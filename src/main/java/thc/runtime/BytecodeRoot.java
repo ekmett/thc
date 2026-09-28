@@ -66,10 +66,10 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @CompilerDirectives.CompilationFinal private boolean passThrough;
     @CompilerDirectives.CompilationFinal private BytecodeCaseRegion.Plan casePlan;
     @Children private BytecodeCaseRegion[] caseRegions = new BytecodeCaseRegion[0];
-    final void configureCaseRegions(boolean passThrough, BytecodeCaseRegion[] regions) {
+    final void configureCaseRegions(boolean passThrough, boolean inline, BytecodeCaseRegion[] regions) {
         this.passThrough = passThrough;
         caseRegions = insert(regions);
-        if (regions.length != 0) casePlan = new BytecodeCaseRegion.Plan();
+        if (inline) casePlan = new BytecodeCaseRegion.Plan();
     }
     final long entryMask() { return passThrough ? 0L : mask; }
     final boolean useInlineCaseRegions() {

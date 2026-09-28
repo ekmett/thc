@@ -5,6 +5,7 @@ package thc.runtime;
 
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.bytecode.BytecodeConfig;
+import com.oracle.truffle.api.bytecode.BytecodeEncodingException;
 import com.oracle.truffle.api.bytecode.BytecodeLabel;
 import com.oracle.truffle.api.bytecode.BytecodeLocal;
 import com.oracle.truffle.api.bytecode.LocalAccessor;
@@ -173,6 +174,12 @@ public final class BytecodeProgram implements ExecutableProgram {
     private record TypedArgument(int index, Local local) {}
     private record AggregateLocal(CoreRepresentation proof, List<Local> fields) {}
 
+    // Preparation-only choice. Frozen before the original root is published;
+    // source replay must emit the same bytecode, including after a graph retry.
+    private static final class CaseRegionEmission {
+        boolean inline = true;
+    }
+
     private static final class FunctionContext {
         final int formalArity;
         final boolean[] entryStrict;
@@ -186,6 +193,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         boolean mayLoop;
         boolean passThrough;
         boolean preparingCaseRegion;
+        CaseRegionEmission caseEmission;
         final List<BytecodeCaseRegion> caseRegions = new ArrayList<>();
         LeadingCaseReturn leadingCaseReturn;
         TupleShape tuple;
@@ -866,6 +874,34 @@ public final class BytecodeProgram implements ExecutableProgram {
     }
 
     private RootCallTarget build(String label, FunctionContext context, Expression body, boolean forceResult) {
+        try {
+            return buildEncoded(label, context, body, forceResult);
+        } catch (BytecodeEncodingException failure) {
+            if (!localIndexOverflow(failure) || context.caseEmission == null || !context.caseEmission.inline)
+                throw failure;
+            // No root was published. Unlike graph-budget recovery, capacity
+            // recovery cannot retain an unencodable inline copy or its PCs.
+            context.caseEmission.inline = false;
+            return buildEncoded(label, context, body, forceResult);
+        }
+    }
+
+    private static boolean localIndexOverflow(BytecodeEncodingException failure) {
+        // The pinned API has no structured encoding reason. Match its exact
+        // allocation path, not a message shared by argument/constant encodings.
+        var trace = failure.getStackTrace();
+        return trace.length >= 4
+                && trace[0].getClassName().equals(BytecodeEncodingException.class.getName())
+                && trace[0].getMethodName().equals("create")
+                && trace[1].getClassName().equals("thc.runtime.BytecodeRootGen$Builder")
+                && trace[1].getMethodName().equals("safeCastUnsignedShort")
+                && trace[2].getClassName().equals("thc.runtime.BytecodeRootGen$Builder$RootStackElement")
+                && trace[2].getMethodName().equals("allocateBytecodeLocal")
+                && trace[3].getClassName().equals("thc.runtime.BytecodeRootGen$Builder")
+                && trace[3].getMethodName().equals("createLocal");
+    }
+
+    private RootCallTarget buildEncoded(String label, FunctionContext context, Expression body, boolean forceResult) {
         var source = body.source();
         var config = sources.getEnabled() && sources.getSpanCount() > 0 ? BytecodeConfig.WITH_SOURCE : BytecodeConfig.DEFAULT;
         var typedBloom = new LocalAccessor[1];
@@ -1045,7 +1081,8 @@ public final class BytecodeProgram implements ExecutableProgram {
         root.configureLeadingCaseReturn(context.leadingCaseReturn);
         root.configureTupleResult(context.tuple);
         root.configureScalarResult(body.proof());
-        root.configureCaseRegions(context.passThrough, context.caseRegions.toArray(BytecodeCaseRegion[]::new));
+        root.configureCaseRegions(context.passThrough, context.caseEmission != null && context.caseEmission.inline,
+                context.caseRegions.toArray(BytecodeCaseRegion[]::new));
         roots.add(root);
         return root.getCallTarget();
     }
@@ -5281,14 +5318,33 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
         int width = scalar ? 1 : BytecodeCaseRegion.WIDTH;
         int end = explicit.size() + (scalar && !fallback.isEmpty() ? 1 : 0);
-        for (int start = 0; start < end; start += width) {
-            var chunk = new ArrayList<>(explicit.subList(Math.min(start, explicit.size()), Math.min(start + width, explicit.size())));
-            if (start + width >= end) chunk.addAll(fallback);
-            var body = new ArrayList<>(expr);
-            body.set(1, List.of("var", binder));
-            body.set(3, chunk);
-            specs.add(function("case region " + binder + " " + start, List.of(binderMetadata), body, scope,
-                    inline.proof(), new boolean[1], tail, true));
+        var emission = new CaseRegionEmission();
+        while (true) {
+            int rootMark = roots.size();
+            int joinMark = localJoinCount;
+            try {
+                for (int start = 0; start < end; start += width) {
+                    var chunk = new ArrayList<>(explicit.subList(Math.min(start, explicit.size()), Math.min(start + width, explicit.size())));
+                    if (start + width >= end) chunk.addAll(fallback);
+                    var body = new ArrayList<>(expr);
+                    body.set(1, List.of("var", binder));
+                    body.set(3, chunk);
+                    specs.add(function("case region " + binder + " " + start, List.of(binderMetadata), body, scope,
+                            inline.proof(), new boolean[1], tail, true));
+                }
+                break;
+            } catch (BytecodeEncodingException failure) {
+                if (!localIndexOverflow(failure) || width == 1) throw failure;
+                // The actual emitter, not syntax-size estimates, decides whether
+                // a side fits. At most five reductions; no guest code executes.
+                width /= 2;
+                // These roots belong only to the discarded preparation attempt;
+                // none has been installed in a binding or a region call node.
+                roots.subList(rootMark, roots.size()).clear();
+                localJoinCount = joinMark;
+                specs.clear();
+                emission.inline = false;
+            }
         }
         var targets = new RootCallTarget[specs.size()];
         var layouts = new CaptureLayout[specs.size()];
@@ -5297,20 +5353,23 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
         int index = scope.function.caseRegions.size();
         scope.function.caseRegions.add(new BytecodeCaseRegion(guards, width, targets, layouts, tail));
+        scope.function.caseEmission = emission;
         var scrutinee = force(compile((List<Object>) expr.get(1), scope, false));
         return new LoweredCaseExpression(new ProvenExpression(new ResultExpression((e, destination) -> {
             var b = e.builder;
             b.beginBlock();
             var answer = destination == null ? b.createLocal("case choice result", FrameSlotKind.Object) : null;
             var complete = b.createLabel();
-            b.beginUnprofiledIfThen();
-            b.emitInlineCaseRegions();
-            b.beginBlock();
-            if (answer != null) b.beginStaticStoreObject(answer);
-            emitResult(inline, e, destination);
-            if (answer != null) b.endStaticStoreObject();
-            b.emitBranch(complete);
-            b.endBlock(); b.endUnprofiledIfThen();
+            if (emission.inline) {
+                b.beginUnprofiledIfThen();
+                b.emitInlineCaseRegions();
+                b.beginBlock();
+                if (answer != null) b.beginStaticStoreObject(answer);
+                emitResult(inline, e, destination);
+                if (answer != null) b.endStaticStoreObject();
+                b.emitBranch(complete);
+                b.endBlock(); b.endUnprofiledIfThen();
+            }
             var captures = new LocalAccessor[specs.size()][];
             for (int i = 0; i < captures.length; i++) {
                 var locals = specs.get(i).captures;

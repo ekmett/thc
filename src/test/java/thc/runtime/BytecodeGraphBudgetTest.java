@@ -72,6 +72,96 @@ class BytecodeGraphBudgetTest {
                         "expr", node("con", "C" + (count - 1), 0, Map.of("rep", DATA)))));
     }
 
+    private static List<Object> capacityCalls(int count, int arm, List<Object> body, Map<String, Object> result) {
+        for (int call = count - 1; call >= 0; call--) {
+            var argument = call == 0 ? number(arm * 1000L) : variable("value" + (call - 1), LONG);
+            var application = node("app", variable("step", CLOSURE), List.of(argument),
+                    List.of(false), false, false, Map.of("rep", LONG));
+            body = node("case", application, "value" + call,
+                    List.of(node("default", null, List.of(), body)),
+                    Map.of("rep", result, "binder", binder("value" + call, LONG, false)));
+        }
+        return body;
+    }
+
+    @Test void onlyThePinnedLocalIdOverflowCanSelectCapacityRecovery() throws Exception {
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var check = BytecodeProgram.class.getDeclaredMethod("localIndexOverflow",
+                        com.oracle.truffle.api.bytecode.BytecodeEncodingException.class);
+                check.setAccessible(true);
+                var local = assertThrows(com.oracle.truffle.api.bytecode.BytecodeEncodingException.class,
+                        () -> BytecodeRootGen.create(language, com.oracle.truffle.api.bytecode.BytecodeConfig.DEFAULT, b -> {
+                            b.beginRoot();
+                            for (int i = 0; i <= 65536; i++) { b.beginBlock(); b.createLocal(null, null); b.endBlock(); }
+                            b.beginReturn(); b.emitLoadConstant(Unit.INSTANCE); b.endReturn(); b.endRoot();
+                        }));
+                assertEquals(true, check.invoke(null, local));
+                var argument = assertThrows(com.oracle.truffle.api.bytecode.BytecodeEncodingException.class,
+                        () -> BytecodeRootGen.create(language, com.oracle.truffle.api.bytecode.BytecodeConfig.DEFAULT, b -> {
+                            b.beginRoot(); b.beginReturn(); b.emitLoadArgument(65536); b.endReturn(); b.endRoot();
+                        }));
+                assertEquals(false, check.invoke(null, argument));
+                assertEquals(false, check.invoke(null,
+                        com.oracle.truffle.api.bytecode.BytecodeEncodingException.create(local.getMessage())));
+            } finally { context.leave(); }
+        }
+    }
+
+    @ParameterizedTest @ValueSource(booleans = {false, true})
+    void localEncodingCapacityNarrowsSidesBeforePublishingTheOriginalTarget(boolean parentOnly) throws Exception {
+        int arms = parentOnly ? 256 : 64, repetitions = parentOnly ? 8 : 64;
+        var input = decision(arms, List.of(binder("step", CLOSURE, true)), LONG,
+                arm -> capacityCalls(repetitions, arm, variable("value" + (repetitions - 1), LONG), LONG));
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            var threads = Language.currentState().getThreads(); threads.enterCurrent();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new BytecodeProgram(language, input, true);
+                var closure = (Closure) program.entryValue("entry");
+                var target = closure.target; var root = (BytecodeRoot) target.getRootNode();
+                assertSame(closure, program.entryValue("entry"));
+                assertEquals(0, entries(program));
+                assertEquals(0, root.prepareGraphBudgetRetry(0), "capacity-only extraction is not a graph bailout");
+                assertTrue(instructions(root).values().stream().noneMatch(value -> value.contains("InlineCaseRegions")),
+                        "the unencodable inline body must not be emitted");
+                var beforeInstructions = instructions(root);
+                assertTrue(compile(target)); assertTrue(valid(target)); bypass(target);
+                var calls = new java.util.concurrent.atomic.AtomicInteger();
+                var step = new Closure(null, 1, new RootNode(language) {
+                    @Override public Object execute(VirtualFrame frame) {
+                        calls.incrementAndGet(); return (Long) frame.getArguments()[1] + 1;
+                    }
+                }.getCallTarget());
+                assertEquals(parentOnly ? 255008L : 63064L,
+                        Calls.target(target, new Object[]{0L, program.entryValue("chosen"), step}));
+                assertEquals(repetitions, calls.get(), "no preparation, retry or branch replay may execute a call");
+                assertEquals(1, entries(program)); assertTrue(valid(target));
+                assertSame(target, ((Closure) program.entryValue("entry")).target);
+                root.getRootNodes().ensureSourceInformation();
+                assertEquals(beforeInstructions, instructions(root));
+                assertEquals(0, root.getGraphBudgetGeneration());
+                var cloneMethod = root.getClass().getDeclaredMethod("cloneUninitialized"); cloneMethod.setAccessible(true);
+                var clone = (BytecodeRoot) cloneMethod.invoke(root);
+                assertEquals(beforeInstructions, instructions(clone)); assertEquals(0, clone.getGraphBudgetGeneration());
+                var regionField = BytecodeRoot.class.getDeclaredField("caseRegions"); regionField.setAccessible(true);
+                var region = ((BytecodeCaseRegion[]) regionField.get(root))[0];
+                var widthField = BytecodeCaseRegion.class.getDeclaredField("width"); widthField.setAccessible(true);
+                int width = (int) widthField.get(region);
+                if (parentOnly) assertEquals(BytecodeCaseRegion.WIDTH, width, "only the parent needs a capacity cut");
+                else assertTrue(width < BytecodeCaseRegion.WIDTH, "the original side itself must be subdivided");
+                assertEquals(arms / width + 2, ((Number) program.diagnostics().get("bytecodeRootCount")).intValue(),
+                        "failed attempts must not retain unused side roots");
+                var state = language.getHandoffState().get();
+                assertNull(state.getPending()); assertEquals(0, state.getArguments().getDepth());
+                assertEquals(0, state.getResults().getDepth());
+            } finally { threads.leaveCurrent(); context.leave(); }
+        }
+    }
+
     @ParameterizedTest @ValueSource(booleans = {false, true})
     void recoveredCaptureKeepsExactScalarLeavesAndUnforcedReferenceIdentity(boolean aggregate) throws Exception {
         var narrow = Map.<String, Object>of("kind", "long", "primReps", List.of("Int8Rep"), "evaluated", true);
@@ -707,32 +797,48 @@ class BytecodeGraphBudgetTest {
     @Test void anAlreadyParkedInlinePcSurvivesRecoveryWithoutReplayingItsPrefix() throws Exception {
         checkRegionCut(true);
     }
+    @Test void capacityExtractionPreservesTheFirstAsyncCutAndTupleOwnership() throws Exception {
+        checkRegionCut(false, true);
+    }
     private void checkRegionCut(boolean parkBeforeRecovery) throws Exception {
+        checkRegionCut(parkBeforeRecovery, false);
+    }
+    private void checkRegionCut(boolean parkBeforeRecovery, boolean capacity) throws Exception {
         var resultProof = tuple(REFERENCE, REFERENCE);
         var result = node("app", node("con", "Result", 2), List.of(variable("before", REFERENCE), variable("after", REFERENCE)),
                 List.of(true, true), false, false, Map.of("rep", resultProof));
         var input = new LinkedHashMap<>(decision(64,
                 List.of(binder("prefix", MUTABLE, false), binder("blocked", MUTABLE, false)), resultProof,
-                ignored -> afterTake("blocked", "after", result, resultProof)));
+                ignored -> capacity ? capacityCalls(64, 0, afterTake("blocked", "after", result, resultProof), resultProof)
+                        : afterTake("blocked", "after", result, resultProof)));
         var bindings = new ArrayList<Map<String, Object>>((List<Map<String, Object>>) input.get("bindings"));
         var entry = new LinkedHashMap<>(bindings.getFirst());
         var lambda = new ArrayList<>((List<Object>) entry.get("expr"));
         var decision = new ArrayList<>((List<Object>) lambda.get(2));
         // The selector is closed: this control isolates region suspension, not lazy-formal forcing.
         decision.set(1, node("con", "C63", 0, Map.of("rep", DATA)));
-        lambda.set(1, List.of(binder("prefix", MUTABLE, false), binder("blocked", MUTABLE, false)));
+        var arguments = new ArrayList<>(List.of(binder("prefix", MUTABLE, false), binder("blocked", MUTABLE, false)));
+        if (capacity) arguments.add(binder("step", CLOSURE, true));
+        lambda.set(1, arguments);
         lambda.set(2, afterTake("prefix", "before", decision, resultProof));
-        lambda.set(3, Map.of("rep", CLOSURE, "resultRep", resultProof, "entryStrict", List.of(false, false)));
+        lambda.set(3, Map.of("rep", CLOSURE, "resultRep", resultProof,
+                "entryStrict", java.util.Collections.nCopies(arguments.size(), false)));
         entry.put("expr", lambda); bindings.set(0, entry); input.put("bindings", bindings);
         constructors(input, tupleConstructor("Pair", 2), tupleConstructor("Result", 2));
         try (var context = context()) {
             context.initialize("thc"); context.enter();
             final Language language; final Language.State owner; final BytecodeProgram program; final RootCallTarget target;
-            final BytecodeRoot root; final RootCallTarget resume;
+            final BytecodeRoot root; final RootCallTarget resume; final Closure step;
+            var calls = new java.util.concurrent.atomic.AtomicInteger();
             try {
                 language = TruffleLanguage.LanguageReference.create(Language.class).get(null); owner = Language.currentState();
                 program = new BytecodeProgram(language, input, true); target = program.entryTarget("entry");
                 root = (BytecodeRoot) target.getRootNode();
+                step = new Closure(null, 1, new RootNode(language) {
+                    @Override public Object execute(VirtualFrame frame) {
+                        calls.incrementAndGet(); return (Long) frame.getArguments()[1] + 1;
+                    }
+                }.getCallTarget());
                 resume = new RootNode(language) {
                     @Child private Force force = new Force(new Metrics(false), true);
                     @Override public Object execute(VirtualFrame frame) {
@@ -740,7 +846,7 @@ class BytecodeGraphBudgetTest {
                     }
                 }.getCallTarget();
                 if (!parkBeforeRecovery) {
-                    assertEquals(1, root.prepareGraphBudgetRetry(0)); // Transport control; the real bailout has its own test.
+                    assertEquals(capacity ? 0 : 1, root.prepareGraphBudgetRetry(0)); // Transport control, not a graph bailout.
                     assertTrue(compile(target)); bypass(target); assertTrue(valid(target));
                 }
                 assertEquals(0, entries(program));
@@ -752,7 +858,7 @@ class BytecodeGraphBudgetTest {
                 context.enter(); owner.getThreads().enterCurrent(null, false, true, null);
                 try {
                     var saved = java.util.Objects.requireNonNull(SavedGuestContinuations.savedGuestContinuation(
-                            Calls.target(target, new Object[]{0L, prefix, blocked})));
+                            Calls.target(target, capacity ? new Object[]{0L, prefix, blocked, step} : new Object[]{0L, prefix, blocked})));
                     java.util.Objects.requireNonNull(saved.asyncRequest()).acknowledge();
                     assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(root));
                     answer.complete(saved);
@@ -765,6 +871,7 @@ class BytecodeGraphBudgetTest {
                 while (blocked.pendingCounts().getTakers() != 1 && !answer.isDone() && System.nanoTime() < deadline) Thread.sleep(1);
                 if (answer.isCompletedExceptionally()) answer.get(1, TimeUnit.SECONDS);
                 assertEquals(1, blocked.pendingCounts().getTakers()); assertTrue(prefix.isEmpty());
+                assertEquals(capacity ? 64 : 0, calls.get());
                 owner.getThreads().send(java.util.Objects.requireNonNull(owner.getThreads().pollState(worker).getCurrent()).getIdentity(), "case region cut");
                 var saved = answer.get(10, TimeUnit.SECONDS); worker.join(5000); assertFalse(worker.isAlive());
                 assertEquals(compiled + (parkBeforeRecovery ? 0 : 1), entries(program));
@@ -788,6 +895,7 @@ class BytecodeGraphBudgetTest {
                         var layout = root.getTupleResult().getLayout();
                         assertSame(before, layout.getObject(value, 0)); assertSame(after, layout.getObject(value, 1));
                         assertTrue(prefix.isEmpty(), "Completed caller effect must not replay"); assertTrue(blocked.isEmpty());
+                        assertEquals(capacity ? 64 : 0, calls.get(), "completed side calls must not replay");
                         assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(root));
                         var handoff = language.getHandoffState().get(); assertNull(handoff.getPending());
                         assertEquals(0, handoff.getArguments().getDepth()); assertEquals(0, handoff.getResults().getDepth());

@@ -207,6 +207,16 @@ continuation body as one side target. Its scrutinee stays in the caller and is
 evaluated exactly once; a large scrutinee alone does not qualify a tiny body.
 This is a suffix cut, not an assertion that a default arm is cold.
 
+Bytecode local-ID capacity is a separate preparation-time constraint. If the
+pinned builder reports local-ID overflow in a prepared constructor side, the
+lowerer halves the side width down to one and retries before publishing the
+original root. Actual emission determines whether a side fits; syntax size is
+not an encoding bound. A capacity cut omits the parent's inline copy entirely,
+including when only that copy exceeds the limit. Such a root has no graph-retry
+generation: its instruction positions are fixed at publication. Other encoding
+failures, a single unencodable side, and unpartitionable regions still fail.
+The same exact captures, original tail position and continuation protocol apply.
+
 These are bounded extraction policies, not demand-only candidate allocation or a
 complete application graph-budget solution. A callee inlining veto alone cannot
 reduce an oversized caller's own partial-evaluation graph: its body must actually
