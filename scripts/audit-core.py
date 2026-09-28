@@ -77,7 +77,7 @@ def _lookup_key(value):
     if not isinstance(value, str):
         # Original dictionaries permit a hashable non-string *lookup* and
         # return no match; unhashable lookups retain their original TypeError.
-        hash(value)
+        {}.get(value)
         raise KeyError(value)
     return _key(value)
 
@@ -508,10 +508,10 @@ class _InputRecords(MutableMapping):
     def encoded(self, key):
         if not self.compound:
             if not isinstance(key, str):
-                hash(key)
+                {}.get(key)
                 raise KeyError(key)
             return key
-        hash(key)
+        {}.get(key)
         if (not isinstance(key, tuple) or len(key) != 2 or
                 not all(value is None or isinstance(value, str) for value in key)):
             raise KeyError(key)

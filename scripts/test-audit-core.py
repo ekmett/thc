@@ -4145,6 +4145,20 @@ class ExplicitWeakContractTest(unittest.TestCase):
 
 
 class RTSDataLabelTest(unittest.TestCase):
+    def test_bytestring_hex_table_requires_exact_symbol_and_address_proof(self):
+        label = ["lit", "data-addr", "hs_bytestring_lower_hex_table",
+                 dict(rep=dict(kind="address", primReps=["AddrRep"], evaluated=True))]
+        self.assertTrue(run(label)["accepted"])
+        self.assertFalse(run(label, cap=dict(CAP, dataLabels=[]))["accepted"])
+        for symbol in ("hs_bytestring_lower_hex_table_extra", "hs_bytestring_digit_pairs_table"):
+            wrong = copy.deepcopy(label); wrong[2] = symbol
+            self.assertFalse(run(wrong)["accepted"])
+        for rep in (dict(kind="address", primReps=["AddrRep"], evaluated=False),
+                    dict(kind="long", primReps=["WordRep"], evaluated=True),
+                    dict(kind="address", primReps=["AddrRep"], evaluated=True, aggregate="unboxed-tuple")):
+            wrong = copy.deepcopy(label); wrong[3]["rep"] = rep
+            self.assertFalse(run(wrong)["accepted"])
+
     def test_rtsflags_label_still_requires_exact_evaluated_address_proof(self):
         label = ['lit', 'data-addr', 'RtsFlags',
                  dict(rep=dict(kind='address', primReps=['AddrRep'], evaluated=True))]
@@ -4541,7 +4555,9 @@ class AuditStoreTest(unittest.TestCase):
                     self.assertNotIn(key, mapping)
             for key in [[], {}, ('unit', [])]:
                 with self.subTest(mapping=type(mapping).__name__, key=key):
-                    with self.assertRaisesRegex(TypeError, 'unhashable type'): mapping.get(key)
+                    with self.assertRaises(TypeError) as expected: {}.get(key)
+                    with self.assertRaises(TypeError) as actual: mapping.get(key)
+                    self.assertEqual(str(expected.exception), str(actual.exception))
 
     def test_cache_lru_entry_and_byte_bounds_and_oversized_bypass(self):
         store = self.store(cache_entries=2, cache_bytes=24)
