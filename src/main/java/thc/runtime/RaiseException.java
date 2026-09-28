@@ -16,7 +16,8 @@ public final class RaiseException extends Expr {
     }
     @Override public Object execute(VirtualFrame frame) { throw raise(exception.execute(frame), this, someException); }
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) { return execute(frame); }
-    @CompilerDirectives.TruffleBoundary private static GuestException raise(Object payload, Node location, boolean someException) {
+    // A guest raise is expected control flow, not a failed caller speculation.
+    @CompilerDirectives.TruffleBoundary(transferToInterpreterOnException = false) private static GuestException raise(Object payload, Node location, boolean someException) {
         throw new GuestException(payload, location, someException);
     }
 }

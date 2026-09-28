@@ -781,22 +781,26 @@ tasks.register("originalStackDecoderFullCoreTest", Test) {
         }
     }
 }
-tasks.register("arithmeticExceptionsFullCoreTest", Test) {
-    group = "verification"
-    description = "Tests original arithmetic exception payloads using the explicitly prepared full-Core GHC fixture."
-    testClassesDirs = fullCoreTests.output.classesDirs
-    classpath = fullCoreTests.runtimeClasspath
-    inputs.files(fileTree("build/arithmetic-exceptions") {
-        include("**/*.json", "installed/bundles/*.zip", "logs/*.stdout", "logs/*.stderr", "native/oracle")
-    })
-    useJUnitPlatform()
-    filter { includeTestsMatching("thc.runtime.ArithmeticExceptionsNativeTest") }
-    outputs.upToDateWhen { false }
-    outputs.doNotCacheIf("Full-Core native/compiled evidence requires a fresh test process") { true }
-    doFirst {
-        checkBuild(file("build/arithmetic-exceptions/manifest.json").isFile()) {
-            "Missing arithmetic-exceptions fixture: select a full-Core GHC9.14.1 and run cabal run exe:thc-fixtures -- arithmetic-exceptions"
+[["arithmeticExceptionsFullCoreTest", false], ["arithmeticExceptionsFullCoreDenseTest", true]].each { taskName, dense ->
+    tasks.register(taskName, Test) {
+        group = "verification"
+        description = "Tests original arithmetic exception payloads using the explicitly prepared full-Core GHC fixture."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        inputs.files(fileTree("build/arithmetic-exceptions") {
+            include("**/*.json", "installed/bundles/*.zip", "logs/*.stdout", "logs/*.stderr", "native/oracle")
+        })
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.ArithmeticExceptionsNativeTest") }
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Full-Core native/compiled evidence requires a fresh test process") { true }
+        doFirst {
+            checkBuild(file("build/arithmetic-exceptions/manifest.json").isFile()) {
+                "Missing arithmetic-exceptions fixture: select a full-Core GHC9.14.1 and run cabal run exe:thc-fixtures -- arithmetic-exceptions"
+            }
         }
+        maxHeapSize = "4g"
+        systemProperty("thc.handoffSlabs", dense.toString())
     }
 }
 [["compactRegionsFullCoreDefault", false],[ "compactRegionsFullCoreDense", true],[

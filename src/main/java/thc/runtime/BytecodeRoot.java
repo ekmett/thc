@@ -2869,7 +2869,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static Object raise(boolean someException, Object payload, @Bind("$node") Node node) {
             return throwGuest(payload, node, someException);
         }
-        @TruffleBoundary private static Object throwGuest(Object payload, Node node, boolean someException) { throw new GuestException(payload, node, someException); }
+        // A guest raise is expected control flow, not a failed caller speculation.
+        @TruffleBoundary(transferToInterpreterOnException = false) private static Object throwGuest(Object payload, Node node, boolean someException) { throw new GuestException(payload, node, someException); }
     }
 
     @Operation

@@ -21,8 +21,9 @@ import Data.List (sort)
 import qualified Data.Map.Strict as Map
 import FixtureSupport (CommandResult(..), hashes, runLogged, writeJson)
 import qualified THC.Driver.Installed as Installed
-import InstalledCoreFixtures (InstalledFixture(..), prepareInstalledCore, field, readJson)
+import InstalledCoreFixtures (InstalledFixture(..), prepareInstalledCore, prepareInstalledCoreWithForeign, field, readJson)
 import System.Directory (createDirectoryIfMissing, doesFileExist, listDirectory, removeFile)
+import System.Environment (lookupEnv)
 import System.Exit (ExitCode, die)
 import System.FilePath ((</>), takeExtension)
 
@@ -50,10 +51,12 @@ prepare coreOnly root = do
     let path = root </> directory </> name
     exists <- doesFileExist path
     when exists (removeFile path)
-  installed <- prepareInstalledCore root directory
+  pluginBuild <- run "plugin-build" [] "compiler/build.sh" []
+  sourceRoot <- lookupEnv "THC_INSTALLED_CORE_GHC_SOURCE"
+  installed <- maybe (prepareInstalledCore root directory)
+    (prepareInstalledCoreWithForeign root directory) sourceRoot
   let ghc = fixtureGhc installed
       packagePath = fixturePackages installed
-  pluginBuild <- run "plugin-build" [] "compiler/build.sh" []
   stages <- forM ["pre", "post"] $ \stage -> do
     let core = directory </> stage </> "core"
         ghcOut = directory </> stage </> "ghc"
@@ -85,7 +88,7 @@ prepare coreOnly root = do
         ["compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"] ++
         ["src/THC/Driver" </> file | file <- drivers, takeExtension file == ".hs"] ++
         ["scripts" </> file | file <- scripts, take 5 file == "core_", takeExtension file == ".py"]
-      commands = fixtureCommands installed ++ [pluginBuild] ++
+      commands = [pluginBuild] ++ fixtureCommands installed ++
         concat [exported : [result | (_, Right result) <- audits] | (_,_,exported,audits) <- stages]
       artifacts = fixtureArtifacts installed ++ concatMap commandArtifacts commands ++
         [consumer | (_,consumer,_,_) <- stages] ++
