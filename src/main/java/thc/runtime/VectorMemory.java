@@ -35,7 +35,7 @@ public final class VectorMemory {
 
     public static void writeByteVectorArray(byte[] bytes, long index, ByteVector value, boolean scalarOffset, int vectorBytes) {
         int offset = byteOffset(bytes, index, scalarOffset, 1, "Byte128", vectorBytes);
-        var vector = CoreVectors.requireByte(value, ByteVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)));
+        var vector = RuntimeTypes.requireByte(value, ByteVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)));
         var bits = vector;
 
         bits.reinterpretAsBytes().intoArray(bytes, offset);
@@ -58,7 +58,7 @@ public final class VectorMemory {
 
     public static void writeShortVectorArray(byte[] bytes, long index, ShortVector value, boolean scalarOffset, int vectorBytes) {
         int offset = byteOffset(bytes, index, scalarOffset, 2, "Short128", vectorBytes);
-        var vector = CoreVectors.requireShort(value, ShortVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)));
+        var vector = RuntimeTypes.requireShort(value, ShortVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)));
         var bits = vector;
         if (ByteOrder.nativeOrder() == ByteOrder.BIG_ENDIAN) bits = bits.lanewise(VectorOperators.REVERSE_BYTES);
         bits.reinterpretAsBytes().intoArray(bytes, offset);
@@ -81,7 +81,7 @@ public final class VectorMemory {
 
     public static void writeLongVectorArray(byte[] bytes, long index, LongVector value, boolean scalarOffset, int vectorBytes) {
         int offset = byteOffset(bytes, index, scalarOffset, 8, "Long128", vectorBytes);
-        var vector = CoreVectors.requireLong(value, LongVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)));
+        var vector = RuntimeTypes.requireLong(value, LongVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)));
         var bits = vector;
         if (ByteOrder.nativeOrder() == ByteOrder.BIG_ENDIAN) bits = bits.lanewise(VectorOperators.REVERSE_BYTES);
         bits.reinterpretAsBytes().intoArray(bytes, offset);
@@ -104,7 +104,7 @@ public final class VectorMemory {
 
     public static void writeIntVectorArray(byte[] bytes, long index, IntVector value, boolean scalarOffset, String name, int vectorBytes) {
         int offset = byteOffset(bytes, index, scalarOffset, 4, name, vectorBytes);
-        var vector = CoreVectors.requireInt(value, IntVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)));
+        var vector = RuntimeTypes.requireInt(value, IntVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)));
         var bits = vector;
         if (ByteOrder.nativeOrder() == ByteOrder.BIG_ENDIAN) bits = bits.lanewise(VectorOperators.REVERSE_BYTES);
         bits.reinterpretAsBytes().intoArray(bytes, offset);
@@ -127,7 +127,7 @@ public final class VectorMemory {
 
     public static void writeFloatVectorArray(byte[] bytes, long index, FloatVector value, boolean scalarOffset, int vectorBytes) {
         writeIntVectorArray(bytes, index,
-            CoreVectors.requireFloat(value, FloatVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8))).reinterpretAsInts(),
+            RuntimeTypes.requireFloat(value, FloatVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8))).reinterpretAsInts(),
             scalarOffset, "FloatX4", vectorBytes);
     }
 
@@ -148,7 +148,7 @@ public final class VectorMemory {
 
     public static void writeDoubleVectorArray(byte[] bytes, long index, DoubleVector value, boolean scalarOffset, int vectorBytes) {
         int offset = byteOffset(bytes, index, scalarOffset, 8, "DoubleX2", vectorBytes);
-        var vector = CoreVectors.requireDouble(value, DoubleVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)));
+        var vector = RuntimeTypes.requireDouble(value, DoubleVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)));
         var bits = vector.reinterpretAsLongs();
         if (ByteOrder.nativeOrder() == ByteOrder.BIG_ENDIAN) bits = bits.lanewise(VectorOperators.REVERSE_BYTES);
         bits.reinterpretAsBytes().intoArray(bytes, offset);

@@ -113,13 +113,13 @@ def packed(f, values):
 
 
 def checked(f, value):
-    return f'CoreVectors.require{vector_type(f).removesuffix("Vector")}({value}, {species(f)})'
+    return f'RuntimeTypes.require{vector_type(f).removesuffix("Vector")}({value}, {species(f)})'
 
 
 def operation_expression(f, op, args):
     if op == 'broadcast': return f'{vector_type(f)}.broadcast({species(f)}, {args[0]})'
     if op == 'insert':
-        return f'{args[0]}.withLane(CoreVectors.laneIndex({args[2]}, {f["lanes"]}), {args[1]})'
+        return f'{args[0]}.withLane(RuntimeTypes.laneIndex({args[2]}, {f["lanes"]}), {args[1]})'
     if op in ('quot', 'rem'):
         return f'VectorIntegerDivision.{op}{vector_type(f).removesuffix("Vector")}({args[0]}, {args[1]}, {str(f["laneRep"].startswith("Word")).lower()})'
     if op == 'negate': return f'{args[0]}.neg()'

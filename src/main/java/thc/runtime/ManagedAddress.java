@@ -523,7 +523,7 @@ public final class ManagedAddress {
     public void writeVectorBytes(long elementOffset, int stride, ByteVector value) { writeVectorBytes(elementOffset, stride, value, 16); }
     public void writeVectorBytes(long elementOffset, int stride, ByteVector value, int vectorBytes) {
         if (vectorBytes != 16 && vectorBytes != 32 && vectorBytes != 64) throw fault("Unsupported Addr# vector width");
-        var vector = CoreVectors.requireByte(value, ByteVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)));
+        var vector = RuntimeTypes.requireByte(value, ByteVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)));
         long displacement = vectorDisplacement(elementOffset, stride);
         var pointer = externalPointer();
         if (pointer != null) { pointer.plus(displacement).copyIn(vector.toArray()); return; }

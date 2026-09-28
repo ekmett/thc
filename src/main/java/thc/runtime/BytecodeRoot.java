@@ -4833,7 +4833,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class WriteVectorByteAddress {
         @Specialization public static Object write(boolean scalarOffset, int vectorBytes, ManagedAddress address, long index, ByteVector vector, Object state) {
-            vector = CoreVectors.requireByte(vector, ByteVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)));
+            vector = RuntimeTypes.requireByte(vector, ByteVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)));
             ManagedByteArray.requireState(state);
             address.writeVectorBytes(index, scalarOffset ? 1 : vectorBytes, vector, vectorBytes);
             return thc.runtime.Unit.INSTANCE;
@@ -4860,7 +4860,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class WriteVectorShortAddress {
         @Specialization public static Object write(boolean scalarOffset, int vectorBytes, ManagedAddress address, long index, ShortVector vector, Object state) {
-            vector = CoreVectors.requireShort(vector, ShortVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)));
+            vector = RuntimeTypes.requireShort(vector, ShortVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)));
             ManagedByteArray.requireState(state);
             address.writeVectorBytes(index, scalarOffset ? 2 : vectorBytes, (java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES)).reinterpretAsBytes(), vectorBytes);
             return thc.runtime.Unit.INSTANCE;
@@ -4887,7 +4887,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class WriteVectorIntAddress {
         @Specialization public static Object write(boolean scalarOffset, int vectorBytes, ManagedAddress address, long index, IntVector vector, Object state) {
-            vector = CoreVectors.requireInt(vector, IntVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)));
+            vector = RuntimeTypes.requireInt(vector, IntVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)));
             ManagedByteArray.requireState(state);
             address.writeVectorBytes(index, scalarOffset ? 4 : vectorBytes, (java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES)).reinterpretAsBytes(), vectorBytes);
             return thc.runtime.Unit.INSTANCE;
@@ -4914,7 +4914,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class WriteVectorLongAddress {
         @Specialization public static Object write(boolean scalarOffset, int vectorBytes, ManagedAddress address, long index, LongVector vector, Object state) {
-            vector = CoreVectors.requireLong(vector, LongVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)));
+            vector = RuntimeTypes.requireLong(vector, LongVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)));
             ManagedByteArray.requireState(state);
             address.writeVectorBytes(index, scalarOffset ? 8 : vectorBytes, (java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES)).reinterpretAsBytes(), vectorBytes);
             return thc.runtime.Unit.INSTANCE;
@@ -4941,7 +4941,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class WriteVectorFloatAddress {
         @Specialization public static Object write(boolean scalarOffset, int vectorBytes, ManagedAddress address, long index, FloatVector vector, Object state) {
-            vector = CoreVectors.requireFloat(vector, FloatVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)));
+            vector = RuntimeTypes.requireFloat(vector, FloatVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)));
             ManagedByteArray.requireState(state);
             IntVector bits = vector.reinterpretAsInts();
             address.writeVectorBytes(index, scalarOffset ? 4 : vectorBytes, (java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? bits : bits.lanewise(VectorOperators.REVERSE_BYTES)).reinterpretAsBytes(), vectorBytes);
@@ -4969,7 +4969,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class WriteVectorDoubleAddress {
         @Specialization public static Object write(boolean scalarOffset, int vectorBytes, ManagedAddress address, long index, DoubleVector vector, Object state) {
-            vector = CoreVectors.requireDouble(vector, DoubleVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)));
+            vector = RuntimeTypes.requireDouble(vector, DoubleVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)));
             ManagedByteArray.requireState(state);
             LongVector bits = vector.reinterpretAsLongs();
             address.writeVectorBytes(index, scalarOffset ? 8 : vectorBytes, (java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? bits : bits.lanewise(VectorOperators.REVERSE_BYTES)).reinterpretAsBytes(), vectorBytes);
@@ -4995,7 +4995,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class WriteVectorByteArray {
         @Specialization public static Object write(boolean scalarOffset, int vectorBytes, Object value, long index, ByteVector vector, Object state) {
-            vector = CoreVectors.requireByte(vector, ByteVector.SPECIES_128.withShape(jdk.incubator.vector.VectorShape.forBitSize(vectorBytes * 8)));
+            vector = RuntimeTypes.requireByte(vector, ByteVector.SPECIES_128.withShape(jdk.incubator.vector.VectorShape.forBitSize(vectorBytes * 8)));
             ManagedByteArray.requireState(state);
             ManagedByteArray.writeByteVectorGuest(value, index, vector, scalarOffset, vectorBytes);
             return thc.runtime.Unit.INSTANCE;
@@ -5020,7 +5020,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class WriteVectorShortArray {
         @Specialization public static Object write(boolean scalarOffset, int vectorBytes, Object value, long index, ShortVector vector, Object state) {
-            vector = CoreVectors.requireShort(vector, ShortVector.SPECIES_128.withShape(jdk.incubator.vector.VectorShape.forBitSize(vectorBytes * 8)));
+            vector = RuntimeTypes.requireShort(vector, ShortVector.SPECIES_128.withShape(jdk.incubator.vector.VectorShape.forBitSize(vectorBytes * 8)));
             ManagedByteArray.requireState(state);
             ManagedByteArray.writeShortVectorGuest(value, index, vector, scalarOffset, vectorBytes);
             return thc.runtime.Unit.INSTANCE;
@@ -5045,7 +5045,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class WriteVectorLongArray {
         @Specialization public static Object write(boolean scalarOffset, int vectorBytes, Object value, long index, LongVector vector, Object state) {
-            vector = CoreVectors.requireLong(vector, LongVector.SPECIES_128.withShape(jdk.incubator.vector.VectorShape.forBitSize(vectorBytes * 8)));
+            vector = RuntimeTypes.requireLong(vector, LongVector.SPECIES_128.withShape(jdk.incubator.vector.VectorShape.forBitSize(vectorBytes * 8)));
             ManagedByteArray.requireState(state);
             ManagedByteArray.writeLongVectorGuest(value, index, vector, scalarOffset, vectorBytes);
             return thc.runtime.Unit.INSTANCE;
@@ -5070,7 +5070,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class WriteVector32Array {
         @Specialization public static Object write(boolean scalarOffset, int vectorBytes, Object value, long index, IntVector vector, Object state) {
-            vector = CoreVectors.requireInt(vector, IntVector.SPECIES_128.withShape(jdk.incubator.vector.VectorShape.forBitSize(vectorBytes * 8)));
+            vector = RuntimeTypes.requireInt(vector, IntVector.SPECIES_128.withShape(jdk.incubator.vector.VectorShape.forBitSize(vectorBytes * 8)));
             ManagedByteArray.requireState(state);
             ManagedByteArray.writeInt32VectorGuest(value, index, vector, scalarOffset, vectorBytes);
             return thc.runtime.Unit.INSTANCE;
@@ -5095,7 +5095,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class WriteVectorWord32Array {
         @Specialization public static Object write(boolean scalarOffset, int vectorBytes, Object value, long index, IntVector vector, Object state) {
-            vector = CoreVectors.requireInt(vector, IntVector.SPECIES_128.withShape(jdk.incubator.vector.VectorShape.forBitSize(vectorBytes * 8)));
+            vector = RuntimeTypes.requireInt(vector, IntVector.SPECIES_128.withShape(jdk.incubator.vector.VectorShape.forBitSize(vectorBytes * 8)));
             ManagedByteArray.requireState(state);
             ManagedByteArray.writeWord32VectorGuest(value, index, vector, scalarOffset, vectorBytes);
             return thc.runtime.Unit.INSTANCE;
@@ -5120,7 +5120,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class WriteVectorFloatArray {
         @Specialization public static Object write(boolean scalarOffset, int vectorBytes, Object value, long index, FloatVector vector, Object state) {
-            vector = CoreVectors.requireFloat(vector, FloatVector.SPECIES_128.withShape(jdk.incubator.vector.VectorShape.forBitSize(vectorBytes * 8)));
+            vector = RuntimeTypes.requireFloat(vector, FloatVector.SPECIES_128.withShape(jdk.incubator.vector.VectorShape.forBitSize(vectorBytes * 8)));
             ManagedByteArray.requireState(state);
             ManagedByteArray.writeFloatVectorGuest(value, index, vector, scalarOffset, vectorBytes);
             return thc.runtime.Unit.INSTANCE;
@@ -5145,7 +5145,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class WriteVectorDoubleArray {
         @Specialization public static Object write(boolean scalarOffset, int vectorBytes, Object value, long index, DoubleVector vector, Object state) {
-            vector = CoreVectors.requireDouble(vector, DoubleVector.SPECIES_128.withShape(jdk.incubator.vector.VectorShape.forBitSize(vectorBytes * 8)));
+            vector = RuntimeTypes.requireDouble(vector, DoubleVector.SPECIES_128.withShape(jdk.incubator.vector.VectorShape.forBitSize(vectorBytes * 8)));
             ManagedByteArray.requireState(state);
             ManagedByteArray.writeDoubleVectorGuest(value, index, vector, scalarOffset, vectorBytes);
             return thc.runtime.Unit.INSTANCE;
@@ -5293,13 +5293,13 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
     @Operation public static final class VectorNegate {
         @Specialization public static LongVector negate(LongVector value) {
-            value = CoreVectors.requireLong(value, LongVector.SPECIES_128); return (value).neg(); }
+            value = RuntimeTypes.requireLong(value, LongVector.SPECIES_128); return (value).neg(); }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "subtract")
     public static final class VectorBinary {
         @Specialization public static LongVector binary(boolean subtract, LongVector first, LongVector second) {
-            first = CoreVectors.requireLong(first, LongVector.SPECIES_128);
-            second = CoreVectors.requireLong(second, LongVector.SPECIES_128);
+            first = RuntimeTypes.requireLong(first, LongVector.SPECIES_128);
+            second = RuntimeTypes.requireLong(second, LongVector.SPECIES_128);
             return subtract ? (first).sub(second) : (first).add(second);
         }
     }
@@ -5309,7 +5309,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class VectorUnpack {
         @Specialization public static void unpack(VirtualFrame frame, LocalAccessor first, LocalAccessor second,
                 LongVector value, @Bind("$node") Node node) {
-            value = CoreVectors.requireLong(value, LongVector.SPECIES_128);
+            value = RuntimeTypes.requireLong(value, LongVector.SPECIES_128);
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
             first.setLong(bytecode, frame, value.lane(0)); second.setLong(bytecode, frame, value.lane(1));
         }
@@ -5329,8 +5329,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation @ConstantOperand(type = int.class, name = "operation")
     public static final class VectorWord8Binary {
         @Specialization public static ByteVector binary(int operation, ByteVector first, ByteVector second) {
-            first = CoreVectors.requireByte(first, ByteVector.SPECIES_128);
-            second = CoreVectors.requireByte(second, ByteVector.SPECIES_128);
+            first = RuntimeTypes.requireByte(first, ByteVector.SPECIES_128);
+            second = RuntimeTypes.requireByte(second, ByteVector.SPECIES_128);
             return switch (operation) {
                 case 0 -> (first).add(second);
                 case 1 -> (first).sub(second);
@@ -5364,7 +5364,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 LocalAccessor thirteenth, LocalAccessor fourteenth, LocalAccessor fifteenth,
                 LocalAccessor sixteenth,
                 ByteVector value, @Bind("$node") Node node) {
-            value = CoreVectors.requireByte(value, ByteVector.SPECIES_128);
+            value = RuntimeTypes.requireByte(value, ByteVector.SPECIES_128);
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
             first.setInt(bytecode, frame, value.lane(0) & 0xff); second.setInt(bytecode, frame, value.lane(1) & 0xff);
             third.setInt(bytecode, frame, value.lane(2) & 0xff); fourth.setInt(bytecode, frame, value.lane(3) & 0xff);
@@ -5390,13 +5390,13 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
     @Operation public static final class Vector8Negate {
         @Specialization public static ByteVector negate(ByteVector value) {
-            value = CoreVectors.requireByte(value, ByteVector.SPECIES_128); return (value).neg(); }
+            value = RuntimeTypes.requireByte(value, ByteVector.SPECIES_128); return (value).neg(); }
     }
     @Operation @ConstantOperand(type = int.class, name = "operation")
     public static final class Vector8Binary {
         @Specialization public static ByteVector binary(int operation, ByteVector first, ByteVector second) {
-            first = CoreVectors.requireByte(first, ByteVector.SPECIES_128);
-            second = CoreVectors.requireByte(second, ByteVector.SPECIES_128);
+            first = RuntimeTypes.requireByte(first, ByteVector.SPECIES_128);
+            second = RuntimeTypes.requireByte(second, ByteVector.SPECIES_128);
             return switch (operation) {
                 case 0 -> (first).add(second);
                 case 1 -> (first).sub(second);
@@ -5430,7 +5430,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 LocalAccessor thirteenth, LocalAccessor fourteenth, LocalAccessor fifteenth,
                 LocalAccessor sixteenth,
                 ByteVector value, @Bind("$node") Node node) {
-            value = CoreVectors.requireByte(value, ByteVector.SPECIES_128);
+            value = RuntimeTypes.requireByte(value, ByteVector.SPECIES_128);
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
             first.setInt(bytecode, frame, value.lane(0)); second.setInt(bytecode, frame, value.lane(1));
             third.setInt(bytecode, frame, value.lane(2)); fourth.setInt(bytecode, frame, value.lane(3));
@@ -5453,8 +5453,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation @ConstantOperand(type = int.class, name = "operation")
     public static final class VectorWord32Binary {
         @Specialization public static IntVector binary(int operation, IntVector first, IntVector second) {
-            first = CoreVectors.requireInt(first, IntVector.SPECIES_128);
-            second = CoreVectors.requireInt(second, IntVector.SPECIES_128);
+            first = RuntimeTypes.requireInt(first, IntVector.SPECIES_128);
+            second = RuntimeTypes.requireInt(second, IntVector.SPECIES_128);
             return switch (operation) {
                 case 0 -> (first).add(second);
                 case 1 -> (first).sub(second);
@@ -5471,7 +5471,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class VectorWord32Unpack {
         @Specialization public static void unpack(VirtualFrame frame, LocalAccessor first, LocalAccessor second,
                 LocalAccessor third, LocalAccessor fourth, IntVector value, @Bind("$node") Node node) {
-            value = CoreVectors.requireInt(value, IntVector.SPECIES_128);
+            value = RuntimeTypes.requireInt(value, IntVector.SPECIES_128);
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
             first.setInt(bytecode, frame, value.lane(0)); second.setInt(bytecode, frame, value.lane(1));
             third.setInt(bytecode, frame, value.lane(2)); fourth.setInt(bytecode, frame, value.lane(3));
@@ -5489,8 +5489,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation @ConstantOperand(type = int.class, name = "operation")
     public static final class VectorWord16Binary {
         @Specialization public static ShortVector binary(int operation, ShortVector first, ShortVector second) {
-            first = CoreVectors.requireShort(first, ShortVector.SPECIES_128);
-            second = CoreVectors.requireShort(second, ShortVector.SPECIES_128);
+            first = RuntimeTypes.requireShort(first, ShortVector.SPECIES_128);
+            second = RuntimeTypes.requireShort(second, ShortVector.SPECIES_128);
             return switch (operation) {
                 case 0 -> (first).add(second);
                 case 1 -> (first).sub(second);
@@ -5512,7 +5512,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static void unpack(VirtualFrame frame, LocalAccessor first, LocalAccessor second,
                 LocalAccessor third, LocalAccessor fourth, LocalAccessor fifth, LocalAccessor sixth,
                 LocalAccessor seventh, LocalAccessor eighth, ShortVector value, @Bind("$node") Node node) {
-            value = CoreVectors.requireShort(value, ShortVector.SPECIES_128);
+            value = RuntimeTypes.requireShort(value, ShortVector.SPECIES_128);
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
             first.setInt(bytecode, frame, value.lane(0) & 0xffff); second.setInt(bytecode, frame, value.lane(1) & 0xffff);
             third.setInt(bytecode, frame, value.lane(2) & 0xffff); fourth.setInt(bytecode, frame, value.lane(3) & 0xffff);
@@ -5532,13 +5532,13 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
     @Operation public static final class Vector16Negate {
         @Specialization public static ShortVector negate(ShortVector value) {
-            value = CoreVectors.requireShort(value, ShortVector.SPECIES_128); return (value).neg(); }
+            value = RuntimeTypes.requireShort(value, ShortVector.SPECIES_128); return (value).neg(); }
     }
     @Operation @ConstantOperand(type = int.class, name = "operation")
     public static final class Vector16Binary {
         @Specialization public static ShortVector binary(int operation, ShortVector first, ShortVector second) {
-            first = CoreVectors.requireShort(first, ShortVector.SPECIES_128);
-            second = CoreVectors.requireShort(second, ShortVector.SPECIES_128);
+            first = RuntimeTypes.requireShort(first, ShortVector.SPECIES_128);
+            second = RuntimeTypes.requireShort(second, ShortVector.SPECIES_128);
             return switch (operation) {
                 case 0 -> (first).add(second);
                 case 1 -> (first).sub(second);
@@ -5560,7 +5560,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static void unpack(VirtualFrame frame, LocalAccessor first, LocalAccessor second,
                 LocalAccessor third, LocalAccessor fourth, LocalAccessor fifth, LocalAccessor sixth,
                 LocalAccessor seventh, LocalAccessor eighth, ShortVector value, @Bind("$node") Node node) {
-            value = CoreVectors.requireShort(value, ShortVector.SPECIES_128);
+            value = RuntimeTypes.requireShort(value, ShortVector.SPECIES_128);
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
             first.setInt(bytecode, frame, value.lane(0)); second.setInt(bytecode, frame, value.lane(1));
             third.setInt(bytecode, frame, value.lane(2)); fourth.setInt(bytecode, frame, value.lane(3));
@@ -5582,18 +5582,18 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
     @Operation public static final class Vector32Negate {
         @Specialization public static IntVector negate(IntVector value) {
-            value = CoreVectors.requireInt(value, IntVector.SPECIES_128); return (value).neg(); }
+            value = RuntimeTypes.requireInt(value, IntVector.SPECIES_128); return (value).neg(); }
     }
     @Operation public static final class Vector32Multiply {
         @Specialization public static IntVector multiply(IntVector first, IntVector second) {
-            first = CoreVectors.requireInt(first, IntVector.SPECIES_128);
-            second = CoreVectors.requireInt(second, IntVector.SPECIES_128); return (first).mul(second); }
+            first = RuntimeTypes.requireInt(first, IntVector.SPECIES_128);
+            second = RuntimeTypes.requireInt(second, IntVector.SPECIES_128); return (first).mul(second); }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "subtract")
     public static final class Vector32Binary {
         @Specialization public static IntVector binary(boolean subtract, IntVector first, IntVector second) {
-            first = CoreVectors.requireInt(first, IntVector.SPECIES_128);
-            second = CoreVectors.requireInt(second, IntVector.SPECIES_128);
+            first = RuntimeTypes.requireInt(first, IntVector.SPECIES_128);
+            second = RuntimeTypes.requireInt(second, IntVector.SPECIES_128);
             return subtract ? (first).sub(second) : (first).add(second);
         }
     }
@@ -5605,7 +5605,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class Vector32Unpack {
         @Specialization public static void unpack(VirtualFrame frame, LocalAccessor first, LocalAccessor second,
                 LocalAccessor third, LocalAccessor fourth, IntVector value, @Bind("$node") Node node) {
-            value = CoreVectors.requireInt(value, IntVector.SPECIES_128);
+            value = RuntimeTypes.requireInt(value, IntVector.SPECIES_128);
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
             first.setInt(bytecode, frame, value.lane(0)); second.setInt(bytecode, frame, value.lane(1));
             third.setInt(bytecode, frame, value.lane(2)); fourth.setInt(bytecode, frame, value.lane(3));
@@ -5623,8 +5623,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation @ConstantOperand(type = int.class, name = "operation")
     public static final class VectorFloatBinary {
         @Specialization public static FloatVector binary(int operation, FloatVector first, FloatVector second) {
-            first = CoreVectors.requireFloat(first, FloatVector.SPECIES_128);
-            second = CoreVectors.requireFloat(second, FloatVector.SPECIES_128);
+            first = RuntimeTypes.requireFloat(first, FloatVector.SPECIES_128);
+            second = RuntimeTypes.requireFloat(second, FloatVector.SPECIES_128);
             return switch (operation) {
                 case 0 -> (first).add(second);
                 case 1 -> (first).sub(second);
@@ -5636,9 +5636,9 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation @ConstantOperand(type = int.class, name = "operation")
     public static final class VectorFloatFused {
         @Specialization public static FloatVector apply(int operation, FloatVector first, FloatVector second, FloatVector third) {
-            first = CoreVectors.requireFloat(first, FloatVector.SPECIES_128);
-            second = CoreVectors.requireFloat(second, FloatVector.SPECIES_128);
-            third = CoreVectors.requireFloat(third, FloatVector.SPECIES_128);
+            first = RuntimeTypes.requireFloat(first, FloatVector.SPECIES_128);
+            second = RuntimeTypes.requireFloat(second, FloatVector.SPECIES_128);
+            third = RuntimeTypes.requireFloat(third, FloatVector.SPECIES_128);
             if (operation < 0 || operation > 3) throw new RuntimeFault("Invalid FloatX4 fused operation");
             var left = operation >= 2 ? first.neg() : first;
             var addend = (operation & 1) != 0 ? third.neg() : third;
@@ -5648,9 +5648,9 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation @ConstantOperand(type = int.class, name = "operation")
     public static final class VectorFloat8Fused {
         @Specialization public static FloatVector apply(int operation, FloatVector first, FloatVector second, FloatVector third) {
-            first = CoreVectors.requireFloat(first, FloatVector.SPECIES_256);
-            second = CoreVectors.requireFloat(second, FloatVector.SPECIES_256);
-            third = CoreVectors.requireFloat(third, FloatVector.SPECIES_256);
+            first = RuntimeTypes.requireFloat(first, FloatVector.SPECIES_256);
+            second = RuntimeTypes.requireFloat(second, FloatVector.SPECIES_256);
+            third = RuntimeTypes.requireFloat(third, FloatVector.SPECIES_256);
             if (operation < 0 || operation > 3) throw new RuntimeFault("Invalid FloatX8 fused operation");
             var left = operation >= 2 ? first.neg() : first;
             var addend = (operation & 1) != 0 ? third.neg() : third;
@@ -5660,9 +5660,9 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation @ConstantOperand(type = int.class, name = "operation")
     public static final class VectorFloat16Fused {
         @Specialization public static FloatVector apply(int operation, FloatVector first, FloatVector second, FloatVector third) {
-            first = CoreVectors.requireFloat(first, FloatVector.SPECIES_512);
-            second = CoreVectors.requireFloat(second, FloatVector.SPECIES_512);
-            third = CoreVectors.requireFloat(third, FloatVector.SPECIES_512);
+            first = RuntimeTypes.requireFloat(first, FloatVector.SPECIES_512);
+            second = RuntimeTypes.requireFloat(second, FloatVector.SPECIES_512);
+            third = RuntimeTypes.requireFloat(third, FloatVector.SPECIES_512);
             if (operation < 0 || operation > 3) throw new RuntimeFault("Invalid FloatX16 fused operation");
             var left = operation >= 2 ? first.neg() : first;
             var addend = (operation & 1) != 0 ? third.neg() : third;
@@ -5672,9 +5672,9 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation @ConstantOperand(type = int.class, name = "operation")
     public static final class VectorDouble4Fused {
         @Specialization public static DoubleVector apply(int operation, DoubleVector first, DoubleVector second, DoubleVector third) {
-            first = CoreVectors.requireDouble(first, DoubleVector.SPECIES_256);
-            second = CoreVectors.requireDouble(second, DoubleVector.SPECIES_256);
-            third = CoreVectors.requireDouble(third, DoubleVector.SPECIES_256);
+            first = RuntimeTypes.requireDouble(first, DoubleVector.SPECIES_256);
+            second = RuntimeTypes.requireDouble(second, DoubleVector.SPECIES_256);
+            third = RuntimeTypes.requireDouble(third, DoubleVector.SPECIES_256);
             if (operation < 0 || operation > 3) throw new RuntimeFault("Invalid DoubleX4 fused operation");
             var left = operation >= 2 ? first.neg() : first;
             var addend = (operation & 1) != 0 ? third.neg() : third;
@@ -5684,9 +5684,9 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation @ConstantOperand(type = int.class, name = "operation")
     public static final class VectorDouble8Fused {
         @Specialization public static DoubleVector apply(int operation, DoubleVector first, DoubleVector second, DoubleVector third) {
-            first = CoreVectors.requireDouble(first, DoubleVector.SPECIES_512);
-            second = CoreVectors.requireDouble(second, DoubleVector.SPECIES_512);
-            third = CoreVectors.requireDouble(third, DoubleVector.SPECIES_512);
+            first = RuntimeTypes.requireDouble(first, DoubleVector.SPECIES_512);
+            second = RuntimeTypes.requireDouble(second, DoubleVector.SPECIES_512);
+            third = RuntimeTypes.requireDouble(third, DoubleVector.SPECIES_512);
             if (operation < 0 || operation > 3) throw new RuntimeFault("Invalid DoubleX8 fused operation");
             var left = operation >= 2 ? first.neg() : first;
             var addend = (operation & 1) != 0 ? third.neg() : third;
@@ -5701,7 +5701,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class VectorFloatUnpack {
         @Specialization public static void unpack(VirtualFrame frame, LocalAccessor first, LocalAccessor second,
                 LocalAccessor third, LocalAccessor fourth, FloatVector value, @Bind("$node") Node node) {
-            value = CoreVectors.requireFloat(value, FloatVector.SPECIES_128);
+            value = RuntimeTypes.requireFloat(value, FloatVector.SPECIES_128);
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
             first.setFloat(bytecode, frame, value.lane(0)); second.setFloat(bytecode, frame, value.lane(1));
             third.setFloat(bytecode, frame, value.lane(2)); fourth.setFloat(bytecode, frame, value.lane(3));
@@ -5719,8 +5719,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation @ConstantOperand(type = int.class, name = "operation")
     public static final class VectorDoubleBinary {
         @Specialization public static DoubleVector binary(int operation, DoubleVector first, DoubleVector second) {
-            first = CoreVectors.requireDouble(first, DoubleVector.SPECIES_128);
-            second = CoreVectors.requireDouble(second, DoubleVector.SPECIES_128);
+            first = RuntimeTypes.requireDouble(first, DoubleVector.SPECIES_128);
+            second = RuntimeTypes.requireDouble(second, DoubleVector.SPECIES_128);
             return switch (operation) {
                 case 0 -> (first).add(second);
                 case 1 -> (first).sub(second);
@@ -5734,7 +5734,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = LocalAccessor.class, name = "second")
     public static final class VectorDoubleUnpack {
         @Specialization public static void unpack(VirtualFrame frame, LocalAccessor first, LocalAccessor second, DoubleVector value, @Bind("$node") Node node) {
-            value = CoreVectors.requireDouble(value, DoubleVector.SPECIES_128);
+            value = RuntimeTypes.requireDouble(value, DoubleVector.SPECIES_128);
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
             first.setDouble(bytecode, frame, value.lane(0)); second.setDouble(bytecode, frame, value.lane(1));
         }
@@ -5743,9 +5743,9 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation @ConstantOperand(type = int.class, name = "operation")
     public static final class VectorDoubleFused {
         @Specialization public static DoubleVector apply(int operation, DoubleVector first, DoubleVector second, DoubleVector third) {
-            first = CoreVectors.requireDouble(first, DoubleVector.SPECIES_128);
-            second = CoreVectors.requireDouble(second, DoubleVector.SPECIES_128);
-            third = CoreVectors.requireDouble(third, DoubleVector.SPECIES_128);
+            first = RuntimeTypes.requireDouble(first, DoubleVector.SPECIES_128);
+            second = RuntimeTypes.requireDouble(second, DoubleVector.SPECIES_128);
+            third = RuntimeTypes.requireDouble(third, DoubleVector.SPECIES_128);
             if (operation < 0 || operation > 3) throw new RuntimeFault("Invalid DoubleX2 fused operation");
             var left = operation >= 2 ? first.neg() : first;
             var addend = (operation & 1) != 0 ? third.neg() : third;
@@ -6097,7 +6097,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class GeneratedInt8X32Unpack {
         @Specialization public static void apply(VirtualFrame frame, BytecodeVectorLanes lanes, ByteVector raw, @Bind("$node") Node node) {
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
-            ByteVector value = CoreVectors.requireByte(raw, ByteVector.SPECIES_256);
+            ByteVector value = RuntimeTypes.requireByte(raw, ByteVector.SPECIES_256);
             lanes.getSlots()[0].setInt(bytecode, frame, value.lane(0));
             lanes.getSlots()[1].setInt(bytecode, frame, value.lane(1));
             lanes.getSlots()[2].setInt(bytecode, frame, value.lane(2));
@@ -6136,37 +6136,37 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static ByteVector apply(int value) { return ByteVector.broadcast(ByteVector.SPECIES_256, (byte) value); }
     }
     @Operation public static final class GeneratedInt8X32Plus {
-        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return CoreVectors.requireByte(left, ByteVector.SPECIES_256).add(CoreVectors.requireByte(right, ByteVector.SPECIES_256)); }
+        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return RuntimeTypes.requireByte(left, ByteVector.SPECIES_256).add(RuntimeTypes.requireByte(right, ByteVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedInt8X32Minus {
-        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return CoreVectors.requireByte(left, ByteVector.SPECIES_256).sub(CoreVectors.requireByte(right, ByteVector.SPECIES_256)); }
+        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return RuntimeTypes.requireByte(left, ByteVector.SPECIES_256).sub(RuntimeTypes.requireByte(right, ByteVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedInt8X32Times {
-        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return CoreVectors.requireByte(left, ByteVector.SPECIES_256).mul(CoreVectors.requireByte(right, ByteVector.SPECIES_256)); }
+        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return RuntimeTypes.requireByte(left, ByteVector.SPECIES_256).mul(RuntimeTypes.requireByte(right, ByteVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedInt8X32Negate {
-        @Specialization public static ByteVector apply(ByteVector value) { return CoreVectors.requireByte(value, ByteVector.SPECIES_256).neg(); }
+        @Specialization public static ByteVector apply(ByteVector value) { return RuntimeTypes.requireByte(value, ByteVector.SPECIES_256).neg(); }
     }
     @Operation public static final class GeneratedInt8X32Insert {
-        @Specialization public static ByteVector apply(ByteVector vector, int value, long index) { return CoreVectors.requireByte(vector, ByteVector.SPECIES_256).withLane(CoreVectors.laneIndex(index, 32), (byte) value); }
+        @Specialization public static ByteVector apply(ByteVector vector, int value, long index) { return RuntimeTypes.requireByte(vector, ByteVector.SPECIES_256).withLane(RuntimeTypes.laneIndex(index, 32), (byte) value); }
     }
     @Operation public static final class GeneratedInt8X32Min {
-        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return CoreVectors.requireByte(left, ByteVector.SPECIES_256).min(CoreVectors.requireByte(right, ByteVector.SPECIES_256)); }
+        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return RuntimeTypes.requireByte(left, ByteVector.SPECIES_256).min(RuntimeTypes.requireByte(right, ByteVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedInt8X32Max {
-        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return CoreVectors.requireByte(left, ByteVector.SPECIES_256).max(CoreVectors.requireByte(right, ByteVector.SPECIES_256)); }
+        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return RuntimeTypes.requireByte(left, ByteVector.SPECIES_256).max(RuntimeTypes.requireByte(right, ByteVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedInt8X32Quot {
-        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return VectorIntegerDivision.quotByte(CoreVectors.requireByte(left, ByteVector.SPECIES_256), CoreVectors.requireByte(right, ByteVector.SPECIES_256), false); }
+        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return VectorIntegerDivision.quotByte(RuntimeTypes.requireByte(left, ByteVector.SPECIES_256), RuntimeTypes.requireByte(right, ByteVector.SPECIES_256), false); }
     }
     @Operation public static final class GeneratedInt8X32Rem {
-        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return VectorIntegerDivision.remByte(CoreVectors.requireByte(left, ByteVector.SPECIES_256), CoreVectors.requireByte(right, ByteVector.SPECIES_256), false); }
+        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return VectorIntegerDivision.remByte(RuntimeTypes.requireByte(left, ByteVector.SPECIES_256), RuntimeTypes.requireByte(right, ByteVector.SPECIES_256), false); }
     }
     @Operation
     @ConstantOperand(type = VectorShuffle.class, name = "shuffle")
     public static final class GeneratedInt8X32Shuffle {
         @Specialization public static ByteVector apply(VectorShuffle<?> shuffle, ByteVector left, ByteVector right) {
-            return CoreVectors.requireByte(left, ByteVector.SPECIES_256).rearrange(shuffle.check(ByteVector.SPECIES_256), CoreVectors.requireByte(right, ByteVector.SPECIES_256));
+            return RuntimeTypes.requireByte(left, ByteVector.SPECIES_256).rearrange(shuffle.check(ByteVector.SPECIES_256), RuntimeTypes.requireByte(right, ByteVector.SPECIES_256));
         }
     }
     @Operation
@@ -6186,7 +6186,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class GeneratedWord8X32Unpack {
         @Specialization public static void apply(VirtualFrame frame, BytecodeVectorLanes lanes, ByteVector raw, @Bind("$node") Node node) {
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
-            ByteVector value = CoreVectors.requireByte(raw, ByteVector.SPECIES_256);
+            ByteVector value = RuntimeTypes.requireByte(raw, ByteVector.SPECIES_256);
             lanes.getSlots()[0].setInt(bytecode, frame, value.lane(0) & 0xff);
             lanes.getSlots()[1].setInt(bytecode, frame, value.lane(1) & 0xff);
             lanes.getSlots()[2].setInt(bytecode, frame, value.lane(2) & 0xff);
@@ -6225,34 +6225,34 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static ByteVector apply(int value) { return ByteVector.broadcast(ByteVector.SPECIES_256, (byte) value); }
     }
     @Operation public static final class GeneratedWord8X32Plus {
-        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return CoreVectors.requireByte(left, ByteVector.SPECIES_256).add(CoreVectors.requireByte(right, ByteVector.SPECIES_256)); }
+        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return RuntimeTypes.requireByte(left, ByteVector.SPECIES_256).add(RuntimeTypes.requireByte(right, ByteVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedWord8X32Minus {
-        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return CoreVectors.requireByte(left, ByteVector.SPECIES_256).sub(CoreVectors.requireByte(right, ByteVector.SPECIES_256)); }
+        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return RuntimeTypes.requireByte(left, ByteVector.SPECIES_256).sub(RuntimeTypes.requireByte(right, ByteVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedWord8X32Times {
-        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return CoreVectors.requireByte(left, ByteVector.SPECIES_256).mul(CoreVectors.requireByte(right, ByteVector.SPECIES_256)); }
+        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return RuntimeTypes.requireByte(left, ByteVector.SPECIES_256).mul(RuntimeTypes.requireByte(right, ByteVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedWord8X32Insert {
-        @Specialization public static ByteVector apply(ByteVector vector, int value, long index) { return CoreVectors.requireByte(vector, ByteVector.SPECIES_256).withLane(CoreVectors.laneIndex(index, 32), (byte) value); }
+        @Specialization public static ByteVector apply(ByteVector vector, int value, long index) { return RuntimeTypes.requireByte(vector, ByteVector.SPECIES_256).withLane(RuntimeTypes.laneIndex(index, 32), (byte) value); }
     }
     @Operation public static final class GeneratedWord8X32Min {
-        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return CoreVectors.requireByte(left, ByteVector.SPECIES_256).lanewise(VectorOperators.UMIN, CoreVectors.requireByte(right, ByteVector.SPECIES_256)); }
+        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return RuntimeTypes.requireByte(left, ByteVector.SPECIES_256).lanewise(VectorOperators.UMIN, RuntimeTypes.requireByte(right, ByteVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedWord8X32Max {
-        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return CoreVectors.requireByte(left, ByteVector.SPECIES_256).lanewise(VectorOperators.UMAX, CoreVectors.requireByte(right, ByteVector.SPECIES_256)); }
+        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return RuntimeTypes.requireByte(left, ByteVector.SPECIES_256).lanewise(VectorOperators.UMAX, RuntimeTypes.requireByte(right, ByteVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedWord8X32Quot {
-        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return VectorIntegerDivision.quotByte(CoreVectors.requireByte(left, ByteVector.SPECIES_256), CoreVectors.requireByte(right, ByteVector.SPECIES_256), true); }
+        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return VectorIntegerDivision.quotByte(RuntimeTypes.requireByte(left, ByteVector.SPECIES_256), RuntimeTypes.requireByte(right, ByteVector.SPECIES_256), true); }
     }
     @Operation public static final class GeneratedWord8X32Rem {
-        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return VectorIntegerDivision.remByte(CoreVectors.requireByte(left, ByteVector.SPECIES_256), CoreVectors.requireByte(right, ByteVector.SPECIES_256), true); }
+        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return VectorIntegerDivision.remByte(RuntimeTypes.requireByte(left, ByteVector.SPECIES_256), RuntimeTypes.requireByte(right, ByteVector.SPECIES_256), true); }
     }
     @Operation
     @ConstantOperand(type = VectorShuffle.class, name = "shuffle")
     public static final class GeneratedWord8X32Shuffle {
         @Specialization public static ByteVector apply(VectorShuffle<?> shuffle, ByteVector left, ByteVector right) {
-            return CoreVectors.requireByte(left, ByteVector.SPECIES_256).rearrange(shuffle.check(ByteVector.SPECIES_256), CoreVectors.requireByte(right, ByteVector.SPECIES_256));
+            return RuntimeTypes.requireByte(left, ByteVector.SPECIES_256).rearrange(shuffle.check(ByteVector.SPECIES_256), RuntimeTypes.requireByte(right, ByteVector.SPECIES_256));
         }
     }
     @Operation
@@ -6272,7 +6272,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class GeneratedInt8X64Unpack {
         @Specialization public static void apply(VirtualFrame frame, BytecodeVectorLanes lanes, ByteVector raw, @Bind("$node") Node node) {
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
-            ByteVector value = CoreVectors.requireByte(raw, ByteVector.SPECIES_512);
+            ByteVector value = RuntimeTypes.requireByte(raw, ByteVector.SPECIES_512);
             lanes.getSlots()[0].setInt(bytecode, frame, value.lane(0));
             lanes.getSlots()[1].setInt(bytecode, frame, value.lane(1));
             lanes.getSlots()[2].setInt(bytecode, frame, value.lane(2));
@@ -6343,37 +6343,37 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static ByteVector apply(int value) { return ByteVector.broadcast(ByteVector.SPECIES_512, (byte) value); }
     }
     @Operation public static final class GeneratedInt8X64Plus {
-        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return CoreVectors.requireByte(left, ByteVector.SPECIES_512).add(CoreVectors.requireByte(right, ByteVector.SPECIES_512)); }
+        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return RuntimeTypes.requireByte(left, ByteVector.SPECIES_512).add(RuntimeTypes.requireByte(right, ByteVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedInt8X64Minus {
-        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return CoreVectors.requireByte(left, ByteVector.SPECIES_512).sub(CoreVectors.requireByte(right, ByteVector.SPECIES_512)); }
+        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return RuntimeTypes.requireByte(left, ByteVector.SPECIES_512).sub(RuntimeTypes.requireByte(right, ByteVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedInt8X64Times {
-        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return CoreVectors.requireByte(left, ByteVector.SPECIES_512).mul(CoreVectors.requireByte(right, ByteVector.SPECIES_512)); }
+        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return RuntimeTypes.requireByte(left, ByteVector.SPECIES_512).mul(RuntimeTypes.requireByte(right, ByteVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedInt8X64Negate {
-        @Specialization public static ByteVector apply(ByteVector value) { return CoreVectors.requireByte(value, ByteVector.SPECIES_512).neg(); }
+        @Specialization public static ByteVector apply(ByteVector value) { return RuntimeTypes.requireByte(value, ByteVector.SPECIES_512).neg(); }
     }
     @Operation public static final class GeneratedInt8X64Insert {
-        @Specialization public static ByteVector apply(ByteVector vector, int value, long index) { return CoreVectors.requireByte(vector, ByteVector.SPECIES_512).withLane(CoreVectors.laneIndex(index, 64), (byte) value); }
+        @Specialization public static ByteVector apply(ByteVector vector, int value, long index) { return RuntimeTypes.requireByte(vector, ByteVector.SPECIES_512).withLane(RuntimeTypes.laneIndex(index, 64), (byte) value); }
     }
     @Operation public static final class GeneratedInt8X64Min {
-        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return CoreVectors.requireByte(left, ByteVector.SPECIES_512).min(CoreVectors.requireByte(right, ByteVector.SPECIES_512)); }
+        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return RuntimeTypes.requireByte(left, ByteVector.SPECIES_512).min(RuntimeTypes.requireByte(right, ByteVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedInt8X64Max {
-        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return CoreVectors.requireByte(left, ByteVector.SPECIES_512).max(CoreVectors.requireByte(right, ByteVector.SPECIES_512)); }
+        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return RuntimeTypes.requireByte(left, ByteVector.SPECIES_512).max(RuntimeTypes.requireByte(right, ByteVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedInt8X64Quot {
-        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return VectorIntegerDivision.quotByte(CoreVectors.requireByte(left, ByteVector.SPECIES_512), CoreVectors.requireByte(right, ByteVector.SPECIES_512), false); }
+        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return VectorIntegerDivision.quotByte(RuntimeTypes.requireByte(left, ByteVector.SPECIES_512), RuntimeTypes.requireByte(right, ByteVector.SPECIES_512), false); }
     }
     @Operation public static final class GeneratedInt8X64Rem {
-        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return VectorIntegerDivision.remByte(CoreVectors.requireByte(left, ByteVector.SPECIES_512), CoreVectors.requireByte(right, ByteVector.SPECIES_512), false); }
+        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return VectorIntegerDivision.remByte(RuntimeTypes.requireByte(left, ByteVector.SPECIES_512), RuntimeTypes.requireByte(right, ByteVector.SPECIES_512), false); }
     }
     @Operation
     @ConstantOperand(type = VectorShuffle.class, name = "shuffle")
     public static final class GeneratedInt8X64Shuffle {
         @Specialization public static ByteVector apply(VectorShuffle<?> shuffle, ByteVector left, ByteVector right) {
-            return CoreVectors.requireByte(left, ByteVector.SPECIES_512).rearrange(shuffle.check(ByteVector.SPECIES_512), CoreVectors.requireByte(right, ByteVector.SPECIES_512));
+            return RuntimeTypes.requireByte(left, ByteVector.SPECIES_512).rearrange(shuffle.check(ByteVector.SPECIES_512), RuntimeTypes.requireByte(right, ByteVector.SPECIES_512));
         }
     }
     @Operation
@@ -6393,7 +6393,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class GeneratedWord8X64Unpack {
         @Specialization public static void apply(VirtualFrame frame, BytecodeVectorLanes lanes, ByteVector raw, @Bind("$node") Node node) {
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
-            ByteVector value = CoreVectors.requireByte(raw, ByteVector.SPECIES_512);
+            ByteVector value = RuntimeTypes.requireByte(raw, ByteVector.SPECIES_512);
             lanes.getSlots()[0].setInt(bytecode, frame, value.lane(0) & 0xff);
             lanes.getSlots()[1].setInt(bytecode, frame, value.lane(1) & 0xff);
             lanes.getSlots()[2].setInt(bytecode, frame, value.lane(2) & 0xff);
@@ -6464,34 +6464,34 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static ByteVector apply(int value) { return ByteVector.broadcast(ByteVector.SPECIES_512, (byte) value); }
     }
     @Operation public static final class GeneratedWord8X64Plus {
-        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return CoreVectors.requireByte(left, ByteVector.SPECIES_512).add(CoreVectors.requireByte(right, ByteVector.SPECIES_512)); }
+        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return RuntimeTypes.requireByte(left, ByteVector.SPECIES_512).add(RuntimeTypes.requireByte(right, ByteVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedWord8X64Minus {
-        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return CoreVectors.requireByte(left, ByteVector.SPECIES_512).sub(CoreVectors.requireByte(right, ByteVector.SPECIES_512)); }
+        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return RuntimeTypes.requireByte(left, ByteVector.SPECIES_512).sub(RuntimeTypes.requireByte(right, ByteVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedWord8X64Times {
-        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return CoreVectors.requireByte(left, ByteVector.SPECIES_512).mul(CoreVectors.requireByte(right, ByteVector.SPECIES_512)); }
+        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return RuntimeTypes.requireByte(left, ByteVector.SPECIES_512).mul(RuntimeTypes.requireByte(right, ByteVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedWord8X64Insert {
-        @Specialization public static ByteVector apply(ByteVector vector, int value, long index) { return CoreVectors.requireByte(vector, ByteVector.SPECIES_512).withLane(CoreVectors.laneIndex(index, 64), (byte) value); }
+        @Specialization public static ByteVector apply(ByteVector vector, int value, long index) { return RuntimeTypes.requireByte(vector, ByteVector.SPECIES_512).withLane(RuntimeTypes.laneIndex(index, 64), (byte) value); }
     }
     @Operation public static final class GeneratedWord8X64Min {
-        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return CoreVectors.requireByte(left, ByteVector.SPECIES_512).lanewise(VectorOperators.UMIN, CoreVectors.requireByte(right, ByteVector.SPECIES_512)); }
+        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return RuntimeTypes.requireByte(left, ByteVector.SPECIES_512).lanewise(VectorOperators.UMIN, RuntimeTypes.requireByte(right, ByteVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedWord8X64Max {
-        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return CoreVectors.requireByte(left, ByteVector.SPECIES_512).lanewise(VectorOperators.UMAX, CoreVectors.requireByte(right, ByteVector.SPECIES_512)); }
+        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return RuntimeTypes.requireByte(left, ByteVector.SPECIES_512).lanewise(VectorOperators.UMAX, RuntimeTypes.requireByte(right, ByteVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedWord8X64Quot {
-        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return VectorIntegerDivision.quotByte(CoreVectors.requireByte(left, ByteVector.SPECIES_512), CoreVectors.requireByte(right, ByteVector.SPECIES_512), true); }
+        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return VectorIntegerDivision.quotByte(RuntimeTypes.requireByte(left, ByteVector.SPECIES_512), RuntimeTypes.requireByte(right, ByteVector.SPECIES_512), true); }
     }
     @Operation public static final class GeneratedWord8X64Rem {
-        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return VectorIntegerDivision.remByte(CoreVectors.requireByte(left, ByteVector.SPECIES_512), CoreVectors.requireByte(right, ByteVector.SPECIES_512), true); }
+        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return VectorIntegerDivision.remByte(RuntimeTypes.requireByte(left, ByteVector.SPECIES_512), RuntimeTypes.requireByte(right, ByteVector.SPECIES_512), true); }
     }
     @Operation
     @ConstantOperand(type = VectorShuffle.class, name = "shuffle")
     public static final class GeneratedWord8X64Shuffle {
         @Specialization public static ByteVector apply(VectorShuffle<?> shuffle, ByteVector left, ByteVector right) {
-            return CoreVectors.requireByte(left, ByteVector.SPECIES_512).rearrange(shuffle.check(ByteVector.SPECIES_512), CoreVectors.requireByte(right, ByteVector.SPECIES_512));
+            return RuntimeTypes.requireByte(left, ByteVector.SPECIES_512).rearrange(shuffle.check(ByteVector.SPECIES_512), RuntimeTypes.requireByte(right, ByteVector.SPECIES_512));
         }
     }
     @Operation
@@ -6511,7 +6511,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class GeneratedInt16X32Unpack {
         @Specialization public static void apply(VirtualFrame frame, BytecodeVectorLanes lanes, ShortVector raw, @Bind("$node") Node node) {
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
-            ShortVector value = CoreVectors.requireShort(raw, ShortVector.SPECIES_512);
+            ShortVector value = RuntimeTypes.requireShort(raw, ShortVector.SPECIES_512);
             lanes.getSlots()[0].setInt(bytecode, frame, value.lane(0));
             lanes.getSlots()[1].setInt(bytecode, frame, value.lane(1));
             lanes.getSlots()[2].setInt(bytecode, frame, value.lane(2));
@@ -6550,37 +6550,37 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static ShortVector apply(int value) { return ShortVector.broadcast(ShortVector.SPECIES_512, (short) value); }
     }
     @Operation public static final class GeneratedInt16X32Plus {
-        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return CoreVectors.requireShort(left, ShortVector.SPECIES_512).add(CoreVectors.requireShort(right, ShortVector.SPECIES_512)); }
+        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return RuntimeTypes.requireShort(left, ShortVector.SPECIES_512).add(RuntimeTypes.requireShort(right, ShortVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedInt16X32Minus {
-        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return CoreVectors.requireShort(left, ShortVector.SPECIES_512).sub(CoreVectors.requireShort(right, ShortVector.SPECIES_512)); }
+        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return RuntimeTypes.requireShort(left, ShortVector.SPECIES_512).sub(RuntimeTypes.requireShort(right, ShortVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedInt16X32Times {
-        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return CoreVectors.requireShort(left, ShortVector.SPECIES_512).mul(CoreVectors.requireShort(right, ShortVector.SPECIES_512)); }
+        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return RuntimeTypes.requireShort(left, ShortVector.SPECIES_512).mul(RuntimeTypes.requireShort(right, ShortVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedInt16X32Negate {
-        @Specialization public static ShortVector apply(ShortVector value) { return CoreVectors.requireShort(value, ShortVector.SPECIES_512).neg(); }
+        @Specialization public static ShortVector apply(ShortVector value) { return RuntimeTypes.requireShort(value, ShortVector.SPECIES_512).neg(); }
     }
     @Operation public static final class GeneratedInt16X32Insert {
-        @Specialization public static ShortVector apply(ShortVector vector, int value, long index) { return CoreVectors.requireShort(vector, ShortVector.SPECIES_512).withLane(CoreVectors.laneIndex(index, 32), (short) value); }
+        @Specialization public static ShortVector apply(ShortVector vector, int value, long index) { return RuntimeTypes.requireShort(vector, ShortVector.SPECIES_512).withLane(RuntimeTypes.laneIndex(index, 32), (short) value); }
     }
     @Operation public static final class GeneratedInt16X32Min {
-        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return CoreVectors.requireShort(left, ShortVector.SPECIES_512).min(CoreVectors.requireShort(right, ShortVector.SPECIES_512)); }
+        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return RuntimeTypes.requireShort(left, ShortVector.SPECIES_512).min(RuntimeTypes.requireShort(right, ShortVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedInt16X32Max {
-        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return CoreVectors.requireShort(left, ShortVector.SPECIES_512).max(CoreVectors.requireShort(right, ShortVector.SPECIES_512)); }
+        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return RuntimeTypes.requireShort(left, ShortVector.SPECIES_512).max(RuntimeTypes.requireShort(right, ShortVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedInt16X32Quot {
-        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return VectorIntegerDivision.quotShort(CoreVectors.requireShort(left, ShortVector.SPECIES_512), CoreVectors.requireShort(right, ShortVector.SPECIES_512), false); }
+        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return VectorIntegerDivision.quotShort(RuntimeTypes.requireShort(left, ShortVector.SPECIES_512), RuntimeTypes.requireShort(right, ShortVector.SPECIES_512), false); }
     }
     @Operation public static final class GeneratedInt16X32Rem {
-        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return VectorIntegerDivision.remShort(CoreVectors.requireShort(left, ShortVector.SPECIES_512), CoreVectors.requireShort(right, ShortVector.SPECIES_512), false); }
+        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return VectorIntegerDivision.remShort(RuntimeTypes.requireShort(left, ShortVector.SPECIES_512), RuntimeTypes.requireShort(right, ShortVector.SPECIES_512), false); }
     }
     @Operation
     @ConstantOperand(type = VectorShuffle.class, name = "shuffle")
     public static final class GeneratedInt16X32Shuffle {
         @Specialization public static ShortVector apply(VectorShuffle<?> shuffle, ShortVector left, ShortVector right) {
-            return CoreVectors.requireShort(left, ShortVector.SPECIES_512).rearrange(shuffle.check(ShortVector.SPECIES_512), CoreVectors.requireShort(right, ShortVector.SPECIES_512));
+            return RuntimeTypes.requireShort(left, ShortVector.SPECIES_512).rearrange(shuffle.check(ShortVector.SPECIES_512), RuntimeTypes.requireShort(right, ShortVector.SPECIES_512));
         }
     }
     @Operation
@@ -6600,7 +6600,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class GeneratedWord16X32Unpack {
         @Specialization public static void apply(VirtualFrame frame, BytecodeVectorLanes lanes, ShortVector raw, @Bind("$node") Node node) {
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
-            ShortVector value = CoreVectors.requireShort(raw, ShortVector.SPECIES_512);
+            ShortVector value = RuntimeTypes.requireShort(raw, ShortVector.SPECIES_512);
             lanes.getSlots()[0].setInt(bytecode, frame, value.lane(0) & 0xffff);
             lanes.getSlots()[1].setInt(bytecode, frame, value.lane(1) & 0xffff);
             lanes.getSlots()[2].setInt(bytecode, frame, value.lane(2) & 0xffff);
@@ -6639,34 +6639,34 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static ShortVector apply(int value) { return ShortVector.broadcast(ShortVector.SPECIES_512, (short) value); }
     }
     @Operation public static final class GeneratedWord16X32Plus {
-        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return CoreVectors.requireShort(left, ShortVector.SPECIES_512).add(CoreVectors.requireShort(right, ShortVector.SPECIES_512)); }
+        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return RuntimeTypes.requireShort(left, ShortVector.SPECIES_512).add(RuntimeTypes.requireShort(right, ShortVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedWord16X32Minus {
-        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return CoreVectors.requireShort(left, ShortVector.SPECIES_512).sub(CoreVectors.requireShort(right, ShortVector.SPECIES_512)); }
+        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return RuntimeTypes.requireShort(left, ShortVector.SPECIES_512).sub(RuntimeTypes.requireShort(right, ShortVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedWord16X32Times {
-        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return CoreVectors.requireShort(left, ShortVector.SPECIES_512).mul(CoreVectors.requireShort(right, ShortVector.SPECIES_512)); }
+        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return RuntimeTypes.requireShort(left, ShortVector.SPECIES_512).mul(RuntimeTypes.requireShort(right, ShortVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedWord16X32Insert {
-        @Specialization public static ShortVector apply(ShortVector vector, int value, long index) { return CoreVectors.requireShort(vector, ShortVector.SPECIES_512).withLane(CoreVectors.laneIndex(index, 32), (short) value); }
+        @Specialization public static ShortVector apply(ShortVector vector, int value, long index) { return RuntimeTypes.requireShort(vector, ShortVector.SPECIES_512).withLane(RuntimeTypes.laneIndex(index, 32), (short) value); }
     }
     @Operation public static final class GeneratedWord16X32Min {
-        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return CoreVectors.requireShort(left, ShortVector.SPECIES_512).lanewise(VectorOperators.UMIN, CoreVectors.requireShort(right, ShortVector.SPECIES_512)); }
+        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return RuntimeTypes.requireShort(left, ShortVector.SPECIES_512).lanewise(VectorOperators.UMIN, RuntimeTypes.requireShort(right, ShortVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedWord16X32Max {
-        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return CoreVectors.requireShort(left, ShortVector.SPECIES_512).lanewise(VectorOperators.UMAX, CoreVectors.requireShort(right, ShortVector.SPECIES_512)); }
+        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return RuntimeTypes.requireShort(left, ShortVector.SPECIES_512).lanewise(VectorOperators.UMAX, RuntimeTypes.requireShort(right, ShortVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedWord16X32Quot {
-        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return VectorIntegerDivision.quotShort(CoreVectors.requireShort(left, ShortVector.SPECIES_512), CoreVectors.requireShort(right, ShortVector.SPECIES_512), true); }
+        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return VectorIntegerDivision.quotShort(RuntimeTypes.requireShort(left, ShortVector.SPECIES_512), RuntimeTypes.requireShort(right, ShortVector.SPECIES_512), true); }
     }
     @Operation public static final class GeneratedWord16X32Rem {
-        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return VectorIntegerDivision.remShort(CoreVectors.requireShort(left, ShortVector.SPECIES_512), CoreVectors.requireShort(right, ShortVector.SPECIES_512), true); }
+        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return VectorIntegerDivision.remShort(RuntimeTypes.requireShort(left, ShortVector.SPECIES_512), RuntimeTypes.requireShort(right, ShortVector.SPECIES_512), true); }
     }
     @Operation
     @ConstantOperand(type = VectorShuffle.class, name = "shuffle")
     public static final class GeneratedWord16X32Shuffle {
         @Specialization public static ShortVector apply(VectorShuffle<?> shuffle, ShortVector left, ShortVector right) {
-            return CoreVectors.requireShort(left, ShortVector.SPECIES_512).rearrange(shuffle.check(ShortVector.SPECIES_512), CoreVectors.requireShort(right, ShortVector.SPECIES_512));
+            return RuntimeTypes.requireShort(left, ShortVector.SPECIES_512).rearrange(shuffle.check(ShortVector.SPECIES_512), RuntimeTypes.requireShort(right, ShortVector.SPECIES_512));
         }
     }
     @Operation public static final class GeneratedWord64X2Pack {
@@ -6678,7 +6678,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class GeneratedWord64X2Unpack {
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor lane0, LocalAccessor lane1, LongVector raw, @Bind("$node") Node node) {
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
-            LongVector value = CoreVectors.requireLong(raw, LongVector.SPECIES_128);
+            LongVector value = RuntimeTypes.requireLong(raw, LongVector.SPECIES_128);
             lane0.setLong(bytecode, frame, value.lane(0));
             lane1.setLong(bytecode, frame, value.lane(1));
         }
@@ -6687,34 +6687,34 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static LongVector apply(long value) { return LongVector.broadcast(LongVector.SPECIES_128, value); }
     }
     @Operation public static final class GeneratedWord64X2Plus {
-        @Specialization public static LongVector apply(LongVector left, LongVector right) { return CoreVectors.requireLong(left, LongVector.SPECIES_128).add(CoreVectors.requireLong(right, LongVector.SPECIES_128)); }
+        @Specialization public static LongVector apply(LongVector left, LongVector right) { return RuntimeTypes.requireLong(left, LongVector.SPECIES_128).add(RuntimeTypes.requireLong(right, LongVector.SPECIES_128)); }
     }
     @Operation public static final class GeneratedWord64X2Minus {
-        @Specialization public static LongVector apply(LongVector left, LongVector right) { return CoreVectors.requireLong(left, LongVector.SPECIES_128).sub(CoreVectors.requireLong(right, LongVector.SPECIES_128)); }
+        @Specialization public static LongVector apply(LongVector left, LongVector right) { return RuntimeTypes.requireLong(left, LongVector.SPECIES_128).sub(RuntimeTypes.requireLong(right, LongVector.SPECIES_128)); }
     }
     @Operation public static final class GeneratedWord64X2Times {
-        @Specialization public static LongVector apply(LongVector left, LongVector right) { return CoreVectors.requireLong(left, LongVector.SPECIES_128).mul(CoreVectors.requireLong(right, LongVector.SPECIES_128)); }
+        @Specialization public static LongVector apply(LongVector left, LongVector right) { return RuntimeTypes.requireLong(left, LongVector.SPECIES_128).mul(RuntimeTypes.requireLong(right, LongVector.SPECIES_128)); }
     }
     @Operation public static final class GeneratedWord64X2Insert {
-        @Specialization public static LongVector apply(LongVector vector, long value, long index) { return CoreVectors.requireLong(vector, LongVector.SPECIES_128).withLane(CoreVectors.laneIndex(index, 2), value); }
+        @Specialization public static LongVector apply(LongVector vector, long value, long index) { return RuntimeTypes.requireLong(vector, LongVector.SPECIES_128).withLane(RuntimeTypes.laneIndex(index, 2), value); }
     }
     @Operation public static final class GeneratedWord64X2Min {
-        @Specialization public static LongVector apply(LongVector left, LongVector right) { return CoreVectors.requireLong(left, LongVector.SPECIES_128).lanewise(VectorOperators.UMIN, CoreVectors.requireLong(right, LongVector.SPECIES_128)); }
+        @Specialization public static LongVector apply(LongVector left, LongVector right) { return RuntimeTypes.requireLong(left, LongVector.SPECIES_128).lanewise(VectorOperators.UMIN, RuntimeTypes.requireLong(right, LongVector.SPECIES_128)); }
     }
     @Operation public static final class GeneratedWord64X2Max {
-        @Specialization public static LongVector apply(LongVector left, LongVector right) { return CoreVectors.requireLong(left, LongVector.SPECIES_128).lanewise(VectorOperators.UMAX, CoreVectors.requireLong(right, LongVector.SPECIES_128)); }
+        @Specialization public static LongVector apply(LongVector left, LongVector right) { return RuntimeTypes.requireLong(left, LongVector.SPECIES_128).lanewise(VectorOperators.UMAX, RuntimeTypes.requireLong(right, LongVector.SPECIES_128)); }
     }
     @Operation public static final class GeneratedWord64X2Quot {
-        @Specialization public static LongVector apply(LongVector left, LongVector right) { return VectorIntegerDivision.quotLong(CoreVectors.requireLong(left, LongVector.SPECIES_128), CoreVectors.requireLong(right, LongVector.SPECIES_128), true); }
+        @Specialization public static LongVector apply(LongVector left, LongVector right) { return VectorIntegerDivision.quotLong(RuntimeTypes.requireLong(left, LongVector.SPECIES_128), RuntimeTypes.requireLong(right, LongVector.SPECIES_128), true); }
     }
     @Operation public static final class GeneratedWord64X2Rem {
-        @Specialization public static LongVector apply(LongVector left, LongVector right) { return VectorIntegerDivision.remLong(CoreVectors.requireLong(left, LongVector.SPECIES_128), CoreVectors.requireLong(right, LongVector.SPECIES_128), true); }
+        @Specialization public static LongVector apply(LongVector left, LongVector right) { return VectorIntegerDivision.remLong(RuntimeTypes.requireLong(left, LongVector.SPECIES_128), RuntimeTypes.requireLong(right, LongVector.SPECIES_128), true); }
     }
     @Operation
     @ConstantOperand(type = VectorShuffle.class, name = "shuffle")
     public static final class GeneratedWord64X2Shuffle {
         @Specialization public static LongVector apply(VectorShuffle<?> shuffle, LongVector left, LongVector right) {
-            return CoreVectors.requireLong(left, LongVector.SPECIES_128).rearrange(shuffle.check(LongVector.SPECIES_128), CoreVectors.requireLong(right, LongVector.SPECIES_128));
+            return RuntimeTypes.requireLong(left, LongVector.SPECIES_128).rearrange(shuffle.check(LongVector.SPECIES_128), RuntimeTypes.requireLong(right, LongVector.SPECIES_128));
         }
     }
     @Operation public static final class GeneratedWord32X8Pack {
@@ -6732,7 +6732,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class GeneratedWord32X8Unpack {
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor lane0, LocalAccessor lane1, LocalAccessor lane2, LocalAccessor lane3, LocalAccessor lane4, LocalAccessor lane5, LocalAccessor lane6, LocalAccessor lane7, IntVector raw, @Bind("$node") Node node) {
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
-            IntVector value = CoreVectors.requireInt(raw, IntVector.SPECIES_256);
+            IntVector value = RuntimeTypes.requireInt(raw, IntVector.SPECIES_256);
             lane0.setInt(bytecode, frame, value.lane(0));
             lane1.setInt(bytecode, frame, value.lane(1));
             lane2.setInt(bytecode, frame, value.lane(2));
@@ -6747,34 +6747,34 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static IntVector apply(int value) { return IntVector.broadcast(IntVector.SPECIES_256, (int) value); }
     }
     @Operation public static final class GeneratedWord32X8Plus {
-        @Specialization public static IntVector apply(IntVector left, IntVector right) { return CoreVectors.requireInt(left, IntVector.SPECIES_256).add(CoreVectors.requireInt(right, IntVector.SPECIES_256)); }
+        @Specialization public static IntVector apply(IntVector left, IntVector right) { return RuntimeTypes.requireInt(left, IntVector.SPECIES_256).add(RuntimeTypes.requireInt(right, IntVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedWord32X8Minus {
-        @Specialization public static IntVector apply(IntVector left, IntVector right) { return CoreVectors.requireInt(left, IntVector.SPECIES_256).sub(CoreVectors.requireInt(right, IntVector.SPECIES_256)); }
+        @Specialization public static IntVector apply(IntVector left, IntVector right) { return RuntimeTypes.requireInt(left, IntVector.SPECIES_256).sub(RuntimeTypes.requireInt(right, IntVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedWord32X8Times {
-        @Specialization public static IntVector apply(IntVector left, IntVector right) { return CoreVectors.requireInt(left, IntVector.SPECIES_256).mul(CoreVectors.requireInt(right, IntVector.SPECIES_256)); }
+        @Specialization public static IntVector apply(IntVector left, IntVector right) { return RuntimeTypes.requireInt(left, IntVector.SPECIES_256).mul(RuntimeTypes.requireInt(right, IntVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedWord32X8Insert {
-        @Specialization public static IntVector apply(IntVector vector, int value, long index) { return CoreVectors.requireInt(vector, IntVector.SPECIES_256).withLane(CoreVectors.laneIndex(index, 8), (int) value); }
+        @Specialization public static IntVector apply(IntVector vector, int value, long index) { return RuntimeTypes.requireInt(vector, IntVector.SPECIES_256).withLane(RuntimeTypes.laneIndex(index, 8), (int) value); }
     }
     @Operation public static final class GeneratedWord32X8Min {
-        @Specialization public static IntVector apply(IntVector left, IntVector right) { return CoreVectors.requireInt(left, IntVector.SPECIES_256).lanewise(VectorOperators.UMIN, CoreVectors.requireInt(right, IntVector.SPECIES_256)); }
+        @Specialization public static IntVector apply(IntVector left, IntVector right) { return RuntimeTypes.requireInt(left, IntVector.SPECIES_256).lanewise(VectorOperators.UMIN, RuntimeTypes.requireInt(right, IntVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedWord32X8Max {
-        @Specialization public static IntVector apply(IntVector left, IntVector right) { return CoreVectors.requireInt(left, IntVector.SPECIES_256).lanewise(VectorOperators.UMAX, CoreVectors.requireInt(right, IntVector.SPECIES_256)); }
+        @Specialization public static IntVector apply(IntVector left, IntVector right) { return RuntimeTypes.requireInt(left, IntVector.SPECIES_256).lanewise(VectorOperators.UMAX, RuntimeTypes.requireInt(right, IntVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedWord32X8Quot {
-        @Specialization public static IntVector apply(IntVector left, IntVector right) { return VectorIntegerDivision.quotInt(CoreVectors.requireInt(left, IntVector.SPECIES_256), CoreVectors.requireInt(right, IntVector.SPECIES_256), true); }
+        @Specialization public static IntVector apply(IntVector left, IntVector right) { return VectorIntegerDivision.quotInt(RuntimeTypes.requireInt(left, IntVector.SPECIES_256), RuntimeTypes.requireInt(right, IntVector.SPECIES_256), true); }
     }
     @Operation public static final class GeneratedWord32X8Rem {
-        @Specialization public static IntVector apply(IntVector left, IntVector right) { return VectorIntegerDivision.remInt(CoreVectors.requireInt(left, IntVector.SPECIES_256), CoreVectors.requireInt(right, IntVector.SPECIES_256), true); }
+        @Specialization public static IntVector apply(IntVector left, IntVector right) { return VectorIntegerDivision.remInt(RuntimeTypes.requireInt(left, IntVector.SPECIES_256), RuntimeTypes.requireInt(right, IntVector.SPECIES_256), true); }
     }
     @Operation
     @ConstantOperand(type = VectorShuffle.class, name = "shuffle")
     public static final class GeneratedWord32X8Shuffle {
         @Specialization public static IntVector apply(VectorShuffle<?> shuffle, IntVector left, IntVector right) {
-            return CoreVectors.requireInt(left, IntVector.SPECIES_256).rearrange(shuffle.check(IntVector.SPECIES_256), CoreVectors.requireInt(right, IntVector.SPECIES_256));
+            return RuntimeTypes.requireInt(left, IntVector.SPECIES_256).rearrange(shuffle.check(IntVector.SPECIES_256), RuntimeTypes.requireInt(right, IntVector.SPECIES_256));
         }
     }
     @Operation public static final class GeneratedInt32X8Pack {
@@ -6792,7 +6792,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class GeneratedInt32X8Unpack {
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor lane0, LocalAccessor lane1, LocalAccessor lane2, LocalAccessor lane3, LocalAccessor lane4, LocalAccessor lane5, LocalAccessor lane6, LocalAccessor lane7, IntVector raw, @Bind("$node") Node node) {
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
-            IntVector value = CoreVectors.requireInt(raw, IntVector.SPECIES_256);
+            IntVector value = RuntimeTypes.requireInt(raw, IntVector.SPECIES_256);
             lane0.setInt(bytecode, frame, value.lane(0));
             lane1.setInt(bytecode, frame, value.lane(1));
             lane2.setInt(bytecode, frame, value.lane(2));
@@ -6807,37 +6807,37 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static IntVector apply(int value) { return IntVector.broadcast(IntVector.SPECIES_256, (int) value); }
     }
     @Operation public static final class GeneratedInt32X8Plus {
-        @Specialization public static IntVector apply(IntVector left, IntVector right) { return CoreVectors.requireInt(left, IntVector.SPECIES_256).add(CoreVectors.requireInt(right, IntVector.SPECIES_256)); }
+        @Specialization public static IntVector apply(IntVector left, IntVector right) { return RuntimeTypes.requireInt(left, IntVector.SPECIES_256).add(RuntimeTypes.requireInt(right, IntVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedInt32X8Minus {
-        @Specialization public static IntVector apply(IntVector left, IntVector right) { return CoreVectors.requireInt(left, IntVector.SPECIES_256).sub(CoreVectors.requireInt(right, IntVector.SPECIES_256)); }
+        @Specialization public static IntVector apply(IntVector left, IntVector right) { return RuntimeTypes.requireInt(left, IntVector.SPECIES_256).sub(RuntimeTypes.requireInt(right, IntVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedInt32X8Times {
-        @Specialization public static IntVector apply(IntVector left, IntVector right) { return CoreVectors.requireInt(left, IntVector.SPECIES_256).mul(CoreVectors.requireInt(right, IntVector.SPECIES_256)); }
+        @Specialization public static IntVector apply(IntVector left, IntVector right) { return RuntimeTypes.requireInt(left, IntVector.SPECIES_256).mul(RuntimeTypes.requireInt(right, IntVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedInt32X8Negate {
-        @Specialization public static IntVector apply(IntVector value) { return CoreVectors.requireInt(value, IntVector.SPECIES_256).neg(); }
+        @Specialization public static IntVector apply(IntVector value) { return RuntimeTypes.requireInt(value, IntVector.SPECIES_256).neg(); }
     }
     @Operation public static final class GeneratedInt32X8Insert {
-        @Specialization public static IntVector apply(IntVector vector, int value, long index) { return CoreVectors.requireInt(vector, IntVector.SPECIES_256).withLane(CoreVectors.laneIndex(index, 8), (int) value); }
+        @Specialization public static IntVector apply(IntVector vector, int value, long index) { return RuntimeTypes.requireInt(vector, IntVector.SPECIES_256).withLane(RuntimeTypes.laneIndex(index, 8), (int) value); }
     }
     @Operation public static final class GeneratedInt32X8Min {
-        @Specialization public static IntVector apply(IntVector left, IntVector right) { return CoreVectors.requireInt(left, IntVector.SPECIES_256).min(CoreVectors.requireInt(right, IntVector.SPECIES_256)); }
+        @Specialization public static IntVector apply(IntVector left, IntVector right) { return RuntimeTypes.requireInt(left, IntVector.SPECIES_256).min(RuntimeTypes.requireInt(right, IntVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedInt32X8Max {
-        @Specialization public static IntVector apply(IntVector left, IntVector right) { return CoreVectors.requireInt(left, IntVector.SPECIES_256).max(CoreVectors.requireInt(right, IntVector.SPECIES_256)); }
+        @Specialization public static IntVector apply(IntVector left, IntVector right) { return RuntimeTypes.requireInt(left, IntVector.SPECIES_256).max(RuntimeTypes.requireInt(right, IntVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedInt32X8Quot {
-        @Specialization public static IntVector apply(IntVector left, IntVector right) { return VectorIntegerDivision.quotInt(CoreVectors.requireInt(left, IntVector.SPECIES_256), CoreVectors.requireInt(right, IntVector.SPECIES_256), false); }
+        @Specialization public static IntVector apply(IntVector left, IntVector right) { return VectorIntegerDivision.quotInt(RuntimeTypes.requireInt(left, IntVector.SPECIES_256), RuntimeTypes.requireInt(right, IntVector.SPECIES_256), false); }
     }
     @Operation public static final class GeneratedInt32X8Rem {
-        @Specialization public static IntVector apply(IntVector left, IntVector right) { return VectorIntegerDivision.remInt(CoreVectors.requireInt(left, IntVector.SPECIES_256), CoreVectors.requireInt(right, IntVector.SPECIES_256), false); }
+        @Specialization public static IntVector apply(IntVector left, IntVector right) { return VectorIntegerDivision.remInt(RuntimeTypes.requireInt(left, IntVector.SPECIES_256), RuntimeTypes.requireInt(right, IntVector.SPECIES_256), false); }
     }
     @Operation
     @ConstantOperand(type = VectorShuffle.class, name = "shuffle")
     public static final class GeneratedInt32X8Shuffle {
         @Specialization public static IntVector apply(VectorShuffle<?> shuffle, IntVector left, IntVector right) {
-            return CoreVectors.requireInt(left, IntVector.SPECIES_256).rearrange(shuffle.check(IntVector.SPECIES_256), CoreVectors.requireInt(right, IntVector.SPECIES_256));
+            return RuntimeTypes.requireInt(left, IntVector.SPECIES_256).rearrange(shuffle.check(IntVector.SPECIES_256), RuntimeTypes.requireInt(right, IntVector.SPECIES_256));
         }
     }
     @Operation
@@ -6857,7 +6857,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class GeneratedInt32X16Unpack {
         @Specialization public static void apply(VirtualFrame frame, BytecodeVectorLanes lanes, IntVector raw, @Bind("$node") Node node) {
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
-            IntVector value = CoreVectors.requireInt(raw, IntVector.SPECIES_512);
+            IntVector value = RuntimeTypes.requireInt(raw, IntVector.SPECIES_512);
             lanes.getSlots()[0].setInt(bytecode, frame, value.lane(0));
             lanes.getSlots()[1].setInt(bytecode, frame, value.lane(1));
             lanes.getSlots()[2].setInt(bytecode, frame, value.lane(2));
@@ -6880,106 +6880,106 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static IntVector apply(int value) { return IntVector.broadcast(IntVector.SPECIES_512, (int) value); }
     }
     @Operation public static final class GeneratedInt32X16Plus {
-        @Specialization public static IntVector apply(IntVector left, IntVector right) { return CoreVectors.requireInt(left, IntVector.SPECIES_512).add(CoreVectors.requireInt(right, IntVector.SPECIES_512)); }
+        @Specialization public static IntVector apply(IntVector left, IntVector right) { return RuntimeTypes.requireInt(left, IntVector.SPECIES_512).add(RuntimeTypes.requireInt(right, IntVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedInt32X16Minus {
-        @Specialization public static IntVector apply(IntVector left, IntVector right) { return CoreVectors.requireInt(left, IntVector.SPECIES_512).sub(CoreVectors.requireInt(right, IntVector.SPECIES_512)); }
+        @Specialization public static IntVector apply(IntVector left, IntVector right) { return RuntimeTypes.requireInt(left, IntVector.SPECIES_512).sub(RuntimeTypes.requireInt(right, IntVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedInt32X16Times {
-        @Specialization public static IntVector apply(IntVector left, IntVector right) { return CoreVectors.requireInt(left, IntVector.SPECIES_512).mul(CoreVectors.requireInt(right, IntVector.SPECIES_512)); }
+        @Specialization public static IntVector apply(IntVector left, IntVector right) { return RuntimeTypes.requireInt(left, IntVector.SPECIES_512).mul(RuntimeTypes.requireInt(right, IntVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedInt32X16Negate {
-        @Specialization public static IntVector apply(IntVector value) { return CoreVectors.requireInt(value, IntVector.SPECIES_512).neg(); }
+        @Specialization public static IntVector apply(IntVector value) { return RuntimeTypes.requireInt(value, IntVector.SPECIES_512).neg(); }
     }
     @Operation public static final class GeneratedInt32X16Insert {
-        @Specialization public static IntVector apply(IntVector vector, int value, long index) { return CoreVectors.requireInt(vector, IntVector.SPECIES_512).withLane(CoreVectors.laneIndex(index, 16), (int) value); }
+        @Specialization public static IntVector apply(IntVector vector, int value, long index) { return RuntimeTypes.requireInt(vector, IntVector.SPECIES_512).withLane(RuntimeTypes.laneIndex(index, 16), (int) value); }
     }
     @Operation public static final class GeneratedInt32X16Min {
-        @Specialization public static IntVector apply(IntVector left, IntVector right) { return CoreVectors.requireInt(left, IntVector.SPECIES_512).min(CoreVectors.requireInt(right, IntVector.SPECIES_512)); }
+        @Specialization public static IntVector apply(IntVector left, IntVector right) { return RuntimeTypes.requireInt(left, IntVector.SPECIES_512).min(RuntimeTypes.requireInt(right, IntVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedInt32X16Max {
-        @Specialization public static IntVector apply(IntVector left, IntVector right) { return CoreVectors.requireInt(left, IntVector.SPECIES_512).max(CoreVectors.requireInt(right, IntVector.SPECIES_512)); }
+        @Specialization public static IntVector apply(IntVector left, IntVector right) { return RuntimeTypes.requireInt(left, IntVector.SPECIES_512).max(RuntimeTypes.requireInt(right, IntVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedInt32X16Quot {
-        @Specialization public static IntVector apply(IntVector left, IntVector right) { return VectorIntegerDivision.quotInt(CoreVectors.requireInt(left, IntVector.SPECIES_512), CoreVectors.requireInt(right, IntVector.SPECIES_512), false); }
+        @Specialization public static IntVector apply(IntVector left, IntVector right) { return VectorIntegerDivision.quotInt(RuntimeTypes.requireInt(left, IntVector.SPECIES_512), RuntimeTypes.requireInt(right, IntVector.SPECIES_512), false); }
     }
     @Operation public static final class GeneratedInt32X16Rem {
-        @Specialization public static IntVector apply(IntVector left, IntVector right) { return VectorIntegerDivision.remInt(CoreVectors.requireInt(left, IntVector.SPECIES_512), CoreVectors.requireInt(right, IntVector.SPECIES_512), false); }
+        @Specialization public static IntVector apply(IntVector left, IntVector right) { return VectorIntegerDivision.remInt(RuntimeTypes.requireInt(left, IntVector.SPECIES_512), RuntimeTypes.requireInt(right, IntVector.SPECIES_512), false); }
     }
     @Operation
     @ConstantOperand(type = VectorShuffle.class, name = "shuffle")
     public static final class GeneratedInt32X16Shuffle {
         @Specialization public static IntVector apply(VectorShuffle<?> shuffle, IntVector left, IntVector right) {
-            return CoreVectors.requireInt(left, IntVector.SPECIES_512).rearrange(shuffle.check(IntVector.SPECIES_512), CoreVectors.requireInt(right, IntVector.SPECIES_512));
+            return RuntimeTypes.requireInt(left, IntVector.SPECIES_512).rearrange(shuffle.check(IntVector.SPECIES_512), RuntimeTypes.requireInt(right, IntVector.SPECIES_512));
         }
     }
     @Operation public static final class GeneratedInt64X2Times {
-        @Specialization public static LongVector apply(LongVector left, LongVector right) { return CoreVectors.requireLong(left, LongVector.SPECIES_128).mul(CoreVectors.requireLong(right, LongVector.SPECIES_128)); }
+        @Specialization public static LongVector apply(LongVector left, LongVector right) { return RuntimeTypes.requireLong(left, LongVector.SPECIES_128).mul(RuntimeTypes.requireLong(right, LongVector.SPECIES_128)); }
     }
     @Operation public static final class GeneratedInt64X2Insert {
-        @Specialization public static LongVector apply(LongVector vector, long value, long index) { return CoreVectors.requireLong(vector, LongVector.SPECIES_128).withLane(CoreVectors.laneIndex(index, 2), value); }
+        @Specialization public static LongVector apply(LongVector vector, long value, long index) { return RuntimeTypes.requireLong(vector, LongVector.SPECIES_128).withLane(RuntimeTypes.laneIndex(index, 2), value); }
     }
     @Operation public static final class GeneratedInt64X2Min {
-        @Specialization public static LongVector apply(LongVector left, LongVector right) { return CoreVectors.requireLong(left, LongVector.SPECIES_128).min(CoreVectors.requireLong(right, LongVector.SPECIES_128)); }
+        @Specialization public static LongVector apply(LongVector left, LongVector right) { return RuntimeTypes.requireLong(left, LongVector.SPECIES_128).min(RuntimeTypes.requireLong(right, LongVector.SPECIES_128)); }
     }
     @Operation public static final class GeneratedInt64X2Max {
-        @Specialization public static LongVector apply(LongVector left, LongVector right) { return CoreVectors.requireLong(left, LongVector.SPECIES_128).max(CoreVectors.requireLong(right, LongVector.SPECIES_128)); }
+        @Specialization public static LongVector apply(LongVector left, LongVector right) { return RuntimeTypes.requireLong(left, LongVector.SPECIES_128).max(RuntimeTypes.requireLong(right, LongVector.SPECIES_128)); }
     }
     @Operation public static final class GeneratedInt64X2Quot {
-        @Specialization public static LongVector apply(LongVector left, LongVector right) { return VectorIntegerDivision.quotLong(CoreVectors.requireLong(left, LongVector.SPECIES_128), CoreVectors.requireLong(right, LongVector.SPECIES_128), false); }
+        @Specialization public static LongVector apply(LongVector left, LongVector right) { return VectorIntegerDivision.quotLong(RuntimeTypes.requireLong(left, LongVector.SPECIES_128), RuntimeTypes.requireLong(right, LongVector.SPECIES_128), false); }
     }
     @Operation public static final class GeneratedInt64X2Rem {
-        @Specialization public static LongVector apply(LongVector left, LongVector right) { return VectorIntegerDivision.remLong(CoreVectors.requireLong(left, LongVector.SPECIES_128), CoreVectors.requireLong(right, LongVector.SPECIES_128), false); }
+        @Specialization public static LongVector apply(LongVector left, LongVector right) { return VectorIntegerDivision.remLong(RuntimeTypes.requireLong(left, LongVector.SPECIES_128), RuntimeTypes.requireLong(right, LongVector.SPECIES_128), false); }
     }
     @Operation
     @ConstantOperand(type = VectorShuffle.class, name = "shuffle")
     public static final class GeneratedInt64X2Shuffle {
         @Specialization public static LongVector apply(VectorShuffle<?> shuffle, LongVector left, LongVector right) {
-            return CoreVectors.requireLong(left, LongVector.SPECIES_128).rearrange(shuffle.check(LongVector.SPECIES_128), CoreVectors.requireLong(right, LongVector.SPECIES_128));
+            return RuntimeTypes.requireLong(left, LongVector.SPECIES_128).rearrange(shuffle.check(LongVector.SPECIES_128), RuntimeTypes.requireLong(right, LongVector.SPECIES_128));
         }
     }
     @Operation public static final class GeneratedFloatX4Negate {
-        @Specialization public static FloatVector apply(FloatVector value) { return CoreVectors.requireFloat(value, FloatVector.SPECIES_128).neg(); }
+        @Specialization public static FloatVector apply(FloatVector value) { return RuntimeTypes.requireFloat(value, FloatVector.SPECIES_128).neg(); }
     }
     @Operation public static final class GeneratedFloatX4Divide {
-        @Specialization public static FloatVector apply(FloatVector left, FloatVector right) { return CoreVectors.requireFloat(left, FloatVector.SPECIES_128).div(CoreVectors.requireFloat(right, FloatVector.SPECIES_128)); }
+        @Specialization public static FloatVector apply(FloatVector left, FloatVector right) { return RuntimeTypes.requireFloat(left, FloatVector.SPECIES_128).div(RuntimeTypes.requireFloat(right, FloatVector.SPECIES_128)); }
     }
     @Operation public static final class GeneratedFloatX4Insert {
-        @Specialization public static FloatVector apply(FloatVector vector, float value, long index) { return CoreVectors.requireFloat(vector, FloatVector.SPECIES_128).withLane(CoreVectors.laneIndex(index, 4), value); }
+        @Specialization public static FloatVector apply(FloatVector vector, float value, long index) { return RuntimeTypes.requireFloat(vector, FloatVector.SPECIES_128).withLane(RuntimeTypes.laneIndex(index, 4), value); }
     }
     @Operation public static final class GeneratedFloatX4Min {
-        @Specialization public static FloatVector apply(FloatVector left, FloatVector right) { return CoreVectors.requireFloat(left, FloatVector.SPECIES_128).min(CoreVectors.requireFloat(right, FloatVector.SPECIES_128)); }
+        @Specialization public static FloatVector apply(FloatVector left, FloatVector right) { return RuntimeTypes.requireFloat(left, FloatVector.SPECIES_128).min(RuntimeTypes.requireFloat(right, FloatVector.SPECIES_128)); }
     }
     @Operation public static final class GeneratedFloatX4Max {
-        @Specialization public static FloatVector apply(FloatVector left, FloatVector right) { return CoreVectors.requireFloat(left, FloatVector.SPECIES_128).max(CoreVectors.requireFloat(right, FloatVector.SPECIES_128)); }
+        @Specialization public static FloatVector apply(FloatVector left, FloatVector right) { return RuntimeTypes.requireFloat(left, FloatVector.SPECIES_128).max(RuntimeTypes.requireFloat(right, FloatVector.SPECIES_128)); }
     }
     @Operation
     @ConstantOperand(type = VectorShuffle.class, name = "shuffle")
     public static final class GeneratedFloatX4Shuffle {
         @Specialization public static FloatVector apply(VectorShuffle<?> shuffle, FloatVector left, FloatVector right) {
-            return CoreVectors.requireFloat(left, FloatVector.SPECIES_128).rearrange(shuffle.check(FloatVector.SPECIES_128), CoreVectors.requireFloat(right, FloatVector.SPECIES_128));
+            return RuntimeTypes.requireFloat(left, FloatVector.SPECIES_128).rearrange(shuffle.check(FloatVector.SPECIES_128), RuntimeTypes.requireFloat(right, FloatVector.SPECIES_128));
         }
     }
     @Operation public static final class GeneratedDoubleX2Negate {
-        @Specialization public static DoubleVector apply(DoubleVector value) { return CoreVectors.requireDouble(value, DoubleVector.SPECIES_128).neg(); }
+        @Specialization public static DoubleVector apply(DoubleVector value) { return RuntimeTypes.requireDouble(value, DoubleVector.SPECIES_128).neg(); }
     }
     @Operation public static final class GeneratedDoubleX2Divide {
-        @Specialization public static DoubleVector apply(DoubleVector left, DoubleVector right) { return CoreVectors.requireDouble(left, DoubleVector.SPECIES_128).div(CoreVectors.requireDouble(right, DoubleVector.SPECIES_128)); }
+        @Specialization public static DoubleVector apply(DoubleVector left, DoubleVector right) { return RuntimeTypes.requireDouble(left, DoubleVector.SPECIES_128).div(RuntimeTypes.requireDouble(right, DoubleVector.SPECIES_128)); }
     }
     @Operation public static final class GeneratedDoubleX2Insert {
-        @Specialization public static DoubleVector apply(DoubleVector vector, double value, long index) { return CoreVectors.requireDouble(vector, DoubleVector.SPECIES_128).withLane(CoreVectors.laneIndex(index, 2), value); }
+        @Specialization public static DoubleVector apply(DoubleVector vector, double value, long index) { return RuntimeTypes.requireDouble(vector, DoubleVector.SPECIES_128).withLane(RuntimeTypes.laneIndex(index, 2), value); }
     }
     @Operation public static final class GeneratedDoubleX2Min {
-        @Specialization public static DoubleVector apply(DoubleVector left, DoubleVector right) { return CoreVectors.requireDouble(left, DoubleVector.SPECIES_128).min(CoreVectors.requireDouble(right, DoubleVector.SPECIES_128)); }
+        @Specialization public static DoubleVector apply(DoubleVector left, DoubleVector right) { return RuntimeTypes.requireDouble(left, DoubleVector.SPECIES_128).min(RuntimeTypes.requireDouble(right, DoubleVector.SPECIES_128)); }
     }
     @Operation public static final class GeneratedDoubleX2Max {
-        @Specialization public static DoubleVector apply(DoubleVector left, DoubleVector right) { return CoreVectors.requireDouble(left, DoubleVector.SPECIES_128).max(CoreVectors.requireDouble(right, DoubleVector.SPECIES_128)); }
+        @Specialization public static DoubleVector apply(DoubleVector left, DoubleVector right) { return RuntimeTypes.requireDouble(left, DoubleVector.SPECIES_128).max(RuntimeTypes.requireDouble(right, DoubleVector.SPECIES_128)); }
     }
     @Operation
     @ConstantOperand(type = VectorShuffle.class, name = "shuffle")
     public static final class GeneratedDoubleX2Shuffle {
         @Specialization public static DoubleVector apply(VectorShuffle<?> shuffle, DoubleVector left, DoubleVector right) {
-            return CoreVectors.requireDouble(left, DoubleVector.SPECIES_128).rearrange(shuffle.check(DoubleVector.SPECIES_128), CoreVectors.requireDouble(right, DoubleVector.SPECIES_128));
+            return RuntimeTypes.requireDouble(left, DoubleVector.SPECIES_128).rearrange(shuffle.check(DoubleVector.SPECIES_128), RuntimeTypes.requireDouble(right, DoubleVector.SPECIES_128));
         }
     }
     @Operation public static final class GeneratedFloatX8Pack {
@@ -6997,7 +6997,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class GeneratedFloatX8Unpack {
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor lane0, LocalAccessor lane1, LocalAccessor lane2, LocalAccessor lane3, LocalAccessor lane4, LocalAccessor lane5, LocalAccessor lane6, LocalAccessor lane7, FloatVector raw, @Bind("$node") Node node) {
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
-            FloatVector value = CoreVectors.requireFloat(raw, FloatVector.SPECIES_256);
+            FloatVector value = RuntimeTypes.requireFloat(raw, FloatVector.SPECIES_256);
             lane0.setFloat(bytecode, frame, value.lane(0));
             lane1.setFloat(bytecode, frame, value.lane(1));
             lane2.setFloat(bytecode, frame, value.lane(2));
@@ -7012,34 +7012,34 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static FloatVector apply(float value) { return FloatVector.broadcast(FloatVector.SPECIES_256, value); }
     }
     @Operation public static final class GeneratedFloatX8Plus {
-        @Specialization public static FloatVector apply(FloatVector left, FloatVector right) { return CoreVectors.requireFloat(left, FloatVector.SPECIES_256).add(CoreVectors.requireFloat(right, FloatVector.SPECIES_256)); }
+        @Specialization public static FloatVector apply(FloatVector left, FloatVector right) { return RuntimeTypes.requireFloat(left, FloatVector.SPECIES_256).add(RuntimeTypes.requireFloat(right, FloatVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedFloatX8Minus {
-        @Specialization public static FloatVector apply(FloatVector left, FloatVector right) { return CoreVectors.requireFloat(left, FloatVector.SPECIES_256).sub(CoreVectors.requireFloat(right, FloatVector.SPECIES_256)); }
+        @Specialization public static FloatVector apply(FloatVector left, FloatVector right) { return RuntimeTypes.requireFloat(left, FloatVector.SPECIES_256).sub(RuntimeTypes.requireFloat(right, FloatVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedFloatX8Times {
-        @Specialization public static FloatVector apply(FloatVector left, FloatVector right) { return CoreVectors.requireFloat(left, FloatVector.SPECIES_256).mul(CoreVectors.requireFloat(right, FloatVector.SPECIES_256)); }
+        @Specialization public static FloatVector apply(FloatVector left, FloatVector right) { return RuntimeTypes.requireFloat(left, FloatVector.SPECIES_256).mul(RuntimeTypes.requireFloat(right, FloatVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedFloatX8Negate {
-        @Specialization public static FloatVector apply(FloatVector value) { return CoreVectors.requireFloat(value, FloatVector.SPECIES_256).neg(); }
+        @Specialization public static FloatVector apply(FloatVector value) { return RuntimeTypes.requireFloat(value, FloatVector.SPECIES_256).neg(); }
     }
     @Operation public static final class GeneratedFloatX8Divide {
-        @Specialization public static FloatVector apply(FloatVector left, FloatVector right) { return CoreVectors.requireFloat(left, FloatVector.SPECIES_256).div(CoreVectors.requireFloat(right, FloatVector.SPECIES_256)); }
+        @Specialization public static FloatVector apply(FloatVector left, FloatVector right) { return RuntimeTypes.requireFloat(left, FloatVector.SPECIES_256).div(RuntimeTypes.requireFloat(right, FloatVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedFloatX8Insert {
-        @Specialization public static FloatVector apply(FloatVector vector, float value, long index) { return CoreVectors.requireFloat(vector, FloatVector.SPECIES_256).withLane(CoreVectors.laneIndex(index, 8), value); }
+        @Specialization public static FloatVector apply(FloatVector vector, float value, long index) { return RuntimeTypes.requireFloat(vector, FloatVector.SPECIES_256).withLane(RuntimeTypes.laneIndex(index, 8), value); }
     }
     @Operation public static final class GeneratedFloatX8Min {
-        @Specialization public static FloatVector apply(FloatVector left, FloatVector right) { return CoreVectors.requireFloat(left, FloatVector.SPECIES_256).min(CoreVectors.requireFloat(right, FloatVector.SPECIES_256)); }
+        @Specialization public static FloatVector apply(FloatVector left, FloatVector right) { return RuntimeTypes.requireFloat(left, FloatVector.SPECIES_256).min(RuntimeTypes.requireFloat(right, FloatVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedFloatX8Max {
-        @Specialization public static FloatVector apply(FloatVector left, FloatVector right) { return CoreVectors.requireFloat(left, FloatVector.SPECIES_256).max(CoreVectors.requireFloat(right, FloatVector.SPECIES_256)); }
+        @Specialization public static FloatVector apply(FloatVector left, FloatVector right) { return RuntimeTypes.requireFloat(left, FloatVector.SPECIES_256).max(RuntimeTypes.requireFloat(right, FloatVector.SPECIES_256)); }
     }
     @Operation
     @ConstantOperand(type = VectorShuffle.class, name = "shuffle")
     public static final class GeneratedFloatX8Shuffle {
         @Specialization public static FloatVector apply(VectorShuffle<?> shuffle, FloatVector left, FloatVector right) {
-            return CoreVectors.requireFloat(left, FloatVector.SPECIES_256).rearrange(shuffle.check(FloatVector.SPECIES_256), CoreVectors.requireFloat(right, FloatVector.SPECIES_256));
+            return RuntimeTypes.requireFloat(left, FloatVector.SPECIES_256).rearrange(shuffle.check(FloatVector.SPECIES_256), RuntimeTypes.requireFloat(right, FloatVector.SPECIES_256));
         }
     }
     @Operation public static final class GeneratedDoubleX4Pack {
@@ -7053,7 +7053,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class GeneratedDoubleX4Unpack {
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor lane0, LocalAccessor lane1, LocalAccessor lane2, LocalAccessor lane3, DoubleVector raw, @Bind("$node") Node node) {
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
-            DoubleVector value = CoreVectors.requireDouble(raw, DoubleVector.SPECIES_256);
+            DoubleVector value = RuntimeTypes.requireDouble(raw, DoubleVector.SPECIES_256);
             lane0.setDouble(bytecode, frame, value.lane(0));
             lane1.setDouble(bytecode, frame, value.lane(1));
             lane2.setDouble(bytecode, frame, value.lane(2));
@@ -7064,34 +7064,34 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static DoubleVector apply(double value) { return DoubleVector.broadcast(DoubleVector.SPECIES_256, value); }
     }
     @Operation public static final class GeneratedDoubleX4Plus {
-        @Specialization public static DoubleVector apply(DoubleVector left, DoubleVector right) { return CoreVectors.requireDouble(left, DoubleVector.SPECIES_256).add(CoreVectors.requireDouble(right, DoubleVector.SPECIES_256)); }
+        @Specialization public static DoubleVector apply(DoubleVector left, DoubleVector right) { return RuntimeTypes.requireDouble(left, DoubleVector.SPECIES_256).add(RuntimeTypes.requireDouble(right, DoubleVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedDoubleX4Minus {
-        @Specialization public static DoubleVector apply(DoubleVector left, DoubleVector right) { return CoreVectors.requireDouble(left, DoubleVector.SPECIES_256).sub(CoreVectors.requireDouble(right, DoubleVector.SPECIES_256)); }
+        @Specialization public static DoubleVector apply(DoubleVector left, DoubleVector right) { return RuntimeTypes.requireDouble(left, DoubleVector.SPECIES_256).sub(RuntimeTypes.requireDouble(right, DoubleVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedDoubleX4Times {
-        @Specialization public static DoubleVector apply(DoubleVector left, DoubleVector right) { return CoreVectors.requireDouble(left, DoubleVector.SPECIES_256).mul(CoreVectors.requireDouble(right, DoubleVector.SPECIES_256)); }
+        @Specialization public static DoubleVector apply(DoubleVector left, DoubleVector right) { return RuntimeTypes.requireDouble(left, DoubleVector.SPECIES_256).mul(RuntimeTypes.requireDouble(right, DoubleVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedDoubleX4Negate {
-        @Specialization public static DoubleVector apply(DoubleVector value) { return CoreVectors.requireDouble(value, DoubleVector.SPECIES_256).neg(); }
+        @Specialization public static DoubleVector apply(DoubleVector value) { return RuntimeTypes.requireDouble(value, DoubleVector.SPECIES_256).neg(); }
     }
     @Operation public static final class GeneratedDoubleX4Divide {
-        @Specialization public static DoubleVector apply(DoubleVector left, DoubleVector right) { return CoreVectors.requireDouble(left, DoubleVector.SPECIES_256).div(CoreVectors.requireDouble(right, DoubleVector.SPECIES_256)); }
+        @Specialization public static DoubleVector apply(DoubleVector left, DoubleVector right) { return RuntimeTypes.requireDouble(left, DoubleVector.SPECIES_256).div(RuntimeTypes.requireDouble(right, DoubleVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedDoubleX4Insert {
-        @Specialization public static DoubleVector apply(DoubleVector vector, double value, long index) { return CoreVectors.requireDouble(vector, DoubleVector.SPECIES_256).withLane(CoreVectors.laneIndex(index, 4), value); }
+        @Specialization public static DoubleVector apply(DoubleVector vector, double value, long index) { return RuntimeTypes.requireDouble(vector, DoubleVector.SPECIES_256).withLane(RuntimeTypes.laneIndex(index, 4), value); }
     }
     @Operation public static final class GeneratedDoubleX4Min {
-        @Specialization public static DoubleVector apply(DoubleVector left, DoubleVector right) { return CoreVectors.requireDouble(left, DoubleVector.SPECIES_256).min(CoreVectors.requireDouble(right, DoubleVector.SPECIES_256)); }
+        @Specialization public static DoubleVector apply(DoubleVector left, DoubleVector right) { return RuntimeTypes.requireDouble(left, DoubleVector.SPECIES_256).min(RuntimeTypes.requireDouble(right, DoubleVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedDoubleX4Max {
-        @Specialization public static DoubleVector apply(DoubleVector left, DoubleVector right) { return CoreVectors.requireDouble(left, DoubleVector.SPECIES_256).max(CoreVectors.requireDouble(right, DoubleVector.SPECIES_256)); }
+        @Specialization public static DoubleVector apply(DoubleVector left, DoubleVector right) { return RuntimeTypes.requireDouble(left, DoubleVector.SPECIES_256).max(RuntimeTypes.requireDouble(right, DoubleVector.SPECIES_256)); }
     }
     @Operation
     @ConstantOperand(type = VectorShuffle.class, name = "shuffle")
     public static final class GeneratedDoubleX4Shuffle {
         @Specialization public static DoubleVector apply(VectorShuffle<?> shuffle, DoubleVector left, DoubleVector right) {
-            return CoreVectors.requireDouble(left, DoubleVector.SPECIES_256).rearrange(shuffle.check(DoubleVector.SPECIES_256), CoreVectors.requireDouble(right, DoubleVector.SPECIES_256));
+            return RuntimeTypes.requireDouble(left, DoubleVector.SPECIES_256).rearrange(shuffle.check(DoubleVector.SPECIES_256), RuntimeTypes.requireDouble(right, DoubleVector.SPECIES_256));
         }
     }
     @Operation public static final class GeneratedInt64X4Pack {
@@ -7105,7 +7105,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class GeneratedInt64X4Unpack {
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor lane0, LocalAccessor lane1, LocalAccessor lane2, LocalAccessor lane3, LongVector raw, @Bind("$node") Node node) {
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
-            LongVector value = CoreVectors.requireLong(raw, LongVector.SPECIES_256);
+            LongVector value = RuntimeTypes.requireLong(raw, LongVector.SPECIES_256);
             lane0.setLong(bytecode, frame, value.lane(0));
             lane1.setLong(bytecode, frame, value.lane(1));
             lane2.setLong(bytecode, frame, value.lane(2));
@@ -7116,37 +7116,37 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static LongVector apply(long value) { return LongVector.broadcast(LongVector.SPECIES_256, value); }
     }
     @Operation public static final class GeneratedInt64X4Plus {
-        @Specialization public static LongVector apply(LongVector left, LongVector right) { return CoreVectors.requireLong(left, LongVector.SPECIES_256).add(CoreVectors.requireLong(right, LongVector.SPECIES_256)); }
+        @Specialization public static LongVector apply(LongVector left, LongVector right) { return RuntimeTypes.requireLong(left, LongVector.SPECIES_256).add(RuntimeTypes.requireLong(right, LongVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedInt64X4Minus {
-        @Specialization public static LongVector apply(LongVector left, LongVector right) { return CoreVectors.requireLong(left, LongVector.SPECIES_256).sub(CoreVectors.requireLong(right, LongVector.SPECIES_256)); }
+        @Specialization public static LongVector apply(LongVector left, LongVector right) { return RuntimeTypes.requireLong(left, LongVector.SPECIES_256).sub(RuntimeTypes.requireLong(right, LongVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedInt64X4Times {
-        @Specialization public static LongVector apply(LongVector left, LongVector right) { return CoreVectors.requireLong(left, LongVector.SPECIES_256).mul(CoreVectors.requireLong(right, LongVector.SPECIES_256)); }
+        @Specialization public static LongVector apply(LongVector left, LongVector right) { return RuntimeTypes.requireLong(left, LongVector.SPECIES_256).mul(RuntimeTypes.requireLong(right, LongVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedInt64X4Negate {
-        @Specialization public static LongVector apply(LongVector value) { return CoreVectors.requireLong(value, LongVector.SPECIES_256).neg(); }
+        @Specialization public static LongVector apply(LongVector value) { return RuntimeTypes.requireLong(value, LongVector.SPECIES_256).neg(); }
     }
     @Operation public static final class GeneratedInt64X4Insert {
-        @Specialization public static LongVector apply(LongVector vector, long value, long index) { return CoreVectors.requireLong(vector, LongVector.SPECIES_256).withLane(CoreVectors.laneIndex(index, 4), value); }
+        @Specialization public static LongVector apply(LongVector vector, long value, long index) { return RuntimeTypes.requireLong(vector, LongVector.SPECIES_256).withLane(RuntimeTypes.laneIndex(index, 4), value); }
     }
     @Operation public static final class GeneratedInt64X4Min {
-        @Specialization public static LongVector apply(LongVector left, LongVector right) { return CoreVectors.requireLong(left, LongVector.SPECIES_256).min(CoreVectors.requireLong(right, LongVector.SPECIES_256)); }
+        @Specialization public static LongVector apply(LongVector left, LongVector right) { return RuntimeTypes.requireLong(left, LongVector.SPECIES_256).min(RuntimeTypes.requireLong(right, LongVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedInt64X4Max {
-        @Specialization public static LongVector apply(LongVector left, LongVector right) { return CoreVectors.requireLong(left, LongVector.SPECIES_256).max(CoreVectors.requireLong(right, LongVector.SPECIES_256)); }
+        @Specialization public static LongVector apply(LongVector left, LongVector right) { return RuntimeTypes.requireLong(left, LongVector.SPECIES_256).max(RuntimeTypes.requireLong(right, LongVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedInt64X4Quot {
-        @Specialization public static LongVector apply(LongVector left, LongVector right) { return VectorIntegerDivision.quotLong(CoreVectors.requireLong(left, LongVector.SPECIES_256), CoreVectors.requireLong(right, LongVector.SPECIES_256), false); }
+        @Specialization public static LongVector apply(LongVector left, LongVector right) { return VectorIntegerDivision.quotLong(RuntimeTypes.requireLong(left, LongVector.SPECIES_256), RuntimeTypes.requireLong(right, LongVector.SPECIES_256), false); }
     }
     @Operation public static final class GeneratedInt64X4Rem {
-        @Specialization public static LongVector apply(LongVector left, LongVector right) { return VectorIntegerDivision.remLong(CoreVectors.requireLong(left, LongVector.SPECIES_256), CoreVectors.requireLong(right, LongVector.SPECIES_256), false); }
+        @Specialization public static LongVector apply(LongVector left, LongVector right) { return VectorIntegerDivision.remLong(RuntimeTypes.requireLong(left, LongVector.SPECIES_256), RuntimeTypes.requireLong(right, LongVector.SPECIES_256), false); }
     }
     @Operation
     @ConstantOperand(type = VectorShuffle.class, name = "shuffle")
     public static final class GeneratedInt64X4Shuffle {
         @Specialization public static LongVector apply(VectorShuffle<?> shuffle, LongVector left, LongVector right) {
-            return CoreVectors.requireLong(left, LongVector.SPECIES_256).rearrange(shuffle.check(LongVector.SPECIES_256), CoreVectors.requireLong(right, LongVector.SPECIES_256));
+            return RuntimeTypes.requireLong(left, LongVector.SPECIES_256).rearrange(shuffle.check(LongVector.SPECIES_256), RuntimeTypes.requireLong(right, LongVector.SPECIES_256));
         }
     }
     @Operation public static final class GeneratedInt64X8Pack {
@@ -7164,7 +7164,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class GeneratedInt64X8Unpack {
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor lane0, LocalAccessor lane1, LocalAccessor lane2, LocalAccessor lane3, LocalAccessor lane4, LocalAccessor lane5, LocalAccessor lane6, LocalAccessor lane7, LongVector raw, @Bind("$node") Node node) {
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
-            LongVector value = CoreVectors.requireLong(raw, LongVector.SPECIES_512);
+            LongVector value = RuntimeTypes.requireLong(raw, LongVector.SPECIES_512);
             lane0.setLong(bytecode, frame, value.lane(0));
             lane1.setLong(bytecode, frame, value.lane(1));
             lane2.setLong(bytecode, frame, value.lane(2));
@@ -7179,37 +7179,37 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static LongVector apply(long value) { return LongVector.broadcast(LongVector.SPECIES_512, value); }
     }
     @Operation public static final class GeneratedInt64X8Plus {
-        @Specialization public static LongVector apply(LongVector left, LongVector right) { return CoreVectors.requireLong(left, LongVector.SPECIES_512).add(CoreVectors.requireLong(right, LongVector.SPECIES_512)); }
+        @Specialization public static LongVector apply(LongVector left, LongVector right) { return RuntimeTypes.requireLong(left, LongVector.SPECIES_512).add(RuntimeTypes.requireLong(right, LongVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedInt64X8Minus {
-        @Specialization public static LongVector apply(LongVector left, LongVector right) { return CoreVectors.requireLong(left, LongVector.SPECIES_512).sub(CoreVectors.requireLong(right, LongVector.SPECIES_512)); }
+        @Specialization public static LongVector apply(LongVector left, LongVector right) { return RuntimeTypes.requireLong(left, LongVector.SPECIES_512).sub(RuntimeTypes.requireLong(right, LongVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedInt64X8Times {
-        @Specialization public static LongVector apply(LongVector left, LongVector right) { return CoreVectors.requireLong(left, LongVector.SPECIES_512).mul(CoreVectors.requireLong(right, LongVector.SPECIES_512)); }
+        @Specialization public static LongVector apply(LongVector left, LongVector right) { return RuntimeTypes.requireLong(left, LongVector.SPECIES_512).mul(RuntimeTypes.requireLong(right, LongVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedInt64X8Negate {
-        @Specialization public static LongVector apply(LongVector value) { return CoreVectors.requireLong(value, LongVector.SPECIES_512).neg(); }
+        @Specialization public static LongVector apply(LongVector value) { return RuntimeTypes.requireLong(value, LongVector.SPECIES_512).neg(); }
     }
     @Operation public static final class GeneratedInt64X8Insert {
-        @Specialization public static LongVector apply(LongVector vector, long value, long index) { return CoreVectors.requireLong(vector, LongVector.SPECIES_512).withLane(CoreVectors.laneIndex(index, 8), value); }
+        @Specialization public static LongVector apply(LongVector vector, long value, long index) { return RuntimeTypes.requireLong(vector, LongVector.SPECIES_512).withLane(RuntimeTypes.laneIndex(index, 8), value); }
     }
     @Operation public static final class GeneratedInt64X8Min {
-        @Specialization public static LongVector apply(LongVector left, LongVector right) { return CoreVectors.requireLong(left, LongVector.SPECIES_512).min(CoreVectors.requireLong(right, LongVector.SPECIES_512)); }
+        @Specialization public static LongVector apply(LongVector left, LongVector right) { return RuntimeTypes.requireLong(left, LongVector.SPECIES_512).min(RuntimeTypes.requireLong(right, LongVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedInt64X8Max {
-        @Specialization public static LongVector apply(LongVector left, LongVector right) { return CoreVectors.requireLong(left, LongVector.SPECIES_512).max(CoreVectors.requireLong(right, LongVector.SPECIES_512)); }
+        @Specialization public static LongVector apply(LongVector left, LongVector right) { return RuntimeTypes.requireLong(left, LongVector.SPECIES_512).max(RuntimeTypes.requireLong(right, LongVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedInt64X8Quot {
-        @Specialization public static LongVector apply(LongVector left, LongVector right) { return VectorIntegerDivision.quotLong(CoreVectors.requireLong(left, LongVector.SPECIES_512), CoreVectors.requireLong(right, LongVector.SPECIES_512), false); }
+        @Specialization public static LongVector apply(LongVector left, LongVector right) { return VectorIntegerDivision.quotLong(RuntimeTypes.requireLong(left, LongVector.SPECIES_512), RuntimeTypes.requireLong(right, LongVector.SPECIES_512), false); }
     }
     @Operation public static final class GeneratedInt64X8Rem {
-        @Specialization public static LongVector apply(LongVector left, LongVector right) { return VectorIntegerDivision.remLong(CoreVectors.requireLong(left, LongVector.SPECIES_512), CoreVectors.requireLong(right, LongVector.SPECIES_512), false); }
+        @Specialization public static LongVector apply(LongVector left, LongVector right) { return VectorIntegerDivision.remLong(RuntimeTypes.requireLong(left, LongVector.SPECIES_512), RuntimeTypes.requireLong(right, LongVector.SPECIES_512), false); }
     }
     @Operation
     @ConstantOperand(type = VectorShuffle.class, name = "shuffle")
     public static final class GeneratedInt64X8Shuffle {
         @Specialization public static LongVector apply(VectorShuffle<?> shuffle, LongVector left, LongVector right) {
-            return CoreVectors.requireLong(left, LongVector.SPECIES_512).rearrange(shuffle.check(LongVector.SPECIES_512), CoreVectors.requireLong(right, LongVector.SPECIES_512));
+            return RuntimeTypes.requireLong(left, LongVector.SPECIES_512).rearrange(shuffle.check(LongVector.SPECIES_512), RuntimeTypes.requireLong(right, LongVector.SPECIES_512));
         }
     }
     @Operation public static final class GeneratedWord64X4Pack {
@@ -7223,7 +7223,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class GeneratedWord64X4Unpack {
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor lane0, LocalAccessor lane1, LocalAccessor lane2, LocalAccessor lane3, LongVector raw, @Bind("$node") Node node) {
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
-            LongVector value = CoreVectors.requireLong(raw, LongVector.SPECIES_256);
+            LongVector value = RuntimeTypes.requireLong(raw, LongVector.SPECIES_256);
             lane0.setLong(bytecode, frame, value.lane(0));
             lane1.setLong(bytecode, frame, value.lane(1));
             lane2.setLong(bytecode, frame, value.lane(2));
@@ -7234,34 +7234,34 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static LongVector apply(long value) { return LongVector.broadcast(LongVector.SPECIES_256, value); }
     }
     @Operation public static final class GeneratedWord64X4Plus {
-        @Specialization public static LongVector apply(LongVector left, LongVector right) { return CoreVectors.requireLong(left, LongVector.SPECIES_256).add(CoreVectors.requireLong(right, LongVector.SPECIES_256)); }
+        @Specialization public static LongVector apply(LongVector left, LongVector right) { return RuntimeTypes.requireLong(left, LongVector.SPECIES_256).add(RuntimeTypes.requireLong(right, LongVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedWord64X4Minus {
-        @Specialization public static LongVector apply(LongVector left, LongVector right) { return CoreVectors.requireLong(left, LongVector.SPECIES_256).sub(CoreVectors.requireLong(right, LongVector.SPECIES_256)); }
+        @Specialization public static LongVector apply(LongVector left, LongVector right) { return RuntimeTypes.requireLong(left, LongVector.SPECIES_256).sub(RuntimeTypes.requireLong(right, LongVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedWord64X4Times {
-        @Specialization public static LongVector apply(LongVector left, LongVector right) { return CoreVectors.requireLong(left, LongVector.SPECIES_256).mul(CoreVectors.requireLong(right, LongVector.SPECIES_256)); }
+        @Specialization public static LongVector apply(LongVector left, LongVector right) { return RuntimeTypes.requireLong(left, LongVector.SPECIES_256).mul(RuntimeTypes.requireLong(right, LongVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedWord64X4Insert {
-        @Specialization public static LongVector apply(LongVector vector, long value, long index) { return CoreVectors.requireLong(vector, LongVector.SPECIES_256).withLane(CoreVectors.laneIndex(index, 4), value); }
+        @Specialization public static LongVector apply(LongVector vector, long value, long index) { return RuntimeTypes.requireLong(vector, LongVector.SPECIES_256).withLane(RuntimeTypes.laneIndex(index, 4), value); }
     }
     @Operation public static final class GeneratedWord64X4Min {
-        @Specialization public static LongVector apply(LongVector left, LongVector right) { return CoreVectors.requireLong(left, LongVector.SPECIES_256).lanewise(VectorOperators.UMIN, CoreVectors.requireLong(right, LongVector.SPECIES_256)); }
+        @Specialization public static LongVector apply(LongVector left, LongVector right) { return RuntimeTypes.requireLong(left, LongVector.SPECIES_256).lanewise(VectorOperators.UMIN, RuntimeTypes.requireLong(right, LongVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedWord64X4Max {
-        @Specialization public static LongVector apply(LongVector left, LongVector right) { return CoreVectors.requireLong(left, LongVector.SPECIES_256).lanewise(VectorOperators.UMAX, CoreVectors.requireLong(right, LongVector.SPECIES_256)); }
+        @Specialization public static LongVector apply(LongVector left, LongVector right) { return RuntimeTypes.requireLong(left, LongVector.SPECIES_256).lanewise(VectorOperators.UMAX, RuntimeTypes.requireLong(right, LongVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedWord64X4Quot {
-        @Specialization public static LongVector apply(LongVector left, LongVector right) { return VectorIntegerDivision.quotLong(CoreVectors.requireLong(left, LongVector.SPECIES_256), CoreVectors.requireLong(right, LongVector.SPECIES_256), true); }
+        @Specialization public static LongVector apply(LongVector left, LongVector right) { return VectorIntegerDivision.quotLong(RuntimeTypes.requireLong(left, LongVector.SPECIES_256), RuntimeTypes.requireLong(right, LongVector.SPECIES_256), true); }
     }
     @Operation public static final class GeneratedWord64X4Rem {
-        @Specialization public static LongVector apply(LongVector left, LongVector right) { return VectorIntegerDivision.remLong(CoreVectors.requireLong(left, LongVector.SPECIES_256), CoreVectors.requireLong(right, LongVector.SPECIES_256), true); }
+        @Specialization public static LongVector apply(LongVector left, LongVector right) { return VectorIntegerDivision.remLong(RuntimeTypes.requireLong(left, LongVector.SPECIES_256), RuntimeTypes.requireLong(right, LongVector.SPECIES_256), true); }
     }
     @Operation
     @ConstantOperand(type = VectorShuffle.class, name = "shuffle")
     public static final class GeneratedWord64X4Shuffle {
         @Specialization public static LongVector apply(VectorShuffle<?> shuffle, LongVector left, LongVector right) {
-            return CoreVectors.requireLong(left, LongVector.SPECIES_256).rearrange(shuffle.check(LongVector.SPECIES_256), CoreVectors.requireLong(right, LongVector.SPECIES_256));
+            return RuntimeTypes.requireLong(left, LongVector.SPECIES_256).rearrange(shuffle.check(LongVector.SPECIES_256), RuntimeTypes.requireLong(right, LongVector.SPECIES_256));
         }
     }
     @Operation public static final class GeneratedWord64X8Pack {
@@ -7279,7 +7279,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class GeneratedWord64X8Unpack {
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor lane0, LocalAccessor lane1, LocalAccessor lane2, LocalAccessor lane3, LocalAccessor lane4, LocalAccessor lane5, LocalAccessor lane6, LocalAccessor lane7, LongVector raw, @Bind("$node") Node node) {
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
-            LongVector value = CoreVectors.requireLong(raw, LongVector.SPECIES_512);
+            LongVector value = RuntimeTypes.requireLong(raw, LongVector.SPECIES_512);
             lane0.setLong(bytecode, frame, value.lane(0));
             lane1.setLong(bytecode, frame, value.lane(1));
             lane2.setLong(bytecode, frame, value.lane(2));
@@ -7294,34 +7294,34 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static LongVector apply(long value) { return LongVector.broadcast(LongVector.SPECIES_512, value); }
     }
     @Operation public static final class GeneratedWord64X8Plus {
-        @Specialization public static LongVector apply(LongVector left, LongVector right) { return CoreVectors.requireLong(left, LongVector.SPECIES_512).add(CoreVectors.requireLong(right, LongVector.SPECIES_512)); }
+        @Specialization public static LongVector apply(LongVector left, LongVector right) { return RuntimeTypes.requireLong(left, LongVector.SPECIES_512).add(RuntimeTypes.requireLong(right, LongVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedWord64X8Minus {
-        @Specialization public static LongVector apply(LongVector left, LongVector right) { return CoreVectors.requireLong(left, LongVector.SPECIES_512).sub(CoreVectors.requireLong(right, LongVector.SPECIES_512)); }
+        @Specialization public static LongVector apply(LongVector left, LongVector right) { return RuntimeTypes.requireLong(left, LongVector.SPECIES_512).sub(RuntimeTypes.requireLong(right, LongVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedWord64X8Times {
-        @Specialization public static LongVector apply(LongVector left, LongVector right) { return CoreVectors.requireLong(left, LongVector.SPECIES_512).mul(CoreVectors.requireLong(right, LongVector.SPECIES_512)); }
+        @Specialization public static LongVector apply(LongVector left, LongVector right) { return RuntimeTypes.requireLong(left, LongVector.SPECIES_512).mul(RuntimeTypes.requireLong(right, LongVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedWord64X8Insert {
-        @Specialization public static LongVector apply(LongVector vector, long value, long index) { return CoreVectors.requireLong(vector, LongVector.SPECIES_512).withLane(CoreVectors.laneIndex(index, 8), value); }
+        @Specialization public static LongVector apply(LongVector vector, long value, long index) { return RuntimeTypes.requireLong(vector, LongVector.SPECIES_512).withLane(RuntimeTypes.laneIndex(index, 8), value); }
     }
     @Operation public static final class GeneratedWord64X8Min {
-        @Specialization public static LongVector apply(LongVector left, LongVector right) { return CoreVectors.requireLong(left, LongVector.SPECIES_512).lanewise(VectorOperators.UMIN, CoreVectors.requireLong(right, LongVector.SPECIES_512)); }
+        @Specialization public static LongVector apply(LongVector left, LongVector right) { return RuntimeTypes.requireLong(left, LongVector.SPECIES_512).lanewise(VectorOperators.UMIN, RuntimeTypes.requireLong(right, LongVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedWord64X8Max {
-        @Specialization public static LongVector apply(LongVector left, LongVector right) { return CoreVectors.requireLong(left, LongVector.SPECIES_512).lanewise(VectorOperators.UMAX, CoreVectors.requireLong(right, LongVector.SPECIES_512)); }
+        @Specialization public static LongVector apply(LongVector left, LongVector right) { return RuntimeTypes.requireLong(left, LongVector.SPECIES_512).lanewise(VectorOperators.UMAX, RuntimeTypes.requireLong(right, LongVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedWord64X8Quot {
-        @Specialization public static LongVector apply(LongVector left, LongVector right) { return VectorIntegerDivision.quotLong(CoreVectors.requireLong(left, LongVector.SPECIES_512), CoreVectors.requireLong(right, LongVector.SPECIES_512), true); }
+        @Specialization public static LongVector apply(LongVector left, LongVector right) { return VectorIntegerDivision.quotLong(RuntimeTypes.requireLong(left, LongVector.SPECIES_512), RuntimeTypes.requireLong(right, LongVector.SPECIES_512), true); }
     }
     @Operation public static final class GeneratedWord64X8Rem {
-        @Specialization public static LongVector apply(LongVector left, LongVector right) { return VectorIntegerDivision.remLong(CoreVectors.requireLong(left, LongVector.SPECIES_512), CoreVectors.requireLong(right, LongVector.SPECIES_512), true); }
+        @Specialization public static LongVector apply(LongVector left, LongVector right) { return VectorIntegerDivision.remLong(RuntimeTypes.requireLong(left, LongVector.SPECIES_512), RuntimeTypes.requireLong(right, LongVector.SPECIES_512), true); }
     }
     @Operation
     @ConstantOperand(type = VectorShuffle.class, name = "shuffle")
     public static final class GeneratedWord64X8Shuffle {
         @Specialization public static LongVector apply(VectorShuffle<?> shuffle, LongVector left, LongVector right) {
-            return CoreVectors.requireLong(left, LongVector.SPECIES_512).rearrange(shuffle.check(LongVector.SPECIES_512), CoreVectors.requireLong(right, LongVector.SPECIES_512));
+            return RuntimeTypes.requireLong(left, LongVector.SPECIES_512).rearrange(shuffle.check(LongVector.SPECIES_512), RuntimeTypes.requireLong(right, LongVector.SPECIES_512));
         }
     }
     @Operation
@@ -7341,7 +7341,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class GeneratedWord32X16Unpack {
         @Specialization public static void apply(VirtualFrame frame, BytecodeVectorLanes lanes, IntVector raw, @Bind("$node") Node node) {
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
-            IntVector value = CoreVectors.requireInt(raw, IntVector.SPECIES_512);
+            IntVector value = RuntimeTypes.requireInt(raw, IntVector.SPECIES_512);
             lanes.getSlots()[0].setInt(bytecode, frame, value.lane(0));
             lanes.getSlots()[1].setInt(bytecode, frame, value.lane(1));
             lanes.getSlots()[2].setInt(bytecode, frame, value.lane(2));
@@ -7364,34 +7364,34 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static IntVector apply(int value) { return IntVector.broadcast(IntVector.SPECIES_512, (int) value); }
     }
     @Operation public static final class GeneratedWord32X16Plus {
-        @Specialization public static IntVector apply(IntVector left, IntVector right) { return CoreVectors.requireInt(left, IntVector.SPECIES_512).add(CoreVectors.requireInt(right, IntVector.SPECIES_512)); }
+        @Specialization public static IntVector apply(IntVector left, IntVector right) { return RuntimeTypes.requireInt(left, IntVector.SPECIES_512).add(RuntimeTypes.requireInt(right, IntVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedWord32X16Minus {
-        @Specialization public static IntVector apply(IntVector left, IntVector right) { return CoreVectors.requireInt(left, IntVector.SPECIES_512).sub(CoreVectors.requireInt(right, IntVector.SPECIES_512)); }
+        @Specialization public static IntVector apply(IntVector left, IntVector right) { return RuntimeTypes.requireInt(left, IntVector.SPECIES_512).sub(RuntimeTypes.requireInt(right, IntVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedWord32X16Times {
-        @Specialization public static IntVector apply(IntVector left, IntVector right) { return CoreVectors.requireInt(left, IntVector.SPECIES_512).mul(CoreVectors.requireInt(right, IntVector.SPECIES_512)); }
+        @Specialization public static IntVector apply(IntVector left, IntVector right) { return RuntimeTypes.requireInt(left, IntVector.SPECIES_512).mul(RuntimeTypes.requireInt(right, IntVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedWord32X16Insert {
-        @Specialization public static IntVector apply(IntVector vector, int value, long index) { return CoreVectors.requireInt(vector, IntVector.SPECIES_512).withLane(CoreVectors.laneIndex(index, 16), (int) value); }
+        @Specialization public static IntVector apply(IntVector vector, int value, long index) { return RuntimeTypes.requireInt(vector, IntVector.SPECIES_512).withLane(RuntimeTypes.laneIndex(index, 16), (int) value); }
     }
     @Operation public static final class GeneratedWord32X16Min {
-        @Specialization public static IntVector apply(IntVector left, IntVector right) { return CoreVectors.requireInt(left, IntVector.SPECIES_512).lanewise(VectorOperators.UMIN, CoreVectors.requireInt(right, IntVector.SPECIES_512)); }
+        @Specialization public static IntVector apply(IntVector left, IntVector right) { return RuntimeTypes.requireInt(left, IntVector.SPECIES_512).lanewise(VectorOperators.UMIN, RuntimeTypes.requireInt(right, IntVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedWord32X16Max {
-        @Specialization public static IntVector apply(IntVector left, IntVector right) { return CoreVectors.requireInt(left, IntVector.SPECIES_512).lanewise(VectorOperators.UMAX, CoreVectors.requireInt(right, IntVector.SPECIES_512)); }
+        @Specialization public static IntVector apply(IntVector left, IntVector right) { return RuntimeTypes.requireInt(left, IntVector.SPECIES_512).lanewise(VectorOperators.UMAX, RuntimeTypes.requireInt(right, IntVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedWord32X16Quot {
-        @Specialization public static IntVector apply(IntVector left, IntVector right) { return VectorIntegerDivision.quotInt(CoreVectors.requireInt(left, IntVector.SPECIES_512), CoreVectors.requireInt(right, IntVector.SPECIES_512), true); }
+        @Specialization public static IntVector apply(IntVector left, IntVector right) { return VectorIntegerDivision.quotInt(RuntimeTypes.requireInt(left, IntVector.SPECIES_512), RuntimeTypes.requireInt(right, IntVector.SPECIES_512), true); }
     }
     @Operation public static final class GeneratedWord32X16Rem {
-        @Specialization public static IntVector apply(IntVector left, IntVector right) { return VectorIntegerDivision.remInt(CoreVectors.requireInt(left, IntVector.SPECIES_512), CoreVectors.requireInt(right, IntVector.SPECIES_512), true); }
+        @Specialization public static IntVector apply(IntVector left, IntVector right) { return VectorIntegerDivision.remInt(RuntimeTypes.requireInt(left, IntVector.SPECIES_512), RuntimeTypes.requireInt(right, IntVector.SPECIES_512), true); }
     }
     @Operation
     @ConstantOperand(type = VectorShuffle.class, name = "shuffle")
     public static final class GeneratedWord32X16Shuffle {
         @Specialization public static IntVector apply(VectorShuffle<?> shuffle, IntVector left, IntVector right) {
-            return CoreVectors.requireInt(left, IntVector.SPECIES_512).rearrange(shuffle.check(IntVector.SPECIES_512), CoreVectors.requireInt(right, IntVector.SPECIES_512));
+            return RuntimeTypes.requireInt(left, IntVector.SPECIES_512).rearrange(shuffle.check(IntVector.SPECIES_512), RuntimeTypes.requireInt(right, IntVector.SPECIES_512));
         }
     }
     @Operation
@@ -7411,7 +7411,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class GeneratedFloatX16Unpack {
         @Specialization public static void apply(VirtualFrame frame, BytecodeVectorLanes lanes, FloatVector raw, @Bind("$node") Node node) {
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
-            FloatVector value = CoreVectors.requireFloat(raw, FloatVector.SPECIES_512);
+            FloatVector value = RuntimeTypes.requireFloat(raw, FloatVector.SPECIES_512);
             lanes.getSlots()[0].setFloat(bytecode, frame, value.lane(0));
             lanes.getSlots()[1].setFloat(bytecode, frame, value.lane(1));
             lanes.getSlots()[2].setFloat(bytecode, frame, value.lane(2));
@@ -7434,34 +7434,34 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static FloatVector apply(float value) { return FloatVector.broadcast(FloatVector.SPECIES_512, value); }
     }
     @Operation public static final class GeneratedFloatX16Plus {
-        @Specialization public static FloatVector apply(FloatVector left, FloatVector right) { return CoreVectors.requireFloat(left, FloatVector.SPECIES_512).add(CoreVectors.requireFloat(right, FloatVector.SPECIES_512)); }
+        @Specialization public static FloatVector apply(FloatVector left, FloatVector right) { return RuntimeTypes.requireFloat(left, FloatVector.SPECIES_512).add(RuntimeTypes.requireFloat(right, FloatVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedFloatX16Minus {
-        @Specialization public static FloatVector apply(FloatVector left, FloatVector right) { return CoreVectors.requireFloat(left, FloatVector.SPECIES_512).sub(CoreVectors.requireFloat(right, FloatVector.SPECIES_512)); }
+        @Specialization public static FloatVector apply(FloatVector left, FloatVector right) { return RuntimeTypes.requireFloat(left, FloatVector.SPECIES_512).sub(RuntimeTypes.requireFloat(right, FloatVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedFloatX16Times {
-        @Specialization public static FloatVector apply(FloatVector left, FloatVector right) { return CoreVectors.requireFloat(left, FloatVector.SPECIES_512).mul(CoreVectors.requireFloat(right, FloatVector.SPECIES_512)); }
+        @Specialization public static FloatVector apply(FloatVector left, FloatVector right) { return RuntimeTypes.requireFloat(left, FloatVector.SPECIES_512).mul(RuntimeTypes.requireFloat(right, FloatVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedFloatX16Negate {
-        @Specialization public static FloatVector apply(FloatVector value) { return CoreVectors.requireFloat(value, FloatVector.SPECIES_512).neg(); }
+        @Specialization public static FloatVector apply(FloatVector value) { return RuntimeTypes.requireFloat(value, FloatVector.SPECIES_512).neg(); }
     }
     @Operation public static final class GeneratedFloatX16Divide {
-        @Specialization public static FloatVector apply(FloatVector left, FloatVector right) { return CoreVectors.requireFloat(left, FloatVector.SPECIES_512).div(CoreVectors.requireFloat(right, FloatVector.SPECIES_512)); }
+        @Specialization public static FloatVector apply(FloatVector left, FloatVector right) { return RuntimeTypes.requireFloat(left, FloatVector.SPECIES_512).div(RuntimeTypes.requireFloat(right, FloatVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedFloatX16Insert {
-        @Specialization public static FloatVector apply(FloatVector vector, float value, long index) { return CoreVectors.requireFloat(vector, FloatVector.SPECIES_512).withLane(CoreVectors.laneIndex(index, 16), value); }
+        @Specialization public static FloatVector apply(FloatVector vector, float value, long index) { return RuntimeTypes.requireFloat(vector, FloatVector.SPECIES_512).withLane(RuntimeTypes.laneIndex(index, 16), value); }
     }
     @Operation public static final class GeneratedFloatX16Min {
-        @Specialization public static FloatVector apply(FloatVector left, FloatVector right) { return CoreVectors.requireFloat(left, FloatVector.SPECIES_512).min(CoreVectors.requireFloat(right, FloatVector.SPECIES_512)); }
+        @Specialization public static FloatVector apply(FloatVector left, FloatVector right) { return RuntimeTypes.requireFloat(left, FloatVector.SPECIES_512).min(RuntimeTypes.requireFloat(right, FloatVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedFloatX16Max {
-        @Specialization public static FloatVector apply(FloatVector left, FloatVector right) { return CoreVectors.requireFloat(left, FloatVector.SPECIES_512).max(CoreVectors.requireFloat(right, FloatVector.SPECIES_512)); }
+        @Specialization public static FloatVector apply(FloatVector left, FloatVector right) { return RuntimeTypes.requireFloat(left, FloatVector.SPECIES_512).max(RuntimeTypes.requireFloat(right, FloatVector.SPECIES_512)); }
     }
     @Operation
     @ConstantOperand(type = VectorShuffle.class, name = "shuffle")
     public static final class GeneratedFloatX16Shuffle {
         @Specialization public static FloatVector apply(VectorShuffle<?> shuffle, FloatVector left, FloatVector right) {
-            return CoreVectors.requireFloat(left, FloatVector.SPECIES_512).rearrange(shuffle.check(FloatVector.SPECIES_512), CoreVectors.requireFloat(right, FloatVector.SPECIES_512));
+            return RuntimeTypes.requireFloat(left, FloatVector.SPECIES_512).rearrange(shuffle.check(FloatVector.SPECIES_512), RuntimeTypes.requireFloat(right, FloatVector.SPECIES_512));
         }
     }
     @Operation public static final class GeneratedDoubleX8Pack {
@@ -7479,7 +7479,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class GeneratedDoubleX8Unpack {
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor lane0, LocalAccessor lane1, LocalAccessor lane2, LocalAccessor lane3, LocalAccessor lane4, LocalAccessor lane5, LocalAccessor lane6, LocalAccessor lane7, DoubleVector raw, @Bind("$node") Node node) {
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
-            DoubleVector value = CoreVectors.requireDouble(raw, DoubleVector.SPECIES_512);
+            DoubleVector value = RuntimeTypes.requireDouble(raw, DoubleVector.SPECIES_512);
             lane0.setDouble(bytecode, frame, value.lane(0));
             lane1.setDouble(bytecode, frame, value.lane(1));
             lane2.setDouble(bytecode, frame, value.lane(2));
@@ -7494,166 +7494,166 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static DoubleVector apply(double value) { return DoubleVector.broadcast(DoubleVector.SPECIES_512, value); }
     }
     @Operation public static final class GeneratedDoubleX8Plus {
-        @Specialization public static DoubleVector apply(DoubleVector left, DoubleVector right) { return CoreVectors.requireDouble(left, DoubleVector.SPECIES_512).add(CoreVectors.requireDouble(right, DoubleVector.SPECIES_512)); }
+        @Specialization public static DoubleVector apply(DoubleVector left, DoubleVector right) { return RuntimeTypes.requireDouble(left, DoubleVector.SPECIES_512).add(RuntimeTypes.requireDouble(right, DoubleVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedDoubleX8Minus {
-        @Specialization public static DoubleVector apply(DoubleVector left, DoubleVector right) { return CoreVectors.requireDouble(left, DoubleVector.SPECIES_512).sub(CoreVectors.requireDouble(right, DoubleVector.SPECIES_512)); }
+        @Specialization public static DoubleVector apply(DoubleVector left, DoubleVector right) { return RuntimeTypes.requireDouble(left, DoubleVector.SPECIES_512).sub(RuntimeTypes.requireDouble(right, DoubleVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedDoubleX8Times {
-        @Specialization public static DoubleVector apply(DoubleVector left, DoubleVector right) { return CoreVectors.requireDouble(left, DoubleVector.SPECIES_512).mul(CoreVectors.requireDouble(right, DoubleVector.SPECIES_512)); }
+        @Specialization public static DoubleVector apply(DoubleVector left, DoubleVector right) { return RuntimeTypes.requireDouble(left, DoubleVector.SPECIES_512).mul(RuntimeTypes.requireDouble(right, DoubleVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedDoubleX8Negate {
-        @Specialization public static DoubleVector apply(DoubleVector value) { return CoreVectors.requireDouble(value, DoubleVector.SPECIES_512).neg(); }
+        @Specialization public static DoubleVector apply(DoubleVector value) { return RuntimeTypes.requireDouble(value, DoubleVector.SPECIES_512).neg(); }
     }
     @Operation public static final class GeneratedDoubleX8Divide {
-        @Specialization public static DoubleVector apply(DoubleVector left, DoubleVector right) { return CoreVectors.requireDouble(left, DoubleVector.SPECIES_512).div(CoreVectors.requireDouble(right, DoubleVector.SPECIES_512)); }
+        @Specialization public static DoubleVector apply(DoubleVector left, DoubleVector right) { return RuntimeTypes.requireDouble(left, DoubleVector.SPECIES_512).div(RuntimeTypes.requireDouble(right, DoubleVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedDoubleX8Insert {
-        @Specialization public static DoubleVector apply(DoubleVector vector, double value, long index) { return CoreVectors.requireDouble(vector, DoubleVector.SPECIES_512).withLane(CoreVectors.laneIndex(index, 8), value); }
+        @Specialization public static DoubleVector apply(DoubleVector vector, double value, long index) { return RuntimeTypes.requireDouble(vector, DoubleVector.SPECIES_512).withLane(RuntimeTypes.laneIndex(index, 8), value); }
     }
     @Operation public static final class GeneratedDoubleX8Min {
-        @Specialization public static DoubleVector apply(DoubleVector left, DoubleVector right) { return CoreVectors.requireDouble(left, DoubleVector.SPECIES_512).min(CoreVectors.requireDouble(right, DoubleVector.SPECIES_512)); }
+        @Specialization public static DoubleVector apply(DoubleVector left, DoubleVector right) { return RuntimeTypes.requireDouble(left, DoubleVector.SPECIES_512).min(RuntimeTypes.requireDouble(right, DoubleVector.SPECIES_512)); }
     }
     @Operation public static final class GeneratedDoubleX8Max {
-        @Specialization public static DoubleVector apply(DoubleVector left, DoubleVector right) { return CoreVectors.requireDouble(left, DoubleVector.SPECIES_512).max(CoreVectors.requireDouble(right, DoubleVector.SPECIES_512)); }
+        @Specialization public static DoubleVector apply(DoubleVector left, DoubleVector right) { return RuntimeTypes.requireDouble(left, DoubleVector.SPECIES_512).max(RuntimeTypes.requireDouble(right, DoubleVector.SPECIES_512)); }
     }
     @Operation
     @ConstantOperand(type = VectorShuffle.class, name = "shuffle")
     public static final class GeneratedDoubleX8Shuffle {
         @Specialization public static DoubleVector apply(VectorShuffle<?> shuffle, DoubleVector left, DoubleVector right) {
-            return CoreVectors.requireDouble(left, DoubleVector.SPECIES_512).rearrange(shuffle.check(DoubleVector.SPECIES_512), CoreVectors.requireDouble(right, DoubleVector.SPECIES_512));
+            return RuntimeTypes.requireDouble(left, DoubleVector.SPECIES_512).rearrange(shuffle.check(DoubleVector.SPECIES_512), RuntimeTypes.requireDouble(right, DoubleVector.SPECIES_512));
         }
     }
     @Operation public static final class GeneratedInt8X16Insert {
-        @Specialization public static ByteVector apply(ByteVector vector, int value, long index) { return CoreVectors.requireByte(vector, ByteVector.SPECIES_128).withLane(CoreVectors.laneIndex(index, 16), (byte) value); }
+        @Specialization public static ByteVector apply(ByteVector vector, int value, long index) { return RuntimeTypes.requireByte(vector, ByteVector.SPECIES_128).withLane(RuntimeTypes.laneIndex(index, 16), (byte) value); }
     }
     @Operation public static final class GeneratedInt8X16Min {
-        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return CoreVectors.requireByte(left, ByteVector.SPECIES_128).min(CoreVectors.requireByte(right, ByteVector.SPECIES_128)); }
+        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return RuntimeTypes.requireByte(left, ByteVector.SPECIES_128).min(RuntimeTypes.requireByte(right, ByteVector.SPECIES_128)); }
     }
     @Operation public static final class GeneratedInt8X16Max {
-        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return CoreVectors.requireByte(left, ByteVector.SPECIES_128).max(CoreVectors.requireByte(right, ByteVector.SPECIES_128)); }
+        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return RuntimeTypes.requireByte(left, ByteVector.SPECIES_128).max(RuntimeTypes.requireByte(right, ByteVector.SPECIES_128)); }
     }
     @Operation public static final class GeneratedInt8X16Quot {
-        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return VectorIntegerDivision.quotByte(CoreVectors.requireByte(left, ByteVector.SPECIES_128), CoreVectors.requireByte(right, ByteVector.SPECIES_128), false); }
+        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return VectorIntegerDivision.quotByte(RuntimeTypes.requireByte(left, ByteVector.SPECIES_128), RuntimeTypes.requireByte(right, ByteVector.SPECIES_128), false); }
     }
     @Operation public static final class GeneratedInt8X16Rem {
-        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return VectorIntegerDivision.remByte(CoreVectors.requireByte(left, ByteVector.SPECIES_128), CoreVectors.requireByte(right, ByteVector.SPECIES_128), false); }
+        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return VectorIntegerDivision.remByte(RuntimeTypes.requireByte(left, ByteVector.SPECIES_128), RuntimeTypes.requireByte(right, ByteVector.SPECIES_128), false); }
     }
     @Operation
     @ConstantOperand(type = VectorShuffle.class, name = "shuffle")
     public static final class GeneratedInt8X16Shuffle {
         @Specialization public static ByteVector apply(VectorShuffle<?> shuffle, ByteVector left, ByteVector right) {
-            return CoreVectors.requireByte(left, ByteVector.SPECIES_128).rearrange(shuffle.check(ByteVector.SPECIES_128), CoreVectors.requireByte(right, ByteVector.SPECIES_128));
+            return RuntimeTypes.requireByte(left, ByteVector.SPECIES_128).rearrange(shuffle.check(ByteVector.SPECIES_128), RuntimeTypes.requireByte(right, ByteVector.SPECIES_128));
         }
     }
     @Operation public static final class GeneratedInt16X8Insert {
-        @Specialization public static ShortVector apply(ShortVector vector, int value, long index) { return CoreVectors.requireShort(vector, ShortVector.SPECIES_128).withLane(CoreVectors.laneIndex(index, 8), (short) value); }
+        @Specialization public static ShortVector apply(ShortVector vector, int value, long index) { return RuntimeTypes.requireShort(vector, ShortVector.SPECIES_128).withLane(RuntimeTypes.laneIndex(index, 8), (short) value); }
     }
     @Operation public static final class GeneratedInt16X8Min {
-        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return CoreVectors.requireShort(left, ShortVector.SPECIES_128).min(CoreVectors.requireShort(right, ShortVector.SPECIES_128)); }
+        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return RuntimeTypes.requireShort(left, ShortVector.SPECIES_128).min(RuntimeTypes.requireShort(right, ShortVector.SPECIES_128)); }
     }
     @Operation public static final class GeneratedInt16X8Max {
-        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return CoreVectors.requireShort(left, ShortVector.SPECIES_128).max(CoreVectors.requireShort(right, ShortVector.SPECIES_128)); }
+        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return RuntimeTypes.requireShort(left, ShortVector.SPECIES_128).max(RuntimeTypes.requireShort(right, ShortVector.SPECIES_128)); }
     }
     @Operation public static final class GeneratedInt16X8Quot {
-        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return VectorIntegerDivision.quotShort(CoreVectors.requireShort(left, ShortVector.SPECIES_128), CoreVectors.requireShort(right, ShortVector.SPECIES_128), false); }
+        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return VectorIntegerDivision.quotShort(RuntimeTypes.requireShort(left, ShortVector.SPECIES_128), RuntimeTypes.requireShort(right, ShortVector.SPECIES_128), false); }
     }
     @Operation public static final class GeneratedInt16X8Rem {
-        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return VectorIntegerDivision.remShort(CoreVectors.requireShort(left, ShortVector.SPECIES_128), CoreVectors.requireShort(right, ShortVector.SPECIES_128), false); }
+        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return VectorIntegerDivision.remShort(RuntimeTypes.requireShort(left, ShortVector.SPECIES_128), RuntimeTypes.requireShort(right, ShortVector.SPECIES_128), false); }
     }
     @Operation
     @ConstantOperand(type = VectorShuffle.class, name = "shuffle")
     public static final class GeneratedInt16X8Shuffle {
         @Specialization public static ShortVector apply(VectorShuffle<?> shuffle, ShortVector left, ShortVector right) {
-            return CoreVectors.requireShort(left, ShortVector.SPECIES_128).rearrange(shuffle.check(ShortVector.SPECIES_128), CoreVectors.requireShort(right, ShortVector.SPECIES_128));
+            return RuntimeTypes.requireShort(left, ShortVector.SPECIES_128).rearrange(shuffle.check(ShortVector.SPECIES_128), RuntimeTypes.requireShort(right, ShortVector.SPECIES_128));
         }
     }
     @Operation public static final class GeneratedInt32X4Insert {
-        @Specialization public static IntVector apply(IntVector vector, int value, long index) { return CoreVectors.requireInt(vector, IntVector.SPECIES_128).withLane(CoreVectors.laneIndex(index, 4), (int) value); }
+        @Specialization public static IntVector apply(IntVector vector, int value, long index) { return RuntimeTypes.requireInt(vector, IntVector.SPECIES_128).withLane(RuntimeTypes.laneIndex(index, 4), (int) value); }
     }
     @Operation public static final class GeneratedInt32X4Min {
-        @Specialization public static IntVector apply(IntVector left, IntVector right) { return CoreVectors.requireInt(left, IntVector.SPECIES_128).min(CoreVectors.requireInt(right, IntVector.SPECIES_128)); }
+        @Specialization public static IntVector apply(IntVector left, IntVector right) { return RuntimeTypes.requireInt(left, IntVector.SPECIES_128).min(RuntimeTypes.requireInt(right, IntVector.SPECIES_128)); }
     }
     @Operation public static final class GeneratedInt32X4Max {
-        @Specialization public static IntVector apply(IntVector left, IntVector right) { return CoreVectors.requireInt(left, IntVector.SPECIES_128).max(CoreVectors.requireInt(right, IntVector.SPECIES_128)); }
+        @Specialization public static IntVector apply(IntVector left, IntVector right) { return RuntimeTypes.requireInt(left, IntVector.SPECIES_128).max(RuntimeTypes.requireInt(right, IntVector.SPECIES_128)); }
     }
     @Operation public static final class GeneratedInt32X4Quot {
-        @Specialization public static IntVector apply(IntVector left, IntVector right) { return VectorIntegerDivision.quotInt(CoreVectors.requireInt(left, IntVector.SPECIES_128), CoreVectors.requireInt(right, IntVector.SPECIES_128), false); }
+        @Specialization public static IntVector apply(IntVector left, IntVector right) { return VectorIntegerDivision.quotInt(RuntimeTypes.requireInt(left, IntVector.SPECIES_128), RuntimeTypes.requireInt(right, IntVector.SPECIES_128), false); }
     }
     @Operation public static final class GeneratedInt32X4Rem {
-        @Specialization public static IntVector apply(IntVector left, IntVector right) { return VectorIntegerDivision.remInt(CoreVectors.requireInt(left, IntVector.SPECIES_128), CoreVectors.requireInt(right, IntVector.SPECIES_128), false); }
+        @Specialization public static IntVector apply(IntVector left, IntVector right) { return VectorIntegerDivision.remInt(RuntimeTypes.requireInt(left, IntVector.SPECIES_128), RuntimeTypes.requireInt(right, IntVector.SPECIES_128), false); }
     }
     @Operation
     @ConstantOperand(type = VectorShuffle.class, name = "shuffle")
     public static final class GeneratedInt32X4Shuffle {
         @Specialization public static IntVector apply(VectorShuffle<?> shuffle, IntVector left, IntVector right) {
-            return CoreVectors.requireInt(left, IntVector.SPECIES_128).rearrange(shuffle.check(IntVector.SPECIES_128), CoreVectors.requireInt(right, IntVector.SPECIES_128));
+            return RuntimeTypes.requireInt(left, IntVector.SPECIES_128).rearrange(shuffle.check(IntVector.SPECIES_128), RuntimeTypes.requireInt(right, IntVector.SPECIES_128));
         }
     }
     @Operation public static final class GeneratedWord8X16Insert {
-        @Specialization public static ByteVector apply(ByteVector vector, int value, long index) { return CoreVectors.requireByte(vector, ByteVector.SPECIES_128).withLane(CoreVectors.laneIndex(index, 16), (byte) value); }
+        @Specialization public static ByteVector apply(ByteVector vector, int value, long index) { return RuntimeTypes.requireByte(vector, ByteVector.SPECIES_128).withLane(RuntimeTypes.laneIndex(index, 16), (byte) value); }
     }
     @Operation public static final class GeneratedWord8X16Min {
-        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return CoreVectors.requireByte(left, ByteVector.SPECIES_128).lanewise(VectorOperators.UMIN, CoreVectors.requireByte(right, ByteVector.SPECIES_128)); }
+        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return RuntimeTypes.requireByte(left, ByteVector.SPECIES_128).lanewise(VectorOperators.UMIN, RuntimeTypes.requireByte(right, ByteVector.SPECIES_128)); }
     }
     @Operation public static final class GeneratedWord8X16Max {
-        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return CoreVectors.requireByte(left, ByteVector.SPECIES_128).lanewise(VectorOperators.UMAX, CoreVectors.requireByte(right, ByteVector.SPECIES_128)); }
+        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return RuntimeTypes.requireByte(left, ByteVector.SPECIES_128).lanewise(VectorOperators.UMAX, RuntimeTypes.requireByte(right, ByteVector.SPECIES_128)); }
     }
     @Operation public static final class GeneratedWord8X16Quot {
-        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return VectorIntegerDivision.quotByte(CoreVectors.requireByte(left, ByteVector.SPECIES_128), CoreVectors.requireByte(right, ByteVector.SPECIES_128), true); }
+        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return VectorIntegerDivision.quotByte(RuntimeTypes.requireByte(left, ByteVector.SPECIES_128), RuntimeTypes.requireByte(right, ByteVector.SPECIES_128), true); }
     }
     @Operation public static final class GeneratedWord8X16Rem {
-        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return VectorIntegerDivision.remByte(CoreVectors.requireByte(left, ByteVector.SPECIES_128), CoreVectors.requireByte(right, ByteVector.SPECIES_128), true); }
+        @Specialization public static ByteVector apply(ByteVector left, ByteVector right) { return VectorIntegerDivision.remByte(RuntimeTypes.requireByte(left, ByteVector.SPECIES_128), RuntimeTypes.requireByte(right, ByteVector.SPECIES_128), true); }
     }
     @Operation
     @ConstantOperand(type = VectorShuffle.class, name = "shuffle")
     public static final class GeneratedWord8X16Shuffle {
         @Specialization public static ByteVector apply(VectorShuffle<?> shuffle, ByteVector left, ByteVector right) {
-            return CoreVectors.requireByte(left, ByteVector.SPECIES_128).rearrange(shuffle.check(ByteVector.SPECIES_128), CoreVectors.requireByte(right, ByteVector.SPECIES_128));
+            return RuntimeTypes.requireByte(left, ByteVector.SPECIES_128).rearrange(shuffle.check(ByteVector.SPECIES_128), RuntimeTypes.requireByte(right, ByteVector.SPECIES_128));
         }
     }
     @Operation public static final class GeneratedWord16X8Insert {
-        @Specialization public static ShortVector apply(ShortVector vector, int value, long index) { return CoreVectors.requireShort(vector, ShortVector.SPECIES_128).withLane(CoreVectors.laneIndex(index, 8), (short) value); }
+        @Specialization public static ShortVector apply(ShortVector vector, int value, long index) { return RuntimeTypes.requireShort(vector, ShortVector.SPECIES_128).withLane(RuntimeTypes.laneIndex(index, 8), (short) value); }
     }
     @Operation public static final class GeneratedWord16X8Min {
-        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return CoreVectors.requireShort(left, ShortVector.SPECIES_128).lanewise(VectorOperators.UMIN, CoreVectors.requireShort(right, ShortVector.SPECIES_128)); }
+        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return RuntimeTypes.requireShort(left, ShortVector.SPECIES_128).lanewise(VectorOperators.UMIN, RuntimeTypes.requireShort(right, ShortVector.SPECIES_128)); }
     }
     @Operation public static final class GeneratedWord16X8Max {
-        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return CoreVectors.requireShort(left, ShortVector.SPECIES_128).lanewise(VectorOperators.UMAX, CoreVectors.requireShort(right, ShortVector.SPECIES_128)); }
+        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return RuntimeTypes.requireShort(left, ShortVector.SPECIES_128).lanewise(VectorOperators.UMAX, RuntimeTypes.requireShort(right, ShortVector.SPECIES_128)); }
     }
     @Operation public static final class GeneratedWord16X8Quot {
-        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return VectorIntegerDivision.quotShort(CoreVectors.requireShort(left, ShortVector.SPECIES_128), CoreVectors.requireShort(right, ShortVector.SPECIES_128), true); }
+        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return VectorIntegerDivision.quotShort(RuntimeTypes.requireShort(left, ShortVector.SPECIES_128), RuntimeTypes.requireShort(right, ShortVector.SPECIES_128), true); }
     }
     @Operation public static final class GeneratedWord16X8Rem {
-        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return VectorIntegerDivision.remShort(CoreVectors.requireShort(left, ShortVector.SPECIES_128), CoreVectors.requireShort(right, ShortVector.SPECIES_128), true); }
+        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return VectorIntegerDivision.remShort(RuntimeTypes.requireShort(left, ShortVector.SPECIES_128), RuntimeTypes.requireShort(right, ShortVector.SPECIES_128), true); }
     }
     @Operation
     @ConstantOperand(type = VectorShuffle.class, name = "shuffle")
     public static final class GeneratedWord16X8Shuffle {
         @Specialization public static ShortVector apply(VectorShuffle<?> shuffle, ShortVector left, ShortVector right) {
-            return CoreVectors.requireShort(left, ShortVector.SPECIES_128).rearrange(shuffle.check(ShortVector.SPECIES_128), CoreVectors.requireShort(right, ShortVector.SPECIES_128));
+            return RuntimeTypes.requireShort(left, ShortVector.SPECIES_128).rearrange(shuffle.check(ShortVector.SPECIES_128), RuntimeTypes.requireShort(right, ShortVector.SPECIES_128));
         }
     }
     @Operation public static final class GeneratedWord32X4Insert {
-        @Specialization public static IntVector apply(IntVector vector, int value, long index) { return CoreVectors.requireInt(vector, IntVector.SPECIES_128).withLane(CoreVectors.laneIndex(index, 4), (int) value); }
+        @Specialization public static IntVector apply(IntVector vector, int value, long index) { return RuntimeTypes.requireInt(vector, IntVector.SPECIES_128).withLane(RuntimeTypes.laneIndex(index, 4), (int) value); }
     }
     @Operation public static final class GeneratedWord32X4Min {
-        @Specialization public static IntVector apply(IntVector left, IntVector right) { return CoreVectors.requireInt(left, IntVector.SPECIES_128).lanewise(VectorOperators.UMIN, CoreVectors.requireInt(right, IntVector.SPECIES_128)); }
+        @Specialization public static IntVector apply(IntVector left, IntVector right) { return RuntimeTypes.requireInt(left, IntVector.SPECIES_128).lanewise(VectorOperators.UMIN, RuntimeTypes.requireInt(right, IntVector.SPECIES_128)); }
     }
     @Operation public static final class GeneratedWord32X4Max {
-        @Specialization public static IntVector apply(IntVector left, IntVector right) { return CoreVectors.requireInt(left, IntVector.SPECIES_128).lanewise(VectorOperators.UMAX, CoreVectors.requireInt(right, IntVector.SPECIES_128)); }
+        @Specialization public static IntVector apply(IntVector left, IntVector right) { return RuntimeTypes.requireInt(left, IntVector.SPECIES_128).lanewise(VectorOperators.UMAX, RuntimeTypes.requireInt(right, IntVector.SPECIES_128)); }
     }
     @Operation public static final class GeneratedWord32X4Quot {
-        @Specialization public static IntVector apply(IntVector left, IntVector right) { return VectorIntegerDivision.quotInt(CoreVectors.requireInt(left, IntVector.SPECIES_128), CoreVectors.requireInt(right, IntVector.SPECIES_128), true); }
+        @Specialization public static IntVector apply(IntVector left, IntVector right) { return VectorIntegerDivision.quotInt(RuntimeTypes.requireInt(left, IntVector.SPECIES_128), RuntimeTypes.requireInt(right, IntVector.SPECIES_128), true); }
     }
     @Operation public static final class GeneratedWord32X4Rem {
-        @Specialization public static IntVector apply(IntVector left, IntVector right) { return VectorIntegerDivision.remInt(CoreVectors.requireInt(left, IntVector.SPECIES_128), CoreVectors.requireInt(right, IntVector.SPECIES_128), true); }
+        @Specialization public static IntVector apply(IntVector left, IntVector right) { return VectorIntegerDivision.remInt(RuntimeTypes.requireInt(left, IntVector.SPECIES_128), RuntimeTypes.requireInt(right, IntVector.SPECIES_128), true); }
     }
     @Operation
     @ConstantOperand(type = VectorShuffle.class, name = "shuffle")
     public static final class GeneratedWord32X4Shuffle {
         @Specialization public static IntVector apply(VectorShuffle<?> shuffle, IntVector left, IntVector right) {
-            return CoreVectors.requireInt(left, IntVector.SPECIES_128).rearrange(shuffle.check(IntVector.SPECIES_128), CoreVectors.requireInt(right, IntVector.SPECIES_128));
+            return RuntimeTypes.requireInt(left, IntVector.SPECIES_128).rearrange(shuffle.check(IntVector.SPECIES_128), RuntimeTypes.requireInt(right, IntVector.SPECIES_128));
         }
     }
     @Operation
@@ -7673,7 +7673,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class GeneratedInt16X16Unpack {
         @Specialization public static void apply(VirtualFrame frame, BytecodeVectorLanes lanes, ShortVector raw, @Bind("$node") Node node) {
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
-            ShortVector value = CoreVectors.requireShort(raw, ShortVector.SPECIES_256);
+            ShortVector value = RuntimeTypes.requireShort(raw, ShortVector.SPECIES_256);
             lanes.getSlots()[0].setInt(bytecode, frame, value.lane(0));
             lanes.getSlots()[1].setInt(bytecode, frame, value.lane(1));
             lanes.getSlots()[2].setInt(bytecode, frame, value.lane(2));
@@ -7696,37 +7696,37 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static ShortVector apply(int value) { return ShortVector.broadcast(ShortVector.SPECIES_256, (short) value); }
     }
     @Operation public static final class GeneratedInt16X16Plus {
-        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return CoreVectors.requireShort(left, ShortVector.SPECIES_256).add(CoreVectors.requireShort(right, ShortVector.SPECIES_256)); }
+        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return RuntimeTypes.requireShort(left, ShortVector.SPECIES_256).add(RuntimeTypes.requireShort(right, ShortVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedInt16X16Minus {
-        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return CoreVectors.requireShort(left, ShortVector.SPECIES_256).sub(CoreVectors.requireShort(right, ShortVector.SPECIES_256)); }
+        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return RuntimeTypes.requireShort(left, ShortVector.SPECIES_256).sub(RuntimeTypes.requireShort(right, ShortVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedInt16X16Times {
-        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return CoreVectors.requireShort(left, ShortVector.SPECIES_256).mul(CoreVectors.requireShort(right, ShortVector.SPECIES_256)); }
+        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return RuntimeTypes.requireShort(left, ShortVector.SPECIES_256).mul(RuntimeTypes.requireShort(right, ShortVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedInt16X16Negate {
-        @Specialization public static ShortVector apply(ShortVector value) { return CoreVectors.requireShort(value, ShortVector.SPECIES_256).neg(); }
+        @Specialization public static ShortVector apply(ShortVector value) { return RuntimeTypes.requireShort(value, ShortVector.SPECIES_256).neg(); }
     }
     @Operation public static final class GeneratedInt16X16Insert {
-        @Specialization public static ShortVector apply(ShortVector vector, int value, long index) { return CoreVectors.requireShort(vector, ShortVector.SPECIES_256).withLane(CoreVectors.laneIndex(index, 16), (short) value); }
+        @Specialization public static ShortVector apply(ShortVector vector, int value, long index) { return RuntimeTypes.requireShort(vector, ShortVector.SPECIES_256).withLane(RuntimeTypes.laneIndex(index, 16), (short) value); }
     }
     @Operation public static final class GeneratedInt16X16Min {
-        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return CoreVectors.requireShort(left, ShortVector.SPECIES_256).min(CoreVectors.requireShort(right, ShortVector.SPECIES_256)); }
+        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return RuntimeTypes.requireShort(left, ShortVector.SPECIES_256).min(RuntimeTypes.requireShort(right, ShortVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedInt16X16Max {
-        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return CoreVectors.requireShort(left, ShortVector.SPECIES_256).max(CoreVectors.requireShort(right, ShortVector.SPECIES_256)); }
+        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return RuntimeTypes.requireShort(left, ShortVector.SPECIES_256).max(RuntimeTypes.requireShort(right, ShortVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedInt16X16Quot {
-        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return VectorIntegerDivision.quotShort(CoreVectors.requireShort(left, ShortVector.SPECIES_256), CoreVectors.requireShort(right, ShortVector.SPECIES_256), false); }
+        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return VectorIntegerDivision.quotShort(RuntimeTypes.requireShort(left, ShortVector.SPECIES_256), RuntimeTypes.requireShort(right, ShortVector.SPECIES_256), false); }
     }
     @Operation public static final class GeneratedInt16X16Rem {
-        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return VectorIntegerDivision.remShort(CoreVectors.requireShort(left, ShortVector.SPECIES_256), CoreVectors.requireShort(right, ShortVector.SPECIES_256), false); }
+        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return VectorIntegerDivision.remShort(RuntimeTypes.requireShort(left, ShortVector.SPECIES_256), RuntimeTypes.requireShort(right, ShortVector.SPECIES_256), false); }
     }
     @Operation
     @ConstantOperand(type = VectorShuffle.class, name = "shuffle")
     public static final class GeneratedInt16X16Shuffle {
         @Specialization public static ShortVector apply(VectorShuffle<?> shuffle, ShortVector left, ShortVector right) {
-            return CoreVectors.requireShort(left, ShortVector.SPECIES_256).rearrange(shuffle.check(ShortVector.SPECIES_256), CoreVectors.requireShort(right, ShortVector.SPECIES_256));
+            return RuntimeTypes.requireShort(left, ShortVector.SPECIES_256).rearrange(shuffle.check(ShortVector.SPECIES_256), RuntimeTypes.requireShort(right, ShortVector.SPECIES_256));
         }
     }
     @Operation
@@ -7746,7 +7746,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class GeneratedWord16X16Unpack {
         @Specialization public static void apply(VirtualFrame frame, BytecodeVectorLanes lanes, ShortVector raw, @Bind("$node") Node node) {
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
-            ShortVector value = CoreVectors.requireShort(raw, ShortVector.SPECIES_256);
+            ShortVector value = RuntimeTypes.requireShort(raw, ShortVector.SPECIES_256);
             lanes.getSlots()[0].setInt(bytecode, frame, value.lane(0) & 0xffff);
             lanes.getSlots()[1].setInt(bytecode, frame, value.lane(1) & 0xffff);
             lanes.getSlots()[2].setInt(bytecode, frame, value.lane(2) & 0xffff);
@@ -7769,34 +7769,34 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static ShortVector apply(int value) { return ShortVector.broadcast(ShortVector.SPECIES_256, (short) value); }
     }
     @Operation public static final class GeneratedWord16X16Plus {
-        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return CoreVectors.requireShort(left, ShortVector.SPECIES_256).add(CoreVectors.requireShort(right, ShortVector.SPECIES_256)); }
+        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return RuntimeTypes.requireShort(left, ShortVector.SPECIES_256).add(RuntimeTypes.requireShort(right, ShortVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedWord16X16Minus {
-        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return CoreVectors.requireShort(left, ShortVector.SPECIES_256).sub(CoreVectors.requireShort(right, ShortVector.SPECIES_256)); }
+        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return RuntimeTypes.requireShort(left, ShortVector.SPECIES_256).sub(RuntimeTypes.requireShort(right, ShortVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedWord16X16Times {
-        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return CoreVectors.requireShort(left, ShortVector.SPECIES_256).mul(CoreVectors.requireShort(right, ShortVector.SPECIES_256)); }
+        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return RuntimeTypes.requireShort(left, ShortVector.SPECIES_256).mul(RuntimeTypes.requireShort(right, ShortVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedWord16X16Insert {
-        @Specialization public static ShortVector apply(ShortVector vector, int value, long index) { return CoreVectors.requireShort(vector, ShortVector.SPECIES_256).withLane(CoreVectors.laneIndex(index, 16), (short) value); }
+        @Specialization public static ShortVector apply(ShortVector vector, int value, long index) { return RuntimeTypes.requireShort(vector, ShortVector.SPECIES_256).withLane(RuntimeTypes.laneIndex(index, 16), (short) value); }
     }
     @Operation public static final class GeneratedWord16X16Min {
-        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return CoreVectors.requireShort(left, ShortVector.SPECIES_256).lanewise(VectorOperators.UMIN, CoreVectors.requireShort(right, ShortVector.SPECIES_256)); }
+        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return RuntimeTypes.requireShort(left, ShortVector.SPECIES_256).lanewise(VectorOperators.UMIN, RuntimeTypes.requireShort(right, ShortVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedWord16X16Max {
-        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return CoreVectors.requireShort(left, ShortVector.SPECIES_256).lanewise(VectorOperators.UMAX, CoreVectors.requireShort(right, ShortVector.SPECIES_256)); }
+        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return RuntimeTypes.requireShort(left, ShortVector.SPECIES_256).lanewise(VectorOperators.UMAX, RuntimeTypes.requireShort(right, ShortVector.SPECIES_256)); }
     }
     @Operation public static final class GeneratedWord16X16Quot {
-        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return VectorIntegerDivision.quotShort(CoreVectors.requireShort(left, ShortVector.SPECIES_256), CoreVectors.requireShort(right, ShortVector.SPECIES_256), true); }
+        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return VectorIntegerDivision.quotShort(RuntimeTypes.requireShort(left, ShortVector.SPECIES_256), RuntimeTypes.requireShort(right, ShortVector.SPECIES_256), true); }
     }
     @Operation public static final class GeneratedWord16X16Rem {
-        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return VectorIntegerDivision.remShort(CoreVectors.requireShort(left, ShortVector.SPECIES_256), CoreVectors.requireShort(right, ShortVector.SPECIES_256), true); }
+        @Specialization public static ShortVector apply(ShortVector left, ShortVector right) { return VectorIntegerDivision.remShort(RuntimeTypes.requireShort(left, ShortVector.SPECIES_256), RuntimeTypes.requireShort(right, ShortVector.SPECIES_256), true); }
     }
     @Operation
     @ConstantOperand(type = VectorShuffle.class, name = "shuffle")
     public static final class GeneratedWord16X16Shuffle {
         @Specialization public static ShortVector apply(VectorShuffle<?> shuffle, ShortVector left, ShortVector right) {
-            return CoreVectors.requireShort(left, ShortVector.SPECIES_256).rearrange(shuffle.check(ShortVector.SPECIES_256), CoreVectors.requireShort(right, ShortVector.SPECIES_256));
+            return RuntimeTypes.requireShort(left, ShortVector.SPECIES_256).rearrange(shuffle.check(ShortVector.SPECIES_256), RuntimeTypes.requireShort(right, ShortVector.SPECIES_256));
         }
     }
     // END GENERATED SIMD FAMILIES

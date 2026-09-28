@@ -2,55 +2,12 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
 
-import com.oracle.truffle.api.CompilerDirectives;
-import jdk.incubator.vector.*;
 import java.util.*;
-import static thc.runtime.RuntimeFault.fault;
 
-/** Exact vector proof validation and physical species boundaries. */
+/** Exact vector proof metadata and validation. Runtime species checks live in RuntimeTypes. */
 public final class CoreVectors {
     private CoreVectors() {}
 
-    public static ByteVector requireByte(Object raw, VectorSpecies<Byte> species) {
-        if (!(raw instanceof ByteVector value)) throw fault("Expected ByteVector");
-        if (!value.species().equals(species)) throw fault("Unexpected vector species");
-        return (ByteVector) CompilerDirectives.castExact(value, species.vectorType());
-    }
-
-    public static ShortVector requireShort(Object raw, VectorSpecies<Short> species) {
-        if (!(raw instanceof ShortVector value)) throw fault("Expected ShortVector");
-        if (!value.species().equals(species)) throw fault("Unexpected vector species");
-        return (ShortVector) CompilerDirectives.castExact(value, species.vectorType());
-    }
-
-    public static IntVector requireInt(Object raw, VectorSpecies<Integer> species) {
-        if (!(raw instanceof IntVector value)) throw fault("Expected IntVector");
-        if (!value.species().equals(species)) throw fault("Unexpected vector species");
-        return (IntVector) CompilerDirectives.castExact(value, species.vectorType());
-    }
-
-    public static LongVector requireLong(Object raw, VectorSpecies<Long> species) {
-        if (!(raw instanceof LongVector value)) throw fault("Expected LongVector");
-        if (!value.species().equals(species)) throw fault("Unexpected vector species");
-        return (LongVector) CompilerDirectives.castExact(value, species.vectorType());
-    }
-
-    public static FloatVector requireFloat(Object raw, VectorSpecies<Float> species) {
-        if (!(raw instanceof FloatVector value)) throw fault("Expected FloatVector");
-        if (!value.species().equals(species)) throw fault("Unexpected vector species");
-        return (FloatVector) CompilerDirectives.castExact(value, species.vectorType());
-    }
-
-    public static DoubleVector requireDouble(Object raw, VectorSpecies<Double> species) {
-        if (!(raw instanceof DoubleVector value)) throw fault("Expected DoubleVector");
-        if (!value.species().equals(species)) throw fault("Unexpected vector species");
-        return (DoubleVector) CompilerDirectives.castExact(value, species.vectorType());
-    }
-
-    public static int laneIndex(long index, int lanes) {
-        if (index < 0L || index >= (long) lanes) throw fault("Invalid vector lane index");
-        return (int) index;
-    }
     private static Object at(List<?> values, int index) {
         return index < values.size() ? values.get(index) : null;
     }

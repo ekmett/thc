@@ -49,6 +49,6 @@ public final class VectorFloatOperation extends Expr {
     }
 
     private static FloatVector vector(Object value) {
-        return CoreVectors.requireFloat(value, FloatVector.SPECIES_128);
+        return RuntimeTypes.requireFloat(value, FloatVector.SPECIES_128);
     }
 }

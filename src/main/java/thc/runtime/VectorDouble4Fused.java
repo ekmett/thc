@@ -32,6 +32,6 @@ public final class VectorDouble4Fused extends Expr {
     }
 
     private static DoubleVector vector(Object value) {
-        return CoreVectors.requireDouble(value, DoubleVector.SPECIES_256);
+        return RuntimeTypes.requireDouble(value, DoubleVector.SPECIES_256);
     }
 }

@@ -22,7 +22,7 @@ public final class VectorDoubleUnpack extends Expr {
     }
 
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
-        DoubleVector value = CoreVectors.requireDouble(argument.execute(frame), DoubleVector.SPECIES_128);
+        DoubleVector value = RuntimeTypes.requireDouble(argument.execute(frame), DoubleVector.SPECIES_128);
         FrameAccess.INSTANCE.writeDouble(frame, slots[offset], value.lane(0));
         FrameAccess.INSTANCE.writeDouble(frame, slots[offset + 1], value.lane(1));
         return null;

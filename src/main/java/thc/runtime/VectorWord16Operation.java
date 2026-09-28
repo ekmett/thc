@@ -38,6 +38,6 @@ public final class VectorWord16Operation extends Expr {
     }
 
     private static ShortVector vector(Object value) {
-        return CoreVectors.requireShort(value, ShortVector.SPECIES_128);
+        return RuntimeTypes.requireShort(value, ShortVector.SPECIES_128);
     }
 }

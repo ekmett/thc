@@ -22,7 +22,7 @@ public final class VectorWord16Unpack extends Expr {
     }
 
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
-        ShortVector value = CoreVectors.requireShort(argument.execute(frame), ShortVector.SPECIES_128);
+        ShortVector value = RuntimeTypes.requireShort(argument.execute(frame), ShortVector.SPECIES_128);
         FrameAccess.INSTANCE.writeInt(frame, slots[offset], value.lane(0) & 0xffff);
         FrameAccess.INSTANCE.writeInt(frame, slots[offset + 1], value.lane(1) & 0xffff);
         FrameAccess.INSTANCE.writeInt(frame, slots[offset + 2], value.lane(2) & 0xffff);
