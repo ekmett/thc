@@ -7027,14 +7027,14 @@ public final class BytecodeProgram implements ExecutableProgram {
                 }
             });
         }
-        if (CompactOp.Companion.named(name) != null) {
-            var operation = CompactOp.Companion.named(name);
+        if (CompactOp.named(name) != null) {
+            var operation = CompactOp.named(name);
             if (enableAsync && operation.getAdds()) throw new UnsupportedCore("Compact graph traversal does not yet support resumable asynchronous forcing");
             operation.validate(argumentProofs(args), flags, tupleProof);
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
             var failures = new ArrayList<GlobalBinding>();
-            if (operation.getAdds()) for (var id : CompactOp.Companion.getFailures()) {
+            if (operation.getAdds()) for (var id : CompactOp.getFailures()) {
                 var binding = globals.get(id);
                 if (binding == null) throw new UnsupportedCore("Compact addition requires original exception payload: " + id);
                 failures.add(binding);
@@ -7086,8 +7086,8 @@ public final class BytecodeProgram implements ExecutableProgram {
                 b.beginWriteMutVar(); for (var operand : operands) operand.emit(e); b.endWriteMutVar();
             }, evaluatedProof(tupleProof, true));
         }
-        if (WeakOp.Companion.named(name) != null) {
-            var operation = WeakOp.Companion.named(name);
+        if (WeakOp.named(name) != null) {
+            var operation = WeakOp.named(name);
             var proofs = argumentProofs(args);
             operation.validate(proofs, flags, tupleProof);
             operation.validateBindings(proofs, lexicalProofs(args, scope));
