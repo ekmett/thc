@@ -71,7 +71,7 @@ class OriginalProcessIdentityTest {
                                 stdio.setErrno(sentinel);
                                 for (var invocation : List.of(new Invocation(raw,rawTarget,new Object[]{0L,kotlin.Unit.INSTANCE}),new Invocation(consumer,consumerTarget,new Object[]{0L,0L}))) {
                                     long identity = symbol.equals("getpid") ? ProcessHandle.current().pid() : Integer.toUnsignedLong((int) effectiveUid.invokeExact());
-                                    long before = ((Number) invocation.program().diagnostics().get("compiledEntries")).longValue(); assertEquals(identity,Calls.target(invocation.target(),invocation.arguments()),stage + "/" + backend + "/" + name); assertEquals(sentinel,stdio.errno()); released(language);
+                                    long before = ((Number) invocation.program().diagnostics().get("compiledEntries")).longValue(); Object expected = invocation.target() == rawTarget ? (Object) (int) identity : identity; assertEquals(expected,Calls.target(invocation.target(),invocation.arguments()),stage + "/" + backend + "/" + name); assertEquals(sentinel,stdio.errno()); released(language);
                                     if (compiled) { assertEquals(before + 1,((Number) invocation.program().diagnostics().get("compiledEntries")).longValue()); valid(invocation.target()); }
                                 }
                             }

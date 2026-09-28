@@ -14,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
+import static thc.runtime.NarrowIntegerCarrierTestKt.callScalarTestTarget;
 import static thc.runtime.OriginalStdioChecks.*;
 
 @EnabledOnOs(OS.LINUX)
@@ -76,12 +77,12 @@ class OriginalFcntlTest {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var raw = rawModule(call,module); var executable = program(backend,language,raw); var target = executable.entryTarget("entry"); var state = Language.currentState(); var abi = StdioHostAbi.load();
                     var path = directory.resolve("raw-" + backend + "-" + original.name()); Files.writeString(path,"abc"); long fd = state.getStdio().open(ManagedAddress.fromByteArray((path + "\0").getBytes(StandardCharsets.UTF_8)),abi.flagConstant(OriginalStdioOp.O_RDWR),0);
                     long before = state.getStdio().fcntl(fd,abi.flagConstant(OriginalStdioOp.F_GETFL),0,false);
-                    Object[] args = switch (original) { case FCNTL_READ -> new Object[]{fd,abi.flagConstant(OriginalStdioOp.F_GETFL),kotlin.Unit.INSTANCE}; case FCNTL_WRITE -> new Object[]{fd,abi.flagConstant(OriginalStdioOp.F_SETFL),before | abi.flagConstant(OriginalStdioOp.O_APPEND),kotlin.Unit.INSTANCE}; default -> new Object[]{kotlin.Unit.INSTANCE}; };
-                    Calls.target(target,packet(args)); assertEquals(0L,state.getStdio().fcntl(fd,abi.flagConstant(OriginalStdioOp.F_SETFL),before,true)); var label = backend + "/" + original.name() + " raw foreign entry"; compile(target,label);
-                    long count = ((Number) executable.diagnostics().get("compiledEntries")).longValue(); var result = Calls.target(target,packet(args)); assertEquals(count + 1,((Number) executable.diagnostics().get("compiledEntries")).longValue(),label + " first installed invocation must enter compiled code"); valid(target,label + " after first installed invocation (result=" + result + ")"); released(language);
-                    assertEquals(switch (original) { case FCNTL_READ -> before; case FCNTL_WRITE -> 0L; default -> abi.flagConstant(original); },result);
-                    long stable = state.getStdio().fcntl(fd,abi.flagConstant(OriginalStdioOp.F_GETFL),0,false); var badState = args.clone(); badState[badState.length - 1] = 9L; assertThrows(RuntimeFault.class,() -> Calls.target(target,packet(badState)));
-                    if (original.getFcntl()) { var badWidth = args.clone(); badWidth[0] = 1L << 32; assertThrows(RuntimeFault.class,() -> Calls.target(target,packet(badWidth))); var wrongCommand = args.clone(); wrongCommand[1] = -7L; assertThrows(RuntimeFault.class,() -> Calls.target(target,packet(wrongCommand))); }
+                    Object[] args = switch (original) { case FCNTL_READ -> new Object[]{(int) fd,(int) abi.flagConstant(OriginalStdioOp.F_GETFL),kotlin.Unit.INSTANCE}; case FCNTL_WRITE -> new Object[]{(int) fd,(int) abi.flagConstant(OriginalStdioOp.F_SETFL),before | abi.flagConstant(OriginalStdioOp.O_APPEND),kotlin.Unit.INSTANCE}; default -> new Object[]{kotlin.Unit.INSTANCE}; };
+                    callScalarTestTarget(target,packet(args)); assertEquals(0L,state.getStdio().fcntl(fd,abi.flagConstant(OriginalStdioOp.F_SETFL),before,true)); var label = backend + "/" + original.name() + " raw foreign entry"; compile(target,label);
+                    long count = ((Number) executable.diagnostics().get("compiledEntries")).longValue(); var result = callScalarTestTarget(target,packet(args)); assertEquals(count + 1,((Number) executable.diagnostics().get("compiledEntries")).longValue(),label + " first installed invocation must enter compiled code"); valid(target,label + " after first installed invocation (result=" + result + ")"); released(language);
+                    assertEquals(switch (original) { case FCNTL_READ -> (int) before; case FCNTL_WRITE -> 0; case FD_CLOEXEC -> (Object) abi.flagConstant(original); default -> (int) abi.flagConstant(original); },result);
+                    long stable = state.getStdio().fcntl(fd,abi.flagConstant(OriginalStdioOp.F_GETFL),0,false); var badState = args.clone(); badState[badState.length - 1] = 9L; assertThrows(RuntimeFault.class,() -> Calls.target(target,packet(badState))); assertThrows(RuntimeFault.class,() -> callScalarTestTarget(target,packet(badState)));
+                    if (original.getFcntl()) { var badWidth = args.clone(); badWidth[0] = 1L << 32; assertThrows(RuntimeFault.class,() -> callScalarTestTarget(target,packet(badWidth))); var wrongCommand = args.clone(); wrongCommand[1] = -7; assertThrows(RuntimeFault.class,() -> callScalarTestTarget(target,packet(wrongCommand))); }
                     for (int i = 0; i < original.getArguments().size(); i++) { int index = i; assertThrows(RuntimeFault.class,() -> program(backend,language,rawModule(call,module,index))); }
                     assertEquals(stable,state.getStdio().fcntl(fd,abi.flagConstant(OriginalStdioOp.F_GETFL),0,false)); assertEquals("abc",Files.readString(path)); released(language); assertEquals(0L,state.getStdio().close(fd));
                 } finally { context.leave(); }

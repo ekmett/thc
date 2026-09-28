@@ -13,6 +13,7 @@ import java.nio.file.Files;
 import java.security.MessageDigest;
 import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
+import static thc.runtime.NarrowIntegerCarrierTestKt.callScalarTestTarget;
 import static thc.Main.withContextProfile;
 import static thc.runtime.OriginalStdioChecks.*;
 
@@ -144,7 +145,8 @@ class UnixWaitStatusTest {
                     var source = CoreModules.reachable(json("post.json"),"wait" + operation.name()); var call = single(foreignApps(source),ignored -> true);
                     for (int i = 0; i <= 1; i++) { int index = i; assertThrows(RuntimeFault.class,() -> program(language,rawModule(call,source,index),backend)); }
                     var target = program(language,rawModule(call,source),backend).entryTarget("entry");
-                    var failure = assertThrows(RuntimeFault.class,() -> Calls.target(target,new Object[]{0L,137L,9L}));
+                    assertThrows(RuntimeFault.class,() -> Calls.target(target,new Object[]{0L,137L,9L}));
+                    var failure = assertThrows(RuntimeFault.class,() -> callScalarTestTarget(target,new Object[]{0L,137,9L}));
                     assertTrue(Objects.toString(failure.getMessage(),"").contains("zero-width scalar carrier"),failure.getMessage());
                     var shadowed = rawModule(call,source); var app = single(foreignApps(shadowed),ignored -> true); app.set(1,list("var","p0",((List<?>) app.get(1)).get(2)));
                     assertThrows(RuntimeFault.class,() -> program(language,shadowed,backend));

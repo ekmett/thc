@@ -15,6 +15,7 @@ import java.nio.file.Files;
 import java.util.*;
 import java.util.function.BiConsumer;
 import static org.junit.jupiter.api.Assertions.*;
+import static thc.runtime.NarrowIntegerCarrierTestKt.callScalarTestTarget;
 import static thc.runtime.OriginalStdioChecks.*;
 
 @EnabledOnOs(OS.LINUX)
@@ -115,11 +116,11 @@ class OriginalTermiosTest {
                 var load = new Load();
                 for (var call : calls()) {
                     var operation = Objects.requireNonNull(validate(call)); var raw = rawModule(call,source); var target = load.call(raw).entryTarget("entry"); byte[] bytes = new byte[4096]; Arrays.fill(bytes,(byte) 90); var address = ManagedAddress.fromByteArray(bytes); var args = new ArrayList<Object>();
-                    for (var rep : operation.getArguments().subList(0,operation.getArguments().size() - 1)) args.add(Objects.equals(rep,"AddrRep") ? address : 7L);
-                    var invalid = new ArrayList<>(args); invalid.add(9L); var error = assertThrows(RuntimeFault.class,() -> Calls.target(target,packet(invalid.toArray(),0L))); assertTrue(Objects.toString(error.getMessage(),"").contains("zero-width scalar carrier"),error.getMessage()); for (byte value : bytes) assertEquals((byte) 90,value);
+                    for (var rep : operation.getArguments().subList(0,operation.getArguments().size() - 1)) args.add(Objects.equals(rep,"AddrRep") ? address : Objects.equals(rep,"Word32Rep") || Objects.equals(rep,"Int32Rep") ? (Object) 7 : 7L);
+                    var invalid = new ArrayList<>(args); invalid.add(9L); assertThrows(RuntimeFault.class,() -> Calls.target(target,packet(invalid.toArray(),0L))); var error = assertThrows(RuntimeFault.class,() -> callScalarTestTarget(target,packet(invalid.toArray(),0L))); assertTrue(Objects.toString(error.getMessage(),"").contains("zero-width scalar carrier"),error.getMessage()); for (byte value : bytes) assertEquals((byte) 90,value);
                     for (int i = 0; i < operation.getArguments().size(); i++) { int index = i; assertThrows(RuntimeFault.class,() -> load.call(rawModule(call,source,index))); }
-                    if (operation.getTermiosAddress()) for (var bad : List.of(ManagedAddress.nullAddress(),address.plus(4095))) { var badArgs = new ArrayList<>(args); badArgs.set(0,bad); badArgs.add(kotlin.Unit.INSTANCE); assertThrows(RuntimeFault.class,() -> Calls.target(target,packet(badArgs.toArray(),0L))); }
-                    if (operation == OriginalStdioOp.POKE_LFLAG) for (long bad : new long[]{-1,1L << 32}) { assertThrows(RuntimeFault.class,() -> Calls.target(target,new Object[]{0L,address,bad,kotlin.Unit.INSTANCE})); for (byte value : bytes) assertEquals((byte) 90,value); }
+                    if (operation.getTermiosAddress()) for (var bad : List.of(ManagedAddress.nullAddress(),address.plus(4095))) { var badArgs = new ArrayList<>(args); badArgs.set(0,bad); badArgs.add(kotlin.Unit.INSTANCE); assertThrows(RuntimeFault.class,() -> callScalarTestTarget(target,packet(badArgs.toArray(),0L))); }
+                    if (operation == OriginalStdioOp.POKE_LFLAG) for (long bad : new long[]{-1,1L << 32}) { assertThrows(RuntimeFault.class,() -> callScalarTestTarget(target,new Object[]{0L,address,bad,kotlin.Unit.INSTANCE})); for (byte value : bytes) assertEquals((byte) 90,value); }
                     var malformed = (Map<String,Object>) copy(raw); ((List<Object>) single(foreignCalls(malformed),ignored -> true).get(1)).set(1,17L); assertThrows(RuntimeFault.class,() -> load.call(malformed)); var handoff = language.getHandoffState().get(); assertEquals(0,handoff.getArguments().getDepth()); assertEquals(0,handoff.getResults().getDepth());
                 }
             } finally { context.leave(); }

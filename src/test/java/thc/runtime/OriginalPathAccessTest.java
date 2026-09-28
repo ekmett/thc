@@ -17,6 +17,7 @@ import java.nio.file.attribute.PosixFilePermissions;
 import java.util.*;
 import java.util.concurrent.Callable;
 import static org.junit.jupiter.api.Assertions.*;
+import static thc.runtime.NarrowIntegerCarrierTestKt.callScalarTestTarget;
 import static thc.runtime.OriginalStdioChecks.*;
 
 /** Native GHC observes real-ID access results; no assumptions about root's permissions. */
@@ -93,15 +94,15 @@ class OriginalPathAccessTest {
     @Test void stateCanonicalModeAndPathOwnershipPrecedeObservation() throws Exception {
         for (var backend : List.of("ast","bytecode")) try (var context = context()) { entered(context,() -> {
             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var entry = program(language,backend,raw(original())).entryTarget("entry"); var stdio = Language.currentState().getStdio(); var missing = cstring(directory.resolve("missing").toString());
-            class Call { Object invoke(ManagedAddress address,long mode,Object state) { return Calls.target(entry,new Object[]{0L,address,mode,state}); }}
-            var call = new Call(); assertEquals(-1L,stdio.close(-1)); long prior = stdio.errno(); assertThrows(RuntimeFault.class,() -> call.invoke(missing,0,9L));
+            class Call { Object invoke(ManagedAddress address,Object mode,Object state) { return callScalarTestTarget(entry,new Object[]{0L,address,mode,state}); }}
+            var call = new Call(); assertThrows(RuntimeFault.class,() -> Calls.target(entry,new Object[]{0L,ManagedAddress.nullAddress(),0,9L})); assertEquals(-1L,stdio.close(-1)); long prior = stdio.errno(); assertThrows(RuntimeFault.class,() -> call.invoke(missing,0,9L));
             for (long mode : new long[]{(long) Integer.MIN_VALUE - 1,(long) Integer.MAX_VALUE + 1,0x1_0000_0000L}) assertThrows(RuntimeFault.class,() -> call.invoke(missing,mode,kotlin.Unit.INSTANCE));
             assertThrows(RuntimeFault.class,() -> call.invoke(ManagedAddress.nullAddress(),0,kotlin.Unit.INSTANCE)); assertThrows(RuntimeFault.class,() -> call.invoke(ManagedAddress.fromByteArray(new byte[]{65}),0,kotlin.Unit.INSTANCE));
             var allocation = ManagedAllocation.mutable(16,8); allocation.writeAddressByteOffset(0,ManagedAddress.nullAddress()); assertThrows(RuntimeFault.class,() -> call.invoke(ManagedAddress.fromAllocation(allocation),0,kotlin.Unit.INSTANCE)); assertEquals(prior,stdio.errno()); released(language); return null;
         }); }
         for (var backend : List.of("ast","bytecode")) try (var context = Context.newBuilder("thc").build()) { entered(context,() -> {
             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var entry = program(language,backend,raw(original())).entryTarget("entry");
-            assertEquals(-1L,Calls.target(entry,new Object[]{0L,cstring(directory.toString()),0L,kotlin.Unit.INSTANCE})); assertEquals(StdioHostAbi.load().error(7),Language.currentState().getStdio().errno()); return null;
+            assertEquals(-1,callScalarTestTarget(entry,new Object[]{0L,cstring(directory.toString()),0,kotlin.Unit.INSTANCE})); assertEquals(StdioHostAbi.load().error(7),Language.currentState().getStdio().errno()); return null;
         }); }
     }
     @Test void nativePathAliasesRetainContextAndLifetimeChecks() throws Exception {
@@ -110,11 +111,11 @@ class OriginalPathAccessTest {
             var base = state.getNativeAllocations().malloc(bytes.length + 8L); var alias = base.plus(8); var entry = program(language,backend,raw(original())).entryTarget("entry");
             try {
                 ManagedAddress.fromByteArray(bytes).copyNonOverlappingTo(alias,bytes.length);
-                try (var second = context()) { entered(second,() -> { var other = TruffleLanguage.LanguageReference.create(Language.class).get(null); var foreign = program(other,backend,raw(original())).entryTarget("entry"); assertThrows(RuntimeFault.class,() -> Calls.target(foreign,new Object[]{0L,alias,0L,kotlin.Unit.INSTANCE})); released(other); return null; }); }
-                assertEquals(0L,Calls.target(entry,new Object[]{0L,alias,0L,kotlin.Unit.INSTANCE})); assertEquals(-1L,state.getStdio().close(-1)); long prior = state.getStdio().errno();
-                assertEquals(0L,Calls.target(entry,new Object[]{0L,alias,0L,kotlin.Unit.INSTANCE})); assertEquals(prior,state.getStdio().errno());
+                try (var second = context()) { entered(second,() -> { var other = TruffleLanguage.LanguageReference.create(Language.class).get(null); var foreign = program(other,backend,raw(original())).entryTarget("entry"); assertThrows(RuntimeFault.class,() -> callScalarTestTarget(foreign,new Object[]{0L,alias,0,kotlin.Unit.INSTANCE})); released(other); return null; }); }
+                assertEquals(0,callScalarTestTarget(entry,new Object[]{0L,alias,0,kotlin.Unit.INSTANCE})); assertEquals(-1L,state.getStdio().close(-1)); long prior = state.getStdio().errno();
+                assertEquals(0,callScalarTestTarget(entry,new Object[]{0L,alias,0,kotlin.Unit.INSTANCE})); assertEquals(prior,state.getStdio().errno());
             } finally { state.getNativeAllocations().free(base); }
-            assertThrows(RuntimeFault.class,() -> Calls.target(entry,new Object[]{0L,alias,0L,kotlin.Unit.INSTANCE})); released(language); return null;
+            assertThrows(RuntimeFault.class,() -> callScalarTestTarget(entry,new Object[]{0L,alias,0,kotlin.Unit.INSTANCE})); released(language); return null;
         }); }
     }
 }

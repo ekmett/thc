@@ -16,6 +16,7 @@ import java.nio.file.Files;
 import java.util.*;
 import java.util.concurrent.*;
 import static org.junit.jupiter.api.Assertions.*;
+import static thc.runtime.NarrowIntegerCarrierTestKt.callScalarTestTarget;
 import static thc.runtime.OriginalStdioChecks.*;
 
 @EnabledOnOs({OS.LINUX, OS.MAC})
@@ -83,20 +84,20 @@ class OriginalErrnoTest {
                 var targets = List.of(setTarget, getTarget, resetTarget);
                 class Exercise {
                     Object invoke(ExecutableProgram guest, RootCallTarget target, Object[] args, boolean compiled) throws Exception {
-                        long before = ((Number) guest.diagnostics().get("compiledEntries")).longValue(); var result = Calls.target(target, args);
+                        long before = ((Number) guest.diagnostics().get("compiledEntries")).longValue(); var result = callScalarTestTarget(target, args);
                         if (compiled) { assertEquals(before + 1, ((Number) guest.diagnostics().get("compiledEntries")).longValue(), stage + "/" + backend + " enters the one scalar consumer root"); valid(target); }
                         released(language); return result;
                     }
                     void run(boolean compiled) throws Exception {
                         for (var row : rows) {
-                            assertEquals(0L, invoke(set, setTarget, new Object[]{0L, row.get("value"), kotlin.Unit.INSTANCE}, compiled));
-                            assertEquals(row.get("roundTrip"), invoke(get, getTarget, new Object[]{0L, kotlin.Unit.INSTANCE}, compiled));
+                            assertEquals(0L, invoke(set, setTarget, new Object[]{0L, ((Number) row.get("value")).intValue(), kotlin.Unit.INSTANCE}, compiled));
+                            assertEquals(((Number) row.get("roundTrip")).intValue(), invoke(get, getTarget, new Object[]{0L, kotlin.Unit.INSTANCE}, compiled));
                             assertEquals(row.get("successResult"), stdio.write(1L, ManagedAddress.fromByteArray(new byte[0]), 0L));
-                            assertEquals(row.get("successErrno"), invoke(get, getTarget, new Object[]{0L, kotlin.Unit.INSTANCE}, compiled));
+                            assertEquals(((Number) row.get("successErrno")).intValue(), invoke(get, getTarget, new Object[]{0L, kotlin.Unit.INSTANCE}, compiled));
                             assertEquals(row.get("failureResult"), stdio.write(-1L, ManagedAddress.fromByteArray(new byte[0]), 0L));
-                            assertEquals(row.get("failureErrno"), invoke(get, getTarget, new Object[]{0L, kotlin.Unit.INSTANCE}, compiled));
+                            assertEquals(((Number) row.get("failureErrno")).intValue(), invoke(get, getTarget, new Object[]{0L, kotlin.Unit.INSTANCE}, compiled));
                             assertEquals(row.get("resetErrno"), invoke(reset, resetTarget, new Object[]{0L, 0L}, compiled));
-                            assertEquals(0L, invoke(get, getTarget, new Object[]{0L, kotlin.Unit.INSTANCE}, compiled));
+                            assertEquals(0, invoke(get, getTarget, new Object[]{0L, kotlin.Unit.INSTANCE}, compiled));
                         }
                     }
                 }

@@ -95,7 +95,7 @@ class OriginalPosixDupNativeTest {
                                     boolean failed = List.of("invalid","closed","bad-target").contains(scenario), two = name.startsWith("originalDup2"); assertEquals(-1L,stdio.close(-1));
                                     long before = ((Number) program.diagnostics().get("compiledEntries")).longValue(); long result = (Long) Calls.target(entry,two ? new Object[]{0L,fd,target} : new Object[]{0L,fd}); assertEquals(row.get("errno"),stdio.errno());
                                     if (failed) assertEquals(row.get("result"),result); else if (two) assertEquals(target,result); else { assertTrue(result >= 0); assertNotEquals(source,result); if (backup != null) assertEquals(backup.wanted(),result); }
-                                    if (compiled) { assertEquals(before + 2,((Number) program.diagnostics().get("compiledEntries")).longValue(),stage + "/" + backend + "/" + name + "/" + scenario); for (var active : targets(entry)) valid(active); }
+                                    if (compiled) { assertEquals(before + 1,((Number) program.diagnostics().get("compiledEntries")).longValue(),stage + "/" + backend + "/" + name + "/" + scenario); for (var active : targets(entry)) valid(active); }
                                     long alias = two ? target : result; if (scenario.equals("close-source")) assertEquals(0L,files.close(source)); long position = -1, value = -1;
                                     if (!failed || two && !scenario.equals("bad-target")) {
                                         if (scenario.equals("append")) { assertEquals(0L,files.seek(alias,0,0)); assertEquals(1L,files.write(alias,address(new byte[]{90}),1,ForeignSafety.UNSAFE)); }
@@ -107,7 +107,7 @@ class OriginalPosixDupNativeTest {
                                     var actual = new ArrayList<Long>(); for (byte b : Files.readAllBytes(file)) actual.add((long) b); assertEquals(row.get("contents"),actual); assertEquals("target",Files.readString(otherFile));
                                 }
                             }}
-                            var exercise = new Exercise(); exercise.run(false); var active = targets(entry); assertEquals(2,active.size(),"Original entry and local runRW State lambda");
+                            var exercise = new Exercise(); exercise.run(false); var active = targets(entry); assertEquals(1,active.size(),"Original entry with the runRW State lambda inlined");
                             for (var target : active) { target.getClass().getMethod("compile",boolean.class).invoke(target,true); valid(target); } exercise.run(true); assertEquals(active,targets(entry)); for (var target : active) valid(target);
                             assertEquals(0L,((Number) program.diagnostics().get("unsupportedTraps")).longValue());
                         }
