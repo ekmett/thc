@@ -14,5 +14,16 @@ public abstract class TupleDestination {
     protected TupleDestination(TupleShape shape) { this.shape = shape; }
     public final TupleShape getShape() { return shape; }
     public abstract void consume(VirtualFrame frame, Node node, Object result);
+    /** Authenticate the final callee's descriptor before reading its exact storage layout. */
+    public final void consume(VirtualFrame frame, Node node, Object result, TupleShape producer) {
+        if (producer == null || !shape.matches(producer))
+            throw RuntimeFault.fault("Tuple producer changed the declared result shape");
+        consumeFrom(frame, node, result, producer);
+    }
+    protected void consumeFrom(VirtualFrame frame, Node node, Object result, TupleShape producer) {
+        if (producer.getLayout() != shape.getLayout())
+            throw RuntimeFault.fault("Tuple destination requires its producer descriptor");
+        consume(frame, node, result);
+    }
     public Object delimitedResult(VirtualFrame frame, Node node) { return null; }
 }

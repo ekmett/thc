@@ -164,7 +164,7 @@ public final class HostReference implements TruffleObject {
                 if (target == null) {
                     synchronized (this) {
                         target = callTarget;
-                        if (target == null) callTarget = target = new EntryRoot(language, inputs, result, new Metrics(false)).getCallTarget();
+                        if (target == null) callTarget = target = new EntryRoot(language, inputs, result, new Metrics(false), root.getTupleResult()).getCallTarget();
                     }
                 }
                 Object answer = AsyncContinuations.publicResult(dispatch.executePublic(target, new Object[]{function, normalized}), dispatch);

@@ -58,7 +58,8 @@ public final class EntryValue implements TruffleObject {
         boolean typed = hostResult != null && hostResult.isTypedTransport();
         if (hostInputs != null) for (var proof : hostInputs) typed |= proof.isTypedTransport();
         guestTarget = hostInputs != null && hostResult != null && (argumentCount != 0 || guestEntry instanceof Closure) && (admittedSignature || typed)
-            ? ((EntryRoot) untypedTarget.getRootNode()).withSignature(language != null ? language : untypedTarget.getRootNode().getLanguage(Language.class), hostInputs, hostResult).getCallTarget() : untypedTarget;
+            ? ((EntryRoot) untypedTarget.getRootNode()).withSignature(language != null ? language : untypedTarget.getRootNode().getLanguage(Language.class), hostInputs, hostResult, guestEntry instanceof Closure closure && closure.target.getRootNode() instanceof GuestRoot root
+                ? root.getTupleResult() : null).getCallTarget() : untypedTarget;
         if (ioResult != null && language == null) throw new IllegalStateException("Missing IO language");
         ioTarget = ioResult == null ? null : new IoMainRoot(language, ioResult).getCallTarget();
         shutdownValue = shutdownEntry == null ? null : program.entryValue(shutdownEntry);

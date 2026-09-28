@@ -601,16 +601,16 @@ class ReusableProgramTest {
         }
     }
 
-    @Test void admissionRejectsUnconvertedOwnershipAndAddressInputs() {
+    @Test void admissionRejectsForeignOwnershipAndUnknownInputs() {
         try (var context = Main.executionContext(false)) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 var foreign = module(list(binding("read", lambda(variable("x")), true)));
                 foreign.put("selectedForeignExceptionBridge", map("unit", "u", "box", "b", "project", "p"));
-                var address = map("id", "x", "name", "x", "type", "Addr#", "lifted", false, "coercion", false,
-                    "rep", map("kind", "address", "evaluated", true, "primReps", list("AddrRep")));
-                var unsupported = module(list(binding("read", list("lam", list(address), variable("x")), true)));
+                var unknown = map("id", "x", "name", "x", "type", "Unknown", "lifted", false, "coercion", false,
+                    "rep", map("kind", "unknown", "evaluated", true, "primReps", list()));
+                var unsupported = module(list(binding("read", list("lam", list(unknown), variable("x")), true)));
                 assertAll(
                     () -> assertThrows(UnsupportedCore.class, () -> Program.prepareCode(language, foreign, List.of("read"))),
                     () -> assertThrows(UnsupportedCore.class, () -> Program.prepareCode(language, unsupported, List.of("read"))));

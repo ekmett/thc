@@ -235,7 +235,8 @@ public final class FunctionRoot extends GuestRoot {
             return ExecutionSignature.create(numericClass(getScalarResultProof()), new Class<?>[]{null});
         }
         List<CoreRepresentation> inputs = getInputProofs();
-        Class<?>[] signature = new Class<?>[getEntryArgumentOffset() + inputs.size()];
+        ArgumentLayout input = getInputLayout();
+        Class<?>[] signature = new Class<?>[getEntryArgumentOffset() + ArgumentLayout.width(input, inputs.size())];
         signature[0] = Long.class;
         // ExecutionSignature requires an exact runtime class, not a superclass.
         // StaticShape selects the concrete CapturedFrame subclass; keep its
@@ -243,13 +244,12 @@ public final class FunctionRoot extends GuestRoot {
         signature[1] = null;
         for (int i = 0; i < inputs.size(); i++) {
             CoreRepresentation proof = inputs.get(i);
-            Class<?> carrier = numericClass(proof);
-            if (carrier == null && proof.getKind() != CoreKind.DATA && proof.getKind() != CoreKind.CLOSURE)
-                throw new IllegalStateException("Unsupported reusable AOT argument");
+            if (proof.isEmptyTuple()) continue;
+            Class<?> carrier = proof.getKind() == CoreKind.VOID ? Unit.class : numericClass(proof);
             // Lifted data/functions may arrive as a lazy thunk or a value.
             // Keep the existing constructor/captured-program owner checks;
             // these alternatives do not have one exact signature class.
-            signature[getEntryArgumentOffset() + i] = carrier;
+            signature[getEntryArgumentOffset() + ArgumentLayout.offset(input, i)] = carrier;
         }
         preparedForAOT = true;
         return ExecutionSignature.create(numericClass(getScalarResultProof()), signature);

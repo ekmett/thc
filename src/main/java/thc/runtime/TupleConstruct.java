@@ -12,6 +12,10 @@ public final class TupleConstruct extends Expr {
         CoreRepresentation p = shape.getProof();
         setRepresentation(p.copy(p.getKind(), true, p.getPresent(), p.getPrimReps(), p.getComponents(), p.getVector(), p.getAlternatives(), p.getTagSlot(), p.getAlternativeSlots()));
     }
+    @Override public void prepareTuple(int[] slots, int offset) {
+        for (int i = 0; i < fields.length; i++) if (shape.getComponents()[i].isTypedTransport())
+            fields[i].prepareTuple(slots, offset + shape.getOffsets()[i]);
+    }
     @Override public Object execute(VirtualFrame frame) { throw fault("Tuple value requires a destination"); }
     @ExplodeLoop @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
         for (int i = 0; i < fields.length; i++) {

@@ -29,6 +29,7 @@ public final class LocalJoinCall extends Expr {
             if (argument.isTypedTransport()) {
                 if (typedTemporaries[i] == null) throw fault("Missing typed join temporaries");
                 typedCopies[i] = new TupleLocalRead(new TupleShape(argument, language), typedTemporaries[i]);
+                arguments[i].prepareTuple(typedTemporaries[i], 0);
             }
         }
     }

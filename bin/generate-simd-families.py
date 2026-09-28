@@ -188,6 +188,7 @@ def ast_code(fs):
                       '    @CompilationFinal(dimensions = 1) private final int[] slots;',
                       f'    Generated{n}Pack(Expr argument, int[] slots) {{',
                       '        this.argument = argument; this.slots = slots;',
+                      '        argument.prepareTuple(slots, 0);',
                       f'        setRepresentation(GeneratedVectors.proof{n});', '    }',
                       f'    @Override public {vector_type(f)} execute(VirtualFrame frame) {{', '        argument.executeTuple(frame, slots, 0);',
                       f'        return {packed(f, [f"{cast}frame.get{access}(slots[{i}])" for i in range(count)])};','    }','}']

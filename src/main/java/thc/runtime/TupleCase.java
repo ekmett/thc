@@ -11,7 +11,9 @@ public final class TupleCase extends Expr {
     @Child private Expr body;
     public TupleCase(Expr scrutinee, int[] slots, Expr body) {
         this.scrutinee = scrutinee; this.slots = slots; this.body = body; setRepresentation(body.getRepresentation());
+        scrutinee.prepareTuple(slots, 0);
     }
+    @Override public void prepareTuple(int[] slots, int offset) { body.prepareTuple(slots, offset); }
     private void prepare(VirtualFrame frame) { prepare(frame, null, 0); }
     private void prepare(VirtualFrame frame, int[] destination, int offset) {
         try { scrutinee.executeTuple(frame, slots, 0); }

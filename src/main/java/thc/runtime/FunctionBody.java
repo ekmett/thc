@@ -18,6 +18,7 @@ final class FunctionBody extends Node {
     FunctionBody(Expr expression, Metrics metrics, CoreRepresentation result, TupleShape tuple, int[] tupleSlots) {
         value = new Evaluate(expression, metrics);
         this.tuple = tuple; this.tupleSlots = tupleSlots;
+        if (tuple != null) value.prepareTuple(tupleSlots, 0);
         CoreRepresentation effective = result.getKind() == CoreKind.UNKNOWN ? expression.getRepresentation() : result;
         resultKind = effective.getKind();
         exactInt = effective.isInt();

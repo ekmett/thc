@@ -15,6 +15,7 @@ final class LocalJoinRepeater extends Node implements RepeatingNode {
     private final CoreKind referenceKind;
     LocalJoinRepeater(Object group, int selector, int result, Expr[] bodies, CoreRepresentation proof, int[] tupleSlots, boolean delimited) {
         this.group = group; this.selector = selector; this.result = result; this.bodies = bodies; this.tupleSlots = tupleSlots; this.delimited = delimited;
+        if (proof.isTypedTransport()) for (Expr body : bodies) body.prepareTuple(tupleSlots, 0);
         tuple = proof.isTypedTransport(); exactLong = proof.isLong(); exactFloat = proof.isFloat(); exactDouble = proof.isDouble();
         referenceKind = proof.getEvaluated() ? proof.getKind() : CoreKind.UNKNOWN;
     }

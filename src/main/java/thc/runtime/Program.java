@@ -282,6 +282,8 @@ public final class Program implements ExecutableProgram {
         }
     }
     private static void requireReusableBody(List<Object> expression) {
+        List<Object> inline = CoreStateApplications.inline(expression);
+        if (inline != null) { requireReusableBody(inline); return; }
         switch ((String) expression.getFirst()) {
             case "var", "void" -> { }
             case "con" -> {
@@ -294,8 +296,8 @@ public final class Program implements ExecutableProgram {
             case "lam" -> {
                 for (Map<String, Object> argument : (List<Map<String, Object>>) expression.get(1)) {
                     CoreRepresentation proof = CoreRepresentations.binder(argument);
-                    if (!reusableScalar(proof) || proof.getKind() != CoreKind.DATA && proof.getKind() != CoreKind.CLOSURE && representationLifted(argument))
-                        throw new UnsupportedCore("Reusable AST input requires a numeric scalar, data or closure proof");
+                    if (!reusableValue(proof) || !proof.hasBoxedPointer() && representationLifted(argument))
+                        throw new UnsupportedCore("Reusable AST input requires an exact supported representation");
                 }
                 requireReusableBody((List<Object>) expression.get(2));
             }
@@ -303,7 +305,7 @@ public final class Program implements ExecutableProgram {
                 List<Object> function = (List<Object>) expression.get(1);
                 if ("prim".equals(function.getFirst())) {
                     String name = (String) function.get(1);
-                    if (NarrowScalarOp.named(name) == null && !Set.of("+#", "-#", "*#",
+                    if (Primitive.arity(name) < 0 && NarrowScalarOp.named(name) == null && !CoreVectors.operations.contains(name) && !Set.of(
                             "plusFloat#", "minusFloat#", "timesFloat#", "divideFloat#", "negateFloat#",
                             "+##", "-##", "*##", "/##", "negateDouble#",
                             "eqFloat#", "neFloat#", "ltFloat#", "leFloat#", "gtFloat#", "geFloat#",
@@ -320,12 +322,12 @@ public final class Program implements ExecutableProgram {
                 var bindings = (List<Map<String,Object>>) expression.get(2);
                 var joins = CoreJoins.definitions(bindings);
                 if (joins != null) for (var join : joins) {
-                    if (!reusableScalar(join.getResult()))
-                        throw new UnsupportedCore("Reusable AST join result requires a numeric scalar, data or closure proof");
+                    if (!reusableValue(join.getResult()))
+                        throw new UnsupportedCore("Reusable AST join result requires an exact supported representation");
                 }
                 for (var binding : bindings) {
                     CoreRepresentation proof = CoreRepresentations.binder(binding);
-                    if (proof.isTypedTransport()) throw new UnsupportedCore("Reusable AST typed locals are not yet admitted");
+                    if (proof.isTypedTransport()) CoreRepresentations.requireInput(proof);
                     requireReusableBody((List<Object>) binding.get("expr"));
                 }
                 requireReusableBody((List<Object>) expression.get(3));
@@ -333,13 +335,13 @@ public final class Program implements ExecutableProgram {
             case "case" -> {
                 CoreRepresentation binder = CoreRepresentations.caseBinder(expression);
                 CoreRepresentation result = CoreRepresentations.expression(expression);
-                if (!reusableScalar(binder) || !reusableScalar(result))
-                    throw new UnsupportedCore("Reusable AST case binder and result require numeric scalar, data or closure proofs");
+                if (!reusableValue(binder) || !reusableValue(result))
+                    throw new UnsupportedCore("Reusable AST case binder and result require exact supported representations");
                 requireReusableBody((List<Object>) expression.get(1));
                 for (var alternative : (List<List<Object>>) expression.get(3)) {
                     String kind = (String) alternative.getFirst();
                     if (kind.equals("data")) {
-                        if (binder.getKind() != CoreKind.DATA) throw new UnsupportedCore("Reusable data case requires a data binder");
+                        if (binder.getKind() != CoreKind.DATA && !binder.isAggregate()) throw new UnsupportedCore("Reusable data case requires a data or aggregate binder");
                     } else if (!(kind.equals("default") || (binder.isLong() || binder.isInt()) && kind.equals("lit") &&
                             reusableLiteral((String) ((List<?>) alternative.get(1)).getFirst())) || !((List<?>) alternative.get(2)).isEmpty())
                         throw new UnsupportedCore("Reusable AST case requires data, integral literals or default alternatives");
@@ -349,9 +351,10 @@ public final class Program implements ExecutableProgram {
             default -> throw new UnsupportedCore("Reusable AST node is not yet admitted: " + expression.getFirst());
         }
     }
-    private static boolean reusableScalar(CoreRepresentation proof) {
-        return proof.getPresent() && (proof.isInt() || proof.isLong() || proof.isFloat() || proof.isDouble() ||
-            proof.getKind() == CoreKind.DATA || proof.getKind() == CoreKind.CLOSURE) && !proof.isTypedTransport();
+    private static boolean reusableValue(CoreRepresentation proof) {
+        if (!proof.getPresent() || proof.getKind() == CoreKind.UNKNOWN && !proof.isTypedTransport()) return false;
+        CoreRepresentations.requireInput(proof);
+        return true;
     }
     private static boolean reusableLiteral(String kind) {
         return switch (kind) {
@@ -983,7 +986,7 @@ public final class Program implements ExecutableProgram {
     private Expr compileSumCase(List<Object> expr, Expr scrutinee, CoreRepresentation proof, Scope scope, boolean tail) {
         TupleShape shape = new TupleShape(proof, (thc.Language) language);
         int[] slots = new int[shape.getWidth()];
-        for (int i = 0; i < slots.length; i++) slots[i] = scope.layout.bind("<sum case " + i + ">");
+        for (int i = 0; i < slots.length; i++) slots[i] = scope.layout.bind("<sum case " + i + ">", FrameLayout.carrierKind(shape.getLeaves()[i]));
         scope.bindTuple((String) expr.get(2), proof, slots);
         Set<Integer> tags = new LinkedHashSet<>();
         int fallback = -1;
@@ -1019,7 +1022,7 @@ public final class Program implements ExecutableProgram {
                     CoreRepresentation leaf = leaves.get(i);
                     if (!leaf.isInt()) projection[i] = slots[physical.get(i)];
                     else {
-                        int destination = child.layout.bind("<narrow sum arm " + i + ">");
+                        int destination = child.layout.bind("<narrow sum arm " + i + ">", FrameSlotKind.Int);
                         conversionSlots.add(destination);
                         conversionValues.add(new SumNarrowRead(slots[physical.get(i)], Objects.requireNonNull(leaf.getNarrowInteger()), leaf));
                         projection[i] = destination;
@@ -1052,7 +1055,7 @@ public final class Program implements ExecutableProgram {
         boolean allEvaluated = true;
         for (Expr arm : arms) { armProofs.add(arm.getRepresentation()); allEvaluated = allEvaluated && arm.getRepresentation().getEvaluated(); }
         CoreRepresentations.validateFloatingCaseResult(result, armProofs);
-        return new SumCase(scrutinee, slots, arms, selected, evaluated(result, allEvaluated));
+        return new SumCase(scrutinee, slots, arms, selected, evaluated(result, allEvaluated), !reusableCode);
     }
     private Expr compileVectorReadCase(VectorReadCase read, Scope scope, boolean tail) {
         Scope local = scope.child();
@@ -1076,7 +1079,7 @@ public final class Program implements ExecutableProgram {
         if (!"default".equals(only.getFirst()) || !((List<?>) only.get(2)).isEmpty())
             throw new RuntimeFault("Vector case requires one default alternative");
         int[] lanes = new int[TupleShape.flatten(proof).size()];
-        for (int i = 0; i < lanes.length; i++) lanes[i] = scope.layout.bind("<vector case lane " + i + ">");
+        for (int i = 0; i < lanes.length; i++) lanes[i] = scope.layout.bind("<vector case lane " + i + ">", FrameLayout.carrierKind(TupleShape.flatten(proof).get(i)));
         scope.bindTuple((String) expr.get(2), proof, lanes);
         return new Let(new int[] {-1}, new Expr[] {scrutinee}, new boolean[] {false},
             compile((List<Object>) only.get(3), scope, tail), false, new int[][] {lanes});
@@ -1132,7 +1135,7 @@ public final class Program implements ExecutableProgram {
         for (int i = 0; i < nodes.length; i++) {
             if (target.getProofs()[i].isTypedTransport()) {
                 typedTemps[i] = new int[ArgumentLayout.leaves(target.getProofs()[i]).size()];
-                for (int j = 0; j < typedTemps[i].length; j++) typedTemps[i][j] = scope.layout.bind("<join typed argument " + i + " field " + j + ">");
+                for (int j = 0; j < typedTemps[i].length; j++) typedTemps[i][j] = scope.layout.bind("<join typed argument " + i + " field " + j + ">", FrameLayout.carrierKind(ArgumentLayout.leaves(target.getProofs()[i]).get(j)));
                 temps[i] = -1;
             } else temps[i] = scope.layout.bind("<join argument " + i + ">", reusableCode ?
                 FrameLayout.carrierKind(target.getProofs()[i]) : FrameSlotKind.Illegal);
@@ -1181,7 +1184,7 @@ public final class Program implements ExecutableProgram {
                 if (lifted) proof = evaluated(proof, entryStrict[i]);
                 if (proof.isTypedTransport()) {
                     int[] lanes = new int[ArgumentLayout.leaves(proof).size()];
-                    for (int j = 0; j < lanes.length; j++) lanes[j] = scope.layout.bind(parameter.get("id") + " join typed field " + j);
+                    for (int j = 0; j < lanes.length; j++) lanes[j] = scope.layout.bind(parameter.get("id") + " join typed field " + j, FrameLayout.carrierKind(ArgumentLayout.leaves(proof).get(j)));
                     scope.bindTuple((String) parameter.get("id"), evaluated(proof, true), lanes);
                 } else scope.bind((String) parameter.get("id"), !lifted && !Boolean.TRUE.equals(parameter.get("coercion")),
                     proof, false, null, null, reusableCode ? FrameLayout.carrierKind(proof) : FrameSlotKind.Illegal);
@@ -1227,7 +1230,7 @@ public final class Program implements ExecutableProgram {
         result = evaluated(result, allEvaluated);
         TupleShape tuple = result.isTypedTransport() ? new TupleShape(result, (thc.Language) language) : null;
         int[] tupleSlots = new int[tuple == null ? 0 : tuple.getWidth()];
-        for (int i = 0; i < tupleSlots.length; i++) tupleSlots[i] = local.layout.bind("<join tuple result " + i + ">");
+        for (int i = 0; i < tupleSlots.length; i++) tupleSlots[i] = local.layout.bind("<join tuple result " + i + ">", FrameLayout.carrierKind(tuple.getLeaves()[i]));
         Expr[] nodes = new Expr[bodies.size() + 1]; nodes[0] = entry;
         for (int i = 0; i < bodies.size(); i++) nodes[i + 1] = bodies.get(i);
         return new LocalJoinRegion(identity, local.layout.bind("<join selector>", reusableCode ? FrameSlotKind.Long : FrameSlotKind.Illegal),
@@ -1403,7 +1406,7 @@ public final class Program implements ExecutableProgram {
             if (proof.isTypedTransport()) {
                 List<CoreRepresentation> fields = TupleShape.flatten(proof);
                 int[] lanes = new int[fields.size()];
-                for (int i = 0; i < lanes.length; i++) lanes[i] = local.layout.bind(binding.get("id") + " let field " + i);
+                for (int i = 0; i < lanes.length; i++) lanes[i] = local.layout.bind(binding.get("id") + " let field " + i, FrameLayout.carrierKind(fields.get(i)));
                 typedSlots[index] = lanes;
                 slots[index] = local.bindTuple((String) binding.get("id"), proof, lanes).slot;
             } else slots[index] = local.bind((String) binding.get("id"), !representation(binding),
@@ -1941,15 +1944,15 @@ public final class Program implements ExecutableProgram {
             Expr[] operands = compileOperands(args, scope);
             int[] shuffle = name.startsWith("shuffle") ? CoreVectors.shuffleIndices(args.get(2), tupleProof.getVector().getLanes()) : null;
             if (GeneratedVectors.operations.contains(name))
-                return GeneratedVectors.expression(name, operands, shuffle, count -> vectorSlots(scope, count, "<vector lane "));
-            if (name.equals("packInt64X2#")) return new VectorPack(operands[0], vectorSlots(scope, 2, "<vector lane "));
+                return GeneratedVectors.expression(name, operands, shuffle, count -> vectorSlots(scope, count, "<vector lane ", operands[0].getRepresentation()));
+            if (name.equals("packInt64X2#")) return new VectorPack(operands[0], vectorSlots(scope, 2, "<vector lane ", operands[0].getRepresentation()));
             if (name.equals("unpackInt64X2#")) return new VectorUnpack(operands[0]);
-            if (name.equals("packInt32X4#")) return new Vector32Pack(operands[0], vectorSlots(scope, 4, "<vector lane "));
+            if (name.equals("packInt32X4#")) return new Vector32Pack(operands[0], vectorSlots(scope, 4, "<vector lane ", operands[0].getRepresentation()));
             if (name.equals("unpackInt32X4#")) return new Vector32Unpack(operands[0]);
-            if (name.equals("packDoubleX2#")) return new VectorDoublePack(operands[0], vectorSlots(scope, 2, "<double vector lane "));
+            if (name.equals("packDoubleX2#")) return new VectorDoublePack(operands[0], vectorSlots(scope, 2, "<double vector lane ", operands[0].getRepresentation()));
             if (name.equals("unpackDoubleX2#")) return new VectorDoubleUnpack(operands[0]);
             if (CoreVectors.operationsDouble.contains(name)) return new VectorDoubleOperation(name, operands);
-            if (name.equals("packFloatX4#")) return new VectorFloatPack(operands[0], vectorSlots(scope, 4, "<float vector lane "));
+            if (name.equals("packFloatX4#")) return new VectorFloatPack(operands[0], vectorSlots(scope, 4, "<float vector lane ", operands[0].getRepresentation()));
             if (name.equals("unpackFloatX4#")) return new VectorFloatUnpack(operands[0]);
             if (CoreVectors.operationsFloat.contains(name)) return new VectorFloatOperation(name, operands);
             if (CoreVectors.fusedFloat8.contains(name)) return new VectorFloat8Fused(name, operands);
@@ -1957,19 +1960,19 @@ public final class Program implements ExecutableProgram {
             if (CoreVectors.fusedDouble4.contains(name)) return new VectorDouble4Fused(name, operands);
             if (CoreVectors.fusedDouble8.contains(name)) return new VectorDouble8Fused(name, operands);
             if (CoreVectors.operations32.contains(name)) return new Vector32Operation(name, operands);
-            if (name.equals("packInt16X8#")) return new Vector16Pack(operands[0], vectorSlots(scope, 8, "<int16 vector lane "));
+            if (name.equals("packInt16X8#")) return new Vector16Pack(operands[0], vectorSlots(scope, 8, "<int16 vector lane ", operands[0].getRepresentation()));
             if (name.equals("unpackInt16X8#")) return new Vector16Unpack(operands[0]);
             if (CoreVectors.operations16.contains(name)) return new Vector16Operation(name, operands);
-            if (name.equals("packInt8X16#")) return new Vector8Pack(operands[0], vectorSlots(scope, 16, "<int8 vector lane "));
+            if (name.equals("packInt8X16#")) return new Vector8Pack(operands[0], vectorSlots(scope, 16, "<int8 vector lane ", operands[0].getRepresentation()));
             if (name.equals("unpackInt8X16#")) return new Vector8Unpack(operands[0]);
             if (CoreVectors.operations8.contains(name)) return new Vector8Operation(name, operands);
-            if (name.equals("packWord8X16#")) return new VectorWord8Pack(operands[0], vectorSlots(scope, 16, "<word8 vector lane "));
+            if (name.equals("packWord8X16#")) return new VectorWord8Pack(operands[0], vectorSlots(scope, 16, "<word8 vector lane ", operands[0].getRepresentation()));
             if (name.equals("unpackWord8X16#")) return new VectorWord8Unpack(operands[0]);
             if (CoreVectors.operationsWord8.contains(name)) return new VectorWord8Operation(name, operands);
-            if (name.equals("packWord16X8#")) return new VectorWord16Pack(operands[0], vectorSlots(scope, 8, "<word16 vector lane "));
+            if (name.equals("packWord16X8#")) return new VectorWord16Pack(operands[0], vectorSlots(scope, 8, "<word16 vector lane ", operands[0].getRepresentation()));
             if (name.equals("unpackWord16X8#")) return new VectorWord16Unpack(operands[0]);
             if (CoreVectors.operationsWord16.contains(name)) return new VectorWord16Operation(name, operands);
-            if (name.equals("packWord32X4#")) return new VectorWord32Pack(operands[0], vectorSlots(scope, 4, "<word32 vector lane "));
+            if (name.equals("packWord32X4#")) return new VectorWord32Pack(operands[0], vectorSlots(scope, 4, "<word32 vector lane ", operands[0].getRepresentation()));
             if (name.equals("unpackWord32X4#")) return new VectorWord32Unpack(operands[0]);
             if (CoreVectors.operationsWord32.contains(name)) return new VectorWord32Operation(name, operands);
             return new VectorOperation(name, operands);
@@ -2290,6 +2293,13 @@ public final class Program implements ExecutableProgram {
         for (List<Object> arg : args) result.add(bindingProof(arg, scope));
         return result;
     }
+    private int[] vectorSlots(Scope scope, int count, String prefix, CoreRepresentation proof) {
+        List<CoreRepresentation> fields = TupleShape.flatten(proof);
+        if (fields.size() != count) throw new RuntimeFault("Vector scratch shape mismatch");
+        int[] result = new int[count];
+        for (int i = 0; i < count; i++) result[i] = scope.layout.bind(prefix + i + ">", FrameLayout.carrierKind(fields.get(i)));
+        return result;
+    }
     private int[] vectorSlots(Scope scope, int count, String prefix) {
         int[] result = new int[count];
         for (int i = 0; i < count; i++) result[i] = scope.layout.bind(prefix + i + ">");
@@ -2310,7 +2320,7 @@ public final class Program implements ExecutableProgram {
             if (selected.isTypedTransport()) {
                 var fields = TupleShape.flatten(selected);
                 intSlots = new int[fields.size()];
-                for (int i = 0; i < intSlots.length; i++) intSlots[i] = fields.get(i).isInt() ? scope.layout.bind("<narrow sum payload " + i + ">") : -1;
+                for (int i = 0; i < intSlots.length; i++) intSlots[i] = fields.get(i).isInt() ? scope.layout.bind("<narrow sum payload " + i + ">", FrameSlotKind.Int) : -1;
             }
             return new SumConstruct(new TupleShape(tupleProof, (thc.Language) language), tag, payload, intSlots);
         }
@@ -2372,8 +2382,8 @@ public final class Program implements ExecutableProgram {
                 TypedInputs.supportsTypedSelf(scope.self.getInputLayout(), scope.self.getEntryStrict(), input));
         if (tupleProof.isTypedTransport()) {
             TupleShape shape = new TupleShape(tupleProof, (thc.Language) language);
-            int[] vectorSlots = tupleProof.isVector() ? vectorSlots(scope, shape.getWidth(), "<vector call result ") : null;
-            return new TupleApplication((thc.Language) language, shape, function, nodes, tail, metrics, vectorSlots);
+            int[] vectorSlots = tupleProof.isVector() ? vectorSlots(scope, shape.getWidth(), "<vector call result ", tupleProof) : null;
+            return new TupleApplication((thc.Language) language, shape, function, nodes, tail, codeMetrics(), vectorSlots);
         }
         AstSelfLayout self = scope.self;
         boolean emptyTuple = false;

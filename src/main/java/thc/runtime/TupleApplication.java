@@ -20,6 +20,7 @@ public final class TupleApplication extends Expr {
     @CompilationFinal(dimensions = 1) private final int[] vectorSlots;
     private final ArgumentLayout inputLayout;
     @Child private volatile TupleDispatch dispatch;
+    @Child private InputDispatch prepared;
     @CompilationFinal(dimensions = 1) private int[] destinationSlots;
     @CompilationFinal private int destinationOffset = -1;
     private final VectorLayout vector;
@@ -30,13 +31,28 @@ public final class TupleApplication extends Expr {
         this.language = language; this.shape = shape; this.function = new Evaluate(function, metrics);
         this.arguments = arguments; this.tail = tail; this.metrics = metrics; this.vectorSlots = vectorSlots;
         ArrayList<CoreRepresentation> proofs = new ArrayList<>(arguments.length);
-        for (Expr argument : arguments) proofs.add(argument.getRepresentation());
+        for (Expr argument : arguments) {
+            proofs.add(argument.getRepresentation());
+            if (argument.getRepresentation().isEmptyTuple()) argument.prepareTuple(ArgumentLayout.EMPTY_TUPLE_SLOTS, 0);
+        }
         inputLayout = ArgumentLayout.fromProofs(proofs);
         vector = shape.getProof().isVector() ? new VectorLayout(shape.getProof()) : null;
         if (vector != null && (vectorSlots == null || vectorSlots.length != vector.getWidth())) throw new IllegalArgumentException("Failed requirement.");
         if (inputLayout != null && inputLayout.getRequiresTyped()) throw new IllegalArgumentException("Failed requirement.");
+        if (vector != null) prepareTuple(vectorSlots, 0);
         CoreRepresentation p = shape.getProof();
         setRepresentation(p.copy(p.getKind(), true, p.getPresent(), p.getPrimReps(), p.getComponents(), p.getVector(), p.getAlternatives(), p.getTagSlot(), p.getAlternativeSlots()));
+    }
+    @Override public void prepareTuple(int[] slots, int offset) {
+        if (metrics != null) return;
+        if (vector != null) { slots = vectorSlots; offset = 0; }
+        if (prepared != null) {
+            if (destinationSlots != slots || destinationOffset != offset) throw new IllegalStateException("Conflicting typed destination");
+            return;
+        }
+        destinationSlots = slots; destinationOffset = offset;
+        prepared = new InputDispatch(new ScalarArrayInputSource(inputLayout), arguments.length, tail, null,
+            new AstTupleDestination(shape, slots, offset));
     }
     @Override public Object execute(VirtualFrame frame) {
         VectorLayout layout = vector;
@@ -89,6 +105,10 @@ public final class TupleApplication extends Expr {
                     }
                 });
             }
+        }
+        if (prepared != null) {
+            if (destinationSlots != slots || destinationOffset != offset) throw new IllegalStateException("Conflicting typed destination");
+            prepared.execute(frame, closure, values); return null;
         }
         TupleDispatch child = dispatch;
         if (child == null) {

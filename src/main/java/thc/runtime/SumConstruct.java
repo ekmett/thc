@@ -45,6 +45,16 @@ public final class SumConstruct extends Expr {
         CoreRepresentation result = shape.getProof();
         setRepresentation(result.copy(result.getKind(), true, result.getPresent(), result.getPrimReps(), result.getComponents(), result.getVector(), result.getAlternatives(), result.getTagSlot(), result.getAlternativeSlots()));
     }
+    @Override public void prepareTuple(int[] slots, int offset) {
+        if (mapping != null) {
+            if (mapping.destination != slots || mapping.offset != offset) throw new IllegalStateException("Conflicting sum destination");
+            return;
+        }
+        int[] fields = new int[projection.length];
+        for (int i = 0; i < fields.length; i++) fields[i] = proof.isTypedTransport() && integers[i] != null ? intSlots[i] : slots[offset + projection[i]];
+        mapping = new Mapping(slots, offset, fields);
+        if (proof.isTypedTransport()) payload.prepareTuple(fields, 0);
+    }
     @Override public Object execute(VirtualFrame frame) { throw fault("Sum value requires a typed destination"); }
     @ExplodeLoop @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
         Mapping selected = mapping;

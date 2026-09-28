@@ -32,6 +32,8 @@ public abstract class Expr extends Node {
         Node parent = getParent();
         return parent == null ? null : parent.getEncapsulatingSourceSection();
     }
+    /** Bind an existing typed destination while lowering, without executing the expression. */
+    public void prepareTuple(int[] slots, int offset) {}
     public final Object executeTuple(VirtualFrame frame, int[] slots) {
         return executeTuple(frame, slots, 0);
     }

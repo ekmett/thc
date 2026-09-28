@@ -15,10 +15,17 @@ public final class SumCase extends Expr {
     @CompilationFinal(dimensions = 1) private final int[] tagToArm;
     @CompilationFinal(dimensions = 1) private final CountingConditionProfile[] armProfiles;
     public SumCase(Expr scrutinee, int[] slots, Expr[] alternatives, int[] tagToArm, CoreRepresentation proof) {
+        this(scrutinee, slots, alternatives, tagToArm, proof, true);
+    }
+    public SumCase(Expr scrutinee, int[] slots, Expr[] alternatives, int[] tagToArm, CoreRepresentation proof, boolean profileChoice) {
         this.scrutinee = scrutinee; this.slots = slots; this.alternatives = alternatives; this.tagToArm = tagToArm;
         setRepresentation(proof);
+        scrutinee.prepareTuple(slots, 0);
         armProfiles = new CountingConditionProfile[alternatives.length];
-        for (int i = 0; i < armProfiles.length; i++) armProfiles[i] = CountingConditionProfile.create();
+        for (int i = 0; i < armProfiles.length; i++) armProfiles[i] = profileChoice ? CountingConditionProfile.create() : CountingConditionProfile.getUncached();
+    }
+    @Override public void prepareTuple(int[] slots, int offset) {
+        for (Expr alternative : alternatives) alternative.prepareTuple(slots, offset);
     }
     private enum Route { GENERIC, INT, LONG, FLOAT, DOUBLE, CLOSURE, DATA, ADDRESS, TUPLE }
     private static final class ResumeBranch implements AstResumeStep {
