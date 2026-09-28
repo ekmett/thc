@@ -105,7 +105,9 @@ public class LauncherDiagnosticsTest {
     }
     @Test public void explicitOptInStillReportsBackendAndRuntimeMetrics() throws Throwable {
         for (var mode : List.of("--run-io", "--run-executable")) for (var backend : List.of("ast", "bytecode")) {
-            var output = launch(mode, backend, "true"); assertEquals(1L, output.lines().filter(line -> !line.isEmpty()).count(), mode + "/" + backend);
+            var output = launch(mode, backend, "true"); long nonemptyLines = 0;
+            for (var line : output.split("\\r\\n|\\r|\\n")) if (!line.isEmpty()) nonemptyLines++;
+            assertEquals(1L, nonemptyLines, mode + "/" + backend);
             var metrics = (Map<?, ?>) Json.parse(output.trim()); assertEquals(backend, metrics.get("backend")); assertEquals(0L, ((Number) metrics.get("unsupportedTraps")).longValue());
         }
     }

@@ -139,12 +139,18 @@ public class StablePointerTest {
         for (var stage : List.of("pre", "post")) {
             var core = json(new File(directory, stage + "/core/StablePointerAudit.json")); var all = new ArrayList<List<?>>(); nodes(core.get("bindings"), all);
             var applications = new ArrayList<List<?>>(); for (var node : all) if (!node.isEmpty() && Objects.equals(node.getFirst(), "app")) applications.add(node);
-            List<?> free = applications.stream().filter(app -> Objects.equals(symbol(app), "hs_free_stable_ptr")).findFirst().orElseThrow();
+            List<?> free = null;
+            for (var app : applications) if (Objects.equals(symbol(app), "hs_free_stable_ptr")) { free = app; break; }
+            if (free == null) throw new NoSuchElementException("No value present");
             var metadata = (Map<String, Object>) free.get(6); var arguments = argumentReps(free); var flags = (List<?>) free.get(3);
             assertTrue(CoreStablePointers.validate(metadata, arguments, flags, metadata.get("rep"))); var descriptor = (Map<String, Object>) metadata.get("foreignCall");
             assertThrows(RuntimeFault.class, () -> CoreStablePointers.validate(with(metadata, "foreignCall", with(descriptor, "safety", "safe")), arguments, flags, metadata.get("rep")));
             assertThrows(RuntimeFault.class, () -> CoreStablePointers.validate(metadata, arguments.reversed(), flags, metadata.get("rep")));
-            var make = applications.stream().filter(app -> app.get(1) instanceof List<?> head && head.size() >= 2 && head.subList(0, 2).equals(List.of("prim", "makeStablePtr#"))).findFirst().orElseThrow();
+            List<?> make = null;
+            for (var app : applications) {
+                if (app.get(1) instanceof List<?> head && head.size() >= 2 && head.subList(0, 2).equals(List.of("prim", "makeStablePtr#"))) { make = app; break; }
+            }
+            if (make == null) throw new NoSuchElementException("No value present");
             var operation = StablePointerOp.MAKE; var input = new ArrayList<CoreRepresentation>(); for (var arg : (List<?>) make.get(2)) input.add(CoreRepresentations.expression((List<?>) arg));
             var output = CoreRepresentations.expression(make); operation.validate(input, (List<?>) make.get(3), output);
             assertThrows(RuntimeFault.class, () -> operation.validate(input, List.of(false, false), output));
