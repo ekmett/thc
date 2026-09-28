@@ -12,26 +12,26 @@ class SimdWideFloatFmaTest {
     private record Case(List<String> names, CoreRepresentation proof, List<CoreRepresentation> wrongShapes) {}
     @Test void exactThree512BitCarriersAndResultAreRequired() {
         for (var shape : List.of(
-                new Case(CoreVectors.INSTANCE.getFusedFloat16(), GeneratedVectors.proofFloatX16,
+                new Case(CoreVectors.fusedFloat16, GeneratedVectors.proofFloatX16,
                     List.of(GeneratedVectors.proofFloatX8, GeneratedVectors.proofInt32X16)),
-                new Case(CoreVectors.INSTANCE.getFusedDouble8(), GeneratedVectors.proofDoubleX8,
+                new Case(CoreVectors.fusedDouble8, GeneratedVectors.proofDoubleX8,
                     List.of(GeneratedVectors.proofDoubleX4, GeneratedVectors.proofWord64X8)))) {
             var proof = shape.proof;
             for (var name : shape.names) {
-                CoreVectors.INSTANCE.validate(name, Collections.nCopies(3, proof), proof);
+                CoreVectors.validate(name, Collections.nCopies(3, proof), proof);
                 for (var wrong : shape.wrongShapes) {
                     for (int index = 0; index <= 2; index++) {
                         int lane = index;
                         assertThrows(RuntimeFault.class, () -> {
                             var arguments = new ArrayList<>(Collections.nCopies(3, proof)); arguments.set(lane, wrong);
-                            CoreVectors.INSTANCE.validate(name, arguments, proof);
+                            CoreVectors.validate(name, arguments, proof);
                         });
                     }
-                    assertThrows(RuntimeFault.class, () -> CoreVectors.INSTANCE.validate(name, Collections.nCopies(3, proof), wrong));
+                    assertThrows(RuntimeFault.class, () -> CoreVectors.validate(name, Collections.nCopies(3, proof), wrong));
                 }
                 for (int count : List.of(2, 4)) assertThrows(RuntimeFault.class,
-                    () -> CoreVectors.INSTANCE.validate(name, Collections.nCopies(count, proof), proof));
-                assertThrows(RuntimeFault.class, () -> CoreVectors.INSTANCE.validateFlags(List.of(false, true, false)));
+                    () -> CoreVectors.validate(name, Collections.nCopies(count, proof), proof));
+                assertThrows(RuntimeFault.class, () -> CoreVectors.validateFlags(List.of(false, true, false)));
             }
         }
     }
