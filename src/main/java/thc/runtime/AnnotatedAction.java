@@ -26,7 +26,7 @@ public final class AnnotatedAction extends Expr {
     private Object call(VirtualFrame frame, Closure closure) {
         Object result;
         try {
-            Object returned = dispatch.execute(frame, closure, new Object[] {kotlin.Unit.INSTANCE});
+            Object returned = dispatch.execute(frame, closure, new Object[] {thc.runtime.Unit.INSTANCE});
             DelimitedControl.captureBytecode(returned, shape);
             result = AstControl.complete(this, returned, closure.target, shape);
         } catch (AstCapture cut) { throw cut.append((resumed, input) -> TupleResultsKt.ownedTupleResult(input, shape)); }

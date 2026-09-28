@@ -28,7 +28,7 @@ public class PackageNativeLifecycleTest {
     private static final class Entry extends RootNode {
         @Child private PackageScalarAccess access;
         Entry(Language language, PackageScalarCall operation) { super(language); access = new PackageScalarAccess(operation); }
-        @Override public Object execute(VirtualFrame frame) { return access.executeLong(new Object[0], kotlin.Unit.INSTANCE); }
+        @Override public Object execute(VirtualFrame frame) { return access.executeLong(new Object[0], thc.runtime.Unit.INSTANCE); }
     }
     private String command(List<String> arguments) throws Exception {
         var process = new ProcessBuilder(arguments).redirectErrorStream(true).start();

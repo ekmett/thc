@@ -15,7 +15,7 @@ import thc.Language;
 import java.io.File;
 import java.nio.file.Files;
 import java.util.*;
-import kotlin.Unit;
+import thc.runtime.Unit;
 import static org.junit.jupiter.api.Assertions.*;
 import static thc.runtime.ScalarTestCalls.callScalarTestTarget;
 

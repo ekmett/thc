@@ -130,7 +130,7 @@ class DataToTagTest {
                 assertThrows(RuntimeFault.class, () -> Calls.target(target, new Object[]{0L, failure})); released(language);
                 assertEquals(0L, Calls.target(target, new Object[]{0L, values.getFirst()}));
                 var other = new DataLayout(language, "Other", "Other", new String[0]).allocate();
-                for (var value : list(17L, kotlin.Unit.INSTANCE, ManagedAddress.fromHex("6100"), other))
+                for (var value : list(17L, thc.runtime.Unit.INSTANCE, ManagedAddress.fromHex("6100"), other))
                     assertThrows(RuntimeException.class, () -> Calls.target(target, new Object[]{0L, value}));
                 released(language);
             } finally { context.leave(); }

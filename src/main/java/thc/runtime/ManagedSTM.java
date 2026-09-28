@@ -202,7 +202,7 @@ public final class ManagedSTM implements AutoCloseable {
                     try (var blocked = GuestThreads.blocking(GuestThreadStatus.STM)) { ready.await(); }
                 }
                 live();
-                return kotlin.Unit.INSTANCE;
+                return thc.runtime.Unit.INSTANCE;
             } finally { lock.unlock(); }
         }
         void cancel() { lock.lock(); try { waiters.remove(this); versions.clear(); } finally { lock.unlock(); } }

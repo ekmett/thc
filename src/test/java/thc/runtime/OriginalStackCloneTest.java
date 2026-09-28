@@ -110,7 +110,7 @@ public class OriginalStackCloneTest {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                     var program = load(language, backend, consumer(original(), moved)); var entry = program.entryTarget(consumerId);
                     class Runner {
-                        ManagedStackSnapshot invoke() { return invoke(kotlin.Unit.INSTANCE); }
+                        ManagedStackSnapshot invoke() { return invoke(thc.runtime.Unit.INSTANCE); }
                         ManagedStackSnapshot invoke(Object token) {
                             var value = (DataValue) Calls.target(entry, new Object[]{0L, token});
                             assertEquals("StackSnapshot", value.getLayout().getName());

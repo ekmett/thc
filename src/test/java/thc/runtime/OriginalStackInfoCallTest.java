@@ -109,11 +109,11 @@ public class OriginalStackInfoCallTest {
                         assertEquals(53L, stack.readWord8(typeByte)); assertEquals(30L, standard.readWord8(typeByte));
                         assertTrue(standard.plus((long) layout.offset("infoTableBytes")).sameLocation(key));
                         var storage = ManagedAllocation.mutable(89, 8); var output = ManagedAddress.fromAllocation(storage).plus(5);
-                        assertEquals(1, call("lookup", key, output, kotlin.Unit.INSTANCE));
+                        assertEquals(1, call("lookup", key, output, thc.runtime.Unit.INSTANCE));
                         assertTrue(key.sameLocation(storage.readAddressByteOffset(5)));
                         assertEquals("THC managed diagnostic frame", storage.readAddressByteOffset(13).utf8());
                         var before = storage.readAddressByteOffset(13);
-                        assertEquals(0, call("lookup", ManagedAddress.nullAddress(), output, kotlin.Unit.INSTANCE));
+                        assertEquals(0, call("lookup", ManagedAddress.nullAddress(), output, thc.runtime.Unit.INSTANCE));
                         assertSame(before, storage.readAddressByteOffset(13));
                     }
                 }

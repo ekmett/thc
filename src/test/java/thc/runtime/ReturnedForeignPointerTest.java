@@ -24,7 +24,7 @@ public class ReturnedForeignPointerTest {
             assertEquals(1, link.getAbi().size());
             call = new PackageScalarAccess(new PackageScalarCall(link, link.getAbi().getFirst()));
         }
-        @Override public Object execute(VirtualFrame frame) { return call.executeAddress(frame.getArguments(), kotlin.Unit.INSTANCE); }
+        @Override public Object execute(VirtualFrame frame) { return call.executeAddress(frame.getArguments(), thc.runtime.Unit.INSTANCE); }
     }
     private Context context() { return context(true); }
     private Context context(boolean nativeAccess) {

@@ -4,7 +4,7 @@ package thc.runtime;
 
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.ControlFlowException;
-import kotlin.Unit;
+import thc.runtime.Unit;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;

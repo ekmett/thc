@@ -55,14 +55,14 @@ continues the call.
 
 ## Checks and boundaries
 
-[`TailCycleTest`](../src/test/kotlin/thc/TailCycleTest.kt) covers two-root and
+[`TailCycleTest`](../src/test/java/thc/TailCycleTest.java) covers two-root and
 interior cycles, outward retargeting, changed captures, PAP prefixes,
 overapplication, pending non-tail work, cloned targets and bloom collisions.
 Its collision-free controls require matching-root reentry with zero outer
 trampoline iterations; stack safety alone would not establish that behavior.
 [`TypedExecutionTest`](../src/test/java/thc/runtime/TypedExecutionTest.java) checks
 that widening consumes an already-produced value without reexecuting its child.
-[`TypedApplicationTest`](../src/test/kotlin/thc/TypedApplicationTest.kt) covers
+[`TypedApplicationTest`](../src/test/java/thc/TypedApplicationTest.java) covers
 typed paths through ordinary application.
 
 A tail-transfer protocol does not make arbitrary non-tail recursion stack-safe.

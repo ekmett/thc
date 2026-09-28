@@ -48,10 +48,10 @@ public class LibyamlNativeProductsTest {
         final PackageScalarCall call; final NarrowInteger narrow; @Child PackageScalarAccess access;
         Entry(Language language, PackageScalarCall call) { super(language); this.call = call; narrow = NarrowInteger.fromRep(call.getResult()); access = new PackageScalarAccess(call); }
         @Override public Object execute(VirtualFrame frame) {
-            if (call.getResult().equals("void")) { access.executeVoid(frame.getArguments(), kotlin.Unit.INSTANCE); return kotlin.Unit.INSTANCE; }
-            if (call.getResult().equals("AddrRep")) return access.executeAddress(frame.getArguments(), kotlin.Unit.INSTANCE);
-            if (narrow != null) { int value = access.executeInt(frame.getArguments(), kotlin.Unit.INSTANCE); return narrow == NarrowInteger.WORD32 ? Integer.toUnsignedLong(value) : (long) value; }
-            return access.executeLong(frame.getArguments(), kotlin.Unit.INSTANCE);
+            if (call.getResult().equals("void")) { access.executeVoid(frame.getArguments(), thc.runtime.Unit.INSTANCE); return thc.runtime.Unit.INSTANCE; }
+            if (call.getResult().equals("AddrRep")) return access.executeAddress(frame.getArguments(), thc.runtime.Unit.INSTANCE);
+            if (narrow != null) { int value = access.executeInt(frame.getArguments(), thc.runtime.Unit.INSTANCE); return narrow == NarrowInteger.WORD32 ? Integer.toUnsignedLong(value) : (long) value; }
+            return access.executeLong(frame.getArguments(), thc.runtime.Unit.INSTANCE);
         }
     }
     @FunctionalInterface private interface ParserAction { void run(ManagedAddress parser, ManagedAddress event) throws Throwable; }
@@ -78,7 +78,7 @@ public class LibyamlNativeProductsTest {
                 try { call("my_emitter_set_output", emitter, buffer); long kind; do { success("yaml_parser_parse", parser, event); kind = (Long) call("get_event_type", event); success("yaml_emitter_emit", emitter, event); /* consumes event */ } while (kind != 2L); } finally { call("yaml_emitter_delete", emitter); }
                 // Caller-owned output remains live after emitter destruction.
                 long size = (Long) call("get_buffer_used", buffer); assertTrue(size > 4096, "exercise the original growing encoder buffer"); var pointer = (ManagedAddress) call("get_buffer_buff", buffer); var bytes = inspect(pointer, size);
-                pointer.withNativeIOWindow(size, false, window -> { assertEquals(pointer.toNativeBits(), window.address()); assertEquals(size, window.byteSize(), "window is the IO request, not an allocation extent"); assertArrayEquals(bytes, window.toArray(ValueLayout.JAVA_BYTE)); return kotlin.Unit.INSTANCE; });
+                pointer.withNativeIOWindow(size, false, window -> { assertEquals(pointer.toNativeBits(), window.address()); assertEquals(size, window.byteSize(), "window is the IO request, not an allocation extent"); assertArrayEquals(bytes, window.toArray(ValueLayout.JAVA_BYTE)); return thc.runtime.Unit.INSTANCE; });
                 var path = temporary.resolve("encoded.yaml"); var pathBytes = path.toString().getBytes(StandardCharsets.UTF_8); var filename = ManagedAddress.fromByteArray(Arrays.copyOf(pathBytes, pathBytes.length + 1)); long descriptor = owner.getFiles().open(filename, 3, ForeignSafety.UNSAFE); assertTrue(descriptor >= 3);
                 try { assertTrue(pointer.hasNativeIOStorage()); assertEquals(size, owner.getFiles().write(descriptor, pointer, size, ForeignSafety.UNSAFE)); assertArrayEquals(bytes, Files.readAllBytes(path)); assertEquals(0L, owner.getFiles().seek(descriptor, 0, 0, ForeignSafety.UNSAFE)); pointer.writeWord8(0, 0); assertEquals(size, owner.getFiles().read(descriptor, pointer, size, ForeignSafety.UNSAFE)); assertEquals((long) bytes[0] & 255, pointer.readWord8(0)); } finally { assertEquals(0L, owner.getFiles().close(descriptor, ForeignSafety.UNSAFE)); }
                 var managed = ManagedAllocation.mutable(size, 8, false); pointer.copyToByteArray(managed, 0, size); assertArrayEquals(bytes, managed.copyBytesOut(0, size)); pointer.copyFromByteArray(managed, 0, size); observed.add("encoded\t" + bytes.length + "\t" + HexFormat.of().formatHex(bytes));

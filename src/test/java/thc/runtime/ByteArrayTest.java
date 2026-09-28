@@ -13,7 +13,7 @@ import com.oracle.truffle.api.nodes.NodeUtil;
 import org.graalvm.polyglot.PolyglotException;
 import org.junit.jupiter.api.Test;
 import thc.*;
-import kotlin.Unit;
+import thc.runtime.Unit;
 import java.io.File;
 import java.math.BigInteger;
 import java.nio.file.Files;

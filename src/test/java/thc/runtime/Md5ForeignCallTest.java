@@ -10,7 +10,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import kotlin.Unit;
+import thc.runtime.Unit;
 import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.Test;
 import thc.Language;

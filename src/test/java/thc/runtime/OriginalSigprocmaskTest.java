@@ -134,7 +134,7 @@ public class OriginalSigprocmaskTest {
                 for (var backend : List.of("ast", "bytecode")) {
                     var target = load(language, backend, OriginalStdioChecks.rawModule(original, source, null)).entryTarget("entry");
                     class Runner {
-                        Object invoke(long how, ManagedAddress set, ManagedAddress old) { return invoke(how, set, old, kotlin.Unit.INSTANCE); }
+                        Object invoke(long how, ManagedAddress set, ManagedAddress old) { return invoke(how, set, old, thc.runtime.Unit.INSTANCE); }
                         Object invoke(long how, ManagedAddress set, ManagedAddress old, Object state) { return Calls.target(target, new Object[]{0L, how, set, old, state}); }
                     }
                     var runner = new Runner();

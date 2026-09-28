@@ -51,7 +51,7 @@ public final class DelimitedStack {
             if (outerMask != null) SynchronousMasking.set(site, initialMask);
             if (outsideAnnotations != null) StackAnnotations.set(site, initialAnnotations.rebase(outsideAnnotations, ambientAnnotations, annotationCopies));
             DelimitedResume input;
-            try { input = new DelimitedResume(site.invoke(frame, action, new Object[] {kotlin.Unit.INSTANCE}, inputShape)); }
+            try { input = new DelimitedResume(site.invoke(frame, action, new Object[] {thc.runtime.Unit.INSTANCE}, inputShape)); }
             catch (GuestException failure) { input = new DelimitedResume(null, failure); }
             catch (AsyncDelivery failure) { input = new DelimitedResume(null, failure); }
             catch (AstCapture cut) { input = new DelimitedResume(null, DelimitedControl.asyncFailure(cut, site)); }

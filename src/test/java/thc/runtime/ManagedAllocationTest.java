@@ -11,7 +11,7 @@ import com.oracle.truffle.api.nodes.RootNode;
 import jdk.incubator.vector.IntVector;
 import org.junit.jupiter.api.Test;
 import thc.Language;
-import kotlin.Unit;
+import thc.runtime.Unit;
 import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static thc.PrimopTestContext.primopTestContext;

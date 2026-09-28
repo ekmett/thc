@@ -15,7 +15,7 @@ import java.security.MessageDigest;
 import java.util.*;
 import java.util.stream.*;
 import static org.junit.jupiter.api.Assertions.*;
-import static kotlin.Unit.INSTANCE;
+import static thc.runtime.Unit.INSTANCE;
 
 @SuppressWarnings("unchecked")
 public class PinnedAddressTest {

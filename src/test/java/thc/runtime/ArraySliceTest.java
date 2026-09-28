@@ -8,7 +8,7 @@ import com.oracle.truffle.api.frame.*;
 import com.oracle.truffle.api.nodes.*;
 import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.Test;
-import kotlin.Unit;
+import thc.runtime.Unit;
 import thc.*;
 import java.nio.file.*;
 import java.security.MessageDigest;

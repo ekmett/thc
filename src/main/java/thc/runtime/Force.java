@@ -60,7 +60,7 @@ public final class Force extends Node {
             }
             // The continuation owns its callee frame; never materialize this caller.
             if (suspendedChild(observed) != null) return resumeChain(original, false, false);
-            Object result = executeOne(original, observed, kotlin.Unit.INSTANCE);
+            Object result = executeOne(original, observed, thc.runtime.Unit.INSTANCE);
             if (result != RETRY) return result;
         }
     }
@@ -225,7 +225,7 @@ public final class Force extends Node {
             }
             Object current = leaf;
             SavedGuestContinuation expected = leafContinuation;
-            Object input = kotlin.Unit.INSTANCE;
+            Object input = thc.runtime.Unit.INSTANCE;
             while (true) {
                 boolean spilled = false;
                 Object outcome;

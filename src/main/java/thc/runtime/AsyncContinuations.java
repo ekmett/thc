@@ -11,7 +11,7 @@ public final class AsyncContinuations {
     public static final AsyncContinuations INSTANCE = new AsyncContinuations();
     private AsyncContinuations() {}
     public static boolean isYieldMarker(Object value) {
-        return value == kotlin.Unit.INSTANCE || value == AstStackSpill.INSTANCE ||
+        return value == thc.runtime.Unit.INSTANCE || value == AstStackSpill.INSTANCE ||
             value instanceof ThunkSuspended || value instanceof CallSegmentSuspended || value instanceof AsyncRequest;
     }
     public static AsyncRequest request(ContinuationResult continuation) {

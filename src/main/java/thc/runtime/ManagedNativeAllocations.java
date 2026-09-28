@@ -237,7 +237,7 @@ public final class ManagedNativeAllocations {
         }
     }
 
-    /** Check the same ownership contract when installing an &free callback. */
+    /** Check the same ownership contract when installing an {@code &free} callback. */
     @TruffleBoundary
     public synchronized void requireFreeTarget(ManagedAddress address) {
         current();

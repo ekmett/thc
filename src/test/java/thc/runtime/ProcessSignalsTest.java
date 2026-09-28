@@ -131,15 +131,15 @@ public class ProcessSignalsTest {
     @Test public void compiledUnixEmbeddingDenialRemainsAHostFaultOnBothBackends() throws Exception { compiledEmbeddingDenial(unixDescriptor); }
     private void reject(RootCallTarget target, Object token) {
         var failure = assertThrows(RuntimeFault.class, () -> callScalarTestTarget(target, new Object[] {0L, 2, -5, ManagedAddress.nullAddress(), token}));
-        assertEquals(RuntimeFault.class, failure.getClass()); if (token == kotlin.Unit.INSTANCE) assertTrue(failure.getMessage().contains("launcher authority"));
+        assertEquals(RuntimeFault.class, failure.getClass()); if (token == thc.runtime.Unit.INSTANCE) assertTrue(failure.getMessage().contains("launcher authority"));
     }
     private void compiledEmbeddingDenial(Map<String, Object> original) throws Exception {
         onBackends((language, backend) -> {
             var program = program(language, backend, false, true, original); var target = program.entryTarget("install"); var state = Language.currentState(); state.getThreads().enterCurrent();
             try {
-                reject(target, kotlin.Unit.INSTANCE); reject(target, 1L); target.getClass().getMethod("compile", boolean.class).invoke(target, true);
+                reject(target, thc.runtime.Unit.INSTANCE); reject(target, 1L); target.getClass().getMethod("compile", boolean.class).invoke(target, true);
                 assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target)); long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
-                reject(target, kotlin.Unit.INSTANCE); assertEquals(before + 1, ((Number) program.diagnostics().get("compiledEntries")).longValue());
+                reject(target, thc.runtime.Unit.INSTANCE); assertEquals(before + 1, ((Number) program.diagnostics().get("compiledEntries")).longValue());
                 // Bytecode invalidates ordinary host faults; denial remains a RuntimeFault, not a guest error.
                 if (backend.equals("bytecode")) assertEquals(false, target.getClass().getMethod("isValidLastTier").invoke(target));
                 assertEquals(0, language.getHandoffState().get().getResults().getDepth()); assertEquals(0, language.getHandoffState().get().getResults().retainedReferences());

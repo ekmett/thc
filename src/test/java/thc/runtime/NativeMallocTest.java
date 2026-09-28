@@ -19,7 +19,7 @@ import java.util.function.Consumer;
 import java.util.stream.LongStream;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
-import static kotlin.Unit.INSTANCE;
+import static thc.runtime.Unit.INSTANCE;
 
 /** Genuine declaration certificates in explicitly synthetic scalar consumers. */
 @SuppressWarnings("unchecked")

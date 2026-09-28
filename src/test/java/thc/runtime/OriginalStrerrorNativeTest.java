@@ -77,14 +77,14 @@ class OriginalStrerrorNativeTest {
                 class Replay { void run(boolean compiled) throws Exception {
                     for (var row : messages) {
                         byte[] bytes = new byte[512]; Arrays.fill(bytes,(byte) 0x55); var address = ManagedAddress.fromByteArray(bytes); long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
-                        assertEquals(0,callScalarTestTarget(entry,new Object[]{0L,((Number) row.get("errno")).intValue(),address,512L,kotlin.Unit.INSTANCE}));
+                        assertEquals(0,callScalarTestTarget(entry,new Object[]{0L,((Number) row.get("errno")).intValue(),address,512L,thc.runtime.Unit.INSTANCE}));
                         if (compiled) { assertEquals(before + 1,((Number) program.diagnostics().get("compiledEntries")).longValue()); valid(entry); }
                         int end = -1; for (int i = 0; i < bytes.length; i++) if (bytes[i] == 0) { end = i; break; }
                         assertTrue(end >= 1 && end <= 511); assertEquals(row.get("message"),new String(bytes,0,end,StandardCharsets.US_ASCII));
                     }
                     for (var row : raw) {
                         int length = ((Number) row.get("length")).intValue(); byte[] bytes = new byte[length]; Arrays.fill(bytes,(byte) 0x55); var address = ManagedAddress.fromByteArray(bytes);
-                        long before = ((Number) program.diagnostics().get("compiledEntries")).longValue(); assertEquals(((Number) row.get("status")).intValue(),callScalarTestTarget(entry,new Object[]{0L,((Number) row.get("errno")).intValue(),address,(long) length,kotlin.Unit.INSTANCE}));
+                        long before = ((Number) program.diagnostics().get("compiledEntries")).longValue(); assertEquals(((Number) row.get("status")).intValue(),callScalarTestTarget(entry,new Object[]{0L,((Number) row.get("errno")).intValue(),address,(long) length,thc.runtime.Unit.INSTANCE}));
                         if (compiled) { assertEquals(before + 1,((Number) program.diagnostics().get("compiledEntries")).longValue()); valid(entry); }
                         var expected = new ArrayList<Long>(); for (var value : (List<Number>) row.get("bytes")) expected.add(value.longValue()); var actual = new ArrayList<Long>(); for (byte value : bytes) actual.add((long) (value & 0xff));
                         assertEquals(expected,actual,"native strerror buffer for " + row.get("errno") + "/" + length);
@@ -95,9 +95,9 @@ class OriginalStrerrorNativeTest {
                 class Control { void reject(Object error,Object output,Object length,Object state) {
                     assertThrows(RuntimeFault.class,() -> callScalarTestTarget(entry,new Object[]{0L,error,output,length,state})); for (byte value : bytes) assertEquals((byte) 0x55,value);
                 }}
-                assertThrows(RuntimeFault.class,() -> Calls.target(entry,new Object[]{0L,22,address,512L,9L})); var control = new Control(); control.reject(22,address,3L,kotlin.Unit.INSTANCE); // C ERANGE indexes buflen-4.
-                control.reject(22,address,513L,kotlin.Unit.INSTANCE); control.reject(1L << 32,address,512L,kotlin.Unit.INSTANCE);
-                control.reject(22,address,512L,9L); control.reject(22,ManagedAddress.nullAddress(),512L,kotlin.Unit.INSTANCE);
+                assertThrows(RuntimeFault.class,() -> Calls.target(entry,new Object[]{0L,22,address,512L,9L})); var control = new Control(); control.reject(22,address,3L,thc.runtime.Unit.INSTANCE); // C ERANGE indexes buflen-4.
+                control.reject(22,address,513L,thc.runtime.Unit.INSTANCE); control.reject(1L << 32,address,512L,thc.runtime.Unit.INSTANCE);
+                control.reject(22,address,512L,9L); control.reject(22,ManagedAddress.nullAddress(),512L,thc.runtime.Unit.INSTANCE);
             } finally { context.leave(); }
         }
     }

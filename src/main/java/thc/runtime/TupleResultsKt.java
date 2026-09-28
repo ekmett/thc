@@ -6,7 +6,7 @@ import static thc.runtime.RuntimeServiceStatus.fault;
 public final class TupleResultsKt {
     private TupleResultsKt() {}
     public static void requireVoidCarrier(Object value) {
-        if (value != kotlin.Unit.INSTANCE) throw fault("Invalid zero-width scalar carrier");
+        if (value != thc.runtime.Unit.INSTANCE) throw fault("Invalid zero-width scalar carrier");
     }
     public static HandoffStorage ownedTupleResult(Object result, TupleShape shape) {
         TupleResultPool pool = shape.getLanguage().getHandoffState().get().getResults();

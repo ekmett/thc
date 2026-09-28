@@ -19,6 +19,6 @@ public final class SetThreadAllocationCounter extends Expr {
         else throw RuntimeFault.fault("Allocation counter requires ThreadId#");
         TupleResultsKt.requireVoidCarrier(state.execute(frame));
         threads.setAllocationCounter(counter, identity);
-        return kotlin.Unit.INSTANCE;
+        return thc.runtime.Unit.INSTANCE;
     }
 }

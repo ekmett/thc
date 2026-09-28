@@ -33,12 +33,12 @@ final class WindowsMalloc {
             check(WindowsDirectoryStreams.supportedHost());
             Object parsed;
             try (var stream = WindowsMalloc.class.getResourceAsStream("/thc/cbits/windows-malloc-abi.json")) {
-                if (stream == null) ProgramKt.fault("Missing Windows malloc ABI receipt");
+                if (stream == null) throw RuntimeFault.fault("Missing Windows malloc ABI receipt");
                 parsed = Json.INSTANCE.parse(new String(stream.readAllBytes(), StandardCharsets.UTF_8));
             }
-            if (!(parsed instanceof Map<?, ?>)) ProgramKt.fault("Missing Windows malloc ABI receipt");
+            if (!(parsed instanceof Map<?, ?>)) throw RuntimeFault.fault("Missing Windows malloc ABI receipt");
             var document = (Map<?, ?>) parsed;
-            if (!(document.get("layout") instanceof Map<?, ?>)) ProgramKt.fault("Missing Windows malloc layout");
+            if (!(document.get("layout") instanceof Map<?, ?>)) throw RuntimeFault.fault("Missing Windows malloc layout");
             var layout = (Map<?, ?>) document.get("layout");
             var target = document.get("target") instanceof String text ? text.split("-", -1) : new String[0];
             check(Long.valueOf(1).equals(document.get("schema")) && target.length == 4 && target[0].equals("x86_64") &&
@@ -47,13 +47,13 @@ final class WindowsMalloc {
                 enomem >= 1 && enomem <= Integer.MAX_VALUE && enomem.equals(layout.get("failureErrno")));
             var modules = new HashSet<String>();
             for (var name : List.of("mallocModule", "freeModule", "errnoModule")) {
-                if (!(layout.get(name) instanceof String)) ProgramKt.fault("Missing Windows malloc CRT identity");
+                if (!(layout.get(name) instanceof String)) throw RuntimeFault.fault("Missing Windows malloc CRT identity");
                 modules.add(((String) layout.get(name)).toLowerCase(Locale.ROOT));
             }
             check(modules.size() == 1 && modules.iterator().next().endsWith(".dll"));
             byte[] bytes;
             try (var stream = WindowsMalloc.class.getResourceAsStream("/thc/cbits/windows-malloc.dll")) {
-                if (stream == null) ProgramKt.fault("Missing Windows malloc bridge");
+                if (stream == null) throw RuntimeFault.fault("Missing Windows malloc bridge");
                 bytes = stream.readAllBytes();
             }
             check(HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes)).equals(document.get("dllSha256")));

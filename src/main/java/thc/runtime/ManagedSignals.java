@@ -105,7 +105,7 @@ public final class ManagedSignals {
             owner.getThreads().enterCurrent(MaskingState.UNMASKED, true);
             registered = true;
             while (!stopping) {
-                var event = TruffleSafepoint.getCurrent().setBlockedFunction(null, interrupter, reader, kotlin.Unit.INSTANCE, null, null);
+                var event = TruffleSafepoint.getCurrent().setBlockedFunction(null, interrupter, reader, thc.runtime.Unit.INSTANCE, null, null);
                 if (event != null && !stopping) {
                     reader.pending = null;
                     var image = event.info();
@@ -145,7 +145,7 @@ public final class ManagedSignals {
         synchronized (this) { child = worker; }
         if (child != null && child != Thread.currentThread() && child.isAlive())
             TruffleSafepoint.setBlockedThreadInterruptibleFunction(null,
-                (TruffleSafepoint.InterruptibleFunction<Thread, Object>) thread -> { thread.join(); return kotlin.Unit.INSTANCE; }, child);
+                (TruffleSafepoint.InterruptibleFunction<Thread, Object>) thread -> { thread.join(); return thc.runtime.Unit.INSTANCE; }, child);
     }
     /** Check the effective VM setting, including a later override of launcher -Xrs. */
     public static boolean hasReducedVmSignals() {

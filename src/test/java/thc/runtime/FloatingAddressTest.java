@@ -17,7 +17,7 @@ import java.nio.ByteOrder;
 import java.nio.file.Files;
 import java.security.MessageDigest;
 import java.util.*;
-import kotlin.Unit;
+import thc.runtime.Unit;
 import static org.junit.jupiter.api.Assertions.*;
 
 class FloatingAddressTest {

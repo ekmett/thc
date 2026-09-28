@@ -108,7 +108,7 @@ class CoreKeepAliveTest {
             var bottom = new Thunk(new RootNode(null) {
                 @Override public Object execute(VirtualFrame frame) { throw new AssertionError("kept argument was forced"); }
             }.getCallTarget(), null);
-            assertSame(value, call(p, bottom, kotlin.Unit.INSTANCE, lazyValue), backend);
+            assertSame(value, call(p, bottom, thc.runtime.Unit.INSTANCE, lazyValue), backend);
             assertEquals(1, forced[0]); assertEquals(2, lazyValue.getState()); assertEquals(0, bottom.getState()); released(language);
         });
     }
@@ -125,7 +125,7 @@ class CoreKeepAliveTest {
             var bottom = new Thunk(new RootNode(null) {
                 @Override public Object execute(VirtualFrame frame) { throw new AssertionError("lazy tuple field was forced"); }
             }.getCallTarget(), null);
-            assertEquals(7L, call(p, bottom, kotlin.Unit.INSTANCE, bottom), backend); assertEquals(0, bottom.getState()); released(language);
+            assertEquals(7L, call(p, bottom, thc.runtime.Unit.INSTANCE, bottom), backend); assertEquals(0, bottom.getState()); released(language);
         });
     }
     @Test void existingBinarySumResultCanBeConsumedWithoutChangingItsAbi() throws Exception {
@@ -135,14 +135,14 @@ class CoreKeepAliveTest {
             for (var constructor : list("Left", "Right")) alternatives.add(list("data", constructor, list("payload"), variable("payload", integer), map("binders", list(parameter("payload", integer)))));
             var body = list("case", keep(action, result), "sum", alternatives, map("rep", integer, "binder", parameter("sum", with(result, "evaluated", true))));
             var main = binding("main", lambda(list(parameter("owner", owner), parameter("state", state)), body, integer));
-            assertEquals(77L, call(program(language, backend, list(main)), new Object(), kotlin.Unit.INSTANCE), backend); released(language);
+            assertEquals(77L, call(program(language, backend, list(main)), new Object(), thc.runtime.Unit.INSTANCE), backend); released(language);
         });
     }
     @Test void partialContinuationReturnsTheRemainingLiftedFunction() throws Exception {
         eachBackend((language, backend) -> {
             var action = lambda(list(parameter("s", state), parameter("x", integer)), variable("x", integer), integer);
             var main = binding("main", lambda(list(parameter("owner", owner), parameter("state", state)), keep(action, closure), closure));
-            var p = program(language, backend, list(main)); var result = call(p, new Object(), kotlin.Unit.INSTANCE);
+            var p = program(language, backend, list(main)); var result = call(p, new Object(), thc.runtime.Unit.INSTANCE);
             assertTrue(result instanceof Closure, backend); assertEquals(1, ((Closure) result).arity);
             assertEquals(123L, Calls.target(p.hostEntryTarget(1), new Object[]{result, new Object[]{123L}}), backend); released(language);
         });
@@ -155,7 +155,7 @@ class CoreKeepAliveTest {
             var counts = new Counts();
             var callback = new Closure(null, 1, new RootNode(null) {
                 @Override public Object execute(VirtualFrame frame) {
-                    assertSame(kotlin.Unit.INSTANCE, frame.getArguments()[1]); counts.calls++;
+                    assertSame(thc.runtime.Unit.INSTANCE, frame.getArguments()[1]); counts.calls++;
                     if (counts.throwing) throw new GuestException(exceptionPayload, this); return 77L;
                 }
             }.getCallTarget());
@@ -171,11 +171,11 @@ class CoreKeepAliveTest {
             var stateFailure = assertThrows(RuntimeFault.class, () -> call(p, new Object(), 1L, failedCallback));
             assertTrue(Objects.toString(stateFailure.getMessage(), "").contains("zero-width"), backend + ": " + stateFailure);
             assertEquals(0, counts.failedForces); assertEquals(0, failedCallback.getState());
-            var thunkFailure = assertThrows(RuntimeFault.class, () -> call(p, new Object(), kotlin.Unit.INSTANCE, failedCallback));
+            var thunkFailure = assertThrows(RuntimeFault.class, () -> call(p, new Object(), thc.runtime.Unit.INSTANCE, failedCallback));
             assertEquals("callback thunk failed", thunkFailure.getMessage()); assertEquals(1, counts.failedForces); released(language);
-            var guest = assertThrows(GuestException.class, () -> call(p, new Object(), kotlin.Unit.INSTANCE, lazyCallback));
+            var guest = assertThrows(GuestException.class, () -> call(p, new Object(), thc.runtime.Unit.INSTANCE, lazyCallback));
             assertSame(exceptionPayload, guest.getPayload()); assertEquals(1, counts.forces); assertEquals(1, counts.calls); released(language);
-            counts.throwing = false; assertEquals(77L, call(p, new Object(), kotlin.Unit.INSTANCE, lazyCallback), backend);
+            counts.throwing = false; assertEquals(77L, call(p, new Object(), thc.runtime.Unit.INSTANCE, lazyCallback), backend);
             assertEquals(1, counts.forces); assertEquals(2, counts.calls); released(language);
         });
     }

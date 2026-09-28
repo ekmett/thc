@@ -13,7 +13,7 @@ import java.nio.file.*;
 import java.security.MessageDigest;
 import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
-import static kotlin.Unit.INSTANCE;
+import static thc.runtime.Unit.INSTANCE;
 
 @SuppressWarnings("unchecked")
 public class BoxedArrayExtensionsTest {

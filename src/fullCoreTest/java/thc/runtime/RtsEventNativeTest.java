@@ -115,8 +115,8 @@ public class RtsEventNativeTest {
                     if (mask == MaskingState.UNMASKED) {
                         var cut = assertThrows(AstCapture.class, () -> leaf.executeTuple(frame, new int[0], 0)); assertSame(incoming, cut.getYielded()); assertEquals(3L, threads.capabilityCount());
                         incoming.acknowledge(); var saved = cut.freeze(root, frame.materialize()); threads.setCapabilityCount(5);
-                        assertNull(saved.continueWith(kotlin.Unit.INSTANCE)); assertEquals(5L, threads.capabilityCount(), "Resumption must not replay the completed setter");
-                        assertThrows(RuntimeFault.class, () -> saved.continueWith(kotlin.Unit.INSTANCE));
+                        assertNull(saved.continueWith(thc.runtime.Unit.INSTANCE)); assertEquals(5L, threads.capabilityCount(), "Resumption must not replay the completed setter");
+                        assertThrows(RuntimeFault.class, () -> saved.continueWith(thc.runtime.Unit.INSTANCE));
                     } else {
                         assertNull(leaf.executeTuple(frame, new int[0], 0)); assertEquals(3L, threads.capabilityCount()); assertEquals(AsyncRequestState.PENDING, incoming.getState());
                         SynchronousMasking.set(root, MaskingState.UNMASKED); assertSame(incoming, threads.poll(root, false)); incoming.acknowledge();

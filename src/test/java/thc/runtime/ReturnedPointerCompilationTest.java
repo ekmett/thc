@@ -21,7 +21,7 @@ public class ReturnedPointerCompilationTest {
     private static final class AddressResult extends RootNode {
         @Child private PackageScalarAccess access;
         AddressResult(Language language, PackageScalarCall call) { super(language); access = new PackageScalarAccess(call); }
-        @Override public Object execute(VirtualFrame frame) { return access.executeAddress(frame.getArguments(), kotlin.Unit.INSTANCE); }
+        @Override public Object execute(VirtualFrame frame) { return access.executeAddress(frame.getArguments(), thc.runtime.Unit.INSTANCE); }
     }
     private Map<String, Object> module() {
         var address = Map.of("kind", "address", "primReps", List.of("AddrRep"), "evaluated", true);

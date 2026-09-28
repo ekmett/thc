@@ -24,7 +24,7 @@ public class NarrowReturnedPointerTest {
     private static final class Buffer extends RootNode {
         @Child private PackageScalarAccess access;
         Buffer(Language language, PackageScalarCall call) { super(language); access = new PackageScalarAccess(call); }
-        @Override public Object execute(VirtualFrame frame) { return access.executeAddress(new Object[0], kotlin.Unit.INSTANCE); }
+        @Override public Object execute(VirtualFrame frame) { return access.executeAddress(new Object[0], thc.runtime.Unit.INSTANCE); }
     }
     private List<Object> variable(String id, Map<String, Object> rep) { return List.of("var", id, Map.of("rep", rep)); }
     private Map<String, Object> module(String family, boolean byteOffset) {

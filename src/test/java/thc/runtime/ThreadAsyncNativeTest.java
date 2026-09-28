@@ -44,21 +44,21 @@ public class ThreadAsyncNativeTest {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var threads = Language.currentState().getThreads(); var effects = new AtomicInteger(); var compiled = new AtomicInteger();
                 var stateProof = new CoreRepresentation(CoreKind.VOID, false, false, List.of());
                 var root = new GuestRoot(language, new FrameLayout().build()) {
-                    @Child private YieldThread yielding = new YieldThread(new Expr() { @Override public Object execute(VirtualFrame frame) { effects.incrementAndGet(); if (CompilerDirectives.inCompiledCode()) compiled.incrementAndGet(); return kotlin.Unit.INSTANCE; } }, true, stateProof);
+                    @Child private YieldThread yielding = new YieldThread(new Expr() { @Override public Object execute(VirtualFrame frame) { effects.incrementAndGet(); if (CompilerDirectives.inCompiledCode()) compiled.incrementAndGet(); return thc.runtime.Unit.INSTANCE; } }, true, stateProof);
                     @Override public long bloom(VirtualFrame frame) { return 0L; }
                     @Override public Object execute(VirtualFrame frame) { try { return yielding.execute(frame); } catch (AstCapture cut) { CompilerDirectives.transferToInterpreter(); return cut.freeze(this, frame.materialize()); } }
                 };
                 var target = root.getCallTarget(); long id = threads.enterCurrent();
                 try {
-                    for (int i = 0; i < 5; i++) assertSame(kotlin.Unit.INSTANCE, Calls.target(target, new Object[]{0L}));
+                    for (int i = 0; i < 5; i++) assertSame(thc.runtime.Unit.INSTANCE, Calls.target(target, new Object[]{0L}));
                     target.getClass().getMethod("compile", boolean.class).invoke(target, true); assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
                     var sent = new AtomicReference<AsyncRequest>(); var sender = new Thread(() -> sent.set(threads.send(id, "external"))); sender.start(); sender.join(5000); assertFalse(sender.isAlive()); var request = sent.get();
-                    SynchronousMasking.set(root, MaskingState.MASKED_INTERRUPTIBLE); assertSame(kotlin.Unit.INSTANCE, Calls.target(target, new Object[]{0L}));
+                    SynchronousMasking.set(root, MaskingState.MASKED_INTERRUPTIBLE); assertSame(thc.runtime.Unit.INSTANCE, Calls.target(target, new Object[]{0L}));
                     assertEquals(AsyncRequestState.PENDING, request.getState(), "yield# is an ordinary, noninterruptible guest poll");
                     SynchronousMasking.set(root, MaskingState.UNMASKED); var cut = (AstContinuation) Calls.target(target, new Object[]{0L}); assertSame(request, cut.getYielded());
                     assertEquals(AsyncRequestState.CLAIMED, request.getState()); assertTrue(compiled.get() >= 2, "Both masked and unmasked effects entered compiled AST"); assertEquals(7, effects.get(), "The yield effect ran once per entry");
-                    request.acknowledge(); assertSame(kotlin.Unit.INSTANCE, cut.continueWith(kotlin.Unit.INSTANCE)); assertEquals(7, effects.get(), "Resume must not replay the yield effect");
-                    assertThrows(RuntimeFault.class, () -> cut.continueWith(kotlin.Unit.INSTANCE));
+                    request.acknowledge(); assertSame(thc.runtime.Unit.INSTANCE, cut.continueWith(thc.runtime.Unit.INSTANCE)); assertEquals(7, effects.get(), "Resume must not replay the yield effect");
+                    assertThrows(RuntimeFault.class, () -> cut.continueWith(thc.runtime.Unit.INSTANCE));
                 } finally { SynchronousMasking.set(root, MaskingState.UNMASKED); threads.leaveCurrent(); }
             } finally { context.leave(); }
         }

@@ -36,8 +36,8 @@ final class ForkActionRoot extends RootNode {
             callee = insert(new TupleDispatch(new ForkDestination(shape, language), new Metrics(false), 1, false));
             dispatch = callee;
         }
-        callee.execute(frame, action, new Object[] {kotlin.Unit.INSTANCE});
-        return kotlin.Unit.INSTANCE;
+        callee.execute(frame, action, new Object[] {thc.runtime.Unit.INSTANCE});
+        return thc.runtime.Unit.INSTANCE;
     }
     @Override public String getName() { return "THC fork action"; }
 }

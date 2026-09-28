@@ -15,7 +15,7 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.jupiter.api.Assertions.*;
-import static kotlin.Unit.INSTANCE;
+import static thc.runtime.Unit.INSTANCE;
 
 @Timeout(180)
 @SuppressWarnings("unchecked")

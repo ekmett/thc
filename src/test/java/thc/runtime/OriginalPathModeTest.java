@@ -105,22 +105,22 @@ class OriginalPathModeTest {
             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var scratch = setup(); var entry = program(language,backend,raw(original(name))).entryTarget("entry"); var stdio = Language.currentState().getStdio(); var selected = name.equals("pathMkdir") ? "new" : "target";
             class Call { Object invoke(ManagedAddress address,Object mode,Object state) { return callScalarTestTarget(entry,new Object[]{0L,address,mode,state}); }}
             var call = new Call(); assertThrows(RuntimeFault.class,() -> Calls.target(entry,new Object[]{0L,ManagedAddress.nullAddress(),0,9L})); var destination = path(scratch,selected.getBytes(StandardCharsets.UTF_8)); assertEquals(-1L,stdio.close(-1)); long prior = stdio.errno(); assertThrows(RuntimeFault.class,() -> call.invoke(destination,448,9L));
-            for (long mode : new long[]{-1L,0x1_0000_0000L}) assertThrows(RuntimeFault.class,() -> call.invoke(destination,mode,kotlin.Unit.INSTANCE)); assertThrows(RuntimeFault.class,() -> call.invoke(ManagedAddress.nullAddress(),448,kotlin.Unit.INSTANCE));
-            var allocation = ManagedAllocation.mutable(16,8); allocation.writeAddressByteOffset(0,ManagedAddress.nullAddress()); assertThrows(RuntimeFault.class,() -> call.invoke(ManagedAddress.fromAllocation(allocation),448,kotlin.Unit.INSTANCE)); assertEquals(prior,stdio.errno()); assertFalse(Files.exists(scratch.resolve("new"))); assertEquals(420L,unixMode(scratch.resolve("target"))); released(language); return null;
+            for (long mode : new long[]{-1L,0x1_0000_0000L}) assertThrows(RuntimeFault.class,() -> call.invoke(destination,mode,thc.runtime.Unit.INSTANCE)); assertThrows(RuntimeFault.class,() -> call.invoke(ManagedAddress.nullAddress(),448,thc.runtime.Unit.INSTANCE));
+            var allocation = ManagedAllocation.mutable(16,8); allocation.writeAddressByteOffset(0,ManagedAddress.nullAddress()); assertThrows(RuntimeFault.class,() -> call.invoke(ManagedAddress.fromAllocation(allocation),448,thc.runtime.Unit.INSTANCE)); assertEquals(prior,stdio.errno()); assertFalse(Files.exists(scratch.resolve("new"))); assertEquals(420L,unixMode(scratch.resolve("target"))); released(language); return null;
         }); }
         for (var backend : List.of("ast","bytecode")) try (var context = Context.newBuilder("thc").build()) { entered(context,() -> {
             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var destination = directory.resolve("denied"); var entry = program(language,backend,raw(original("pathMkdir"))).entryTarget("entry");
-            assertEquals(-1,callScalarTestTarget(entry,new Object[]{0L,cstring(destination.toString()),448,kotlin.Unit.INSTANCE})); assertEquals(StdioHostAbi.load().error(7),Language.currentState().getStdio().errno()); assertFalse(Files.exists(destination)); return null;
+            assertEquals(-1,callScalarTestTarget(entry,new Object[]{0L,cstring(destination.toString()),448,thc.runtime.Unit.INSTANCE})); assertEquals(StdioHostAbi.load().error(7),Language.currentState().getStdio().errno()); assertFalse(Files.exists(destination)); return null;
         }); }
     }
     @Test void nativePathAliasesRetainContextAndLifetimeChecks() throws Exception {
         for (var backend : List.of("ast","bytecode")) try (var first = context()) { entered(first,() -> {
             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var destination = Files.createTempDirectory(directory,"owned-").resolve("new"); var bytes = (destination + "\0").getBytes(StandardCharsets.UTF_8); var state = Language.currentState(); var base = state.getNativeAllocations().malloc(bytes.length + 8L); var alias = base.plus(8); var entry = program(language,backend,raw(original("pathMkdir"))).entryTarget("entry");
             try {
-                ManagedAddress.fromByteArray(bytes).copyNonOverlappingTo(alias,bytes.length); try (var second = context()) { entered(second,() -> { var other = TruffleLanguage.LanguageReference.create(Language.class).get(null); var foreign = program(other,backend,raw(original("pathMkdir"))).entryTarget("entry"); assertThrows(RuntimeFault.class,() -> callScalarTestTarget(foreign,new Object[]{0L,alias,448,kotlin.Unit.INSTANCE})); assertFalse(Files.exists(destination)); released(other); return null; }); }
-                assertEquals(0,callScalarTestTarget(entry,new Object[]{0L,alias,448,kotlin.Unit.INSTANCE})); assertTrue(Files.isDirectory(destination));
+                ManagedAddress.fromByteArray(bytes).copyNonOverlappingTo(alias,bytes.length); try (var second = context()) { entered(second,() -> { var other = TruffleLanguage.LanguageReference.create(Language.class).get(null); var foreign = program(other,backend,raw(original("pathMkdir"))).entryTarget("entry"); assertThrows(RuntimeFault.class,() -> callScalarTestTarget(foreign,new Object[]{0L,alias,448,thc.runtime.Unit.INSTANCE})); assertFalse(Files.exists(destination)); released(other); return null; }); }
+                assertEquals(0,callScalarTestTarget(entry,new Object[]{0L,alias,448,thc.runtime.Unit.INSTANCE})); assertTrue(Files.isDirectory(destination));
             } finally { state.getNativeAllocations().free(base); }
-            assertThrows(RuntimeFault.class,() -> callScalarTestTarget(entry,new Object[]{0L,alias,448,kotlin.Unit.INSTANCE})); released(language); return null;
+            assertThrows(RuntimeFault.class,() -> callScalarTestTarget(entry,new Object[]{0L,alias,448,thc.runtime.Unit.INSTANCE})); released(language); return null;
         }); }
     }
 }

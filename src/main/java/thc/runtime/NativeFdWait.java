@@ -90,7 +90,7 @@ public final class NativeFdWait implements AutoCloseable, TruffleSafepoint.Inter
     public int await(Node node, boolean writing, long milliseconds, Runnable beforeBlock) {
         polls.set(ValueLayout.JAVA_SHORT, 4, (short) (writing ? 4 : 1));
         long started = System.nanoTime();
-        TruffleSafepoint.InterruptibleFunction<kotlin.Unit, Integer> action = ignored -> {
+        TruffleSafepoint.InterruptibleFunction<thc.runtime.Unit, Integer> action = ignored -> {
             while (true) {
                 if (interrupted.get()) throw new InterruptedException();
                 if (descriptorClosed) return -2;
@@ -111,7 +111,7 @@ public final class NativeFdWait implements AutoCloseable, TruffleSafepoint.Inter
                 // Only a timeout chunk longer than INT_MAX milliseconds reaches here.
             }
         };
-        return TruffleSafepoint.getCurrent().setBlockedFunction(node, this, action, kotlin.Unit.INSTANCE, null, null);
+        return TruffleSafepoint.getCurrent().setBlockedFunction(node, this, action, thc.runtime.Unit.INSTANCE, null, null);
     }
 
     private static int remaining(long started, long milliseconds) {

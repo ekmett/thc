@@ -91,9 +91,9 @@ public class PackageNativeForeignTest {
         Entry(Language language, PackageScalarCall operation, boolean forceIntegerResult) { super(language); this.operation = operation; this.forceIntegerResult = forceIntegerResult; access = new PackageScalarAccess(operation); }
         @Override public Object execute(VirtualFrame frame) {
             var arguments = frame.getArguments();
-            if (operation.getResult().equals("void") && !forceIntegerResult) { access.executeVoid(arguments, kotlin.Unit.INSTANCE); return kotlin.Unit.INSTANCE; }
-            if (NarrowInteger.fromRep(operation.getResult()) != null) return access.executeInt(arguments, kotlin.Unit.INSTANCE);
-            return access.executeLong(arguments, kotlin.Unit.INSTANCE);
+            if (operation.getResult().equals("void") && !forceIntegerResult) { access.executeVoid(arguments, thc.runtime.Unit.INSTANCE); return thc.runtime.Unit.INSTANCE; }
+            if (NarrowInteger.fromRep(operation.getResult()) != null) return access.executeInt(arguments, thc.runtime.Unit.INSTANCE);
+            return access.executeLong(arguments, thc.runtime.Unit.INSTANCE);
         }
     }
     private PackageScalarSignature signature(PackageScalarLink link, String symbol) {

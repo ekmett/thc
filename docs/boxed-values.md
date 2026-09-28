@@ -34,7 +34,7 @@ unchanged. This is Haskell `I#`/`C#` value reuse, not a change to the
 
 ## Checks and cost model
 
-[`BoxedValueCacheTest`](../src/test/kotlin/thc/runtime/BoxedValueCacheTest.kt)
+[`BoxedValueCacheTest`](../src/test/java/thc/runtime/BoxedValueCacheTest.java)
 checks genuine exported constructor identities, inclusive boundaries, full-width
 payloads, lookalike rejection, default-off behavior, layout/context isolation,
 field-based and array-based storage, and compiled transitions between cached

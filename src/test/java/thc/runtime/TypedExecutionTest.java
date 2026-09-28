@@ -7,7 +7,7 @@ import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
-import kotlin.Unit;
+import thc.runtime.Unit;
 import org.junit.jupiter.api.Test;
 import thc.Main;
 import java.util.List;

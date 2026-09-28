@@ -91,9 +91,9 @@ public class RtsDiagnosticsTest {
                             for (var row : selected) {
                                 output.reset();
                                 Object[] arguments = switch (operation) {
-                                    case "errorBelch2", "debugBelch2" -> new Object[]{0L, format(operation), cstring(bytes((List<Long>) row.get("bytes"))).plus((Long) row.get("offset")), kotlin.Unit.INSTANCE};
-                                    case "reportStackOverflow" -> new Object[]{0L, threads.currentIdentity(), kotlin.Unit.INSTANCE};
-                                    default -> new Object[]{0L, kotlin.Unit.INSTANCE};
+                                    case "errorBelch2", "debugBelch2" -> new Object[]{0L, format(operation), cstring(bytes((List<Long>) row.get("bytes"))).plus((Long) row.get("offset")), thc.runtime.Unit.INSTANCE};
+                                    case "reportStackOverflow" -> new Object[]{0L, threads.currentIdentity(), thc.runtime.Unit.INSTANCE};
+                                    default -> new Object[]{0L, thc.runtime.Unit.INSTANCE};
                                 };
                                 long before = ((Number) program.diagnostics().get("compiledEntries")).longValue(); assertEquals(0L, Calls.target(target, arguments));
                                 byte[] expected;
@@ -115,7 +115,7 @@ public class RtsDiagnosticsTest {
                             // Native traceIO filters NULs in Haskell, then makes
                             // these two leaf calls. The leaf itself only truncates.
                             output.reset(); long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
-                            for (var message : List.of("leftright", "WARNING: previous trace message had null bytes")) assertEquals(0L, Calls.target(target, new Object[]{0L, format(operation), cstring(message.getBytes(StandardCharsets.UTF_8)), kotlin.Unit.INSTANCE}));
+                            for (var message : List.of("leftright", "WARNING: previous trace message had null bytes")) assertEquals(0L, Calls.target(target, new Object[]{0L, format(operation), cstring(message.getBytes(StandardCharsets.UTF_8)), thc.runtime.Unit.INSTANCE}));
                             assertArrayEquals(bytes((List<Long>) nativeOutput.get("trace-nul").get("stderr")), output.toByteArray());
                             assertEquals(before + 2, ((Number) program.diagnostics().get("compiledEntries")).longValue());
                             assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target)); assertEquals(0, stdout.size());
@@ -133,12 +133,12 @@ public class RtsDiagnosticsTest {
                 for (var operation : List.of("errorBelch2", "debugBelch2")) {
                     var target = program(language, backend, call(operation)).entryTarget("entry"); var text = cstring("ok".getBytes(StandardCharsets.UTF_8));
                     var validFormat = format(operation); var otherFormat = format(operation.equals("debugBelch2") ? "errorBelch2" : "debugBelch2");
-                    for (var args : List.of(new Object[]{0L, validFormat, text, 1L}, new Object[]{0L, 1L, text, kotlin.Unit.INSTANCE},
-                            new Object[]{0L, validFormat, 1L, kotlin.Unit.INSTANCE}, new Object[]{0L, otherFormat, text, kotlin.Unit.INSTANCE},
-                            new Object[]{0L, cstring("%d".getBytes(StandardCharsets.UTF_8)), text, kotlin.Unit.INSTANCE},
-                            new Object[]{0L, ManagedAddress.fromByteArray(new byte[]{37, 115}), text, kotlin.Unit.INSTANCE},
-                            new Object[]{0L, validFormat, ManagedAddress.fromByteArray(new byte[]{1, 2}), kotlin.Unit.INSTANCE},
-                            new Object[]{0L, ManagedAddress.nullAddress(), text, kotlin.Unit.INSTANCE}, new Object[]{0L, validFormat, ManagedAddress.nullAddress(), kotlin.Unit.INSTANCE})) {
+                    for (var args : List.of(new Object[]{0L, validFormat, text, 1L}, new Object[]{0L, 1L, text, thc.runtime.Unit.INSTANCE},
+                            new Object[]{0L, validFormat, 1L, thc.runtime.Unit.INSTANCE}, new Object[]{0L, otherFormat, text, thc.runtime.Unit.INSTANCE},
+                            new Object[]{0L, cstring("%d".getBytes(StandardCharsets.UTF_8)), text, thc.runtime.Unit.INSTANCE},
+                            new Object[]{0L, ManagedAddress.fromByteArray(new byte[]{37, 115}), text, thc.runtime.Unit.INSTANCE},
+                            new Object[]{0L, validFormat, ManagedAddress.fromByteArray(new byte[]{1, 2}), thc.runtime.Unit.INSTANCE},
+                            new Object[]{0L, ManagedAddress.nullAddress(), text, thc.runtime.Unit.INSTANCE}, new Object[]{0L, validFormat, ManagedAddress.nullAddress(), thc.runtime.Unit.INSTANCE})) {
                         assertThrows(RuntimeFault.class, () -> Calls.target(target, args)); assertEquals(0, output.size()); assertEquals(0, stdout.size());
                     }
                     for (var mutation : List.of(new Mutation("safety", "safe"), new Mutation("arity", 4L), new Mutation("suppliedArity", 2L), new Mutation("convention", "capi"), new Mutation("schema", 2L))) {
@@ -165,7 +165,7 @@ public class RtsDiagnosticsTest {
                     }
                 }
                 var stack = program(language, backend, call("reportStackOverflow")).entryTarget("entry");
-                assertThrows(RuntimeFault.class, () -> Calls.target(stack, new Object[]{0L, new Object(), kotlin.Unit.INSTANCE})); assertEquals(0, output.size()); assertEquals(0, stdout.size());
+                assertThrows(RuntimeFault.class, () -> Calls.target(stack, new Object[]{0L, new Object(), thc.runtime.Unit.INSTANCE})); assertEquals(0, output.size()); assertEquals(0, stdout.size());
             }); }
         }
     }

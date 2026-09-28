@@ -87,4 +87,4 @@ exec "$JAVA_HOME/bin/native-image" -Ob -J-Xmx8g -J-XX:ActiveProcessorCount=2 --p
     -H:+UnlockExperimentalVMOptions -H:+PrintCanonicalGraphStrings \
     -H:DumpPath="${THC_NATIVE_IMAGE_DUMP_PATH:-$repo_dir/build/native-image/graphs/reproduction}" \
     "${diagnostics[@]}" -H:-UnlockExperimentalVMOptions \
-    -cp "$classpath" thc.MainKt "$repo_dir/build/native-image/thc-reproduced-prepared"
+    -cp "$classpath" thc.Main "$repo_dir/build/native-image/thc-reproduced-prepared"

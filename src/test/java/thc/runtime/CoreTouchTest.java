@@ -114,7 +114,7 @@ class CoreTouchTest {
                 Object value = unliftedCase ? allocation : lazy;
                 CheckedConsumer<Boolean> call = compiled -> {
                     long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
-                    assertSame(kotlin.Unit.INSTANCE, Calls.target(target, new Object[]{0L, value, kotlin.Unit.INSTANCE}));
+                    assertSame(thc.runtime.Unit.INSTANCE, Calls.target(target, new Object[]{0L, value, thc.runtime.Unit.INSTANCE}));
                     assertEquals(0, lazy.getState());
                     if (compiled) {
                         assertEquals(before + 1, ((Number) program.diagnostics().get("compiledEntries")).longValue());
@@ -137,19 +137,19 @@ class CoreTouchTest {
             var owner = proof("object", lifted, false);
             var raise = list("app", list("prim", "raise#"), list(variable("kept", owner)), list(true), false, false, map("rep", owner));
             var program = program(language, backend, module(owner, application(owner, state, state, list(true, false), raise), owner));
-            assertSame(kotlin.Unit.INSTANCE, Calls.target(program.entryTarget("main"), new Object[]{0L, new Object(), kotlin.Unit.INSTANCE}));
+            assertSame(thc.runtime.Unit.INSTANCE, Calls.target(program.entryTarget("main"), new Object[]{0L, new Object(), thc.runtime.Unit.INSTANCE}));
             released(language);
         });
     }
     @Test void stateValidationPrecedesFenceAndAstOperandsAreEvaluatedOnce() {
         var lazy = bottom();
-        assertSame(kotlin.Unit.INSTANCE, Touch.preserve(lazy, kotlin.Unit.INSTANCE));
+        assertSame(thc.runtime.Unit.INSTANCE, Touch.preserve(lazy, thc.runtime.Unit.INSTANCE));
         for (var invalid : list(null, 1L, new Object(), bottom())) assertThrows(RuntimeFault.class, () -> Touch.preserve(lazy, invalid));
         assertEquals(0, lazy.getState());
         var calls = new ArrayList<String>();
         var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], new FrameLayout().build());
-        var node = new TouchExpression(operand(calls, "kept", lazy), operand(calls, "state", kotlin.Unit.INSTANCE), CoreRepresentations.parse(state));
-        assertSame(kotlin.Unit.INSTANCE, node.execute(frame)); assertEquals(list("kept", "state"), calls);
+        var node = new TouchExpression(operand(calls, "kept", lazy), operand(calls, "state", thc.runtime.Unit.INSTANCE), CoreRepresentations.parse(state));
+        assertSame(thc.runtime.Unit.INSTANCE, node.execute(frame)); assertEquals(list("kept", "state"), calls);
         assertEquals(0, lazy.getState()); calls.clear();
         var invalid = new TouchExpression(operand(calls, "kept", lazy), operand(calls, "state", 1L), CoreRepresentations.parse(state));
         assertThrows(RuntimeFault.class, () -> invalid.execute(frame));

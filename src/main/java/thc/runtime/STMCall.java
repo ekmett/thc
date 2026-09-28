@@ -58,7 +58,7 @@ public final class STMCall extends Node {
                     while (true) {
                         var tx = stm.begin();
                         try {
-                            actionCall.execute(frame, ApplicationKt.requireClosure(force.execute(frame, action)), new Object[]{kotlin.Unit.INSTANCE});
+                            actionCall.execute(frame, ApplicationKt.requireClosure(force.execute(frame, action)), new Object[]{thc.runtime.Unit.INSTANCE});
                             stm.commit(tx);
                             break;
                         } catch (STMConflict ignored) {
@@ -80,7 +80,7 @@ public final class STMCall extends Node {
                     try { nested(stm, parent, frame, action, actionCall); }
                     catch (GuestException failure) {
                         otherCall.execute(frame, ApplicationKt.requireClosure(force.execute(frame, alternative)),
-                            new Object[]{failure.getPayload(), kotlin.Unit.INSTANCE});
+                            new Object[]{failure.getPayload(), thc.runtime.Unit.INSTANCE});
                     }
                 }
                 default -> throw new IllegalStateException("Not an STM callback: " + operation);
@@ -106,7 +106,7 @@ public final class STMCall extends Node {
     private void nested(ManagedSTM stm, ManagedSTM.Transaction parent, VirtualFrame frame, Object action, TupleDispatch call) {
         var child = stm.beginNested(parent);
         try {
-            call.execute(frame, ApplicationKt.requireClosure(force.execute(frame, action)), new Object[]{kotlin.Unit.INSTANCE});
+            call.execute(frame, ApplicationKt.requireClosure(force.execute(frame, action)), new Object[]{thc.runtime.Unit.INSTANCE});
             stm.commitNested(parent, child);
         } catch (Throwable failure) { stm.abort(parent, child); throw failure; }
         finally { stm.restore(parent); }

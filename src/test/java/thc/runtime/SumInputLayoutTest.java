@@ -38,8 +38,8 @@ class SumInputLayoutTest {
                 @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
                     events.add("prefix");
                     if (Objects.equals(frame.getArguments()[2], false)) { FrameAccess.writeLong(frame, slots[offset], (Long) frame.getArguments()[1]); return null; }
-                    throw new AstCapture(kotlin.Unit.INSTANCE, MaskingState.UNMASKED).append((resumed, input) -> {
-                        assertSame(kotlin.Unit.INSTANCE, input); events.add("suffix"); FrameAccess.writeLong(resumed, slots[offset], (Long) resumed.getArguments()[1]); return null;
+                    throw new AstCapture(thc.runtime.Unit.INSTANCE, MaskingState.UNMASKED).append((resumed, input) -> {
+                        assertSame(thc.runtime.Unit.INSTANCE, input); events.add("suffix"); FrameAccess.writeLong(resumed, slots[offset], (Long) resumed.getArguments()[1]); return null;
                     });
                 }
             };
@@ -90,14 +90,14 @@ class SumInputLayoutTest {
                 var before = counts.get(); var saved = (AstContinuation) Calls.target(root.getCallTarget(), new Object[]{0L, selected, true});
                 assertEquals(before, counts.get(), "No arm is observed before the scrutinee resumes");
                 int expected = selected == 2L ? Integer.MAX_VALUE : Integer.MIN_VALUE;
-                assertEquals(expected, saved.continueWith(kotlin.Unit.INSTANCE)); assertEquals(observations.get((int) (selected - 1)), counts.get());
-                assertThrows(RuntimeFault.class, () -> saved.continueWith(kotlin.Unit.INSTANCE));
+                assertEquals(expected, saved.continueWith(thc.runtime.Unit.INSTANCE)); assertEquals(observations.get((int) (selected - 1)), counts.get());
+                assertThrows(RuntimeFault.class, () -> saved.continueWith(thc.runtime.Unit.INSTANCE));
                 expectedEvents.addAll(List.of("prefix", "suffix", "arm" + (selected == 2L ? 1 : 0))); assertEquals(expectedEvents, events);
             }
             assertEquals(Integer.MAX_VALUE, Calls.target(root.getCallTarget(), new Object[]{0L, 2L, false}));
             assertEquals(List.of(List.of(2, 2), List.of(2, 0)), counts.get(), "Ordinary and resumed arms share the same profiles"); expectedEvents.addAll(List.of("prefix", "arm1"));
             var missing = (AstContinuation) Calls.target(root.getCallTarget(), new Object[]{0L, 4L, true});
-            assertEquals("Non-exhaustive unboxed sum case", assertThrows(RuntimeFault.class, () -> missing.continueWith(kotlin.Unit.INSTANCE)).getMessage());
+            assertEquals("Non-exhaustive unboxed sum case", assertThrows(RuntimeFault.class, () -> missing.continueWith(thc.runtime.Unit.INSTANCE)).getMessage());
             assertEquals(List.of(List.of(2, 3), List.of(2, 1)), counts.get()); expectedEvents.addAll(List.of("prefix", "suffix")); assertEquals(expectedEvents, events);
             assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(root)); assertEquals(0, language.getHandoffState().get().getResults().getDepth());
         });
@@ -127,7 +127,7 @@ class SumInputLayoutTest {
             prefix.setLong(retained, 0, 1); prefix.setObject(retained, 1, marker); prefix.setLong(retained, 2, 0);
             var loan = input.state().getArguments().acquire(input.getPacket()); loan.setInputMode(1); input.getPacket().setObject(loan, input.getHeader() + 1, new Object()); input.release(loan);
             assertSame(marker, prefix.getObject(retained, 1)); assertFalse(retained.getLive()); assertEquals(0, retained.getInputMode()); assertEquals(0, input.state().getArguments().retainedReferences());
-            var target = new RootNode(language) { @Override public Object execute(VirtualFrame frame) { return kotlin.Unit.INSTANCE; } }.getCallTarget();
+            var target = new RootNode(language) { @Override public Object execute(VirtualFrame frame) { return thc.runtime.Unit.INSTANCE; } }.getCallTarget();
             var captureLayout = new CaptureLayout(language, new boolean[]{true, false, true}, new boolean[]{true, false, true}); var environment = captureLayout.captureValues(new Object[]{2L, null, 37L});
             var closure = new Closure(environment, 1, target); var image = ClosureInspection.image(closure);
             assertEquals(32, image.getBytes().length); assertEquals(0, image.getPointers().length); assertNull(environment.getObject(1)); assertEquals(37L, environment.getLong(2));

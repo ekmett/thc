@@ -15,7 +15,7 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.function.IntConsumer;
 import static org.junit.jupiter.api.Assertions.*;
-import static kotlin.Unit.INSTANCE;
+import static thc.runtime.Unit.INSTANCE;
 
 @SuppressWarnings("unchecked")
 public class AtomicIntArrayTest {

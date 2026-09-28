@@ -49,7 +49,7 @@ public final class AstControl {
         private final Object value;
         RetryForce(Node node, Force force, Object value) { this.node = node; this.force = force; this.value = value; }
         @Override public Object resume(VirtualFrame frame, Object input) {
-            if (input != kotlin.Unit.INSTANCE) throw fault("AST blackhole continuation requires Unit");
+            if (input != thc.runtime.Unit.INSTANCE) throw fault("AST blackhole continuation requires Unit");
             return force(frame, node, force, value);
         }
     }

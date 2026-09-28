@@ -165,7 +165,7 @@ public class GenericSumTransportTest {
         for (String backend : List.of("ast", "bytecode")) entered(true, (context, language) -> {
             var program = program(language, "pre", backend, "save"); var target = program.entryTarget("main:GenericSumTransport.save");
             for (long selector = 0; selector <= 15; selector++) {
-                var value = (DataValue) Calls.target(target, new Object[] {0L, selector, Long.MIN_VALUE, kotlin.Unit.INSTANCE}); var layout = value.getLayout();
+                var value = (DataValue) Calls.target(target, new Object[] {0L, selector, Long.MIN_VALUE, thc.runtime.Unit.INSTANCE}); var layout = value.getLayout();
                 assertEquals(3, layout.getLogicalArity()); assertEquals(10, layout.getArity()); assertEquals(Long.MIN_VALUE, layout.readLong(value, 0)); assertEquals(Long.MAX_VALUE, layout.readLong(value, 9));
                 assertTrue(layout.compactPointer(2)); boolean active = (selector & 3L) == 3L && (selector & 4L) == 0L;
                 assertEquals(!active, layout.inactiveSumReference(value, 2), "selector=" + selector); if (active) assertNotNull(layout.read(value, 2)); else assertNull(layout.read(value, 2));

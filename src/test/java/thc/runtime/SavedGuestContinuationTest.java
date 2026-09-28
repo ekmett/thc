@@ -71,12 +71,12 @@ class SavedGuestContinuationTest {
                 assertEquals(1, probe.compiled, "The first call must enter the original installed guest code");
                 assertSame(target, root.getCallTarget());
                 assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
-                for (var ordinary : Arrays.asList(null, kotlin.Unit.INSTANCE, 17L, 23, marker, new Object[]{marker}))
+                for (var ordinary : Arrays.asList(null, thc.runtime.Unit.INSTANCE, 17L, 23, marker, new Object[]{marker}))
                     assertSame(ordinary, probe.complete(ordinary));
                 var ambient = SynchronousMasking.current(probe);
                 SynchronousMasking.set(probe, MaskingState.MASKED_INTERRUPTIBLE);
                 try {
-                    var saved = new Saved(root, kotlin.Unit.INSTANCE, input -> fail("Completion must not resume the child"));
+                    var saved = new Saved(root, thc.runtime.Unit.INSTANCE, input -> fail("Completion must not resume the child"));
                     var cut = assertThrows(AstCapture.class, () -> probe.complete(saved, target));
                     var parked = (CallSegmentSuspended) cut.getYielded();
                     assertSame(saved, parked.getSegment().getValue());
@@ -87,7 +87,7 @@ class SavedGuestContinuationTest {
                     assertEquals(MaskingState.MASKED_INTERRUPTIBLE, SynchronousMasking.current(probe));
                     var other = root(language, new CompletionProbe(), true).getCallTarget();
                     assertThrows(RuntimeFault.class, () -> probe.complete(saved, other));
-                    assertThrows(RuntimeFault.class, () -> probe.complete(new Saved(new Object(), kotlin.Unit.INSTANCE, input -> null)));
+                    assertThrows(RuntimeFault.class, () -> probe.complete(new Saved(new Object(), thc.runtime.Unit.INSTANCE, input -> null)));
                     assertThrows(RuntimeFault.class, () -> probe.complete(new Saved(root, new Object(), input -> null)));
                     var scalar = new CoreRepresentation(CoreKind.LONG, true, true, List.of("IntRep"), null, null, null, null, null);
                     var shape = new TupleShape(new CoreRepresentation(CoreKind.UNKNOWN, true, true, List.of("IntRep"), List.of(scalar), null, null, null, null), language);
@@ -106,7 +106,7 @@ class SavedGuestContinuationTest {
                 var original = new RootNode(null) {
                     @Override public Object execute(VirtualFrame frame) { return fail("Original body replayed"); }
                 }.getCallTarget();
-                var childSaved = new Saved(original.getRootNode(), kotlin.Unit.INSTANCE, input -> 42L);
+                var childSaved = new Saved(original.getRootNode(), thc.runtime.Unit.INSTANCE, input -> 42L);
                 var child = parked(original, childSaved);
                 var parentSaved = new Saved(original.getRootNode(), new ThunkSuspended(child), input -> {
                     var completed = (ChildResume) input;

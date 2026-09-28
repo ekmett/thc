@@ -69,7 +69,7 @@ class OriginalProcessIdentityTest {
                         class Exercise { void run(boolean compiled) throws Throwable {
                             for (long sentinel : new long[]{-1,0,17}) {
                                 stdio.setErrno(sentinel);
-                                for (var invocation : List.of(new Invocation(raw,rawTarget,new Object[]{0L,kotlin.Unit.INSTANCE}),new Invocation(consumer,consumerTarget,new Object[]{0L,0L}))) {
+                                for (var invocation : List.of(new Invocation(raw,rawTarget,new Object[]{0L,thc.runtime.Unit.INSTANCE}),new Invocation(consumer,consumerTarget,new Object[]{0L,0L}))) {
                                     long identity = symbol.equals("getpid") ? ProcessHandle.current().pid() : Integer.toUnsignedLong((int) effectiveUid.invokeExact());
                                     long before = ((Number) invocation.program().diagnostics().get("compiledEntries")).longValue(); Object expected = invocation.target() == rawTarget ? (Object) (int) identity : identity; assertEquals(expected,Calls.target(invocation.target(),invocation.arguments()),stage + "/" + backend + "/" + name); assertEquals(sentinel,stdio.errno()); released(language);
                                     if (compiled) { assertEquals(before + 1,((Number) invocation.program().diagnostics().get("compiledEntries")).longValue()); valid(invocation.target()); }
@@ -92,7 +92,7 @@ class OriginalProcessIdentityTest {
                     var target = program(language,backend,rawModule(original(module,(String) symbol),module)).entryTarget("entry");
                     for (var invalid : list(null,0L,true,ManagedAddress.nullAddress())) { stdio.setErrno(-23L); var failure = assertThrows(RuntimeFault.class,() -> Calls.target(target,new Object[]{0L,invalid}));
                         assertTrue(Objects.toString(failure.getMessage(),"").contains("zero-width scalar carrier") || invalid == null && Objects.equals(failure.getMessage(),"Uninitialized local binding"),failure.getMessage()); assertEquals(-23L,stdio.errno()); released(language); }
-                    if (!nativeAccess) { var failure = assertThrows(RuntimeFault.class,() -> Calls.target(target,new Object[]{0L,kotlin.Unit.INSTANCE})); assertTrue(Objects.toString(failure.getMessage(),"").contains("requires native access"),failure.getMessage()); assertEquals(-23L,stdio.errno()); released(language); }
+                    if (!nativeAccess) { var failure = assertThrows(RuntimeFault.class,() -> Calls.target(target,new Object[]{0L,thc.runtime.Unit.INSTANCE})); assertTrue(Objects.toString(failure.getMessage(),"").contains("requires native access"),failure.getMessage()); assertEquals(-23L,stdio.errno()); released(language); }
                 }
             } finally { context.leave(); }
         }

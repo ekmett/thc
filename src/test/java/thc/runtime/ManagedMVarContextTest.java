@@ -111,9 +111,9 @@ public class ManagedMVarContextTest {
             for (var row : fixture.oracle()) {
                 var name = label + "/" + row.name() + "/" + row.input(); var cell = new ManagedMVar(); var value = box(program, row.input());
                 if (!row.name().equals("waitPut")) assertTrue(cell.tryPut(value));
-                long result = row.name().equals("waitPut") ? call(context, program, row.name(), cell, row.input(), kotlin.Unit.INSTANCE) : call(context, program, row.name(), cell, kotlin.Unit.INSTANCE);
+                long result = row.name().equals("waitPut") ? call(context, program, row.name(), cell, row.input(), thc.runtime.Unit.INSTANCE) : call(context, program, row.name(), cell, thc.runtime.Unit.INSTANCE);
                 assertEquals(row.result(), result, name); assertEquals(row.name().equals("waitPut") ? row.input() + 17 : row.input(), row.result(), name + " model");
-                switch (row.name()) { case "waitTake" -> assertTrue(cell.isEmpty(), name); case "waitRead" -> assertSame(value, cell.tryRead().getValue(), name); case "waitPut" -> assertEquals(row.input(), call(context, program, "waitRead", cell, kotlin.Unit.INSTANCE), name); }
+                switch (row.name()) { case "waitTake" -> assertTrue(cell.isEmpty(), name); case "waitRead" -> assertSame(value, cell.tryRead().getValue(), name); case "waitPut" -> assertEquals(row.input(), call(context, program, "waitRead", cell, thc.runtime.Unit.INSTANCE), name); }
                 assertEquals(noWaiters, cell.pendingCounts(), name); released(language, name);
             }
             return null;
@@ -137,8 +137,8 @@ public class ManagedMVarContextTest {
                 return entered(context, label, language -> {
                     var program = program(language, module, backend); var original = box(program, input ^ Long.MIN_VALUE); var offered = box(program, input); var cell = new ManagedMVar();
                     if (name.equals("waitPut")) assertTrue(cell.tryPut(original)); published.complete(new Published(cell, original, offered));
-                    long result = name.equals("waitPut") ? call(context, program, name, cell, input, kotlin.Unit.INSTANCE) : call(context, program, name, cell, kotlin.Unit.INSTANCE);
-                    return new Completed(result, name.equals("waitPut") ? call(context, program, "waitRead", cell, kotlin.Unit.INSTANCE) : null);
+                    long result = name.equals("waitPut") ? call(context, program, name, cell, input, thc.runtime.Unit.INSTANCE) : call(context, program, name, cell, thc.runtime.Unit.INSTANCE);
+                    return new Completed(result, name.equals("waitPut") ? call(context, program, "waitRead", cell, thc.runtime.Unit.INSTANCE) : null);
                 });
             } catch (Throwable failure) { published.completeExceptionally(failure); throw failure; }
         });
@@ -176,7 +176,7 @@ public class ManagedMVarContextTest {
                 // Polyglot interrupt is not permanent context closure. This fresh,
                 // independent call proves cleanup; it does not resume a cancelled thunk.
                 var result = executor.submit(() -> entered(context, label + "/reuse", language -> {
-                    var program = program(language, module, backend); var cell = new ManagedMVar(); assertTrue(cell.tryPut(box(program, -913L))); return call(context, program, "waitTake", cell, kotlin.Unit.INSTANCE);
+                    var program = program(language, module, backend); var cell = new ManagedMVar(); assertTrue(cell.tryPut(box(program, -913L))); return call(context, program, "waitTake", cell, thc.runtime.Unit.INSTANCE);
                 })).get(10, TimeUnit.SECONDS); assertEquals(-913L, result, label + " reusable context");
             }
         });

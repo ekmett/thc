@@ -14,9 +14,9 @@ public final class DelayThread extends Expr {
     }
     private record Resume(DelayThread node, ThreadDelayToken token) implements AstResumeStep {
         @Override public Object resume(VirtualFrame frame, Object input) {
-            if (input != kotlin.Unit.INSTANCE) throw RuntimeFault.fault("Invalid delay continuation");
+            if (input != thc.runtime.Unit.INSTANCE) throw RuntimeFault.fault("Invalid delay continuation");
             node.await(token);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
     private void await(ThreadDelayToken token) {
@@ -29,6 +29,6 @@ public final class DelayThread extends Expr {
         long microseconds = duration.executeRequiredLong(frame);
         TupleResultsKt.requireVoidCarrier(state.execute(frame));
         await(new ThreadDelayToken(GuestThreads.current(this), microseconds));
-        return kotlin.Unit.INSTANCE;
+        return thc.runtime.Unit.INSTANCE;
     }
 }

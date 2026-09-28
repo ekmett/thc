@@ -73,7 +73,7 @@ final class Let extends Expr {
                             cell.setValue(input);
                             cell.setInitialized(true);
                             initializeFrom(frame, index + 1);
-                            return kotlin.Unit.INSTANCE;
+                            return thc.runtime.Unit.INSTANCE;
                         }
                     });
                 }
@@ -93,7 +93,7 @@ final class Let extends Expr {
                     throw cut.append(new AstResumeStep() {
                         @Override public Object resume(VirtualFrame frame, Object input) {
                             initializeFrom(frame, index + 1);
-                            return kotlin.Unit.INSTANCE;
+                            return thc.runtime.Unit.INSTANCE;
                         }
                     });
                 }

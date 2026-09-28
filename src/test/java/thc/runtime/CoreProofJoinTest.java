@@ -82,7 +82,7 @@ class CoreProofJoinTest {
                 while (((Number) p.diagnostics().get("localJoinTransfers")).longValue() < 1000 && !completed.isDone() && System.nanoTime() < deadline) Thread.sleep(1);
                 assertFalse(completed.isDone(), "The request must arrive inside the join loop"); var request = threads.send(Objects.requireNonNull(threads.pollState(worker).getCurrent()).getIdentity(), "join loop");
                 var saved = (ContinuationResult) completed.get(10, TimeUnit.SECONDS); worker.join(5000); assertFalse(worker.isAlive()); assertSame(request, saved.getResult()); assertTrue(request.compiledCapture); assertEquals(AsyncRequestState.ACKNOWLEDGED, request.getState());
-                context.enter(); try { assertEquals(10_000_000L, saved.continueWith(kotlin.Unit.INSTANCE)); } finally { context.leave(); }
+                context.enter(); try { assertEquals(10_000_000L, saved.continueWith(thc.runtime.Unit.INSTANCE)); } finally { context.leave(); }
             } finally { if (worker.isAlive()) context.close(true); }
         }
     }
@@ -151,7 +151,7 @@ class CoreProofJoinTest {
                     var frame = com.oracle.truffle.api.Truffle.getRuntime().createVirtualFrame(new Object[0], descriptor); FrameAccess.writeLong(frame, slot, value); var environment = captures.capture(frame, new int[]{slot});
                     assertTrue(environment.isLong(0)); assertFalse(environment.isObject(0)); assertEquals(value, environment.getLong(0)); var restored = com.oracle.truffle.api.Truffle.getRuntime().createVirtualFrame(new Object[0], descriptor); captures.restore(environment, 0, restored, slot); assertTrue(restored.isLong(slot)); assertEquals(value, restored.getLong(slot));
                 }
-                assertThrows(RuntimeFault.class, () -> captures.captureValues(new Object[]{kotlin.Unit.INSTANCE}));
+                assertThrows(RuntimeFault.class, () -> captures.captureValues(new Object[]{thc.runtime.Unit.INSTANCE}));
             } finally { context.leave(); }
         }
     }

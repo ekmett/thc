@@ -138,16 +138,16 @@ class NarrowIntegerContinuationTest {
                 var captured = answer.get(10, TimeUnit.SECONDS); worker.join(5000); assertFalse(worker.isAlive());
                 assertEquals(before + 1, ((Number) program.diagnostics().get("compiledEntries")).longValue());
                 var retainedAfterCapture = target.getClass().getMethod("isValidLastTier").invoke(target);
-                var completed = new CompletableFuture<kotlin.Unit>();
+                var completed = new CompletableFuture<thc.runtime.Unit>();
                 var resumer = new Thread(() -> {
                     context.enter();
                     try {
-                        assertTrue(blocked.tryPut("continue")); checkResult(captured.continueWith(kotlin.Unit.INSTANCE), shape, actualValues, narrow);
+                        assertTrue(blocked.tryPut("continue")); checkResult(captured.continueWith(thc.runtime.Unit.INSTANCE), shape, actualValues, narrow);
                         assertTrue(prefix.isEmpty(), "Resumption must not replay the completed first take"); assertTrue(blocked.isEmpty());
-                        assertSame(target, program.entryTarget("entry")); if (backend.equals("ast")) assertThrows(RuntimeFault.class, () -> captured.continueWith(kotlin.Unit.INSTANCE));
+                        assertSame(target, program.entryTarget("entry")); if (backend.equals("ast")) assertThrows(RuntimeFault.class, () -> captured.continueWith(thc.runtime.Unit.INSTANCE));
                         var handoff = language.getHandoffState().get(); assertEquals(0, handoff.getArguments().getDepth()); assertEquals(0, handoff.getArguments().retainedReferences());
                         assertEquals(0, handoff.getResults().getDepth()); assertEquals(0, handoff.getResults().retainedReferences()); assertNull(handoff.getPending());
-                        assertEquals(true, retainedAfterCapture, "The first blocking cut retains installed code"); valid(target); completed.complete(kotlin.Unit.INSTANCE);
+                        assertEquals(true, retainedAfterCapture, "The first blocking cut retains installed code"); valid(target); completed.complete(thc.runtime.Unit.INSTANCE);
                     } catch (Throwable failure) { completed.completeExceptionally(failure); } finally { context.leave(); }
                 });
                 resumer.start();

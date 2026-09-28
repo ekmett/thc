@@ -38,7 +38,7 @@ public class SignalDispatchFullCoreTest {
     @Test public void bytecodeOriginalHandlersSelectSignalAndInheritNativeMasking() throws Exception { dispatch("bytecode"); }
     private long call(ExecutableProgram program, String entry, long argument) {
         var target = program.entryTarget(entry); var shape = Objects.requireNonNull(((GuestRoot) target.getRootNode()).getTupleResult());
-        var result = Calls.target(target, new Object[] {0L, argument, kotlin.Unit.INSTANCE}); return shape.getLayout().getLong(TupleResultsKt.ownedTupleResult(result, shape), 0);
+        var result = Calls.target(target, new Object[] {0L, argument, thc.runtime.Unit.INSTANCE}); return shape.getLayout().getLong(TupleResultsKt.ownedTupleResult(result, shape), 0);
     }
     @SuppressWarnings("unchecked") private static <E extends Throwable, T> T rethrow(Throwable failure) throws E { throw (E) failure; }
     private void dispatch(String backend) throws Exception {

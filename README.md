@@ -51,7 +51,7 @@ above.
 
 Use `make test` for the test suite and `make clean` to remove build products.
 `make test-modes` runs both handoff modes in separate JVMs from one shared build.
-`make distclean` also removes the checkout's Gradle and Kotlin caches.
+`make distclean` also removes the checkout's Gradle caches and any legacy Kotlin cache.
 `make run ARGS='--help'` builds and runs the driver; the equivalent Cabal command
 is `cabal run thc -- --help`.
 
@@ -259,7 +259,7 @@ describe implemented protocols and opt-in experiments.
   and design reports; [open design questions](research/open-questions.md)
   identify the next design decisions and relevant background.
 * [The documentation site](https://ekmett.github.io/thc/) combines selected
-  guides, the mixed Java/Kotlin reference and the Haskell library API.
+  guides, the Java reference and the Haskell library API.
   [Build it locally](docs/documentation.md) with `make docs` (also needs Pandoc).
 * [Development](docs/contributing.md) covers local checks, build batching and manual
   integration of reviewed PRs. Update the [primop checklist](docs/primops.md#updating-the-list) when

@@ -40,7 +40,7 @@ final class WindowsMd5 {
                 var library = Files.createTempFile("thc-md5-", ".dll");
                 library.toFile().deleteOnExit();
                 try (var source = WindowsMd5.class.getResourceAsStream("/thc/cbits/md5.dll")) {
-                    if (source == null) ProgramKt.fault("Missing native Windows MD5 bridge");
+                    if (source == null) throw RuntimeFault.fault("Missing native Windows MD5 bridge");
                     Files.copy(source, library, StandardCopyOption.REPLACE_EXISTING);
                 }
                 lookup = SymbolLookup.libraryLookup(library, Arena.global());
@@ -60,7 +60,7 @@ final class WindowsMd5 {
         private final IdentityHashMap<byte[], MemorySegment> images = new IdentityHashMap<>();
         private Call() {
             if (!Language.currentState(null).getEnv().isNativeAccessAllowed())
-                ProgramKt.fault("Native Windows MD5 requires native access");
+                throw RuntimeFault.fault("Native Windows MD5 requires native access");
         }
         private MemorySegment image(ManagedAddress address) {
             var owner = address.cbitsOwner();

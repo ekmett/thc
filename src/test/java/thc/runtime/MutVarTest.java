@@ -17,7 +17,7 @@ import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Value;
 import org.junit.jupiter.api.Test;
 import thc.*;
-import kotlin.Unit;
+import thc.runtime.Unit;
 import java.io.File;
 import java.math.BigInteger;
 import java.nio.file.Files;

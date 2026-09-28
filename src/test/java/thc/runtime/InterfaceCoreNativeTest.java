@@ -149,7 +149,7 @@ class InterfaceCoreNativeTest {
                 var target = program.entryTarget("clock"); var cbits = Language.currentState().cbits(); long clock = cbits.capiZero(link.getUnit(), "fixture_clock_id", false);
                 checkClock(program, target, clock, false); target.getClass().getMethod("compile", boolean.class).invoke(target, true); valid(target); checkClock(program, target, clock, true);
                 var unchanged = bytes();
-                assertThrows(RuntimeFault.class, () -> Calls.target(target, new Object[]{0L, clock, ManagedAddress.fromByteArray(unchanged).plus(20), kotlin.Unit.INSTANCE}));
+                assertThrows(RuntimeFault.class, () -> Calls.target(target, new Object[]{0L, clock, ManagedAddress.fromByteArray(unchanged).plus(20), thc.runtime.Unit.INSTANCE}));
                 assertArrayEquals(bytes(), unchanged);
             } finally { context.leave(); }
         }
@@ -157,7 +157,7 @@ class InterfaceCoreNativeTest {
     private static void checkClock(ExecutableProgram program, RootCallTarget target, long clock, boolean compiled) throws Exception {
         var bytes = bytes(); var address = ManagedAddress.fromByteArray(bytes).plus(5);
         long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
-        assertEquals(0, Calls.target(target, new Object[]{0L, clock, address, kotlin.Unit.INSTANCE}));
+        assertEquals(0, Calls.target(target, new Object[]{0L, clock, address, thc.runtime.Unit.INSTANCE}));
         if (compiled) { assertEquals(before + 1, ((Number) program.diagnostics().get("compiledEntries")).longValue()); valid(target); }
         var view = ByteBuffer.wrap(bytes).order(ByteOrder.nativeOrder()); assertTrue(view.getLong(5) >= 0);
         long nanos = view.getLong(13); assertTrue(nanos >= 0 && nanos < 1_000_000_000L);

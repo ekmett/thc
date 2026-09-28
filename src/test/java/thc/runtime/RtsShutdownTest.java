@@ -115,7 +115,7 @@ public class RtsShutdownTest {
                 var value = context.asValue(new EntryValue(program(language, backend, module(op)), "entry", 2));
                 for (var args : new Long[][]{{Long.MAX_VALUE, 0L}, {0L, Long.MIN_VALUE}}) {
                     // Preserve tested correction 5b0be6bf: both ABI boundaries remain negative controls.
-                    var direct = assertThrows(RuntimeFault.class, () -> CoreRtsShutdown.shutdown(null, op, args[0], args[1], kotlin.Unit.INSTANCE));
+                    var direct = assertThrows(RuntimeFault.class, () -> CoreRtsShutdown.shutdown(null, op, args[0], args[1], thc.runtime.Unit.INSTANCE));
                     assertTrue(Objects.toString(direct.getMessage(), "").contains("signed CInt"));
                     var failure = assertThrows(PolyglotException.class, () -> value.execute((Object[]) args));
                     assertFalse(failure.isExit()); assertTrue(Objects.toString(failure.getMessage(), "").contains("Public narrow integer argument is out of range"));

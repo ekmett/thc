@@ -115,8 +115,8 @@ public class OriginalSigsetTest {
                     var operation = Objects.requireNonNull(validate(call)); var raw = OriginalStdioChecks.rawModule(call, source, null); var target = load(language, backend, raw).entryTarget("entry");
                     var bytes = filled((int) abi.getSize() + 16, 90); var address = ManagedAddress.fromByteArray(bytes).plus(8);
                     class Runner {
-                        Object invoke(ManagedAddress pointer) { return invoke(pointer, 1L, kotlin.Unit.INSTANCE); }
-                        Object invoke(ManagedAddress pointer, long signal) { return invoke(pointer, signal, kotlin.Unit.INSTANCE); }
+                        Object invoke(ManagedAddress pointer) { return invoke(pointer, 1L, thc.runtime.Unit.INSTANCE); }
+                        Object invoke(ManagedAddress pointer, long signal) { return invoke(pointer, signal, thc.runtime.Unit.INSTANCE); }
                         Object invoke(ManagedAddress pointer, long signal, Object state) { return Calls.target(target, operation == OriginalStdioOp.SIGADDSET ? new Object[]{0L, pointer, signal, state} : new Object[]{0L, pointer, state}); }
                     }
                     var runner = new Runner(); stdio.captureForeignErrno(123); assertThrows(RuntimeFault.class, () -> runner.invoke(address, 1L, 9L));

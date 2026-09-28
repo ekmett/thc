@@ -166,7 +166,7 @@ public class CaseArmOutliningTest {
                     }.getCallTarget();
                     var completed = TupleResultsKt.ownedTupleResult(Calls.target(driver, new Object[0]), shape);
                     assertEquals(918273645L, shape.getLayout().getLong(completed, 0)); assertTrue(prefix.isEmpty()); assertTrue(blocked.isEmpty());
-                    assertThrows(RuntimeFault.class, () -> saved.continueWith(kotlin.Unit.INSTANCE)); assertSame(target, p.entryTarget("entry")); released(language);
+                    assertThrows(RuntimeFault.class, () -> saved.continueWith(thc.runtime.Unit.INSTANCE)); assertSame(target, p.entryTarget("entry")); released(language);
                 } finally { context.leave(); }
             } finally { if (worker.isAlive()) context.close(true); worker.join(5000); }
         }

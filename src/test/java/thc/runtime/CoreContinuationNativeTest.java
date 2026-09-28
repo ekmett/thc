@@ -18,7 +18,7 @@ import org.graalvm.polyglot.Context;
 import thc.Language;
 import thc.CoreModules;
 import thc.Json;
-import kotlin.Unit;
+import thc.runtime.Unit;
 import java.io.File;
 import java.nio.file.Files;
 import java.util.ArrayList;

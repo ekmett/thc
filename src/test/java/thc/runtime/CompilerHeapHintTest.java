@@ -79,9 +79,9 @@ public class CompilerHeapHintTest {
                 ExecutableProgram program = backend.equals("ast") ? new Program(language, module(declaration)) : new BytecodeProgram(language, module(declaration));
                 var target = program.entryTarget("hint");
                 for (long bytes : new long[]{Long.MIN_VALUE, -1L, 0L, 1L, 4095L, 4096L, 4097L, Long.MAX_VALUE})
-                    assertEquals(bytes, Calls.target(target, new Object[]{0L, bytes, kotlin.Unit.INSTANCE}), backend + "/" + bytes);
+                    assertEquals(bytes, Calls.target(target, new Object[]{0L, bytes, thc.runtime.Unit.INSTANCE}), backend + "/" + bytes);
                 assertThrows(RuntimeFault.class, () -> Calls.target(target, new Object[]{0L, 42L, "not-state"}));
-                assertEquals(42L, Calls.target(target, new Object[]{0L, 42L, kotlin.Unit.INSTANCE}));
+                assertEquals(42L, Calls.target(target, new Object[]{0L, 42L, thc.runtime.Unit.INSTANCE}));
                 assertEquals(0, language.getHandoffState().get().getResults().getDepth()); assertEquals(0, language.getHandoffState().get().getArguments().getDepth());
             } finally { threads.leaveCurrent(); context.leave(); }
         }
@@ -107,7 +107,7 @@ public class CompilerHeapHintTest {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var input = module(declaration, quotient);
                 ExecutableProgram program = backend.equals("ast") ? new Program(language, input) : new BytecodeProgram(language, input);
                 var target = program.entryTarget("hint");
-                assertThrows(ArithmeticException.class, () -> Calls.target(target, new Object[]{0L, 42L, kotlin.Unit.INSTANCE}));
+                assertThrows(ArithmeticException.class, () -> Calls.target(target, new Object[]{0L, 42L, thc.runtime.Unit.INSTANCE}));
             } finally { threads.leaveCurrent(); context.leave(); }
         }
     }

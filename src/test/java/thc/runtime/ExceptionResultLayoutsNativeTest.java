@@ -141,7 +141,7 @@ public class ExceptionResultLayoutsNativeTest {
         var result = new CoreRepresentation(CoreKind.UNKNOWN, true, true, value.getPrimReps(), List.of(state, value));
         CoreSynchronousExceptions.validate("raiseIO#", List.of(value, state), List.of(false, false), result);
         var raise = new RaiseIOException(new Expr() { @Override public Object execute(VirtualFrame frame) { return payload; } },
-            new Expr() { @Override public Object execute(VirtualFrame frame) { consumed[0]++; return kotlin.Unit.INSTANCE; } }, result);
+            new Expr() { @Override public Object execute(VirtualFrame frame) { consumed[0]++; return thc.runtime.Unit.INSTANCE; } }, result);
         var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], FrameDescriptor.newBuilder().build());
         var exception = assertThrows(GuestException.class, () -> raise.executeTuple(frame, new int[0], 0));
         assertSame(payload, exception.getPayload()); assertEquals(1, consumed[0]);

@@ -119,7 +119,7 @@ class OriginalSavedTermiosTest {
                     Object[] packet = new Object[arguments.length + 2]; packet[0] = 0L; System.arraycopy(arguments, 0, packet, 1, arguments.length); packet[packet.length - 1] = 9L;
                     assertThrows(RuntimeFault.class, () -> Calls.target(target, packet)); assertSame(original, saved.get(1));
                     for (long bad : new long[]{Long.MIN_VALUE, 2147483648L}) {
-                        arguments[0] = bad; System.arraycopy(arguments, 0, packet, 1, arguments.length); packet[packet.length - 1] = kotlin.Unit.INSTANCE;
+                        arguments[0] = bad; System.arraycopy(arguments, 0, packet, 1, arguments.length); packet[packet.length - 1] = thc.runtime.Unit.INSTANCE;
                         assertThrows(RuntimeFault.class, () -> Calls.target(target, packet)); assertSame(original, saved.get(1));
                     }
                     for (int i = 0; i < operation.getArguments().size(); i++) {

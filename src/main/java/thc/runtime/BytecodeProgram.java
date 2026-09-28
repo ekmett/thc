@@ -460,7 +460,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                     initializers.get(i).emit(e);
                     b.endInitializeGlobal();
                 }
-                b.emitLoadConstant(kotlin.Unit.INSTANCE);
+                b.emitLoadConstant(thc.runtime.Unit.INSTANCE);
                 b.endBlock();
             };
             // Publication stores lazy values, so the initializer has no WHNF return obligation.
@@ -509,7 +509,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         CoreRepresentations.requireNoSum(CoreRepresentations.expression(expr), "global binding");
         if (demand != null && !representation(binding)) return switch ((String) expr.getFirst()) {
             case "lit" -> literal((String) expr.get(1), expr.get(2), CoreRepresentations.expression(expr));
-            case "void" -> kotlin.Unit.INSTANCE;
+            case "void" -> thc.runtime.Unit.INSTANCE;
             default -> throw new UnsupportedCore("Demand loading does not yet support effectful strict global initialization");
         };
         var scope = new Scope(new FunctionContext(0), sources.binding(binding, null));
@@ -1084,7 +1084,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         b.endTryCatch();
         b.endBlock();
         b.endWhile();
-        if (result) b.emitLoadConstant(kotlin.Unit.INSTANCE);
+        if (result) b.emitLoadConstant(thc.runtime.Unit.INSTANCE);
         b.endBlock();
     }
 
@@ -1173,7 +1173,7 @@ public final class BytecodeProgram implements ExecutableProgram {
     private Expression read(Local local) { return read(local, true); }
     private Expression read(Local local, boolean resolve) {
         return local.id < 0 && local.proof.getKind() == CoreKind.VOID
-            ? new ProvenExpression(constant(kotlin.Unit.INSTANCE), local.proof) : new LocalExpression(local, resolve);
+            ? new ProvenExpression(constant(thc.runtime.Unit.INSTANCE), local.proof) : new LocalExpression(local, resolve);
     }
     private static Expression evaluated(Expression value) { return new ProvenExpression(value, evaluatedProof(value.proof(), true)); }
 
@@ -1392,7 +1392,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             case Float ignored -> CoreKind.FLOAT;
             case Double ignored -> CoreKind.DOUBLE;
             case ManagedAddress ignored -> CoreKind.ADDRESS;
-            default -> value == kotlin.Unit.INSTANCE ? CoreKind.VOID : CoreKind.OBJECT;
+            default -> value == thc.runtime.Unit.INSTANCE ? CoreKind.VOID : CoreKind.OBJECT;
         };
         return new ProvenExpression(e -> e.builder.emitLoadConstant(value),
             new CoreRepresentation(kind, true, false, null, null, null, null, null, null));
@@ -3023,7 +3023,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             b.beginTransferTypedSelf(Objects.requireNonNull(e.typedInputSlots), source, metrics);
             b.emitLoadLocal(fn); b.endTransferTypedSelf();
             b.emitBranch(Objects.requireNonNull(e.continueLabel));
-            b.emitLoadConstant(kotlin.Unit.INSTANCE);
+            b.emitLoadConstant(thc.runtime.Unit.INSTANCE);
             b.endBlock();
         }
         if (destination == null) {
@@ -3547,7 +3547,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                     });
                 }
                 b.emitBranch(Objects.requireNonNull(e.continueLabel));
-                b.emitLoadConstant(kotlin.Unit.INSTANCE);
+                b.emitLoadConstant(thc.runtime.Unit.INSTANCE);
                 b.endBlock();
                 if (resumable) {
                     var savedFunction = new ProvenExpression(emission -> emission.builder.emitLoadLocal(fn),
@@ -3574,7 +3574,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 b.beginBlock();
                 restoreTailArguments(e, context, reentryResult);
                 b.emitBranch(Objects.requireNonNull(e.continueLabel));
-                b.emitLoadConstant(kotlin.Unit.INSTANCE);
+                b.emitLoadConstant(thc.runtime.Unit.INSTANCE);
                 b.endBlock();
                 b.emitLoadLocal(reentryResult);
                 b.endConditional();
@@ -3624,7 +3624,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 b.beginStoreLocal(region.selector); b.emitLoadConstant((long) target.index); b.endStoreLocal();
                 b.emitBranch(region.next);
             }
-            if (destination == null) b.emitLoadConstant(kotlin.Unit.INSTANCE);
+            if (destination == null) b.emitLoadConstant(thc.runtime.Unit.INSTANCE);
             b.endBlock();
         }), evaluatedProof(target.result, true));
     }
@@ -4965,7 +4965,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                     default -> value;
                 };
             }
-            case "void" -> constant(kotlin.Unit.INSTANCE);
+            case "void" -> constant(thc.runtime.Unit.INSTANCE);
             case "lam" -> {
                 var args = (List<Map<String, Object>>) expr.get(1);
                 var names = new ArrayList<String>(args.size());
@@ -5776,8 +5776,8 @@ public final class BytecodeProgram implements ExecutableProgram {
                 var b = e.builder;
                 if (!destination.isEmpty()) throw RuntimeFault.fault("RTS diagnostic has no result field");
                 b.beginRtsDiagnostic(rtsDiagnostic);
-                if (operands.size() > 1) operands.get(0).emit(e); else b.emitLoadConstant(kotlin.Unit.INSTANCE);
-                if (operands.size() > 2) operands.get(1).emit(e); else b.emitLoadConstant(kotlin.Unit.INSTANCE);
+                if (operands.size() > 1) operands.get(0).emit(e); else b.emitLoadConstant(thc.runtime.Unit.INSTANCE);
+                if (operands.size() > 2) operands.get(1).emit(e); else b.emitLoadConstant(thc.runtime.Unit.INSTANCE);
                 operands.getLast().emit(e); b.endRtsDiagnostic();
             });
         }
@@ -6716,7 +6716,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 else {
                     b.beginBlock(); b.beginNoDuplicate(); operand.emit(e); b.endNoDuplicate();
                     b.beginConditional(); b.emitCheckpointArmed(checkpoint); beginAnnotationYield(e);
-                    b.emitLoadConstant(kotlin.Unit.INSTANCE); endAnnotationYield(e); b.emitLoadConstant(kotlin.Unit.INSTANCE);
+                    b.emitLoadConstant(thc.runtime.Unit.INSTANCE); endAnnotationYield(e); b.emitLoadConstant(thc.runtime.Unit.INSTANCE);
                     b.endConditional(); b.endBlock();
                 }
             }, evaluatedProof(tupleProof, true));
@@ -6737,15 +6737,15 @@ public final class BytecodeProgram implements ExecutableProgram {
                 });
                 else {
                     b.beginBlock(); b.beginAwaitThreadDelay(false); token.emit(e); b.endAwaitThreadDelay();
-                    b.emitLoadConstant(kotlin.Unit.INSTANCE); b.endBlock();
+                    b.emitLoadConstant(thc.runtime.Unit.INSTANCE); b.endBlock();
                 }
             }, evaluatedProof(tupleProof, true));
             if (name.equals("setThreadAllocationCounter#") || name.equals("setOtherThreadAllocationCounter#")) return new ProvenExpression(e -> {
                 var b = e.builder;
                 boolean other = name.equals("setOtherThreadAllocationCounter#");
                 b.beginBlock(); b.beginSetThreadAllocationCounter(other); operands.get(0).emit(e);
-                if (other) operands.get(1).emit(e); else b.emitLoadConstant(kotlin.Unit.INSTANCE);
-                operands.getLast().emit(e); b.endSetThreadAllocationCounter(); b.emitLoadConstant(kotlin.Unit.INSTANCE); b.endBlock();
+                if (other) operands.get(1).emit(e); else b.emitLoadConstant(thc.runtime.Unit.INSTANCE);
+                operands.getLast().emit(e); b.endSetThreadAllocationCounter(); b.emitLoadConstant(thc.runtime.Unit.INSTANCE); b.endBlock();
             }, evaluatedProof(tupleProof, true));
             var empty = name.equals("getSpark#") ? dataLayouts.computeIfAbsent(CoreThreadScheduling.FALSE,
                 id -> new DataLayout(language, id, "False", new String[0], new Class<?>[0])).allocate() : null;
@@ -6775,7 +6775,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             return new ProvenExpression(e -> {
                 var b = e.builder;
                 b.beginBlock(); b.beginYieldThread(); operand.emit(e); b.endYieldThread();
-                if (enableAsync) emitAsyncPoll(e); b.emitLoadConstant(kotlin.Unit.INSTANCE); b.endBlock();
+                if (enableAsync) emitAsyncPoll(e); b.emitLoadConstant(thc.runtime.Unit.INSTANCE); b.endBlock();
             }, evaluatedProof(tupleProof, true));
         }
         if (CoreFileWait.named(name)) {
@@ -6795,7 +6795,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 });
                 else {
                     b.beginBlock(); b.beginAwaitFileWait(payload, false); token.emit(e); b.endAwaitFileWait();
-                    b.emitLoadConstant(kotlin.Unit.INSTANCE); b.endBlock();
+                    b.emitLoadConstant(thc.runtime.Unit.INSTANCE); b.endBlock();
                 }
             }, evaluatedProof(tupleProof, true));
         }
@@ -6805,7 +6805,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             var action = argument(args.get(1), scope, true);
             var state = argument(args.get(2), scope, false);
             var call = tupleApplication(new TupleShape(tupleProof, language), action,
-                List.of(new ProvenExpression(e -> e.builder.emitLoadConstant(kotlin.Unit.INSTANCE), state.proof())), scope, false);
+                List.of(new ProvenExpression(e -> e.builder.emitLoadConstant(thc.runtime.Unit.INSTANCE), state.proof())), scope, false);
             return tupleExpression(tupleProof, (e, destination) -> {
                 var b = e.builder;
                 b.beginBlock(); b.beginRequireIOState(); state.emit(e); b.endRequireIOState();
@@ -6820,7 +6820,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             var state = compile(args.get(1), scope, false);
             var checked = new ProvenExpression(e -> {
                 var b = e.builder;
-                b.beginBlock(); b.beginRequireIOState(); state.emit(e); b.endRequireIOState(); b.emitLoadConstant(kotlin.Unit.INSTANCE); b.endBlock();
+                b.beginBlock(); b.beginRequireIOState(); state.emit(e); b.endRequireIOState(); b.emitLoadConstant(thc.runtime.Unit.INSTANCE); b.endBlock();
             }, evaluatedProof(state.proof(), true));
             return tupleApplication(new TupleShape(tupleProof, language), argument(args.get(0), scope, true), List.of(checked), scope, tail);
         }
@@ -6861,7 +6861,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             return new ProvenExpression(e -> {
                 var b = e.builder;
                 b.beginBlock(); b.beginLabelThread(); for (var operand : operands) operand.emit(e);
-                b.endLabelThread(); b.emitLoadConstant(kotlin.Unit.INSTANCE); b.endBlock();
+                b.endLabelThread(); b.emitLoadConstant(thc.runtime.Unit.INSTANCE); b.endBlock();
             }, evaluatedProof(tupleProof, true));
         }
         if (name.equals("threadStatus#")) {
@@ -6900,7 +6900,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                     b.beginStoreLocal(retry); b.emitLoadConstant(true); b.endStoreLocal(); b.beginWhile(); b.emitLoadLocal(retry);
                     b.beginBlock(); b.beginTryCatch(); b.beginBlock(); b.beginStoreLocal(discard);
                     b.beginThreadPrimitive(BytecodeRoot.ThreadPrimitiveKind.FINISH_KILL); b.emitLoadLocal(sent);
-                    b.emitLoadConstant(kotlin.Unit.INSTANCE); b.emitLoadConstant(kotlin.Unit.INSTANCE); b.endThreadPrimitive(); b.endStoreLocal();
+                    b.emitLoadConstant(thc.runtime.Unit.INSTANCE); b.emitLoadConstant(thc.runtime.Unit.INSTANCE); b.endThreadPrimitive(); b.endStoreLocal();
                     b.beginStoreLocal(retry); b.emitLoadConstant(false); b.endStoreLocal(); b.endBlock();
                     b.beginBlock(); b.beginStoreLocal(incoming); b.beginCallSuspensionOnly(); b.emitLoadException();
                     b.endCallSuspensionOnly(); b.endStoreLocal(); b.beginStoreLocal(active); b.emitCurrentMask(); b.endStoreLocal();
@@ -6909,7 +6909,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                     endAnnotationYield(e); b.emitLoadLocal(active); b.endReenterCallMask(); b.endStoreLocal(); b.endBlock();
                     b.endTryCatch(); b.endBlock(); b.endWhile();
                     emitAsyncPoll(e); // Self-target delivery follows enqueue.
-                    b.emitLoadConstant(kotlin.Unit.INSTANCE); b.endBlock();
+                    b.emitLoadConstant(thc.runtime.Unit.INSTANCE); b.endBlock();
                 }, evaluatedProof(tupleProof, true));
             }
             return tupleExpression(tupleProof, (e, destination) -> {
@@ -6922,8 +6922,8 @@ public final class BytecodeProgram implements ExecutableProgram {
                 });
                 if (name.equals("forkOn#")) for (var operand : operands) operand.emit(e);
                 else {
-                    if (name.equals("fork#")) operands.get(0).emit(e); else b.emitLoadConstant(kotlin.Unit.INSTANCE);
-                    operands.getLast().emit(e); b.emitLoadConstant(kotlin.Unit.INSTANCE);
+                    if (name.equals("fork#")) operands.get(0).emit(e); else b.emitLoadConstant(thc.runtime.Unit.INSTANCE);
+                    operands.getLast().emit(e); b.emitLoadConstant(thc.runtime.Unit.INSTANCE);
                 }
                 b.endThreadPrimitive(); b.endStoreLocal();
             });
@@ -7014,7 +7014,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 switch (operation) {
                     case FIRST, NEXT -> {
                         b.beginReadCompactBlock(destination.get(0), destination.get(1), operation == CompactImageOp.FIRST); operands.get(0).emit(e);
-                        if (operation == CompactImageOp.FIRST) b.emitLoadConstant(kotlin.Unit.INSTANCE); else operands.get(1).emit(e);
+                        if (operation == CompactImageOp.FIRST) b.emitLoadConstant(thc.runtime.Unit.INSTANCE); else operands.get(1).emit(e);
                         operands.getLast().emit(e); b.endReadCompactBlock();
                     }
                     case ALLOCATE -> { b.beginAllocateCompactBlock(destination.get(0)); for (var operand : operands) operand.emit(e); b.endAllocateCompactBlock(); }
@@ -7022,7 +7022,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                     case TO_ADDRESS, FROM_ADDRESS -> {
                         b.beginObjectAddress(destination.get(0), operation == CompactImageOp.FROM_ADDRESS);
                         for (var operand : operands) operand.emit(e);
-                        if (operation == CompactImageOp.FROM_ADDRESS) b.emitLoadConstant(kotlin.Unit.INSTANCE); b.endObjectAddress();
+                        if (operation == CompactImageOp.FROM_ADDRESS) b.emitLoadConstant(thc.runtime.Unit.INSTANCE); b.endObjectAddress();
                     }
                 }
             });
@@ -7507,7 +7507,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 for (var operand : operands) operand.emit(e);
                 switch (operation) {
                     case COMPARE -> b.endCompareByteArrays();
-                    case SHRINK -> { b.endResizeByteArray(); b.emitLoadConstant(kotlin.Unit.INSTANCE); b.endBlock(); }
+                    case SHRINK -> { b.endResizeByteArray(); b.emitLoadConstant(thc.runtime.Unit.INSTANCE); b.endBlock(); }
                     case COPY -> b.endCopyByteArray();
                     case SET -> b.endSetByteArray();
                     case COPY_MUTABLE, COPY_MUTABLE_NON_OVERLAPPING -> b.endCopyMutableByteArray();

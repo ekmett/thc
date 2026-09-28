@@ -9,6 +9,6 @@ public final class Touch {
     public static Object preserve(Object kept, Object state) {
         TupleResultsKt.requireVoidCarrier(state);
         Reference.reachabilityFence(kept);
-        return kotlin.Unit.INSTANCE;
+        return thc.runtime.Unit.INSTANCE;
     }
 }

@@ -7,7 +7,7 @@ import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.bytecode.LocalAccessor;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import java.util.List;
-import kotlin.Unit;
+import thc.runtime.Unit;
 import org.junit.jupiter.api.Test;
 import thc.Language;
 import thc.Main;

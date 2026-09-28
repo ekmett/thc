@@ -8,7 +8,7 @@ import com.oracle.truffle.api.nodes.RootNode;
 import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.Test;
 import thc.Language;
-import kotlin.Unit;
+import thc.runtime.Unit;
 import java.util.*;
 import java.util.function.Function;
 import static org.junit.jupiter.api.Assertions.*;

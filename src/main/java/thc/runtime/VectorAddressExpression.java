@@ -75,7 +75,7 @@ public final class VectorAddressExpression extends Expr {
             else throw RuntimeFault.fault("Unsupported local vector memory family");
             ManagedByteArray.requireState(arguments[3].execute(frame));
             address.writeVectorBytes(index, stride, bytes, vectorBytes);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
         if (operation.isRead()) ManagedByteArray.requireState(arguments[2].execute(frame));
         var bytes = address.readVectorBytes(index, stride, vectorBytes);

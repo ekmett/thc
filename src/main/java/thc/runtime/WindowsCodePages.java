@@ -35,7 +35,7 @@ public final class WindowsCodePages {
     public WindowsCodePages(Language.State context) { this.context = context; }
 
     private void current() {
-        if (Language.currentState(null) != context) ProgramKt.fault("Windows encoding service belongs to another context");
+        if (Language.currentState(null) != context) throw RuntimeFault.fault("Windows encoding service belongs to another context");
         if (!context.getEnv().isNativeAccessAllowed()) throw new SecurityException("Windows encoding requires native access");
         Abi.requireLayout();
     }
@@ -148,8 +148,8 @@ public final class WindowsCodePages {
         } else action.accept(address.cbitsSegment().asSlice(address.cbitsOffset(), count));
     }
     private long inputBytes(ManagedAddress address, int count, int width) {
-        if (address == ManagedAddress.nullAddress()) ProgramKt.fault("Windows conversion requires an input buffer");
-        if (count < -1) ProgramKt.fault("Windows conversion input length must be nonnegative or -1");
+        if (address == ManagedAddress.nullAddress()) throw RuntimeFault.fault("Windows conversion requires an input buffer");
+        if (count < -1) throw RuntimeFault.fault("Windows conversion input length must be nonnegative or -1");
         if (count != -1) return Math.max(0L, count) * width;
         // A -1 count includes the terminator. Never scan beyond the guest allocation.
         long available = address.availableBytes();
@@ -160,12 +160,11 @@ public final class WindowsCodePages {
             position += width;
             if (zero) return position;
         }
-        ProgramKt.fault("Unterminated Windows conversion input");
-        throw new AssertionError("unreachable");
+        throw RuntimeFault.fault("Unterminated Windows conversion input");
     }
     @TruffleBoundary public long info(long codePage, ManagedAddress output) {
         current();
-        if (output == ManagedAddress.nullAddress()) ProgramKt.fault("GetCPInfo requires a writable CPINFO buffer");
+        if (output == ManagedAddress.nullAddress()) throw RuntimeFault.fault("GetCPInfo requires a writable CPINFO buffer");
         return buffers(List.of(output), () -> List.of(new Region(output, Abi.getFieldBytes(), true)), (arena, pointers) -> {
             // GHC allocates18 field bytes; native CPINFO is20 with tail padding.
             var data = arena.allocate(Abi.getInfoBytes(), Abi.getInfoAlignment());
@@ -181,7 +180,7 @@ public final class WindowsCodePages {
             ManagedAddress output, long capacity) {
         current();
         return buffers(List.of(input, output), () -> {
-            if ((int) capacity < 0) ProgramKt.fault("Windows conversion output capacity must be nonnegative");
+            if ((int) capacity < 0) throw RuntimeFault.fault("Windows conversion output capacity must be nonnegative");
             long sourceBytes = inputBytes(input, (int) count, 1);
             return List.of(new Region(input, sourceBytes, false), new Region(output, Math.max(0L, (int) capacity) * 2, true));
         }, (arena, pointers) -> {
@@ -196,7 +195,7 @@ public final class WindowsCodePages {
             ManagedAddress output, long capacity, ManagedAddress defaultChar, ManagedAddress usedDefault) {
         current();
         return buffers(List.of(input, output, defaultChar, usedDefault), () -> {
-            if ((int) capacity < 0) ProgramKt.fault("Windows conversion output capacity must be nonnegative");
+            if ((int) capacity < 0) throw RuntimeFault.fault("Windows conversion output capacity must be nonnegative");
             long sourceBytes = inputBytes(input, (int) count, 2);
             long defaultBytes = 0;
             if (defaultChar != ManagedAddress.nullAddress()) {
@@ -280,10 +279,10 @@ public final class WindowsCodePages {
             if (!WindowsDirectoryStreams.supportedHost()) throw new IllegalStateException("Windows encoding ABI requires Windows x86_64");
             Map<?, ?> document;
             try (var stream = WindowsCodePages.class.getResourceAsStream("/thc/native/windows-directory-abi.json")) {
-                if (stream == null) ProgramKt.fault("Missing native Windows ABI");
+                if (stream == null) throw RuntimeFault.fault("Missing native Windows ABI");
                 document = (Map<?, ?>) Json.INSTANCE.parse(new String(stream.readAllBytes(), StandardCharsets.UTF_8));
             }
-            if (!(document.get("layout") instanceof Map<?, ?>)) ProgramKt.fault("Malformed native Windows ABI");
+            if (!(document.get("layout") instanceof Map<?, ?>)) throw RuntimeFault.fault("Malformed native Windows ABI");
             var layout = (Map<?, ?>) document.get("layout");
             if (!(Long.valueOf(1).equals(document.get("schema")) && "x86_64".equals(document.get("architecture")) &&
                     Long.valueOf(8).equals(layout.get("pointerBytes")) && Long.valueOf(2).equals(layout.get("wcharBytes")) &&
@@ -330,7 +329,7 @@ public final class WindowsCodePages {
         try (var arena = Arena.ofConfined()) {
             var error = arena.allocate(Api.capture);
             var result = (MemorySegment) Api.localFree.invokeExact(error, pointer);
-            if (result.address() != 0) ProgramKt.fault("LocalFree failed: " + Api.error(error));
+            if (result.address() != 0) throw RuntimeFault.fault("LocalFree failed: " + Api.error(error));
         } catch (Throwable failure) { throw propagate(failure); }
     }
 }

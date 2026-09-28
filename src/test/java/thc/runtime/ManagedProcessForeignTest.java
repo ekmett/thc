@@ -59,11 +59,11 @@ public class ManagedProcessForeignTest {
     private long create(ManagedAddress command, long[] streams, List<ManagedAddress> outputs, ManagedAddress failure) { return create(command, nil(), nil(), streams, outputs, failure, nil(), nil()); }
     private long create(ManagedAddress command, ManagedAddress environment, ManagedAddress cwd, long[] streams, List<ManagedAddress> outputs, ManagedAddress failure, ManagedAddress group, ManagedAddress user) {
         return ManagedProcessForeign.current(null).execute(ProcessOp.CREATE, new Object[]{command, cwd, environment, streams[0], streams[1], streams[2],
-            outputs.get(0), outputs.get(1), outputs.get(2), group, user, 0L, failure, kotlin.Unit.INSTANCE});
+            outputs.get(0), outputs.get(1), outputs.get(2), group, user, 0L, failure, thc.runtime.Unit.INSTANCE});
     }
     private long status(ProcessOp operation, long pid) { return status(operation, pid, cell()); }
     private long status(ProcessOp operation, long pid, ManagedAddress output) {
-        return ManagedProcessForeign.current(null).execute(operation, operation == ProcessOp.TERMINATE ? new Object[]{pid, kotlin.Unit.INSTANCE} : new Object[]{pid, output, kotlin.Unit.INSTANCE});
+        return ManagedProcessForeign.current(null).execute(operation, operation == ProcessOp.TERMINATE ? new Object[]{pid, thc.runtime.Unit.INSTANCE} : new Object[]{pid, output, thc.runtime.Unit.INSTANCE});
     }
     @Test public void realChildPipeEnvironmentAndCwdReachTheOriginalAbi() throws Exception { inside(() -> {
         var state = Language.currentState(); state.getEnvironment().put(string("PATH=/bin")); state.getEnvironment().put(bytes(new byte[]{82, 65, 87, 61, -1, -2}));

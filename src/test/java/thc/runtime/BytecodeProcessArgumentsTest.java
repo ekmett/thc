@@ -31,7 +31,7 @@ public class BytecodeProcessArgumentsTest {
                     var address = ManagedAddress.fromHex("1122");
                     Object[] previous = null;
                     // Null metadata means object-carried State#, not an absent operand.
-                    for (var state : new Object[]{kotlin.Unit.INSTANCE, null}) {
+                    for (var state : new Object[]{thc.runtime.Unit.INSTANCE, null}) {
                         var expected = new ArrayList<Object>();
                         for (int index = 0; index < operation.getArguments().size(); index++) {
                             var representation = operation.getArguments().get(index);

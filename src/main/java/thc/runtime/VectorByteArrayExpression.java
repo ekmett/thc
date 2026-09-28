@@ -57,7 +57,7 @@ public final class VectorByteArrayExpression extends Expr {
                 ManagedByteArray.writeDoubleVectorGuest(array, index, value, operation.getScalarOffset(), operation.getVectorBytes());
             }
             else throw RuntimeFault.fault("Unsupported local vector memory family");
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
         if (operation.isRead()) ManagedByteArray.requireState(arguments[2].execute(frame));
         if (family == VectorMemoryFamily.INT8 || family == VectorMemoryFamily.WORD8) return ManagedByteArray.readByteVectorGuest(array, index, operation.getScalarOffset(), operation.getVectorBytes());

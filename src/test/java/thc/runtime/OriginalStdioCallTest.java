@@ -40,7 +40,7 @@ class OriginalStdioCallTest {
                         b.beginReturn(); b.emitLoadLocal(result); b.endReturn(); b.endRoot();
                     }).getNode(0).getCallTarget();
                     assertThrows(RuntimeFault.class,() -> Calls.target(target,new Object[]{0L,17L})); assertEquals(3L,state.getFiles().duplicate(1),"Bad State must not acquire an open descriptor"); assertEquals(0L,state.getFiles().close(3));
-                    var result = Calls.target(target,new Object[]{0L,kotlin.Unit.INSTANCE});
+                    var result = Calls.target(target,new Object[]{0L,thc.runtime.Unit.INSTANCE});
                     if (opening || operation == OriginalStdioOp.TCSETATTR) { assertInstanceOf(Integer.class,result,operation.name()); assertEquals(opening ? 3 : -1,result); }
                     else { assertInstanceOf(Long.class,result,operation.name()); assertEquals(-1L,result); }
                     if (opening) assertEquals(0L,state.getFiles().close(3));
@@ -62,7 +62,7 @@ class OriginalStdioCallTest {
                     boolean compiled;
                     long call(String name,long... fds) throws Exception {
                         long before = ((Number) program.diagnostics().get("compiledEntries")).longValue(); Object[] args = new Object[fds.length + 2]; args[0] = 0L;
-                        for (int i = 0; i < fds.length; i++) args[i + 1] = (int) fds[i]; args[args.length - 1] = kotlin.Unit.INSTANCE;
+                        for (int i = 0; i < fds.length; i++) args[i + 1] = (int) fds[i]; args[args.length - 1] = thc.runtime.Unit.INSTANCE;
                         long result = (Integer) callScalarTestTarget(targets.get(name),args);
                         if (compiled) { assertEquals(before + 1,((Number) program.diagnostics().get("compiledEntries")).longValue()); for (var target : targets.values()) valid(target); }
                         released(language); return result;
@@ -97,7 +97,7 @@ class OriginalStdioCallTest {
                         Object call(String name,Object... args) throws Exception {
                             long before = ((Number) program.diagnostics().get("compiledEntries")).longValue(); var target = targets.get(name); Object[] guest = new Object[args.length + 2]; guest[0] = 0L;
                             for (int i = 0; i < args.length; i++) { var value = args[i]; guest[i + 1] = Objects.equals(OriginalStdioFixtures.signatures.get(name).get(i),"Int32Rep") && value instanceof Long word && word >= Integer.MIN_VALUE && word <= Integer.MAX_VALUE ? Integer.valueOf(((Long) value).intValue()) : value; }
-                            guest[guest.length - 1] = kotlin.Unit.INSTANCE; var raw = callScalarTestTarget(target,guest); Object result = Objects.equals(OriginalStdioFixtures.output(name),"Int32Rep") ? Long.valueOf(((Integer) raw).longValue()) : raw;
+                            guest[guest.length - 1] = thc.runtime.Unit.INSTANCE; var raw = callScalarTestTarget(target,guest); Object result = Objects.equals(OriginalStdioFixtures.output(name),"Int32Rep") ? Long.valueOf(((Integer) raw).longValue()) : raw;
                             if (compiled) { assertEquals(before + 1,((Number) program.diagnostics().get("compiledEntries")).longValue(),name); valid(target); } released(language); return result;
                         }
                         void run(int pass) throws Exception {

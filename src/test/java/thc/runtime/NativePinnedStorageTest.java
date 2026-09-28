@@ -428,7 +428,7 @@ public class NativePinnedStorageTest {
             assertTrue(segment.scope().isAlive());
             assertEquals((byte) 93, segment.get(ValueLayout.JAVA_BYTE, 0));
             segment.set(ValueLayout.JAVA_BYTE, 0, (byte) 71);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         });
         assertEquals(71L, alias.readWord8(0));
         Reference.reachabilityFence(alias);

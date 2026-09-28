@@ -18,7 +18,7 @@ import java.util.function.IntUnaryOperator;
 import java.util.stream.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
-import static kotlin.Unit.INSTANCE;
+import static thc.runtime.Unit.INSTANCE;
 
 @SuppressWarnings("unchecked")
 public class AddressArrayCopyTest {

@@ -82,9 +82,9 @@ public class PackageSafeForeignTest {
         private final PackageScalarCall call; @Child private PackageScalarAccess access;
         Entry(Language language, PackageScalarCall call) { super(language); this.call = call; access = new PackageScalarAccess(call); }
         @Override public Object execute(VirtualFrame frame) { return switch (call.getResult()) {
-            case "DoubleRep" -> access.executeDouble(frame.getArguments(), kotlin.Unit.INSTANCE);
-            case "Int32Rep" -> (long) access.executeInt(frame.getArguments(), kotlin.Unit.INSTANCE);
-            case "void" -> { access.executeVoid(frame.getArguments(), kotlin.Unit.INSTANCE); yield kotlin.Unit.INSTANCE; }
+            case "DoubleRep" -> access.executeDouble(frame.getArguments(), thc.runtime.Unit.INSTANCE);
+            case "Int32Rep" -> (long) access.executeInt(frame.getArguments(), thc.runtime.Unit.INSTANCE);
+            case "void" -> { access.executeVoid(frame.getArguments(), thc.runtime.Unit.INSTANCE); yield thc.runtime.Unit.INSTANCE; }
             default -> throw new IllegalStateException("Unexpected safe control ABI");
         }; }
     }
@@ -130,9 +130,9 @@ public class PackageSafeForeignTest {
                     try {
                         // Warm on the same registered carrier that will
                         // execute the first installed foreign call.
-                        for (int i = 0; i < 3; i++) { entries.get("reset").call(); var result = Calls.target(target, new Object[]{0L, argument, kotlin.Unit.INSTANCE}); results.check(result); }
+                        for (int i = 0; i < 3; i++) { entries.get("reset").call(); var result = Calls.target(target, new Object[]{0L, argument, thc.runtime.Unit.INSTANCE}); results.check(result); }
                         entries.get("reset").call(); ready.countDown(); if (!begin.await(30, TimeUnit.SECONDS)) throw new IllegalStateException("Check failed.");
-                        var result = Calls.target(target, new Object[]{0L, argument, kotlin.Unit.INSTANCE}); var continuation = Objects.requireNonNull(SavedGuestContinuationKt.savedGuestContinuation(result)); var request = continuation.asyncRequest();
+                        var result = Calls.target(target, new Object[]{0L, argument, thc.runtime.Unit.INSTANCE}); var continuation = Objects.requireNonNull(SavedGuestContinuationKt.savedGuestContinuation(result)); var request = continuation.asyncRequest();
                         assertSame(pending.get(), request, "delivery occurs at the completed foreign-call cut");
                         if (mode.endsWith("compiled")) { assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > compiledBefore.get()); assertTrue(request.compiledCapture, "first installed call reaches the return cut in compiled code"); }
                         request.acknowledge(); completed.set(continuation);
@@ -152,8 +152,8 @@ public class PackageSafeForeignTest {
                 assertFalse(worker.isAlive(), "safe return must release the Java carrier"); if (failure.get() != null) throw failure.get(); assertEquals(AsyncRequestState.ACKNOWLEDGED, pending.get().getState()); assertEquals(1L, entries.get("call_count").call());
                 owner.getThreads().enterCurrent();
                 try {
-                    var result = completed.get().continueWith(kotlin.Unit.INSTANCE); results.check(result); if (pointer) assertEquals(4L, storage.readByte(3), "three warm calls and one completed effect, with no replay");
-                    assertEquals(1L, entries.get("call_count").call(), "resumption must not replay the foreign effect"); if (mode.startsWith("ast")) assertThrows(RuntimeFault.class, () -> completed.get().continueWith(kotlin.Unit.INSTANCE));
+                    var result = completed.get().continueWith(thc.runtime.Unit.INSTANCE); results.check(result); if (pointer) assertEquals(4L, storage.readByte(3), "three warm calls and one completed effect, with no replay");
+                    assertEquals(1L, entries.get("call_count").call(), "resumption must not replay the foreign effect"); if (mode.startsWith("ast")) assertThrows(RuntimeFault.class, () -> completed.get().continueWith(thc.runtime.Unit.INSTANCE));
                     assertEquals(0, language.getHandoffState().get().getArguments().getDepth()); assertEquals(0, language.getHandoffState().get().getResults().getDepth()); assertEquals(0, language.getHandoffState().get().getArguments().retainedReferences()); assertEquals(0, language.getHandoffState().get().getResults().retainedReferences());
                 } finally { owner.getThreads().leaveCurrent(); }
             } finally { context.leave(); }

@@ -3,7 +3,7 @@
 package thc.runtime;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
-import kotlin.Unit;
+import thc.runtime.Unit;
 import static thc.runtime.RuntimeServiceStatus.fault;
 
 /** MVar AST operations preserve operands across a pre-commit asynchronous cut. */

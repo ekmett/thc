@@ -121,10 +121,10 @@ public class OriginalRtsLocksTest {
             var op = Objects.requireNonNull(operation(call)); int count = op.getArguments().size();
             for (var backend : List.of("ast", "bytecode")) try (var context = context()) { entered(context, language -> {
                 var target = load(language, backend, OriginalStdioChecks.rawModule(call, source, null)).entryTarget("entry");
-                var args = op == OriginalStdioOp.LOCK ? new Object[]{0L, -1L, Long.MIN_VALUE, -1L, 0L, kotlin.Unit.INSTANCE} : new Object[]{0L, -1L, kotlin.Unit.INSTANCE};
+                var args = op == OriginalStdioOp.LOCK ? new Object[]{0L, -1L, Long.MIN_VALUE, -1L, 0L, thc.runtime.Unit.INSTANCE} : new Object[]{0L, -1L, thc.runtime.Unit.INSTANCE};
                 var locks = Language.currentState().getRtsFileLocks(); assertEquals(0L, locks.lock(-1, Long.MIN_VALUE, -1, 0)); args[args.length - 1] = 9L;
                 assertThrows(RuntimeFault.class, () -> Calls.target(target, args)); assertEquals(0L, locks.unlock(-1)); assertEquals(1L, locks.unlock(-1));
-                if (op == OriginalStdioOp.LOCK) { args[args.length - 1] = kotlin.Unit.INSTANCE; args[4] = 1L << 32; assertThrows(RuntimeFault.class, () -> Calls.target(target, args)); assertEquals(1L, locks.unlock(-1)); }
+                if (op == OriginalStdioOp.LOCK) { args[args.length - 1] = thc.runtime.Unit.INSTANCE; args[4] = 1L << 32; assertThrows(RuntimeFault.class, () -> Calls.target(target, args)); assertEquals(1L, locks.unlock(-1)); }
                 for (int index = 0; index < count; index++) { final int selected = index; assertThrows(RuntimeFault.class, () -> load(language, backend, OriginalStdioChecks.rawModule(call, source, selected))); }
                 for (var head : List.of(List.of("var", 17L), List.of("var", "entry", Map.of("rep", OriginalStdioFixtures.closure())))) {
                     var module = OriginalStdioChecks.rawModule(call, source, null); var calls = OriginalStdioChecks.foreignCalls(module); if (calls.size() != 1) throw new IllegalArgumentException("Expected one call"); calls.getFirst().set(1, head);

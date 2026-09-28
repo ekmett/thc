@@ -144,7 +144,7 @@ class FloatVectorMemoryProofTest {
         var module = new LinkedHashMap<>(fixture.module); module.put("diagnosticUnsupported", diagnostic);
         return backend.equals("ast") ? new Program(language, module) : new BytecodeProgram(language, module);
     }
-    private Object invoke(ExecutableProgram program, byte[] bytes, long index) { return invoke(program, bytes, index, kotlin.Unit.INSTANCE); }
+    private Object invoke(ExecutableProgram program, byte[] bytes, long index) { return invoke(program, bytes, index, thc.runtime.Unit.INSTANCE); }
     private Object invoke(ExecutableProgram program, byte[] bytes, long index, Object token) {
         return Calls.target(program.hostEntryTarget(3), new Object[]{program.entryValue("root"), new Object[]{bytes, index, token}});
     }

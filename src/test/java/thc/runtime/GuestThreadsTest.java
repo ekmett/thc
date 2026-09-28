@@ -3,7 +3,7 @@
 package thc.runtime;
 
 import com.oracle.truffle.api.nodes.Node;
-import kotlin.Unit;
+import thc.runtime.Unit;
 import org.junit.jupiter.api.Test;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;

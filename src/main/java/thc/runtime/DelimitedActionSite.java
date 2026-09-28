@@ -90,13 +90,13 @@ public final class DelimitedActionSite extends Node {
     }
     public Object handle(VirtualFrame frame, DelimitedCut cut, TupleShape shape) {
         Closure continuation = snapshot(cut, shape);
-        return invoke(frame, cut.getHandler(), new Object[] {continuation, kotlin.Unit.INSTANCE}, shape);
+        return invoke(frame, cut.getHandler(), new Object[] {continuation, thc.runtime.Unit.INSTANCE}, shape);
     }
     @TruffleBoundary private Closure snapshot(DelimitedCut cut, TupleShape shape) { return new DelimitedStack(cut, shape).closure(language, metrics); }
     public Object prompt(VirtualFrame frame, Object tag, Object action, Object state, TupleShape shape) {
         requireVoidCarrier(state);
         PromptTag identity = DelimitedControl.tag(this, tag);
-        try { return invoke(frame, action, new Object[] {kotlin.Unit.INSTANCE}, shape); }
+        try { return invoke(frame, action, new Object[] {thc.runtime.Unit.INSTANCE}, shape); }
         catch (DelimitedCut cut) {
             if (cut.getTag() == identity) return handle(frame, cut, shape);
             throw cut.append(frame, new DelimitedPromptStep(identity, this, shape));
@@ -114,13 +114,13 @@ public final class DelimitedActionSite extends Node {
         } else throw failure;
         MaskingState prior = SynchronousMasking.current(this);
         if (prior == MaskingState.UNMASKED) SynchronousMasking.set(this, MaskingState.MASKED_INTERRUPTIBLE);
-        try { return invoke(frame, handler, new Object[] {payload, kotlin.Unit.INSTANCE}, shape); }
+        try { return invoke(frame, handler, new Object[] {payload, thc.runtime.Unit.INSTANCE}, shape); }
         catch (DelimitedCut cut) { throw cut.append(frame, new DelimitedMaskStep(this, prior)); }
         finally { SynchronousMasking.set(this, prior); }
     }
     public Object caught(VirtualFrame frame, Object action, Object handler, Object state, TupleShape shape) {
         requireVoidCarrier(state);
-        try { return invoke(frame, action, new Object[] {kotlin.Unit.INSTANCE}, shape); }
+        try { return invoke(frame, action, new Object[] {thc.runtime.Unit.INSTANCE}, shape); }
         catch (GuestException failure) { return handleException(frame, handler, failure, shape); }
         catch (AsyncDelivery delivered) { return handleException(frame, handler, delivered, shape); }
         catch (DelimitedCut cut) { throw cut.append(frame, new DelimitedCatchStep(this, handler, shape)); }
@@ -129,14 +129,14 @@ public final class DelimitedActionSite extends Node {
         requireVoidCarrier(state);
         MaskingState prior = SynchronousMasking.current(this);
         SynchronousMasking.set(this, target);
-        try { return invoke(frame, action, new Object[] {kotlin.Unit.INSTANCE}, shape); }
+        try { return invoke(frame, action, new Object[] {thc.runtime.Unit.INSTANCE}, shape); }
         catch (DelimitedCut cut) { throw cut.append(frame, new DelimitedMaskStep(this, prior)); }
         finally { SynchronousMasking.set(this, prior); }
     }
     public Object annotated(VirtualFrame frame, Object annotation, Object action, Object state, TupleShape shape) {
         requireVoidCarrier(state);
         StackAnnotationState prior = StackAnnotations.enter(this, annotation);
-        try { return invoke(frame, action, new Object[] {kotlin.Unit.INSTANCE}, shape); }
+        try { return invoke(frame, action, new Object[] {thc.runtime.Unit.INSTANCE}, shape); }
         catch (DelimitedCut cut) { throw cut.append(frame, new DelimitedAnnotationStep(this, prior)); }
         finally { StackAnnotations.set(this, prior); }
     }

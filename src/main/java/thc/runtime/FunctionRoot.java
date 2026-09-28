@@ -211,7 +211,7 @@ public final class FunctionRoot extends GuestRoot {
         private final FunctionRoot root;
         ResumeBody(FunctionRoot root) { this.root = root; }
         @Override public Object resume(VirtualFrame frame, Object input) {
-            if (input != kotlin.Unit.INSTANCE) throw fault("Invalid AST root poll resume value");
+            if (input != thc.runtime.Unit.INSTANCE) throw fault("Invalid AST root poll resume value");
             return root.executeBody(frame);
         }
     }

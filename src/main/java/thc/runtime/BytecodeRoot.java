@@ -676,7 +676,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 }
                 case FINISH_KILL -> {
                     GuestThreadOps.finishKill(node, (AsyncRequest) first);
-                    yield kotlin.Unit.INSTANCE;
+                    yield thc.runtime.Unit.INSTANCE;
                 }
                 case SELF_KILL -> {
                     TupleResultsKt.requireVoidCarrier(third);
@@ -997,7 +997,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static Object execute(ManagedAddress location, long value, Object state) {
             ManagedByteArray.requireState(state);
             AtomicAddressOp.WRITE.numeric(location, value, 0L);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
 
@@ -1110,7 +1110,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static Object write(boolean byteOffset, ManagedAddress address, long index, float value, Object state) {
             ManagedByteArray.requireState(state);
             FloatingAddresses.writeFloat(address, index, value, byteOffset);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "byteOffset")
@@ -1118,7 +1118,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static Object write(boolean byteOffset, ManagedAddress address, long index, double value, Object state) {
             ManagedByteArray.requireState(state);
             FloatingAddresses.writeDouble(address, index, value, byteOffset);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
 
@@ -1141,12 +1141,12 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static Object write(ManagedAddress address, long offset, int value, Object state) {
             ManagedByteArray.requireState(state);
             address.writeWord8Int(offset, value);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
         @Specialization public static Object writeChar(ManagedAddress address, long offset, long value, Object state) {
             ManagedByteArray.requireState(state);
             address.writeWord8Int(offset, (int) value);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
 
@@ -1156,7 +1156,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static Object write(boolean byteOffset, ManagedAddress address, long offset, int value, Object state) {
             ManagedByteArray.requireState(state);
             address.writeNativeInt(offset, 2, value, byteOffset);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
 
@@ -1168,13 +1168,13 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 int value, Object state) {
             ManagedByteArray.requireState(state);
             address.writeNativeInt(offset, width, value, byteOffset);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
         @Specialization public static Object write(int width, boolean byteOffset, ManagedAddress address, long offset,
                 long value, Object state) {
             ManagedByteArray.requireState(state);
             address.writeNativeScalar(offset, width, value, byteOffset);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
 
@@ -1185,14 +1185,14 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 ManagedAddress value, Object state) {
             ManagedByteArray.requireState(state);
             address.writeAddressElementIndex(offset, value, byteOffset);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
         // Distinct typed operands share this address-mutation operation.
         @Specialization public static Object copy(boolean byteOffset, ManagedAddress source, ManagedAddress destination,
                 long count, Object state) {
             ManagedByteArray.requireState(state);
             source.copyNonOverlappingTo(destination, count);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
 
@@ -1204,7 +1204,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 long offset, long count, Object state) {
             TupleResultsKt.requireVoidCarrier(state);
             source.copyToByteArray(destination, offset, count);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
 
@@ -1214,7 +1214,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 ManagedAddress destination, long count, Object state) {
             TupleResultsKt.requireVoidCarrier(state);
             destination.copyFromByteArray(source, offset, count);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
 
@@ -1225,7 +1225,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 ManagedAddress value, Object state) {
             ManagedByteArray.requireState(state);
             PinnedMemory.writeAddressArray(array, index, value, byteOffset);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
 
@@ -1234,14 +1234,14 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 long count, Object state) {
             ManagedByteArray.requireState(state);
             source.moveTo(destination, count);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
     @Operation public static final class FillAddress {
         @Specialization public static Object fill(ManagedAddress destination, long count, long value, Object state) {
             ManagedByteArray.requireState(state);
             destination.fill(count, value);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
 
@@ -2336,7 +2336,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class Prefetch {
         @Specialization public static Object hint(Object ignored, long offset, Object state) {
             TupleResultsKt.requireVoidCarrier(state);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
     @Operation
@@ -2346,7 +2346,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 long count, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
             RtsDiagnostics.trace(node, operation, address, count);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
     @Operation public static final class Touch {
@@ -2364,7 +2364,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 @Cached(value = "create(metrics)", neverDefault = true) Dispatch dispatch,
                 @Cached(value = "createForce(metrics)", neverDefault = true) Force force) {
             ManagedByteArray.requireState(state);
-            try { return dispatch.execute(frame, RequireClosure.require(force.execute(frame, function)), new Object[]{kotlin.Unit.INSTANCE}); }
+            try { return dispatch.execute(frame, RequireClosure.require(force.execute(frame, function)), new Object[]{thc.runtime.Unit.INSTANCE}); }
             finally { java.lang.ref.Reference.reachabilityFence(kept); }
         }
         public static Dispatch create(Metrics metrics) { return Dispatch.create(1, false, metrics); }
@@ -2380,7 +2380,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 @Cached(value = "create(destination, metrics)", neverDefault = true) TupleDispatch dispatch,
                 @Cached(value = "createForce(metrics)", neverDefault = true) Force force) {
             ManagedByteArray.requireState(state);
-            try { dispatch.execute(frame, RequireClosure.require(force.execute(frame, function)), new Object[]{kotlin.Unit.INSTANCE}); }
+            try { dispatch.execute(frame, RequireClosure.require(force.execute(frame, function)), new Object[]{thc.runtime.Unit.INSTANCE}); }
             finally { java.lang.ref.Reference.reachabilityFence(kept); }
         }
         public static TupleDispatch create(BytecodeTupleSlots destination, Metrics metrics) {
@@ -2926,7 +2926,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static Object run(Object cell, Object value, Object state, @Bind Node node) {
             TupleResultsKt.requireVoidCarrier(state);
             thc.Language.currentState(node).stm.write(cell, value);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
 
@@ -2941,7 +2941,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 @Cached(value = "createForce(metrics)", neverDefault = true) Force force) {
             try {
                 actionCall.execute(frame, RequireClosure.require(force.execute(frame, action)),
-                        new Object[]{kotlin.Unit.INSTANCE});
+                        new Object[]{thc.runtime.Unit.INSTANCE});
             } catch (RuntimeException | Error failure) {
                 // Generated DSL finally handlers see Truffle exceptions, but
                 // host faults and control transfers bypass them. Preserve the
@@ -2970,7 +2970,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             Closure closure = RequireClosure.require(force.execute(frame, action));
             MaskingState callerMask = SynchronousMasking.current(node);
             try {
-                actionCall.execute(frame, closure, new Object[]{kotlin.Unit.INSTANCE});
+                actionCall.execute(frame, closure, new Object[]{thc.runtime.Unit.INSTANCE});
             } catch (TupleCallYield yielded) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 try {
@@ -3176,7 +3176,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 @Cached(value = "createForce(metrics)", neverDefault = true) Force force) {
             try {
                 handlerCall.execute(frame, RequireClosure.require(force.execute(frame, handler)),
-                        new Object[]{payload, kotlin.Unit.INSTANCE});
+                        new Object[]{payload, thc.runtime.Unit.INSTANCE});
             } catch (RuntimeException | Error failure) {
                 if (!(failure instanceof AbstractTruffleException)) SynchronousMasking.set(force, prior);
                 throw failure;
@@ -3202,7 +3202,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             Closure closure = null;
             try {
                 closure = RequireClosure.require(force.execute(frame, handler));
-                handlerCall.execute(frame, closure, new Object[]{payload, kotlin.Unit.INSTANCE});
+                handlerCall.execute(frame, closure, new Object[]{payload, thc.runtime.Unit.INSTANCE});
             } catch (TupleCallYield yielded) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 boolean captured = false;
@@ -3325,7 +3325,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class NoDuplicate {
         @Specialization public static Object preserve(Object state) {
             TupleResultsKt.requireVoidCarrier(state);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
 
@@ -3333,7 +3333,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static Object giveWay(Object state) {
             TupleResultsKt.requireVoidCarrier(state);
             CoreYield.giveWay();
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
 
@@ -3498,7 +3498,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             ManagedMVar cell = ManagedMVar.require(reference);
             TupleResultsKt.requireVoidCarrier(state);
             cell.put(value, node, async);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
     @Operation
@@ -3612,7 +3612,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static Object execute(Object reference, long size, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
             Language.currentState(node).compactRegions.require(reference).resize(size);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
     @Operation
@@ -3710,7 +3710,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             ManagedMutVar cell = ManagedMutVar.require(reference);
             TupleResultsKt.requireVoidCarrier(state);
             cell.setValue(value);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
 
@@ -4151,7 +4151,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             Object[] array = ManagedArray.require(reference);
             TupleResultsKt.requireVoidCarrier(state);
             ManagedArray.write(array, index, value);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
     @Operation
@@ -4190,7 +4190,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             Object[] to = ManagedArray.require(destination);
             TupleResultsKt.requireVoidCarrier(state);
             ManagedArray.copy(from, sourceOffset, to, destinationOffset, count, mutableSource);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
     @Operation public static final class CloneArray {
@@ -4254,7 +4254,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             SmallArrayStorage array = ManagedSmallArray.require(reference);
             TupleResultsKt.requireVoidCarrier(state);
             ManagedSmallArray.write(array, index, value);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
     @Operation
@@ -4321,7 +4321,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             SmallArrayStorage to = ManagedSmallArray.require(destination);
             TupleResultsKt.requireVoidCarrier(state);
             ManagedSmallArray.copy(from, sourceOffset, to, destinationOffset, count, mutableSource);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
 
@@ -4365,12 +4365,12 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static Object write(Object value, long offset, int byteValue, Object state) {
             ManagedByteArray.requireState(state);
             ManagedByteArray.writeGuest(value, offset, byteValue);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
         @Specialization public static Object writeChar(Object value, long offset, long byteValue, Object state) {
             ManagedByteArray.requireState(state);
             ManagedByteArray.writeGuest(value, offset, (int) byteValue);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
     @Operation public static final class CopyByteArray {
@@ -4378,14 +4378,14 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 long destinationOffset, long count, Object state) {
             ManagedByteArray.requireState(state);
             ManagedByteArray.copyGuest(source, sourceOffset, destination, destinationOffset, count, false, false);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
     @Operation public static final class SetByteArray {
         @Specialization public static Object set(Object value, long offset, long count, long byteValue, Object state) {
             ManagedByteArray.requireState(state);
             ManagedByteArray.fillGuest(value, offset, count, byteValue);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
     @Operation
@@ -4395,7 +4395,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 Object destination, long destinationOffset, long count, Object state) {
             ManagedByteArray.requireState(state);
             ManagedByteArray.copyGuest(source, sourceOffset, destination, destinationOffset, count, true, nonOverlapping);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
     @Operation public static final class CompareByteArrays {
@@ -4427,7 +4427,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             SmallArrayStorage array = ManagedSmallArray.require(reference);
             TupleResultsKt.requireVoidCarrier(state);
             array.shrink(size);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
     @Operation
@@ -4484,7 +4484,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             ManagedByteArray.requireState(state);
             if (byteOffset) ManagedByteArray.writeInt32ByteOffsetGuest(value, index, (int) character);
             else ManagedByteArray.writeInt32Guest(value, index, (int) character);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "byteOffset")
@@ -4528,7 +4528,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static Object write(Object value, long index, long operand, Object state) {
             ManagedByteArray.requireState(state);
             AtomicIntArrayOp.WRITE.execute(value, index, operand, 0L);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
@@ -4553,7 +4553,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             vector = CoreVectors.requireByte(vector, ByteVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)));
             ManagedByteArray.requireState(state);
             address.writeVectorBytes(index, scalarOffset ? 1 : vectorBytes, vector, vectorBytes);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
@@ -4580,7 +4580,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             vector = CoreVectors.requireShort(vector, ShortVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)));
             ManagedByteArray.requireState(state);
             address.writeVectorBytes(index, scalarOffset ? 2 : vectorBytes, (java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES)).reinterpretAsBytes(), vectorBytes);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
@@ -4607,7 +4607,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             vector = CoreVectors.requireInt(vector, IntVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)));
             ManagedByteArray.requireState(state);
             address.writeVectorBytes(index, scalarOffset ? 4 : vectorBytes, (java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES)).reinterpretAsBytes(), vectorBytes);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
@@ -4634,7 +4634,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             vector = CoreVectors.requireLong(vector, LongVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)));
             ManagedByteArray.requireState(state);
             address.writeVectorBytes(index, scalarOffset ? 8 : vectorBytes, (java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES)).reinterpretAsBytes(), vectorBytes);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
@@ -4662,7 +4662,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             ManagedByteArray.requireState(state);
             IntVector bits = vector.reinterpretAsInts();
             address.writeVectorBytes(index, scalarOffset ? 4 : vectorBytes, (java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? bits : bits.lanewise(VectorOperators.REVERSE_BYTES)).reinterpretAsBytes(), vectorBytes);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
@@ -4690,7 +4690,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             ManagedByteArray.requireState(state);
             LongVector bits = vector.reinterpretAsLongs();
             address.writeVectorBytes(index, scalarOffset ? 8 : vectorBytes, (java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? bits : bits.lanewise(VectorOperators.REVERSE_BYTES)).reinterpretAsBytes(), vectorBytes);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
@@ -4715,7 +4715,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             vector = CoreVectors.requireByte(vector, ByteVector.SPECIES_128.withShape(jdk.incubator.vector.VectorShape.forBitSize(vectorBytes * 8)));
             ManagedByteArray.requireState(state);
             ManagedByteArray.writeByteVectorGuest(value, index, vector, scalarOffset, vectorBytes);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
@@ -4740,7 +4740,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             vector = CoreVectors.requireShort(vector, ShortVector.SPECIES_128.withShape(jdk.incubator.vector.VectorShape.forBitSize(vectorBytes * 8)));
             ManagedByteArray.requireState(state);
             ManagedByteArray.writeShortVectorGuest(value, index, vector, scalarOffset, vectorBytes);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
@@ -4765,7 +4765,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             vector = CoreVectors.requireLong(vector, LongVector.SPECIES_128.withShape(jdk.incubator.vector.VectorShape.forBitSize(vectorBytes * 8)));
             ManagedByteArray.requireState(state);
             ManagedByteArray.writeLongVectorGuest(value, index, vector, scalarOffset, vectorBytes);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
@@ -4790,7 +4790,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             vector = CoreVectors.requireInt(vector, IntVector.SPECIES_128.withShape(jdk.incubator.vector.VectorShape.forBitSize(vectorBytes * 8)));
             ManagedByteArray.requireState(state);
             ManagedByteArray.writeInt32VectorGuest(value, index, vector, scalarOffset, vectorBytes);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
@@ -4815,7 +4815,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             vector = CoreVectors.requireInt(vector, IntVector.SPECIES_128.withShape(jdk.incubator.vector.VectorShape.forBitSize(vectorBytes * 8)));
             ManagedByteArray.requireState(state);
             ManagedByteArray.writeWord32VectorGuest(value, index, vector, scalarOffset, vectorBytes);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
@@ -4840,7 +4840,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             vector = CoreVectors.requireFloat(vector, FloatVector.SPECIES_128.withShape(jdk.incubator.vector.VectorShape.forBitSize(vectorBytes * 8)));
             ManagedByteArray.requireState(state);
             ManagedByteArray.writeFloatVectorGuest(value, index, vector, scalarOffset, vectorBytes);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
@@ -4865,7 +4865,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             vector = CoreVectors.requireDouble(vector, DoubleVector.SPECIES_128.withShape(jdk.incubator.vector.VectorShape.forBitSize(vectorBytes * 8)));
             ManagedByteArray.requireState(state);
             ManagedByteArray.writeDoubleVectorGuest(value, index, vector, scalarOffset, vectorBytes);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "byteOffset")
@@ -4873,7 +4873,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static Object write(boolean byteOffset, Object value, long index, long integer, Object state) {
             ManagedByteArray.requireState(state);
             ManagedByteArray.writeIntGuest(value, index, integer, byteOffset);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "byteOffset")
@@ -4900,7 +4900,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             ManagedByteArray.requireState(state);
             if (byteOffset) ManagedByteArray.writeDoubleByteOffsetGuest(value, index, number);
             else ManagedByteArray.writeDoubleGuest(value, index, number);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "byteOffset")
@@ -4929,7 +4929,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             ManagedByteArray.requireState(state);
             if (byteOffset) ManagedByteArray.writeFloatByteOffsetGuest(value, index, number);
             else ManagedByteArray.writeFloatGuest(value, index, number);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "byteOffset")
@@ -4959,7 +4959,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             ManagedByteArray.requireState(state);
             if (byteOffset) ManagedByteArray.writeInt16ByteOffsetGuest(value, index, integer);
             else ManagedByteArray.writeInt16Guest(value, index, integer);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "unsigned")
@@ -4990,7 +4990,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             ManagedByteArray.requireState(state);
             if (byteOffset) ManagedByteArray.writeInt32ByteOffsetGuest(value, index, integer);
             else ManagedByteArray.writeInt32Guest(value, index, integer);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "unsigned") @ConstantOperand(type = boolean.class, name = "byteOffset")

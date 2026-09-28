@@ -23,7 +23,7 @@ public final class FileWaitPrimitives {
             if (failure instanceof ClosedChannelException) badFileDescriptor(payload, node);
             throw propagate(failure);
         }
-        return kotlin.Unit.INSTANCE;
+        return thc.runtime.Unit.INSTANCE;
     }
     @SuppressWarnings("unchecked") static <E extends Throwable> RuntimeException propagate(Throwable failure) throws E {
         throw (E) failure;

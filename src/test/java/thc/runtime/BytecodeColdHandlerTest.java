@@ -104,15 +104,15 @@ class BytecodeColdHandlerTest {
                 assertEquals(1, blocked.pendingCounts().getTakers()); assertTrue(prefix.isEmpty(), "The first effect completed before the blocked cut");
                 f.owner.getThreads().send(Objects.requireNonNull(f.owner.getThreads().pollState(worker).getCurrent()).getIdentity(), "wide cut");
                 var captured = answer.get(10, TimeUnit.SECONDS); worker.join(5000); assertFalse(worker.isAlive()); assertEquals(before + 1, ((Number) f.program.diagnostics().get("compiledEntries")).longValue());
-                var retainedAfterCapture = f.target.getClass().getMethod("isValidLastTier").invoke(f.target); var completed = new CompletableFuture<kotlin.Unit>();
+                var retainedAfterCapture = f.target.getClass().getMethod("isValidLastTier").invoke(f.target); var completed = new CompletableFuture<thc.runtime.Unit>();
                 var resumer = new Thread(() -> {
                     context.enter();
                     try {
-                        assertTrue(blocked.tryPut("continue")); f.checkResult(captured.continueWith(kotlin.Unit.INSTANCE)); assertTrue(prefix.isEmpty(), "Resumption must not replay the completed first take"); assertTrue(blocked.isEmpty()); assertSame(f.target, f.program.entryTarget("entry"));
+                        assertTrue(blocked.tryPut("continue")); f.checkResult(captured.continueWith(thc.runtime.Unit.INSTANCE)); assertTrue(prefix.isEmpty(), "Resumption must not replay the completed first take"); assertTrue(blocked.isEmpty()); assertSame(f.target, f.program.entryTarget("entry"));
                         var handoff = f.language.getHandoffState().get(); assertEquals(0, handoff.getArguments().getDepth()); assertEquals(0, handoff.getArguments().retainedReferences()); assertEquals(0, handoff.getResults().getDepth()); assertEquals(0, handoff.getResults().retainedReferences()); assertNull(handoff.getPending());
                         var bytecode = ((BytecodeRoot) f.target.getRootNode()).getBytecodeNode(); var field = bytecode.getClass().getDeclaredField("exceptionProfiles_"); field.setAccessible(true); var profiles = (boolean[]) field.get(bytecode);
                         boolean none = true; for (boolean profile : profiles) if (profile) { none = false; break; }
-                        assertTrue(none, "Capture must not manufacture observed exception profiles"); assertEquals(true, retainedAfterCapture, "The first blocking cut retains installed code"); f.valid(); completed.complete(kotlin.Unit.INSTANCE);
+                        assertTrue(none, "Capture must not manufacture observed exception profiles"); assertEquals(true, retainedAfterCapture, "The first blocking cut retains installed code"); f.valid(); completed.complete(thc.runtime.Unit.INSTANCE);
                     } catch (Throwable failure) { completed.completeExceptionally(failure); } finally { context.leave(); }
                 });
                 resumer.start();

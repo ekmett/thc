@@ -142,7 +142,7 @@ final class VectorArrayProofCases {
         }
     }
     private ExecutableProgram program(Language language, String backend, Fixture f) { return backend.equals("ast") ? new Program(language, f.module) : new BytecodeProgram(language, f.module); }
-    private Object invoke(ExecutableProgram p, Object bytes, long index) { return invoke(p, bytes, index, kotlin.Unit.INSTANCE); }
+    private Object invoke(ExecutableProgram p, Object bytes, long index) { return invoke(p, bytes, index, thc.runtime.Unit.INSTANCE); }
     private Object invoke(ExecutableProgram p, Object bytes, long index, Object token) {
         return Calls.target(p.hostEntryTarget(3), new Object[]{p.entryValue("root"), new Object[]{bytes, index, token}});
     }

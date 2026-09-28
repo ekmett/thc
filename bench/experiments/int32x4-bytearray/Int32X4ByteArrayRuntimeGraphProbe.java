@@ -122,7 +122,7 @@ public final class Int32X4ByteArrayRuntimeGraphProbe {
             // Fresh caller-owned storage for every warm and measured invocation.
             byte[] array = row.initial.clone();
             Object[] arguments = store
-                ? new Object[]{array, row.offset, row.lanes[0], row.lanes[1], row.lanes[2], row.lanes[3], kotlin.Unit.INSTANCE}
+                ? new Object[]{array, row.offset, row.lanes[0], row.lanes[1], row.lanes[2], row.lanes[3], thc.runtime.Unit.INSTANCE}
                 : new Object[]{array, row.offset};
             Object actual = host.call(closure, arguments);
             if (store ? actual != array : !(actual instanceof Long) || ((Long)actual).longValue() != row.checksum)
@@ -148,12 +148,12 @@ public final class Int32X4ByteArrayRuntimeGraphProbe {
                 throw new AssertionError("Malformed/duplicate native row");
         }
         if (nativeRows.size() != 9666) throw new AssertionError("Wrong native corpus cardinality");
-        List<Map<String,Object>> definitions = (List<Map<String,Object>>)Json.INSTANCE.parse(Files.readString(Path.of(args[1])));
+        List<Map<String,Object>> definitions = (List<Map<String,Object>>)Json.parse(Files.readString(Path.of(args[1])));
         List<Map<String,Object>> chosen = definitions.stream().filter(e -> entry.equals(e.get("name"))).toList();
         if (chosen.size() != 1) throw new AssertionError("Missing/duplicate graph definition");
         List<Row> rows = rows(chosen.getFirst(), nativeRows);
-        Map<String,Object> module = (Map<String,Object>)Json.INSTANCE.parse(Files.readString(Path.of(args[0])));
-        Map<String,Object> linked = new LinkedHashMap<>(CoreModules.INSTANCE.reachable(module, entry));
+        Map<String,Object> module = (Map<String,Object>)Json.parse(Files.readString(Path.of(args[0])));
+        Map<String,Object> linked = new LinkedHashMap<>(CoreModules.reachable(module, entry));
         linked.put("instrument", false); linked.put("diagnosticUnsupported", false);
         List<Map<String,Object>> bindings = (List<Map<String,Object>>)linked.get("bindings");
         if (bindings.size() != 1 || !entry.equals(bindings.getFirst().get("name"))
@@ -170,13 +170,13 @@ public final class Int32X4ByteArrayRuntimeGraphProbe {
                 for (int i = 0; i < 40; i++) check(program, id, entry, rows, null);
                 RootCallTarget target = active(program, id, arity);
                 if (valid(target)) throw new AssertionError("Unexpected automatic compilation");
-                System.out.println("GRAPH_TARGET=" + Json.INSTANCE.stringify(Map.of("entry", entry, "backend", backend, "root", target.getRootNode().getName())));
+                System.out.println("GRAPH_TARGET=" + Json.stringify(Map.of("entry", entry, "backend", backend, "root", target.getRootNode().getName())));
                 target.getClass().getMethod("compile", boolean.class).invoke(target, true);
                 if (!valid(target)) throw new AssertionError("No installed last-tier code");
                 check(program, id, entry, rows, target); check(program, id, entry, rows, target);
                 System.out.println("PASS entry=" + entry + " backend=" + backend + " mode=inline oracleOrigin=native oracleRows=" + rows.size()
                     + " arity=" + arity + " compiledPasses=2 backingBytes=64 freshArrayEveryCall=true validAfterExecution=true");
-                System.out.println("diagnostics=" + Json.INSTANCE.stringify(program.diagnostics()));
+                System.out.println("diagnostics=" + Json.stringify(program.diagnostics()));
             } finally { context.leave(); }
         }
     }

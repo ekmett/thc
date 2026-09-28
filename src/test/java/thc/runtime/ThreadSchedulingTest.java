@@ -125,8 +125,8 @@ public class ThreadSchedulingTest {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); ExecutableProgram program = backend.equals("ast") ? new Program(language, delayModule()) : new BytecodeProgram(language, delayModule()); var target = program.entryTarget("wait");
-                for (long duration : new long[]{Long.MIN_VALUE, -1L, 0L, 2000L}) assertSame(kotlin.Unit.INSTANCE, Calls.target(target, new Object[]{0L, duration, kotlin.Unit.INSTANCE}));
-                compile(target); long before = ((Number) program.diagnostics().get("compiledEntries")).longValue(); long start = System.nanoTime(); assertSame(kotlin.Unit.INSTANCE, Calls.target(target, new Object[]{0L, 10_000L, kotlin.Unit.INSTANCE}));
+                for (long duration : new long[]{Long.MIN_VALUE, -1L, 0L, 2000L}) assertSame(thc.runtime.Unit.INSTANCE, Calls.target(target, new Object[]{0L, duration, thc.runtime.Unit.INSTANCE}));
+                compile(target); long before = ((Number) program.diagnostics().get("compiledEntries")).longValue(); long start = System.nanoTime(); assertSame(thc.runtime.Unit.INSTANCE, Calls.target(target, new Object[]{0L, 10_000L, thc.runtime.Unit.INSTANCE}));
                 assertTrue(System.nanoTime() - start >= 10_000_000L); assertEquals(before + 1, ((Number) program.diagnostics().get("compiledEntries")).longValue()); assertTrue(valid(target));
             } finally { context.leave(); }
         }
@@ -135,14 +135,14 @@ public class ThreadSchedulingTest {
         var context = context(); var worker = Executors.newSingleThreadExecutor();
         try {
             context.initialize("thc"); context.enter(); final Language.State state; final BytecodeProgram program; final RootCallTarget target;
-            try { state = Language.currentState(); var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); program = new BytecodeProgram(language, delayModule(), true); target = program.entryTarget("wait"); assertSame(kotlin.Unit.INSTANCE, Calls.target(target, new Object[]{0L, 0L, kotlin.Unit.INSTANCE})); compile(target); }
+            try { state = Language.currentState(); var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); program = new BytecodeProgram(language, delayModule(), true); target = program.entryTarget("wait"); assertSame(thc.runtime.Unit.INSTANCE, Calls.target(target, new Object[]{0L, 0L, thc.runtime.Unit.INSTANCE})); compile(target); }
             finally { context.leave(); }
             var identity = new AtomicReference<GuestThreadId>();
             class Runner {
                 Future<Object> start(long duration, MaskingState mask) { return worker.submit(() -> {
                     context.enter(); state.getThreads().enterCurrent(mask);
                     try {
-                        identity.set(state.getThreads().currentIdentity()); var answer = Calls.target(target, new Object[]{0L, duration, kotlin.Unit.INSTANCE});
+                        identity.set(state.getThreads().currentIdentity()); var answer = Calls.target(target, new Object[]{0L, duration, thc.runtime.Unit.INSTANCE});
                         if (answer instanceof ContinuationResult continuation) { var request = AsyncContinuations.request(continuation); if (request != null) request.acknowledge(); }
                         else { state.getMaskingState().set(MaskingState.UNMASKED); var request = state.getThreads().poll(target.getRootNode(), true); if (request != null) request.acknowledge(); }
                         return answer;
@@ -158,12 +158,12 @@ public class ThreadSchedulingTest {
             var request = state.getThreads().send(identity.get(), "wake delay"); var saved = (ContinuationResult) first.get(5, TimeUnit.SECONDS);
             assertSame(request, AsyncContinuations.request(saved)); assertTrue(request.compiledCapture); assertEquals(AsyncRequestState.ACKNOWLEDGED, request.getState()); assertEquals(before + 1, ((Number) program.diagnostics().get("compiledEntries")).longValue());
             Thread.sleep(400); context.enter();
-            try { long resumed = System.nanoTime(); assertSame(kotlin.Unit.INSTANCE, saved.continueWith(kotlin.Unit.INSTANCE)); assertTrue(System.nanoTime() - resumed < 250_000_000L, "Resume must not restart the original duration"); }
+            try { long resumed = System.nanoTime(); assertSame(thc.runtime.Unit.INSTANCE, saved.continueWith(thc.runtime.Unit.INSTANCE)); assertTrue(System.nanoTime() - resumed < 250_000_000L, "Resume must not restart the original duration"); }
             finally { context.leave(); }
             identity.set(null); var huge = runner.start(Long.MAX_VALUE, MaskingState.UNMASKED); runner.awaitBlocked(huge); // Saturation must not turn a huge positive delay into an immediate return.
             var hugeRequest = state.getThreads().send(identity.get(), "cancel huge delay"); assertSame(hugeRequest, AsyncContinuations.request((ContinuationResult) huge.get(5, TimeUnit.SECONDS)));
             identity.set(null); long maskedStart = System.nanoTime(); var masked = runner.start(150_000L, MaskingState.MASKED_UNINTERRUPTIBLE); runner.awaitBlocked(masked);
-            var pending = state.getThreads().send(identity.get(), "masked delay"); assertEquals(AsyncRequestState.PENDING, pending.getState()); assertSame(kotlin.Unit.INSTANCE, masked.get(5, TimeUnit.SECONDS));
+            var pending = state.getThreads().send(identity.get(), "masked delay"); assertEquals(AsyncRequestState.PENDING, pending.getState()); assertSame(thc.runtime.Unit.INSTANCE, masked.get(5, TimeUnit.SECONDS));
             assertTrue(System.nanoTime() - maskedStart >= 150_000_000L); assertEquals(AsyncRequestState.ACKNOWLEDGED, pending.getState());
         } finally { context.close(true); worker.shutdownNow(); assertTrue(worker.awaitTermination(5, TimeUnit.SECONDS)); }
     }

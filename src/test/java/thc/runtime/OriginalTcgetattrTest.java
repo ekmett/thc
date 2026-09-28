@@ -94,9 +94,9 @@ class OriginalTcgetattrTest {
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var target = load(language,backend,rawModule(original,source)).entryTarget("entry"); var io = Language.currentState().getStdio(); var bytes = image(90); var valid = ManagedAddress.fromByteArray(bytes).plus(8);
                 assertEquals(-1L,io.close(-1)); long sticky = io.errno(); assertThrows(RuntimeFault.class,() -> Calls.target(target,new Object[]{0L,-1L,valid,9L}));
-                for (long bad : new long[]{Long.MIN_VALUE,2147483648L}) assertThrows(RuntimeFault.class,() -> Calls.target(target,new Object[]{0L,bad,valid,kotlin.Unit.INSTANCE}));
+                for (long bad : new long[]{Long.MIN_VALUE,2147483648L}) assertThrows(RuntimeFault.class,() -> Calls.target(target,new Object[]{0L,bad,valid,thc.runtime.Unit.INSTANCE}));
                 var pointerCell = ManagedAddress.fromAllocation(PinnedMemory.allocate(size(),8)); pointerCell.writeAddressElementIndex(0,valid);
-                for (var bad : List.of(ManagedAddress.nullAddress(),valid.plus(9),pointerCell,ManagedAddress.fromByteArray(new byte[size() - 1]),ManagedAddress.fromHex("00".repeat(size())))) assertThrows(RuntimeFault.class,() -> Calls.target(target,new Object[]{0L,-1L,bad,kotlin.Unit.INSTANCE}));
+                for (var bad : List.of(ManagedAddress.nullAddress(),valid.plus(9),pointerCell,ManagedAddress.fromByteArray(new byte[size() - 1]),ManagedAddress.fromHex("00".repeat(size())))) assertThrows(RuntimeFault.class,() -> Calls.target(target,new Object[]{0L,-1L,bad,thc.runtime.Unit.INSTANCE}));
                 assertArrayEquals(image(90),bytes); assertEquals(sticky,io.errno()); assertSame(valid,pointerCell.readAddressElementIndex(0));
                 for (int i = 0; i <= 2; i++) { int index = i; assertThrows(RuntimeFault.class,() -> load(language,backend,rawModule(original,source,index))); }
                 for (var edit : List.of(list("convention","ccall"),list("safety","safe"),list("arity",2L))) { var changed = (List<Object>) Json.parse(Json.stringify(original)); ((Map<String,Object>) ((Map<?,?>) changed.get(6)).get("foreignCall")).put((String) edit.get(0),edit.get(1)); assertThrows(RuntimeFault.class,() -> validate(changed)); }

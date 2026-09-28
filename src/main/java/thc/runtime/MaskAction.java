@@ -54,9 +54,9 @@ public final class MaskAction extends Expr {
             Object closure;
             try { closure = AstControl.force(frame, this, force, actionValue); }
             catch (AstCapture cut) {
-                throw cut.append((saved, input) -> { actionCall.execute(saved, requireClosure(input), new Object[] {kotlin.Unit.INSTANCE}); return null; });
+                throw cut.append((saved, input) -> { actionCall.execute(saved, requireClosure(input), new Object[] {thc.runtime.Unit.INSTANCE}); return null; });
             }
-            actionCall.execute(frame, requireClosure(closure), new Object[] {kotlin.Unit.INSTANCE});
+            actionCall.execute(frame, requireClosure(closure), new Object[] {thc.runtime.Unit.INSTANCE});
             return null;
         } catch (AstCapture cut) { throw cut.enclose(steps -> new AstMaskScope(this, prior, steps)); }
         finally { SynchronousMasking.set(this, prior); }

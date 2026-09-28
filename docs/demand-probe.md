@@ -45,7 +45,7 @@ certificates and entry obligations.
 versus Id arity, type/coercion slots, absent and bottom demands, lazy wrappers,
 head casts/ticks and metadata-only IO cases.
 
-[`RealCoreCallDemandTest`](../src/test/kotlin/thc/RealCoreCallDemandTest.kt)
+[`RealCoreCallDemandTest`](../src/test/java/thc/RealCoreCallDemandTest.java)
 checks genuine ordinary, polymorphic, lazy and partial applications before and
 after requested guest compilation on both backends.
 [`CallDemandTest`](../src/test/java/thc/runtime/CallDemandTest.java) separately

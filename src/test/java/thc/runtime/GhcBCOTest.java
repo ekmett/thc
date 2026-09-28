@@ -49,7 +49,7 @@ class GhcBCOTest {
     private Closure create(Language language, byte[] code) { return create(language, code, 0, words(0), words(), new Object[0]); }
     private Closure create(Language language, byte[] code, long arity, byte[] bitmap) { return create(language, code, arity, bitmap, words(), new Object[0]); }
     private Closure create(Language language, byte[] code, long arity, byte[] bitmap, byte[] literals) { return create(language, code, arity, bitmap, literals, new Object[0]); }
-    private Closure create(Language language, byte[] code, long arity, byte[] bitmap, byte[] literals, Object[] refs) { return GhcBCO.create(new Node() {}, language, new Metrics(false), code, literals, refs, arity, bitmap, kotlin.Unit.INSTANCE); }
+    private Closure create(Language language, byte[] code, long arity, byte[] bitmap, byte[] literals, Object[] refs) { return GhcBCO.create(new Node() {}, language, new Metrics(false), code, literals, refs, arity, bitmap, thc.runtime.Unit.INSTANCE); }
     @Test void malformedBytecodeFailsBeforeExecutionOrPointerBitFabrication() {
         try (var context = context()) { context.initialize("thc"); context.enter(); try {
             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);

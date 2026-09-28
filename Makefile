@@ -72,7 +72,7 @@ docs-haskell:
 	@printf '%s\n' '$(DOCS_REVISION)' > build/docs/runtime.revision
 
 docs-jvm: check-java
-	./gradlew dokkaGeneratePublicationHtml $(GRADLE_FLAGS) --max-workers=2 -Pthc.docsRevision='$(DOCS_REVISION)'
+	./gradlew javadoc $(GRADLE_FLAGS) --max-workers=2 -Pthc.docsRevision='$(DOCS_REVISION)'
 	@printf '%s\n' '$(DOCS_REVISION)' > build/docs/jvm.revision
 
 docs-check:

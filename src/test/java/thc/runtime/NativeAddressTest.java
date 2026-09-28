@@ -166,8 +166,8 @@ public class NativeAddressTest {
                 }
                 var bytes = new byte[] {1, 2, 3}; var mutable = ManagedAddress.fromByteArray(bytes); assertThrows(RuntimeFault.class, mutable::toNativeBits);
                 assertArrayEquals(new byte[] {1, 2, 3}, bytes); assertThrows(RuntimeFault.class, () -> ManagedAddress.fromAllocation(ManagedAllocation.mutable(8, 8)).toNativeBits());
-                var stable = StablePointers.current(null); var handle = stable.make(kotlin.Unit.INSTANCE); long token = handle.toNativeBits();
-                assertSame(kotlin.Unit.INSTANCE, stable.dereference(registry.recover(token))); assertThrows(RuntimeFault.class, () -> registry.recover(token).readWord8(0));
+                var stable = StablePointers.current(null); var handle = stable.make(thc.runtime.Unit.INSTANCE); long token = handle.toNativeBits();
+                assertSame(thc.runtime.Unit.INSTANCE, stable.dereference(registry.recover(token))); assertThrows(RuntimeFault.class, () -> registry.recover(token).readWord8(0));
                 stable.free(handle); assertThrows(RuntimeFault.class, () -> stable.dereference(registry.recover(token)));
             } finally { context.leave(); }
         }

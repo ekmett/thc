@@ -147,7 +147,7 @@ class ByteStringUtf8Test {
                 }
                 var target = load(language, backend, raw).entryTarget("entry"); var bytes = ManagedAddress.fromByteArray(new byte[]{65});
                 assertThrows(RuntimeFault.class, () -> Calls.target(target, new Object[]{0L, bytes, 1L, 17L}));
-                assertEquals(1, Calls.target(target, new Object[]{0L, bytes, 1L, kotlin.Unit.INSTANCE}));
+                assertEquals(1, Calls.target(target, new Object[]{0L, bytes, 1L, thc.runtime.Unit.INSTANCE}));
             }
         });
     }
@@ -172,7 +172,7 @@ class ByteStringUtf8Test {
             for (var backend : list("ast", "bytecode")) inside(language -> {
                 for (var original : OriginalStdioChecks.foreignCalls(source)) {
                     var ordinary = load(language, backend, shadowed(original, source, false)).entryTarget("entry");
-                    assertEquals(37, Calls.target(ordinary, new Object[]{0L, ManagedAddress.fromByteArray(new byte[]{-1}), 1L, kotlin.Unit.INSTANCE}), stage + "/" + backend + " ordinary lexical join keeps its result");
+                    assertEquals(37, Calls.target(ordinary, new Object[]{0L, ManagedAddress.fromByteArray(new byte[]{-1}), 1L, thc.runtime.Unit.INSTANCE}), stage + "/" + backend + " ordinary lexical join keeps its result");
                     var failure = assertThrows(RuntimeFault.class, () -> load(language, backend, shadowed(original, source, true)));
                     assertTrue(Objects.toString(failure.getMessage(), "").contains("unresolved original FCallId required"), stage + "/" + backend + " rejects the shadowed head specifically: " + failure.getMessage());
                 }
@@ -198,7 +198,7 @@ class ByteStringUtf8Test {
                     var source = new Expr() { @Override public Object execute(VirtualFrame frame) { return bytes; } };
                     var length = new Expr() { @Override public Object execute(VirtualFrame frame) { return 1L; } };
                     var enqueue = new Expr() { @Override public Object execute(VirtualFrame frame) {
-                        effect.evaluated++; effect.pending = state.getThreads().send(identity, "after completed validation"); return kotlin.Unit.INSTANCE;
+                        effect.evaluated++; effect.pending = state.getThreads().send(identity, "after completed validation"); return thc.runtime.Unit.INSTANCE;
                     } };
                     var body = new ByteStringUtf8Expression(safe, new Expr[]{source, length, enqueue}, proof);
                     var root = new FunctionRoot(language, layout.build(), "UTF-8 completion control", null, new int[0], new int[0], new int[0], body,
@@ -210,7 +210,7 @@ class ByteStringUtf8Test {
                         Objects.requireNonNull(effect.pending).acknowledge();
                         // A replay or a poll before native completion would now
                         // return zero. The saved completed result must remain one.
-                        bytes.writeWord8(0, 255); completed = saved.continueWith(kotlin.Unit.INSTANCE);
+                        bytes.writeWord8(0, 255); completed = saved.continueWith(thc.runtime.Unit.INSTANCE);
                     } else {
                         assertEquals(AsyncRequestState.PENDING, Objects.requireNonNull(effect.pending).getState()); assertSame(effect.pending, state.getThreads().poll(root, false));
                         effect.pending.acknowledge(); completed = result;

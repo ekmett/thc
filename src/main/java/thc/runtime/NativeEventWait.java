@@ -100,7 +100,7 @@ public final class NativeEventWait implements AutoCloseable, TruffleSafepoint.In
 
     public short[] await(Node node, int timeout, Runnable beforeBlock) {
         long started = System.nanoTime();
-        TruffleSafepoint.InterruptibleFunction<kotlin.Unit, short[]> action = ignored -> {
+        TruffleSafepoint.InterruptibleFunction<thc.runtime.Unit, short[]> action = ignored -> {
             while (true) {
                 if (interrupted.get()) throw new InterruptedException();
                 NativePollApi.poll(polls, 0, (long) descriptors.length + 1);
@@ -117,7 +117,7 @@ public final class NativeEventWait implements AutoCloseable, TruffleSafepoint.In
                     throw new InterruptedException();
             }
         };
-        return TruffleSafepoint.getCurrent().setBlockedFunction(node, this, action, kotlin.Unit.INSTANCE, null, null);
+        return TruffleSafepoint.getCurrent().setBlockedFunction(node, this, action, thc.runtime.Unit.INSTANCE, null, null);
     }
 
     private static int remaining(long started, int timeout) {
