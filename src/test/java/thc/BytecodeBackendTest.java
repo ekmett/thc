@@ -180,7 +180,7 @@ class BytecodeBackendTest {
             assertFalse(instructions.isBlank()); assertTrue(instructions.contains("c.EnterRoot"), "Dump must contain generated Core instructions"); assertTrue(instructions.contains("load.argument"), "Dump must include the bytecode argument loads");
             assertEquals(120L, ast.execute(7L).asLong()); assertTrue(count(ast, "thunkEvaluations") > 0); assertEquals(0L, count(bytecode, "thunkEvaluations")); assertEquals(0L, count(otherContext, "thunkEvaluations"));
             assertEquals(222L, bytecode.execute(10L).asLong()); assertEquals(0L, count(otherContext, "thunkEvaluations")); assertEquals(30L, otherContext.execute(2L).asLong()); assertEquals(120L, ast.execute(7L).asLong());
-            var bad = assertThrows(PolyglotException.class, () -> first.eval("thc", CoreModules.request(modules, "under", true, false, "unknown-backend", true, false, null, null, null, false)));
+            var bad = assertThrows(PolyglotException.class, () -> first.eval("thc", CoreModules.request(modules, "under", true, false, "unknown-backend", true, false, null, null, false, false)));
             assertTrue(bad.getMessage().contains("Unknown THC backend: unknown-backend"), bad.getMessage()); assertEquals(14L, load(first, "under").execute(7L).asLong());
         }
     }

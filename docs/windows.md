@@ -35,24 +35,6 @@ PowerShell helpers treat native exit codes as authoritative. An ordinary
 compiler message on stderr is not a failed native command. Failed commands
 still stop the workflow.
 
-## Native JSON index checks
-
-~~~powershell
-./bin/windows.ps1 -Action JsonIndexTest -Jobs 4
-~~~
-
-This focused action runs `cabal test json-index -fdevelopment
---test-show-details=direct` with the selected GHC 9.14.1 and its native C
-toolchain. It builds only the test and its dependencies, without requiring a
-JVM build or complete-Core acquisition. The full Test action and Windows CI
-also run this suite; Cabal logs are retained under dist-newstyle.
-
-The suite checks native scalar/ISA parity, Haskell FFI state carry and bounds,
-sidecar sections and hashes, and the tracked cross-language golden vectors.
-Runtime dispatch selects AVX2 only when the CPU and OS support it; unavailable
-explicit backends are rejected. These checks validate the index producer,
-not execution of exported Core. See [the scanner contract](../compiler/json-index/README.md).
-
 ## Native export and launch
 
 The official Windows GHC is a vanilla/static compiler. The exporter loads the
@@ -96,19 +78,19 @@ runtime's exact unit identity and passes a checked package manifest alongside th
 application Core, avoiding the batch launcher's command-length limit.
 
 Stock Windows GHC interfaces do not contain all executable Core needed by this
-support library. On a cold cache, THC acquires the official GHC 9.14.1 source
-archive, checks its SHA-256 and the file inventory in
-`config/ghc/9.14.1/windows-ghc-internal.json`, and builds a private source graph. Native
+support library. On a cold cache, THC checks the GHC 9.14.1 submodule's selected
+source files against `config/ghc/9.14.1/windows-ghc-internal.json` and builds a
+private source graph. The one release-generated header absent from upstream Git
+is retained unchanged under `third-party/pinned/ghc-9.14.1-generated`. Native
 `hsc2hs` uses the selected Windows headers; GHC orders 211 modules and 24 boot
 interfaces. The compiler-provided virtual `GHC.Internal.Prim` has no source body
 in this graph. The selected x86_64 Windows compiler must use its GMP backend.
 Compilation retains ordinary `-O2`, imported optimizations, source notes, Core
 lint and complete-Core interfaces. The installed package database is unchanged.
 
-The first acquisition needs `curl.exe` and `tar.exe` and can take several minutes.
-For offline use, set `THC_GHC_SOURCE_ARCHIVE` to a local copy of
-`ghc-9.14.1-src.tar.xz`; the same fixed SHA-256 remains mandatory. Source and Core
-caches live under `THC_CACHE_HOME` when set. Bundle inputs retain source hashes,
+Initialize the pinned submodules before building; source acquisition then works
+offline. The first Core build can take several minutes. Core caches live under
+`THC_CACHE_HOME` when set. Bundle inputs retain source hashes,
 native target layout, generated-source hashes, compiler commands and graph order.
 
 The complete source ZIP retains every compiled module. A separate checked runtime
@@ -256,7 +238,7 @@ last-error slot. The original errno slot remains separate.
 ~~~
 
 The full Test action and native Windows CI include this test. The producer uses
-the hash-pinned GHC 9.14.1 source archive, rebuilding three unchanged declaration
+the hash-pinned GHC 9.14.1 submodule sources, rebuilding three unchanged declaration
 interfaces with full Core and Core Lint. These bounded declaration fixtures use
 `-fignore-interface-pragmas`; the complete production graph retains normal O2
 and imported pragmas. A GHC session reads the actual FCallIds; a second session

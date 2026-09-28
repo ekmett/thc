@@ -7,12 +7,275 @@ version: 0.1.0.0
 synopsis: Haskell on Truffle/Graal
 license: UPL-1.0 AND BSD-3-Clause
 license-files: LICENSE, LICENSE.txt,
-  compiler/json-index/LICENSE.succinctly, compiler/json-index/LICENSE.everett-bsd
+  third-party/licenses/succinctly-MIT.txt, third-party/licenses/everett-BSD-2-Clause.txt
 author: Edward Kmett
 maintainer: Edward Kmett
 category: Development
 description: A GHC Core plugin and Cabal driver for running Haskell on Truffle/Graal.
 extra-source-files:
+  third-party/pinned/ghc-9.14.1-generated/README.md
+  third-party/pinned/ghc-9.14.1-generated/include/HsBaseConfig.h.in
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/cbits/Win32Utils.c
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/ghc-internal.cabal.in
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/include/CTypes.h
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/include/EventConfig.h.in
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/include/HsBase.h
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/include/HsEvent.h
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/include/HsIntegerGmp.h.in
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/include/RtsIfaceSymbols.h
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/include/consUtils.h
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/include/ieee-flpt.h
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/include/winio_structs.h
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/AllocationLimitHandler.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/ArrayArray.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/Backend.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/Backend/Check.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/Backend/FFI.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/Backend/GMP.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/Backend/Native.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/Backend/Selected.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/Primitives.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/WordArray.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bits.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/ByteOrder.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/ByteOrder.hs-boot
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Char.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Clock.hsc
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Conc/Bound.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Conc/IO.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Conc/POSIX.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Conc/POSIX/Const.hsc
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Conc/Signal.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Conc/Sync.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Conc/Sync.hs-boot
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Conc/Windows.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/ConsoleHandler.hsc
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Control/Arrow.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Control/Category.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Control/Concurrent/MVar.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Control/Exception.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Control/Exception/Base.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Control/Monad.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Control/Monad/Fix.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Control/Monad/IO/Class.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Control/Monad/ST.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Control/Monad/ST/Imp.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Control/Monad/ST/Lazy.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Control/Monad/ST/Lazy/Imp.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Control/Monad/Zip.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Data/Bits.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Data/Bool.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Data/Coerce.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Data/Data.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Data/Dynamic.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Data/Eq.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Data/Foldable.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Data/Function.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Data/Functor.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Data/Functor/Const.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Data/Functor/Identity.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Data/Functor/Utils.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Data/IORef.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Data/Ix.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Data/List.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Data/List/NonEmpty.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Data/Monoid.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Data/NonEmpty.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Data/Ord.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Data/Proxy.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Data/STRef.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Data/STRef/Strict.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Data/Semigroup/Internal.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Data/String.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Data/Traversable.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Data/Type/Bool.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Data/Type/Coercion.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Data/Type/Equality.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Data/Type/Ord.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Data/Typeable.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Data/Unique.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Data/Version.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Data/Version.hs-boot
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Data/Void.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Debug.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Debug/Trace.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Debug/Trace.hs-boot
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Desugar.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Encoding/UTF8.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Environment.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Event.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Event/Arr.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Event/Array.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Event/Control.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Event/EPoll.hsc
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Event/IntTable.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Event/IntVar.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Event/Internal.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Event/Internal/Types.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Event/KQueue.hsc
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Event/Manager.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Event/PSQ.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Event/Poll.hsc
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Event/Thread.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Event/TimeOut.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Event/TimerManager.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Event/Unique.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Event/Windows.hsc
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Event/Windows/Clock.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Event/Windows/ConsoleEvent.hsc
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Event/Windows/FFI.hsc
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Event/Windows/ManagedThreadPool.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Event/Windows/Thread.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Exception/Context.hs-boot
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/ExecutionStack.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Exts.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Fingerprint/Type.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Float.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Float/ConversionUtils.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Float/RealFracMethods.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Foreign/C/ConstPtr.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Foreign/C/Error.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Foreign/C/String.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Foreign/C/Types.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Foreign/Concurrent.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Foreign/ForeignPtr.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Foreign/ForeignPtr/Imp.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Foreign/ForeignPtr/Unsafe.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Foreign/Marshal/Array.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Foreign/Marshal/Error.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Foreign/Marshal/Pool.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Foreign/Marshal/Safe.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Foreign/Marshal/Unsafe.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Foreign/Marshal/Utils.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Foreign/Ptr.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Foreign/StablePtr.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/ForeignSrcLang.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Functor/ZipList.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/GHCi.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/GHCi/Helpers.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Generics.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Heap/InfoTableProf.hsc
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Heap/ProfInfo/Types.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Buffer.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/BufferedIO.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Device.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Encoding.hs-boot
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Encoding/CodePage.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Encoding/CodePage/API.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Encoding/CodePage/Table.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Encoding/Iconv.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Encoding/Latin1.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Encoding/UTF16.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Encoding/UTF32.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/FD.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Handle.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Handle.hs-boot
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Handle/FD.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Handle/FD.hs-boot
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Handle/Internals.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Handle/Lock.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Handle/Lock/Common.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Handle/Lock/Flock.hsc
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Handle/Lock/LinuxOFD.hsc
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Handle/Lock/NoOp.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Handle/Lock/Windows.hsc
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Handle/Text.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Handle/Text.hs-boot
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Handle/Windows.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/IOMode.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/StdHandles.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/StdHandles.hs-boot
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/SubSystem.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Windows/Encoding.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Windows/Handle.hsc
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Windows/Paths.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IOArray.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IORef.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/InfoProv.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Int.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Integer.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Integer/Logarithms.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IsList.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/JS/Foreign/Callback.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/JS/Prim.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/JS/Prim/Internal.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/JS/Prim/Internal/Build.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/LanguageExtensions.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Lexeme.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/MVar.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Magic.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Magic/Dict.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Maybe.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Natural.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Numeric/Natural.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/OverloadedLabels.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Pack.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Prim/Exception.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Prim/Ext.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Prim/Panic.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Prim/PtrEq.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Profiling.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/RTS/Flags.hsc
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/RTS/Flags/Test.hsc
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Read.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Records.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/ResponseFile.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/ST.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/STRef.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Stable.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/StableName.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Stack/ConstantsProf.hsc
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/StaticPtr.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/StaticPtr/Internal.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Stats.hsc
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Storable.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/System/Environment.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/System/Environment/Blank.hsc
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/System/Environment/ExecutablePath.hsc
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/System/Exit.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/System/IO.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/System/IO/Error.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/System/Mem.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/System/Mem/StableName.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/System/Posix/Internals.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/System/Posix/Types.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/TH/Lib.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/TH/Lift.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/TH/Quote.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/TH/Syntax.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Text/ParserCombinators/ReadP.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Text/ParserCombinators/ReadPrec.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Text/Read.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Text/Read/Lex.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Text/Show.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/TopHandler.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Tuple.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Type/Reflection.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Type/Reflection/Unsafe.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/TypeError.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/TypeLits.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/TypeLits/Internal.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/TypeNats.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/TypeNats/Internal.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Unicode.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Unicode/Bits.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Unicode/Char/DerivedCoreProperties.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Unicode/Char/UnicodeData/GeneralCategory.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Unicode/Char/UnicodeData/SimpleLowerCaseMapping.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Unicode/Char/UnicodeData/SimpleTitleCaseMapping.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Unicode/Char/UnicodeData/SimpleUpperCaseMapping.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Unicode/Version.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Unsafe/Coerce.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Wasm/Prim.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Wasm/Prim/Conc.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Wasm/Prim/Conc/Internal.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Wasm/Prim/Exports.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Wasm/Prim/Flag.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Wasm/Prim/Imports.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Wasm/Prim/Types.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Weak.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Weak/Finalize.hs
+  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Windows.hs
   third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/BigNat.hs
   .gitmodules
   third-party/README.md
@@ -31,14 +294,9 @@ extra-source-files:
   test/compact-core/golden/*.json
   test/compact-core/golden/*.hex
   test/compact-core/golden/*.cbd
-  compiler/json-index/README.md
-  compiler/json-index/LICENSE.succinctly
-  compiler/json-index/LICENSE.everett
-  compiler/json-index/LICENSE.everett-bsd
-  compiler/json-index/json_index.h
-  test/json-index/native.c
-  test/json-index/golden/*.json
-  test/json-index/golden/*.idx
+  third-party/licenses/succinctly-MIT.txt
+  third-party/licenses/everett-LICENSE.txt
+  third-party/licenses/everett-BSD-2-Clause.txt
   docs/foreign-exceptions.md
   test/fixtures/compiler/ForeignExceptionNative.hs
   test/fixtures/compiler/ForeignExceptionSafe.hs
@@ -504,7 +762,7 @@ library
     THC.Sources
     THC.Wired
   build-depends:
-    thc:core-json-index,
+    thc:core-symbols,
     base >= 4.22 && < 4.23,
     bytestring >= 0.12.2 && < 0.13,
     containers >= 0.8 && < 0.9,
@@ -533,7 +791,7 @@ library compact-core
     THC.Compact.Compression
     THC.Compact.Zip
   build-depends:
-    thc:core-json-index,
+    thc:core-symbols,
     aeson >= 2.3 && < 2.4,
     base >= 4.22 && < 4.23,
     binary >= 0.8.9 && < 0.9,
@@ -571,7 +829,7 @@ test-suite compact-core-tests
   other-modules: SemanticTests DebugTests CompressionTests CbdTests
   build-depends:
     thc:compact-core,
-    thc:core-json-index,
+    thc:core-symbols,
     base >= 4.22 && < 4.23,
     aeson >= 2.3 && < 2.4,
     binary >= 0.8.9 && < 0.9,
@@ -587,59 +845,16 @@ test-suite compact-core-tests
   if flag(development)
     ghc-options: -Werror
 
-library core-json-index
-  hs-source-dirs: json-index
-  exposed-modules: THC.JsonIndex, THC.JsonIndex.Scanner, THC.CoreSymbols
-  c-sources: compiler/json-index/json_index.c
-  include-dirs: compiler/json-index
-  cc-options: -std=c11 -Wall -Wextra
+library core-symbols
+  hs-source-dirs: src/core-symbols
+  exposed-modules: THC.CoreSymbols
   build-depends:
     base >= 4.22 && < 4.23,
-    bytestring >= 0.12.2 && < 0.13,
-    cryptohash-sha256 >= 0.11 && < 0.12
+    bytestring >= 0.12.2 && < 0.13
   default-language: Haskell2010
   ghc-options: -Wall
   if flag(development)
     ghc-options: -Werror
-    cc-options: -Werror
-
-executable thc-json-index
-  main-is: Main.hs
-  hs-source-dirs: compiler/json-index-tool
-  build-depends:
-    thc:core-json-index,
-    base >= 4.22 && < 4.23,
-    bytestring >= 0.12.2 && < 0.13,
-    cryptohash-sha256 >= 0.11 && < 0.12,
-    directory >= 1.3.10 && < 1.4,
-    filepath >= 1.5.4 && < 1.6
-  default-language: Haskell2010
-  ghc-options: -Wall -rtsopts
-  if flag(development)
-    ghc-options: -Werror
-    cc-options: -Werror
-
-test-suite json-index
-  type: exitcode-stdio-1.0
-  build-tool-depends: thc:thc-json-index
-  main-is: Main.hs
-  hs-source-dirs: test/json-index
-  c-sources: test/json-index/native.c
-  include-dirs: compiler/json-index
-  cc-options: -std=c11 -Wall -Wextra -DTHC_JSON_TEST_EMBEDDED
-  build-depends:
-    thc:core-json-index,
-    base >= 4.22 && < 4.23,
-    bytestring >= 0.12.2 && < 0.13,
-    HUnit >= 1.6 && < 1.7,
-    cryptohash-sha256 >= 0.11 && < 0.12,
-    directory >= 1.3.10 && < 1.4,
-    filepath >= 1.5.4 && < 1.6
-  default-language: Haskell2010
-  ghc-options: -Wall
-  if flag(development)
-    ghc-options: -Werror
-    cc-options: -Werror
 
 test-suite interface-json
   type: exitcode-stdio-1.0
@@ -647,7 +862,7 @@ test-suite interface-json
   hs-source-dirs: test/interface-json, src/compiler
   other-modules: THC.JSON
   build-depends:
-    thc:core-json-index,
+    thc:core-symbols,
     base >= 4.22 && < 4.23,
     bytestring >= 0.12.2 && < 0.13,
     HUnit >= 1.6 && < 1.7,
@@ -702,7 +917,7 @@ executable thc
     THC.Driver.Zip
     THC.Driver.Wired
   build-depends:
-    thc:core-json-index,
+    thc:core-symbols,
     base >= 4.22 && < 4.23,
     Cabal == 3.16.*, Cabal-syntax == 3.16.*,
     aeson >= 2.3 && < 2.4,
@@ -771,7 +986,7 @@ test-suite driver-tests
     THC.Driver.RuntimeShim
   build-tool-depends: thc:thc, thc:thc-interface
   build-depends:
-    thc:core-json-index,
+    thc:core-symbols,
     base >= 4.22 && < 4.23,
     Cabal == 3.16.*, Cabal-syntax == 3.16.*,
     aeson >= 2.3 && < 2.4,
@@ -1141,7 +1356,7 @@ executable thc-fixtures
     ManagedAddressReadFixtures
   hs-source-dirs: test/haskell-fixtures, src/driver
   build-depends:
-    thc:core-json-index,
+    thc:core-symbols,
     base >= 4.22 && < 4.23,
     Cabal == 3.16.*, Cabal-syntax == 3.16.*,
     thc,

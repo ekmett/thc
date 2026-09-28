@@ -14,7 +14,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
-import static thc.Main.launcherJsonSidecars;
 import static thc.Main.launcherArtifactVerification;
 
 @ResourceLock(Resources.SYSTEM_ERR)
@@ -54,16 +53,10 @@ public class LauncherDiagnosticsTest {
         assertFalse(launcherArtifactVerification(concat(host, new String[] {"--", "program", "--verify-artifacts"})).getVerifyArtifacts());
         assertThrows(IllegalArgumentException.class, () -> launcherArtifactVerification(concat(new String[] {"--verify-artifacts", "--verify-artifacts"}, host)));
     }
-    @Test public void explicitSidecarPairsAreRepeatableAndStopAtTheGuestSeparator() {
-        var parsed = launcherJsonSidecars(new String[] {"--ffi", "native", "--json-sidecar", "a.json", "a.idx", "--run-io", "a.json,b.json,@packages.json", "main",
-            "--json-sidecar", "b.json", "b.idx", "--", "program", "--json-sidecar", "guest.json", "guest.idx"});
-        assertArrayEquals(new String[] {"--ffi", "native", "--run-io", "a.json,b.json,@packages.json", "main", "--", "program", "--json-sidecar", "guest.json", "guest.idx"}, parsed.getArguments());
-        var sidecars = new LinkedHashMap<String, String>(); sidecars.put("a.json", "a.idx"); sidecars.put("b.json", "b.idx"); assertEquals(sidecars, parsed.getSidecars());
-        assertNull(launcherJsonSidecars(new String[] {"--", "--json-sidecar", "guest"}).getSidecars());
-        for (var invalid : List.of(new String[] {"--json-sidecar"}, new String[] {"--json-sidecar", "a.json"},
-            new String[] {"--json-sidecar", "a.json", "--"}, new String[] {"--json-sidecar", "@packages.json", "a.idx"},
-            new String[] {"--json-sidecar", "a.json", "a.idx", "--json-sidecar", "a.json", "b.idx"}))
-            assertThrows(IllegalArgumentException.class, () -> launcherJsonSidecars(invalid));
+    @Test public void retiredSidecarOptionIsRejectedOnlyBeforeGuestArguments() {
+        assertThrows(IllegalArgumentException.class, () -> launcherArtifactVerification(new String[]{"--json-sidecar", "a.json", "a.idx"}));
+        var guest = new String[]{"--run-io", "a.json", "main", "--", "program", "--json-sidecar", "guest"};
+        assertArrayEquals(guest, launcherArtifactVerification(guest).getArguments());
     }
     /** Synthetic exact IO boundary: no foreign effects, fixture export, or native process. */
     private Map<String, Object> module() {

@@ -11,7 +11,7 @@
 --
 -- Build a selected Cabal component and launch it with explicit guest runtime arguments.
 module THC.Driver.Run
-  ( RunOptions(..), FfiMode(..), parseFfiMode, runtimeLaunchArguments, runtimeIndexedEntryArguments, runResolvedPackage
+  ( RunOptions(..), FfiMode(..), parseFfiMode, runtimeLaunchArguments, runtimeEntryArguments, runResolvedPackage
   ) where
 
 import Control.Monad (unless, when)
@@ -85,11 +85,9 @@ runtimeLaunchArguments verify mode entry program arguments =
     NativeFfi -> "native"
     ManagedFfi -> "managed"]) mode ++ entry ++ ["--", program] ++ arguments
 
--- | Explicit loose pairs retain their own ownership beside the authenticated
--- package manifest. Keep paths as separate CLI operands, before guest arguments.
-runtimeIndexedEntryArguments :: [FilePath] -> FilePath -> String -> [String]
-runtimeIndexedEntryArguments modules manifest entry =
-  concatMap (\path -> ["--json-sidecar", path, path ++ ".idx"]) modules ++
+-- | Loose Core modules accompany the authenticated package manifest.
+runtimeEntryArguments :: [FilePath] -> FilePath -> String -> [String]
+runtimeEntryArguments modules manifest entry =
   ["--run-io", intercalate "," (modules ++ ["@" ++ manifest]), entry]
 
 -- | Internal simple-package backend retained for Windows after Cabal resolves
@@ -171,8 +169,7 @@ runResolvedPackage opts working target prepareRuntime = do
       -- notes, without sending source filenames through its assembler.
       exportArgs = ["-hide-all-packages", "-no-user-package-db", "-package-env", "-",
                     "-fplugin-opt=THC.Plugin:closure=" ++ (if windows then "thcRunMain" else "main"),
-                    "-fplugin-opt=THC.Plugin:foreign-import-provenance",
-                    "-fplugin-opt=THC.Plugin:json-index"] ++
+                    "-fplugin-opt=THC.Plugin:foreign-import-provenance"] ++
                    packages ++ concatMap (\directory -> ["-i" ++ directory]) dirs ++
                    extensions ++ cpp ++ hcOptions GHC info ++ supportOptions ++
                    ["-fno-code", "-fwrite-interface", "-fwrite-if-simplified-core", source] ++
@@ -191,13 +188,12 @@ runResolvedPackage opts working target prepareRuntime = do
   files <- sort . filter ((== ".json") . takeExtension) <$> listDirectory core
   let modules = [core </> file | file <- files, file /= "audit.json"]
   unless (not (null modules)) $ fail "GHC plugin exported no Core modules"
-  mapM_ (ensureFile . (++ ".idx")) modules
   when (runVerifyArtifacts opts) $
     checked True python ([thcRoot </> "bin/audit-core.py", "--entry", entry, "--io-main",
                       "--package-manifest", supportManifest,
                       "--output", output </> "audit.json"] ++ modules) thcRoot inherited
   checked False runtime (runtimeLaunchArguments (runVerifyArtifacts opts) (runFfiMode opts)
-    (runtimeIndexedEntryArguments modules supportManifest entry) selectedName (runArguments opts)) working inherited
+    (runtimeEntryArguments modules supportManifest entry) selectedName (runArguments opts)) working inherited
 
 filterMFile :: (a -> IO Bool) -> [a] -> IO [a]
 filterMFile predicate items = do

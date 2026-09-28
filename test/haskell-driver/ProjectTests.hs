@@ -194,7 +194,7 @@ projectTests env = TestLabel "three-package project native versus THC run" $ Tes
     -- The first project run must bootstrap the ordinary Cabal plugin library.
     -- Keep this source-only root private so shared compiler artifacts and other
     -- worktrees are never renamed or deleted during the test.
-    forM_ ["compiler", "json-index", "bin", "src", "third-party", "config", "test"] $ \directory ->
+    forM_ ["bin", "src", "third-party", "config", "test"] $ \directory ->
       copyTree (root env </> directory) (sourceOnlyRoot </> directory)
     forM_ ["thc.cabal", "cabal.project", "Setup.hs", ".gitmodules", "LICENSE", "LICENSE.txt", "README.md"] $ \name ->
       copyFile (root env </> name) (sourceOnlyRoot </> name)

@@ -18,7 +18,7 @@ import System.FilePath ((</>))
 import System.Info (os)
 import Test.HUnit (Test(..), assertBool, assertEqual)
 import TestSupport
-import THC.Driver.Run (FfiMode(..), parseFfiMode, runtimeLaunchArguments, runtimeIndexedEntryArguments)
+import THC.Driver.Run (FfiMode(..), parseFfiMode, runtimeLaunchArguments, runtimeEntryArguments)
 
 tests :: Env -> Test
 tests env = TestLabel "run options and target selection" $ TestList
@@ -42,13 +42,11 @@ tests env = TestLabel "run options and target selection" $ TestList
                   ["--run-executable", "@packages.json", "main::Main.main", "flushStdHandles"]]
       , guest <- [[], ["--ffi", "not-a-runtime-mode", "--verify-artifacts", "--", "", "two words", "lambda-λ"]]
       ]
-  , TestLabel "indexed consumers keep explicit pairs before the guest boundary" $ TestCase $ do
+  , TestLabel "loose consumers keep paths before the guest boundary" $ TestCase $ do
       let modules = ["C:/core café/Main.json", "C:/core café/THC.InterfaceClosure.json"]
-          entry = runtimeIndexedEntryArguments modules "C:/support/packages.json" "main:Main.main"
-      assertEqual "exact pair association, manifest and guest operands"
+          entry = runtimeEntryArguments modules "C:/support/packages.json" "main:Main.main"
+      assertEqual "exact module association, manifest and guest operands"
         ["--verify-artifacts", "--ffi", "native",
-         "--json-sidecar", "C:/core café/Main.json", "C:/core café/Main.json.idx",
-         "--json-sidecar", "C:/core café/THC.InterfaceClosure.json", "C:/core café/THC.InterfaceClosure.json.idx",
          "--run-io", "C:/core café/Main.json,C:/core café/THC.InterfaceClosure.json,@C:/support/packages.json", "main:Main.main",
          "--", "program", "--json-sidecar", "guest", "", "--"]
         (runtimeLaunchArguments True (Just NativeFfi) entry "program" ["--json-sidecar", "guest", "", "--"])

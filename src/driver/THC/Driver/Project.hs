@@ -56,7 +56,7 @@ import System.Process (CreateProcess(..), StdStream(..), createProcess, proc, wa
                        readCreateProcessWithExitCode)
 import THC.Driver.Cabal (PlanOptions(..))
 import THC.Driver.Cache (coreCacheDirectory)
-import THC.Driver.CoreIndex (indexedModules, modulePaths, moduleEntries, indexFormat)
+import THC.Driver.CoreIndex (packageModules, modulePaths, moduleEntries)
 import THC.Driver.CoreSymbols (publishCoreUnit)
 import THC.Driver.ForeignBitcode (linkClockGetTime, timeClockHeaders)
 import THC.Driver.GhcProxy (ghcProxyCommand, ghcProxyWindowsCommand)
@@ -702,7 +702,7 @@ prepareInstalledBundleWithVerification verify cache staging recipe driverHash co
     (rtsRegistration, _) <- installedLayoutHeaders context registrationUnit
     probe <- probeCurrent
     let identity = object ["schema" .= (1 :: Int), "helperHash" .= helperHash,
-          "driverHash" .= driverHash, "jsonIndex" .= indexFormat, "recipeHash" .= recipeHash,
+          "driverHash" .= driverHash, "recipeHash" .= recipeHash,
           "rtsRegistration" .= rtsRegistration,
           "registration" .= installedProvenance context registrationUnit]
         index = cache </> "installed-probes/v1" </> shaHex (BL.toStrict (encode identity)) ++ ".json"
@@ -890,7 +890,7 @@ acquireInstalledBundle verify cache staging recipe driverHash context registrati
             "generatedCore" .= [object ["module" .= name, "sha256" .= shaHex bytes] | (name, bytes) <- modules],
             "dependencies" .= installedDepends registrationUnit]
           buildKey = shaHex (BL.toStrict (encode (object inputFields)))
-          exporter = object (["helperHash" .= helperHash, "driverHash" .= driverHash, "jsonIndex" .= indexFormat,
+          exporter = object (["helperHash" .= helperHash, "driverHash" .= driverHash,
                              "options" .= (["post-tidy", "unit-qualified", "source-notes", "dynamic"] :: [String])] ++
                              ["foreignLinkRecipe" .= ("original-capi-llvm-v5" :: String)
                              | any ((`elem` ["System.CPUTime.Posix.ClockGetTime", "Data.Time.Clock.Internal.CTimespec"]) . fst) modules])
@@ -923,7 +923,7 @@ acquireInstalledBundle verify cache staging recipe driverHash context registrati
                 pure (name, result)
               currentClockHeaders <- if null clockHeaders then pure [] else timeClockHeaders (installedLibdir context) includes
               require (currentClockHeaders == clockHeaders) "Selected time headers changed during installed acquisition"
-              (refs, members) <- indexedModules
+              (refs, members) <- packageModules
                 [(name, "core/" ++ show index ++ ".json", bytes)
                 | (index, (name, bytes)) <- zip [0 :: Int ..] linked]
               let receiptBytes = BL.toStrict (encode (object (inputFields ++
@@ -965,20 +965,26 @@ wiredGhcInternal context thcRoot = do
     "The pinned native Windows source recipe requires x86_64-windows"
   windowsSpec <- if Host.os == "mingw32" then Just <$> readJson (thcRoot </> "config/ghc/9.14.1/windows-ghc-internal.json") else pure Nothing
   names <- maybe (pure (map snd moduleSources)) (`field` "modules") windowsSpec
-  sources <- maybe (pure sourceHashes) (\spec -> do
+  let packagePath = "third-party/pinned/ghc-9.14.1/libraries/ghc-internal"
+  sources <- maybe (pure [(name, packagePath </> pinnedSourcePath name, digest) | (name, digest) <- sourceHashes]) (\spec -> do
     files <- field spec "files"
-    forM files $ \item -> (,) <$> field item "path" <*> field item "sha256") windowsSpec
-  let pinned = thcRoot </> "third-party/pinned/ghc-9.14.1/libraries/ghc-internal"
+    forM files $ \item -> do
+      name <- field item "path"
+      path <- optionalField item "source" (packagePath </> name)
+      digest <- field item "sha256"
+      pure (name, path, digest)) windowsSpec
+  let pinned = thcRoot </> packagePath
       layoutRecipe = thcRoot </> "src/driver/cbits/target-layout.c"
       unit = "ghc-internal" :: String
-      sourceArtifact (name, digest) = object
-        ["path" .= (if Host.os == "mingw32" then name else "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/" ++ pinnedSourcePath name), "sha256" .= digest]
-      generatedPaths = sort [path | (path, _) <- sources, takeExtension path == ".hsc"]
-  when (Host.os /= "mingw32") $ forM_ sources $ \(name, expected) -> do
-      let path = pinned </> pinnedSourcePath name
-      requireFile path
-      actual <- digestFile path
-      require (actual == expected) ("pinned GHC 9.14.1 source changed: " ++ name)
+      sourceArtifact (_, path, digest) = object ["path" .= path, "sha256" .= digest]
+      generatedPaths = sort [name | (name, _, _) <- sources, takeExtension name == ".hsc"]
+      verifySources = forM_ sources $ \(name, path, expected) -> do
+        require (not (isAbsolute path) && all (`notElem` [".", ".."]) (splitDirectories path))
+          "Unsafe pinned GHC source path"
+        requireFile (thcRoot </> path)
+        actual <- digestFile (thcRoot </> path)
+        require (actual == expected) ("pinned GHC 9.14.1 source changed: " ++ name)
+  when (Host.os /= "mingw32") verifySources
   requireFile layoutRecipe
   recipeHash <- digestFile layoutRecipe
   pluginHash <- digestFile (contextPluginLibrary context)
@@ -1003,7 +1009,7 @@ wiredGhcInternal context thcRoot = do
       exporter = object (["pluginUnit" .= contextPluginUnit context,
                          "pluginDb" .= contextPluginDb context,
                          "pluginHash" .= pluginHash,
-                         "driverHash" .= contextDriverHash context, "jsonIndex" .= indexFormat,
+                         "driverHash" .= contextDriverHash context,
                          "options" .= (["ghc-internal-source-closure-v2", "post-tidy",
                                         "source-notes", "foreign-import-provenance",
                                         "hsc2hs", "-g"] ++
@@ -1044,9 +1050,8 @@ wiredGhcInternal context thcRoot = do
             Nothing -> exportPinnedCore pinned (contextGhc context) packageTool
               (contextPluginLibrary context) (contextPluginUnit context) layoutRecipe staging
             Just selectedHelper -> do
-              spec <- maybe (fail "Missing Windows source specification") pure windowsSpec
-              source <- acquireWindowsGhcSources context spec sources
-              exportPinnedWindowsCore source (contextGhc context) packageTool
+              verifySources
+              exportPinnedWindowsCore pinned [name | (name, _, _) <- sources] (contextGhc context) packageTool
                 (installedHelper selectedHelper) names layoutRecipe staging
           layout <- readJson (targetLayout artifacts)
           require (validTargetLayout layout &&
@@ -1066,7 +1071,7 @@ wiredGhcInternal context thcRoot = do
               ("pinned wired Core has wrong identity: " ++ name)
             bytes <- BS.readFile core
             pure (member, bytes)
-          (refs, members) <- indexedModules
+          (refs, members) <- packageModules
             [(name, member, bytes) | (name, (member, bytes)) <- zip names originalMembers]
           let derived = ["targetLayout" .= layout, "generatedSources" .= generated] ++
                 ["sourceBuild" .= value | Just value <- [sourceBuildReceipt artifacts]]
@@ -1170,49 +1175,6 @@ projectWindowsWiredBundleCold verify path full refs names excluded key source ex
         atomicBytes path (BL.toStrict archive)
         pure (Bundle path (shaHex (BL.toStrict archive)) refs key [])
 
--- The stock Windows interfaces omit full Core. Acquire the exact upstream
--- source archive only on a bundle-cache miss, then verify each selected source
--- against the repository's immutable inventory. An offline archive override
--- changes location, never compiler version or expected bytes.
-acquireWindowsGhcSources :: ExportContext -> Value -> [(FilePath, String)] -> IO FilePath
-acquireWindowsGhcSources context specification files = do
-  archive <- field specification "archive"
-  url <- field archive "url"
-  digest <- field archive "sha256"
-  prefix <- field archive "root"
-  require (url == ("https://downloads.haskell.org/~ghc/9.14.1/ghc-9.14.1-src.tar.xz" :: String) &&
-    prefix == ("ghc-9.14.1/libraries/ghc-internal" :: String) &&
-    digest == ("2a83779c9af86554a3289f2787a38d6aa83d00d136aa9f920361dd693c101e77" :: String))
-    "Unsupported Windows GHC source archive"
-  forM_ files $ \(path, _) -> require (not (isAbsolute path) &&
-    all (`notElem` [".", ".."]) (splitDirectories path)) "Unsafe GHC source member path"
-  let directory = contextCache context </> "sources/ghc-9.14.1"
-      source = directory </> prefix
-      verify = forM_ files $ \(path, expected) -> do
-        actual <- digestFile (source </> path)
-        require (actual == expected) ("Pinned Windows GHC source changed: " ++ path)
-  createDirectoryIfMissing True (takeDirectory directory)
-  withLock (directory ++ ".lock") $ do
-    exists <- doesDirectoryExist source
-    unless exists $ do
-      override <- lookupEnv "THC_GHC_SOURCE_ARCHIVE"
-      let downloaded = contextCache context </> "sources/ghc-9.14.1-src.tar.xz"
-          path = maybe downloaded id override
-      present <- doesFileExist path
-      unless present $ case override of
-        Just _ -> fail ("THC_GHC_SOURCE_ARCHIVE does not exist: " ++ path)
-        Nothing -> do
-          curl <- findExecutable "curl.exe" >>= maybe (fail "curl.exe is required to acquire pinned GHC source") pure
-          runCommand True curl ["--fail", "--location", "--output", path, url] (contextRoot context)
-      actual <- digestFile path
-      require (actual == digest) "GHC source archive SHA-256 mismatch"
-      tar <- findExecutable "tar.exe" >>= maybe (fail "tar.exe is required to extract pinned GHC source") pure
-      createDirectoryIfMissing True directory
-      runCommand True tar ["-xJf", path, "-C", directory, prefix ++ "/src", prefix ++ "/include",
-        prefix ++ "/LICENSE", prefix ++ "/ghc-internal.cabal.in"] (contextRoot context)
-    verify
-    pure source
-
 -- Cabal locks its own build tree; this also keeps the THC cache and the
 -- published package manifest coherent for concurrent runs of one project.
 withProjectLock :: FilePath -> IO a -> IO a
@@ -1311,7 +1273,7 @@ exporterIdentity context = do
   pure $ object ["pluginUnit" .= contextPluginUnit context,
                  "pluginDb" .= contextPluginDb context,
                  "pluginHash" .= pluginHash,
-                 "driverHash" .= contextDriverHash context, "jsonIndex" .= indexFormat,
+                 "driverHash" .= contextDriverHash context,
                  "options" .= (["post-tidy", "unit-qualified", "source-notes",
                                 "foreign-import-provenance",
                                 "native-debug-info", "-dynamic", "-dcore-lint",
@@ -1537,7 +1499,7 @@ packGlobalBundle store dist capture planned unit buildKey exportKey destination 
       names = map fst sorted
   require (length names == length (nub names))
     ("duplicate exported store modules for " ++ unitId unit)
-  (modules, members) <- indexedModules
+  (modules, members) <- packageModules
     [(name, "core/" ++ show index ++ ".json", bytes)
     | (index, (name, bytes)) <- zip [0 :: Int ..] sorted]
   let inner = object (["format" .= ("thc-core-bundle" :: String), "schema" .= (1 :: Int),
@@ -1652,7 +1614,7 @@ exportConfiguredUnit context keys unit component scalar runtimeShim nativeObject
   let exporter = object $ ["pluginUnit" .= contextPluginUnit context,
                          "pluginDb" .= contextPluginDb context,
                          "pluginHash" .= pluginHash,
-                         "driverHash" .= contextDriverHash context, "jsonIndex" .= indexFormat,
+                         "driverHash" .= contextDriverHash context,
                          "options" .= (["post-tidy", "unit-qualified", "source-notes",
                                          "foreign-import-provenance",
                                          "native-debug-info"] ++ exportWayOptions ++
@@ -1764,7 +1726,7 @@ freshExport context component unit scalar runtimeShim helper nativeObjects build
         retained <- scalarInterfaceModules selectedHelper component unit objects expected
         validateRuntimeShimModules shim retained
       _ -> fail "scalar cbits interface helper missing"
-    (modules, members) <- indexedModules
+    (modules, members) <- packageModules
       [(name, "core/" ++ show index ++ ".json", bytes)
       | (index, (name, bytes)) <- zip [0 :: Int ..] sorted]
     let inputsBytes = BL.toStrict (encode buildInputs)

@@ -97,8 +97,8 @@ jobs:
           cabal run exe:thc-primops -- scalars
           # Cabal's pre-test setup resolves sibling libraries from the combined plan.
           # Register them before any suite starts, including on a clean build.
-          cabal build test:primop-tools test:json-index test:compact-core-tests -fdevelopment
-          cabal test primop-tools json-index compact-core-tests -fdevelopment --test-show-details=direct
+          cabal build test:primop-tools test:compact-core-tests -fdevelopment
+          cabal test primop-tools compact-core-tests -fdevelopment --test-show-details=direct
       - name: Resolve Cabal driver dependencies
         run: cabal build exe:thc
       - name: Install Linux native and LLVM build dependencies

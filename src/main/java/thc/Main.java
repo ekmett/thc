@@ -53,13 +53,13 @@ public final class Main {
     public static Value loadEntry(Context context, List<String> modules, String entry, boolean instrument, String backend) { return loadEntry(context, modules, entry, instrument, backend, false); }
     public static Value loadEntry(Context context, List<String> modules, String entry, boolean instrument, String backend, boolean ioMain) { return loadEntry(context, modules, entry, instrument, backend, ioMain, null); }
     public static Value loadEntry(Context context, List<String> modules, String entry, boolean instrument, String backend, boolean ioMain, String shutdownEntry) { return loadEntry(context, modules, entry, instrument, backend, ioMain, shutdownEntry, configuredAsyncExceptions()); }
-    public static Value loadEntry(Context context, List<String> modules, String entry, boolean instrument, String backend, boolean ioMain, String shutdownEntry, Boolean asyncExceptions) { return loadEntry(context, modules, entry, instrument, backend, ioMain, shutdownEntry, asyncExceptions, null); }
-    public static Value loadEntry(Context context, List<String> modules, String entry, boolean instrument, String backend, boolean ioMain, String shutdownEntry, Boolean asyncExceptions, Map<String, String> jsonSidecars) { return loadEntry(context, modules, entry, instrument, backend, ioMain, shutdownEntry, asyncExceptions, jsonSidecars, false); }
-    public static Value loadEntry(Context context, List<String> modules, String entry, boolean instrument, String backend, boolean ioMain, String shutdownEntry, Boolean asyncExceptions, Map<String, String> jsonSidecars, boolean verifyArtifacts) {
+    public static Value loadEntry(Context context, List<String> modules, String entry, boolean instrument, String backend, boolean ioMain, String shutdownEntry, Boolean asyncExceptions) { return loadEntry(context, modules, entry, instrument, backend, ioMain, shutdownEntry, asyncExceptions, false); }
+    public static Value loadEntry(Context context, List<String> modules, String entry, boolean instrument, String backend, boolean ioMain, String shutdownEntry, Boolean asyncExceptions, boolean indexed) { return loadEntry(context, modules, entry, instrument, backend, ioMain, shutdownEntry, asyncExceptions, indexed, false); }
+    public static Value loadEntry(Context context, List<String> modules, String entry, boolean instrument, String backend, boolean ioMain, String shutdownEntry, Boolean asyncExceptions, boolean indexed, boolean verifyArtifacts) {
         return context.eval("thc", CoreModules.request(modules, entry, instrument,
             !ioMain && Boolean.getBoolean("thc.diagnosticUnsupported"), backend,
             strictBoolean(System.getProperty("thc.sourceNotesEnabled", "true")), ioMain,
-            shutdownEntry, asyncExceptions, jsonSidecars, verifyArtifacts));
+            shutdownEntry, asyncExceptions, indexed, verifyArtifacts));
     }
     public static Boolean configuredAsyncExceptions() {
         String configured = System.getProperty("thc.asyncExceptions");
@@ -95,10 +95,6 @@ public final class Main {
         public String getProgramName() { return programName; }
         public String[] getArguments() { return arguments; }
     }
-    public record SidecarArguments(String[] arguments, Map<String, String> sidecars) {
-        public String[] getArguments() { return arguments; }
-        public Map<String, String> getSidecars() { return sidecars; }
-    }
     public record VerifiedArguments(String[] arguments, boolean verifyArtifacts) {
         public String[] getArguments() { return arguments; }
         public boolean getVerifyArtifacts() { return verifyArtifacts; }
@@ -116,30 +112,12 @@ public final class Main {
         finally { context.leave(); }
     }
 
-    /** Extract only explicit host pairs, leaving everything after -- opaque. */
-    public static SidecarArguments launcherJsonSidecars(String[] rawArgs) {
-        var arguments = new ArrayList<String>();
-        var sidecars = new LinkedHashMap<String, String>();
-        int position = 0;
-        while (position < rawArgs.length) {
-            String argument = rawArgs[position];
-            if (argument.equals("--")) { arguments.addAll(Arrays.asList(rawArgs).subList(position, rawArgs.length)); break; }
-            if (argument.equals("--json-sidecar")) {
-                require(position + 2 < rawArgs.length && !rawArgs[position + 1].equals("--") && !rawArgs[position + 2].equals("--"),
-                    "--json-sidecar requires JSON_PATH INDEX_PATH before guest arguments");
-                String json = rawArgs[position + 1], index = rawArgs[position + 2];
-                require(!blank(json) && !blank(index) && !json.startsWith("@") && sidecars.putIfAbsent(json, index) == null,
-                    "Invalid or duplicate --json-sidecar source: " + json);
-                position += 3;
-            } else { arguments.add(argument); position++; }
-        }
-        return new SidecarArguments(arguments.toArray(String[]::new), sidecars.isEmpty() ? null : sidecars);
-    }
     public static VerifiedArguments launcherArtifactVerification(String[] arguments) {
         var selected = new ArrayList<String>();
         boolean verify = false, guest = false;
         for (String argument : arguments) {
             if (argument.equals("--")) guest = true;
+            require(guest || !argument.equals("--json-sidecar"), "JSON .idx sidecars are no longer supported");
             if (!guest && argument.equals("--verify-artifacts")) { require(!verify, "Duplicate --verify-artifacts"); verify = true; }
             else selected.add(argument);
         }
@@ -147,10 +125,8 @@ public final class Main {
     }
 
     public static void launch(String[] arguments) {
-        var withSidecars = launcherJsonSidecars(arguments);
-        var withVerification = launcherArtifactVerification(withSidecars.arguments());
+        var withVerification = launcherArtifactVerification(arguments);
         String[] rawArgs = withVerification.arguments();
-        var sidecars = withSidecars.sidecars();
         boolean verifyArtifacts = withVerification.verifyArtifacts();
         int prefix = 0;
         FfiMode selected = null;
@@ -170,7 +146,7 @@ public final class Main {
             try (Context context = executionContext(true, ffiMode)) {
                 initializeArguments(context, guest);
                 Boolean async = configuredAsyncExceptions();
-                var action = loadEntry(context, modules(args[1]), args[2], true, defaultBackend(), true, args[3], async == null ? true : async, sidecars, verifyArtifacts);
+                var action = loadEntry(context, modules(args[1]), args[2], true, defaultBackend(), true, args[3], async == null ? true : async, true, verifyArtifacts);
                 check(action.invokeMember("runIO").asBoolean(), "Executable IO did not complete");
                 if (Boolean.getBoolean("thc.diagnostics")) System.err.println(action.getMember("diagnostics").asString());
             }
@@ -181,7 +157,7 @@ public final class Main {
             var guest = launcherArguments(args, 3);
             try (Context context = executionContext(true, ffiMode)) {
                 initializeArguments(context, guest);
-                var action = loadEntry(context, modules(args[1]), args[2], true, defaultBackend(), true, null, configuredAsyncExceptions(), sidecars, verifyArtifacts);
+                var action = loadEntry(context, modules(args[1]), args[2], true, defaultBackend(), true, null, configuredAsyncExceptions(), true, verifyArtifacts);
                 check(action.invokeMember("runIO").asBoolean(), "IO main did not complete");
                 if (Boolean.getBoolean("thc.diagnostics")) System.err.println(action.getMember("diagnostics").asString());
             }
@@ -190,7 +166,7 @@ public final class Main {
         require(args.length >= 3, "Usage: thc MODULE.json[,MODULE.json...] ENTRY INTEGER [--compile]");
         long input = Long.parseLong(args[2]);
         try (Context context = executionContext(false, ffiMode)) {
-            var function = loadEntry(context, modules(args[0]), args[1], true, defaultBackend(), false, null, configuredAsyncExceptions(), sidecars, verifyArtifacts);
+            var function = loadEntry(context, modules(args[0]), args[1], true, defaultBackend(), false, null, configuredAsyncExceptions(), true, verifyArtifacts);
             Long before = null;
             if (Arrays.asList(args).subList(3, args.length).contains("--compile")) {
                 // Training precedes installation; never settle or retry the first installed call.

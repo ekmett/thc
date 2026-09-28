@@ -26,9 +26,9 @@ final class CoreFormatTestSupport {
     @SuppressWarnings("unchecked")
     static Map<String, Object> document(String text) { return (Map<String, Object>) Json.parse(text); }
     static String request(List<String> paths, String entry, String backend, boolean sourceNotes,
-            Boolean async, Map<String, String> sidecars, boolean verify) {
+            Boolean async, boolean indexed, boolean verify) {
         return CoreModules.request(paths, entry, true, false, backend, sourceNotes,
-            false, null, async, sidecars, verify);
+            false, null, async, indexed, verify);
     }
     static void visit(Map<String, Object> input, Consumer<Map<String, Object>> consumer) {
         CoreModules.visitRequestModules(input, consumer);

@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 param(
-    [ValidateSet('Build', 'Runtime', 'Haskell', 'Fixtures', 'Test', 'ArrayTest', 'DirectoryTest', 'CodePageTest', 'WindowsServicesTest', 'LibdwTest', 'MallocTest', 'JsonIndexTest', 'CheckCore')]
+    [ValidateSet('Build', 'Runtime', 'Haskell', 'Fixtures', 'Test', 'ArrayTest', 'DirectoryTest', 'CodePageTest', 'WindowsServicesTest', 'LibdwTest', 'MallocTest', 'CheckCore')]
     [string]$Action = 'Build',
     [ValidateRange(1, 32)][int]$Jobs = 4
 )
@@ -19,7 +19,7 @@ try {
         Assert-ThcJava
         Invoke-ThcTool "$root/gradlew.bat" @('--no-daemon', "--max-workers=$Jobs", 'installDist', 'toolsJar')
     }
-    if ($Action -in @('Build', 'Haskell', 'Fixtures', 'Test', 'ArrayTest', 'DirectoryTest', 'CodePageTest', 'WindowsServicesTest', 'LibdwTest', 'MallocTest', 'JsonIndexTest', 'CheckCore')) {
+    if ($Action -in @('Build', 'Haskell', 'Fixtures', 'Test', 'ArrayTest', 'DirectoryTest', 'CodePageTest', 'WindowsServicesTest', 'LibdwTest', 'MallocTest', 'CheckCore')) {
         $tools = Get-ThcGhc
         $env:GHC = $tools.Compiler
         $env:GHC_PKG = $tools.PackageTool
@@ -30,12 +30,9 @@ try {
             Invoke-ThcTool (Join-Path (Split-Path $tools.Compiler) 'runghc.exe') @('-f', $tools.Compiler,
                 '--ghc-arg=-package', '--ghc-arg=ghc', '--ghc-arg=-package', '--ghc-arg=Cabal',
                 'bin/check-ghc-core.hs', 'check', 'ghc-internal', 'base')
-        } elseif ($Action -ne 'JsonIndexTest') {
+        } else {
             Invoke-ThcTool $cabal (@('build', 'all') + $flags)
         }
-    }
-    if ($Action -in @('Test', 'JsonIndexTest')) {
-        Invoke-ThcTool $cabal (@('test', 'json-index', '--test-show-details=direct') + $flags)
     }
     if ($Action -in @('Fixtures', 'Test')) {
         $fixture = Invoke-ThcTool $cabal (@('list-bin', 'exe:thc-fixtures') + $flags)

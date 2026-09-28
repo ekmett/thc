@@ -1491,23 +1491,8 @@
     "test/compact-core/golden/cbd-module-v1-stored.cbd": {"junit": ["thc.CoreCompactGoldenTest"], "python": [], "haskell": ["compact-core-tests"]},
     "test/compact-core/golden/cbd-module-v1-deflated.cbd": {"junit": ["thc.CoreCompactGoldenTest"], "python": [], "haskell": ["compact-core-tests"]},
     "test/compact-core/golden/cbd-module-v1-mixed.cbd": {"junit": ["thc.CoreCompactGoldenTest"], "python": [], "haskell": ["compact-core-tests"]},
-    "json-index/THC/JsonIndex.hs": {
-      "junit": [], "python": [], "haskell": ["driver-tests", "json-index"]
-    },
-    "json-index/THC/JsonIndex/Scanner.hs": {
-      "junit": [], "python": [], "haskell": ["driver-tests", "json-index"]
-    },
-    "compiler/json-index/json_index.c": {
-      "junit": [], "python": [], "haskell": ["driver-tests", "json-index"]
-    },
-    "compiler/json-index/json_index.h": {
-      "junit": [], "python": [], "haskell": ["driver-tests", "json-index"]
-    },
-    "test/json-index/Main.hs": {
-      "junit": [], "python": [], "haskell": ["json-index"]
-    },
-    "test/json-index/native.c": {
-      "junit": [], "python": [], "haskell": ["json-index"]
+    "src/core-symbols/THC/CoreSymbols.hs": {
+      "junit": [], "python": [], "haskell": ["driver-tests", "compact-core-tests"]
     },
     "examples/GhcBCO.hs": {
       "junit": ["thc.runtime.GhcBCOTest"], "python": []
@@ -2351,7 +2336,7 @@
         "bin/test-audit-core.py"
       ]
     },
-    "app/Main.hs": {
+    "src/driver/Main.hs": {
       "junit": [],
       "python": [],
       "haskell": ["driver-tests"]

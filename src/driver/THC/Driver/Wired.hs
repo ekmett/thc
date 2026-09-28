@@ -207,12 +207,15 @@ exportPinnedCore = exportPinnedUsing
 
 -- The Windows compiler has no dynamic plugin way. Compile unchanged pinned
 -- sources with full Core and read their actual vanilla interfaces through GHC.
-exportPinnedWindowsCore :: FilePath -> FilePath -> FilePath -> FilePath -> [String] -> FilePath -> FilePath -> IO WiredArtifacts
-exportPinnedWindowsCore upstream ghc ghcPkg helper expected layoutRecipe staging = do
+exportPinnedWindowsCore :: FilePath -> [FilePath] -> FilePath -> FilePath -> FilePath -> [String] -> FilePath -> FilePath -> IO WiredArtifacts
+exportPinnedWindowsCore upstream sourceFiles ghc ghcPkg helper expected layoutRecipe staging = do
   let source = staging </> "src"
       overlay = staging </> "interfaces"
       core = staging </> "core"
-  copyTree (upstream </> "src") source
+  forM_ (filter ("src/" `isPrefixOf`) sourceFiles) $ \path -> do
+    let target = source </> drop 4 path
+    createDirectoryIfMissing True (takeDirectory target)
+    copyFile (upstream </> path) target
   createDirectoryIfMissing True overlay
   createDirectoryIfMissing True core
   registration <- package "ghc-internal"
@@ -292,14 +295,6 @@ treeFiles directory = do
     let path = directory </> name
     isDirectory <- doesDirectoryExist path
     if isDirectory then treeFiles path else pure [path])
-
-copyTree :: FilePath -> FilePath -> IO ()
-copyTree source destination = do
-  files <- treeFiles source
-  forM_ files $ \path -> do
-    let target = destination </> makeRelative source path
-    createDirectoryIfMissing True (takeDirectory target)
-    copyFile path target
 
 exportPinnedUsing :: FilePath -> FilePath -> FilePath -> FilePath -> String -> FilePath -> FilePath -> IO WiredArtifacts
 exportPinnedUsing packageRoot ghc ghcPkg pluginLibrary pluginUnit layoutRecipe staging = do

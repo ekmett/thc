@@ -7,10 +7,10 @@
       "reason": "Original native forkOS foreign-export initializers require executable callback registration; retained in the complete source archive."
     }
   ],
-  "archive": {
-    "url": "https://downloads.haskell.org/~ghc/9.14.1/ghc-9.14.1-src.tar.xz",
-    "sha256": "2a83779c9af86554a3289f2787a38d6aa83d00d136aa9f920361dd693c101e77",
-    "root": "ghc-9.14.1/libraries/ghc-internal"
+  "upstream": {
+    "repository": "https://github.com/ghc/ghc",
+    "revision": "902339d332fb4ce2b3c87dcac1ee6495d41ad886",
+    "root": "libraries/ghc-internal"
   },
   "files": [
     {
@@ -35,6 +35,7 @@
     },
     {
       "path": "include/HsBaseConfig.h.in",
+      "source": "third-party/pinned/ghc-9.14.1-generated/include/HsBaseConfig.h.in",
       "sha256": "45ab1cf2ee1b8c226941e0c084cf01f44f9f418a65483b336e847aae6459f4da"
     },
     {

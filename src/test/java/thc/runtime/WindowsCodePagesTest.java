@@ -104,11 +104,11 @@ class WindowsCodePagesTest {
         assertEquals("9.14.1", proof.get("ghc"));
         assertEquals(true, proof.get("originalFCallIds"));
         assertEquals(new ArrayList<>(operations.keySet()), proof.get("entries"));
-        assertEquals("2a83779c9af86554a3289f2787a38d6aa83d00d136aa9f920361dd693c101e77", proof.get("archiveSha256"));
+        assertEquals("902339d332fb4ce2b3c87dcac1ee6495d41ad886", ((Map<?, ?>) proof.get("upstream")).get("revision"));
         OriginalStdioChecks.hashes(root, proof.get("inputHashes"), Set.of("test/fixtures/compiler/WindowsCodePageAudit.hs",
             "test/haskell-fixtures/WindowsCodePageFixtures.hs", "bin/core_original_foreign.py"), null);
         OriginalStdioChecks.hashes(root, proof.get("artifactHashes"), Set.of(logs + "/pre.json", logs + "/post.json", logs + "/oracle.json"), logs + "/");
-        var upstream = logs + "/source/ghc-9.14.1/libraries/ghc-internal/";
+        var upstream = "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/";
         var sourceHashes = new LinkedHashMap<String, String>();
         for (var entry : ((Map<String, String>) proof.get("sourceHashes")).entrySet()) {
             var relative = root.getCanonicalFile().toPath().relativize(new File(entry.getKey()).getCanonicalFile().toPath()).toString().replace('\\', '/');
@@ -116,7 +116,7 @@ class WindowsCodePagesTest {
         }
         OriginalStdioChecks.hashes(root, sourceHashes, Set.of(upstream + "src/GHC/Internal/Windows.hs",
             upstream + "src/GHC/Internal/IO/Encoding/CodePage.hs", upstream + "src/GHC/Internal/IO/Encoding/CodePage/API.hs",
-            upstream + "cbits/Win32Utils.c"), upstream);
+            upstream + "cbits/Win32Utils.c", "third-party/pinned/ghc-9.14.1-generated/include/HsBaseConfig.h.in"), "third-party/pinned/");
         for (var command : (List<Map<String, Object>>) proof.get("commands")) assertEquals(command.get("expectedExit"), command.get("exit"));
         var oracle = json(logs + "/oracle.json");
         assertEquals(263, ((List<?>) oracle.get("mapping")).size());
