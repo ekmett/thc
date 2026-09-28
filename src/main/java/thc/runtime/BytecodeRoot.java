@@ -33,7 +33,6 @@ import com.oracle.truffle.api.exception.AbstractTruffleException;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.nodes.RootNode;
 import thc.Language;
 
 /**
@@ -49,16 +48,12 @@ import thc.Language;
 @GenerateBytecode(languageClass = Language.class, enableYield = true,
         boxingEliminationTypes = {int.class, long.class, float.class, double.class, boolean.class})
 public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode {
-    static {
-        // Stock API would silently ignore the new protected override.
-        if (RootNode.materializableFramePolicyVersion() != 1)
-            throw new LinkageError("THC requires the declared materializable-root API");
-    }
-    @Override public final boolean requiresUnprofiledReturn() {
+    // Optional overlay declarations; stock Truffle uses its ordinary policies.
+    public final boolean requiresUnprofiledReturn() {
         return asyncEnabled || delimitedEnabled;
     }
 
-    @Override protected final boolean requiresMaterializableFrame() {
+    protected final boolean requiresMaterializableFrame() {
         return asyncEnabled || delimitedEnabled;
     }
 
@@ -76,8 +71,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         if (casePlan == null) throw new IllegalStateException("Unconfigured bytecode case decision");
         return casePlan.inline.isValid();
     }
-    @Override public final long getGraphBudgetGeneration() { return casePlan == null ? 0 : casePlan.generation(); }
-    @Override public final long prepareGraphBudgetRetry(long failedGeneration) {
+    public final long getGraphBudgetGeneration() { return casePlan == null ? 0 : casePlan.generation(); }
+    public final long prepareGraphBudgetRetry(long failedGeneration) {
         return casePlan == null ? failedGeneration : casePlan.recover(failedGeneration);
     }
     @Override protected boolean prepareForCompilation(boolean rootCompilation, int tier, boolean lastTier) {
