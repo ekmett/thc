@@ -300,8 +300,11 @@ class OriginalUnlinkAtTest {
                 val body = OriginalStdioExpression(OriginalStdioOp.UNLINKAT,
                     arrayOf(value(StdioHostAbi.load().atFdcwd), value(cstring(file.toString())), value(0L), enqueue), proof)
                 val ast = FunctionRoot(language, layout.build(), "unlinkat completion", null,
-                    intArrayOf(), intArrayOf(), intArrayOf(), body, Metrics(false),
-                    tuple = shape, tupleSlots = slots, enableAsync = true)
+                    intArrayOf(), intArrayOf(), intArrayOf(), body,
+                    Metrics(false), emptyArray(), body.representation, body.coreSourceLocation,
+                    booleanArrayOf(), null, shape, slots,
+                    null, true, emptyArray(), false,
+                    FunctionRootRole.FUNCTION, false)
                 val saved = checkNotNull(SavedGuestContinuationKt.savedGuestContinuation(Calls.target(ast.callTarget, arrayOf(0L))))
                 assertSame(pending, saved.asyncRequest()); assertFalse(Files.exists(file))
                 pending!!.acknowledge()

@@ -83,8 +83,12 @@ class AstSelfCallTest {
                     val body = object : Expr() {
                         override fun execute(frame: VirtualFrame): Any = error("Frame restoration must not execute its body")
                     }
-                    val root = FunctionRoot(language, descriptor, "optional references", null, intArrayOf(),
-                        slots, intArrayOf(0, 1), body, Metrics(false), argumentProofs = proofs)
+                    val root = FunctionRoot(language, descriptor, "optional references", null,
+                        intArrayOf(), slots, intArrayOf(0, 1), body,
+                        Metrics(false), proofs, body.representation, body.coreSourceLocation,
+                        booleanArrayOf(), null, null, intArrayOf(),
+                        null, false, emptyArray(), false,
+                        FunctionRootRole.FUNCTION, false)
                     val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), descriptor)
                     root.buildFrame(arrayOf(0L, first, second), frame)
                     assertSame(first, FrameAccess.read(frame, slots[0]))

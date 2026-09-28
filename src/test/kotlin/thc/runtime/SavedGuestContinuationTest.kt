@@ -61,9 +61,12 @@ class SavedGuestContinuationTest {
             context.initialize("thc"); context.enter()
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                fun root(probe: CompletionProbe, enabled: Boolean) = FunctionRoot(language,
-                    FrameLayout().build(), "completion control", null, intArrayOf(), intArrayOf(),
-                    intArrayOf(), probe, Metrics(false), enableAsync = enabled)
+                fun root(probe: CompletionProbe, enabled: Boolean) = FunctionRoot(language, FrameLayout().build(), "completion control", null,
+                    intArrayOf(), intArrayOf(), intArrayOf(), probe,
+                    Metrics(false), emptyArray(), probe.representation, probe.coreSourceLocation,
+                    booleanArrayOf(), null, null, intArrayOf(),
+                    null, enabled, emptyArray(), false,
+                    FunctionRootRole.FUNCTION, false)
                 val probe = CompletionProbe()
                 val root = root(probe, true)
                 val target = root.callTarget
