@@ -82,7 +82,11 @@ class StockGraphRecoveryTest {
     }
     @Test void realBytecodeOsrFailureFinishesOldLoopThenFreshEntryRunsCompiledOsr() {
         Truffle.getRuntime();
-        Controls.recoverBytecodeOsr();
+        Controls.recoverBytecodeOsr(false);
+    }
+    @Test void installedBytecodeEntryClaimsTheRealFailureOfItsSavedLoopOsr() {
+        Truffle.getRuntime();
+        Controls.recoverBytecodeOsr(true);
     }
     @Test void realDeferredDefaultFailureKeepsPreparedSidesReplacementLocal() {
         Truffle.getRuntime();
@@ -644,7 +648,7 @@ class StockGraphRecoveryTest {
             }
         }
 
-        static void recoverBytecodeOsr() {
+        static void recoverBytecodeOsr(boolean installedEntry) {
             try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
                     .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
                     .option("engine.SingleTierCompilationThreshold", "10000000")
@@ -660,10 +664,15 @@ class StockGraphRecoveryTest {
                     }).getNode(0);
                     side.configureCaseRegions(true, false, new BytecodeCaseRegion[0]);
                     var checkpoint = new BytecodeCheckpoint(); checkpoint.setArmed(true);
+                    var entries = new BytecodeCheckpoint(); entries.setArmed(true);
                     var source = new BytecodeCaseRegion.Source(new com.oracle.truffle.api.bytecode.LocalAccessor[][]{
                             new com.oracle.truffle.api.bytecode.LocalAccessor[0]}, null);
                     var root = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT, b -> {
                         b.beginRoot(); b.beginBlock();
+                        if (installedEntry) {
+                            b.emitCheckpointArmed(entries);
+                            b.beginYield(); b.emitLoadConstant(Unit.INSTANCE); b.endYield();
+                        }
                         var counter = b.createLocal("counter", FrameSlotKind.Long);
                         var total = b.createLocal("total", FrameSlotKind.Long);
                         var answer = b.createLocal("case result", FrameSlotKind.Object);
@@ -692,15 +701,38 @@ class StockGraphRecoveryTest {
                             new BytecodeCaseRegion(new Object[0], 1, new com.oracle.truffle.api.RootCallTarget[]{side.getCallTarget()},
                                     new CaptureLayout[]{null}, false)});
                     var target = root.getCallTarget();
-                    assertEquals(10733223936L, Calls.target(target, new Object[]{0L}));
+                    ContinuationResult parked = null;
+                    int parkedPc = -1;
+                    if (installedEntry) {
+                        parked = assertInstanceOf(ContinuationResult.class, Calls.target(target, new Object[]{0L}));
+                        parkedPc = parked.getContinuationRootNode().getLocation().getBytecodeIndex();
+                        assertSame(root, parked.getContinuationRootNode().getSourceRootNode());
+                        assertEquals(1, entries.getVisits().get()); assertEquals(0, checkpoint.getVisits().get());
+                        assertTrue(((OptimizedCallTarget) target).compile(true));
+                        assertTrue(((OptimizedCallTarget) target).isValidLastTier());
+                        ((OptimizedTruffleRuntime) Truffle.getRuntime()).bypassedInstalledCode((OptimizedCallTarget) target);
+                        assertEquals(10733223936L, parked.continueWith(Unit.INSTANCE));
+                        assertTrue(((OptimizedCallTarget) target).isValidLastTier(),
+                                "the independently installed normal entry must survive the real OSR failure");
+                    } else assertEquals(10733223936L, Calls.target(target, new Object[]{0L}));
                     assertEquals(4096, checkpoint.getVisits().get()); assertEquals(0, checkpoint.getCompiledVisits().get());
                     var failure = root.graphFailure.get(); assertNotNull(failure, "actual bytecode OSR must fail the fixed budget");
                     assertInstanceOf(BaseOSRRootNode.class, failure.target().getRootNode());
                     assertSame(root, GraphRecovery.source(failure.target().getRootNode()));
                     assertTrue(GraphRecovery.graphTooBig(failure.reason(), true, true));
                     assertFalse(failure.target().isSubmittedForCompilation()); assertFalse(failure.target().isValid());
+                    assertNotSame(target, failure.target());
                     var failedBytecode = root.getBytecodeNode();
-                    assertEquals(10733223936L, Calls.target(target, new Object[]{0L}));
+                    if (installedEntry) {
+                        var next = assertInstanceOf(ContinuationResult.class, Calls.target(target, new Object[]{0L}));
+                        assertEquals(2, entries.getVisits().get(), "new ingress executes exactly once");
+                        assertNotSame(root, next.getContinuationRootNode().getSourceRootNode(),
+                                "installed normal entry must claim the failed OSR receipt before ingress");
+                        assertNotNull(recovered(root));
+                        assertEquals(10733223936L, next.continueWith(Unit.INSTANCE));
+                        assertSame(root, parked.getContinuationRootNode().getSourceRootNode());
+                        assertEquals(parkedPc, parked.getContinuationRootNode().getLocation().getBytecodeIndex());
+                    } else assertEquals(10733223936L, Calls.target(target, new Object[]{0L}));
                     assertEquals(8192, checkpoint.getVisits().get());
                     assertTrue(checkpoint.getCompiledVisits().get() > 0, "replacement must execute actual OSR-compiled loop visits");
                     var fresh = (BytecodeRoot) recovered(root).getRootNode();

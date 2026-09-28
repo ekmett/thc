@@ -76,8 +76,10 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Prolog public static final class RecoveryEntry {
         @Specialization public static void enter(@Bind BytecodeRoot root) {
             DirectCallNode redirect = root.recoveredEntry;
-            if (redirect == null && CompilerDirectives.inInterpreter() && root.graphFailure.get() != null)
+            if (redirect == null && root.graphFailure.get() != null) {
+                CompilerDirectives.transferToInterpreterAndInvalidate();
                 redirect = root.recoverEntry();
+            }
             if (redirect != null) throw EnterRecovered.INSTANCE;
         }
     }
