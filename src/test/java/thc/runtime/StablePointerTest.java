@@ -131,7 +131,7 @@ public class StablePointerTest {
     }
     private List<Object> argumentReps(List<?> app) {
         var result = new ArrayList<Object>();
-        for (var argument : (List<?>) app.get(2)) { var metadata = CoreRepresentations.metadata(argument); result.add(metadata == null ? null : metadata.get("rep")); }
+        for (var argument : (List<?>) app.get(2)) { var metadata = CoreRepresentations.metadata((List<?>) argument); result.add(metadata == null ? null : metadata.get("rep")); }
         return result;
     }
 
@@ -145,7 +145,7 @@ public class StablePointerTest {
             assertThrows(RuntimeFault.class, () -> CoreStablePointers.validate(with(metadata, "foreignCall", with(descriptor, "safety", "safe")), arguments, flags, metadata.get("rep")));
             assertThrows(RuntimeFault.class, () -> CoreStablePointers.validate(metadata, arguments.reversed(), flags, metadata.get("rep")));
             var make = applications.stream().filter(app -> app.get(1) instanceof List<?> head && head.size() >= 2 && head.subList(0, 2).equals(List.of("prim", "makeStablePtr#"))).findFirst().orElseThrow();
-            var operation = StablePointerOp.MAKE; var input = new ArrayList<CoreRepresentation>(); for (var arg : (List<?>) make.get(2)) input.add(CoreRepresentations.expression(arg));
+            var operation = StablePointerOp.MAKE; var input = new ArrayList<CoreRepresentation>(); for (var arg : (List<?>) make.get(2)) input.add(CoreRepresentations.expression((List<?>) arg));
             var output = CoreRepresentations.expression(make); operation.validate(input, (List<?>) make.get(3), output);
             assertThrows(RuntimeFault.class, () -> operation.validate(input, List.of(false, false), output));
             var synthetic = json(new File(directory, stage + "/synthetic/SharedCAFNative.json")); var syntheticNodes = new ArrayList<List<?>>(); nodes(synthetic.get("bindings"), syntheticNodes);

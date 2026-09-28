@@ -1219,8 +1219,9 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                         self.assertEqual("runtime-core-native", name)
                         self.assertLessEqual({"thc.RuntimeTest", "thc.BytecodeBackendTest"}, actual)
         self.assertEqual({"thc.runtime.BitPrimopsTest", "thc.IntegerPrimopsTest",
-                          "thc.SignedNarrowPrimopsTest"},
-                         set(owners["src/test/kotlin/thc/PrimopTestContext.kt"]["junit"]))
+                          "thc.SignedNarrowPrimopsTest", "thc.runtime.AddressIdentityNativeTest",
+                          "thc.runtime.ManagedAddressStorageTest", "thc.runtime.ManagedAllocationTest"},
+                         set(owners["src/test/java/thc/PrimopTestContext.java"]["junit"]))
 
     def test_tcsetattr_sources_select_the_original_native_comparison(self):
         for path in ("compiler/test-fixtures/OriginalTcsetattrAudit.hs", "compiler/test-fixtures/OriginalTcsetattrNative.hs",
