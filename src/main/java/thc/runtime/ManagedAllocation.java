@@ -506,7 +506,7 @@ public final class ManagedAllocation {
         if (size < 0 || size > Integer.MAX_VALUE) throw fault("Managed allocation size outside JVM domain");
         if (nativeBacking) {
             if (alignment <= 0 || (alignment & (alignment - 1)) != 0) throw fault("Pinned ByteArray# alignment must be a positive power of two");
-            var storage = Arena.ofAuto().allocate(size + 1, alignment).asSlice(0, size);
+            var storage = allocateNativeStorage(size, alignment);
             return new ManagedAllocation(null, storage, true, pointerBytes, false, pinned);
         }
         var bytes = new byte[(int) size];
@@ -520,8 +520,13 @@ public final class ManagedAllocation {
     /** A real guest copy, not promotion of an existing alias at a foreign boundary. */
     public static ManagedAllocation immutableGuest(byte[] bytes, int pointerBytes) {
         if (!thc.Language.currentState().getNativeByteArrays()) return immutable(bytes, pointerBytes);
-        var storage = Arena.ofAuto().allocate(bytes.length + 1L, 8).asSlice(0, bytes.length);
+        var storage = allocateNativeStorage(bytes.length, 8);
         MemorySegment.copy(MemorySegment.ofArray(bytes), 0, storage, 0, bytes.length);
         return new ManagedAllocation(null, storage, false, pointerBytes, false, false);
+    }
+    // Native allocation may reserve memory and interact with JDK thread state.
+    // Keep that machinery outside guest graphs without hiding heap allocation.
+    @TruffleBoundary private static MemorySegment allocateNativeStorage(long size, long alignment) {
+        return Arena.ofAuto().allocate(size + 1, alignment).asSlice(0, size);
     }
 }
