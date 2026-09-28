@@ -204,8 +204,13 @@ The pinned bytecode continuation entry reuses its saved materialized frame in
 compiled code as well as the interpreter. A fresh virtual operand frame can
 escape when a yield copies live operands across an exception-handler merge,
 causing a compiler bailout. `BytecodeStackPreparation` checks and replaces only
-that generated entry block; saved bytecode locations, raw slot carriers, stack
-balancing and transaction restoration are unchanged. `BytecodeLiveOperandResumeTest`
+that generated entry block and its now-unreachable split-frame forwarding paths.
+The reserved slot and user-local offsets remain unchanged; actual local clearing,
+saved bytecode locations, raw slot carriers, stack balancing and transaction
+restoration are preserved. Unknown reserved-slot producers or consumers fail
+the pinned shape checks. `BytecodeUnifiedFrameTest` checks live/dead locals and
+exception cleanup across a first compiled entry and saved resumption.
+`BytecodeLiveOperandResumeTest`
 compiles the first saved suffix before any resume and checks resuspension with a
 live operand, frame identity and the final result.
 
