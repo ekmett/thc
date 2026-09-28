@@ -21,6 +21,26 @@ import static thc.Main.launcherArtifactVerification;
 @ResourceLock(Resources.SYSTEM_PROPERTIES)
 public class LauncherDiagnosticsTest {
     @TempDir public Path directory;
+    @Test
+    @org.junit.jupiter.api.condition.EnabledOnOs({org.junit.jupiter.api.condition.OS.LINUX, org.junit.jupiter.api.condition.OS.MAC})
+    public void shellWrapperPreservesExplicitModulesAndEveryArgument() throws Exception {
+        var script = directory.resolve("bin/run.sh");
+        Files.createDirectories(script.getParent());
+        Files.copy(Path.of(System.getProperty("thc.projectRoot"), "bin/run.sh"), script);
+        // Observe the real wrapper's process boundary without requiring a second JVM.
+        Files.writeString(directory.resolve("Makefile"), "check-java:\n\t@true\n");
+        var child = directory.resolve("build/install/thc/bin/thc");
+        Files.createDirectories(child.getParent());
+        Files.writeString(child, "#!/bin/sh\nprintf '%s\\n' \"$@\"\n");
+        assertTrue(child.toFile().setExecutable(true));
+        var arguments = List.of("--ffi=native", "path with spaces/core.json", "entry", "", "--", "guest", "--compile");
+        var command = new ArrayList<>(List.of("sh", script.toString())); command.addAll(arguments);
+        var process = new ProcessBuilder(command).redirectErrorStream(true).start();
+        assertTrue(process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS));
+        var output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        assertEquals(0, process.exitValue(), output);
+        assertEquals(arguments, output.lines().toList());
+    }
     @Test public void scalarCompileChecksTheImmediateCallWithoutAdditionalTraining() throws Exception {
         var body = List.of("app", List.of("prim", "+#"), List.of(List.of("var", "input"), List.of("lit", "int", "1")), List.of(false, false));
         var expression = List.of("lam", List.of(Map.of("id", "input", "name", "input", "lifted", false)), body);

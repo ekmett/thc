@@ -41,17 +41,18 @@ original Integer module is required by the real `Double` implementation; omittin
 it is a strict loading error, not a request to replace the library method.
 
 These are real Haskell modules compiled by GHC 9.14.1 at `-O2`. The THC
-prototype exports `THC.ExamplePrim` and `THC.Fixtures`; `NativeOracle.hs` is only the
-native GHC oracle and benchmark driver. The prototype does not need to execute
-that driver's `base` IO code to execute the exported fixtures.
+smoke suite exports `THC.Prim.Test` and `THC.Fixtures`; `NativeOracle.hs` is the
+native GHC oracle and benchmark driver. The suite invokes the exported fixtures
+directly without executing that driver's `base` IO code.
 
-`THC.ExamplePrim` supplies ordinary Haskell functions and constructors from a separate
-module. Its `Box`, `Pair`, `List`, `Function`, and `Unary` types are deliberately small.
+`THC.Prim.Test` supplies ordinary Haskell functions and constructors from the private
+`thc:lib:tests` component, under `t/fixtures/compiler`. It is not part of the public
+runtime API. Its `Box`, `Pair`, `List`, `Function`, and `Unary` types are deliberately small.
 Only `Int#` arithmetic and comparisons are primitive runtime services; addition
 of two `Box` values, list construction/traversal, application helpers, and
 recursive functions are compiled Haskell. `NoImplicitPrelude` keeps the initial
-end-to-end dependency graph tractable. This is a constrained first milestone,
-not evidence of broad `base`, IO, or FFI compatibility.
+smoke dependency graph small. This focused suite does not by itself establish
+broad `base`, IO, or FFI compatibility.
 
 Every terminating public entry has type `Int# -> Int#`, allowing the host to
 supply and read machine integers while its implementation exercises lifted

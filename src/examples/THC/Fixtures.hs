@@ -20,7 +20,7 @@ module THC.Fixtures
   ) where
 
 import GHC.Exts (Int#, (+#), (-#), (*#), (<=#))
-import THC.ExamplePrim
+import THC.Prim.Test
 
 sumLoop :: Int# -> Int#
 sumLoop n = go n 0# where

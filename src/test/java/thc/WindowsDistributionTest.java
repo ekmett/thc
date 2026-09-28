@@ -251,7 +251,7 @@ class WindowsDistributionTest {
         }
         var core = Files.createDirectories(temporary.resolve("Core inputs with spaces"));
         var modules = new ArrayList<String>();
-        for (var module : List.of("THC.ExamplePrim", "THC.Fixtures"))
+        for (var module : List.of("THC.Prim.Test", "THC.Fixtures"))
             modules.add(Files.copy(root.resolve("build/core/" + module + ".json"), core.resolve(module + ".json")).toAbsolutePath().toString());
         var evidence = Files.createDirectories(root.resolve("build/windows-launcher/" + UUID.randomUUID()));
         var oracle = Files.readAllLines(root.resolve("build/native/oracle.tsv")).stream().map(line -> line.split("\t", -1)).toList();

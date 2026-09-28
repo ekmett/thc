@@ -549,7 +549,7 @@ REQUIRED = tuple(sorted({
     "build/scalar-signatures/provenance.json", "build/aggregate-frontier.json",
     "build/aggregate-native/oracle.tsv", "build/native/oracle.tsv",
     "build/map/boot-provenance.json", "build/corpus/corpus.json",
-    "build/core/THC.ExamplePrim.json", "build/core/THC.Fixtures.json",
+    "build/core/THC.Prim.Test.json", "build/core/THC.Fixtures.json",
     "build/aggregate-core/AggregateFrontier.json",
     "build/aggregate-post-core/AggregateFrontier.json",
     "build/map/core/GHC.InterfaceClosure.json",
