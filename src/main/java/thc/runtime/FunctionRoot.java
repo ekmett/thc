@@ -213,6 +213,10 @@ public final class FunctionRoot extends GuestRoot {
         if (slot < 0 || programSlot >= 0 || metrics != null) throw new IllegalStateException("Invalid reusable root configuration");
         programSlot = slot;
         programCodeIdentity = java.util.Objects.requireNonNull(codeIdentity);
+        // Reusable roots cannot discover self recursion by executing a guest body.
+        // Prepare the existing loop before publication, leaving ordinary JIT
+        // roots' observed self-tail activation unchanged.
+        hasSelfTail = true;
         shareCompilationOwnership();
     }
     Metrics invocationMetrics(VirtualFrame frame) {

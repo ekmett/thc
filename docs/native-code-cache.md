@@ -10,7 +10,8 @@ explicit machine-word input proofs, integer literals, globals, ordinary function
 applications, nested closures, `let` bindings, `Int#` literal/default cases, local
 joins, and `+#`, `-#`, `*#` arithmetic. Function and join formals still require
 machine-word arguments; case binders/results and join results need exact
-machine-word proofs. Recursive local joins use the existing local-loop lowering.
+machine-word proofs. Recursive local joins use the existing local-loop lowering;
+ordinary self recursion uses the existing function loop, prepared before publication.
 Higher-order formals, constructors and constructor cases remain outside this
 incremental admission.
 Reachable CAF code is prepared without evaluating the CAF;
@@ -70,6 +71,10 @@ This example requires a nonnegative count and adds `1 + ... + count` to its
 dynamic seed. Prepared cases use their actual predicates without observed branch
 profiles; local joins use predeclared frame carriers and the invoking instance's
 metrics. Preparation does not execute branches or loop iterations.
+The same module's `countDown` entry exercises ordinary global self recursion:
+store it as a separate cache and run it with a nonnegative count. It returns zero
+without requiring a base-case training call; loop counters belong to the invoking
+program instance, not the preparation context.
 
 An existing package manifest may be supplied as `@PACKAGES.json`, with an exact
 qualified binding such as `main:THC.CachedCalls.affine`. JSON unit directories and

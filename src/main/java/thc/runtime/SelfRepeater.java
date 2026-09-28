@@ -10,6 +10,9 @@ final class SelfRepeater extends Node implements RepeatingNode {
     @Child private FunctionBody body;
     private final Metrics metrics;
     SelfRepeater(FunctionBody body, Metrics metrics) { this.body = body; this.metrics = metrics; }
+    private Metrics invocationMetrics(VirtualFrame frame) {
+        return metrics != null ? metrics : ((FunctionRoot) getRootNode()).invocationMetrics(frame);
+    }
     Object once(VirtualFrame frame) {
         if (!(getRootNode() instanceof FunctionRoot root)) throw fault("Invalid self-loop function root");
         root.forceEntry(frame);
@@ -23,18 +26,21 @@ final class SelfRepeater extends Node implements RepeatingNode {
     @Override public Object executeRepeatingWithValue(VirtualFrame frame) {
         try { return once(frame); }
         catch (AstSelfCall ignored) {
-            if (metrics.getEnabled()) metrics.incrementSelfTailReentries();
+            Metrics invocation = invocationMetrics(frame);
+            if (invocation.getEnabled()) invocation.incrementSelfTailReentries();
             return CONTINUE_LOOP_STATUS;
         } catch (HandoffTailCall tail) {
             if (!(getRootNode() instanceof FunctionRoot root)) throw fault("Invalid self-loop function root");
             if (!root.isSelf(tail.getTarget())) throw tail;
-            if (metrics.getEnabled()) metrics.incrementSelfTailReentries();
+            Metrics invocation = invocationMetrics(frame);
+            if (invocation.getEnabled()) invocation.incrementSelfTailReentries();
             root.restoreHandoff(frame, tail.getArguments(), false);
             return CONTINUE_LOOP_STATUS;
         } catch (TailCall tail) {
             if (!(getRootNode() instanceof FunctionRoot root)) throw fault("Invalid self-loop function root");
             if (!root.isSelf(tail.getTarget())) throw tail;
-            if (metrics.getEnabled()) metrics.incrementSelfTailReentries();
+            Metrics invocation = invocationMetrics(frame);
+            if (invocation.getEnabled()) invocation.incrementSelfTailReentries();
             root.restoreTail(frame, tail);
             return CONTINUE_LOOP_STATUS;
         }

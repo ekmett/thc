@@ -2,8 +2,8 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE MagicHash #-}
 
--- | Word cases and a local recursive join for the experimental code cache.
-module THC.CachedWordLoop (sumFrom) where
+-- | Word cases, a local recursive join and global self recursion for the code cache.
+module THC.CachedWordLoop (sumFrom, countDown) where
 
 import GHC.Exts (Int#, (+#), (-#))
 
@@ -16,3 +16,10 @@ sumFrom n seed =
         0# -> accumulator
         _ -> go (remaining -# 1#) (accumulator +# (n -# remaining +# 1#))
   in go n seed
+
+-- | Count a nonnegative machine word down to zero using ordinary self recursion.
+{-# OPAQUE countDown #-}
+countDown :: Int# -> Int#
+countDown n = case n of
+  0# -> 0#
+  _ -> countDown (n -# 1#)
