@@ -149,7 +149,27 @@
       "junit": ["thc.runtime.StablePointerTest", "thc.runtime.AlignedScalarMemoryTest"],
       "python": []
     },
-    "src/main/kotlin/thc/runtime/CoreStablePointers.kt": {
+    "src/main/java/thc/runtime/CoreStablePointers.java": {
+      "junit": ["thc.runtime.StablePointerTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/StablePointerOp.java": {
+      "junit": ["thc.runtime.StablePointerTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/MakeStablePointer.java": {
+      "junit": ["thc.runtime.StablePointerTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/DereferenceStablePointer.java": {
+      "junit": ["thc.runtime.StablePointerTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/EqualStablePointers.java": {
+      "junit": ["thc.runtime.StablePointerTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/FreeStablePointer.java": {
       "junit": ["thc.runtime.StablePointerTest"],
       "python": []
     },
@@ -1706,7 +1726,11 @@
       "junit": ["thc.runtime.OriginalFcntlTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.StdioHostAbiTest", "thc.runtime.ManagedStdioTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"],
       "python": []
     },
-    "src/main/kotlin/thc/runtime/CoreManagedFiles.kt": {
+    "src/main/java/thc/runtime/CoreManagedFiles.java": {
+      "junit": ["thc.runtime.CoreManagedFilesTest", "thc.runtime.ManagedFileCallTest", "thc.runtime.ManagedFilesTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/ManagedFileOp.java": {
       "junit": ["thc.runtime.CoreManagedFilesTest", "thc.runtime.ManagedFileCallTest", "thc.runtime.ManagedFilesTest"],
       "python": []
     },
@@ -2603,7 +2627,8 @@
     },
     "test/haskell-fixtures/LibdwUnavailableFixtures.hs": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": []},
     "compiler/test-fixtures/LibdwUnavailableNative.hs": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": []},
-    "src/main/kotlin/thc/runtime/CoreLibdwForeign.kt": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/main/java/thc/runtime/CoreLibdwForeign.java": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/main/java/thc/runtime/LibdwForeignOp.java": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": ["scripts/test-audit-core.py"]},
     "src/main/kotlin/thc/runtime/OriginalLibdwExpression.kt": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": []},
     "src/test/resources/core/original-libdw-descriptors.json": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": ["scripts/test-audit-core.py"]},
     "test/haskell-fixtures/NativeAddressFixtures.hs": {"junit": ["thc.runtime.NativeAddressTest", "thc.runtime.NativeMallocTest"], "python": []},
@@ -2640,7 +2665,13 @@
     "compiler/test-fixtures/OriginalGmpNative.hs": {
       "junit": ["thc.runtime.OriginalGmpTest"], "python": []
     },
-    "src/main/kotlin/thc/runtime/CoreGmpForeign.kt": {
+    "src/main/java/thc/runtime/CoreGmpForeign.java": {
+      "junit": ["thc.runtime.CoreGmpForeignTest", "thc.runtime.OriginalGmpTest"], "python": ["scripts/test-audit-core.py"]
+    },
+    "src/main/java/thc/runtime/GmpForeignOp.java": {
+      "junit": ["thc.runtime.CoreGmpForeignTest", "thc.runtime.OriginalGmpTest"], "python": ["scripts/test-audit-core.py"]
+    },
+    "src/main/java/thc/runtime/GmpForm.java": {
       "junit": ["thc.runtime.CoreGmpForeignTest", "thc.runtime.OriginalGmpTest"], "python": ["scripts/test-audit-core.py"]
     },
     "src/main/kotlin/thc/runtime/ManagedGmp.kt": {
