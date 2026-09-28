@@ -20,7 +20,12 @@ public final class BytecodeStackPreparation {
                 thc.runtime.ManagedSTM.Transaction ambient = null;
                 boolean restored = false;
                 try {
-                    if (resumed) { ambient = resumeStackTransaction(frame); restored = true; }
+                    if (resumed) {
+                        // Compiled continuations use a fresh operand frame; locals stay in the saved parent.
+                        FrameWithoutBoxing localFrame = frame.isObject(CONTINUATION_FRAME_INDEX)
+                            ? (FrameWithoutBoxing) frame.getObject(CONTINUATION_FRAME_INDEX) : frame;
+                        ambient = resumeStackTransaction(localFrame); restored = true;
+                    }
                     Object result;
                     scope.setDepth(scope.getDepth() + 1);
                     try { result = continueAtStackBody(bc, bci, sp, frame, continuationRootNode); }
@@ -43,6 +48,8 @@ public final class BytecodeStackPreparation {
         require(result.contains("return continueAt(bytecode, 0, stackBase, (FrameWithoutBoxing) frame, null);"),
             "Changed initial bytecode root entry");
         require(result.contains("root.continueAt(bytecodeNode,"), "Changed bytecode continuation entry");
+        require(result.contains("FRAMES.setObject(virtualFrame, CONTINUATION_FRAME_INDEX, parentFrame);"),
+            "Changed bytecode continuation parent frame");
         result = replaceOnce(result, SIGNATURE, WRAPPER + BODY, "Changed bytecode continueAt entry");
         return newline(source, result);
     }
@@ -57,6 +64,7 @@ public final class BytecodeStackPreparation {
         String before = "class Entry {\n"
             + "    Object initial() { return continueAt(bytecode, 0, stackBase, (FrameWithoutBoxing) frame, null); }\n"
             + "    Object resume() { return root.continueAt(bytecodeNode, index, sp, frame, this); }\n"
+            + "    void savedLocals() { FRAMES.setObject(virtualFrame, CONTINUATION_FRAME_INDEX, parentFrame); }\n"
             + SIGNATURE + "        return existingBody();\n    }\n}\n";
         String after = transform(before, VERSION);
         require(transform(after, VERSION).equals(after), "Stack entry preparation is not idempotent");
@@ -65,6 +73,7 @@ public final class BytecodeStackPreparation {
         reject(before, "changed-version");
         reject(before + before, VERSION);
         reject(before.replace("root.continueAt(bytecodeNode,", "root.other(bytecodeNode,"), VERSION);
+        reject(before.replace("CONTINUATION_FRAME_INDEX, parentFrame", "CONTINUATION_FRAME_INDEX, otherFrame"), VERSION);
         reject(before.replace("continueAt(bytecode, 0,", "continueAt(bytecode, 1,"), VERSION);
         reject(after.replace("scope.getDepth() - 1", "scope.getDepth()"), VERSION);
         reject(after.replace("if (driver) scope.setDriving(false)", "if (true) scope.setDriving(false)"), VERSION);
