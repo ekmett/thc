@@ -19,6 +19,53 @@ data Box = Box Int#
 type UBox :: UnliftedType
 data UBox = UBox Int#
 
+-- The MutVar records executed prefixes independently of the transaction log.
+-- There is no competing transaction in these controls: an internal stack cut
+-- must neither commit partial writes nor restart an otherwise valid attempt.
+{-# OPAQUE stackAction #-}
+stackAction :: Int# -> TVar# RealWorld Box -> MutVar# RealWorld Box -> Int#
+            -> State# RealWorld -> (# State# RealWorld, Box #)
+stackAction mode value visits depth s0 =
+  case readMutVar# visits s0 of { (# s1, Box seen #) ->
+  case writeMutVar# visits (Box (seen +# 1#)) s1 of { s2 ->
+  case readTVar# value s2 of { (# s3, Box old #) ->
+  case writeTVar# value (Box (old +# 1#)) s3 of { s4 ->
+  case depth of
+    0# -> case mode of
+      1# -> raiseIO# (Box 7#) s4
+      2# -> retry# s4
+      _ -> (# s4, Box 1# #)
+    _ -> case (case mode of
+        1# -> catchSTM# (stackAction mode value visits (depth -# 1#))
+          (\(Box payload) t -> case readTVar# value t of
+            (# u, Box prior #) -> (# u, Box (prior +# payload) #)) s4
+        2# -> catchRetry# (stackAction mode value visits (depth -# 1#))
+          (\t -> readTVar# value t) s4
+        _ -> stackAction mode value visits (depth -# 1#) s4) of
+      (# s5, Box answer #) -> case readTVar# value s5 of
+        (# s6, Box current #) -> case writeTVar# value (Box (current +# 1#)) s6 of
+          s7 -> (# s7, Box (answer +# 1#) #)
+  } } } }
+
+{-# OPAQUE stackRun #-}
+stackRun :: Int# -> Int# -> Int#
+stackRun mode depth = runRW# (\s0 -> case newTVar# (Box 0#) s0 of
+  (# s1, value #) -> case newMutVar# (Box 0#) s1 of
+    (# s2, visits #) -> case atomically# (stackAction mode value visits depth) s2 of
+      (# s3, Box answer #) -> case readTVarIO# value s3 of
+        (# s4, Box committed #) -> case readMutVar# visits s4 of
+          (# _, Box prefixes #) -> answer *# 10000000000# +# prefixes *# 100000# +# committed)
+
+{-# OPAQUE stackAtomic #-}
+stackAtomic :: Int# -> Int#
+stackAtomic = stackRun 0#
+{-# OPAQUE stackCatch #-}
+stackCatch :: Int# -> Int#
+stackCatch = stackRun 1#
+{-# OPAQUE stackAlternative #-}
+stackAlternative :: Int# -> Int#
+stackAlternative = stackRun 2#
+
 -- The original tasty Async field stores an STM newtype as an opaque lifted
 -- object; its erased cast supplies the closure occurrence passed to atomically#.
 -- Opaque consumers preserve this real field boundary after optimization.

@@ -17,6 +17,7 @@ public final class AstContinuation implements SavedGuestContinuation {
     private final List<AstResumeStep> steps;
     private final StackAnnotationState annotations;
     private final boolean rootEntrySpill;
+    private final ManagedSTM.Transaction transaction;
     private boolean tailSpill;
     private final AtomicBoolean claimed = new AtomicBoolean();
     public AstContinuation(GuestRoot root, Object yielded, MaskingState mask, MaterializedFrame frame,
@@ -27,6 +28,7 @@ public final class AstContinuation implements SavedGuestContinuation {
                            List<AstResumeStep> steps, StackAnnotationState annotations, boolean rootEntrySpill, boolean tailSpill) {
         this.sourceRoot = root; this.yielded = yielded; this.logicalMask = mask; this.frame = frame;
         this.steps = steps; this.annotations = annotations; this.rootEntrySpill = rootEntrySpill; this.tailSpill = tailSpill;
+        this.transaction = thc.Language.currentState(root).stm.currentTransaction();
     }
     @Override public GuestRoot getSourceRoot() { return sourceRoot; }
     @Override public Object getYielded() { return yielded; }
@@ -46,10 +48,14 @@ public final class AstContinuation implements SavedGuestContinuation {
         MaskingState ambient = SynchronousMasking.current(sourceRoot);
         StackAnnotationState ambientAnnotations = StackAnnotations.current(sourceRoot);
         AstStackScope stack = AstStacks.astStackScope(sourceRoot);
+        ManagedSTM stm = thc.Language.currentState(sourceRoot).stm;
+        ManagedSTM.Transaction ambientTransaction = stm.currentTransaction();
         stack.setDepth(stack.getDepth() + 1);
         try {
             SynchronousMasking.set(sourceRoot, logicalMask);
             StackAnnotations.set(sourceRoot, annotations);
+            // A shared child abandoned by external delivery belongs to a new attempt on demand.
+            if (transaction == null || transaction.active()) stm.restore(transaction);
             try { return AstContinuations.resumeAstSteps(frame, steps, input); }
             catch (AstCapture cut) {
                 return sourceRoot instanceof FunctionRoot root ? root.finishCapture(cut, frame) : cut.freeze(sourceRoot, frame);
@@ -58,6 +64,7 @@ public final class AstContinuation implements SavedGuestContinuation {
             stack.setDepth(stack.getDepth() - 1);
             SynchronousMasking.set(sourceRoot, ambient);
             StackAnnotations.set(sourceRoot, ambientAnnotations);
+            stm.restore(ambientTransaction);
         }
     }
 }

@@ -41,7 +41,7 @@ public final class BytecodeNormalizers {
         result = BytecodeColdApplyPreparation.transform(result, version);
         result = BytecodeColdDelimitedPreparation.transform(result, version);
         result = BytecodeColdForcePreparation.transform(result, version);
-        return BytecodeBudgetChoice.transform(result, version);
+        return BytecodeStackPreparation.transform(BytecodeBudgetChoice.transform(result, version), version);
     }
 
     static final String SIGNATURE = "        private static List<Instruction.Argument> getArguments(int opcode, long bci, AbstractBytecodeNode bytecode, byte[] bytecodes, Object[] constants) {\n";

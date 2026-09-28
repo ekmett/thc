@@ -92,19 +92,208 @@ public class AstStackTest {
         var parameters = List.of(Map.of("id", "n", "name", "n", "lifted", false, "rep", longRep), Map.of("id", "tick", "name", "tick", "lifted", true, "rep", closure));
         return Map.of("bindings", List.of(Map.of("id", "loop", "name", "loop", "lifted", true, "expr", List.of("lam", parameters, body, Map.of("rep", closure, "resultRep", longRep)))));
     }
+    @Test void bytecodeAutonomousCutsRetainEveryNonTailPrefixAndSuffix() {
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.Compilation", "false").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var state = Language.currentState(); state.getThreads().enterCurrent(null, false, true, null);
+                try {
+                    state.getMaskingState().set(MaskingState.MASKED_INTERRUPTIBLE);
+                    var program = new BytecodeProgram(language, module(), true);
+                    int[] prefixes = {0};
+                    var tick = new Closure(null, 1, new RootNode(language) {
+                        @Override public Object execute(VirtualFrame frame) {
+                            assertEquals(MaskingState.MASKED_INTERRUPTIBLE, state.getMaskingState().get());
+                            prefixes[0]++;
+                            return 1L;
+                        }
+                    }.getCallTarget());
+                    assertEquals(4097L, Calls.target(program.hostEntryTarget(2),
+                        new Object[]{program.entryValue("loop"), new Object[]{4096L, tick}}));
+                    assertEquals(4097, prefixes[0], "Internal cuts must not replay any completed prefix");
+                    var stack = state.getThreadPollState().get().getAstStack();
+                    assertTrue(stack.getSpills() > 0, "Bytecode must cut autonomously, without an async request");
+                    assertEquals(0, stack.getDepth()); assertFalse(stack.getDriving());
+                    assertEquals(MaskingState.MASKED_INTERRUPTIBLE, state.getMaskingState().get());
+                    assertEquals(0, language.getHandoffState().get().getArguments().getDepth());
+                    assertEquals(0, language.getHandoffState().get().getResults().getDepth());
+                } finally { state.getThreads().leaveCurrent(); }
+            } finally { context.leave(); }
+        }
+    }
+    @Test void firstInstalledAstCallerSurvivesAnAutonomousCut() throws Exception { installedSpill(false); }
+    @Test void firstInstalledBytecodeCallerSurvivesAnAutonomousCut() throws Exception { installedSpill(true); }
+    private void installedSpill(boolean bytecode) throws Exception {
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("engine.CompilationFailureAction", "Throw").option("compiler.Inlining", "false")
+                .option("engine.Splitting", "false")
+                .option("engine.SingleTierCompilationThreshold", "10000000").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var source = new LinkedHashMap<>(module());
+                var bindings = new ArrayList<Object>((List<?>) source.get("bindings"));
+                var body = caseOf(apply(variable("loop"), variable("n"), variable("tick")), longRep,
+                    prim("+#", variable("ignored"), literal(1)), longRep);
+                var caller = new LinkedHashMap<>(binder("caller", closure, true));
+                caller.put("expr", lambda(List.of(binder("n", longRep, false), binder("tick", closure, true)), body, longRep));
+                bindings.add(caller); source.put("bindings", bindings); source.put("instrument", true);
+                ExecutableProgram program = bytecode ? new BytecodeProgram(language, source, true) : new Program(language, source, true);
+                var target = program.entryTarget("caller");
+                target.getClass().getMethod("compile", boolean.class).invoke(target, true);
+                assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
+                var runtime = Truffle.getRuntime();
+                runtime.getClass().getMethod("bypassedInstalledCode", Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"))
+                    .invoke(runtime, target);
+                var state = Language.currentState(); state.getThreads().enterCurrent();
+                try {
+                    int[] prefixes = {0};
+                    var tick = new Closure(null, 1, new RootNode(language) {
+                        @Override public Object execute(VirtualFrame frame) { prefixes[0]++; return 1L; }
+                    }.getCallTarget());
+                    long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
+                    assertEquals(4098L, Calls.target(program.hostEntryTarget(2),
+                        new Object[]{program.entryValue("caller"), new Object[]{4096L, tick}}));
+                    assertEquals(4097, prefixes[0]);
+                    assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > before);
+                    assertSame(target, program.entryTarget("caller"));
+                    assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), "The original installed caller must survive its first spill");
+                    var stack = state.getThreadPollState().get().getAstStack();
+                    assertTrue(stack.getSpills() > 0); assertEquals(0, stack.getDepth()); assertFalse(stack.getDriving());
+                    assertEquals(0, language.getHandoffState().get().getArguments().getDepth());
+                    assertEquals(0, language.getHandoffState().get().getResults().getDepth());
+                } finally { state.getThreads().leaveCurrent(); }
+            } finally { context.leave(); }
+        }
+    }
+    @Test void autonomousCutsKeepTheOriginalTransactionLogUntilCommit() {
+        for (boolean bytecode : new boolean[]{false, true})
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.Compilation", "false").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var state = Language.currentState(); state.getThreads().enterCurrent();
+                try {
+                    ExecutableProgram program = bytecode ? new BytecodeProgram(language, module(), true) : new Program(language, module(), true);
+                    var cell = state.stm.newTVar(17L);
+                    int[] prefixes = {0};
+                    var tick = new Closure(null, 1, new RootNode(language) {
+                        @Override public Object execute(VirtualFrame frame) {
+                            assertEquals(17L, state.stm.readIO(cell), "A stack cut must not publish buffered writes");
+                            assertEquals(99L, state.stm.read(cell), "A stack cut must retain its original log");
+                            prefixes[0]++;
+                            return 1L;
+                        }
+                    }.getCallTarget());
+                    assertEquals(4097L, state.stm.atomically(null,
+                        () -> { throw new IllegalStateException("Unexpected nested transaction"); }, () -> {
+                            state.stm.write(cell, 99L);
+                            return Calls.target(program.hostEntryTarget(2),
+                                new Object[]{program.entryValue("loop"), new Object[]{4096L, tick}});
+                        }));
+                    assertEquals(99L, state.stm.readIO(cell)); assertFalse(state.stm.hasTransaction());
+                    assertEquals(4097, prefixes[0], "Internal cuts do not restart transaction bodies");
+                    var stack = state.getThreadPollState().get().getAstStack();
+                    assertTrue(stack.getSpills() > 0); assertEquals(0, stack.getDepth()); assertFalse(stack.getDriving());
+                } finally { state.getThreads().leaveCurrent(); }
+            } finally { context.leave(); }
+        }
+    }
     private static Map<String, Object> binder(String id, Map<String, Object> rep, boolean lifted) { return Map.of("id", id, "name", id, "lifted", lifted, "rep", rep); }
+    @Test void aRealConflictAfterSpillingRestartsOnlyTheFailedAttempt() throws Exception {
+        for (boolean bytecode : new boolean[]{false, true})
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.Compilation", "false").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var state = Language.currentState(); state.getThreads().enterCurrent();
+                try {
+                    ExecutableProgram program = bytecode ? new BytecodeProgram(language, module(), true) : new Program(language, module(), true);
+                    var cell = state.stm.newTVar(17L); int[] prefixes = {0}, attempts = {0};
+                    var tick = new Closure(null, 1, new RootNode(language) {
+                        @Override public Object execute(VirtualFrame frame) {
+                            if (++prefixes[0] == 100) {
+                                assertTrue(state.getThreadPollState().get().getAstStack().getSpills() > 0);
+                                var writer = java.util.concurrent.CompletableFuture.runAsync(() -> state.stm.atomically(null,
+                                    () -> { throw new AssertionError("Nested writer"); }, () -> { state.stm.write(cell, 50L); return Unit.INSTANCE; }));
+                                try { writer.get(5, java.util.concurrent.TimeUnit.SECONDS); }
+                                catch (Exception failure) { throw new AssertionError(failure); }
+                            }
+                            state.stm.read(cell); // The changed revision raises the original STMConflict.
+                            return 1L;
+                        }
+                    }.getCallTarget());
+                    assertEquals(4097L, state.stm.atomically(null, () -> { throw new AssertionError("Nested attempt"); }, () -> {
+                        attempts[0]++; long value = (Long) state.stm.read(cell); state.stm.write(cell, value + 1);
+                        return Calls.target(program.hostEntryTarget(2), new Object[]{program.entryValue("loop"), new Object[]{4096L, tick}});
+                    }));
+                    assertEquals(2, attempts[0]); assertEquals(100 + 4097, prefixes[0]);
+                    assertEquals(51L, state.stm.readIO(cell)); assertFalse(state.stm.hasTransaction());
+                    var stack = state.getThreadPollState().get().getAstStack(); assertEquals(0, stack.getDepth()); assertFalse(stack.getDriving());
+                } finally { state.getThreads().leaveCurrent(); }
+            } finally { context.leave(); }
+        }
+    }
     private List<?> lambda(List<?> parameters, Object body, Map<String, Object> result) { return List.of("lam", parameters, body, Map.of("rep", closure, "resultRep", result)); }
     private static List<?> caseOf(Object value, Map<String, Object> rep, Object body, Map<String, Object> result) { return List.of("case", value, "ignored", List.of(Arrays.asList("default", null, List.of(), body)), Map.of("rep", result, "binder", binder("ignored", rep, false))); }
-    private Map<String, Object> caughtModule() {
+    private Map<String, Object> caughtModule() { return caughtModule(false); }
+    private Map<String, Object> caughtModule(boolean transaction) {
         Map<String, Object> state = Map.of("kind", "void", "primReps", List.of(), "evaluated", true); var boxed = new LinkedHashMap<>(closure); boxed.put("kind", "data");
         Map<String, Object> io = Map.of("kind", "unknown", "aggregate", "unboxed-tuple", "primReps", List.of("BoxedRep (Just Lifted)"), "components", List.of(state, boxed), "evaluated", true);
         var voidValue = List.of("void", Map.of("rep", state)); var unit = List.of("con", "Unit", 0, Map.of("rep", boxed));
         var pair = List.of("app", List.of("con", "Pair", 2), List.of(voidValue, unit), List.of(false, true), false, false, Map.of("rep", io));
         var action = lambda(List.of(binder("s", state, false)), caseOf(apply(variable("loop"), variable("n"), variable("tick")), longRep, pair, io), io);
+        if (transaction) {
+            var atomic = List.of("app", List.of("prim", "atomically#"), List.of(action, voidValue), List.of(true, false), false, false, Map.of("rep", io));
+            action = lambda(List.of(binder("sAtomic", state, false)), atomic, io);
+        }
         var handler = lambda(List.of(binder("e", boxed, true), binder("t", state, false)), pair, io);
         var caught = List.of("app", List.of("prim", "catch#"), List.of(action, handler, voidValue), List.of(true, true, false), false, false, Map.of("rep", io)); var body = caseOf(caught, io, literal(777), longRep);
         var result = new LinkedHashMap<>(module()); result.put("constructors", List.of(Map.of("id", "Unit", "name", "()", "arity", 0, "tag", 1, "fieldReps", List.of(), "strictFields", List.of(), "fieldLifted", List.of()), Map.of("id", "Pair", "name", "(#,#)", "arity", 2, "tag", 1, "kind", "unboxed-tuple")));
-        var bindings = new ArrayList<Object>((List<?>) module().get("bindings")); var binding = new LinkedHashMap<>(binder("caught", closure, true)); binding.put("expr", lambda(List.of(binder("n", longRep, false), binder("tick", closure, true)), body, longRep)); bindings.add(binding); result.put("bindings", bindings); return result;
+        var bindings = new ArrayList<Object>((List<?>) module().get("bindings")); var binding = new LinkedHashMap<>(binder("caught", closure, true)); binding.put("expr", lambda(List.of(binder("n", longRep, false), binder("tick", closure, true)), body, longRep)); bindings.add(binding);
+        if (transaction) {
+            var nested = new LinkedHashMap<>(binder(STMOp.NESTED, boxed, true)); nested.put("expr", unit); bindings.add(nested);
+        }
+        result.put("bindings", bindings); return result;
+    }
+    @Test void externalDeliveryAfterInternalSpillingAbandonsTheLogWithoutReplay() {
+        for (boolean bytecode : new boolean[]{false, true})
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.Compilation", "false").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var state = Language.currentState(); state.getThreads().enterCurrent();
+                try {
+                    ExecutableProgram program = bytecode ? new BytecodeProgram(language, caughtModule(true), true) : new Program(language, caughtModule(true), true);
+                    var payload = program.constructorLayout("Unit").create(new Object[0]); var cell = state.stm.newTVar(17L);
+                    int[] prefixes = {0}; AsyncRequest[] sent = {null};
+                    var tick = new Closure(null, 1, new RootNode(language) {
+                        @Override public Object execute(VirtualFrame frame) {
+                            state.stm.write(cell, 99L); assertEquals(17L, state.stm.readIO(cell));
+                            if (++prefixes[0] == 100) {
+                                assertTrue(state.getThreadPollState().get().getAstStack().getSpills() > 0);
+                                var target = state.getThreads().currentIdentity();
+                                var sender = java.util.concurrent.CompletableFuture.supplyAsync(() -> state.getThreads().send(target, payload));
+                                try { sent[0] = sender.get(5, java.util.concurrent.TimeUnit.SECONDS); }
+                                catch (Exception failure) { throw new AssertionError(failure); }
+                            }
+                            return 1L;
+                        }
+                    }.getCallTarget());
+                    assertEquals(777L, Calls.target(program.hostEntryTarget(2), new Object[]{program.entryValue("caught"), new Object[]{4096L, tick}}), "bytecode=" + bytecode);
+                    assertEquals(100, prefixes[0]); assertEquals(17L, state.stm.readIO(cell)); assertFalse(state.stm.hasTransaction());
+                    assertNotNull(sent[0]); assertEquals(AsyncRequestState.ACKNOWLEDGED, sent[0].getState());
+                    assertFalse(sent[0].getForceSelf()); assertSame(Thread.currentThread(), sent[0].getTarget());
+                    assertEquals(state.getThreads().currentIdentity().getLogicalId(), sent[0].getTargetId());
+                    assertEquals(MaskingState.UNMASKED, state.getMaskingState().get());
+                    var stack = state.getThreadPollState().get().getAstStack(); assertEquals(0, stack.getDepth()); assertFalse(stack.getDriving());
+                    assertEquals(0, language.getHandoffState().get().getArguments().getDepth());
+                    assertEquals(0, language.getHandoffState().get().getResults().getDepth());
+                } finally { state.getThreads().leaveCurrent(); }
+            } finally { context.leave(); }
+        }
     }
     @Test void spillsRetainSharedUpdatesPrefixesMasksAndMemoizedFailure() {
         try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.Compilation", "false").build()) {
@@ -157,16 +346,28 @@ public class AstStackTest {
             } finally { context.leave(); }
         }
     }
-    @Test void transactionLimitRollsBackWithoutPublishingAnAutonomousCut() {
+    @Test void failedSpilledTransactionRollsBackItsOriginalLog() {
+        for (boolean bytecode : new boolean[]{false, true})
         try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.Compilation", "false").build()) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var state = Language.currentState(); state.getThreads().enterCurrent();
                 try {
-                    var program = new Program(language, module(), true); var tick = new Closure(null, 1, new RootNode(language) { @Override public Object execute(VirtualFrame frame) { return 1L; } }.getCallTarget()); var cell = state.stm.newTVar(17L);
-                    var failure = assertThrows(UnsupportedCore.class, () -> state.stm.atomically(null, () -> { throw new IllegalStateException("Unexpected nested transaction"); }, () -> { state.stm.write(cell, 99L); return Calls.target(program.hostEntryTarget(2), new Object[]{program.entryValue("loop"), new Object[]{4096L, tick}}); }));
-                    assertTrue(failure.getMessage().contains("active STM transaction")); assertEquals(17L, state.stm.readIO(cell)); assertFalse(state.stm.hasTransaction());
-                    var scope = state.getThreadPollState().get().getAstStack(); assertEquals(0L, scope.getSpills()); assertEquals(0, scope.getDepth()); assertFalse(scope.getDriving()); assertEquals(4097L, Calls.target(program.hostEntryTarget(2), new Object[]{program.entryValue("loop"), new Object[]{4096L, tick}}));
+                    ExecutableProgram program = bytecode ? new BytecodeProgram(language, module(), true) : new Program(language, module(), true);
+                    var payload = new Object(); int[] prefixes = {0};
+                    var tick = new Closure(null, 1, new RootNode(language) {
+                        @Override public Object execute(VirtualFrame frame) {
+                            if (++prefixes[0] == 100) throw new GuestException(payload, this);
+                            return 1L;
+                        }
+                    }.getCallTarget());
+                    var cell = state.stm.newTVar(17L);
+                    var failure = assertThrows(GuestException.class, () -> state.stm.atomically(null, () -> { throw new IllegalStateException("Unexpected nested transaction"); }, () -> { state.stm.write(cell, 99L); return Calls.target(program.hostEntryTarget(2), new Object[]{program.entryValue("loop"), new Object[]{4096L, tick}}); }));
+                    assertSame(payload, failure.getPayload()); assertEquals(100, prefixes[0]);
+                    assertEquals(17L, state.stm.readIO(cell)); assertFalse(state.stm.hasTransaction());
+                    var scope = state.getThreadPollState().get().getAstStack(); assertTrue(scope.getSpills() > 0);
+                    assertEquals(0, scope.getDepth()); assertFalse(scope.getDriving());
+                    assertEquals(4097L, Calls.target(program.hostEntryTarget(2), new Object[]{program.entryValue("loop"), new Object[]{4096L, tick}}));
                 } finally { state.getThreads().leaveCurrent(); }
             } finally { context.leave(); }
         }

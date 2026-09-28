@@ -93,11 +93,11 @@ still apply.
 | `takeMVar#` | Blocking transfers and supported interruption work, but no GC-driven `BlockedIndefinitelyOnMVar` detection. A wait with no future producer needs supported interruption or embedding cancellation to end. |
 | `putMVar#` | Same missing deadlock exception for a blocked put; FIFO handoff and cancellation-before-commit are implemented. |
 | `readMVar#` | Same missing deadlock exception for a blocked read; reader broadcast is implemented. |
-| `atomically#` | Async interruption aborts the attempt. An abandoned shared thunk restarts the original action under a fresh carrier-local transaction; it does not restore an old log. Explicit checkpoint/delimited capture across transactions remains unsupported. |
+| `atomically#` | Private autonomous stack cuts retain the live attempt and remaining scopes on both backends; they do not replay prefixes or publish writes. External async interruption aborts the attempt. An abandoned shared thunk restarts the original action under a fresh transaction; it does not restore a retired log. Explicit checkpoint/delimited capture across transactions remains unsupported. |
 | `retry#` | Async delivery cancels the wait before leaving the attempt. No GC-driven `BlockedIndefinitelyOnSTM`: retries with no possible future wakeup, including empty read sets, wait until cancellation/disposal. |
 | `catchRetry#` | A retry rolls back the failed branch and runs the alternative. Async delivery aborts nested state and continues outward without running that alternative. Explicit checkpoint/delimited capture remains unsupported. |
 | `catchSTM#` | Catches synchronous Haskell exceptions with nested rollback. Async delivery aborts nested state and continues outward without invoking this handler. Explicit checkpoint/delimited capture remains unsupported. |
-| `readTVar#` | Validated reads belong to the current attempt, not to saved continuation state. Explicit checkpoint/delimited capture remains unsupported. |
+| `readTVar#` | Validated reads belong to the current live attempt. Internal stack continuations retain its association, not a copy of the log; external interruption retires it. Explicit checkpoint/delimited capture remains unsupported. |
 | `writeTVar#` | Writes remain private until atomic commit and are discarded on async abort. Explicit checkpoint/delimited capture remains unsupported. |
 | `raiseDivZero#` | Raises the original GHC exception closure for scalar and concrete tuple bottom results; direct vector and unboxed-sum results are rejected. |
 | `raiseOverflow#` | Same result-shape restriction, with the original overflow exception. |
