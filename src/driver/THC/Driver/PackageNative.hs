@@ -654,7 +654,7 @@ writeNativeWrappers compiler root arguments configured unit directory signatures
       entries = makeEntries component
   compiled <- compileUnits component
   let currentDependencies = [headers | (_,_,_,headers) <- compiled]
-      inputs = [input | (_,_,input,_) <- compiled] ++ [object ["files" .= dataInputs] | not (null dataInputs)]
+      inputs = [input | (_,_,input,_) <- compiled]
   check (currentDependencies == dependencies) "package native headers changed during acquisition"
   target <- case nub [value | (_,value,_,_) <- compiled] of
     [value] -> pure value
@@ -941,7 +941,12 @@ finishPackageNativeWithDependencies cOnlyProducts pieces directory unit currentO
           ["finalizers" .= finalizers | not (null finalizers)] ++
           ["dataSymbols" .= dataSymbols | not (null dataSymbols)] ++
           maybe [] (\library -> ["nativeLibrary" .= library]) nativeLibrary
-    writeJson (directory </> "native/inputs.json") (object ["sources" .= inputs,"unresolved" .= externals])
+    -- Native archives are linker inputs, not C translation units. Their hashes
+    -- already participate in sourceIdentity/component identity; retain them in
+    -- the local cache-observation receipt without inventing compile metadata.
+    archiveInputs <- maybe (pure []) (either fail pure . parseValue) (member identity "dataLibraries") :: IO [Value]
+    writeJson (directory </> "native/inputs.json") (object
+      ["sources" .= (inputs ++ [object ["files" .= archiveInputs] | not (null archiveInputs)]),"unresolved" .= externals])
     forM modules $ \(name,bytes') -> do
       value <- either fail pure (eitherDecodeStrict' bytes')
       case value of
