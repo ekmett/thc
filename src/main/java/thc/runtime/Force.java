@@ -255,8 +255,8 @@ public final class Force extends Node {
                 } catch (ThunkSuspended suspension) {
                     if (drainSpills && (suspension.getStackSpill() || delimitedInvocation) && suspension.getAsyncRequest() == null) {
                         spilled = true; outcome = null;
-                    } else if (suspension.getThunk() == current && suspension.getAsyncRequest() != null && astCaller(parked.peekLast())) {
-                        outcome = new AstChildSuspension(current, suspension.getAsyncRequest());
+                    } else if (suspension.getThunk() == current && suspension.getAsyncRequest() != null && canUnwindCaller(parked.peekLast(), drainSpills)) {
+                        outcome = unwindCaller(parked.peekLast(), current, suspension.getAsyncRequest());
                     } else {
                         resignalParked(original, suspension.getAsyncRequest(), suspension.getStackSpill());
                         throw suspension;
@@ -264,8 +264,8 @@ public final class Force extends Node {
                 } catch (CallSegmentSuspended suspension) {
                     if (drainSpills && (suspension.getStackSpill() || delimitedInvocation) && suspension.getAsyncRequest() == null) {
                         spilled = true; outcome = null;
-                    } else if (suspension.getSegment() == current && suspension.getAsyncRequest() != null && astCaller(parked.peekLast())) {
-                        outcome = new AstChildSuspension(current, suspension.getAsyncRequest());
+                    } else if (suspension.getSegment() == current && suspension.getAsyncRequest() != null && canUnwindCaller(parked.peekLast(), drainSpills)) {
+                        outcome = unwindCaller(parked.peekLast(), current, suspension.getAsyncRequest());
                     } else {
                         // Resignal the requested boundary, never skip its saved caller.
                         resignalParked(original, suspension.getAsyncRequest(), suspension.getStackSpill());
@@ -274,17 +274,21 @@ public final class Force extends Node {
                 } catch (DelimitedCut cut) {
                     if (delimitedInvocation) throw new UnsupportedCore("control0# cannot recapture a parked one-shot invocation chain");
                     throw cut;
-                } catch (GuestException failure) {
+                } catch (GuestException | STMRetry | STMConflict | STMRestart failure) {
+                    outcome = new ChildResume(null, failure);
+                } catch (AsyncDelivery failure) {
+                    if (!drainSpills) throw failure;
                     outcome = new ChildResume(null, failure);
                 } catch (TailCall tail) {
                     if (!AstTailAnchor.accepts(astStackScope(this).getTailAnchor(), tail)) throw tail;
                     outcome = tail;
                 }
-                AsyncRequest pending = input instanceof AstChildSuspension suspension ? suspension.getRequest() : null;
+                AsyncRequest pending = input instanceof AstChildSuspension suspension ? suspension.getRequest() :
+                    input instanceof ChildResume child && child.getFailure() instanceof AsyncDelivery delivered ? delivered.getRequest() : null;
                 if (pending != null && pending.getState() != AsyncRequestState.CLAIMED) pending = null;
                 if (pending != null && (outcome instanceof ChildResume || outcome == null && !spilled)) {
                     // A concurrent evaluator advancing this caller never consumes delivery.
-                    if (astCaller(parked.peekLast())) outcome = new AstChildSuspension(current, pending);
+                    if (canUnwindCaller(parked.peekLast(), drainSpills)) outcome = unwindCaller(parked.peekLast(), current, pending);
                     else throw resignalPending(original, pending);
                 }
                 if (outcome == null) {
@@ -306,6 +310,17 @@ public final class Force extends Node {
     }
     private boolean astCaller(Parked parked) {
         return parked != null && (parked.continuation() instanceof AstContinuation || parked.continuation() instanceof AstStackContinuation);
+    }
+    private boolean canUnwindCaller(Parked parked, boolean drainSpills) {
+        return astCaller(parked) || drainSpills && parked != null && parked.continuation().getSourceRoot() instanceof BytecodeRoot;
+    }
+    private Object unwindCaller(Parked parked, Object child, AsyncRequest request) {
+        if (astCaller(parked)) return new AstChildSuspension(child, request);
+        if (request.getTarget() != Thread.currentThread() || request.getState() != AsyncRequestState.CLAIMED)
+            throw new IllegalStateException("Spilled bytecode delivery left its claimed target");
+        // Existing resume operations restore the lexical mask before forwarding failure.
+        // The real catch# acknowledges this exact request; the driver never does.
+        return new ChildResume(null, new AsyncDelivery(request, this));
     }
     private RuntimeException resignalPending(Object original, AsyncRequest request) {
         resignalParked(original, request, false);

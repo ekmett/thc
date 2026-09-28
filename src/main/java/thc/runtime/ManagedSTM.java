@@ -16,8 +16,9 @@ import static thc.runtime.RuntimeFault.fault;
 
 /** A context-owned commit domain. Locks cover only storage, validation and wake
  * registration, never guest actions, handlers, forcing or payload equality. Logs
- * remain carrier-local and detach on every exit. Async unwinds restart the original
- * atomically action, never an abandoned log or inner continuation on another carrier. */
+ * detach on every exit. Private one-shot stack cuts retain their live attempt;
+ * external async unwinds retire it. A shared child subsequently demanded inside
+ * a fresh attempt inherits that attempt, never the retired log. */
 public final class ManagedSTM implements AutoCloseable {
     public static final class Entry {
         final Object revision;
@@ -37,6 +38,8 @@ public final class ManagedSTM implements AutoCloseable {
     }
     public static final class Transaction {
         final IdentityHashMap<ManagedTVar, Entry> entries;
+        private volatile boolean active = true;
+        boolean active() { return active; }
         public Transaction() { this(new IdentityHashMap<>()); }
         public Transaction(IdentityHashMap<ManagedTVar, Entry> entries) { this.entries = entries; }
         public IdentityHashMap<ManagedTVar, Entry> getEntries() { return entries; }
@@ -104,6 +107,9 @@ public final class ManagedSTM implements AutoCloseable {
         lock.lock(); try { live(); var tx = new Transaction(); current.set(tx); return tx; } finally { lock.unlock(); }
     }
     @TruffleBoundary void restore(Transaction tx) { if (tx == null) current.remove(); else current.set(tx); }
+    /** Only private one-shot continuations retain this association; external cuts abandon their log. */
+    @TruffleBoundary Transaction currentTransaction() { return current.get(); }
+    @TruffleBoundary void retire(Transaction tx) { tx.active = false; }
     @TruffleBoundary(transferToInterpreterOnException = false)
     void commit(Transaction tx) {
         lock.lock();
@@ -140,7 +146,7 @@ public final class ManagedSTM implements AutoCloseable {
             catch (STMConflict ignored) { /* Replay only transactional effects. */ }
             catch (STMRetry ignored) { restore(null); await(tx, node, async); }
             catch (GuestException failure) { if (validException(tx)) throw failure; }
-            finally { restore(null); }
+            finally { retire(tx); restore(null); }
         }
     }
     /** Abort a child scope but retain its reads, like stmAbortTransaction. */
@@ -149,6 +155,7 @@ public final class ManagedSTM implements AutoCloseable {
             var entry = item.getValue();
             parent.entries.putIfAbsent(item.getKey(), new Entry(entry.revision, entry.original, entry.original, false));
         }
+        retire(child);
     }
     @TruffleBoundary Transaction parent() { return transaction(); }
     public <T> T orElse(Supplier<T> action, Supplier<T> alternative) {
@@ -168,6 +175,7 @@ public final class ManagedSTM implements AutoCloseable {
     void commitNested(Transaction parent, Transaction child) {
         lock.lock(); try { validate(child); } finally { lock.unlock(); }
         parent.entries.clear(); parent.entries.putAll(child.entries);
+        retire(child);
     }
     private <T> T nested(Transaction parent, Supplier<T> action) {
         var child = beginNested(parent);

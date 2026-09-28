@@ -125,7 +125,7 @@ path. AST capture also saves pending operands and caller suffixes from Java
 locals. Calls, active masks and annotation scopes form a saved continuation;
 ordinary execution does not allocate continuation records at each poll.
 
-Async-enabled AST roots also use these continuations to bound nested calls and
+Async-enabled AST and bytecode roots also use these continuations to bound nested calls and
 thunk forcing. At the depth limit, they save the pending computation before
 entering another body and unwind to the current guest entry's driver. That
 driver resumes saved updates iteratively. This cut is not an asynchronous
@@ -135,9 +135,21 @@ uncaught-delivery protocol.
 Public calls, forked actions and reentrant callbacks have separate drivers, so
 an autonomous cut is consumed inside its guest extent. Completed effects,
 shared updates, masks and pending caller operands remain in their saved scopes.
-This support requires async-enabled AST; other backends and modes keep their
-existing stack behavior. A cut inside an active STM transaction is explicitly
-unsupported and aborts the attempt before publishing a saved continuation.
+Bytecode initial and continuation entries balance the same conservative depth
+budget in `finally`; the entry cut resumes after ingress restoration, before any
+body effects. AST roots with the separate synchronous stack-capture capability
+also retain that capability without enabling external delivery. The logical
+depth budget is not a portable measurement of remaining machine stack space.
+
+An internal cut inside STM retains the original attempt and saved nested
+`catchSTM#`/`catchRetry#` scopes. It does not commit, abort, restart a prefix, or
+keep those scopes on the host stack. Resumption temporarily reinstalls the live
+transaction association, and completion performs the original validation and
+commit/rollback. A real conflict/retry still restarts the appropriate action.
+External interruption retires the old log and keeps the original request through
+the saved handler chain; a shared child later demanded by a new attempt inherits
+that new attempt. Explicit checkpoint/delimited capture across transactions is
+still unsupported.
 Inline tuple carriers in async AST calls remain virtual at creation, but a cold
 capture can retain them as owned storage. Capture therefore need not repeatedly
 deoptimize compiled callers, and it does not retain a tuple-pool loan.

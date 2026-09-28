@@ -111,7 +111,10 @@ public final class FunctionRoot extends GuestRoot {
                 initialize(descriptor, argumentSlots[i], FrameSlotKind.Object);
                 continue;
             }
-            if (i >= argumentProofs.length) continue;
+            if (i >= argumentProofs.length) {
+                initialize(descriptor, argumentSlots[i], FrameSlotKind.Object);
+                continue;
+            }
             CoreRepresentation proof = argumentProofs[i];
             FrameSlotKind kind;
             if (proof.referenceCarrier() != null) kind = FrameSlotKind.Object;
@@ -119,7 +122,7 @@ public final class FunctionRoot extends GuestRoot {
             else if (proof.isLong()) kind = FrameSlotKind.Long;
             else if (proof.isFloat()) kind = FrameSlotKind.Float;
             else if (proof.isDouble()) kind = FrameSlotKind.Double;
-            else continue;
+            else kind = FrameSlotKind.Object;
             initialize(descriptor, argumentSlots[i], kind);
         }
         if (handoff != null) {
@@ -415,8 +418,6 @@ public final class FunctionRoot extends GuestRoot {
     }
     /** A root-entry cut has no executed body or caller suffix to unwind here. */
     @TruffleBoundary private AstContinuation captureStack(MaterializedFrame frame) {
-        if (thc.Language.currentState(this).stm.hasTransaction())
-            throw new UnsupportedCore("AST stack spilling across an active STM transaction is unsupported");
         AstStackScope stack = astStackScope(this);
         stack.setSpills(stack.getSpills() + 1);
         return new AstCapture(AstStackSpill.INSTANCE, SynchronousMasking.current(this)).append(new ResumeBody(this)).freeze(this, frame, true);

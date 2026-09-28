@@ -85,7 +85,11 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         return (!passThrough || rootCompilation) && super.prepareForCompilation(rootCompilation, tier, lastTier);
     }
     @CompilerDirectives.CompilationFinal private boolean asyncEnabled;
+    @Child private Force stackDriver;
     public final void configureAsync(boolean enabled) { asyncEnabled = enabled; }
+    public final void configureStackDriver(Metrics metrics) {
+        if (asyncEnabled) stackDriver = insert(new Force(metrics, true));
+    }
     public final boolean isAsyncEnabled() { return asyncEnabled; }
     @Override public final boolean getAsynchronousExceptions() { return asyncEnabled; }
     @CompilerDirectives.CompilationFinal private boolean delimitedEnabled;
@@ -98,10 +102,34 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         return asyncEnabled || delimitedEnabled;
     }
     @CompilerDirectives.CompilationFinal private LocalAccessor typedBloom;
+    @CompilerDirectives.CompilationFinal private LocalAccessor stackTransaction;
     public final void configureTypedBloom(LocalAccessor bloom) { typedBloom = bloom; }
+    final void configureStackTransaction(LocalAccessor transaction) { stackTransaction = transaction; }
+    protected final ManagedSTM.Transaction resumeStackTransaction(VirtualFrame frame) {
+        ManagedSTM stm = Language.currentState(this).stm;
+        ManagedSTM.Transaction ambient = stm.currentTransaction();
+        Object saved = stackTransaction.getObject(getBytecodeNode(), frame);
+        if (saved != null && !(saved instanceof ManagedSTM.Transaction)) throw new IllegalStateException("Invalid saved transaction");
+        if (saved == null || ((ManagedSTM.Transaction) saved).active()) stm.restore((ManagedSTM.Transaction) saved);
+        return ambient;
+    }
+    protected final void restoreStackTransaction(ManagedSTM.Transaction ambient) {
+        Language.currentState(this).stm.restore(ambient);
+    }
 
     protected BytecodeRoot(Language language, FrameDescriptor descriptor) {
         super(language, descriptor);
+    }
+
+    /** Called after the initial or resumed physical activation has unwound. */
+    protected final Object finishStackEntry(Object result) {
+        Object value = result instanceof TailYield tail ? tail.getContinuation() : result;
+        SavedGuestContinuation saved = SavedGuestContinuations.savedGuestContinuation(value);
+        if (saved != null && saved.stackSpill() && saved.asyncRequest() == null) {
+            if (stackDriver == null) throw new IllegalStateException("Unconfigured bytecode stack driver");
+            return stackDriver.drainStack(saved);
+        }
+        return result;
     }
 
     public final void setLabel(String label) { this.label = label; }
@@ -136,6 +164,19 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 metrics.incrementCompiledEntries();
             }
         }
+    }
+
+    @Operation public static final class StackLimit {
+        @Specialization public static boolean reached(@Bind("$node") Node node) {
+            AstStackScope scope = AstStacks.astStackScope(node);
+            if (scope.getDepth() < AstStackScope.MAX_DEPTH) return false;
+            scope.setSpills(scope.getSpills() + 1);
+            return true;
+        }
+    }
+
+    @Operation public static final class CurrentTransaction {
+        @Specialization public static Object read(@Bind Node node) { return Language.currentState(node).stm.currentTransaction(); }
     }
 
     @Operation public static final class InlineCaseRegions {
@@ -530,7 +571,11 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 }
                 return result;
             }
-            CompilerDirectives.transferToInterpreterAndInvalidate();
+            throw captureSuspended(arity, function, continuation, tail, node, callerMask);
+        }
+        @TruffleBoundary(transferToInterpreterOnException = false)
+        private static RuntimeException captureSuspended(int arity, Closure function, ContinuationResult continuation,
+                TailYield tail, Node node, MaskingState callerMask) {
             try {
                 Object source = continuation.getContinuationRootNode().getSourceRootNode();
                 if (function.arity != arity || !(source instanceof BytecodeRoot callee) ||
@@ -547,7 +592,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 // Only a yielded call allocates this carrier. Its bytecode frame
                 // and active mask belong to the logical callee, not this host thread.
                 MaskingState active = parked != null ? parked : SynchronousMasking.current(node);
-                throw new CapturedCallSuspension(new CallSegment(continuation, active, callerMask));
+                return new CapturedCallSuspension(new CallSegment(continuation, active, callerMask));
             } finally {
                 SynchronousMasking.set(node, callerMask);
             }
@@ -2991,12 +3036,32 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static void run(VirtualFrame frame, STMOp operation,
                 BytecodeTupleSlots destination, Metrics metrics, boolean async, Object action, Object alternative,
                 Object nested, Object state,
+                @Bind Node node,
                 @Cached(value = "create(operation, destination, metrics, async)", neverDefault = true) STMCall call) {
             TupleResults.requireVoidCarrier(state);
-            call.execute(frame, action, alternative, nested);
+            try {
+                Object result = call.execute(frame, action, alternative, nested);
+                if (call.captures()) destination.consume(frame, node, result);
+            }
+            catch (AstCapture cut) { throw captureSTM(frame.materialize(), destination, cut, node); }
+        }
+        @TruffleBoundary(transferToInterpreterOnException = false)
+        private static RuntimeException captureSTM(com.oracle.truffle.api.frame.MaterializedFrame frame,
+                BytecodeTupleSlots destination, AstCapture cut, Node node) {
+            if (cut.asyncRequest() != null) return new STMRestart(cut.asyncRequest());
+            MaskingState mask = SynchronousMasking.current(node);
+            AstContinuation saved = cut.freeze((GuestRoot) node.getRootNode(), frame);
+            return new CapturedCallSuspension(new CallSegment(saved, mask, mask, destination.getShape()));
         }
         public static STMCall create(STMOp operation, BytecodeTupleSlots destination, Metrics metrics, boolean async) {
             return new STMCall(operation, destination, metrics, async);
+        }
+    }
+    /** Only an internal scope completion is resumed here; external STMRestart reaches the retry owner. */
+    @Operation public static final class STMScopeSuspension {
+        @Specialization public static Object capture(AbstractTruffleException failure) {
+            if (failure instanceof CapturedCallSuspension captured) return CallSuspensionOnly.captured(captured.getSegment());
+            throw failure;
         }
     }
     @Operation

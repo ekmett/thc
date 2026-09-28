@@ -21,6 +21,7 @@ def checks = [
         BytecodeNormalizerChecks.staticPreparation()
         BytecodeNormalizerChecks.staticTags(task.temporaryDir.toPath())
         thc.buildlogic.BytecodeBudgetChoice.check()
+        thc.buildlogic.BytecodeStackPreparation.check()
         logger.lifecycle('Static cached-node/local metadata preparation: version, shape, clone, CRLF and idempotence controls passed.')
     },
     testBytecodeHandlerPreparation: { task ->
