@@ -244,9 +244,11 @@ public final class FunctionRoot extends GuestRoot {
         for (int i = 0; i < inputs.size(); i++) {
             CoreRepresentation proof = inputs.get(i);
             Class<?> carrier = numericClass(proof);
-            if (carrier == null && proof.getKind() != CoreKind.DATA) throw new IllegalStateException("Unsupported reusable AOT argument");
-            // Lifted data may arrive as a lazy thunk or an authenticated owned
-            // constructor carrier; neither has one exact signature class.
+            if (carrier == null && proof.getKind() != CoreKind.DATA && proof.getKind() != CoreKind.CLOSURE)
+                throw new IllegalStateException("Unsupported reusable AOT argument");
+            // Lifted data/functions may arrive as a lazy thunk or a value.
+            // Keep the existing constructor/captured-program owner checks;
+            // these alternatives do not have one exact signature class.
             signature[getEntryArgumentOffset() + i] = carrier;
         }
         preparedForAOT = true;

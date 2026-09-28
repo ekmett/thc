@@ -13,13 +13,14 @@ machine words, signed/unsigned 8/16/32-bit integers, `Float#` and `Double#`.
 The admitted arithmetic includes `+#`, `-#`, `*#`, existing narrow scalar operations,
 floating arithmetic/comparisons and integer/floating conversions. Floating cases
 may use defaults, not floating literal alternatives (which GHC Core disallows).
-Internal function formals and case binders/results require exact numeric or data
-proofs; join formals/results are numeric. Constructor fields support these numeric
+Internal function formals and case binders/results require exact numeric, data or
+closure proofs; join results remain numeric. Constructor fields support numeric
 carriers and boxed data with exact field descriptors, including lazy tails.
 Recursive local joins use the existing local-loop lowering;
 ordinary self recursion uses the existing function loop, prepared before publication.
-Higher-order formals and unsaturated constructor functions remain outside this
-incremental admission.
+Ordinary higher-order calls preserve each closure's captured program owner,
+including partial applications and lazy function values. Constructor functions
+must still be saturated; closure-bearing data fields remain outside this admission.
 Reachable CAF code is prepared without evaluating the CAF;
 each load creates a fresh Program, CAF cells and metrics. Unselected definitions
 stay unprepared. Unused GHC module/constructor descriptors do not prevent scalar
@@ -121,6 +122,28 @@ bin/native-cache run build/numeric.cache 32767 f:-0.5 d:16371.5
 
 The narrow addition wraps before widening, and the Float addition rounds before
 conversion to Double. These are dynamic arguments, not store-time training inputs.
+
+`src/examples/THC/CachedHigherOrder.hs` passes an ordinary guest function into a
+recursive fold. Its dynamic offset is retained by a partial application, and the
+fold also demands a per-load shared list CAF:
+
+```sh
+THC_CORE_OUT="$PWD/build/cached-higher-order-core" \
+  bin/export-core.sh -fplugin-opt=THC.Plugin:post-tidy \
+  -fplugin-opt=THC.Plugin:unit-qualified src/examples/THC/CachedHigherOrder.hs
+bin/native-cache store build/higher-order.cache \
+  build/cached-higher-order-core/units/u-main/THC.CachedHigherOrder.json \
+  main:THC.CachedHigherOrder.calculate
+bin/native-cache run build/higher-order.cache 4 7 0
+# 47
+bin/native-cache run build/higher-order.cache 3 -10 -10
+# -25
+```
+
+The first argument is a nonnegative list length. Function arguments are ordinary
+THC closures, not foreign callbacks; the CLI entry itself still takes and returns
+numeric scalars. Shared code does not share captured values or CAF state between
+loads, and calling a retained closure in another context is rejected.
 
 An existing package manifest may be supplied as `@PACKAGES.json`, with an exact
 qualified binding such as `main:THC.CachedCalls.affine`. JSON unit directories and
