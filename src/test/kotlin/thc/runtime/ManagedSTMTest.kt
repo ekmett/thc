@@ -17,7 +17,7 @@ import java.util.concurrent.atomic.AtomicReference
 class ManagedSTMTest {
     private val location = object : Node() {}
     private fun <T> atomic(stm: ManagedSTM, action: () -> T): T =
-        stm.atomically(null, { throw GuestException("nested", location) }, action = action)
+        stm.atomically(null, { throw GuestException("nested", location) }, action)
     private fun await(gate: CountDownLatch) = assertTrue(gate.await(5, TimeUnit.SECONDS), "gate timed out")
     private fun queued(stm: ManagedSTM) {
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
@@ -45,7 +45,7 @@ class ManagedSTMTest {
         assertFalse(stm.hasTransaction())
         assertThrows(RuntimeFault::class.java) { stm.read(cell) }
         assertThrows(RuntimeFault::class.java) { stm.write(cell, null) }
-        assertThrows(RuntimeFault::class.java) { stm.retry() }
+        assertThrows(RuntimeFault::class.java) { throw stm.retry() }
     }
 
     @Test fun catchAndAlternativeHaveRealNestedWriteRollback() {
@@ -64,7 +64,7 @@ class ManagedSTMTest {
                 17L
             })
             assertEquals(17L, result)
-            assertEquals(3L, stm.orElse({ stm.write(cell, 666L); stm.retry() }, { stm.read(cell) }))
+            assertEquals(3L, stm.orElse({ stm.write(cell, 666L); throw stm.retry() }, { stm.read(cell) }))
             assertEquals(23L, stm.orElse({ 23L }, { error("right branch must stay lazy") }))
         }
         assertEquals(3L, stm.readIO(cell))
@@ -182,11 +182,11 @@ class ManagedSTMTest {
                     atomic(stm) {
                         stm.orElse({
                             val x = stm.read(a) as Long
-                            if (x == 0L) { stm.write(sentinel, 999L); stm.retry() }
+                            if (x == 0L) { stm.write(sentinel, 999L); throw stm.retry() }
                             x * 17
                         }, {
                             val y = stm.read(b) as Long
-                            if (y == 0L) stm.retry()
+                            if (y == 0L) throw stm.retry()
                             y
                         })
                     }
@@ -212,7 +212,7 @@ class ManagedSTMTest {
                         val x = stm.read(cell) as Long
                         if (x == 0L) throw GuestException(null, location)
                         x
-                    }, { stm.retry() })
+                    }, { throw stm.retry() })
                 }
             }
             queued(stm)
@@ -228,7 +228,7 @@ class ManagedSTMTest {
         val worker = Executors.newSingleThreadExecutor()
         try {
             val result = worker.submit<Boolean> {
-                assertThrows(RuntimeFault::class.java) { atomic(stm) { stm.retry() } }
+                assertThrows(RuntimeFault::class.java) { atomic(stm) { throw stm.retry() } }
                 !stm.hasTransaction()
             }
             queued(stm)
@@ -297,7 +297,7 @@ class ManagedSTMTest {
                     if (x == 0L) {
                         // Deliberate protocol seam: retry has validated, but the
                         // top atomically frame has not yet installed its waiter.
-                        try { stm.retry() }
+                        try { throw stm.retry() }
                         catch (retry: ControlFlowException) {
                             validated.countDown(); await(updated); throw retry
                         }
@@ -324,7 +324,7 @@ class ManagedSTMTest {
             val result = worker.submit<Boolean> {
                 carrier.set(Thread.currentThread())
                 assertThrows(InterruptedException::class.java) {
-                    atomic(stm) { stm.read(dependency); stm.write(sentinel, 999L); stm.retry() }
+                    atomic(stm) { stm.read(dependency); stm.write(sentinel, 999L); throw stm.retry() }
                 }
                 !stm.hasTransaction()
             }

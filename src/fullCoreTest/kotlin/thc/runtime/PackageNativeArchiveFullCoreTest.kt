@@ -86,7 +86,7 @@ class PackageNativeArchiveFullCoreTest {
                     links.forEach(state.packageCbits::link)
                     val source = CoreModules.reachable(merged,
                         listOf(mixed + "allowed", mixed + "count", narrow + "allowed", mixedHeader, staticPointer, wideHeader, word16Header, lifecycle, partial), true) + ("instrument" to true)
-                    val program: ExecutableProgram = if (backend == "ast") Program(language, source, enableAsync = true)
+                    val program: ExecutableProgram = if (backend == "ast") Program(language, source, true)
                         else BytecodeProgram(language, source, enableAsync = true)
                     state.threads.enterCurrent()
                     try {

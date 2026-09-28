@@ -89,7 +89,7 @@ class PackageNativeOriginalsTest {
                     val owner = Language.currentState()
                     owner.packageCbits.link(link)
                     val source = CoreModules.reachable(merged, names.values.toList(), true) + ("instrument" to true)
-                    val program: ExecutableProgram = if (backend == "ast") Program(language, source, enableAsync = true)
+                    val program: ExecutableProgram = if (backend == "ast") Program(language, source, true)
                         else BytecodeProgram(language, source, enableAsync = true)
                     val entries = names.mapValues { program.entryTarget(it.value) }
                     owner.threads.enterCurrent()
@@ -289,7 +289,7 @@ class PackageNativeOriginalsTest {
                     val owner = Language.currentState()
                     owner.packageCbits.link(link)
                     val source = CoreModules.reachable(merged, names.values.toList(), true) + ("instrument" to true)
-                    val program: ExecutableProgram = if (backend == "ast") Program(language, source, enableAsync = true)
+                    val program: ExecutableProgram = if (backend == "ast") Program(language, source, true)
                         else BytecodeProgram(language, source, enableAsync = true)
                     val entries = names.values.associateWith { program.entryTarget(it) }
                     owner.threads.enterCurrent()

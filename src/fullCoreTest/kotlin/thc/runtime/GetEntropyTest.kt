@@ -136,7 +136,7 @@ class GetEntropyTest {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                 val owner = Language.currentState()
                 owner.packageCbits.link(link)
-                val program: ExecutableProgram = if (backend == "ast") Program(language, source, enableAsync = true)
+                val program: ExecutableProgram = if (backend == "ast") Program(language, source, true)
                     else BytecodeProgram(language, source, enableAsync = true)
                 val target = program.entryTarget(entry)
                 owner.threads.enterCurrent()

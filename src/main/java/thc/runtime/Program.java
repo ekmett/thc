@@ -1831,8 +1831,8 @@ public final class Program implements ExecutableProgram {
             return new GetCurrentCCS(argument(args.get(0), scope, true), argument(args.get(1), scope, false), tupleProof);
         }
 
-        if (primitive && STMOp.Companion.named((String) fn.get(1)) != null) {
-            var operation = Objects.requireNonNull(STMOp.Companion.named((String) fn.get(1)));
+        if (primitive && STMOp.named((String) fn.get(1)) != null) {
+            var operation = Objects.requireNonNull(STMOp.named((String) fn.get(1)));
             if (containsDelimited && operation != STMOp.NEW && operation != STMOp.READ_IO)
                 throw new UnsupportedCore("STM transaction frames do not support explicit delimited capture");
             operation.validate(argumentProofs(args), flags, tupleProof);

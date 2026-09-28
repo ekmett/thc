@@ -70,7 +70,7 @@ class GuestThreadStatusTest {
             var retained = new ArrayList<GuestThreadId>();
             for (boolean read : new boolean[]{false, true}) {
                 var cell = new ManagedMVar();
-                var request = read ? cell.beginRead$org_intelligence_thc() : cell.beginTake$org_intelligence_thc();
+                var request = read ? cell.beginRead() : cell.beginTake();
                 var identity = new AtomicReference<GuestThreadId>();
                 var failure = new AtomicReference<Throwable>();
                 var ready = new CountDownLatch(1);
@@ -78,7 +78,7 @@ class GuestThreadStatusTest {
                     threads.enterCurrent(null, true, true, null);
                     try {
                         identity.set(threads.currentIdentity()); ready.countDown();
-                        assertEquals(42L, request.await$org_intelligence_thc());
+                        assertEquals(42L, request.await());
                         assertEquals(GuestThreadStatus.RUNNING, threads.status(identity.get()));
                     } catch (Throwable error) { failure.set(error); }
                     finally { threads.leaveCurrent(GuestThreadStatus.FINISHED); }
@@ -87,8 +87,8 @@ class GuestThreadStatusTest {
                 try {
                     assertTrue(ready.await(5, TimeUnit.SECONDS));
                     long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-                    while (!request.hasWaitingThread$org_intelligence_thc() && System.nanoTime() < deadline) Thread.yield();
-                    assertTrue(request.hasWaitingThread$org_intelligence_thc());
+                    while (!request.hasWaitingThread() && System.nanoTime() < deadline) Thread.yield();
+                    assertTrue(request.hasWaitingThread());
                     var id = identity.get();
                     assertEquals(worker.threadId(), id.getJavaId());
                     assertEquals((retained.size() + 1L) % 2L, id.getCapability());
