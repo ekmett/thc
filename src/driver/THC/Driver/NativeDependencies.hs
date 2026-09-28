@@ -32,7 +32,8 @@ import Distribution.InstalledPackageInfo (parseInstalledPackageInfo)
 import qualified Distribution.Types.InstalledPackageInfo as Package
 import Distribution.Pretty (prettyShow)
 import Distribution.Package (pkgName)
-import Distribution.PackageDescription (library, libBuildInfo, cSources, cxxSources)
+import Distribution.PackageDescription (libBuildInfo, cSources, cxxSources)
+import qualified Distribution.PackageDescription as Cabal
 import Distribution.Simple.Configure (getPersistBuildConfig)
 import qualified Distribution.Simple.Compiler as Compiler
 import qualified Distribution.Simple.LocalBuildInfo as Local
@@ -188,7 +189,7 @@ configuredNativeArchive source destination compilerIdentity registration = do
     check (actual == expected) "configured native provider belongs to another build tree"
     declarations <- maybe (pure []) (\lib -> pure (map getSymbolicPath
       (cSources (libBuildInfo lib)) ++ map getSymbolicPath (cxxSources (libBuildInfo lib))))
-      (library (localPkgDescr lbi))
+      (Cabal.library (localPkgDescr lbi))
     if null declarations then pure Nothing else do
       let packagePath path
             | Just suffix <- stripPrefix "${pkgroot}" path, Just pkgRoot <- Package.pkgRoot info = pkgRoot ++ suffix
