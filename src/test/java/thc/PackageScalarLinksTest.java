@@ -140,6 +140,10 @@ class PackageScalarLinksTest {
         var archive = map("schema", 1L, "profile", "thc-package-native-archive-v1", "execution", "not-linked", "unit", base.get("unit"), "module", base.get("module"), "unsupportedImports", list(emitted), "unclassifiedReason", null, "unresolvedSymbols", List.of(), "artifact", null);
         var mixedProof = with(proof, "imports", list(original, blocked), "expectedCalls", list(call));
         var mixed = with(without(base, "packageScalarLink"), "packageNativeLink", link, "packageNativeArchive", archive, "staticForeignImports", mixedProof, "bindings", bindings);
+        var installed = without(mixed, "packageNativeArchive");
+        assertEquals(Set.of(nativeEntry), Objects.requireNonNull(PackageScalarLinks.read(installed)).getProved());
+        assertEquals(mixedProof, installed.get("staticForeignImports"));
+        assertEquals(bindings, CoreModules.reachable(CoreModules.merge(List.of(installed)), List.of(goodId, badId), true).get("bindings"));
         var merged = CoreModules.merge(List.of(mixed)); assertEquals(Set.of(nativeEntry), Objects.requireNonNull(PackageScalarLinks.read(mixed)).getProved());
         assertEquals(list(bindings.getFirst()), CoreModules.reachable(merged, goodId, true).get("bindings"));
         var failure = assertThrows(IllegalArgumentException.class, () -> CoreModules.reachable(merged, badId, true)); assertTrue(failure.getMessage().contains("archive-only"));
