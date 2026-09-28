@@ -118,7 +118,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
 
     /** Called after the initial or resumed physical activation has unwound. */
     protected final Object finishStackEntry(Object result) {
-        Object value = result instanceof TailYield tail ? tail.getContinuation() : result;
+        Object value = result instanceof TailYield tail ? tail.getContinuation() :
+                result instanceof AstTailYield tail ? tail.getContinuation() : result;
         SavedGuestContinuation saved = SavedGuestContinuations.savedGuestContinuation(value);
         if (saved != null && saved.stackSpill() && saved.asyncRequest() == null) {
             if (stackDriver == null) throw new IllegalStateException("Unconfigured bytecode stack driver");
@@ -555,39 +556,40 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class CaptureApplicationResult {
         @Specialization public static Object capture(int arity, Closure function, Object result, MaskingState callerMask,
                 @Bind("$node") Node node) {
-            TailYield tail = result instanceof TailYield yielded ? yielded : null;
-            ContinuationResult continuation = tail == null
-                    ? result instanceof ContinuationResult resumed ? resumed : null : tail.getContinuation();
             DelimitedControl.captureBytecode(result, null);
-            if (continuation == null) {
+            if (!(result instanceof TailYield) && !(result instanceof AstTailYield) &&
+                    !(result instanceof ContinuationResult) && !(result instanceof SavedGuestContinuation)) {
                 if (SynchronousMasking.current(node) != callerMask) {
                     SynchronousMasking.set(node, callerMask);
                     throw new IllegalStateException("Completed application did not restore its caller mask");
                 }
                 return result;
             }
-            throw captureSuspended(arity, function, continuation, tail, node, callerMask);
+            throw captureSuspended(arity, function, result, node, callerMask);
         }
         @TruffleBoundary(transferToInterpreterOnException = false)
-        private static RuntimeException captureSuspended(int arity, Closure function, ContinuationResult continuation,
-                TailYield tail, Node node, MaskingState callerMask) {
+        private static RuntimeException captureSuspended(int arity, Closure function, Object result,
+                Node node, MaskingState callerMask) {
             try {
-                Object source = continuation.getContinuationRootNode().getSourceRootNode();
-                if (function.arity != arity || !(source instanceof BytecodeRoot callee) ||
-                        !callee.isSelf(tail == null ? function.target : tail.getTarget()) ||
-                        !AsyncContinuations.isYieldMarker(continuation.getResult()))
-                    throw new IllegalStateException("Application returned an unrelated bytecode continuation: " +
+                RootCallTarget target = result instanceof TailYield tail ? tail.getTarget() :
+                        result instanceof AstTailYield tail ? tail.getTarget() : function.target;
+                SavedGuestContinuation continuation = SavedGuestContinuations.savedGuestContinuation(
+                        result instanceof TailYield tail ? tail.getContinuation() :
+                        result instanceof AstTailYield tail ? tail.getContinuation() : result);
+                Object source = continuation.getSourceRoot();
+                if (function.arity != arity || !(source instanceof GuestRoot callee) ||
+                        !callee.isSelf(target) || !AsyncContinuations.isYieldMarker(continuation.getYielded()))
+                    throw new IllegalStateException("Application returned an unrelated guest continuation: " +
                             "arity=" + function.arity + "/" + arity + ", source=" + source +
-                            ", target=" + (tail == null ? function.target : tail.getTarget()).getRootNode() +
-                            ", yielded=" + continuation.getResult());
-                MaskingState parked = continuation.getResult() instanceof CallSegmentSuspended suspended
+                            ", target=" + target.getRootNode() + ", yielded=" + continuation.getYielded());
+                MaskingState parked = continuation.getYielded() instanceof CallSegmentSuspended suspended
                         ? suspended.getParkedActiveMask() : null;
                 if (parked != null && SynchronousMasking.current(node) != callerMask)
                     throw new IllegalStateException("Parked application did not restore its caller mask");
-                // Only a yielded call allocates this carrier. Its bytecode frame
+                // Only a yielded call allocates this carrier. Its saved frame
                 // and active mask belong to the logical callee, not this host thread.
                 MaskingState active = parked != null ? parked : SynchronousMasking.current(node);
-                return new CapturedCallSuspension(new CallSegment(continuation, active, callerMask));
+                return new CapturedCallSuspension(new CallSegment(continuation.getIdentity(), active, callerMask));
             } finally {
                 SynchronousMasking.set(node, callerMask);
             }
@@ -2525,38 +2527,40 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     private static RuntimeException captureTupleCall(Closure function, int arity, BytecodeTupleSlots destination,
             TupleCallYield yielded, Node node, MaskingState callerMask) {
         try {
-            ContinuationResult continuation = yielded.getContinuation();
-            Object source = continuation.getContinuationRootNode().getSourceRootNode();
-            if (function.arity != arity || !(source instanceof BytecodeRoot callee) ||
-                    (!yielded.getTail() && !callee.isSelf(function.target)) ||
+            SavedGuestContinuation continuation = yielded.getContinuation();
+            Object source = continuation.getSourceRoot();
+            RootCallTarget target = yielded.getTail() ? yielded.getTailTarget() : function.target;
+            if (function.arity != arity || target == null || !(source instanceof GuestRoot callee) ||
+                    !callee.isSelf(target) ||
                     !callee.hasTupleResult(destination.getShape()) ||
-                    !AsyncContinuations.isYieldMarker(continuation.getResult()))
+                    !AsyncContinuations.isYieldMarker(continuation.getYielded()))
                 throw new IllegalStateException("Tuple application returned an unrelated continuation");
-            MaskingState parked = continuation.getResult() instanceof CallSegmentSuspended suspended
+            MaskingState parked = continuation.getYielded() instanceof CallSegmentSuspended suspended
                     ? suspended.getParkedActiveMask() : null;
             if (parked != null && SynchronousMasking.current(node) != callerMask)
                 throw new IllegalStateException("Parked tuple application did not restore its caller mask");
             MaskingState active = parked != null ? parked : SynchronousMasking.current(node);
-            return new CapturedCallSuspension(new CallSegment(continuation, active, callerMask,
+            return new CapturedCallSuspension(new CallSegment(continuation.getIdentity(), active, callerMask,
                     destination.getShape()));
         } finally { SynchronousMasking.set(node, callerMask); }
     }
 
     /** An exact tuple tail has no caller suffix and can return its trusted callee continuation. */
     @TruffleBoundary(transferToInterpreterOnException = false)
-    private static TailYield tailTupleYield(Closure function, int arity, BytecodeTupleSlots destination,
+    private static Object tailTupleYield(Closure function, int arity, BytecodeTupleSlots destination,
             TupleCallYield yielded, Node node, MaskingState callerMask) {
         try {
-            ContinuationResult continuation = yielded.getContinuation();
-            Object source = continuation.getContinuationRootNode().getSourceRootNode();
+            SavedGuestContinuation continuation = yielded.getContinuation();
+            Object source = continuation.getSourceRoot();
             RootCallTarget target = yielded.getTail() ? yielded.getTailTarget() : function.target;
-            if (function.arity != arity || target == null || !(source instanceof BytecodeRoot callee) ||
+            if (function.arity != arity || target == null || !(source instanceof GuestRoot callee) ||
                     !callee.isSelf(target) || !callee.hasTupleResult(destination.getShape()) ||
-                    !AsyncContinuations.isYieldMarker(continuation.getResult()))
+                    !AsyncContinuations.isYieldMarker(continuation.getYielded()))
                 throw new IllegalStateException("Tuple tail returned an unrelated continuation");
             if (SynchronousMasking.current(node) != callerMask)
                 throw new IllegalStateException("Parked tuple tail did not restore its caller mask");
-            return new TailYield(continuation, target);
+            return continuation.getIdentity() instanceof ContinuationResult bytecode
+                    ? new TailYield(bytecode, target) : new AstTailYield(continuation, target);
         } finally { SynchronousMasking.set(node, callerMask); }
     }
 
@@ -2674,8 +2678,10 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
 
     /** Exact tail calls have no caller suffix; a nested yield carries its actual callee identity. */
     private static Object tailResult(Object result, Closure function, int supplied, boolean tail) {
-        return tail && function.arity == supplied && result instanceof ContinuationResult continuation
-                ? new TailYield(continuation, function.target) : result;
+        if (!tail || function.arity != supplied) return result;
+        if (result instanceof ContinuationResult continuation) return new TailYield(continuation, function.target);
+        if (result instanceof SavedGuestContinuation continuation) return new AstTailYield(continuation, function.target);
+        return result;
     }
 
     /** Logical arity includes a PAP's remaining formals, not its physical prefix width. */
@@ -2769,7 +2775,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = boolean.class, name = "yielded")
     public static final class IsTailReentry {
         @Specialization public static boolean test(boolean yielded, Object value) {
-            return yielded ? value instanceof TailYield : value instanceof TailCall;
+            return yielded ? value instanceof TailYield || value instanceof AstTailYield : value instanceof TailCall;
         }
     }
 
@@ -3129,20 +3135,21 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             } catch (TupleCallYield yielded) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 try {
-                    ContinuationResult continuation = yielded.getContinuation();
-                    Object source = continuation.getContinuationRootNode().getSourceRootNode();
-                    if (closure.arity != 1 || !(source instanceof BytecodeRoot callee) ||
-                            (!yielded.getTail() && !callee.isSelf(closure.target)) ||
+                    SavedGuestContinuation continuation = yielded.getContinuation();
+                    Object source = continuation.getSourceRoot();
+                    RootCallTarget target = yielded.getTail() ? yielded.getTailTarget() : closure.target;
+                    if (closure.arity != 1 || target == null || !(source instanceof GuestRoot callee) ||
+                            !callee.isSelf(target) ||
                             !callee.hasTupleResult(destination.getShape()) ||
-                            !AsyncContinuations.isYieldMarker(continuation.getResult()))
+                            !AsyncContinuations.isYieldMarker(continuation.getYielded()))
                         throw new IllegalStateException("IO action returned an unrelated tuple continuation");
-                    MaskingState parked = continuation.getResult() instanceof CallSegmentSuspended suspended
+                    MaskingState parked = continuation.getYielded() instanceof CallSegmentSuspended suspended
                             ? suspended.getParkedActiveMask() : null;
                     if (parked != null && SynchronousMasking.current(node) != callerMask)
                         throw new IllegalStateException("Parked IO action did not restore its caller mask");
                     MaskingState active = parked != null ? parked : SynchronousMasking.current(node);
                     AsyncContinuations.deliverIfCaught(continuation, caughtIOAction, node);
-                    throw new CapturedCallSuspension(new CallSegment(continuation, active, callerMask,
+                    throw new CapturedCallSuspension(new CallSegment(continuation.getIdentity(), active, callerMask,
                             destination.getShape(), caughtIOAction));
                 } finally { SynchronousMasking.set(node, callerMask); }
             }
@@ -3362,19 +3369,20 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 boolean captured = false;
                 try {
-                    ContinuationResult continuation = yielded.getContinuation();
-                    Object source = continuation.getContinuationRootNode().getSourceRootNode();
-                    if (closure == null || closure.arity != 2 || !(source instanceof BytecodeRoot callee) ||
-                            (!yielded.getTail() && !callee.isSelf(closure.target)) ||
+                    SavedGuestContinuation continuation = yielded.getContinuation();
+                    Object source = continuation.getSourceRoot();
+                    RootCallTarget target = yielded.getTail() ? yielded.getTailTarget() : closure == null ? null : closure.target;
+                    if (closure == null || closure.arity != 2 || target == null || !(source instanceof GuestRoot callee) ||
+                            !callee.isSelf(target) ||
                             !callee.hasTupleResult(destination.getShape()) ||
-                            !AsyncContinuations.isYieldMarker(continuation.getResult()))
+                            !AsyncContinuations.isYieldMarker(continuation.getYielded()))
                         throw new IllegalStateException("IO handler returned an unrelated tuple continuation");
-                    MaskingState parked = continuation.getResult() instanceof CallSegmentSuspended suspended
+                    MaskingState parked = continuation.getYielded() instanceof CallSegmentSuspended suspended
                             ? suspended.getParkedActiveMask() : null;
                     if (parked != null && SynchronousMasking.current(node) != callerMask)
                         throw new IllegalStateException("Parked IO handler did not restore its caller mask");
                     MaskingState active = parked != null ? parked : SynchronousMasking.current(node);
-                    CapturedCallSuspension escape = new CapturedCallSuspension(new CallSegment(continuation,
+                    CapturedCallSuspension escape = new CapturedCallSuspension(new CallSegment(continuation.getIdentity(),
                             active, callerMask, destination.getShape(), false));
                     captured = true;
                     throw escape;

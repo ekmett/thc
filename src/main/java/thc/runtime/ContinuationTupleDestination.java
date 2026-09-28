@@ -15,7 +15,9 @@ public final class ContinuationTupleDestination extends TupleDestination {
     @Override public void consume(VirtualFrame frame, Node node, Object result) {
         DelimitedControl.captureBytecode(result, getShape());
         if (result instanceof TailYield tail) throw new TupleCallYield(tail.getContinuation(), true, tail.getTarget());
+        if (result instanceof AstTailYield tail) throw new TupleCallYield(tail.getContinuation(), true, tail.getTarget());
         if (result instanceof ContinuationResult continuation) throw new TupleCallYield(continuation);
+        if (result instanceof SavedGuestContinuation continuation) throw new TupleCallYield(continuation);
         destination.consume(frame, node, result);
     }
 }

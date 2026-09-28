@@ -5415,7 +5415,11 @@ public final class BytecodeProgram implements ExecutableProgram {
             b.emitStaticLoadObject(Objects.requireNonNull(e.checkpointRootEntry)); b.emitStaticLoadObject(mask);
             b.endParkCallMask(); endAnnotationYield(e); b.emitStaticLoadObject(mask); b.endReenterCallMask();
             if (source.destination() == null) { b.endResumeApplication(); b.endStaticStoreObject(); }
-            else b.endResumeTupleApplication();
+            else {
+                b.endResumeTupleApplication();
+                // Match CallCaseRegion's ordinary tuple completion before the tail check.
+                b.beginStaticStoreObject(result); b.emitLoadConstant(thc.runtime.Unit.INSTANCE); b.endStaticStoreObject();
+            }
             b.endBlock(); b.endTryCatch();
         }
         if (tail && context.mayLoop) {

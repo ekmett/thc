@@ -79,6 +79,15 @@ retaining the first installed target. Compiled-entry controls do not warm up a
 capture; they check request identity, masks, once-only effects and returned loans
 across managed SAFE completion, tail forwarding and non-tail tuple suffixes.
 
+Closures can cross between the AST and bytecode backends in the same context.
+Saved scalar and tuple calls use the common continuation protocol, including
+typed-input PAPs, exact tail targets, IO actions/handlers and recovered bytecode
+case regions. Alternating-backend tests interrupt a real MVar wait after effects
+and resume on another carrier, checking original child identities, masks,
+annotations, once-only suffixes and returned input/result loans in both handoff
+modes. Compiled controls disable inlining to observe each backend entry
+separately; they do not establish an optimal backend mix or performance benefit.
+
 The current managed errno slot is still carrier-local. Native GHC starts callback
 errno at zero and publishes callback changes on return; matching that transition
 across native transports remains a separate requirement. No previous caller errno

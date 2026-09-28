@@ -7,7 +7,6 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.bytecode.ContinuationResult;
 import com.oracle.truffle.api.bytecode.LocalAccessor;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.DirectCallNode;
@@ -91,31 +90,34 @@ public final class BytecodeCaseRegion extends Node {
     }
 
     private Object complete(RootCallTarget target, Object result, MaskingState callerMask, TupleShape shape) {
-        TailYield tailYield = result instanceof TailYield yielded ? yielded : null;
-        ContinuationResult continuation = tailYield == null
-                ? result instanceof ContinuationResult resumed ? resumed : null : tailYield.getContinuation();
         DelimitedControl.captureBytecode(result, shape);
+        RootCallTarget callee = result instanceof TailYield tail ? tail.getTarget() :
+                result instanceof AstTailYield tail ? tail.getTarget() : target;
+        SavedGuestContinuation continuation = SavedGuestContinuations.savedGuestContinuation(
+                result instanceof TailYield tail ? tail.getContinuation() :
+                result instanceof AstTailYield tail ? tail.getContinuation() : result);
         if (continuation == null) {
             if (SynchronousMasking.current(this) != callerMask)
                 throw new IllegalStateException("Case region did not restore its caller mask");
             return result;
         }
-        return suspend(tailYield == null ? target : tailYield.getTarget(), continuation, callerMask, shape);
+        return suspend(callee, continuation, callerMask, shape);
     }
 
     @TruffleBoundary(transferToInterpreterOnException = false)
-    private Object suspend(RootCallTarget target, ContinuationResult continuation, MaskingState callerMask, TupleShape shape) {
+    private Object suspend(RootCallTarget target, SavedGuestContinuation continuation, MaskingState callerMask, TupleShape shape) {
         try {
-            Object source = continuation.getContinuationRootNode().getSourceRootNode();
-            if (!(source instanceof BytecodeRoot callee) || !callee.isSelf(target)
-                    || !AsyncContinuations.isYieldMarker(continuation.getResult()))
+            Object source = continuation.getSourceRoot();
+            if (!(source instanceof GuestRoot callee) || !callee.isSelf(target)
+                    || shape != null && !callee.hasTupleResult(shape)
+                    || !AsyncContinuations.isYieldMarker(continuation.getYielded()))
                 throw new IllegalStateException("Unrelated case-region continuation");
-            MaskingState parked = continuation.getResult() instanceof CallSegmentSuspended suspended
+            MaskingState parked = continuation.getYielded() instanceof CallSegmentSuspended suspended
                     ? suspended.getParkedActiveMask() : null;
             if (parked != null && SynchronousMasking.current(this) != callerMask)
                 throw new IllegalStateException("Parked case region did not restore its caller mask");
             MaskingState active = parked != null ? parked : SynchronousMasking.current(this);
-            throw new CapturedCallSuspension(new CallSegment(continuation, active, callerMask, shape));
+            throw new CapturedCallSuspension(new CallSegment(continuation.getIdentity(), active, callerMask, shape));
         } finally {
             SynchronousMasking.set(this, callerMask);
         }

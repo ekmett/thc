@@ -22,9 +22,9 @@ public final class AsyncContinuations {
             case null, default -> null;
         };
     }
-    @TruffleBoundary public static void deliverIfCaught(ContinuationResult continuation, boolean caught, Node node) {
+    @TruffleBoundary public static void deliverIfCaught(SavedGuestContinuation continuation, boolean caught, Node node) {
         if (!caught) return;
-        AsyncRequest request = request(continuation);
+        AsyncRequest request = continuation.asyncRequest();
         if (request == null) return;
         if (request.getTarget() != Thread.currentThread() || request.getState() != AsyncRequestState.CLAIMED)
             throw new IllegalStateException("Async delivery left its target thread or was already consumed");
