@@ -44,10 +44,10 @@ public class WcwidthTest {
         }
     }
     @Test public void originalTastyDeclarationAndFallbackMatchNativeLocalesInBothCompiledBackends() throws Throwable {
-        var manifest = json("manifest.json"); OriginalStdioChecks.INSTANCE.hashes(root, manifest.get("inputHashes"), Set.of(
+        var manifest = json("manifest.json"); OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of(
             "test/fixtures/run-wcwidth/src/Width.hs", "test/fixtures/run-wcwidth/app/Main.hs", "test/haskell-fixtures/WcwidthFixtures.hs",
             "src/THC/Driver/PackageNative.hs", "src/THC/Driver/NativeLibrarySources.hs"), null);
-        OriginalStdioChecks.INSTANCE.hashes(root, manifest.get("artifactHashes"), Set.of("build/wcwidth/Width.json", "build/wcwidth/C.tsv", "build/wcwidth/C.UTF-8.tsv",
+        OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"), Set.of("build/wcwidth/Width.json", "build/wcwidth/C.tsv", "build/wcwidth/C.UTF-8.tsv",
             "build/wcwidth/rawWidth.json", "build/wcwidth/displayWidth.json", "build/wcwidth/ConsoleReporter.hs", "build/wcwidth/TASTY-LICENSE"), "build/wcwidth/");
         for (String entry : List.of("rawWidth", "displayWidth")) assertEquals(true, json(entry + ".json").get("accepted"));
         var original = json("Width.json"); var proof = (Map<?, ?>) original.get("packageNativeLink"); assertEquals("llvm-embedded-elf", proof.get("format"));

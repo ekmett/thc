@@ -50,10 +50,10 @@ public class StablePtrFfiFullCoreTest {
         var manifest = json(prefix + "/manifest.json");
         assertEquals(1L, manifest.get("schema")); assertEquals(true, manifest.get("strictAccepted"));
         assertEquals(true, manifest.get("runtimeVerified")); assertEquals(12L, manifest.get("nativeRows"));
-        OriginalStdioChecks.INSTANCE.hashes(root, manifest.get("inputHashes"), Set.of(
+        OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of(
             "test/fixtures/run-stableptr-ffi/src/StableForeign.hs", "test/fixtures/run-stableptr-ffi/cbits/stable.c",
             "test/fixtures/run-stableptr-ffi/cbits/stable.h", "test/haskell-fixtures/StablePtrFFIFixtures.hs"), null);
-        OriginalStdioChecks.INSTANCE.hashes(root, manifest.get("artifactHashes"), Set.of(
+        OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"), Set.of(
             prefix + "/packages.json", prefix + "/audit.json", prefix + "/logs/native-run.stdout"), prefix + "/");
         var rows = (List<Map<String, String>>) manifest.get("observations");
         var names = new LinkedHashSet<String>(); var lines = new ArrayList<String>();

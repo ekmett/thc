@@ -51,7 +51,7 @@ public class PackageNativeArchiveFullCoreTest {
     @Test public void supportedMixedImportRunsWhileArchivedImportsFailBeforeEffects() throws Exception {
         File root = new File(System.getProperty("thc.projectRoot")), directory = new File(root, "build/native-archive");
         var manifest = json(new File(directory, "manifest.json"));
-        OriginalStdioChecks.INSTANCE.hashes(root, manifest.get("inputHashes"), Set.of(
+        OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of(
             "test/fixtures/run-native-archive/mixed/src/Mixed.hs", "test/fixtures/run-native-archive/mixed/native.c",
             "test/fixtures/run-native-archive/mixed/src/Unknown.hs", "test/fixtures/run-native-archive/unresolved/Unresolved.hs",
             "test/fixtures/run-native-archive/mixed/src/Narrow.hs", "test/fixtures/run-native-archive/mixed/src/Wide.hs",
@@ -68,7 +68,7 @@ public class PackageNativeArchiveFullCoreTest {
             "build/native-archive/mixed-header-audit.json", "build/native-archive/lifecycle-audit.json", "build/native-archive/partial-audit.json",
             "build/native-archive/indirect-unresolved.json", "build/native-archive/constructor-unresolved.json", "build/native-archive/provider-container.json",
             "build/native-archive/non-static.json", "build/native-archive/unresolved.json"));
-        OriginalStdioChecks.INSTANCE.hashes(root, manifest.get("artifactHashes"), artifacts, "build/native-archive/");
+        OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"), artifacts, "build/native-archive/");
         var modules = new ArrayList<Map<String, Object>>(); for (String path : paths) modules.add(json(new File(root, path)));
         String mixed = "native-archive-mixed-0.1.0.0-inplace:Mixed.", narrow = "native-archive-mixed-0.1.0.0-inplace:Narrow.";
         String mixedHeader = "native-archive-mixed-0.1.0.0-inplace:CapiMix.mixedProbe#", staticPointer = "native-archive-mixed-0.1.0.0-inplace:CapiMix.staticPointerProbe#";

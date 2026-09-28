@@ -40,10 +40,10 @@ class ManagedFileCallTest {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                var module = ManagedFileFixtures.INSTANCE.module(ManagedFileFixtures.INSTANCE.getSignatures().keySet(), ignored -> Unit.INSTANCE);
+                var module = ManagedFileFixtures.module(ManagedFileFixtures.signatures.keySet(), ignored -> {});
                 ExecutableProgram program = backend.equals("ast") ? new Program(language, module, false, false) : new BytecodeProgram(language, module);
                 var targets = new LinkedHashMap<String, RootCallTarget>();
-                for (var name : ManagedFileFixtures.INSTANCE.getSignatures().keySet()) targets.put(name, program.entryTarget(name));
+                for (var name : ManagedFileFixtures.signatures.keySet()) targets.put(name, program.entryTarget(name));
                 class Caller {
                     boolean compiled;
                     Object call(String name, Object... arguments) throws Exception {
@@ -98,13 +98,13 @@ class ManagedFileCallTest {
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 java.util.function.Function<Consumer<List<Object>>, ExecutableProgram> load = mutate -> {
-                    var module = ManagedFileFixtures.INSTANCE.module(List.of("open"), call -> { mutate.accept(call); return Unit.INSTANCE; });
+                    var module = ManagedFileFixtures.module(List.of("open"), call -> mutate.accept(call));
                     return backend.equals("ast") ? new Program(language, module, false, false) : new BytecodeProgram(language, module);
                 };
                 for (var id : Arrays.asList(null, "", 3L, "p0", "open"))
                     assertThrows(RuntimeFault.class, () -> load.apply(call -> ((List<Object>) call.get(1)).set(1, id)));
                 for (var head : List.of(List.of("prim", "open"), List.of("var", "foreign-open"),
-                    List.of("var", "foreign-open", Map.of("rep", ManagedFileFixtures.INSTANCE.scalar(null, true)))))
+                    List.of("var", "foreign-open", Map.of("rep", ManagedFileFixtures.scalar(null, true)))))
                     assertThrows(RuntimeFault.class, () -> load.apply(call -> call.set(1, head)));
                 for (var change : new Object[][]{{"convention","ccall"},{"convention","javascript"},{"safety","unsafe"},{"arity",3.0},{"suppliedArity",2L}})
                     assertThrows(RuntimeFault.class, () -> load.apply(call -> {
@@ -118,7 +118,7 @@ class ManagedFileCallTest {
                 assertThrows(RuntimeFault.class, () -> load.apply(call -> ((List<Object>) call.get(3)).set(0, true)));
                 assertThrows(RuntimeFault.class, () -> load.apply(call -> {
                     var arguments = (List<List<Object>>) call.get(2);
-                    arguments.get(2).set(2, Map.of("rep", ManagedFileFixtures.INSTANCE.scalar("IntRep", true)));
+                    arguments.get(2).set(2, Map.of("rep", ManagedFileFixtures.scalar("IntRep", true)));
                 }));
                 assertThrows(RuntimeFault.class, () -> load.apply(call -> {
                     var arguments = (List<List<Object>>) call.get(2);

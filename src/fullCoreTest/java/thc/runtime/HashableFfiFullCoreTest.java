@@ -35,9 +35,9 @@ public class HashableFfiFullCoreTest {
     private Fixture fixture() throws Exception {
         var manifest = json(prefix + "/manifest.json"); assertEquals(1L, manifest.get("schema")); assertEquals(true, manifest.get("strictAccepted")); assertEquals(true, manifest.get("runtimeVerified"));
         assertEquals("1.5.1.0", manifest.get("hashableVersion")); assertEquals(false, manifest.get("randomInitialSeed")); assertEquals(false, manifest.get("archNative")); assertEquals(300L, manifest.get("nativeRows"));
-        OriginalStdioChecks.INSTANCE.hashes(root, manifest.get("inputHashes"), Set.of("test/fixtures/run-hashable-ffi/cabal.project", "test/fixtures/run-hashable-ffi/run-hashable-ffi.cabal",
+        OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of("test/fixtures/run-hashable-ffi/cabal.project", "test/fixtures/run-hashable-ffi/run-hashable-ffi.cabal",
             "test/fixtures/run-hashable-ffi/src/HashableProbe.hs", "test/fixtures/run-hashable-ffi/app/Main.hs", "test/haskell-fixtures/HashableFfiFixtures.hs", "compiler/THC/Plugin.hs"), null);
-        OriginalStdioChecks.INSTANCE.hashes(root, manifest.get("artifactHashes"), Set.of(prefix + "/packages.json", prefix + "/acquired/packages.json", prefix + "/acquired/audit.json",
+        OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"), Set.of(prefix + "/packages.json", prefix + "/acquired/packages.json", prefix + "/acquired/audit.json",
             prefix + "/acquired/native/cache/plan.json", prefix + "/logs/native-oracle.stdout"), prefix + "/");
         var rows = new ArrayList<Row>(); for (var row : (List<Map<String, Object>>) manifest.get("observations")) {
             var arguments = (List<String>) row.get("arguments"); assertEquals(2, arguments.size()); rows.add(new Row((String) row.get("entry"), Long.parseLong(arguments.getFirst()), Long.parseLong(arguments.get(1)), Long.parseLong((String) row.get("result"))));
@@ -66,7 +66,7 @@ public class HashableFfiFullCoreTest {
         String unit = (String) manifest.get("probeUnit"); var merged = CoreModules.merge(modules);
         for (String name : entries) {
             var linked = CoreModules.reachable(merged, List.of(unit + ":HashableProbe." + name), true); var calls = new LinkedHashSet<Call>();
-            for (var app : OriginalStdioChecks.INSTANCE.foreignCalls(linked)) {
+            for (var app : OriginalStdioChecks.foreignCalls(linked)) {
                 var descriptor = (Map<?, ?>) ((Map<?, ?>) app.getLast()).get("foreignCall"); var target = (Map<?, ?>) descriptor.get("target"); calls.add(new Call(target.get("unit"), target.get("symbol")));
             }
             Set<String> expected = switch (name) {

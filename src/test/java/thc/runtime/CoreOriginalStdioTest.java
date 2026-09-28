@@ -14,7 +14,6 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @SuppressWarnings("unchecked")
 class CoreOriginalStdioTest {
-    private static final OriginalStdioFixtures fixtures = OriginalStdioFixtures.INSTANCE;
     private static class Input {
         final Map<String, Object> descriptor;
         final Map<String, Object> metadata;
@@ -22,11 +21,11 @@ class CoreOriginalStdioTest {
         final List<Object> flags;
         final Map<String, Object> result;
         Input(String name) {
-            descriptor = fixtures.descriptor(name);
-            metadata = new LinkedHashMap<>(Map.of("foreignCall", descriptor, "rep", fixtures.tuple(name, true)));
-            for (var rep : fixtures.getSignatures().get(name)) arguments.add(fixtures.scalar(rep, true));
+            descriptor = OriginalStdioFixtures.descriptor(name);
+            metadata = new LinkedHashMap<>(Map.of("foreignCall", descriptor, "rep", OriginalStdioFixtures.tuple(name, true)));
+            for (var rep : OriginalStdioFixtures.signatures.get(name)) arguments.add(OriginalStdioFixtures.scalar(rep, true));
             flags = new ArrayList<>(Collections.nCopies(arguments.size(), false));
-            result = fixtures.tuple(name, true);
+            result = OriginalStdioFixtures.tuple(name, true);
         }
         Map<String, Object> target() { return (Map<String, Object>) descriptor.get("target"); }
         List<Map<String, Object>> declared() { return (List<Map<String, Object>>) descriptor.get("argumentReps"); }
@@ -41,17 +40,17 @@ class CoreOriginalStdioTest {
     }
     @Test void allElevenExactContracts() {
         assertEquals(Set.of("safe_write", "unsafe_write", "errno", "set_errno", "dup", "dup2", "unlink",
-            "seek_set", "seek_cur", "seek_end", "strerror"), fixtures.getSignatures().keySet());
-        for (var name : fixtures.getSignatures().keySet()) {
+            "seek_set", "seek_cur", "seek_end", "strerror"), OriginalStdioFixtures.signatures.keySet());
+        for (var name : OriginalStdioFixtures.signatures.keySet()) {
             var input = new Input(name);
-            assertEquals(fixtures.getSymbols().get(name), input.validate().getSymbol());
+            assertEquals(OriginalStdioFixtures.symbols.get(name), input.validate().getSymbol());
             for (var argument : input.arguments) ((Map<String, Object>) argument).put("evaluated", false);
             input.result.put("evaluated", false);
-            assertEquals(fixtures.getSymbols().get(name), input.validate().getSymbol());
+            assertEquals(OriginalStdioFixtures.symbols.get(name), input.validate().getSymbol());
         }
     }
     @Test void noSymbolAliasesAreAdmitted() {
-        var symbol = fixtures.getSymbols().get("safe_write");
+        var symbol = OriginalStdioFixtures.symbols.get("safe_write");
         for (var unknown : List.of("write", "read", "__hscore_set_errno64", "thc_io_v1_write",
             symbol.replace("ZC20ZC", "ZC22ZC"), symbol + "64", "prefix" + symbol)) {
             var input = new Input("safe_write"); input.target().put("symbol", unknown); assertNull(input.validate());
@@ -60,7 +59,7 @@ class CoreOriginalStdioTest {
             assertNull(CoreOriginalStdio.validate(metadata, List.of(), List.of(), null));
     }
     @Test void exactTargetDescriptorAndIntegerFields() {
-        for (var name : fixtures.getSignatures().keySet()) {
+        for (var name : OriginalStdioFixtures.signatures.keySet()) {
             for (var field : List.of("schema", "arity", "suppliedArity")) {
                 for (var value : Arrays.asList(null, true, false, 1.0, 2.0, "1", -1L, 1L << 32)) {
                     var input = new Input(name); input.descriptor.put(field, value); reject(input);
@@ -71,8 +70,8 @@ class CoreOriginalStdioTest {
                 "isFunction", Arrays.asList(null, false, 1L, "true")).entrySet()) for (var value : entry.getValue()) {
                 var input = new Input(name); input.target().put(entry.getKey(), value); reject(input);
             }
-            for (var entry : Map.of("convention", Arrays.asList(null, "prim", "javascript", fixtures.convention(name).equals("ccall") ? "capi" : "ccall"),
-                "safety", Arrays.asList(null, "interruptible", fixtures.safety(name).equals("safe") ? "unsafe" : "safe")).entrySet()) for (var value : entry.getValue()) {
+            for (var entry : Map.of("convention", Arrays.asList(null, "prim", "javascript", OriginalStdioFixtures.convention(name).equals("ccall") ? "capi" : "ccall"),
+                "safety", Arrays.asList(null, "interruptible", OriginalStdioFixtures.safety(name).equals("safe") ? "unsafe" : "safe")).entrySet()) for (var value : entry.getValue()) {
                 var input = new Input(name); input.descriptor.put(entry.getKey(), value); reject(input);
             }
             var missing = new Input(name); missing.target().remove("unit"); reject(missing);
@@ -81,8 +80,8 @@ class CoreOriginalStdioTest {
         }
     }
     @Test void everyArgumentFlagAndProofIsExact() {
-        for (var name : fixtures.getSignatures().keySet()) {
-            for (int i = 0; i < fixtures.getSignatures().get(name).size(); i++) {
+        for (var name : OriginalStdioFixtures.signatures.keySet()) {
+            for (int i = 0; i < OriginalStdioFixtures.signatures.get(name).size(); i++) {
                 for (var value : Arrays.asList(true, 0, null, "false")) {
                     var input = new Input(name); input.flags.set(i, value); reject(input);
                 }
@@ -123,11 +122,11 @@ class CoreOriginalStdioTest {
     }
     @Test void numericWidthsAndSignednessAreNotInterchangeable() {
         var alternatives = List.of("IntRep", "WordRep", "Int32Rep", "Word32Rep", "Int64Rep", "Word64Rep", "AddrRep");
-        for (var entry : fixtures.getSignatures().entrySet()) for (int index = 0; index < entry.getValue().size(); index++)
+        for (var entry : OriginalStdioFixtures.signatures.entrySet()) for (int index = 0; index < entry.getValue().size(); index++)
             for (var replacement : alternatives) if (!replacement.equals(entry.getValue().get(index)))
                 for (boolean declared : new boolean[]{false, true}) {
                     var input = new Input(entry.getKey());
-                    var proof = fixtures.scalar(replacement, !declared);
+                    var proof = OriginalStdioFixtures.scalar(replacement, !declared);
                     if (declared) input.declared().set(index, proof); else input.arguments.set(index, proof);
                     reject(input);
                 }
@@ -137,15 +136,15 @@ class CoreOriginalStdioTest {
             var input = new Input("set_errno");
             var proof = input.proof(site);
             switch (mutation) {
-                case "bare" -> { proof.clear(); proof.putAll(fixtures.scalar(null, site != 0)); }
+                case "bare" -> { proof.clear(); proof.putAll(OriginalStdioFixtures.scalar(null, site != 0)); }
                 case "empty" -> proof.put("components", List.of());
-                case "extra" -> proof.put("components", List.of(fixtures.scalar(null, true), fixtures.scalar(null, true)));
+                case "extra" -> proof.put("components", List.of(OriginalStdioFixtures.scalar(null, true), OriginalStdioFixtures.scalar(null, true)));
                 case "sum" -> proof.put("aggregate", "unboxed-sum");
             }
             reject(input);
         }
     }
-    private List<Object> head(Object id) { return Arrays.asList("var", id, Map.of("rep", fixtures.closure())); }
+    private List<Object> head(Object id) { return Arrays.asList("var", id, Map.of("rep", OriginalStdioFixtures.closure())); }
     @Test void foreignHeadsAreUnboundDeclarationsNotCallerNameAliases() {
         for (var name : List.of("arbitrary", "other-package:Caller.inlined", "write"))
             CoreOriginalStdio.validateHead(head(name), false);
@@ -155,7 +154,7 @@ class CoreOriginalStdioTest {
         assertThrows(RuntimeFault.class, () -> CoreOriginalStdio.validateHead(head("foreign"), true));
         for (var change : new Object[][]{{"kind","long"},{"primReps",List.of("IntRep")},
             {"evaluated",false},{"evaluated",1},{"extra",null}}) {
-            var proof = fixtures.closure(); proof.put((String) change[0], change[1]);
+            var proof = OriginalStdioFixtures.closure(); proof.put((String) change[0], change[1]);
             assertThrows(RuntimeFault.class, () -> CoreOriginalStdio.validateHead(List.of("var", "foreign", Map.of("rep", proof)), false));
         }
     }

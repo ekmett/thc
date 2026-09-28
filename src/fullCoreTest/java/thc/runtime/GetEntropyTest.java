@@ -32,13 +32,13 @@ public class GetEntropyTest {
     }
     private void verify() throws Exception {
         var manifest = json("manifest.json"); assertEquals(9L, manifest.get("nativeRows"));
-        OriginalStdioChecks.INSTANCE.hashes(root, manifest.get("sourceHashes"), Set.of(
+        OriginalStdioChecks.hashes(root, manifest.get("sourceHashes"), Set.of(
             "build/getentropy/sources/splitmix-0.1.3.2/splitmix.cabal", "build/getentropy/sources/splitmix-0.1.3.2/cbits-unix/init.c",
             "build/getentropy/sources/splitmix-0.1.3.2/src/System/Random/SplitMix/Init.hs"), "build/getentropy/sources/");
-        OriginalStdioChecks.INSTANCE.hashes(root, manifest.get("inputHashes"), Set.of(
+        OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of(
             "compiler/test-fixtures/NativeGetEntropy.c", "compiler/test-fixtures/OriginalSplitmixNative.hs", "compiler/test-fixtures/OriginalSplitmixEntry.hs",
             "test/haskell-fixtures/GetEntropyFixtures.hs", "src/THC/Driver/PackageNative.hs", "src/THC/Driver/NativeLibrarySources.hs"), null);
-        OriginalStdioChecks.INSTANCE.hashes(root, manifest.get("artifactHashes"), Set.of(
+        OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"), Set.of(
             "build/getentropy/System.Random.SplitMix.Init.json", "build/getentropy/System.Random.SplitMix.json",
             "build/getentropy/entry/units/u-original-splitmix-entry/OriginalSplitmixEntry.json", "build/getentropy/audit.json",
             "build/getentropy/native.tsv", "build/getentropy/splitmix-native.tsv", "build/getentropy/control.so"), "build/getentropy/");

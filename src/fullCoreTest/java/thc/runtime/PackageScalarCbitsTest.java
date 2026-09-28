@@ -31,11 +31,11 @@ public class PackageScalarCbitsTest {
     private Map<String, Object> with(Map<String, Object> original, String key, Object value) { var result = new LinkedHashMap<>(original); result.put(key, value); return result; }
     private Fixture fixture() throws Exception {
         var manifest = json(prefix + "/manifest.json"); assertEquals(1L, manifest.get("schema")); assertEquals(true, manifest.get("supported")); assertEquals(true, manifest.get("strictAccepted")); assertEquals(true, manifest.get("runtimeVerified")); assertEquals(60L, manifest.get("nativeRows"));
-        OriginalStdioChecks.INSTANCE.hashes(root, manifest.get("inputHashes"), Set.of("test/fixtures/run-scalar-cbits/src/Scalar.hs", "test/fixtures/run-scalar-cbits/src/ScalarAgain.hs", "test/fixtures/run-scalar-cbits/cbits/scalar.c", "test/fixtures/run-scalar-cbits/cbits/scalar.h", "src/THC/Driver/ScalarBitcode.hs", "compiler/THC/Plugin.hs", "test/haskell-fixtures/PackageScalarFixtures.hs"), null);
+        OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of("test/fixtures/run-scalar-cbits/src/Scalar.hs", "test/fixtures/run-scalar-cbits/src/ScalarAgain.hs", "test/fixtures/run-scalar-cbits/cbits/scalar.c", "test/fixtures/run-scalar-cbits/cbits/scalar.h", "src/THC/Driver/ScalarBitcode.hs", "compiler/THC/Plugin.hs", "test/haskell-fixtures/PackageScalarFixtures.hs"), null);
         var records = (List<Map<String, Object>>) manifest.get("records"); var recordNames = new ArrayList<Object>(); var units = new HashSet<Object>(); var required = new LinkedHashSet<String>();
         for (var name : List.of("first", "second")) { required.add(prefix + "/" + name + "/packages.json"); required.add(prefix + "/" + name + "/audit.json"); }
         for (var record : records) { recordNames.add(record.get("name")); units.add(record.get("unit")); for (var reference : (List<Map<String, String>>) record.get("libraryArtifacts")) required.add(root.toPath().relativize(Path.of(reference.get("path"))).toString().replace(File.separatorChar, '/')); }
-        assertEquals(List.of("first", "second"), recordNames); assertEquals(2, units.size()); OriginalStdioChecks.INSTANCE.hashes(root, manifest.get("artifactHashes"), required, prefix + "/");
+        assertEquals(List.of("first", "second"), recordNames); assertEquals(2, units.size()); OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"), required, prefix + "/");
         var modules = new ArrayList<Map<String, Object>>(); Map<String, Object> programDocument = null; var programUnits = new LinkedHashMap<String, Map<String, Object>>();
         for (var record : records) {
             var packages = json((String) record.get("packages")); var packageUnits = (List<Map<String, Object>>) packages.get("units");

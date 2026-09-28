@@ -105,12 +105,12 @@ class CoreLinkerTest {
     }
     @SuppressWarnings("unchecked")
     private String foreignRequest(String backend, Consumer<List<Object>> mutate) {
-        var module = ManagedFileFixtures.INSTANCE.module(List.of("error_kind"), call -> {
-            call.set(2, list(list("void", map("rep", ManagedFileFixtures.INSTANCE.scalar(null, true))))); mutate.accept(call); return kotlin.Unit.INSTANCE;
+        var module = ManagedFileFixtures.module(List.of("error_kind"), call -> {
+            call.set(2, list(list("void", map("rep", ManagedFileFixtures.scalar(null, true))))); mutate.accept(call);
         });
         var bindings = (List<Map<String, Object>>) module.get("bindings"); assertEquals(1, bindings.size()); var binding = bindings.getFirst();
         var lambda = new ArrayList<>((List<Object>) binding.get("expr"));
-        lambda.set(1, list(map("id", "ignored", "name", "ignored", "lifted", false, "rep", ManagedFileFixtures.INSTANCE.scalar("IntRep", true))));
+        lambda.set(1, list(map("id", "ignored", "name", "ignored", "lifted", false, "rep", ManagedFileFixtures.scalar("IntRep", true))));
         var exported = with(module, "schema", 1, "ghc", "9.14.1", "bindings", list(with(binding, "expr", lambda)));
         return Json.stringify(map("modules", list(exported), "entry", "error_kind", "backend", backend, "strictLink", true));
     }

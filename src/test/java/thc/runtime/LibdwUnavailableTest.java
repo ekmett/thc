@@ -390,10 +390,10 @@ class LibdwUnavailableTest {
         String prefix = "build/libdw-unavailable";
         var manifest = (Map<String, Object>) Json.parse(Files.readString(root.toPath().resolve(prefix + "/manifest.json")));
         assertEquals("9.14.1", manifest.get("ghc"));
-        OriginalStdioChecks.INSTANCE.hashes(root, manifest.get("inputHashes"), Set.of(
+        OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of(
             "compiler/test-fixtures/LibdwUnavailableNative.hs", "compiler/test-fixtures/CFinalizerNative.hs",
             "compiler/test-fixtures/ForeignLabelAudit.hs", "compiler/THC/Plugin.hs", "test/haskell-fixtures/LibdwUnavailableFixtures.hs"), null);
-        OriginalStdioChecks.INSTANCE.hashes(root, manifest.get("artifactHashes"), Set.of(prefix + "/oracle.json", prefix + "/foreign-labels.json"), prefix + "/");
+        OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"), Set.of(prefix + "/oracle.json", prefix + "/foreign-labels.json"), prefix + "/");
         var oracle = (Map<String, Object>) Json.parse(Files.readString(root.toPath().resolve(prefix + "/oracle.json")));
         assertEquals(false, oracle.get("useLibdw"));
         assertEquals(Collections.nCopies(8, true), oracle.get("observations"));

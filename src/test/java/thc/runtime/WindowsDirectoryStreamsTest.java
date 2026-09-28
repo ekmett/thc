@@ -76,7 +76,7 @@ class WindowsDirectoryStreamsTest {
         throw new IllegalStateException("Unterminated find-data name");
     }
     private List<Object> original(String name) throws Exception {
-        var calls = OriginalStdioChecks.INSTANCE.foreignCalls(CoreModules.INSTANCE.reachable(source(), name, false));
+        var calls = OriginalStdioChecks.foreignCalls(CoreModules.INSTANCE.reachable(source(), name, false));
         assertEquals(1, calls.size());
         return calls.getFirst();
     }
@@ -94,10 +94,10 @@ class WindowsDirectoryStreamsTest {
         assertEquals("Win32-2.14.2.1-inplace", manifest.get("win32Unit"));
         assertEquals(true, manifest.get("privateRebuiltWin32"));
         assertEquals(true, manifest.get("originalFCallIds"));
-        OriginalStdioChecks.INSTANCE.hashes(root, manifest.get("inputHashes"), Set.of(
+        OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of(
             "compiler/test-fixtures/WindowsDirectoryAudit.hsc", "test/haskell-fixtures/WindowsDirectoryFixtures.hs",
             "scripts/core_original_foreign.py", "scripts/core-capabilities.json"), null);
-        OriginalStdioChecks.INSTANCE.hashes(root, manifest.get("artifactHashes"),
+        OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"),
             Set.of(prefix + "/pre.json", prefix + "/post.json", prefix + "/oracle.json", prefix + "/win32-source.json"), prefix + "/");
         var receipt = json(prefix + "/win32-source.json");
         assertEquals(true, receipt.get("sourcesUnchangedAfterBuild"));
@@ -333,13 +333,13 @@ class WindowsDirectoryStreamsTest {
                 try {
                     for (int i = 0; i < ((List<?>) call.get(2)).size(); i++) {
                         int index = i;
-                        assertThrows(RuntimeFault.class, () -> program(language, backend, OriginalStdioChecks.INSTANCE.rawModule(call, source(), index)));
+                        assertThrows(RuntimeFault.class, () -> program(language, backend, OriginalStdioChecks.rawModule(call, source(), index)));
                     }
                     var streams = service();
                     var output = buffer();
                     var handle = streams.first(path(directory + "\\*"), output);
                     var before = name(output);
-                    var target = program(language, backend, OriginalStdioChecks.INSTANCE.rawModule(call, source(), null)).entryTarget("entry");
+                    var target = program(language, backend, OriginalStdioChecks.rawModule(call, source(), null)).entryTarget("entry");
                     var operands = switch (op) {
                         case FIND_FIRST -> new Object[] {path(directory + "\\*"), output};
                         case FIND_NEXT -> new Object[] {handle, output};

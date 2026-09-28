@@ -109,14 +109,14 @@ public class PackageNativeOriginalsTest {
 
     @Test public void originalSafeErfImportsMatchNativeInBothFirstInstalledBackends() throws Exception {
         var manifest = json(new File(directory, "manifest.json")); assertEquals(88L, manifest.get("erfNativeRows"));
-        OriginalStdioChecks.INSTANCE.hashes(root, manifest.get("sourceHashes"), Set.of(
+        OriginalStdioChecks.hashes(root, manifest.get("sourceHashes"), Set.of(
             "build/original-native/sources/erf-2.0.0.0/erf.cabal", "build/original-native/sources/erf-2.0.0.0/src/Data/Number/Erf.hs"), "build/original-native/sources/");
-        OriginalStdioChecks.INSTANCE.hashes(root, manifest.get("inputHashes"), Set.of(
+        OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of(
             "compiler/test-fixtures/OriginalErfNative.hs", "compiler/test-fixtures/OriginalErfEntry.hs",
             "test/haskell-fixtures/PackageNativeOriginalsFixtures.hs", "src/THC/Driver/PackageNative.hs", "src/THC/Driver/NativeLibrarySources.hs"), null);
         var moduleNames = List.of("linked/erf-2.0.0.0-inplace/Data.Number.Erf.json", "erf-entry/units/u-original-erf-entry/OriginalErfEntry.json");
         var namesAndArtifacts = new ArrayList<>(moduleNames); namesAndArtifacts.addAll(List.of("erf-native.tsv", "erf-audit.json"));
-        OriginalStdioChecks.INSTANCE.hashes(root, manifest.get("artifactHashes"), artifacts(namesAndArtifacts), "build/original-native/");
+        OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"), artifacts(namesAndArtifacts), "build/original-native/");
         assertEquals(true, json(new File(directory, "erf-audit.json")).get("accepted"));
         var modules = new ArrayList<Map<String, Object>>(); for (String name : moduleNames) modules.add(json(new File(directory, name)));
         var merged = CoreModules.merge(modules); var link = link(merged); assertEquals("llvm-embedded-elf", link.getFormat());
@@ -167,12 +167,12 @@ public class PackageNativeOriginalsTest {
         var manifest = json(new File(directory, "manifest.json")); assertEquals(1L, manifest.get("schema"));
         assertEquals("original-package-foreign-adapters", manifest.get("scope")); assertEquals(270L, manifest.get("nativeRows"));
         assertEquals(true, manifest.get("rejectedChangedSource")); assertEquals(true, manifest.get("rejectedHeaderMismatch"));
-        OriginalStdioChecks.INSTANCE.hashes(root, manifest.get("sourceHashes"), Set.of(
+        OriginalStdioChecks.hashes(root, manifest.get("sourceHashes"), Set.of(
             "build/original-native/sources/digest-0.0.2.1/digest.cabal", "build/original-native/sources/digest-0.0.2.1/Data/Digest/CRC32C.hs",
             "build/original-native/sources/digest-0.0.2.1/external/crc32c/src/crc32c.cc", "build/original-native/sources/digest-0.0.2.1/external/crc32c/src/crc32c_portable.cc"), "build/original-native/sources/");
-        OriginalStdioChecks.INSTANCE.hashes(root, manifest.get("inputHashes"), Set.of("compiler/test-fixtures/OriginalDigestNative.hs",
+        OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of("compiler/test-fixtures/OriginalDigestNative.hs",
             "test/haskell-fixtures/PackageNativeOriginalsFixtures.hs", "src/THC/Driver/PackageNative.hs", "src/THC/Driver/NativeLibrarySources.hs"), null);
-        OriginalStdioChecks.INSTANCE.hashes(root, manifest.get("artifactHashes"), Set.of("build/original-native/digest-native.tsv",
+        OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"), Set.of("build/original-native/digest-native.tsv",
             "build/original-native/linked/digest-0.0.2.1-inplace/Data.Digest.Adler32.json", "build/original-native/linked/digest-0.0.2.1-inplace/Data.Digest.CRC32.json",
             "build/original-native/linked/digest-0.0.2.1-inplace/Data.Digest.CRC32C.json"), "build/original-native/");
         var modules = modules(moduleFiles("linked/digest-0.0.2.1-inplace")); var moduleNames = new LinkedHashSet<Object>();
@@ -204,13 +204,13 @@ public class PackageNativeOriginalsTest {
     }
     @Test public void originalPrimitiveSignednessAdaptersMatchNativeWithoutCopyingManagedStorage() throws Exception {
         var manifest = json(new File(directory, "manifest.json")); assertEquals(720L, manifest.get("primitiveNativeRows"));
-        OriginalStdioChecks.INSTANCE.hashes(root, manifest.get("sourceHashes"), Set.of("build/original-native/sources/primitive-0.9.1.0/primitive.cabal",
+        OriginalStdioChecks.hashes(root, manifest.get("sourceHashes"), Set.of("build/original-native/sources/primitive-0.9.1.0/primitive.cabal",
             "build/original-native/sources/primitive-0.9.1.0/Data/Primitive/Internal/Operations.hs", "build/original-native/sources/primitive-0.9.1.0/cbits/primitive-memops.c",
             "build/original-native/sources/primitive-0.9.1.0/cbits/primitive-memops.h"), "build/original-native/sources/");
-        OriginalStdioChecks.INSTANCE.hashes(root, manifest.get("inputHashes"), Set.of("compiler/test-fixtures/OriginalPrimitiveNative.hs",
+        OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of("compiler/test-fixtures/OriginalPrimitiveNative.hs",
             "test/haskell-fixtures/PackageNativeOriginalsFixtures.hs", "src/THC/Driver/PackageNative.hs"), null);
         var files = moduleFiles("linked/primitive-0.9.1.0-inplace"); assertEquals(14, files.size()); var artifacts = moduleArtifacts(files); artifacts.add("build/original-native/primitive-native.tsv");
-        OriginalStdioChecks.INSTANCE.hashes(root, manifest.get("artifactHashes"), artifacts, "build/original-native/");
+        OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"), artifacts, "build/original-native/");
         var link = link(CoreModules.merge(modules(files))); var setters = new ArrayList<PackageScalarSignature>(); var reps = new LinkedHashSet<String>();
         for (var abi : link.getAbi()) if (abi.getSymbol().startsWith("hsprimitive_memset_Word")) { setters.add(abi); reps.add(abi.getArguments().getLast()); }
         assertEquals(20, setters.size()); assertEquals(10, reps.size()); var rows = rows("primitive-native.tsv"); assertEquals(720, rows.size());
@@ -232,12 +232,12 @@ public class PackageNativeOriginalsTest {
     @Test public void originalPrimitivePublicSettersRunThroughBothFirstInstalledBackends() throws Exception {
         var manifest = json(new File(directory, "manifest.json")); var files = moduleFiles("linked/primitive-0.9.1.0-inplace");
         String entryPath = "primitive-entry/units/u-original-primitive-entry/OriginalPrimitiveEntry.json";
-        OriginalStdioChecks.INSTANCE.hashes(root, manifest.get("sourceHashes"), Set.of("build/original-native/sources/primitive-0.9.1.0/Data/Primitive/ByteArray.hs",
+        OriginalStdioChecks.hashes(root, manifest.get("sourceHashes"), Set.of("build/original-native/sources/primitive-0.9.1.0/Data/Primitive/ByteArray.hs",
             "build/original-native/sources/primitive-0.9.1.0/Data/Primitive/Internal/Operations.hs"), "build/original-native/sources/");
-        OriginalStdioChecks.INSTANCE.hashes(root, manifest.get("inputHashes"), Set.of("compiler/test-fixtures/OriginalPrimitiveEntry.hs", "compiler/test-fixtures/OriginalPrimitiveNative.hs",
+        OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of("compiler/test-fixtures/OriginalPrimitiveEntry.hs", "compiler/test-fixtures/OriginalPrimitiveNative.hs",
             "test/haskell-fixtures/PackageNativeOriginalsFixtures.hs", "src/THC/Driver/PackageNative.hs"), null);
         var artifacts = moduleArtifacts(files); artifacts.addAll(artifacts(List.of(entryPath, "primitive-audit.json", "primitive-native.tsv")));
-        OriginalStdioChecks.INSTANCE.hashes(root, manifest.get("artifactHashes"), artifacts, "build/original-native/");
+        OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"), artifacts, "build/original-native/");
         var modules = modules(files); modules.add(json(new File(directory, entryPath))); assertEquals(true, json(new File(directory, "primitive-audit.json")).get("accepted"));
         var names = new LinkedHashMap<String, String>(); names.put("Int16Rep", "signed16"); names.put("Word16Rep", "unsigned16"); names.put("Int64Rep", "signed64");
         names.replaceAll((key, value) -> "original-primitive-entry:OriginalPrimitiveEntry." + value);

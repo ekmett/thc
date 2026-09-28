@@ -173,7 +173,7 @@ class RtsDiagnosticsTest {
                     }
                     val source = mapOf("sourceFiles" to emptyList<Any>(), "sourceSpans" to emptyList<Any>())
                     assertThrows(RuntimeFault::class.java) {
-                        program(language, backend, OriginalStdioChecks.rawModule(call(operation), source, storedMutation = 2))
+                        program(language, backend, OriginalStdioChecks.rawModule(call(operation), source, 2))
                     }
                     for (mutation in listOf("state-producer", "bound-head", "singleton-state-result")) {
                         val module = Json.parse(Json.stringify(OriginalStdioChecks.rawModule(call(operation), source))) as Map<String, Any?>
