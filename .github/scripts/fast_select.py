@@ -599,7 +599,9 @@ def select(repo, base_ref, head_ref):
         elif polyglot_junit_source(path):
             try:
                 names, unsafe, _ = junit_info(text(path))
-                if unsafe or not names:
+                # This lane runs every optional class, so members shared between
+                # those classes do not make its class inventory incomplete.
+                if set(unsafe) - {"shared-test-member"} or not names:
                     raise SelectionError("unresolved optional JUnit source")
                 for name in names:
                     if name in classes or name in polyglot_classes:

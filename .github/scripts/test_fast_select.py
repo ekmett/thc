@@ -310,6 +310,20 @@ class FastSelectionTest(unittest.TestCase):
         self.assertEqual({"required": True, "classes": ["example.PolyglotTest"]}, result["polyglot"])
         self.assertEqual(["example.SmokeTest"], result["junit"]["classes"])
 
+    def test_polyglot_shared_members_keep_complete_inventory(self):
+        self.write("src/polyglotTest/java/example/PolyglotTest.java", java_fixture(
+            "PolyglotTest", "@Test void works() {}\nint sharedValue() { return 42; }"))
+        self.write("src/polyglotTest/java/example/StorageTest.java", java_fixture(
+            "StorageTest", """@Test void usesSharedHelper() { new PolyglotTest().sharedValue(); }
+            static final class ForeignBytes { byte[] bytes; }
+            """))
+        self.commit()
+        result = self.plan()
+        self.assertTrue(result["runnable"])
+        self.assertTrue(result["inventoryComplete"])
+        self.assertEqual({"required": True, "classes": ["example.PolyglotTest", "example.StorageTest"]},
+                         result["polyglot"])
+
     def test_shared_core_and_frontend_changes_require_polyglot_but_leaf_does_not(self):
         for path in ("src/main/java/thc/runtime/CoreRepresentations.java",
                      "src/main/java/thc/Language.java", "src/main/java/thc/Json.java",
