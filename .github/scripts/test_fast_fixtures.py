@@ -2324,7 +2324,11 @@ class FixturePreparationTest(unittest.TestCase):
             with self.subTest(junit=junit):
                 self.assertEqual(group_id, owners[junit])
                 group = manifest["groups"][group_id]
-                source = (project / ("src/test/kotlin/" + junit.replace(".", "/") + ".kt")).read_text()
+                sources = [project / "src/test" / language / (junit.replace(".", "/") + suffix)
+                           for language, suffix in (("java", ".java"), ("kotlin", ".kt"))]
+                sources = [path for path in sources if path.is_file()]
+                self.assertEqual(1, len(sources), junit)
+                source = sources[0].read_text()
                 for root in roots:
                     self.assertTrue('"build/' + root in source or '"' + root + '"' in source, root)
                     self.assertIn("build/" + root, group["outputs"])
@@ -2353,7 +2357,11 @@ class FixturePreparationTest(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertIn("thc.runtime." + name, owners)
                 self.assertIsNone(owners["thc.runtime." + name])
-                source = (project / "src/test/kotlin/thc/runtime" / (name + ".kt")).read_text()
+                sources = [project / "src/test" / language / "thc/runtime" / (name + suffix)
+                           for language, suffix in (("java", ".java"), ("kotlin", ".kt"))]
+                sources = [path for path in sources if path.is_file()]
+                self.assertEqual(1, len(sources), name)
+                source = sources[0].read_text()
                 self.assertNotIn('"build/', source)
 
     def test_managed_file_and_stdio_controls_do_not_force_full_fixture_preparation(self):
