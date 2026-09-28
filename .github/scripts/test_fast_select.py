@@ -1518,7 +1518,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                            "BoundThreadSupport", "CoreMainThreadForeign", "RegisterMainThread",
                            "CompactImageOp", "CompactImageExpression", "CoreStablePointers", "StablePointerOp",
                            "MakeStablePointer", "DereferenceStablePointer", "EqualStablePointers", "FreeStablePointer",
-                           "AstStackScope", "AstStackSpill", "AstStackContinuation", "AstChildSuspension", "AstStackKt", "ManagedSmallArray", "SmallArrayStorage", "SmallArrayOp", "ManagedMutVar", "ModifiedMutVar", "MutVarModifySite", "MutVarOp", "ManagedNativeAllocations", "NativeEventWait", "AtomicIntArrayOp", "AtomicIntArrayExpression")},
+                           "AstStackScope", "AstStackSpill", "AstStackContinuation", "AstChildSuspension", "AstStackKt", "ManagedSmallArray", "SmallArrayStorage", "SmallArrayOp", "ManagedMutVar", "ModifiedMutVar", "MutVarModifySite", "MutVarOp", "ManagedNativeAllocations", "NativeEventWait", "NativeEpoll", "AtomicIntArrayOp", "AtomicIntArrayExpression")},
                          {path for path in self.families if path.startswith("src/main/java/")})
 
     def test_file_and_stdio_owners_keep_native_and_lifecycle_controls(self):
