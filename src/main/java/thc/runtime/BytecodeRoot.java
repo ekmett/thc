@@ -63,6 +63,23 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     private String label = "bytecode";
+    @CompilerDirectives.CompilationFinal private boolean passThrough;
+    @CompilerDirectives.CompilationFinal private BytecodeCaseRegion.Plan casePlan;
+    @Children private BytecodeCaseRegion[] caseRegions = new BytecodeCaseRegion[0];
+    final void configureCaseRegions(boolean passThrough, BytecodeCaseRegion[] regions) {
+        this.passThrough = passThrough;
+        caseRegions = insert(regions);
+        if (regions.length != 0) casePlan = new BytecodeCaseRegion.Plan();
+    }
+    final long entryMask() { return passThrough ? 0L : mask; }
+    @Override public final long getGraphBudgetGeneration() { return casePlan == null ? 0 : casePlan.generation(); }
+    @Override public final long prepareGraphBudgetRetry(long failedGeneration) {
+        return casePlan == null ? failedGeneration : casePlan.recover(failedGeneration);
+    }
+    @Override protected boolean prepareForCompilation(boolean rootCompilation, int tier, boolean lastTier) {
+        // These private roots can only be called by the recovered case edge.
+        return (!passThrough || rootCompilation) && super.prepareForCompilation(rootCompilation, tier, lastTier);
+    }
     @CompilerDirectives.CompilationFinal private boolean asyncEnabled;
     public final void configureAsync(boolean enabled) { asyncEnabled = enabled; }
     public final boolean isAsyncEnabled() { return asyncEnabled; }
@@ -87,7 +104,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Override public final String toString() { return label; }
     @Override public final long bloom(VirtualFrame frame) {
         // Self backedges restore DSL locals, leaving the incoming ancestry intact.
-        if (typedBloom == null) return (long) frame.getArguments()[0] | mask;
+        if (typedBloom == null) return (long) frame.getArguments()[0] | entryMask();
         try { return typedBloom.getLong(getBytecodeNode(), frame); }
         catch (com.oracle.truffle.api.nodes.UnexpectedResultException invalid) { throw fail("Invalid typed input bloom"); }
     }
@@ -113,6 +130,24 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             if (metrics.getEnabled() && CompilerDirectives.inCompiledCode()) {
                 metrics.incrementCompiledEntries();
             }
+        }
+    }
+
+    @Operation public static final class InlineCaseRegions {
+        @Specialization public static boolean test(@Bind("$node") Node node) {
+            BytecodeRoot root = (BytecodeRoot) node.getRootNode();
+            return root.casePlan.inline.isValid();
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = int.class, name = "index")
+    @ConstantOperand(type = BytecodeCaseRegion.Source.class, name = "source")
+    public static final class CallCaseRegion {
+        @Specialization public static Object call(VirtualFrame frame, int index, BytecodeCaseRegion.Source source,
+                Object scrutinee, MaskingState callerMask, @Bind("$node") Node node) {
+            BytecodeRoot root = (BytecodeRoot) node.getRootNode();
+            return root.caseRegions[index].execute(frame, root, source, scrutinee, callerMask);
         }
     }
 

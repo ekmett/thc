@@ -204,6 +204,10 @@ public final class BytecodeNormalizers {
             "        if (this.bytecode instanceof UninitializedBytecodeNode) transitionToCached();\n" +
             "        return super.prepareForCompilation(rootCompilation, compilationTier, lastTier);\n" +
             "    }\n\n";
+    static final String CONTINUATION_PREPARATION = "        @Override\n" +
+            "        protected boolean prepareForCompilation(boolean rootCompilation, int tier, boolean lastTier) {\n" +
+            "            return root.prepareForCompilation(rootCompilation, tier, lastTier);\n" +
+            "        }\n";
     static final String OLD_TAGS = "    private static byte[] createCachedTags(int numLocals) {\n" +
             "        byte[] localTags = new byte[numLocals];\n" +
             "        Arrays.fill(localTags, FrameSlotKind.Illegal.tag);\n" +
@@ -236,7 +240,13 @@ public final class BytecodeNormalizers {
             for (String[] call : TAG_CALLS) result = replaceOnce(result, call[1], call[0], message);
             require(!result.contains(STATIC_MARKER), message);
         }
-        require(!Pattern.compile("protected boolean prepareForCompilation\\(").matcher(result).find(), message);
+        String checked = result;
+        if (checked.contains(CONTINUATION_PREPARATION)) {
+            int continuation = checked.indexOf("    private static final class ContinuationRootNodeImpl extends ContinuationRootNode {\n");
+            require(continuation >= 0 && checked.indexOf(CONTINUATION_PREPARATION) > continuation, message);
+            checked = replaceOnce(checked, CONTINUATION_PREPARATION, "", message);
+        }
+        require(!Pattern.compile("protected boolean prepareForCompilation\\(").matcher(checked).find(), message);
         result = replaceOnce(result, TRANSITION, PREPARATION + TRANSITION, message);
         result = replaceOnce(result, OLD_TAGS, NEW_TAGS, message);
         for (String[] call : TAG_CALLS) result = replaceOnce(result, call[0], call[1], message);

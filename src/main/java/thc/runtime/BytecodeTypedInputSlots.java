@@ -52,13 +52,13 @@ public final class BytecodeTypedInputSlots {
     }
 
     public void enter(VirtualFrame frame, BytecodeRoot root) {
-        restore(frame, root.getBytecodeNode(), entry.take(frame.getArguments()), true, root.mask);
+        restore(frame, root.getBytecodeNode(), entry.take(frame.getArguments()), true, root.entryMask());
     }
 
     public void tail(VirtualFrame frame, BytecodeRoot root, TailCall transfer) {
         var input = transfer.getInput();
         if (input == null) throw fault("Typed input target received a scalar packet");
-        restore(frame, root.getBytecodeNode(), input, false, root.mask);
+        restore(frame, root.getBytecodeNode(), input, false, root.entryMask());
     }
 
     /** All source slots are disjoint snapshots: copying formals and captures is a parallel move. */
