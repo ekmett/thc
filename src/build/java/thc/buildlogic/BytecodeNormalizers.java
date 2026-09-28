@@ -42,6 +42,7 @@ public final class BytecodeNormalizers {
         result = BytecodeColdDelimitedPreparation.transform(result, version);
         result = BytecodeColdCompactPreparation.transform(result, version);
         result = BytecodeColdForcePreparation.transform(result, version);
+        result = BytecodeColdPolyglotPreparation.transform(result, version);
         return BytecodeStackPreparation.transform(BytecodeBudgetChoice.transform(result, version), version);
     }
 

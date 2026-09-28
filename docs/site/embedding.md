@@ -102,6 +102,8 @@ logical argument and result shapes, not the runtime's flattened transport slots:
 | Unboxed sum | A two-element array `[tag, payload]`, with a 1-based alternative tag |
 | SIMD vector | The exact raw JDK Vector API value with the declared species; not a lane array |
 | Guest reference or managed address | An opaque, context-owned value returned by THC; null is accepted for a null address |
+| ByteArray# storage | A read-only, aliasing buffer with byte-order-aware reads; never an invented native pointer |
+| Array# / SmallArray# storage | A fixed-size, read-only array view; only the requested element is exported, without forcing it |
 | Guest function | An executable, context-owned value, including closures and partial applications |
 | `State#` / `Void#` | Null; nested void fields occupy a logical field but no physical register |
 
@@ -117,6 +119,15 @@ addresses. Guest references and functions cannot be passed to another context
 or used after their context closes. Host marshalling does not force references
 or inspect their fields; the guest's own evaluation rules still apply. Calling a returned function checks its remaining logical
 signature, including any already supplied partial-application prefix.
+
+Storage views retain their original allocation. An owned byte or small-array
+shrink is visible through the existing view; growing to a different allocation
+does not retarget old views. Ordinary Core export is read-only because erased
+RuntimeRep cannot distinguish mutable and immutable storage. Typed
+[`THC.Interop.Buffer` constructors](../polyglot.md#buffers-and-fixed-arrays)
+can explicitly grant byte writes. Arbitrary addresses have no known extent and
+are not buffers. Pointer-bearing managed allocations cannot be exposed as raw
+bytes, and raw-exposed allocations reject later managed pointer-cell stores.
 
 Qualified constructor identities and their complete field contracts are shared
 across independent loads in one context, including between AST and bytecode

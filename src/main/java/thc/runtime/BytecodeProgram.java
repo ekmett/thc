@@ -350,6 +350,30 @@ public final class BytecodeProgram implements ExecutableProgram {
         if (destination == null) value.emit(emission); else value.emitTuple(emission, destination);
     }
 
+    /** Honor the destination's existing single-carrier certificate for every tuple writer. */
+    private static void storeTupleResult(Emission e, BytecodeLocal slot, Runnable value) {
+        var b = e.builder;
+        var kind = e.staticResults.get(slot);
+        if (kind == null) { b.beginStoreLocal(slot); value.run(); b.endStoreLocal(); return; }
+        switch (kind) {
+            case Int -> b.beginStaticStoreInt(slot);
+            case Long -> b.beginStaticStoreLong(slot);
+            case Float -> b.beginStaticStoreFloat(slot);
+            case Double -> b.beginStaticStoreDouble(slot);
+            case Object -> b.beginStaticStoreObject(slot);
+            default -> throw new AssertionError(kind);
+        }
+        value.run();
+        switch (kind) {
+            case Int -> b.endStaticStoreInt();
+            case Long -> b.endStaticStoreLong();
+            case Float -> b.endStaticStoreFloat();
+            case Double -> b.endStaticStoreDouble();
+            case Object -> b.endStaticStoreObject();
+            default -> throw new AssertionError(kind);
+        }
+    }
+
     private static Expression tupleExpression(CoreRepresentation proof,
             BiConsumer<Emission, List<BytecodeLocal>> action) {
         return new ProvenExpression(new ResultExpression((emission, destination) -> {
@@ -943,7 +967,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                     var kind = FrameLayout.carrierKind(local.proof);
                     e.staticScalars.put(local.id, kind);
                     info = kind;
-                } else if (strictReference || fixedCarrier && (staticBoxedReference(local.proof)
+                } else if (strictReference || fixedCarrier && (staticBoxedReference(local.proof) || local.proof.getKind() == CoreKind.VOID
                         || typedFormal && FrameLayout.carrierKind(local.proof) == FrameSlotKind.Object)) {
                     e.staticObjectLocals.add(local.id);
                     info = FrameSlotKind.Object;
@@ -5035,30 +5059,8 @@ public final class BytecodeProgram implements ExecutableProgram {
                     TupleShape.requireCompatible(aggregate.proof, occurrence, false);
                     yield tupleExpression(aggregate.proof, (e, destination) -> {
                         for (int index = 0; index < aggregate.fields.size(); ++index) {
-                            var slot = destination.get(index);
-                            var kind = e.staticResults.get(slot);
-                            if (kind == null) {
-                                e.builder.beginStoreLocal(slot);
-                                read(aggregate.fields.get(index)).emit(e); e.builder.endStoreLocal();
-                            } else {
-                                switch (kind) {
-                                    case Int -> e.builder.beginStaticStoreInt(slot);
-                                    case Long -> e.builder.beginStaticStoreLong(slot);
-                                    case Float -> e.builder.beginStaticStoreFloat(slot);
-                                    case Double -> e.builder.beginStaticStoreDouble(slot);
-                                    case Object -> e.builder.beginStaticStoreObject(slot);
-                                    default -> throw new AssertionError(kind);
-                                }
-                                read(aggregate.fields.get(index)).emit(e);
-                                switch (kind) {
-                                    case Int -> e.builder.endStaticStoreInt();
-                                    case Long -> e.builder.endStaticStoreLong();
-                                    case Float -> e.builder.endStaticStoreFloat();
-                                    case Double -> e.builder.endStaticStoreDouble();
-                                    case Object -> e.builder.endStaticStoreObject();
-                                    default -> throw new AssertionError(kind);
-                                }
-                            }
+                            var field = aggregate.fields.get(index);
+                            storeTupleResult(e, destination.get(index), () -> read(field).emit(e));
                         }
                     });
                 }
@@ -5814,11 +5816,11 @@ public final class BytecodeProgram implements ExecutableProgram {
                     if (component.isTypedTransport()) operand.emitTuple(e, destination.subList(offset, offset + TupleShape.flatten(component).size()));
                     else if (component.getKind() == CoreKind.VOID) { b.beginDiscardVoid(); operand.emit(e); b.endDiscardVoid(); }
                     else {
-                        b.beginStoreLocal(destination.get(offset));
-                        if (component.getKind() == CoreKind.ADDRESS) b.beginRequireAddress();
-                        operand.emit(e);
-                        if (component.getKind() == CoreKind.ADDRESS) b.endRequireAddress();
-                        b.endStoreLocal();
+                        storeTupleResult(e, destination.get(offset), () -> {
+                            if (component.getKind() == CoreKind.ADDRESS) b.beginRequireAddress();
+                            operand.emit(e);
+                            if (component.getKind() == CoreKind.ADDRESS) b.endRequireAddress();
+                        });
                     }
                 }
                 b.endBlock();
@@ -6424,10 +6426,12 @@ public final class BytecodeProgram implements ExecutableProgram {
                     case EVAL -> b.beginPolyglotEval(destination.get(0));
                     case READ_MEMBER -> b.beginPolyglotReadMember(destination.get(0));
                     case EXECUTE_INT -> b.beginPolyglotExecuteInt(destination.get(0));
+                    default -> b.beginPolyglotStorage(destination.get(0), polyglot);
                 }
                 for (var operand : operands) operand.emit(e);
                 switch (polyglot) {
                     case EVAL -> b.endPolyglotEval(); case READ_MEMBER -> b.endPolyglotReadMember(); case EXECUTE_INT -> b.endPolyglotExecuteInt();
+                    default -> b.endPolyglotStorage();
                 }
                 if (enableAsync) emitAsyncPoll(e);
             });

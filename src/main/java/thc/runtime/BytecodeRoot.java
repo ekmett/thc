@@ -302,6 +302,21 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    @ConstantOperand(type = PolyglotOp.class, name = "operation")
+    public static final class PolyglotStorage {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                PolyglotOp operation, @Variadic Object[] arguments,
+                @Cached(value = "createAccess()", neverDefault = true) PolyglotAccess access, @Bind("$node") Node node) {
+            Object answer = access.storage(frame, operation, arguments);
+            var bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            if (operation.getResult().equals("IntRep")) destination.setLong(bytecode, frame, (Long) answer);
+            else destination.setObject(bytecode, frame, answer);
+        }
+        public static PolyglotAccess createAccess() { return new PolyglotAccess(); }
+    }
+
+    @Operation
     @ConstantOperand(type = BytecodeJavaScriptArguments.class, name = "arguments")
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class JavaScriptInt {

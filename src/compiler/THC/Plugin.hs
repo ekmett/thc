@@ -691,7 +691,24 @@ polyglotForeign :: Id -> Bool
 polyglotForeign v = case isFCallId_maybe v of
   Just (Foreign.CCall (Foreign.CCallSpec
     (Foreign.StaticTarget _ symbol _ True) Foreign.PrimCallConv Foreign.PlaySafe)) ->
-      unpackFS symbol `elem` ["thc_polyglot_v1_eval", "thc_polyglot_v1_read_member", "thc_polyglot_v1_execute_int"]
+      unpackFS symbol `elem`
+        ["thc_polyglot_v1_eval", "thc_polyglot_v1_read_member", "thc_polyglot_v1_execute_int"
+        , "thc_polyglot_v1_execute_value"
+        , "thc_polyglot_v1_buffer_view"
+        , "thc_polyglot_v1_buffer_mutable_view"
+        , "thc_polyglot_v1_array_view"
+        , "thc_polyglot_v1_array_mutable_view"
+        , "thc_polyglot_v1_buffer_size"
+        , "thc_polyglot_v1_buffer_read_byte"
+        , "thc_polyglot_v1_buffer_write_byte"
+        , "thc_polyglot_v1_buffer_read_long"
+        , "thc_polyglot_v1_buffer_write_long"
+        , "thc_polyglot_v1_buffer_copy"
+        , "thc_polyglot_v1_buffer_copy_into"
+        , "thc_polyglot_v1_array_size"
+        , "thc_polyglot_v1_array_read"
+        , "thc_polyglot_v1_array_write"
+        , "thc_polyglot_v1_array_copy"]
   Just (Foreign.CCall (Foreign.CCallSpec
     (Foreign.StaticTarget _ symbol _ True) Foreign.CCallConv safety)) ->
       (safety == Foreign.PlayRisky && unpackFS symbol `elem`

@@ -5,6 +5,7 @@ import thc.buildlogic.BytecodeNormalizerChecks
 import thc.buildlogic.BytecodeColdApplyPreparation
 import thc.buildlogic.BytecodeColdDelimitedPreparation
 import thc.buildlogic.BytecodeColdCompactPreparation
+import thc.buildlogic.BytecodeColdPolyglotPreparation
 import thc.buildlogic.BytecodeColdForcePreparation
 
 buildscript {
@@ -44,6 +45,10 @@ def checks = [
     testBytecodeColdCompactPreparation: { task ->
         BytecodeColdCompactPreparation.check()
         logger.lifecycle('Immutable compact construction: exact body/operand/version, no state-bit writes, CRLF/idempotence/negative controls passed.')
+    },
+    testBytecodeColdPolyglotPreparation: { task ->
+        BytecodeColdPolyglotPreparation.check()
+        logger.lifecycle('Immutable storage interop child: version/body/CRLF/idempotence/negative controls passed.')
     },
     testBytecodeColdForcePreparation: { task ->
         BytecodeColdForcePreparation.check(file('build/generated/main/java/thc/runtime/BytecodeRootGen.java').getText('UTF-8'))

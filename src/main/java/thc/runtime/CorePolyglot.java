@@ -37,8 +37,11 @@ public final class CorePolyglot {
         if (!(expr.size() > 3 && expr.get(3) instanceof List<?> flags)) throw new RuntimeFault("Missing foreign representation flags");
         requireProof(!expr.isEmpty() && "app".equals(expr.getFirst()) && !function.isEmpty() && "var".equals(function.getFirst()) &&
             function.size() > 1 && function.get(1) instanceof String && !defined, "expected an unresolved foreign identifier");
-        requireProof(exact(descriptor.get("schema"), 1) && "static".equals(target.get("kind")) && Boolean.TRUE.equals(target.get("isFunction")),
-            "expected a static version 1 function declaration");
+        var types = op.getArgumentTypes();
+        requireProof(exact(descriptor.get("schema"), types == null ? 1 : 2) &&
+            (types == null ? !descriptor.containsKey("argumentTypes") : types.equals(descriptor.get("argumentTypes"))) &&
+            "static".equals(target.get("kind")) && Boolean.TRUE.equals(target.get("isFunction")),
+            "expected an exact static declaration, including nominal array types");
         requireProof("prim".equals(descriptor.get("convention")) && "safe".equals(descriptor.get("safety")), "calling convention");
         requireProof(exact(descriptor.get("arity"), op.getArguments().size()) && exact(descriptor.get("suppliedArity"), op.getArguments().size()) &&
             arguments.size() == op.getArguments().size() && flags.size() == arguments.size(), "saturated arity");

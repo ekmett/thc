@@ -744,6 +744,23 @@ library runtime
   if flag(development)
     ghc-options: -Werror
 
+-- THC-owned foreign intrinsics have no ordinary native linker implementation.
+-- Keep them separate from the native-compatible runtime service library.
+library interop
+  visibility: public
+  hs-source-dirs: src/runtime
+  exposed-modules:
+    THC.Polyglot
+    THC.Interop.Buffer
+    THC.Interop.Array
+    THC.Interop.Array.Unsafe
+    THC.Internal.Polyglot
+  build-depends: base >= 4.22 && < 4.23
+  default-language: Haskell2010
+  ghc-options: -Wall
+  if flag(development)
+    ghc-options: -Werror
+
 test-suite cpu-affinity-api
   type: exitcode-stdio-1.0
   main-is: Main.hs

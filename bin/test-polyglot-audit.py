@@ -17,7 +17,7 @@ ABI = json.loads((ROOT / 'src/test/resources/thc/polyglot-abi.json').read_text()
 
 def rep(register):
     return dict(kind={'AddrRep': 'address', 'IntRep': 'long', 'DoubleRep': 'double',
-                      'BoxedRep (Just Lifted)': 'object', 'State# RealWorld': 'void'}[register],
+                      'BoxedRep (Just Lifted)': 'object', 'BoxedRep (Just Unlifted)': 'object', 'State# RealWorld': 'void'}[register],
                 primReps=[] if register == 'State# RealWorld' else [register], evaluated=True)
 
 
@@ -30,6 +30,8 @@ def call(symbol):
     descriptor = dict(schema=1, target=dict(kind='static', symbol=symbol, unit='main', isFunction=True),
                       convention=ABI['convention'], safety=ABI['safety'], arity=len(arguments),
                       suppliedArity=len(arguments), argumentReps=deepcopy(arguments), resultRep=deepcopy(result))
+    if 'argumentTypes' in signature:
+        descriptor.update(schema=2, argumentTypes=deepcopy(signature['argumentTypes']))
     expression = ['app', ['var', 'ffi:external', {'rep': dict(kind='closure',
                         primReps=['BoxedRep (Just Lifted)'], evaluated=True)}],
                   [['var', f'arg{i}', {'rep': value}] for i, value in enumerate(arguments)],
@@ -79,6 +81,25 @@ class PolyglotAuditTest(unittest.TestCase):
         auditor = self.audit(expression, bound)
         self.assertIn('ffi:external', auditor.missing)
         self.assertEqual([], auditor.foreign_calls)
+
+    def test_nominal_byte_array_mutability_cannot_be_erased_or_swapped(self):
+        for symbol, spec in ABI['operations'].items():
+            if 'argumentTypes' not in spec:
+                continue
+            for mutation in ('schema', 'missing', 'mutability'):
+                expression, bound = call(symbol)
+                declaration = expression[6]['foreignCall']
+                if mutation == 'schema':
+                    declaration['schema'] = 1
+                elif mutation == 'missing':
+                    del declaration['argumentTypes']
+                else:
+                    declaration['argumentTypes'] = [None if kind is None else
+                        'MutableByteArray#' if kind == 'ByteArray#' else 'ByteArray#'
+                        for kind in declaration['argumentTypes']]
+                auditor = self.audit(expression, bound)
+                self.assertTrue(any(issue['code'] == 'foreign-call' for issue in auditor.issues))
+                self.assertEqual([], auditor.foreign_calls)
 
     def test_changed_symbol_convention_safety_arity_or_rep_is_rejected(self):
         symbol = 'thc_polyglot_v1_execute_int'

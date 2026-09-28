@@ -19,4 +19,4 @@ fi
 exec "$GHC" --make -no-link -O2 -dynamic -fforce-recomp -dcore-lint \
   -package-db "$plugin_db" -plugin-package-id "$plugin_unit" \
   -fplugin=THC.Plugin "-fplugin-opt=THC.Plugin:$out" \
-  -i"$root/src/examples" -odir "$obj" -hidir "$obj" "$@"
+  -i"$root/src/examples" -i"$root/src/runtime" -odir "$obj" -hidir "$obj" "$@"

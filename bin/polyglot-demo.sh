@@ -18,6 +18,7 @@ for stage in pre post; do
     bin/export-core.sh -fplugin-opt=THC.Plugin:closure=main "$@" src/examples/THC/PolyglotDemo.hs
   python3 bin/audit-core.py \
     "build/polyglot/$stage-core/THC.Polyglot.json" \
+    "build/polyglot/$stage-core/THC.Internal.Polyglot.json" \
     "build/polyglot/$stage-core/THC.PolyglotDemo.json" \
     "build/polyglot/$stage-core/THC.InterfaceClosure.json" \
     --entry main:THC.PolyglotDemo.main --io-main \

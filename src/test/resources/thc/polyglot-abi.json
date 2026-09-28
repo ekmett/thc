@@ -3,6 +3,73 @@
   "convention": "prim",
   "safety": "safe",
   "operations": {
+    "thc_polyglot_v1_execute_value": {
+      "arguments": ["BoxedRep (Just Lifted)","BoxedRep (Just Lifted)","State# RealWorld"],
+      "result": ["State# RealWorld","BoxedRep (Just Lifted)"]
+    },
+    "thc_polyglot_v1_buffer_view": {
+      "argumentTypes": ["ByteArray#", null],
+      "arguments": ["BoxedRep (Just Unlifted)","State# RealWorld"],
+      "result": ["State# RealWorld","BoxedRep (Just Lifted)"]
+    },
+    "thc_polyglot_v1_buffer_mutable_view": {
+      "argumentTypes": ["MutableByteArray#", null],
+      "arguments": ["BoxedRep (Just Unlifted)","State# RealWorld"],
+      "result": ["State# RealWorld","BoxedRep (Just Lifted)"]
+    },
+    "thc_polyglot_v1_array_view": {
+      "arguments": ["BoxedRep (Just Unlifted)","State# RealWorld"],
+      "result": ["State# RealWorld","BoxedRep (Just Lifted)"]
+    },
+    "thc_polyglot_v1_array_mutable_view": {
+      "arguments": ["BoxedRep (Just Unlifted)","State# RealWorld"],
+      "result": ["State# RealWorld","BoxedRep (Just Lifted)"]
+    },
+    "thc_polyglot_v1_buffer_size": {
+      "arguments": ["BoxedRep (Just Lifted)","State# RealWorld"],
+      "result": ["State# RealWorld","IntRep"]
+    },
+    "thc_polyglot_v1_buffer_read_byte": {
+      "arguments": ["BoxedRep (Just Lifted)","IntRep","State# RealWorld"],
+      "result": ["State# RealWorld","IntRep"]
+    },
+    "thc_polyglot_v1_buffer_write_byte": {
+      "arguments": ["BoxedRep (Just Lifted)","IntRep","IntRep","State# RealWorld"],
+      "result": ["State# RealWorld","IntRep"]
+    },
+    "thc_polyglot_v1_buffer_read_long": {
+      "arguments": ["BoxedRep (Just Lifted)","IntRep","IntRep","State# RealWorld"],
+      "result": ["State# RealWorld","IntRep"]
+    },
+    "thc_polyglot_v1_buffer_write_long": {
+      "arguments": ["BoxedRep (Just Lifted)","IntRep","IntRep","IntRep","State# RealWorld"],
+      "result": ["State# RealWorld","IntRep"]
+    },
+    "thc_polyglot_v1_buffer_copy": {
+      "arguments": ["BoxedRep (Just Lifted)","IntRep","IntRep","State# RealWorld"],
+      "result": ["State# RealWorld","BoxedRep (Just Unlifted)"]
+    },
+    "thc_polyglot_v1_buffer_copy_into": {
+      "argumentTypes": [null, null, "MutableByteArray#", null, null, null],
+      "arguments": ["BoxedRep (Just Lifted)","IntRep","BoxedRep (Just Unlifted)","IntRep","IntRep","State# RealWorld"],
+      "result": ["State# RealWorld","IntRep"]
+    },
+    "thc_polyglot_v1_array_size": {
+      "arguments": ["BoxedRep (Just Lifted)","State# RealWorld"],
+      "result": ["State# RealWorld","IntRep"]
+    },
+    "thc_polyglot_v1_array_read": {
+      "arguments": ["BoxedRep (Just Lifted)","IntRep","State# RealWorld"],
+      "result": ["State# RealWorld","BoxedRep (Just Lifted)"]
+    },
+    "thc_polyglot_v1_array_write": {
+      "arguments": ["BoxedRep (Just Lifted)","IntRep","BoxedRep (Just Lifted)","State# RealWorld"],
+      "result": ["State# RealWorld","IntRep"]
+    },
+    "thc_polyglot_v1_array_copy": {
+      "arguments": ["BoxedRep (Just Lifted)","State# RealWorld"],
+      "result": ["State# RealWorld","BoxedRep (Just Unlifted)"]
+    },
     "thc_polyglot_v1_eval": {
       "arguments": ["AddrRep", "AddrRep", "AddrRep", "State# RealWorld"],
       "result": ["State# RealWorld", "BoxedRep (Just Lifted)"]

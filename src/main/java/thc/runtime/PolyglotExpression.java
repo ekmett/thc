@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.ExplodeLoop;
 public final class PolyglotExpression extends Expr {
     private final PolyglotOp operation;
     @Children private Expr[] arguments;
     @Child private PolyglotAccess access = new PolyglotAccess();
     public PolyglotExpression(PolyglotOp operation, Expr[] arguments) { this.operation = operation; this.arguments = arguments; }
     @Override public Object execute(VirtualFrame frame) { throw RuntimeFault.fault("Polyglot IO requires a tuple destination"); }
-    @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
+    @ExplodeLoop @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
         switch (operation) {
             case EVAL -> {
                 var language = arguments[0].executeRequiredAddress(frame);
@@ -28,6 +29,13 @@ public final class PolyglotExpression extends Expr {
                 long input = arguments[1].executeRequiredLong(frame);
                 var state = arguments[2].execute(frame);
                 FrameAccess.writeLong(frame, slots[offset], access.executeInt(frame, value, input, state));
+            }
+            default -> {
+                Object[] inputs = new Object[arguments.length];
+                for (int i = 0; i < inputs.length; i++) inputs[i] = arguments[i].execute(frame);
+                Object answer = access.storage(frame, operation, inputs);
+                if (operation.getResult().equals("IntRep")) FrameAccess.writeLong(frame, slots[offset], (Long) answer);
+                else FrameAccess.write(frame, slots[offset], answer);
             }
         }
         AstForeignCompleted.poll(this);
