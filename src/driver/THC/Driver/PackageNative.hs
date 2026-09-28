@@ -50,7 +50,9 @@ type Signature = (String, String, String, [String], String)
 -- by themselves, distinguish ByteArray# from MutableByteArray#.
 installedNativeSignatures :: String -> Value -> Either String [Signature]
 installedNativeSignatures unit value
-  | member value "staticForeignImports" /= Nothing = nativeSignatures unit [value]
+  | member value "staticForeignImports" /= Nothing = do
+      imports <- nativeImports unit value
+      sort . nub . filter supportedSignature <$> mapM (nativeSignature unit) imports
   | otherwise = pure . sort . nub $
       [signature | call <- calls value, owned unit call,
         Just signature <- [direct call], supportedSignature signature]

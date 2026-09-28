@@ -790,11 +790,15 @@ def package_scalar_link(module, validate_archive=True):
         require((item['header'] is None or native and isinstance(item['header'], str) and
             item['header'] and '\0' not in item['header']) and
             item['unit'] in (None, unit) and (item['isFunction'] is True or native and convention == 'capi' and item['isFunction'] is False) and
-            convention in (('ccall', 'capi') if native else ('ccall',)) and item['safety'] in (('unsafe', 'safe') if native else ('unsafe',)) and
+            convention in (('ccall', 'capi') if native else ('ccall',)) and item['safety'] in (('unsafe', 'safe', 'interruptible') if native else ('unsafe',)) and
             item['normalizationRole'] == 'representational', 'static supported C import')
         typ(item['declaredType']); typ(item['normalizedType'])
         text(item['symbol'])
         emitted = record(item['emitted'], 'symbol unit convention safety arguments result')
+        if native and item['safety'] == 'interruptible':
+            require(emitted['unit'] == unit and emitted['convention'] == convention and
+                    emitted['safety'] == item['safety'], 'unlinked declaration identity')
+            continue
         name = text(emitted['symbol'] if native else item['symbol'])
         if name in header_adapted:
             require(convention == 'ccall' and isinstance(item['header'], str) and item['header'] and

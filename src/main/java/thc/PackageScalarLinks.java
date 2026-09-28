@@ -205,9 +205,16 @@ public final class PackageScalarLinks {
             if (PackageNativeArchives.excluded(module).contains(item.get("emitted"))) continue;
             var binder = archiveIdentity(item.get("binder")); check(Objects.equals(binder.get("unit"), unit) && Objects.equals(binder.get("module"), module.get("module")) && Objects.equals(binder.get("namespace"), "value") && binders.add(binder), "import binder");
             Object convention = item.get("convention"), header = item.get("header");
-            check((header == null || nativeLink && header instanceof String s && !s.isEmpty() && s.indexOf(0) < 0) && (item.get("unit") == null || Objects.equals(item.get("unit"), unit)) && (Objects.equals(item.get("isFunction"), true) || nativeLink && Objects.equals(convention, "capi") && Objects.equals(item.get("isFunction"), false)) && (nativeLink ? in(convention, "ccall", "capi") : Objects.equals(convention, "ccall")) && (nativeLink ? in(item.get("safety"), "unsafe", "safe") : Objects.equals(item.get("safety"), "unsafe")) && Objects.equals(item.get("normalizationRole"), "representational"), "static supported C import");
+            check((header == null || nativeLink && header instanceof String s && !s.isEmpty() && s.indexOf(0) < 0) && (item.get("unit") == null || Objects.equals(item.get("unit"), unit)) && (Objects.equals(item.get("isFunction"), true) || nativeLink && Objects.equals(convention, "capi") && Objects.equals(item.get("isFunction"), false)) && (nativeLink ? in(convention, "ccall", "capi") : Objects.equals(convention, "ccall")) && (nativeLink ? in(item.get("safety"), "unsafe", "safe", "interruptible") : Objects.equals(item.get("safety"), "unsafe")) && Objects.equals(item.get("normalizationRole"), "representational"), "static supported C import");
             archiveType(item.get("declaredType")); archiveType(item.get("normalizedType")); text(item.get("symbol"));
             var emitted = record(item.get("emitted"), "symbol unit convention safety arguments result");
+            if (nativeLink && Objects.equals(item.get("safety"), "interruptible")) {
+                // Retain the original obligation, not an executable adapter.
+                // A reached call still needs its actual scheduling boundary.
+                check(Objects.equals(emitted.get("unit"), unit) && Objects.equals(emitted.get("convention"), convention) &&
+                    Objects.equals(emitted.get("safety"), item.get("safety")), "unlinked declaration identity");
+                continue;
+            }
             String name = nativeLink ? text(emitted.get("symbol")) : text(item.get("symbol"));
             if (headerAdapted.contains(name)) {
                 boolean validHeader = Objects.equals(convention, "ccall") && header instanceof String s && !s.isEmpty();
