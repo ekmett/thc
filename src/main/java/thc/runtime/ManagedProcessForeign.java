@@ -39,7 +39,7 @@ public final class ManagedProcessForeign {
     }
 
     public static ManagedProcessForeign current(Node node) {
-        return Language.currentState(node).getFiles().getProcessForeign$org_intelligence_thc();
+        return Language.currentState(node).getFiles().getProcessForeign();
     }
 
     /** Cancellation observes pending work; the interpreter claims it after saving the scalar/errno. */
@@ -148,14 +148,14 @@ public final class ManagedProcessForeign {
         if (operation == ProcessOp.CREATE) return create(arguments);
         int pid = cint(arguments[0]);
         if (operation == ProcessOp.TERMINATE) {
-            var result = context.getFiles().processOperation$org_intelligence_thc(operation, pid, node, beforeBlock);
+            var result = context.getFiles().processOperation(operation, pid, node, beforeBlock);
             context.getStdio().nativeError(result.getErrno());
             return result.getStatus();
         }
         var destination = pointer(arguments[1]);
         return outputs(List.of(new Region(destination, 4)), () -> {
             destination.requireByteRegion$org_intelligence_thc(4, true);
-            var result = context.getFiles().processOperation$org_intelligence_thc(operation, pid, node, beforeBlock);
+            var result = context.getFiles().processOperation(operation, pid, node, beforeBlock);
             if (result.getExitCode() != null) destination.writeNativeScalar(0, 4, result.getExitCode().longValue());
             context.getStdio().nativeError(result.getErrno());
             return result.getStatus();
@@ -203,7 +203,7 @@ public final class ManagedProcessForeign {
                 if (streams[index] == -1) destinations[index].requireByteRegion$org_intelligence_thc(4, true);
             failure.writeAddressElementIndex(0, ManagedAddress.Companion.nullAddress());
             try {
-                return context.getFiles().launchProcess$org_intelligence_thc(
+                return context.getFiles().launchProcess(
                     arguments, environment, cwd, streams, flags, group, user, parentEnvironment.getSearchPath(), (pid, returned) -> {
                         for (int index = 0; index < streams.length; index++)
                             if (streams[index] == -1) destinations[index].writeNativeScalar(0, 4, returned[index]);

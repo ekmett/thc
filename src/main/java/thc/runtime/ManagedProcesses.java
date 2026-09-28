@@ -96,7 +96,7 @@ public final class ManagedProcesses implements Closeable {
 
     public ManagedProcesses(NativeDirectoryOwner directory) {
         this.directory = directory;
-        if (!NativeIO.INSTANCE.supportedPosixHost$org_intelligence_thc()) throw new UnsupportedOperationException("Native processes require Linux x86_64");
+        if (!NativeIO.supportedPosixHost()) throw new UnsupportedOperationException("Native processes require Linux x86_64");
         if (!context.getEnv().isNativeAccessAllowed() || !context.getEnv().isCreateProcessAllowed())
             throw new SecurityException("Native processes require explicit native access and process creation permission");
         context.getEnv().registerOnDispose(this);
@@ -165,7 +165,7 @@ public final class ManagedProcesses implements Closeable {
             }
             try (var anchor = directory.borrow(); var arena = Arena.ofConfined()) {
                 var slots = arena.allocate(24, 4);
-                int errno = NativeProcessApi.spawn(arguments, environment, anchor.getDescriptor$org_intelligence_thc(),
+                int errno = NativeProcessApi.spawn(arguments, environment, anchor.getDescriptor(),
                     cwd, descriptors, flags, searchPath, slots);
                 if (errno != 0) {
                     int ordinal = slots.get(ValueLayout.JAVA_INT, 20);

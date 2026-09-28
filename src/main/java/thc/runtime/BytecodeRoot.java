@@ -3436,7 +3436,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class PrepareFileWait {
         @Specialization public static Object prepare(boolean writing, long fd, Object state,
                 @Bind("$node") Node node) {
-            return FileWaitPrimitivesKt.prepareFileWait(fd, state, writing, node);
+            return FileWaitPrimitives.prepareFileWait(fd, state, writing, node);
         }
     }
 
@@ -3449,7 +3449,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             // The native wait crosses a boundary; sample before leaving this
             // resumable bytecode operation, then tag only a claimed request.
             boolean compiledAtCut = CompilerDirectives.inCompiledCode();
-            FileWaitPrimitivesKt.awaitFileWait(token, payload, async, compiledAtCut, node);
+            FileWaitPrimitives.awaitFileWait(token, payload, async, compiledAtCut, node);
         }
     }
 

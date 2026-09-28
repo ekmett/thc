@@ -219,7 +219,7 @@ public final class Language extends TruffleLanguage<Language.State> {
     @Override protected Object getScope(State context) { return context.managedExports.getScope(); }
     @Override protected boolean isThreadAccessAllowed(Thread thread, boolean singleThreaded) { return true; }
     @Override protected void exitContext(State context, ExitMode exitMode, int exitCode) {
-        try { context.files.shutdownEventManagers$org_intelligence_thc(); }
+        try { context.files.shutdownEventManagers(); }
         finally {
             context.signals.requestStop();
             // LLVM calls remain permitted before hard exit unwinds all contexts; dispose is idempotent.
@@ -227,7 +227,7 @@ public final class Language extends TruffleLanguage<Language.State> {
         }
     }
     @Override protected void finalizeContext(State context) {
-        try { context.files.shutdownEventManagers$org_intelligence_thc(); }
+        try { context.files.shutdownEventManagers(); }
         finally { try { context.signals.close(); } finally { context.iconv.dispose(); } }
     }
     @Override protected void disposeContext(State context) {

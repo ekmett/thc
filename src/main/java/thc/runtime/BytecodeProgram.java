@@ -6778,10 +6778,10 @@ public final class BytecodeProgram implements ExecutableProgram {
                 if (enableAsync) emitAsyncPoll(e); b.emitLoadConstant(kotlin.Unit.INSTANCE); b.endBlock();
             }, evaluatedProof(tupleProof, true));
         }
-        if (CoreFileWait.INSTANCE.named(name)) {
-            CoreFileWait.INSTANCE.validate(name, argumentProofs(args), flags, tupleProof);
+        if (CoreFileWait.named(name)) {
+            CoreFileWait.validate(name, argumentProofs(args), flags, tupleProof);
             var operands = argumentOperands(args, scope);
-            CoreFileWait.INSTANCE.validate(name, loweredProofs(operands), flags, tupleProof);
+            CoreFileWait.validate(name, loweredProofs(operands), flags, tupleProof);
             var payload = globals.get(CoreFileWait.badFd);
             if (payload == null) throw new UnsupportedCore(name + " requires original blockedOnBadFD payload");
             boolean writing = name.equals("waitWrite#");

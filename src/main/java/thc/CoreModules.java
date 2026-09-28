@@ -168,7 +168,7 @@ public final class CoreModules {
                     case "var" -> reference((String) expression.get(1), bound);
                     case "prim" -> {
                         String name = (String) expression.get(1);
-                        if (CoreFileWait.INSTANCE.named(name)) reference(CoreFileWait.badFd, Set.of());
+                        if (CoreFileWait.named(name)) reference(CoreFileWait.badFd, Set.of());
                         String payload = CoreArithmeticExceptions.INSTANCE.payload(name); if (payload != null) reference(payload, Set.of());
                         var compact = CompactOp.Companion.named(name); if (compact != null && compact.getAdds()) for (String failure : CompactOp.Companion.getFailures()) reference(failure, Set.of());
                         if (name.equals("atomically#")) reference(STMOp.NESTED, Set.of());

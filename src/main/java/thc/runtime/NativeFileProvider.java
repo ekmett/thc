@@ -60,7 +60,7 @@ public final class NativeFileProvider implements Closeable {
     }
     /** No arbitrary Builder, FileSystem, provider attachment, or global map. */
     public static Context createContext(Set<StandardEndpoint> endpoints, ContextProfile profile, FfiMode ffiMode, boolean allowProcesses) {
-        if (!NativeIO.INSTANCE.supportedPosixHost$org_intelligence_thc())
+        if (!NativeIO.supportedPosixHost())
             throw new UnsupportedOperationException("Native files are currently verified only on Linux x86_64");
         var filesystem = new NativeFileSystem(endpoints);
         Context context;
@@ -77,7 +77,7 @@ public final class NativeFileProvider implements Closeable {
                 var state = Language.currentState();
                 if (state.getNativeFiles() != null) throw new IllegalStateException("Check failed.");
                 var provider = new NativeFileProvider(state.getEnv(), state.getThreads(), filesystem.getDirectoryOwner());
-                state.getFiles().installNative$org_intelligence_thc(provider, endpoints);
+                state.getFiles().installNative(provider, endpoints);
                 state.setNativeFiles(provider);
                 if (profile == ContextProfile.LAUNCHER) state.getSignals().authorizeLauncher$org_intelligence_thc();
             } finally { context.leave(); }
@@ -100,7 +100,7 @@ public final class NativeFileProvider implements Closeable {
         directoryStreams = new NativeDirectoryStreams(directory);
         if (!env.isNativeAccessAllowed() || !env.isFileIOAllowed())
             throw new SecurityException("Native files require explicit file IO and native access");
-        if (!NativeIO.INSTANCE.supportedPosixHost$org_intelligence_thc())
+        if (!NativeIO.supportedPosixHost())
             throw new UnsupportedOperationException("Native files are currently verified only on Linux x86_64");
         try {
             byte[] bytes;
@@ -194,12 +194,12 @@ public final class NativeFileProvider implements Closeable {
                     try (var scope = new NativeLimbScope()) {
                         var name = scope.allocate((path.length + 7L) & -8L);
                         name.copyFrom(path, 0, path.length);
-                        result("open_raw", lease, anchor.getLease$org_intelligence_thc(), name, flags, (int) mode);
+                        result("open_raw", lease, anchor.getLease(), name, flags, (int) mode);
                     }
                 } else {
-                    try (var request = new NativeOpenOperation(path, flags, (int) mode, anchor.getDescriptor$org_intelligence_thc())) {
+                    try (var request = new NativeOpenOperation(path, flags, (int) mode, anchor.getDescriptor())) {
                         request.await(node, threads, operation == OriginalStdioOp.OPEN_INTERRUPTIBLE, lease);
-                    }
+                    } catch (Throwable failure) { throw propagate(failure); }
                 }
             });
         }), options);
@@ -210,7 +210,7 @@ public final class NativeFileProvider implements Closeable {
         try (var anchor = directory.borrow(); var scope = new NativeLimbScope()) {
             var name = scope.allocate((path.length + 7L) & -8L);
             name.copyFrom(path, 0, path.length);
-            return result("unlink", anchor.getLease$org_intelligence_thc(), name);
+            return result("unlink", anchor.getLease(), name);
         }
     }
     /** Only the link pathname is anchored; target bytes remain data. */
@@ -221,7 +221,7 @@ public final class NativeFileProvider implements Closeable {
             targetName.copyFrom(target, 0, target.length);
             var name = scope.allocate((path.length + 7L) & -8L);
             name.copyFrom(path, 0, path.length);
-            return result("symlink", anchor.getLease$org_intelligence_thc(), targetName, name);
+            return result("symlink", anchor.getLease(), targetName, name);
         }
     }
     public synchronized byte[] readlinkRaw(byte[] path, int capacity) {
@@ -229,7 +229,7 @@ public final class NativeFileProvider implements Closeable {
         try (var anchor = directory.borrow(); var scope = new NativeLimbScope()) {
             var name = scope.allocate((path.length + 7L) & -8L); name.copyFrom(path, 0, path.length);
             var output = scope.allocate((capacity + 7L) & -8L);
-            long count = result("readlink", anchor.getLease$org_intelligence_thc(), name, output, (long) capacity);
+            long count = result("readlink", anchor.getLease(), name, output, (long) capacity);
             if (count < 0 || count > capacity) throw fault("Invalid native readlink result");
             var copy = new byte[(int) count]; output.copyTo(copy, 0, copy.length); return copy;
         }
@@ -257,7 +257,7 @@ public final class NativeFileProvider implements Closeable {
     }
     public synchronized byte[] statAtRaw(byte[] path, int flags) {
         requireCurrent(); if (disposed) throw propagate(new ClosedChannelException());
-        try (var anchor = directory.borrow()) { return statAtImage("fstatat", path, flags, anchor.getLease$org_intelligence_thc()); }
+        try (var anchor = directory.borrow()) { return statAtImage("fstatat", path, flags, anchor.getLease()); }
     }
     public synchronized long changeDirectory(byte[] path) {
         requireCurrent(); if (disposed) throw propagate(new ClosedChannelException());
@@ -271,21 +271,21 @@ public final class NativeFileProvider implements Closeable {
         requireCurrent(); if (disposed) throw propagate(new ClosedChannelException());
         try (var anchor = directory.borrow(); var scope = new NativeLimbScope()) {
             var name = scope.allocate((path.length + 7L) & -8L); name.copyFrom(path, 0, path.length);
-            return result("unlinkat", anchor.getLease$org_intelligence_thc(), name, flags);
+            return result("unlinkat", anchor.getLease(), name, flags);
         }
     }
     public synchronized long accessRaw(byte[] path, int mode) {
         requireCurrent(); if (disposed) throw propagate(new ClosedChannelException());
         try (var anchor = directory.borrow(); var scope = new NativeLimbScope()) {
             var name = scope.allocate((path.length + 7L) & -8L); name.copyFrom(path, 0, path.length);
-            return result("access", anchor.getLease$org_intelligence_thc(), name, mode);
+            return result("access", anchor.getLease(), name, mode);
         }
     }
     public synchronized long pathModeRaw(byte[] path, long mode, boolean createDirectory) {
         requireCurrent(); if (disposed) throw propagate(new ClosedChannelException());
         try (var anchor = directory.borrow(); var scope = new NativeLimbScope()) {
             var name = scope.allocate((path.length + 7L) & -8L); name.copyFrom(path, 0, path.length);
-            return result(createDirectory ? "mkdir" : "chmod", anchor.getLease$org_intelligence_thc(), name, (int) mode);
+            return result(createDirectory ? "mkdir" : "chmod", anchor.getLease(), name, (int) mode);
         }
     }
     public synchronized byte[] statRaw(byte[] path, boolean followLinks) {
@@ -293,7 +293,7 @@ public final class NativeFileProvider implements Closeable {
         try (var anchor = directory.borrow(); var scope = new NativeLimbScope()) {
             var name = scope.allocate((path.length + 7L) & -8L); name.copyFrom(path, 0, path.length);
             var image = scope.allocate(statSize);
-            result("path_stat", anchor.getLease$org_intelligence_thc(), name, followLinks ? 1 : 0, image);
+            result("path_stat", anchor.getLease(), name, followLinks ? 1 : 0, image);
             var copy = new byte[statSize]; image.copyTo(copy, 0, copy.length); return copy;
         }
     }
@@ -317,11 +317,11 @@ public final class NativeFileProvider implements Closeable {
         } finally { threads.leaveForeign(previous); }
     }
     private NativeResource acquireFile(Path path, int mode, NativeDirectoryOwner.Borrow anchor) {
-        byte[] bytes = NativeDirectoryOwner.Companion.pathBytes$org_intelligence_thc(path.equals(Path.of("")) ? Path.of(".") : path);
+        byte[] bytes = NativeDirectoryOwner.pathBytes(path.equals(Path.of("")) ? Path.of(".") : path);
         return acquire(mode == 0 || mode == 3, mode != 0, lease -> {
             try (var scope = new NativeLimbScope()) {
                 var name = scope.allocate((bytes.length + 7L) & -8L); name.copyFrom(bytes, 0, bytes.length);
-                result("open", lease, anchor.getLease$org_intelligence_thc(), name, mode);
+                result("open", lease, anchor.getLease(), name, mode);
             }
         });
     }
@@ -395,7 +395,7 @@ public final class NativeFileProvider implements Closeable {
             requireCurrent();
             synchronized (NativeFileProvider.this) { if (disposed) throw propagate(new ClosedChannelException()); }
             // Never take the IO monitor while another read may be blocked.
-            return NativeFdWait.Companion.acquire$org_intelligence_thc(lease);
+            return NativeFdWait.acquire(lease);
         }
         @Override public void requireLive() {
             synchronized (lease) {

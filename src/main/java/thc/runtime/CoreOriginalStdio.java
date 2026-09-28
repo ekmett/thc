@@ -29,7 +29,7 @@ public final class CoreOriginalStdio {
         finally { state.getThreads().leaveForeign(previous); }
     }
     public static ManagedStdio current(Node node) { return Language.currentState(node).getStdio(); }
-    public static NativeDirectoryStreams directories(Node node) { return NativeFileProvider.Companion.current$org_intelligence_thc().getDirectoryStreams$org_intelligence_thc(); }
+    public static NativeDirectoryStreams directories(Node node) { return NativeFileProvider.current().getDirectoryStreams(); }
     public static RtsFileLocks locks(Node node) { return Language.currentState(node).getRtsFileLocks(); }
     public static ManagedIconv iconv(Node node) { return Language.currentState(node).getIconv(); }
     public static ManagedStrerror strerror(Node node) { return Language.currentState(node).getStrerror(); }
