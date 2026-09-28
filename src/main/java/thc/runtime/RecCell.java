@@ -10,4 +10,9 @@ public final class RecCell {
     public void setInitialized(boolean initialized) { this.initialized = initialized; }
     public Object getValue() { return value; }
     public void setValue(Object value) { this.value = value; }
+
+    /** Replace only the successfully forced link; aliases may already have updated this cell. */
+    public synchronized void updateForced(Thunk original, Object result) {
+        if (initialized && value == original) value = result;
+    }
 }

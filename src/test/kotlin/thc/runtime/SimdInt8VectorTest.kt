@@ -144,8 +144,8 @@ class SimdInt8VectorTest {
             return base + ("bindings" to listOf(binding + ("expr" to lambda)))
         }
         val malformed = listOf("-129", "128", "255", "", "+1", "01", "-0", " 1", "1.0", "18446744073709551616")
-        for (value in -128L..127L) assertEquals(value.toInt(), int8Literal(value.toString()))
-        for (text in malformed) assertThrows(RuntimeFault::class.java) { int8Literal(text) }
+        for (value in -128L..127L) assertEquals(value.toInt(), ScalarLiterals.int8Literal(value.toString()))
+        for (text in malformed) assertThrows(RuntimeFault::class.java) { ScalarLiterals.int8Literal(text) }
         for (backend in listOf("ast", "bytecode")) for (diagnostic in listOf(false, true)) {
             for (text in malformed) for (input in listOf(broadcastModule(listOf("lit", "int8", text, mapOf("rep" to lane))), alternative(text)))
                 assertThrows(RuntimeFault::class.java) { program(language, backend, input, "root", diagnostic) }

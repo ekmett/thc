@@ -419,7 +419,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 Object original, Object result, Node node) {
             if (!(original instanceof Thunk thunk)) return;
             if (cell) {
-                ProgramKt.updateForcedCell((RecCell) binding, thunk, result);
+                ((RecCell) binding).updateForced(thunk, result);
             } else {
                 BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
                 if (local.getObject(bytecode, frame) == thunk) {

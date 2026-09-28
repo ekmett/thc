@@ -525,7 +525,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             return new Closure(null, args.size(), fn.target);
         }
         var fn = function((String) binding.get("name"), List.of(), expr, scope);
-        var tuple = ((GuestRoot) fn.target.getRootNode()).getTupleResult$org_intelligence_thc();
+        var tuple = ((GuestRoot) fn.target.getRootNode()).getTupleResult();
         if (tuple != null) CoreRepresentations.INSTANCE.requireScalar(tuple.getProof(), "thunk");
         if (fn.captureLayout != null || !fn.captures.isEmpty())
             throw new IllegalStateException("Top-level thunk has lexical captures");
@@ -968,16 +968,16 @@ public final class BytecodeProgram implements ExecutableProgram {
             if (section != null) endSource(b);
         }).getNode(0);
         root.setLabel(label);
-        root.configureForeignExceptionBridge$org_intelligence_thc(foreignExceptionBridge);
+        root.configureForeignExceptionBridge(foreignExceptionBridge);
         root.configureAsync(enableAsync);
         root.configureDelimited(delimited);
-        root.configureEntry$org_intelligence_thc(context.entryStrict, context.captureLayout != null);
-        root.configureInput$org_intelligence_thc(context.inputLayout);
-        root.configureTypedInput$org_intelligence_thc(context.typedInput);
+        root.configureEntry(context.entryStrict, context.captureLayout != null);
+        root.configureInput(context.inputLayout);
+        root.configureTypedInput(context.typedInput);
         root.configureTypedBloom(typedBloom[0]);
-        root.configureLeadingCaseReturn$org_intelligence_thc(context.leadingCaseReturn);
-        root.configureTupleResult$org_intelligence_thc(context.tuple);
-        root.configureScalarResult$org_intelligence_thc(body.proof());
+        root.configureLeadingCaseReturn(context.leadingCaseReturn);
+        root.configureTupleResult(context.tuple);
+        root.configureScalarResult(body.proof());
         roots.add(root);
         return root.getCallTarget();
     }
@@ -1271,7 +1271,7 @@ public final class BytecodeProgram implements ExecutableProgram {
 
     private Expression delay(List<Object> expr, Scope scope, String label) {
         var fn = function(label, List.of(), expr, scope);
-        var tuple = ((GuestRoot) fn.target.getRootNode()).getTupleResult$org_intelligence_thc();
+        var tuple = ((GuestRoot) fn.target.getRootNode()).getTupleResult();
         if (tuple != null) CoreRepresentations.INSTANCE.requireScalar(tuple.getProof(), "thunk");
         var template = new BytecodeRoot.ClosureTemplate(fn.target, 0, fn.captureLayout);
         return sourced(new ProvenExpression(e -> {
@@ -1362,16 +1362,16 @@ public final class BytecodeProgram implements ExecutableProgram {
         if (!(encoded instanceof String value)) throw new UnsupportedCore("Malformed Core literal payload");
         return switch (kind) {
             case "rubbish" -> rubbishLiterals.decode(Objects.requireNonNull(proof));
-            case "int8" -> ProgramKt.int8Literal(value);
-            case "int16" -> ProgramKt.int16Literal(value);
-            case "int32" -> ProgramKt.int32Literal(value);
-            case "int64" -> ProgramKt.int64Literal(value);
+            case "int8" -> ScalarLiterals.int8Literal(value);
+            case "int16" -> ScalarLiterals.int16Literal(value);
+            case "int32" -> ScalarLiterals.int32Literal(value);
+            case "int64" -> ScalarLiterals.int64Literal(value);
             case "word64" -> word64Literal(value);
             case "int", "char" -> Long.parseLong(value);
             case "word" -> Long.parseUnsignedLong(value);
             case "float" -> Float.parseFloat(value);
             case "double" -> Double.parseDouble(value);
-            case "word8", "word16", "word32" -> ProgramKt.narrowWordLiteral(kind, value);
+            case "word8", "word16", "word32" -> ScalarLiterals.narrowWordLiteral(kind, value);
             case "string-bytes" -> ManagedAddress.Companion.fromHex(value);
             case "null-addr" -> {
                 if (!"0".equals(value)) throw new UnsupportedCore("Malformed null Addr# literal");
@@ -4550,7 +4550,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
         var floating = floatingPrimitive(name, args);
         if (floating != null) return floating;
-        long wordMask = ProgramKt.narrowWordPrimitiveMask(name);
+        long wordMask = ScalarLiterals.narrowWordPrimitiveMask(name);
         int bitShift = scalarBitPrimitiveShift(name);
         String operation = switch (scalar64PrimitiveOperation(name)) {
             case "popCnt8#", "popCnt16#", "popCnt32#", "popCnt64#" -> "PopulationCountWidth";
