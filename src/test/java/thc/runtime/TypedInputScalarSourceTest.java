@@ -3,6 +3,7 @@
 package thc.runtime;
 
 import com.oracle.truffle.api.RootCallTarget;
+import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.NodeUtil;
@@ -23,6 +24,7 @@ class TypedInputScalarSourceTest {
     private final Map<String, Object> integral = Map.of("kind", "long", "primReps", List.of("IntRep"), "evaluated", true);
     private final Map<String, Object> single = Map.of("kind", "float", "primReps", List.of("FloatRep"), "evaluated", true);
     private final Map<String, Object> real = Map.of("kind", "double", "primReps", List.of("DoubleRep"), "evaluated", true);
+    private final Map<String, Object> address = Map.of("kind", "address", "primReps", List.of("AddrRep"), "evaluated", true);
     private final Map<String, Object> unknown = unknownProof();
     private final Map<String, Object> closure = Map.of("kind", "closure", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", true);
     private final Map<String, Object> pair = Map.of("kind", "unknown", "aggregate", "unboxed-tuple", "components", List.of(integral, integral),
@@ -39,8 +41,11 @@ class TypedInputScalarSourceTest {
     private List<Object> n(int value) { return List.of("lit", "int", Integer.toString(value), Map.of("rep", integral)); }
     private List<Object> plus(List<Object> a, List<Object> b) { return app(List.of("prim", "+#"), List.of(a, b)); }
     private Map<String, Object> bind(String name, List<Map<String, Object>> args, List<Object> body) {
+        return bind(name, args, body, integral);
+    }
+    private Map<String, Object> bind(String name, List<Map<String, Object>> args, List<Object> body, Map<String, Object> result) {
         return Map.of("id", name, "name", name, "rep", closure, "lifted", true, "expr", List.of("lam", args, body,
-            Map.of("rep", closure, "resultRep", integral, "entryStrict", Collections.nCopies(args.size(), false))));
+            Map.of("rep", closure, "resultRep", result, "entryStrict", Collections.nCopies(args.size(), false))));
     }
     private Map<String, Object> worker(String name, Map<String, Object> rep, String conversion) {
         var scalar = conversion == null ? v("x", rep) : app(List.of("prim", conversion), List.of(v("x", rep)));
@@ -66,6 +71,56 @@ class TypedInputScalarSourceTest {
         var state = language.getHandoffState().get();
         assertEquals(0, state.getArguments().getDepth()); assertEquals(0, state.getArguments().retainedReferences());
         assertEquals(0, state.getResults().getDepth()); assertEquals(0, state.getResults().retainedReferences());
+    }
+    @Test void scalarFloatDoubleAndAddressPapsOwnTypedPrefixesWithoutAnAggregateArgument() throws Exception {
+        for (String backend : List.of("ast", "bytecode"))
+            try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                    .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                    .option("engine.Splitting", "false").option("engine.CompilationFailureAction", "Throw").build()) {
+                context.initialize("thc"); context.enter();
+                try {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    var pointer = ManagedAddress.fromByteArray(new byte[]{11, 29}).plus(1);
+                    var values = List.of(List.of(-0.0f, Float.intBitsToFloat(0x7fc01234)),
+                        List.of(-0.0, Double.longBitsToDouble(0x7ff8000000005678L)), List.of(pointer));
+                    var proofs = List.of(single, real, address);
+                    for (int kind = 0; kind < proofs.size(); kind++) {
+                        var proof = proofs.get(kind);
+                        var worker = bind("worker", List.of(arg("x", proof), arg("suffix", integral)), v("x", proof), proof);
+                        var make = bind("make", List.of(arg("x", proof)),
+                            app(v("worker", closure), List.of(v("x", proof)), closure), closure);
+                        Map<String, Object> module = Map.of("instrument", true, "bindings", List.of(worker, make));
+                        ExecutableProgram p = backend.equals("ast") ? new Program(language, module, true) : new BytecodeProgram(language, module, true);
+                        var target = p.entryTarget("worker");
+                        for (Object value : values.get(kind)) {
+                            var pap = (Closure) Calls.target(p.hostEntryTarget(1), new Object[]{p.entryValue("make"), new Object[]{value}});
+                            var prefix = pap.typedSupplied;
+                            assertNotNull(prefix, backend + "/" + proof.get("kind") + " scalar PAP must own typed storage");
+                            assertEquals(1, pap.suppliedCount); assertEquals(1, pap.arity);
+                            assertEquals(0, pap.supplied.length); assertFalse(prefix.getLive()); assertEquals(0, prefix.getInputMode());
+                            var shape = prefix.getLayout();
+                            if (kind == 0) assertEquals(Float.floatToRawIntBits((Float) value), Float.floatToRawIntBits(shape.getFloat(prefix, 0)));
+                            else if (kind == 1) assertEquals(Double.doubleToRawLongBits((Double) value), Double.doubleToRawLongBits(shape.getDouble(prefix, 0)));
+                            else assertSame(pointer, shape.getObject(prefix, 0));
+                            clear(language);
+                            if (value == values.get(kind).getFirst()) {
+                                assertEquals(true, target.getClass().getMethod("compile", boolean.class).invoke(target, true));
+                                valid(target, backend + "/" + proof.get("kind") + " installed before first worker call");
+                                var runtime = Truffle.getRuntime();
+                                runtime.getClass().getMethod("bypassedInstalledCode", Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")).invoke(runtime, target);
+                            }
+                            long before = (Long) p.diagnostics().get("compiledEntries");
+                            Object result = Calls.target(p.hostEntryTarget(1), new Object[]{pap, new Object[]{7L}});
+                            if (value == values.get(kind).getFirst()) assertEquals(before + 1, p.diagnostics().get("compiledEntries"), "first worker entry, no guest warmup");
+                            if (kind == 0) assertEquals(Float.floatToRawIntBits((Float) value), Float.floatToRawIntBits((Float) result));
+                            else if (kind == 1) assertEquals(Double.doubleToRawLongBits((Double) value), Double.doubleToRawLongBits((Double) result));
+                            else assertSame(pointer, result);
+                            clear(language);
+                            if (kind == 2) assertSame(pointer, shape.getObject(prefix, 0), "durable PAP must retain the original address owner");
+                        }
+                    }
+                } finally { context.leave(); }
+            }
     }
     @Test void unknownScalarBesideTupleSurvivesLongFloatDoubleLocalGeneralization() throws Exception {
         for (var backend : List.of("ast", "bytecode")) for (boolean inline : List.of(true, false))
