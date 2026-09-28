@@ -320,8 +320,8 @@ public final class Program implements ExecutableProgram {
                 var bindings = (List<Map<String,Object>>) expression.get(2);
                 var joins = CoreJoins.definitions(bindings);
                 if (joins != null) for (var join : joins) {
-                    if (!reusableScalar(join.getResult()) || join.getResult().getKind() == CoreKind.DATA || join.getResult().getKind() == CoreKind.CLOSURE)
-                        throw new UnsupportedCore("Reusable AST join result requires a numeric scalar proof");
+                    if (!reusableScalar(join.getResult()))
+                        throw new UnsupportedCore("Reusable AST join result requires a numeric scalar, data or closure proof");
                 }
                 for (var binding : bindings) {
                     CoreRepresentation proof = CoreRepresentations.binder(binding);

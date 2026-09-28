@@ -13,8 +13,8 @@ machine words, signed/unsigned 8/16/32-bit integers, `Float#` and `Double#`.
 The admitted arithmetic includes `+#`, `-#`, `*#`, existing narrow scalar operations,
 floating arithmetic/comparisons and integer/floating conversions. Floating cases
 may use defaults, not floating literal alternatives (which GHC Core disallows).
-Internal function formals and case binders/results require exact numeric, data or
-closure proofs; join results remain numeric. Constructor fields support numeric
+Internal function formals, case binders/results and local-join results require
+exact numeric, data or closure proofs. Constructor fields support numeric
 carriers, boxed data and ordinary guest closures with exact field descriptors,
 including strict function fields, lazy function thunks and lazy data tails.
 Recursive local joins use the existing local-loop lowering;
@@ -31,6 +31,8 @@ caches. Constructor matches authenticate that exact load's layout, not just its
 name, tag or shared carrier class. Unsupported code fails admission rather than falling back to
 runtime lowering. Bytecode, typed aggregates,
 async delivery, IO and FFI are not admitted by this workflow.
+These are experimental cache-admission limits, not restrictions on THC's ordinary
+runtime ABI for scalar widths, references, vectors, tuples, sums or zero-width values.
 
 ## Build and select a program
 
@@ -167,6 +169,28 @@ Strict function fields hold evaluated closures; lazy fields can retain thunks
 until demanded. Neither field storage nor shared code transfers a closure's
 captured values or CAF ownership to the program invoking it. Constructor matching
 still authenticates the exact load's layout.
+
+`src/examples/THC/CachedReferenceJoins.hs` combines a recursive data-returning
+local join with a closure-returning join. The example disables GHC's lambda
+eta-expansion locally so the exported join really returns a function value,
+rather than moving that function's argument outside the selection:
+
+```sh
+THC_CORE_OUT="$PWD/build/cached-reference-joins-core" \
+  bin/export-core.sh -fplugin-opt=THC.Plugin:post-tidy \
+  -fplugin-opt=THC.Plugin:unit-qualified src/examples/THC/CachedReferenceJoins.hs
+bin/native-cache store build/reference-joins.cache \
+  build/cached-reference-joins-core/units/u-main/THC.CachedReferenceJoins.json \
+  main:THC.CachedReferenceJoins.calculate
+bin/native-cache run build/reference-joins.cache 4 7 0
+# 47
+bin/native-cache run build/reference-joins.cache 3 -10 -10
+# -25
+```
+
+Join results use the existing reference slots: returning a lazy value does not
+force it, and returning a closure does not change its captured program owner.
+Typed aggregate join results remain outside this cache's admission.
 
 An existing package manifest may be supplied as `@PACKAGES.json`, with an exact
 qualified binding such as `main:THC.CachedCalls.affine`. JSON unit directories and
