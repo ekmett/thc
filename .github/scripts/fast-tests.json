@@ -2671,6 +2671,35 @@
       "junit": ["thc.runtime.Simd128ArrayProofTest", "thc.runtime.SimdWideArrayProofTest"],
       "python": []
     },
+    "src/test/java/thc/runtime/RepresentationTestSupport.java": {
+      "junit": [
+        "thc.runtime.AddressFieldTest",
+        "thc.runtime.BindingCellMetadataTest",
+        "thc.runtime.BloomValueTest",
+        "thc.runtime.BoxedLexicalProofTest",
+        "thc.runtime.BoxedValueCacheTest",
+        "thc.runtime.ClassOwnedLayoutTest",
+        "thc.runtime.ConstructorClassIdentityTest",
+        "thc.runtime.DataLayoutFirstFieldTest",
+        "thc.runtime.ForcedBindingTest",
+        "thc.runtime.ReferenceCaptureTest",
+        "thc.runtime.ReferenceFieldTest",
+        "thc.runtime.ReferenceFormalTest",
+        "thc.runtime.ScalarLexicalProofTest",
+        "thc.runtime.TypedCaseTest",
+        "thc.runtime.TypedTupleFieldLevityTest",
+        "thc.runtime.VectorLayoutTest"
+      ],
+      "python": []
+    },
+    "src/test/java/thc/runtime/RawVectorTestValues.java": {
+      "junit": [
+        "thc.runtime.VectorLayoutTest",
+        "thc.runtime.VectorHeapStorageTest",
+        "thc.runtime.CompactImagesTest"
+      ],
+      "python": []
+    },
     "src/test/kotlin/thc/PrimopTestContext.kt": {
       "junit": [
         "thc.runtime.BitPrimopsTest",
