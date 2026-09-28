@@ -1,1 +1,0 @@
-python3 -O scripts/test-core-float-vector-memory.py 

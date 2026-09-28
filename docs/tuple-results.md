@@ -91,11 +91,6 @@ Every measured row checks its exact compiled-entry increment and installed targe
 validity on AST and BytecodeDSL, with guest inlining enabled and disabled. The CI
 handoff run repeats these checks with the optional scalar handoff enabled. Source,
 auditor, native executable, oracle and export hashes are checked before execution.
-The [floating result graph experiment](../bench/experiments/floating-tuple-graphs/README.md)
-checks six normally inlined production graphs and two residual controls against
-the native oracle. Inlined Float/Double tuple fields become scalar floating
-register values with no tuple carrier allocation or field traffic. Residual calls
-retain the typed result slab and existing Object argument ABI.
 
 The exporter preserves native proofs through `runRW# f` to `f realWorld#` only
 when GHC's exact type equality confirms the rewrite. Representation-changing
@@ -117,22 +112,4 @@ allocation reuse. Cases include two differently weighted outstanding pairs,
 lazy bottom fields, empty/singleton/nested results, 20,000 self-tail and 20,001
 mutual-tail iterations, PAPs and overapplication. `TupleRepresentationTest` covers
 logical-shape forgeries, mismatched-layout cleanup, fresh-carrier ownership and
-independence from scalar handoff. The [production graph experiment](../bench/experiments/tuple-runtime-graphs/README.md)
-executes five real exported Haskell consumers on both backends, with normal and
-disabled guest inlining. All twenty configurations agree with native GHC and keep
-the selected entry compiled after execution. The ten normal-inlining graphs
-eliminate tuple carriers, their field traffic and guest calls; their final AArch64
-LIR computes the dynamic leaves in scalar registers. A host-result `Long` box
-remains. Residual controls retain a call boundary and typed slab traffic. This
-proves those compiled entries, not the inlining frequency of arbitrary programs
-or a multiple-register return convention across residual calls.
-
-The [real Set diagnostic experiment](../bench/experiments/set-diagnostic/README.md)
-also runs all 22 existing native oracle rows on both backends, including the
-exported `minViewSure`/`maxViewSure` tuple-result joins and `glue`, with no
-unsupported traps and valid compiled entries after replay. Its focused AST
-`minViewSure` graph keeps join results as separate SSA values until outer tuple
-completion; residual call traffic and three exception-control join guard groups
-(nine field reads) remain.
-This is diagnostic execution only: strict Set still rejects the remaining cold
-exception/backtrace and state-representation gaps.
+independence from scalar handoff.

@@ -1,1 +1,0 @@
-bash bench/experiments/word32x4-bytearray/run-runtime.sh build/word32x4-bytearray-double-family-regression 

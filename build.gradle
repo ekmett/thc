@@ -415,12 +415,11 @@ tasks.withType(Test).configureEach {
         "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Heap/InfoTable.hsc")
     inputs.files(fileTree("t/haskell-fixtures") { include("**/*.hs") })
     inputs.file("src/tools/primops/PrimopTools.hs")
-    inputs.files(fileTree("bench/experiments") {
-        include("int32x4-bytearray/evidence-x86_64/*-core.json.gz", "int32x4-bytearray/evidence-x86_64/native/provenance.json.gz",
-            "word32x4-bytearray/evidence-x86_64/*-core.json.gz", "word32x4-bytearray/evidence-x86_64/native/provenance.json.gz",
-            "floatx4-bytearray/evidence-x86_64/*-core.json.gz", "floatx4-bytearray/evidence-x86_64/input-provenance.json.gz",
-            "doublex2-bytearray/evidence-x86_64/captures/doublex2/*-core.json.gz",
-            "doublex2-bytearray/evidence-x86_64/captures/doublex2/input-provenance.json.gz")
+    inputs.files(fileTree("t/fixtures/retained-core") {
+        include("int32x4-bytearray/*-core.json.gz", "int32x4-bytearray/native/provenance.json.gz",
+            "word32x4-bytearray/*-core.json.gz", "word32x4-bytearray/native/provenance.json.gz",
+            "floatx4-bytearray/*-core.json.gz", "floatx4-bytearray/input-provenance.json.gz",
+            "doublex2-bytearray/*-core.json.gz", "doublex2-bytearray/input-provenance.json.gz")
     })
     inputs.file("thc.cabal")
     inputs.files(fileTree("nih/pinned/ghc-9.14.1/libraries/ghc-internal") { include("**/*.hs", "**/*.hs-boot", "LICENSE") })

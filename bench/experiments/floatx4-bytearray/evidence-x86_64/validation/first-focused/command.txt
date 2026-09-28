@@ -1,1 +1,0 @@
-scripts/gradle.sh --no-daemon test --tests thc.runtime.FloatVectorStorageTest --tests thc.runtime.FloatVectorMemoryProofTest --rerun-tasks

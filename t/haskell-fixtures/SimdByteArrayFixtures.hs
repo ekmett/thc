@@ -346,8 +346,7 @@ retainedFixtureBody family current = do
 
 retainedControls :: Family -> FilePath -> FilePath -> Audit -> IO (Value,[CommandResult],[FilePath],[FilePath])
 retainedControls family root attempt audit = do
-  let base = "bench/experiments" </> familyName family </> "evidence-x86_64"
-      retained = if family == DoubleLanes then base </> "captures/doublex2" else base
+  let retained = "t/fixtures/retained-core" </> familyName family
       provenance = if not (floating family) then retained </> "native/provenance.json.gz" else retained </> "input-provenance.json.gz"
       logs = attempt </> "commands"
       decompress label path = runLogged 60 root logs label [] "gzip" ["-dc",path]
@@ -357,7 +356,8 @@ retainedControls family root attempt audit = do
       hashes = Map.fromList [(string (get "path" item),string (get "sha256" item)) | item <- items (get "artifacts" source)]
   when (family `elem` [Int32Lanes,Word32Lanes]) $ do
     let fixture = "t/fixtures/compiler" </> moduleName family ++ ".hs"
-        wanted = [string (get "sha256" item) | item <- items (get "sources" source),get "path" item == toJSON fixture]
+        originalFixture = "compiler/test-fixtures" </> moduleName family ++ ".hs"
+        wanted = [string (get "sha256" item) | item <- items (get "sources" source),get "path" item == toJSON originalFixture]
     current <- BS.readFile (root </> fixture)
     let path = attempt </> "retained-original-source.hs"
     check (length wanted == 1) "Retained fixture source provenance missing"

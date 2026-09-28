@@ -1,1 +1,0 @@
-python3 scripts/test-doublex2-bytearray-model.py 

@@ -1,1 +1,0 @@
-python3 bench/experiments/doublex2-bytearray/test-runtime-audit.py 

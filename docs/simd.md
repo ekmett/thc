@@ -60,13 +60,6 @@ interior lane extraction/reinsertion, allocations and residual calls, separating
 entry/exit pack/unpack from arithmetic transport. A target may use packed
 instructions, wider-lane reconstruction or scalar fallback.
 
-The existing graph driver accepts the shape explicitly, for example:
-
-```sh
-bench/experiments/simd-foundation/run-runtime.sh build/int32-graphs int32x4
-```
-
-Its selected-phase JSON and complete raw BGV/CFG captures are graph evidence,
-not throughput measurements. Record the exact runtime, source, oracle and host
+Record the exact runtime, source, oracle and host
 for a capture; a result on AVX2 does not establish an SSE2-only target, and an
 imported x86 native oracle does not establish native GHC execution on AArch64.

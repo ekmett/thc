@@ -386,8 +386,7 @@ SIMD_BYTEARRAY_FAMILIES = {
     "simd-doublex2-bytearray": ("SimdDoubleX2ByteArray", 4384, ("Int64ElemRep", "Int32ElemRep", "Word32ElemRep", "FloatElemRep")),
 }
 SIMD_BYTEARRAY_RETAINED = frozenset(
-    f"bench/experiments/{family.removeprefix('simd-')}/evidence-x86_64/" +
-    ("captures/doublex2/" if "doublex2" in family else "") + path
+    f"t/fixtures/retained-core/{family.removeprefix('simd-')}/" + path
     for family in SIMD_BYTEARRAY_FAMILIES for path in (
         "pre-core.json.gz", "post-core.json.gz",
         "input-provenance.json.gz" if "floatx4" in family or "doublex2" in family else "native/provenance.json.gz"))
@@ -1620,7 +1619,7 @@ def toolchain(root):
 
 def identity(root):
     tracked = tracked_files(root)
-    sources = {name for name in tracked if name.startswith(("src/compiler/", "src/cbd/", "t/fixtures/compiler/", "t/fixtures/package-roots/", "t/fixtures/putstrln/", "nih/pinned/", "etc/", "src/core-symbols/", "bin/", "src/examples/", "src/main/resources/", "t/haskell-fixtures/", "src/driver/THC/Driver/", "src/tools/primops/"))}
+    sources = {name for name in tracked if name.startswith(("src/compiler/", "src/cbd/", "t/fixtures/compiler/", "t/fixtures/retained-core/", "t/fixtures/package-roots/", "t/fixtures/putstrln/", "nih/pinned/", "etc/", "src/core-symbols/", "bin/", "src/examples/", "src/main/resources/", "t/haskell-fixtures/", "src/driver/THC/Driver/", "src/tools/primops/"))}
     sources.update((SELF, WIRED_SOURCE, *RUNTIME_INPUTS, *COMPILER_BUILD_INPUTS, *SIMD_BYTEARRAY_RETAINED,
                     "src/test/resources/core/original-unix-libc-descriptors.json",
                     "src/test/resources/core/original-bytestring-sort-descriptor.json",

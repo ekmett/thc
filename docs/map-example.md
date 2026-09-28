@@ -14,22 +14,6 @@ For input `n`, the workload builds a histogram with `Map.insertWith (+)`, adjust
 
 The retained [source provenance](map-graphs/provenance.json) and [dependency audit](map-graphs/reachability-audit.json) describe the exact bundle: 1,619 supplied bindings and 52 syntactically reachable globals across the 17-module manifest. Reachability respects lexical scope, including recursive groups and case binders. It intentionally includes unexecuted branches.
 
-## Validation and timing
-
-A clean source-only checkout with an empty build cache passed the fixture and Map pipelines: **37 JVM tests**, plus **18 Map inputs checked before and after requested last-tier compilation**. Inputs include negatives, zero, bucket boundaries, 10,000, 65,536, and 100,000. The native oracle also matches an independent histogram calculation. [Validation](../bench/results/map/validation.json) and [oracle inputs](map-graphs/oracle-validation.json) are retained.
-
-The timing machine was an Apple M3 with 16 GiB, macOS 15.5, GHC 9.14.1, and GraalVM 25.3.4.1 / JDK 25. Each engine ran in three fresh processes, serially. Each JVM warmed for at least 15 seconds and 256 calls; native processes warmed for one second. Each process then ran five windows of at least two seconds. Inputs varied over a 16-value cycle starting at 10,000, and every output contributed to a consumed checksum. Startup, loading, and warmup are excluded; the Polyglot host invocation is included.
-
-| Engine | Median workload time | Per-process median range |
-|---|---:|---:|
-| Native GHC `-O2` | 1.325825 ms | 1.323641–1.353897 ms |
-| THC / Graal | 3.101204 ms | 3.019110–3.178544 ms |
-| THC / GHC | **2.339075×** | |
-
-The headline is the median of the three process medians. All **30 measurement windows** matched checksums, and the logs contain **zero Truffle compilation/deoptimization events during measurement**. Final last-tier verification succeeded in all three JVMs. The raw ranges and drift are retained; no timing windows were discarded. This is one machine/workload measurement; the graph and allocation observations do not causally attribute the entire timing gap. See [all windows](../bench/results/map/timings.tsv), [summary](../bench/results/map/summary.json), and [run configuration](../bench/results/map/run-config.json).
-
-A separate allocation probe measured approximately **11.50 MB per workload on the JVM versus 7.07 MB for native GHC**, or **1.625× allocation volume**. The JVM number is the median of three 256-call windows after warmup and requested compilation, using current-thread `ThreadMXBean` accounting. The native estimate subtracts RTS totals for 16 calls from 272 calls and divides by 256, preserving the input cycle. These measure allocation volume, not retained memory: the JVM count excludes other threads, and the native result is a process-total difference. The probe observed zero unsupported traps. See [allocation methods and results](../bench/results/map/allocation-summary.json), [JVM samples](../bench/results/map/allocation-jvm.tsv), and [native 272-call sample](../bench/results/map/allocation-native-272.tsv).
-
 ## What the actual compiler graphs show
 
 The first insertion compilation failed at Graal's existing graph-cost limit of 100,000. Its partial-evaluation snapshot contained 65,176 nodes. It expanded 547 generic frame reads into every frame kind, including 547 each of Byte, Float, Double, and Int boxing nodes that this runtime never needed. It also contained 171 `StringLatin1.equals` loop headers from comparing case-alternative kind strings. The [failed graph and evidence](map-graphs/failed-insert-pe-evidence.json) retain those exact counts and node IDs.
@@ -64,7 +48,7 @@ Every arrow above exists in graph 5 of compilation 2757. This is a data/conditio
 
 `Bin` is a generated StaticShape object with a layout reference, a **direct primitive long size**, and **four direct object fields**: key, value, left, and right. There is no per-Bin `Object[]` payload or boxed size. Haskell `Int` keys and values remain separate `I#` objects, each storing its primitive long directly. In balance graph 2816, virtual instance 11589 lists the complete field layout; commit 12181 builds two Bin objects using primitive `i64` size nodes 3996 and 4648. [The exact representation proof](map-graphs/bin-layout-proof.json) retains these nodes.
 
-Updates still allocate persistent tree nodes and boxed Haskell values. Larger inlined update/fold graphs also retain call packets, lazy thunks/captures, and call boundaries. For example, the insertion graph contains 31 committed Bin descriptions, 13 `I#` descriptions, 28 packet arrays, and four thunk/capture pairs distributed across its branches. Lookup's small allocation-free descent therefore does not make the complete workload allocation-free. The residual update calls, packet traffic, boxed key/value objects, and conditional forcing are concrete places to investigate next; the graph counts alone cannot quantify their share of the 2.339× timing ratio.
+Updates still allocate persistent tree nodes and boxed Haskell values. Larger inlined update/fold graphs also retain call packets, lazy thunks/captures, and call boundaries. For example, the insertion graph contains 31 committed Bin descriptions, 13 `I#` descriptions, 28 packet arrays, and four thunk/capture pairs distributed across its branches. Lookup's small allocation-free descent therefore does not make the complete workload allocation-free. The residual update calls, packet traffic, boxed key/value objects, and conditional forcing are concrete places to investigate next; the graph counts alone cannot quantify their contribution to execution time.
 
 ## Explicit dependency frontier
 
@@ -81,8 +65,7 @@ The thirteen capability issues are four unboxed-tuple construction/matching site
 Set `JAVA_HOME` to the required GraalVM JDK and make GHC 9.14.1 available as described in the repository setup. Default strict mode exposes the incomplete dependency frontier. The explicit diagnostic run used here is:
 
 ```sh
-THC_DIAGNOSTIC_UNSUPPORTED=true bin/try-map.sh
-THC_DIAGNOSTIC_UNSUPPORTED=true bin/benchmark-map.sh bench/results/map-repeat
+THC_DIAGNOSTIC_UNSUPPORTED=true make -C bench map OUT="$PWD/build/bench/map"
 
 THC_DIAGNOSTIC_UNSUPPORTED=true \
 THC_GRAPH_MIN_WARM_CALLS=256 \

@@ -136,15 +136,6 @@ fixed arithmetic controls, unsigned carry/borrow, aliases, canaries, empty
 division cases, malformed shapes/divisors, pointer-cell rejection, immutable
 destinations, logical shrink and native-access denial. The GCD/bitwise tranche
 adds zero/high-bit word controls, prefix-only writes and native-pinned aliases.
-The separate
-`bench/experiments/gmp-sulong/run-ownership.sh` passes pointer lifetime,
-confinement, failed interop and post-cancellation cleanup controls.
-
-An initial test had an incorrect expected multi-limb division result:
-`2*B + 7 = 2*(B + 3) + 1` for `B = 2^64`. Native GMP correctly returned
-quotient 2/remainder 1. The retained failure was fixed only in test constants,
-and a native GHC arithmetic control independently confirmed `(2,1)`.
-
 `OriginalGmpAudit.hs` imports the actual hidden installed GMP module through a
 fixture-local registration that exposes only that module; unit identity,
 dependencies and installed interface/library paths remain unchanged. No new

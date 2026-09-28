@@ -145,7 +145,7 @@ def python_test(path):
     name = PurePosixPath(path).name
     # Historical snapshots are data, not runnable test sources. Changes to these
     # paths still widen through the ordinary unmapped-path rule.
-    historical = path.startswith("bench/results/") or any(
+    historical = any(
         part.startswith("evidence-") for part in PurePosixPath(path).parts)
     return not historical and name.endswith(".py") and (name.startswith(("test-", "test_")) or name.endswith("_test.py"))
 

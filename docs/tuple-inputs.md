@@ -67,9 +67,5 @@ account for carrier/packet allocation and field traffic; typed fields alone are
 not a hardware register-passing claim. A scalar Object-return box can remain at
 the public Truffle boundary even when all tuple transport disappears.
 
-The [graph experiment](../bench/experiments/tuple-inputs/README.md) retains both
-native direct/mixed/lazy call controls and synthetic data-dependent tail loops.
-The latter preserve changing payload and depth recurrences for self, three-target
-and prefixed cycles; allocation removal is checked inside the surviving loop.
 Separate ownership tests force an actual deoptimization after partial input
 restore, including a throw, and require immediate reference cleanup before recovery.

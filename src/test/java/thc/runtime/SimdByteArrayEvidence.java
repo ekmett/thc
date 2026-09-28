@@ -100,7 +100,7 @@ final class SimdByteArrayEvidence {
             if (floating(family)) for (String file : List.of("snan-expected.tsv", "snan-requests.tsv", "snan-oracle.tsv")) artifacts.add(directory + "/" + file);
         }
         records(manifest, "artifacts", new HashSet<>(artifacts));
-        String retainedBase = "bench/experiments/" + family + "-bytearray/evidence-x86_64" + (family.equals("doublex2") ? "/captures/doublex2" : "");
+        String retainedBase = "t/fixtures/retained-core/" + family + "-bytearray";
         var sources = new ArrayList<>(List.of("t/fixtures/compiler/" + module + ".hs", "t/fixtures/compiler/" + module + "Native.hs",
             "t/haskell-fixtures/SimdByteArrayFixtures.hs", "t/haskell-fixtures/SimdByteArrayModel.hs",
             "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal",

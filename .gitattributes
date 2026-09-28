@@ -1,14 +1,13 @@
 # Source provenance hashes are over repository bytes on every host.
 * text=auto eol=lf
-# Retain the committed bytes of the batch wrapper and historical evidence.
+# Retain the committed bytes of the batch wrapper and native fixture inputs.
 gradlew.bat -text
-bench/results/** -text
+t/fixtures/retained-core/** -text -whitespace linguist-generated=true
 # Preserve compiler and benchmark output exactly as captured.
 docs/graphs/** -whitespace linguist-generated=true
 docs/cadenza-graphs/** -whitespace linguist-generated=true
 docs/map-graphs/** -whitespace linguist-generated=true
 docs/inlining-graphs/** -whitespace linguist-generated=true
-bench/results/** -whitespace linguist-generated=true
 *.bgv binary
 *.zip binary
 *.tar.xz binary
@@ -16,9 +15,6 @@ bench/results/** -whitespace linguist-generated=true
 gradlew.bat whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
 
 docs/bytecode-graphs/** -whitespace linguist-generated=true
-bench/experiments/int32x4-bytearray/evidence-x86_64/** -whitespace linguist-generated=true
-bench/experiments/word32x4-bytearray/evidence-x86_64/** -whitespace linguist-generated=true
-bench/experiments/floatx4-bytearray/evidence-x86_64/** -whitespace linguist-generated=true
 
 # Unified diffs retain a space prefix on empty context lines.
 tools/truffle-protocol/*.patch -whitespace
