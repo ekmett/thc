@@ -352,7 +352,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertNotIn('thc.runtime.STMFullCoreTest', owners)
         self.assertNotIn('"$fixture_bin" stm', (project / 'scripts/prepare-tests.sh').read_text())
         self.assertNotIn('build/stm/manifest.json', fast_fixtures.FULL_REQUIRED)
-        self.assertTrue((project / 'src/fullCoreTest/kotlin/thc/runtime/STMFullCoreTest.kt').is_file())
+        self.assertTrue((project / 'src/fullCoreTest/java/thc/runtime/STMFullCoreTest.java').is_file())
         build = (project / 'build.gradle').read_text()
         self.assertIn('[["stmFullCoreTest", false],[ "stmDenseFullCoreTest", true]].each { taskName, dense -> tasks.register(taskName, Test)', build)
         self.assertIn('systemProperty("thc.handoffSlabs", dense.toString())', build)
@@ -757,7 +757,8 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertNotIn('"$fixture_bin" original-stack-decoder', (project / 'scripts/prepare-tests.sh').read_text())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertFalse((project / 'src/test/kotlin/thc/runtime/OriginalStackDecoderTest.kt').exists())
-        self.assertTrue((project / 'src/fullCoreTest/kotlin/thc/runtime/OriginalStackDecoderTest.kt').is_file())
+        self.assertFalse((project / 'src/test/java/thc/runtime/OriginalStackDecoderTest.java').exists())
+        self.assertTrue((project / 'src/fullCoreTest/java/thc/runtime/OriginalStackDecoderTest.java').is_file())
 
     def test_explicit_weak_fixture_registration_preserves_native_and_strict_inputs(self):
         project = Path(__file__).resolve().parents[2]
