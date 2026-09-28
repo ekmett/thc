@@ -57,6 +57,18 @@ thc.runtime.AstStackScope
 # threads, guest contexts, or foreign activations are created by initialization.
 thc.runtime.GuestThreads
 
+# Exact Java declaring owners required by deoptimization graph validation.
+# Empty parameter/argument arrays, two identity markers, and a fieldless
+# companion only; no closure, frame, language or handoff state is constructed.
+thc.runtime.ArgumentLayout
+thc.runtime.Closure
+thc.runtime.HandoffEntry
+thc.runtime.TupleShape
+# Empty ClassValue prototype only. Its initializer does not compute an Owners
+# value or create Truffle assumptions; those remain lazy per-carrier operations.
+# Reaudit this closure if the registry or its anonymous initializer changes.
+thc.runtime.ConstructorClassIdentity
+
 # Finite Java metadata compatibility inventory; see the closure audit in README.
 # Literal enum descriptors and argument lists only, not their runtime operations.
 thc.runtime.ArrayOp
