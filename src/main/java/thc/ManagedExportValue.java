@@ -11,6 +11,8 @@ import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import java.math.BigInteger;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.Collections;
 import thc.runtime.*;
 
 /** A declaration alias uses the same program-owned binder, layouts and CAFs as its peers. */
@@ -26,7 +28,9 @@ public final class ManagedExportValue implements TruffleObject {
     private final Object guestEntry;
     public ManagedExportValue(ManagedExportRegistry registry, Language.State owner, Language language, ExecutableProgram program, ManagedExportSignature signature) {
         this.registry = registry; this.owner = owner; this.program = program; this.signature = signature;
-        arguments = signature.arguments().stream().map(type -> ManagedExportScalar.Companion.fromNormalizedType(type, ManagedExportScalar.Role.ARGUMENT, signature.wordBits(), program::constructorLayout)).toList();
+        var argumentTypes = new ArrayList<ManagedExportScalar>();
+        for (var type : signature.arguments()) argumentTypes.add(ManagedExportScalar.Companion.fromNormalizedType(type, ManagedExportScalar.Role.ARGUMENT, signature.wordBits(), program::constructorLayout));
+        arguments = Collections.unmodifiableList(argumentTypes);
         result = ManagedExportScalar.Companion.fromNormalizedType(signature.result(), ManagedExportScalar.Role.RESULT, signature.wordBits(), program::constructorLayout);
         guestTarget = program.hostEntryTarget(arguments.size()); guestEntry = program.entryValue(signature.binder());
         ioTarget = signature.ioResult() == null ? null : new ManagedExportIoRoot(language, signature.ioResult()).getCallTarget();

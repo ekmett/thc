@@ -222,7 +222,13 @@ public final class Main {
         check(((Number) observation.get("targetCount")).intValue() > 0 && Boolean.TRUE.equals(observation.get("sameTargets")) && Boolean.TRUE.equals(observation.get("validLastTier")),
             "Explicitly installed guest targets changed or became invalid");
     }
-    private static boolean blank(String text) { return text.chars().allMatch(c -> Character.isWhitespace(c) || Character.isSpaceChar(c)); }
+    private static boolean blank(String text) {
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (!Character.isWhitespace(c) && !Character.isSpaceChar(c)) return false;
+        }
+        return true;
+    }
     private static void require(boolean accepted, String message) { if (!accepted) throw new IllegalArgumentException(message); }
     private static void check(boolean accepted, String message) { if (!accepted) throw new IllegalStateException(message); }
 }

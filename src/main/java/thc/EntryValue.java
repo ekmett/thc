@@ -134,7 +134,9 @@ public final class EntryValue implements TruffleObject {
             var validity = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget").getMethod("isValidLastTier");
             boolean same = current.size() == targets.size(), valid = true;
             for (var target : targets) {
-                same &= current.stream().anyMatch(candidate -> candidate == target);
+                boolean found = false;
+                for (var candidate : current) if (candidate == target) { found = true; break; }
+                same &= found;
                 // Preserve short-circuiting of the original all predicate.
                 if (valid) valid = Boolean.TRUE.equals(validity.invoke(target));
             }

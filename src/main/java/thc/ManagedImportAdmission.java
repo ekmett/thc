@@ -39,7 +39,9 @@ public final class ManagedImportAdmission {
     private static final Set<String> PRIMITIVES = Set.of("void", "IntRep", "WordRep", "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep",
             "Int32Rep", "Word32Rep", "Int64Rep", "Word64Rep", "AddrRep", "FloatRep", "DoubleRep");
     private static List<?> scalars(Object value) {
-        requireProof(value instanceof List<?> fields && !fields.isEmpty() && fields.stream().allMatch(item -> item instanceof String text && PRIMITIVES.contains(text)), "foreign scalar carriers");
+        boolean valid = value instanceof List<?> fields && !fields.isEmpty();
+        if (valid) for (Object item : (List<?>) value) if (!(item instanceof String text) || !PRIMITIVES.contains(text)) { valid = false; break; }
+        requireProof(valid, "foreign scalar carriers");
         return (List<?>) value;
     }
     private static List<Object> calls(Object value) {
@@ -58,11 +60,19 @@ public final class ManagedImportAdmission {
         var arguments = (List<?>) emitted.get("arguments"); var result = (List<?>) emitted.get("result");
         var target = new LinkedHashMap<String,Object>();
         target.put("kind", "static"); target.put("symbol", emitted.get("symbol")); target.put("unit", emitted.get("unit")); target.put("isFunction", true);
-        return Map.of("schema", 1L, "target", target, "convention", emitted.get("convention"), "safety", emitted.get("safety"),
-                "arity", (long) arguments.size(), "suppliedArity", (long) arguments.size(),
-                "argumentReps", arguments.stream().map(primitive -> scalar(primitive, false)).toList(),
-                "resultRep", Map.of("kind", "unknown", "primReps", result.stream().filter(primitive -> !Objects.equals(primitive, "void")).toList(),
-                        "aggregate", "unboxed-tuple", "components", result.stream().map(primitive -> scalar(primitive, true)).toList(), "evaluated", false));
+        Object convention = emitted.get("convention"), safety = emitted.get("safety");
+        long arity = arguments.size(), suppliedArity = arguments.size();
+        var argumentReps = new ArrayList<Map<String,Object>>();
+        for (Object primitive : arguments) argumentReps.add(scalar(primitive, false));
+        var primReps = new ArrayList<Object>();
+        for (Object primitive : result) if (!Objects.equals(primitive, "void")) primReps.add(primitive);
+        var components = new ArrayList<Map<String,Object>>();
+        for (Object primitive : result) components.add(scalar(primitive, true));
+        return Map.of("schema", 1L, "target", target, "convention", convention, "safety", safety,
+                "arity", arity, "suppliedArity", suppliedArity,
+                "argumentReps", Collections.unmodifiableList(argumentReps),
+                "resultRep", Map.of("kind", "unknown", "primReps", Collections.unmodifiableList(primReps),
+                        "aggregate", "unboxed-tuple", "components", Collections.unmodifiableList(components), "evaluated", false));
     }
     private static boolean version(Object value, int expected) { return Objects.equals(value, expected) || Objects.equals(value, (long) expected); }
     public static ManagedImportAdmission read(Map<?,?> module) { return read(module, true); }
@@ -110,8 +120,11 @@ public final class ManagedImportAdmission {
             requireProof(Objects.equals(emitted.get("convention"), item.get("convention")) && Objects.equals(emitted.get("safety"), item.get("safety")) &&
                     Objects.equals(emitted.get("unit"), item.get("unit")), "emitted call ownership/convention");
             var arguments = scalars(emitted.get("arguments")); var result = scalars(emitted.get("result"));
-            requireProof(Objects.equals(arguments.getLast(), "void") && arguments.subList(0, arguments.size() - 1).stream().noneMatch("void"::equals) &&
-                    Objects.equals(result.getFirst(), "void") && result.size() <= 2 && result.subList(1, result.size()).stream().noneMatch("void"::equals), "State/result shape");
+            boolean validState = Objects.equals(arguments.getLast(), "void");
+            if (validState) for (Object primitive : arguments.subList(0, arguments.size() - 1)) if ("void".equals(primitive)) { validState = false; break; }
+            validState = validState && Objects.equals(result.getFirst(), "void") && result.size() <= 2;
+            if (validState) for (Object primitive : result.subList(1, result.size())) if ("void".equals(primitive)) { validState = false; break; }
+            requireProof(validState, "State/result shape");
             if (Objects.equals(item.get("convention"), "ccall")) requireProof(Objects.equals(emitted.get("symbol"), item.get("symbol")), "direct C symbol changed");
             else requireProof(generated.put(new Target(emitted.get("unit"), emitted.get("symbol")), descriptor(emitted)) == null, "duplicate generated CAPI target");
         }

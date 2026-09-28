@@ -22,7 +22,11 @@ public final class PackageNativeArchive {
             if (!(call.get("target") instanceof Map<?,?> target) || !Objects.equals(target.get("unit"), unit)) continue;
             for (var emitted : excluded) if (Objects.equals(target.get("symbol"), emitted.get("symbol")) && Objects.equals(call.get("convention"), emitted.get("convention")) && Objects.equals(call.get("safety"), emitted.get("safety"))) return true;
             for (var entry : unavailable) {
-                List<?> actual = call.get("argumentReps") instanceof List<?> args ? args.stream().map(arg -> arg instanceof Map<?,?> map ? map.get("primReps") : null).toList() : null;
+                List<Object> actual = null;
+                if (call.get("argumentReps") instanceof List<?> args) {
+                    actual = new ArrayList<>();
+                    for (Object arg : args) actual.add(arg instanceof Map<?,?> map ? map.get("primReps") : null);
+                }
                 var expected = new ArrayList<List<?>>();
                 for (Object rep : (List<?>) entry.get("arguments")) expected.add(Collections.singletonList(Objects.equals(rep, "ByteArray#") || Objects.equals(rep, "MutableByteArray#") ? "BoxedRep (Just Unlifted)" : rep));
                 expected.add(List.of());

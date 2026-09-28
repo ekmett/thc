@@ -73,10 +73,13 @@ public final class CoreForeignArtifacts {
                 name.equals("System.CPUTime.Posix.ClockGetTime") && unit.startsWith("base-"), "Foreign module has no complete execution ABI: " + unit + ":" + name);
         if (time) {
             var headers = list(link.get("headerHashes"), "Missing selected time headers");
-            var names = headers.stream().map(header -> header instanceof Map<?,?> fields ? fields.get("name") : null).toList();
-            require(headers.size() == 3 && names.equals(List.of("HsFFI.h", "HsTime.h", "HsTimeConfig.h")) &&
-                    headers.stream().allMatch(header -> header instanceof Map<?,?> fields && fields.keySet().equals(Set.of("name", "sha256")) && sha(fields.get("sha256"))),
-                    "Invalid selected time header provenance");
+            var names = new ArrayList<Object>();
+            for (Object header : headers) names.add(header instanceof Map<?,?> fields ? fields.get("name") : null);
+            boolean valid = headers.size() == 3 && names.equals(List.of("HsFFI.h", "HsTime.h", "HsTimeConfig.h"));
+            if (valid) for (Object header : headers) {
+                if (!(header instanceof Map<?,?> fields) || !fields.keySet().equals(Set.of("name", "sha256")) || !sha(fields.get("sha256"))) { valid = false; break; }
+            }
+            require(valid, "Invalid selected time header provenance");
         }
         var foreign = record(module.get("foreign"), "Missing original foreign archive");
         var stubs = record(foreign.get("stubs"), "Missing original C stubs");
@@ -101,7 +104,9 @@ public final class CoreForeignArtifacts {
                 "Foreign bitcode target differs from this runtime");
         var symbols = new ArrayList<String>();
         for (Object symbol : list(link.get("symbols"), "Missing foreign symbol inventory")) symbols.add(text(symbol, "Invalid foreign symbol"));
-        require(symbols.size() == 3 && new HashSet<>(symbols).size() == symbols.size() && symbols.stream().noneMatch(String::isEmpty), "Invalid foreign symbol inventory");
+        boolean validSymbols = symbols.size() == 3 && new HashSet<>(symbols).size() == symbols.size();
+        if (validSymbols) for (String symbol : symbols) if (symbol.isEmpty()) { validSymbols = false; break; }
+        require(validSymbols, "Invalid foreign symbol inventory");
         var abiEntries = list(link.get("abi"), "Missing CAPI ABI inventory");
         var abi = new LinkedHashMap<String,String>();
         for (Object entry : abiEntries) {
@@ -111,9 +116,21 @@ public final class CoreForeignArtifacts {
             require(time ? Objects.equals(kind, timeSymbols(unit).get(symbol)) : kind.equals("clock-id") || kind.equals("clock-buffer"), "Invalid CAPI ABI kind");
             abi.put(symbol, kind);
         }
-        require(abiEntries.size() == 3 && abi.keySet().equals(new HashSet<>(symbols)) && (time ? abi.equals(timeSymbols(unit)) :
-                abi.values().stream().filter("clock-id"::equals).count() == 1 && abi.values().stream().filter("clock-buffer"::equals).count() == 2),
-                "CAPI ABI inventory differs from original symbols");
+        boolean validAbi = abiEntries.size() == 3 && abi.keySet().equals(new HashSet<>(symbols));
+        if (validAbi) {
+            if (time) validAbi = abi.equals(timeSymbols(unit));
+            else {
+                long ids = 0;
+                for (String kind : abi.values()) if ("clock-id".equals(kind)) ids++;
+                validAbi = ids == 1;
+                if (validAbi) {
+                    long buffers = 0;
+                    for (String kind : abi.values()) if ("clock-buffer".equals(kind)) buffers++;
+                    validAbi = buffers == 2;
+                }
+            }
+        }
+        require(validAbi, "CAPI ABI inventory differs from original symbols");
         var result = new ForeignBitcode(unit, name, target, new LinkedHashSet<>(symbols), abi, bytes);
         validateCalls(module.get("bindings"), result, completeBindings);
         return result;

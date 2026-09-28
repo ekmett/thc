@@ -260,7 +260,9 @@ public final class CoreCompactRecords {
             default -> throw error("Invalid compact Core alternative tag: " + tag);
         }
         var binders = list(cursor, () -> binder(cursor));
-        return values(kind, discriminator, binders.stream().map(binder -> binder.get("id")).toList(), expression(cursor), map("binders", binders));
+        var ids = new ArrayList<Object>();
+        for (var binder : binders) ids.add(binder.get("id"));
+        return values(kind, discriminator, Collections.unmodifiableList(ids), expression(cursor), map("binders", binders));
     }
     private List<Object> literal(CoreCompactCursor cursor) throws Throwable {
         int tag = cursor.readByte();

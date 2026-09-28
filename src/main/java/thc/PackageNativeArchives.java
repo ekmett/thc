@@ -23,15 +23,20 @@ public final class PackageNativeArchives {
         var emitted = record(value, "symbol unit convention safety arguments result");
         check(text(emitted.get("symbol")).matches("[A-Za-z_][A-Za-z0-9_]*") && Objects.equals(emitted.get("unit"), unit) && in(emitted.get("convention"), "ccall", "capi") && in(emitted.get("safety"), "unsafe", "safe", "interruptible"), "emitted identity");
         var args = list(emitted.get("arguments")); var result = list(emitted.get("result"));
-        check(!args.isEmpty() && Objects.equals(args.getLast(), "void") && args.subList(0, args.size() - 1).stream().allMatch(arg -> scalar(arg) || in(arg, "ByteArray#", "MutableByteArray#")) && (result.equals(List.of("void")) || result.size() == 2 && Objects.equals(result.getFirst(), "void") && scalar(result.get(1))), "emitted carriers");
+        boolean valid = !args.isEmpty() && Objects.equals(args.getLast(), "void");
+        if (valid) for (Object arg : args.subList(0, args.size() - 1)) if (!scalar(arg) && !in(arg, "ByteArray#", "MutableByteArray#")) { valid = false; break; }
+        check(valid && (result.equals(List.of("void")) || result.size() == 2 && Objects.equals(result.getFirst(), "void") && scalar(result.get(1))), "emitted carriers");
         return emitted;
     }
     private static List<?> cAbi(Map<?,?> emitted) {
-        return Arrays.asList(emitted.get("convention"), Objects.equals(emitted.get("safety"), "safe") ? "unsafe" : emitted.get("safety"), list(emitted.get("arguments")).stream().map(rep -> {
-            if (in(rep, "ByteArray#", "MutableByteArray#")) return "AddrRep";
-            if (in(rep, "IntRep", "Int8Rep", "Int16Rep", "Int32Rep", "Int64Rep")) return "Word" + ((String) rep).substring(3);
-            return rep;
-        }).toList(), emitted.get("result"));
+        Object convention = emitted.get("convention"), safety = Objects.equals(emitted.get("safety"), "safe") ? "unsafe" : emitted.get("safety");
+        var arguments = new ArrayList<Object>();
+        for (Object rep : list(emitted.get("arguments"))) {
+            if (in(rep, "ByteArray#", "MutableByteArray#")) arguments.add("AddrRep");
+            else if (in(rep, "IntRep", "Int8Rep", "Int16Rep", "Int32Rep", "Int64Rep")) arguments.add("Word" + ((String) rep).substring(3));
+            else arguments.add(rep);
+        }
+        return Arrays.asList(convention, safety, Collections.unmodifiableList(arguments), emitted.get("result"));
     }
     public static List<?> excluded(Map<?,?> module) {
         return module.get("packageNativeArchive") instanceof Map<?,?> archive && archive.get("unsupportedImports") instanceof List<?> imports ? imports : List.of();
@@ -39,8 +44,10 @@ public final class PackageNativeArchives {
     private static Map<?,?> requiredMap(Object value, String message) { if (value instanceof Map<?,?> map) return map; throw new IllegalArgumentException(message); }
     private static Map<Object,Object> without(Map<?,?> map, String... keys) { var copy = new LinkedHashMap<Object,Object>(map); for (String key : keys) copy.remove(key); return copy; }
     private static List<String> names(Object raw) {
-        var names = list(raw).stream().map(PackageNativeArchives::text).toList();
-        check(names.equals(names.stream().distinct().sorted().toList()), "sorted unique dependency symbols"); return names;
+        var names = new ArrayList<String>();
+        for (Object value : list(raw)) names.add(text(value));
+        var sorted = new ArrayList<>(new LinkedHashSet<>(names)); sorted.sort(null);
+        check(names.equals(sorted), "sorted unique dependency symbols"); return Collections.unmodifiableList(names);
     }
     /** A strict producer receipt binds every original adapter to its LLVM closure
      * and independently checked union. Old archives gain no authority. */
@@ -55,7 +62,8 @@ public final class PackageNativeArchives {
         var unsupported = names(archive.get("unresolvedSymbols"));
         var externals = names(original.get("buildInputs") instanceof Map<?,?> inputs ? inputs.get("unresolved") : null);
         check(!unsupported.isEmpty() && externals.containsAll(unsupported), "original unresolved inventory");
-        var entries = list(original.get("abi")).stream().map(value -> ((Map<?,?>) value).get("entry")).toList();
+        var entries = new ArrayList<Object>();
+        for (Object value : list(original.get("abi"))) entries.add(((Map<?,?>) value).get("entry"));
         record Dependency(String entry, List<String> symbols) {}
         var dependencies = new ArrayList<Dependency>();
         for (Object value : list(proof.get("entries"))) {
@@ -63,12 +71,28 @@ public final class PackageNativeArchives {
             var symbols = names(row.get("unresolved")); check(externals.containsAll(symbols), "unrecorded adapter dependency");
             dependencies.add(new Dependency(text(row.get("entry")), symbols));
         }
-        check(dependencies.stream().map(Dependency::entry).toList().equals(entries), "complete ordered adapter coverage");
-        var available = dependencies.stream().filter(dep -> dep.symbols().stream().noneMatch(unsupported::contains)).map(Dependency::entry).toList();
+        var dependencyEntries = new ArrayList<String>();
+        for (var dependency : dependencies) dependencyEntries.add(dependency.entry());
+        check(dependencyEntries.equals(entries), "complete ordered adapter coverage");
+        var available = new ArrayList<String>();
+        for (var dependency : dependencies) {
+            boolean supported = true;
+            for (String symbol : dependency.symbols()) if (unsupported.contains(symbol)) { supported = false; break; }
+            if (supported) available.add(dependency.entry());
+        }
         check(!available.isEmpty() && available.size() < entries.size() && Objects.equals(selected.get("availableEntries"), available), "exact available adapter selection");
         var union = names(proof.get("unresolved"));
-        check(union.stream().noneMatch(unsupported::contains) && dependencies.stream().filter(dep -> available.contains(dep.entry())).flatMap(dep -> dep.symbols().stream()).toList().containsAll(union), "union unresolved dependencies");
-        check(union.stream().allMatch(name -> in(name, "memcpy", "memmove", "memset", "memcmp", "bcmp", "__cxa_atexit", "__dso_handle") || name.startsWith("llvm.")), "selected bitcode requires an unrecorded native provider container");
+        boolean supportedUnion = true;
+        for (String symbol : union) if (unsupported.contains(symbol)) { supportedUnion = false; break; }
+        if (supportedUnion) {
+            var selectedSymbols = new ArrayList<String>();
+            for (var dependency : dependencies) if (available.contains(dependency.entry())) selectedSymbols.addAll(dependency.symbols());
+            supportedUnion = selectedSymbols.containsAll(union);
+        }
+        check(supportedUnion, "union unresolved dependencies");
+        boolean knownProvider = true;
+        for (String name : union) if (!in(name, "memcpy", "memmove", "memset", "memcmp", "bcmp", "__cxa_atexit", "__dso_handle") && !name.startsWith("llvm.")) { knownProvider = false; break; }
+        check(knownProvider, "selected bitcode requires an unrecorded native provider container");
         return new LinkedHashSet<>(available);
     }
     public static PackageNativeArchive read(Map<?,?> module) { return read(module, true); }
@@ -104,7 +128,13 @@ public final class PackageNativeArchives {
                 var binder = PackageScalarLinks.archiveIdentity(entry.get("binder"));
                 check(Objects.equals(binder.get("unit"), unit) && Objects.equals(binder.get("module"), module.get("module")) && Objects.equals(binder.get("namespace"), "value") && binders.add(binder), "import binder");
                 text(entry.get("symbol"));
-                check(entry.get("header") == null || entry.get("header") instanceof String && text(entry.get("header")).chars().noneMatch(c -> "\n\r\"\\".indexOf(c) >= 0), "import header");
+                Object rawHeader = entry.get("header");
+                boolean validHeader = rawHeader == null || rawHeader instanceof String;
+                if (validHeader && rawHeader != null) {
+                    String header = text(rawHeader);
+                    for (int i = 0; i < header.length(); i++) if ("\n\r\"\\".indexOf(header.charAt(i)) >= 0) { validHeader = false; break; }
+                }
+                check(validHeader, "import header");
                 check((entry.get("unit") == null || Objects.equals(entry.get("unit"), unit)) && in(entry.get("convention"), "ccall", "capi") && (Objects.equals(entry.get("isFunction"), true) || Objects.equals(entry.get("convention"), "capi") && Objects.equals(entry.get("isFunction"), false)) && in(entry.get("safety"), "unsafe", "safe", "interruptible") && Objects.equals(entry.get("normalizationRole"), "representational"), "import metadata");
                 PackageScalarLinks.archiveType(entry.get("declaredType")); PackageScalarLinks.archiveType(entry.get("normalizedType"));
                 var emitted = emitted(entry.get("emitted"), unit);
@@ -113,17 +143,30 @@ public final class PackageNativeArchives {
         }
         if (module.containsKey("staticForeignImportStubs")) check(Objects.equals(module.get("staticForeignImportStubs"), proof), "retained stub provenance differs");
         var conflicts = new ArrayList<Map<?,?>>(); if (conflictField) for (Object value : list(archive.get("conflictingImports"))) conflicts.add(emitted(value, unit));
-        if (conflictField) check(!conflicts.isEmpty() && conflicts.stream().distinct().toList().equals(conflicts) && unknown == null, "conflicting import inventory");
+        if (conflictField) check(!conflicts.isEmpty() && new ArrayList<>(new LinkedHashSet<>(conflicts)).equals(conflicts) && unknown == null, "conflicting import inventory");
         var conflictGroups = new LinkedHashMap<Object,List<Map<?,?>>>(); for (var entry : conflicts) conflictGroups.computeIfAbsent(entry.get("symbol"), ignored -> new ArrayList<>()).add(entry);
         for (var group : conflictGroups.entrySet()) {
-            var variants = group.getValue(); check(variants.stream().allMatch(entry -> in(entry.get("safety"), "unsafe", "safe")) && variants.stream().map(PackageNativeArchives::cAbi).distinct().count() > 1, "imports do not have conflicting C ABIs");
-            var local = imports.stream().filter(entry -> Objects.equals(entry.get("symbol"), group.getKey()) && !Objects.equals(entry.get("safety"), "interruptible")).toList();
+            var variants = group.getValue();
+            boolean validVariants = true;
+            for (var entry : variants) if (!in(entry.get("safety"), "unsafe", "safe")) { validVariants = false; break; }
+            if (validVariants) {
+                var abis = new HashSet<List<?>>();
+                for (var entry : variants) abis.add(cAbi(entry));
+                validVariants = abis.size() > 1;
+            }
+            check(validVariants, "imports do not have conflicting C ABIs");
+            var local = new ArrayList<Map<?,?>>();
+            for (var entry : imports) if (Objects.equals(entry.get("symbol"), group.getKey()) && !Objects.equals(entry.get("safety"), "interruptible")) local.add(entry);
             check(!local.isEmpty() && variants.containsAll(local), "conflict witnesses differ from local imports");
         }
         var conflictSymbols = conflictGroups.keySet();
-        var expected = imports.stream().filter(entry -> Objects.equals(entry.get("safety"), "interruptible") || conflictSymbols.contains(entry.get("symbol"))).toList();
+        var selectedImports = new ArrayList<Map<?,?>>();
+        for (var entry : imports) if (Objects.equals(entry.get("safety"), "interruptible") || conflictSymbols.contains(entry.get("symbol"))) selectedImports.add(entry);
+        List<Map<?,?>> expected = Collections.unmodifiableList(selectedImports);
         check(list(archive.get("unsupportedImports")).equals(expected), "unsupported import inventory differs");
-        var unresolved = list(archive.get("unresolvedSymbols")).stream().map(PackageNativeArchives::text).toList(); check(unresolved.stream().distinct().toList().equals(unresolved), "duplicate unresolved symbols");
+        var unresolved = new ArrayList<String>();
+        for (Object value : list(archive.get("unresolvedSymbols"))) unresolved.add(text(value));
+        check(new ArrayList<>(new LinkedHashSet<>(unresolved)).equals(unresolved), "duplicate unresolved symbols");
         Object artifact = archive.get("artifact"); check((artifact == null) == unresolved.isEmpty(), "unresolved artifact pair");
         check(unknown != null || !expected.isEmpty() || !unresolved.isEmpty(), "empty archive obligation");
         if (artifact != null) {

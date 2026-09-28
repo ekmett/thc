@@ -56,20 +56,34 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
             });
             for (var module : consumers) {
                 Object provided = module.get("providedModules");
-                if (provided != null) require(Objects.equals(module.get("unit"), "dependency-closure") && Objects.equals(module.get("module"), "THC.InterfaceClosure") && Objects.equals(module.get("boundary"), "actual-interface-unfoldings") && provided instanceof List<?> list && list.stream().allMatch(item -> item instanceof String && availableModules.contains(item)), "Invalid or missing provided-module interface closure");
+                if (provided != null) {
+                    boolean valid = Objects.equals(module.get("unit"), "dependency-closure") && Objects.equals(module.get("module"), "THC.InterfaceClosure") && Objects.equals(module.get("boundary"), "actual-interface-unfoldings") && provided instanceof List<?>;
+                    if (valid) for (Object item : (List<?>) provided) {
+                        if (!(item instanceof String) || !availableModules.contains(item)) { valid = false; break; }
+                    }
+                    require(valid, "Invalid or missing provided-module interface closure");
+                }
             }
         } catch (Throwable failure) { consumerSources.forEach(CoreJsonIndex::close); sources.close(); throw failure; }
         demand = new CoreDemandBindings(this::contains, this::binding, this::constructor, this::prepare, !Objects.equals(input.get("instrument"), false), id -> consumerBindings.containsKey(id) || sources.containsSymbol(id));
         // Cold summaries select a calling convention, not an admission verdict.
-        captureDelimited = directory.getModules().stream().anyMatch(CoreUnitDirectory.ModuleRecord::containsDelimitedControl) || consumerBindings.values().stream().anyMatch(binding -> {
-            Object body = binding.get("expr"); return body instanceof CoreBindingBody lazy ? lazy.getHeader().getContainsDelimitedControl() : DelimitedControl.INSTANCE.contains(body);
-        });
+        boolean delimited = false;
+        for (var module : directory.getModules()) if (module.containsDelimitedControl()) { delimited = true; break; }
+        if (!delimited) for (var binding : consumerBindings.values()) {
+            Object body = binding.get("expr");
+            if (body instanceof CoreBindingBody lazy ? lazy.getHeader().getContainsDelimitedControl() : DelimitedControl.INSTANCE.contains(body)) { delimited = true; break; }
+        }
+        captureDelimited = delimited;
     }
     private static void require(boolean value, String message) { if (!value) throw new IllegalArgumentException(message); }
     private static String requiredText(Object value, String message) { if (value instanceof String text) return text; throw new IllegalStateException(message); }
     @Override public boolean getAsynchronousExceptions() { return async; }
     @Override public boolean getHasBytecode() { return backend.equals("bytecode"); }
-    @Override public String bytecodeDump() { return String.join("\n\n", demand.preparedPrograms().stream().map(ExecutableProgram::bytecodeDump).toList()); }
+    @Override public String bytecodeDump() {
+        var dumps = new ArrayList<String>();
+        for (var program : demand.preparedPrograms()) dumps.add(program.bytecodeDump());
+        return String.join("\n\n", dumps);
+    }
     public boolean contains(String id) { return consumerBindings.containsKey(id) || directory.owner(id) != null; }
     private static Map<String,Object> withoutType(Map<String,Object> raw) { var copy = new LinkedHashMap<>(raw); copy.remove("type"); return copy; }
     private void addConstructors(Map<String,Object> data) {
@@ -127,8 +141,10 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
     private Map<String,Object> bridge() {
         if (selectedBridge != null) return selectedBridge;
         String unit = directory.getForeignExceptionBridgeUnit();
-        var candidates = directory.getModules().stream().filter(module -> module.name().equals("THC.Internal.Exception") && (unit == null || module.unit().equals(unit))).toList();
-        var loose = consumers.stream().filter(module -> Objects.equals(module.get("module"), "THC.Internal.Exception") && (unit == null || Objects.equals(module.get("unit"), unit))).toList();
+        var candidates = new ArrayList<CoreUnitDirectory.ModuleRecord>();
+        for (var module : directory.getModules()) if (module.name().equals("THC.Internal.Exception") && (unit == null || module.unit().equals(unit))) candidates.add(module);
+        var loose = new ArrayList<Map<String,Object>>();
+        for (var module : consumers) if (Objects.equals(module.get("module"), "THC.Internal.Exception") && (unit == null || Objects.equals(module.get("unit"), unit))) loose.add(module);
         require(candidates.size() + loose.size() == 1, "Missing or ambiguous foreign exception bridge unit");
         var selected = loose.isEmpty() ? admission(candidates.getFirst()) : consumerAdmission(loose.getFirst());
         if (selected.getBridge() == null) throw new IllegalStateException("Foreign execution requires a genuine THC.Exception runtime bundle");
@@ -182,46 +198,119 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
     @Override public RootCallTarget entryTarget(String name) { return demand.program(name).entryTarget(name); }
     @Override public DataLayout constructorLayout(String id) { return hostProgram().constructorLayout(id); }
     @Override public Map<String,Object> diagnostics() {
-        var programs = demand.preparedPrograms().stream().map(ExecutableProgram::diagnostics).toList();
+        var programs = new ArrayList<Map<String,Object>>();
+        for (var program : demand.preparedPrograms()) programs.add(program.diagnostics());
         var result = new LinkedHashMap<>(programs.getFirst());
         for (String field : List.of("loweredRootCount", "bytecodeRootCount", "sourceRootCount", "hostEntryRootCount", "initializedBindingCount")) {
-            if (programs.stream().anyMatch(program -> program.containsKey(field))) result.put(field, programs.stream().mapToLong(program -> program.get(field) instanceof Number value ? value.longValue() : 0L).sum());
+            boolean present = false;
+            for (var program : programs) if (program.containsKey(field)) { present = true; break; }
+            if (present) {
+                long total = 0;
+                for (var program : programs) total += program.get(field) instanceof Number value ? value.longValue() : 0L;
+                result.put(field, total);
+            }
         }
-        var counters = totals.stream().map(CoreJsonSymbols.Counters::statistics).toList();
+        var counters = new ArrayList<CoreJsonSymbols.Statistics>();
+        for (var counter : totals) counters.add(counter.statistics());
         result.put("unsupportedPolicy", "reject-at-binding-admission");
-        var compact = compactTotals.stream().map(CoreCompactFile.Counters::statistics).toList();
-        result.put("coreUnitSourceOpens", counters.stream().mapToLong(CoreJsonSymbols.Statistics::sourceOpens).sum());
-        result.put("coreUnitDirectoryOpens", counters.stream().mapToLong(CoreJsonSymbols.Statistics::directoryOpens).sum());
-        result.put("coreUnitSourceMappedBytes", counters.stream().mapToLong(CoreJsonSymbols.Statistics::sourceMappedBytes).sum());
-        result.put("coreUnitDirectoryMappedBytes", counters.stream().mapToLong(CoreJsonSymbols.Statistics::directoryMappedBytes).sum());
-        result.put("coreUnitSourceByteReads", counters.stream().mapToLong(CoreJsonSymbols.Statistics::sourceByteReads).sum());
-        result.put("coreUnitDirectoryByteReads", counters.stream().mapToLong(CoreJsonSymbols.Statistics::directoryByteReads).sum());
-        result.put("coreUnitHashBytesScanned", counters.stream().mapToLong(CoreJsonSymbols.Statistics::hashBytesScanned).sum());
-        result.put("coreUnitDecodedBindings", counters.stream().mapToLong(CoreJsonSymbols.Statistics::decodedBindings).sum());
-        result.put("coreUnitDecodedModules", counters.stream().mapToLong(CoreJsonSymbols.Statistics::decodedModules).sum());
-        result.put("coreUnitDecodedBytes", counters.stream().mapToLong(CoreJsonSymbols.Statistics::decodedBytes).sum());
-        result.put("coreUnitMetadataBytes", counters.stream().mapToLong(CoreJsonSymbols.Statistics::metadataBytes).sum());
-        result.put("coreUnitVerifiedModuleBytes", counters.stream().mapToLong(CoreJsonSymbols.Statistics::verifiedModuleBytes).sum());
-        result.put("coreUnitPhysicalMappingOpens", counters.stream().mapToLong(CoreJsonSymbols.Statistics::physicalMappingOpens).sum());
-        result.put("coreUnitMappingCacheHits", counters.stream().mapToLong(CoreJsonSymbols.Statistics::mappingCacheHits).sum());
-        result.put("coreCompactModuleOpens", compact.stream().mapToLong(CoreCompactFile.Statistics::acquisitions).sum());
-        result.put("coreCompactMappedBytes", compact.stream().mapToLong(CoreCompactFile.Statistics::mappedBytes).sum());
-        result.put("coreCompactDirectoryBytesRead", compact.stream().mapToLong(CoreCompactFile.Statistics::directoryBytesRead).sum());
-        result.put("coreCompactMemberInflations", compact.stream().mapToLong(CoreCompactFile.Statistics::memberInflations).sum());
-        result.put("coreCompactInflatedBytes", compact.stream().mapToLong(CoreCompactFile.Statistics::inflatedBytes).sum());
-        result.put("coreCompactCompressedBytesRead", compact.stream().mapToLong(CoreCompactFile.Statistics::compressedBytesRead).sum());
-        result.put("coreCompactSlabCacheHits", compact.stream().mapToLong(CoreCompactFile.Statistics::slabCacheHits).sum());
-        result.put("coreCompactVerifiedStoredBytes", compact.stream().mapToLong(CoreCompactFile.Statistics::verifiedStoredBytes).sum());
-        result.put("coreCompactHeaderBytesRead", compact.stream().mapToLong(CoreCompactFile.Statistics::headerBytesRead).sum());
-        result.put("coreCompactLookupBytesRead", compact.stream().mapToLong(CoreCompactFile.Statistics::lookupBytesRead).sum());
-        result.put("coreCompactDataBytesRead", compact.stream().mapToLong(CoreCompactFile.Statistics::dataBytesRead).sum());
-        result.put("coreCompactStringBytesRead", compact.stream().mapToLong(CoreCompactFile.Statistics::stringBytesRead).sum());
-        result.put("coreCompactDebugBytesRead", compact.stream().mapToLong(CoreCompactFile.Statistics::debugBytesRead).sum());
-        result.put("coreCompactHashBytesScanned", compact.stream().mapToLong(CoreCompactFile.Statistics::hashBytesRead).sum());
-        result.put("coreCompactDecodedBindings", compact.stream().mapToLong(CoreCompactFile.Statistics::decodedBindings).sum());
-        result.put("coreCompactDecodedModules", compact.stream().mapToLong(CoreCompactFile.Statistics::decodedModules).sum());
-        result.put("coreCompactPhysicalMappingOpens", compact.stream().mapToLong(CoreCompactFile.Statistics::physicalOpens).sum());
-        result.put("coreCompactMappingCacheHits", compact.stream().mapToLong(CoreCompactFile.Statistics::cacheHits).sum());
+        var compact = new ArrayList<CoreCompactFile.Statistics>();
+        for (var counter : compactTotals) compact.add(counter.statistics());
+        long coreUnitSourceOpens = 0;
+        for (var item : counters) coreUnitSourceOpens += item.sourceOpens();
+        result.put("coreUnitSourceOpens", coreUnitSourceOpens);
+        long coreUnitDirectoryOpens = 0;
+        for (var item : counters) coreUnitDirectoryOpens += item.directoryOpens();
+        result.put("coreUnitDirectoryOpens", coreUnitDirectoryOpens);
+        long coreUnitSourceMappedBytes = 0;
+        for (var item : counters) coreUnitSourceMappedBytes += item.sourceMappedBytes();
+        result.put("coreUnitSourceMappedBytes", coreUnitSourceMappedBytes);
+        long coreUnitDirectoryMappedBytes = 0;
+        for (var item : counters) coreUnitDirectoryMappedBytes += item.directoryMappedBytes();
+        result.put("coreUnitDirectoryMappedBytes", coreUnitDirectoryMappedBytes);
+        long coreUnitSourceByteReads = 0;
+        for (var item : counters) coreUnitSourceByteReads += item.sourceByteReads();
+        result.put("coreUnitSourceByteReads", coreUnitSourceByteReads);
+        long coreUnitDirectoryByteReads = 0;
+        for (var item : counters) coreUnitDirectoryByteReads += item.directoryByteReads();
+        result.put("coreUnitDirectoryByteReads", coreUnitDirectoryByteReads);
+        long coreUnitHashBytesScanned = 0;
+        for (var item : counters) coreUnitHashBytesScanned += item.hashBytesScanned();
+        result.put("coreUnitHashBytesScanned", coreUnitHashBytesScanned);
+        long coreUnitDecodedBindings = 0;
+        for (var item : counters) coreUnitDecodedBindings += item.decodedBindings();
+        result.put("coreUnitDecodedBindings", coreUnitDecodedBindings);
+        long coreUnitDecodedModules = 0;
+        for (var item : counters) coreUnitDecodedModules += item.decodedModules();
+        result.put("coreUnitDecodedModules", coreUnitDecodedModules);
+        long coreUnitDecodedBytes = 0;
+        for (var item : counters) coreUnitDecodedBytes += item.decodedBytes();
+        result.put("coreUnitDecodedBytes", coreUnitDecodedBytes);
+        long coreUnitMetadataBytes = 0;
+        for (var item : counters) coreUnitMetadataBytes += item.metadataBytes();
+        result.put("coreUnitMetadataBytes", coreUnitMetadataBytes);
+        long coreUnitVerifiedModuleBytes = 0;
+        for (var item : counters) coreUnitVerifiedModuleBytes += item.verifiedModuleBytes();
+        result.put("coreUnitVerifiedModuleBytes", coreUnitVerifiedModuleBytes);
+        long coreUnitPhysicalMappingOpens = 0;
+        for (var item : counters) coreUnitPhysicalMappingOpens += item.physicalMappingOpens();
+        result.put("coreUnitPhysicalMappingOpens", coreUnitPhysicalMappingOpens);
+        long coreUnitMappingCacheHits = 0;
+        for (var item : counters) coreUnitMappingCacheHits += item.mappingCacheHits();
+        result.put("coreUnitMappingCacheHits", coreUnitMappingCacheHits);
+        long coreCompactModuleOpens = 0;
+        for (var item : compact) coreCompactModuleOpens += item.acquisitions();
+        result.put("coreCompactModuleOpens", coreCompactModuleOpens);
+        long coreCompactMappedBytes = 0;
+        for (var item : compact) coreCompactMappedBytes += item.mappedBytes();
+        result.put("coreCompactMappedBytes", coreCompactMappedBytes);
+        long coreCompactDirectoryBytesRead = 0;
+        for (var item : compact) coreCompactDirectoryBytesRead += item.directoryBytesRead();
+        result.put("coreCompactDirectoryBytesRead", coreCompactDirectoryBytesRead);
+        long coreCompactMemberInflations = 0;
+        for (var item : compact) coreCompactMemberInflations += item.memberInflations();
+        result.put("coreCompactMemberInflations", coreCompactMemberInflations);
+        long coreCompactInflatedBytes = 0;
+        for (var item : compact) coreCompactInflatedBytes += item.inflatedBytes();
+        result.put("coreCompactInflatedBytes", coreCompactInflatedBytes);
+        long coreCompactCompressedBytesRead = 0;
+        for (var item : compact) coreCompactCompressedBytesRead += item.compressedBytesRead();
+        result.put("coreCompactCompressedBytesRead", coreCompactCompressedBytesRead);
+        long coreCompactSlabCacheHits = 0;
+        for (var item : compact) coreCompactSlabCacheHits += item.slabCacheHits();
+        result.put("coreCompactSlabCacheHits", coreCompactSlabCacheHits);
+        long coreCompactVerifiedStoredBytes = 0;
+        for (var item : compact) coreCompactVerifiedStoredBytes += item.verifiedStoredBytes();
+        result.put("coreCompactVerifiedStoredBytes", coreCompactVerifiedStoredBytes);
+        long coreCompactHeaderBytesRead = 0;
+        for (var item : compact) coreCompactHeaderBytesRead += item.headerBytesRead();
+        result.put("coreCompactHeaderBytesRead", coreCompactHeaderBytesRead);
+        long coreCompactLookupBytesRead = 0;
+        for (var item : compact) coreCompactLookupBytesRead += item.lookupBytesRead();
+        result.put("coreCompactLookupBytesRead", coreCompactLookupBytesRead);
+        long coreCompactDataBytesRead = 0;
+        for (var item : compact) coreCompactDataBytesRead += item.dataBytesRead();
+        result.put("coreCompactDataBytesRead", coreCompactDataBytesRead);
+        long coreCompactStringBytesRead = 0;
+        for (var item : compact) coreCompactStringBytesRead += item.stringBytesRead();
+        result.put("coreCompactStringBytesRead", coreCompactStringBytesRead);
+        long coreCompactDebugBytesRead = 0;
+        for (var item : compact) coreCompactDebugBytesRead += item.debugBytesRead();
+        result.put("coreCompactDebugBytesRead", coreCompactDebugBytesRead);
+        long coreCompactHashBytesScanned = 0;
+        for (var item : compact) coreCompactHashBytesScanned += item.hashBytesRead();
+        result.put("coreCompactHashBytesScanned", coreCompactHashBytesScanned);
+        long coreCompactDecodedBindings = 0;
+        for (var item : compact) coreCompactDecodedBindings += item.decodedBindings();
+        result.put("coreCompactDecodedBindings", coreCompactDecodedBindings);
+        long coreCompactDecodedModules = 0;
+        for (var item : compact) coreCompactDecodedModules += item.decodedModules();
+        result.put("coreCompactDecodedModules", coreCompactDecodedModules);
+        long coreCompactPhysicalMappingOpens = 0;
+        for (var item : compact) coreCompactPhysicalMappingOpens += item.physicalOpens();
+        result.put("coreCompactPhysicalMappingOpens", coreCompactPhysicalMappingOpens);
+        long coreCompactMappingCacheHits = 0;
+        for (var item : compact) coreCompactMappingCacheHits += item.cacheHits();
+        result.put("coreCompactMappingCacheHits", coreCompactMappingCacheHits);
         result.put("looseConsumerBindingHeaders", consumerBindings.size()); result.putAll(consumerStatistics.get()); return result;
     }
     @Override public void close() { try { sources.close(); } finally { consumerSources.forEach(CoreJsonIndex::close); } }

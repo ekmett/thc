@@ -61,7 +61,9 @@ public final class CoreModules {
         public void addPackageProvenance(PackageScalarAdmission admission) { packageProvenance(admission); }
         private void packageProvenance(PackageScalarAdmission admission) {
             var link = admission.link();
-            require(packageScalarLinks.values().stream().noneMatch(value -> !value.getUnit().equals(link.getUnit()) && value.getComponentSha256().equals(link.getComponentSha256())), "Package C entry namespace belongs to another unit: " + link.getComponentSha256());
+            boolean unique = true;
+            for (var value : packageScalarLinks.values()) if (!value.getUnit().equals(link.getUnit()) && value.getComponentSha256().equals(link.getComponentSha256())) { unique = false; break; }
+            require(unique, "Package C entry namespace belongs to another unit: " + link.getComponentSha256());
             var previous = packageScalarLinks.putIfAbsent(link.getUnit(), link);
             require(previous == null || previous.same(link), "Conflicting package C component: " + link.getUnit());
             packageScalarProofs.computeIfAbsent(link.getUnit(), ignored -> new LinkedHashSet<>()).addAll(admission.proved());
@@ -94,7 +96,9 @@ public final class CoreModules {
             }
             Object supplied = module.get("providedModules");
             if (supplied != null) {
-                require(fragment && supplied instanceof List<?> values && values.stream().allMatch(item -> item instanceof String s && !s.chars().allMatch(c -> Character.isWhitespace(c) || Character.isSpaceChar(c))), "Invalid provided-module interface closure");
+                boolean valid = fragment && supplied instanceof List<?>;
+                if (valid) for (Object item : (List<?>) supplied) if (!(item instanceof String s) || blank(s)) { valid = false; break; }
+                require(valid, "Invalid provided-module interface closure");
                 providedModules.addAll((List<String>) supplied);
             }
             for (String key : List.of("sourceFiles", "sourceSpans")) {
@@ -121,7 +125,12 @@ public final class CoreModules {
             require(count != 0, "No Core modules supplied");
             var missing = new HashSet<>(providedModules); missing.removeAll(completeModules); missing.removeAll(availableModules);
             require(missing.isEmpty(), "Interface closure lacks its exact complete provided modules: " + missing);
-            packageScalarLinks.forEach((unit, link) -> require(Objects.equals(packageScalarProofs.get(unit), new HashSet<>(link.getAbi().stream().map(PackageScalarSignature::entry).toList())), "Package C ABI lacks complete typed import provenance: " + unit));
+            for (var entry : packageScalarLinks.entrySet()) {
+                var proved = packageScalarProofs.get(entry.getKey());
+                var required = new HashSet<String>();
+                for (var signature : entry.getValue().getAbi()) required.add(signature.entry());
+                require(Objects.equals(proved, required), "Package C ABI lacks complete typed import provenance: " + entry.getKey());
+            }
             var result = new LinkedHashMap<String,Object>();
             result.put("schema", 1L); result.put("ghc", "9.14.1"); result.put("module", "THC.Bundle");
             result.put("bindings", new ArrayList<>(bindings.values())); result.put("constructors", new ArrayList<>(constructors.values())); result.put("bindingOrigins", bindingOrigins);
@@ -164,7 +173,12 @@ public final class CoreModules {
                         var compact = CompactOp.Companion.named(name); if (compact != null && compact.getAdds()) for (String failure : CompactOp.Companion.getFailures()) reference(failure, Set.of());
                         if (name.equals("atomically#")) reference(STMOp.NESTED, Set.of());
                     }
-                    case "lam" -> visit((List<Object>) expression.get(2), boundWith(bound, ((List<Map<String,Object>>) expression.get(1)).stream().map(binding -> (String) binding.get("id")).toList()));
+                    case "lam" -> {
+                        var body = (List<Object>) expression.get(2);
+                        var ids = new ArrayList<String>();
+                        for (var binding : (List<Map<String,Object>>) expression.get(1)) ids.add((String) binding.get("id"));
+                        visit(body, boundWith(bound, ids));
+                    }
                     case "app" -> {
                         var function = (List<Object>) expression.get(1); CoreExceptionPayload.validate(expression);
                         var metadata = CoreRepresentations.INSTANCE.metadata(expression); boolean foreignDescriptor = metadata != null && metadata.get("foreignCall") instanceof Map<?,?>;
@@ -181,7 +195,8 @@ public final class CoreModules {
                         for (var argument : (List<List<Object>>) expression.get(2)) visit(argument, bound);
                     }
                     case "let" -> {
-                        var group = (List<Map<String,Object>>) expression.get(2); var ids = group.stream().map(binding -> (String) binding.get("id")).toList();
+                        var group = (List<Map<String,Object>>) expression.get(2); var ids = new ArrayList<String>();
+                        for (var binding : group) ids.add((String) binding.get("id"));
                         var rhsScope = Objects.equals(expression.get(1), true) ? boundWith(bound, ids) : bound;
                         for (var binding : group) visit((List<Object>) binding.get("expr"), rhsScope);
                         visit((List<Object>) expression.get(3), boundWith(bound, ids));
@@ -201,7 +216,9 @@ public final class CoreModules {
         var linker = new Linker(); var roots = new LinkedHashSet<>(entries);
         if (module.get("managedRegistrations") instanceof List<?> registrations) for (Object raw : registrations) for (var export : ((ManagedExportAdmission) raw).getExports()) roots.add(export.binder());
         for (String entry : roots) {
-            var exact = byId.get(entry); var matches = exact != null ? List.of(exact) : bindings.stream().filter(binding -> Objects.equals(binding.get("name"), entry)).toList();
+            var exact = byId.get(entry); var matches = new ArrayList<Map<String,Object>>();
+            if (exact != null) matches.add(exact);
+            else for (var binding : bindings) if (Objects.equals(binding.get("name"), entry)) matches.add(binding);
             require(matches.size() == 1, "Missing or ambiguous entry: " + entry); String root = (String) matches.getFirst().get("id"); if (reachable.add(root)) pending.addLast(root);
         }
         while (!pending.isEmpty()) {
@@ -212,9 +229,23 @@ public final class CoreModules {
         require(missingConstructors.isEmpty(), "Unlinked Core constructors: " + missingDescription(missingConstructors));
         var archived = module.get("archiveBindings") instanceof Map<?,?> map ? (Map<String,String>) map : Map.<String,String>of();
         for (String id : reachable) { String owner = archived.get(id); if (owner != null) throw new IllegalArgumentException("Unsupported foreign code/registration for " + owner + ": Core schema 2 is archive-only; native stubs, initializers, finalizers and callbacks are not linked"); }
-        var result = without(module, "archiveBindings"); result.put("bindings", bindings.stream().filter(binding -> reachable.contains(binding.get("id"))).toList()); result.put("selectedForeignExceptionBridge", linker.exceptionBridge); return result;
+        var result = without(module, "archiveBindings");
+        var selected = new ArrayList<Map<String,Object>>();
+        for (var binding : bindings) if (reachable.contains(binding.get("id"))) selected.add(binding);
+        result.put("bindings", Collections.unmodifiableList(selected)); result.put("selectedForeignExceptionBridge", linker.exceptionBridge); return result;
     }
-    private static String missingDescription(Map<String,Set<String>> missing) { return String.join(", ", missing.entrySet().stream().map(entry -> entry.getKey() + " referenced by " + String.join(", ", entry.getValue())).toList()); }
+    private static String missingDescription(Map<String,Set<String>> missing) {
+        var descriptions = new ArrayList<String>();
+        for (var entry : missing.entrySet()) descriptions.add(entry.getKey() + " referenced by " + String.join(", ", entry.getValue()));
+        return String.join(", ", descriptions);
+    }
+    private static boolean blank(String value) {
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (!Character.isWhitespace(c) && !Character.isSpaceChar(c)) return false;
+        }
+        return true;
+    }
 
     /** Serialize a load request. Deferred file reads require process-local capabilities. */
     public static String request(List<String> paths, String entry) { return request(paths, entry, true, false, Main.defaultBackend(), true, false, null, null, null, false); }
@@ -229,11 +260,11 @@ public final class CoreModules {
     public static String request(List<String> paths, String entry, boolean instrument, boolean diagnosticUnsupported,
             String backend, boolean sourceNotesEnabled, boolean ioMain, String shutdownEntry, Boolean asyncExceptions,
             Map<String,String> jsonSidecars, boolean verifyArtifacts) {
-        require(shutdownEntry == null || ioMain && !shutdownEntry.chars().allMatch(c -> Character.isWhitespace(c) || Character.isSpaceChar(c)) && !shutdownEntry.equals(entry), "Executable shutdown requires a distinct IO entry");
+        require(shutdownEntry == null || ioMain && !blank(shutdownEntry) && !shutdownEntry.equals(entry), "Executable shutdown requires a distinct IO entry");
         var settings = new LinkedHashMap<String,Object>();
         settings.put("entry", entry); settings.put("instrument", instrument); settings.put("diagnosticUnsupported", diagnosticUnsupported); settings.put("backend", backend);
         settings.put("sourceNotesEnabled", sourceNotesEnabled); settings.put("verifyArtifacts", verifyArtifacts);
-        if (paths.stream().anyMatch(path -> path.startsWith("@"))) settings.put("strictLink", true);
+        for (String path : paths) if (path.startsWith("@")) { settings.put("strictLink", true); break; }
         if (ioMain) settings.put("ioMain", true); if (shutdownEntry != null) settings.put("shutdownEntry", shutdownEntry); if (asyncExceptions != null) settings.put("asyncExceptions", asyncExceptions);
         try { return jsonSidecars == null ? requestDocument(paths, settings) : indexedRequestDocument(paths, jsonSidecars, settings); }
         catch (Exception failure) { throw rethrow(failure); }
@@ -251,7 +282,7 @@ public final class CoreModules {
         require(input.get("verifyArtifacts") == null || input.get("verifyArtifacts") instanceof Boolean, "verifyArtifacts must be a Boolean");
         boolean verify = Objects.equals(input.get("verifyArtifacts"), true); Object files = input.get("indexedModuleFiles");
         if (files != null) {
-            require(files instanceof List<?> list && !list.isEmpty() && List.of("modules", "consumerModules", "targetLayout").stream().allMatch(key -> input.get(key) == null), "Indexed module request must not mix input protocols");
+            require(files instanceof List<?> list && !list.isEmpty() && input.get("modules") == null && input.get("consumerModules") == null && input.get("targetLayout") == null, "Indexed module request must not mix input protocols");
             require(input.get("packageManifest") != null || input.get("packageManifestSha256") == null && input.get("packageCapability") == null, "Orphan package manifest identity");
             var adapter = new CoreJsonBindings(!Objects.equals(input.get("sourceNotesEnabled"), false)); var opened = new ArrayList<CoreJsonIndex>();
             try {
@@ -279,7 +310,10 @@ public final class CoreModules {
             require(manifest instanceof String && input.get("modules") == null && input.get("targetLayout") == null, "Package request must not mix manifest and inline modules");
             String expected = text(input.get("packageManifestSha256"), "Missing package manifest identity"), supplied = text(input.get("packageCapability"), "Missing package request capability");
             require(sameCapability(supplied, packageCapability((String) manifest, expected, verify)), "Invalid package request capability");
-            Object consumers = input.get("consumerModules"); require(consumers == null || consumers instanceof List<?> list && list.stream().allMatch(value -> value instanceof Map<?,?>), "Invalid loose package consumers");
+            Object consumers = input.get("consumerModules");
+            boolean validConsumers = consumers == null || consumers instanceof List<?>;
+            if (validConsumers && consumers != null) for (Object value : (List<?>) consumers) if (!(value instanceof Map<?,?>)) { validConsumers = false; break; }
+            require(validConsumers, "Invalid loose package consumers");
             var result = CorePackageManifest.visitRuntimeModules((String) manifest, expected, !Objects.equals(input.get("sourceNotesEnabled"), false), verify, indexed,
                     module -> accept.accept(with(module, "foreignExceptionBridgeUnit", input.get("foreignExceptionBridgeUnit"))));
             require(Objects.equals(input.get("foreignExceptionBridgeUnit"), result.getForeignExceptionBridgeUnit()), "Package bridge selection changed after request");
@@ -323,7 +357,9 @@ public final class CoreModules {
         var loose = without(input, "packageManifest", "packageManifestSha256", "packageCapability", "consumerModules");
         if (files != null) visitRequestModules(loose, indexed, accept);
         else if (consumers != null) {
-            require(consumers instanceof List<?> list && list.stream().allMatch(value -> value instanceof Map<?,?>), "Invalid loose package consumers");
+            boolean validConsumers = consumers instanceof List<?>;
+            if (validConsumers) for (Object value : (List<?>) consumers) if (!(value instanceof Map<?,?>)) { validConsumers = false; break; }
+            require(validConsumers, "Invalid loose package consumers");
             visitRequestModules(with(loose, "modules", consumers), indexed, accept);
         }
     }
@@ -333,7 +369,10 @@ public final class CoreModules {
     }
     private static String indexedRequestDocument(List<String> paths, Map<String,String> sidecars, Map<String,Object> settings) throws java.io.IOException {
         boolean verify = Objects.equals(settings.get("verifyArtifacts"), true);
-        var manifests = paths.stream().filter(path -> path.startsWith("@")).toList(); var loose = paths.stream().filter(path -> !path.startsWith("@")).toList();
+        var manifests = new ArrayList<String>();
+        for (String path : paths) if (path.startsWith("@")) manifests.add(path);
+        var loose = new ArrayList<String>();
+        for (String path : paths) if (!path.startsWith("@")) loose.add(path);
         require(manifests.size() <= 1 && new HashSet<>(paths).size() == paths.size() && !loose.isEmpty() && sidecars.keySet().equals(new HashSet<>(loose)), "Explicit JSON sidecars require exactly the listed loose JSON inputs and at most one package manifest");
         var seenPaths = new HashSet<String>(); var files = new ArrayList<Map<String,Object>>();
         for (String raw : loose) {
@@ -347,7 +386,9 @@ public final class CoreModules {
     }
     private static String requestDocument(List<String> paths, Map<String,Object> settings) throws java.io.IOException {
         boolean verify = Objects.equals(settings.get("verifyArtifacts"), true);
-        var manifests = paths.stream().filter(path -> path.startsWith("@")).toList(); require(manifests.size() <= 1, "A Core request accepts at most one package manifest");
+        var manifests = new ArrayList<String>();
+        for (String path : paths) if (path.startsWith("@")) manifests.add(path);
+        require(manifests.size() <= 1, "A Core request accepts at most one package manifest");
         String manifest = manifests.isEmpty() ? null : manifests.getFirst().substring(1);
         var options = new StringBuilder(); Json.appendObjectDocument(options, Json.stringify(settings));
         if (manifest != null) {
@@ -375,7 +416,13 @@ public final class CoreModules {
         return document.append("]}").toString();
     }
     private static String manifestDocument(Map<String,Object> settings, CorePackageManifest.VisitResult identity, boolean verify, List<String> consumers) {
-        var document = manifestSettings(settings, identity, verify); if (!consumers.isEmpty()) document.put("consumerModules", consumers.stream().map(Json::parse).toList()); return Json.stringify(document);
+        var document = manifestSettings(settings, identity, verify);
+        if (!consumers.isEmpty()) {
+            var modules = new ArrayList<Object>();
+            for (String consumer : consumers) modules.add(Json.parse(consumer));
+            document.put("consumerModules", Collections.unmodifiableList(modules));
+        }
+        return Json.stringify(document);
     }
     private static String readText(String path) throws java.io.IOException { return new String(Files.readAllBytes(Path.of(path)), StandardCharsets.UTF_8); }
     @SuppressWarnings("unchecked") private static <E extends Throwable> RuntimeException rethrow(Throwable failure) throws E { throw (E) failure; }

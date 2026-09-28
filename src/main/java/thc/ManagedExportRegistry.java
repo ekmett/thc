@@ -42,7 +42,8 @@ public final class ManagedExportRegistry {
             var program = new CoreUnitProgram(language, directory, input, null, backend, backend.equals("bytecode"), owner);
             try {
                 var registrations = program.registerStartup();
-                var exports = registrations.stream().flatMap(admission -> admission.getExports().stream()).toList();
+                var exports = new ArrayList<ManagedExportSignature>();
+                for (var admission : registrations) exports.addAll(admission.getExports());
                 if (exports.isEmpty()) throw new IllegalArgumentException("No verified static foreign exports supplied");
                 return new Loaded(program, ManagedExportPlan.checked(exports, program::signatureBindings), registrations);
             } catch (Throwable failure) { program.close(); throw failure; }

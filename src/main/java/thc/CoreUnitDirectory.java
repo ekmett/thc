@@ -102,7 +102,8 @@ public final class CoreUnitDirectory {
         private CoreJsonSymbols reader(String unit) {
             check(!closed, "Core unit sources are closed");
             return readers.computeIfAbsent(unit, ignored -> {
-                var matches = directory.units.stream().filter(record -> record.id.equals(unit)).toList();
+                var matches = new ArrayList<UnitRecord>();
+                for (var record : directory.units) if (record.id.equals(unit)) matches.add(record);
                 if (matches.size() != 1) throw error("Expected one unit: " + unit);
                 var record = matches.getFirst();
                 if (record.json == null) throw error("Moduleless unit has no JSON bindings");
@@ -165,8 +166,16 @@ public final class CoreUnitDirectory {
             });
             verified.add(module);
         }
-        public synchronized List<CoreJsonSymbols.Counters> counters() { return readers.values().stream().map(CoreJsonSymbols::getCounters).toList(); }
-        public synchronized List<CoreCompactFile.Counters> compactCounters() { return compactReaders.values().stream().map(CoreCompactModule::getCounters).toList(); }
+        public synchronized List<CoreJsonSymbols.Counters> counters() {
+            var counters = new ArrayList<CoreJsonSymbols.Counters>();
+            for (var reader : readers.values()) counters.add(reader.getCounters());
+            return Collections.unmodifiableList(counters);
+        }
+        public synchronized List<CoreCompactFile.Counters> compactCounters() {
+            var counters = new ArrayList<CoreCompactFile.Counters>();
+            for (var reader : compactReaders.values()) counters.add(reader.getCounters());
+            return Collections.unmodifiableList(counters);
+        }
         public synchronized void close() {
             if (closed) return;
             closed = true; metadata.clear(); verified.clear();
@@ -185,9 +194,12 @@ public final class CoreUnitDirectory {
     /** Null retains legacy package loading; never discovers or converts sidecars. */
     public static CoreUnitDirectory read(Map<?,?> document) {
         var rawUnits = list(document.get("units"), "Missing package units");
-        boolean direct = rawUnits.stream().anyMatch(raw -> raw instanceof Map<?,?> unit &&
-                (unit.containsKey("json") || unit.containsKey("symbols") || unit.get("modules") instanceof List<?> modules &&
-                        modules.stream().anyMatch(value -> value instanceof Map<?,?> module && module.containsKey("compact"))));
+        boolean direct = false;
+        unitScan: for (Object raw : rawUnits) if (raw instanceof Map<?,?> unit) {
+            if (unit.containsKey("json") || unit.containsKey("symbols")) { direct = true; break; }
+            if (unit.get("modules") instanceof List<?> modules) for (Object value : modules)
+                if (value instanceof Map<?,?> module && module.containsKey("compact")) { direct = true; break unitScan; }
+        }
         if (!direct) return null;
         require(Objects.equals(document.get("format"), "thc-core-packages") && Objects.equals(document.get("schema"), 1L) &&
                 Objects.equals(document.get("ghc"), "9.14.1"), "Core package manifest requires schema 1 / GHC 9.14.1");
@@ -200,9 +212,13 @@ public final class CoreUnitDirectory {
             String id = text(unit.get("id"), "Missing GHC unit ID");
             require(!id.isEmpty() && unitIds.add(id), "Invalid or duplicate GHC unit ID: " + id);
             var depends = list(unit.get("depends"), "Missing GHC unit dependencies");
-            require(depends.stream().allMatch(value -> value instanceof String dependency && !dependency.isEmpty()) &&
+            boolean validDepends = true;
+            for (Object value : depends) if (!(value instanceof String dependency) || dependency.isEmpty()) { validDepends = false; break; }
+            require(validDepends &&
                     new HashSet<>(depends).size() == depends.size(), "Invalid dependencies for GHC unit " + id);
-            List<String> dependencies = depends.stream().map(value -> (String) value).toList();
+            var dependencyNames = new ArrayList<String>();
+            for (Object value : depends) dependencyNames.add((String) value);
+            List<String> dependencies = Collections.unmodifiableList(dependencyNames);
             var rawModules = list(unit.get("modules"), "Missing unit modules");
             if (rawModules.isEmpty() && !unit.containsKey("json") && !unit.containsKey("symbols")) {
                 units.add(new UnitRecord(id, dependencies, null, null, List.of(),
@@ -210,10 +226,12 @@ public final class CoreUnitDirectory {
                 continue;
             }
             require(!unit.containsKey("bundle"), "Only moduleless legacy units may accompany direct unit pairs: " + id);
-            boolean compact = rawModules.stream().anyMatch(value -> value instanceof Map<?,?> module && module.containsKey("compact"));
-            require(!compact || !unit.containsKey("json") && !unit.containsKey("symbols") &&
-                    rawModules.stream().allMatch(value -> value instanceof Map<?,?> module && module.containsKey("compact")),
-                    "Mixed compact and JSON storage within GHC unit: " + id);
+            boolean compact = false;
+            for (Object value : rawModules) if (value instanceof Map<?,?> module && module.containsKey("compact")) { compact = true; break; }
+            boolean consistent = !compact || !unit.containsKey("json") && !unit.containsKey("symbols");
+            if (compact && consistent) for (Object value : rawModules)
+                if (!(value instanceof Map<?,?> module) || !module.containsKey("compact")) { consistent = false; break; }
+            require(consistent, "Mixed compact and JSON storage within GHC unit: " + id);
             var names = new HashSet<String>();
             long previousEnd = 0;
             var modules = new ArrayList<ModuleRecord>();
@@ -224,8 +242,10 @@ public final class CoreUnitDirectory {
                         module.get("sha256") instanceof String hash && hash.matches("[0-9a-f]{64}"), "Invalid module directory record: " + id + ":" + name);
                 Storage storage;
                 if (compact) {
-                    require(module.keySet().stream().noneMatch(Set.of("start", "end", "bindingsStart", "bindingsEnd", "metadataStart", "metadataEnd",
-                            "sourceMetadataStart", "sourceMetadataEnd", "index")::contains), "Compact module contains JSON storage extents");
+                    var jsonFields = Set.of("start", "end", "bindingsStart", "bindingsEnd", "metadataStart", "metadataEnd", "sourceMetadataStart", "sourceMetadataEnd", "index");
+                    boolean jsonExtent = false;
+                    for (Object key : module.keySet()) if (jsonFields.contains(key)) { jsonExtent = true; break; }
+                    require(!jsonExtent, "Compact module contains JSON storage extents");
                     storage = new CompactStorage(artifact(module.get("compact"), false, true, artifactPaths));
                 } else {
                     var span = new CoreJsonSymbols.ModuleSpan(offset(module, "start"), offset(module, "end"), offset(module, "bindingsStart"), offset(module, "bindingsEnd"));
@@ -258,8 +278,15 @@ public final class CoreUnitDirectory {
                     !compact && ((Map<?,?>) unit.get("symbols")).containsKey("format") ? CoreJsonSymbols.Format.MD5_UTF8_U64LE : CoreJsonSymbols.Format.TEXT));
         }
         Object bridge = document.get("foreignExceptionBridgeUnit");
-        require(bridge == null || bridge instanceof String name && !name.chars().allMatch(c -> Character.isWhitespace(c) || Character.isSpaceChar(c)), "Invalid foreign exception bridge unit");
+        require(bridge == null || bridge instanceof String name && !blank(name), "Invalid foreign exception bridge unit");
         return new CoreUnitDirectory(units, (String) bridge, layout);
+    }
+    private static boolean blank(String value) {
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (!Character.isWhitespace(c) && !Character.isSpaceChar(c)) return false;
+        }
+        return true;
     }
     private static Artifact artifact(Object raw, boolean symbols, boolean compact, Set<Path> paths) {
         var record = record(raw, "Missing unit artifact");

@@ -40,7 +40,13 @@ public final class ManagedExportAdmission {
             var binder = identity(export.get("binder"));
             require(Objects.equals(binder.get("unit"), unit) && Objects.equals(binder.get("module"), name) && Objects.equals(binder.get("namespace"), "value"), "Static export binder has a different owner");
             roots.add(binder); String id = unit + ":" + name + "." + binder.get("occurrence");
-            require(binding == null ? bindings.stream().filter(value -> Objects.equals(value.get("id"), id)).count() == 1 : Objects.equals(binding.apply(id).get("id"), id), "Static export does not resolve to one exact Core binder: " + id);
+            boolean exact;
+            if (binding == null) {
+                long matches = 0;
+                for (var value : bindings) if (Objects.equals(value.get("id"), id)) matches++;
+                exact = matches == 1;
+            } else exact = Objects.equals(binding.apply(id).get("id"), id);
+            require(exact, "Static export does not resolve to one exact Core binder: " + id);
             String symbol = text(export.get("symbol")); require(names.add(symbol), "Duplicate static export symbol: " + unit + ":" + name + "/" + symbol);
             require(Objects.equals(export.get("convention"), "ccall") && Objects.equals(export.get("normalizationRole"), "representational"), "Unsupported static export convention/normalization");
             type(export.get("declaredType")); var remaining = type(export.get("normalizedType"));

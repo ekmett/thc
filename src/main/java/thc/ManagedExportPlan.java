@@ -34,10 +34,14 @@ public final class ManagedExportPlan {
             if (admission != null) admissions.add(admission);
             merger.add(module, admission);
         });
-        var exports = admissions.stream().flatMap(admission -> admission.getExports().stream()).toList();
+        var exports = new ArrayList<ManagedExportSignature>();
+        for (var admission : admissions) exports.addAll(admission.getExports());
         require(!exports.isEmpty(), "No verified static foreign exports supplied");
         require(layout == null || layout.getWordBytes() * 8 == 64, "Managed export target word width differs");
-        var linked = new LinkedHashMap<>(CoreModules.reachable(merger.finish(), exports.stream().map(ManagedExportSignature::binder).distinct().toList(), true));
+        var merged = merger.finish();
+        var entries = new LinkedHashSet<String>();
+        for (var export : exports) entries.add(export.binder());
+        var linked = new LinkedHashMap<>(CoreModules.reachable(merged, new ArrayList<>(entries), true));
         linked.put("instrument", !Objects.equals(input.get("instrument"), false)); linked.put("diagnosticUnsupported", false);
         linked.put("sourceNotesEnabled", !Objects.equals(input.get("sourceNotesEnabled"), false)); if (layout != null) linked.put("targetLayout", layout);
         var bindings = (List<Map<String,Object>>) linked.get("bindings");
@@ -50,7 +54,8 @@ public final class ManagedExportPlan {
         var checked = new ArrayList<ManagedExportSignature>();
         for (var export : exports) {
             var bindings = definitions.apply(export.binder());
-            var matching = bindings.stream().filter(binding -> Objects.equals(binding.get("id"), export.binder())).toList();
+            var matching = new ArrayList<Map<String,Object>>();
+            for (var binding : bindings) if (Objects.equals(binding.get("id"), export.binder())) matching.add(binding);
             if (matching.isEmpty()) throw new NoSuchElementException("Collection contains no element matching the predicate.");
             if (matching.size() != 1) throw new IllegalArgumentException("Collection contains more than one matching element.");
             var expression = (List<Object>) matching.getFirst().get("expr");
@@ -60,7 +65,11 @@ public final class ManagedExportPlan {
             else if (export.arguments().isEmpty() && !export.io()) { inputs = List.of(); result = CoreRepresentations.INSTANCE.expression(expression); }
             else throw new IllegalStateException("Managed export lacks a known Core function signature: " + export.binder());
             require(inputs.size() == export.arguments().size() + (export.io() ? 1 : 0), "Managed export Core input count differs");
-            require(inputs.subList(0, export.arguments().size()).stream().allMatch(ManagedExportPlan::boxed), "Managed export arguments must retain boxed scalar representation");
+            boolean boxedArguments = true;
+            for (var argument : inputs.subList(0, export.arguments().size())) {
+                if (!boxed(argument)) { boxedArguments = false; break; }
+            }
+            require(boxedArguments, "Managed export arguments must retain boxed scalar representation");
             if (export.io()) {
                 var state = inputs.getLast(); var fields = result.getComponents();
                 require(state.getKind() == CoreKind.VOID && Objects.equals(state.getPrimReps(), List.of()) && !state.isAggregate() && result.isTuple() && fields != null && fields.size() == 2 && fields.getFirst().getKind() == CoreKind.VOID && Objects.equals(fields.getFirst().getPrimReps(), List.of()) && !fields.getFirst().isAggregate() && boxed(fields.get(1)) && Objects.equals(result.getPrimReps(), List.of("BoxedRep (Just Lifted)")), "Managed IO export requires its exact state/boxed-result tuple");

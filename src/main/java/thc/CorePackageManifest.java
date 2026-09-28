@@ -38,8 +38,9 @@ public final class CorePackageManifest {
             var names = new ArrayList<String>(); names.add(name);
             var index = moduleIndex(id, module);
             if (index != null) names.add((String) index.get("path"));
-            require(names.stream().allMatch(path -> safeRelative(path) && !Set.of("manifest.json", "inplace-manifest.json").contains(path)),
-                    "Invalid module/index path in " + id + ": " + names);
+            boolean valid = true;
+            for (String path : names) if (!safeRelative(path) || Set.of("manifest.json", "inplace-manifest.json").contains(path)) { valid = false; break; }
+            require(valid, "Invalid module/index path in " + id + ": " + names);
             paths.addAll(names);
         }
         return paths;
@@ -78,8 +79,17 @@ public final class CorePackageManifest {
         catch (NoSuchAlgorithmException failure) { return rethrow(failure); }
     }
     private static boolean safeRelative(String path) {
-        return !path.isEmpty() && !path.startsWith("/") && !path.matches("^[A-Za-z]:.*") && path.indexOf('\\') < 0 &&
-                path.chars().noneMatch(c -> c < 32) && Arrays.stream(path.split("/", -1)).allMatch(part -> !part.isEmpty() && !part.equals(".") && !part.equals(".."));
+        if (path.isEmpty() || path.startsWith("/") || path.matches("^[A-Za-z]:.*") || path.indexOf('\\') >= 0) return false;
+        for (int i = 0; i < path.length(); i++) if (path.charAt(i) < 32) return false;
+        for (String part : path.split("/", -1)) if (part.isEmpty() || part.equals(".") || part.equals("..")) return false;
+        return true;
+    }
+    private static boolean blank(String value) {
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (!Character.isWhitespace(c) && !Character.isSpaceChar(c)) return false;
+        }
+        return true;
     }
     private static byte[] artifact(Path root, String relative) throws IOException {
         var raw = Path.of(relative);
@@ -100,7 +110,12 @@ public final class CorePackageManifest {
         byte[] bytes = Files.readAllBytes(file);
         if (verifyArtifacts) require(digest(bytes).equals(expected), "Core ZIP bundle hash mismatch: " + id + " at " + location);
         List<String> centralNames;
-        try (var archive = new ZipFile(file.toFile())) { centralNames = archive.stream().map(ZipEntry::getName).toList(); }
+        try (var archive = new ZipFile(file.toFile())) {
+            var names = new ArrayList<String>();
+            var entries = archive.entries();
+            while (entries.hasMoreElements()) names.add(entries.nextElement().getName());
+            centralNames = Collections.unmodifiableList(names);
+        }
         catch (IOException failure) { throw new IllegalArgumentException("Invalid ZIP bundle for " + id + " at " + location, failure); }
         return new VerifiedBundle(bytes, centralNames);
     }
@@ -157,12 +172,15 @@ public final class CorePackageManifest {
             require(Objects.equals(document.get("format"), "thc-core-packages") && Objects.equals(document.get("schema"), 1L) &&
                     Objects.equals(document.get("ghc"), "9.14.1"), "Core package manifest requires schema 1 / GHC 9.14.1: " + path);
             var units = list(document.get("units"), "Missing package units: " + path);
-            boolean indexed = units.stream().anyMatch(raw -> raw instanceof Map<?,?> unit && (unit.containsKey("json") || unit.containsKey("symbols") ||
-                    unit.get("modules") instanceof List<?> modules && modules.stream().anyMatch(item -> item instanceof Map<?,?> module &&
-                            (module.containsKey("index") || module.containsKey("compact")))));
+            boolean indexed = false;
+            unitScan: for (Object raw : units) if (raw instanceof Map<?,?> unit) {
+                if (unit.containsKey("json") || unit.containsKey("symbols")) { indexed = true; break; }
+                if (unit.get("modules") instanceof List<?> modules) for (Object item : modules)
+                    if (item instanceof Map<?,?> module && (module.containsKey("index") || module.containsKey("compact"))) { indexed = true; break unitScan; }
+            }
             if (!indexed && !forceDescriptor) return null;
             Object bridge = document.get("foreignExceptionBridgeUnit");
-            require(bridge == null || bridge instanceof String text && !text.chars().allMatch(c -> Character.isWhitespace(c) || Character.isSpaceChar(c)), "Invalid foreign exception bridge unit");
+            require(bridge == null || bridge instanceof String text && !blank(text), "Invalid foreign exception bridge unit");
             return new VisitResult(null, verifyArtifacts ? digest(bytes) : "", path.toString(), (String) bridge);
         } catch (IOException failure) { return rethrow(failure); }
     }
@@ -189,7 +207,7 @@ public final class CorePackageManifest {
             require(Objects.equals(document.get("format"), "thc-core-packages") && Objects.equals(document.get("schema"), 1L) &&
                     Objects.equals(document.get("ghc"), "9.14.1"), "Core package manifest requires schema 1 / GHC 9.14.1: " + manifest);
             Object bridgeUnit = document.get("foreignExceptionBridgeUnit");
-            require(bridgeUnit == null || bridgeUnit instanceof String bridge && !bridge.chars().allMatch(c -> Character.isWhitespace(c) || Character.isSpaceChar(c)), "Invalid foreign exception bridge unit");
+            require(bridgeUnit == null || bridgeUnit instanceof String bridge && !blank(bridge), "Invalid foreign exception bridge unit");
             var units = list(document.get("units"), "Missing package units: " + manifest);
             var seenUnits = new HashSet<String>();
             record ModuleIdentity(String unit, String name) {}
@@ -204,11 +222,14 @@ public final class CorePackageManifest {
                     String id = text(unit.get("id"), "Missing GHC unit ID: " + manifest);
                     require(!id.isEmpty() && seenUnits.add(id), "Invalid or duplicate GHC unit ID: " + id);
                     var depends = list(unit.get("depends"), "Missing dependencies for GHC unit " + id);
-                    require(depends.stream().allMatch(item -> item instanceof String dependency && !dependency.isEmpty()) && new HashSet<>(depends).size() == depends.size(),
+                    boolean validDepends = true;
+                    for (Object item : depends) if (!(item instanceof String dependency) || dependency.isEmpty()) { validDepends = false; break; }
+                    require(validDepends && new HashSet<>(depends).size() == depends.size(),
                             "Invalid dependencies for GHC unit " + id);
                     var modules = list(unit.get("modules"), "Missing module list for GHC unit " + id);
-                    List<String> paths = unit.containsKey("bundle") || modules.stream().anyMatch(item -> item instanceof Map<?,?> module && module.containsKey("index"))
-                            ? inventory(id, modules) : List.of();
+                    boolean needsInventory = unit.containsKey("bundle");
+                    if (!needsInventory) for (Object item : modules) if (item instanceof Map<?,?> module && module.containsKey("index")) { needsInventory = true; break; }
+                    List<String> paths = needsInventory ? inventory(id, modules) : List.of();
                     require(new HashSet<>(paths).size() == paths.size(), "Duplicate module/index path in " + id);
                     class Consumer {
                         @SuppressWarnings("unchecked") void consume(Object item, byte[] bytes, byte[] indexBytes, boolean bundled) {

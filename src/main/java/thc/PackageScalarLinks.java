@@ -80,7 +80,13 @@ public final class PackageScalarLinks {
         String target = text(fields.get("target")); target(target);
         String componentHash = text(fields.get("componentSha256")), bitcodeHash = text(fields.get("bitcodeSha256"));
         check(HASH.matcher(componentHash).matches() && HASH.matcher(bitcodeHash).matches(), "digest");
-        String encoded = text(fields.get("bitcodeHex")); check(encoded.length() % 2 == 0 && encoded.chars().allMatch(c -> c >= '0' && c <= '9' || c >= 'a' && c <= 'f'), "bitcode encoding");
+        String encoded = text(fields.get("bitcodeHex"));
+        boolean validEncoding = encoded.length() % 2 == 0;
+        if (validEncoding) for (int i = 0; i < encoded.length(); i++) {
+            char c = encoded.charAt(i);
+            if (!(c >= '0' && c <= '9' || c >= 'a' && c <= 'f')) { validEncoding = false; break; }
+        }
+        check(validEncoding, "bitcode encoding");
         byte[] bytes = HexFormat.of().parseHex(encoded); check(bytes.length != 0 && digest(bytes).equals(bitcodeHash), "bitcode digest");
         var entries = list(fields.get("abi")); var abi = new ArrayList<PackageScalarSignature>();
         for (int index = 0; index < entries.size(); index++) {
@@ -88,25 +94,62 @@ public final class PackageScalarLinks {
             String name = text(entry.get("symbol")); check(SYMBOL.matcher(name).matches(), "C symbol");
             check(Objects.equals(entry.get("entry"), "thc_" + (nativeLink ? "native" : "scalar") + "_" + componentHash + "_" + index), "component entry namespace");
             var arguments = list(entry.get("arguments")); var admitted = nativeLink ? NATIVE_REPS : REPS;
-            check(arguments.stream().allMatch(item -> admitted(admitted, item)) && (nativeLink ? in(entry.get("result"), "void") || admitted(NATIVE_REPS, entry.get("result")) && !in(entry.get("result"), "ByteArray#", "MutableByteArray#") : admitted(REPS, entry.get("result"))), "C ABI");
+            boolean validArguments = true;
+            for (Object item : arguments) if (!admitted(admitted, item)) { validArguments = false; break; }
+            check(validArguments && (nativeLink ? in(entry.get("result"), "void") || admitted(NATIVE_REPS, entry.get("result")) && !in(entry.get("result"), "ByteArray#", "MutableByteArray#") : admitted(REPS, entry.get("result"))), "C ABI");
             String convention = nativeLink ? text(entry.get("convention")) : "ccall", safety = nativeLink ? text(entry.get("safety")) : "unsafe";
             // Temporary safe-as-unsafe policy; declared metadata stays exact.
             check(!nativeLink || in(convention, "ccall", "capi") && in(safety, "unsafe", "safe"), "unsupported C calling convention/safety");
-            abi.add(new PackageScalarSignature(name, (String) entry.get("entry"), arguments.stream().map(item -> (String) item).toList(), (String) entry.get("result"), convention, safety));
+            String entryName = (String) entry.get("entry");
+            var argumentTypes = new ArrayList<String>();
+            for (Object item : arguments) argumentTypes.add((String) item);
+            abi.add(new PackageScalarSignature(name, entryName, Collections.unmodifiableList(argumentTypes), (String) entry.get("result"), convention, safety));
         }
         var ordered = Comparator.comparing(PackageScalarSignature::symbol).thenComparing(PackageScalarSignature::convention).thenComparing(PackageScalarSignature::safety).thenComparing(item -> String.join("\u0000", item.arguments())).thenComparing(PackageScalarSignature::result);
-        check(!abi.isEmpty() && abi.equals(abi.stream().sorted(ordered).toList()) && abi.stream().map(item -> List.of(item.symbol(), item.convention(), item.safety(), item.arguments(), item.result())).distinct().count() == abi.size(), "sorted unique ABI");
+        boolean validAbi = !abi.isEmpty();
+        if (validAbi) {
+            var sorted = new ArrayList<>(abi); sorted.sort(ordered);
+            validAbi = abi.equals(sorted);
+            if (validAbi) {
+                var signatures = new HashSet<List<?>>();
+                for (var item : abi) signatures.add(List.of(item.symbol(), item.convention(), item.safety(), item.arguments(), item.result()));
+                validAbi = signatures.size() == abi.size();
+            }
+        }
+        check(validAbi, "sorted unique ABI");
         var bySymbol = new LinkedHashMap<String,List<PackageScalarSignature>>(); for (var item : abi) bySymbol.computeIfAbsent(item.symbol(), ignored -> new ArrayList<>()).add(item);
         var headerAdapted = new HashSet<String>();
         for (var group : bySymbol.entrySet()) {
             var variants = group.getValue();
-            if (variants.stream().map(item -> item.arguments().stream().map(PackageScalarLinks::pointerAbi).toList()).distinct().count() > 1) headerAdapted.add(group.getKey());
+            var pointerVariants = new HashSet<List<String>>();
+            for (var item : variants) {
+                var arguments = new ArrayList<String>();
+                for (String rep : item.arguments()) arguments.add(pointerAbi(rep));
+                pointerVariants.add(arguments);
+            }
+            if (pointerVariants.size() > 1) headerAdapted.add(group.getKey());
             check(nativeLink || variants.size() == 1, "duplicate scalar ABI symbol");
-            check(variants.stream().map(item -> List.of(item.convention(), item.safety().equals("safe") ? "unsafe" : item.safety(), item.arguments().stream().map(rep -> integerAbi(pointerAbi(rep))).toList(), item.result())).distinct().count() == 1, "conflicting C ABI variants");
-            check(variants.stream().map(item -> List.of(item.convention(), item.safety(), item.arguments().stream().map(rep -> rep.equals("MutableByteArray#") ? "ByteArray#" : rep).toList(), item.result())).distinct().count() == variants.size(), "ambiguous byte-array mutability variants");
+            var cVariants = new HashSet<List<?>>();
+            for (var item : variants) {
+                String convention = item.convention(), safety = item.safety().equals("safe") ? "unsafe" : item.safety();
+                var arguments = new ArrayList<String>();
+                for (String rep : item.arguments()) arguments.add(integerAbi(pointerAbi(rep)));
+                cVariants.add(List.of(convention, safety, arguments, item.result()));
+            }
+            check(cVariants.size() == 1, "conflicting C ABI variants");
+            var mutabilityVariants = new HashSet<List<?>>();
+            for (var item : variants) {
+                String convention = item.convention(), safety = item.safety();
+                var arguments = new ArrayList<String>();
+                for (String rep : item.arguments()) arguments.add(rep.equals("MutableByteArray#") ? "ByteArray#" : rep);
+                mutabilityVariants.add(List.of(convention, safety, arguments, item.result()));
+            }
+            check(mutabilityVariants.size() == variants.size(), "ambiguous byte-array mutability variants");
         }
         var available = partial ? PackageNativeArchives.available(module) : null;
-        var link = new PackageScalarLink(unit, target, componentHash, bitcodeHash, bytes, abi.stream().filter(item -> available == null || available.contains(item.entry())).toList(), format);
+        var selectedAbi = new ArrayList<PackageScalarSignature>();
+        for (var item : abi) if (available == null || available.contains(item.entry())) selectedAbi.add(item);
+        var link = new PackageScalarLink(unit, target, componentHash, bitcodeHash, bytes, Collections.unmodifiableList(selectedAbi), format);
         if (nativeLink && !module.containsKey("staticForeignImports")) {
             check(!module.containsKey("foreign") && !module.containsKey("staticForeignImportStubs"), "foreign products lack import provenance");
             return new PackageScalarAdmission(link, Set.of());
@@ -133,15 +176,26 @@ public final class PackageScalarLinks {
             archiveType(item.get("declaredType")); archiveType(item.get("normalizedType")); text(item.get("symbol"));
             var emitted = record(item.get("emitted"), "symbol unit convention safety arguments result");
             String name = nativeLink ? text(emitted.get("symbol")) : text(item.get("symbol"));
-            if (headerAdapted.contains(name)) check(Objects.equals(convention, "ccall") && header instanceof String s && !s.isEmpty() && s.chars().noneMatch(c -> "\u0000\n\r\"\\".indexOf(c) >= 0), "signedness variants require a retained configured C header");
-            var matches = bySymbol.getOrDefault(name, List.of()).stream().filter(signature -> Objects.equals(signature.convention(), convention) && Objects.equals(signature.safety(), item.get("safety")) && Objects.equals(emitted.get("arguments"), arguments(signature)) && Objects.equals(emitted.get("result"), result(signature))).toList();
+            if (headerAdapted.contains(name)) {
+                boolean validHeader = Objects.equals(convention, "ccall") && header instanceof String s && !s.isEmpty();
+                if (validHeader) {
+                    String text = (String) header;
+                    for (int i = 0; i < text.length(); i++) if ("\u0000\n\r\"\\".indexOf(text.charAt(i)) >= 0) { validHeader = false; break; }
+                }
+                check(validHeader, "signedness variants require a retained configured C header");
+            }
+            var matches = new ArrayList<PackageScalarSignature>();
+            for (var signature : bySymbol.getOrDefault(name, List.of()))
+                if (Objects.equals(signature.convention(), convention) && Objects.equals(signature.safety(), item.get("safety")) && Objects.equals(emitted.get("arguments"), arguments(signature)) && Objects.equals(emitted.get("result"), result(signature))) matches.add(signature);
             if (matches.size() != 1) throw new IllegalArgumentException("Unlinked typed package C import variant: " + name);
             var signature = matches.getFirst();
             check(Objects.equals(emitted.get("symbol"), name) && Objects.equals(emitted.get("unit"), unit) && Objects.equals(emitted.get("convention"), signature.convention()) && Objects.equals(convention, signature.convention()) && Objects.equals(emitted.get("safety"), signature.safety()) && Objects.equals(emitted.get("arguments"), arguments(signature)) && Objects.equals(emitted.get("result"), result(signature)), "emitted ABI differs from compiled C");
             proved.add(signature.entry());
         }
         CoreCallInventory.check(proof.get("expectedCalls"), calls(module.get("bindings")), completeBindings);
-        proved.retainAll(link.getAbi().stream().map(PackageScalarSignature::entry).toList()); return new PackageScalarAdmission(link, proved);
+        var admittedEntries = new ArrayList<String>();
+        for (var signature : link.getAbi()) admittedEntries.add(signature.entry());
+        proved.retainAll(admittedEntries); return new PackageScalarAdmission(link, proved);
     }
     private static List<String> arguments(PackageScalarSignature signature) { var args = new ArrayList<>(signature.arguments()); args.add("void"); return args; }
     private static List<String> result(PackageScalarSignature signature) { return signature.result().equals("void") ? List.of("void") : List.of("void", signature.result()); }

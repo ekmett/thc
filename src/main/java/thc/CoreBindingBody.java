@@ -21,8 +21,9 @@ public final class CoreBindingBody extends AbstractList<Object> {
             this.containsDelimitedControl = containsDelimitedControl;
             if (!(fields.get(0) instanceof String opcode)) throw new IllegalStateException("Core body header lacks its exact opcode");
             tag = opcode;
-            if (fieldCount <= 0 || fields.keySet().stream().anyMatch(index -> index < 0 || index >= fieldCount))
-                throw new IllegalArgumentException("Invalid Core body header extent");
+            if (fieldCount <= 0) throw new IllegalArgumentException("Invalid Core body header extent");
+            for (int index : fields.keySet())
+                if (index < 0 || index >= fieldCount) throw new IllegalArgumentException("Invalid Core body header extent");
         }
         public int getFieldCount() { return fieldCount; }
         public Map<Integer, Object> getFields() { return fields; }

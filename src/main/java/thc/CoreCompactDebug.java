@@ -108,7 +108,10 @@ public final class CoreCompactDebug {
                 spans.add(span);
             }
             var sources = new CoreSources(Map.of("sourceFiles", new ArrayList<>(distinctFiles.values()), "sourceSpans", spans));
-            return sources.binding(Map.of("source", spans.get(notes.primary).get("id"), "sourceNotes", spans.stream().map(span -> span.get("id")).toList()), null);
+            Object primary = spans.get(notes.primary).get("id");
+            var sourceNotes = new ArrayList<Object>();
+            for (var span : spans) sourceNotes.add(span.get("id"));
+            return sources.binding(Map.of("source", primary, "sourceNotes", Collections.unmodifiableList(sourceNotes)), null);
         } catch (Throwable failure) { return rethrow(failure); }
     }
     public String name(long bindingOffset, long slot) {

@@ -359,9 +359,12 @@ public final class Language extends TruffleLanguage<Language.State> {
                 for (var link : (List<PackageScalarLink>) linked.get("packageScalarLinks")) owner.packageCbits.link(link);
                 ExecutableProgram program = backend.equals("ast") ? new Program(Language.this, linked, async, false)
                     : new BytecodeProgram(Language.this, linked, async);
-                var value = new EntryValue(program, entry, ((Number) selected.get("arity")).intValue(), resultFault,
+                int argumentCount = ((Number) selected.get("arity")).intValue();
+                boolean processSignals = false;
+                for (var binding : bindings) if (CoreSignalForeign.dispatcher.equals(binding.get("id"))) { processSignals = true; break; }
+                var value = new EntryValue(program, entry, argumentCount, resultFault,
                     ioResult, Language.this, shutdownEntry, shutdownProof,
-                    bindings.stream().anyMatch(binding -> CoreSignalForeign.dispatcher.equals(binding.get("id"))), acceptedInputs, acceptedResult);
+                    processSignals, acceptedInputs, acceptedResult);
                 owner.foreignRoots.retain(program, registrations);
                 return value;
             }
@@ -434,7 +437,13 @@ public final class Language extends TruffleLanguage<Language.State> {
         if (!present) throw new NoSuchElementException("Collection contains no element matching the predicate.");
         return found;
     }
-    private static boolean blank(String value) { return value.chars().allMatch(c -> Character.isWhitespace(c) || Character.isSpaceChar(c)); }
+    private static boolean blank(String value) {
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (!Character.isWhitespace(c) && !Character.isSpaceChar(c)) return false;
+        }
+        return true;
+    }
     private static void require(boolean accepted, String message) { if (!accepted) throw new IllegalArgumentException(message); }
     @SuppressWarnings("unchecked") private static <T extends Throwable, R> R rethrow(Throwable failure) throws T { throw (T) failure; }
 }

@@ -99,7 +99,11 @@ public final class CoreDemandBindings {
     private List<CoreRepresentation> resolve(List<Object> expression, Set<String> seen) {
         if (expression.isEmpty()) return null;
         return switch (Objects.toString(expression.getFirst(), "")) {
-            case "lam" -> ((List<Map<String,Object>>) expression.get(1)).stream().map(CoreRepresentations.INSTANCE::binder).toList();
+            case "lam" -> {
+                var arguments = new ArrayList<CoreRepresentation>();
+                for (var binding : (List<Map<String,Object>>) expression.get(1)) arguments.add(CoreRepresentations.INSTANCE.binder(binding));
+                yield Collections.unmodifiableList(arguments);
+            }
             case "var" -> { String next = (String) expression.get(1); yield !owns.test(next) || !seen.add(next) ? null : resolve((List<Object>) definition(next).get("expr"), seen); }
             case "app" -> {
                 var inputs = resolve((List<Object>) expression.get(1), seen);
