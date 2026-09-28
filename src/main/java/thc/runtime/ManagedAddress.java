@@ -710,7 +710,9 @@ public final class ManagedAddress {
         }
     }
     public void copyFromByteArray(Object source, long sourceOffset, long count) {
-        try (var loan = borrow()) {
+        var loan = borrow();
+        Throwable failure = null;
+        try {
             requireRange(0, count, true); requireDistinctArray(source);
             long sourceSize = ManagedByteArray.sizeGuest(source);
             if (sourceOffset < 0 || sourceOffset > sourceSize || count > sourceSize - sourceOffset)
@@ -730,6 +732,11 @@ public final class ManagedAddress {
             }
             if (nativeOwner != null) copyArrayToOwnedNative(source, sourceOffset, count);
             else ManagedByteArray.copyGuest(source, sourceOffset, owner != null ? owner : mutableBytes, offset, count, false);
+        } catch (Throwable error) {
+            failure = error;
+            throw error;
+        } finally {
+            if (loan != null) loan.closeAfter(failure);
         }
     }
     @TruffleBoundary private void copyOwnedNativeToArray(Object destination, long destinationOffset, long count) {

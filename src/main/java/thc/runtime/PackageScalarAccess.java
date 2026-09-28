@@ -30,6 +30,7 @@ public final class PackageScalarAccess extends Node {
     private final boolean pointers;
     private final boolean integerResult;
     private final boolean addressResult;
+    private final List<ManagedAddress> noPointerArguments;
 
     public PackageScalarAccess(PackageScalarCall call) {
         this.call = call;
@@ -44,6 +45,7 @@ public final class PackageScalarAccess extends Node {
             default -> false;
         };
         addressResult = call.getResult().equals("AddrRep");
+        noPointerArguments = List.of();
     }
 
     /** Original machine-word adapters retain a checked CInt boundary. */
@@ -101,7 +103,7 @@ public final class PackageScalarAccess extends Node {
         try {
             try {
                 return pointers ? invokePointers(entry, arguments)
-                    : normalizeResult(entry, Calls.interop(calls, entry.getReceiver(), arguments), List.of(), null, null);
+                    : normalizeResult(entry, Calls.interop(calls, entry.getReceiver(), arguments), noPointerArguments, null, null);
             } finally {
                 threads.leaveForeign(previous);
                 Reference.reachabilityFence(arguments);

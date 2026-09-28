@@ -183,8 +183,8 @@ public final class ManagedAllocation {
         else if (intersectsPointer(start, vectorBytes)) throw fault("Vector read overlaps a managed pointer cell");
         return segment;
     }
-    /** Public for the remaining Kotlin inline address caller; never use outside its owner lock. */
-    public MemorySegment atomicSegment(long offset, int width, boolean writable) {
+    /** Synchronous atomic preflight; the caller keeps the owner lock through the operation. */
+    @TruffleBoundary public MemorySegment atomicSegment(long offset, int width, boolean writable) {
         if (!Thread.holdsLock(this)) throw new IllegalMonitorStateException("Managed atomic access requires its owner lock");
         requireByteRegion(offset, width, writable);
         if (offset % width != 0) throw fault("Misaligned atomic Addr#");

@@ -50,6 +50,10 @@ public class PackageNativeForeignTest {
             }
             uint32_t complement32(uint32_t value) { return ~value; }
             uint8_t complement8(uint8_t value) { return (uint8_t) ~value; }
+            static uint64_t scalar_state;
+            void advance(uint64_t value) { scalar_state += value; }
+            uint64_t current(void) { return scalar_state; }
+            unsigned char *null_pointer(void) { return NULL; }
             uint32_t equal(const unsigned char *a, const unsigned char *b) { return a == b; }
             uint32_t next_equal(const unsigned char *a, const unsigned char *b) { return a + 1 == b; }
             int64_t distance(const unsigned char *a, const unsigned char *b) { return b - a; }
@@ -74,6 +78,9 @@ public class PackageNativeForeignTest {
             new PackageScalarSignature("alias", "alias", List.of("AddrRep", "AddrRep"), "Word32Rep"),
             new PackageScalarSignature("complement32", "complement32", List.of("Word32Rep"), "Word32Rep"),
             new PackageScalarSignature("complement8", "complement8", List.of("Word8Rep"), "Word8Rep"),
+            new PackageScalarSignature("advance", "advance", List.of("Word64Rep"), "void"),
+            new PackageScalarSignature("current", "current", List.of(), "Word64Rep"),
+            new PackageScalarSignature("null_pointer", "null_pointer", List.of(), "AddrRep"),
             new PackageScalarSignature("equal", "equal", List.of("AddrRep", "AddrRep"), "Word32Rep"),
             new PackageScalarSignature("next_equal", "next_equal", List.of("AddrRep", "AddrRep"), "Word32Rep"),
             new PackageScalarSignature("distance", "distance", List.of("AddrRep", "AddrRep"), "Int64Rep"),
@@ -87,11 +94,14 @@ public class PackageNativeForeignTest {
     private static final class Entry extends RootNode {
         private final PackageScalarCall operation; private final boolean forceIntegerResult;
         @Child private PackageScalarAccess access;
+        long compiledEntries;
         Entry(Language language, PackageScalarCall operation) { this(language, operation, false); }
         Entry(Language language, PackageScalarCall operation, boolean forceIntegerResult) { super(language); this.operation = operation; this.forceIntegerResult = forceIntegerResult; access = new PackageScalarAccess(operation); }
         @Override public Object execute(VirtualFrame frame) {
+            if (com.oracle.truffle.api.CompilerDirectives.inCompiledCode()) compiledEntries++;
             var arguments = frame.getArguments();
             if (operation.getResult().equals("void") && !forceIntegerResult) { access.executeVoid(arguments, thc.runtime.Unit.INSTANCE); return thc.runtime.Unit.INSTANCE; }
+            if (operation.getResult().equals("AddrRep")) return access.executeAddress(arguments, thc.runtime.Unit.INSTANCE);
             if (NarrowInteger.fromRep(operation.getResult()) != null) return access.executeInt(arguments, thc.runtime.Unit.INSTANCE);
             return access.executeLong(arguments, thc.runtime.Unit.INSTANCE);
         }
@@ -100,6 +110,59 @@ public class PackageNativeForeignTest {
         PackageScalarSignature result = null;
         for (var value : link.getAbi()) if (value.symbol().equals(symbol)) { if (result != null) throw new IllegalArgumentException("Multiple signatures"); result = value; }
         if (result == null) throw new java.util.NoSuchElementException(symbol); return result;
+    }
+    @Test public void pointerFreeVoidAndPointerResultsKeepEffectsAndFirstInstalledCalls() throws Exception {
+        var link = library();
+        try (var context = Context.newBuilder("thc").allowNativeAccess(true).allowExperimentalOptions(true)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("engine.CompilationFailureAction", "Throw").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                Language.currentState().getPackageCbits().link(link);
+                var advance = new Entry(language, new PackageScalarCall(link, signature(link, "advance")));
+                var current = new Entry(language, new PackageScalarCall(link, signature(link, "current"))).getCallTarget();
+                var absent = new Entry(language, new PackageScalarCall(link, signature(link, "null_pointer")));
+                assertSame(Unit.INSTANCE, advance.getCallTarget().call(3L)); assertEquals(3L, current.call());
+                assertThrows(RuntimeFault.class, () -> advance.getCallTarget().call(1)); assertEquals(3L, current.call());
+                assertSame(ManagedAddress.nullAddress(), absent.getCallTarget().call());
+                for (var entry : List.of(advance, absent)) {
+                    var target = entry.getCallTarget();
+                    target.getClass().getMethod("compile", boolean.class).invoke(target, true);
+                    assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), entry.operation.getSignature().symbol() + " before");
+                    long before = entry.compiledEntries;
+                    if (entry == advance) {
+                        assertSame(Unit.INSTANCE, target.call(7L));
+                        assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), "advance immediately after call");
+                        assertEquals(10L, current.call());
+                    }
+                    else assertSame(ManagedAddress.nullAddress(), target.call());
+                    assertEquals(before + 1, entry.compiledEntries);
+                    assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), entry.operation.getSignature().symbol() + " after");
+                }
+            } finally { context.leave(); }
+        }
+    }
+    @Test public void pointerFreeNullResultRetainsItsFirstInstalledCall() throws Exception {
+        var link = library();
+        try (var context = Context.newBuilder("thc").allowNativeAccess(true).allowExperimentalOptions(true)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("engine.CompilationFailureAction", "Throw").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                Language.currentState().getPackageCbits().link(link);
+                var entry = new Entry(language, new PackageScalarCall(link, signature(link, "null_pointer")));
+                var target = entry.getCallTarget();
+                assertSame(ManagedAddress.nullAddress(), target.call());
+                target.getClass().getMethod("compile", boolean.class).invoke(target, true);
+                assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), "before");
+                long before = entry.compiledEntries;
+                assertSame(ManagedAddress.nullAddress(), target.call());
+                assertEquals(before + 1, entry.compiledEntries);
+                assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), "after");
+            } finally { context.leave(); }
+        }
     }
     @Test public void integerCallSitesRetainFirstInstalledCodeAndRejectWrongResultsBeforeEffects() throws Exception {
         var link = library();

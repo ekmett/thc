@@ -17,6 +17,54 @@ import static org.junit.jupiter.api.Assertions.*;
 import static thc.PrimopTestContext.primopTestContext;
 
 class ManagedAllocationTest {
+    @Test void atomicPreflightKeepsOwnerMonitorAndFailureOrdering() {
+        var storage = ManagedAllocation.mutable(16, 8);
+        var missing = assertThrows(IllegalMonitorStateException.class, () -> storage.atomicSegment(-1, 8, true));
+        assertEquals("Managed atomic access requires its owner lock", missing.getMessage());
+        synchronized (storage) {
+            assertEquals(16L, storage.atomicSegment(0, 8, true).byteSize());
+            assertTrue(Thread.holdsLock(storage));
+            assertThrows(RuntimeFault.class, () -> storage.atomicSegment(16, 8, true));
+            assertEquals("Misaligned atomic Addr#", assertThrows(RuntimeFault.class,
+                () -> storage.atomicSegment(1, 8, true)).getMessage());
+            var referent = ManagedAddress.fromByteArray(new byte[]{7});
+            storage.writeAddressByteOffset(0, referent);
+            assertThrows(RuntimeFault.class, () -> storage.atomicSegment(0, 8, false));
+            assertSame(referent, storage.readAddressByteOffset(0));
+        }
+        assertFalse(Thread.holdsLock(storage));
+        var immutable = ManagedAllocation.immutable(new byte[16], 8);
+        synchronized (immutable) {
+            assertEquals(16L, immutable.atomicSegment(0, 8, false).byteSize());
+            assertThrows(RuntimeFault.class, () -> immutable.atomicSegment(0, 8, true));
+        }
+    }
+    @Test void atomicOwnerAndRawAliasRetainImmediateInstalledAccess() throws Exception {
+        try (var context = primopTestContext()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                class AtomicRoot extends RootNode {
+                    long compiledEntries;
+                    AtomicRoot() { super(language); }
+                    @Override public Object execute(VirtualFrame frame) {
+                        if (CompilerDirectives.inCompiledCode()) compiledEntries++;
+                        return AtomicAddressOp.ADD.numeric((ManagedAddress) frame.getArguments()[0], 3, 0);
+                    }
+                }
+                var storage = ManagedAllocation.mutable(16, 8);
+                var owned = ManagedAddress.fromAllocation(storage);
+                var alias = ManagedAddress.fromByteArray(storage.rawBytesIfPointerFree());
+                var root = new AtomicRoot(); var target = root.getCallTarget();
+                assertEquals(0L, target.call(owned)); assertEquals(3L, target.call(alias));
+                install(target);
+                long before = root.compiledEntries;
+                assertEquals(6L, target.call(owned)); assertEquals(before + 1, root.compiledEntries); valid(target);
+                assertEquals(9L, target.call(alias)); assertEquals(before + 2, root.compiledEntries); valid(target);
+                assertFalse(Thread.holdsLock(storage)); assertFalse(Thread.holdsLock(storage.storageKey()));
+            } finally { context.leave(); }
+        }
+    }
     private void valid(RootCallTarget target) throws Exception {
         assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
     }
