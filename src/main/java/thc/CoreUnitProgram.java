@@ -28,6 +28,7 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
     private final List<Map<String,Object>> consumers = new ArrayList<>();
     private final Map<String,Map<String,Object>> consumerBindings = new HashMap<>(), consumerOwners = new HashMap<>();
     private final IdentityHashMap<Map<String,Object>,CoreModuleAdmission> consumerAdmissions = new IdentityHashMap<>();
+    private final IdentityHashMap<CoreModuleAdmission,CoreSources> moduleSources = new IdentityHashMap<>();
     private final Set<String> availableModules = new HashSet<>();
     private Map<String,Object> selectedBridge;
     private final CoreDemandBindings demand;
@@ -177,6 +178,11 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
         linked.put("instrument", !Objects.equals(input.get("instrument"), false)); linked.put("diagnosticUnsupported", Objects.equals(input.get("diagnosticUnsupported"), true));
         linked.put("sourceNotesEnabled", !Objects.equals(input.get("sourceNotesEnabled"), false)); linked.put("demandBindings", demand); linked.put("captureDelimited", captureDelimited);
         if (directory.getTargetLayout() != null) linked.put("targetLayout", directory.getTargetLayout());
+        // Every demanded binding keeps the same immutable source notes for its
+        // admitted module, rather than retaining another complete source table.
+        synchronized (moduleSources) {
+            linked.put("preparedSources", moduleSources.computeIfAbsent(admitted, ignored -> new CoreSources(linked)));
+        }
         // Another binding may demand a new original CAPI owner. The context
         // registry checks exact identity and links the component only once.
         for (var link : (List<ForeignBitcode>) linked.get("foreignLinks")) owner.cbits().link(link);
