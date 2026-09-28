@@ -12,14 +12,15 @@ code. No filesystem permission, DLL name allowlist, pointer representation or
 context ownership is changed.
 
 `gradle/windows-sulong.gradle` follows the existing pinned Truffle patch
-workflow. It validates both Maven source/binary archives, compiles the one patched
-upstream Java ABI class, and replaces the original runtime artifact only on
-Windows. Java is retained because this is the upstream Sulong binary boundary.
+workflow. It validates both Maven source/binary archives and composes this
+Windows-only class correction with the shared
+[declared-global-mutability patch](../sulong-globals/README.md) in one runtime
+artifact. Java is retained because this is the upstream Sulong binary boundary.
 The task preserves the upstream manifest, module descriptor, POM dependencies,
 license and every unrelated JAR entry. `verifyWindowsSulongSelection` rejects
 duplicate stock/patched selection and checks unrelated entries byte-for-byte.
-The installed JDK, Gradle cache artifacts and Linux/macOS dependency selection
-are unchanged.
+The installed JDK and Gradle cache artifacts are unchanged. Linux/macOS use the
+shared global-mutability correction but retain the original Windows locator.
 
 The packaged pointer bridge is genuinely compiled by the selected Clang for
 `x86_64-pc-windows-msvc19.33.0`, the pinned Sulong Windows target. Its Windows

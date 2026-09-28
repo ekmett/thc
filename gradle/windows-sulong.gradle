@@ -4,9 +4,16 @@ import static thc.buildlogic.BuildChecks.*
 import java.security.MessageDigest
 import java.util.jar.JarFile
 
-// Applied only on Windows. Rebuild the pinned upstream Java ABI class rather
-// than shadowing it on the classpath or changing any guest filesystem policy.
+// One pinned Sulong artifact: declared mutable globals on all hosts, plus the
+// optional cwd lookup correction on Windows. Keep the original task names.
+def patchWindowsLocator = System.getProperty("os.name").startsWith("Windows")
 def windowsSulongVersion = "25.3.4.1"
+def sulongPolicyVersion = patchWindowsLocator ? "globals1-windows1" : "globals1"
+def sulongReplacedClasses = ["com/oracle/truffle/llvm/runtime/global/LLVMGlobalContainer",
+    "com/oracle/truffle/llvm/initialization/InitializeSymbolsNode"]
+if (patchWindowsLocator) sulongReplacedClasses.add("com/oracle/truffle/llvm/parser/coff/WindowsLibraryLocator")
+def replacedSulongEntry = { String name -> name == "META-INF/MANIFEST.MF" ||
+    sulongReplacedClasses.any { name == it + ".class" || name.startsWith(it + '\u0024') } }
 def windowsSulongSources = configurations.create("windowsSulongSources") { canBeConsumed = false; transitive = false }
 def windowsSulongBinary = configurations.create("windowsSulongBinary") { canBeConsumed = false; transitive = false }
 def windowsSulongCompile = configurations.create("windowsSulongCompile") { canBeConsumed = false }
@@ -14,6 +21,7 @@ dependencies {
     add(windowsSulongSources.name, "org.graalvm.llvm:llvm-language:$windowsSulongVersion:sources")
     add(windowsSulongBinary.name, "org.graalvm.llvm:llvm-language:$windowsSulongVersion")
     add(windowsSulongCompile.name, "org.graalvm.llvm:llvm-language:$windowsSulongVersion")
+    add(windowsSulongCompile.name, "org.graalvm.polyglot:polyglot:$windowsSulongVersion")
 }
 def windowsSulongDigest = { byte[] bytes -> MessageDigest.getInstance("SHA-256").digest(bytes).encodeHex().toString() }
 def requireWindowsSulongArchive = { File file, String hash ->
@@ -21,19 +29,26 @@ def requireWindowsSulongArchive = { File file, String hash ->
 }
 def prepareWindowsSulong = tasks.register("prepareWindowsSulong", Sync) {
     from(provider { zipTree(windowsSulongSources.singleFile) })
-    include("com/oracle/truffle/llvm/parser/coff/WindowsLibraryLocator.java")
+    include("com/oracle/truffle/llvm/runtime/global/LLVMGlobalContainer.java",
+        "com/oracle/truffle/llvm/initialization/InitializeSymbolsNode.java")
+    if (patchWindowsLocator) include("com/oracle/truffle/llvm/parser/coff/WindowsLibraryLocator.java")
     into(layout.buildDirectory.dir("windows-sulong/source"))
-    inputs.file("tools/sulong-windows/optional-cwd.patch")
+    inputs.file("tools/sulong-globals/declared-mutability.patch")
+    if (patchWindowsLocator) inputs.file("tools/sulong-windows/optional-cwd.patch")
     doFirst {
         requireWindowsSulongArchive(windowsSulongSources.singleFile,
             "716562a9c6cbe9201f53bc972d9eafbb1a692a9d9aebb9f177a541c5e0913f66")
     }
     doLast {
-        providers.exec {
-            workingDir(destinationDir)
-            environment("GIT_CEILING_DIRECTORIES", destinationDir.parentFile.absolutePath)
-            commandLine("git", "apply", "--no-index", file("tools/sulong-windows/optional-cwd.patch").absolutePath)
-        }.result.get().assertNormalExitValue()
+        def patches = ["tools/sulong-globals/declared-mutability.patch"]
+        if (patchWindowsLocator) patches.add("tools/sulong-windows/optional-cwd.patch")
+        for (patch in patches) {
+            providers.exec {
+                workingDir(destinationDir)
+                environment("GIT_CEILING_DIRECTORIES", destinationDir.parentFile.absolutePath)
+                commandLine("git", "apply", "--no-index", file(patch).absolutePath)
+            }.result.get().assertNormalExitValue()
+        }
     }
 }
 def compileWindowsSulong = tasks.register("compileWindowsSulong", JavaCompile) {
@@ -46,15 +61,15 @@ def compileWindowsSulong = tasks.register("compileWindowsSulong", JavaCompile) {
 }
 def windowsSulongJar = tasks.register("windowsSulongJar", Jar) {
     group = "build"
-    description = "Build pinned Windows Sulong with an optional guest cwd library search."
+    description = "Build pinned Sulong with declared global mutability and the Windows optional cwd search."
     archiveBaseName.set("thc-llvm-language")
-    archiveVersion.set("$windowsSulongVersion-windows1")
+    archiveVersion.set("$windowsSulongVersion-$sulongPolicyVersion")
     destinationDirectory.set(layout.buildDirectory.dir("windows-sulong"))
     preserveFileTimestamps = false
     reproducibleFileOrder = true
     from(compileWindowsSulong.flatMap { it.destinationDirectory })
     from(provider { zipTree(windowsSulongBinary.singleFile) }) {
-        exclude("com/oracle/truffle/llvm/parser/coff/WindowsLibraryLocator.class", "META-INF/MANIFEST.MF")
+        exclude { replacedSulongEntry(it.path) }
     }
     from("tools/sulong-windows/LICENSE-BSD.txt") { into("META-INF/licenses/sulong-windows") }
     inputs.files(windowsSulongBinary)
@@ -64,8 +79,8 @@ def windowsSulongJar = tasks.register("windowsSulongJar", Jar) {
         new JarFile(windowsSulongBinary.singleFile).withCloseable { jar ->
             manifest.attributes(jar.manifest.mainAttributes.collectEntries { key, value -> [(key.toString()): value.toString()] })
         }
-        manifest.attributes(["Implementation-Title": "THC Windows Sulong optional cwd lookup",
-            "Implementation-Version": "$windowsSulongVersion-windows1",
+        manifest.attributes(["Implementation-Title": "THC Sulong declared global mutability",
+            "Implementation-Version": "$windowsSulongVersion-$sulongPolicyVersion",
             "Upstream-Source-SHA256": "716562a9c6cbe9201f53bc972d9eafbb1a692a9d9aebb9f177a541c5e0913f66"])
     }
 }
@@ -88,19 +103,18 @@ def verifyWindowsSulongSelection = tasks.register("verifyWindowsSulongSelection"
     doLast {
         def runtime = configurations.getByName("runtimeClasspath").files
         def patched = windowsSulongJar.get().archiveFile.get().asFile
-        checkBuild(runtime.every { !(it.name == "llvm-language-${windowsSulongVersion}.jar") }) { "Stock Sulong remains on Windows runtime classpath" }
-        checkBuild(runtime.count { it == patched } == 1) { "Expected exactly one Windows Sulong artifact" }
-        def changed = ["META-INF/MANIFEST.MF", "com/oracle/truffle/llvm/parser/coff/WindowsLibraryLocator.class"].toSet()
+        checkBuild(runtime.every { !(it.name == "llvm-language-${windowsSulongVersion}.jar") }) { "Stock Sulong remains on runtime classpath" }
+        checkBuild(runtime.count { it == patched } == 1) { "Expected exactly one Sulong artifact" }
         def license = "META-INF/licenses/sulong-windows/LICENSE-BSD.txt"
         new JarFile(windowsSulongBinary.singleFile).withCloseable { stock ->
             new JarFile(patched).withCloseable { fixed ->
                 def original = stock.entries().toList().findAll { !it.isDirectory() }.toList()
                 def current = fixed.entries().toList().findAll { !it.isDirectory() }.toList()
-                checkBuild(current.collect { it.name }.toSet() == original.collect { it.name }.toSet() + license) { "Unexpected Windows Sulong payload" }
-                for (entry in original.findAll { !(it.name in changed) }) {
+                checkBuild(current.collect { it.name }.toSet() == original.collect { it.name }.toSet() + license) { "Unexpected Sulong payload" }
+                for (entry in original.findAll { !replacedSulongEntry(it.name) }) {
                     checkBuild(java.util.Arrays.equals(stock.getInputStream(entry).withCloseable { it.bytes },
                         fixed.getInputStream(fixed.getJarEntry(entry.name)).withCloseable { it.bytes })) {
-                        "Unexpected Windows Sulong entry change: ${entry.name}"
+                        "Unexpected Sulong entry change: ${entry.name}"
                     }
                 }
             }

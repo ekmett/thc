@@ -364,7 +364,9 @@ prevents loading `KERNEL32.dll`. The Windows Gradle build applies a small,
 hash-pinned upstream-source patch that skips the denied cwd search and continues
 the original global/native lookup. It grants no guest filesystem access and
 leaves native authority, C-owned pointer carriers and context ownership intact.
-Linux/macOS continue to use the unmodified pinned Sulong dependency.
+Linux/macOS retain the original locator. All hosts share the separate
+[declared-global-mutability correction](../tools/sulong-globals/README.md),
+composed into the same pinned Sulong artifact.
 
 The packaged pointer bridge is compiled for Sulong's actual MSVC LLVM target,
 using Clang memory builtins on Windows to avoid an extra SDK dependency. The
@@ -374,7 +376,7 @@ compatible producer; the loader's ABI verification remains enabled.
 
 See the [patch provenance and focused checks](../tools/sulong-windows/README.md).
 `verifyWindowsSulongSelection` verifies that only the intended upstream class
-changes and that the runtime selects exactly one patched artifact. The first
+families change and that the runtime selects exactly one patched artifact. The first
 build downloads the pinned source classifier; subsequent builds work offline.
 This addresses library loading, not general Windows native IO or full-Core
 exporter parity.
