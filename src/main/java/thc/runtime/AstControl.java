@@ -15,10 +15,12 @@ public final class AstControl {
     public static final AstControl INSTANCE = new AstControl();
     private AstControl() {}
     public static boolean enabled(Node node) {
-        return node.getRootNode() instanceof FunctionRoot root && root.getEnableAsync$org_intelligence_thc();
+        return node.getRootNode() instanceof GhcBCORoot ||
+            node.getRootNode() instanceof FunctionRoot root && root.getEnableAsync$org_intelligence_thc();
     }
     public static boolean captures(Node node) {
-        return node.getRootNode() instanceof FunctionRoot root && root.getCapturesContinuations$org_intelligence_thc();
+        return node.getRootNode() instanceof GhcBCORoot ||
+            node.getRootNode() instanceof FunctionRoot root && root.getCapturesContinuations$org_intelligence_thc();
     }
     private static final class ResumeChild implements AstResumeStep {
         private final Object child;

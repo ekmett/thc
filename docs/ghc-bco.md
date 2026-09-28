@@ -45,18 +45,25 @@ execution checks live stack bounds and pointer/word boundaries.
 This is not a complete GHCi implementation. Native calls, RTS info-table
 construction/PACK, allocation/AP-building opcodes, case-continuation BCOs,
 packed subword stack operations, tuple/vector returns, breakpoints and other
-unlisted instructions are unsupported. Asynchronous suspension and delimited
-capture through the BCO interpreter reject rather than discard pending stack
-work. The instruction loop
-polls Truffle safepoints; it does not impose an arbitrary instruction budget on
-valid loops. No BCO JIT performance claim is made.
+unlisted instructions are unsupported. One-shot asynchronous suspension and
+bounded stack cuts retain
+the instruction position, operand stack, pending application arguments and the
+interrupted force or call. Repeated cuts resume the remaining work without
+replaying completed effects. Constructor operands resume through the same AST
+operand protocol. BCO continuations check their context owner before claiming
+the one-shot state; masks, annotations and shared thunk updates use the existing
+continuation machinery. Explicit delimited capture through BCO frames remains
+unsupported, including the ordinary prohibition on capture across thunk updates.
+The instruction loop polls the guest scheduler and asynchronous request queue as
+well as Truffle safepoints; valid loops have no arbitrary instruction budget.
+No BCO JIT performance claim is made.
 
 ## Checks
 
 ```sh
 cabal run exe:thc-fixtures --offline -- ghc-bco
-./gradlew --continue testDefault --tests thc.runtime.GhcBCOTest \
-  testDense --tests thc.runtime.GhcBCOTest
+./gradlew --continue testDefault --tests 'thc.runtime.GhcBCO*' \
+  testDense --tests 'thc.runtime.GhcBCO*'
 ```
 
 The producer retains 24 native results, 16 strict audits, unmodified pre/post
@@ -72,17 +79,12 @@ Additional JVM cases cover malformed streams, odd-sized/truncated encodings,
 stack order, signed extremes, logical shifts, raw NaN bits, lazy/shared thunk
 updates, released update targets, and foreign/closed-context use.
 
-The checkpoint passes 19 tests in each handoff mode (seven BCO tests, nine
-handoff tests and three tuple-completion tests) from one compilation in
-`20260926-062844-yrec0b6y`. Each mode compares 96 interpreted observations and
-32 first-installed public entries across both backends and Core stages.
-The final producer is `20260926-062810-m8wluvmf`; its closed 82-file cache
-payload verifies. The 287 fast CI checks and 16 coverage checks also pass.
-
-Earlier evidence is retained: `20260926-062336-i5oo_5s9` exposed a
-generated-node inference issue during annotation processing, fixed by declaring the existing Dispatch node
-array type. `20260926-062451-h1r5isn1` passed the native comparisons but found
-that foreign-root lookup hit Truffle's sharing-layer assertion before the
-explicit ownership check. BCO entry now checks the active context first; the
-unchanged RuntimeFault expectation passes, including after the owner closes.
-The original XML is retained under `build/ghc-bco/failed-first-focused/`.
+The genuine corpus runs with synchronous and capturing callers. Separate JVM
+continuation checks use real MVar interruptions through both Core backends:
+repeated cuts, overapplication with an outer pending Apply frame, initial and
+returned thunk forcing, tail transfers, strict direct/megamorphic arguments,
+constructor operands and instruction-loop interruption followed by completion.
+A deep BCO chain checks bounded stack spilling and result completion. Foreign
+resumption rejects before claiming the continuation, leaving the owner able to
+resume it. These focused controls establish continuation behavior; they do not
+claim a compiled BCO interpreter or complete GHCi/Template Haskell execution.

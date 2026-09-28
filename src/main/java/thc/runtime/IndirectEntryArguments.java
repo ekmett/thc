@@ -15,4 +15,22 @@ public final class IndirectEntryArguments extends Node {
         // Physical positions exclude zero-storage logical inputs.
         for (int position : root.getStrictArgumentPositions()) packet[position] = force.execute(frame, packet[position]);
     }
+    public void executeCaptured(VirtualFrame frame, RootCallTarget target, Object[] packet) {
+        if (target.getRootNode() instanceof GuestRoot root && !EntryArguments.captures(root))
+            forceFrom(frame, root.getStrictArgumentPositions(), packet, 0);
+    }
+    private void forceFrom(VirtualFrame frame, int[] positions, Object[] packet, int start) {
+        for (int i = start; i < positions.length; i++) {
+            int position = positions[i];
+            try { packet[position] = AstControl.forceCallback(frame, this, force, packet[position]); }
+            catch (AstCapture cut) {
+                int next = i + 1;
+                throw cut.append((saved, input) -> {
+                    packet[position] = input;
+                    forceFrom(saved, positions, packet, next);
+                    return Unit.INSTANCE;
+                });
+            }
+        }
+    }
 }

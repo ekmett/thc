@@ -6,6 +6,7 @@ import com.oracle.truffle.api.TruffleSafepoint;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import java.util.ArrayList;
+import java.util.List;
 import thc.Language;
 import static thc.runtime.RuntimeFault.fault;
 
@@ -23,11 +24,12 @@ public final class GhcBCORoot extends GuestRoot {
                       long[] literals, Object[] pointers, boolean[] nonPointers) {
         super(language, FrameDescriptor.newBuilder().build());
         this.owner = owner; this.code = code; this.literals = literals; this.pointers = pointers; this.nonPointers = nonPointers;
-        force = new Force(metrics);
+        force = new Force(metrics, true);
         calls = new Dispatch[6];
         for (int i = 0; i < calls.length; i++) calls[i] = DispatchNodeGen.create(i + 1, false, metrics);
     }
     public Language.State getOwner() { return owner; }
+    @Override public boolean getAsynchronousExceptions() { return true; }
     public int getArity() { return nonPointers.length; }
     @Override public String getName() { return "<GHC BCO>"; }
     @Override public long bloom(VirtualFrame frame) { return (Long) frame.getArguments()[0]; }
@@ -45,37 +47,83 @@ public final class GhcBCORoot extends GuestRoot {
     }
     private static Object pop(ArrayList<Object> stack) { return stack.remove(index(stack, 0)); }
     private Object finish(VirtualFrame frame, ArrayList<Object> stack, Object value, boolean enter) {
-        try {
-            Object answer = enter ? force.execute(frame, value) : value;
-            while (!stack.isEmpty()) {
-                if (!(pop(stack) instanceof Apply apply)) throw fault("BCO returned over unconsumed arguments");
-                var arguments = new Object[apply.count];
-                for (int i = 0; i < arguments.length; i++) arguments[i] = pop(stack);
-                if (!(force.execute(frame, answer) instanceof Closure function)) throw fault("BCO application requires a function");
-                answer = calls[apply.count - 1].execute(frame, function, arguments);
-                if (answer instanceof TailYield || SavedGuestContinuations.savedGuestContinuation(answer) != null)
-                    throw fault("GHC BCO asynchronous continuation is not supported");
-                answer = force.execute(frame, answer);
-            }
-            return answer;
-        } catch (DelimitedCut ignored) {
-            throw fault("Delimited capture through a GHC BCO is not supported");
-        } catch (ThunkSuspended ignored) {
-            throw fault("GHC BCO asynchronous thunk suspension is not supported");
-        } catch (CallSegmentSuspended | CapturedCallSuspension ignored) {
-            throw fault("GHC BCO asynchronous call suspension is not supported");
+        Object answer = value;
+        if (enter) {
+            try { answer = AstControl.force(frame, this, force, answer); }
+            catch (AstCapture cut) { throw cut.append((saved, input) -> finish(saved, stack, input, false)); }
         }
+        while (!stack.isEmpty()) {
+            if (!(pop(stack) instanceof Apply apply)) throw fault("BCO returned over unconsumed arguments");
+            var arguments = new Object[apply.count];
+            for (int i = 0; i < arguments.length; i++) arguments[i] = pop(stack);
+            Object ready;
+            try { ready = AstControl.force(frame, this, force, answer); }
+            catch (AstCapture cut) {
+                throw cut.append((saved, input) -> finish(saved, stack, call(saved, stack, input, arguments), true));
+            }
+            answer = call(frame, stack, ready, arguments);
+            try { answer = AstControl.force(frame, this, force, answer); }
+            catch (AstCapture cut) { throw cut.append((saved, input) -> finish(saved, stack, input, false)); }
+        }
+        return answer;
+    }
+    private Object call(VirtualFrame frame, ArrayList<Object> stack, Object value, Object[] arguments) {
+        if (!(value instanceof Closure function)) throw fault("BCO application requires a function");
+        try { return calls[arguments.length - 1].execute(frame, function, arguments); }
+        catch (AstCapture cut) { throw cut.append((saved, input) -> finish(saved, stack, input, true)); }
+    }
+    void requireOwner() {
+        if (Language.currentState(null) != owner) throw fault("BCO belongs to another context");
+    }
+    private AstCapture own(AstCapture cut) {
+        return cut.enclose(steps -> (frame, input) -> resume(frame, steps, input));
+    }
+    private Object resume(VirtualFrame frame, List<AstResumeStep> steps, Object input) {
+        requireOwner();
+        try { return AstContinuations.resumeAstSteps(frame, steps, input); }
+        catch (AstCapture cut) { throw own(cut); }
+        catch (DelimitedCut ignored) { throw fault("Delimited capture through a GHC BCO is not supported"); }
     }
     @Override public Object execute(VirtualFrame frame) {
         // Check ownership before node lookup can consult another root's sharing layer.
-        if (Language.currentState(null) != owner) throw fault("BCO belongs to another context");
+        requireOwner();
         if (frame.getArguments().length != getArity() + 1) throw fault("BCO argument packet mismatch");
         var stack = new ArrayList<Object>();
         for (int i = getArity() - 1; i >= 0; i--)
             stack.add(nonPointers[i] ? word(frame.getArguments()[i + 1]) : frame.getArguments()[i + 1]);
-        int pc = 0;
+        AstStackScope scope = AstStacks.astStackScope(this);
+        boolean driver = !scope.getDriving();
+        if (driver) scope.setDriving(true);
+        try {
+            scope.setDepth(scope.getDepth() + 1);
+            Object result;
+            try {
+                try {
+                    if (scope.getDepth() >= AstStackScope.MAX_DEPTH) {
+                        scope.setSpills(scope.getSpills() + 1);
+                        throw new AstCapture(AstStackSpill.INSTANCE, SynchronousMasking.current(this))
+                            .append((saved, input) -> resumeLoop(saved, stack, 0, input));
+                    }
+                    result = run(frame, stack, 0);
+                } catch (AstCapture cut) { result = own(cut).freeze(this, frame.materialize()); }
+                catch (DelimitedCut ignored) { throw fault("Delimited capture through a GHC BCO is not supported"); }
+            } finally { scope.setDepth(scope.getDepth() - 1); }
+            SavedGuestContinuation saved = SavedGuestContinuations.savedGuestContinuation(result);
+            return driver && saved != null && saved.stackSpill() && saved.asyncRequest() == null ? force.drainStack(saved) : result;
+        } finally { if (driver) scope.setDriving(false); }
+    }
+    private Object resumeLoop(VirtualFrame frame, ArrayList<Object> stack, int pc, Object input) {
+        if (input != Unit.INSTANCE) throw fault("BCO instruction continuation requires Unit");
+        return run(frame, stack, pc);
+    }
+    private Object run(VirtualFrame frame, ArrayList<Object> stack, int pc) {
         while (true) {
             TruffleSafepoint.poll(this);
+            AsyncRequest request = GuestThreads.pollCurrent(this, false);
+            if (request != null) {
+                int next = pc;
+                throw new AstCapture(request, SynchronousMasking.current(this)).append((saved, input) -> resumeLoop(saved, stack, next, input));
+            }
             var instruction = pc >= 0 && pc < code.length ? code[pc] : null;
             if (instruction == null) throw fault("BCO execution left its instruction stream");
             pc = instruction.next;

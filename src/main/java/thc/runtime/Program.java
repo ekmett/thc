@@ -1906,7 +1906,6 @@ public final class Program implements ExecutableProgram {
 
         if (primitive && Set.of("newBCO#", "mkApUpd0#").contains(fn.get(1))) {
             String name = (String) fn.get(1);
-            if (capturesContinuations) throw new UnsupportedCore("GHC BCO frames do not yet preserve AST captures");
             GhcBCO.validate(name, argumentProofs(args), flags, tupleProof);
             return new GhcBCOExpression(name, argumentOperands(args, scope, flags), (thc.Language) language, metrics, tupleProof);
         }

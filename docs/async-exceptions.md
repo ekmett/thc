@@ -236,7 +236,7 @@ cabal run thc-fixtures --offline -- uncaught-self
 at the enclosing update boundary; it does not save a live log or resume an
 abandoned transactional child. [Compact traversal](compact-regions.md) retains
 its private unfinished copy across supported asynchronous child forcing.
-GHC BCO interpreter frames, opaque foreign execution and new `control0#` capture across a parked one-shot
+BCO frames preserve one-shot asynchronous and stack cuts. Explicit delimited capture through BCO frames, opaque foreign execution and new `control0#` capture across a parked one-shot
 caller chain retain their separate continuation barriers. Scheduling cuts and
 AST stack spills within an existing delimited invocation use its own one-shot
 driver; those owners are not copied into the reusable image.

@@ -44,6 +44,7 @@ public final class AstContinuation implements SavedGuestContinuation {
         frame.setLong(FrameLayout.BLOOM_FILTER, ((FunctionRoot) sourceRoot).entryBloom(liveOwners));
     }
     @Override @TruffleBoundary public Object continueWith(Object input) {
+        if (sourceRoot instanceof GhcBCORoot bco) bco.requireOwner();
         if (!claimed.compareAndSet(false, true)) throw fault("AST continuation was already resumed");
         MaskingState ambient = SynchronousMasking.current(sourceRoot);
         StackAnnotationState ambientAnnotations = StackAnnotations.current(sourceRoot);

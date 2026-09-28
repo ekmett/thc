@@ -33,7 +33,13 @@ public final class DirectCallerNode extends Node {
     }
     public RootCallTarget getTarget() { return target; }
     public Object call(VirtualFrame frame, Object[] arguments, boolean tailCall) {
-        entryArguments.execute(frame, arguments);
+        if (AstControl.captures(this)) {
+            try { entryArguments.executeCaptured(frame, arguments); }
+            catch (AstCapture cut) { throw cut.append((saved, input) -> callEntered(saved, arguments, tailCall)); }
+        } else entryArguments.execute(frame, arguments);
+        return callEntered(frame, arguments, tailCall);
+    }
+    private Object callEntered(VirtualFrame frame, Object[] arguments, boolean tailCall) {
         if (leadingCaseReturn != null) { Object result = leadingCaseReturn.execute(arguments); if (result != null) return result; }
         Object result;
         if (tailCall) {

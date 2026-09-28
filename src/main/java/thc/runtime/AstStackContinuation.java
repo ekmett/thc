@@ -18,6 +18,7 @@ public final class AstStackContinuation implements SavedGuestContinuation {
     @Override public CallSegmentSuspended getYielded() { return yielded; }
     @Override public Object getIdentity() { return this; }
     @Override @TruffleBoundary public Object continueWith(Object input) {
+        if (sourceRoot instanceof GhcBCORoot bco) bco.requireOwner();
         if (!claimed.compareAndSet(false, true)) throw fault("AST stack continuation was already resumed");
         if (input instanceof TailCall tail && AstTailAnchor.accepts(AstStacks.astStackScope((Node) sourceRoot).getTailAnchor(), tail)) throw tail;
         if (input instanceof AstChildSuspension suspended) {
