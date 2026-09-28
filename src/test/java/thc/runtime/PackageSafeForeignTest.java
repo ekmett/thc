@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -25,7 +26,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.CsvSource;
 import thc.ContextProfile;
 import thc.ForeignExceptionFixtureSupport;
 import thc.Language;
@@ -100,16 +101,29 @@ public class PackageSafeForeignTest {
         var parameters = List.of(Map.of("id", "value", "name", "value", "lifted", false, "coercion", false, "rep", value), Map.of("id", "state", "name", "state", "lifted", false, "coercion", false, "rep", state));
         return Map.of("bindings", List.of(Map.of("id", "wait", "name", "wait", "lifted", true, "expr", List.of("lam", parameters, body, Map.of("resultRep", result)))), "packageScalarLinks", List.of(link), "instrument", true);
     }
-    @Tag("foreign-exceptions-full-core") @ParameterizedTest @ValueSource(strings = {"ast", "ast-compiled", "bytecode", "bytecode-compiled"})
-    public void safeScalarDefersAsyncUntilReturnWhileOtherGuestCallsAndGcProgress(String mode) throws Throwable { exerciseSafeReturn(mode, false); }
-    @Tag("foreign-exceptions-full-core") @ParameterizedTest @ValueSource(strings = {"ast", "ast-compiled", "bytecode", "bytecode-compiled"})
-    public void temporarySafePointerPathPreservesNativeStorageAndCompletedResult(String mode) throws Throwable { exerciseSafeReturn(mode, true); }
-    private void exerciseSafeReturn(String mode, boolean pointer) throws Throwable {
+    @Tag("foreign-exceptions-full-core") @ParameterizedTest @CsvSource({
+        "ast,platform", "ast-compiled,platform", "bytecode,platform", "bytecode-compiled,platform",
+        "ast,loom", "ast-compiled,loom", "bytecode,loom", "bytecode-compiled,loom"})
+    public void safeScalarDefersAsyncUntilReturnWhileOtherGuestCallsAndGcProgress(String mode, String hosting) throws Throwable { exerciseSafeReturn(mode, hosting, false); }
+    @Tag("foreign-exceptions-full-core") @ParameterizedTest @CsvSource({
+        "ast,platform", "ast-compiled,platform", "bytecode,platform", "bytecode-compiled,platform",
+        "ast,loom", "ast-compiled,loom", "bytecode,loom", "bytecode-compiled,loom"})
+    public void temporarySafePointerPathPreservesNativeStorageAndCompletedResult(String mode, String hosting) throws Throwable { exerciseSafeReturn(mode, hosting, true); }
+    private static <T> T admitted(GuestThreads threads, Callable<T> action) throws Exception {
+        if (threads.needsHosting()) return threads.hostEntry(null, () -> admitted(threads, action));
+        threads.enterCurrent(null, false, true, 0L);
+        try { return action.call(); }
+        finally { threads.leaveCurrent(); }
+    }
+    private void exerciseSafeReturn(String mode, String hosting, boolean pointer) throws Throwable {
         var link = library();
-        try (var context = Main.withContextProfile(Context.newBuilder("thc").allowNativeAccess(true), ContextProfile.SYNCHRONOUS_TEST).build()) {
+        try (var context = Main.withContextProfile(Context.newBuilder("thc").allowNativeAccess(true), ContextProfile.SYNCHRONOUS_TEST)
+                .option("thc.ThreadHosting", hosting).build()) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var owner = Language.currentState(); owner.getPackageCbits().link(link);
+                var threads = owner.getThreads(); threads.setCapabilityCount(1);
+                assertEquals(hosting.equals("loom"), threads.isLoom()); assertEquals(1L, threads.capabilityCount());
                 var entries = new LinkedHashMap<String, RootCallTarget>(); for (var signature : link.getAbi()) entries.put(signature.symbol(), new Entry(language, new PackageScalarCall(link, signature)).getCallTarget());
                 ExecutableProgram program = mode.startsWith("ast") ? new Program(language, ForeignExceptionFixtureSupport.link(module(link, pointer), "wait"), true) : new BytecodeProgram(language, ForeignExceptionFixtureSupport.link(module(link, pointer), "wait"), true);
                 var target = program.entryTarget("wait"); var shape = Objects.requireNonNull(((GuestRoot) target.getRootNode()).getTupleResult());
@@ -123,39 +137,47 @@ public class PackageSafeForeignTest {
                         for (long index : new long[]{0L, 1L, 2L, 4L, 5L, 6L, 7L}) assertEquals(0L, storage.readByte(index));
                     } else assertEquals(0.5, shape.getLayout().getDouble(tuple, 0));
                 } }
-                var results = new Results(); entries.get("started").call(); entries.get("release").call(); entries.get("call_count").call();
+                var results = new Results();
                 var ready = new CountDownLatch(1); var begin = new CountDownLatch(1); var compiledBefore = new AtomicLong(); var identity = new AtomicLong(); var pending = new AtomicReference<AsyncRequest>(); var completed = new AtomicReference<SavedGuestContinuation>(); var failure = new AtomicReference<Throwable>();
-                var worker = new Thread(() -> {
-                    context.enter(); identity.set(owner.getThreads().enterCurrent());
+                var worker = threads.newThread(owner.getEnv(), () -> {
+                    identity.set(threads.enterCurrent(null, false, true, 0L));
                     try {
-                        // Warm on the same registered carrier that will
-                        // execute the first installed foreign call.
+                        assertEquals(hosting.equals("loom"), Thread.currentThread().isVirtual());
+                        assertFalse(threads.needsHosting());
+                        // Preserve the original three setup calls on the same TSO
+                        // that executes the first installed foreign call.
                         for (int i = 0; i < 3; i++) { entries.get("reset").call(); var result = Calls.target(target, new Object[]{0L, argument, thc.runtime.Unit.INSTANCE}); results.check(result); }
                         entries.get("reset").call(); ready.countDown(); if (!begin.await(30, TimeUnit.SECONDS)) throw new IllegalStateException("Check failed.");
+                        assertEquals(identity.get(), threads.currentId(), "setup and installed call keep one TSO");
                         var result = Calls.target(target, new Object[]{0L, argument, thc.runtime.Unit.INSTANCE}); var continuation = Objects.requireNonNull(SavedGuestContinuations.savedGuestContinuation(result)); var request = continuation.asyncRequest();
                         assertSame(pending.get(), request, "delivery occurs at the completed foreign-call cut");
-                        if (mode.endsWith("compiled")) { assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > compiledBefore.get()); assertTrue(request.compiledCapture, "first installed call reaches the return cut in compiled code"); }
+                        assertEquals(identity.get(), threads.currentId(), "foreign return preserves the TSO");
+                        if (mode.endsWith("compiled")) { assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > compiledBefore.get()); assertTrue(request.compiledCapture, "first installed call reaches the return cut in compiled code"); assertSame(target, program.entryTarget("wait")); assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target)); }
                         request.acknowledge(); completed.set(continuation);
-                    } catch (Throwable problem) { failure.set(problem); } finally { ready.countDown(); owner.getThreads().leaveCurrent(); context.leave(); }
-                });
-                worker.start();
-                try {
-                    long warmDeadline = System.nanoTime() + 30_000_000_000L;
-                    while (!ready.await(1, TimeUnit.MILLISECONDS) && System.nanoTime() < warmDeadline) if (Long.valueOf(1).equals(entries.get("started").call())) entries.get("release").call();
-                    assertEquals(0L, ready.getCount(), "same-carrier warmup completes before code installation"); if (failure.get() != null) throw failure.get();
-                    if (mode.endsWith("compiled")) { target.getClass().getMethod("compile", boolean.class).invoke(target, true); assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target)); }
-                    compiledBefore.set(((Number) program.diagnostics().get("compiledEntries")).longValue()); begin.countDown(); long deadline = System.nanoTime() + 5_000_000_000L;
-                    while (!Long.valueOf(1).equals(entries.get("started").call()) && System.nanoTime() < deadline) Thread.sleep(1);
-                    assertEquals(1L, entries.get("started").call(), "other guest call observes the active C loop"); var request = owner.getThreads().send(identity.get(), "after safe return"); pending.set(request); System.gc();
-                    assertEquals(AsyncRequestState.PENDING, request.getState(), "no guest delivery from the opaque foreign frame");
-                } finally { begin.countDown(); entries.get("release").call(); worker.join(25000); }
-                assertFalse(worker.isAlive(), "safe return must release the Java carrier"); if (failure.get() != null) throw failure.get(); assertEquals(AsyncRequestState.ACKNOWLEDGED, pending.get().getState()); assertEquals(1L, entries.get("call_count").call());
-                owner.getThreads().enterCurrent();
-                try {
+                    } catch (Throwable problem) { failure.set(problem); } finally { ready.countDown(); threads.leaveCurrent(); }
+                }, 0L, null);
+                admitted(threads, () -> {
+                    assertFalse(threads.needsHosting(), "controller and resume must hold the same HEC");
+                    assertEquals(hosting.equals("loom"), Thread.currentThread().isVirtual());
+                    entries.get("started").call(); entries.get("release").call(); entries.get("call_count").call();
+                    threads.startThread(worker);
+                    try {
+                        long warmDeadline = System.nanoTime() + 30_000_000_000L;
+                        while (!ready.await(1, TimeUnit.MILLISECONDS) && System.nanoTime() < warmDeadline) if (Long.valueOf(1).equals(entries.get("started").call())) entries.get("release").call();
+                        assertEquals(0L, ready.getCount(), "same-TSO setup completes before code installation"); if (failure.get() != null) throw new AssertionError("safe worker failed", failure.get());
+                        if (mode.endsWith("compiled")) { target.getClass().getMethod("compile", boolean.class).invoke(target, true); assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target)); }
+                        compiledBefore.set(((Number) program.diagnostics().get("compiledEntries")).longValue()); begin.countDown(); long deadline = System.nanoTime() + 5_000_000_000L;
+                        while (!Long.valueOf(1).equals(entries.get("started").call()) && System.nanoTime() < deadline) Thread.sleep(1);
+                        assertEquals(1L, entries.get("started").call(), "other guest call observes the active C loop"); var request = threads.send(identity.get(), "after safe return"); pending.set(request); System.gc();
+                        assertEquals(AsyncRequestState.PENDING, request.getState(), "no guest delivery from the opaque foreign frame");
+                    } finally { begin.countDown(); entries.get("release").call(); worker.join(25000); }
+                    assertFalse(worker.isAlive(), "safe return must release the Java carrier"); if (failure.get() != null) throw new AssertionError("safe worker failed", failure.get()); assertEquals(AsyncRequestState.ACKNOWLEDGED, pending.get().getState()); assertEquals(1L, entries.get("call_count").call());
+                    assertFalse(threads.needsHosting(), "completed resumption remains admitted");
                     var result = completed.get().continueWith(thc.runtime.Unit.INSTANCE); results.check(result); if (pointer) assertEquals(4L, storage.readByte(3), "three warm calls and one completed effect, with no replay");
                     assertEquals(1L, entries.get("call_count").call(), "resumption must not replay the foreign effect"); if (mode.startsWith("ast")) assertThrows(RuntimeFault.class, () -> completed.get().continueWith(thc.runtime.Unit.INSTANCE));
                     assertEquals(0, language.getHandoffState().get().getArguments().getDepth()); assertEquals(0, language.getHandoffState().get().getResults().getDepth()); assertEquals(0, language.getHandoffState().get().getArguments().retainedReferences()); assertEquals(0, language.getHandoffState().get().getResults().retainedReferences());
-                } finally { owner.getThreads().leaveCurrent(); }
+                    return null;
+                });
             } finally { context.leave(); }
         }
     }
