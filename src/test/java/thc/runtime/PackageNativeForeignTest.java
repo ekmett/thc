@@ -33,6 +33,10 @@ public class PackageNativeForeignTest {
         Files.writeString(source, """
             #include <stdint.h>
             #include <stddef.h>
+            #include <errno.h>
+            int change_errno(int value) { errno = value; return -1; }
+            int observe_errno(void) { return errno; }
+            int pointer_errno(unsigned char *p, int value) { p[0] = 197; errno = value; return -1; }
             uint64_t sum_bytes(const unsigned char *p, uint64_t n) {
               uint64_t result = 0;
               for (uint64_t i = 0; i < n; ++i) result += p[i];
@@ -118,7 +122,10 @@ public class PackageNativeForeignTest {
             new PackageScalarSignature("distance", "distance", List.of("AddrRep", "AddrRep"), "Int64Rep"),
             new PackageScalarSignature("read_before", "read_before", List.of("AddrRep"), "Word32Rep"),
             new PackageScalarSignature("native_bits", "native_bits", List.of("AddrRep"), "Word64Rep"),
-            new PackageScalarSignature("mixed_alias", "mixed_alias", List.of("MutableByteArray#", "ByteArray#"), "Word32Rep"));
+            new PackageScalarSignature("mixed_alias", "mixed_alias", List.of("MutableByteArray#", "ByteArray#"), "Word32Rep"),
+            new PackageScalarSignature("change_errno", "change_errno", List.of("Int32Rep"), "Int32Rep"),
+            new PackageScalarSignature("observe_errno", "observe_errno", List.of(), "Int32Rep"),
+            new PackageScalarSignature("pointer_errno", "pointer_errno", List.of("MutableByteArray#", "Int32Rep"), "Int32Rep"));
         var selected = pointerVariants ? List.of(abi.getFirst(), new PackageScalarSignature(abi.getFirst().symbol(), "sum_bytes_address", List.of("AddrRep", "Word64Rep"), abi.getFirst().result(), abi.getFirst().convention(), abi.getFirst().safety())) : abi;
         var signatures = new ArrayList<PackageScalarSignature>(); for (var signature : selected) signatures.add(new PackageScalarSignature(signature.symbol(), signature.entry(), signature.arguments(), signature.result(), signature.convention(), safety));
         return new PackageScalarLink("native-ffi-control", "test-host", sha, sha, bytes, signatures);
@@ -179,6 +186,46 @@ public class PackageNativeForeignTest {
         return Context.newBuilder("thc").allowNativeAccess(true).allowExperimentalOptions(true)
             .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
             .option("engine.CompilationFailureAction", "Throw").build();
+    }
+    @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
+    public void genericCallsShareOriginalErrnoWithoutLosingZeroOrThreadIsolation(String backend) throws Exception {
+        var link = library(false, "safe");
+        try (var context = globalContext()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                Language.currentState().getPackageCbits().link(link);
+                var module = OriginalStdioFixtures.module(List.of("errno"));
+                ExecutableProgram program = backend.equals("ast") ? new Program(language, module) : new BytecodeProgram(language, module);
+                var errno = program.entryTarget("errno");
+                var change = globalEntry(link, "change_errno").getCallTarget();
+                var observe = globalEntry(link, "observe_errno").getCallTarget();
+                var pointer = globalEntry(link, "pointer_errno").getCallTarget();
+                var stdio = Language.currentState().getStdio();
+                assertEquals(-1, change.call(73));
+                assertEquals(73, ScalarTestCalls.callScalarTestTarget(errno, new Object[]{0L, Unit.INSTANCE}));
+                stdio.setErrno(41);
+                assertEquals(41, observe.call(), "managed errno is seeded into every generic call");
+                var bytes = ManagedAllocation.mutable(1, 8, true);
+                assertEquals(-1, pointer.call(bytes, 19));
+                assertEquals(197L, bytes.readByte(0));
+                assertEquals(19, ScalarTestCalls.callScalarTestTarget(errno, new Object[]{0L, Unit.INSTANCE}));
+                var worker = java.util.concurrent.Executors.newSingleThreadExecutor();
+                try {
+                    worker.submit(() -> {
+                        context.enter();
+                        try {
+                            assertEquals(0, observe.call());
+                            assertEquals(-1, change.call(31));
+                            assertEquals(31, ScalarTestCalls.callScalarTestTarget(errno, new Object[]{0L, Unit.INSTANCE}));
+                        } finally { context.leave(); }
+                    }).get(10, java.util.concurrent.TimeUnit.SECONDS);
+                } finally { worker.shutdownNow(); assertTrue(worker.awaitTermination(10, java.util.concurrent.TimeUnit.SECONDS)); }
+                assertEquals(19, observe.call());
+                assertEquals(-1, change.call(0));
+                assertEquals(0, ScalarTestCalls.callScalarTestTarget(errno, new Object[]{0L, Unit.INSTANCE}));
+            } finally { context.leave(); }
+        }
     }
     private Entry globalEntry(PackageScalarLink link, String name) {
         return new Entry(TruffleLanguage.LanguageReference.create(Language.class).get(null),

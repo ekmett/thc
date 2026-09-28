@@ -41,7 +41,7 @@ public final class PackageScalarLibraries {
             Object library = env.parseInternal(Source.newBuilder("llvm", ByteSequence.create(bytes), "package-pointer.bc").build()).call();
             var functions = new HashMap<String, Object>();
             for (String name : new String[]{"offset", "equal", "compare", "difference", "overlap", "read", "write",
-                    "read_address", "write_address", "strlen", "copy", "fill"})
+                    "read_address", "write_address", "strlen", "copy", "fill", "errno", "set_errno"})
                 functions.put(name, interop.readMember(library, "thc_package_pointer_" + name));
             return functions;
         });
@@ -107,6 +107,24 @@ public final class PackageScalarLibraries {
         try { return interop.execute(function, arguments); }
         catch (Exception failure) { throw rethrow(failure); }
         finally { owner.getThreads().leaveForeign(previous); Reference.reachabilityFence(arguments); }
+    }
+    // These run inside the caller's foreign activation. In particular, capturing
+    // errno must precede pointer reconciliation and Loom guest readmission.
+    @TruffleBoundary void seedErrno() {
+        var owner = current();
+        if (!alive.isValid()) throw fault("Package C library registry is closed");
+        pointerOperations.run();
+        var functions = await(pointerOperations);
+        int value = Math.toIntExact(owner.getStdio().errno());
+        try { interop.execute(functions.get("set_errno"), value); }
+        catch (Exception failure) { throw rethrow(failure); }
+    }
+    @TruffleBoundary void captureErrno() {
+        var owner = current();
+        try {
+            int value = interop.asInt(interop.execute(await(pointerOperations).get("errno")));
+            owner.getStdio().captureForeignErrno(value);
+        } catch (Exception failure) { throw rethrow(failure); }
     }
     @TruffleBoundary public Object transport(ManagedAddress address) {
         var owner = current();
