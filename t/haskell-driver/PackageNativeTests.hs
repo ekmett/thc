@@ -29,6 +29,31 @@ import THC.Driver.NativeDependencies (selectCOnlyPieces)
 tests :: Test
 tests = TestLabel "package-owned native C acquisition" $ TestList
   [ TestCase $ do
+      let rep kind prim = object ["kind" .= (kind::String), "primReps" .= (prim::[String]), "evaluated" .= False]
+          state = rep "void" []
+          result = object ["kind" .= ("unknown"::String), "primReps" .= (["IntRep"]::[String]),
+            "evaluated" .= False, "aggregate" .= ("unboxed-tuple"::String),
+            "components" .= [set "evaluated" (Bool True) state, set "evaluated" (Bool True) (rep "long" ["IntRep"])]]
+          call = object ["schema" .= (1::Int), "target" .= object ["kind" .= ("static"::String),
+            "unit" .= ("fixture-unit"::String), "symbol" .= ("strlen"::String), "isFunction" .= True],
+            "convention" .= ("ccall"::String), "safety" .= ("unsafe"::String), "arity" .= (2::Int),
+            "suppliedArity" .= (2::Int), "argumentReps" .= [rep "address" ["AddrRep"], state], "resultRep" .= result]
+          original descriptor = object ["unit" .= ("fixture-unit"::String), "module" .= ("Fixture"::String),
+            "bindings" .= [object ["foreignCall" .= descriptor]]]
+      assertEqual "genuine FCallId needs no vanished source declaration"
+        (Right [("strlen","ccall","unsafe",["AddrRep"],"IntRep")])
+        (installedNativeSignatures "fixture-unit" (original call))
+      assertEqual "inline calls retain their original owner" (Right [])
+        (installedNativeSignatures "different-unit" (original call))
+      assertEqual "erased unlifted pointers do not invent byte-array mutability" (Right [])
+        (installedNativeSignatures "fixture-unit" (original (set "argumentReps"
+          (toJSON [rep "object" ["BoxedRep (Just Unlifted)"],state]) call)))
+      let array = set "schema" (toJSON (2::Int)) $ set "argumentTypes" (toJSON [String "ByteArray#",Null]) $
+            set "argumentReps" (toJSON [rep "object" ["BoxedRep (Just Unlifted)"],state]) call
+      assertEqual "actual nominal array carrier survives Core erasure"
+        (Right [("strlen","ccall","unsafe",["ByteArray#"],"IntRep")])
+        (installedNativeSignatures "fixture-unit" (original array))
+  , TestCase $ do
       let named modName name args = object ["kind" .= ("tycon"::String), "name" .= object
             ["unit" .= ("ghc-internal"::String), "module" .= (modName::String),
              "occurrence" .= (name::String), "namespace" .= ("type"::String)], "arguments" .= (args::[Value])]

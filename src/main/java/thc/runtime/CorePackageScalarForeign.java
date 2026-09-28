@@ -67,12 +67,24 @@ public final class CorePackageScalarForeign {
             }
         }
         if (signature == null) throw fault("Unlinked or ambiguous package C signature in scalar component: " + target.get("symbol"));
-        check(descriptor.keySet().equals(Set.of("schema", "target", "convention", "safety", "arity", "suppliedArity", "argumentReps", "resultRep"))
-            && number(descriptor.get("schema"), 1) && target.keySet().equals(Set.of("kind", "symbol", "unit", "isFunction"))
+        boolean typedArrays = descriptor.containsKey("argumentTypes");
+        var keys = new java.util.HashSet<>(Set.of("schema", "target", "convention", "safety", "arity", "suppliedArity", "argumentReps", "resultRep"));
+        if (typedArrays) keys.add("argumentTypes");
+        check(descriptor.keySet().equals(keys)
+            && number(descriptor.get("schema"), typedArrays ? 2 : 1) && target.keySet().equals(Set.of("kind", "symbol", "unit", "isFunction"))
             && "static".equals(target.get("kind")) && Boolean.TRUE.equals(target.get("isFunction"))
             && signature.getConvention().equals(descriptor.get("convention")) && signature.getSafety().equals(descriptor.get("safety")),
             "static exact-safety declaration");
         int count = signature.getArguments().size() + 1;
+        if (typedArrays) {
+            check(descriptor.get("argumentTypes") instanceof List<?> types && types.size() == count, "typed array arity");
+            var types = (List<?>) descriptor.get("argumentTypes");
+            for (int i = 0; i < count; i++) {
+                String rep = i == count - 1 ? null : signature.getArguments().get(i);
+                Object expected = "ByteArray#".equals(rep) || "MutableByteArray#".equals(rep) ? rep : null;
+                check(Objects.equals(types.get(i), expected), "typed array carrier");
+            }
+        }
         boolean matches = number(descriptor.get("arity"), count) && number(descriptor.get("suppliedArity"), count)
             && arguments.size() == count && declared.size() == count && flags.size() == count;
         if (matches) for (int i = 0; i < count; i++) {

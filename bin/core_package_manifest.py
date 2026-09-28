@@ -748,9 +748,17 @@ def package_scalar_link(module, validate_archive=True):
                 entry['symbol'] not in ('free', 'libdwPoolRelease', 'backtraceFree'), 'finalizer ABI')
     selected_link = dict(link, abi=[entry for entry in link['abi'] if entry['entry'] in available]) if partial else link
     if native and 'staticForeignImports' not in module:
-        require('foreign' not in module and 'staticForeignImportStubs' not in module,
-                'foreign products lack import provenance')
-        return selected_link, set()
+        require('staticForeignImportStubs' not in module and not finalizers, 'unproved retained import obligations')
+        if 'foreign' in module:
+            product = record(module['foreign'], 'schema execution stubs files')
+            require(product['schema'] == 1 and product['execution'] == 'not-linked' and product['files'] == [], 'foreign product')
+            if product['stubs'] is not None:
+                stubs = record(product['stubs'], 'header source initializers finalizers')
+                require(stubs['header'] == '' and isinstance(stubs['source'], str) and
+                        stubs['initializers'] == [] and stubs['finalizers'] == [], 'foreign registration requires its managed protocol')
+        # Installed FCallIds retain their ABI without source annotations. The
+        # compiled contract is checked against each reached call below.
+        return selected_link, available
     proof = record(module.get('staticForeignImports'),
         'schema scope execution profile unit module status wordBits expectedForeign imports expectedCalls' +
         (' addresses' if module.get('staticForeignImports', {}).get('schema') == 2 else ''))
@@ -857,8 +865,12 @@ def validate_package_scalar_call(call, abi, unit, arguments, flags, output):
             isinstance(parts, list) and len(parts) == len(reps) and
             all(scalar(part, rep) and part['evaluated'] is True for part, rep in zip(parts, reps)))
     wanted = abi['arguments'] + [None]
-    if (not isinstance(call, dict) or set(call) != {'schema', 'target', 'convention', 'safety', 'arity', 'suppliedArity', 'argumentReps', 'resultRep'} or
-        type(call['schema']) is not int or call['schema'] != 1 or
+    typed_arrays = isinstance(call, dict) and 'argumentTypes' in call
+    keys = {'schema', 'target', 'convention', 'safety', 'arity', 'suppliedArity', 'argumentReps', 'resultRep'}
+    if typed_arrays: keys.add('argumentTypes')
+    if (not isinstance(call, dict) or set(call) != keys or
+        type(call['schema']) is not int or call['schema'] != (2 if typed_arrays else 1) or
+        typed_arrays and call['argumentTypes'] != [rep if rep in ('ByteArray#', 'MutableByteArray#') else None for rep in wanted] or
         call['target'] != dict(kind='static', symbol=abi['symbol'], unit=unit, isFunction=True) or
         call['target'].get('isFunction') is not True or call['convention'] != abi.get('convention', 'ccall') or call['safety'] != abi.get('safety', 'unsafe') or
         type(call['arity']) is not int or call['arity'] != len(wanted) or
@@ -1279,7 +1291,7 @@ def _check_unit_summaries(path, item, module):
     alias = any(binding['id'] == 'main::' + module['module'] + '.main' for binding in module['bindings'])
     inventory = module.get('staticForeignImports')
     imports = inventory.get('imports') if isinstance(inventory, dict) else None
-    declarations = isinstance(imports, list) and bool(imports)
+    declarations = 'packageNativeLink' in module or isinstance(imports, list) and bool(imports)
     for key, actual in (('containsDelimitedControl', control), ('registrationObligations', registration),
                         ('mainAlias', alias), ('packageScalarDeclarations', declarations)):
         if type(item.get(key)) is not bool or item[key] != actual:
