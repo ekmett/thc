@@ -154,14 +154,14 @@ final class OriginalStdioExpression extends Expr {
                 long count = readInteger(frame, 1);
                 long timeout = readInteger(frame, 2);
                 TupleResults.requireVoidCarrier(operands[3].execute(frame));
-                result = stdio.poll(address, count, timeout, this);
+                result = stdio.poll(address, count, timeout, this, ForeignSafety.synchronous(operation.getSafety()));
             } else if (operation.getEpollWait()) {
                 long fd = readInteger(frame, 0);
                 var address = operands[1].executeRequiredAddress(frame);
                 long maximum = readInteger(frame, 2);
                 long timeout = readInteger(frame, 3);
                 TupleResults.requireVoidCarrier(operands[4].execute(frame));
-                result = stdio.epollWait(fd, address, maximum, timeout, this);
+                result = stdio.epollWait(fd, address, maximum, timeout, this, ForeignSafety.synchronous(operation.getSafety()));
             } else if (operation == OriginalStdioOp.EPOLL_CTL) {
                 long fd = readInteger(frame, 0);
                 long command = readInteger(frame, 1);

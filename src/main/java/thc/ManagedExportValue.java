@@ -10,9 +10,7 @@ import com.oracle.truffle.api.interop.*;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import java.math.BigInteger;
-import java.util.List;
 import java.util.ArrayList;
-import java.util.Collections;
 import thc.runtime.*;
 
 /** A declaration alias uses the same program-owned binder, layouts and CAFs as its peers. */
@@ -22,7 +20,7 @@ public final class ManagedExportValue implements TruffleObject {
     private final Language.State owner;
     private final ExecutableProgram program;
     private final ManagedExportSignature signature;
-    private final List<ManagedExportScalar> arguments;
+    private final ManagedExportScalar[] arguments;
     private final ManagedExportScalar result;
     private final RootCallTarget guestTarget, ioTarget;
     private final Object guestEntry;
@@ -30,9 +28,9 @@ public final class ManagedExportValue implements TruffleObject {
         this.registry = registry; this.owner = owner; this.program = program; this.signature = signature;
         var argumentTypes = new ArrayList<ManagedExportScalar>();
         for (var type : signature.arguments()) argumentTypes.add(ManagedExportScalar.fromNormalizedType(type, ManagedExportScalar.Role.ARGUMENT, signature.wordBits(), program::constructorLayout));
-        arguments = Collections.unmodifiableList(argumentTypes);
+        arguments = argumentTypes.toArray(new ManagedExportScalar[0]);
         result = ManagedExportScalar.fromNormalizedType(signature.result(), ManagedExportScalar.Role.RESULT, signature.wordBits(), program::constructorLayout);
-        guestTarget = program.hostEntryTarget(arguments.size()); guestEntry = program.entryValue(signature.binder());
+        guestTarget = program.hostEntryTarget(arguments.length); guestEntry = program.entryValue(signature.binder());
         ioTarget = signature.ioResult() == null ? null : new ManagedExportIoRoot(language, signature.ioResult()).getCallTarget();
     }
     public ExecutableProgram getProgram() { return program; }
@@ -43,7 +41,7 @@ public final class ManagedExportValue implements TruffleObject {
         registry.checkOwner();
         var threads = owner.getThreads();
         if (threads.needsHosting()) return threads.hostEntry(dispatch, () -> execute(values, dispatch));
-        if (values.length != arguments.size()) throw ArityException.create(arguments.size(), arguments.size(), values.length);
+        if (values.length != arguments.length) throw ArityException.create(arguments.length, arguments.length, values.length);
         // Complete all host validation before an IO action can run. Unwrap only
         // the exact BigInteger codec from a polyglot HostObject.
         Object[] inputs = new Object[values.length];
@@ -53,7 +51,7 @@ public final class ManagedExportValue implements TruffleObject {
                 if (value != null && owner.getEnv().isHostObject(value)) {
                     Object host = owner.getEnv().asHostObject(value); if (host instanceof BigInteger) unwrapped = host;
                 }
-                inputs[index] = arguments.get(index).fromHost(unwrapped, InteropLibrary.getUncached());
+                inputs[index] = arguments[index].fromHost(unwrapped, InteropLibrary.getUncached());
             }
         } catch (RuntimeFault failure) { throw UnsupportedTypeException.create(values, failure.getMessage()); }
         threads.enterCurrent(null, false, program.getAsynchronousExceptions(), null);

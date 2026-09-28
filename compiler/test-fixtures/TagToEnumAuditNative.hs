@@ -27,9 +27,11 @@ main = do
                   "boolCase" -> boolCase n
                   "orderingCase" -> orderingCase n
                   "colourCase" -> colourCase n
+                  "wrappedColourCase" -> wrappedColourCase n
                   "externalCase" -> externalCase n
                   "lazyCase" -> lazyCase n
                   "lazyTagCase" -> lazyTagCase n
+                  "lazyWrappedTagCase" -> lazyWrappedTagCase n
                   "papCase" -> papCase n
                   "onceCase" -> onceCase n
                   _ -> error name

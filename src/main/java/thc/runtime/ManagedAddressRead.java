@@ -24,8 +24,15 @@ public enum ManagedAddressRead {
     public int readInt(ManagedAddress address, long elementOffset) { return readInt(address, elementOffset, false); }
     public int readInt(ManagedAddress address, long elementOffset, boolean byteOffset) {
         if (!intCarrier) throw fault("Expected a narrow address read");
-        try (var loan = address.borrow()) {
+        var loan = address.borrow();
+        Throwable failure = null;
+        try {
             return readIntBorrowed(address, elementOffset, byteOffset);
+        } catch (Throwable error) {
+            failure = error;
+            throw error;
+        } finally {
+            if (loan != null) loan.closeAfter(failure);
         }
     }
     private int readIntBorrowed(ManagedAddress address, long elementOffset, boolean byteOffset) {
@@ -47,8 +54,15 @@ public enum ManagedAddressRead {
     public long read(ManagedAddress address, long elementOffset) { return read(address, elementOffset, false); }
     public long read(ManagedAddress address, long elementOffset, boolean byteOffset) {
         if (intCarrier) throw fault("Expected a machine or 64-bit address read");
-        try (var loan = address.borrow()) {
+        var loan = address.borrow();
+        Throwable failure = null;
+        try {
             return readBorrowed(address, elementOffset, byteOffset);
+        } catch (Throwable error) {
+            failure = error;
+            throw error;
+        } finally {
+            if (loan != null) loan.closeAfter(failure);
         }
     }
     @ExplodeLoop

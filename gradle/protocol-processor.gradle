@@ -28,6 +28,7 @@ def prepareProtocolProcessor = tasks.register("prepareProtocolProcessor", Sync) 
     from(provider { zipTree(protocolProcessorSources.singleFile) })
     into(layout.buildDirectory.dir("protocol-processor/source"))
     inputs.file("tools/truffle-protocol/unprofiled-if-then.patch")
+    inputs.file("tools/truffle-protocol/unprofiled-while.patch")
     doFirst {
         checkArchive(protocolProcessorSources.singleFile,
             "5098f0923e52f26ef4ce49060663982a2f7028d87b17317088860fb88b0d5b2a")
@@ -39,6 +40,11 @@ def prepareProtocolProcessor = tasks.register("prepareProtocolProcessor", Sync) 
             // Prevent Git from treating its paths as a repository subdirectory.
             environment("GIT_CEILING_DIRECTORIES", destinationDir.parentFile.absolutePath)
             commandLine("git", "apply", "--no-index", file("tools/truffle-protocol/unprofiled-if-then.patch").absolutePath)
+        }.result.get().assertNormalExitValue()
+        providers.exec {
+            workingDir(destinationDir)
+            environment("GIT_CEILING_DIRECTORIES", destinationDir.parentFile.absolutePath)
+            commandLine("git", "apply", "--no-index", file("tools/truffle-protocol/unprofiled-while.patch").absolutePath)
         }.result.get().assertNormalExitValue()
         checkBuild(destinationDir.toPath().resolve("com/oracle/truffle/dsl/processor/bytecode/model/BytecodeDSLBuiltins.java").toFile()
             .getText("UTF-8").contains("m.unprofiledIfThenOperation")) { "Processor patch was not applied" }

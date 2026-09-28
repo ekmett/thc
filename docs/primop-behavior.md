@@ -43,7 +43,7 @@ test commands.
 | `forkOn#` | Same thread and delivery requirements as `fork#`. Chooses a dense logical capability modulo the context's current logical capability count, then maps modulo its immutable eligible CPU capacity. Native affinity is **best effort**: Linux requests a per-thread pin; Windows requests advisory CPU Sets and declines unresolved multi-group topology; macOS, unavailable native access, or a rejected request run unpinned without failing the fork. |
 | `threadStatus#` | Capability is a context-local assignment, not a measurement of the currently executing physical CPU. The lock flag records a `forkOn#` request, **not successful OS affinity**. Ordinary threads share logical capabilities. |
 | `listThreads#` | Lists context-owned guest identities, not every JVM thread. Retained completed identities and, in platform mode, host carriers between guest invocations can appear; ordering is unspecified. |
-| `isCurrentThreadBound#` | In platform mode, returns `1` inside an admitted safe managed foreign reverse entry and `0` for ordinary guest entries and forks. Unsafe activations reject reverse entry before changing thread state. Loom rejects callbacks. Callback identities stay on their carrier; raw C callback transport and `forkOS` remain unsupported. |
+| `isCurrentThreadBound#` | In either hosting mode, returns `1` inside an admitted safe managed foreign reverse entry and `0` for ordinary guest entries and forks. Unsafe activations reject reverse entry before changing thread state. Callback identities stay on their native origin thread; raw C callback transport and `forkOS` remain unsupported. |
 | `setThreadAllocationCounter#` | Accounts JVM heap bytes during outer guest-entry extents, including runtime bookkeeping and excluding native/Sulong allocations and host work between entries. Requires JVM thread-allocation accounting support; Loom reads/resets reject. Does **not** enforce allocation limits. |
 | `setOtherThreadAllocationCounter#` | Same accounting and missing allocation-limit enforcement, for the selected context-owned thread. |
 
@@ -57,15 +57,17 @@ acceptance; `threadStatus#` cannot supply that information.
 
 **Virtual-thread safety:** platform hosting is the default. Opt-in Loom hosting
 uses a lifetime routing executor per guest virtual thread, not the JVM's shared
-default scheduler; only its exclusive HEC platform workers receive native pins.
+default scheduler; only its HEC platform carriers receive native pins.
 Both the
 [Linux](../src/main/java/thc/runtime/LinuxCpuAffinity.java) and
 [Windows](../src/main/java/thc/runtime/WindowsCpuAffinity.java) affinity paths
 refuse native affinity changes on virtual threads, including when an embedding
 enters from one. Keep those guards: native pins on a migrating virtual thread
-could affect unrelated carrier work. Loom rejects general safe/interruptible
-foreign transitions, callbacks, process-signal handlers and explicit per-thread
-allocation counters. See the exact setup and limitations in
+could affect unrelated carrier work. Safe/interruptible foreign execution and
+blocking callbacks release the exclusive HEC permit; replacement carriers share
+that permit, preserving native-origin callback TLS. Process-signal readers use
+the same admission protocol. Explicit per-thread allocation counters remain
+unavailable. See the exact setup and limitations in
 [thread hosting](thread-scheduling.md#thread-hosting). The helper-inheritance
 caveat above still applies.
 
@@ -253,7 +255,7 @@ Details: [delimited continuations](delimited-continuations.md),
 
 | Primop | Current behavior and consequence |
 | --- | --- |
-| `tagToEnum#` | Only saturated applications to concrete, parameterless ordinary enumeration types are admitted. Valid phantom-parameter enumerations and enumeration data-family instances are excluded by the exporter. |
+| `tagToEnum#` | Only saturated applications to concrete, parameterless ordinary enumeration types are admitted. An erased newtype result cast is supported with the original complete enum family and exact lifted scalar result carrier; using a newtype as the enum type is not supported. Valid phantom-parameter enumerations and enumeration data-family instances are excluded by the exporter. |
 
 This is not a restriction on `dataToTagSmall#` or `dataToTagLarge#`, which admit
 parameterized algebraic families and data-family representation types.

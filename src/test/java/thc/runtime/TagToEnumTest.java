@@ -60,7 +60,7 @@ class TagToEnumTest {
         for (var line : Files.readAllLines(root.resolve("build/tag-to-enum/oracle.tsv"))) {
             var row = Arrays.asList(line.split("\t", -1)); rows.computeIfAbsent(row.getFirst(), ignored -> new ArrayList<>()).add(row);
         }
-        assertEquals(29, rows.values().stream().mapToInt(List::size).sum());
+        assertEquals(38, rows.values().stream().mapToInt(List::size).sum());
         for (var stage : list("pre", "post")) for (var backend : list("ast", "bytecode")) for (var entry : rows.entrySet())
             try (var context = context(inlining)) {
                 context.initialize("thc"); context.enter();
@@ -127,6 +127,26 @@ class TagToEnumTest {
             } finally { context.leave(); }
         }
     }
+    @Test void genuineNewtypeResultCastRetainsTheOriginalEnumFamily() throws Exception {
+        verifyEvidence();
+        for (var stage : list("pre", "post")) for (var backend : list("ast", "bytecode")) try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var linked = CoreModules.reachable(module(stage), "wrappedColourCase");
+                var metadata = object(application(linked).get(6));
+                assertEquals("object", object(metadata.get("rep")).get("kind"));
+                assertEquals(list("BoxedRep (Just Lifted)"), object(metadata.get("rep")).get("primReps"));
+                assertTrue(((String) object(metadata.get("enumFamily")).get("typeConstructor")).endsWith(":TagToEnumAudit.Colour"));
+                var program = program(language, linked, backend);
+                var function = context.asValue(new EntryValue(program, "wrappedColourCase", 1));
+                assertEquals(17L, function.execute(0L).asLong());
+                assertEquals(-31L, function.execute(1L).asLong());
+                assertEquals(83L, function.execute(2L).asLong());
+                released(language);
+            } finally { context.leave(); }
+        }
+    }
     @Test void malformedOrUnsaturatedEnumProofsRejectAtLoad() throws Exception {
         for (var backend : list("ast", "bytecode")) for (var variant : list("missing", "family", "empty", "reverse", "duplicate", "missing-con", "wrong-tag", "float-tag", "fields", "newtype", "truncated-family", "extra-family-member", "word", "unknown", "aggregate", "function-proof", "result", "lifted", "zero", "two", "bare"))
             try (var context = context()) {
@@ -153,7 +173,7 @@ class TagToEnumTest {
                         case "unknown" -> app.set(2, list(list("lit", "int", "0")));
                         case "aggregate" -> metadata.put("rep", map("kind", "unknown", "aggregate", "unboxed-tuple", "components", list(), "primReps", list(), "evaluated", true));
                         case "function-proof" -> expression(app.get(1)).set(2, map("rep", list()));
-                        case "result" -> metadata.put("rep", map("kind", "object", "primReps", list("BoxedRep (Just Lifted)"), "evaluated", false));
+                        case "result" -> metadata.put("rep", map("kind", "object", "primReps", list("BoxedRep (Just Unlifted)"), "evaluated", false));
                         case "lifted" -> app.set(3, list(true));
                         case "zero" -> { app.set(2, list()); app.set(3, list()); }
                         case "two" -> { var twice = new ArrayList<>(expression(app.get(2))); twice.addAll(expression(app.get(2))); app.set(2, twice); app.set(3, list(false, false)); }

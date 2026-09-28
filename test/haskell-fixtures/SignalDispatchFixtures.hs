@@ -18,7 +18,7 @@ import Data.Aeson (object, (.=))
 import Data.List (isPrefixOf, sort)
 import qualified Data.Map.Strict as Map
 import FixtureSupport (hashes, run, runWithTimeout, writeJson)
-import InstalledCoreFixtures (InstalledFixture(..), prepareInstalledCore)
+import InstalledCoreFixtures (InstalledFixture(..), prepareInstalledCore, prepareInstalledCoreWithForeign)
 import System.Directory (createDirectoryIfMissing, doesFileExist, listDirectory, removeFile)
 import System.Environment (lookupEnv)
 import System.Exit (die)
@@ -47,7 +47,10 @@ prepareSignalDispatch root = do
   unless (observed == "1\n10010\n2\n20020\n3\n30030\n15\n150150\n")
     (die ("Original GHC signal dispatcher oracle mismatch: " ++ observed))
   writeFile (root </> oracle) observed
-  installed <- prepareInstalledCore root directory
+  _ <- run root [] "compiler/build.sh" [] ""
+  sourceRoot <- lookupEnv "THC_INSTALLED_CORE_GHC_SOURCE"
+  installed <- maybe (prepareInstalledCore root directory)
+    (prepareInstalledCoreWithForeign root directory) sourceRoot
   stages <- forM ["pre", "post"] $ \stage -> do
     let stageDir = directory </> stage
         core = stageDir </> "core"

@@ -35,4 +35,9 @@ public abstract class BranchRoot extends RootNode implements BytecodeRootNode {
     @Operation public static final class Mark {
         @Specialization @TruffleBoundary public static void mark() { effects.incrementAndGet(); }
     }
+    @Operation public static final class Next {
+        @Specialization @TruffleBoundary public static boolean next(AtomicInteger remaining) {
+            return remaining.getAndDecrement() > 0;
+        }
+    }
 }

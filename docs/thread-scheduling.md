@@ -14,18 +14,23 @@ creation. Loom requires the pinned JDK 25 and
 `--add-opens=java.base/java.lang=ALL-UNNAMED` (included by the launcher). Missing
 support fails explicitly; there is no platform fallback.
 
-Each logical capability (HEC) has one exclusive platform worker. MVar waits park
-the guest virtual thread without retaining its HEC. Runnable, unmounted ordinary
+Each logical capability (HEC) has one exclusive guest-execution permit. MVar and
+STM waits release it, including inside native-pinned callbacks. Runnable, unmounted ordinary
 threads may move between HECs; `forkOn#` stays on its selected logical HEC.
 Resizing normalizes parked and queued routes immediately and mounted routes at
 their next unmounted boundary. Cooperative guest polls yield to waiting work;
 this is not preemptive scheduling. Shutdown cancels and joins managed threads
-before closing carrier queues.
+and active callbacks before closing carrier queues.
 
-Loom rejects general safe/interruptible foreign transitions, foreign callbacks
-and process-signal handler installation. Modeled RTS operations such as
-`setNumCapabilities` keep their dedicated implementations. Unsafe foreign calls
-retain the HEC and can block its progress. There is no native-blocking compensation. Per-virtual-thread
+Safe/interruptible foreign transitions release the HEC before native entry and
+reacquire it before guest execution resumes. Replacement carriers run only while
+released native mounts retain carriers; they share the same exclusive HEC permit.
+Reverse entries remain on the native origin thread, with fresh bound identities
+and destination-context admission. Native TLS and the foreign activation stack
+are not moved to an offload thread. Process-signal readers use the same managed
+hosting and release their HEC during native waits. Unsafe foreign calls retain
+the HEC and can block its progress. This does not make arbitrary native calls
+cancellable or add raw C callback transport. Per-virtual-thread
 allocation counters are unavailable and explicit reads/resets fail, not return
 zero. Platform hosting retains the existing foreign and allocation facilities.
 Existing async delivery, masking and saved-continuation rules apply in both modes.
@@ -41,7 +46,7 @@ no speculative worker pool or parallel-speedup claim.
 and inherited masking state. It records a locked context-local logical capability,
 reducing the requested number modulo the context's logical capability count. It
 maps that index modulo eligible CPU capacity and attempts native affinity on
-the child platform thread, or the Loom HEC's exclusive platform worker. Affinity is best
+the child platform thread, or the Loom HEC's platform carriers. Affinity is best
 effort: an unavailable API, denied native access or rejected request never prevents
 the fork. `threadStatus#` reports the logical capability and requested lock, not
 proof that the OS accepted a pin. This is not `forkOS` or bound foreign TLS.

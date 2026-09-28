@@ -20,6 +20,9 @@ class ManagedExportAsyncPolicyTest {
     private final Map<String, Object> stateRep = map("kind", "void", "primReps", list(), "evaluated", true);
     private final Map<String, Object> scalar = map("kind", "tycon", "name", map("unit", "ghc-internal", "module", "GHC.Internal.Int", "occurrence", "Int32", "namespace", "type"), "arguments", list());
     private Value exported(Context context, String backend, boolean async) {
+        return exported(context, backend, async, list(scalar));
+    }
+    private Value exported(Context context, String backend, boolean async, List<Map<String, Object>> arguments) {
         context.initialize("thc"); context.enter();
         try {
             var owner = Language.currentState(null); var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
@@ -30,7 +33,7 @@ class ManagedExportAsyncPolicyTest {
                 "expr", list("lam", list(map("id", "x", "name", "x", "type", "Int32", "lifted", true, "coercion", false, "rep", dataRep)), body, map("rep", closureRep, "resultRep", dataRep)))),
                 "constructors", list(map("id", "ghc-internal:GHC.Internal.Int.I32#", "name", "I32#", "kind", "boxed", "arity", 1, "fieldReps", list(list("Int32Rep")), "strictFields", list(false), "fieldLifted", list(false))));
             ExecutableProgram program = backend.equals("ast") ? new Program(language, module, async, false) : new BytecodeProgram(language, module, async);
-            var signature = new ManagedExportSignature("model", "Export", "identity", "model:Export.identity", list(scalar), scalar, false, 64, null);
+            var signature = new ManagedExportSignature("model", "Export", "identity", "model:Export.identity", arguments, scalar, false, 64, null);
             return context.asValue(new ManagedExportValue(owner.getManagedExports(), owner, language, program, signature));
         } finally { context.leave(); }
     }
@@ -90,4 +93,22 @@ class ManagedExportAsyncPolicyTest {
     }
     @Test void directExportsPreserveTheirExecutableAsyncPolicy() throws Exception { checkPolicy(false); }
     @Test void safeCrossContextImportsPreserveExporterPolicyAndRestoreCaller() throws Exception { checkPolicy(true); }
+    @Test void privateDescriptorSnapshotKeepsArityAndHostValidationBeforeEffects() {
+        for (String backend : list("ast", "bytecode")) {
+            var output = new ByteArrayOutputStream();
+            try (var context = Context.newBuilder("thc").err(output).build()) {
+                var supplied = new ArrayList<Map<String, Object>>(list(scalar));
+                var value = exported(context, backend, false, supplied);
+                supplied.clear();
+                assertEquals(0, output.size(), "Descriptor conversion must not execute the export");
+                assertThrows(RuntimeException.class, () -> value.execute());
+                assertThrows(RuntimeException.class, () -> value.execute(1, 2));
+                assertThrows(RuntimeException.class, () -> value.execute("wrong carrier"));
+                assertThrows(RuntimeException.class, () -> value.execute(1L << 32));
+                assertEquals(0, output.size(), "Arity and host conversion failures must precede guest effects");
+                assertEquals(19, value.execute(19).asInt());
+                assertEquals("[thc trace event] policy\n", output.toString(StandardCharsets.UTF_8));
+            }
+        }
+    }
 }

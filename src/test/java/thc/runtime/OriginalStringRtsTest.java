@@ -3,7 +3,11 @@
 package thc.runtime;
 
 import com.oracle.truffle.api.RootCallTarget;
+import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.frame.FrameDescriptor;
+import com.oracle.truffle.api.frame.FrameSlotKind;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.Test;
 import thc.Json;
@@ -45,6 +49,58 @@ class OriginalStringRtsTest {
     private static void valid(RootCallTarget target) throws Exception { assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target)); }
     private ExecutableProgram program(Language language, String backend, Map<String,Object> source) { return backend.equals("ast") ? new Program(language, source) : new BytecodeProgram(language, source); }
     private static long length(RootCallTarget target, ManagedAddress address) { return (Long) Calls.target(target, new Object[]{0L, address, thc.runtime.Unit.INSTANCE}); }
+    private static Expr observed(List<String> events, String event, Object value) {
+        return new Expr() {
+            @Override public Object execute(VirtualFrame frame) {
+                events.add(event);
+                if (value instanceof RuntimeException failure) throw failure;
+                return value;
+            }
+        };
+    }
+    @Test void everyStringRtsOperationPreservesAddressThenStateSelection() throws Exception {
+        for (var operation : StringRtsOp.values()) {
+            var events = new ArrayList<String>();
+            boolean readsAddress = operation == StringRtsOp.STRLEN || operation == StringRtsOp.STRLEN_CSIZE;
+            var address = observed(events, "address", ManagedAddress.fromByteArray(new byte[]{65, 66, 0}));
+            var state = observed(events, "state", thc.runtime.Unit.INSTANCE);
+            var expression = new StringRtsExpression(operation, readsAddress ? new Expr[]{address, state} : new Expr[]{state}, CoreRepresentation.UNKNOWN);
+            var descriptor = FrameDescriptor.newBuilder(); int slot = descriptor.addSlot(FrameSlotKind.Long, null, null);
+            var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], descriptor.build());
+            assertNull(expression.executeTuple(frame, new int[]{slot}, 0));
+            assertEquals(readsAddress ? 2L : operation == StringRtsOp.KEEP_CAFS ? 1L : 0L, frame.getLong(slot), operation.name());
+            assertEquals(readsAddress ? List.of("address", "state") : List.of("state"), events, operation.name());
+        }
+    }
+    @Test void stringRtsOperandFailuresRetainOrderAndLeaveDestinationUnchanged() throws Exception {
+        var nullEvents = new ArrayList<String>();
+        var nullOperation = new StringRtsExpression(null, new Expr[]{observed(nullEvents, "state", thc.runtime.Unit.INSTANCE)}, CoreRepresentation.UNKNOWN);
+        assertThrows(NullPointerException.class, () -> nullOperation.executeTuple(null, new int[]{0}, 0));
+        assertEquals(List.of(), nullEvents, "A null operation must fail before evaluating operands");
+        for (var operation : List.of(StringRtsOp.STRLEN, StringRtsOp.STRLEN_CSIZE)) {
+            var events = new ArrayList<String>(); var failure = new IllegalStateException("operand failure");
+            var descriptor = FrameDescriptor.newBuilder(); int slot = descriptor.addSlot(FrameSlotKind.Long, null, null);
+            var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], descriptor.build()); frame.setLong(slot, 73L);
+            var addressFailure = new StringRtsExpression(operation, new Expr[]{observed(events, "address", failure), observed(events, "state", thc.runtime.Unit.INSTANCE)}, CoreRepresentation.UNKNOWN);
+            assertSame(failure, assertThrows(IllegalStateException.class, () -> addressFailure.executeTuple(frame, new int[]{slot}, 0)));
+            assertEquals(List.of("address"), events); assertEquals(73L, frame.getLong(slot));
+            events.clear();
+            var stateFailure = new StringRtsExpression(operation, new Expr[]{observed(events, "address", ManagedAddress.nullAddress()), observed(events, "state", failure)}, CoreRepresentation.UNKNOWN);
+            assertSame(failure, assertThrows(IllegalStateException.class, () -> stateFailure.executeTuple(frame, new int[]{slot}, 0)));
+            assertEquals(List.of("address", "state"), events); assertEquals(73L, frame.getLong(slot));
+        }
+        for (var operation : StringRtsOp.values()) {
+            var events = new ArrayList<String>();
+            boolean readsAddress = operation == StringRtsOp.STRLEN || operation == StringRtsOp.STRLEN_CSIZE;
+            var state = observed(events, "state", 0L);
+            var address = observed(events, "address", ManagedAddress.nullAddress());
+            var expression = new StringRtsExpression(operation, readsAddress ? new Expr[]{address, state} : new Expr[]{state}, CoreRepresentation.UNKNOWN);
+            var descriptor = FrameDescriptor.newBuilder(); int slot = descriptor.addSlot(FrameSlotKind.Long, null, null);
+            var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], descriptor.build()); frame.setLong(slot, 91L);
+            assertEquals("Invalid zero-width scalar carrier", assertThrows(RuntimeFault.class, () -> expression.executeTuple(frame, new int[]{slot}, 0)).getMessage());
+            assertEquals(readsAddress ? List.of("address", "state") : List.of("state"), events); assertEquals(91L, frame.getLong(slot));
+        }
+    }
     @Test void originalByteStringSizeTDeclarationUsesTheSameCheckedCStringStorage() throws Exception {
         // Original unix System.Posix.PosixPath.FilePath module SHA-256
         // e341553bb7289341df45e43917d9dc17a3f7e67074c9afbd315326480175a26b.

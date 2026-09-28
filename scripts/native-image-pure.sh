@@ -27,7 +27,7 @@ fi
 
 image_classpath=
 for image_jar in "$lib_dir"/*.jar; do
-    case "${image_jar##*/}" in llvm-*|antlr4-*|truffle-nfi-*) continue ;; esac
+    case "${image_jar##*/}" in llvm-*|thc-llvm-language-*|antlr4-*|truffle-nfi-*) continue ;; esac
     image_classpath="${image_classpath:+$image_classpath:}$image_jar"
 done
 initialization=

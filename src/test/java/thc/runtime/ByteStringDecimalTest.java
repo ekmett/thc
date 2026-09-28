@@ -10,6 +10,8 @@ import org.junit.jupiter.api.Test;
 import thc.*;
 import java.nio.file.*;
 import java.nio.charset.StandardCharsets;
+import java.lang.reflect.InvocationTargetException;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static thc.runtime.ScalarValueTestSupport.*;
@@ -42,6 +44,64 @@ class ByteStringDecimalTest {
     private byte[] bytes(ManagedAddress address) { return bytes(address, 48); }
     private byte[] bytes(ManagedAddress address, int count) { var bytes = new byte[count]; for (int i = 0; i < count; i++) bytes[i] = (byte) address.readWord8(i); return bytes; }
     private byte[] sentinel(int count) { var bytes = new byte[count]; Arrays.fill(bytes, (byte) 0xa5); return bytes; }
+    @Test void directWritersKeepBytesAndReleaseNativeBorrowsAfterFailures() throws Exception {
+        inside(language -> {
+            for (boolean nativeStorage : nativeAvailable ? new boolean[]{false, true} : new boolean[]{false}) {
+                var address = nativeStorage ? Language.currentState().getNativeAllocations().malloc(24)
+                    : ManagedAddress.fromByteArray(sentinel(24));
+                try {
+                    for (int i = 0; i < 24; i++) address.writeWord8(i, 0xa5);
+                    assertTrue(ByteStringDecimal.signed(Long.MIN_VALUE, address).sameLocation(address.plus(20)));
+                    assertEquals("-9223372036854775808", new String(bytes(address, 20), StandardCharsets.US_ASCII));
+                    assertEquals(0xa5L, address.readWord8(20));
+                    ByteStringDecimal.padded18(17, address);
+                    assertEquals("000000000000000017", new String(bytes(address, 18), StandardCharsets.US_ASCII));
+                    var before = bytes(address, 24);
+                    assertThrows(RuntimeFault.class, () -> ByteStringDecimal.padded18(-1, address));
+                    assertThrows(RuntimeFault.class, () -> ByteStringDecimal.padded18(17, address.plus(7)));
+                    assertThrows(RuntimeFault.class, () -> ByteStringDecimal.signed(Long.MIN_VALUE, address.plus(5)));
+                    assertArrayEquals(before, bytes(address, 24));
+                } finally {
+                    // Free rejects this thread's live borrow: success proves exceptional cleanup released it.
+                    if (nativeStorage) Language.currentState().getNativeAllocations().free(address);
+                }
+            }
+        });
+    }
+    @Test void borrowCleanupRetainsPrimarySuppressedAndCloseOnlyFailures() throws Exception {
+        if (!nativeAvailable) return;
+        var close = ManagedNativeAllocations.Owner.Borrow.class.getDeclaredMethod("closeAfter", Throwable.class);
+        close.setAccessible(true);
+        inside(language -> {
+            var allocation = Language.currentState().getNativeAllocations().malloc(24);
+            var borrow = allocation.nativeAllocation().borrow();
+            var primary = new IllegalStateException("original writer failure");
+            var failure = new AtomicReference<Throwable>();
+            try {
+                var other = new Thread(() -> {
+                    try { close.invoke(borrow, primary); }
+                    catch (Throwable error) { failure.set(error); }
+                });
+                other.start(); other.join(); assertNull(failure.get());
+                assertEquals(1, primary.getSuppressed().length);
+                assertInstanceOf(RuntimeFault.class, primary.getSuppressed()[0]);
+                assertEquals("Native allocation borrow belongs to another thread", primary.getSuppressed()[0].getMessage());
+                assertThrows(RuntimeFault.class, () -> Language.currentState().getNativeAllocations().free(allocation));
+                var closeOnly = new Thread(() -> {
+                    try { close.invoke(borrow, (Object) null); }
+                    catch (InvocationTargetException error) { failure.set(error.getCause()); }
+                    catch (Throwable error) { failure.set(error); }
+                });
+                closeOnly.start(); closeOnly.join();
+                assertInstanceOf(RuntimeFault.class, failure.get());
+                assertEquals("Native allocation borrow belongs to another thread", failure.get().getMessage());
+                close.invoke(borrow, primary);
+                assertEquals(1, primary.getSuppressed().length, "Successful close does not alter the primary failure");
+            } finally {
+                borrow.close(); Language.currentState().getNativeAllocations().free(allocation);
+            }
+        });
+    }
     private List<Map<String, Object>> fixture() throws Exception {
         var manifest = object(json("manifest.json")); assertEquals("9.14.1", manifest.get("ghc")); assertEquals(entries, manifest.get("entries"));
         assertTrue(CoreMemorySearchForeign.isOriginalByteStringUnit(manifest.get("bytestringUnit"))); assertEquals(false, manifest.get("installedArtifactsHashed"));
