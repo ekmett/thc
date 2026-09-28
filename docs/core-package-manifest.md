@@ -45,7 +45,7 @@ module names, boundaries and binding owners, and rejects missing reachable
 globals. File-hash verification is opt-in. The separate auditor accepts
 `--package-manifest packages.json`. The JVM command-line module argument accepts
 `@packages.json`, including with `--run-io`. Add `--verify-artifacts` before the
-guest `--` separator to check artifact hashes and complete source/index agreement.
+guest `--` separator to check artifact hashes and original source identity.
 The JVM `loadEntry` and `loadManagedExports` APIs expose `verifyArtifacts = false`.
 
 `scripts/test-core-package-link.py` builds an independently registered library
@@ -117,42 +117,22 @@ hashes, metadata projections and derived facts before publishing a completed
 result. ZIP acquisition receipts remain in the producer cache; existing ZIP and
 loose-module manifests remain valid.
 
-## Optional JSON indexes and lazy loading
+## JSON navigation and lazy loading
 
-A module record may include an `index` object with exactly `path` and `sha256`:
+Serialized `.idx` sidecars and module `index` references are no longer supported.
+Regenerate old package artifacts with the current exporter. JSON and `.symbols`
+directories remain supported; the latter provide direct binding lookup without
+building navigation over a whole unit.
 
-```json
-{
-  "index": {
-    "path": "core/units/u-example-0.1-inplace/Example.json.idx",
-    "sha256": "<lowercase SHA-256 of the complete sidecar file>"
-  }
-}
-```
-
-The original JSON and the module record's existing fields remain unchanged. An
-index describes navigation through those exact bytes; it is not another Core format.
-The [sidecar producer](../compiler/json-index/README.md#sidecar-v2-producer)
-documents generation and the version 2 wire layout. Records without `index`
-remain valid and use the existing JSON loading path. A nearby `.idx` file is
-not selected unless the manifest declares it.
-
-For loose artifacts, the declared paths remain inside the manifest directory.
-For a ZIP bundle, they name members of that bundle. JSON and index member paths
-must be distinct, and the inner `manifest.json` must contain the same module
-records as the outer package manifest. The ZIP inventory includes every declared
-JSON and index, plus its required manifests; missing, duplicate and undeclared
-members are rejected. Normal loading trusts the supplied files and sidecars,
-checking their framing, extents and accessed value/ABI shapes without hashing or
-rescanning the complete source. Explicit verification additionally checks artifact
-and sidecar hashes, source identity, grammar and navigation metadata. Errors do
-not silently fall back to the unindexed path.
-
-Indexed loading still reads and retains an owned immutable JSON snapshot, builds
-navigation over the complete topology, reads ZIP members and enumerates binding
-headers eagerly. Control summaries and strict dependency discovery still visit
-expressions; foreign admission may inspect additional fields. Skipping optional
-verification does not make these remaining stages demand-driven.
+Loose module paths stay inside the manifest directory. ZIP bundles contain the
+exact declared JSON modules plus their required manifests; missing, duplicate
+and undeclared members are rejected. Explicit artifact verification checks the
+source and bundle hashes. Normal loading retains immutable JSON bytes and builds
+in-memory navigation, checking container grammar and quoted boundaries without
+decoding all scalar values or binding bodies. It still scans the JSON topology,
+reads ZIP members and enumerates binding headers. Control summaries and strict
+dependency discovery still visit expressions; foreign admission may inspect
+additional fields.
 
 For both backends, eligible lifted top-level functions and thunks decode body
 fields and lower executable roots on demand. Entry selection prepares the entry;

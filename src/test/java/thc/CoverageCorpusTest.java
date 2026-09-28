@@ -39,7 +39,7 @@ class CoverageCorpusTest {
             var shared = entry.get("sharedBindings") instanceof List<?> values ? values.stream().map(value -> (String) value).toList() : List.<String>of();
             tests.add(DynamicTest.dynamicTest(backend + " " + id + ": " + entry.get("focus"), () -> {
                 try (var context = Main.executionContext(false)) {
-                    var function = context.eval("thc", CoreModules.request(modules, (String) entry.get("name"), true, false, backend, true, false, null, null, null, false));
+                    var function = context.eval("thc", CoreModules.request(modules, (String) entry.get("name"), true, false, backend, true, false, null, null, false, false));
                     assertEquals(backend, diagnostics(function).get("backend"));
                     LongConsumer check = n -> {
                         var evaluations = new LinkedHashMap<String, Long>(); for (var label : shared) evaluations.put(label, labelCount(function, label));

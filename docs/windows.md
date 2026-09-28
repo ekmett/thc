@@ -35,24 +35,6 @@ PowerShell helpers treat native exit codes as authoritative. An ordinary
 compiler message on stderr is not a failed native command. Failed commands
 still stop the workflow.
 
-## Native JSON index checks
-
-~~~powershell
-./scripts/windows.ps1 -Action JsonIndexTest -Jobs 4
-~~~
-
-This focused action runs `cabal test json-index -fdevelopment
---test-show-details=direct` with the selected GHC 9.14.1 and its native C
-toolchain. It builds only the test and its dependencies, without requiring a
-JVM build or complete-Core acquisition. The full Test action and Windows CI
-also run this suite; Cabal logs are retained under dist-newstyle.
-
-The suite checks native scalar/ISA parity, Haskell FFI state carry and bounds,
-sidecar sections and hashes, and the tracked cross-language golden vectors.
-Runtime dispatch selects AVX2 only when the CPU and OS support it; unavailable
-explicit backends are rejected. These checks validate the index producer,
-not execution of exported Core. See [the scanner contract](../compiler/json-index/README.md).
-
 ## Native export and launch
 
 The official Windows GHC is a vanilla/static compiler. The exporter loads the

@@ -119,21 +119,17 @@ Warm publication checks the selected identity and pair file sizes.
 `--verify-artifacts` bypasses selection receipts, checks the original archives
 and cached pair hashes, and regenerates corrupt publications from the checked
 original ZIP. Older text symbol directories have no format marker and remain
-explicit legacy inputs. Legacy ZIP, loose JSON and explicit structural-index inputs remain
-separate supported formats.
+explicit legacy inputs. ZIP and loose JSON remain supported formats; serialized
+`.idx` sidecars have been retired. Regenerate artifacts that still declare them.
 
-Simple-package runs also produce sidecars for their loose consumer modules.
-The driver passes those pairs explicitly alongside the support package
-manifest. Manual JVM launches use repeatable `--json-sidecar JSON INDEX`
-options; they must cover every loose JSON input and precede the guest `--`
-boundary. The [embedding guide](site/embedding.md#indexed-packages-and-loose-inputs)
-shows the mixed-input syntax. A neighboring `.idx` file is not discovered
-automatically.
+Simple-package runs pass loose consumer JSON alongside the support package
+manifest. The [embedding guide](site/embedding.md#indexed-packages-and-loose-inputs)
+shows the mixed-input syntax and explicit in-memory JSON navigation API.
 
-Indexed loading defers eligible binding-body decoding and backend preparation.
-An index does not establish that every supplied binding is executable.
+Demand loading defers eligible binding-body decoding and backend preparation;
+it does not establish that every supplied binding is executable.
 `run --verify-artifacts` requests a pre-launch reachable-Core audit as well as
-runtime artifact verification. See the [package format](core-package-manifest.md#optional-json-indexes-and-lazy-loading)
+runtime artifact verification. See the [package format](core-package-manifest.md#json-navigation-and-lazy-loading)
 for the validation and lazy-loading boundary.
 
 IO launchers (`--run-io` and `--run-executable`) do not append runtime metrics to

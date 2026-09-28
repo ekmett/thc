@@ -1989,9 +1989,7 @@ class RenamedInputContractTests(unittest.TestCase):
                           "src/test/java/thc/runtime/IntegerSimdModel.java"), cache.RUNTIME_INPUTS)
         with patch.object(cache, "toolchain", return_value={}):
             sources = cache.identity(root)["sources"]
-        for name in (*cache.RUNTIME_INPUTS, "json-index/THC/JsonIndex.hs",
-                     "json-index/THC/JsonIndex/Scanner.hs", "compiler/json-index/json_index.c",
-                     "compiler/json-index/json_index.h", *("compiler/THC/" + name + ".hs" for name in
+        for name in (*cache.RUNTIME_INPUTS, "json-index/THC/CoreSymbols.hs", *("compiler/THC/" + name + ".hs" for name in
                                              ("CBV", "Demands", "Plugin", "Sources", "Wired"))):
             self.assertIn(name, sources)
             self.assertEqual(cache.digest(root / name), sources[name])

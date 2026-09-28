@@ -61,7 +61,7 @@ continuation coverage are not interchangeable merely because values are shared.
 See the [bytecode guide](bytecode.md) and
 [JVM implementation reference introduction](site/jvm.md).
 
-An optional [JSON sidecar](core-package-manifest.md#optional-json-indexes-and-lazy-loading)
+[In-memory JSON navigation](core-package-manifest.md#json-navigation-and-lazy-loading)
 lets either backend project fields from retained JSON bytes and prepare eligible
 top-level functions and thunks on demand. File verification is opt-in; source
 snapshotting, header indexing and dependency discovery still do eager work. The selected entry is

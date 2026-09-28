@@ -51,9 +51,6 @@ import qualified THC.ForeignImportProvenance as ImportProvenance
 import THC.Wired (wiredApplication, wiredCase, wiredRhs, preservesWiredTypes, isWiredVoid)
 import THC.JSON (J(..), json, jsonBytesWithBindings)
 import THC.CoreSymbols (encodeSymbols)
-import qualified THC.JsonIndex as JsonIndex
-import THC.JsonIndex.Scanner (Backend(Automatic))
-import System.IO (IOMode(WriteMode), withBinaryFile)
 import GHC.Types.Tickish (CoreTickish, tickishFloatable)
 import GHC.Types.Literal
 import qualified GHC.Types.ForeignCall as Foreign
@@ -297,19 +294,16 @@ nameKey n = case nameModule_maybe n of
     occurrence = unpackFS (occNameMangledFS (nameOccName n))
 
 -- Count positions in the emitted UTF-8 bytes, never in a pretty-printed String
--- or locale/newline-translated text handle. The structural index is optional;
--- the small text directory also works without one.
-writeCoreOutput :: [CommandLineOption] -> FilePath -> J -> IO ()
-writeCoreOutput opts path result = do
+-- or locale/newline-translated text handle. The small symbol directory permits
+-- demand loading without decoding the whole JSON document.
+writeCoreOutput :: FilePath -> J -> IO ()
+writeCoreOutput path result = do
   let (body, offsets, _) = jsonBytesWithBindings result
       bytes = BS.snoc body 10
   symbols <- either fail pure $ encodeSymbols
     [(bytesFS (mkFastString key), fromIntegral offset) | (key, offset) <- offsets]
   BS.writeFile path bytes
   BS.writeFile (path ++ ".symbols") symbols
-  when ("json-index" `elem` opts) $ do
-    withBinaryFile (path ++ ".idx") WriteMode $ \output ->
-      JsonIndex.writeSidecar output Automatic bytes
 
 -- Cabal can compile the same module name in several distinct units. Keep the
 -- historical flat layout for fixtures, but let package exports preserve the
@@ -884,7 +878,7 @@ exportModule opts guts = do
   liftIO $ do
     let path = coreOutputPath opts dir (unitString (moduleUnit (mg_module guts))) modName
     createDirectoryIfMissing True (takeDirectory path)
-    writeCoreOutput opts path result
+    writeCoreOutput path result
     modifyIORef' sourceDefinitions ((d,binds):)
     let roots = [v | (v,_) <- binds, occNameString (nameOccName (varName v)) `elem` closureRoots]
     if null roots then pure () else exportInterfaceClosure hsc opts dir d roots
@@ -959,7 +953,7 @@ exportLate hsc opts pair@(guts,_)
           binds = concatMap flattenBind (cg_binds guts)
       let path = coreOutputPath opts dir (unitString (moduleUnit m)) modName
       createDirectoryIfMissing True (takeDirectory path)
-      writeCoreOutput opts path result
+      writeCoreOutput path result
       modifyIORef' sourceDefinitions ((d,binds):)
       let roots = [v | (v,_) <- binds, occNameString (nameOccName (varName v)) `elem` mapMaybe (stripPrefix "closure=") opts]
       if null roots then pure () else exportInterfaceClosure hsc opts dir d roots
@@ -1306,5 +1300,5 @@ exportInterfaceClosure hsc opts dir rootCtx roots = do
         [("providedModules", A (map S provided)) | not (null provided)] ++ sourceTableFields closureCtx
   let path = coreOutputPath opts dir "dependency-closure" "THC.InterfaceClosure"
   createDirectoryIfMissing True (takeDirectory path)
-  writeCoreOutput opts path result
+  writeCoreOutput path result
   putStrLn ("THC interface closure: " ++ show (length imports) ++ " actual unfoldings, " ++ show (length missing) ++ " missing source definitions")

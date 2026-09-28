@@ -9,11 +9,11 @@
 -- License     : UPL-1.0 AND BSD-3-Clause
 -- Maintainer  : Edward Kmett <ekmett@gmail.com>
 -- Stability   : experimental
--- Portability : Haskell 2010; bytestring and the portable JSON index FFI
+-- Portability : Haskell 2010; bytestring and SHA-256
 --
--- Pair final Core bytes with optional, source-bound navigation sidecars.
+-- Preserve final Core bytes and validate their package member references.
 module THC.Driver.CoreIndex
-  ( indexedModules, modulePaths, moduleEntries, indexFormat ) where
+  ( packageModules, modulePaths, moduleEntries ) where
 
 import Control.Monad (guard)
 import qualified Crypto.Hash.SHA256 as SHA
@@ -22,77 +22,41 @@ import Data.Aeson.Key (Key)
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString as BS
 import Data.Char (isAscii, isControl, isAlpha)
-import Data.List (nub, sort)
+import Data.List (nub)
 import Numeric (showHex)
-import THC.JsonIndex (encodeSidecar, validateSidecar)
-import THC.JsonIndex.Scanner (Backend(Automatic))
-
--- | The output contract participates in exporter cache identities. The linked
--- driver/plugin artifact hashes cover the actual encoder implementation.
-indexFormat :: Value
-indexFormat = object ["magic" .= ("THCJSIX1" :: String), "version" .= (2 :: Int)]
 
 -- | Input bytes must already contain every native/ABI linking amendment.
--- Preserve them exactly and place each sidecar immediately after its JSON.
-indexedModules :: [(String, FilePath, BS.ByteString)] -> IO ([Value], [(FilePath, BS.ByteString)])
-indexedModules modules = do
-  pairs <- mapM indexed modules
-  let entries = concatMap snd pairs
-      paths = map fst entries
+-- Preserve them exactly in supplied order.
+packageModules :: [(String, FilePath, BS.ByteString)] -> IO ([Value], [(FilePath, BS.ByteString)])
+packageModules modules =
   if all safeMember paths && length paths == length (nub paths)
-    then pure (map fst pairs, entries)
-    else fail "invalid or duplicate Core/index member paths"
+    then pure (refs, entries)
+    else fail "invalid or duplicate Core member paths"
   where
-    indexed (name, path, bytes) = do
-      index <- encodeSidecar Automatic bytes
-      let indexPath = path ++ ".idx"
-          ref = object ["name" .= name,
-            "boundary" .= ("optimized-Core-after-Tidy-before-CorePrep" :: String),
-            "path" .= path, "sha256" .= digest bytes,
-            "index" .= object ["path" .= indexPath, "sha256" .= digest index]]
-      pure (ref, [(path, bytes), (indexPath, index)])
+    paths = [path | (_, path, _) <- modules]
+    entries = [(path, bytes) | (_, path, bytes) <- modules]
+    refs = [object ["name" .= name,
+      "boundary" .= ("optimized-Core-after-Tidy-before-CorePrep" :: String),
+      "path" .= path, "sha256" .= digest bytes] | (name, path, bytes) <- modules]
 
--- | All declared payload paths, including a strictly shaped optional sidecar.
--- Legacy records without an index remain valid. An explicit malformed/null
--- index is rejected rather than interpreted as a legacy record.
+-- | Sidecar records are retired; stale cache records must be regenerated.
 modulePaths :: Value -> Maybe [FilePath]
-modulePaths item = do
+modulePaths item@(Object fields) = do
+  guard (not (KeyMap.member "index" fields))
   path <- field item "path"
   guard (safeMember path)
-  optional <- indexReference item
-  let paths = path : [indexPath | Just (indexPath, _) <- [optional]]
-  guard (length paths == length (nub paths))
-  pure paths
+  pure [path]
+modulePaths _ = Nothing
 
--- | Check the declared pair before retaining it in a cache hit or projection.
--- This checks envelope binding; the navigation consumer validates its records.
+-- | Validate source identity before retaining a cache hit or projection.
 moduleEntries :: Value -> [(FilePath, BS.ByteString)] -> Maybe [(FilePath, BS.ByteString)]
 moduleEntries item entries = do
   paths <- modulePaths item
   path <- field item "path"
   expected <- field item "sha256"
   bytes <- lookup path entries
-  guard (digest bytes == expected)
-  optional <- indexReference item
-  case optional of
-    Nothing -> pure [(path, bytes)]
-    Just (indexPath, indexHash) -> do
-      index <- lookup indexPath entries
-      guard (digest index == indexHash && validateSidecar bytes index == Right ())
-      guard (paths == [path, indexPath])
-      pure [(path, bytes), (indexPath, index)]
-
-indexReference :: Value -> Maybe (Maybe (FilePath, String))
-indexReference (Object fields) = case KeyMap.lookup "index" fields of
-  Nothing -> Just Nothing
-  Just value@(Object index) -> do
-    guard (sort (KeyMap.keys index) == ["path", "sha256"])
-    path <- field value "path"
-    expected <- field value "sha256"
-    guard (safeMember path)
-    pure (Just (path, expected))
-  _ -> Nothing
-indexReference _ = Nothing
+  guard (paths == [path] && digest bytes == expected)
+  pure [(path, bytes)]
 
 field :: FromJSON a => Value -> Key -> Maybe a
 field (Object fields) key = KeyMap.lookup key fields >>= \value -> case fromJSON value of

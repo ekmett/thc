@@ -197,7 +197,7 @@ def haskell_suites(selection):
             and selected.get("count") == len(selected["suites"]),
             "Invalid Haskell test selection")
     suites = selected["suites"]
-    require(isinstance(suites, list) and all(name in ("driver-tests", "primop-tools", "json-index", "compact-core-tests") for name in suites)
+    require(isinstance(suites, list) and all(name in ("driver-tests", "primop-tools", "compact-core-tests") for name in suites)
             and len(suites) == len(set(suites)),
             "Unknown or duplicate Haskell test suite")
     return suites

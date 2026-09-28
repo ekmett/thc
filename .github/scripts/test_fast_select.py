@@ -63,7 +63,6 @@ class FastSelectionTest(unittest.TestCase):
             "scripts/test-other.py": PYTHON_TEST,
             "test/haskell-driver/Main.hs": "module Main where\nmain = pure ()\n",
             "test/primop-tools/Main.hs": "module Main where\nmain = pure ()\n",
-            "test/json-index/Main.hs": "module Main where\nmain = pure ()\n",
             "test/compact-core/Main.hs": "module Main where\nmain = pure ()\n",
             "README.md": "Documentation\n",
         }
@@ -236,10 +235,9 @@ class FastSelectionTest(unittest.TestCase):
         self.assertEqual(["primop-tools"], selected["haskell"]["suites"])
         self.assertEqual(["primop-tools"], selected["affected"]["haskell"])
 
-    def test_json_index_inputs_select_the_cabal_suite(self):
+    def test_core_symbols_selects_its_consumers(self):
         policy = json.loads(Path(__file__).with_name("fast-tests.json").read_text())
-        for path in ("json-index/THC/JsonIndex.hs", "json-index/THC/JsonIndex/Scanner.hs", "compiler/json-index/json_index.c",
-                     "compiler/json-index/json_index.h", "test/json-index/Main.hs", "test/json-index/native.c"):
+        for path in ("json-index/THC/CoreSymbols.hs",):
             with self.subTest(path=path):
                 self.policy["owners"][path] = policy["owners"][path]
                 self.write(select.POLICY, json.dumps(self.policy))
@@ -250,7 +248,7 @@ class FastSelectionTest(unittest.TestCase):
                 selected = self.plan(base=before)
                 self.assertEqual("narrow", selected["mode"], selected)
                 self.assertTrue(selected["runnable"])
-                suites = ["json-index"] if path.startswith("test/") else ["driver-tests", "json-index"]
+                suites = ["compact-core-tests", "driver-tests"]
                 self.assertEqual(suites, selected["haskell"]["suites"])
                 self.assertEqual(suites, selected["affected"]["haskell"])
                 self.assertEqual(["example.SmokeTest"], selected["junit"]["classes"])
@@ -285,8 +283,8 @@ class FastSelectionTest(unittest.TestCase):
                     junit.append("thc.CoreCompactGoldenTest")
                 self.assertEqual(junit, selected["junit"]["classes"])
 
-    def test_json_index_documentation_retains_only_smoke(self):
-        for path in ("compiler/json-index/README.md", "compiler/json-index/LICENSE.succinctly"):
+    def test_retained_attribution_retains_only_smoke(self):
+        for path in ("compiler/json-index/LICENSE.succinctly",):
             with self.subTest(path=path):
                 before = self.git("rev-parse", "HEAD")
                 self.write(path, "Documentation or license update\n")
@@ -296,12 +294,12 @@ class FastSelectionTest(unittest.TestCase):
                 self.assertEqual([], selected["haskell"]["suites"])
                 self.assertEqual(["example.SmokeTest"], selected["junit"]["classes"])
 
-    def test_full_selection_includes_json_index(self):
-        self.write("json-index/THC/JsonIndex/Producer.hs", "unreviewed production dependency\n")
+    def test_full_selection_includes_current_haskell_suites(self):
+        self.write("json-index/THC/NewSymbols.hs", "unreviewed production dependency\n")
         self.commit()
         selected = self.full("unmapped-source-or-configuration")
         self.assertTrue(selected["runnable"])
-        self.assertEqual(["compact-core-tests", "driver-tests", "json-index", "primop-tools"], selected["haskell"]["suites"])
+        self.assertEqual(["compact-core-tests", "driver-tests", "primop-tools"], selected["haskell"]["suites"])
 
     def test_polyglot_changes_select_actual_optional_class_without_all_regular_tests(self):
         path = "src/polyglotTest/java/example/PolyglotTest.java"

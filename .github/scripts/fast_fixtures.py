@@ -290,8 +290,6 @@ COMMON_SOURCES = (
     "Makefile",
     "compiler/THC/**/*.hs",
     "json-index/**/*.hs",
-    "compiler/json-index/json_index.c",
-    "compiler/json-index/json_index.h",
     "compiler/build.sh",
     "compiler/export.sh",
     "compiler/toolchain.sh",

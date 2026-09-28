@@ -56,7 +56,7 @@ import System.Process (CreateProcess(..), StdStream(..), createProcess, proc, wa
                        readCreateProcessWithExitCode)
 import THC.Driver.Cabal (PlanOptions(..))
 import THC.Driver.Cache (coreCacheDirectory)
-import THC.Driver.CoreIndex (indexedModules, modulePaths, moduleEntries, indexFormat)
+import THC.Driver.CoreIndex (packageModules, modulePaths, moduleEntries)
 import THC.Driver.CoreSymbols (publishCoreUnit)
 import THC.Driver.ForeignBitcode (linkClockGetTime, timeClockHeaders)
 import THC.Driver.GhcProxy (ghcProxyCommand, ghcProxyWindowsCommand)
@@ -702,7 +702,7 @@ prepareInstalledBundleWithVerification verify cache staging recipe driverHash co
     (rtsRegistration, _) <- installedLayoutHeaders context registrationUnit
     probe <- probeCurrent
     let identity = object ["schema" .= (1 :: Int), "helperHash" .= helperHash,
-          "driverHash" .= driverHash, "jsonIndex" .= indexFormat, "recipeHash" .= recipeHash,
+          "driverHash" .= driverHash, "recipeHash" .= recipeHash,
           "rtsRegistration" .= rtsRegistration,
           "registration" .= installedProvenance context registrationUnit]
         index = cache </> "installed-probes/v1" </> shaHex (BL.toStrict (encode identity)) ++ ".json"
@@ -890,7 +890,7 @@ acquireInstalledBundle verify cache staging recipe driverHash context registrati
             "generatedCore" .= [object ["module" .= name, "sha256" .= shaHex bytes] | (name, bytes) <- modules],
             "dependencies" .= installedDepends registrationUnit]
           buildKey = shaHex (BL.toStrict (encode (object inputFields)))
-          exporter = object (["helperHash" .= helperHash, "driverHash" .= driverHash, "jsonIndex" .= indexFormat,
+          exporter = object (["helperHash" .= helperHash, "driverHash" .= driverHash,
                              "options" .= (["post-tidy", "unit-qualified", "source-notes", "dynamic"] :: [String])] ++
                              ["foreignLinkRecipe" .= ("original-capi-llvm-v5" :: String)
                              | any ((`elem` ["System.CPUTime.Posix.ClockGetTime", "Data.Time.Clock.Internal.CTimespec"]) . fst) modules])
@@ -923,7 +923,7 @@ acquireInstalledBundle verify cache staging recipe driverHash context registrati
                 pure (name, result)
               currentClockHeaders <- if null clockHeaders then pure [] else timeClockHeaders (installedLibdir context) includes
               require (currentClockHeaders == clockHeaders) "Selected time headers changed during installed acquisition"
-              (refs, members) <- indexedModules
+              (refs, members) <- packageModules
                 [(name, "core/" ++ show index ++ ".json", bytes)
                 | (index, (name, bytes)) <- zip [0 :: Int ..] linked]
               let receiptBytes = BL.toStrict (encode (object (inputFields ++
@@ -1003,7 +1003,7 @@ wiredGhcInternal context thcRoot = do
       exporter = object (["pluginUnit" .= contextPluginUnit context,
                          "pluginDb" .= contextPluginDb context,
                          "pluginHash" .= pluginHash,
-                         "driverHash" .= contextDriverHash context, "jsonIndex" .= indexFormat,
+                         "driverHash" .= contextDriverHash context,
                          "options" .= (["ghc-internal-source-closure-v2", "post-tidy",
                                         "source-notes", "foreign-import-provenance",
                                         "hsc2hs", "-g"] ++
@@ -1066,7 +1066,7 @@ wiredGhcInternal context thcRoot = do
               ("pinned wired Core has wrong identity: " ++ name)
             bytes <- BS.readFile core
             pure (member, bytes)
-          (refs, members) <- indexedModules
+          (refs, members) <- packageModules
             [(name, member, bytes) | (name, (member, bytes)) <- zip names originalMembers]
           let derived = ["targetLayout" .= layout, "generatedSources" .= generated] ++
                 ["sourceBuild" .= value | Just value <- [sourceBuildReceipt artifacts]]
@@ -1311,7 +1311,7 @@ exporterIdentity context = do
   pure $ object ["pluginUnit" .= contextPluginUnit context,
                  "pluginDb" .= contextPluginDb context,
                  "pluginHash" .= pluginHash,
-                 "driverHash" .= contextDriverHash context, "jsonIndex" .= indexFormat,
+                 "driverHash" .= contextDriverHash context,
                  "options" .= (["post-tidy", "unit-qualified", "source-notes",
                                 "foreign-import-provenance",
                                 "native-debug-info", "-dynamic", "-dcore-lint",
@@ -1537,7 +1537,7 @@ packGlobalBundle store dist capture planned unit buildKey exportKey destination 
       names = map fst sorted
   require (length names == length (nub names))
     ("duplicate exported store modules for " ++ unitId unit)
-  (modules, members) <- indexedModules
+  (modules, members) <- packageModules
     [(name, "core/" ++ show index ++ ".json", bytes)
     | (index, (name, bytes)) <- zip [0 :: Int ..] sorted]
   let inner = object (["format" .= ("thc-core-bundle" :: String), "schema" .= (1 :: Int),
@@ -1652,7 +1652,7 @@ exportConfiguredUnit context keys unit component scalar runtimeShim nativeObject
   let exporter = object $ ["pluginUnit" .= contextPluginUnit context,
                          "pluginDb" .= contextPluginDb context,
                          "pluginHash" .= pluginHash,
-                         "driverHash" .= contextDriverHash context, "jsonIndex" .= indexFormat,
+                         "driverHash" .= contextDriverHash context,
                          "options" .= (["post-tidy", "unit-qualified", "source-notes",
                                          "foreign-import-provenance",
                                          "native-debug-info"] ++ exportWayOptions ++
@@ -1764,7 +1764,7 @@ freshExport context component unit scalar runtimeShim helper nativeObjects build
         retained <- scalarInterfaceModules selectedHelper component unit objects expected
         validateRuntimeShimModules shim retained
       _ -> fail "scalar cbits interface helper missing"
-    (modules, members) <- indexedModules
+    (modules, members) <- packageModules
       [(name, "core/" ++ show index ++ ".json", bytes)
       | (index, (name, bytes)) <- zip [0 :: Int ..] sorted]
     let inputsBytes = BL.toStrict (encode buildInputs)

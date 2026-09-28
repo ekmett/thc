@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: MIT
 // Scalar transcription of John Ky's succinctly Simple Cursor state machine,
 // rust-works/succinctly 6ee3210413d1f180fd6a93ab30c5bc6aaad29b78, src/json/simple.rs.
-// Matches compiler/json-index/json_index.c; see third-party-licenses/succinctly-MIT.txt.
+// Source-backed JSON masks; see third-party-licenses/succinctly-MIT.txt.
 package thc;
 
 import java.util.Arrays;

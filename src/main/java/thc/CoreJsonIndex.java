@@ -20,7 +20,7 @@ import static thc.CoreJsonRank.*;
  * Topology follows rust-works/succinctly (MIT), revision
  * 6ee3210413d1f180fd6a93ab30c5bc6aaad29b78, json/simple.rs. Rank follows Everett,
  * eaa5ff3ccdb970cd684d8a01fe5fcea2d3bc23ca, include/everett/rank.h;
- * see third-party-licenses/everett-BSD-2-Clause.txt. This is THC's wire format,
+ * see third-party-licenses/everett-BSD-2-Clause.txt. This is THC's in-memory representation,
  * not an upstream compatibility or performance claim.
  *
  * Building checks container grammar and quoted boundaries, not scalar decoding,
@@ -29,10 +29,9 @@ import static thc.CoreJsonRank.*;
  */
 public final class CoreJsonIndex implements AutoCloseable {
     public enum Kind { OBJECT, ARRAY, STRING, ATOM }
-    public record Statistics(int sourceByteSize, long indexByteSize, Long serializedByteSize, long sourceFileBytesRead, long sourceSnapshotBytesCopied, long sourceHashBytesScanned, long structuralBytesScanned, long decodedSpanCount, long decodedByteCount, long navigationByteReads, long balancedParenthesisBitsExamined, long interestDirectoryBytes, long lexerCheckpointBytes, long topologyBytes, long topologyNavigationBytes, long scratchBytes, long sourceIdentityBytes, long indexSourceBytesScanned, long regeneratedSourceBytes, long regeneratedBlockCount) {
+    public record Statistics(int sourceByteSize, long indexByteSize, long sourceFileBytesRead, long sourceSnapshotBytesCopied, long sourceHashBytesScanned, long structuralBytesScanned, long decodedSpanCount, long decodedByteCount, long navigationByteReads, long balancedParenthesisBitsExamined, long interestDirectoryBytes, long lexerCheckpointBytes, long topologyBytes, long topologyNavigationBytes, long scratchBytes, long sourceIdentityBytes, long indexSourceBytesScanned, long regeneratedSourceBytes, long regeneratedBlockCount) {
         public int getSourceByteSize() { return sourceByteSize; }
         public long getIndexByteSize() { return indexByteSize; }
-        public Long getSerializedByteSize() { return serializedByteSize; }
         public long getSourceFileBytesRead() { return sourceFileBytesRead; }
         public long getSourceSnapshotBytesCopied() { return sourceSnapshotBytesCopied; }
         public long getSourceHashBytesScanned() { return sourceHashBytesScanned; }
@@ -54,7 +53,6 @@ public final class CoreJsonIndex implements AutoCloseable {
     public static final class Counters {
         public int sourceByteSize;
         public long indexByteSize;
-        public Long serializedByteSize;
         public long sourceFileBytesRead;
         public long sourceSnapshotBytesCopied;
         public long sourceHashBytesScanned;
@@ -72,7 +70,7 @@ public final class CoreJsonIndex implements AutoCloseable {
         public long indexSourceBytesScanned;
         public long regeneratedSourceBytes;
         public long regeneratedBlockCount;
-        public synchronized Statistics statistics() { return new Statistics(sourceByteSize, indexByteSize, serializedByteSize, sourceFileBytesRead, sourceSnapshotBytesCopied, sourceHashBytesScanned, structuralBytesScanned, decodedSpanCount, decodedByteCount, navigationByteReads, balancedParenthesisBitsExamined, interestDirectoryBytes, lexerCheckpointBytes, topologyBytes, topologyNavigationBytes, scratchBytes, sourceIdentityBytes, indexSourceBytesScanned, regeneratedSourceBytes, regeneratedBlockCount); }
+        public synchronized Statistics statistics() { return new Statistics(sourceByteSize, indexByteSize, sourceFileBytesRead, sourceSnapshotBytesCopied, sourceHashBytesScanned, structuralBytesScanned, decodedSpanCount, decodedByteCount, navigationByteReads, balancedParenthesisBitsExamined, interestDirectoryBytes, lexerCheckpointBytes, topologyBytes, topologyNavigationBytes, scratchBytes, sourceIdentityBytes, indexSourceBytesScanned, regeneratedSourceBytes, regeneratedBlockCount); }
     }
 
     public record Member(String name, Span value) {
@@ -294,23 +292,19 @@ public final class CoreJsonIndex implements AutoCloseable {
         final Counters counters;
         private byte[] sourceHash;
         Storage(byte[] bytes, SourceInterest interest, Parentheses bp, long scanBytes, int rootStart, int rootEnd,
-                long fileBytesRead, long snapshotBytesCopied, Long serializedBytes, byte[] initialHash) {
+                long fileBytesRead, long snapshotBytesCopied) {
             this.bytes = bytes; this.interest = interest; this.bp = bp; this.rootStart = rootStart; this.rootEnd = rootEnd;
-            this.sourceHash = initialHash;
             counters = interest.counters;
             counters.sourceByteSize = bytes.length;
-            counters.indexByteSize = interest.byteSize() + bp.byteSize() + (initialHash == null ? 0 : initialHash.length);
-            counters.serializedByteSize = serializedBytes;
+            counters.indexByteSize = interest.byteSize() + bp.byteSize();
             counters.sourceFileBytesRead = fileBytesRead;
             counters.sourceSnapshotBytesCopied = snapshotBytesCopied;
-            counters.sourceHashBytesScanned = initialHash == null ? 0 : bytes.length;
             counters.structuralBytesScanned = scanBytes;
             counters.interestDirectoryBytes = interest.directoryBytes();
             counters.lexerCheckpointBytes = interest.checkpointBytes();
             counters.topologyBytes = (long) bp.bits.data.length * 8;
             counters.topologyNavigationBytes = bp.byteSize() - counters.topologyBytes;
             counters.scratchBytes = interest.scratchBytes();
-            counters.sourceIdentityBytes = initialHash == null ? 0 : initialHash.length;
         }
         byte[] hash() {
             if (sourceHash != null) return sourceHash;
@@ -319,87 +313,6 @@ public final class CoreJsonIndex implements AutoCloseable {
             counters.sourceIdentityBytes = sourceHash.length;
             counters.indexByteSize += sourceHash.length;
             return sourceHash;
-        }
-    }
-    public static CoreJsonIndex loadSidecar(byte[] bytes, InputStream input) { return loadSidecar(bytes, input, false); }
-    public static CoreJsonIndex loadSidecar(byte[] bytes, InputStream input, boolean verifyArtifacts) {
-        return loadOwned(bytes.clone(), input, 0, bytes.length, verifyArtifacts);
-    }
-    public static CoreJsonIndex loadSidecar(Path path, InputStream input) { return loadSidecar(path, input, false); }
-    public static CoreJsonIndex loadSidecar(Path path, InputStream input, boolean verifyArtifacts) {
-        try {
-            byte[] bytes = Files.readAllBytes(path);
-            return loadOwned(bytes, input, bytes.length, 0, verifyArtifacts);
-        } catch (IOException failure) { return rethrow(failure); }
-    }
-    private static CoreJsonIndex loadOwned(byte[] bytes, InputStream input, long fileBytesRead, long copiedBytes, boolean verifyArtifacts) {
-        try {
-            MessageDigest digest = verifyArtifacts ? digest() : null;
-            InputStream checked = digest == null ? input : new DigestInputStream(input, digest);
-            byte[] header = checked.readNBytes(64);
-            require(header.length == 64, "Truncated JSON index header");
-            require(Arrays.equals(Arrays.copyOfRange(header, 0, 8), "THCJSIX1".getBytes(StandardCharsets.US_ASCII)), "Unknown JSON index magic");
-            var fields = ByteBuffer.wrap(header).order(ByteOrder.LITTLE_ENDIAN);
-            fields.position(8);
-            require(fields.getInt() == 2 && fields.getInt() == 0, "Unsupported JSON index version or flags");
-            long sourceLength = fields.getLong(), markerCount = fields.getLong();
-            require(sourceLength == bytes.length, "JSON index source length mismatch");
-            var shape = new JsonIndexShape(sourceLength, markerCount);
-            int count = Math.toIntExact(markerCount);
-            byte[] sourceHash = verifyArtifacts ? digest().digest(bytes) : null;
-            if (sourceHash != null) require(MessageDigest.isEqual(Arrays.copyOfRange(header, 32, 64), sourceHash), "JSON index source identity mismatch");
-            var sections = new Sections(checked);
-            long[] supers = sections.words(shape.getEpochCount());
-            int[] directory = sections.ints(Math.multiplyExact(shape.getBlockCount(), 2));
-            long[] states = sections.words(words(shape.getCheckpointBits()));
-            long[] bpWords = sections.words(words(shape.getBpBits()));
-            checkPadding(states, shape.getCheckpointBits());
-            checkPadding(bpWords, shape.getBpBits());
-            byte[] expectedDigest = digest == null ? null : digest.digest();
-            byte[] trailer = input.readNBytes(32);
-            require(trailer.length == 32, "Truncated JSON index integrity field");
-            if (expectedDigest != null) require(MessageDigest.isEqual(trailer, expectedDigest), "JSON index integrity mismatch");
-            require(input.read() == -1, "Trailing JSON index bytes");
-            var interest = new SourceInterest(bytes, count, directory, supers, states);
-            var bp = new Bits(bpWords, shape.getBpBits());
-            if (verifyArtifacts) interest.verify(bp);
-            int start, end;
-            if (verifyArtifacts) { var extent = new Scanner(bytes).scan(); start = extent[0]; end = extent[1]; }
-            else {
-                start = 0; end = bytes.length;
-                while (start < end && whitespace(bytes[start] & 255)) start++;
-                while (end > start && whitespace(bytes[end - 1] & 255)) end--;
-                require(start < end, "Missing JSON value");
-            }
-            return new CoreJsonIndex(new Storage(bytes, interest, new Parentheses(bp), verifyArtifacts ? bytes.length : 0,
-                    start, end, fileBytesRead, copiedBytes, shape.getSerializedBytes(), sourceHash));
-        } catch (IOException failure) { return rethrow(failure); }
-    }
-    private static final class Sections {
-        final InputStream input;
-        final byte[] chunk = new byte[8192];
-        Sections(InputStream input) { this.input = input; }
-        long[] words(int wordCount) throws IOException {
-            long[] result = new long[wordCount];
-            int word = 0;
-            while (word < result.length) {
-                int words = Math.min(chunk.length / 8, result.length - word), size = words * 8;
-                require(input.readNBytes(chunk, 0, size) == size, "Truncated JSON index section");
-                var buffer = ByteBuffer.wrap(chunk, 0, size).order(ByteOrder.LITTLE_ENDIAN);
-                for (int i = 0; i < words; i++) result[word++] = buffer.getLong();
-            }
-            return result;
-        }
-        int[] ints(int intCount) throws IOException {
-            int[] result = new int[intCount];
-            int word = 0;
-            while (word < result.length) {
-                int words = Math.min(chunk.length / 4, result.length - word), size = words * 4;
-                require(input.readNBytes(chunk, 0, size) == size, "Truncated JSON index directory");
-                var buffer = ByteBuffer.wrap(chunk, 0, size).order(ByteOrder.LITTLE_ENDIAN);
-                for (int i = 0; i < words; i++) result[word++] = buffer.getInt();
-            }
-            return result;
         }
     }
     public static CoreJsonIndex fromBytes(byte[] bytes) { return build(bytes.clone(), 0, bytes.length); }
@@ -411,7 +324,7 @@ public final class CoreJsonIndex implements AutoCloseable {
         int[] extent = new Scanner(bytes).scan();
         var built = SourceInterest.build(bytes);
         return new CoreJsonIndex(new Storage(bytes, built.interest, new Parentheses(built.bp), bytes.length,
-                extent[0], extent[1], fileBytesRead, copiedBytes, null, null));
+                extent[0], extent[1], fileBytesRead, copiedBytes));
     }
     /** Iterative structural grammar check without scalar conversion. */
     private static final class Scanner {
@@ -485,9 +398,7 @@ public final class CoreJsonIndex implements AutoCloseable {
         }
     }
     static int words(int bits) { return (int) (((long) bits + 63) / 64); }
-    private static void checkPadding(long[] data, int bits) {
-        if ((bits & 63) != 0) require(data[data.length - 1] >>> (bits & 63) == 0, "Nonzero JSON index padding");
-    }
+
     private static boolean whitespace(int c) { return c == 32 || c == 9 || c == 10 || c == 13; }
     private static boolean delimiter(int c) { return whitespace(c) || c == 123 || c == 125 || c == 91 || c == 93 || c == 44 || c == 58 || c == 34; }
     private static void require(boolean condition, String message) { if (!condition) throw new IllegalArgumentException(message); }
@@ -587,36 +498,6 @@ public final class CoreJsonIndex implements AutoCloseable {
                     value &= value - 1;
                 }
             }
-        }
-        void verify(Bits bp) {
-            var cursor = new JsonRankDirectoryCursor();
-            class Verification {
-                long total;
-                int packed;
-                void quarter(int quarter, int before) {
-                    require(state(quarter) == before, "JSON lexer checkpoint mismatch");
-                    int block = quarter >>> 2, run = quarter & 3;
-                    if (run == 0) {
-                        packed = 0;
-                        int relative = cursor.before(block, total);
-                        require(directory[block * 2] == relative, "JSON relative rank mismatch");
-                        if (JsonRankDirectoryCursor.startsEpoch(block)) require(supers[block >>> 21] == cursor.getEpochBase(), "JSON epoch rank mismatch");
-                    }
-                    int population = jsonRankPrefix512(masks, 0, 512);
-                    if (run < 3) packed |= population << (run * 11);
-                    markers((opening, closing) -> {
-                        require(total < count, "Extra JSON source marker");
-                        int bit = Math.toIntExact(total * 2);
-                        long expected = opening ? 3 : closing ? 0 : 2;
-                        require(((bp.data[bit >>> 6] >>> (bit & 63)) & 3) == expected, "JSON topology mismatch");
-                        total++;
-                    });
-                    if (run == 3 || quarter == quarters - 1) require(directory[block * 2 + 1] == packed, "JSON quarter rank mismatch");
-                }
-            }
-            var verification = new Verification();
-            walk(verification::quarter);
-            require(verification.total == count, "JSON marker count mismatch");
         }
         record Built(SourceInterest interest, Bits bp) {}
         static Built build(byte[] source) {

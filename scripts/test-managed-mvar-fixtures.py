@@ -74,11 +74,10 @@ class ManagedMVarFixtureTests(unittest.TestCase):
                 recipe.prepare_plugin(build, failed, root)
             self.assertFalse(recipe.plugin_snapshot(build).exists())
 
-    def test_source_inventory_includes_plugin_build_and_index_dependency(self):
+    def test_source_inventory_includes_plugin_build_and_symbols_dependency(self):
         inputs = set(recipe.source_inputs())
         self.assertTrue({'thc.cabal', 'cabal.project', 'compiler/build.sh', 'compiler/plugin.py',
-            'compiler/toolchain.sh', 'json-index/THC/JsonIndex.hs', 'json-index/THC/JsonIndex/Scanner.hs',
-            'compiler/json-index/json_index.c', 'compiler/json-index/json_index.h'} <= inputs)
+            'compiler/toolchain.sh', 'json-index/THC/CoreSymbols.hs'} <= inputs)
 
     def test_exact_contracts_at_both_boxed_levities(self):
         for name in recipe.CONTRACTS:

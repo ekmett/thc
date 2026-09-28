@@ -153,8 +153,7 @@ def input_vectors():
 def source_inputs(root=ROOT):
     inputs = [SOURCE, NATIVE, 'scripts/prepare-managed-mvars.py', 'scripts/audit-core.py',
               'scripts/core-capabilities.json', 'src/main/resources/thc/scalar-primop-signatures.json',
-              'thc.cabal', 'cabal.project', 'compiler/build.sh', 'compiler/plugin.py', 'compiler/toolchain.sh',
-              'compiler/json-index/json_index.c', 'compiler/json-index/json_index.h']
+              'thc.cabal', 'cabal.project', 'compiler/build.sh', 'compiler/plugin.py', 'compiler/toolchain.sh']
     inputs += sorted(str(p.relative_to(root)) for p in (root / 'scripts').glob('core_*.py'))
     inputs += sorted(str(p.relative_to(root)) for p in (root / 'compiler/THC').glob('*.hs'))
     inputs += sorted(str(p.relative_to(root)) for p in (root / 'json-index').rglob('*.hs'))
