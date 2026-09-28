@@ -47,3 +47,18 @@ diff --git a/com/oracle/truffle/runtime/OptimizedCallTarget.java b/com/oracle/tr
 +                return;
 +            }
          }
+diff --git a/com/oracle/truffle/runtime/BaseOSRRootNode.java b/com/oracle/truffle/runtime/BaseOSRRootNode.java
+--- a/com/oracle/truffle/runtime/BaseOSRRootNode.java
++++ b/com/oracle/truffle/runtime/BaseOSRRootNode.java
+@@ -80,6 +80,11 @@
+         return OptimizedRuntimeAccessor.NODES.prepareForCompilation(getOriginalRootNode(), rootCompilation, compilationTier, lastTier);
+     }
+ 
++    /** The existing non-adopted loop's source owner; no context is retained. */
++    public final RootNode getSourceRootNode() {
++        return getOriginalRootNode();
++    }
++
+     @Override
+     protected boolean isCaptureFramesForTrace(boolean compiledFrame) {
+         return OptimizedRuntimeAccessor.NODES.isCaptureFramesForTrace(getOriginalRootNode(), compiledFrame);

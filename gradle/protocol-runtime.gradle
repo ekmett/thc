@@ -21,7 +21,8 @@ def requireRuntimeArchive = { File file, String hash ->
 }
 def prepareProtocolRuntime = tasks.register("prepareProtocolRuntime", Sync) {
     from(provider { zipTree(protocolRuntimeSource.singleFile) })
-    include("com/oracle/truffle/runtime/OptimizedCallTarget.java", "com/oracle/truffle/runtime/OptimizedIndirectCallNode.java")
+    include("com/oracle/truffle/runtime/OptimizedCallTarget.java", "com/oracle/truffle/runtime/OptimizedIndirectCallNode.java",
+        "com/oracle/truffle/runtime/BaseOSRRootNode.java")
     into(layout.buildDirectory.dir("protocol-runtime/source"))
     inputs.files("tools/truffle-protocol/declared-return-runtime.patch", "tools/truffle-protocol/graph-budget-runtime.patch",
         "tools/truffle-protocol/unprofiled-indirect-exceptions.patch")
@@ -72,6 +73,7 @@ def protocolRuntimeJar = tasks.register("protocolRuntimeJar", Jar) {
     from(provider { zipTree(protocolRuntimeBinary.singleFile) }) {
         exclude("com/oracle/truffle/runtime/OptimizedCallTarget.class", "com/oracle/truffle/runtime/OptimizedCallTarget\$*.class",
             "com/oracle/truffle/runtime/OptimizedIndirectCallNode.class",
+            "com/oracle/truffle/runtime/BaseOSRRootNode.class",
             "META-INF/MANIFEST.MF")
     }
     from("tools/truffle-protocol/LICENSE-UPL.txt") { into("META-INF") }
@@ -108,6 +110,7 @@ tasks.register("verifyProtocolRuntimeSelection") {
         def replaced = { String name -> name == "META-INF/MANIFEST.MF" ||
             name == "com/oracle/truffle/runtime/OptimizedCallTarget.class" ||
             name == "com/oracle/truffle/runtime/OptimizedIndirectCallNode.class" ||
+            name == "com/oracle/truffle/runtime/BaseOSRRootNode.class" ||
             name.startsWith("com/oracle/truffle/runtime/OptimizedCallTarget\$") }
         new JarFile(protocolRuntimeBinary.singleFile).withCloseable { stock ->
             new JarFile(overlay).withCloseable { declared ->
@@ -183,6 +186,25 @@ tasks.register("testReturnContinuations", JavaExec) {
     maxHeapSize = "1g"
 }
 tasks.named("check") { dependsOn("testReturnContinuations") }
+
+def compileOsrSourceControl = tasks.register("compileOsrSourceControl", JavaCompile) {
+    source("tools/truffle-protocol/tests/MaterializationProbe.java", "tools/truffle-protocol/tests/OsrSourceRootProbe.java")
+    classpath = returnPolicyRuntime
+    options.release.set(17)
+    options.compilerArgs.add("-proc:none")
+    destinationDirectory.set(layout.buildDirectory.dir("protocol-runtime/checks/osr-source"))
+}
+tasks.register("testOsrSourceOwnership", JavaExec) {
+    group = "verification"
+    description = "Check actual original/cloned loop and both bytecode OSR source-root identities."
+    dependsOn("verifyProtocolRuntimeSelection")
+    classpath = files(compileOsrSourceControl.flatMap { it.destinationDirectory }) + returnPolicyRuntime
+    mainClass.set("protocolprobe.OsrSourceRootProbe")
+    enableAssertions = true
+    jvmArgs("--enable-native-access=ALL-UNNAMED", "--add-modules=jdk.incubator.vector")
+    maxHeapSize = "1g"
+}
+tasks.named("check") { dependsOn("testOsrSourceOwnership") }
 
 def compileGraphBudgetControl = tasks.register("compileGraphBudgetControl", JavaCompile) {
     source("tools/truffle-protocol/tests/GraphBudgetProbe.java")
