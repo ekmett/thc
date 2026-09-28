@@ -1417,6 +1417,7 @@
     }
   },
   "owners": {
+    "src/test/java/thc/runtime/SumEvidence.java": {"junit": ["thc.runtime.SumProtocolTest", "thc.runtime.SumResultTest"], "python": []},
     "src/test/kotlin/thc/runtime/ByteStringSortTest.kt": {"junit": ["thc.runtime.ByteStringSortTest"], "python": ["scripts/test-audit-core.py"]},
     "src/main/java/thc/runtime/CoreByteStringSort.java": {"junit": ["thc.runtime.ByteStringSortTest"], "python": ["scripts/test-audit-core.py"]},
     "src/main/java/thc/runtime/ByteStringSort.java": {"junit": ["thc.runtime.ByteStringSortTest"], "python": ["scripts/test-audit-core.py"]},

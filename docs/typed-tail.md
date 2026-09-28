@@ -60,7 +60,7 @@ interior cycles, outward retargeting, changed captures, PAP prefixes,
 overapplication, pending non-tail work, cloned targets and bloom collisions.
 Its collision-free controls require matching-root reentry with zero outer
 trampoline iterations; stack safety alone would not establish that behavior.
-[`TypedExecutionTest`](../src/test/kotlin/thc/runtime/TypedExecutionTest.kt) checks
+[`TypedExecutionTest`](../src/test/java/thc/runtime/TypedExecutionTest.java) checks
 that widening consumes an already-produced value without reexecuting its child.
 [`TypedApplicationTest`](../src/test/kotlin/thc/TypedApplicationTest.kt) covers
 typed paths through ordinary application.

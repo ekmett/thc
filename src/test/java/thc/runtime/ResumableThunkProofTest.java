@@ -1,0 +1,159 @@
+// SPDX-FileCopyrightText: 2026 Edward Kmett
+// SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+package thc.runtime;
+
+import com.oracle.truffle.api.RootCallTarget;
+import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.bytecode.BytecodeRootNode;
+import com.oracle.truffle.api.bytecode.ContinuationResult;
+import com.oracle.truffle.api.bytecode.LocalVariable;
+import com.oracle.truffle.api.frame.FrameSlotKind;
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.RootNode;
+import org.graalvm.polyglot.Context;
+import org.junit.jupiter.api.Test;
+import thc.Language;
+import thc.Main;
+import java.util.ArrayList;
+import java.util.NoSuchElementException;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
+import static org.junit.jupiter.api.Assertions.*;
+
+/** An actual DSL continuation, kept by one shared thunk across guest threads. */
+class ResumableThunkProofTest {
+    private static final class Driver extends RootNode {
+        @Child private Force force = new Force(new Metrics(true));
+        Driver() { super(null); }
+        @Override public Object execute(VirtualFrame frame) { return force.execute(frame, frame.getArguments()[0]); }
+        Object force(Thunk thunk) { return Calls.target(getCallTarget(), new Object[]{thunk}); }
+    }
+    @FunctionalInterface private interface Action<T> { T run() throws Exception; }
+    private static <T> T entered(Context context, Action<T> action) throws Exception {
+        context.enter(); try { return action.run(); } finally { context.leave(); }
+    }
+    private static void compile(RootCallTarget target) throws Exception {
+        var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget");
+        assertTrue(type.isInstance(target)); type.getMethod("compile", boolean.class).invoke(target, true);
+        assertEquals(true, type.getMethod("isValidLastTier").invoke(target));
+    }
+    private record TargetDriver(RootCallTarget target, Driver driver) {}
+    @Test void compiledBytecodeYieldResumesTypedLocalsOnAnotherThreadWithoutReplayingEffect() throws Exception {
+        try (var context = Main.executionContext()) {
+            context.initialize("thc");
+            var language = entered(context, () -> TruffleLanguage.LanguageReference.create(Language.class).get(null));
+            var effects = new AtomicInteger(); var compiledEffects = new AtomicInteger();
+            var gate = new ThunkYieldProofRoot.Gate(); var marker = new Object();
+            var pair = entered(context, () -> new TargetDriver(ThunkYieldProofRoot.target(language, effects, compiledEffects, gate, marker), new Driver()));
+            var target = pair.target(); var driver = pair.driver();
+            // Initialize both the bytecode root and its continuation target, then
+            // explicitly install the initial root. A fresh thunk uses the same code.
+            entered(context, () -> {
+                for (int i = 0; i < 8; i++) {
+                    var warm = new Thunk(target, null);
+                    assertThrows(ThunkSuspended.class, () -> driver.force(warm));
+                    assertThrows(ThunkSuspended.class, () -> driver.force(warm));
+                    var answer = (ThunkYieldProofRoot.Answer) driver.force(warm);
+                    assertEquals(42L, answer.number()); assertSame(marker, answer.marker());
+                }
+                compile(target); return null;
+            });
+            int before = effects.get(), compiledBefore = compiledEffects.get();
+            var thunk = entered(context, () -> new Thunk(target, null));
+            try (var pool = Executors.newFixedThreadPool(4)) {
+                var first = pool.submit(() -> entered(context, () -> assertThrows(ThunkSuspended.class, () -> driver.force(thunk))));
+                first.get(5, TimeUnit.SECONDS);
+                assertEquals(5, thunk.getState());
+                var saved = (ContinuationResult) thunk.getValue(); var frame = saved.getFrame();
+                boolean numeric = false;
+                for (int i = 0; i < frame.getFrameDescriptor().getNumberOfSlots(); i++) if (frame.isLong(i) && frame.getLong(i) == 42L) { numeric = true; break; }
+                assertTrue(numeric, "The live numeric value must retain a primitive Long frame slot");
+                boolean reference = false;
+                for (int i = 0; i < frame.getFrameDescriptor().getNumberOfSlots(); i++) if (frame.isObject(i) && frame.getObject(i) == marker) { reference = true; break; }
+                assertTrue(reference, "The live reference must retain its identity in the captured frame");
+                var root = (BytecodeRootNode) target.getRootNode();
+                LocalVariable number = null;
+                for (var local : root.getBytecodeNode().getLocals()) if ("number".equals(local.getName())) {
+                    if (number != null) throw new IllegalArgumentException("Collection contains more than one matching element.");
+                    number = local;
+                }
+                if (number == null) throw new NoSuchElementException("Collection contains no element matching the predicate.");
+                assertEquals(FrameSlotKind.Long, number.getTypeProfile());
+                assertEquals(before + 1, effects.get());
+                assertTrue(compiledEffects.get() > compiledBefore, "Initial yield must execute installed guest code");
+                gate.armed = true;
+                var second = pool.submit(() -> entered(context, () -> assertThrows(ThunkSuspended.class, () -> driver.force(thunk))));
+                assertTrue(gate.entered.await(5, TimeUnit.SECONDS));
+                assertEquals(1, thunk.getState(), "Only the resumer owns the thunk while its frame is live");
+                var readersStarted = new CountDownLatch(2);
+                var readers = new ArrayList<Future<Object>>();
+                for (int i = 0; i < 2; i++) readers.add(pool.submit(() -> entered(context, () -> { readersStarted.countDown(); return driver.force(thunk); })));
+                assertTrue(readersStarted.await(5, TimeUnit.SECONDS));
+                assertThrows(TimeoutException.class, () -> readers.get(0).get(50, TimeUnit.MILLISECONDS));
+                gate.release.countDown(); second.get(5, TimeUnit.SECONDS);
+                var answers = new ArrayList<ThunkYieldProofRoot.Answer>();
+                for (var reader : readers) answers.add((ThunkYieldProofRoot.Answer) reader.get(5, TimeUnit.SECONDS));
+                assertSame(answers.get(0), answers.get(1), "Both waiters observe the single published WHNF");
+                assertEquals(42L, answers.get(0).number()); assertSame(marker, answers.get(0).marker());
+            }
+            assertEquals(before + 1, effects.get(), "Resuming twice must not replay the pre-yield effect");
+            assertEquals(2, thunk.getState()); assertNull(thunk.getTarget()); assertNull(thunk.getEnvironment());
+            assertTrue(thunk.getValue() instanceof ThunkYieldProofRoot.Answer); assertNull(thunk.getOwner());
+        }
+    }
+    private record Thunks(Thunk inner, Thunk outer, Driver driver) {}
+    @Test void uncapturedCallerUpdateFailsClosedAndWakesItsWaiter() throws Exception {
+        try (var context = Main.executionContext()) {
+            context.initialize("thc");
+            var language = entered(context, () -> TruffleLanguage.LanguageReference.create(Language.class).get(null));
+            var marker = new Object(); var effects = new AtomicInteger(); var outerEffects = new AtomicInteger();
+            var thunks = entered(context, () -> {
+                var driver = new Driver();
+                var inner = new Thunk(ThunkYieldProofRoot.target(language, effects, new AtomicInteger(), new ThunkYieldProofRoot.Gate(), marker), null);
+                var outer = new Thunk(new RootNode(null) {
+                    @Override public Object execute(VirtualFrame frame) { outerEffects.incrementAndGet(); return driver.force(inner); }
+                }.getCallTarget(), null);
+                return new Thunks(inner, outer, driver);
+            });
+            var inner = thunks.inner(); var outer = thunks.outer(); var driver = thunks.driver();
+            var yielded = entered(context, () -> assertThrows(ThunkSuspended.class, () -> driver.force(outer)));
+            assertSame(inner, yielded.getThunk()); assertEquals(5, inner.getState());
+            assertEquals(4, outer.getState(), "The uncaptured caller must not retain a blackhole");
+            try (var pool = Executors.newSingleThreadExecutor()) {
+                var waiter = pool.submit(() -> entered(context, () -> assertThrows(RuntimeFault.class, () -> driver.force(outer))));
+                assertTrue(waiter.get(5, TimeUnit.SECONDS).getMessage().contains("no resumable continuation"));
+            }
+            assertEquals(1, outerEffects.get(), "Never replay the caller's effect");
+            entered(context, () -> {
+                assertThrows(ThunkSuspended.class, () -> driver.force(inner));
+                var answer = (ThunkYieldProofRoot.Answer) driver.force(inner);
+                assertEquals(42L, answer.number()); assertSame(marker, answer.marker()); return null;
+            });
+            assertEquals(1, effects.get());
+        }
+    }
+    private record ThunkDriver(Thunk outer, Driver driver) {}
+    @Test void nestedRootYieldCannotMasqueradeAsItsCallersContinuation() throws Exception {
+        try (var context = Main.executionContext()) {
+            context.initialize("thc");
+            var language = entered(context, () -> TruffleLanguage.LanguageReference.create(Language.class).get(null));
+            var effects = new AtomicInteger(); var calls = new AtomicInteger();
+            var pair = entered(context, () -> {
+                var innerTarget = ThunkYieldProofRoot.target(language, effects, new AtomicInteger(), new ThunkYieldProofRoot.Gate(), new Object());
+                var outerTarget = new RootNode(null) {
+                    @Override public Object execute(VirtualFrame frame) { calls.incrementAndGet(); return Calls.target(innerTarget, new Object[]{0L}); }
+                }.getCallTarget();
+                return new ThunkDriver(new Thunk(outerTarget, null), new Driver());
+            });
+            var outer = pair.outer(); var driver = pair.driver();
+            var unsupported = entered(context, () -> assertThrows(IllegalStateException.class, () -> driver.force(outer)));
+            assertTrue(unsupported.getMessage().contains("no captured caller segment")); assertEquals(4, outer.getState());
+            entered(context, () -> assertThrows(RuntimeFault.class, () -> driver.force(outer)));
+            assertEquals(1, calls.get()); assertEquals(1, effects.get());
+        }
+    }
+}
