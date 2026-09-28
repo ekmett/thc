@@ -16,6 +16,7 @@ from collections.abc import Mapping, MutableMapping, MutableSet
 from contextlib import closing
 import hashlib
 import json
+import re
 import os
 import sqlite3
 import tempfile
@@ -1441,7 +1442,7 @@ class Audit:
                 self.issue('foreign-call', owner, path, str(error))
             return True
         package_link = self.package_scalar_links.get(target.get('unit')) if isinstance(target, dict) else None
-        if package_link is not None:
+        if package_link is not None and call.get('convention') in ('ccall', 'capi'):
             try:
                 head = self.expression_rep(function)
                 if (len(function) != 3 or function[0] != 'var' or not isinstance(function[1], str) or not function[1] or
@@ -1458,6 +1459,44 @@ class Audit:
                 self.foreign_calls.append(dict(symbol=symbol, owner=owner, path=path, linkedUnit=package_link['unit']))
                 self.require_exception_bridge(owner, path)
             except (ValueError, KeyError, TypeError) as error:
+                self.issue('foreign-call', owner, path, str(error))
+            return True
+
+        if isinstance(call, dict) and call.get('schema') == 2:
+            # Typed array FCalls carry their C ABI directly. An exported closure
+            # may precede its owner bundle; this checks the call, not symbol
+            # availability, and leaves ordinary linkage explicitly outstanding.
+            try:
+                core_original_foreign.validate_head(function, function[1] in bound or function[1] in self.bindings)
+                if (call.get('convention') not in ('ccall', 'capi') or call.get('safety') not in ('safe', 'unsafe') or
+                        not isinstance(target, dict) or not isinstance(target.get('unit'), str) or not target['unit'] or
+                        not isinstance(symbol, str) or re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', symbol) is None):
+                    raise ValueError('Invalid typed native FCall target/convention/safety')
+                scalars = ('IntRep', 'WordRep', 'Int8Rep', 'Word8Rep', 'Int16Rep', 'Word16Rep',
+                           'Int32Rep', 'Word32Rep', 'Int64Rep', 'Word64Rep', 'FloatRep', 'DoubleRep', 'AddrRep')
+                declared = call['argumentReps']
+                types = call['argumentTypes']
+                if not isinstance(types, list) or len(types) != len(declared):
+                    raise ValueError('Typed native FCall argument type count differs')
+                carriers = [kind if kind is not None else value['primReps'][0]
+                            for kind, value in zip(types[:-1], declared[:-1])]
+                parts = call['resultRep']['components']
+                result = 'void' if len(parts) == 1 else parts[1]['primReps'][0]
+                if (any(carrier not in scalars + ('ByteArray#', 'MutableByteArray#') for carrier in carriers) or
+                        result not in scalars + ('void',)):
+                    raise ValueError('Unsupported typed native FCall carrier')
+                abi = dict(symbol=symbol, arguments=carriers, result=result,
+                           convention=call['convention'], safety=call['safety'])
+                core_package_manifest.validate_package_scalar_call(call, abi, target['unit'],
+                    [core_original_foreign.raw_rep(argument) for argument in arguments], expr[3],
+                    core_original_foreign.raw_rep(expr))
+                for index, (argument, primitive) in enumerate(zip(arguments, carriers + [None])):
+                    self.original_stack_operand(argument,
+                        'BoxedRep (Just Unlifted)' if primitive in ('ByteArray#', 'MutableByteArray#') else primitive,
+                        bound, index)
+                self.foreign_calls.append(dict(symbol=symbol, owner=owner, path=path,
+                                               arguments=carriers, nativeLinkRequired=True))
+            except (ValueError, KeyError, TypeError, IndexError) as error:
                 self.issue('foreign-call', owner, path, str(error))
             return True
 

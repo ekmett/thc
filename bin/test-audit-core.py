@@ -481,6 +481,31 @@ class PackageScalarOperandTest(unittest.TestCase):
             altered[6]['rep']['components'].append(dict(kind='long', primReps=['Word64Rep'], evaluated=True))
             self.assertIn('exact scalar/State ABI', str(self.inspect(abi, altered, stored)), rep)
 
+    def test_unlinked_typed_array_calls_keep_native_link_obligations(self):
+        for rep in ('ByteArray#', 'MutableByteArray#'):
+            _, expression, _ = self.call('Word64Rep')
+            stored = dict(kind='object', primReps=['BoxedRep (Just Unlifted)'], evaluated=True)
+            expression[2][0][2]['rep'] = stored
+            call = expression[6]['foreignCall']
+            call.update(schema=2, argumentTypes=[rep, None])
+            call['argumentReps'][0] = dict(stored, evaluated=False)
+            audit = audit_core.Audit([], CAP)
+            self.assertTrue(audit.polyglot_call(expression, dict(argument=stored), 'root', 'root'))
+            self.assertEqual([], audit.issues)
+            self.assertTrue(audit.foreign_calls[0]['nativeLinkRequired'])
+            self.assertEqual([rep], audit.foreign_calls[0]['arguments'])
+            for alteration in ('missing-type', 'wrong-type', 'wrong-shape', 'wrong-flag', 'wrong-state'):
+                bad = copy.deepcopy(expression)
+                descriptor = bad[6]['foreignCall']
+                if alteration == 'missing-type': descriptor['argumentTypes'].pop()
+                elif alteration == 'wrong-type': descriptor['argumentTypes'][0] = 'Any'
+                elif alteration == 'wrong-shape': descriptor['argumentReps'][0]['primReps'] = ['AddrRep']
+                elif alteration == 'wrong-flag': bad[3][0] = True
+                else: bad[2][-1] = ['lit', 'int', '0', bad[2][-1][1]]
+                audit = audit_core.Audit([], CAP)
+                audit.polyglot_call(bad, dict(argument=stored), 'root', 'root')
+                self.assertTrue(audit.issues, alteration)
+
     def test_same_symbol_pointer_variants_select_by_exact_call_shape(self):
         original, expression, _ = self.call('Word64Rep')
         variants = [dict(original, entry='adapter_' + str(index), arguments=[rep])
@@ -1962,6 +1987,12 @@ class OriginalStackCloneAuditTest(unittest.TestCase):
     def audit(self, module, cap=None):
         return audit_core.Audit([('genuine-clone-with-synthetic-consumer.json', module)],
                                CAP if cap is None else cap).run(['synthetic-consumer'])
+
+    def test_owner_native_component_does_not_claim_prim_stack_calls(self):
+        audit = audit_core.Audit([('original-stack.json', self.fixture())], CAP)
+        audit.package_scalar_links['ghc-internal'] = dict(unit='ghc-internal', abi=[])
+        report = audit.run(['synthetic-consumer'])
+        self.assertTrue(report['accepted'], report['issues'])
 
     def reject(self, module):
         report = self.audit(module)
