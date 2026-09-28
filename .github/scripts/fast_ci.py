@@ -290,7 +290,7 @@ def identify(recorder, identity_path):
     # Gradle itself validates task inputs. This prefix prevents reuse across tool,
     # dependency, compiler-plugin, wrapper or cache-policy changes.
     paths = [root / name for name in ("build.gradle", "settings.gradle", "gradle.properties",
-             "gradlew", "src/gradle/wrapper/gradle-wrapper.jar", "src/gradle/wrapper/gradle-wrapper.properties")]
+             "gradlew", "nih/gradle/wrapper/gradle-wrapper.jar", "nih/gradle/wrapper/gradle-wrapper.properties")]
     paths.extend(sorted((root / "src/gradle").glob("*.gradle")))
     paths.extend(sorted(path for path in (root / "src/build").rglob("*")
                         if path.is_file() and path.suffix in (".java", ".gradle")
