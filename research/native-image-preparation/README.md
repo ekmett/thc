@@ -39,6 +39,15 @@ java research/native-image-preparation/InitializationArgumentsTest.java \
   research/native-image-preparation "$(mktemp -d)"
 ```
 
+The classpath-selection regression executes both recipes' actual selection
+loops against fixture JAR names, without an image builder. It checks that stock
+and patched Sulong artifacts remain excluded while ordinary Java JARs remain:
+
+```sh
+java research/native-image-preparation/ClasspathSelectionTest.java \
+  "$PWD" "$(mktemp -d)"
+```
+
 Retain the source revision, installed-JAR hashes, generated inventories, exact
 argument file, command, output and exit status for each attempt. Reusing a JAR
 from an older revision is not a test of current source. Rebuilt inventory files
