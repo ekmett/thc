@@ -14,13 +14,13 @@ public final class EntryRoot extends RootNode {
     private final Metrics metrics;
     private final boolean typedResult;
     private final boolean forceResult;
-    @Child private Dispatch dispatch;
+    @Child private PreparedDispatch dispatch;
     @Child private GenericInputCall typedDispatch;
     @Child private Force force;
     public EntryRoot(TruffleLanguage<?> language, int arity, Metrics metrics) {
         super(language, new FrameLayout().build());
         this.arity = arity; this.metrics = metrics; typedResult = false; forceResult = true;
-        dispatch = Dispatch.create(arity, false, metrics); force = new Force(metrics);
+        dispatch = new PreparedDispatch(arity, false, metrics, new boolean[0], null); force = new Force(metrics);
     }
     /** A signature-specific host root; it does not change the program's arity-only cache. */
     public EntryRoot withSignature(Language language, List<CoreRepresentation> inputs, CoreRepresentation result) {

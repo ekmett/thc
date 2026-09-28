@@ -14,10 +14,15 @@ public final class IndirectCallerNode extends Node {
     @Child private IndirectCallNode callNode = IndirectCallNode.create();
     @Child private TailCallLoop loop;
     @Child private TailCheck tailCheck;
-    private final BranchProfile normalProfile = BranchProfile.create(), tailProfile = BranchProfile.create();
+    private final BranchProfile normalProfile, tailProfile;
     public IndirectCallerNode(Metrics metrics) {
+        this(metrics, false);
+    }
+    public IndirectCallerNode(Metrics metrics, boolean coldGeneric) {
         this.metrics = metrics; entryArguments = new IndirectEntryArguments(metrics);
         loop = new TailCallLoop(metrics); tailCheck = new TailCheck(metrics);
+        normalProfile = coldGeneric ? BranchProfile.getUncached() : BranchProfile.create();
+        tailProfile = coldGeneric ? BranchProfile.getUncached() : BranchProfile.create();
     }
     public Object call(VirtualFrame frame, RootCallTarget target, Object[] arguments, boolean tailCall) {
         entryArguments.execute(frame, target, arguments);

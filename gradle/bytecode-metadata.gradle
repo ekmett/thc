@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 import thc.buildlogic.BytecodeNormalizers
 import thc.buildlogic.BytecodeNormalizerChecks
+import thc.buildlogic.BytecodeColdApplyPreparation
 
 // Normalize generated metadata before the final Java compilation.
 def checks = [
@@ -21,6 +22,10 @@ def checks = [
     testBytecodeHandlerPreparation: { task ->
         BytecodeNormalizerChecks.handlers(task.temporaryDir.toPath())
         logger.lifecycle('Nonadaptive capture handlers: range/order/profile semantics, version/shape/CRLF/idempotence passed.')
+    },
+    testBytecodeColdApplyPreparation: { task ->
+        BytecodeColdApplyPreparation.check()
+        logger.lifecycle('Immutable Apply construction: exact body/operand/version, no state-bit writes, CRLF/idempotence/negative controls passed.')
     },
     testBytecodeUnprofiledBranchPreparation: { task ->
         BytecodeNormalizerChecks.unprofiledBranch()
@@ -42,7 +47,7 @@ checks.each { name, runCheck ->
 tasks.named('check') { dependsOn(checks.keySet()) }
 
 // Normalize proc:only output before the separate proc:none compilation. Keep
-// all five passes in their pinned order; none may be deferred until javac.
+// all six passes in their pinned order; none may be deferred until javac.
 tasks.matching { it.name == 'processMainJava' }.configureEach {
     inputs.files('gradle/bytecode-metadata.gradle', fileTree('buildSrc/src/main/java/thc/buildlogic'))
     doLast {

@@ -21,6 +21,17 @@ public final class FrameLayout {
         builder.addSlot(FrameSlotKind.Object, "<TCO Arguments>", null);
     }
     public FrameLayout scope() { return new FrameLayout(builder, new HashMap<>(locals)); }
+    /** Storage for a completed scalar or a physical tuple leaf, not a WHNF certificate. */
+    public static FrameSlotKind carrierKind(CoreRepresentation proof) {
+        if (proof.isInt()) return FrameSlotKind.Int;
+        return switch (proof.getKind()) {
+            case LONG -> FrameSlotKind.Long;
+            case FLOAT -> FrameSlotKind.Float;
+            case DOUBLE -> FrameSlotKind.Double;
+            case VOID, DATA, CLOSURE, ADDRESS, OBJECT, VECTOR -> FrameSlotKind.Object;
+            case UNKNOWN -> FrameSlotKind.Illegal;
+        };
+    }
     public int bind(String name) { return bind(name, FrameSlotKind.Illegal); }
     public int bind(String name, FrameSlotKind kind) {
         int slot = builder.addSlot(kind, name, null);

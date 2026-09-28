@@ -79,6 +79,9 @@ public class ThreadAsyncNativeTest {
     private void exercise(String name, List<Long> expected) throws Exception { exercise(name, expected, "ThreadAsyncAudit", "bytecode", true); }
     private void exercise(String name, List<Long> expected, String backend, boolean asyncExceptions) throws Exception { exercise(name, expected, "ThreadAsyncAudit", backend, asyncExceptions); }
     private void exercise(String name, List<Long> expected, String module, String backend, boolean asyncExceptions) throws Exception {
+        exercise(name, expected, module, backend, asyncExceptions, false);
+    }
+    private void exercise(String name, List<Long> expected, String module, String backend, boolean asyncExceptions, boolean cold) throws Exception {
         checkReceipt();
         for (var stage : List.of("pre", "post")) {
             var context = Context.newBuilder("thc").allowExperimentalOptions(true).allowCreateThread(true).option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.Splitting", "false").option("engine.CompilationFailureAction", "Throw").build();
@@ -87,6 +90,22 @@ public class ThreadAsyncNativeTest {
                 var core = new File(root, "build/thread-async/" + stage + "/core/" + module + ".json");
                 var entry = context.eval("thc", CoreModules.request(List.of(core.getPath()), name, true, false, backend, true, false, null, asyncExceptions));
                 var result = executor.submit(() -> {
+                    if (cold) {
+                        assertEquals(0L, ((Number) ((Map<?, ?>) Json.parse(entry.getMember("diagnostics").asString())).get("compiledEntries")).longValue());
+                        assertTrue(entry.invokeMember("compile").asBoolean());
+                        var results = new java.util.ArrayList<Long>();
+                        for (long token = 0; token < 2; token++) {
+                            var before = (Number) ((Map<?, ?>) Json.parse(entry.getMember("diagnostics").asString())).get("compiledEntries");
+                            results.add(entry.execute(token).asLong());
+                            var diagnostics = (Map<?, ?>) Json.parse(entry.getMember("diagnostics").asString());
+                            var after = (Number) diagnostics.get("compiledEntries");
+                            assertTrue(after.longValue() > before.longValue(), stage + " " + backend + " " + name + " cold installed call " + token);
+                            var installed = (Map<?, ?>) diagnostics.get("explicitCompilation");
+                            assertEquals(true, installed.get("sameTargets"), stage + " " + backend + " retained targets " + token);
+                            assertEquals(true, installed.get("validLastTier"), stage + " " + backend + " valid installed targets " + token);
+                        }
+                        return results;
+                    }
                     long interpreted = entry.execute(0L).asLong(); assertTrue(entry.invokeMember("compile").asBoolean());
                     var before = (Number) ((Map<?, ?>) Json.parse(entry.getMember("diagnostics").asString())).get("compiledEntries"); long installed = entry.execute(1L).asLong();
                     var after = (Number) ((Map<?, ?>) Json.parse(entry.getMember("diagnostics").asString())).get("compiledEntries"); assertTrue(after.longValue() > before.longValue(), stage + " " + backend + " " + name + " first installed call");
@@ -117,6 +136,10 @@ public class ThreadAsyncNativeTest {
     @Test public void savedExternalDeliveryOwnsEachInterruptedInvocation() throws Exception { exercise("externalSaved", List.of(22122122L, 22122123L)); }
     @Test public void savedSchedulingOwnsEachInvocation() throws Exception { exercise("scheduledSaved", List.of(96202106490L, 97204107494L)); }
     @Test public void astSavedSchedulingOwnsEachInvocation() throws Exception { exercise("scheduledSaved", List.of(96202106490L, 97204107494L), "ast", true); }
+    // The native answer encodes two image invocations, all deep prefix/suffix
+    // effects and mask restoration. No interpreter entry prepares these roots.
+    @Test public void firstInstalledSavedSchedulingOwnsEachInvocation() throws Exception { exercise("scheduledSaved", List.of(96202106490L, 97204107494L), "ThreadAsyncAudit", "bytecode", true, true); }
+    @Test public void astFirstInstalledSavedSchedulingOwnsEachInvocation() throws Exception { exercise("scheduledSaved", List.of(96202106490L, 97204107494L), "ThreadAsyncAudit", "ast", true, true); }
     @Test public void astSavedExternalDeliveryOwnsEachInterruptedInvocation() throws Exception { exercise("externalSaved", List.of(22122122L, 22122123L), "ast", true); }
     @Test public void astSavedSelfDeliveryAcknowledgesEachResumption() throws Exception { exercise("savedSelfThrow", List.of(220102L, 220103L), "ast", false); }
     @Test public void savedSelfDeliveryUnwindsMasks() throws Exception { exercise("savedMaskedSelf", List.of(220102L, 220103L), "bytecode", false); }
