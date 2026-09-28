@@ -136,12 +136,12 @@ public final class TypedInputs {
     }
     static void checkTypedTail(VirtualFrame frame, Node node, RootCallTarget target, HandoffStorage loan, HandoffLayout packet, Metrics metrics) {
         GuestRoot source = node.getRootNode() instanceof GuestRoot root ? root : null;
-        GuestRoot targetRoot = (GuestRoot) java.util.Objects.requireNonNull(target.getRootNode(), "null cannot be cast to non-null type thc.runtime.GuestRoot");
+        GuestRoot targetRoot = ColdCallChecks.guestRoot(target.getRootNode());
         long mask = source == null ? 0L : source.bloom(frame);
         if (source == null || (mask & targetRoot.mask) == targetRoot.mask) {
             if (metrics.getEnabled()) {
                 metrics.incrementTailBounces();
-                HandoffState state = targetRoot.getTypedInput().state();
+                HandoffState state = ColdCallChecks.typedInput(targetRoot.getTypedInput()).state();
                 state.setTailTransfers(state.getTailTransfers() + 1);
             }
             if (loan.getInputMode() == 2) loan.setInputMode(3);

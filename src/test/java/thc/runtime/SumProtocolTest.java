@@ -168,13 +168,20 @@ class SumProtocolTest {
             }
         });
     }
-    @Test void publicHostRejectsKnownAliasToSumResult() throws Exception {
+    @Test void publicHostTransportsKnownAliasToSumResult() throws Exception {
         for (String backend : List.of("ast", "bytecode")) try (var context = context()) {
             var module = module(true); var source = binding(module, "produce");
             var alias = map("id", "sum-alias", "name", "sumAlias", "arity", 1L, "lifted", true, "rep", source.get("rep"), "expr", list("var", source.get("id"), map("rep", source.get("rep"))));
             ((List<Object>) module.get("bindings")).add(alias);
-            var error = assertThrows(PolyglotException.class, () -> context.eval("thc", Json.stringify(map("modules", list(module), "entry", "sumAlias", "backend", backend))));
-            assertTrue(Objects.toString(error.getMessage(), "").contains("unboxed-sum (host result)"), error.getMessage());
+            var entry = context.eval("thc", Json.stringify(map("modules", list(module), "entry", "sumAlias", "backend", backend)));
+            var negative = entry.execute(-7L);
+            assertEquals(2, negative.getArraySize()); assertEquals(1L, negative.getArrayElement(0).asLong());
+            assertEquals(-7L, negative.getArrayElement(1).asLong());
+            var positive = entry.execute(7L);
+            assertEquals(2, positive.getArraySize()); assertEquals(2L, positive.getArrayElement(0).asLong());
+            assertEquals(8L, positive.getArrayElement(1).asLong());
+            assertThrows(PolyglotException.class, () -> entry.execute("invalid host argument"));
+            assertThrows(PolyglotException.class, () -> entry.execute());
         }
     }
     @Test void sumAndTuplePayloadBindingsShadowOuterJoinWithoutChangingProjectionSlots() throws Exception {

@@ -9,6 +9,7 @@ import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
 import java.util.Arrays;
+import java.util.List;
 
 /** Executable root and fixed calling convention shared by AST and bytecode. */
 public abstract class GuestRoot extends RootNode {
@@ -19,6 +20,8 @@ public abstract class GuestRoot extends RootNode {
         SavedGuestContinuations.initializeCarrierTypes();
     }
     protected GuestRoot(TruffleLanguage<?> language, FrameDescriptor descriptor) { super(language, descriptor); }
+    /** Whether an independent host entry may admit external asynchronous exceptions. */
+    public boolean getAsynchronousExceptions() { return false; }
     @CompilationFinal private boolean delimitedControlEnabled = false;
     public final boolean getDelimitedControlEnabled() { return delimitedControlEnabled; }
     public final boolean getDelimitedControlEnabled$org_intelligence_thc() { return delimitedControlEnabled; }
@@ -35,6 +38,13 @@ public abstract class GuestRoot extends RootNode {
     public final int getEntryArgumentOffset() { return entryArgumentOffset; }
     public final int getEntryArgumentOffset$org_intelligence_thc() { return entryArgumentOffset; }
     @CompilationFinal private ArgumentLayout inputLayout = null;
+    private List<CoreRepresentation> inputProofs = null;
+    /** Complete logical signature, including scalar-only roots whose layout is null. */
+    public final List<CoreRepresentation> getInputProofs() { return inputProofs; }
+    public final void configureInputProofs(List<CoreRepresentation> proofs) {
+        if (inputProofs != null) throw new IllegalStateException("Function input proofs already configured");
+        inputProofs = List.copyOf(proofs);
+    }
     public final ArgumentLayout getInputLayout() { return inputLayout; }
     public final ArgumentLayout getInputLayout$org_intelligence_thc() { return inputLayout; }
     @CompilationFinal(dimensions = 1) private int[] strictArgumentPositions = new int[0];

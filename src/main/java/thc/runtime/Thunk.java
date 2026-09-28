@@ -7,6 +7,7 @@ import com.oracle.truffle.api.RootCallTarget;
 /** A shared lazy update cell; state publishes the answer and ownership release. */
 public final class Thunk {
     private RootCallTarget target;
+    private final boolean asynchronousExceptions;
     private CapturedFrame environment;
     // 0=unevaluated, 1=owned, 2=WHNF, 3=failure, 4=unsupported unwind, 5=parked.
     private volatile int state;
@@ -16,7 +17,10 @@ public final class Thunk {
     public Thunk(RootCallTarget target, CapturedFrame environment) {
         this.target = target;
         this.environment = environment;
+        // The target is cleared on completion or suspension; admission still needs its policy.
+        asynchronousExceptions = target.getRootNode() instanceof GuestRoot root && root.getAsynchronousExceptions();
     }
+    public boolean getAsynchronousExceptions() { return asynchronousExceptions; }
     public RootCallTarget getTarget() { return target; }
     public void setTarget(RootCallTarget target) { this.target = target; }
     public CapturedFrame getEnvironment() { return environment; }

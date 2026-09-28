@@ -247,7 +247,9 @@ public final class BytecodeProgram implements ExecutableProgram {
         final BytecodeRootGen.Builder builder;
         final Map<Integer, BytecodeLocal> locals = new LinkedHashMap<>();
         final Set<Integer> staticLocals = new LinkedHashSet<>();
+        final Map<Integer, FrameSlotKind> staticScalars = new HashMap<>();
         final Set<Integer> staticObjectLocals = new LinkedHashSet<>();
+        final Map<BytecodeLocal, FrameSlotKind> staticResults = new HashMap<>();
         BytecodeLocal checkpointRootEntry;
         BytecodeLocal annotationRootEntry;
         BytecodeLabel continueLabel;
@@ -360,6 +362,17 @@ public final class BytecodeProgram implements ExecutableProgram {
             var b = emission.builder;
             if (emission.staticLocals.contains(local.id)) {
                 b.emitStaticLoadLong(Objects.requireNonNull(emission.locals.get(local.id)));
+                return;
+            }
+            var scalar = emission.staticScalars.get(local.id);
+            if (scalar != null) {
+                var slot = Objects.requireNonNull(emission.locals.get(local.id));
+                switch (scalar) {
+                    case Int -> b.emitStaticLoadInt(slot);
+                    case Float -> b.emitStaticLoadFloat(slot);
+                    case Double -> b.emitStaticLoadDouble(slot);
+                    default -> throw new AssertionError(scalar);
+                }
                 return;
             }
             if (emission.staticObjectLocals.contains(local.id)) {
@@ -843,6 +856,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         var body = new ProvenExpression(compiled, evaluatedProof(compiled.proof().refine(resultProof), compiled.proof().getEvaluated()));
         context.tuple = body.proof.isTypedTransport() ? new TupleShape(body.proof, language) : null;
         var target = build(label, context, body, !passThrough && !body.proof.getEvaluated());
+        ((GuestRoot) target.getRootNode()).configureInputProofs(argumentProofs);
         captureSources.addAll(vectorSources);
         return new FunctionSpec(target, context.captureLayout, captureSources, vectorCount != 0);
     }
@@ -874,29 +888,43 @@ public final class BytecodeProgram implements ExecutableProgram {
                 if (local != null) argumentIndices.put(local.id, i);
             }
             var locals = new ArrayList<>(context.captures);
+            var typedFormals = new HashSet<Integer>();
+            for (var argument : context.typedArguments) typedFormals.add(argument.local.id);
             for (var capture : context.vectorCaptures) locals.addAll(capture.destinations);
             if (!context.typedArguments.isEmpty())
                 for (var argument : context.typedArguments) locals.add(argument.local);
             else for (var local : context.arguments) if (local != null) locals.add(local);
             for (var local : locals) {
-                // Joins, loops, captures and typed ingress keep adaptive locals.
+                // Loops, captures and deferred demands keep adaptive locals.
                 int argumentIndex = argumentIndices.getOrDefault(local.id, -1);
-                boolean singleWrite = !context.mayLoop && context.typedInput == null
+                boolean typedFormal = context.typedInput != null && typedFormals.contains(local.id) && !enableAsync;
+                boolean singleWrite = !context.mayLoop
                     && context.captures.isEmpty() && context.vectorCaptures.isEmpty() && !local.cell
-                    && argumentIndex >= 0 && !(enableAsync && context.entryStrict[argumentIndex]);
+                    && (typedFormal || context.typedInput == null && argumentIndex >= 0
+                        && !(enableAsync && context.entryStrict[argumentIndex]));
                 Object info;
-                if (singleWrite && staticWideLong(local.proof)) {
+                if (singleWrite && (staticWideLong(local.proof)
+                        || typedFormal && local.proof.isLong() && local.proof.getEvaluated())) {
                     e.staticLocals.add(local.id);
                     info = FrameSlotKind.Long;
-                } else if (singleWrite && staticLiftedReference(local.proof)) {
+                } else if (singleWrite && local.proof.getEvaluated() && !local.proof.isTypedTransport() &&
+                        (local.proof.isInt() || local.proof.isFloat() || local.proof.isDouble())) {
+                    var kind = FrameLayout.carrierKind(local.proof);
+                    e.staticScalars.put(local.id, kind);
+                    info = kind;
+                } else if (singleWrite && (staticLiftedReference(local.proof)
+                        || typedFormal && FrameLayout.carrierKind(local.proof) == FrameSlotKind.Object)) {
                     e.staticObjectLocals.add(local.id);
                     info = FrameSlotKind.Object;
-                } else info = local.primitive ? "primitive" : "object";
+                } else {
+                    // Initial carrier metadata does not make a multi-write local static.
+                    info = local.cell ? FrameSlotKind.Object : FrameLayout.carrierKind(local.proof);
+                }
                 e.locals.put(local.id, b.createLocal(local.name, info));
             }
             var typed = context.typedInput;
             if (typed != null) {
-                var bloom = LocalAccessor.constantOf(b.createLocal("typed input bloom", "primitive"));
+                var bloom = LocalAccessor.constantOf(b.createLocal("typed input bloom", FrameSlotKind.Long));
                 typedBloom[0] = bloom;
                 var physical = context.typedArguments;
                 var deferredStrict = new HashSet<Integer>();
@@ -958,7 +986,12 @@ public final class BytecodeProgram implements ExecutableProgram {
             var tuple = context.tuple;
             if (tuple != null) {
                 var result = new ArrayList<BytecodeLocal>();
-                for (int i = 0; i < tuple.getWidth(); ++i) result.add(b.createLocal("tuple result " + i, null));
+                for (int i = 0; i < tuple.getWidth(); ++i) {
+                    var kind = FrameLayout.carrierKind(tuple.getLeaves()[i]);
+                    var slot = b.createLocal("tuple result " + i, kind);
+                    result.add(slot);
+                    if (!context.mayLoop) e.staticResults.put(slot, kind);
+                }
                 body.emitTuple(e, result);
                 b.beginReturn(); b.emitFinishTuple(tupleSlots(tuple, result)); b.endReturn();
             } else {
@@ -1145,6 +1178,18 @@ public final class BytecodeProgram implements ExecutableProgram {
     /** Choose checked reference identities while emitting code, never by a guest-time enum switch. */
     private void restoreArgument(Emission e, Local local, boolean deferStrictDemand, Runnable value) {
         var b = e.builder;
+        var scalar = e.staticScalars.get(local.id);
+        if (scalar != null) {
+            if (deferStrictDemand) throw new IllegalStateException("Check failed.");
+            var slot = Objects.requireNonNull(e.locals.get(local.id));
+            switch (scalar) {
+                case Int -> { b.beginStaticStoreInt(slot); value.run(); b.endStaticStoreInt(); }
+                case Float -> { b.beginStaticStoreFloat(slot); value.run(); b.endStaticStoreFloat(); }
+                case Double -> { b.beginStaticStoreDouble(slot); value.run(); b.endStaticStoreDouble(); }
+                default -> throw new AssertionError(scalar);
+            }
+            return;
+        }
         if (e.staticLocals.contains(local.id)) {
             if (deferStrictDemand) throw new IllegalStateException("Check failed.");
             b.beginStaticStoreLong(Objects.requireNonNull(e.locals.get(local.id)));
@@ -4849,7 +4894,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             var b = e.builder;
             b.beginBlock();
             var slots = new ArrayList<BytecodeLocal>(fields.size());
-            for (var field : fields) slots.add(b.createLocal(field.name, field.primitive ? "primitive" : "object"));
+            for (var field : fields) slots.add(b.createLocal(field.name, FrameLayout.carrierKind(field.proof)));
             scrutinee.emitTuple(e, slots); b.emitFailCase(); b.endBlock();
         }), CoreRepresentations.expression(expr));
         if (alternatives.size() != 1) throw new RuntimeFault("Tuple or vector case requires one alternative");
@@ -4885,7 +4930,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         return new ProvenExpression(new ResultExpression((e, destination) -> {
             var b = e.builder;
             b.beginBlock();
-            for (var field : fields) e.locals.put(field.id, b.createLocal(field.name, field.primitive ? "primitive" : "object"));
+            for (var field : fields) e.locals.put(field.id, b.createLocal(field.name, FrameLayout.carrierKind(field.proof)));
             scrutinee.emitTuple(e, localSlots(e, fields));
             emitResult(body, e, destination); b.endBlock();
             for (var field : fields) e.locals.remove(field.id);
@@ -4954,8 +4999,30 @@ public final class BytecodeProgram implements ExecutableProgram {
                     TupleShape.requireCompatible(aggregate.proof, occurrence, false);
                     yield tupleExpression(aggregate.proof, (e, destination) -> {
                         for (int index = 0; index < aggregate.fields.size(); ++index) {
-                            e.builder.beginStoreLocal(destination.get(index));
-                            read(aggregate.fields.get(index)).emit(e); e.builder.endStoreLocal();
+                            var slot = destination.get(index);
+                            var kind = e.staticResults.get(slot);
+                            if (kind == null) {
+                                e.builder.beginStoreLocal(slot);
+                                read(aggregate.fields.get(index)).emit(e); e.builder.endStoreLocal();
+                            } else {
+                                switch (kind) {
+                                    case Int -> e.builder.beginStaticStoreInt(slot);
+                                    case Long -> e.builder.beginStaticStoreLong(slot);
+                                    case Float -> e.builder.beginStaticStoreFloat(slot);
+                                    case Double -> e.builder.beginStaticStoreDouble(slot);
+                                    case Object -> e.builder.beginStaticStoreObject(slot);
+                                    default -> throw new AssertionError(kind);
+                                }
+                                read(aggregate.fields.get(index)).emit(e);
+                                switch (kind) {
+                                    case Int -> e.builder.endStaticStoreInt();
+                                    case Long -> e.builder.endStaticStoreLong();
+                                    case Float -> e.builder.endStaticStoreFloat();
+                                    case Double -> e.builder.endStaticStoreDouble();
+                                    case Object -> e.builder.endStaticStoreObject();
+                                    default -> throw new AssertionError(kind);
+                                }
+                            }
                         }
                     });
                 }

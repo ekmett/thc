@@ -37,7 +37,8 @@ public final class BytecodeNormalizers {
 
     /** Keep the order explicit: each transform independently checks its version and source shape. */
     public static String all(String source, String version) {
-        return unprofiledBranch(handlers(staticPreparation(sourceMode(metadata(source, version), version), version), version), version);
+        return BytecodeColdApplyPreparation.transform(
+            unprofiledBranch(handlers(staticPreparation(sourceMode(metadata(source, version), version), version), version), version), version);
     }
 
     static final String SIGNATURE = "        private static List<Instruction.Argument> getArguments(int opcode, long bci, AbstractBytecodeNode bytecode, byte[] bytecodes, Object[] constants) {\n";
@@ -221,6 +222,10 @@ public final class BytecodeNormalizers {
             "            int index = locals[at + LOCALS_OFFSET_INFO];\n" +
             "            Object info = index < 0 ? null : constants[index];\n" +
             "            byte tag = info == FrameSlotKind.Long ? FrameSlotKind.Long.tag :\n" +
+            "                info == FrameSlotKind.Int ? FrameSlotKind.Int.tag :\n" +
+            "                info == FrameSlotKind.Float ? FrameSlotKind.Float.tag :\n" +
+            "                info == FrameSlotKind.Double ? FrameSlotKind.Double.tag :\n" +
+            "                info == FrameSlotKind.Boolean ? FrameSlotKind.Boolean.tag :\n" +
             "                info == FrameSlotKind.Object ? FrameSlotKind.Object.tag : FrameSlotKind.Illegal.tag;\n" +
             "            if (!seen[local]) { localTags[local] = tag; seen[local] = true; }\n" +
             "            else if (localTags[local] != tag) localTags[local] = FrameSlotKind.Illegal.tag;\n" +
