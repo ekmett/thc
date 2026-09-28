@@ -202,6 +202,11 @@ still change through another alias: only an explicit copy creates a snapshot.
 Foreign views stay managed foreign handles; ordinary byte-array primops continue
 to use ordinary guest allocations.
 
+Opaque `Value` handles may be lazy. Their guest evaluation completes before the
+foreign operation starts; suspension retains completed operands and the pending
+operation. Resuming a handle does not replay earlier operands or a completed
+foreign effect. This also applies to the value passed to `execute` or an array write.
+
 `THC.Interop.Array` exposes fixed `Array#` and `SmallArray#` views, queries
 foreign collection sizes, reads individual opaque values, and copies a foreign
 collection into an `Array# Value`. It does not force Haskell elements or claim
