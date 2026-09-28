@@ -41,6 +41,10 @@ class PackageScalarLinksTest {
             "format", System.getProperty("os.name").startsWith("Mac") ? "llvm-embedded-mach-o" : "llvm-embedded-elf",
             "abi", list(with(entry, "entry", nativeEntry, "convention", "ccall", "safety", "unsafe")));
         var nativeModule = with(without(base, "packageScalarLink"), "packageNativeLink", link);
+        if (!System.getProperty("os.name").equals("Linux") && !System.getProperty("os.name").startsWith("Mac")) {
+            assertThrows(IllegalArgumentException.class, () -> PackageScalarLinks.read(nativeModule));
+            return;
+        }
         var first = Objects.requireNonNull(PackageScalarLinks.read(nativeModule)).getLink();
         var changed = with(link, "nativeLibrary", map("sha256", hash(new byte[]{1, 3}), "hex", "0103"));
         assertFalse(first.same(Objects.requireNonNull(PackageScalarLinks.read(with(nativeModule, "packageNativeLink", changed))).getLink()));
