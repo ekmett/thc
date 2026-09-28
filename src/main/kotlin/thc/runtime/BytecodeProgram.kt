@@ -322,7 +322,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         CoreSignalForeign.validateHeads(requested)
         if (!diagnosticUnsupported) {
             CoreRepresentations.validateAggregates(requested, constructors)
-            checkNotNull(validateInputs).invoke(requested)
+            checkNotNull(validateInputs).accept(requested)
         }
     }
 
