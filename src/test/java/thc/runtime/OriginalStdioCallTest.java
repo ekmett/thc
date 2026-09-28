@@ -129,13 +129,32 @@ class OriginalStdioCallTest {
     }
     private Map<String,Object> descriptor(List<Object> call) { return (Map<String,Object>) ((Map<?,?>) call.get(6)).get("foreignCall"); }
     @Test void bothLoadersRejectBoundHeadsWrongProvenanceAndMalformedContracts() {
-        for (var backend : List.of("ast","bytecode")) try (var context = context(new ByteArrayOutputStream(),new ByteArrayOutputStream())) {
+        var out = new ByteArrayOutputStream(); var err = new ByteArrayOutputStream();
+        for (var backend : List.of("ast","bytecode")) try (var context = context(out,err)) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 class Load { ExecutableProgram call(String name,Consumer<List<Object>> mutate) {
                     var module = OriginalStdioFixtures.module(List.of(name),mutate); return backend.equals("ast") ? new Program(language,module) : new BytecodeProgram(language,module);
-                }}
+                }
+                    void unknown(String name, String symbol) {
+                        var program = call(name, it -> ((Map<String,Object>) descriptor(it).get("target")).put("symbol", symbol));
+                        var reps = OriginalStdioFixtures.signatures.get(name);
+                        var args = new Object[reps.size() + 1]; args[0] = 0L;
+                        for (int i = 0; i < reps.size(); i++) args[i + 1] = switch (reps.get(i)) {
+                            case null -> Unit.INSTANCE; case "AddrRep" -> ManagedAddress.nullAddress();
+                            case "Int32Rep" -> -1; default -> 0L;
+                        };
+                        // Only unknown calls trap when reached; known malformed ABIs above remain eager.
+                        assertEquals(0L, ((Number) program.diagnostics().get("unsupportedTraps")).longValue());
+                        var error = assertThrows(UnsupportedCore.class,
+                            () -> callScalarTestTarget(program.entryTarget(name), args), backend + "/" + symbol);
+                        assertEquals("Unsupported foreign call: " + symbol, error.getMessage());
+                        assertEquals(1L, ((Number) program.diagnostics().get("unsupportedTraps")).longValue());
+                        assertEquals(0, out.size()); assertEquals(0, err.size());
+                        released(language);
+                    }
+                }
                 var load = new Load();
                 for (var name : OriginalStdioFixtures.signatures.keySet()) if (!name.equals("set_errno")) {
                     for (var id : list(null,"",3L,"p0",name)) assertThrows(RuntimeFault.class,() -> load.call(name,it -> ((List<Object>) it.get(1)).set(1,id)));
@@ -147,10 +166,10 @@ class OriginalStdioCallTest {
                     assertThrows(UnsupportedCore.class,() -> load.call(name,it -> ((Map<?,?>) it.get(6)).remove("foreignCall")));
                 }
                 assertThrows(RuntimeFault.class,() -> load.call("safe_write",it -> ((List<List<Object>>) it.get(2)).get(1).set(1,"p0")));
-                for (var symbol : List.of("write","__hscore_set_errno64",OriginalStdioFixtures.symbols.get("safe_write").replace("ZC20ZC","ZC22ZC"))) assertThrows(UnsupportedCore.class,() -> load.call("safe_write",it -> ((Map<String,Object>) descriptor(it).get("target")).put("symbol",symbol)));
+                for (var symbol : List.of("write","__hscore_set_errno64",OriginalStdioFixtures.symbols.get("safe_write").replace("ZC20ZC","ZC22ZC"))) load.unknown("safe_write", symbol);
                 for (var name : List.of("dup","dup2")) {
                     assertThrows(RuntimeFault.class,() -> load.call(name,it -> ((List<List<Object>>) it.get(2)).get(0).set(1,"p" + (OriginalStdioFixtures.signatures.get(name).size() - 1))));
-                    assertThrows(UnsupportedCore.class,() -> load.call(name,it -> ((Map<String,Object>) descriptor(it).get("target")).put("symbol","dup3")));
+                    load.unknown(name, "dup3");
                 }
             } finally { context.leave(); }
         }
