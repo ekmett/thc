@@ -114,7 +114,7 @@ final class AstSameFrameArm extends Expr implements ReplaceObserver {
 
     /** Non-adopted reference, as with Truffle partial blocks. No frame or guest
      * arguments are retained and no control-flow exception is intercepted. */
-    private static final class ArmRoot extends ContextRoot {
+    static final class ArmRoot extends ContextRoot {
         private final AstSameFrameArm arm;
         private final int mode;
         ArmRoot(ContextRoot source, AstSameFrameArm arm, int mode) {
@@ -145,8 +145,9 @@ final class AstSameFrameArm extends Expr implements ReplaceObserver {
         @Override protected boolean prepareForCompilation(boolean rootCompilation, int tier, boolean lastTier) {
             return rootCompilation; // Only this required post-budget boundary vetoes inlining.
         }
-        @Override public long getGraphBudgetGeneration() { return arm.sideGeneration; }
-        @Override public long prepareGraphBudgetRetry(long failedGeneration) {
+        // Optional graph-budget hooks when running with the THC runtime overlay.
+        public long getGraphBudgetGeneration() { return arm.sideGeneration; }
+        public long prepareGraphBudgetRetry(long failedGeneration) {
             synchronized (arm) {
                 if (failedGeneration == arm.sideGeneration && extract(arm.body)) arm.sideGeneration++;
                 return arm.sideGeneration;

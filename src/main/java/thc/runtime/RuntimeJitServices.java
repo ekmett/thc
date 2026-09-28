@@ -6,6 +6,7 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleRuntime;
 import com.oracle.truffle.api.frame.Frame;
+import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.compiler.TruffleCompilerListener;
 import com.oracle.truffle.runtime.AbstractCompilationTask;
 import com.oracle.truffle.runtime.OptimizedCallTarget;
@@ -13,6 +14,8 @@ import com.oracle.truffle.runtime.OptimizedTruffleRuntime;
 import com.oracle.truffle.runtime.OptimizedTruffleRuntimeListener;
 import thc.Language;
 import java.lang.ref.WeakReference;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.function.Supplier;
 
 /**
@@ -24,6 +27,8 @@ import java.util.function.Supplier;
  * roots and their clones, never the compiler worker's current context. Reusable
  * code and shared load factories have no single owner and are not charged to any
  * context's event counters. Per-instance guest-entry metrics remain independent.
+ * Stock OSR wrappers expose no public source owner and are not attributed. An
+ * optional runtime overlay's exact public source accessor preserves attribution.
  *
  * Counters count callbacks during enabled periods, not live compiled targets or
  * resident machine code. For example, a compilation started while disabled can
@@ -38,6 +43,22 @@ import java.util.function.Supplier;
  */
 public final class RuntimeJitServices implements AutoCloseable {
     private static final Supplier<TruffleRuntime> JVM_RUNTIME = Truffle::getRuntime;
+    private static final Method OSR_SOURCE = osrSourceAccessor();
+
+    private static Method osrSourceAccessor() {
+        try {
+            Method method = com.oracle.truffle.runtime.BaseOSRRootNode.class.getMethod("getSourceRootNode");
+            return method.getDeclaringClass() == com.oracle.truffle.runtime.BaseOSRRootNode.class
+                && method.getReturnType() == RootNode.class && !Modifier.isStatic(method.getModifiers())
+                ? method : null;
+        } catch (NoSuchMethodException | SecurityException absent) { return null; }
+    }
+
+    private static RootNode osrSource(com.oracle.truffle.runtime.BaseOSRRootNode root) {
+        if (OSR_SOURCE == null) return null;
+        try { return (RootNode) OSR_SOURCE.invoke(root); }
+        catch (ReflectiveOperationException unavailable) { return null; }
+    }
     private final Supplier<? extends TruffleRuntime> runtimeProvider;
     private final WeakReference<Object> ownership;
     private OptimizedTruffleRuntime runtime;
@@ -113,7 +134,7 @@ public final class RuntimeJitServices implements AutoCloseable {
             if (sourceRoot instanceof com.oracle.truffle.api.bytecode.ContinuationRootNode continuation)
                 sourceRoot = continuation.getSourceRootNode();
             else if (sourceRoot instanceof com.oracle.truffle.runtime.BaseOSRRootNode osr)
-                sourceRoot = osr.getSourceRootNode();
+                sourceRoot = osrSource(osr);
             else break;
         }
         if (!(sourceRoot instanceof ContextRoot root) || root.compilationOwner() != owner) return;
