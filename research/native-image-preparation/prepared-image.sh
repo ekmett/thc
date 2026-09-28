@@ -66,6 +66,13 @@ if [[ "$mode" == cache* ]]; then
     main_class=thc.NativeCache
     image_path="$repo_dir/build/native-image/thc-native-cache"
 fi
+# Switch tables depend only on enums ALREADY selected above. This final category
+# proves the complete synthetic initializer; it never adds an enum dependency.
+"$JAVA_HOME/bin/java" -Xmx512m -XX:-UseJVMCICompiler -cp "$probe_dir:$classpath" \
+    ClassInitializationInventory build/install/thc/lib/thc-0.1-experiment.jar switches "$initialization" \
+    > "$inventory_dir/switches.txt"
+generated=$(<"$inventory_dir/switches.txt")
+[[ -z "$generated" ]] || initialization="${initialization:+$initialization,}$generated"
 # Native Image interprets an empty class/package entry as the whole hierarchy.
 # Empty generated categories must not broaden policy.
 [[ "$initialization" =~ ^[a-zA-Z0-9_.$]+(,[a-zA-Z0-9_.$]+)*$ ]] || {
