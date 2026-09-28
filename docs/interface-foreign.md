@@ -66,9 +66,16 @@ does not claim full GHC safe-FFI scheduling or callback semantics.
 Pointer results retain the runtime's pointer ownership/lifetime boundary.
 Pure source imports and IO
 imports both retain GHC's actual State-token worker ABI and original safety.
-Callbacks, interruptible calls, additional foreign-file products,
-and arbitrary extra native libraries remain outside this profile.
-Ordinary memory helpers supplied by Sulong/libc are allowed. C++ `.cc`, `.cpp`
+Callbacks, interruptible calls and additional foreign-file products retain
+their explicit runtime boundaries. Native library calls are otherwise linked
+by default, not admitted through a tested-symbol table. The producer
+uses the component's GHC linker options and the selected Cabal registrations'
+external libraries, search paths and linker options. Clang emits an embedded
+LLVM shared library (ELF on Linux, Mach-O on Darwin); Sulong loads its ordinary
+native dependencies. Components without native externals retain raw bitcode. Missing
+symbols or libraries are native linker errors. Haskell archives and the GHC
+RTS are not loaded as a substitute for executing their Core in THC.
+C++ `.cc`, `.cpp`
 and `.cxx` sources retain their actual Cabal compiler arguments, including
 `-optcxx` options, and replay through GHC's C++ compiler phase. Verified LLVM
 constructor/destructor arrays remain intact through linking and trimming.
@@ -77,14 +84,13 @@ normal context close executes registered C++ `atexit` handlers and module
 destructors. Forced cancellation does not promise guest cleanup. No separate
 THC initializer runner or process-global destructor registration is introduced.
 
-On Linux x86-64, the original libstdc++ iostream `Init` constructor/destructor
-ABI has an explicit `-lstdc++` embedded-LLVM provider; this preserves the actual
-configured headers and does not substitute libc++. `__cxa_atexit` and the DSO
-identity use Sulong's context-owned runtime. The original declarations are
-checked before admission, even for otherwise archive-only components. Native
-libstdc++ internals remain process-shared, while package LLVM globals belong to
-their context. Other unresolved C++ runtime dependencies remain archive-only;
-this does not admit arbitrary C++ programs. Assembly sources remain unsupported.
+The selected package's `extra-libraries` chooses libstdc++ or other native
+libraries; symbol names do not choose them. `__cxa_atexit` and the DSO identity
+use Sulong's context-owned runtime. Native library internals remain
+process-shared, while package LLVM globals belong to their context. Assembly
+sources remain unsupported. THC's explicit RTS and virtualized file-descriptor
+or cwd adapters still apply where a call actually crosses those boundaries;
+ordinary package C code is not blanket-virtualized.
 
 The source capture runs while Cabal's unpacked sources and generated headers
 still exist. `thc-interface --home-interfaces DIR` reads the exact just-emitted
@@ -126,9 +132,8 @@ to the native component identity.
 Direct caller translation units include only `HsFFI.h` for the emitted scalar
 types, not the broad `Rts.h` header. This also prevents unrelated libc
 declarations such as `FILE*` prototypes from colliding with opaque `Addr#`
-caller signatures. The original `fdopen`/`fclose` shape is exercised natively;
-unresolved libc execution remains archive-only, not implicitly linked by this
-source-capture correction. The mixed-header fixture compares an existing
+caller signatures. The original `fdopen`/`fclose` shape is exercised natively
+and uses the same default library-linking path. The mixed-header fixture compares an existing
 managed buffer passed as an opaque struct pointer and 8/32-bit argument-boundary
 behavior against native GHC with exact-width Haskell arguments. The retained
 machine-word caller variant uses an explicit x86_64 Linux argument bridge when
@@ -163,8 +168,10 @@ links a provider only when that symbol remains unresolved after package source
 linking, preserving package-owned definitions. Source/header observations and
 provider hashes remain in the component identity and `buildInputs`. This is
 managed LLVM over the original buffers: no native zlib call, extra buffer copy,
-or heap pinning is introduced. Other zlib versions and operations remain outside
-this bounded provider.
+or heap pinning is introduced. This override is needed for checksum imports
+over unpinned Haskell byte arrays, which cannot be passed as native addresses.
+Other zlib operations use the package's ordinary native library link and pointer
+contract, rather than requiring additions to this bounded source provider.
 
 The unchanged `digest-0.0.2.1` package now captures its two original C++ CRC32C
 units and links the checksum providers. All six typed foreign adapters match
@@ -193,10 +200,8 @@ capture enabled and all installed targets retained, in both handoff modes.
 This adds genuine public-API Core execution to the common-adapter checks above;
 it does not claim whole-package or Pandoc execution.
 
-Linux x86-64 package C also has an exact native libc `getentropy` provider.
-The final LLVM declaration must be `i32 (ptr, i64)`, matching
-`int getentropy(void *, size_t)`, and the embedded-LLVM ELF container explicitly
-links libc. Original `splitmix-0.1.3.2` uses this through its unchanged safe
+Package C uses libc `getentropy` through the ordinary declared-ABI native link,
+without a separate symbol admission rule. Original `splitmix-0.1.3.2` uses this through its unchanged safe
 `splitmix_init :: IO Word64` import: its eight-byte buffer is local C stack
 storage, not a copied Haskell array. Real native/pinned addresses remain
 in-place; an ordinary unpinned heap buffer cannot be projected into libc.
@@ -217,8 +222,7 @@ cabal test driver-tests --test-options=--package-native-only
 ./gradlew --continue getEntropyDefault getEntropyDense
 ```
 
-Linux x86-64 also admits libc `wcwidth` at its exact `i32 (i32)` ABI and
-records the explicit libc dependency in the embedded-LLVM artifact. This is
+The same native-link path calls libc `wcwidth` with its declared ABI. This is
 the native locale-sensitive implementation used by Tasty's original
 `foreign import capi safe "wchar.h wcwidth" :: CWchar -> CInt`; no Unicode
 width table or unconditional width-one substitute is introduced. Its `-1`
@@ -298,12 +302,10 @@ cabal run exe:thc-fixtures -- text-cbits
 
 The unchanged `erf-2.0.0.0` package has source-pure imports whose emitted
 State-threaded calls are `safe`. Its four Float/Double entries retain that safety
-through acquisition, ABI admission and call selection. A Linux native-libm
-provider checks the final LLVM declarations for exactly `erf`, `erfc`, `erff`
-and `erfcf`, then embeds the LLVM in a linked ELF container with an explicit
-`-lm` dependency. `format=llvm-embedded-elf` distinguishes that artifact from raw
-bitcode; its compiler, link arguments and digest remain recorded. This does not
-add native transport for managed pointers or authorize arbitrary library symbols.
+through acquisition, ABI admission and call selection. Its declared libm
+dependency follows the ordinary native link path, with the compiler, link
+arguments and artifact digest recorded. This does not change managed-pointer
+transport or the foreign-call scheduling boundary.
 
 Safe scalar calls use the existing foreign extent: other Java guest threads and
 JVM GC may progress, pending async delivery is deferred while in foreign code,
@@ -327,9 +329,10 @@ possibly from different modules of that component. Both widths remain excluded;
 no result conversion or guessed callee prototype is manufactured. Compatible
 safe/unsafe declarations and the existing same-C-ABI pointer/signedness adapters
 are not conflicts. An unclassified non-static declaration inventory is honestly
-module-wide, as is a component whose verified LLVM retains unresolved external
-symbols. The latter preserves its actual compiled artifact and build inputs,
-including the checked artifact digest, but does not load it into Sulong.
+module-wide. Ordinary unresolved LLVM declarations instead go to the native
+linker with the package's declared libraries. Legacy unresolved-component
+archives remain readable, but new acquisition does not manufacture partial
+symbol closures to avoid normal native linking.
 
 Only recognized unsupported cases enter this path. Malformed import metadata,
 changed retained products, compiler failures, invalid LLVM, stale object receipts
@@ -341,7 +344,11 @@ unresolved-component packages, including two modules declaring one symbol with
 different result widths. Its native oracle performs the interruptible effect,
 while `packageNativeArchivesDefault` and `packageNativeArchivesDense` verify
 supported calls (also inside the conflicting module) and rejection before any
-excluded effect in both runtimes. The original network-3.2.9.0 capture exposed
+excluded effect in both runtimes. Set `THC_PACKAGE_NATIVE_SUPPORT` to an existing
+genuine exception-runtime package manifest when preparing this fixture; it
+reuses that runtime and its dependencies without re-exporting them. One shared
+positive audit covers ordinary direct, indirect and initializer library calls.
+The original network-3.2.9.0 capture exposed
 this case for `recvmsg` and `sendmsg`: `Network.Socket.Buffer` declares `CInt`
 results while `Network.Socket.ByteString.Internal` declares `CSsize` results.
 

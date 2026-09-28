@@ -672,7 +672,8 @@ def package_scalar_link(module, validate_archive=True):
                   (' buildInputs' if inputs else '') + (' availableEntries' if partial else '') + (' finalizers' if callbacks else ''))
     if inputs: require(isinstance(link['buildInputs'], dict), 'build inputs record')
     require(type(link['schema']) is int and (link['schema'] == 1 or callbacks) and (link['format'] == 'llvm-bitcode' or
-            native and link['format'] == 'llvm-embedded-elf' and platform.system() == 'Linux') and
+            native and (link['format'] == 'llvm-embedded-elf' and platform.system() == 'Linux' or
+                        link['format'] == 'llvm-embedded-mach-o' and platform.system() == 'Darwin')) and
             link['profile'] == ('thc-package-c-ffi-v1' if native else 'thc-local-scalar-ccall-v1'), 'link profile')
     unit = text(link['unit'])
     require(unit == module.get('unit'), 'component owner')

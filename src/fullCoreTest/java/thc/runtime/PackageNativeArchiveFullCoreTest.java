@@ -21,7 +21,7 @@ import java.util.Set;
 import static thc.Main.withContextProfile;
 import static org.junit.jupiter.api.Assertions.*;
 
-/** Actual producer output; unsupported source effects run only in the native oracle. */
+/** Actual package producer output and declared native-library execution. */
 @SuppressWarnings("unchecked")
 public class PackageNativeArchiveFullCoreTest {
     private Map<String, Object> json(File file) throws Exception { return (Map<String, Object>) Json.parse(Files.readString(file.toPath(), StandardCharsets.UTF_8)); }
@@ -63,11 +63,12 @@ public class PackageNativeArchiveFullCoreTest {
             "t/fixtures/run-native-archive/provider/native.c", "t/fixtures/run-native-archive/provider/Provider.hs",
             "bin/core_package_manifest.py", "bin/audit-core.py"), null);
         var paths = (List<String>) manifest.get("modules"); var artifacts = new LinkedHashSet<>(paths);
-        artifacts.addAll(List.of("build/native-archive/supported-audit.json", "build/native-archive/interruptible.json",
-            "build/native-archive/mixed-width-audit.json", "build/native-archive/narrow-conflict.json", "build/native-archive/wide-conflict.json",
-            "build/native-archive/mixed-header-audit.json", "build/native-archive/lifecycle-audit.json", "build/native-archive/partial-audit.json",
-            "build/native-archive/indirect-unresolved.json", "build/native-archive/constructor-unresolved.json", "build/native-archive/provider-container.json",
-            "build/native-archive/non-static.json", "build/native-archive/unresolved.json"));
+        artifacts.addAll(List.of("build/native-archive/supported-audit.json", "build/native-archive/rejected-audit.json"));
+        var support = new File((String) manifest.get("packageManifest"));
+        assertEquals(manifest.get("packageManifestSha256"),
+            HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(support.toPath()))));
+        var sources = new ArrayList<String>(); sources.add("@" + support.getAbsolutePath());
+        for (String path : paths) sources.add(new File(root, path).getAbsolutePath());
         OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"), artifacts, "build/native-archive/");
         var modules = new ArrayList<Map<String, Object>>(); for (String path : paths) modules.add(json(new File(root, path)));
         String mixed = "native-archive-mixed-0.1.0.0-inplace:Mixed.", narrow = "native-archive-mixed-0.1.0.0-inplace:Narrow.";
@@ -75,7 +76,7 @@ public class PackageNativeArchiveFullCoreTest {
         String wideHeader = "native-archive-mixed-0.1.0.0-inplace:CapiMix.wideProbe#", word16Header = "native-archive-mixed-0.1.0.0-inplace:CapiMix.word16Probe#";
         String lifecycle = "native-archive-mixed-0.1.0.0-inplace:Lifecycle.lifecycleProbe#", partial = "native-archive-unresolved-0.1.0.0-inplace:Unresolved.partialProbe#";
         var observations = (List<List<Number>>) manifest.get("mixedHeaderObservations"); assertEquals(36, observations.size());
-        var merged = CoreModules.merge(modules); var links = (List<PackageScalarLink>) merged.get("packageScalarLinks"); assertEquals(2, links.size());
+        var merged = CoreModules.merge(modules); var links = (List<PackageScalarLink>) merged.get("packageScalarLinks"); assertEquals(4, links.size());
         var mixedLink = link(links, "native-archive-mixed-0.1.0.0-inplace"); var ccall = new LinkedHashSet<String>(); int capi = 0;
         for (var abi : mixedLink.getAbi()) { if (abi.getConvention().equals("ccall")) ccall.add(abi.getSymbol()); if (abi.getConvention().equals("capi")) capi++; }
         assertEquals(Set.of("archive_allowed", "archive_count", "archive_header_mix", "archive_header_mix_wide", "archive_header_mix16", "archive_lifecycle"), ccall);
@@ -83,32 +84,36 @@ public class PackageNativeArchiveFullCoreTest {
         assertEquals(List.of("AddrRep", "IntRep", "IntRep"), arguments(mixedLink, "archive_header_mix_wide"));
         var unresolvedSymbols = new LinkedHashSet<String>();
         for (var abi : link(links, "native-archive-unresolved-0.1.0.0-inplace").getAbi()) unresolvedSymbols.add(abi.getSymbol());
-        assertEquals(Set.of("archive_partial_add", "archive_partial_read"), unresolvedSymbols);
+        assertTrue(unresolvedSymbols.containsAll(Set.of("archive_partial_add", "archive_partial_read", "archive_process", "archive_through_global")));
         Map<String, Object> nativeProof = null;
         for (var module : modules) if (module.get("packageNativeLink") != null) { nativeProof = (Map<String, Object>) module.get("packageNativeLink"); break; }
         assertNotNull(nativeProof); assertEquals("llvm-embedded-elf", nativeProof.get("format"));
         var buildInputs = (Map<String, Object>) nativeProof.get("buildInputs");
         var libraries = (List<Map<String, Object>>) buildInputs.get("nativeLibraries"); assertEquals(1, libraries.size());
-        assertEquals("native-libstdcxx-ios-init-v1", libraries.getFirst().get("provider"));
+        assertEquals("package-declared-native-libraries-v1", libraries.getFirst().get("provider"));
         var bridges = (List<Map<String, Object>>) buildInputs.get("argumentBridges"); assertEquals(1, bridges.size()); var bridge = bridges.getFirst();
         assertEquals("x86_64-c-integer-argument-truncation-v1", bridge.get("profile")); String bridgeSource = (String) bridge.get("source");
         assertEquals(bridge.get("sourceSha256"), HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bridgeSource.getBytes(StandardCharsets.UTF_8))));
         assertEquals(2, ((List<?>) bridge.get("definitions")).size()); assertTrue(((String) bridge.get("inputBitcodeSha256")).matches("[0-9a-f]{64}"));
         for (int width : new int[] {8, 16, 32}) assertTrue(bridgeSource.contains(" to i" + width));
         var failures = List.of(mixed + "blocked", "native-archive-mixed-0.1.0.0-inplace:Unknown.other", narrow + "narrow",
-            "native-archive-mixed-0.1.0.0-inplace:Wide.wide", "native-archive-unresolved-0.1.0.0-inplace:Unresolved.process",
-            "native-archive-unresolved-0.1.0.0-inplace:Unresolved.throughGlobal", "native-archive-poisoned-0.1.0.0-inplace:Poisoned.poisoned",
-            "native-archive-provider-0.1.0.0-inplace:Provider.nativeMath");
+            "native-archive-mixed-0.1.0.0-inplace:Wide.wide");
+        var nativeEntries = List.of("native-archive-unresolved-0.1.0.0-inplace:Unresolved.process",
+            "native-archive-unresolved-0.1.0.0-inplace:Unresolved.throughGlobal",
+            "native-archive-poisoned-0.1.0.0-inplace:Poisoned.poisoned");
+        String nativeMath = "native-archive-provider-0.1.0.0-inplace:Provider.nativeMath";
         for (String backend : List.of("ast", "bytecode")) try (Context context = withContextProfile(Context.newBuilder("thc").allowNativeAccess(true), ContextProfile.SYNCHRONOUS_TEST).build()) {
-            context.initialize("thc"); context.enter();
+            context.eval("thc", CoreModules.request(sources, mixed + "allowed", true, false, backend, false, false, null, false, false, true)); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var state = Language.currentState();
                 for (var link : links) state.getPackageCbits().link(link);
-                var source = new LinkedHashMap<>(CoreModules.reachable(merged, List.of(mixed + "allowed", mixed + "count", narrow + "allowed",
-                    mixedHeader, staticPointer, wideHeader, word16Header, lifecycle, partial), true)); source.put("instrument", true);
-                ExecutableProgram program = backend.equals("ast") ? new Program(language, source, true) : new BytecodeProgram(language, source, true);
+                var programs = state.getCoreUnitPrograms(); assertEquals(1, programs.size());
+                ExecutableProgram program = programs.getFirst();
                 state.getThreads().enterCurrent(null, false, true, null);
                 try {
+                    for (String entry : nativeEntries)
+                        assertEquals(ProcessHandle.current().pid(), Calls.target(program.entryTarget(entry), new Object[] {0L, 0L}));
+                    assertEquals(0.0, Calls.target(program.entryTarget(nativeMath), new Object[] {0L, 0.0}));
                     var allowed = program.entryTarget(mixed + "allowed"); var count = program.entryTarget(mixed + "count");
                     assertEquals(40L, Calls.target(allowed, new Object[] {0L, 3L}));
                     assertEquals(42L, Calls.target(program.entryTarget(narrow + "allowed"), new Object[] {0L, 5L}));
@@ -122,8 +127,12 @@ public class PackageNativeArchiveFullCoreTest {
                     var initialized = program.entryTarget(lifecycle); assertEquals(47L, Calls.target(initialized, new Object[] {0L, 5L}));
                     compile(initialized); assertEquals(48L, Calls.target(initialized, new Object[] {0L, 6L}), backend + " initialized native C++ state"); valid(initialized);
                     for (String entry : failures) {
-                        var rejected = assertThrows(IllegalArgumentException.class, () -> CoreModules.reachable(merged, entry, true));
-                        assertTrue(rejected.getMessage().contains("archive-only"), rejected.getMessage());
+                        assertTrue(((Map<?, ?>) merged.get("archiveBindings")).containsKey(entry), "retained archive exclusion: " + entry);
+                        // Exception-bridge preflight can reject an excluded ABI
+                        // before the final reachable-archive diagnostic.
+                        var rejected = assertThrows(RuntimeException.class, () -> CoreModules.reachable(merged, entry, true));
+                        assertTrue(rejected.getMessage().contains("archive-only") ||
+                            rejected.getMessage().contains("Unlinked or ambiguous package C signature"), rejected.getMessage());
                         assertEquals(0L, Calls.target(count, new Object[] {0L, 0L}), backend + "/" + entry + " must not enter native code");
                     }
                     assertEquals(46L, Calls.target(allowed, new Object[] {0L, 9L}));

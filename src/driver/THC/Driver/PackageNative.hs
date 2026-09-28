@@ -27,7 +27,7 @@ import qualified Data.Aeson.KeyMap as KM
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import Data.Char (isAlpha, isAlphaNum)
-import Data.List (groupBy, isInfixOf, isPrefixOf, isSuffixOf, nub, sort)
+import Data.List (groupBy, isInfixOf, isPrefixOf, nub, sort)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import Numeric (showHex)
@@ -37,11 +37,9 @@ import System.Exit (ExitCode(..))
 import System.FilePath
 import System.Process (CreateProcess(..), proc, readCreateProcessWithExitCode)
 import THC.Driver.ScalarBitcode (parseDependencies, sulongScalarTarget)
-import THC.Driver.NativeLibrarySources (zlibChecksumSources, nativeMathSymbols, validateNativeMathIR, validateNativeEntropyIR, validateNativeWidthIR,
-  nativeCxxInitSymbols, nativeLifecycleSymbols, validateNativeLifecycleIR,
-  nativeLibcSymbols, validateNativeLibcIR, nativeZlibSymbols, validateNativeZlibIR)
+import THC.Driver.NativeLibrarySources (zlibChecksumSources)
 import THC.Driver.NativeArgumentBridge (nativeArgumentBridge)
-import THC.Driver.NativeDependencies (COnlyProduct, cOnlyProductProof, cOnlyProductPieces)
+import THC.Driver.NativeDependencies (COnlyProduct, cOnlyProductProof, cOnlyProductPieces, nativeLinkInputs)
 
 -- (original emitted symbol, convention, safety, semantic carriers, result)
 type Signature = (String, String, String, [String], String)
@@ -697,49 +695,33 @@ finishPackageNativeWithDependencies cOnlyProducts pieces directory unit currentO
       _ <- trim resolved
       pure ()
     externals <- unresolved
-    -- Explicit native providers retain LLVM execution and actual C ABI checks.
-    -- getentropy requires a genuine native address, never a managed heap copy.
-    -- Other unresolved symbols retain this component as a non-executable archive.
-    let unsupported = [name | name <- externals,
-          name `notElem` (["memcpy","memmove","memset","memcmp","bcmp","getentropy","wcwidth"] ++
-            nativeMathSymbols ++ nativeCxxInitSymbols ++ nativeLifecycleSymbols ++ nativeLibcSymbols ++ nativeZlibSymbols),
-          not ("llvm." `isPrefixOf` name)]
-    let math = filter (`elem` nativeMathSymbols) externals
-        entropy = "getentropy" `elem` externals
-        width = "wcwidth" `elem` externals
-        cxx = filter (`elem` nativeCxxInitSymbols) externals
-        lifecycle = filter (`elem` nativeLifecycleSymbols) externals
-        libc = filter (`elem` nativeLibcSymbols) externals
-        zlib = filter (`elem` nativeZlibSymbols) externals
-        finalIR = directory </> "native/final.ll"
-    _ <- command directory opt ["-S","-passes=verify",final,"-o",finalIR]
-    ir <- readFile finalIR
-    -- Even archive-only components must not disguise malformed supported ABIs.
-    unless (null math) $ do
-      check ("-linux-gnu" `isSuffixOf` target) "native scalar libm provider currently requires Linux"
-      either fail pure (validateNativeMathIR math ir)
-    when entropy (either fail pure (validateNativeEntropyIR target ir))
-    when width (either fail pure (validateNativeWidthIR target ir))
-    unless (null (cxx ++ lifecycle)) (either fail pure (validateNativeLifecycleIR target (cxx ++ lifecycle) ir))
-    unless (null libc) (either fail pure (validateNativeLibcIR target libc ir))
-    unless (null zlib) (either fail pure (validateNativeZlibIR target zlib ir))
-    (artifact,format,libraries) <- if (null math && not entropy && not width && null cxx && null libc && null zlib) || not (null unsupported)
+    -- The configured C compiler and linker own native symbol resolution.
+    -- Sulong consumes the embedded LLVM and native dependency list; there is
+    -- no tested-symbol inventory or inferred library/ABI here.
+    identity <- get record "sourceIdentity"
+    compiler <- get identity "compiler"
+    originalArguments <- get identity "arguments"
+    libdir <- command directory compiler ["--print-libdir"] >>= \output -> case lines output of
+      [path] -> pure path
+      _ -> fail "native compiler did not report one library directory"
+    linkArguments <- nativeLinkInputs compiler libdir root (Just unit) originalArguments
+    clang <- tool "THC_CLANG" "clang"
+    (artifact,format,libraries) <- if all ("llvm." `isPrefixOf`) externals
       then pure (final,"llvm-bitcode",[]) else do
-      clang <- tool "THC_CLANG" "clang"
-      let container = directory </> "native/final.so"
-          arguments = ["--target=" ++ target,"-fembed-bitcode","-shared","-fPIC",final] ++
-            ["-lm" | not (null math)] ++ ["-lc" | entropy || width || not (null libc)] ++
-            ["-lstdc++" | not (null cxx)] ++ ["-lz" | not (null zlib)] ++ ["-o",container]
-      _ <- command directory clang arguments
-      compilerHash <- sha <$> BS.readFile clang
-      pure (container,"llvm-embedded-elf",[object ["provider" .= provider,
-        "symbols" .= symbols,"compiler" .= clang,"compilerSha256" .= compilerHash,"arguments" .= arguments] |
-        (provider,symbols) <- [("native-libm-scalars-v1"::String,math) | not (null math)] ++
-          [("native-libc-getentropy-v1",["getentropy"]) | entropy] ++
-          [("native-libc-wcwidth-v1",["wcwidth"]) | width] ++
-          [("native-libc-package-lp64-v1",libc) | not (null libc)] ++
-          [("native-zlib-package-lp64-v1",zlib) | not (null zlib)] ++
-          [("native-libstdcxx-ios-init-v1",cxx) | not (null cxx)]])
+        let darwin = "-darwin" `isInfixOf` target || "-apple-macosx" `isInfixOf` target
+            artifact = directory </> if darwin then "native/final.dylib" else "native/final.so"
+            format = if darwin then "llvm-embedded-mach-o" else "llvm-embedded-elf"
+            -- Current Apple ld ignores -fembed-bitcode's legacy bundle flag.
+            -- Sulong accepts raw bitcode in the Mach-O __LLVM,__bundle section.
+            embedding = if darwin
+              then concatMap (\argument -> ["-Xlinker",argument]) ["-sectcreate","__LLVM","__bundle",final]
+              else ["-fembed-bitcode"]
+            arguments = ["--target=" ++ target,"-shared","-fPIC",final] ++ embedding ++
+              linkArguments ++ [if darwin then "-Wl,-undefined,error" else "-Wl,--no-undefined","-o",artifact]
+        _ <- command directory clang arguments
+        compilerHash <- sha <$> BS.readFile clang
+        pure (artifact,format,[object ["provider" .= ("package-declared-native-libraries-v1"::String),
+          "symbols" .= externals,"compiler" .= clang,"compilerSha256" .= compilerHash,"arguments" .= arguments]])
     bytes <- BS.readFile artifact
     component <- get record "componentSha256" :: IO String
     providerInputs <- mapM (\value -> get value "inputs") providers
@@ -751,48 +733,6 @@ finishPackageNativeWithDependencies cOnlyProducts pieces directory unit currentO
             "dependencies" .= map cOnlyProductProof cOnlyProducts,
             "nativeLibraries" .= libraries,"unresolved" .= externals,"argumentBridges" .= bridgeInputs]] ++
           ["finalizers" .= finalizers | not (null finalizers)]
-    -- Keep the complete failed link as evidence. LLVM, rather than a textual
-    -- call-graph guess, computes each adapter's closure including global
-    -- initializers, destructors, aliases and address-taken functions. Load one
-    -- union of the usable closures so mutable C globals are never duplicated.
-    partial <- if null unsupported || not (null finalizers) || format /= "llvm-bitcode" then pure Nothing else do
-      let selection = directory </> "native/entry-resolution"
-      createDirectoryIfMissing True selection
-      closures <- forM (zip [0::Int ..] entries) $ \(index,entry) -> do
-        let output = selection </> show index <.> "bc"
-        _ <- command directory opt ["-passes=internalize,globaldce",
-          "-internalize-public-api-list=" ++ entry,final,"-o",output]
-        _ <- command directory opt ["-passes=verify",output,"-disable-output"]
-        observed <- command directory nm ["--undefined-only","--format=posix",output]
-        digest <- sha <$> BS.readFile output
-        let dependencies = sort [name | line <- lines observed, name:_ <- [words line]]
-        check (all (`elem` externals) dependencies) "native adapter closure acquired an unrecorded external"
-        pure (entry,dependencies,object ["entry" .= entry,"bitcodeSha256" .= digest,"unresolved" .= dependencies])
-      let available = [entry | (entry,dependencies,_) <- closures, not (any (`elem` unsupported) dependencies)]
-      if null available then pure Nothing else do
-        let output = selection </> "available.bc"
-        _ <- command directory opt ["-passes=internalize,globaldce",
-          "-internalize-public-api-list=" ++ join "," available,final,"-o",output]
-        _ <- command directory opt ["-passes=verify",output,"-disable-output"]
-        observed <- command directory nm ["--undefined-only","--format=posix",output]
-        selectedBytes <- BS.readFile output
-        let dependencies = sort [name | line <- lines observed, name:_ <- [words line]]
-            expected = nub (concat [deps | (entry,deps,_) <- closures, entry `elem` available])
-        check (all (`elem` expected) dependencies && not (any (`elem` unsupported) dependencies))
-          "native adapter union retains an unsupported or unproved external"
-        let resolution = object ["schema" .= (1::Int),
-              "profile" .= ("llvm-globaldce-adapter-closures-v1"::String),
-              "inputBitcodeSha256" .= sha bytes,"entries" .= [closureRecord | (_,_,closureRecord) <- closures],
-              "outputBitcodeSha256" .= sha selectedBytes,"unresolved" .= dependencies]
-            selectedProof = setMember "availableEntries" (toJSON available) $
-              setMember "bitcodeHex" (toJSON (hex selectedBytes)) $
-              setMember "bitcodeSha256" (toJSON (sha selectedBytes)) proof
-        -- This profile carries raw bitcode only. An otherwise allowed libm,
-        -- entropy, width or C++ provider still needs the embedded container
-        -- produced by the complete-link path above; do not omit that recipe.
-        pure $ if all (\name -> name `elem` (["memcpy","memmove","memset","memcmp","bcmp"] ++ nativeLifecycleSymbols) ||
-                    "llvm." `isPrefixOf` name) dependencies
-          then Just (resolution,selectedProof) else Nothing
     writeJson (directory </> "native/inputs.json") (object ["sources" .= inputs,"unresolved" .= externals])
     forM modules $ \(name,bytes') -> do
       value <- either fail pure (eitherDecodeStrict' bytes')
@@ -801,17 +741,8 @@ finishPackageNativeWithDependencies cOnlyProducts pieces directory unit currentO
           let prior = member value "packageNativeArchive"
               unclassified = prior >>= (`member` "unclassifiedReason")
               ownsCalls = any (owned unit) (calls value) || hasFunctionAddress value
-          next <- if not ownsCalls || maybe False (/= Null) unclassified then pure value
-            else if null unsupported then pure (Object (KM.insert "packageNativeLink" proof fields))
-            else do
-              excluded <- maybe (pure []) (\archive -> get archive "unsupportedImports") prior
-              conflicts <- maybe (pure []) (either fail pure . parseValue)
-                (prior >>= (`member` "conflictingImports"))
-              let archive = archiveRecord value excluded Nothing unsupported (Just proof) conflicts
-              pure $ case partial of
-                Nothing -> setMember "packageNativeArchive" archive value
-                Just (resolution,selectedProof) -> setMember "packageNativeLink" selectedProof $
-                  setMember "packageNativeArchive" (setMember "entryResolution" resolution archive) value
+          let next = if not ownsCalls || maybe False (/= Null) unclassified then value
+                else Object (KM.insert "packageNativeLink" proof fields)
           pure (name, BL.toStrict (encode next))
         _ -> fail "package native Core module is not an object"
 

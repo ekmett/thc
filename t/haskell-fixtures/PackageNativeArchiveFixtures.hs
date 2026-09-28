@@ -14,7 +14,7 @@
 module PackageNativeArchiveFixtures (preparePackageNativeArchives) where
 
 import Control.Monad (forM, unless)
-import Data.Aeson (eitherDecodeStrict', Value(..), object, (.=))
+import Data.Aeson (eitherDecodeStrict', Value(..), object, toJSON, (.=))
 import qualified Data.Aeson.KeyMap as KM
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC
@@ -28,8 +28,8 @@ import Text.Read (readMaybe)
 import THC.Driver.GhcProxy (ghcProxyCommand)
 import THC.Driver.PackageNative (finishPackageNative)
 
--- Real Cabal/GHC acquisition with known unsupported declarations. The native
--- oracle executes them; guest admission must not. No invented LLVM or proof.
+-- Real Cabal/GHC acquisition: ordinary native dependencies link by default,
+-- while unsupported calling conventions retain their declaration obligations.
 preparePackageNativeArchives :: FilePath -> IO ()
 preparePackageNativeArchives root = do
   unsetEnv "GHC_ENVIRONMENT"
@@ -43,6 +43,28 @@ preparePackageNativeArchives root = do
       providerUnit = "native-archive-provider-0.1.0.0-inplace"
       units = [mixedUnit,unresolvedUnit,poisonedUnit,providerUnit]
   createDirectoryIfMissing True output
+  suppliedSupport <- lookupEnv "THC_PACKAGE_NATIVE_SUPPORT" >>= maybe
+    (fail "Set THC_PACKAGE_NATIVE_SUPPORT to an existing genuine exception-runtime package manifest") canonicalizePath
+  supportManifest <- readJson suppliedSupport
+  bridge <- field supportManifest "foreignExceptionBridgeUnit"
+  supportUnits <- field supportManifest "units" :: IO [Value]
+  let visit seen [] = pure seen
+      visit seen (unit:rest)
+        | unit `elem` seen = visit seen rest
+        | otherwise = case [value | value@(Object fields) <- supportUnits, KM.lookup "id" fields == Just (toJSON unit)] of
+            [value] -> do
+              dependencies <- field value "depends"
+              visit (unit:seen) (dependencies ++ rest)
+            _ -> fail "exception support has a missing or duplicate dependency"
+  -- The selected GHC's implementation unit has its own Core identity, separate
+  -- from the installed ghc-internal registration used in Cabal dependencies.
+  selected <- visit [] [bridge :: String,"ghc-internal"]
+  let support = output </> "runtime-support.json"
+  case supportManifest of
+    Object fields -> writeJson support (Object (KM.insert "units" (toJSON
+      [value | value@(Object unit) <- supportUnits, KM.lookup "id" unit `elem` map (Just . toJSON) selected]) fields))
+    _ -> fail "invalid exception support manifest"
+  supportHash <- hashFile support
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
   ghcPkg <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
   cabal <- maybe "cabal" id <$> lookupEnv "CABAL"
@@ -97,42 +119,38 @@ preparePackageNativeArchives root = do
       createDirectoryIfMissing True (takeDirectory (root </> path))
       BS.writeFile (root </> path) bytes
       pure path)
-  let audit entry label = ["bin/audit-core.py","--entry",entry,"--output",output </> label <.> "json"] ++ map (root </>) linked
-      mixed = mixedUnit ++ ":Mixed."
-  accepted <- execute "supported-audit" [] "python3" (audit (mixed ++ "allowed") "supported-audit")
-  mixedWidth <- execute "mixed-width-audit" [] "python3"
-    (audit (mixedUnit ++ ":Narrow.allowed") "mixed-width-audit")
-  mixedHeader <- execute "mixed-header-audit" [] "python3"
-    (audit (mixedUnit ++ ":CapiMix.mixedProbe#") "mixed-header-audit")
-  lifecycle <- execute "lifecycle-audit" [] "python3"
-    (audit (mixedUnit ++ ":Lifecycle.lifecycleProbe#") "lifecycle-audit")
-  partial <- execute "partial-audit" [] "python3"
-    (audit (unresolvedUnit ++ ":Unresolved.partialProbe#") "partial-audit")
-  negatives <- forM [(mixed ++ "blocked","interruptible"),(mixedUnit ++ ":Unknown.other","non-static"),
-    (mixedUnit ++ ":Narrow.narrow","narrow-conflict"),(mixedUnit ++ ":Wide.wide","wide-conflict"),
-    (unresolvedUnit ++ ":Unresolved.process","unresolved"),
-    (unresolvedUnit ++ ":Unresolved.throughGlobal","indirect-unresolved"),
-    (poisonedUnit ++ ":Poisoned.poisoned","constructor-unresolved"),
-    (providerUnit ++ ":Provider.nativeMath","provider-container")] $ \(entry,label) -> do
-      rejected <- runLoggedExpect 1 60 root (relative </> "logs") label [] "python3" (audit entry label)
-      report <- readJson (output </> label <.> "json")
-      ok <- field report "accepted"
-      unless (not ok) (fail "archive-only reachable import passed its audit")
-      pure rejected
+  let mixed = mixedUnit ++ ":Mixed."
+      acceptedEntries = [mixed ++ "allowed", mixedUnit ++ ":Narrow.allowed",
+        mixedUnit ++ ":CapiMix.mixedProbe#", mixedUnit ++ ":Lifecycle.lifecycleProbe#",
+        unresolvedUnit ++ ":Unresolved.partialProbe#", unresolvedUnit ++ ":Unresolved.process",
+        unresolvedUnit ++ ":Unresolved.throughGlobal", poisonedUnit ++ ":Poisoned.poisoned",
+        providerUnit ++ ":Provider.nativeMath"]
+      rejectedEntries = [mixed ++ "blocked", mixedUnit ++ ":Unknown.other",
+        mixedUnit ++ ":Narrow.narrow", mixedUnit ++ ":Wide.wide"]
+      audit entries label = ["bin/audit-core.py","--package-manifest",support,
+        "--output",output </> label <.> "json"] ++
+        concatMap (\entry -> ["--entry",entry]) entries ++ map (root </>) linked
+  accepted <- execute "supported-audit" [] "python3" (audit acceptedEntries "supported-audit")
+  rejected <- runLoggedExpect 1 180 root (relative </> "logs") "rejected-audit" [] "python3"
+    (audit rejectedEntries "rejected-audit")
+  report <- readJson (output </> "rejected-audit.json")
+  ok <- field report "accepted"
+  unless (not ok) (fail "archive-only reachable import passed its audit")
   sources <- files (root </> fixture)
   inputs <- hashes root (map (makeRelative root) sources ++
     ["t/haskell-fixtures/PackageNativeArchiveFixtures.hs","bin/plugin.py","src/driver/THC/Driver/PackageNative.hs",
      "src/driver/THC/Driver/NativeArgumentBridge.hs",
+     "src/driver/THC/Driver/NativeDependencies.hs",
      "src/driver/THC/Driver/NativeLibrarySources.hs",
      "bin/core_package_manifest.py","bin/audit-core.py"])
   artifacts <- hashes root (linked ++ [relative </> name <.> "json" | name <-
-    ["supported-audit","mixed-width-audit","mixed-header-audit","lifecycle-audit","partial-audit","interruptible","non-static","narrow-conflict","wide-conflict","unresolved","indirect-unresolved","constructor-unresolved","provider-container"]])
+    ["supported-audit","rejected-audit"]])
   writeJson (output </> "manifest.json") (object ["schema" .= (1::Int),"driverSha256" .= driverHash,
-    "modules" .= linked,"inputHashes" .= inputs,"artifactHashes" .= artifacts,
+    "modules" .= linked,"packageManifest" .= support,"packageManifestSha256" .= supportHash,"inputHashes" .= inputs,"artifactHashes" .= artifacts,
     "mixedHeaderObservations" .= observations,
     "partialObservations" .= ([1010,1515,1313,1414,1818] :: [Int]),
-    "commands" .= map commandRecord ([built,acquired,oracle,accepted,mixedWidth,mixedHeader,lifecycle,partial] ++ negatives)])
-  putStrLn "package-native-archives: supported mixed imports admitted; interruptible, non-static, conflicting-width and unresolved imports archived and rejected when reachable"
+    "commands" .= map commandRecord [built,acquired,oracle,accepted,rejected]])
+  putStrLn "package-native-archives: supported mixed imports admitted; ordinary native libraries linked; interruptible, non-static and conflicting-width imports remain explicit"
   where
     line bytes = case BSC.lines bytes of [value] -> BSC.unpack value; _ -> error "expected one tool result"
     locate execute cabal target = line . commandStdout <$> execute ("locate-" ++ drop 4 target) [] cabal ["list-bin","--offline",target]
