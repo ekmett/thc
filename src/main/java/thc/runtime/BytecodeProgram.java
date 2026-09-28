@@ -6965,8 +6965,8 @@ public final class BytecodeProgram implements ExecutableProgram {
                 }
             });
         }
-        if (MVarOp.Companion.named(name) != null) {
-            var operation = MVarOp.Companion.named(name);
+        if (MVarOp.named(name) != null) {
+            var operation = MVarOp.named(name);
             var proofs = argumentProofs(args);
             operation.validate(proofs, flags, tupleProof);
             operation.validateBindings(proofs, lexicalProofs(args, scope));
