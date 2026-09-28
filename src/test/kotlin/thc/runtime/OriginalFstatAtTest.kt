@@ -376,7 +376,7 @@ class OriginalFstatAtTest {
                 assertSame(pending, saved.asyncRequest()); assertEquals(6L, field(destination, OriginalStdioOp.ST_SIZE))
                 pending!!.acknowledge(); Files.writeString(file, "changed after native stat")
                 val completed = saved.continueWith(Unit)
-                assertEquals(0L, shape.layout.getLong(ownedTupleResult(completed, shape), 0))
+                assertEquals(0L, shape.layout.getLong(TupleResultsKt.ownedTupleResult(completed, shape), 0))
                 assertEquals(6L, field(destination, OriginalStdioOp.ST_SIZE)); assertEquals(1, evaluated)
                 released(language)
 

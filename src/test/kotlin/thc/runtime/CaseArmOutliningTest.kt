@@ -235,7 +235,7 @@ class CaseArmOutliningTest {
                         @Child var force = Force(Metrics(false), true)
                         override fun execute(frame: VirtualFrame): Any? = force.execute(frame, parked)
                     }.callTarget
-                    val completed = ownedTupleResult(Calls.target(driver, emptyArray()), shape)
+                    val completed = TupleResultsKt.ownedTupleResult(Calls.target(driver, emptyArray()), shape)
                     assertEquals(918273645L, shape.layout.getLong(completed, 0))
                     assertTrue(prefix.isEmpty()); assertTrue(blocked.isEmpty())
                     assertThrows(RuntimeFault::class.java) { saved.continueWith(Unit) }

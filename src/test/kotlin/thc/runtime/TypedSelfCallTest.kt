@@ -102,7 +102,7 @@ class TypedSelfCallTest {
         val label = "$backend/depth=$depth/vectorResult=$vectorResult"
         if (vectorResult) {
             val shape = requireNotNull(root.tupleResult)
-            val result = ownedTupleResult(value, shape)
+            val result = TupleResultsKt.ownedTupleResult(value, shape)
             val actual = shape.layout.getObject(result, 0) as ShortVector
             assertArrayEquals(left, actual.toArray(), label)
         } else {

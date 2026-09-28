@@ -55,7 +55,7 @@ internal class WaitFileDescriptor(@field:Child private var fd: Expr,
 
     override fun execute(frame: VirtualFrame): Any {
         val descriptor = fd.executeRequiredLong(frame)
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         await(Language.currentState(this).files.waitToken(descriptor, writing))
         return Unit
     }
@@ -63,7 +63,7 @@ internal class WaitFileDescriptor(@field:Child private var fd: Expr,
 
 /** Java bytecode operations use these package functions to keep WaitToken private. */
 internal fun prepareFileWait(fd: Long, state: Any?, writing: Boolean, node: Node): Any {
-    requireVoidCarrier(state)
+    TupleResultsKt.requireVoidCarrier(state)
     return Language.currentState(node).files.waitToken(fd, writing)
 }
 

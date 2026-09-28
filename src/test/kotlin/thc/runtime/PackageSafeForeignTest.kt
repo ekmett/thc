@@ -145,7 +145,7 @@ class PackageSafeForeignTest {
                     val argument: Any = storage?.let { ManagedAddress.fromAllocation(it).plus(3) } ?: 0.5
                     val originalBits = storage?.nativeSegment()?.address()
                     fun checkResult(result: Any?) {
-                        val tuple = ownedTupleResult(result, shape)
+                        val tuple = TupleResultsKt.ownedTupleResult(result, shape)
                         if (pointer) {
                             val address = shape.layout.getObject(tuple, 0) as ManagedAddress
                             assertEquals(originalBits!! + 3, address.toNativeBits())

@@ -225,7 +225,7 @@ class WindowsCodePagesTest {
                                 }
                                 assertSame(ManagedAddress.Companion.nullAddress(), invoke("localFree", address));
                             }
-                            assertEquals(0, Language.currentState(null).getNativeAllocations().liveCount$org_intelligence_thc());
+                            assertEquals(0, Language.currentState(null).getNativeAllocations().liveCount());
                         }
                     }
                     var exercise = new Exercise();
@@ -290,7 +290,7 @@ class WindowsCodePagesTest {
                 } finally { second.leave(); }
             }
         }
-        assertEquals(0, allocations.liveCount$org_intelligence_thc());
+        assertEquals(0, allocations.liveCount());
         try (var denied = context(false)) {
             enter(denied);
             try { assertThrows(SecurityException.class, () -> Language.currentState(null).getWindowsCodePages().codePage(false)); }
@@ -319,7 +319,7 @@ class WindowsCodePagesTest {
                     borrow.close();
                     freeing.get(5, TimeUnit.SECONDS);
                     assertThrows(RuntimeFault.class, () -> address.readWord8(0));
-                    assertEquals(0, Language.currentState(null).getNativeAllocations().liveCount$org_intelligence_thc());
+                    assertEquals(0, Language.currentState(null).getNativeAllocations().liveCount());
                 } finally { borrow.close(); executor.shutdownNow(); }
             } finally { context.leave(); }
         }

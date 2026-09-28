@@ -27,18 +27,18 @@ final class Md5ForeignExpression extends Expr {
         switch (operation) {
             case INIT -> {
                 ManagedByteArray.requireState(operands[1].execute(frame));
-                ManagedMd5.INSTANCE.init(first);
+                ManagedMd5.init(first);
             }
             case UPDATE -> {
                 var input = operands[1].executeRequiredAddress(frame);
                 long length = operands[2].executeRequiredInt(frame);
                 ManagedByteArray.requireState(operands[3].execute(frame));
-                ManagedMd5.INSTANCE.update(first, input, length);
+                ManagedMd5.update(first, input, length);
             }
             case FINAL -> {
                 var context = operands[1].executeRequiredAddress(frame);
                 ManagedByteArray.requireState(operands[2].execute(frame));
-                ManagedMd5.INSTANCE.finish(first, context);
+                ManagedMd5.finish(first, context);
             }
         }
         return null;

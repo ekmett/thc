@@ -68,7 +68,7 @@ class SignalDispatchFullCoreTest {
                             val target = program.entryTarget(entry)
                             val shape = checkNotNull((target.rootNode as GuestRoot).tupleResult)
                             val result = Calls.target(target, arrayOf(0L, argument, Unit))
-                            return shape.layout.getLong(ownedTupleResult(result, shape), 0)
+                            return shape.layout.getLong(TupleResultsKt.ownedTupleResult(result, shape), 0)
                         }
                         val events = LinkedBlockingQueue<ProcessSignalTransport.Event>()
                         val closed = AtomicInteger()

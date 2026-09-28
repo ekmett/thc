@@ -253,7 +253,7 @@ public final class WindowsCodePages {
             if (count == 0) return ManagedAddress.Companion.nullAddress();
             var pointer = resultPointer.get(ADDRESS, 0);
             // Adoption consumes the allocation, including cleanup on publication failure.
-            return context.getNativeAllocations().adoptWindowsLocal$org_intelligence_thc(pointer,
+            return context.getNativeAllocations().adoptWindowsLocal(pointer,
                 (Integer.toUnsignedLong(count) + 1) * 2);
         }
     }
