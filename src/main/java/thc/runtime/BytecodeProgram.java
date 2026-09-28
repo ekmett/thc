@@ -5342,7 +5342,8 @@ public final class BytecodeProgram implements ExecutableProgram {
 
     private Expression compileOrdinaryApplication(List<Object> expr, Scope scope, boolean tail,
             List<Object> fn, List<List<Object>> args, List<?> flags, boolean[] callStrict, CoreRepresentation tupleProof) {
-        var metadata = constructors.get(fn.size() > 1 ? fn.get(1) : null);
+        var metadata = (tupleProof.isSum() || tupleProof.isTuple()) && "con".equals(fn.getFirst())
+            ? constructors.get(fn.get(1)) : null;
         if (tupleProof.isSum() && "con".equals(fn.getFirst()) && metadata != null && "unboxed-sum".equals(metadata.get("kind"))) {
             int tag = SumShape.constructor(tupleProof, metadata, fn.get(2));
             if (args.size() != 1) throw new RuntimeFault("Sum constructor must be saturated");
