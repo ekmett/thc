@@ -30,7 +30,7 @@ public final class BytecodeCaseRegion extends Node {
     }
 
     /** Recreated by bytecode source replay; contains no activation or guest values. */
-    public record Source(LocalAccessor[][] captures, BytecodeTupleSlots destination) {}
+    public record Source(@CompilationFinal(dimensions = 2) LocalAccessor[][] captures, BytecodeTupleSlots destination) {}
 
     @CompilationFinal(dimensions = 1) private final DataLayout[] guards;
     @Children private Side[] sides;
