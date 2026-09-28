@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
 
+import com.oracle.truffle.api.RootCallTarget;
+import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import java.io.File;
 import java.nio.file.Files;
@@ -76,10 +78,18 @@ public class AsyncStrictEntryNativeTest {
     }
     @ParameterizedTest @ValueSource(strings = {"bytecode", "ast"})
     public void blockedDynamicPapDemandsUnusedStrictFormalInsideOriginalCatch(String backend) throws Exception {
+        exercise(backend, false);
+    }
+    @ParameterizedTest @ValueSource(strings = {"bytecode", "ast"})
+    public void firstCompiledDynamicPapRetainsItsStrictEntryAndWorkerAcrossDelivery(String backend) throws Exception {
+        exercise(backend, true);
+    }
+    private void exercise(String backend, boolean compiled) throws Exception {
         for (var stage : List.of("pre", "post")) {
             var module = fixture(stage);
             try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
-                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build()) {
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("engine.Splitting", "false").option("engine.CompilationFailureAction", "Throw").build()) {
                 context.initialize("thc");
                 ExecutableProgram program; Language.State state;
                 var functions = new LinkedHashMap<String, Value>();
@@ -99,6 +109,24 @@ public class AsyncStrictEntryNativeTest {
                 assertEquals(9999007L, call(functions, "warmLoop", 9999000L));
                 assertEquals(7L, call(functions, "takeReady")); assertEquals(7L, call(functions, "takeRunning"));
                 assertEquals(0, shared.getState());
+                var installed = new LinkedHashMap<String, RootCallTarget>();
+                if (compiled) {
+                    context.enter();
+                    try {
+                        for (var name : List.of("strictWorker", "strictEntry", "longLoop")) {
+                            var entry = program.entryTarget(name); installed.put(name, entry);
+                            assertEquals(true, entry.getClass().getMethod("compile", boolean.class).invoke(entry, true));
+                            assertEquals(true, entry.getClass().getMethod("isValidLastTier").invoke(entry), name);
+                            var runtime = Truffle.getRuntime();
+                            runtime.getClass().getMethod("bypassedInstalledCode", Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"))
+                                    .invoke(runtime, entry);
+                        }
+                    } finally { context.leave(); }
+                    // Delivery in the original running loop records an actual compiled claim.
+                    // Neither strictEntry nor strictWorker has executed before installation.
+                    assertEquals(1L, call(functions, "releaseGate"));
+                }
+                long compiledBefore = ((Number) program.diagnostics().get("compiledEntries")).longValue();
                 var result = new CompletableFuture<Long>();
                 var target = new Thread(() -> {
                     try { result.complete(call(functions, "strictEntry")); } catch (Throwable failure) { result.completeExceptionally(failure); }
@@ -114,18 +142,37 @@ public class AsyncStrictEntryNativeTest {
                     assertTrue(ready.isDone(), "The dynamic worker returned before demanding its strict PAP prefix");
                     assertEquals(1007L, ready.get(1, TimeUnit.SECONDS));
                     assertFalse(result.isDone(), "The PAP prefix must be demanded before the worker returns");
+                    if (compiled) {
+                        assertEquals(1007L, CompletableFuture.supplyAsync(() -> call(functions, "takeRunning")).get(10, TimeUnit.SECONDS));
+                        assertRetained(program, installed, "before delivery");
+                    }
                     var request = state.getThreads().send(Objects.requireNonNull(state.getThreads().pollState(target).getCurrent()).getIdentity(), program.entryValue("asyncPayload"));
                     assertEquals(-1L, result.get(15, TimeUnit.SECONDS), "The original catch# handles delivery");
                     assertEquals(AsyncRequestState.ACKNOWLEDGED, request.getState());
+                    if (compiled) {
+                        assertTrue(request.compiledCapture, "The original installed loop claims the strict-PAP delivery");
+                        assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() >= compiledBefore + 3,
+                                "The strict entry, strict worker and loop must enter installed code");
+                        assertRetained(program, installed, "after delivery");
+                    }
                     assertEquals(5, shared.getState()); assertEquals(1L, call(functions, "prefixCount"));
-                    assertEquals(1L, call(functions, "releaseGate")); assertEquals(10000008L, call(functions, "forceShared", 1));
+                    if (!compiled) assertEquals(1L, call(functions, "releaseGate"));
+                    assertEquals(10000008L, call(functions, "forceShared", 1));
                     assertEquals(2, shared.getState());
                     assertEquals(1L, call(functions, "prefixCount"), "Resumption must not replay the effectful prefix");
+                    if (compiled) assertRetained(program, installed, "after saved completion");
                 } finally {
                     target.join(5000);
                     if (target.isAlive() || waiter.isAlive()) context.close(true);
                 }
             }
+        }
+    }
+    private void assertRetained(ExecutableProgram program, Map<String, RootCallTarget> installed, String phase) throws Exception {
+        for (var entry : installed.entrySet()) {
+            assertSame(entry.getValue(), program.entryTarget(entry.getKey()), phase + ": " + entry.getKey());
+            assertEquals(true, entry.getValue().getClass().getMethod("isValidLastTier").invoke(entry.getValue()),
+                    phase + ": original installed " + entry.getKey());
         }
     }
     private long call(Map<String, Value> functions, String name) { return call(functions, name, 0); }

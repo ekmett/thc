@@ -40,12 +40,20 @@ public final class Force extends Node {
         trampoline = new TailCallLoop(metrics);
     }
     public Object execute(VirtualFrame frame, Object value) {
+        if (!(value instanceof Thunk original)) return value;
         if (!seenThunk) {
-            if (!(value instanceof Thunk)) return value;
+            // An untouched compiled demand has no target/profile history. Keep its
+            // real thunk execution cold without training or retiring the caller.
+            if (CompilerDirectives.inCompiledCode()) return executeCold(original);
             CompilerDirectives.transferToInterpreterAndInvalidate();
             seenThunk = true;
         }
-        if (!(value instanceof Thunk original)) return value;
+        return executeThunk(original);
+    }
+    @TruffleBoundary(transferToInterpreterOnException = false)
+    private Object executeCold(Thunk original) { return executeThunk(original); }
+
+    private Object executeThunk(Thunk original) {
         // Successful updates already verified WHNF before publishing state 2.
         while (true) {
             switch (original.getState()) {

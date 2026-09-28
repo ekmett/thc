@@ -91,7 +91,7 @@ class BytecodeTypedTupleInputTest {
         }
     }
     @Test void typedPairPapScalarSuffixCapturedOverapplicationAndResultLoans() throws ReflectiveOperationException {
-        for (boolean inlining : new boolean[]{true, false}) withLanguage(inlining, (context, language) -> {
+        for (boolean async : new boolean[]{false, true}) for (boolean inlining : new boolean[]{true, false}) withLanguage(inlining, (context, language) -> {
             var data = module(
                 bind("worker", lam(List.of(arg("p", pair), arg("z")), unpack(v("p", pair), pair, List.of("a", "b"), prim("+#", prim("+#", v("a"), v("b")), v("z"))))),
                 bind("identity", lam(List.of(arg("p", pair)), v("p", pair), pair)),
@@ -103,7 +103,7 @@ class BytecodeTypedTupleInputTest {
                 bind("prefix", lam(List.of(arg("x")), call("worker", List.of(pack(pair, v("x"), n(7))), closure), closure)),
                 bind("over", lam(List.of(arg("x")), call("make", List.of(pack(pair, v("x"), n(7)), n(13))))),
                 bind("roundTrip", lam(List.of(arg("x")), call("worker", List.of(call("identity", List.of(pack(pair, v("x"), n(7))), pair), n(13))))));
-            var p = new BytecodeProgram(language, data); var pap = (Closure) run(p, "prefix", 9L);
+            var p = new BytecodeProgram(language, data, async); var pap = (Closure) run(p, "prefix", 9L);
             assertEquals(1, pap.suppliedCount); assertEquals(1, pap.arity); assertEquals(0, pap.supplied.length); assertNotNull(pap.typedSupplied); assertEquals(2, Objects.requireNonNull(pap.typedSupplied).getLayout().getReps().size());
             var root = (BytecodeRoot) p.entryTarget("worker").getRootNode(); assertEquals(2, Objects.requireNonNull(root.getInputLayout()).getLogicalArity()); assertEquals(3, Objects.requireNonNull(root.getInputLayout()).getPhysicalArity()); assertNotNull(root.getTypedInput());
             for (String name : List.of("exact", "pap", "over", "roundTrip", "captured")) checkCompiled(context, language, p, name, x -> x + 20L);

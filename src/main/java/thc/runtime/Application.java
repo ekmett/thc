@@ -10,7 +10,7 @@ final class Application extends Expr {
     @Child private Evaluate function;
     @Children private Expr[] arguments;
     private final ArgumentLayout inputLayout;
-    @Child private Dispatch dispatch;
+    @Child private PreparedDispatch dispatch;
     Application(Expr function, Expr[] arguments, boolean tail, Metrics metrics) {
         setRepresentation(new CoreRepresentation(CoreKind.UNKNOWN, true, false, null, null, null, null, null, null));
         this.function = new Evaluate(function, metrics);
@@ -23,7 +23,7 @@ final class Application extends Expr {
             evaluated[i] = proof.getEvaluated();
         }
         inputLayout = ArgumentLayout.fromProofs(proofs);
-        dispatch = Dispatch.create(arguments.length, tail, metrics, evaluated, inputLayout);
+        dispatch = new PreparedDispatch(arguments.length, tail, metrics, evaluated, inputLayout);
     }
     @ExplodeLoop @Override public Object execute(VirtualFrame frame) {
         Closure fn;
