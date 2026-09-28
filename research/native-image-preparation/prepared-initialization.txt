@@ -74,6 +74,10 @@ thc.runtime.ConstructorClassIdentity$1
 # values array are initialized. AstResumeStep has no fields or default methods.
 thc.runtime.GcForeignExpression$ResumeCompleted
 thc.runtime.RtsEventForeignExpression$ResumeCompleted
+# Private identity marker and empty argument array only; no node, profile,
+# guest context, frame or handoff state is constructed by these initializers.
+thc.runtime.Force
+thc.runtime.HandoffCaller
 
 # Finite Java metadata compatibility inventory; see the closure audit in README.
 # Literal enum descriptors and argument lists only, not their runtime operations.
