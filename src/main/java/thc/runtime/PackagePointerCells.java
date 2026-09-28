@@ -32,6 +32,7 @@ final class PackagePointerCells {
     private final IdentityHashMap<ManagedAllocation, Allocation> allocations = new IdentityHashMap<>();
     private final IdentityHashMap<ManagedAddress, Long> bits = new IdentityHashMap<>();
     private boolean active;
+    private boolean reserved;
 
     private PackagePointerCells(PackageScalarFunction entry, List<ManagedAddress> arguments) {
         this.entry = entry;
@@ -56,7 +57,6 @@ final class PackagePointerCells {
         PackageFinalizerRegistry.requireCurrent(entry);
         // Validate the whole transitive graph before projecting any cell or native image.
         for (var allocation : allocations.values()) {
-            allocation.owner.requirePointerSnapshot(allocation.before, allocation.size, entry);
             for (var value : allocation.before.values()) validateCell(value);
         }
     }
@@ -92,14 +92,37 @@ final class PackagePointerCells {
     @TruffleBoundary
     static <T> T invoke(PackageScalarFunction entry, List<ManagedAddress> arguments,
             Function<PackagePointerCells, Supplier<T>> prepare, BiFunction<PackagePointerCells, T, T> finish) {
-        var projection = new PackagePointerCells(entry, arguments);
-        return ManagedAddress.withNativeBorrows(projection.addresses, () -> {
-            // Argument views may acquire native registries. Prepare them before owner
-            // monitors/materialization, but keep every transitive malloc owner borrowed.
-            Supplier<T> call = prepare.apply(projection);
-            T result = projection.invoke(call);
-            // Returned aliases are recovered after writeback, before those borrows end.
-            return finish.apply(projection, result);
+        while (true) {
+            var projection = new PackagePointerCells(entry, arguments);
+            T result = ManagedAddress.withNativeBorrows(projection.addresses, () -> {
+                if (!projection.reserve()) return null;
+                try {
+                    if (projection.active) for (var allocation : projection.allocations.values())
+                        allocation.owner.requirePointerSnapshot(allocation.before, allocation.size, entry);
+                    // Argument views may acquire native registries. Prepare them before
+                    // owner monitors/materialization, with all transitive owners borrowed.
+                    Supplier<T> call = prepare.apply(projection);
+                    T value = projection.invoke(call);
+                    // Recover returned aliases before publication/borrows end.
+                    return finish.apply(projection, value);
+                } finally {
+                    if (projection.active) for (var allocation : projection.allocations.values())
+                        allocation.owner.endPointerPublication();
+                }
+            });
+            if (projection.reserved) return result;
+            // Another publication changed the graph before argument preparation.
+            // Rebuild its transitive borrows; no prepare/native effect is replayed.
+        }
+    }
+    private boolean reserve() {
+        if (!active) { reserved = true; return true; }
+        return ManagedAllocation.withPointerLocks(new ArrayList<>(allocations.keySet()), () -> {
+            for (var allocation : allocations.values())
+                if (!allocation.owner.canPublishPointers(allocation.before, allocation.size)) return false;
+            for (var allocation : allocations.values()) allocation.owner.beginPointerPublication();
+            reserved = true;
+            return true;
         });
     }
     private <T> T invoke(Supplier<T> call) {

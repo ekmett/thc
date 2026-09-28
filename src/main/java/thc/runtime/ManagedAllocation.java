@@ -20,6 +20,8 @@ public final class ManagedAllocation {
     private final int pointerBytes;
     private Map<Integer, ManagedAddress> pointers;
     private PackageScalarFunction nativePointerProvenance;
+    private Thread pointerPublisher;
+    private int pointerPublicationDepth;
     private boolean exposedToNative, exposedAsRawBytes;
     private volatile boolean pointerCapable;
     private volatile int logicalSize;
@@ -71,7 +73,31 @@ public final class ManagedAllocation {
         return pointers;
     }
     synchronized Map<Integer, ManagedAddress> pointerSnapshot() {
+        awaitPointerPublication();
         return pointers == null ? Map.of() : new LinkedHashMap<>(pointers);
+    }
+    // Publication spans C and registry recovery, but never keeps this monitor
+    // across registry access. Wait only while holding this one allocation monitor.
+    private synchronized void awaitPointerPublication() {
+        boolean interrupted = false;
+        while (pointerPublicationPending()) {
+            try { wait(); } catch (InterruptedException ignored) { interrupted = true; }
+        }
+        if (interrupted) Thread.currentThread().interrupt();
+    }
+    private boolean pointerPublicationPending() {
+        return pointerPublisher != null && pointerPublisher != Thread.currentThread();
+    }
+    synchronized boolean canPublishPointers(Map<Integer, ManagedAddress> expected, long size) {
+        return !pointerPublicationPending() && getSize() == size
+            && expected.equals(pointers == null ? Map.of() : pointers);
+    }
+    synchronized void beginPointerPublication() {
+        pointerPublisher = Thread.currentThread();
+        pointerPublicationDepth++;
+    }
+    synchronized void endPointerPublication() {
+        if (--pointerPublicationDepth == 0) { pointerPublisher = null; notifyAll(); }
     }
     synchronized void requirePointerSnapshot(Map<Integer, ManagedAddress> expected, long size, PackageScalarFunction entry) {
         if (!isPinned() || pointerBytes != ValueLayout.ADDRESS.byteSize())
@@ -211,6 +237,7 @@ public final class ManagedAllocation {
             long bits;
             int start;
             synchronized (this) {
+                awaitPointerPublication();
                 start = range(offset, pointerBytes);
                 provenance = nativePointerProvenance;
                 if (provenance != null) PackageFinalizerRegistry.requireCurrent(provenance);
@@ -223,6 +250,7 @@ public final class ManagedAllocation {
             // Native pointer recovery can take registry/lifetime locks, never this monitor.
             var recovered = PackagePointerCells.recover(provenance, bits);
             synchronized (this) {
+                awaitPointerPublication();
                 range(offset, pointerBytes);
                 var value = pointers == null ? null : pointers.get(start);
                 if (value != null) return value;
@@ -237,6 +265,7 @@ public final class ManagedAllocation {
     /** Atomic pointer CAS already resolved the old value outside its owner monitor. */
     synchronized ManagedAddress knownAddressByteOffset(long offset) {
         int start = range(offset, pointerBytes);
+        if (pointerPublicationPending()) return null;
         return pointers == null ? null : pointers.get(start);
     }
     /** Package-only synchronous accesses: the caller holds this monitor through the final load/store. */
@@ -377,11 +406,17 @@ public final class ManagedAllocation {
         segment.asSlice(start, count).fill((byte) value);
     }
     public void copyFrom(ManagedAllocation source, long sourceOffset, long destinationOffset, long count) {
-        int sourceId = System.identityHashCode(source), thisId = System.identityHashCode(this);
-        if (source == this) { synchronized (this) { copyLocked(source, sourceOffset, destinationOffset, count); } }
-        else if (sourceId < thisId) { synchronized (source) { synchronized (this) { copyLocked(source, sourceOffset, destinationOffset, count); } } }
-        else if (sourceId > thisId) { synchronized (this) { synchronized (source) { copyLocked(source, sourceOffset, destinationOffset, count); } } }
-        else { synchronized (COPY_TIE_LOCK) { synchronized (source) { synchronized (this) { copyLocked(source, sourceOffset, destinationOffset, count); } } } }
+        while (true) {
+            source.awaitPointerPublication();
+            awaitPointerPublication();
+            if (withOrderedLocks(source, () -> {
+                // A publisher may have started after either wait. Never wait while
+                // holding both monitors: its reconciliation needs each of them.
+                if (pointerPublicationPending() || source.pointerPublicationPending()) return false;
+                copyLocked(source, sourceOffset, destinationOffset, count);
+                return true;
+            })) return;
+        }
     }
     private void copyLocked(ManagedAllocation source, long sourceOffset, long destinationOffset, long count) {
         mutable();
@@ -413,6 +448,7 @@ public final class ManagedAllocation {
         synchronized (COPY_TIE_LOCK) { synchronized (other) { synchronized (this) { return action.get(); } } }
     }
     public synchronized ManagedAllocation resized(long newSize) {
+        awaitPointerPublication();
         mutable();
         if (newSize < 0 || newSize > Integer.MAX_VALUE) throw fault("Managed allocation size outside JVM domain");
         if (newSize == getSize()) return this;

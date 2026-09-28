@@ -422,6 +422,122 @@ class PackagePointerCellsTest {
     @Test void concurrentFreeCannotStripInteriorPointerOwnershipOnReturn() throws Exception {
         concurrentFreeCannotStripInteriorPointerOwnership(false, false);
     }
+
+    @Test void overlappingCallsCannotReplayThePreNativePointerSnapshot() throws Exception {
+        overlappingPublication(0);
+    }
+    @Test void pointerReadsWaitForNativePublication() throws Exception {
+        overlappingPublication(1);
+    }
+    @Test void pointerCopiesWaitForNativePublication() throws Exception {
+        overlappingPublication(2);
+    }
+    @Test void pointerResizeWaitsForNativePublication() throws Exception {
+        overlappingPublication(3);
+    }
+    private void overlappingPublication(int observation) throws Exception {
+        var fixture = fixture();
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var state = Language.currentState(); state.getPackageCbits().link(fixture.link());
+                var input = ManagedAddress.fromGuestByteArray(ManagedAllocation.mutable(8, 8, true));
+                var storage = cell(input); var address = ManagedAddress.fromGuestByteArray(storage);
+                var signature = fixture.link().getAbi().stream()
+                    .filter(item -> item.getSymbol().equals("finalize_cell")).findFirst().orElseThrow();
+                var entry = state.getPackageCbits().resolve(fixture.link(), signature);
+                var registry = state.getNativeAddresses();
+                var management = java.lang.management.ManagementFactory.getThreadMXBean();
+                assertTrue(management.isObjectMonitorUsageSupported());
+                var firstDone = new java.util.concurrent.CompletableFuture<Void>();
+                var secondDone = new java.util.concurrent.CompletableFuture<Void>();
+                var nativeCalls = new java.util.concurrent.atomic.AtomicInteger();
+                var observed = new java.util.concurrent.atomic.AtomicReference<ManagedAddress>();
+                java.util.function.Consumer<java.util.concurrent.CompletableFuture<Void>> invoke = done -> {
+                    context.enter();
+                    try {
+                        PackagePointerCells.invoke(entry, List.of(address), projection -> () -> {
+                            try {
+                                Object result = InteropLibrary.getUncached().execute(entry.getReceiver(),
+                                    new PackageNativePointer(projection.address(address), null));
+                                nativeCalls.incrementAndGet(); return result;
+                            } catch (Exception failure) { throw new AssertionError(failure); }
+                        }, (projection, result) -> result);
+                        done.complete(null);
+                    } catch (Throwable failure) { done.completeExceptionally(failure);
+                    } finally { context.leave(); }
+                };
+                Thread first = null, second = null;
+                try {
+                    synchronized (registry) {
+                        first = Thread.ofPlatform().daemon(true).start(() -> invoke.accept(firstDone));
+                        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
+                        boolean firstAtPublication = false;
+                        while (System.nanoTime() < deadline) {
+                            var info = management.getThreadInfo(new long[]{first.threadId()}, true, false)[0];
+                            var lock = info == null ? null : info.getLockInfo();
+                            if (nativeCalls.get() == 1 && info != null && info.getThreadState() == Thread.State.BLOCKED
+                                    && lock != null && lock.getIdentityHashCode() == System.identityHashCode(registry)) {
+                                for (var monitor : info.getLockedMonitors())
+                                    assertNotEquals(System.identityHashCode(storage), monitor.getIdentityHashCode(),
+                                        "registry recovery must remain outside the allocation monitor");
+                                firstAtPublication = true; break;
+                            }
+                            if (firstDone.isDone()) firstDone.get(1, java.util.concurrent.TimeUnit.SECONDS);
+                            Thread.sleep(1);
+                        }
+                        assertTrue(firstAtPublication, "first C call must finish before the second starts");
+                        second = Thread.ofPlatform().daemon(true).start(() -> {
+                            if (observation == 0) { invoke.accept(secondDone); return; }
+                            context.enter();
+                            try {
+                                ManagedAllocation source = storage;
+                                if (observation == 2) {
+                                    source = ManagedAllocation.mutable(storage.getSize(), 8, true);
+                                    source.copyFrom(storage, 0, 0, storage.getSize());
+                                } else if (observation == 3) source = storage.resized(storage.getSize() + 8);
+                                observed.set(source.readAddressByteOffset(0));
+                                secondDone.complete(null);
+                            } catch (Throwable failure) { secondDone.completeExceptionally(failure);
+                            } finally { context.leave(); }
+                        });
+                        deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
+                        boolean secondReachedProjection = false;
+                        while (System.nanoTime() < deadline) {
+                            var info = management.getThreadInfo(new long[]{second.threadId()}, true, false)[0];
+                            if (info != null && (info.getThreadState() == Thread.State.BLOCKED
+                                    || info.getThreadState() == Thread.State.WAITING
+                                    || info.getThreadState() == Thread.State.TIMED_WAITING)) {
+                                for (var frame : info.getStackTrace())
+                                    if (frame.getClassName().equals(PackagePointerCells.class.getName())
+                                            || frame.getClassName().equals(ManagedAllocation.class.getName()))
+                                        secondReachedProjection = true;
+                                if (secondReachedProjection) break;
+                            }
+                            if (secondDone.isDone()) {
+                                secondDone.get(1, java.util.concurrent.TimeUnit.SECONDS);
+                                secondReachedProjection = true; break;
+                            }
+                            Thread.sleep(1);
+                        }
+                        assertTrue(secondReachedProjection, "second call must overlap the pending publication");
+                    }
+                    firstDone.get(5, java.util.concurrent.TimeUnit.SECONDS);
+                    secondDone.get(5, java.util.concurrent.TimeUnit.SECONDS);
+                    int expectedCalls = observation == 0 ? 2 : 1;
+                    assertEquals(expectedCalls, nativeCalls.get());
+                    assertEquals((long) expectedCalls, call(fixture, "count"), "real C effects must execute exactly once");
+                    assertTrue(storage.readAddressByteOffset(0).sameLocation(input.plus(expectedCalls)),
+                        "second projection must preserve the first native pointer increment");
+                    if (observation != 0) assertTrue(observed.get().sameLocation(input.plus(1)),
+                        "managed pointer observation must see the completed native update");
+                } finally {
+                    if (first != null) { first.join(6000); assertFalse(first.isAlive()); }
+                    if (second != null) { second.join(6000); assertFalse(second.isAlive()); }
+                }
+            } finally { context.leave(); }
+        }
+    }
     @Test void concurrentFreeCannotStripInteriorPointerOwnershipOnFailure() throws Exception {
         concurrentFreeCannotStripInteriorPointerOwnership(true, false);
     }
