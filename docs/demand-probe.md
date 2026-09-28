@@ -48,7 +48,7 @@ head casts/ticks and metadata-only IO cases.
 [`RealCoreCallDemandTest`](../src/test/kotlin/thc/RealCoreCallDemandTest.kt)
 checks genuine ordinary, polymorphic, lazy and partial applications before and
 after requested guest compilation on both backends.
-[`CallDemandTest`](../src/test/kotlin/thc/runtime/CallDemandTest.kt) separately
+[`CallDemandTest`](../src/test/java/thc/runtime/CallDemandTest.java) separately
 checks opt-in behavior, strict failures, PAP sharing, unknown calls and unchanged
 formal contracts.
 

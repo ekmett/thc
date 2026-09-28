@@ -20,13 +20,13 @@ import java.util.IdentityHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
-import thc.runtime.ThreadInventoryCoreEvidence.Companion.install
-import thc.runtime.ThreadInventoryCoreEvidence.Companion.interpretedCalls
-import thc.runtime.ThreadInventoryCoreEvidence.Companion.rawCompile
-import thc.runtime.ThreadInventoryCoreEvidence.Companion.released
-import thc.runtime.ThreadInventoryCoreEvidence.Companion.restoreBoundary
-import thc.runtime.ThreadInventoryCoreEvidence.Companion.targets
-import thc.runtime.ThreadInventoryCoreEvidence.Companion.valid
+import thc.runtime.ThreadInventoryCoreEvidence.install
+import thc.runtime.ThreadInventoryCoreEvidence.interpretedCalls
+import thc.runtime.ThreadInventoryCoreEvidence.rawCompile
+import thc.runtime.ThreadInventoryCoreEvidence.released
+import thc.runtime.ThreadInventoryCoreEvidence.restoreBoundary
+import thc.runtime.ThreadInventoryCoreEvidence.targets
+import thc.runtime.ThreadInventoryCoreEvidence.valid
 
 @Timeout(180)
 class ThreadInventoryNativeTest {

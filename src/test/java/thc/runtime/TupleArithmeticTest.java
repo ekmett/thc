@@ -121,8 +121,8 @@ class TupleArithmeticTest {
             app -> { var rep = (Map<String, Object>) ((Map<String, Object>) app.get(6)).get("rep"); var children = (List<Object>) rep.get("components"); children.set(0, wrap(children.getFirst())); },
             app -> ((Map<String, Object>) app.get(6)).remove("rep"),
             app -> { var rep = (Map<String, Object>) ((Map<String, Object>) app.get(6)).get("rep"); rep.remove("aggregate"); rep.remove("components"); rep.put("kind", "long"); rep.put("primReps", List.of("IntRep")); },
-            app -> { var arg = ((List<List<Object>>) app.get(2)).getFirst(); var rep = (Map<String, Object>) Objects.requireNonNull(CoreRepresentations.INSTANCE.metadata(arg)).get("rep"); rep.put("kind", "float"); rep.put("primReps", List.of("FloatRep")); },
-            app -> { var arg = ((List<List<Object>>) app.get(2)).getFirst(); ((Map<String, Object>) Objects.requireNonNull(CoreRepresentations.INSTANCE.metadata(arg)).get("rep")).put("kind", "unknown"); },
+            app -> { var arg = ((List<List<Object>>) app.get(2)).getFirst(); var rep = (Map<String, Object>) Objects.requireNonNull(CoreRepresentations.metadata(arg)).get("rep"); rep.put("kind", "float"); rep.put("primReps", List.of("FloatRep")); },
+            app -> { var arg = ((List<List<Object>>) app.get(2)).getFirst(); ((Map<String, Object>) Objects.requireNonNull(CoreRepresentations.metadata(arg)).get("rep")).put("kind", "unknown"); },
             app -> ((List<Object>) app.get(3)).set(0, true),
             app -> { ((List<Object>) app.get(2)).remove(1); ((List<Object>) app.get(3)).remove(1); ((Map<String, Object>) app.get(6)).remove("callDemand"); },
             app -> { ((List<Object>) app.get(2)).add(((List<?>) app.get(2)).getFirst()); ((List<Object>) app.get(3)).add(false); ((Map<String, Object>) app.get(6)).remove("callDemand"); });

@@ -90,8 +90,8 @@ class AstSelfCallTest {
                     assertSame(second, FrameAccess.read(frame, slots[1]));
                 }
                 CoreRepresentation reference = new CoreRepresentation(CoreKind.CLOSURE, true, false, null, null, null, null, null, null);
-                for (CoreRepresentation[] proofs : List.of(new CoreRepresentation[0], new CoreRepresentation[]{CoreRepresentation.Companion.getUNKNOWN()},
-                        new CoreRepresentation[]{reference}, new CoreRepresentation[]{reference, CoreRepresentation.Companion.getUNKNOWN()})) {
+                for (CoreRepresentation[] proofs : List.of(new CoreRepresentation[0], new CoreRepresentation[]{CoreRepresentation.UNKNOWN},
+                        new CoreRepresentation[]{reference}, new CoreRepresentation[]{reference, CoreRepresentation.UNKNOWN})) {
                     FrameLayout layout = new FrameLayout();
                     int[] slots = {layout.bind("first"), layout.bind("second")};
                     var descriptor = layout.build();

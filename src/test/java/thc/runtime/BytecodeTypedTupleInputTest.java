@@ -159,7 +159,7 @@ class BytecodeTypedTupleInputTest {
         withLanguage((context, language) -> {
             var zero = tuple(state, tuple()); var p = new BytecodeProgram(language, module(bind("worker", lam(List.of(arg("unused", zero), arg("n")), v("n"))),
                 bind("entry", lam(List.of(arg("effect", closure), arg("later", closure), arg("x")), call("worker", List.of(call("effect", List.of(v("x")), zero), call("later", List.of(v("x")))))))));
-            var events = new ArrayList<Long>(); var effect = new Closure(null, 1, new OperandEffect(language, events, new TupleShape(CoreRepresentations.INSTANCE.parse(zero), language)).getCallTarget());
+            var events = new ArrayList<Long>(); var effect = new Closure(null, 1, new OperandEffect(language, events, new TupleShape(CoreRepresentations.parse(zero), language)).getCallTarget());
             var later = new Closure(null, 1, new OperandEffect(language, events, null).getCallTarget());
             assertEquals(107L, run(p, "entry", effect, later, 7L)); assertEquals(List.of(7L, 107L), events); released(language);
             var entry = Objects.requireNonNull(((GuestRoot) p.entryTarget("worker").getRootNode()).getTypedInput()); assertEquals(2, entry.getLogical().getLogicalArity()); assertEquals(1, entry.getLogical().getPhysicalArity());
@@ -172,7 +172,7 @@ class BytecodeTypedTupleInputTest {
             var data = map("kind", "data", "primReps", list("BoxedRep (Just Lifted)"), "evaluated", true); var inputProof = tuple(data);
             var p = new BytecodeProgram(language, module(bind("worker", lam(List.of(arg("p", inputProof)), unpack(v("p", inputProof), inputProof, List.of("d"), v("d", data), data), data))));
             var target = p.entryTarget("worker"); var entry = Objects.requireNonNull(((GuestRoot) target.getRootNode()).getTypedInput()); var handoff = language.getHandoffState().get();
-            var resultShape = new TupleShape(CoreRepresentations.INSTANCE.parse(tuple(reference, integer)), language); var result = handoff.getResults().acquire(resultShape.getLayout()); var sentinel = new Object();
+            var resultShape = new TupleShape(CoreRepresentations.parse(tuple(reference, integer)), language); var result = handoff.getResults().acquire(resultShape.getLayout()); var sentinel = new Object();
             resultShape.getLayout().setObject(result, 0, sentinel); resultShape.getLayout().setLong(result, 1, 123L);
             var loan = handoff.getArguments().acquire(entry.getPacket()); loan.setInputMode(1); entry.getPacket().setLong(loan, 0, 0L); entry.getPacket().setObject(loan, entry.getHeader(), "not a constructor");
             assertThrows(RuntimeFault.class, () -> TypedInputsKt.invokeTypedInput(target, loan, packet -> Calls.target(target, packet)));

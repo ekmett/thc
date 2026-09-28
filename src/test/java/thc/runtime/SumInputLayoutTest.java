@@ -113,11 +113,11 @@ class SumInputLayoutTest {
             var changed = Objects.requireNonNull(ArgumentLayout.fromProofs(List.of(integer, changedSum, integer)));
             var input = Objects.requireNonNull(TypedInputLayout.create(language, formal, false)); var other = Objects.requireNonNull(TypedInputLayout.create(language, changed, false)); assertSame(input.getPacket(), other.getPacket());
             assertThrows(RuntimeFault.class, () -> ArgumentLayout.validate(formal, 0, changed, 0, 3)); assertThrows(RuntimeFault.class, () -> ArgumentLayout.validate(formal, 1, null, 0, 1));
-            CoreRepresentations.INSTANCE.requireInput(sum); CoreRepresentations.INSTANCE.requireJoinArgument(sum, sum);
-            assertThrows(RuntimeFault.class, () -> CoreRepresentations.INSTANCE.requireJoinArgument(sum, changedSum));
-            assertThrows(RuntimeFault.class, () -> CoreRepresentations.INSTANCE.requireJoinArgument(sum, integer)); assertThrows(RuntimeFault.class, () -> CoreRepresentations.INSTANCE.requireJoinArgument(integer, sum));
+            CoreRepresentations.requireInput(sum); CoreRepresentations.requireJoinArgument(sum, sum);
+            assertThrows(RuntimeFault.class, () -> CoreRepresentations.requireJoinArgument(sum, changedSum));
+            assertThrows(RuntimeFault.class, () -> CoreRepresentations.requireJoinArgument(sum, integer)); assertThrows(RuntimeFault.class, () -> CoreRepresentations.requireJoinArgument(integer, sum));
             ArgumentLayout.validate(formal, 1, formal.suffix(1), 0, 2); assertEquals(4, input.prefix(2).getReps().size());
-            assertThrows(RuntimeFault.class, () -> CoreRepresentations.INSTANCE.requireInput(sum.copy(sum.getKind(), sum.getEvaluated(), sum.getPresent(), sum.getPrimReps(), sum.getComponents(), sum.getVector(), sum.getAlternatives(), 1, sum.getAlternativeSlots())));
+            assertThrows(RuntimeFault.class, () -> CoreRepresentations.requireInput(sum.copy(sum.getKind(), sum.getEvaluated(), sum.getPresent(), sum.getPrimReps(), sum.getComponents(), sum.getVector(), sum.getAlternatives(), 1, sum.getAlternativeSlots())));
         });
     }
     @Test void durablePrefixesAndOwnedCapturesDoNotBorrowInputsOrRetainNullRoots() throws ReflectiveOperationException {
@@ -129,11 +129,11 @@ class SumInputLayoutTest {
             assertSame(marker, prefix.getObject(retained, 1)); assertFalse(retained.getLive()); assertEquals(0, retained.getInputMode()); assertEquals(0, input.state().getArguments().retainedReferences());
             var target = new RootNode(language) { @Override public Object execute(VirtualFrame frame) { return kotlin.Unit.INSTANCE; } }.getCallTarget();
             var captureLayout = new CaptureLayout(language, new boolean[]{true, false, true}, new boolean[]{true, false, true}); var environment = captureLayout.captureValues(new Object[]{2L, null, 37L});
-            var closure = new Closure(environment, 1, target); var image = ClosureInspection.INSTANCE.image(closure);
+            var closure = new Closure(environment, 1, target); var image = ClosureInspection.image(closure);
             assertEquals(32, image.getBytes().length); assertEquals(0, image.getPointers().length); assertNull(environment.getObject(1)); assertEquals(37L, environment.getLong(2));
-            var liveEnvironment = captureLayout.captureValues(new Object[]{1L, marker, 0L}); assertArrayEquals(new Object[]{marker}, ClosureInspection.INSTANCE.image(new Closure(liveEnvironment, 1, target)).getPointers());
+            var liveEnvironment = captureLayout.captureValues(new Object[]{1L, marker, 0L}); assertArrayEquals(new Object[]{marker}, ClosureInspection.image(new Closure(liveEnvironment, 1, target)).getPointers());
             var emptyPrefix = prefix.create(); prefix.setLong(emptyPrefix, 0, 2); prefix.setObject(emptyPrefix, 1, null); prefix.setLong(emptyPrefix, 2, 41);
-            var pap = new Closure(null, Closure.NO_PAP_ARGUMENTS, 1, target, 1, emptyPrefix); assertEquals(0, ClosureInspection.INSTANCE.image(pap).getPointers().length);
+            var pap = new Closure(null, Closure.NO_PAP_ARGUMENTS, 1, target, 1, emptyPrefix); assertEquals(0, ClosureInspection.image(pap).getPointers().length);
         });
     }
 }

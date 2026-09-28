@@ -69,14 +69,14 @@ class SumProtocolTest {
             it -> it.put("tagSlot", 1L), it -> it.put("tagSlot", 0.0), it -> it.remove("tagSlot"),
             it -> it.put("alternativeSlots", list(list(0L), list(1L))), it -> it.put("alternativeSlots", list(list(1.0), list(1L))), it -> it.put("alternativeSlots", list(list(1L, 1L), list(1L))),
             it -> it.put("primReps", list("WordRep", "WordRep", "WordRep")), it -> it.put("components", List.of()), it -> it.put("kind", "long"));
-        for (var mutate : mutants) { var proof = shape(module(), "returnedSum"); mutate.accept(proof); assertThrows(RuntimeFault.class, () -> CoreRepresentations.INSTANCE.parse(proof)); }
+        for (var mutate : mutants) { var proof = shape(module(), "returnedSum"); mutate.accept(proof); assertThrows(RuntimeFault.class, () -> CoreRepresentations.parse(proof)); }
         for (String name : List.of("narrowWideSum", "threeWaySum")) {
-            var exact = CoreRepresentations.INSTANCE.parse(shape(module(), name)); assertTrue(exact.isSum());
+            var exact = CoreRepresentations.parse(shape(module(), name)); assertTrue(exact.isSum());
             boolean allLong = true; for (var field : SumShape.storage(exact)) if (!field.isLong()) { allLong = false; break; } assertTrue(allLong);
         }
-        for (String name : List.of("nestedSum", "addressResult", "vectorResult")) assertTrue(CoreRepresentations.INSTANCE.parse(shape(module(), name)).isSum());
-        for (String name : List.of("runtimePolymorphic", "levityPolymorphic", "abstractSumIdentity", "abstractRuntimeSum", "abstractAlternative")) assertThrows(UnsupportedCore.class, () -> CoreRepresentations.INSTANCE.parse(shape(module(), name)));
-        var proof = shape(module(), "returnedSum"); proof.put("alternativeSlots", null); assertThrows(UnsupportedCore.class, () -> CoreRepresentations.INSTANCE.parse(proof));
+        for (String name : List.of("nestedSum", "addressResult", "vectorResult")) assertTrue(CoreRepresentations.parse(shape(module(), name)).isSum());
+        for (String name : List.of("runtimePolymorphic", "levityPolymorphic", "abstractSumIdentity", "abstractRuntimeSum", "abstractAlternative")) assertThrows(UnsupportedCore.class, () -> CoreRepresentations.parse(shape(module(), name)));
+        var proof = shape(module(), "returnedSum"); proof.put("alternativeSlots", null); assertThrows(UnsupportedCore.class, () -> CoreRepresentations.parse(proof));
         withLanguage(language -> assertThrows(RuntimeFault.class, () -> new TupleShape(new CoreRepresentation(CoreKind.LONG, true, true, List.of("WordRep"), null, null, null, null, null), language)));
     }
 
@@ -115,7 +115,7 @@ class SumProtocolTest {
         withLanguage(false, language -> {
             for (String backend : List.of("ast", "bytecode")) {
                 var module = module(true); var program = program(language, module, "lazyLeaf", backend); var target = program.entryTarget((String) binding(module, "lazyLeaf").get("id"));
-                var shape = new TupleShape(CoreRepresentations.INSTANCE.parse(shape(module, "lazyLeaf")), language); assertEquals(list("long", "reference", "long"), shape.getLayout().getReps());
+                var shape = new TupleShape(CoreRepresentations.parse(shape(module, "lazyLeaf")), language); assertEquals(list("long", "reference", "long"), shape.getLayout().getReps());
                 var layout = new FrameLayout(); int[] slots = new int[shape.getWidth()]; for (int i = 0; i < slots.length; i++) slots[i] = layout.bind("sum" + i); var descriptor = layout.build();
                 class Call {
                     Object invoke(long x) throws Exception {
@@ -128,7 +128,7 @@ class SumProtocolTest {
                 var call = new Call(); var lazy = call.invoke(-1); call.invoke(1); compile(target);
                 for (long x : new long[]{-7, 7, -1, 0}) { var value = call.invoke(x); if (x < 0) assertSame(lazy, value); valid(target); }
                 assertEquals(0L, ((Number) program.diagnostics().get("blackholes")).longValue());
-                var wrong = new TupleShape(CoreRepresentations.INSTANCE.parse(shape(module(), "returnedSum")), language); var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], descriptor); var completion = Calls.target(target, new Object[]{0L, -1L});
+                var wrong = new TupleShape(CoreRepresentations.parse(shape(module(), "returnedSum")), language); var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], descriptor); var completion = Calls.target(target, new Object[]{0L, -1L});
                 assertThrows(IllegalStateException.class, () -> wrong.consume(frame, completion, slots, 0)); released(language);
             }
         });
@@ -159,7 +159,7 @@ class SumProtocolTest {
         withLanguage(language -> {
             for (String backend : List.of("ast", "bytecode")) {
                 var module = module(true); var program = program(language, module, "lazyLeaf", backend); var target = program.entryTarget((String) binding(module, "lazyLeaf").get("id"));
-                var shape = new TupleShape(CoreRepresentations.INSTANCE.parse(shape(module, "lazyLeaf")), language); var consumer = new DeoptConsumer(language, shape, target).getCallTarget();
+                var shape = new TupleShape(CoreRepresentations.parse(shape(module, "lazyLeaf")), language); var consumer = new DeoptConsumer(language, shape, target).getCallTarget();
                 Barrier.requested = false; var pointer = consumer.call(-1L);
                 for (int i = 0; i < 20; i++) { assertSame(pointer, consumer.call(-7L)); released(language); }
                 compile(consumer); assertSame(pointer, consumer.call(-4097L)); valid(consumer); released(language); int before = Barrier.materialized; Barrier.requested = true;
@@ -218,7 +218,7 @@ class SumProtocolTest {
                 alternatives.get(1).set(3, list("lit", "int", "99")); var error = assertThrows(RuntimeFault.class, () -> program(language, module, name, backend));
                 assertTrue(Objects.toString(error.getMessage(), "").contains("scalar and aggregate"), backend + "/generic=" + genericCase + ": " + error.getMessage());
             }
-            var proof = CoreRepresentations.INSTANCE.parse(shape(module(), "returnedSum")); assertEquals(proof, proof.refine(CoreRepresentation.Companion.getUNKNOWN()), "A genuinely unknown legacy proof adds no constraint");
+            var proof = CoreRepresentations.parse(shape(module(), "returnedSum")); assertEquals(proof, proof.refine(CoreRepresentation.UNKNOWN), "A genuinely unknown legacy proof adds no constraint");
         });
     }
     @Test void defaultAndNonExhaustiveSumCasesConsumeAndReleaseResults() throws Exception {

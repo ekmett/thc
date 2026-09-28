@@ -82,7 +82,7 @@ class AstTailSpillTest {
             Object expected = switch (kind) {
                 case DATA, OBJECT -> new DataLayout(language, "TailBox", "TailBox", new String[]{"LiftedRep"}).create(new Object[]{payload});
                 case CLOSURE -> new Closure(null, 1, new RootNode(language) { @Override public Object execute(VirtualFrame frame) { throw new IllegalStateException("Returned closure was entered"); } }.getCallTarget());
-                case ADDRESS -> ManagedAddress.Companion.fromByteArray(bytes).plus(1);
+                case ADDRESS -> ManagedAddress.fromByteArray(bytes).plus(1);
                 default -> 73L;
             };
             var resultThunk = evaluated ? null : new Thunk(new RootNode(language) { @Override public Object execute(VirtualFrame frame) { return expected; } }.getCallTarget(), null);

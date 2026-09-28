@@ -115,7 +115,7 @@ class EmptyJoinInputTest {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var layout = new FrameLayout(); int a = layout.bind("a"), b = layout.bind("b"), first = layout.bind("first"), last = layout.bind("last");
                 var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], layout.build()); var scalar = new CoreRepresentation(CoreKind.LONG, true, true, List.of("IntRep"), null, null, null, null, null);
                 var zero = new CoreRepresentation(CoreKind.UNKNOWN, true, true, List.of(), List.of(), null, null, null, null); int[][] typed = {null, new int[0], null};
-                var target = new LocalJoinTarget(new Object(), 1, new int[]{a, -1, b}, new CoreRepresentation[]{scalar, zero, scalar}, new boolean[3], CoreRepresentation.Companion.getUNKNOWN(), typed); var events = new ArrayList<String>(); var metrics = new Metrics(true);
+                var target = new LocalJoinTarget(new Object(), 1, new int[]{a, -1, b}, new CoreRepresentation[]{scalar, zero, scalar}, new boolean[3], CoreRepresentation.UNKNOWN, typed); var events = new ArrayList<String>(); var metrics = new Metrics(true);
                 class Read extends Expr {
                     private final String label; private final int slot;
                     Read(String label, int slot) { this.label = label; this.slot = slot; }

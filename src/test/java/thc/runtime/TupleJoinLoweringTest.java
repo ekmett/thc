@@ -32,7 +32,7 @@ class TupleJoinLoweringTest {
                 for (int i = 0; i < 8; i++) builder.addSlot(FrameSlotKind.Illegal, "field " + i, null); var descriptor = builder.build(); var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], descriptor);
                 var left = new Object(); var right = new Object(); var events = new ArrayList<Integer>();
                 FrameAccess.writeLong(frame, 0, Long.MIN_VALUE); FrameAccess.write(frame, 1, left); FrameAccess.writeLong(frame, 2, Long.MAX_VALUE); FrameAccess.write(frame, 3, right);
-                var shape = tuple(longProof, reference); var target = new LocalJoinTarget(new Object(), 1, new int[]{-1, -1}, new CoreRepresentation[]{shape, shape}, new boolean[]{false, false}, CoreRepresentation.Companion.getUNKNOWN(), new int[][]{{0, 1}, {2, 3}});
+                var shape = tuple(longProof, reference); var target = new LocalJoinTarget(new Object(), 1, new int[]{-1, -1}, new CoreRepresentation[]{shape, shape}, new boolean[]{false, false}, CoreRepresentation.UNKNOWN, new int[][]{{0, 1}, {2, 3}});
                 class Operand extends Expr {
                     private final int index, source;
                     Operand(int index, int source) { this.index = index; this.source = source; }
@@ -52,8 +52,8 @@ class TupleJoinLoweringTest {
         }
     }
     @Test void tupleLogicalShapeIsNotInferredFromEqualPhysicalWidth() {
-        var expected = tuple(longProof, reference); CoreRepresentations.INSTANCE.requireJoinArgument(expected, tuple(longProof, reference));
-        for (var actual : List.of(tuple(tuple(longProof), reference), tuple(reference, longProof), reference, CoreRepresentation.Companion.getUNKNOWN())) assertThrows(RuntimeFault.class, () -> CoreRepresentations.INSTANCE.requireJoinArgument(expected, actual));
+        var expected = tuple(longProof, reference); CoreRepresentations.requireJoinArgument(expected, tuple(longProof, reference));
+        for (var actual : List.of(tuple(tuple(longProof), reference), tuple(reference, longProof), reference, CoreRepresentation.UNKNOWN)) assertThrows(RuntimeFault.class, () -> CoreRepresentations.requireJoinArgument(expected, actual));
     }
     @Test void sumSwapsMoveTagsAndInactiveReferencesTogetherAndClearScratchRoots() throws ReflectiveOperationException {
         try (var context = Context.newBuilder("thc").build()) {
@@ -63,7 +63,7 @@ class TupleJoinLoweringTest {
                 for (int i = 0; i < 12; i++) builder.addSlot(FrameSlotKind.Illegal, "sum field " + i, null); var descriptor = builder.build(); var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], descriptor); var marker = new Object();
                 var shape = new CoreRepresentation(CoreKind.UNKNOWN, true, true, List.of("WordRep", "BoxedRep (Just Lifted)", "WordRep"), null, null, List.of(reference, longProof), 0, List.of(List.of(1), List.of(2)));
                 FrameAccess.writeLong(frame, 0, 1); FrameAccess.write(frame, 1, marker); FrameAccess.writeLong(frame, 2, 0); FrameAccess.writeLong(frame, 3, 2); FrameAccess.write(frame, 4, null); FrameAccess.writeLong(frame, 5, Long.MIN_VALUE);
-                var target = new LocalJoinTarget(new Object(), 1, new int[]{-1, -1}, new CoreRepresentation[]{shape, shape}, new boolean[]{false, false}, CoreRepresentation.Companion.getUNKNOWN(), new int[][]{{0, 1, 2}, {3, 4, 5}});
+                var target = new LocalJoinTarget(new Object(), 1, new int[]{-1, -1}, new CoreRepresentation[]{shape, shape}, new boolean[]{false, false}, CoreRepresentation.UNKNOWN, new int[][]{{0, 1, 2}, {3, 4, 5}});
                 class Operand extends Expr {
                     private final int source; Operand(int source) { this.source = source; }
                     @Override public Object execute(VirtualFrame frame) { throw new IllegalStateException("No sum Object carrier"); }

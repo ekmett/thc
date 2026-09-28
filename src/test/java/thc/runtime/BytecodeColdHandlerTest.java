@@ -99,10 +99,10 @@ class BytecodeColdHandlerTest {
             worker.start();
             try {
                 long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
-                while (blocked.pendingCounts$org_intelligence_thc().getTakers() != 1 && !answer.isDone() && System.nanoTime() < deadline) Thread.sleep(1);
+                while (blocked.pendingCounts().getTakers() != 1 && !answer.isDone() && System.nanoTime() < deadline) Thread.sleep(1);
                 if (answer.isCompletedExceptionally()) answer.get(1, TimeUnit.SECONDS);
-                assertEquals(1, blocked.pendingCounts$org_intelligence_thc().getTakers()); assertTrue(prefix.isEmpty(), "The first effect completed before the blocked cut");
-                f.owner.getThreads().send(Objects.requireNonNull(f.owner.getThreads().pollState$org_intelligence_thc(worker).getCurrent$org_intelligence_thc()).getIdentity(), "wide cut");
+                assertEquals(1, blocked.pendingCounts().getTakers()); assertTrue(prefix.isEmpty(), "The first effect completed before the blocked cut");
+                f.owner.getThreads().send(Objects.requireNonNull(f.owner.getThreads().pollState(worker).getCurrent()).getIdentity(), "wide cut");
                 var captured = answer.get(10, TimeUnit.SECONDS); worker.join(5000); assertFalse(worker.isAlive()); assertEquals(before + 1, ((Number) f.program.diagnostics().get("compiledEntries")).longValue());
                 var retainedAfterCapture = f.target.getClass().getMethod("isValidLastTier").invoke(f.target); var completed = new CompletableFuture<kotlin.Unit>();
                 var resumer = new Thread(() -> {

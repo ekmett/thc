@@ -80,7 +80,7 @@ class CoreProofJoinTest {
             try {
                 long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
                 while (((Number) p.diagnostics().get("localJoinTransfers")).longValue() < 1000 && !completed.isDone() && System.nanoTime() < deadline) Thread.sleep(1);
-                assertFalse(completed.isDone(), "The request must arrive inside the join loop"); var request = threads.send(Objects.requireNonNull(threads.pollState$org_intelligence_thc(worker).getCurrent$org_intelligence_thc()).getIdentity(), "join loop");
+                assertFalse(completed.isDone(), "The request must arrive inside the join loop"); var request = threads.send(Objects.requireNonNull(threads.pollState(worker).getCurrent()).getIdentity(), "join loop");
                 var saved = (ContinuationResult) completed.get(10, TimeUnit.SECONDS); worker.join(5000); assertFalse(worker.isAlive()); assertSame(request, saved.getResult()); assertTrue(request.compiledCapture); assertEquals(AsyncRequestState.ACKNOWLEDGED, request.getState());
                 context.enter(); try { assertEquals(10_000_000L, saved.continueWith(kotlin.Unit.INSTANCE)); } finally { context.leave(); }
             } finally { if (worker.isAlive()) context.close(true); }
@@ -156,8 +156,8 @@ class CoreProofJoinTest {
         }
     }
     @Test void representationMetadataRequiresExactCarriersAndPreservesLegacyUnknown() {
-        assertFalse(CoreRepresentations.INSTANCE.expression(list("var", "x")).getPresent()); assertTrue(CoreRepresentations.INSTANCE.parse(longProof).isLong()); var absent = new LinkedHashMap<>(longProof); absent.remove("primReps");
-        for (var bad : List.of(absent, with(longProof, "primReps", list("AddrRep")), with(closure, "primReps", list("IntRep")), with(closure, "primReps", list()))) assertThrows(RuntimeFault.class, () -> CoreRepresentations.INSTANCE.parse(bad));
-        assertThrows(RuntimeFault.class, () -> CoreRepresentations.INSTANCE.parse(longProof).refine(CoreRepresentations.INSTANCE.parse(closure))); assertThrows(RuntimeFault.class, () -> CoreRepresentations.INSTANCE.joinArity(map("joinValueArity", 1.5))); assertNull(CoreRepresentations.INSTANCE.joinArity(map("info", map("joinArity", 1))));
+        assertFalse(CoreRepresentations.expression(list("var", "x")).getPresent()); assertTrue(CoreRepresentations.parse(longProof).isLong()); var absent = new LinkedHashMap<>(longProof); absent.remove("primReps");
+        for (var bad : List.of(absent, with(longProof, "primReps", list("AddrRep")), with(closure, "primReps", list("IntRep")), with(closure, "primReps", list()))) assertThrows(RuntimeFault.class, () -> CoreRepresentations.parse(bad));
+        assertThrows(RuntimeFault.class, () -> CoreRepresentations.parse(longProof).refine(CoreRepresentations.parse(closure))); assertThrows(RuntimeFault.class, () -> CoreRepresentations.joinArity(map("joinValueArity", 1.5))); assertNull(CoreRepresentations.joinArity(map("info", map("joinArity", 1))));
     }
 }

@@ -110,17 +110,17 @@ class HintTraceTest {
                 context.initialize("thc"); context.enter();
                 try {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var program = program(language, CoreModules.reachable(module("pre"), List.of("event", "marker", "binary", "addressHints"), true), backend);
-                    var address = ManagedAddress.Companion.fromByteArray("λ\n\\\u0000ignored".getBytes(StandardCharsets.UTF_8));
+                    var address = ManagedAddress.fromByteArray("λ\n\\\u0000ignored".getBytes(StandardCharsets.UTF_8));
                     assertEquals(23L, call(program, "event", address, 23L)); assertEquals("[thc trace event] λ\\x0a\\\\\n", output.toString(StandardCharsets.UTF_8)); output.reset();
-                    assertEquals(3L, call(program, "binary", ManagedAddress.Companion.fromByteArray(new byte[]{0, -1, 10, 88}), 3L)); assertEquals("[thc trace binary] 00ff0a\n", output.toString(StandardCharsets.UTF_8)); output.reset();
-                    assertEquals(0L, call(program, "binary", ManagedAddress.Companion.nullAddress(), 0L)); assertEquals(7L, call(program, "marker", ManagedAddress.Companion.fromByteArray(new byte[]{0}), 7L));
-                    assertEquals("[thc trace binary] \n[thc trace marker] \n", output.toString(StandardCharsets.UTF_8)); output.reset(); var bytes = ManagedAddress.Companion.fromByteArray(new byte[]{65, 0});
+                    assertEquals(3L, call(program, "binary", ManagedAddress.fromByteArray(new byte[]{0, -1, 10, 88}), 3L)); assertEquals("[thc trace binary] 00ff0a\n", output.toString(StandardCharsets.UTF_8)); output.reset();
+                    assertEquals(0L, call(program, "binary", ManagedAddress.nullAddress(), 0L)); assertEquals(7L, call(program, "marker", ManagedAddress.fromByteArray(new byte[]{0}), 7L));
+                    assertEquals("[thc trace binary] \n[thc trace marker] \n", output.toString(StandardCharsets.UTF_8)); output.reset(); var bytes = ManagedAddress.fromByteArray(new byte[]{65, 0});
                     record Invalid(String name, ManagedAddress location, long count) {}
-                    for (var invalid : List.of(new Invalid("event", ManagedAddress.Companion.fromByteArray(new byte[]{65}), 0L), new Invalid("event", ManagedAddress.Companion.unownedNumeric$org_intelligence_thc(1234), 0L), new Invalid("binary", bytes, -1L), new Invalid("binary", bytes, 3L), new Invalid("binary", bytes, Long.MAX_VALUE)))
+                    for (var invalid : List.of(new Invalid("event", ManagedAddress.fromByteArray(new byte[]{65}), 0L), new Invalid("event", ManagedAddress.unownedNumeric(1234), 0L), new Invalid("binary", bytes, -1L), new Invalid("binary", bytes, 3L), new Invalid("binary", bytes, Long.MAX_VALUE)))
                         assertThrows(RuntimeFault.class, () -> call(program, invalid.name(), invalid.location(), invalid.count()));
-                    assertEquals(0, output.size(), "Invalid trace must not publish a partial record"); var pointerCell = ManagedAddress.Companion.fromAllocation(ManagedAllocation.mutable(8, 8)); pointerCell.writeAddressElementIndex(0, bytes);
+                    assertEquals(0, output.size(), "Invalid trace must not publish a partial record"); var pointerCell = ManagedAddress.fromAllocation(ManagedAllocation.mutable(8, 8)); pointerCell.writeAddressElementIndex(0, bytes);
                     assertThrows(RuntimeFault.class, () -> call(program, "binary", pointerCell, 8L));
-                    for (var location : List.of(ManagedAddress.Companion.nullAddress(), ManagedAddress.Companion.unownedNumeric$org_intelligence_thc(1234), bytes.plus(2))) for (long offset : new long[]{Long.MIN_VALUE, -1L, 0L, Long.MAX_VALUE}) assertEquals(offset, call(program, "addressHints", location, offset));
+                    for (var location : List.of(ManagedAddress.nullAddress(), ManagedAddress.unownedNumeric(1234), bytes.plus(2))) for (long offset : new long[]{Long.MIN_VALUE, -1L, 0L, Long.MAX_VALUE}) assertEquals(offset, call(program, "addressHints", location, offset));
                     assertEquals(0, output.size(), "Prefetch emits no diagnostic and dereferences nothing");
                 } finally { context.leave(); }
             }
@@ -133,12 +133,12 @@ class HintTraceTest {
             first.initialize("thc"); second.initialize("thc"); first.enter(); final ManagedAddress address;
             try {
                 var allocations = Language.currentState().getNativeAllocations(); address = allocations.malloc(4); address.writeWord8(0, 65); address.writeWord8(1, 0); address.writeWord8(2, 255); address.writeWord8(3, 10);
-                RtsDiagnostics.INSTANCE.trace(null, TraceOp.EVENT, address, 0); RtsDiagnostics.INSTANCE.trace(null, TraceOp.BINARY, address.plus(1), 3);
+                RtsDiagnostics.trace(null, TraceOp.EVENT, address, 0); RtsDiagnostics.trace(null, TraceOp.BINARY, address.plus(1), 3);
             } finally { first.leave(); }
             second.enter();
-            try { assertThrows(RuntimeFault.class, () -> RtsDiagnostics.INSTANCE.trace(null, TraceOp.EVENT, address, 0)); RtsDiagnostics.INSTANCE.trace(null, TraceOp.MARKER, ManagedAddress.Companion.fromHex("42"), 0); } finally { second.leave(); }
+            try { assertThrows(RuntimeFault.class, () -> RtsDiagnostics.trace(null, TraceOp.EVENT, address, 0)); RtsDiagnostics.trace(null, TraceOp.MARKER, ManagedAddress.fromHex("42"), 0); } finally { second.leave(); }
             first.enter();
-            try { Language.currentState().getNativeAllocations().free(address); assertThrows(RuntimeFault.class, () -> RtsDiagnostics.INSTANCE.trace(null, TraceOp.BINARY, address, 1)); } finally { first.leave(); }
+            try { Language.currentState().getNativeAllocations().free(address); assertThrows(RuntimeFault.class, () -> RtsDiagnostics.trace(null, TraceOp.BINARY, address, 1)); } finally { first.leave(); }
             assertEquals("[thc trace event] A\n[thc trace binary] 00ff0a\n", left.toString(StandardCharsets.UTF_8)); assertEquals("[thc trace marker] B\n", right.toString(StandardCharsets.UTF_8));
         }
     }
@@ -150,7 +150,7 @@ class HintTraceTest {
                 for (int worker = 0; worker <= 1; worker++) {
                     int id = worker; jobs.add(workers.submit(() -> {
                         context.enter();
-                        try { var text = ManagedAddress.Companion.fromByteArray(("worker-" + id + '\u0000').getBytes(StandardCharsets.UTF_8)); for (int i = 0; i < 32; i++) RtsDiagnostics.INSTANCE.trace(null, TraceOp.EVENT, text, 0); }
+                        try { var text = ManagedAddress.fromByteArray(("worker-" + id + '\u0000').getBytes(StandardCharsets.UTF_8)); for (int i = 0; i < 32; i++) RtsDiagnostics.trace(null, TraceOp.EVENT, text, 0); }
                         finally { context.leave(); }
                     }));
                 }

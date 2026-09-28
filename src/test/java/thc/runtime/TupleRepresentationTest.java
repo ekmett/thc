@@ -25,8 +25,8 @@ class TupleRepresentationTest {
     @Test void emptyTupleProofOwnsParsedListsAndRecomputesOnCopyAndRefinement() {
         var reps = new ArrayList<String>(); var components = new ArrayList<Object>();
         var input = record("kind", "unknown", "evaluated", true, "primReps", reps, "aggregate", "unboxed-tuple", "components", components);
-        var empty = CoreRepresentations.INSTANCE.parse(input); assertTrue(empty.isEmptyTuple()); assertNotSame(reps, empty.getPrimReps()); assertNotSame(components, empty.getComponents());
-        reps.add("IntRep"); components.add(record("kind", "long", "evaluated", true, "primReps", List.of("IntRep"))); var nonempty = CoreRepresentations.INSTANCE.parse(input); assertFalse(nonempty.isEmptyTuple());
+        var empty = CoreRepresentations.parse(input); assertTrue(empty.isEmptyTuple()); assertNotSame(reps, empty.getPrimReps()); assertNotSame(components, empty.getComponents());
+        reps.add("IntRep"); components.add(record("kind", "long", "evaluated", true, "primReps", List.of("IntRep"))); var nonempty = CoreRepresentations.parse(input); assertFalse(nonempty.isEmptyTuple());
         reps.clear(); components.clear(); assertEquals(List.of("IntRep"), nonempty.getPrimReps()); assertEquals(1, Objects.requireNonNull(nonempty.getComponents()).size());
         assertTrue(empty.isEmptyTuple()); assertTrue(Objects.requireNonNull(empty.getPrimReps()).isEmpty()); assertTrue(Objects.requireNonNull(empty.getComponents()).isEmpty());
         assertFalse(empty.copy(empty.getKind(), empty.getEvaluated(), empty.getPresent(), empty.getPrimReps(), List.of(empty), empty.getVector(), empty.getAlternatives(), empty.getTagSlot(), empty.getAlternativeSlots()).isEmptyTuple(), "nested empty tuple has one logical component");
@@ -35,7 +35,7 @@ class TupleRepresentationTest {
         assertFalse(empty.copy(empty.getKind(), empty.getEvaluated(), false, empty.getPrimReps(), empty.getComponents(), empty.getVector(), empty.getAlternatives(), empty.getTagSlot(), empty.getAlternativeSlots()).isEmptyTuple());
         assertFalse(empty.copy(CoreKind.VOID, empty.getEvaluated(), empty.getPresent(), empty.getPrimReps(), empty.getComponents(), empty.getVector(), empty.getAlternatives(), empty.getTagSlot(), empty.getAlternativeSlots()).isEmptyTuple());
         assertTrue(nonempty.copy(nonempty.getKind(), nonempty.getEvaluated(), nonempty.getPresent(), List.of(), List.of(), nonempty.getVector(), nonempty.getAlternatives(), nonempty.getTagSlot(), nonempty.getAlternativeSlots()).isEmptyTuple());
-        assertTrue(CoreRepresentation.Companion.getUNKNOWN().refine(empty).isEmptyTuple()); assertTrue(empty.refine(CoreRepresentation.Companion.getUNKNOWN()).isEmptyTuple());
+        assertTrue(CoreRepresentation.UNKNOWN.refine(empty).isEmptyTuple()); assertTrue(empty.refine(CoreRepresentation.UNKNOWN).isEmptyTuple());
         assertEquals(empty, empty.copy(empty.getKind(), empty.getEvaluated(), empty.getPresent(), empty.getPrimReps(), empty.getComponents(), empty.getVector(), empty.getAlternatives(), empty.getTagSlot(), empty.getAlternativeSlots()), "derived proof does not change structural equality");
         assertTrue(empty.copy(empty.getKind(), false, empty.getPresent(), empty.getPrimReps(), empty.getComponents(), empty.getVector(), empty.getAlternatives(), empty.getTagSlot(), empty.getAlternativeSlots()).isEmptyTuple());
     }
@@ -114,7 +114,7 @@ class TupleRepresentationTest {
                 assertThrows(RuntimeFault.class, () -> { if (backend.equals("ast")) new Program(language, linked); else new BytecodeProgram(language, linked); }, backend + " mutation " + index);
             }
         });
-        var empty = CoreRepresentations.INSTANCE.parse(record("kind", "unknown", "primReps", List.of(), "evaluated", true, "aggregate", "unboxed-tuple", "components", List.of()));
+        var empty = CoreRepresentations.parse(record("kind", "unknown", "primReps", List.of(), "evaluated", true, "aggregate", "unboxed-tuple", "components", List.of()));
         var nested = empty.copy(empty.getKind(), empty.getEvaluated(), empty.getPresent(), empty.getPrimReps(), List.of(empty), empty.getVector(), empty.getAlternatives(), empty.getTagSlot(), empty.getAlternativeSlots());
         assertFalse(TupleShape.compatible(empty, nested)); assertFalse(TupleShape.compatible(empty, new CoreRepresentation(CoreKind.VOID, true, true, List.of(), null, null, null, null, null))); assertThrows(RuntimeFault.class, () -> empty.refine(nested));
         var generic = new CoreRepresentation(CoreKind.OBJECT, false, true, List.of("BoxedRep (Just Lifted)"), null, null, null, null, null);
