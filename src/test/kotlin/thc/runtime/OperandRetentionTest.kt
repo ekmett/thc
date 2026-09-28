@@ -21,7 +21,7 @@ class OperandRetentionTest {
     private fun expression(action: (VirtualFrame) -> Any?): Expr = object : Expr() {
         override fun execute(frame: VirtualFrame): Any? = action(frame)
     }
-    private val long = CoreRepresentation(CoreKind.LONG, evaluated = true)
+    private val long = CoreRepresentation(CoreKind.LONG, true)
 
     private fun assertCleared(frame: VirtualFrame, slots: IntArray) {
         // Public reads reject a cleared (Illegal) slot. Inspect the pinned

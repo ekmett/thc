@@ -37,7 +37,7 @@ public final class CoreFields {
         logicalProofs = new CoreRepresentation[arity];
         for (int i = 0; i < arity; i++) {
             Object raw = types == null ? null : types.get(i);
-            logicalProofs[i] = raw == null ? CoreRepresentation.Companion.getUNKNOWN() : CoreRepresentations.parse(raw);
+            logicalProofs[i] = raw == null ? CoreRepresentation.UNKNOWN : CoreRepresentations.parse(raw);
         }
         var leaves = new ArrayList<List<CoreRepresentation>>(arity);
         for (CoreRepresentation proof : logicalProofs) {

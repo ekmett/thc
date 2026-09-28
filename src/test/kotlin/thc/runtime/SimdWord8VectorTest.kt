@@ -63,15 +63,15 @@ class SimdWord8VectorTest {
         assertThrows(RuntimeFault::class.java) { CoreVectors.validate("timesWord8X16#", listOf(proof, CoreVectors.proof32), proof) }
         assertThrows(RuntimeFault::class.java) { CoreVectors.validate("unpackWord8X16#", listOf(proof), proof) }
         for (wrong in listOf("IntRep", "WordRep", "Int16Rep", "Int8Rep")) for (index in 0 until 16) {
-            val bad = CoreVectors.unpackedWord8.copy(components = CoreVectors.unpackedWord8.components!!.mapIndexed { i, lane ->
-                if (i == index) lane.copy(primReps = listOf(wrong)) else lane })
+            val bad = CoreVectors.unpackedWord8.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, originalProof.primReps, CoreVectors.unpackedWord8.components!!.mapIndexed { i, lane ->
+                if (i == index) lane.withPrimReps(listOf(wrong)) else lane }, originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) }
             assertThrows(RuntimeFault::class.java) { CoreVectors.validate("packWord8X16#", listOf(bad), proof) }
         }
         for (name in listOf("plus", "minus", "times")) {
             assertThrows(RuntimeFault::class.java) { CoreVectors.validate("${name}Word8X16#", listOf(proof, CoreVectors.proof8), proof) }
             assertThrows(RuntimeFault::class.java) { CoreVectors.validate("${name}Int8X16#", listOf(CoreVectors.proof8, proof), CoreVectors.proof8) }
         }
-        val bad = CoreVectors.unpackedWord8.copy(components = CoreVectors.unpackedWord8.components!!.map { it.copy(kind = CoreKind.UNKNOWN) })
+        val bad = CoreVectors.unpackedWord8.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, originalProof.primReps, CoreVectors.unpackedWord8.components!!.map { it.let { originalProof -> originalProof.copy(CoreKind.UNKNOWN, originalProof.evaluated, originalProof.present, originalProof.primReps, originalProof.components, originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) } }, originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) }
         assertThrows(RuntimeFault::class.java) { CoreVectors.validate("packWord8X16#", listOf(bad), proof) }
         assertThrows(RuntimeFault::class.java) { CoreRepresentations.parse(metadata() - "vector") }
         assertThrows(RuntimeFault::class.java) { CoreRepresentations.parse(metadata() + ("primReps" to List(16) { "Word8Rep" })) }

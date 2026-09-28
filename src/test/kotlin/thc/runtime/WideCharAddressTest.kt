@@ -91,14 +91,14 @@ class WideCharAddressTest {
                 val result = CoreRepresentations.expression(app)
                 op.validate(arguments, app[3] as List<*>, result)
                 assertThrows(RuntimeFault::class.java) {
-                    op.validate(arguments.toMutableList().also { it[0] = it[0].copy(primReps = listOf("IntRep")) },
+                    op.validate(arguments.toMutableList().also { it[0] = it[0].withPrimReps(listOf("IntRep")) },
                         app[3] as List<*>, result)
                 }
                 assertThrows(RuntimeFault::class.java) {
                     op.validate(arguments, List(arguments.size) { true }, result)
                 }
                 assertThrows(RuntimeFault::class.java) {
-                    op.validate(arguments, app[3] as List<*>, result.copy(kind = CoreKind.DOUBLE, primReps = listOf("DoubleRep")))
+                    op.validate(arguments, app[3] as List<*>, result.let { originalProof -> originalProof.copy(CoreKind.DOUBLE, originalProof.evaluated, originalProof.present, listOf("DoubleRep"), originalProof.components, originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) })
                 }
             }
             val audit = Json.parse(File(root, "build/wide-char-address/$stage/audit.json").readText()) as Map<String,Any?>

@@ -74,7 +74,7 @@ class AstSelfCallTest {
                     assertSame(first, FrameAccess.read(frame, slots[0]))
                     assertSame(second, FrameAccess.read(frame, slots[1]))
                 }
-                val reference = CoreRepresentation(CoreKind.CLOSURE, evaluated = true)
+                val reference = CoreRepresentation(CoreKind.CLOSURE, true)
                 for (proofs in listOf(emptyArray(), arrayOf(CoreRepresentation.UNKNOWN),
                     arrayOf(reference), arrayOf(reference, CoreRepresentation.UNKNOWN))) {
                     val layout = FrameLayout()

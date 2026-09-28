@@ -82,9 +82,9 @@ class SimdDoubleVectorTest {
         assertThrows(RuntimeFault::class.java) { CoreVectors.validate("plusDoubleX2#", listOf(proof), proof) }
         assertThrows(RuntimeFault::class.java) { CoreVectors.validate("plusDoubleX2#", listOf(proof, proof), CoreVectors.proof) }
         assertThrows(RuntimeFault::class.java) { CoreVectors.validate("packDoubleX2#", listOf(CoreVectors.unpackedFloat), proof) }
-        val nested = CoreVectors.unpackedDouble.copy(components = listOf(
+        val nested = CoreVectors.unpackedDouble.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, originalProof.primReps, listOf(
             CoreRepresentation(CoreKind.UNKNOWN, true, true, listOf("DoubleRep"), listOf(CoreVectors.unpackedDouble.components!![0])),
-            CoreVectors.unpackedDouble.components!![1]))
+            CoreVectors.unpackedDouble.components!![1]), originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) }
         assertThrows(RuntimeFault::class.java) { CoreVectors.validate("packDoubleX2#", listOf(nested), proof) }
         assertThrows(RuntimeFault::class.java) { CoreVectors.validate("timesDoubleX2#", listOf(proof, CoreVectors.proof32), proof) }
         assertThrows(RuntimeFault::class.java) { CoreVectors.validate("packDoubleX2#", listOf(CoreVectors.unpacked32), proof) }

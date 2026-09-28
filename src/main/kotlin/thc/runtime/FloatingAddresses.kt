@@ -61,7 +61,7 @@ internal enum class FloatingAddressOp(val primitive: String, val floating: Boole
 
 internal class FloatingAddressExpression(private val operation: FloatingAddressOp, proof: CoreRepresentation,
     @field:Children private var operands: Array<Expr>, private val byteOffset: Boolean = false) : Expr() {
-    init { representation = proof.copy(evaluated = true) }
+    init { representation = proof.withEvaluated(true) }
     override fun execute(frame: VirtualFrame): Any {
         if (operation.tuple) fault("Floating Addr# tuple read requires a destination")
         if (operation.write) {

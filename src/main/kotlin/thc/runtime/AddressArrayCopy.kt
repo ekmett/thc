@@ -30,7 +30,7 @@ internal class AddressToByteArrayExpression(proof: CoreRepresentation,
     @field:Child private var source: Expr, @field:Child private var destination: Expr,
     @field:Child private var offset: Expr, @field:Child private var count: Expr,
     @field:Child private var state: Expr) : Expr() {
-    init { representation = proof.copy(evaluated = true) }
+    init { representation = proof.withEvaluated(true) }
     override fun execute(frame: VirtualFrame): Any {
         val from = source.executeRequiredAddress(frame)
         val to = destination.execute(frame)
@@ -46,7 +46,7 @@ internal class ByteArrayToAddressExpression(proof: CoreRepresentation,
     @field:Child private var source: Expr, @field:Child private var offset: Expr,
     @field:Child private var destination: Expr, @field:Child private var count: Expr,
     @field:Child private var state: Expr) : Expr() {
-    init { representation = proof.copy(evaluated = true) }
+    init { representation = proof.withEvaluated(true) }
     override fun execute(frame: VirtualFrame): Any {
         val from = source.execute(frame)
         val start = offset.executeRequiredLong(frame)

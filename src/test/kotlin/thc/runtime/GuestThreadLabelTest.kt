@@ -75,22 +75,21 @@ class GuestThreadLabelTest {
     }
 
     @Test fun exactProofRejectsLiftedBytesFlagsAndIncorrectGetterTuple() {
-        val state = CoreRepresentation(CoreKind.VOID, primReps = emptyList())
-        val opaque = CoreRepresentation(CoreKind.OBJECT, primReps = listOf("BoxedRep (Just Unlifted)"))
-        val int = CoreRepresentation(CoreKind.LONG, primReps = listOf("IntRep"))
-        val tuple = CoreRepresentation(CoreKind.UNKNOWN, primReps = listOf("IntRep", "BoxedRep (Just Unlifted)"),
-            components = listOf(state, int, opaque))
+        val state = CoreRepresentation(CoreKind.VOID, false, false, emptyList())
+        val opaque = CoreRepresentation(CoreKind.OBJECT, false, false, listOf("BoxedRep (Just Unlifted)"))
+        val int = CoreRepresentation(CoreKind.LONG, false, false, listOf("IntRep"))
+        val tuple = CoreRepresentation(CoreKind.UNKNOWN, false, false, listOf("IntRep", "BoxedRep (Just Unlifted)"), listOf(state, int, opaque))
         CoreGuestThreads.validate("labelThread#", listOf(opaque, opaque, state), List(3) { false }, state)
         CoreGuestThreads.validate("threadLabel#", listOf(opaque, state), List(2) { false }, tuple)
         assertThrows(RuntimeFault::class.java) {
             CoreGuestThreads.validate("labelThread#", listOf(opaque,
-                opaque.copy(primReps = listOf("BoxedRep (Just Lifted)")), state), List(3) { false }, state)
+                opaque.withPrimReps(listOf("BoxedRep (Just Lifted)")), state), List(3) { false }, state)
         }
         assertThrows(RuntimeFault::class.java) {
             CoreGuestThreads.validate("labelThread#", listOf(opaque, opaque, state), listOf(false, true, false), state)
         }
-        for (bad in listOf(tuple.copy(primReps = listOf("IntRep")),
-                tuple.copy(components = listOf(state, opaque, int))))
+        for (bad in listOf(tuple.withPrimReps(listOf("IntRep")),
+                tuple.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, originalProof.primReps, listOf(state, opaque, int), originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) }))
             assertThrows(RuntimeFault::class.java) {
                 CoreGuestThreads.validate("threadLabel#", listOf(opaque, state), List(2) { false }, bad)
             }

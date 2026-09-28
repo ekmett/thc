@@ -60,11 +60,11 @@ class SimdInt8VectorTest {
         assertThrows(RuntimeFault::class.java) { CoreVectors.validate("timesInt8X16#", listOf(proof, CoreVectors.proof32), proof) }
         assertThrows(RuntimeFault::class.java) { CoreVectors.validate("unpackInt8X16#", listOf(proof), proof) }
         for (wrong in listOf("IntRep", "Int16Rep", "Int32Rep", "Word8Rep")) {
-            val bad = CoreVectors.unpacked8.copy(components = CoreVectors.unpacked8.components!!.mapIndexed { i, lane ->
-                if (i == 15) lane.copy(primReps = listOf(wrong)) else lane })
+            val bad = CoreVectors.unpacked8.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, originalProof.primReps, CoreVectors.unpacked8.components!!.mapIndexed { i, lane ->
+                if (i == 15) lane.withPrimReps(listOf(wrong)) else lane }, originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) }
             assertThrows(RuntimeFault::class.java) { CoreVectors.validate("packInt8X16#", listOf(bad), proof) }
         }
-        val bad = CoreVectors.unpacked8.copy(components = CoreVectors.unpacked8.components!!.map { it.copy(kind = CoreKind.UNKNOWN) })
+        val bad = CoreVectors.unpacked8.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, originalProof.primReps, CoreVectors.unpacked8.components!!.map { it.let { originalProof -> originalProof.copy(CoreKind.UNKNOWN, originalProof.evaluated, originalProof.present, originalProof.primReps, originalProof.components, originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) } }, originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) }
         assertThrows(RuntimeFault::class.java) { CoreVectors.validate("packInt8X16#", listOf(bad), proof) }
         assertThrows(RuntimeFault::class.java) { CoreRepresentations.parse(metadata() - "vector") }
         assertThrows(RuntimeFault::class.java) { CoreRepresentations.parse(metadata() + ("primReps" to List(16) { "Int8Rep" })) }

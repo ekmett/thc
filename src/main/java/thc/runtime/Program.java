@@ -103,7 +103,7 @@ public final class Program implements ExecutableProgram {
         for (Map<String, Object> binding : bindings) {
             List<Object> expression = (List<Object>) binding.get("expr");
             boolean delayed = representation(binding) && !Arrays.asList("lam", "lit", "con", "void").contains(expression.getFirst());
-            globalProofs.put((String) binding.get("id"), diagnosticUnsupported ? CoreRepresentation.Companion.getUNKNOWN() :
+            globalProofs.put((String) binding.get("id"), diagnosticUnsupported ? CoreRepresentation.UNKNOWN :
                 evaluated(CoreRepresentations.binder(binding), demand == null && !delayed &&
                     Arrays.asList("lam", "lit", "con", "void").contains(expression.getFirst())));
         }
@@ -476,7 +476,7 @@ public final class Program implements ExecutableProgram {
         int[] allArgumentSlots = new int[args.size()];
         Arrays.fill(allArgumentSlots, -1);
         CoreRepresentation[] allArgumentProofs = new CoreRepresentation[args.size()];
-        Arrays.fill(allArgumentProofs, CoreRepresentation.Companion.getUNKNOWN());
+        Arrays.fill(allArgumentProofs, CoreRepresentation.UNKNOWN);
         for (int i = 0; i < args.size(); i++) {
             Local local = scope.locals.get(args.get(i).get("id"));
             if (local != null && !local.proof.isTypedTransport()) { allArgumentSlots[i] = local.slot; allArgumentProofs[i] = local.proof; }
@@ -640,7 +640,7 @@ public final class Program implements ExecutableProgram {
     private Expr compileLocated(List<Object> expr, Scope scope, boolean tail) {
         try {
             Expr lowered = compileSupported(expr, scope, tail);
-            CoreRepresentation metadata = diagnosticUnsupported && lowered instanceof GlobalRead ? CoreRepresentation.Companion.getUNKNOWN() :
+            CoreRepresentation metadata = diagnosticUnsupported && lowered instanceof GlobalRead ? CoreRepresentation.UNKNOWN :
                 CoreRepresentations.expression(expr);
             return lowered.proven(lowered.getRepresentation().refine(evaluated(metadata, false)));
         } catch (UnsupportedCore gap) {
@@ -836,7 +836,7 @@ public final class Program implements ExecutableProgram {
                 } else CoreRepresentations.requireScalar(captured.proof, "join capture");
             }
         }
-        CoreJoins.INSTANCE.validate((List<Map<String, Object>>) expr.get(2), (List<Object>) expr.get(3), recursive);
+        CoreJoins.validate((List<Map<String, Object>>) expr.get(2), (List<Object>) expr.get(3), recursive);
         Object identity = new Object();
         Scope local = outer.child();
         List<boolean[]> entryContracts = new ArrayList<>();
@@ -1048,7 +1048,7 @@ public final class Program implements ExecutableProgram {
     private Expr compileLet(List<Object> expr, Scope scope, boolean tail) {
         boolean recursive = (Boolean) expr.get(1);
         List<Map<String, Object>> group = (List<Map<String, Object>>) expr.get(2);
-        var definitions = CoreJoins.INSTANCE.definitions(group);
+        var definitions = CoreJoins.definitions(group);
         if (definitions != null) return compileJoins(expr, scope, tail, definitions);
         for (Map<String, Object> binding : group) {
             CoreRepresentation proof = CoreRepresentations.binder(binding);
@@ -1139,7 +1139,7 @@ public final class Program implements ExecutableProgram {
             for (int index = 0; index < ids.size(); index++) {
                 String id = ids.get(index);
                 Map<String, Object> meta = at(metadata, index);
-                CoreRepresentation raw = meta != null ? CoreRepresentations.binder(meta) : CoreRepresentation.Companion.getUNKNOWN();
+                CoreRepresentation raw = meta != null ? CoreRepresentations.binder(meta) : CoreRepresentation.UNKNOWN;
                 int physical = layout != null ? layout.fieldOffset(index) : index;
                 CoreRepresentation aggregate = layout != null ? layout.logicalProof(index) : null;
                 if (aggregate != null && !aggregate.isAggregate()) aggregate = null;
@@ -1216,7 +1216,7 @@ public final class Program implements ExecutableProgram {
         List<?> fieldTypes = fieldData instanceof List<?> found ? found : null;
         List<CoreRepresentation> proofs = new ArrayList<>();
         for (int i = 0; i < arity; i++) proofs.add(fieldTypes != null && fieldTypes.get(i) != null ?
-            CoreRepresentations.parse(fieldTypes.get(i)) : CoreRepresentation.Companion.getUNKNOWN());
+            CoreRepresentations.parse(fieldTypes.get(i)) : CoreRepresentation.UNKNOWN);
         ArgumentLayout inputLayout = ArgumentLayout.fromProofs(proofs);
         List<Integer> slots = new ArrayList<>(), indices = new ArrayList<>();
         List<CoreRepresentation> argumentProofs = new ArrayList<>();

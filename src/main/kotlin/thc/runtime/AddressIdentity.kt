@@ -53,7 +53,7 @@ internal class CompareOrderedManagedAddress(@field:Child private var left: Expr,
 
 internal class GetCurrentCCS(@field:Child private var dummy: Expr,
     @field:Child private var state: Expr, proof: CoreRepresentation) : Expr() {
-    init { representation = proof.copy(evaluated = true) }
+    init { representation = proof.withEvaluated(true) }
     override fun execute(frame: VirtualFrame): Nothing = fault("getCurrentCCS# requires a tuple destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         // The dummy is retained as a child for source/provenance, but never entered.

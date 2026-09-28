@@ -59,7 +59,7 @@ public final class CoreInputCalls {
                 List<?> fields = constructor.get("fieldTypes") instanceof List<?> values ? values : null;
                 if (fields != null && fields.size() != arity) throw new RuntimeFault("Constructor field type count mismatch");
                 List<CoreRepresentation> result = new ArrayList<>(fields == null ? arity : fields.size());
-                if (fields == null) for (int i = 0; i < arity; i++) result.add(CoreRepresentation.Companion.getUNKNOWN());
+                if (fields == null) for (int i = 0; i < arity; i++) result.add(CoreRepresentation.UNKNOWN);
                 else for (Object field : fields) result.add(CoreRepresentations.parse(field));
                 return result;
             }
@@ -157,7 +157,7 @@ public final class CoreInputCalls {
                     Map<String, Binding> arm = new LinkedHashMap<>(local);
                     for (String id : (List<String>) alternative.get(2)) {
                         Map<String, Object> record = records.get(id);
-                        arm.put(id, new Binding(record == null ? CoreRepresentation.Companion.getUNKNOWN() :
+                        arm.put(id, new Binding(record == null ? CoreRepresentation.UNKNOWN :
                             CoreRepresentations.binder(record), null));
                     }
                     visit((List<Object>) alternative.get(3), arm);

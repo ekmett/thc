@@ -101,7 +101,7 @@ internal class AnnotatedAction(private val shape: TupleShape,
     @field:Child private var state: Expr, metrics: Metrics, async: Boolean) : Expr() {
     @Child private var force = Force(metrics, async)
     @Child private var dispatch = Dispatch.create(1, false, metrics)
-    init { representation = shape.proof.copy(evaluated = true) }
+    init { representation = shape.proof.withEvaluated(true) }
     override fun execute(frame: VirtualFrame): Nothing = fault("annotateStack# requires a tuple destination")
 
     private fun invoke(frame: VirtualFrame, action: Any?): Any? {

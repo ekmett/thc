@@ -219,7 +219,7 @@ internal class GhcBCORoot(language: Language, val owner: Language.State, metrics
 internal class GhcBCOExpression(private val name: String, @field:Children private var operands: Array<Expr>,
                                 private val language: Language, private val metrics: Metrics,
                                 proof: CoreRepresentation) : Expr() {
-    init { representation = proof.copy(evaluated = true) }
+    init { representation = proof.withEvaluated(true) }
     override fun execute(frame: VirtualFrame): Nothing {
         CompilerDirectives.transferToInterpreterAndInvalidate()
         fault("$name requires a tuple destination")

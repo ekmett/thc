@@ -327,7 +327,7 @@ class AddressArrayCopyTest {
 
     @Test fun fixedAstChildrenEvaluateStateBeforeStorageAndLeaveNoMutationOnFailure() {
         val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), FrameDescriptor.newBuilder().build())
-        val proof = CoreRepresentation(CoreKind.VOID, present = true)
+        val proof = CoreRepresentation(CoreKind.VOID, false, true)
         for (toArray in listOf(false, true)) {
             val log = mutableListOf<Int>(); val source = ByteArray(8) { 3 }; val target = ByteArray(8) { 71 }
             fun value(index: Int, value: Any) = object : Expr() {
@@ -516,8 +516,7 @@ class AddressArrayCopyTest {
             val proofs = if (operation.toArray) listOf(CoreKind.ADDRESS, CoreKind.OBJECT, CoreKind.LONG, CoreKind.LONG, CoreKind.VOID)
                 else listOf(CoreKind.OBJECT, CoreKind.LONG, CoreKind.ADDRESS, CoreKind.LONG, CoreKind.VOID)
             for (register in listOf("IntRep", "WordRep", "Int64Rep", "Word64Rep"))
-                operation.validate(proofs.map { CoreRepresentation(it, present = true,
-                    primReps = if (it == CoreKind.LONG) listOf(register) else emptyList()) }, List(5) { false }, CoreRepresentation(CoreKind.VOID))
+                operation.validate(proofs.map { CoreRepresentation(it, false, true, if (it == CoreKind.LONG) listOf(register) else emptyList()) }, List(5) { false }, CoreRepresentation(CoreKind.VOID))
         }
     }
 }

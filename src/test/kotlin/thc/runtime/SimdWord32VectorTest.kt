@@ -61,15 +61,15 @@ class SimdWord32VectorTest {
         assertThrows(RuntimeFault::class.java) { CoreVectors.validate("timesWord32X4#", listOf(proof, CoreVectors.proof32), proof) }
         assertThrows(RuntimeFault::class.java) { CoreVectors.validate("unpackWord32X4#", listOf(proof), proof) }
         for (wrong in listOf("IntRep", "WordRep", "Int16Rep", "Int8Rep", "Word8Rep", "Word16Rep", "Int32Rep")) for (index in 0 until 4) {
-            val bad = CoreVectors.unpackedWord32.copy(components = CoreVectors.unpackedWord32.components!!.mapIndexed { i, lane ->
-                if (i == index) lane.copy(primReps = listOf(wrong)) else lane })
+            val bad = CoreVectors.unpackedWord32.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, originalProof.primReps, CoreVectors.unpackedWord32.components!!.mapIndexed { i, lane ->
+                if (i == index) lane.withPrimReps(listOf(wrong)) else lane }, originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) }
             assertThrows(RuntimeFault::class.java) { CoreVectors.validate("packWord32X4#", listOf(bad), proof) }
         }
         for (name in listOf("plus", "minus", "times")) {
             assertThrows(RuntimeFault::class.java) { CoreVectors.validate("${name}Word32X4#", listOf(proof, CoreVectors.proof32), proof) }
             if (name != "times") assertThrows(RuntimeFault::class.java) { CoreVectors.validate("${name}Int32X4#", listOf(CoreVectors.proof32, proof), CoreVectors.proof32) }
         }
-        val bad = CoreVectors.unpackedWord32.copy(components = CoreVectors.unpackedWord32.components!!.map { it.copy(kind = CoreKind.UNKNOWN) })
+        val bad = CoreVectors.unpackedWord32.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, originalProof.primReps, CoreVectors.unpackedWord32.components!!.map { it.let { originalProof -> originalProof.copy(CoreKind.UNKNOWN, originalProof.evaluated, originalProof.present, originalProof.primReps, originalProof.components, originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) } }, originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) }
         assertThrows(RuntimeFault::class.java) { CoreVectors.validate("packWord32X4#", listOf(bad), proof) }
         assertThrows(RuntimeFault::class.java) { CoreRepresentations.parse(metadata() - "vector") }
         assertThrows(RuntimeFault::class.java) { CoreRepresentations.parse(metadata() + ("primReps" to List(4) { "Word32Rep" })) }

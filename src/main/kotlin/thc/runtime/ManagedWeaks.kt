@@ -132,7 +132,7 @@ internal enum class WeakOp(val primitive: String, private val arguments: List<St
             val occurrence = actual[index]
             val refined = if (binding.primReps == listOf("BoxedRep Nothing") &&
                 occurrence.primReps?.singleOrNull() in setOf(LIFTED, UNLIFTED))
-                binding.copy(primReps = occurrence.primReps) else binding
+                binding.withPrimReps(occurrence.primReps) else binding
             if (refined.isAggregate || refined.isVector || refined.primReps != occurrence.primReps ||
                 refined.kind != CoreKind.UNKNOWN && !matches(refined, arguments[index]))
                 fault("Weak primitive argument contradicts its binding proof: $primitive")

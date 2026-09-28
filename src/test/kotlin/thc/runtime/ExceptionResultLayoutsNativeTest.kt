@@ -123,7 +123,7 @@ class ExceptionResultLayoutsNativeTest {
                 }
                 assertThrows(RuntimeFault::class.java) {
                     CoreSynchronousExceptions.validate(name, arguments, flags,
-                        result.copy(components = result.components + result.components.last()))
+                        result.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, originalProof.primReps, result.components + result.components.last(), originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) })
                 }
             }
             val audit = Json.parse(File(directory, "$stage/$entry-audit.json").readText()) as Map<*, *>
@@ -140,7 +140,7 @@ class ExceptionResultLayoutsNativeTest {
             value.primReps, listOf(state, value))
         CoreSynchronousExceptions.validate("catch#", listOf(closure, closure, state),
             listOf(true, true, false), tuple(empty))
-        for (value in listOf(CoreRepresentation.UNKNOWN, empty.copy(components = null),
+        for (value in listOf(CoreRepresentation.UNKNOWN, empty.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, originalProof.primReps, null, originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) },
             CoreRepresentation(CoreKind.OBJECT, false, true, listOf("BoxedRep Nothing"))))
             assertThrows(RuntimeFault::class.java) {
                 CoreSynchronousExceptions.validate("catch#", listOf(closure, closure, state),

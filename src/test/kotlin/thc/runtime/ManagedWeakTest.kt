@@ -236,15 +236,14 @@ class ManagedWeakTest {
         }
     }
 
-    private val state = CoreRepresentation(CoreKind.VOID, present = true, primReps = emptyList())
-    private val weak = CoreRepresentation(CoreKind.OBJECT, present = true, primReps = listOf("BoxedRep (Just Unlifted)"))
-    private val lifted = CoreRepresentation(CoreKind.DATA, present = true, primReps = listOf("BoxedRep (Just Lifted)"))
-    private val action = lifted.copy(kind = CoreKind.CLOSURE)
-    private val flag = CoreRepresentation(CoreKind.LONG, present = true, primReps = listOf("IntRep"))
-    private val address = CoreRepresentation(CoreKind.ADDRESS, present = true, primReps = listOf("AddrRep"))
+    private val state = CoreRepresentation(CoreKind.VOID, false, true, emptyList())
+    private val weak = CoreRepresentation(CoreKind.OBJECT, false, true, listOf("BoxedRep (Just Unlifted)"))
+    private val lifted = CoreRepresentation(CoreKind.DATA, false, true, listOf("BoxedRep (Just Lifted)"))
+    private val action = lifted.let { originalProof -> originalProof.copy(CoreKind.CLOSURE, originalProof.evaluated, originalProof.present, originalProof.primReps, originalProof.components, originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) }
+    private val flag = CoreRepresentation(CoreKind.LONG, false, true, listOf("IntRep"))
+    private val address = CoreRepresentation(CoreKind.ADDRESS, false, true, listOf("AddrRep"))
     private val originalOps = listOf(WeakOp.MAKE, WeakOp.MAKE_PLAIN, WeakOp.DEREFERENCE, WeakOp.FINALIZE)
-    private fun tuple(vararg fields: CoreRepresentation) = CoreRepresentation(CoreKind.UNKNOWN, present = true,
-        components = fields.toList(), primReps = fields.flatMap { it.primReps!! })
+    private fun tuple(vararg fields: CoreRepresentation) = run { val proofArgument0: CoreKind = CoreKind.UNKNOWN; val proofArgument1: Boolean = true; val proofArgument2: List<CoreRepresentation>? = fields.toList(); val proofArgument3: List<String>? = fields.flatMap { it.primReps!! }; CoreRepresentation(proofArgument0, false, proofArgument1, proofArgument3, proofArgument2) }
     private fun inputs(op: WeakOp, value: CoreRepresentation) = when (op) {
         WeakOp.MAKE -> listOf(weak, value, action, state)
         WeakOp.MAKE_PLAIN -> listOf(weak, value, state)
@@ -267,16 +266,16 @@ class ManagedWeakTest {
             op.validate(args, flags(args), result)
             assertThrows(RuntimeFault::class.java) { op.validate(args.dropLast(1), flags(args), result) }
             for (index in args.indices) {
-                val bad = args.toMutableList().also { it[index] = flag.copy(primReps = listOf("WordRep")) }
+                val bad = args.toMutableList().also { it[index] = flag.withPrimReps(listOf("WordRep")) }
                 assertThrows(RuntimeFault::class.java) { op.validate(bad, flags(bad), result) }
                 val wrongFlags = flags(args).toMutableList().also { it[index] = !it[index] }
                 assertThrows(RuntimeFault::class.java) { op.validate(args, wrongFlags, result) }
                 val stored = args.map { it as CoreRepresentation? }.toMutableList().also {
-                    it[index] = flag.copy(primReps = listOf("WordRep"))
+                    it[index] = flag.withPrimReps(listOf("WordRep"))
                 }
                 assertThrows(RuntimeFault::class.java) { op.validateBindings(args, stored) }
             }
-            assertThrows(RuntimeFault::class.java) { op.validate(args, flags(args), result.copy(primReps = emptyList())) }
+            assertThrows(RuntimeFault::class.java) { op.validate(args, flags(args), result.withPrimReps(emptyList())) }
             assertThrows(RuntimeFault::class.java) { op.validate(args, flags(args), tuple(*result.components!!.drop(1).toTypedArray())) }
         }
         WeakOp.MAKE.validateAction(CoreFunctionSignature(listOf(state), tuple(state, lifted)))

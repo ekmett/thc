@@ -145,7 +145,7 @@ public final class CoreRepresentations {
         if (proof.isVector()) throw new UnsupportedCore("Unsupported Core vector boundary: " + boundary);
     }
     public static CoreRepresentation parse(Object value) {
-        if (value == null) return CoreRepresentation.Companion.getUNKNOWN();
+        if (value == null) return CoreRepresentation.UNKNOWN;
         if (!(value instanceof Map<?, ?> map)) throw new RuntimeFault("Invalid Core representation metadata");
         List<CoreRepresentation> components = null;
         Object aggregate = map.get("aggregate");
@@ -256,7 +256,7 @@ public final class CoreRepresentations {
     }
     public static CoreRepresentation caseBinder(List<?> expr) {
         var metadata = metadata(expr);
-        return metadata != null && metadata.get("binder") instanceof Map<?, ?> map ? binder((Map<String, Object>) map) : CoreRepresentation.Companion.getUNKNOWN();
+        return metadata != null && metadata.get("binder") instanceof Map<?, ?> map ? binder((Map<String, Object>) map) : CoreRepresentation.UNKNOWN;
     }
     public static List<Map<String, Object>> alternativeBinders(List<?> alt) {
         return at(alt, 4) instanceof Map<?, ?> map && map.get("binders") instanceof List<?> binders ? (List<Map<String, Object>>) binders : List.of();

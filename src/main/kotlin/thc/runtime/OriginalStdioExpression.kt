@@ -9,7 +9,7 @@ import com.oracle.truffle.api.CompilerDirectives
 /** Preserve typed addresses and numeric carriers; validate State before effects. */
 internal class OriginalStdioExpression(private val operation: OriginalStdioOp,
     @field:Children private var operands: Array<Expr>, proof: CoreRepresentation) : Expr() {
-    init { representation = proof.copy(evaluated = true) }
+    init { representation = proof.withEvaluated(true) }
     override fun execute(frame: VirtualFrame): Nothing = fault("Original stdio call requires a State/result tuple destination")
 
     @field:CompilerDirectives.CompilationFinal(dimensions = 1)

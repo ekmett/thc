@@ -106,7 +106,7 @@ class RtsFlagsTest {
                 assertThrows(RuntimeFault::class.java) { CoreDataLabels.fromCore("RtsFlags", proof, wrongAbi) }
                 assertThrows(RuntimeFault::class.java) { CoreDataLabels.fromCore("RtsFlags", null, valid) }
                 assertThrows(RuntimeFault::class.java) {
-                    CoreDataLabels.fromCore("RtsFlags", proof.copy(evaluated = false), valid)
+                    CoreDataLabels.fromCore("RtsFlags", proof.withEvaluated(false), valid)
                 }
                 assertThrows(RuntimeFault::class.java) {
                     CoreDataLabels.fromCore("RtsFlags", CoreRepresentations.parse(int), valid)

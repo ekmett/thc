@@ -160,7 +160,7 @@ private object NativeNarrowAtomic {
 
 internal class AtomicAddressExpression(private val operation: AtomicAddressOp, proof: CoreRepresentation,
     @field:Children private var operands: Array<Expr>) : Expr() {
-    init { representation = proof.copy(evaluated = true) }
+    init { representation = proof.withEvaluated(true) }
     override fun execute(frame: VirtualFrame): Any {
         if (operation != AtomicAddressOp.WRITE) fault("Atomic Addr# result requires a tuple destination")
         val address = operands[0].executeRequiredAddress(frame)

@@ -130,7 +130,7 @@ internal class STMExpression(private val operation: STMOp, proof: CoreRepresenta
     @Child @Volatile private var call: STMCall? = null
     @field:CompilationFinal(dimensions = 1) private var destinationSlots: IntArray? = null
     @CompilationFinal private var destinationOffset = -1
-    init { representation = proof.copy(evaluated = true) }
+    init { representation = proof.withEvaluated(true) }
     override fun execute(frame: VirtualFrame): Any {
         if (operation != STMOp.WRITE) fault("STM tuple primitive requires a destination")
         val cell = operands[0].execute(frame)

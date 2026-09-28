@@ -158,11 +158,10 @@ class GuestThreadInventoryTest {
     }
 
     @Test fun stateTupleAndReadOnlyUnliftedArrayContractsRetainCarrierChecks() {
-        val state = CoreRepresentation(CoreKind.VOID, primReps = emptyList())
-        val objectRep = CoreRepresentation(CoreKind.OBJECT, primReps = listOf("BoxedRep (Just Unlifted)"))
-        val integer = CoreRepresentation(CoreKind.LONG, primReps = listOf("IntRep"))
-        fun tuple(vararg fields: CoreRepresentation) = CoreRepresentation(CoreKind.UNKNOWN,
-            primReps = fields.flatMap { it.primReps!! }, components = fields.toList())
+        val state = CoreRepresentation(CoreKind.VOID, false, false, emptyList())
+        val objectRep = CoreRepresentation(CoreKind.OBJECT, false, false, listOf("BoxedRep (Just Unlifted)"))
+        val integer = CoreRepresentation(CoreKind.LONG, false, false, listOf("IntRep"))
+        fun tuple(vararg fields: CoreRepresentation) = CoreRepresentation(CoreKind.UNKNOWN, false, false, fields.flatMap { it.primReps!! }, fields.toList())
         for ((name, value) in listOf("listThreads#" to objectRep, "isCurrentThreadBound#" to integer)) {
             val result = tuple(state, value)
             CoreThreadObservation.validate(name, listOf(state), listOf(false), result)

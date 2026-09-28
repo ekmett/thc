@@ -59,7 +59,7 @@ internal class CoreDemandBindings(private val owns: (String) -> Boolean,
         if (!owns(id)) return@synchronized null
         uses.getOrPut(id) { ArrayList() }.add(proof)
         definitions[id]?.let { validateOccurrence(CoreRepresentations.binder(it), proof) }
-        proof.copy(evaluated = false)
+        proof.withEvaluated(false)
     }
     fun call(id: String, arguments: List<CoreRepresentation>) = synchronized(lock) {
         calls.getOrPut(id) { ArrayList() }.add(arguments)

@@ -575,13 +575,12 @@ class GuestThreadsTest {
         val thread = CoreRepresentation(CoreKind.OBJECT, true, true, listOf("BoxedRep (Just Unlifted)"))
         val lifted = CoreRepresentation(CoreKind.DATA, false, true, listOf("BoxedRep (Just Lifted)"))
         val action = CoreRepresentation(CoreKind.CLOSURE, true, true, listOf("BoxedRep (Just Lifted)"))
-        val result = CoreRepresentation(CoreKind.UNKNOWN, false, true, thread.primReps,
-            components = listOf(state, thread))
+        val result = CoreRepresentation(CoreKind.UNKNOWN, false, true, thread.primReps, listOf(state, thread))
         CoreGuestThreads.validate("fork#", listOf(action, state), listOf(true, false), result)
         CoreGuestThreads.validate("myThreadId#", listOf(state), listOf(false), result)
         CoreGuestThreads.validate("killThread#", listOf(thread, lifted, state),
             listOf(false, true, false), state)
-        val wrongThread = thread.copy(primReps = lifted.primReps)
+        val wrongThread = thread.withPrimReps(lifted.primReps)
         assertThrows(RuntimeFault::class.java) {
             CoreGuestThreads.validate("killThread#", listOf(wrongThread, lifted, state),
                 listOf(false, true, false), state)
@@ -592,7 +591,7 @@ class GuestThreadsTest {
         }
         assertThrows(RuntimeFault::class.java) {
             CoreGuestThreads.validate("fork#", listOf(action, state), listOf(true, false),
-                result.copy(components = listOf(state, lifted)))
+                result.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, originalProof.primReps, listOf(state, lifted), originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) })
         }
     }
 

@@ -35,7 +35,7 @@ private fun badFileDescriptor(payload: GlobalBinding, node: Node): Nothing =
 internal class WaitFileDescriptor(@field:Child private var fd: Expr,
     @field:Child private var state: Expr, private val payload: GlobalBinding,
     private val writing: Boolean, private val async: Boolean, proof: CoreRepresentation) : Expr() {
-    init { representation = proof.copy(evaluated = true) }
+    init { representation = proof.withEvaluated(true) }
 
     private class Resume(private val node: WaitFileDescriptor, private val token: ManagedFiles.WaitToken) : AstResumeStep {
         override fun resume(frame: VirtualFrame, input: Any?): Any {

@@ -72,7 +72,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         val rhs = binding["expr"] as List<Any?>
         val proof = CoreRepresentations.binder(binding)
         binding["id"] as String to if (diagnosticUnsupported) CoreRepresentation.UNKNOWN
-        else proof.copy(evaluated = demand == null && (binding["lifted"] == false || rhs[0] in listOf("lam", "lit", "con", "void")))
+        else proof.withEvaluated(demand == null && (binding["lifted"] == false || rhs[0] in listOf("lam", "lit", "con", "void")))
     }
     private val globalEntries = bindings.associate { it["id"] as String to CoreEntries.binding(it) }
     private val globalArityCertificates = bindings.associate { it["id"] as String to CoreApplicationCertificates.binding(it) }
@@ -115,7 +115,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         fun child() = Scope(function, LinkedHashMap(locals), LinkedHashMap(joins), source, LinkedHashMap(tuples))
         fun withSource(location: CoreSourceLocation?) = Scope(function, locals, joins, location, tuples)
         fun bindLocal(name: String, value: Local) { locals[name] = value; joins.remove(name); tuples.remove(name) }
-        fun bindVoid(name: String, proof: CoreRepresentation) = bindLocal(name, Local(-1, name, false, proof.copy(evaluated = true)))
+        fun bindVoid(name: String, proof: CoreRepresentation) = bindLocal(name, Local(-1, name, false, proof.withEvaluated(true)))
         fun bindTuple(name: String, proof: CoreRepresentation, fields: List<Local>) {
             tuples[name] = proof to fields; locals.remove(name); joins.remove(name)
         }
@@ -201,7 +201,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         if (destination == null) value.emit(e) else value.emitTuple(e, destination)
     }
     private fun tupleExpression(proof: CoreRepresentation, action: (Emission, List<BytecodeLocal>) -> Unit): Expression =
-        ProvenExpression(ResultExpression { e, destination -> action(e, destination ?: throw RuntimeFault("Tuple result requires a destination")) }, proof.copy(evaluated = true))
+        ProvenExpression(ResultExpression { e, destination -> action(e, destination ?: throw RuntimeFault("Tuple result requires a destination")) }, proof.withEvaluated(true))
     private fun tupleSlots(shape: TupleShape, locals: List<BytecodeLocal>, capturesYield: Boolean = false) =
         BytecodeTupleSlots(shape, locals.map(LocalAccessor::constantOf).toTypedArray(), capturesYield,
             resumable)
@@ -448,7 +448,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         val physicalArguments = arrayListOf<Pair<Int, Local>>()
         context.arguments = args.mapIndexed { index, arg ->
             val lifted = representation(arg)
-            val proof = CoreRepresentations.binder(arg).copy(evaluated = !lifted || context.entryStrict[index])
+            val proof = CoreRepresentations.binder(arg).withEvaluated(!lifted || context.entryStrict[index])
             val offset = ArgumentLayout.offset(context.inputLayout, index)
             if (proof.isTypedTransport) {
                 if (lifted) throw RuntimeFault(if (proof.isVector) "Vector formal cannot be lifted" else "Tuple formal cannot be lifted")
@@ -470,7 +470,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             ::dataLayout, sources, compiled.source)
         if ((compiled.proof.isSum || resultProof.isSum) && (!compiled.proof.isSum || !resultProof.isSum))
             throw RuntimeFault("Sum function requires exact body and declared result proofs")
-        val body = ProvenExpression(compiled, compiled.proof.refine(resultProof).copy(evaluated = compiled.proof.evaluated))
+        val body = ProvenExpression(compiled, compiled.proof.refine(resultProof).withEvaluated(compiled.proof.evaluated))
         context.tuple = if (body.proof.isTypedTransport) TupleShape(body.proof, language) else null
         return FunctionSpec(build(label, context, body, forceResult = !body.proof.evaluated),
             context.captureLayout, captureSources + vectorSources, vectorCount != 0)
@@ -534,7 +534,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 val slots = BytecodeTypedInputSlots(typed, bloom,
                     physical.map { LocalAccessor.constantOf(e.locals.getValue(it.second.id)) }.toTypedArray(),
                     physical.map { it.first }.toIntArray(), physical.map {
-                        if (it.second.id in deferredStrict) it.second.proof.copy(evaluated = false) else it.second.proof
+                        if (it.second.id in deferredStrict) it.second.proof.withEvaluated(false) else it.second.proof
                     }.toTypedArray(),
                     context.captureLayout,
                     context.captures.map { LocalAccessor.constantOf(e.locals.getValue(it.id)) }.toTypedArray(),
@@ -785,14 +785,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
     private fun read(local: Local, resolve: Boolean = true): Expression =
         if (local.id < 0 && local.proof.kind == CoreKind.VOID) ProvenExpression(constant(Unit), local.proof)
         else LocalExpression(local, resolve)
-    private fun evaluated(value: Expression): Expression = ProvenExpression(value, value.proof.copy(evaluated = true))
+    private fun evaluated(value: Expression): Expression = ProvenExpression(value, value.proof.withEvaluated(true))
     /** Async callees demand their own CBV formals at a captured bytecode cut.
      * The caller has already transferred PAP prefixes and typed input fields.
      * Recheck the declared carrier only after the resumable force completes. */
     private fun emitEntryStrictDemands(e: Emission, context: FunctionContext) {
         context.arguments.forEachIndexed { index, local ->
             if (!context.entryStrict[index] || local == null || local.primitive || local.proof.isTypedTransport) return@forEachIndexed
-            val raw = ProvenExpression(read(local), local.proof.copy(evaluated = false))
+            val raw = ProvenExpression(read(local), local.proof.withEvaluated(false))
             restoreArgument(e, local) { force(raw).emit(e) }
         }
     }
@@ -872,7 +872,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     }
                 }
             }
-        }).let { sourced(ProvenExpression(it, value.proof.copy(evaluated = true)), value.source) }
+        }).let { sourced(ProvenExpression(it, value.proof.withEvaluated(true)), value.source) }
     }
     private fun requireClosure(value: Expression) = Expression { e ->
         e.builder.beginRequireClosure(); force(value).emit(e); e.builder.endRequireClosure()
@@ -882,7 +882,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         // forcing its own callback operand. Enter the enclosing catch/mask
         // scope first, then use the bytecode force path and its resumable yield.
         val saved = ProvenExpression(Expression { it.builder.emitLoadLocal(slot) },
-            proof.copy(evaluated = false))
+            proof.withEvaluated(false))
         force(saved).emit(e)
     }
     private fun delay(expr: List<Any?>, scope: Scope, label: String): Expression {
@@ -899,7 +899,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 fn.captures.forEach { read(it, false).emit(e) }
                 e.builder.endMakeThunk()
             }
-        }, CoreRepresentations.expression(expr).copy(evaluated = false)), sources.expression(expr, scope.source))
+        }, CoreRepresentations.expression(expr).withEvaluated(false)), sources.expression(expr, scope.source))
     }
     private fun closure(fn: FunctionSpec, arity: Int): Expression {
         val template = BytecodeRoot.ClosureTemplate(fn.target, arity, fn.captureLayout)
@@ -967,7 +967,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         CoreRepresentation(when (value) {
             is Int, is Long -> CoreKind.LONG; is Float -> CoreKind.FLOAT; is Double -> CoreKind.DOUBLE
             is ManagedAddress -> CoreKind.ADDRESS; Unit -> CoreKind.VOID; else -> CoreKind.OBJECT
-        }, evaluated = true))
+        }, true))
     private fun compile(expr: List<Any?>, scope: Scope, tail: Boolean): Expression {
         CoreStateApplications.inline(expr)?.let { return compile(it, scope, tail) }
         val source = sources.expression(expr, scope.source)
@@ -977,7 +977,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             // Core describes the denoted value; our lowering may introduce an extra
             // thunk (notably for CAFs). Only the lowered storage proves WHNF here.
             val diagnosticGlobal = diagnosticUnsupported && expr[0] == "var" && expr[1] !in scope.locals && expr[1] !in scope.joins && expr[1] in globals
-            if (proof.present && !diagnosticGlobal) ProvenExpression(lowered, lowered.proof.refine(proof).copy(evaluated = lowered.proof.evaluated)) else lowered
+            if (proof.present && !diagnosticGlobal) ProvenExpression(lowered, lowered.proof.refine(proof).withEvaluated(lowered.proof.evaluated)) else lowered
         } catch (gap: UnsupportedCore) {
             if (!diagnosticUnsupported) throw gap
             val message = gap.message ?: "Unsupported Core"
@@ -1372,7 +1372,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 b.endBlock()
                 if (resumable) {
                     val savedFunction = ProvenExpression(Expression { it.builder.emitLoadLocal(fn) },
-                        function.proof.copy(evaluated = true))
+                        function.proof.withEvaluated(true))
                     val savedArguments = args.mapIndexed { index, local ->
                         ProvenExpression(Expression { it.builder.emitLoadLocal(local) }, arguments[index].proof)
                     }
@@ -1443,7 +1443,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             // Unreachable value preserves the surrounding expression's builder signature.
             if (destination == null) b.emitLoadConstant(Unit)
             b.endBlock()
-        }, target.result.copy(evaluated = true))
+        }, target.result.withEvaluated(true))
     }
 
     private fun joinRegion(group: List<Map<String, Any?>>, expression: List<Any?>, recursive: Boolean,
@@ -1483,7 +1483,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val entryStrict = CoreEntries.join(definition)
             val parameters = definition.parameters.mapIndexed { parameterIndex, parameter ->
                 // Join formal names have lexical scope only in their own body.
-                val proof = CoreRepresentations.binder(parameter).copy(evaluated = !representation(parameter) || entryStrict[parameterIndex])
+                val proof = CoreRepresentations.binder(parameter).withEvaluated(!representation(parameter) || entryStrict[parameterIndex])
                 if (proof.isTypedTransport) ArgumentLayout.leaves(proof).mapIndexed { lane, field ->
                     Local(nextLocal++, "${parameter["id"]} lane $lane", field.isLong, field)
                 } else listOf(Local(nextLocal++, parameter["id"] as String,
@@ -1497,14 +1497,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             targets[index].locals.forEachIndexed { parameterIndex, fields ->
                 val raw = definition.parameters[parameterIndex]
                 val formal = CoreRepresentations.binder(raw)
-                if (formal.isTypedTransport) bodyScope.bindTuple(raw["id"] as String, formal.copy(evaluated = true), fields)
+                if (formal.isTypedTransport) bodyScope.bindTuple(raw["id"] as String, formal.withEvaluated(true), fields)
                 else bodyScope.bindLocal(fields.single().name, fields.single())
             }
             val body = compile(definition.body, bodyScope.withSource(sources.binding(definition.binding, scope.source)), tail)
-            ProvenExpression(body, body.proof.refine(definition.result.copy(evaluated = false)))
+            ProvenExpression(body, body.proof.refine(definition.result.withEvaluated(false)))
         }
         val entry = compile(expression, local, tail)
-        val proof = entry.proof.refine(CoreRepresentations.expression(expression).copy(evaluated = false))
+        val proof = entry.proof.refine(CoreRepresentations.expression(expression).withEvaluated(false))
         bodies.forEach { TupleShape.requireCompatible(proof, it.proof) }
         return ProvenExpression(ResultExpression { e, destination ->
             if (proof.isTypedTransport != (destination != null)) throw RuntimeFault("Join result destination disagrees with its representation")
@@ -1556,7 +1556,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             b.endBlock()
             e.joins.remove(region)
             targets.flatMap { it.locals.flatten() }.forEach { e.locals.remove(it.id) }
-        }, proof.copy(evaluated = entry.proof.evaluated && bodies.all { it.proof.evaluated }))
+        }, proof.withEvaluated(entry.proof.evaluated && bodies.all { it.proof.evaluated }))
     }
 
     private fun compileSupported(expr: List<Any?>, scope: Scope, tail: Boolean): Expression = when (expr[0]) {
@@ -1737,22 +1737,22 @@ CoreStackForeign.validateHead(fn, defined)
                     e.builder.beginOriginalStackInfo(layout)
                     operands.single().emit(e)
                     e.builder.endOriginalStackInfo()
-                }, tupleProof.copy(evaluated = true)) else if (stackInfo == OriginalStackInfoOp.STACK_FIELDS)
+                }, tupleProof.withEvaluated(true)) else if (stackInfo == OriginalStackInfoOp.STACK_FIELDS)
                     ProvenExpression(Expression { e ->
                         e.builder.beginOriginalStackFields(layout)
                         operands.single().emit(e)
                         e.builder.endOriginalStackFields()
-                    }, tupleProof.copy(evaluated = true))
+                    }, tupleProof.withEvaluated(true))
                 else if (stackInfo == OriginalStackInfoOp.WORD) ProvenExpression(Expression { e ->
                     e.builder.beginOriginalStackWord(layout)
                     operands.forEach { it.emit(e) }
                     e.builder.endOriginalStackWord()
-                }, tupleProof.copy(evaluated = true))
+                }, tupleProof.withEvaluated(true))
                 else if (!stackInfo.tupleResult) ProvenExpression(Expression { e ->
                     e.builder.beginOriginalStackIncompatibleGetter(layout, stackInfo)
                     operands.forEach { it.emit(e) }
                     e.builder.endOriginalStackIncompatibleGetter()
-                }, tupleProof.copy(evaluated = true)) else tupleExpression(tupleProof) { e, destination ->
+                }, tupleProof.withEvaluated(true)) else tupleExpression(tupleProof) { e, destination ->
                     val b = e.builder
                     if (stackInfo == OriginalStackInfoOp.FRAME_INFO)
                         b.beginOriginalStackFrameInfo(layout, destination[0], destination[1])
@@ -2571,7 +2571,7 @@ CoreStackForeign.validateHead(fn, defined)
                 val family = EnumFamily(ids.map { dataLayout(it).allocate() }.toTypedArray())
                 ProvenExpression(Expression { e ->
                     e.builder.beginTagToEnum(family); operand.emit(e); e.builder.endTagToEnum()
-                }, tupleProof.copy(evaluated = true))
+                }, tupleProof.withEvaluated(true))
             } else if (fn[0] == "prim" && fn[1] in CoreDataTags.operations) {
                 if (args.size != 1) throw RuntimeFault("dataToTag: Exactly one operand required")
                 val operand = argument(args[0], scope, false)
@@ -2579,7 +2579,7 @@ CoreStackForeign.validateHead(fn, defined)
                 val family = DataTagFamily(ids.map(::dataLayout).toTypedArray())
                 ProvenExpression(Expression { e ->
                     e.builder.beginDataToTag(family); operand.emit(e); e.builder.endDataToTag()
-                }, tupleProof.copy(evaluated = true))
+                }, tupleProof.withEvaluated(true))
             } else if (fn[0] == "prim" && fn[1] in CoreVectors.operations) {
                 val name = fn[1] as String
                 CoreVectors.validate(name, args.map { CoreVectors.argumentProof(it) }, tupleProof)
@@ -2603,7 +2603,7 @@ CoreStackForeign.validateHead(fn, defined)
                     b.beginRaise(true); b.emitReadGlobal(payload); b.endRaise()
                     if (destination != null) b.endStoreLocal()
                     b.endBlock()
-                }, tupleProof.copy(evaluated = true))
+                }, tupleProof.withEvaluated(true))
             } else if (fn[0] == "prim" && fn[1] in setOf("newBCO#", "mkApUpd0#")) {
                 val name = fn[1] as String
                 GhcBCO.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
@@ -2845,14 +2845,14 @@ CoreStackForeign.validateHead(fn, defined)
                         b.endConditional()
                         b.endBlock()
                     }
-                }, tupleProof.copy(evaluated = true))
+                }, tupleProof.withEvaluated(true))
             } else if (fn[0] == "prim" && CoreThreadScheduling.named(fn[1] as String)) {
                 val name = fn[1] as String
                 CoreThreadScheduling.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
                 val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
                 CoreThreadScheduling.validate(name, operands.map { it.proof }, flags, tupleProof)
                 when (name) {
-                    "par#" -> ProvenExpression(Expression { it.builder.emitLoadConstant(1L) }, tupleProof.copy(evaluated = true))
+                    "par#" -> ProvenExpression(Expression { it.builder.emitLoadConstant(1L) }, tupleProof.withEvaluated(true))
                     "delay#" -> ProvenExpression(Expression { e ->
                         val b = e.builder
                         val token = Expression { target ->
@@ -2868,7 +2868,7 @@ CoreStackForeign.validateHead(fn, defined)
                             b.emitLoadConstant(Unit)
                             b.endBlock()
                         }
-                    }, tupleProof.copy(evaluated = true))
+                    }, tupleProof.withEvaluated(true))
                     "setThreadAllocationCounter#", "setOtherThreadAllocationCounter#" -> ProvenExpression(Expression { e ->
                         val b = e.builder
                         val other = name == "setOtherThreadAllocationCounter#"
@@ -2880,7 +2880,7 @@ CoreStackForeign.validateHead(fn, defined)
                         b.endSetThreadAllocationCounter()
                         b.emitLoadConstant(Unit)
                         b.endBlock()
-                    }, tupleProof.copy(evaluated = true))
+                    }, tupleProof.withEvaluated(true))
                     else -> {
                         val empty = if (name == "getSpark#") dataLayouts.getOrPut(CoreThreadScheduling.FALSE) {
                             DataLayout(language, CoreThreadScheduling.FALSE, "False", emptyArray())
@@ -2922,7 +2922,7 @@ CoreStackForeign.validateHead(fn, defined)
                     if (enableAsync) emitAsyncPoll(e)
                     b.emitLoadConstant(Unit)
                     b.endBlock()
-                }, tupleProof.copy(evaluated = true))
+                }, tupleProof.withEvaluated(true))
             } else if (fn[0] == "prim" && CoreFileWait.named(fn[1] as String)) {
                 val name = fn[1] as String
                 CoreFileWait.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
@@ -2950,7 +2950,7 @@ CoreStackForeign.validateHead(fn, defined)
                         b.emitLoadConstant(Unit)
                         b.endBlock()
                     }
-                }, tupleProof.copy(evaluated = true))
+                }, tupleProof.withEvaluated(true))
             } else if (fn[0] == "prim" && fn[1] == "annotateStack#") {
                 StackAnnotations.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 val annotation = argument(args[0], scope, true)
@@ -2979,7 +2979,7 @@ CoreStackForeign.validateHead(fn, defined)
                     e.builder.beginRequireIOState(); state.emit(e); e.builder.endRequireIOState()
                     e.builder.emitLoadConstant(Unit)
                     e.builder.endBlock()
-                }, state.proof.copy(evaluated = true))
+                }, state.proof.withEvaluated(true))
                 tupleApplication(TupleShape(tupleProof, language), argument(args[0], scope, true), listOf(checked), scope, tail)
             } else if (fn[0] == "prim" && ClosureInspectOp.named(fn[1] as String) != null) {
                 val operation = ClosureInspectOp.named(fn[1] as String)!!
@@ -2987,7 +2987,7 @@ CoreStackForeign.validateHead(fn, defined)
                 val operands = args.mapIndexed { index, value -> argument(value, scope, index == 0) }
                 if (operation == ClosureInspectOp.SIZE) ProvenExpression(Expression { e ->
                     e.builder.beginClosureSize(); operands[0].emit(e); e.builder.endClosureSize()
-                }, tupleProof.copy(evaluated = true))
+                }, tupleProof.withEvaluated(true))
                 else tupleExpression(tupleProof) { e, destination ->
                     val b = e.builder
                     when (operation) {
@@ -3034,7 +3034,7 @@ CoreStackForeign.validateHead(fn, defined)
                     e.builder.endLabelThread()
                     e.builder.emitLoadConstant(Unit)
                     e.builder.endBlock()
-                }, tupleProof.copy(evaluated = true))
+                }, tupleProof.withEvaluated(true))
             } else if (fn[0] == "prim" && fn[1] == "threadStatus#") {
                 CoreGuestThreads.validate("threadStatus#", args.map(CoreRepresentations::expression), flags, tupleProof)
                 val operands = args.map { argument(it, scope, false) }
@@ -3053,7 +3053,7 @@ CoreStackForeign.validateHead(fn, defined)
                         e.builder.beginThreadPrimitive(BytecodeRoot.ThreadPrimitiveKind.SELF_KILL)
                         operands.forEach { it.emit(e) }
                         e.builder.endThreadPrimitive()
-                    }, tupleProof.copy(evaluated = true)) else ProvenExpression(Expression { e ->
+                    }, tupleProof.withEvaluated(true)) else ProvenExpression(Expression { e ->
                         val b = e.builder
                         b.beginBlock()
                         val values = operands.mapIndexed { index, operand ->
@@ -3107,7 +3107,7 @@ CoreStackForeign.validateHead(fn, defined)
                         emitAsyncPoll(e) // Self-target delivery occurs only after enqueue.
                         b.emitLoadConstant(Unit)
                         b.endBlock()
-                    }, tupleProof.copy(evaluated = true))
+                    }, tupleProof.withEvaluated(true))
                 } else tupleExpression(tupleProof) { e, destination ->
                     val b = e.builder
                     b.beginStoreLocal(destination[0])
@@ -3136,7 +3136,7 @@ CoreStackForeign.validateHead(fn, defined)
                     ?: throw UnsupportedCore("atomically# requires original nestedAtomically payload") else null
                 if (operation == STMOp.WRITE) ProvenExpression(Expression { e ->
                     e.builder.beginWriteTVar(); operands.forEach { it.emit(e) }; e.builder.endWriteTVar()
-                }, tupleProof.copy(evaluated = true))
+                }, tupleProof.withEvaluated(true))
                 else tupleExpression(tupleProof) { e, destination ->
                     val b = e.builder
                     if (operation.callback) {
@@ -3214,7 +3214,7 @@ CoreStackForeign.validateHead(fn, defined)
                     } else {
                         e.builder.beginPutMVar(false); operands.forEach { it.emit(e) }; e.builder.endPutMVar()
                     }
-                }, tupleProof.copy(evaluated = true))
+                }, tupleProof.withEvaluated(true))
             } else if (fn[0] == "prim" && CompactImageOp.named(fn[1] as String) != null) {
                 val operation = CompactImageOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
@@ -3254,7 +3254,7 @@ CoreStackForeign.validateHead(fn, defined)
                     else emptyArray()
                 if (operation == CompactOp.RESIZE) ProvenExpression(Expression { e ->
                     e.builder.beginResizeCompact(); operands.forEach { it.emit(e) }; e.builder.endResizeCompact()
-                }, tupleProof.copy(evaluated = true)) else tupleExpression(tupleProof) { e, destination ->
+                }, tupleProof.withEvaluated(true)) else tupleExpression(tupleProof) { e, destination ->
                     when (operation) {
                         CompactOp.ADD, CompactOp.ADD_SHARING -> e.builder.beginAddCompact(destination[0],
                             operation == CompactOp.ADD_SHARING, metrics, failures)
@@ -3293,7 +3293,7 @@ CoreStackForeign.validateHead(fn, defined)
                     }
                 } else ProvenExpression(Expression { e ->
                     e.builder.beginWriteMutVar(); operands.forEach { it.emit(e) }; e.builder.endWriteMutVar()
-                }, tupleProof.copy(evaluated = true))
+                }, tupleProof.withEvaluated(true))
             } else if (fn[0] == "prim" && WeakOp.named(fn[1] as String) != null) {
                 val operation = WeakOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
@@ -3331,7 +3331,7 @@ CoreStackForeign.validateHead(fn, defined)
                     e.builder.beginHashStableName()
                     operands.single().emit(e)
                     e.builder.endHashStableName()
-                }, tupleProof.copy(evaluated = true))
+                }, tupleProof.withEvaluated(true))
             } else if (fn[0] == "prim" && StablePointerOp.named(fn[1] as String) != null) {
                 val operation = StablePointerOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
@@ -3344,7 +3344,7 @@ CoreStackForeign.validateHead(fn, defined)
                     e.builder.beginEqualStablePointers()
                     operands.forEach { it.emit(e) }
                     e.builder.endEqualStablePointers()
-                }, tupleProof.copy(evaluated = true))
+                }, tupleProof.withEvaluated(true))
             } else if (fn[0] == "prim" && ArrayOp.named(fn[1] as String) != null) {
                 val operation = ArrayOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
@@ -3383,7 +3383,7 @@ CoreStackForeign.validateHead(fn, defined)
                         ArrayOp.COPY, ArrayOp.COPY_MUTABLE -> e.builder.endTransferArray()
                         else -> e.builder.endWriteArray()
                     }
-                }, tupleProof.copy(evaluated = true))
+                }, tupleProof.withEvaluated(true))
             } else if (fn[0] == "prim" && SmallArrayOp.named(fn[1] as String) != null) {
                 val operation = SmallArrayOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
@@ -3428,7 +3428,7 @@ CoreStackForeign.validateHead(fn, defined)
                         SmallArrayOp.COPY, SmallArrayOp.COPY_MUTABLE -> e.builder.endTransferSmallArray()
                         else -> e.builder.endSizeSmallArray()
                     }
-                }, tupleProof.copy(evaluated = true))
+                }, tupleProof.withEvaluated(true))
             } else if (fn[0] == "prim" && VectorMemoryOp.named(fn[1] as String) != null) {
                 val operation = VectorMemoryOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
@@ -3444,7 +3444,7 @@ CoreStackForeign.validateHead(fn, defined)
                     if (offset == null) e.builder.emitLoadConstant(0L) else offset.emit(e)
                     state.emit(e)
                     e.builder.endPrefetch()
-                }, tupleProof.copy(evaluated = true))
+                }, tupleProof.withEvaluated(true))
             } else if (fn[0] == "prim" && TraceOp.named(fn[1] as String) != null) {
                 val operation = TraceOp.named(fn[1] as String)!!
                 if (args.size != operation.arity) fault("Wrong trace arity")
@@ -3455,7 +3455,7 @@ CoreStackForeign.validateHead(fn, defined)
                     if (operation == TraceOp.BINARY) operands[1].emit(e) else e.builder.emitLoadConstant(0L)
                     operands.last().emit(e)
                     e.builder.endTraceEvent()
-                }, tupleProof.copy(evaluated = true))
+                }, tupleProof.withEvaluated(true))
             } else if (fn[0] == "prim" && fn[1] == "touch#") {
                 CoreTouch.validateRaw(args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags,
                     CoreRepresentations.metadata(expr)?.get("rep"))
@@ -3464,14 +3464,14 @@ CoreStackForeign.validateHead(fn, defined)
                 // Its body was checked by lowering; refine without asserting WHNF
                 // or permitting an incompatible known stored representation.
                 val kept = ProvenExpression(lowered,
-                    lowered.proof.refine(CoreRepresentations.expression(args[0]).copy(evaluated = false)))
+                    lowered.proof.refine(CoreRepresentations.expression(args[0]).withEvaluated(false)))
                 val state = compile(args[1], scope, false)
                 CoreTouch.validate(listOf(kept.proof, state.proof), flags, tupleProof)
                 ProvenExpression(Expression { e ->
                     e.builder.beginTouch()
                     kept.emit(e); state.emit(e)
                     e.builder.endTouch()
-                }, tupleProof.copy(evaluated = true))
+                }, tupleProof.withEvaluated(true))
             } else if (fn[0] == "prim" && fn[1] == "keepAlive#") {
                 val argumentProofs = args.map(CoreRepresentations::expression)
                 val continuation = args.getOrNull(2)?.let { CoreRepresentations.knownFunctionSignature(it, bindings) }
@@ -3500,7 +3500,7 @@ CoreStackForeign.validateHead(fn, defined)
                     if (result != null) b.beginStoreLocal(result)
                     if (resumable) {
                         val stateArgument = ProvenExpression(Expression { it.builder.emitLoadLocal(stateLocal) },
-                            state.proof.copy(evaluated = true))
+                            state.proof.withEvaluated(true))
                         if (destination != null) {
                             checkpointedTupleApplication(e, TupleShape(tupleProof, language), function,
                                 listOf(stateArgument), null, destination)
@@ -3519,7 +3519,7 @@ CoreStackForeign.validateHead(fn, defined)
                 if (tupleProof.isAggregate) tupleExpression(tupleProof) { e, destination ->
                     emitKeepAlive(e, destination)
                 } else ProvenExpression(Expression { e -> emitKeepAlive(e, null) },
-                    tupleProof.copy(evaluated = true))
+                    tupleProof.withEvaluated(true))
             } else if (fn[0] == "prim" && AtomicAddressOp.named(fn[1] as String) != null) {
                 val operation = AtomicAddressOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
@@ -3528,7 +3528,7 @@ CoreStackForeign.validateHead(fn, defined)
                     e.builder.beginAtomicAddressWrite()
                     operands.forEach { it.emit(e) }
                     e.builder.endAtomicAddressWrite()
-                }, tupleProof.copy(evaluated = true))
+                }, tupleProof.withEvaluated(true))
                 else tupleExpression(tupleProof) { e, destination ->
                     if (operation.pointer) e.builder.beginAtomicAddressPointer(operation, destination[0])
                     else e.builder.beginAtomicAddressNumeric(operation, destination[0])
@@ -3567,7 +3567,7 @@ CoreStackForeign.validateHead(fn, defined)
                         if (operation.floating) e.builder.endIndexFloatOffAddr()
                         else e.builder.endIndexDoubleOffAddr()
                     }
-                }, tupleProof.copy(evaluated = true))
+                }, tupleProof.withEvaluated(true))
             } else if (fn[0] == "prim" && AddressArrayCopyOp.named(fn[1] as String) != null) {
                 val operation = AddressArrayCopyOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
@@ -3576,7 +3576,7 @@ CoreStackForeign.validateHead(fn, defined)
                     if (operation.toArray) e.builder.beginCopyAddressToByteArray() else e.builder.beginCopyByteArrayToAddress()
                     operands.forEach { it.emit(e) }
                     if (operation.toArray) e.builder.endCopyAddressToByteArray() else e.builder.endCopyByteArrayToAddress()
-                }, tupleProof.copy(evaluated = true))
+                }, tupleProof.withEvaluated(true))
             } else if (fn[0] == "prim" && PinnedMemoryOp.named(fn[1] as String) != null) {
                 val operation = PinnedMemoryOp.named(fn[1] as String)!!
                 val byteOffset = (fn[1] as String).contains("Word8") && (fn[1] as String).contains("As")
@@ -3655,7 +3655,7 @@ CoreStackForeign.validateHead(fn, defined)
                         PinnedMemoryOp.INDEX_INT64, PinnedMemoryOp.INDEX_WORD64 -> e.builder.endIndexManagedAddress()
                         else -> e.builder.endWriteWord8OffAddr()
                     }
-                }, tupleProof.copy(evaluated = true))
+                }, tupleProof.withEvaluated(true))
             } else if (fn[0] == "prim" && AtomicIntArrayOp.named(fn[1] as String) != null) {
                 val operation = AtomicIntArrayOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
@@ -3672,7 +3672,7 @@ CoreStackForeign.validateHead(fn, defined)
                     e.builder.beginAtomicWriteIntArray()
                     operands.forEach { it.emit(e) }
                     e.builder.endAtomicWriteIntArray()
-                }, tupleProof.copy(evaluated = true))
+                }, tupleProof.withEvaluated(true))
             } else if (fn[0] == "prim" && ByteArrayOp.named(fn[1] as String) != null) {
                 val operation = ByteArrayOp.named(fn[1] as String)!!
                 val byteOffset = (fn[1] as String).contains("Word8") && (fn[1] as String).contains("As")
@@ -3818,7 +3818,7 @@ CoreStackForeign.validateHead(fn, defined)
                         ByteArrayOp.INDEX_WORD8_AS_INT32, ByteArrayOp.INDEX_WORD8_AS_WORD32 -> e.builder.endIndexInt32Array()
                         else -> error("Tuple ByteArray operation")
                     }
-                }, tupleProof.copy(evaluated = true))
+                }, tupleProof.withEvaluated(true))
             } else if (floatDecode != null) {
                 floatDecode.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 val operand = argument(args.single(), scope, false)
@@ -3990,9 +3990,9 @@ CoreStackForeign.validateHead(fn, defined)
                     val proof = CoreRepresentations.binder(binding)
                     if (proof.isVector) TupleShape.flatten(proof).mapIndexed { lane, field ->
                         Local(nextLocal++, "${binding["id"]} vector let lane $lane", field.isLong, field)
-                    }.also { local.bindTuple(binding["id"] as String, proof.copy(evaluated = true), it) }
+                    }.also { local.bindTuple(binding["id"] as String, proof.withEvaluated(true), it) }
                     else listOf(bind(local, binding["id"] as String, !representation(binding),
-                        proof.copy(evaluated = false), cell = recursive, entry = CoreEntries.binding(binding),
+                        proof.withEvaluated(false), cell = recursive, entry = CoreEntries.binding(binding),
                         arityCertificate = CoreApplicationCertificates.binding(binding)))
                 }
                 val rhs = group.map {
@@ -4010,7 +4010,7 @@ CoreStackForeign.validateHead(fn, defined)
                         TupleShape.requireCompatible(CoreRepresentations.binder(group[index]), rhs[index].proof)
                     } else {
                         val slot = fields.single()
-                        val proof = slot.proof.refine(rhs[index].proof).copy(evaluated = rhs[index].proof.evaluated)
+                        val proof = slot.proof.refine(rhs[index].proof).withEvaluated(rhs[index].proof.evaluated)
                         // All RHS roots have already captured immutable Local records
                         // with cell=true. Only body/new captures see published values.
                         local.locals[slot.name] = slot.copy(proof = proof, cell = false,
@@ -4049,14 +4049,14 @@ CoreStackForeign.validateHead(fn, defined)
             val local = scope.child()
             val scrutineeExpr = expr[1] as List<Any?>
             val scrutinee = force(compile(scrutineeExpr, scope, false))
-            val binderProof = scrutinee.proof.refine(CoreRepresentations.caseBinder(expr)).copy(evaluated = true)
+            val binderProof = scrutinee.proof.refine(CoreRepresentations.caseBinder(expr)).withEvaluated(true)
             if (binderProof.isSum) sumCase(expr, scrutinee, binderProof, local, tail)
             else if (binderProof.isTuple || binderProof.isVector)
                 tupleOrVectorCase(expr, scrutinee, binderProof, local, tail) else {
             val binder = bind(local, expr[2] as String, true, binderProof)
             if (scrutineeExpr[0] == "var" && scrutineeExpr[1] != expr[2]) {
                 val id = scrutineeExpr[1] as String
-                scope.locals[id]?.let { local.locals[id] = it.copy(proof = it.proof.copy(evaluated = true)) }
+                scope.locals[id]?.let { local.locals[id] = it.copy(proof = it.proof.withEvaluated(true)) }
             }
             data class Alternative(val kind: String, val value: Any?, val fields: List<List<Local>>, val body: Expression)
             val alternatives = (expr[3] as List<List<Any?>>).map { alt ->
@@ -4099,7 +4099,7 @@ CoreStackForeign.validateHead(fn, defined)
                         listOf(lanes)
                     } else listOf(listOf(bind(child, id, layout?.isLong(physical) == true,
                         (metadata.getOrNull(index)?.let { CoreRepresentations.binder(it) } ?: CoreRepresentation.UNKNOWN)
-                            .let { it.copy(evaluated = layout != null && fieldIsEvaluated(alt[1] as String, index)) })))
+                            .let { it.withEvaluated(layout != null && fieldIsEvaluated(alt[1] as String, index)) })))
                 }
                 Alternative(kind, value, fields, compile(alt[3] as List<Any?>, child, tail))
             }
@@ -4127,7 +4127,7 @@ CoreStackForeign.validateHead(fn, defined)
                 alternatives.first().body.proof.refine(resultProof)
             } else resultProof
             val mergedProof = CoreVectors.caseResult(alternatives.map { it.body.proof })?.refine(effectiveResult)
-                ?: effectiveResult.copy(evaluated = alternatives.all { it.body.proof.evaluated })
+                ?: effectiveResult.withEvaluated(alternatives.all { it.body.proof.evaluated })
             LoweredCaseExpression(ProvenExpression(ResultExpression { e, destination ->
                 val b = e.builder
                 b.beginBlock()
@@ -4783,7 +4783,7 @@ CoreStackForeign.validateHead(fn, defined)
                 val actual = CoreRepresentations.binder(metadata.single())
                 val lifted = metadata.single()["lifted"] as? Boolean ?: throw RuntimeFault("Unknown sum payload binder levity")
                 SumShape.payload(component, actual, lifted)
-                val logical = component.refine(actual).copy(evaluated = component.evaluated)
+                val logical = component.refine(actual).withEvaluated(component.evaluated)
                 val leaves = TupleShape.flatten(logical)
                 val projected = SumShape.projection(proof, selected - 1).mapIndexed { index, physical ->
                     val leaf = leaves[index]
@@ -4842,7 +4842,7 @@ CoreStackForeign.validateHead(fn, defined)
             choice(0)
             b.endBlock()
             fields.forEach { e.locals.remove(it.id) }
-        }, result.copy(evaluated = arms.all { it.body.proof.evaluated }))
+        }, result.withEvaluated(arms.all { it.body.proof.evaluated }))
     }
     private fun vectorMemory(operation: VectorMemoryOp, operands: List<Expression>): Expression =
         ProvenExpression(Expression { e ->
@@ -5366,7 +5366,7 @@ CoreStackForeign.validateHead(fn, defined)
                 "FloatToDouble" -> b.endFloatToDouble()
                 "DoubleToFloat" -> b.endDoubleToFloat()
             }
-        }, CoreRepresentation(kind, evaluated = true))
+        }, CoreRepresentation(kind, true))
     }
 
 

@@ -26,7 +26,7 @@ internal enum class MVarOp(val primitive: String, private val arguments: List<St
             val occurrence = actual[index]
             val refined = if (binding.primReps == listOf("BoxedRep Nothing") &&
                 occurrence.primReps?.singleOrNull() in setOf(LIFTED, UNLIFTED))
-                binding.copy(primReps = occurrence.primReps) else binding
+                binding.withPrimReps(occurrence.primReps) else binding
             if (refined.isAggregate || refined.isVector || refined.primReps != occurrence.primReps ||
                 refined.kind != CoreKind.UNKNOWN && !matches(refined, arguments[index]))
                 throw RuntimeFault("MVar argument contradicts its binding proof: $primitive")
@@ -71,7 +71,7 @@ internal fun mVarExpression(operation: MVarOp, proof: CoreRepresentation, operan
         MVarOp.PUT -> PutMVarExpression(operands[0], operands[1], operands[2], async)
         MVarOp.TRY_PUT -> TryPutMVarExpression(operands[0], operands[1], operands[2])
         MVarOp.IS_EMPTY -> IsEmptyMVarExpression(operands[0], operands[1])
-    }.proven(proof.copy(evaluated = true))
+    }.proven(proof.withEvaluated(true))
 
 private abstract class MVarTupleExpression : Expr() {
     override fun execute(frame: VirtualFrame): Nothing = fault("Tuple primitive requires a destination")

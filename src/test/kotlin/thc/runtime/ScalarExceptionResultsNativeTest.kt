@@ -98,9 +98,9 @@ class ScalarExceptionResultsNativeTest {
                 CoreSynchronousExceptions.validate(name, arguments, flags, result)
                 val components = result.components!!
                 for (broken in listOf(
-                    result.copy(components = components.reversed()),
-                    result.copy(components = components + components.last()),
-                    result.copy(primReps = listOf("DoubleRep"))
+                    result.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, originalProof.primReps, components.reversed(), originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) },
+                    result.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, originalProof.primReps, components + components.last(), originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) },
+                    result.withPrimReps(listOf("DoubleRep"))
                 )) assertThrows(RuntimeFault::class.java, {
                     CoreSynchronousExceptions.validate(name, arguments, flags, broken)
                 }, "$stage/$entry/$name malformed result")
@@ -111,8 +111,8 @@ class ScalarExceptionResultsNativeTest {
                         "primReps" to components[1].primReps))
                 }
                 CoreSynchronousExceptions.validate(name, arguments, flags,
-                    result.copy(primReps = listOf("DoubleRep"), components = listOf(components[0],
-                        CoreRepresentation(CoreKind.DOUBLE, true, true, listOf("DoubleRep")))))
+                    result.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, listOf("DoubleRep"), listOf(components[0],
+                        CoreRepresentation(CoreKind.DOUBLE, true, true, listOf("DoubleRep"))), originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) })
                 assertThrows(RuntimeFault::class.java) {
                     CoreSynchronousExceptions.validate(name, arguments, flags.dropLast(1) + true, result)
                 }

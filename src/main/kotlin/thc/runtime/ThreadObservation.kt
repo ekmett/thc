@@ -23,7 +23,7 @@ internal object CoreThreadObservation {
 
 internal class ThreadObservation(private val listing: Boolean, @field:Child private var state: Expr,
                                  proof: CoreRepresentation) : Expr() {
-    init { representation = proof.copy(evaluated = true) }
+    init { representation = proof.withEvaluated(true) }
     override fun execute(frame: VirtualFrame): Nothing = fault("Thread observation requires a tuple destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         TupleResultsKt.requireVoidCarrier(state.execute(frame))

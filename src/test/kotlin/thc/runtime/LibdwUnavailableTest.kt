@@ -154,7 +154,7 @@ class LibdwUnavailableTest {
         org.junit.jupiter.api.Assumptions.assumeTrue(System.getProperty("os.name") == "Linux" &&
             System.getProperty("os.arch") in setOf("amd64", "x86_64"))
         val module = cFinalizerConsumer(originalLabel("free"))
-        val proof = CoreRepresentation(CoreKind.ADDRESS, evaluated = true, present = true, primReps = listOf("AddrRep"))
+        val proof = CoreRepresentation(CoreKind.ADDRESS, true, true, listOf("AddrRep"))
         for (backend in listOf("ast", "bytecode")) Context.newBuilder("thc").allowNativeAccess(true)
             .allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false")
             .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build().use { context ->
@@ -205,7 +205,7 @@ class LibdwUnavailableTest {
     }
 
     @Test fun certifiedLabelsUseContextOwnedNativeCallablesOnlyOnExplicitFinalization() {
-        val proof = CoreRepresentation(CoreKind.ADDRESS, evaluated = true, present = true, primReps = listOf("AddrRep"))
+        val proof = CoreRepresentation(CoreKind.ADDRESS, true, true, listOf("AddrRep"))
         Context.newBuilder("thc").allowNativeAccess(true).build().use { context ->
             context.initialize("thc"); context.enter()
             try {
@@ -219,7 +219,7 @@ class LibdwUnavailableTest {
                 assertThrows(RuntimeFault::class.java) { first.plus(0) }
                 assertThrows(RuntimeFault::class.java) { first.readWord8(0) }
                 assertThrows(RuntimeFault::class.java) { CFinalizerLabels.fromCore("enabled_capabilities", proof) }
-                assertThrows(RuntimeFault::class.java) { CFinalizerLabels.fromCore("libdwPoolRelease", proof.copy(primReps = listOf("WordRep"))) }
+                assertThrows(RuntimeFault::class.java) { CFinalizerLabels.fromCore("libdwPoolRelease", proof.withPrimReps(listOf("WordRep"))) }
                 val bytes = ManagedAllocation.mutable(16, 8)
                 for (index in 0L until 16L) bytes.writeByte(index, index + 17)
                 val pointer = ManagedAddress.fromAllocation(bytes)
@@ -401,7 +401,7 @@ class LibdwUnavailableTest {
                 val proof = CoreRepresentation(if (primitive == null) CoreKind.VOID else CoreKind.ADDRESS, true, true, listOfNotNull(primitive))
                 CoreLibdwForeign.validateOperand(operation, index, proof, proof)
                 assertThrows(RuntimeFault::class.java) {
-                    CoreLibdwForeign.validateOperand(operation, index, proof, proof.copy(kind = CoreKind.LONG, primReps = listOf("IntRep")))
+                    CoreLibdwForeign.validateOperand(operation, index, proof, proof.let { originalProof -> originalProof.copy(CoreKind.LONG, originalProof.evaluated, originalProof.present, listOf("IntRep"), originalProof.components, originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) })
                 }
             }
         }

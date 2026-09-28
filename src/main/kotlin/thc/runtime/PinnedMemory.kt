@@ -169,7 +169,7 @@ internal enum class PinnedMemoryOp(val primitive: String, val arguments: List<Li
  * does not have to materialize a virtual frame through an array-selected Expr. */
 internal class PinnedPointerIndexExpression(private val operation: PinnedMemoryOp, proof: CoreRepresentation, private val byteOffset: Boolean,
     @field:Child private var base: Expr, @field:Child private var index: Expr) : Expr() {
-    init { representation = proof.copy(evaluated = true) }
+    init { representation = proof.withEvaluated(true) }
     override fun execute(frame: VirtualFrame): Any = executeAddress(frame)
     override fun executeAddress(frame: VirtualFrame): ManagedAddress = when (operation) {
         PinnedMemoryOp.INDEX_ADDR_OFF -> base.executeRequiredAddress(frame)
@@ -184,7 +184,7 @@ internal class PinnedPointerIndexExpression(private val operation: PinnedMemoryO
  * Do not pass the virtual frame through an array-selected operand or enum arm. */
 internal class PinnedByteArrayContents(proof: CoreRepresentation,
     @field:Child private var array: Expr) : Expr() {
-    init { representation = proof.copy(evaluated = true) }
+    init { representation = proof.withEvaluated(true) }
     override fun execute(frame: VirtualFrame): ManagedAddress = executeAddress(frame)
     override fun executeAddress(frame: VirtualFrame): ManagedAddress =
         ManagedAddress.fromGuestByteArray(array.execute(frame))
@@ -192,7 +192,7 @@ internal class PinnedByteArrayContents(proof: CoreRepresentation,
 
 internal class PinnedScalarIndexExpression(private val operation: ManagedAddressRead, proof: CoreRepresentation, private val byteOffset: Boolean,
     @field:Child private var base: Expr, @field:Child private var index: Expr) : Expr() {
-    init { representation = proof.copy(evaluated = true) }
+    init { representation = proof.withEvaluated(true) }
     override fun execute(frame: VirtualFrame): Any = if (operation.isInt) executeInt(frame) else executeLong(frame)
     override fun executeInt(frame: VirtualFrame): Int = operation.readInt(
         base.executeRequiredAddress(frame), index.executeRequiredLong(frame), byteOffset)
@@ -203,7 +203,7 @@ internal class PinnedScalarIndexExpression(private val operation: ManagedAddress
 internal class PinnedPointerArrayWrite(proof: CoreRepresentation, private val byteOffset: Boolean,
     @field:Child private var array: Expr, @field:Child private var index: Expr,
     @field:Child private var address: Expr, @field:Child private var state: Expr) : Expr() {
-    init { representation = proof.copy(evaluated = true) }
+    init { representation = proof.withEvaluated(true) }
     override fun execute(frame: VirtualFrame): Any {
         val allocation = array.execute(frame)
         val element = index.executeRequiredLong(frame)
@@ -217,7 +217,7 @@ internal class PinnedPointerArrayWrite(proof: CoreRepresentation, private val by
 internal class PinnedPointerArrayRead(proof: CoreRepresentation, private val byteOffset: Boolean,
     @field:Child private var array: Expr, @field:Child private var index: Expr,
     @field:Child private var state: Expr) : Expr() {
-    init { representation = proof.copy(evaluated = true) }
+    init { representation = proof.withEvaluated(true) }
     override fun execute(frame: VirtualFrame): Any = fault("AddrArray# read requires a tuple destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val allocation = array.execute(frame)
@@ -230,7 +230,7 @@ internal class PinnedPointerArrayRead(proof: CoreRepresentation, private val byt
 
 internal class PinnedMemoryExpression(private val operation: PinnedMemoryOp, proof: CoreRepresentation,
     @field:Children private var operands: Array<Expr>, private val byteOffset: Boolean = false) : Expr() {
-    init { representation = proof.copy(evaluated = true) }
+    init { representation = proof.withEvaluated(true) }
     override fun execute(frame: VirtualFrame): Any = when {
         operation == PinnedMemoryOp.CONTENTS || operation == PinnedMemoryOp.MUTABLE_CONTENTS ->
             ManagedAddress.fromGuestByteArray(operands[0].execute(frame))

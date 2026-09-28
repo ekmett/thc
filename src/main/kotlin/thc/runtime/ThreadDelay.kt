@@ -35,7 +35,7 @@ internal class ThreadDelayToken(private val owner: GuestThreads, microseconds: L
 
 internal class DelayThread(@field:Child private var duration: Expr, @field:Child private var state: Expr,
                            private val async: Boolean, proof: CoreRepresentation) : Expr() {
-    init { representation = proof.copy(evaluated = true) }
+    init { representation = proof.withEvaluated(true) }
 
     private class Resume(private val node: DelayThread, private val token: ThreadDelayToken) : AstResumeStep {
         override fun resume(frame: VirtualFrame, input: Any?): Any {
