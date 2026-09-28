@@ -80,6 +80,19 @@ remaining inline, scalar raw-bit preservation, caller clones and context-local
 side targets. Explicit callback unit controls are distinct from the test that
 provokes the compiler's actual budget failure.
 
+## Stock-runtime entry recovery
+
+With stock Truffle, the compiler callback only records failure. The next fresh
+function entry claims the terminal failed task, clones the body with independent
+case targets and fresh loop state, and applies the finite extraction to that
+replacement. Entry publication adopts the child and reports the structural change
+atomically. Old `executeBody` paths, tail anchors and saved frames remain on their
+original body; no guest invocation is replayed. A failed same-frame side selects
+the corresponding nested region in the copied owning function, even when that
+function's enclosing target was successfully installed. Deferred default sides
+are also prepared independently for the replacement. See the
+[stock-runtime workflow](contributing.md) for eligibility and limitations.
+
 ## Internal tail-spill compaction
 
 Compaction covers synchronous, non-delimited, evaluated primitive scalar arms

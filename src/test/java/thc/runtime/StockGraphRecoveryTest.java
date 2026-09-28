@@ -7,6 +7,8 @@ import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.OptimizationFailedException;
 import com.oracle.truffle.api.bytecode.BytecodeConfig;
+import com.oracle.truffle.api.bytecode.LocalAccessor;
+import com.oracle.truffle.api.bytecode.ContinuationResult;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.nodes.Node;
@@ -14,6 +16,7 @@ import com.oracle.truffle.api.nodes.RepeatingNode;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.NodeUtil;
+import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.LoopNode;
 import com.oracle.truffle.compiler.TruffleCompilerListener;
 import com.oracle.truffle.runtime.AbstractCompilationTask;
@@ -35,12 +38,18 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Timeout;
 import thc.Language;
 import static org.junit.jupiter.api.Assertions.*;
 
 @Timeout(90)
 class StockGraphRecoveryTest {
+    @BeforeAll static void requireStockRuntime() {
+        var origin = Truffle.getRuntime().getClass().getProtectionDomain().getCodeSource().getLocation().getPath();
+        org.junit.jupiter.api.Assumptions.assumeTrue(origin.endsWith("/truffle-runtime-25.3.4.1.jar"),
+                "requires -Pthc.stockTruffle=true; the overlay retries inside compilation instead");
+    }
     @Test void stockAstOsrCallbackExposesOriginalOwnerThroughPublicChildren() { ownership(false); }
     @Test void stockBytecodeOsrCallbackExposesOriginalOwnerThroughPublicChildren() { ownership(true); }
     @Test void terminalStockFailureRecoversOnlyFreshEntryWithoutReplayingEffects() {
@@ -91,6 +100,18 @@ class StockGraphRecoveryTest {
         Truffle.getRuntime();
         Controls.lifecycle();
     }
+    @Test void bytecodeTypedLoansAndParkedPcsSurviveRealFailureRecovery() {
+        Truffle.getRuntime();
+        Controls.bytecodeTypedResume();
+    }
+    @Test void capturedOldLogicalThunkFirstSuspendsInFreshCompiledBody() {
+        Truffle.getRuntime();
+        Controls.capturedThunk();
+    }
+    @Test void oldTailAnchorRestartsOldBodyAfterAutomaticEntryReplacement() {
+        Truffle.getRuntime();
+        Controls.tailAnchor();
+    }
 
     private static void ownership(boolean bytecode) {
         try (var engine = Engine.newBuilder().allowExperimentalOptions(true)
@@ -110,6 +131,261 @@ class StockGraphRecoveryTest {
         private static final CoreRepresentation LONG = new CoreRepresentation(CoreKind.LONG, true, true,
                 List.of("IntRep"), null, null, null, null, null);
         private record Event(OptimizedCallTarget target, ContextRoot source, Object owner) {}
+
+        private static Context strictContext() {
+            return Context.newBuilder("thc").allowExperimentalOptions(true)
+                    .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                    .option("engine.SingleTierCompilationThreshold", "10000000")
+                    .option("engine.CompilationFailureAction", "Throw")
+                    .option("compiler.MaximumGraalGraphSize", "10000").build();
+        }
+        private static FunctionRoot capturedRoot(Language language, CaptureLayout capture, Expr body, Metrics metrics, boolean async) {
+            var layout = new FrameLayout(); int seed = layout.bind("seed", FrameSlotKind.Long);
+            return new FunctionRoot(language, layout.build(), "captured recovery", capture, new int[]{seed},
+                    new int[0], new int[0], body, metrics, new CoreRepresentation[0], LONG, null, new boolean[0],
+                    null, null, new int[0], null, async, new int[0][], false, FunctionRootRole.FUNCTION, !async);
+        }
+        private static final class CapturedWork extends Expr {
+            @Child private Expr heavy;
+            CapturedWork(AtomicInteger effects, AtomicReference<RootNode> source) {
+                heavy = new AstSameFrameArm(new Heavy(new long[4096], effects, source)); setRepresentation(LONG);
+            }
+            @Override public Object execute(VirtualFrame frame) {
+                try { return heavy.executeLong(frame) + frame.getLong(4); }
+                catch (com.oracle.truffle.api.nodes.UnexpectedResultException failure) { throw new AssertionError(failure); }
+            }
+        }
+        static void capturedThunk() {
+            try (var context = strictContext()) {
+                context.initialize("thc"); context.enter();
+                try {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    var owner = Language.currentState(); var metrics = new Metrics(true);
+                    var capture = new CaptureLayout(language, new boolean[]{true}, new boolean[]{true});
+                    var environment = capture.captureValues(new Object[]{23L});
+                    var effects = new AtomicInteger(); var source = new AtomicReference<RootNode>();
+                    var root = capturedRoot(language, capture, new CapturedWork(effects, source), metrics, true);
+                    var target = (OptimizedCallTarget) root.getCallTarget();
+                    var escaped = new Closure(environment, 0, target);
+                    assertThrows(OptimizationFailedException.class, () -> target.compile(true)); assertEquals(0, effects.get());
+                    assertEquals(-6705412340454524888L, Calls.target(target, new Object[]{0L, environment}));
+                    var fresh = (FunctionRoot) recovered(root).getRootNode(); assertSame(fresh, source.get());
+                    var optimized = (OptimizedCallTarget) fresh.getCallTarget();
+                    assertTrue(optimized.compile(true)); assertTrue(optimized.isValidLastTier());
+                    ((OptimizedTruffleRuntime) Truffle.getRuntime()).bypassedInstalledCode(optimized);
+                    assertSame(target, escaped.target); assertSame(environment, escaped.environment);
+                    assertSame(capture, environment.getLayout()); assertTrue(root.isSelf(optimized));
+                    var thunk = new Thunk(escaped.target, escaped.environment);
+                    var demand = new RootNode(language, new FrameLayout().build()) {
+                        @Child private Force force = new Force(metrics, true);
+                        @Override public Object execute(VirtualFrame frame) { return force.execute(frame, thunk); }
+                    }.getCallTarget();
+                    owner.getThreads().enterCurrent(null, false, true, null);
+                    try {
+                        var request = owner.getThreads().send(owner.getThreads().currentIdentity(), new Object());
+                        var suspension = assertThrows(ThunkSuspended.class, demand::call);
+                        assertSame(thunk, suspension.getThunk()); assertSame(request, suspension.getAsyncRequest());
+                        assertTrue(request.compiledCapture); assertEquals(5, thunk.getState());
+                        var saved = SavedGuestContinuations.savedGuestContinuation(thunk.getValue());
+                        assertNotNull(saved); assertSame(fresh, saved.getSourceRoot()); assertNotSame(root, saved.getSourceRoot());
+                        assertSame(request, saved.asyncRequest()); assertEquals(1, effects.get()); request.acknowledge();
+                        Object value = demand.call(); assertEquals(-6705412340454524888L, value);
+                        assertSame(value, demand.call()); assertEquals(2, thunk.getState()); assertEquals(2, effects.get());
+                        assertSame(fresh, source.get()); assertThrows(RuntimeFault.class, () -> saved.continueWith(Unit.INSTANCE));
+                        assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(root)); clean(language);
+                    } finally { owner.getThreads().leaveCurrent(GuestThreadStatus.FINISHED); }
+                } finally { context.leave(); }
+            }
+        }
+
+        private static final class AnchorWork extends Expr {
+            @Child private CapturedWork work;
+            @Child private DirectCallNode call;
+            private final com.oracle.truffle.api.RootCallTarget first;
+            private final AtomicInteger iterations;
+            AnchorWork(AtomicInteger effects, AtomicReference<RootNode> source, AtomicInteger iterations,
+                    com.oracle.truffle.api.RootCallTarget first) {
+                work = new CapturedWork(effects, source); this.iterations = iterations; this.first = first;
+                call = DirectCallNode.create(first); setRepresentation(LONG);
+            }
+            @Override public Object execute(VirtualFrame frame) {
+                Object result = work.execute(frame);
+                if (iterations.incrementAndGet() == 1)
+                    return AstControl.complete(this, Calls.direct(call, new Object[]{((GuestRoot) getRootNode()).bloom(frame)}), first, null, true);
+                return result;
+            }
+        }
+        static void tailAnchor() {
+            try (var context = strictContext()) {
+                context.initialize("thc"); context.enter();
+                try {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    var metrics = new Metrics(true); var capture = new CaptureLayout(language, new boolean[]{true}, new boolean[]{true});
+                    var environment = capture.captureValues(new Object[]{23L});
+                    FunctionRoot[] owner = new FunctionRoot[1]; int[] prefixes = new int[70];
+                    com.oracle.truffle.api.RootCallTarget next = null;
+                    for (int i = prefixes.length - 1; i >= 0; i--) {
+                        int index = i; var following = next;
+                        Expr side = new Expr() {
+                            @Child private DirectCallNode call = following == null ? null : DirectCallNode.create(following);
+                            @Child private TailCheck tail = new TailCheck(metrics);
+                            @Override public Object execute(VirtualFrame frame) {
+                                prefixes[index]++; long bloom = ((GuestRoot) getRootNode()).bloom(frame);
+                                if (following == null) {
+                                    tail.check(frame, owner[0].getCallTarget(), new Object[]{bloom, environment});
+                                    throw new AssertionError("saved old anchor must own its restart");
+                                }
+                                return AstControl.complete(this, Calls.direct(call, new Object[]{bloom}), following, null, true);
+                            }
+                        }.proven(LONG);
+                        next = new FunctionRoot(language, new FrameLayout().build(), "existing tail side " + i, null,
+                                new int[0], new int[0], new int[0], side, metrics, new CoreRepresentation[0], LONG, null,
+                                new boolean[0], null, null, new int[0], null, false, new int[0][], false,
+                                FunctionRootRole.PASS_THROUGH, true).getCallTarget();
+                    }
+                    var effects = new AtomicInteger(); var source = new AtomicReference<RootNode>(); var iterations = new AtomicInteger();
+                    var root = capturedRoot(language, capture, new AnchorWork(effects, source, iterations, next), metrics, false);
+                    owner[0] = root; var target = (OptimizedCallTarget) root.getCallTarget();
+                    var scope = AstStacks.astStackScope(root); AstTailAnchor saved;
+                    scope.setDriving(true);
+                    try { saved = assertInstanceOf(AstTailAnchor.class, Calls.target(target, new Object[]{0L, environment})); }
+                    finally { scope.setDriving(false); }
+                    assertSame(root, saved.getSourceRoot()); assertEquals(1, effects.get()); assertTrue(scope.getSpills() > 0);
+                    assertThrows(OptimizationFailedException.class, () -> target.compile(true)); assertEquals(1, effects.get());
+                    assertEquals(-6705412340454524888L, Calls.target(target, new Object[]{0L, environment}));
+                    var fresh = (FunctionRoot) recovered(root).getRootNode(); assertSame(fresh, source.get());
+                    assertTrue(((OptimizedCallTarget) fresh.getCallTarget()).compile(true));
+                    assertEquals(-6705412340454524888L, saved.continueWith(Unit.INSTANCE));
+                    assertSame(root, source.get(), "saved anchor restarts the original body, never the new entry");
+                    assertEquals(3, iterations.get()); for (int count : prefixes) assertEquals(1, count);
+                    assertEquals(1, scope.getTailAnchors()); assertNull(scope.getTailAnchor()); assertEquals(0, scope.getDepth());
+                    assertThrows(IllegalStateException.class, () -> saved.continueWith(Unit.INSTANCE));
+                    long entries = metrics.getCompiledEntries();
+                    assertEquals(-6705412340454524888L, Calls.target(target, new Object[]{0L, environment}));
+                    assertSame(fresh, source.get()); assertTrue(metrics.getCompiledEntries() > entries);
+                    assertEquals(4, effects.get()); assertTrue(root.isSelf(fresh.getCallTarget())); clean(language);
+                } finally { context.leave(); }
+            }
+        }
+
+        static void bytecodeTypedResume() {
+            try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                    .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                    .option("engine.SingleTierCompilationThreshold", "10000000")
+                    .option("engine.CompilationFailureAction", "Throw")
+                    .option("compiler.MaximumGraalGraphSize", "10000").build()) {
+                context.initialize("thc"); context.enter();
+                try {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    var owner = Language.currentState();
+                    var reference = new CoreRepresentation(CoreKind.OBJECT, false, true,
+                            List.of("BoxedRep (Just Lifted)"), null, null, null, null, null);
+                    var pair = new CoreRepresentation(CoreKind.UNKNOWN, true, true,
+                            List.of("IntRep", "BoxedRep (Just Lifted)"), List.of(LONG, reference), null, null, null, null);
+                    var arguments = ArgumentLayout.fromProofs(List.of(pair));
+                    var input = new TypedInputLayout(language, arguments, false); var tuple = new TupleShape(pair, language);
+                    var prefixes = new BytecodeCheckpoint(); prefixes.setArmed(true);
+                    var suffixes = new BytecodeCheckpoint(); suffixes.setArmed(true);
+                    var side = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT, b -> {
+                        b.beginRoot(); b.beginReturn(); emitArithmetic(b, 0, 1024, () -> b.emitLoadArgument(1));
+                        b.endReturn(); b.endRoot();
+                    }).getNode(0);
+                    side.configureCaseRegions(true, false, new BytecodeCaseRegion[0]);
+                    var capture = new BytecodeCaseRegion.Source(new LocalAccessor[][]{new LocalAccessor[0]}, null);
+                    LocalAccessor[] bloomSlot = new LocalAccessor[1], transactionSlot = new LocalAccessor[1];
+                    var root = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT, b -> {
+                        b.beginRoot(); b.beginBlock();
+                        var transaction = b.createLocal("transaction", FrameSlotKind.Object);
+                        transactionSlot[0] = LocalAccessor.constantOf(transaction);
+                        b.beginStaticStoreObject(transaction); b.emitCurrentTransaction(); b.endStaticStoreObject();
+                        var bloom = b.createLocal("bloom", FrameSlotKind.Long); bloomSlot[0] = LocalAccessor.constantOf(bloom);
+                        var number = b.createLocal("number", FrameSlotKind.Long);
+                        var ref = b.createLocal("reference", FrameSlotKind.Object);
+                        var result = b.createLocal("result", FrameSlotKind.Long);
+                        var entryMask = b.createLocal("entry mask", FrameSlotKind.Object);
+                        var activeMask = b.createLocal("active mask", FrameSlotKind.Object);
+                        var request = b.createLocal("request", FrameSlotKind.Object);
+                        b.emitRestoreTypedInput(new BytecodeTypedInputSlots(input, bloomSlot[0],
+                                new LocalAccessor[]{LocalAccessor.constantOf(number), LocalAccessor.constantOf(ref)},
+                                new int[]{0, 1}, new CoreRepresentation[]{LONG, reference}, null,
+                                new LocalAccessor[0], new CoreRepresentation[0]));
+                        b.beginStaticStoreObject(entryMask); b.emitCurrentMask(); b.endStaticStoreObject();
+                        for (var local : List.of(activeMask, request)) {
+                            b.beginStaticStoreObject(local); b.emitLoadNull(); b.endStaticStoreObject();
+                        }
+                        var complete = b.createLabel();
+                        b.beginIfThen(); b.emitInlineCaseRegions(); b.beginBlock();
+                        b.beginStaticStoreLong(result); emitArithmetic(b, 0, 1024, () -> b.emitStaticLoadLong(number));
+                        b.endStaticStoreLong(); b.emitBranch(complete); b.endBlock(); b.endIfThen();
+                        b.beginStaticStoreLong(result);
+                        b.beginCallCaseRegion(0, capture); b.emitStaticLoadLong(number); b.emitStaticLoadObject(entryMask);
+                        b.endCallCaseRegion(); b.endStaticStoreLong(); b.emitLabel(complete);
+                        b.emitCheckpointArmed(prefixes);
+                        b.beginIfThen(); b.emitPollAsync(request); b.beginBlock();
+                        b.beginReenterPendingAsyncMask(activeMask); b.beginYield();
+                        b.emitParkPendingAsyncMask(request, entryMask, activeMask);
+                        b.endYield(); b.endReenterPendingAsyncMask(); b.endBlock(); b.endIfThen();
+                        b.emitCheckpointArmed(suffixes);
+                        b.beginReturn(); b.emitFinishTuple(new BytecodeTupleSlots(tuple, new LocalAccessor[]{
+                                LocalAccessor.constantOf(result), LocalAccessor.constantOf(ref)})); b.endReturn();
+                        b.endBlock(); b.endRoot();
+                    }).getNode(0);
+                    root.configureCaseRegions(false, true, new BytecodeCaseRegion[]{new BytecodeCaseRegion(
+                            new Object[0], 1, new com.oracle.truffle.api.RootCallTarget[]{side.getCallTarget()},
+                            new CaptureLayout[]{null}, false)});
+                    root.configureAsync(true); root.configureStackDriver(new Metrics(true));
+                    root.configureStackTransaction(transactionSlot[0]);
+                    root.configureTypedInput(input); root.configureInput(arguments); root.configureTypedBloom(bloomSlot[0]);
+                    root.configureTupleResult(tuple); root.configureEntry(new boolean[]{false}, false);
+                    var target = (OptimizedCallTarget) root.getCallTarget();
+                    var lazy = new Thunk(new RootNode(language) {
+                        @Override public Object execute(VirtualFrame frame) { throw new AssertionError("lazy reference forced"); }
+                    }.getCallTarget(), null);
+                    owner.getThreads().enterCurrent(null, false, true, null);
+                    try {
+                        SynchronousMasking.set(root, MaskingState.MASKED_INTERRUPTIBLE);
+                        var oldRequest = owner.getThreads().send(owner.getThreads().currentIdentity(), new Object());
+                        var oldPacket = packet(input, 23L, lazy);
+                        var old = assertInstanceOf(ContinuationResult.class, Calls.target(target, new Object[]{oldPacket}));
+                        consumed(input, oldPacket); assertSame(oldRequest, old.getResult()); oldRequest.acknowledge();
+                        assertEquals(1, prefixes.getVisits().get()); assertEquals(0, suffixes.getVisits().get());
+                        var oldFrame = old.getFrame(); int oldPc = old.getContinuationRootNode().getLocation().getBytecodeIndex();
+                        assertSame(root, old.getContinuationRootNode().getSourceRootNode());
+                        SynchronousMasking.set(root, MaskingState.UNMASKED);
+                        assertSame(target, assertThrows(OptimizationFailedException.class, () -> target.compile(true)).getCallTarget());
+                        assertNotNull(root.graphFailure.get()); assertFalse(target.isSubmittedForCompilation());
+                        assertEquals(1, prefixes.getVisits().get());
+                        var nextPacket = packet(input, 29L, lazy);
+                        answer(language, tuple, Calls.target(target, new Object[]{nextPacket}), 553472L, lazy);
+                        consumed(input, nextPacket);
+                        var fresh = (BytecodeRoot) recovered(root).getRootNode();
+                        assertTrue(root.isSelf(fresh.getCallTarget())); assertSame(input, fresh.getTypedInput());
+                        assertSame(tuple, fresh.getTupleResult()); assertEquals(root.mask, fresh.mask);
+                        var optimized = (OptimizedCallTarget) fresh.getCallTarget();
+                        assertTrue(optimized.compile(true)); assertTrue(optimized.isValidLastTier());
+                        ((OptimizedTruffleRuntime) Truffle.getRuntime()).bypassedInstalledCode(optimized);
+                        var request = owner.getThreads().send(owner.getThreads().currentIdentity(), new Object());
+                        var lastPacket = packet(input, 31L, lazy);
+                        var saved = assertInstanceOf(ContinuationResult.class, Calls.target(target, new Object[]{lastPacket}));
+                        consumed(input, lastPacket); assertSame(request, saved.getResult());
+                        assertTrue(request.compiledCapture); assertTrue(prefixes.getCompiledVisits().get() > 0);
+                        assertSame(fresh, saved.getContinuationRootNode().getSourceRootNode()); request.acknowledge();
+                        answer(language, tuple, old.continueWith(Unit.INSTANCE), 547328L, lazy);
+                        assertEquals(MaskingState.MASKED_INTERRUPTIBLE, SynchronousMasking.current(root));
+                        answer(language, tuple, saved.continueWith(Unit.INSTANCE), 555520L, lazy);
+                        assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(root));
+                        assertSame(oldFrame, old.getFrame());
+                        assertEquals(oldPc, old.getContinuationRootNode().getLocation().getBytecodeIndex());
+                        assertSame(root, old.getContinuationRootNode().getSourceRootNode());
+                        assertEquals(3, prefixes.getVisits().get()); assertEquals(3, suffixes.getVisits().get());
+                        assertEquals(0, lazy.getState()); assertEquals(0, root.getGraphBudgetGeneration()); clean(language);
+                    } finally {
+                        SynchronousMasking.set(root, MaskingState.UNMASKED);
+                        owner.getThreads().leaveCurrent(GuestThreadStatus.FINISHED);
+                    }
+                } finally { context.leave(); }
+            }
+        }
 
         static void lifecycle() {
             try (var engine = Engine.newBuilder().allowExperimentalOptions(true)
