@@ -156,16 +156,16 @@ support for every dependency of the original package closure.
 | `minusAddr#` | Managed addresses can be subtracted only within the same backing allocation. Native/numeric addresses retain machine-word subtraction; unrelated managed allocations have no synthetic numeric separation. |
 | `remAddr#` | Uses unsigned remainder of the allocation-relative byte offset for managed addresses, real address bits for native/numeric addresses. It is not a physical-address alignment query for managed storage. |
 | `ltAddr#`, `leAddr#`, `gtAddr#`, `geAddr#` | Order aliases within one managed allocation, or compare numeric/native bits. Unrelated managed allocations do not acquire a fabricated total address order. |
-| `newPinnedByteArray#` | Allocates real stable native storage from creation, reclaimed with its last live owner/view. No copy-to-pin or per-call repinning. Ordinary `newByteArray#` remains moving heap storage. |
+| `newPinnedByteArray#` | Allocates real stable native storage from creation, reclaimed with its last live owner/view. No copy-to-pin or per-call repinning. Ordinary `newByteArray#` defaults to heap storage; the opt-in [native creation policy](bytearrays.md) changes physical backing without the strong-pinned contract. |
 | `newAlignedPinnedByteArray#` | Same native storage guarantee with actual requested power-of-two alignment. |
 | `byteArrayContents#` | Returns an alias retaining its backing storage, not an unconditional raw native address. Native projection has the `addr2Int#` restrictions above. |
 | `mutableByteArrayContents#` | Returns an alias without copying or pinning; explicitly pinned backing has a real stable native address, moving heap backing does not. |
 | `isByteArrayPinned#`, `isMutableByteArrayPinned#` | Report explicit native-backed pinning. Do not emulate GHC large-object or compact-region automatic pinning policy. |
-| `isByteArrayWeaklyPinned#`, `isMutableByteArrayWeaklyPinned#` | Currently report the same explicit pinning flag as the strong queries; no separate GHC weak-pinning allocation policy. |
+| `isByteArrayWeaklyPinned#`, `isMutableByteArrayWeaklyPinned#` | Report stable native backing, including ordinary arrays under the opt-in native creation policy. Such ordinary arrays remain strong-unpinned and compactable. |
 | `anyToAddr#` | Returns a weak opaque heap-identity handle. Equality/roundtrip work, but raw bytes, native projection and general pointer arithmetic do not. The caller must keep the evaluated referent alive, as required by GHC. |
 | `addrToAny#` | Recovers a live context-owned heap handle, not an arbitrary GHC heap object at native address bits. |
 | `shrinkMutableByteArray#` | Shrinks logical size in place and preserves aliases, but retains backing capacity. Partial truncation of a managed pointer cell is rejected. Host-injected raw byte arrays cannot be shrunk in place. |
-| `resizeMutableByteArray#` | Shrinks in place without copying; growth copies the prefix into a new **unpinned** heap allocation. Partial truncation of a managed pointer cell is rejected. No extra promise about old aliases beyond GHC's contract. |
+| `resizeMutableByteArray#` | Shrinks in place without copying; growth copies the prefix into a new **strong-unpinned** allocation using the context's guest storage policy (heap by default). Raw host arrays retain their heap resize path. Partial truncation of a managed pointer cell is rejected. No extra promise about old aliases beyond GHC's contract. |
 
 The following names spell out the pointer-cell boundary; they are not missing
 implementations of numeric reads/writes or atomics.

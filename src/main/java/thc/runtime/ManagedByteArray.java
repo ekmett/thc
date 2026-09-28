@@ -107,6 +107,10 @@ public final class ManagedByteArray {
         if (value instanceof byte[] bytes) return resize(bytes, size);
         throw fault("Expected a managed ByteArray#");
     }
+    public static Object resizeGuest(Object value, long size, boolean nativeBacking) {
+        if (value instanceof ManagedAllocation owner) return owner.resized(size, nativeBacking);
+        return resizeGuest(value, size);
+    }
     public static void shrinkGuest(Object value, long size) {
         if (!(value instanceof ManagedAllocation owner)) throw fault("shrinkMutableByteArray# requires an owned MutableByteArray#");
         owner.shrink(size);
@@ -416,6 +420,9 @@ public final class ManagedByteArray {
         return new byte[(int) size];
     }
     public static ManagedAllocation allocateGuest(long size) { return ManagedAllocation.mutable(size, (int) ValueLayout.ADDRESS.byteSize()); }
+    public static ManagedAllocation allocateGuest(long size, boolean nativeBacking) {
+        return nativeBacking ? ManagedAllocation.nativeMutable(size, (int) ValueLayout.ADDRESS.byteSize()) : allocateGuest(size);
+    }
     private static MemorySegment vectorSegment(byte[] bytes, long index, int stride, int vectorBytes) {
         if (bytes.length < vectorBytes || index < 0 || index > (long) (bytes.length - vectorBytes) / stride)
             throw fault("Vector ByteArray# range outside its backing storage");

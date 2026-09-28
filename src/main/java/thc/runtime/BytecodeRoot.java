@@ -4594,7 +4594,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static void allocate(VirtualFrame frame, LocalAccessor destination,
                 long size, Object state, @Bind("$node") Node node) {
             ManagedByteArray.requireState(state);
-            Object array = ManagedByteArray.allocateGuest(size);
+            Object array = ManagedByteArray.allocateGuest(size, Language.currentState(node).getNativeByteArrays());
             destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, array);
         }
     }
@@ -4608,7 +4608,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             ManagedByteArray.requireState(state);
             if (shrink) ManagedByteArray.shrinkGuest(array, size);
             else {
-                Object result = ManagedByteArray.resizeGuest(array, size);
+                Object result = ManagedByteArray.resizeGuest(array, size, Language.currentState(node).getNativeByteArrays());
                 destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
             }
         }
@@ -4679,10 +4679,12 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class SizeByteArray {
         @Specialization public static long size(Object value) { return ManagedByteArray.sizeGuest(value); }
     }
-    @Operation public static final class PinnedByteArray {
-        @Specialization public static long query(ManagedAllocation value) { return value.isPinned() ? 1L : 0L; }
-        @Specialization public static long query(byte[] value) { return 0L; }
-        @Fallback public static long invalid(Object value) { throw fail("Expected a managed ByteArray#"); }
+    @Operation
+    @ConstantOperand(type = boolean.class, name = "weak")
+    public static final class PinnedByteArray {
+        @Specialization public static long query(boolean weak, ManagedAllocation value) { return (weak ? value.hasNativeStorage() : value.isPinned()) ? 1L : 0L; }
+        @Specialization public static long query(boolean weak, byte[] value) { return 0L; }
+        @Fallback public static long invalid(boolean weak, Object value) { throw fail("Expected a managed ByteArray#"); }
     }
     @Operation public static final class ShrinkSmallArray {
         @Specialization public static Object shrink(Object reference, long size, Object state) {

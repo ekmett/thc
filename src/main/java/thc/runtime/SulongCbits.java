@@ -280,7 +280,7 @@ public final class SulongCbits {
             if (!call.timeClock()) address.cbitsSegment();
             try (var scope = new NativeLimbScope()) {
                 var owner = address.cbitsOwner();
-                var pointer = !call.timeClock() && owner != null && owner.isPinned() ? scope.borrow(address, 16) : scope.allocate(16);
+                var pointer = !call.timeClock() && owner != null && owner.hasNativeStorage() ? scope.borrow(address, 16) : scope.allocate(16);
                 Object result = interop.execute(foreignFunction(call.unit(), call.symbol()), clock, pointer);
                 if (!interop.fitsInInt(result)) throw fault("CAPI result is not a CInt: " + call.symbol());
                 long value = interop.asInt(result);
@@ -324,7 +324,7 @@ public final class SulongCbits {
             var pointer = registry.transport(address);
             if (pointer == null) throw fault("Missing immutable native image"); return pointer;
         };
-        LongSupplier nativeAddress = owner != null && owner.isPinned() ? () -> address.toNativeBits() - address.cbitsOffset() : null;
+        LongSupplier nativeAddress = owner != null && owner.hasNativeStorage() ? () -> address.toNativeBits() - address.cbitsOffset() : null;
         buffer = new CbitsBuffer(bytes, address.cbitsWritable(), () -> address.cbitsSize(), 0, image, nativeAddress);
         buffers.put(key, new WeakReference<>(buffer)); return buffer;
     }
@@ -346,7 +346,7 @@ public final class SulongCbits {
             if (pointer == null) throw fault("Missing immutable callback pointer image"); return pointer;
         };
         var owner = address.cbitsOwner();
-        LongSupplier nativeAddress = allowNativePointer && owner != null && owner.isPinned() ? () -> address.toNativeBits() - address.cbitsOffset() : null;
+        LongSupplier nativeAddress = allowNativePointer && owner != null && owner.hasNativeStorage() ? () -> address.toNativeBits() - address.cbitsOffset() : null;
         return new CbitsBuffer(address.cbitsBuffer(), address.cbitsWritable(),
             () -> address.cbitsSize(), address.cbitsOffset(), image, nativeAddress);
     }

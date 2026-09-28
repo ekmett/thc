@@ -66,7 +66,7 @@ public final class CompactImages {
             catch (IOException failure) { throw propagate(failure); }
             var blocks = new ArrayList<ManagedAddress>();
             for (int offset = 0; offset < bytes.length; offset += BLOCK_BYTES)
-                blocks.add(ManagedAddress.fromAllocation(ManagedAllocation.immutable(
+                blocks.add(ManagedAddress.fromAllocation(ManagedAllocation.immutableGuest(
                     Arrays.copyOfRange(bytes, offset, Math.min(bytes.length, offset + BLOCK_BYTES)), 8)));
             exports.put(region, new Export(region.getGeneration(), blocks));
             return blocks.getFirst();
@@ -264,9 +264,13 @@ public final class CompactImages {
                 }
                 case ALLOCATION -> {
                     int width = input.readInt(); if (width != 4 && width != 8) throw invalid();
-                    nodes[index] = ManagedAllocation.immutable(input.readNBytes(size(input, 1)), width);
+                    nodes[index] = ManagedAllocation.immutableGuest(input.readNBytes(size(input, 1)), width);
                 }
-                case BYTES -> nodes[index] = input.readNBytes(size(input, 1));
+                case BYTES -> {
+                    byte[] payload = input.readNBytes(size(input, 1));
+                    nodes[index] = thc.Language.currentState().getNativeByteArrays()
+                        ? ManagedAllocation.immutableGuest(payload, 8) : payload;
+                }
                 case ARRAY, SMALL_ARRAY -> {
                     int length = size(input, 4);
                     var fields = new int[length];

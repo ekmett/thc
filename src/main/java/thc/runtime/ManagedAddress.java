@@ -72,7 +72,7 @@ public final class ManagedAddress {
     public ManagedNativeAllocations.Owner nativeAllocation() { return nativeOwner; }
     public PackageReturnedAddress returnedAddress() { return foreign; }
     public Long numericBits() { return numeric; }
-    public boolean hasNativeStorage() { return nativeOwner != null || owner != null && owner.isPinned(); }
+    public boolean hasNativeStorage() { return nativeOwner != null || owner != null && owner.hasNativeStorage(); }
     public boolean isNativeBase() { return nativeOwner != null && offset == 0; }
     // A nullable resource preserves the original no-native-owner loan without a wrapper.
     ManagedNativeAllocations.Owner.Borrow borrow() { return nativeOwner == null ? null : nativeOwner.borrow(); }

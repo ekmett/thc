@@ -183,7 +183,7 @@ public final class PackageScalarAccess extends Node {
                         return image;
                     };
                     var owner = address.cbitsOwner();
-                    LongSupplier nativeAddress = owner != null && owner.isPinned()
+                    LongSupplier nativeAddress = owner != null && owner.hasNativeStorage()
                         ? () -> address.toNativeBits() - address.cbitsOffset() : null;
                     buffer.transport = new CbitsBuffer(address.cbitsBuffer(), buffer.writable,
                         () -> address.cbitsSize(), 0, nativeImage, nativeAddress, address.cbitsStorageKey());
@@ -303,7 +303,7 @@ public final class PackageScalarAccess extends Node {
             }
             if (!candidate.hasNativeStorage()) continue;
             var allocation = candidate.cbitsOwner();
-            long candidateBits = allocation != null && allocation.isPinned()
+            long candidateBits = allocation != null && allocation.hasNativeStorage()
                 ? allocation.nativeSegment().address() + candidate.cbitsOffset() : candidate.toNativeBits();
             long base = candidateBits - candidate.cbitsOffset();
             long displacement = bits - base;

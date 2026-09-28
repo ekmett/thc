@@ -23,6 +23,8 @@ import thc.runtime.*;
 public final class Language extends TruffleLanguage<Language.State> {
     @Option(name = "ThreadHosting", help = "Guest thread host: platform (default) or experimental loom (pinned JDK 25).", category = OptionCategory.USER)
     static final OptionKey<String> THREAD_HOSTING = new OptionKey<>("platform");
+    @Option(name = "ByteArrayStorage", help = "Ordinary guest byte-array backing: heap (default) or native (requires native access).", category = OptionCategory.USER)
+    static final OptionKey<String> BYTE_ARRAY_STORAGE = new OptionKey<>("heap");
     @Override protected OptionDescriptors getOptionDescriptors() { return new LanguageOptionDescriptors(); }
     // Layout interning belongs to a context even when the language instance is shared.
     public HandoffLayouts getHandoffLayouts() { return currentState(null).handoffLayouts; }
@@ -37,6 +39,7 @@ public final class Language extends TruffleLanguage<Language.State> {
 
     public static final class State {
         private final Env env;
+        private final boolean nativeByteArrays;
         private final AtomicReference<GuestShutdown> shutdown;
         private final ManagedExportRegistry managedExports;
         private final ManagedForeignRoots foreignRoots;
@@ -92,6 +95,14 @@ public final class Language extends TruffleLanguage<Language.State> {
         private final AtomicReference<FutureTask<LimbProvider>> nativeLimbs;
         public State(Env env, Language language) {
             this.env = env;
+            nativeByteArrays = switch (env.getOptions().get(BYTE_ARRAY_STORAGE)) {
+                case "heap" -> false;
+                case "native" -> {
+                    if (!env.isNativeAccessAllowed()) throw new IllegalArgumentException("Native byte-array storage requires native access");
+                    yield true;
+                }
+                default -> throw new IllegalArgumentException("ByteArrayStorage must be heap or native");
+            };
             shutdown = new AtomicReference<>();
             managedExports = new ManagedExportRegistry(this, language);
             foreignRoots = new ManagedForeignRoots(this);
@@ -142,6 +153,7 @@ public final class Language extends TruffleLanguage<Language.State> {
             nativeLimbs = new AtomicReference<>();
         }
         public Env getEnv() { return env; }
+        public boolean getNativeByteArrays() { return nativeByteArrays; }
         public AtomicReference<GuestShutdown> getShutdown() { return shutdown; }
         public ManagedExportRegistry getManagedExports() { return managedExports; }
         public ManagedForeignRoots getForeignRoots() { return foreignRoots; }

@@ -7746,7 +7746,8 @@ public final class BytecodeProgram implements ExecutableProgram {
                     case COPY_MUTABLE, COPY_MUTABLE_NON_OVERLAPPING -> b.beginCopyMutableByteArray(operation == ByteArrayOp.COPY_MUTABLE_NON_OVERLAPPING);
                     case WRITE, WRITE_INT8, WRITE_CHAR -> b.beginWriteByteArray();
                     case SIZE, SIZE_MUTABLE -> b.beginSizeByteArray();
-                    case IS_PINNED, IS_MUTABLE_PINNED, IS_WEAKLY_PINNED, IS_MUTABLE_WEAKLY_PINNED -> b.beginPinnedByteArray();
+                    case IS_PINNED, IS_MUTABLE_PINNED -> b.beginPinnedByteArray(false);
+                    case IS_WEAKLY_PINNED, IS_MUTABLE_WEAKLY_PINNED -> b.beginPinnedByteArray(true);
                     case INDEX -> b.beginIndexByteArray();
                     case INDEX_CHAR -> b.beginIndexCharArray();
                     case INDEX_WIDE_CHAR -> b.beginIndexWideCharArray(byteOffset);

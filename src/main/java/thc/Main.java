@@ -23,6 +23,8 @@ public final class Main {
 
     public static Context.Builder withContextProfile(Context.Builder builder, ContextProfile profile) {
         builder.allowCreateThread(true).useSystemExit(false);
+        if (profile == ContextProfile.LAUNCHER)
+            builder.option("thc.ByteArrayStorage", System.getProperty("thc.byteArrayStorage", "heap"));
         if (profile == ContextProfile.NATIVE) return builder;
         builder.allowExperimentalOptions(true)
             .option("engine.BackgroundCompilation", "false")
