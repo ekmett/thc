@@ -80,6 +80,7 @@ public final class ManagedExportValue implements TruffleObject {
                 return callbacks == null ? result.toHost(boxed) : result.toNative(boxed, callbacks);
             } catch (ThunkSuspended suspended) { throw AsyncContinuations.publicSuspension(suspended, dispatch); }
             catch (CallSegmentSuspended suspended) { throw AsyncContinuations.publicSuspension(suspended, dispatch); }
+            catch (AsyncDelivery delivered) { throw AsyncContinuations.uncaught(delivered.getRequest(), dispatch); }
         } catch (Throwable failure) {
             outcome = GuestThreadStatus.uncaught(failure);
             if (failure instanceof GuestException guest) dispatch.escaping(guest);

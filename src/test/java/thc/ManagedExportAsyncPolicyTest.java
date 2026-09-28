@@ -3,12 +3,18 @@
 package thc;
 
 import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.RootCallTarget;
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.interop.InteropLibrary;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicReference;
 import org.graalvm.polyglot.*;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import thc.runtime.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static thc.CoreBackendTestSupport.*;
@@ -93,6 +99,134 @@ class ManagedExportAsyncPolicyTest {
     }
     @Test void directExportsPreserveTheirExecutableAsyncPolicy() throws Exception { checkPolicy(false); }
     @Test void safeCrossContextImportsPreserveExporterPolicyAndRestoreCaller() throws Exception { checkPolicy(true); }
+
+    private Map<String, Object> binder(String id, Map<String, Object> proof, boolean lifted) {
+        return map("id", id, "name", id, "lifted", lifted, "rep", proof);
+    }
+    private List<Object> variable(String id, Map<String, Object> proof) { return list("var", id, map("rep", proof)); }
+    private ManagedExportValue selfDeliveryExport(String backend, boolean async, AtomicReference<AsyncRequest> request,
+            AtomicReference<GuestThreadId> identity) {
+        var owner = Language.currentState();
+        var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+        var threadRep = map("kind", "object", "primReps", list("BoxedRep (Just Unlifted)"), "evaluated", true);
+        var threadTuple = map("kind", "unknown", "aggregate", "unboxed-tuple", "components", list(stateRep, threadRep),
+            "primReps", list("BoxedRep (Just Unlifted)"), "evaluated", true);
+        var ioResult = map("kind", "unknown", "aggregate", "unboxed-tuple", "components", list(stateRep, dataRep),
+            "primReps", list("BoxedRep (Just Lifted)"), "evaluated", true);
+        var result = list("app", list("con", "StateResult", 2), list(variable("after", stateRep), variable("x", dataRep)),
+            list(false, true), true, true, map("rep", ioResult));
+        var kill = list("app", list("prim", "killThread#"), list(variable("tid", threadRep), variable("x", dataRep), variable("s1", stateRep)),
+            list(false, true, false), false, false, map("rep", stateRep));
+        var killed = list("case", kill, "after", list(list("default", null, list(), result)),
+            map("rep", ioResult, "binder", binder("after", stateRep, false)));
+        var current = list("app", list("prim", "myThreadId#"), list(variable("s", stateRep)),
+            list(false), false, false, map("rep", threadTuple));
+        var action = list("case", current, "current", list(list("data", "StateThread", list("s1", "tid"), killed,
+            map("binders", list(binder("s1", stateRep, false), binder("tid", threadRep, false))))),
+            map("rep", ioResult, "binder", binder("current", threadTuple, false)));
+        var traced = list("app", list("prim", "traceEvent#"), list(list("lit", "string-bytes", "73656c662d6578706f7274"), variable("s", stateRep)),
+            list(false, false), false, false, map("rep", stateRep));
+        var body = list("case", traced, "traced", list(list("default", null, list(), action)),
+            map("rep", ioResult, "binder", binder("traced", stateRep, false)));
+        var source = map("bindings", list(map("id", "model:Export.self", "name", "self", "arity", 2, "lifted", true, "rep", closureRep,
+                "expr", list("lam", list(binder("x", dataRep, true), binder("s", stateRep, false)), body, map("rep", closureRep, "resultRep", ioResult)))),
+            "constructors", list(map("id", "StateThread", "name", "StateThread", "kind", "unboxed-tuple", "arity", 2),
+                map("id", "StateResult", "name", "StateResult", "kind", "unboxed-tuple", "arity", 2),
+                map("id", "ghc-internal:GHC.Internal.Int.I32#", "name", "I32#", "kind", "boxed", "arity", 1,
+                    "fieldReps", list(list("Int32Rep")), "strictFields", list(false), "fieldLifted", list(false))));
+        ExecutableProgram program = backend.equals("ast") ? new Program(language, source, async, false) : new BytecodeProgram(language, source, async);
+        var original = (Closure) program.entryValue("model:Export.self");
+        var root = (GuestRoot) original.target.getRootNode();
+        // Observe the real lowered self-kill token before boundary cleanup, without
+        // replacing delivery, acknowledging it, or fabricating a control signal.
+        var observed = new GuestRoot(language, new FrameLayout().build()) {
+            @Override public boolean getAsynchronousExceptions() { return async; }
+            @Override public long bloom(VirtualFrame frame) { return 0L; }
+            @Override public Object execute(VirtualFrame frame) {
+                identity.set(owner.getThreads().currentIdentity());
+                assertEquals(MaskingState.UNMASKED, owner.getMaskingState().get());
+                assertEquals(async, owner.getThreads().pollState(Thread.currentThread()).getCurrent().getExternalAsync());
+                try {
+                    Object answer = Calls.target(original.target, frame.getArguments());
+                    var saved = SavedGuestContinuations.savedGuestContinuation(answer instanceof TailYield tail ? tail.getContinuation()
+                        : answer instanceof AstTailYield tail ? tail.getContinuation() : answer);
+                    if (saved != null) request.set(saved.asyncRequest());
+                    return answer;
+                } catch (AsyncDelivery delivered) {
+                    request.set(delivered.getRequest());
+                    throw delivered;
+                }
+            }
+        };
+        observed.configureInputProofs(root.getInputProofs()); observed.configureInput(root.getInputLayout());
+        observed.configureEntry(root.getEntryStrict(), original.environment != null); observed.configureTypedInput(root.getTypedInput());
+        observed.configureTupleResult(root.getTupleResult());
+        var target = observed.getCallTarget();
+        var entry = new Closure(original.environment, original.supplied, original.arity, target, original.suppliedCount, original.typedSupplied);
+        var observingProgram = new ExecutableProgram() {
+            @Override public boolean getAsynchronousExceptions() { return program.getAsynchronousExceptions(); }
+            @Override public RootCallTarget hostEntryTarget(int arity) { return program.hostEntryTarget(arity); }
+            @Override public Object entryValue(String name) { return entry; }
+            @Override public RootCallTarget entryTarget(String name) { return target; }
+            @Override public DataLayout constructorLayout(String id) { return program.constructorLayout(id); }
+            @Override public Map<String, Object> diagnostics() { return program.diagnostics(); }
+        };
+        var signature = new ManagedExportSignature("model", "Export", "self", "model:Export.self", list(scalar), scalar, true, 64,
+            CoreRepresentations.parse(ioResult));
+        return new ManagedExportValue(owner.getManagedExports(), owner, language, observingProgram, signature);
+    }
+    private void checkSelfDelivery(String backend, boolean async, boolean callback) throws Exception {
+        var request = new AtomicReference<AsyncRequest>();
+        var identity = new AtomicReference<GuestThreadId>();
+        var output = new ByteArrayOutputStream();
+        try (var context = Context.newBuilder("thc").err(output).build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var owner = Language.currentState(); var threads = owner.getThreads();
+                var entry = selfDeliveryExport(backend, async, request, identity);
+                var interop = InteropLibrary.getUncached();
+                GuestException guest;
+                if (callback) {
+                    threads.enterCurrent(MaskingState.MASKED_UNINTERRUPTIBLE, false, true, null);
+                    var caller = threads.currentIdentity();
+                    var pending = threads.send(caller, "suspended caller");
+                    try {
+                        var permission = threads.enterForeign(ForeignSafety.SAFE);
+                        try {
+                            var failure = assertThrows(ForeignCallbackAsyncFailure.class, () -> interop.execute(entry, 19));
+                            guest = assertInstanceOf(GuestException.class, failure.getCause());
+                            assertSame(guest.getPayload(), failure.getPayload());
+                            assertSame(caller, threads.currentIdentity());
+                            assertNull(threads.poll(null, false), "Callback exit restores foreign permission");
+                        } finally { threads.leaveForeign(permission); }
+                        assertNotSame(caller, identity.get()); assertTrue(identity.get().getCallback());
+                        assertEquals(GuestThreadStatus.DIED, threads.status(identity.get()));
+                        assertSame(caller, threads.currentIdentity()); assertEquals(GuestThreadStatus.RUNNING, threads.status(caller));
+                        assertEquals(MaskingState.MASKED_UNINTERRUPTIBLE, owner.getMaskingState().get());
+                        assertEquals(AsyncRequestState.PENDING, pending.getState(), "Callback must not consume its caller's request");
+                    } finally { pending.cancel(); threads.leaveCurrent(); }
+                } else guest = assertThrows(GuestException.class, () -> interop.execute(entry, 19));
+                var delivered = Objects.requireNonNull(request.get());
+                assertTrue(delivered.getForceSelf()); assertEquals(AsyncRequestState.ACKNOWLEDGED, delivered.getState());
+                assertSame(delivered.getPayload(), guest.getPayload());
+                var payload = assertInstanceOf(DataValue.class, guest.getPayload());
+                assertEquals("ghc-internal:GHC.Internal.Int.I32#", payload.getLayout().getId());
+                assertEquals(19, payload.getLayout().read(payload, 0));
+                assertEquals(GuestThreadStatus.DIED, identity.get().getLastOutcome());
+                assertNull(threads.pollState(Thread.currentThread()).getCurrent());
+                assertEquals("[thc trace event] self-export\n", output.toString(StandardCharsets.UTF_8));
+            } finally { context.leave(); }
+        }
+    }
+    @ParameterizedTest @CsvSource({"ast,false", "ast,true", "bytecode,false", "bytecode,true"})
+    void uncaughtIoSelfDeliveryAcknowledgesTheOriginalPayload(String backend, boolean async) throws Exception {
+        checkSelfDelivery(backend, async, false);
+    }
+    @ParameterizedTest @CsvSource({"ast,false", "ast,true", "bytecode,false", "bytecode,true"})
+    void safeCallbackSelfDeliveryAcknowledgesItsPayloadAndRestoresTheCaller(String backend, boolean async) throws Exception {
+        checkSelfDelivery(backend, async, true);
+    }
+
     @Test void privateDescriptorSnapshotKeepsArityAndHostValidationBeforeEffects() {
         for (String backend : list("ast", "bytecode")) {
             var output = new ByteArrayOutputStream();
