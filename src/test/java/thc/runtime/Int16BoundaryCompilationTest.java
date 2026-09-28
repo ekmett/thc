@@ -11,7 +11,7 @@ import org.junit.jupiter.api.parallel.Isolated;
 @Isolated("Retires the JVM-wide Truffle call-boundary stub")
 @Execution(ExecutionMode.SAME_THREAD)
 class Int16BoundaryCompilationTest {
-    @Test void compilationRestoresRetiredBoundaryBeforeFirstTwoRootCall() {
-        new Int16ArrayNativeTest().checkRetiredBoundaryBeforeFirstTwoRootCall$org_intelligence_thc_test();
+    @Test void compilationRestoresRetiredBoundaryBeforeFirstTwoRootCall() throws Exception {
+        new Int16ArrayNativeTest().checkRetiredBoundaryBeforeFirstTwoRootCall();
     }
 }

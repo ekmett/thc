@@ -1308,7 +1308,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
             self.assertIn("thc.runtime.OriginalCurrentDirectoryTest", self.policy["owners"][path]["junit"], path)
 
     def test_array_core_helper_selects_all_consuming_suites(self):
-        group = self.policy["owners"]["src/test/kotlin/thc/runtime/ArrayCoreEvidence.kt"]
+        group = self.policy["owners"]["src/test/java/thc/runtime/ArrayCoreEvidence.java"]
         consumers = set()
         for path in (self.root / "src/test").glob("*/thc/runtime/*"):
             if path.suffix not in (".kt", ".java"):
@@ -1343,8 +1343,8 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
 
     def test_int16_boundary_control_tracks_its_helper_and_genuine_inputs(self):
         expected = {"thc.runtime.Int16ArrayNativeTest", "thc.runtime.Int16BoundaryCompilationTest"}
-        for path in ("src/test/kotlin/thc/runtime/Int16ArrayNativeTest.kt",
-                     "src/test/kotlin/thc/runtime/ArrayCoreEvidence.kt",
+        for path in ("src/test/java/thc/runtime/Int16ArrayNativeTest.java",
+                     "src/test/java/thc/runtime/ArrayCoreEvidence.java",
                      "compiler/test-fixtures/Int16ArrayAudit.hs",
                      "examples/THC/Unboxed16Arrays.hs", "test/haskell-fixtures/Main.hs"):
             self.assertTrue(expected <= set(self.policy["owners"][path]["junit"]), path)
