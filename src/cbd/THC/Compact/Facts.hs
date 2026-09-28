@@ -73,7 +73,7 @@ data ScalarLink = ScalarLink !LinkPayload ![ScalarABI] deriving (Eq, Show)
 data NativeABI = NativeABI !BS.ByteString !BS.ByteString !Convention !Safety
   ![BS.ByteString] !BS.ByteString deriving (Eq, Show)
 data NativeLink = NativeLink !LinkPayload ![NativeABI] !(Presence NativeBuildInputs)
-  !(Presence [BS.ByteString]) ![BS.ByteString] deriving (Eq, Show)
+  !(Presence (BS.ByteString,BS.ByteString)) !(Presence [BS.ByteString]) ![BS.ByteString] deriving (Eq, Show)
 data NativeBuildInputs = NativeBuildInputs ![CompileGroup] ![NativeProvider]
   !(Presence [NativeDependency]) ![NativeLibrary] ![BS.ByteString] ![ArgumentBridge]
   deriving (Eq, Show)
@@ -99,10 +99,7 @@ data NativePiece = NativePiece !BS.ByteString !BS.ByteString !BS.ByteString
   !BS.ByteString !BS.ByteString !CompileInput deriving (Eq, Show)
 data NativeArchive = NativeArchive !Word64 !BS.ByteString !BS.ByteString !BS.ByteString !BS.ByteString
   ![EmittedCall] !(Presence BS.ByteString) ![BS.ByteString] !(Presence NativeLink)
-  !(Presence [EmittedCall]) !(Presence EntryResolution) deriving (Eq, Show)
-data EntryResolution = EntryResolution !Word64 !BS.ByteString !BS.ByteString
-  ![EntryClosure] !BS.ByteString ![BS.ByteString] deriving (Eq, Show)
-data EntryClosure = EntryClosure !BS.ByteString !BS.ByteString ![BS.ByteString] deriving (Eq, Show)
+  !(Presence [EmittedCall]) deriving (Eq, Show)
 data QualifiedName = QualifiedName !BS.ByteString !BS.ByteString !BS.ByteString !BS.ByteString
   deriving (Eq, Show)
 data ForeignType = ForeignTyCon !QualifiedName ![ForeignType]

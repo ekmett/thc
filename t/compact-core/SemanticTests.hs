@@ -19,7 +19,7 @@ import Control.Monad (forM, forM_)
 import qualified Data.ByteString as BS
 import Data.Either (isLeft)
 import Data.Foldable (toList)
-import Data.Aeson (Value(..), toJSON)
+import Data.Aeson (Value(..), toJSON, object, (.=))
 import qualified Data.Aeson.KeyMap as KM
 import Data.Binary.Get (getByteString, getWord64le)
 import Data.IORef
@@ -257,8 +257,8 @@ semanticTests = TestList
             nominal nominal "representational" (Just (["AddrRep"],"void"))
           imports2 = ImportProof 2 scope execution profile owner name
             (ImportsVerified wordBits productRecord imports calls [address])
-          NativeLink (LinkPayload _ format linkProfile unit target component digest artifact) abi inputs entries _ = completeNativeLink
-          linked2 = NativeLink (LinkPayload 2 format linkProfile unit target component digest artifact) abi inputs entries ["adapter"]
+          NativeLink (LinkPayload _ format linkProfile unit target component digest artifact) abi inputs companion dataSymbols _ = completeNativeLink
+          linked2 = NativeLink (LinkPayload 2 format linkProfile unit target component digest artifact) abi inputs companion dataSymbols ["adapter"]
           facts = completeFacts {factsPendingProvenance =
             [Missing,Known (ImportsRecord imports2),Known (ImportsRecord imports2),Missing,Missing,Missing,
              Known (NativeLinkRecord linked2),Missing]}
@@ -267,6 +267,26 @@ semanticTests = TestList
       withEncoded (\_ encoder -> encodeFacts encoder facts) $ \payload strings bytes -> do
         assertEqual "callback inventory is metadata, not executable DATA" BS.empty payload
         assertEqual "versioned address identity, type and native roots survive" (Right facts) (decodeFacts bytes strings)
+  , TestLabel "native companion bytes and data entries survive compact metadata" $ TestCase $ do
+      let original = moduleJSON completeFacts {factsPendingProvenance =
+            [Missing,Missing,Missing,Missing,Missing,Missing,Known (NativeLinkRecord completeNativeLink),Missing]} []
+          amend (Object fields) | Just (Object link) <- KM.lookup "packageNativeLink" fields =
+            Object (KM.insert "packageNativeLink" (Object $ KM.insert "dataSymbols" (toJSON (["data_adapter"] :: [String])) $
+              KM.insert "nativeLibrary" (object ["sha256" .= (replicate 64 'a'), "hex" .= ("00ff427f" :: String)]) $
+              KM.delete "availableEntries" link) fields)
+          amend value = value
+          expected = amend original
+      (facts, bindings) <- either fail pure (parseModuleWithoutDebug expected)
+      assertEqual "no companion bytes or data entry identity lost" expected (moduleJSON facts bindings)
+      withEncoded (\_ encoder -> encodeFacts encoder facts) $ \_ strings payload ->
+        assertEqual "native metadata survives typed wire encoding" (Right facts) (decodeFacts payload strings)
+  , TestLabel "retired partial native protocols cannot become executable metadata" $ TestCase $ do
+      let original = moduleJSON completeFacts {factsPendingProvenance =
+            [Missing,Missing,Missing,Missing,Missing,Missing,Known (NativeLinkRecord completeNativeLink),Missing]} []
+          amend (Object fields) | Just (Object link) <- KM.lookup "packageNativeLink" fields =
+            Object (KM.insert "packageNativeLink" (Object $ KM.insert "availableEntries" (toJSON (["adapter"] :: [String])) link) fields)
+          amend value = value
+      assertBool "retired selected-entry proof rejected" (isLeft (parseModuleWithoutDebug (amend original)))
   , TestLabel "native artifact conversion rejects malformed hex and unknown nested facts" $ TestCase $ do
       let original = moduleJSON completeFacts {factsPendingProvenance =
             [Missing,Missing,Missing,Missing,Missing,Known (ScalarLinkRecord completeScalarLink),Missing,Missing]} []
@@ -454,8 +474,8 @@ nativeFactsWithFlags :: [(BS.ByteString,Bool)] -> Facts
 nativeFactsWithFlags flags = nativeProvenanceFacts
   {factsPendingProvenance=map replace (factsPendingProvenance nativeProvenanceFacts)}
   where
-    replace (Known (NativeLinkRecord (NativeLink payload abi (Known (NativeBuildInputs units providers (Known dependencies) libraries unresolved bridges)) entries finalizers))) =
-      Known (NativeLinkRecord (NativeLink payload abi (Known (NativeBuildInputs units providers (Known (map dependency dependencies)) libraries unresolved bridges)) entries finalizers))
+    replace (Known (NativeLinkRecord (NativeLink payload abi (Known (NativeBuildInputs units providers (Known dependencies) libraries unresolved bridges)) companion dataSymbols finalizers))) =
+      Known (NativeLinkRecord (NativeLink payload abi (Known (NativeBuildInputs units providers (Known (map dependency dependencies)) libraries unresolved bridges)) companion dataSymbols finalizers))
     replace value = value
     dependency (NativeDependency profile unit (SourceIdentity identifier depends kind style name version _ component sourceSha cabalSha)
         registrationText digest archives products) = NativeDependency profile unit
@@ -481,14 +501,11 @@ completeNativeLink = NativeLink completeLinkPayload [NativeABI "original" "adapt
       [NativeProduct (NativePiece "/source" "api.o" "object-sha" "api.bc" "actual-target" input) "bitcode-sha"]])
     [NativeLibrary "native-libc" ["free"] "clang" "compiler-sha" ["-lc"]] ["unknown"]
     [ArgumentBridge "actual-integer-width-bridge" "actual LLVM\n" "source-sha" "input-sha" [["define caller","define callee"]]]))
-  (Known ["adapter"]) []
+  Missing Missing []
   where input = CompileInput "ghc" "clang" ["-c","api.c"] (Known "c") "native-target" "actual-target"
           [("api.c","actual-source-sha"),("yaml.h","actual-header-sha")]
 
 completeNativeArchive :: NativeArchive
 completeNativeArchive = NativeArchive 1 "thc-package-native-archive-v1" "not-linked" "main" "Typed"
   [call] Unknown ["unsupported"] (Known completeNativeLink) (Known [call,call])
-  (Known (EntryResolution 1 "llvm-globaldce-adapter-closures-v1" "input-hash"
-    [EntryClosure "adapter" "closure-hash" [],EntryClosure "bad_adapter" "failed-closure-hash" ["unsupported"]]
-    "output-hash" []))
   where call = EmittedCall "original" (Known "main") CApi SafeCall ["AddrRep"] ["void"]

@@ -114,9 +114,15 @@ blob decoder = count decoder >>= getByteString
 nativeLink :: Decoder -> Get NativeLink
 nativeLink decoder = do
   payload@(LinkPayload schema _ _ _ _ _ _ _) <- linkPayload decoder
-  NativeLink payload <$> list decoder entry <*> present (nativeBuildInputs decoder)
-    <*> present (list decoder (string decoder)) <*>
-      (if schema == 2 then list decoder (string decoder) else pure [])
+  abi <- list decoder entry
+  inputs <- present (nativeBuildInputs decoder)
+  (companion,dataSymbols) <- getWord8 >>= \kind -> case kind of
+    0 -> pure (Missing,Missing)
+    3 -> (,) <$> present ((,) <$> string decoder <*> blob decoder)
+             <*> present (list decoder (string decoder))
+    _ -> fail "Retired or invalid compact native entry metadata"
+  NativeLink payload abi inputs companion dataSymbols <$>
+    (if schema == 2 then list decoder (string decoder) else pure [])
   where entry = NativeABI <$> string decoder <*> string decoder <*> enumeration <*> enumeration
           <*> list decoder (string decoder) <*> string decoder
 
@@ -160,11 +166,8 @@ nativeArchive :: Decoder -> Get NativeArchive
 nativeArchive decoder = NativeArchive <$> getUVar <*> string decoder <*> string decoder <*> string decoder
   <*> string decoder <*> list decoder (emittedCall decoder) <*> present (string decoder)
   <*> list decoder (string decoder) <*> present (nativeLink decoder)
-  <*> present (list decoder (emittedCall decoder)) <*> present entryResolution
-  where
-    entryResolution = EntryResolution <$> getUVar <*> string decoder <*> string decoder <*> list decoder entry
-      <*> string decoder <*> list decoder (string decoder)
-    entry = EntryClosure <$> string decoder <*> string decoder <*> list decoder (string decoder)
+  <*> present (list decoder (emittedCall decoder)) <*
+    (getWord8 >>= \kind -> unless (kind == 0) (fail "Retired compact native entry-resolution metadata"))
 
 qualifiedName :: Decoder -> Get QualifiedName
 qualifiedName decoder = QualifiedName <$> string decoder <*> string decoder <*> string decoder <*> string decoder

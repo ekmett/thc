@@ -452,15 +452,19 @@ hexBytes = withText "original artifact hex" $ \value -> do
 nativeLink :: Value -> Parser NativeLink
 nativeLink = withObject "native linked artifact" $ \fields -> do
   schema <- fields .: "schema" :: Parser Word64
-  checked fields (linkPayloadKeys ++ ["abi","buildInputs","availableEntries"] ++ ["finalizers" | schema == 2])
+  checked fields (linkPayloadKeys ++ ["abi","buildInputs","nativeLibrary","dataSymbols"] ++ ["finalizers" | schema == 2])
   NativeLink <$> linkPayload fields <*> (fields .: "abi" >>= array entry)
-    <*> optional fields "buildInputs" nativeBuildInputs <*> optional fields "availableEntries" (array bytes)
+    <*> optional fields "buildInputs" nativeBuildInputs <*> optional fields "nativeLibrary" companion
+    <*> optional fields "dataSymbols" (array bytes)
     <*> (if schema == 2 then fields .: "finalizers" >>= array bytes else pure [])
   where entry = withObject "native linked ABI" $ \fields -> do
           checked fields ["symbol","entry","convention","safety","arguments","result"]
           NativeABI <$> bytesAt fields "symbol" <*> bytesAt fields "entry"
             <*> (fields .: "convention" >>= parseConvention) <*> (fields .: "safety" >>= parseSafety)
             <*> (fields .: "arguments" >>= array bytes) <*> bytesAt fields "result"
+        companion = withObject "native library companion" $ \fields -> do
+          checked fields ["sha256","hex"]
+          (,) <$> bytesAt fields "sha256" <*> (fields .: "hex" >>= hexBytes)
 
 nativeBuildInputs :: Value -> Parser NativeBuildInputs
 nativeBuildInputs = withObject "native build inputs" $ \fields -> do
@@ -524,20 +528,11 @@ sourceIdentity = withObject "resolved native source identity" $ \fields -> do
 nativeArchive :: Value -> Parser NativeArchive
 nativeArchive = withObject "unlinked native archive" $ \fields -> do
   checked fields ["schema","profile","execution","unit","module","unsupportedImports","unclassifiedReason",
-    "unresolvedSymbols","artifact","conflictingImports","entryResolution"]
+    "unresolvedSymbols","artifact","conflictingImports"]
   NativeArchive <$> fields .: "schema" <*> bytesAt fields "profile" <*> bytesAt fields "execution"
     <*> bytesAt fields "unit" <*> bytesAt fields "module" <*> (fields .: "unsupportedImports" >>= array emittedCall)
     <*> optional fields "unclassifiedReason" bytes <*> (fields .: "unresolvedSymbols" >>= array bytes)
     <*> optional fields "artifact" nativeLink <*> optional fields "conflictingImports" (array emittedCall)
-    <*> optional fields "entryResolution" resolution
-  where
-    resolution = withObject "native entry resolution" $ \fields -> do
-      checked fields ["schema","profile","inputBitcodeSha256","entries","outputBitcodeSha256","unresolved"]
-      EntryResolution <$> fields .: "schema" <*> bytesAt fields "profile" <*> bytesAt fields "inputBitcodeSha256"
-        <*> (fields .: "entries" >>= array entry) <*> bytesAt fields "outputBitcodeSha256" <*> (fields .: "unresolved" >>= array bytes)
-    entry = withObject "native entry closure" $ \fields -> do
-      checked fields ["entry","bitcodeSha256","unresolved"]
-      EntryClosure <$> bytesAt fields "entry" <*> bytesAt fields "bitcodeSha256" <*> (fields .: "unresolved" >>= array bytes)
 
 qualifiedName :: Value -> Parser QualifiedName
 qualifiedName = withObject "qualified foreign identity" $ \fields -> do

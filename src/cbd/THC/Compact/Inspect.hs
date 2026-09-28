@@ -291,9 +291,11 @@ hexBytes :: BS.ByteString -> Value
 hexBytes = toJSON . concatMap (\byte -> let digits = showHex byte "" in replicate (2-length digits) '0' ++ digits) . BS.unpack
 
 nativeLink :: NativeLink -> Value
-nativeLink (NativeLink payload@(LinkPayload schema _ _ _ _ _ _ _) abi inputs entries finalizers) = object $ linkPayload payload ++ ["abi" .= arr entry abi]
+nativeLink (NativeLink payload@(LinkPayload schema _ _ _ _ _ _ _) abi inputs companion dataSymbols finalizers) = object $ linkPayload payload ++ ["abi" .= arr entry abi]
   ++ ["finalizers" .= arr str finalizers | schema == 2]
-  ++ p "buildInputs" nativeBuildInputs inputs ++ p "availableEntries" (arr str) entries
+  ++ p "buildInputs" nativeBuildInputs inputs
+  ++ p "nativeLibrary" (\(digest,bytes) -> object ["sha256" .= str digest,"hex" .= hexBytes bytes]) companion
+  ++ p "dataSymbols" (arr str) dataSymbols
   where entry (NativeABI symbol name convention safety arguments result) = object
           ["symbol" .= str symbol,"entry" .= str name,
            "convention" .= tagName ["ccall","capi","stdcall","prim","javascript"] convention,
@@ -344,17 +346,11 @@ sourceIdentity (SourceIdentity unit depends kind style name version flags compon
   ++ p "component-name" str component ++ p "pkg-src-sha256" str sourceSha ++ p "pkg-cabal-sha256" str cabalSha
 
 nativeArchive :: NativeArchive -> Value
-nativeArchive (NativeArchive schema profile execution unit moduleName unsupported reason unresolved artifact conflicts resolution) = object $
+nativeArchive (NativeArchive schema profile execution unit moduleName unsupported reason unresolved artifact conflicts) = object $
   ["schema" .= schema,"profile" .= str profile,"execution" .= str execution,"unit" .= str unit,
    "module" .= str moduleName,"unsupportedImports" .= arr emittedCall unsupported,"unresolvedSymbols" .= arr str unresolved]
   ++ p "unclassifiedReason" str reason ++ p "artifact" nativeLink artifact
-  ++ p "conflictingImports" (arr emittedCall) conflicts ++ p "entryResolution" entryResolution resolution
-  where
-    entryResolution (EntryResolution schema' profile' inputSha entries outputSha dependencies) = object
-      ["schema" .= schema',"profile" .= str profile',"inputBitcodeSha256" .= str inputSha,
-       "entries" .= arr entry entries,"outputBitcodeSha256" .= str outputSha,"unresolved" .= arr str dependencies]
-    entry (EntryClosure name digest unresolved') = object
-      ["entry" .= str name,"bitcodeSha256" .= str digest,"unresolved" .= arr str unresolved']
+  ++ p "conflictingImports" (arr emittedCall) conflicts
 
 qualifiedName :: QualifiedName -> Value
 qualifiedName (QualifiedName unit moduleName occurrence namespace) = object

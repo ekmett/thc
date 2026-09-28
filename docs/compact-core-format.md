@@ -374,9 +374,15 @@ str componentSha256, str bitcodeSha256, blob`.
 `packageScalarLink` is `LinkPayload, list(ScalarABI)`; `ScalarABI` is
 `str symbol, str entry, list(str) arguments, str result`.
 `packageNativeLink` is `LinkPayload, list(NativeABI), p(NativeBuildInputs),
-p(list(str)) availableEntries`. `NativeABI` is `str symbol, str entry,
+NativeExtras`. `NativeABI` is `str symbol, str entry,
 Convention, Safety, list(str) arguments, str result`.
-Native link schema 2 appends `list(str) finalizers` after `availableEntries`;
+`NativeExtras` tag 0 is empty, preserving existing complete-link bytes. Tag 3
+carries `p(NativeCompanion), p(list(str)) dataSymbols`; `NativeCompanion` is
+`str sha256, blob`, retaining the exact host-library bytes without hex expansion
+on the wire. Data symbols name address-returning ABI entries, not executable
+function-call entries. Tags 1 and 2 belonged to the retired partial-entry
+protocol and are rejected, never reinterpreted as native libraries.
+Native link schema 2 appends `list(str) finalizers` after `NativeExtras`;
 these are existing namespaced ABI entry names, not original symbols or an
 invented foreign-call inventory. Every entry must be a proved `ccall unsafe`
 one-pointer/void adapter with its original definition retained by native
@@ -412,12 +418,10 @@ These preserve actual resolved C-only unit and archive membership evidence.
 `packageNativeArchive` is `u schema, str profile, str execution, str unit,
 str module, list(EmittedCall) unsupportedImports, p(str unclassifiedReason),
 list(str) unresolvedSymbols, p(NativeLink) artifact,
-p(list(EmittedCall)) conflictingImports, p(EntryResolution)`.
-`EntryResolution` is `u schema, str profile, str inputBitcodeSha256,
-list(EntryClosure), str outputBitcodeSha256, list(str) unresolved`;
-`EntryClosure` is `str entry, str bitcodeSha256, list(str) unresolved`.
-Failed full links and successful selected closures remain separate records;
-conversion neither promotes archives to executable products nor changes recipes.
+p(list(EmittedCall)) conflictingImports, byte 0`.
+The final byte reserves the former entry-resolution slot. Nonzero tags and the
+retired JSON `entryResolution`/`availableEntries` fields are rejected. Conversion
+does not promote unlinked archives to executable products or change recipes.
 
 ### Optional debug tables
 

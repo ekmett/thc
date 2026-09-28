@@ -464,7 +464,15 @@ public final class CoreCompactRecords {
             var entry = strings(cursor, "symbol", "entry"); entry.put("convention", convention(cursor)); entry.put("safety", safety(cursor));
             entry.put("arguments", texts(cursor)); entry.put("result", text(cursor)); return entry;
         }));
-        field(cursor, result, "buildInputs", () -> nativeBuildInputs(cursor)); field(cursor, result, "availableEntries", () -> texts(cursor));
+        field(cursor, result, "buildInputs", () -> nativeBuildInputs(cursor));
+        switch (cursor.readByte()) {
+            case 0 -> { }
+            case 3 -> {
+                field(cursor, result, "nativeLibrary", () -> map("sha256", text(cursor), "hex", blob(cursor)));
+                field(cursor, result, "dataSymbols", () -> texts(cursor));
+            }
+            default -> throw error("Retired or invalid compact native entry metadata");
+        }
         if (Objects.equals(result.get("schema"), 2L)) result.put("finalizers", texts(cursor));
         return result;
     }
@@ -532,14 +540,7 @@ public final class CoreCompactRecords {
         field(cursor, result, "unclassifiedReason", () -> text(cursor));
         result.put("unresolvedSymbols", texts(cursor)); field(cursor, result, "artifact", () -> nativeLink(cursor));
         field(cursor, result, "conflictingImports", () -> list(cursor, () -> emitted(cursor)));
-        field(cursor, result, "entryResolution", () -> {
-            var entry = map("schema", cursor.unsigned());
-            entry.putAll(strings(cursor, "profile", "inputBitcodeSha256"));
-            entry.put("entries", list(cursor, () -> {
-                var child = strings(cursor, "entry", "bitcodeSha256"); child.put("unresolved", texts(cursor)); return child;
-            }));
-            entry.put("outputBitcodeSha256", text(cursor)); entry.put("unresolved", texts(cursor)); return entry;
-        });
+        require(cursor.readByte() == 0, "Retired compact native entry-resolution metadata");
         return result;
     }
     private static LinkedHashMap<String,Object> map(Object... entries) {

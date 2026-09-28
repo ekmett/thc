@@ -27,9 +27,12 @@ class CoreCompactRecordsTest {
         module(data, id, action);
     }
     private void module(byte[] data, byte[] strings, Action action) throws Exception {
+        module(data, strings, new byte[0], action);
+    }
+    private void module(byte[] data, byte[] strings, byte[] facts, Action action) throws Exception {
         var symbols = ByteBuffer.allocate(24).order(ByteOrder.LITTLE_ENDIAN)
             .put(MessageDigest.getInstance("MD5").digest(id)).putLong(0).array();
-        var encoded = CoreCbdTestSupport.archive(CoreCbdTestSupport.header(new byte[0], 1, 0, 0),
+        var encoded = CoreCbdTestSupport.archive(CoreCbdTestSupport.header(facts, 1, 0, 0),
             List.of(data, strings, new byte[0], new byte[0], new byte[0], symbols), Set.of(), false);
         var path = directory.resolve("module.cbd");
         Files.write(path, encoded);
@@ -46,6 +49,28 @@ class CoreCompactRecordsTest {
     private byte[] literal(int kind, byte[] payload) { return concat(bytes(2), new byte[10], bytes(kind), payload); }
     private byte[] binding(byte[] expression) { return concat(bytes(0, 0, id.length, 0, 2, 1, 0, 0, 0, 0, 0, 0, 0), expression); }
     private record LiteralCase(int kind, byte[] payload, String tag, Object expected) {}
+    @Test void nativeCompanionAndDataEntriesDecodeWithoutReadingBodies() throws Exception {
+        byte[] text = bytes(0, id.length);
+        for (int schema : List.of(1, 2)) {
+            byte[] prefix = concat(bytes(1), text, text, text, text, new byte[12], bytes(2, schema),
+                text, text, text, text, text, text, bytes(0, 0, 0));
+            byte[] suffix = schema == 2 ? bytes(0, 0) : bytes(0);
+            byte[] extras = concat(bytes(3, 2), text, bytes(4, 0, 255, 66, 127, 2, 1), text);
+            module(new byte[0], id, concat(prefix, extras, suffix), (records, file) -> {
+                var link = (Map<?, ?>) records.header().get("packageNativeLink");
+                assertEquals(Map.of("sha256", "unit:M.f", "hex", "00ff427f"), link.get("nativeLibrary"));
+                assertEquals(List.of("unit:M.f"), link.get("dataSymbols"));
+                assertFalse(link.containsKey("availableEntries"));
+            });
+            module(new byte[0], id, concat(prefix, bytes(0), suffix), (records, file) -> {
+                var link = (Map<?, ?>) records.header().get("packageNativeLink");
+                assertFalse(link.containsKey("nativeLibrary"));
+                assertFalse(link.containsKey("dataSymbols"));
+            });
+            module(new byte[0], id, concat(prefix, bytes(2), suffix), (records, file) ->
+                assertThrows(IllegalStateException.class, records::header));
+        }
+    }
     @Test void schemaTwoForeignArgumentsKeepArrayIdentityAndScalarNullPositions() throws Exception {
         byte[] immutable = "ByteArray#".getBytes(StandardCharsets.UTF_8);
         byte[] mutable = "MutableByteArray#".getBytes(StandardCharsets.UTF_8);

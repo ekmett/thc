@@ -178,11 +178,16 @@ blob :: Encoder -> BS.ByteString -> IO ()
 blob encoder bytes = number encoder (fromIntegral (BS.length bytes)) >> emit encoder (putByteString bytes)
 
 nativeLink :: Encoder -> NativeLink -> IO ()
-nativeLink encoder (NativeLink payload@(LinkPayload schema _ _ _ _ _ _ _) abi inputs entries finalizers) = do
+nativeLink encoder (NativeLink payload@(LinkPayload schema _ _ _ _ _ _ _) abi inputs companion dataSymbols finalizers) = do
   linkPayload encoder payload
   list encoder entry abi
   present encoder (nativeBuildInputs encoder) inputs
-  present encoder (list encoder (string encoder)) entries
+  case (companion,dataSymbols) of
+    (Missing,Missing) -> tag encoder 0
+    _ -> do
+      tag encoder 3
+      present encoder (\(digest,bytes) -> string encoder digest >> blob encoder bytes) companion
+      present encoder (list encoder (string encoder)) dataSymbols
   when (schema == 2) (list encoder (string encoder) finalizers)
   where entry (NativeABI symbol name convention safety arguments result) = do
           string encoder symbol
@@ -258,7 +263,7 @@ sourceIdentity encoder (SourceIdentity unit depends kind style name version flag
   where optionalString = present encoder (string encoder)
 
 nativeArchive :: Encoder -> NativeArchive -> IO ()
-nativeArchive encoder (NativeArchive schema profile execution unit moduleName unsupported reason unresolved artifact conflicts resolution) = do
+nativeArchive encoder (NativeArchive schema profile execution unit moduleName unsupported reason unresolved artifact conflicts) = do
   number encoder schema
   mapM_ (string encoder) [profile,execution,unit,moduleName]
   list encoder (emittedCall encoder) unsupported
@@ -266,19 +271,7 @@ nativeArchive encoder (NativeArchive schema profile execution unit moduleName un
   list encoder (string encoder) unresolved
   present encoder (nativeLink encoder) artifact
   present encoder (list encoder (emittedCall encoder)) conflicts
-  present encoder entryResolution resolution
-  where
-    entryResolution (EntryResolution schema' profile' inputSha entries outputSha dependencies) = do
-      number encoder schema'
-      string encoder profile'
-      string encoder inputSha
-      list encoder entry entries
-      string encoder outputSha
-      list encoder (string encoder) dependencies
-    entry (EntryClosure name digest unresolved') = do
-      string encoder name
-      string encoder digest
-      list encoder (string encoder) unresolved'
+  tag encoder 0 -- Reserved empty slot for the retired partial-entry protocol.
 
 qualifiedName :: Encoder -> QualifiedName -> IO ()
 qualifiedName encoder (QualifiedName unit moduleName occurrence namespace) =
