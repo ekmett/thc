@@ -5,8 +5,8 @@ package thc.runtime;
 /** Cold caller input distinguishes a child result from its guest failure. */
 public final class ChildResume {
     private final Object value;
-    private final GuestException failure;
-    public ChildResume(Object value, GuestException failure) { this.value = value; this.failure = failure; }
+    private final RuntimeException failure;
+    public ChildResume(Object value, RuntimeException failure) { this.value = value; this.failure = failure; }
     public Object getValue() { return value; }
-    public GuestException getFailure() { return failure; }
+    public RuntimeException getFailure() { return failure; }
 }

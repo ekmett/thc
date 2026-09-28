@@ -64,7 +64,20 @@ public final class STMExpression extends Expr {
         return null;
     }
     private void invoke(VirtualFrame frame, Object action, Object alternative, Object nested) {
-        try { call.execute(frame, action, alternative, nested); }
+        finish(frame, action, alternative, nested, null, null);
+    }
+    private void finish(VirtualFrame frame, Object action, Object alternative, Object nested,
+            java.util.List<AstResumeStep> steps, Object input) {
+        try {
+            Object result = steps == null ? call.execute(frame, action, alternative, nested)
+                : AstContinuations.resumeAstSteps(frame, steps, input);
+            if (steps != null || call.captures()) shape.consume(frame, result, destinationSlots, destinationOffset);
+        } catch (AstCapture cut) {
+            throw cut.enclose(remaining -> (resumed, value) -> {
+                finish(resumed, action, alternative, nested, remaining, value);
+                return null;
+            });
+        }
         catch (STMRestart restart) {
             // A NEW capture: resuming the abandoned child would run without an attempt.
             throw new AstCapture(restart.getRequest(), SynchronousMasking.current(this)).append(new AstResumeStep() {

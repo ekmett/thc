@@ -11,6 +11,8 @@ import org.graalvm.polyglot.Value;
 import org.graalvm.polyglot.io.IOAccess;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import thc.*;
 import java.io.File;
 import java.nio.file.Files;
@@ -28,7 +30,7 @@ public class STMFullCoreTest {
     private Context context(boolean inlining) { return Context.newBuilder("thc", "llvm").allowNativeAccess(true).allowIO(IOAccess.ALL).allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").option("compiler.Inlining", Boolean.toString(inlining)).option("engine.SingleTierCompilationThreshold", "10000000").build(); }
     private Map<String, Object> read(String path) throws Exception { return (Map<String, Object>) Json.parse(Files.readString(new File(root, path).toPath())); }
     private Map<String, Object> fixture() throws Exception {
-        var manifest = read("build/stm/manifest.json"); assertEquals("9.14.1", manifest.get("ghc")); assertEquals(names, manifest.get("entries")); assertEquals(78, ((Number) manifest.get("nativeRows")).intValue());
+        var manifest = read("build/stm/manifest.json"); assertEquals("9.14.1", manifest.get("ghc")); assertEquals(names, manifest.get("entries")); assertEquals(87, ((Number) manifest.get("nativeRows")).intValue());
         for (var kind : List.of("inputHashes", "artifactHashes")) for (var e : ((Map<String, String>) manifest.get(kind)).entrySet()) assertEquals(e.getValue(), HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(new File(root, e.getKey()).toPath()))), "Stale STM fixture: " + e.getKey());
         for (var stage : List.of("pre", "post")) { var selection = (Map<String, String>) (Map<?, ?>) read("build/stm/" + stage + "/original-selection.json"); assertFalse(selection.isEmpty()); for (var e : selection.entrySet()) { var origin = e.getValue().split("!/", 2); try (var zip = new ZipFile(new File(root, origin[0])); var input = zip.getInputStream(zip.getEntry(origin[1]))) { assertArrayEquals(input.readAllBytes(), Files.readAllBytes(new File(root, e.getKey()).toPath()), "Original installed module was rewritten: " + e.getKey()); } } }
         return manifest;
@@ -57,8 +59,8 @@ public class STMFullCoreTest {
     @Test public void originalBytecodeCoreMatchesNativeWithInlining() throws Exception { nativeRows(true, "bytecode"); }
     @Test public void originalBytecodeCoreMatchesNativeAcrossResidualCalls() throws Exception { nativeRows(false, "bytecode"); }
     private void nativeRows(boolean inlining, String backend) throws Exception {
-        var manifest = fixture(); var rows = rows(); assertEquals(78, rows.size()); var keys = new HashSet<Key>(); var originals = new LinkedHashMap<String, List<Row>>();
-        for (var row : rows) { keys.add(new Key(row.name, row.input)); if (names.contains(row.name)) originals.computeIfAbsent(row.name, ignored -> new ArrayList<>()).add(row); } assertEquals(78, keys.size()); assertEquals(new HashSet<>(names), originals.keySet());
+        var manifest = fixture(); var rows = rows(); assertEquals(87, rows.size()); var keys = new HashSet<Key>(); var originals = new LinkedHashMap<String, List<Row>>();
+        for (var row : rows) { keys.add(new Key(row.name, row.input)); if (names.contains(row.name)) originals.computeIfAbsent(row.name, ignored -> new ArrayList<>()).add(row); } assertEquals(87, keys.size()); assertEquals(new HashSet<>(names), originals.keySet());
         for (var stage : ((Map<String, List<String>>) manifest.get("stages")).entrySet()) { var module = module(stage.getValue()); for (var name : names) try (var context = context(inlining)) { context.initialize("thc"); context.enter(); try {
             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var linked = new LinkedHashMap<>(CoreModules.reachable(module, name, true)); linked.put("instrument", true); var program = program(language, linked, backend); var entry = program.entryTarget(name); var host = program.hostEntryTarget(1); var function = context.asValue(new EntryValue(program, name, 1)); var cases = originals.get(name); var inputs = new ArrayList<Long>(); for (var row : cases) inputs.add(row.input); assertEquals(List.of(-31L, -1L, 0L, 1L, 17L, 63L, 4097L), inputs); String label = stage.getKey() + "/" + backend + "/" + name + "/inlining=" + inlining;
             for (var row : cases) check(function, language, name, label, row); var active = activeTargets(host); var installed = new LinkedHashSet<>(active); installed.add(entry); for (var target : installed) if (target != host) compile(target); assertTrue(function.invokeMember("compile").asBoolean());
@@ -72,6 +74,39 @@ public class STMFullCoreTest {
         } finally { context.leave(); } } }
     }
     private Object call(ExecutableProgram program, String name, Object... args) { return Calls.target(program.hostEntryTarget(args.length), new Object[] {program.entryValue(name), args.clone()}); }
+    @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
+    public void autonomousAtomicStackMatchesNative(String backend) throws Exception { autonomousStack("stackAtomic", backend); }
+    @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
+    public void autonomousNestedCatchStackMatchesNative(String backend) throws Exception { autonomousStack("stackCatch", backend); }
+    @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
+    public void autonomousNestedAlternativeStackMatchesNative(String backend) throws Exception { autonomousStack("stackAlternative", backend); }
+    private void autonomousStack(String name, String backend) throws Exception {
+        var manifest = fixture();
+        var cases = rows().stream().filter(row -> row.name.equals(name)).toList();
+        assertEquals(List.of(1L, 100L, 4096L), cases.stream().map(Row::input).toList());
+        for (var stage : ((Map<String, List<String>>) manifest.get("stages")).entrySet())
+                try (var context = Context.newBuilder("thc", "llvm").allowNativeAccess(true).allowIO(IOAccess.ALL)
+                        .allowExperimentalOptions(true).option("engine.Compilation", "false").build()) {
+                    context.initialize("thc"); context.enter();
+                    try {
+                        var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                        var source = CoreModules.reachable(module(stage.getValue()), name, true);
+                        ExecutableProgram program = backend.equals("ast") ? new Program(language, source, true)
+                            : new BytecodeProgram(language, source, true);
+                        var state = Language.currentState(); state.getThreads().enterCurrent();
+                        try {
+                            for (var row : cases) {
+                                long before = state.getThreadPollState().get().getAstStack().getSpills();
+                                assertEquals(row.expected, call(program, name, row.input), stage.getKey() + "/" + backend + "/" + name + "/" + row.input);
+                                var stack = state.getThreadPollState().get().getAstStack();
+                                if (row.input >= 100) assertTrue(stack.getSpills() > before, "Nested STM scopes must not defeat boundedness");
+                                assertEquals(0, stack.getDepth()); assertFalse(stack.getDriving());
+                                released(language);
+                            }
+                        } finally { state.getThreads().leaveCurrent(); }
+                    } finally { context.leave(); }
+                }
+    }
     @Test public void genuineConcurrentUpdatesAndEitherReadSetWakeMatchNative() throws Exception {
         var manifest = fixture(); var nativeRows = new LinkedHashMap<Key, Long>(); for (var row : rows()) nativeRows.put(new Key(row.name, row.input), row.expected); assertEquals(128L, nativeRows.get(new Key("concurrent", 128))); assertEquals(119L, nativeRows.get(new Key("either", 0))); assertEquals(7L, nativeRows.get(new Key("either", 1)));
         for (var paths : ((Map<String, List<String>>) manifest.get("stages")).values()) for (var backend : List.of("ast", "bytecode")) { var workers = Executors.newFixedThreadPool(2); try (var context = context(true)) { context.initialize("thc"); context.enter(); try {

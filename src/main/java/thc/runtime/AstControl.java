@@ -55,6 +55,10 @@ public final class AstControl {
     }
     public static Object force(VirtualFrame frame, Node node, Force force, Object value) {
         if (!captures(node)) return force.execute(frame, value);
+        return forceCallback(frame, node, force, value);
+    }
+    /** A shared callback owns an explicit one-shot resume scope in either backend. */
+    static Object forceCallback(VirtualFrame frame, Node node, Force force, Object value) {
         try { return force.execute(frame, value); }
         catch (ThunkSuspended suspended) {
             throw new AstCapture(suspended, SynchronousMasking.current(node)).append(new ResumeChild(suspended.getThunk(), node));
@@ -69,6 +73,9 @@ public final class AstControl {
     public static Object complete(Node node, Object result, RootCallTarget target, TupleShape shape) { return complete(node, result, target, shape, false); }
     public static Object complete(Node node, Object result, RootCallTarget expectedTarget, TupleShape tupleShape, boolean identityTail) {
         if (!captures(node)) return result;
+        return completeCallback(node, result, expectedTarget, tupleShape, identityTail);
+    }
+    static Object completeCallback(Node node, Object result, RootCallTarget expectedTarget, TupleShape tupleShape, boolean identityTail) {
         if (!(result instanceof TailYield) && !(result instanceof AstTailYield) &&
             !(result instanceof SavedGuestContinuation) && !(result instanceof ContinuationResult)) return result;
         return completeSuspended(node, result, expectedTarget, tupleShape, identityTail);

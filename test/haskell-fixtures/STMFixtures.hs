@@ -33,6 +33,7 @@ entries = ["basic", "rollback", "alternative", "lazyPayload", "nestedAtomic", "u
   ++ ["newtypeField", "newtypeAlternative", "newtypeCatch"]
 contextEntries = ["newCell", "readCell", "bumpCell", "awaitCell", "awaitEither"]
   ++ ["forceRetry", "forceInner", "asyncReady", "asyncRelease", "asyncSet", "asyncValue", "asyncPrefixes", "asyncPayload", "asyncEntry"]
+  ++ ["stackAtomic", "stackCatch", "stackAlternative"]
 
 prepareSTM :: FilePath -> IO ()
 prepareSTM root = do
@@ -113,6 +114,7 @@ prepareSTM root = do
     [name, input, result] | Just x <- readInteger input, Just _ <- readInteger result -> pure (name,x)
     _ -> die ("Malformed native STM row: " ++ line)
   let expected = Set.fromList ([(name,x) | name <- entries, x <- [-31,-1,0,1,17,63,4097]] ++
+        [(name,x) | name <- ["stackAtomic", "stackCatch", "stackAlternative"], x <- [1,100,4096]] ++
         [("concurrent",128),("either",0),("either",1)] ++
         [(name ++ "-" ++ observation,0) | name <- ["retry","inner"],
           observation <- ["caught","aborted","prefix","resumed","committed","prefix-after"]])

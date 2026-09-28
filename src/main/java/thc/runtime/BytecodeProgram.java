@@ -869,12 +869,18 @@ public final class BytecodeProgram implements ExecutableProgram {
         var source = body.source();
         var config = sources.getEnabled() && sources.getSpanCount() > 0 ? BytecodeConfig.WITH_SOURCE : BytecodeConfig.DEFAULT;
         var typedBloom = new LocalAccessor[1];
+        var stackTransaction = new LocalAccessor[1];
         var root = BytecodeRootGen.create(language, config, b -> {
             var section = b.isParsingSources() && source != null ? source.getSection() : null;
             if (section != null) beginSource(b, section);
             b.beginRoot();
             var e = new Emission(b);
             b.emitEnterRoot(metrics);
+            if (enableAsync) {
+                var transaction = b.createLocal("stack transaction", FrameSlotKind.Object);
+                stackTransaction[0] = LocalAccessor.constantOf(transaction);
+                b.beginStaticStoreObject(transaction); b.emitCurrentTransaction(); b.endStaticStoreObject();
+            }
             if (resumable) {
                 // Each snapshot has one exact reference write. Yield parks to the caller's extent.
                 e.checkpointRootEntry = b.createLocal("checkpoint root entry mask", FrameSlotKind.Object);
@@ -981,6 +987,16 @@ public final class BytecodeProgram implements ExecutableProgram {
                     restoreArgument(e, local, enableAsync && context.entryStrict[i], () -> b.emitLoadArgument(argument));
                 }
             }
+            if (enableAsync) {
+                // The saved PC follows ingress restoration, before any body effects.
+                b.beginUnprofiledIfThen(); b.emitStackLimit();
+                b.beginBlock();
+                var resumed = b.createLocal("stack entry resume value", FrameSlotKind.Object);
+                b.beginStaticStoreObject(resumed);
+                b.beginYield(); b.emitLoadConstant(AstStackSpill.INSTANCE); b.endYield();
+                b.endStaticStoreObject();
+                b.endBlock(); b.endUnprofiledIfThen();
+            }
             if (context.mayLoop) {
                 if (resumable) b.beginUnprofiledWhile(); else b.beginWhile();
                 b.emitLoadConstant(true);
@@ -1019,6 +1035,8 @@ public final class BytecodeProgram implements ExecutableProgram {
         root.setLabel(label);
         root.configureForeignExceptionBridge(foreignExceptionBridge);
         root.configureAsync(enableAsync);
+        root.configureStackDriver(metrics);
+        root.configureStackTransaction(stackTransaction[0]);
         root.configureDelimited(delimited);
         root.configureEntry(context.entryStrict, context.captureLayout != null);
         root.configureInput(context.inputLayout);
@@ -7247,11 +7265,26 @@ public final class BytecodeProgram implements ExecutableProgram {
                 if (operation.getCallback()) {
                     var slots = tupleSlots(new TupleShape(tupleProof, language), destination);
                     if (enableAsync) emitBlockingRequest(e, operands, false, values -> {
-                        // Restart the discarded attempt with saved original operands, not its abandoned continuation.
+                        // An internal cut finishes the same scope; only STMRestart reaches the outer retry loop.
+                        var suspended = b.createLocal("STM scope suspension", FrameSlotKind.Object);
+                        var callerMask = b.createLocal("STM caller mask", FrameSlotKind.Object);
+                        b.beginStaticStoreObject(callerMask); b.emitCurrentMask(); b.endStaticStoreObject();
+                        b.beginTryCatch();
                         b.beginInvokeSTM(operation, slots, metrics, true); b.emitStaticLoadObject(values.get(0));
                         if (values.size() == 3) b.emitStaticLoadObject(values.get(1)); else b.emitLoadNull();
                         if (nested != null) b.emitReadGlobal(nested); else b.emitLoadNull();
                         b.emitStaticLoadObject(values.getLast()); b.endInvokeSTM();
+                        b.beginBlock();
+                        b.beginStaticStoreObject(suspended);
+                        b.beginSTMScopeSuspension(); b.emitLoadException(); b.endSTMScopeSuspension();
+                        b.endStaticStoreObject();
+                        b.beginResumeTupleApplication(slots); b.emitStaticLoadObject(suspended);
+                        b.beginReenterCallMask(); beginAnnotationYield(e);
+                        b.beginParkCallMask(); b.emitStaticLoadObject(suspended);
+                        b.emitStaticLoadObject(Objects.requireNonNull(e.checkpointRootEntry));
+                        b.emitStaticLoadObject(callerMask); b.endParkCallMask();
+                        endAnnotationYield(e); b.emitStaticLoadObject(callerMask); b.endReenterCallMask();
+                        b.endResumeTupleApplication(); b.endBlock(); b.endTryCatch();
                     });
                     else {
                         b.beginInvokeSTM(operation, slots, metrics, enableAsync); operands.get(0).emit(e);

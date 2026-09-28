@@ -38,6 +38,10 @@ invoke f (I# n) = IO (\s -> case f n of result -> (# s, I# result #))
 
 main :: IO ()
 main = do
+  forM_ [1,100,4096] $ \depth -> do
+    emit "stackAtomic" P.stackAtomic depth
+    emit "stackCatch" P.stackCatch depth
+    emit "stackAlternative" P.stackAlternative depth
   forM_ [-31,-1,0,1,17,63,4097] $ \x -> do
     emit "basic" P.basic x
     emit "rollback" P.rollback x
