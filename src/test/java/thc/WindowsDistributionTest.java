@@ -292,15 +292,15 @@ class WindowsDistributionTest {
                     Arrays.fill(bytes, (byte) 0xa5);
                     var address = ManagedAddress.Companion.fromByteArray(bytes);
                     if (!nativeAccess) {
-                        assertThrows(RuntimeFault.class, () -> ManagedMd5.INSTANCE.init(address));
+                        assertThrows(RuntimeFault.class, () -> ManagedMd5.init(address));
                         var untouched = new byte[88];
                         Arrays.fill(untouched, (byte) 0xa5);
                         assertArrayEquals(untouched, bytes);
                     } else {
-                        ManagedMd5.INSTANCE.init(address);
+                        ManagedMd5.init(address);
                         var output = new byte[16];
-                        ManagedMd5.INSTANCE.update(address, ManagedAddress.Companion.fromHex("616263"), 3);
-                        ManagedMd5.INSTANCE.finish(ManagedAddress.Companion.fromByteArray(output), address);
+                        ManagedMd5.update(address, ManagedAddress.Companion.fromHex("616263"), 3);
+                        ManagedMd5.finish(ManagedAddress.Companion.fromByteArray(output), address);
                         assertArrayEquals(MessageDigest.getInstance("MD5").digest("abc".getBytes(StandardCharsets.UTF_8)), output);
                         assertArrayEquals(new byte[88], bytes);
                     }

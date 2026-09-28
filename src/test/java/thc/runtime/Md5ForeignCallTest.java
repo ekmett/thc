@@ -84,13 +84,13 @@ class Md5ForeignCallTest {
                             var output = new byte[16]; Arrays.fill(output, (byte) 0xd3);
                             var address = ManagedAddress.Companion.fromByteArray(bytes); var source = ManagedAddress.Companion.fromByteArray(input);
                             var result = ManagedAddress.Companion.fromByteArray(output);
-                            if (operation != Md5ForeignOp.INIT) ManagedMd5.INSTANCE.init(address);
-                            if (operation == Md5ForeignOp.FINAL) ManagedMd5.INSTANCE.update(address, source, size);
+                            if (operation != Md5ForeignOp.INIT) ManagedMd5.init(address);
+                            if (operation == Md5ForeignOp.FINAL) ManagedMd5.update(address, source, size);
                             var expected = bytes.clone(); var expectedOutput = output.clone();
                             switch (operation) {
-                                case INIT -> ManagedMd5.INSTANCE.init(ManagedAddress.Companion.fromByteArray(expected));
-                                case UPDATE -> ManagedMd5.INSTANCE.update(ManagedAddress.Companion.fromByteArray(expected), source, size);
-                                case FINAL -> ManagedMd5.INSTANCE.finish(ManagedAddress.Companion.fromByteArray(expectedOutput), ManagedAddress.Companion.fromByteArray(expected));
+                                case INIT -> ManagedMd5.init(ManagedAddress.Companion.fromByteArray(expected));
+                                case UPDATE -> ManagedMd5.update(ManagedAddress.Companion.fromByteArray(expected), source, size);
+                                case FINAL -> ManagedMd5.finish(ManagedAddress.Companion.fromByteArray(expectedOutput), ManagedAddress.Companion.fromByteArray(expected));
                             }
                             long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
                             assertEquals(17L, call(operation == Md5ForeignOp.FINAL ? result : address, operation == Md5ForeignOp.FINAL ? address : source, size));

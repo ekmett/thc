@@ -211,7 +211,7 @@ internal class ManagedProcesses(private val directory: NativeDirectoryOwner) : C
 
     /** beforeBlock is the caller's existing interruptible-operation cut. No
      * GuestThreads activation/reentry policy is invented by this transport. */
-    @TruffleBoundary fun waitFor(handle: Handle, node: Node? = null, beforeBlock: (() -> Unit)? = null): ProcessResult {
+    @TruffleBoundary fun waitFor(handle: Handle, node: Node? = null, beforeBlock: Runnable? = null): ProcessResult {
         val child = child(handle)
         val wait = synchronized(child) {
             val immediate = query(child)
@@ -221,7 +221,7 @@ internal class ManagedProcesses(private val directory: NativeDirectoryOwner) : C
         }
         try {
             while (true) {
-                beforeBlock?.invoke()
+                beforeBlock?.run()
                 val readiness = wait.await(node, -1, beforeBlock)[0].toInt()
                 synchronized(child) {
                     if (child.closed || readiness and 32 != 0) throw ClosedChannelException()

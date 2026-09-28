@@ -122,7 +122,7 @@
       "junit": ["thc.runtime.SimdArithmeticTest"],
       "python": []
     },
-    "src/main/kotlin/thc/runtime/ManagedNativeAllocations.kt": {
+    "src/main/java/thc/runtime/ManagedNativeAllocations.java": {
       "junit": ["thc.runtime.NativeFileBuffersTest", "thc.runtime.NativeMallocTest", "thc.runtime.AtomicAddressTest"],
       "python": []
     },
@@ -1314,7 +1314,7 @@
     },
     "src/main/java/thc/runtime/TextForeignOp.java": {"junit": ["thc.runtime.TextCbitsTest"], "python": ["scripts/test-audit-core.py"]},
     "src/main/java/thc/runtime/TextForeignExpression.java": {"junit": ["thc.runtime.TextCbitsTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/main/kotlin/thc/runtime/ManagedText.kt": {
+    "src/main/java/thc/runtime/ManagedText.java": {
       "junit": ["thc.runtime.TextCbitsTest"], "python": []
     },
     "compiler/test-fixtures/TextCbitsAudit.hs": {
@@ -2711,7 +2711,7 @@
     "src/main/java/thc/runtime/GmpForm.java": {
       "junit": ["thc.runtime.CoreGmpForeignTest", "thc.runtime.OriginalGmpTest"], "python": ["scripts/test-audit-core.py"]
     },
-    "src/main/kotlin/thc/runtime/ManagedGmp.kt": {
+    "src/main/java/thc/runtime/ManagedGmp.java": {
       "junit": ["thc.runtime.SulongLimbProviderTest", "thc.runtime.OriginalGmpTest"], "python": []
     },
     "src/main/java/thc/runtime/GmpForeignExpression.java": {
