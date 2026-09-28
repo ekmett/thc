@@ -33,7 +33,7 @@ public final class ManagedNativeAllocations {
     public ManagedNativeAllocations(TruffleLanguage.Env env) { this.env = env; }
 
     private void current() {
-        if (Language.currentState(null).getNativeAllocations$org_intelligence_thc() != this)
+        if (Language.currentState(null).getNativeAllocations() != this)
             throw fault("Native allocation belongs to another context");
         if (!env.isNativeAccessAllowed()) throw fault("Native allocation requires native access");
     }
@@ -124,7 +124,7 @@ public final class ManagedNativeAllocations {
         if (!windows && (!"Linux".equals(System.getProperty("os.name")) ||
             !(System.getProperty("os.arch") instanceof String arch && ("amd64".equals(arch) || "x86_64".equals(arch)))))
             throw fault("Native malloc requires verified Linux x86_64 LP64 or Windows x86_64 LLP64");
-        var threads = Language.currentState(null).getThreads$org_intelligence_thc();
+        var threads = Language.currentState(null).getThreads();
         var previous = threads.enterForeign(ForeignSafety.UNSAFE);
         try {
             if (size < 0) throw fault("Native malloc size exceeds the signed Long segment domain");
@@ -143,7 +143,7 @@ public final class ManagedNativeAllocations {
                 }
             } catch (Throwable failure) { throw nativeFailure("Native malloc invocation failed", failure); }
             if (owner == null) {
-                Language.currentState(null).getStdio$org_intelligence_thc().nativeError$org_intelligence_thc(errno);
+                Language.currentState(null).getStdio().nativeError$org_intelligence_thc(errno);
                 return ManagedAddress.Companion.nullAddress();
             }
             try {
@@ -184,7 +184,7 @@ public final class ManagedNativeAllocations {
             if (owner == null) return;
             freeing.add(owner);
         }
-        var threads = Language.currentState(null).getThreads$org_intelligence_thc();
+        var threads = Language.currentState(null).getThreads();
         var previous = threads.enterForeign(ForeignSafety.UNSAFE);
         boolean retired = false;
         try {
@@ -303,7 +303,7 @@ public final class ManagedNativeAllocations {
     }
 
     public static ManagedNativeAllocations current(Node node) {
-        return Language.currentState(node).getNativeAllocations$org_intelligence_thc();
+        return Language.currentState(node).getNativeAllocations();
     }
 
     private static void releaseNative(MemorySegment pointer) {

@@ -25,13 +25,13 @@ public final class ManagedGmp {
     private static double getDouble(Node node, Object input, long count, long exponent) {
         if (count == Long.MIN_VALUE) throw fault("Invalid signed limb count");
         var region = LimbRegion.Companion.read(input, Math.abs(count), true);
-        return Language.currentState(node).limbs$org_intelligence_thc().toDouble(region, count < 0, exponent);
+        return Language.currentState(node).limbs().toDouble(region, count < 0, exponent);
     }
 
     @TruffleBoundary
     public static long invoke(Node node, GmpForeignOp operation, Object first, Object second,
                               Object third, Object fourth, long a, long b, long c) {
-        var provider = Language.currentState(node).limbs$org_intelligence_thc();
+        var provider = Language.currentState(node).limbs();
         return switch (operation) {
             case ADD -> provider.add(LimbRegion.Companion.write(first, a, false), LimbRegion.Companion.read(second, a, false), LimbRegion.Companion.read(third, b, false));
             case SUBTRACT -> provider.subtract(LimbRegion.Companion.write(first, a, false), LimbRegion.Companion.read(second, a, false), LimbRegion.Companion.read(third, b, false));
