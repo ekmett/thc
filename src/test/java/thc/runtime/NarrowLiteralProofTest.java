@@ -234,7 +234,7 @@ public final class NarrowLiteralProofTest {
             for (boolean metadata : new boolean[] {false, true}) {
                 List<Object> literal = new ArrayList<>(List.of("lit", kind, "0"));
                 if (metadata) literal.add(Map.of("rep", unknown));
-                var proof = CoreRepresentations.INSTANCE.expression(literal);
+                var proof = CoreRepresentations.expression(literal);
                 assertEquals(CoreKind.UNKNOWN, proof.getKind(), kind);
                 assertNull(proof.getPrimReps(), kind);
             }

@@ -93,7 +93,7 @@ class FloatingByteOffsetTest {
     }
 
     @Test fun primitiveMetadataRejectsWrongOffsetsRepsAndFlags() {
-        fun proof(kind: CoreKind, rep: String) = CoreRepresentation(kind, primReps = listOf(rep))
+        fun proof(kind: CoreKind, rep: String) = CoreRepresentation(kind, false, false, listOf(rep))
         val array = proof(CoreKind.OBJECT, "BoxedRep (Just Unlifted)")
         val offset = proof(CoreKind.LONG, "IntRep")
         val wrongOffset = proof(CoreKind.DOUBLE, "DoubleRep")

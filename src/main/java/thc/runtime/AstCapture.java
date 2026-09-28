@@ -13,7 +13,7 @@ import java.util.function.Function;
 public final class AstCapture extends ControlFlowException {
     private final Object yielded;
     private final MaskingState logicalMask;
-    private final StackAnnotationState annotations = StackAnnotations.INSTANCE.current(null);
+    private final StackAnnotationState annotations = StackAnnotations.current(null);
     private final ArrayList<AstResumeStep> steps = new ArrayList<>();
     public AstCapture(Object yielded, MaskingState logicalMask) { this.yielded = yielded; this.logicalMask = logicalMask; }
     public Object getYielded() { return yielded; }

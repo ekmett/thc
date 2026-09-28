@@ -261,4 +261,3 @@ class Simd128AddressNativeTest {
                 }
     }
 }
-

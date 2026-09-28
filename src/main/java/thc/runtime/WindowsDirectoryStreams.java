@@ -44,8 +44,8 @@ public final class WindowsDirectoryStreams implements Closeable {
         if (disposed) ProgramKt.fault("Windows directory registry is closed");
     }
     private ManagedAllocation key(ManagedAddress address) {
-        if (address.cbitsOffset$org_intelligence_thc() != 0) ProgramKt.fault("Windows search handle requires its exact opaque base");
-        var owner = address.cbitsOwner$org_intelligence_thc();
+        if (address.cbitsOffset() != 0) ProgramKt.fault("Windows search handle requires its exact opaque base");
+        var owner = address.cbitsOwner();
         if (owner == null) ProgramKt.fault("Windows search handle has no managed identity");
         return owner;
     }
@@ -68,18 +68,18 @@ public final class WindowsDirectoryStreams implements Closeable {
     /** Keep a caller allocation stable through validation, native execution and
      * publication. Invalid output must not advance or acquire a native search. */
     private <T> T output(ManagedAddress address, Supplier<T> action) {
-        return address.withNativeBorrow$org_intelligence_thc(() -> {
+        return address.withNativeBorrow(() -> {
             Supplier<T> checked = () -> {
-                address.requireByteRegion$org_intelligence_thc(Abi.getSize(), true);
+                address.requireByteRegion(Abi.getSize(), true);
                 return action.get();
             };
-            var owner = address.cbitsOwner$org_intelligence_thc();
+            var owner = address.cbitsOwner();
             if (owner == null) return checked.get();
             synchronized (owner) { return checked.get(); }
         });
     }
     private String query(ManagedAddress path) {
-        return path.withNativeBorrow$org_intelligence_thc(() -> {
+        return path.withNativeBorrow(() -> {
             Supplier<String> read = () -> {
                 var result = new StringBuilder();
                 long available = path.availableBytes();
@@ -97,7 +97,7 @@ public final class WindowsDirectoryStreams implements Closeable {
                 // here must reach the original API unchanged, including errors.
                 return supplied.startsWith("\\\\?\\") ? supplied : supplied.replace('/', '\\');
             };
-            var owner = path.cbitsOwner$org_intelligence_thc();
+            var owner = path.cbitsOwner();
             String value;
             if (owner == null) value = read.get();
             else synchronized (owner) { value = read.get(); }
@@ -125,7 +125,7 @@ public final class WindowsDirectoryStreams implements Closeable {
                 var data = arena.allocate(Abi.getSize(), Abi.getAlignment());
                 var error = arena.allocate(Api.capture);
                 // Allocate identity before acquiring the OS resource.
-                var token = ManagedAddress.Companion.fromAllocation(ManagedAllocation.immutable(new byte[0], 8, true));
+                var token = ManagedAddress.fromAllocation(ManagedAllocation.immutable(new byte[0], 8, true));
                 var nativeHandle = foreign(() -> (MemorySegment) Api.first.invokeExact(error, text, data));
                 lastError().set(Api.error(error));
                 if (nativeHandle.address() == -1L) return invalidHandle();
@@ -240,7 +240,7 @@ public final class WindowsDirectoryStreams implements Closeable {
         return System.getProperty("os.name").startsWith("Windows") &&
             (System.getProperty("os.arch").equals("amd64") || System.getProperty("os.arch").equals("x86_64"));
     }
-    public static ManagedAddress invalidHandle() { return ManagedAddress.Companion.unownedNumeric$org_intelligence_thc(-1L); }
+    public static ManagedAddress invalidHandle() { return ManagedAddress.unownedNumeric(-1L); }
     public static WindowsDirectoryStreams current(Node node) {
         var streams = Language.currentState(node).getWindowsDirectories();
         if (streams == null) throw new SecurityException("Windows directory scanning requires the fixed-filesystem NativeIO context");

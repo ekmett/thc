@@ -79,7 +79,7 @@ public final class NativeFileProvider implements Closeable {
                 var provider = new NativeFileProvider(state.getEnv(), state.getThreads(), filesystem.getDirectoryOwner());
                 state.getFiles().installNative(provider, endpoints);
                 state.setNativeFiles(provider);
-                if (profile == ContextProfile.LAUNCHER) state.getSignals().authorizeLauncher$org_intelligence_thc();
+                if (profile == ContextProfile.LAUNCHER) state.getSignals().authorizeLauncher();
             } finally { context.leave(); }
             return context;
         } catch (Throwable failure) {
@@ -110,10 +110,10 @@ public final class NativeFileProvider implements Closeable {
             }
             library = env.parseInternal(Source.newBuilder("llvm", ByteSequence.create(bytes), "native-file-api.so").build()).call();
             statSize = (int) interop.asLong(interop.execute(interop.readMember(library, "thc_file_stat_size")));
-            long expected = PosixStat.execute(OriginalStdioOp.SIZEOF_STAT, ManagedAddress.Companion.nullAddress(), 0);
+            long expected = PosixStat.execute(OriginalStdioOp.SIZEOF_STAT, ManagedAddress.nullAddress(), 0);
             if (statSize != expected) throw fault("Native file provider/stat image ABI mismatch");
             termiosSize = (int) interop.asLong(interop.execute(interop.readMember(library, "thc_file_termios_size")));
-            if (termiosSize != TermiosImage.scalar(OriginalStdioOp.SIZEOF_TERMIOS, ManagedAddress.Companion.nullAddress(), 0))
+            if (termiosSize != TermiosImage.scalar(OriginalStdioOp.SIZEOF_TERMIOS, ManagedAddress.nullAddress(), 0))
                 throw fault("Native file provider/termios image ABI mismatch");
             env.registerOnDispose(this);
         } catch (Throwable failure) { throw propagate(failure); }
@@ -510,7 +510,7 @@ public final class NativeFileProvider implements Closeable {
         @Override public long size() {
             synchronized (lease) {
                 requireCurrent(); lease.requireOpen();
-                return PosixStat.execute(OriginalStdioOp.ST_SIZE, ManagedAddress.Companion.fromByteArray(statImage()), 0);
+                return PosixStat.execute(OriginalStdioOp.ST_SIZE, ManagedAddress.fromByteArray(statImage()), 0);
             }
         }
         @Override public SeekableByteChannel truncate(long size) {

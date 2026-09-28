@@ -367,4 +367,3 @@ class SimdWord32ByteArrayTest {
         });
     }
 }
-

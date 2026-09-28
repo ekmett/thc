@@ -388,4 +388,3 @@ class SimdWord8VectorTest {
         });
     }
 }
-

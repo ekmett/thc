@@ -18,7 +18,7 @@ public final class ManagedMd5 {
     private static void requireContext(ManagedAddress context) {
         context.requireRange(0, CONTEXT_SIZE, true);
         // GHC's MD5Context has C alignment 4. Check the logical offset before a C cast or store.
-        if (context.cbitsOffset$org_intelligence_thc() % CONTEXT_ALIGNMENT != 0)
+        if (context.cbitsOffset() % CONTEXT_ALIGNMENT != 0)
             throw fault("MD5 context address is not 4-byte aligned");
     }
 

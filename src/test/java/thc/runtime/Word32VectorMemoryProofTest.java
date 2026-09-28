@@ -449,4 +449,3 @@ class Word32VectorMemoryProofTest {
         }
     }
 }
-

@@ -72,7 +72,6 @@ thc.runtime.PackageScalarAccess
 thc.runtime.PackagePointerLease
 thc.runtime.ManagedAddress$Companion
 thc.runtime.NativeFileLease$Companion
-thc.runtime.SulongCbits$Companion
 thc.runtime.StablePointers
 thc.runtime.StablePointers$Companion
 thc.runtime.NativeAddresses

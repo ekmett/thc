@@ -20,7 +20,7 @@ public final class HostDispatch extends Node {
     // and explicit compilation of the stable guest entry target unchanged.
     @Child private IndirectCallNode publicCall = IndirectCallNode.create();
 
-    public void escaping(GuestException failure) { foreignExceptions.escaping(failure); }
+    public void escaping(GuestException failure) { throw foreignExceptions.escaping(failure); }
     public Object execute(RootCallTarget target, Object[] arguments) { return calls.call(target, arguments); }
     public Object executePublic(RootCallTarget target, Object[] arguments) { return Calls.indirect(publicCall, target, arguments); }
     public static HostDispatch create() { return new HostDispatch(); }

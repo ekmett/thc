@@ -150,7 +150,7 @@ class LibdwUnavailableTest {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 var program = load(language, backend, module);
                 var target = program.entryTarget("attach");
-                var pointer = ManagedAddress.Companion.fromAllocation(ManagedAllocation.mutable(16, 8));
+                var pointer = ManagedAddress.fromAllocation(ManagedAllocation.mutable(16, 8));
                 java.util.function.LongSupplier call = () -> {
                     var weak = Language.currentState().getWeaks().make(new Object(), new Object(), null);
                     long added = (Long) Calls.target(target, new Object[]{0L, pointer, weak});
@@ -184,16 +184,16 @@ class LibdwUnavailableTest {
                 var program = load(language, backend, module);
                 var target = program.entryTarget("attach");
                 var state = Language.currentState();
-                var function = CFinalizerLabels.INSTANCE.fromCore("free", proof);
-                assertTrue(function.sameLocation(CFinalizerLabels.INSTANCE.fromCore("free", proof)));
+                var function = CFinalizerLabels.fromCore("free", proof);
+                assertTrue(function.sameLocation(CFinalizerLabels.fromCore("free", proof)));
                 assertThrows(RuntimeFault.class, function::toNativeBits);
                 java.util.function.LongSupplier call = () -> {
                     var base = state.getNativeAllocations().malloc(16);
                     var weak = state.getWeaks().make(new Object(), new Object(), null);
                     assertThrows(RuntimeFault.class, () -> state.getWeaks().addCFinalizer(function, base.plus(1), 0, weak, state.cbits()));
                     assertThrows(RuntimeFault.class, () -> state.getWeaks().addCFinalizer(function,
-                        ManagedAddress.Companion.fromAllocation(ManagedAllocation.mutable(16, 8)), 0, weak, state.cbits()));
-                    var borrow = Objects.requireNonNull(base.nativeAllocation$org_intelligence_thc()).borrow();
+                        ManagedAddress.fromAllocation(ManagedAllocation.mutable(16, 8)), 0, weak, state.cbits()));
+                    var borrow = Objects.requireNonNull(base.nativeAllocation()).borrow();
                     try {
                         assertThrows(RuntimeFault.class, () -> state.getWeaks().addCFinalizer(function, base, 0, weak, state.cbits()));
                     } finally { borrow.close(); }
@@ -226,27 +226,27 @@ class LibdwUnavailableTest {
             context.initialize("thc"); context.enter();
             try {
                 var state = Language.currentState();
-                var first = CFinalizerLabels.INSTANCE.fromCore("libdwPoolRelease", proof);
-                var second = CFinalizerLabels.INSTANCE.fromCore("backtraceFree", proof);
-                assertTrue(first.sameLocation(CFinalizerLabels.INSTANCE.fromCore("libdwPoolRelease", proof)));
+                var first = CFinalizerLabels.fromCore("libdwPoolRelease", proof);
+                var second = CFinalizerLabels.fromCore("backtraceFree", proof);
+                assertTrue(first.sameLocation(CFinalizerLabels.fromCore("libdwPoolRelease", proof)));
                 assertFalse(first.sameLocation(second));
-                assertFalse(first.sameLocation(ManagedAddress.Companion.nullAddress()));
+                assertFalse(first.sameLocation(ManagedAddress.nullAddress()));
                 assertThrows(RuntimeFault.class, first::toNativeBits);
                 assertThrows(RuntimeFault.class, () -> first.plus(0));
                 assertThrows(RuntimeFault.class, () -> first.readWord8(0));
-                assertThrows(RuntimeFault.class, () -> CFinalizerLabels.INSTANCE.fromCore("enabled_capabilities", proof));
-                assertThrows(RuntimeFault.class, () -> CFinalizerLabels.INSTANCE.fromCore("libdwPoolRelease",
+                assertThrows(RuntimeFault.class, () -> CFinalizerLabels.fromCore("enabled_capabilities", proof));
+                assertThrows(RuntimeFault.class, () -> CFinalizerLabels.fromCore("libdwPoolRelease",
                     proof.copy(proof.getKind(), proof.getEvaluated(), proof.getPresent(), List.of("WordRep"),
                         proof.getComponents(), proof.getVector(), proof.getAlternatives(), proof.getTagSlot(), proof.getAlternativeSlots())));
                 var bytes = ManagedAllocation.mutable(16, 8);
                 for (long index = 0; index < 16; index++) bytes.writeByte(index, index + 17);
-                var pointer = ManagedAddress.Companion.fromAllocation(bytes);
+                var pointer = ManagedAddress.fromAllocation(bytes);
                 var interop = InteropLibrary.getUncached();
-                var shifted = state.cbits().pointerTransport$org_intelligence_thc(pointer.plus(5), true);
+                var shifted = state.cbits().pointerTransport(pointer.plus(5), true);
                 assertEquals((byte) 22, interop.readBufferByte(shifted, 0));
                 assertEquals(11L, interop.getBufferSize(shifted));
-                var immutable = ManagedAddress.Companion.fromHex("0112233445").plus(2);
-                var projected = state.cbits().pointerTransport$org_intelligence_thc(immutable, true);
+                var immutable = ManagedAddress.fromHex("0112233445").plus(2);
+                var projected = state.cbits().pointerTransport(immutable, true);
                 assertEquals((byte) 0x23, interop.readBufferByte(projected, 0));
                 interop.toNative(projected);
                 assertEquals(immutable.toNativeBits(), interop.asPointer(projected));
@@ -270,32 +270,32 @@ class LibdwUnavailableTest {
             first.initialize("thc"); first.enter();
             try {
                 var state = Language.currentState();
-                label = state.cbits().finalizerLabel$org_intelligence_thc("backtraceFree");
+                label = state.cbits().finalizerLabel("backtraceFree");
                 var buffers = new ArrayList<ManagedAddress>();
                 for (boolean pinned : new boolean[]{false, true}) {
-                    var pointer = ManagedAddress.Companion.fromAllocation(ManagedAllocation.mutable(16, 8, pinned));
+                    var pointer = ManagedAddress.fromAllocation(ManagedAllocation.mutable(16, 8, pinned));
                     pointer.fill(16, 165); buffers.add(pointer);
                 }
-                buffers.add(ManagedAddress.Companion.fromHex("001122334455"));
+                buffers.add(ManagedAddress.fromHex("001122334455"));
                 for (var pointer : buffers) {
                     var before = LongStream.range(0, pointer.availableBytes()).map(pointer::readWord8).boxed().toList();
                     for (String symbol : List.of("libdwPoolRelease", "backtraceFree")) {
                         var weak = state.getWeaks().make(new Object(), new Object(), null);
-                        assertEquals(1L, state.getWeaks().addCFinalizer(state.cbits().finalizerLabel$org_intelligence_thc(symbol), pointer.plus(2), 0, weak, state.cbits()));
+                        assertEquals(1L, state.getWeaks().addCFinalizer(state.cbits().finalizerLabel(symbol), pointer.plus(2), 0, weak, state.cbits()));
                         assertEquals(0L, state.getWeaks().finalize(weak).getFlag());
                         assertEquals(before, LongStream.range(0, pointer.availableBytes()).map(pointer::readWord8).boxed().toList());
                     }
                 }
-                Objects.requireNonNull(label.finalizerFunction$org_intelligence_thc()).invoke(ManagedAddress.Companion.nullAddress());
-                assertThrows(RuntimeFault.class, () -> Objects.requireNonNull(label.finalizerFunction$org_intelligence_thc())
-                    .invoke(ManagedAddress.Companion.unownedNumeric$org_intelligence_thc(1)));
+                Objects.requireNonNull(label.finalizerFunction()).invoke(ManagedAddress.nullAddress());
+                assertThrows(RuntimeFault.class, () -> Objects.requireNonNull(label.finalizerFunction())
+                    .invoke(ManagedAddress.unownedNumeric(1)));
                 if (WindowsDirectoryStreams.supportedHost()) {
                     // Also exercise an actual context-owned native allocation,
                     // including registration before its owner is retired.
                     var address = state.getWindowsCodePages().message(2);
                     var weak = state.getWeaks().make(new Object(), new Object(), null);
                     state.getWeaks().addCFinalizer(label, address, 0, weak, state.cbits());
-                    Objects.requireNonNull(label.finalizerFunction$org_intelligence_thc()).invoke(address.plus(2));
+                    Objects.requireNonNull(label.finalizerFunction()).invoke(address.plus(2));
                     state.getWindowsCodePages().localFree(address);
                     assertThrows(RuntimeFault.class, () -> state.getWeaks().finalize(weak));
                     assertEquals(0L, state.getWeaks().finalize(weak).getFlag());
@@ -305,17 +305,17 @@ class LibdwUnavailableTest {
             try (var second = Context.newBuilder("thc").allowNativeAccess(true).allowIO(IOAccess.NONE).build()) {
                 second.initialize("thc"); second.enter();
                 try {
-                    assertThrows(RuntimeFault.class, () -> Objects.requireNonNull(label.finalizerFunction$org_intelligence_thc()).invoke(ManagedAddress.Companion.nullAddress()));
+                    assertThrows(RuntimeFault.class, () -> Objects.requireNonNull(label.finalizerFunction()).invoke(ManagedAddress.nullAddress()));
                     var state = Language.currentState();
                     var weak = state.getWeaks().make(new Object(), new Object(), null);
-                    assertThrows(RuntimeFault.class, () -> state.getWeaks().addCFinalizer(label, ManagedAddress.Companion.nullAddress(), 0, weak, state.cbits()));
+                    assertThrows(RuntimeFault.class, () -> state.getWeaks().addCFinalizer(label, ManagedAddress.nullAddress(), 0, weak, state.cbits()));
                     assertEquals(0L, state.getWeaks().finalize(weak).getFlag());
                 } finally { second.leave(); }
             }
         } finally { first.close(); }
         try (var denied = Context.newBuilder("thc").allowIO(IOAccess.NONE).build()) {
             denied.initialize("thc"); denied.enter();
-            try { assertThrows(RuntimeFault.class, () -> Language.currentState().cbits().finalizerLabel$org_intelligence_thc("backtraceFree")); }
+            try { assertThrows(RuntimeFault.class, () -> Language.currentState().cbits().finalizerLabel("backtraceFree")); }
             finally { denied.leave(); }
         }
     }
@@ -330,8 +330,8 @@ class LibdwUnavailableTest {
                 for (var op : LibdwForeignOp.values()) targets.put(op.getSymbol(), program.entryTarget(op.getSymbol()));
                 var bytes = ManagedAllocation.mutable(64, 8);
                 for (long offset = 0; offset < 64; offset++) bytes.writeByte(offset, 165L);
-                var pointer = ManagedAddress.Companion.fromAllocation(bytes);
-                var nil = ManagedAddress.Companion.nullAddress();
+                var pointer = ManagedAddress.fromAllocation(bytes);
+                var nil = ManagedAddress.nullAddress();
                 class Exercise {
                     boolean compiled;
                     Object call(String name, Object... args) throws Exception {

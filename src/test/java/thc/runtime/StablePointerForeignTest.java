@@ -81,9 +81,9 @@ class StablePointerForeignTest {
                 state.getPackageCbits().link(link);
                 var calls = new LinkedHashMap<String, com.oracle.truffle.api.RootCallTarget>();
                 for (var signature : abi) calls.put(signature.symbol(), new Entry(language, new PackageScalarCall(link, signature)).getCallTarget());
-                assertSame(ManagedAddress.Companion.nullAddress(), calls.get("stable_identity").call(ManagedAddress.Companion.nullAddress()));
+                assertSame(ManagedAddress.nullAddress(), calls.get("stable_identity").call(ManagedAddress.nullAddress()));
                 var pinned = PinnedMemory.allocate(16, 64);
-                var pinnedAddress = ManagedAddress.Companion.fromAllocation(pinned).plus(7);
+                var pinnedAddress = ManagedAddress.fromAllocation(pinned).plus(7);
                 long pinnedBits = Objects.requireNonNull(pinned.nativeSegment()).address();
                 var returnedPinned = (ManagedAddress) calls.get("stable_identity").call(pinnedAddress);
                 assertEquals(pinnedBits + 7, returnedPinned.toNativeBits());
@@ -94,7 +94,7 @@ class StablePointerForeignTest {
                 assertEquals(1L, calls.get("stable_equal").call(returnedPinned, forwardedPinned));
                 assertEquals(pinnedBits + 9, ((ManagedAddress) calls.get("stable_identity").call(returnedPinned.plus(2))).toNativeBits());
                 var heap = ManagedAllocation.mutable(16, 8);
-                assertThrows(RuntimeFault.class, () -> calls.get("stable_identity").call(ManagedAddress.Companion.fromAllocation(heap)));
+                assertThrows(RuntimeFault.class, () -> calls.get("stable_identity").call(ManagedAddress.fromAllocation(heap)));
                 assertFalse(heap.isPinned());
                 assertNull(heap.nativeSegment());
                 if (System.getProperty("os.name").equals("Linux") && Set.of("amd64", "x86_64").contains(System.getProperty("os.arch"))) {
@@ -105,7 +105,7 @@ class StablePointerForeignTest {
                         assertEquals(allocation.toNativeBits(), returnedAllocation.toNativeBits());
                         assertThrows(RuntimeFault.class, () -> returnedAllocation.readWord8(0));
                         assertEquals(1L, calls.get("stable_equal").call(allocation, returnedAllocation));
-                        ManagedAddress.Companion.withNativeBorrows$org_intelligence_thc(List.of(returnedAllocation), () -> {
+                        ManagedAddress.withNativeBorrows(List.of(returnedAllocation), () -> {
                             assertThrows(RuntimeFault.class, () -> state.getNativeAllocations().free(allocation));
                             return Unit.INSTANCE;
                         });
@@ -132,7 +132,7 @@ class StablePointerForeignTest {
                 var forwardedStatic = (ManagedAddress) calls.get("stable_identity").call(unrelated);
                 assertEquals(1L, calls.get("stable_equal").call(unrelated, forwardedStatic));
                 assertThrows(RuntimeFault.class, () -> calls.get("stable_identity").call(
-                    ManagedAddress.Companion.unownedNumeric$org_intelligence_thc(unrelated.toNativeBits())));
+                    ManagedAddress.unownedNumeric(unrelated.toNativeBits())));
                 try (var other = context()) {
                     other.initialize("thc"); other.enter();
                     try {
@@ -148,7 +148,7 @@ class StablePointerForeignTest {
                     } finally { other.leave(); }
                 }
                 calls.get("stable_clear").call();
-                assertSame(ManagedAddress.Companion.nullAddress(), calls.get("stable_load").call());
+                assertSame(ManagedAddress.nullAddress(), calls.get("stable_load").call());
                 var token = state.getStablePointers().nativeTransport(first);
                 state.getStablePointers().free(first);
                 assertFalse(token.isPointer());

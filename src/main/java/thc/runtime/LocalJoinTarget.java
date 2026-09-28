@@ -15,7 +15,7 @@ public final class LocalJoinTarget {
     private final CoreRepresentation result;
     @CompilerDirectives.CompilationFinal(dimensions = 2) private final int[][] typedSlots;
     private final LocalJoinJump jump;
-    public LocalJoinTarget(Object group, int index, int[] slots, CoreRepresentation[] proofs) { this(group, index, slots, proofs, new boolean[slots.length], CoreRepresentation.Companion.getUNKNOWN(), new int[proofs.length][]); }
+    public LocalJoinTarget(Object group, int index, int[] slots, CoreRepresentation[] proofs) { this(group, index, slots, proofs, new boolean[slots.length], CoreRepresentation.UNKNOWN, new int[proofs.length][]); }
     public LocalJoinTarget(Object group, int index, int[] slots, CoreRepresentation[] proofs, boolean[] entryStrict, CoreRepresentation result) { this(group, index, slots, proofs, entryStrict, result, new int[proofs.length][]); }
     public LocalJoinTarget(Object group, int index, int[] slots, CoreRepresentation[] proofs, boolean[] entryStrict, CoreRepresentation result, int[][] typedSlots) {
         this.group = group; this.index = index; this.slots = slots; this.proofs = proofs; this.entryStrict = entryStrict; this.result = result; this.typedSlots = typedSlots;

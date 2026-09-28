@@ -408,4 +408,3 @@ class SimdWord32VectorTest {
         });
     }
 }
-

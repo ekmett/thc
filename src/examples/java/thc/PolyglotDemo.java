@@ -68,7 +68,7 @@ public final class PolyglotDemo {
                         selectedBinding = binding;
                     }
                     if (selectedBinding == null) throw new NoSuchElementException("Collection contains no element matching the predicate.");
-                    var result = CoreRepresentations.INSTANCE.ioUnitMainResult(selectedBinding, bindings);
+                    var result = CoreRepresentations.ioUnitMainResult(selectedBinding, bindings);
                     ExecutableProgram program = backend.equals("ast") ? new Program(language, linked, false, false) : new BytecodeProgram(language, linked, false);
                     var target = new IoMainRoot(language, result).getCallTarget();
                     var action = program.entryValue(entry);

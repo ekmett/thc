@@ -287,4 +287,3 @@ class SimdInt32ByteArrayTest {
         });
     }
 }
-

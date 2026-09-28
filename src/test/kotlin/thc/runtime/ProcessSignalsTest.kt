@@ -3,6 +3,8 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
+import thc.runtime.ManagedSignals.finishSignalConsumer
+
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.TruffleSafepoint
 import org.junit.jupiter.api.Assertions.*
@@ -199,7 +201,7 @@ class ProcessSignalsTest {
     }
 
     @Test fun synchronousDispatchIsRejectedBeforeTransportAcquisition() = onBackends { language, backend ->
-        val service = ManagedSignals(Language.currentState(), language, reducedVmSignals = true) {
+        val service = ManagedSignals(Language.currentState(), language, true, { NativeSignalTransport.userSignalAvailable() }) {
             error("synchronous program must not acquire signal transport")
         }
         val failure = assertThrows(RuntimeFault::class.java) { service.bind(program(language, backend, async = false)) }
@@ -269,7 +271,7 @@ class ProcessSignalsTest {
                 override fun resetWake() { events.removeIf { it.info.isEmpty() } }
                 override fun close() { closed.incrementAndGet() }
             }
-            val service = ManagedSignals(owner, language, reducedVmSignals = true, userSignalAvailable = { true }) { fake }
+            val service = ManagedSignals(owner, language, true, { true }) { fake }
             val program = program(language, backend)
             service.bind(program)
             assertThrows(RuntimeFault::class.java) { service.install(2L, -5L, ManagedAddress.nullAddress()) }
@@ -293,7 +295,7 @@ class ProcessSignalsTest {
     }
 
     @Test fun extendedHandlersRequireReleasedVmSignalsBeforeAcquiringTransport() = onBackends { language, backend ->
-        val service = ManagedSignals(Language.currentState(), language, reducedVmSignals = false) {
+        val service = ManagedSignals(Language.currentState(), language, false, { NativeSignalTransport.userSignalAvailable() }) {
             error("denied request must not acquire a native signal transport")
         }
         service.bind(program(language, backend))
@@ -308,8 +310,8 @@ class ProcessSignalsTest {
     }
 
     @Test fun userSignalRequiresVerifiedRelocationBeforeAcquiringTransport() = onBackends { language, backend ->
-        val service = ManagedSignals(Language.currentState(), language, reducedVmSignals = true,
-            userSignalAvailable = { false }) { error("denied request must not acquire signal transport") }
+        val service = ManagedSignals(Language.currentState(), language, true,
+            { false }) { error("denied request must not acquire signal transport") }
         service.bind(program(language, backend))
         service.authorizeLauncher()
         val failure = assertThrows(RuntimeFault::class.java) {

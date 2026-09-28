@@ -79,7 +79,7 @@ class SignalDispatchFullCoreTest {
                             override fun resetWake() { events.removeIf { it.info.isEmpty() } }
                             override fun close() { closed.incrementAndGet() }
                         }
-                        val service = ManagedSignals(owner, language, reducedVmSignals = true) { transport }
+                        val service = ManagedSignals(owner, language, true, { NativeSignalTransport.userSignalAvailable() }, { transport })
                         service.bind(program)
                         service.authorizeLauncher() // Test-only transport, never changes host process handlers.
                         owner.threads.enterCurrent()

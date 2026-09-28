@@ -24,7 +24,7 @@ public final class ManagedGmp {
     @TruffleBoundary
     private static double getDouble(Node node, Object input, long count, long exponent) {
         if (count == Long.MIN_VALUE) throw fault("Invalid signed limb count");
-        var region = LimbRegion.Companion.read(input, Math.abs(count), true);
+        var region = LimbRegion.read(input, Math.abs(count), true);
         return Language.currentState(node).limbs().toDouble(region, count < 0, exponent);
     }
 
@@ -33,37 +33,37 @@ public final class ManagedGmp {
                               Object third, Object fourth, long a, long b, long c) {
         var provider = Language.currentState(node).limbs();
         return switch (operation) {
-            case ADD -> provider.add(LimbRegion.Companion.write(first, a, false), LimbRegion.Companion.read(second, a, false), LimbRegion.Companion.read(third, b, false));
-            case SUBTRACT -> provider.subtract(LimbRegion.Companion.write(first, a, false), LimbRegion.Companion.read(second, a, false), LimbRegion.Companion.read(third, b, false));
+            case ADD -> provider.add(LimbRegion.write(first, a, false), LimbRegion.read(second, a, false), LimbRegion.read(third, b, false));
+            case SUBTRACT -> provider.subtract(LimbRegion.write(first, a, false), LimbRegion.read(second, a, false), LimbRegion.read(third, b, false));
             case MULTIPLY -> {
-                var left = LimbRegion.Companion.read(second, a, false);
-                var right = LimbRegion.Companion.read(third, b, false);
-                yield provider.multiply(LimbRegion.Companion.write(first, left.getLimbs() + right.getLimbs(), false), left, right);
+                var left = LimbRegion.read(second, a, false);
+                var right = LimbRegion.read(third, b, false);
+                yield provider.multiply(LimbRegion.write(first, left.getLimbs() + right.getLimbs(), false), left, right);
             }
-            case ADD_WORD -> provider.addWord(LimbRegion.Companion.write(first, a, false), LimbRegion.Companion.read(second, a, false), b);
-            case MULTIPLY_WORD -> provider.multiplyWord(LimbRegion.Companion.write(first, a, false), LimbRegion.Companion.read(second, a, false), b);
+            case ADD_WORD -> provider.addWord(LimbRegion.write(first, a, false), LimbRegion.read(second, a, false), b);
+            case MULTIPLY_WORD -> provider.multiplyWord(LimbRegion.write(first, a, false), LimbRegion.read(second, a, false), b);
             case SHIFT_RIGHT, SHIFT_RIGHT_NEGATIVE -> {
-                var input = LimbRegion.Companion.read(second, a, false);
+                var input = LimbRegion.read(second, a, false);
                 if (b <= 0 || b >= a * 64) throw fault("Limb right shift must be inside the input width");
                 boolean negative = operation == GmpForeignOp.SHIFT_RIGHT_NEGATIVE;
                 long size = a - (negative ? b - 1 : b) / 64;
-                yield provider.shiftRight(LimbRegion.Companion.write(first, size, false), input, b, negative);
+                yield provider.shiftRight(LimbRegion.write(first, size, false), input, b, negative);
             }
             // The original Int# import zero-extends C int; its caller applies narrowCInt#.
-            case COMPARE -> provider.compare(LimbRegion.Companion.read(first, a, false), LimbRegion.Companion.read(second, a, false)) & 0xffff_ffffL;
+            case COMPARE -> provider.compare(LimbRegion.read(first, a, false), LimbRegion.read(second, a, false)) & 0xffff_ffffL;
             case DIVIDE_WORD -> {
-                var input = LimbRegion.Companion.read(second, b, true);
+                var input = LimbRegion.read(second, b, true);
                 if (a < 0 || a > (long) Integer.MAX_VALUE / 8) throw fault("Invalid fractional limb count");
-                yield provider.divideWord(LimbRegion.Companion.write(first, input.getLimbs() + a, true), a, input, c);
+                yield provider.divideWord(LimbRegion.write(first, input.getLimbs() + a, true), a, input, c);
             }
-            case MODULO_WORD -> provider.moduloWord(LimbRegion.Companion.read(first, a, true), b);
+            case MODULO_WORD -> provider.moduloWord(LimbRegion.read(first, a, true), b);
             case GCD_WORDS -> provider.gcdWords(a, b);
-            case GCD_WORD -> provider.gcdWord(LimbRegion.Companion.read(first, a, false), b);
-            case GCD -> provider.gcd(LimbRegion.Companion.write(first, b, false), LimbRegion.Companion.read(second, a, false), LimbRegion.Companion.read(third, b, false));
+            case GCD_WORD -> provider.gcdWord(LimbRegion.read(first, a, false), b);
+            case GCD -> provider.gcd(LimbRegion.write(first, b, false), LimbRegion.read(second, a, false), LimbRegion.read(third, b, false));
             case SHIFT_LEFT -> {
-                var input = LimbRegion.Companion.read(second, a, false);
+                var input = LimbRegion.read(second, a, false);
                 if (b <= 0 || b > (long) Integer.MAX_VALUE * 8) throw fault("Invalid limb left shift count");
-                yield provider.shiftLeft(LimbRegion.Companion.write(first, a + (b + 63) / 64, false), input, b);
+                yield provider.shiftLeft(LimbRegion.write(first, a + (b + 63) / 64, false), input, b);
             }
             case AND, AND_NOT, OR, XOR -> {
                 var logical = switch (operation) {
@@ -72,26 +72,26 @@ public final class ManagedGmp {
                     case OR -> LimbBitwise.OR;
                     default -> LimbBitwise.XOR;
                 };
-                provider.bitwise(LimbRegion.Companion.write(first, a, false), LimbRegion.Companion.read(second, a, false), LimbRegion.Companion.read(third, a, false), logical);
+                provider.bitwise(LimbRegion.write(first, a, false), LimbRegion.read(second, a, false), LimbRegion.read(third, a, false), logical);
                 yield 0;
             }
-            case POPCOUNT -> provider.populationCount(LimbRegion.Companion.read(first, a, false));
+            case POPCOUNT -> provider.populationCount(LimbRegion.read(first, a, false));
             case DIVIDE -> {
-                var numerator = LimbRegion.Companion.read(third, b, false);
-                var divisor = LimbRegion.Companion.read(fourth, c, false);
-                provider.divide(LimbRegion.Companion.write(first, b - c + 1, false), LimbRegion.Companion.write(second, c, false), a, numerator, divisor);
+                var numerator = LimbRegion.read(third, b, false);
+                var divisor = LimbRegion.read(fourth, c, false);
+                provider.divide(LimbRegion.write(first, b - c + 1, false), LimbRegion.write(second, c, false), a, numerator, divisor);
                 yield 0; // Unused internal lane; the guest result is singleton State.
             }
             case QUOTIENT -> {
-                var numerator = LimbRegion.Companion.read(second, a, false);
-                var divisor = LimbRegion.Companion.read(third, b, false);
-                provider.quotient(LimbRegion.Companion.write(first, a - b + 1, false), numerator, divisor);
+                var numerator = LimbRegion.read(second, a, false);
+                var divisor = LimbRegion.read(third, b, false);
+                provider.quotient(LimbRegion.write(first, a - b + 1, false), numerator, divisor);
                 yield 0;
             }
             case REMAINDER -> {
-                var numerator = LimbRegion.Companion.read(second, a, false);
-                var divisor = LimbRegion.Companion.read(third, b, false);
-                provider.remainder(LimbRegion.Companion.write(first, b, false), numerator, divisor);
+                var numerator = LimbRegion.read(second, a, false);
+                var divisor = LimbRegion.read(third, b, false);
+                provider.remainder(LimbRegion.write(first, b, false), numerator, divisor);
                 yield 0;
             }
             case GET_DOUBLE, ENCODE_DOUBLE -> throw fault("Floating GMP operation requires a Double destination");

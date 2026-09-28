@@ -45,7 +45,7 @@ public final class ManagedWeaks {
     /** One-address C callbacks use a zero environment flag. */
     @TruffleBoundary public synchronized long addCFinalizer(ManagedAddress function, ManagedAddress address,
             long flag, Object weak, SulongCbits provider) {
-        var callback = function.finalizerFunction$org_intelligence_thc();
+        var callback = function.finalizerFunction();
         if (callback == null) throw fault("Expected an original C function label");
         callback.requireOwner(provider);
         if (flag != 0L) throw fault("Original C finalizer requires a one-address ABI");
@@ -53,7 +53,7 @@ public final class ManagedWeaks {
         if (payload == null) return 0L;
         // The zero-flag RTS form ignores environment; lowering checks its Addr# carrier.
         if (callback.getSymbol().equals("free")) Language.currentState(null).getNativeAllocations().requireFreeTarget(address);
-        else if (address != ManagedAddress.Companion.nullAddress()) address.requireByteRegion$org_intelligence_thc(0L, false);
+        else if (address != ManagedAddress.nullAddress()) address.requireByteRegion(0L, false);
         payload.callbacks.add(0, () -> callback.invoke(address));
         return 1L;
     }
@@ -90,7 +90,7 @@ public final class ManagedWeaks {
     @TruffleBoundary synchronized Long mainThreadJavaId(Object value, GuestThreads threads) {
         if (closed) return null;
         var payload = live.get(handle(value));
-        return payload == null ? null : threads.liveJavaId$org_intelligence_thc(threadKey(payload, threads));
+        return payload == null ? null : threads.liveJavaId(threadKey(payload, threads));
     }
     public synchronized int retainedCount() { return live.size(); }
     public synchronized void close() { closed = true; live.clear(); }

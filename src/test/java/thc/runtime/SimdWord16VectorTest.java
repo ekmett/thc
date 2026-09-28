@@ -397,4 +397,3 @@ class SimdWord16VectorTest {
         });
     }
 }
-

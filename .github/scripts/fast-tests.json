@@ -39,7 +39,16 @@
     },
     "src/main/java/thc/runtime/EnvironmentOp.java": {"junit": ["thc.runtime.UnixLibcTest", "thc.runtime.GuestEnvironmentTest"], "python": ["scripts/test-audit-core.py"]},
     "src/main/java/thc/runtime/EnvironmentExpression.java": {"junit": ["thc.runtime.UnixLibcTest", "thc.runtime.GuestEnvironmentTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/main/kotlin/thc/runtime/GhcBCO.kt": {
+    "src/main/java/thc/runtime/GhcBCO.java": {
+      "junit": ["thc.runtime.GhcBCOTest"], "python": []
+    },
+    "src/main/java/thc/runtime/GhcInstruction.java": {
+      "junit": ["thc.runtime.GhcBCOTest"], "python": []
+    },
+    "src/main/java/thc/runtime/GhcBCORoot.java": {
+      "junit": ["thc.runtime.GhcBCOTest"], "python": []
+    },
+    "src/main/java/thc/runtime/GhcBCOExpression.java": {
       "junit": ["thc.runtime.GhcBCOTest"], "python": []
     },
     "src/main/java/thc/runtime/CoreMemoryCopyForeign.java": {
@@ -78,7 +87,7 @@
     "src/main/java/thc/runtime/CompactImages.java": {
       "junit": ["thc.runtime.CompactImagesTest"], "python": ["scripts/test-audit-core.py"]
     },
-    "src/main/kotlin/thc/runtime/HeapAddresses.kt": {
+    "src/main/java/thc/runtime/HeapAddresses.java": {
       "junit": ["thc.runtime.CompactImagesTest"], "python": []
     },
     "src/main/java/thc/runtime/CompactImageOp.java": {
@@ -96,13 +105,35 @@
     "src/main/java/thc/runtime/TraceOp.java": {
       "junit": ["thc.runtime.HintTraceTest"], "python": []
     },
-    "src/main/kotlin/thc/runtime/ManagedSTM.kt": {
+    "src/main/java/thc/runtime/ManagedSTM.java": {
       "junit": ["thc.runtime.ManagedSTMTest"], "python": []
     },
-    "src/main/kotlin/thc/runtime/STMPrimops.kt": {
+    "src/main/java/thc/runtime/ManagedTVar.java": {
+      "junit": ["thc.runtime.ManagedSTMTest"], "python": []
+    },
+    "src/main/java/thc/runtime/STMRetry.java": {
+      "junit": ["thc.runtime.ManagedSTMTest"], "python": []
+    },
+    "src/main/java/thc/runtime/STMConflict.java": {
+      "junit": ["thc.runtime.ManagedSTMTest"], "python": []
+    },
+    "src/main/java/thc/runtime/STMCall.java": {
       "junit": ["thc.runtime.ManagedSTMTest"], "python": ["scripts/test-audit-core.py"]
     },
-    "src/main/kotlin/thc/runtime/ThreadObservation.kt": {
+    "src/main/java/thc/runtime/STMExpression.java": {
+      "junit": ["thc.runtime.ManagedSTMTest"], "python": ["scripts/test-audit-core.py"]
+    },
+    "src/main/java/thc/runtime/STMOp.java": {
+      "junit": ["thc.runtime.ManagedSTMTest"], "python": ["scripts/test-audit-core.py"]
+    },
+    "src/main/java/thc/runtime/STMRestart.java": {
+      "junit": ["thc.runtime.ManagedSTMTest"], "python": ["scripts/test-audit-core.py"]
+    },
+    "src/main/java/thc/runtime/CoreThreadObservation.java": {
+      "junit": ["thc.runtime.GuestThreadInventoryTest", "thc.runtime.ThreadInventoryNativeTest"],
+      "python": ["scripts/test-audit-core.py"]
+    },
+    "src/main/java/thc/runtime/ThreadObservation.java": {
       "junit": ["thc.runtime.GuestThreadInventoryTest", "thc.runtime.ThreadInventoryNativeTest"],
       "python": ["scripts/test-audit-core.py"]
     },
@@ -114,7 +145,15 @@
       "junit": ["thc.runtime.AtomicIntArrayTest", "thc.runtime.FetchAddIntArrayTest", "thc.runtime.IntArrayTest"],
       "python": ["scripts/test-core-bytearrays.py"]
     },
-    "src/main/kotlin/thc/runtime/AddressArrayCopy.kt": {
+    "src/main/java/thc/runtime/AddressArrayCopyOp.java": {
+      "junit": ["thc.runtime.AddressArrayCopyTest"],
+      "python": ["scripts/test-audit-core.py"]
+    },
+    "src/main/java/thc/runtime/AddressToByteArrayExpression.java": {
+      "junit": ["thc.runtime.AddressArrayCopyTest"],
+      "python": ["scripts/test-audit-core.py"]
+    },
+    "src/main/java/thc/runtime/ByteArrayToAddressExpression.java": {
       "junit": ["thc.runtime.AddressArrayCopyTest"],
       "python": ["scripts/test-audit-core.py"]
     },
@@ -122,15 +161,23 @@
       "junit": ["thc.runtime.FloatDecodeTest", "thc.runtime.FloatingRemainderTest"],
       "python": ["scripts/test-audit-core.py"]
     },
-    "src/main/kotlin/thc/runtime/AtomicAddresses.kt": {
+    "src/main/java/thc/runtime/AtomicAddressOp.java": {
       "junit": ["thc.runtime.AtomicAddressTest"],
       "python": []
     },
-    "src/main/kotlin/thc/runtime/VectorAddresses.kt": {
+    "src/main/java/thc/runtime/AtomicAddressExpression.java": {
+      "junit": ["thc.runtime.AtomicAddressTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/NativeNarrowAtomic.java": {
+      "junit": ["thc.runtime.AtomicAddressTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/VectorAddressExpression.java": {
       "junit": ["thc.runtime.Simd128AddressTest", "thc.runtime.Simd128AddressNativeTest", "thc.runtime.SimdAddressFamiliesTest"],
       "python": ["scripts/test-core-vector-memory.py"]
     },
-    "src/main/kotlin/thc/runtime/VectorIntegerDivision.kt": {
+    "src/main/java/thc/runtime/VectorIntegerDivision.java": {
       "junit": ["thc.runtime.SimdArithmeticTest"],
       "python": []
     },
@@ -170,7 +217,10 @@
       "junit": ["thc.runtime.CoreMainThreadForeignTest"],
       "python": []
     },
-    "src/main/kotlin/thc/runtime/CoreRtsShutdown.kt": {"junit": ["thc.runtime.RtsShutdownTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/main/java/thc/runtime/RtsShutdownOp.java": {"junit": ["thc.runtime.RtsShutdownTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/main/java/thc/runtime/GuestShutdown.java": {"junit": ["thc.runtime.RtsShutdownTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/main/java/thc/runtime/CoreRtsShutdown.java": {"junit": ["thc.runtime.RtsShutdownTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/main/java/thc/runtime/ShutdownRuntime.java": {"junit": ["thc.runtime.RtsShutdownTest"], "python": ["scripts/test-audit-core.py"]},
     "src/main/java/thc/runtime/CoreBoundThreadForeign.java": {
       "junit": ["thc.runtime.CoreBoundThreadForeignTest", "thc.runtime.ThreadSchedulingTest"],
       "python": ["scripts/test-audit-core.py"]
@@ -201,7 +251,11 @@
       "junit": ["thc.runtime.MutVarTest", "thc.runtime.BoxedCasTest"],
       "python": []
     },
-    "src/main/kotlin/thc/runtime/StablePointers.kt": {
+    "src/main/java/thc/runtime/StablePointers.java": {
+      "junit": ["thc.runtime.StablePointerTest", "thc.runtime.AlignedScalarMemoryTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/StablePointerToken.java": {
       "junit": ["thc.runtime.StablePointerTest", "thc.runtime.AlignedScalarMemoryTest"],
       "python": []
     },
@@ -229,11 +283,27 @@
       "junit": ["thc.runtime.StablePointerTest"],
       "python": []
     },
-    "src/main/kotlin/thc/runtime/CoreSharedCAFStores.kt": {
+    "src/main/java/thc/runtime/CoreSharedCAFStores.java": {
       "junit": ["thc.runtime.StablePointerTest"],
       "python": []
     },
-    "src/main/kotlin/thc/runtime/FloatingAddresses.kt": {
+    "src/main/java/thc/runtime/SharedCAFStore.java": {
+      "junit": ["thc.runtime.StablePointerTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/SharedCAFStoreExpression.java": {
+      "junit": ["thc.runtime.StablePointerTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/FloatingAddresses.java": {
+      "junit": ["thc.runtime.FloatingAddressTest", "thc.runtime.UnalignedScalarMemoryTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/FloatingAddressOp.java": {
+      "junit": ["thc.runtime.FloatingAddressTest", "thc.runtime.UnalignedScalarMemoryTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/FloatingAddressExpression.java": {
       "junit": ["thc.runtime.FloatingAddressTest", "thc.runtime.UnalignedScalarMemoryTest"],
       "python": []
     },
@@ -249,7 +319,39 @@
       "junit": ["thc.runtime.SmallArrayTest", "thc.runtime.BoxedCasTest", "thc.runtime.ScalarMemoryUtilitiesTest"],
       "python": []
     },
-    "src/main/kotlin/thc/runtime/AddressIdentity.kt": {
+    "src/main/java/thc/runtime/CoreCurrentCCS.java": {
+      "junit": ["thc.runtime.AddressIdentityNativeTest", "thc.runtime.PinnedPointerCellsTest", "thc.runtime.NativeAddressTest", "thc.runtime.ScalarMemoryUtilitiesTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/ManagedAddressOrder.java": {
+      "junit": ["thc.runtime.AddressIdentityNativeTest", "thc.runtime.PinnedPointerCellsTest", "thc.runtime.NativeAddressTest", "thc.runtime.ScalarMemoryUtilitiesTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/CompareManagedAddress.java": {
+      "junit": ["thc.runtime.AddressIdentityNativeTest", "thc.runtime.PinnedPointerCellsTest", "thc.runtime.NativeAddressTest", "thc.runtime.ScalarMemoryUtilitiesTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/CompareOrderedManagedAddress.java": {
+      "junit": ["thc.runtime.AddressIdentityNativeTest", "thc.runtime.PinnedPointerCellsTest", "thc.runtime.NativeAddressTest", "thc.runtime.ScalarMemoryUtilitiesTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/GetCurrentCCS.java": {
+      "junit": ["thc.runtime.AddressIdentityNativeTest", "thc.runtime.PinnedPointerCellsTest", "thc.runtime.NativeAddressTest", "thc.runtime.ScalarMemoryUtilitiesTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/AddressToInt.java": {
+      "junit": ["thc.runtime.AddressIdentityNativeTest", "thc.runtime.PinnedPointerCellsTest", "thc.runtime.NativeAddressTest", "thc.runtime.ScalarMemoryUtilitiesTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/IntToAddress.java": {
+      "junit": ["thc.runtime.AddressIdentityNativeTest", "thc.runtime.PinnedPointerCellsTest", "thc.runtime.NativeAddressTest", "thc.runtime.ScalarMemoryUtilitiesTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/SubtractManagedAddress.java": {
+      "junit": ["thc.runtime.AddressIdentityNativeTest", "thc.runtime.PinnedPointerCellsTest", "thc.runtime.NativeAddressTest", "thc.runtime.ScalarMemoryUtilitiesTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/RemainderManagedAddress.java": {
       "junit": ["thc.runtime.AddressIdentityNativeTest", "thc.runtime.PinnedPointerCellsTest", "thc.runtime.NativeAddressTest", "thc.runtime.ScalarMemoryUtilitiesTest"],
       "python": []
     },
@@ -1481,8 +1583,19 @@
     "test/haskell-fixtures/ClosureInspectionFixtures.hs": {"junit": ["thc.runtime.ClosureInspectionTest"], "python": []},
     "compiler/test-fixtures/ClosureInspectionAudit.hs": {"junit": ["thc.runtime.ClosureInspectionTest"], "python": []},
     "compiler/test-fixtures/ClosureInspectionNative.hs": {"junit": ["thc.runtime.ClosureInspectionTest"], "python": []},
-    "src/main/kotlin/thc/runtime/ClosureInspection.kt": {"junit": ["thc.runtime.ClosureInspectionTest"], "python": []},
-    "src/main/kotlin/thc/runtime/StackAnnotations.kt": {"junit": ["thc.runtime.ClosureInspectionTest", "thc.runtime.StackAnnotationsTest"], "python": []},
+    "src/main/java/thc/runtime/ClosureImage.java": {"junit": ["thc.runtime.ClosureInspectionTest"], "python": []},
+    "src/main/java/thc/runtime/ClosureInfoTables.java": {"junit": ["thc.runtime.ClosureInspectionTest"], "python": []},
+    "src/main/java/thc/runtime/ClosureInspection.java": {"junit": ["thc.runtime.ClosureInspectionTest"], "python": []},
+    "src/main/java/thc/runtime/ClosureInspectOp.java": {"junit": ["thc.runtime.ClosureInspectionTest"], "python": []},
+    "src/main/java/thc/runtime/CoreProfileAction.java": {"junit": ["thc.runtime.ClosureInspectionTest"], "python": []},
+    "src/main/java/thc/runtime/InspectionState.java": {"junit": ["thc.runtime.ClosureInspectionTest"], "python": []},
+    "src/main/java/thc/runtime/ClosureInspectExpression.java": {"junit": ["thc.runtime.ClosureInspectionTest"], "python": []},
+    "src/main/java/thc/runtime/StackAnnotationState.java": {"junit": ["thc.runtime.ClosureInspectionTest", "thc.runtime.StackAnnotationsTest"], "python": []},
+    "src/main/java/thc/runtime/AnnotatedTuple.java": {"junit": ["thc.runtime.ClosureInspectionTest", "thc.runtime.StackAnnotationsTest"], "python": []},
+    "src/main/java/thc/runtime/StackAnnotations.java": {"junit": ["thc.runtime.ClosureInspectionTest", "thc.runtime.StackAnnotationsTest"], "python": []},
+    "src/main/java/thc/runtime/AstAnnotationScope.java": {"junit": ["thc.runtime.ClosureInspectionTest", "thc.runtime.StackAnnotationsTest"], "python": []},
+    "src/main/java/thc/runtime/AnnotatedAction.java": {"junit": ["thc.runtime.ClosureInspectionTest", "thc.runtime.StackAnnotationsTest"], "python": []},
+    "src/main/java/thc/runtime/DelimitedAnnotationStep.java": {"junit": ["thc.runtime.ClosureInspectionTest", "thc.runtime.StackAnnotationsTest"], "python": []},
     "compiler/test-fixtures/HintTraceAudit.hs": {"junit": ["thc.runtime.HintTraceTest"], "python": []},
     "compiler/test-fixtures/HintTraceNative.hs": {"junit": ["thc.runtime.HintTraceTest"], "python": []},
     "test/haskell-fixtures/CompactRegionsFixtures.hs": {"junit": ["thc.runtime.ManagedCompactsTest"], "python": [".github/scripts/test_fast_fixtures.py"]},
@@ -1518,9 +1631,12 @@
     "test/haskell-fixtures/ThreadSchedulingFixtures.hs": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": []},
     "examples/ThreadScheduling.hs": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": []},
     "compiler/test-fixtures/ThreadSchedulingNative.hs": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": []},
-    "src/main/kotlin/thc/runtime/ThreadScheduling.kt": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/main/kotlin/thc/runtime/ThreadDelay.kt": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": []},
-    "src/main/kotlin/thc/runtime/GuestAllocationAccounting.kt": {"junit": ["thc.runtime.ThreadSchedulingTest", "thc.runtime.GuestThreadsTest"], "python": []},
+    "src/main/java/thc/runtime/CoreThreadScheduling.java": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/main/java/thc/runtime/SparkResult.java": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/main/java/thc/runtime/SetThreadAllocationCounter.java": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/main/java/thc/runtime/ThreadDelayToken.java": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": []},
+    "src/main/java/thc/runtime/DelayThread.java": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": []},
+    "src/main/java/thc/runtime/GuestAllocationAccounting.java": {"junit": ["thc.runtime.ThreadSchedulingTest", "thc.runtime.GuestThreadsTest"], "python": []},
     "examples/StableWideCells.hs": {
       "junit": ["thc.runtime.AlignedScalarMemoryTest"],
       "python": []
@@ -1572,7 +1688,7 @@
     "compiler/test-fixtures/ScalarBitCastNative.hs": {"junit": ["thc.runtime.ScalarBitCastTest"], "python": []},
     "test/haskell-fixtures/RtsShutdownFixtures.hs": {"junit": ["thc.runtime.RtsShutdownTest"], "python": []},
     "compiler/test-fixtures/RtsShutdownNative.hs": {"junit": ["thc.runtime.RtsShutdownTest"], "python": []},
-    "src/main/kotlin/thc/ManagedImportMetadata.kt": {"junit": ["thc.ManagedImportStubsNativeTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/main/java/thc/ManagedImportAdmission.java": {"junit": ["thc.ManagedImportStubsNativeTest"], "python": ["scripts/test-audit-core.py"]},
     "src/test/kotlin/thc/ManagedImportStubsNativeTest.kt": {"junit": ["thc.ManagedImportStubsNativeTest"], "python": ["scripts/test-audit-core.py"]},
     "compiler/THC/ForeignImportProvenance.hs": {"junit": ["thc.ManagedImportStubsNativeTest"], "python": ["scripts/test-audit-core.py"]},
     "compiler/test-fixtures/ForeignImportStubs.hs": {"junit": ["thc.ManagedImportStubsNativeTest"], "python": ["scripts/test-audit-core.py"]},
@@ -1582,7 +1698,7 @@
     "compiler/test-fixtures/OriginalSigprocmaskNative.hs": {"junit": ["thc.runtime.OriginalSigprocmaskTest"], "python": []},
     "test/haskell-fixtures/OriginalSigprocmaskFixtures.hs": {"junit": ["thc.runtime.OriginalSigprocmaskTest"], "python": []},
     "src/main/c/native-signal-api.c": {"junit": ["thc.runtime.OriginalSigprocmaskTest"], "python": []},
-    "src/main/kotlin/thc/runtime/ManagedSignalMask.kt": {"junit": ["thc.runtime.OriginalSigprocmaskTest"], "python": []},
+    "src/main/java/thc/runtime/ManagedSignalMask.java": {"junit": ["thc.runtime.OriginalSigprocmaskTest"], "python": []},
     "compiler/test-fixtures/OriginalTcgetattrAudit.hs": {"junit": ["thc.runtime.OriginalTcgetattrTest"], "python": []},
     "compiler/test-fixtures/OriginalTcsetattrNative.hs": {"junit": ["thc.runtime.OriginalTcsetattrTest"], "python": []},
     "compiler/test-fixtures/OriginalTcgetattrNative.hs": {"junit": ["thc.runtime.OriginalTcgetattrTest"], "python": []},
@@ -1672,7 +1788,7 @@
     "test/haskell-fixtures/OriginalOpenFixtures.hs": {
       "junit": ["thc.runtime.OriginalOpenTest"], "python": []
     },
-    "src/main/kotlin/thc/runtime/RtsDiagnostics.kt": {
+    "src/main/java/thc/runtime/RtsDiagnostics.java": {
       "junit": ["thc.runtime.RtsDiagnosticsTest", "thc.runtime.HintTraceTest"], "python": []
     },
     "src/main/java/thc/runtime/RtsDiagnosticExpression.java": {
@@ -1696,7 +1812,7 @@
     "src/main/c/strerror-locale.c": {
       "junit": ["thc.runtime.OriginalStrerrorNativeTest"], "python": ["scripts/test-build-cbits.py"]
     },
-    "src/main/kotlin/thc/runtime/ManagedStrerror.kt": {
+    "src/main/java/thc/runtime/ManagedStrerror.java": {
       "junit": ["thc.runtime.OriginalStrerrorNativeTest"], "python": []
     },
     "compiler/test-fixtures/OriginalStrerrorNative.hs": {
@@ -2143,17 +2259,17 @@
       "junit": ["thc.runtime.AddressIdentityNativeTest"],
       "python": []
     },
-    "src/main/kotlin/thc/CorePackageManifest.kt": {
+    "src/main/java/thc/CorePackageManifest.java": {
       "junit": ["thc.CoreZipBundleTest", "thc.CoreLinkerTest", "thc.runtime.InterfaceCoreNativeTest"],
       "python": []
     },
-    "src/main/kotlin/thc/CoreForeignArtifacts.kt": {
+    "src/main/java/thc/CoreForeignArtifacts.java": {
       "junit": ["thc.CoreForeignArtifactsTest", "thc.runtime.InterfaceCoreNativeTest", "thc.ManagedImportStubsNativeTest"], "python": []
     },
-    "src/test/kotlin/thc/CoreForeignArtifactsTest.kt": {
+    "src/test/java/thc/CoreForeignArtifactsTest.java": {
       "junit": ["thc.CoreForeignArtifactsTest"], "python": []
     },
-    "src/test/kotlin/thc/CoreZipBundleTest.kt": {
+    "src/test/java/thc/CoreZipBundleTest.java": {
       "junit": ["thc.CoreZipBundleTest"],
       "python": []
     },
@@ -2555,6 +2671,35 @@
       "junit": ["thc.runtime.Simd128ArrayProofTest", "thc.runtime.SimdWideArrayProofTest"],
       "python": []
     },
+    "src/test/java/thc/runtime/RepresentationTestSupport.java": {
+      "junit": [
+        "thc.runtime.AddressFieldTest",
+        "thc.runtime.BindingCellMetadataTest",
+        "thc.runtime.BloomValueTest",
+        "thc.runtime.BoxedLexicalProofTest",
+        "thc.runtime.BoxedValueCacheTest",
+        "thc.runtime.ClassOwnedLayoutTest",
+        "thc.runtime.ConstructorClassIdentityTest",
+        "thc.runtime.DataLayoutFirstFieldTest",
+        "thc.runtime.ForcedBindingTest",
+        "thc.runtime.ReferenceCaptureTest",
+        "thc.runtime.ReferenceFieldTest",
+        "thc.runtime.ReferenceFormalTest",
+        "thc.runtime.ScalarLexicalProofTest",
+        "thc.runtime.TypedCaseTest",
+        "thc.runtime.TypedTupleFieldLevityTest",
+        "thc.runtime.VectorLayoutTest"
+      ],
+      "python": []
+    },
+    "src/test/java/thc/runtime/RawVectorTestValues.java": {
+      "junit": [
+        "thc.runtime.VectorLayoutTest",
+        "thc.runtime.VectorHeapStorageTest",
+        "thc.runtime.CompactImagesTest"
+      ],
+      "python": []
+    },
     "src/test/kotlin/thc/PrimopTestContext.kt": {
       "junit": [
         "thc.runtime.BitPrimopsTest",
@@ -2608,6 +2753,36 @@
         "thc.CoreCompactFormatTest",
         "thc.CoreCompactLoadTest",
         "thc.CoreCompactRecordsTest"
+      ],
+      "python": []
+    },
+    "src/test/java/thc/CoreExecutionTestSupport.java": {
+      "junit": [
+        "thc.AggregateFrontierTest", "thc.AggregateLayoutTest", "thc.LazyBindingTest",
+        "thc.RealCoreJoinTest", "thc.RuntimeTest", "thc.StrictFieldsTest",
+        "thc.SumLayoutMetadataTest", "thc.TailCycleTest", "thc.ThreadedThunkTest",
+        "thc.ThunkRetentionTest", "thc.TypedApplicationTest"
+      ],
+      "python": []
+    },
+    "src/test/java/thc/CoreBackendTestSupport.java": {
+      "junit": [
+        "thc.BytecodeBackendTest",
+        "thc.BytecodeCoreProofTest",
+        "thc.BytecodeSourceNotesTest",
+        "thc.BytecodeStaticEntryTest",
+        "thc.CStringTest",
+        "thc.CoverageCorpusTest",
+        "thc.GuestExceptionsTest",
+        "thc.LoopSafepointTest",
+        "thc.ManagedExportAsyncPolicyTest",
+        "thc.ManagedExportsNativeTest",
+        "thc.ManagedForeignRootsNativeTest",
+        "thc.ManagedImportStubsNativeTest",
+        "thc.NarrowPublicEntryTest",
+        "thc.NarrowWordPrimitiveTest",
+        "thc.RealCoreCallDemandTest",
+        "thc.RealCoreEntryContractTest"
       ],
       "python": []
     },
@@ -2762,7 +2937,9 @@
     "compiler/test-fixtures/NativeMallocNative.hs": {"junit": ["thc.runtime.NativeMallocTest"], "python": []},
     "src/main/java/thc/runtime/NativeMallocAllocation.java": {"junit": ["thc.runtime.NativeFileBuffersTest", "thc.runtime.NativeMallocTest"], "python": []},
     "src/test/resources/core/original-malloc-descriptors.json": {"junit": ["thc.runtime.NativeMallocTest"], "python": []},
-    "src/main/kotlin/thc/runtime/NativeAddresses.kt": {"junit": ["thc.runtime.NativeAddressTest", "thc.runtime.NativeMallocTest"], "python": []},
+    "src/main/java/thc/runtime/NativeAddresses.java": {"junit": ["thc.runtime.NativeAddressTest", "thc.runtime.NativeMallocTest"], "python": []},
+    "src/main/java/thc/runtime/NativeReadOnlyImage.java": {"junit": ["thc.runtime.NativeAddressTest", "thc.runtime.NativeMallocTest"], "python": []},
+    "src/main/java/thc/runtime/NativeReadOnlyPointer.java": {"junit": ["thc.runtime.NativeAddressTest", "thc.runtime.NativeMallocTest"], "python": []},
     "test/haskell-fixtures/ByteStringUtf8Fixtures.hs": {"junit": ["thc.runtime.ByteStringUtf8Test"], "python": ["scripts/test-audit-core.py"]},
     "compiler/test-fixtures/ByteStringUtf8Audit.hs": {"junit": ["thc.runtime.ByteStringUtf8Test"], "python": ["scripts/test-audit-core.py"]},
     "compiler/test-fixtures/ByteStringUtf8Native.hs": {"junit": ["thc.runtime.ByteStringUtf8Test"], "python": ["scripts/test-audit-core.py"]},
@@ -3080,7 +3257,7 @@
       "junit": ["thc.runtime.InterfaceCoreNativeTest"], "python": [],
       "haskell": ["driver-tests"]
     },
-    "src/main/kotlin/thc/runtime/TargetLayout.kt": {
+    "src/main/java/thc/runtime/TargetLayout.java": {
       "junit": ["thc.CoreZipBundleTest", "thc.runtime.InterfaceCoreNativeTest", "thc.runtime.OriginalStackFormatterTest"],
       "python": []
     },

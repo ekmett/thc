@@ -18,34 +18,34 @@ import static org.junit.jupiter.api.Assertions.*;
 class GuestThreadInventoryTest {
     private static GuestThreads registry() {
         return new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED),
-            CpuAffinity.Companion.discover(false), ignored -> Unit.INSTANCE);
+            CpuAffinity.discover(false), ignored -> {});
     }
 
     @Test void logicalCountIsContextLocalAndShrinkDoesNotRewriteAffinityClaims() {
         var affinity = new CpuAffinity(null, 8);
-        var first = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), affinity, ignored -> Unit.INSTANCE);
+        var first = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), affinity, ignored -> {});
         var second = registry();
-        long originalSecond = second.capabilityCount$org_intelligence_thc();
+        long originalSecond = second.capabilityCount();
         first.enterCurrent(null, false, true, 7L);
         try {
             var id = first.currentIdentity();
             id.setAffinityApplied(true); // A prior successful native request is historical evidence.
             assertEquals(7L, id.getCapability());
-            first.setCapabilityCount$org_intelligence_thc(3);
-            assertEquals(3L, first.capabilityCount$org_intelligence_thc());
+            first.setCapabilityCount(3);
+            assertEquals(3L, first.capabilityCount());
             assertEquals(1L, id.getCapability());
-            assertTrue(id.getCapabilityLocked$org_intelligence_thc()); assertTrue(id.getAffinityApplied());
+            assertTrue(id.getCapabilityLocked()); assertTrue(id.getAffinityApplied());
             assertEquals(8, affinity.getCount());
-            assertEquals(originalSecond, second.capabilityCount$org_intelligence_thc());
-            first.setCapabilityCount$org_intelligence_thc(0xffff_ffffL);
-            assertEquals(0xffff_ffffL, first.capabilityCount$org_intelligence_thc());
+            assertEquals(originalSecond, second.capabilityCount());
+            first.setCapabilityCount(0xffff_ffffL);
+            assertEquals(0xffff_ffffL, first.capabilityCount());
             for (long invalid : new long[]{0L, -1L, Long.MIN_VALUE, 0x1_0000_0000L, Long.MAX_VALUE}) {
-                assertThrows(RuntimeFault.class, () -> first.setCapabilityCount$org_intelligence_thc(invalid));
-                assertEquals(0xffff_ffffL, first.capabilityCount$org_intelligence_thc());
+                assertThrows(RuntimeFault.class, () -> first.setCapabilityCount(invalid));
+                assertEquals(0xffff_ffffL, first.capabilityCount());
             }
         } finally { first.leaveCurrent(GuestThreadStatus.FINISHED); first.close(); second.close(); }
-        assertThrows(RuntimeFault.class, () -> first.setCapabilityCount$org_intelligence_thc(1));
-        assertThrows(RuntimeFault.class, first::capabilityCount$org_intelligence_thc);
+        assertThrows(RuntimeFault.class, () -> first.setCapabilityCount(1));
+        assertThrows(RuntimeFault.class, first::capabilityCount);
     }
 
     @Test void concurrentCountUpdatesAndNewThreadAssignmentsRemainInTheSameRegistry() throws InterruptedException {
@@ -57,8 +57,8 @@ class GuestThreadInventoryTest {
             try {
                 assertTrue(start.await(5, TimeUnit.SECONDS));
                 for (int repeat = 0; repeat < 100; repeat++) {
-                    threads.setCapabilityCount$org_intelligence_thc(count);
-                    long current = threads.capabilityCount$org_intelligence_thc();
+                    threads.setCapabilityCount(count);
+                    long current = threads.capabilityCount();
                     assertTrue(current >= 1L && current <= 4L);
                 }
                 threads.enterCurrent(null, false, true, -1L);
@@ -72,7 +72,7 @@ class GuestThreadInventoryTest {
             workers.forEach(Thread::start); start.countDown();
             for (var worker : workers) { worker.join(5000); assertFalse(worker.isAlive()); }
             if (failure.get() != null) throw new AssertionError("capability worker failed", failure.get());
-            threads.setCapabilityCount$org_intelligence_thc(2);
+            threads.setCapabilityCount(2);
             var observed = new AtomicReference<GuestThreadId>();
             var child = new Thread(() -> {
                 threads.enterCurrent(null, false, true, 7L);
@@ -81,7 +81,7 @@ class GuestThreadInventoryTest {
             });
             child.start(); child.join(5000); assertFalse(child.isAlive());
             assertEquals(1L, observed.get().getCapability());
-            threads.setCapabilityCount$org_intelligence_thc(1);
+            threads.setCapabilityCount(1);
             assertEquals(0L, observed.get().getCapability(), "Retained finished ThreadId# is normalized too");
         } finally { threads.close(); }
     }
@@ -163,7 +163,7 @@ class GuestThreadInventoryTest {
             for (int index = 0; index < ids.size(); index++) {
                 var id = ids.get(index).get();
                 assertEquals(index == 0 ? GuestThreadStatus.DIED : GuestThreadStatus.FINISHED, threads.status(id));
-                id.getCarrier$org_intelligence_thc().clear(); // Observation must not depend on the carrier's continued lifetime.
+                id.getCarrier().clear(); // Observation must not depend on the carrier's continued lifetime.
             }
             assertEquals(expected, new HashSet<>(Arrays.asList(threads.snapshot())));
             assertEquals(expected, new HashSet<>(Arrays.asList(snapshot)));
@@ -192,11 +192,11 @@ class GuestThreadInventoryTest {
         for (var name : List.of("listThreads#", "isCurrentThreadBound#")) {
             var value = name.equals("listThreads#") ? objectRep : integer;
             var result = tuple(state, value);
-            CoreThreadObservation.INSTANCE.validate(name, List.of(state), List.of(false), result);
-            assertThrows(RuntimeFault.class, () -> CoreThreadObservation.INSTANCE.validate(name, List.of(state), List.of(true), result));
-            assertThrows(RuntimeFault.class, () -> CoreThreadObservation.INSTANCE.validate(name, List.of(integer), List.of(false), result));
+            CoreThreadObservation.validate(name, List.of(state), List.of(false), result);
+            assertThrows(RuntimeFault.class, () -> CoreThreadObservation.validate(name, List.of(state), List.of(true), result));
+            assertThrows(RuntimeFault.class, () -> CoreThreadObservation.validate(name, List.of(integer), List.of(false), result));
             for (var bad : List.of(tuple(value, state), tuple(value), value, tuple(state, state)))
-                assertThrows(RuntimeFault.class, () -> CoreThreadObservation.INSTANCE.validate(name, List.of(state), List.of(false), bad));
+                assertThrows(RuntimeFault.class, () -> CoreThreadObservation.validate(name, List.of(state), List.of(false), bad));
         }
         ArrayOp.INDEX.validate(List.of(objectRep, integer), List.of(false, false), tuple(objectRep));
         ArrayOp.READ.validate(List.of(objectRep, integer, state), List.of(false, false, false), tuple(state, objectRep));

@@ -55,7 +55,7 @@ class SulongCbitsTest {
         val failure = IllegalStateException("promotion failure")
         var acquisitions = 0
         lateinit var view: CbitsBuffer
-        view = CbitsBuffer(bytes, false, nativeImage = Supplier {
+        view = CbitsBuffer(bytes, false, CbitsBufferSize { bytes.size.toLong() }, 0, Supplier {
             assertTrue(Thread.holdsLock(view), "acquisition keeps the buffer monitor")
             if (++acquisitions == 1) throw failure
             pointer

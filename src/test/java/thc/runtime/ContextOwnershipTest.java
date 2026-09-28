@@ -12,7 +12,7 @@ import thc.Language;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
-import kotlin.jvm.functions.Function0;
+import java.util.function.Supplier;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ContextOwnershipTest {
@@ -27,10 +27,10 @@ class ContextOwnershipTest {
                     context.initialize("thc"); context.enter();
                     try {
                         var state = Language.currentState();
-                        var address = ManagedAddress.Companion.fromHex("616263");
+                        var address = ManagedAddress.fromHex("616263");
                         var stable = state.getStablePointers().make(address);
                         state.getStablePointers().getOrSetSharedCAF(SharedCAFStore.EVENT_MANAGER, stable);
-                        var weak = state.getWeaks().make(address, stable, (Function0<Integer>) () -> ++finalizerCalls);
+                        var weak = state.getWeaks().make(address, stable, (Supplier<Integer>) () -> ++finalizerCalls);
                         long bits = state.getNativeAddresses().project(address);
                         return new Roots(state, weak, stable, address, bits, Objects.requireNonNull(state.getNativeAddresses().transport(address)));
                     } finally { context.leave(); }
@@ -51,7 +51,7 @@ class ContextOwnershipTest {
                     assertThrows(RuntimeFault.class, () -> roots.state.getWeaks().dereference(roots.weak));
                     assertThrows(RuntimeFault.class, () -> roots.state.getStablePointers().dereference(roots.stable));
                     assertThrows(RuntimeFault.class, () -> roots.state.getStablePointers().getOrSetSharedCAF(
-                        SharedCAFStore.EVENT_MANAGER, ManagedAddress.Companion.nullAddress()));
+                        SharedCAFStore.EVENT_MANAGER, ManagedAddress.nullAddress()));
                     assertThrows(RuntimeFault.class, () -> roots.state.getNativeAddresses().recover(roots.bits));
                     assertFalse(interop.isPointer(roots.pointer));
                     assertThrows(UnsupportedMessageException.class, () -> interop.asPointer(roots.pointer));

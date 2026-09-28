@@ -17,7 +17,7 @@ public final class ManagedText {
     public static void reverse(Object destination, Object source, long offset, long length) {
         var owner = Language.currentState(null);
         var cbits = owner.cbits();
-        var function = cbits.textFunction$org_intelligence_thc(TextForeignOp.REVERSE);
+        var function = cbits.textFunction(TextForeignOp.REVERSE);
         if (destination instanceof ManagedAllocation output && source instanceof ManagedAllocation input) {
             output.withOrderedLocks(input, () -> {
                 reverseLocked(owner, cbits, function, destination, source, offset, length);
@@ -67,7 +67,7 @@ public final class ManagedText {
         var previous = threads.enterForeign(ForeignSafety.UNSAFE);
         try {
             // The empty original call writes nothing; avoid forming dst - 1.
-            if (length != 0) cbits.textReverse$org_intelligence_thc(function, output, input, offset, length);
+            if (length != 0) cbits.textReverse(function, output, input, offset, length);
         } finally {
             threads.leaveForeign(previous);
             Reference.reachabilityFence(source);
@@ -82,7 +82,7 @@ public final class ManagedText {
         var owner = Language.currentState(null);
         var cbits = owner.cbits();
         // Loading another guest language must not hold a ByteArray owner lock.
-        var function = cbits.textFunction$org_intelligence_thc(operation);
+        var function = cbits.textFunction(operation);
         if (bytes instanceof byte[] array) {
             check(operation, array.length, offset, length, count);
             return call(owner, cbits, function, operation, bytes, ByteBuffer.wrap(array), array.length, offset, length, count);
@@ -110,7 +110,7 @@ public final class ManagedText {
         var view = new CbitsBuffer(buffer.asReadOnlyBuffer(), false, () -> size);
         var threads = owner.getThreads();
         var previous = threads.enterForeign(ForeignSafety.UNSAFE);
-        try { return cbits.text$org_intelligence_thc(function, operation, view, offset, length, count); }
+        try { return cbits.text(function, operation, view, offset, length, count); }
         finally {
             threads.leaveForeign(previous);
             Reference.reachabilityFence(bytes);

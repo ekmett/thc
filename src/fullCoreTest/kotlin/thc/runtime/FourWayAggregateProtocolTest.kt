@@ -74,13 +74,13 @@ class FourWayAggregateProtocolTest {
             assertThrows(RuntimeFault::class.java) {
                 SumShape.constructor(proof, mapOf("kind" to "unboxed-sum", "arity" to 1, "sumArity" to 4, "tag" to tag), 1)
             }
-        assertThrows(RuntimeFault::class.java) { SumShape.validate(proof.copy(alternativeSlots = listOf(listOf(0), listOf(1), listOf(1), listOf(1)))) }
-        assertThrows(RuntimeFault::class.java) { SumShape.validate(proof.copy(primReps = listOf("WordRep", "WordRep"))) }
+        assertThrows(RuntimeFault::class.java) { SumShape.validate(proof.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, originalProof.primReps, originalProof.components, originalProof.vector, originalProof.alternatives, originalProof.tagSlot, listOf(listOf(0), listOf(1), listOf(1), listOf(1))) }) }
+        assertThrows(RuntimeFault::class.java) { SumShape.validate(proof.withPrimReps(listOf("WordRep", "WordRep"))) }
         assertThrows(RuntimeFault::class.java) { SumShape.payload(alternatives[0], CoreRepresentation(CoreKind.FLOAT, true, true, listOf("FloatRep"))) }
         assertThrows(RuntimeFault::class.java) { SumShape.payload(alternatives[0], alternatives[0], true) }
         // A nested payload cannot reuse the original family's physical proof unchanged.
         val forgedNested = assertThrows(RuntimeFault::class.java) {
-            SumShape.validate(proof.copy(alternatives = listOf(proof) + alternatives.drop(1)))
+            SumShape.validate(proof.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, originalProof.primReps, originalProof.components, originalProof.vector, listOf(proof) + alternatives.drop(1), originalProof.tagSlot, originalProof.alternativeSlots) })
         }
         assertTrue(forgedNested.message.orEmpty().contains("Sum physical representation or tag slot mismatch"), forgedNested.message)
     }

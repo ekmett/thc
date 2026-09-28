@@ -25,7 +25,7 @@ public final class CoreOriginalStdio {
         requireProof(operation.getWaitStatus(), "wait-status operation");
         var state = Language.currentState(node);
         var previous = state.getThreads().enterForeign(ForeignSafety.UNSAFE);
-        try { return state.cbits().waitStatus$org_intelligence_thc(operation, (int) status); }
+        try { return state.cbits().waitStatus(operation, (int) status); }
         finally { state.getThreads().leaveForeign(previous); }
     }
     public static ManagedStdio current(Node node) { return Language.currentState(node).getStdio(); }
@@ -56,7 +56,7 @@ public final class CoreOriginalStdio {
     }
 
     public static void validateHead(List<?> function, boolean defined) {
-        var metadata = CoreRepresentations.INSTANCE.metadata(function);
+        var metadata = CoreRepresentations.metadata(function);
         var proof = metadata != null && metadata.get("rep") instanceof Map<?, ?> map ? map : null;
         requireProof(function.size() == 3 && "var".equals(function.get(0)) && function.get(1) instanceof String name &&
             !name.isEmpty() && !defined && proof != null && proof.keySet().equals(SCALAR_KEYS) &&

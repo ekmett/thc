@@ -86,7 +86,7 @@ public final class Main {
         catch (PolyglotException exit) {
             if (!exit.isExit()) throw exit;
             // All owning contexts have closed before process termination.
-            if (exit.getExitStatus() < 0) NativeSignalTransport.Companion.exitBySignal(-exit.getExitStatus());
+            if (exit.getExitStatus() < 0) NativeSignalTransport.exitBySignal(-exit.getExitStatus());
             System.exit(exit.getExitStatus());
         }
     }

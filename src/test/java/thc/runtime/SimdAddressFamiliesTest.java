@@ -141,7 +141,7 @@ class SimdAddressFamiliesTest {
     private void call(RootCallTarget entry, Input input, Language language, String stage, String backend) {
         var pools = language.getHandoffState().get(); var bytes = initial(input); var expected = expected(input);
         try {
-            assertEquals(expected.answer, Calls.target(entry, new Object[]{0L, ManagedAddress.Companion.fromByteArray(bytes), input.offset, input.seed}), stage + "/" + backend + "/" + input);
+            assertEquals(expected.answer, Calls.target(entry, new Object[]{0L, ManagedAddress.fromByteArray(bytes), input.offset, input.seed}), stage + "/" + backend + "/" + input);
             assertArrayEquals(expected.bytes, bytes, stage + "/" + backend + "/" + input + " full storage");
         } finally {
             assertEquals(0, pools.getArguments().getDepth()); assertEquals(0, pools.getResults().getDepth());
@@ -196,7 +196,7 @@ class SimdAddressFamiliesTest {
      * the only new ownership dimension: whole 32-/64-byte spans and species. */
     @Test void wideRegionsPreservePointerCellsAndRejectWrongSpeciesBeforeWriting() {
         for (int size : List.of(32, 64)) {
-            var owner = ManagedAllocation.mutable(size * 3L, 8); var address = ManagedAddress.Companion.fromAllocation(owner);
+            var owner = ManagedAllocation.mutable(size * 3L, 8); var address = ManagedAddress.fromAllocation(owner);
             var species = ByteVector.SPECIES_128.withShape(VectorShape.forBitSize(size * 8)); var vector = ByteVector.fromArray(species, bytes(size, 17, 0), 0);
             var pointer = address.plus(size * 2L); owner.writeAddressByteOffset(size * 2L, pointer);
             address.writeVectorBytes(0, 1, vector, size); assertEquals(vector, address.readVectorBytes(0, 1, size)); assertSame(pointer, owner.readAddressByteOffset(size * 2L));

@@ -414,25 +414,25 @@ class UnalignedScalarMemoryTest {
                 val flags = call[3] as List<*>
                 assertEquals(List(arguments.size) { false }, flags)
                 validate(arguments, flags, result)
-                val compatible = arguments.map { if (it.kind == CoreKind.LONG) it.copy(primReps = listOf("Word64Rep")) else it }
+                val compatible = arguments.map { if (it.kind == CoreKind.LONG) it.withPrimReps(listOf("Word64Rep")) else it }
                 assertDoesNotThrow { validate(compatible, flags, result) }
                 assertThrows(RuntimeFault::class.java) { validate(arguments.dropLast(1), flags, result) }
                 assertThrows(RuntimeFault::class.java) { validate(arguments, flags.map { true }, result) }
                 for (index in arguments.indices) {
                     val wrong = if (arguments[index].kind == CoreKind.LONG)
-                        CoreRepresentation(CoreKind.DOUBLE, primReps = listOf("DoubleRep"))
-                        else CoreRepresentation(CoreKind.LONG, primReps = listOf("IntRep"))
+                        CoreRepresentation(CoreKind.DOUBLE, false, false, listOf("DoubleRep"))
+                        else CoreRepresentation(CoreKind.LONG, false, false, listOf("IntRep"))
                     assertThrows(RuntimeFault::class.java, {
                         validate(arguments.toMutableList().also { it[index] = wrong }, flags, result)
                     }, "$stage/$name argument $index actual carrier")
                 }
                 if (result.isTuple) assertThrows(RuntimeFault::class.java) {
-                    validate(arguments, flags, result.copy(components = result.components!!.reversed()))
+                    validate(arguments, flags, result.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, originalProof.primReps, result.components!!.reversed(), originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) })
                 }
                 else {
                     val wrong = if (result.kind == CoreKind.LONG)
-                        CoreRepresentation(CoreKind.DOUBLE, primReps = listOf("DoubleRep"))
-                        else CoreRepresentation(CoreKind.LONG, primReps = listOf("IntRep"))
+                        CoreRepresentation(CoreKind.DOUBLE, false, false, listOf("DoubleRep"))
+                        else CoreRepresentation(CoreKind.LONG, false, false, listOf("IntRep"))
                     assertThrows(RuntimeFault::class.java) { validate(arguments, flags, wrong) }
                 }
             }

@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime
 
+import thc.runtime.PackageScalarAccess.*
+
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.PackageScalarLink
@@ -71,17 +73,16 @@ class PackageScalarForeignTest {
             assertNull(validate(descriptor + ("target" to (target + ("unit" to "second")))))
             assertNull(validate(descriptor + ("target" to (target + ("unit" to null)))))
             assertFalse(CoreSignalForeign.named(mapOf("foreignCall" to descriptor)))
-            val exact = CoreRepresentation(kind(rep), present = true, primReps = listOf(rep))
+            val exact = CoreRepresentation(kind(rep), false, true, listOf(rep))
             CorePackageScalarForeign.validateOperand(admitted, 0, exact, exact)
             CorePackageScalarForeign.validateOperand(admitted, 1,
-                CoreRepresentation(CoreKind.VOID, present = true, primReps = emptyList()), null)
+                CoreRepresentation(CoreKind.VOID, false, true, emptyList()), null)
             assertThrows(RuntimeFault::class.java) {
                 CorePackageScalarForeign.validateOperand(admitted, 0, exact,
-                    CoreRepresentation(CoreKind.LONG, present = true,
-                        primReps = listOf(if (rep == "Word64Rep") "Int64Rep" else "Word64Rep")))
+                    CoreRepresentation(CoreKind.LONG, false, true, listOf(if (rep == "Word64Rep") "Int64Rep" else "Word64Rep")))
             }
             assertThrows(RuntimeFault::class.java) {
-                CorePackageScalarForeign.validateOperand(admitted, 0, exact.copy(present = false), null)
+                CorePackageScalarForeign.validateOperand(admitted, 0, exact.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, false, originalProof.primReps, originalProof.components, originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) }, null)
             }
         }
     }
@@ -118,7 +119,7 @@ class PackageScalarForeignTest {
                 returned, listOf(link))
             val call = validate()!!
             assertEquals("void", call.result)
-            val exact = CoreRepresentation(kind(rep), present = true, primReps = reps(rep))
+            val exact = CoreRepresentation(kind(rep), false, true, reps(rep))
             CorePackageScalarForeign.validateOperand(call, 0, exact, exact)
             assertThrows(RuntimeFault::class.java) { validate(scalar("Word64Rep")) }
             assertThrows(RuntimeFault::class.java) { validate(returned = result("Word64Rep")) }

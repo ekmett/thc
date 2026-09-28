@@ -26,8 +26,8 @@ class ThreadAsyncNativeTest {
     private val root = File(System.getProperty("thc.projectRoot"))
 
     @Test fun yieldRequiresOneExactStateToken() {
-        val state = CoreRepresentation(CoreKind.VOID, primReps = emptyList())
-        val wrong = CoreRepresentation(CoreKind.LONG, primReps = listOf("IntRep"))
+        val state = CoreRepresentation(CoreKind.VOID, false, false, emptyList())
+        val wrong = CoreRepresentation(CoreKind.LONG, false, false, listOf("IntRep"))
         CoreYield.validate(listOf(state), listOf(false), state)
         assertThrows(RuntimeFault::class.java) { CoreYield.validate(listOf(wrong), listOf(false), state) }
         assertThrows(RuntimeFault::class.java) { CoreYield.validate(listOf(state), listOf(true), state) }
@@ -44,7 +44,7 @@ class ThreadAsyncNativeTest {
                 val threads = Language.currentState().threads
                 val effects = AtomicInteger()
                 val compiled = AtomicInteger()
-                val stateProof = CoreRepresentation(CoreKind.VOID, primReps = emptyList())
+                val stateProof = CoreRepresentation(CoreKind.VOID, false, false, emptyList())
                 val root = object : GuestRoot(language, FrameLayout().build()) {
                     @field:Child private var yielding = YieldThread(object : Expr() {
                         override fun execute(frame: VirtualFrame): Any {

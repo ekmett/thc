@@ -344,4 +344,3 @@ class SimdInt8VectorTest {
         });
     }
 }
-

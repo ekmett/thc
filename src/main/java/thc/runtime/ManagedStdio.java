@@ -78,14 +78,14 @@ public final class ManagedStdio {
     @TruffleBoundary public ManagedAddress openDirectory(ManagedAddress path) {
         var abi = hostAbi();
         var result = files.openDirectoryOriginal(path);
-        if (result == ManagedAddress.Companion.nullAddress()) lastError.set(fileError(abi));
+        if (result == ManagedAddress.nullAddress()) lastError.set(fileError(abi));
         return result;
     }
     @TruffleBoundary public ManagedAddress openDirectoryFd(long fd) {
         var abi = hostAbi();
         if (fd != (long) (int) fd) throw fault("Original fdopendir requires a canonical signed CInt");
         var result = files.openDirectoryDescriptor(fd);
-        if (result == ManagedAddress.Companion.nullAddress()) lastError.set(fileError(abi));
+        if (result == ManagedAddress.nullAddress()) lastError.set(fileError(abi));
         return result;
     }
     /** Zero explicitly clears the slot; every signed CInt is otherwise preserved. */
@@ -197,7 +197,7 @@ public final class ManagedStdio {
     @TruffleBoundary public ManagedAddress currentDirectory(ManagedAddress output, long capacity) {
         var abi = hostAbi();
         long result = files.currentDirectoryOriginal(output, capacity);
-        if (result < 0) { lastError.set(fileError(abi)); return ManagedAddress.Companion.nullAddress(); }
+        if (result < 0) { lastError.set(fileError(abi)); return ManagedAddress.nullAddress(); }
         return output;
     }
     @TruffleBoundary public long symlink(ManagedAddress target, ManagedAddress path) {

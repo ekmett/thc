@@ -13,7 +13,7 @@ import com.oracle.truffle.api.source.SourceSection;
 @TypeSystemReference(RuntimeTypes.class)
 public abstract class Expr extends Node {
     // Assigned during lowering, before adoption.
-    @CompilationFinal private CoreRepresentation representation = CoreRepresentation.Companion.getUNKNOWN();
+    @CompilationFinal private CoreRepresentation representation = CoreRepresentation.UNKNOWN;
     @CompilationFinal private VectorLayout vectorLayout;
     @CompilationFinal private CoreSourceLocation coreSourceLocation;
 

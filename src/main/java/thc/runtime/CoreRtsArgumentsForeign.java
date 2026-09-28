@@ -48,7 +48,7 @@ public final class CoreRtsArgumentsForeign {
     }
 
     public static void validateHead(List<?> function, boolean defined) {
-        var metadata = CoreRepresentations.INSTANCE.metadata(function);
+        var metadata = CoreRepresentations.metadata(function);
         var raw = metadata == null ? null : metadata.get("rep");
         var proof = raw instanceof Map<?, ?> value ? value : null;
         requireProof(function.size() == 3 && "var".equals(function.get(0)) &&

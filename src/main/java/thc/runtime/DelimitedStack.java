@@ -33,7 +33,7 @@ public final class DelimitedStack {
     public Object resume(DelimitedActionSite site, MaterializedFrame frame, Object action) {
         if (Language.currentState(site) != owner) throw fault("Continuation belongs to another context");
         MaskingState ambient = SynchronousMasking.current(site);
-        StackAnnotationState ambientAnnotations = StackAnnotations.INSTANCE.current(site);
+        StackAnnotationState ambientAnnotations = StackAnnotations.current(site);
         StackAnnotationState outsideAnnotations = null;
         for (DelimitedFrame entry : frames)
             if (entry.getStep() instanceof DelimitedAnnotationStep annotation) outsideAnnotations = annotation.getPrior();
@@ -49,7 +49,7 @@ public final class DelimitedStack {
         }
         try {
             if (outerMask != null) SynchronousMasking.set(site, initialMask);
-            if (outsideAnnotations != null) StackAnnotations.INSTANCE.set(site, initialAnnotations.rebase(outsideAnnotations, ambientAnnotations, annotationCopies));
+            if (outsideAnnotations != null) StackAnnotations.set(site, initialAnnotations.rebase(outsideAnnotations, ambientAnnotations, annotationCopies));
             DelimitedResume input;
             try { input = new DelimitedResume(site.invoke(frame, action, new Object[] {kotlin.Unit.INSTANCE}, inputShape)); }
             catch (GuestException failure) { input = new DelimitedResume(null, failure); }
@@ -57,7 +57,7 @@ public final class DelimitedStack {
             catch (AstCapture cut) { input = new DelimitedResume(null, DelimitedControl.asyncFailure(cut, site)); }
             catch (DelimitedCut cut) { return transfer(site, cut, active, ambient, outerMask); }
             return run(site, active, input, ambient, outerMask);
-        } finally { SynchronousMasking.set(site, ambient); StackAnnotations.INSTANCE.set(site, ambientAnnotations); }
+        } finally { SynchronousMasking.set(site, ambient); StackAnnotations.set(site, ambientAnnotations); }
     }
     private Object run(DelimitedActionSite site, List<DelimitedFrame> active, DelimitedResume initial, MaskingState ambient, DelimitedStep outerMask) {
         DelimitedResume input = initial;

@@ -41,21 +41,21 @@ class SimdInt32VectorTest {
     @Test void exactInt32VectorIdentityAndDenseDurableStorage() {
         Map<String, Object> metadata = Map.of("kind", "vector", "primReps", List.of("VecRep 4 Int32ElemRep"), "evaluated", true,
             "vector", Map.of("lanes", 4L, "element", "Int32ElemRep"));
-        var proof = CoreRepresentations.INSTANCE.parse(metadata);
-        assertEquals(CoreVectors.INSTANCE.getProof32(), proof);
+        var proof = CoreRepresentations.parse(metadata);
+        assertEquals(CoreVectors.proof32, proof);
         assertFalse(proof.isTuple()); assertFalse(proof.isLong());
-        assertFalse(TupleShape.compatible(proof, CoreVectors.INSTANCE.getUnpacked32()));
-        assertThrows(RuntimeFault.class, () -> proof.refine(CoreVectors.INSTANCE.getProof()));
-        assertThrows(RuntimeFault.class, () -> CoreVectors.INSTANCE.caseResult(List.of(proof, CoreVectors.INSTANCE.getProof())));
-        assertThrows(RuntimeFault.class, () -> CoreVectors.INSTANCE.validate("plusInt32X4#", List.of(proof, CoreVectors.INSTANCE.getProof()), proof));
-        assertThrows(RuntimeFault.class, () -> CoreVectors.INSTANCE.validate("packInt32X4#", List.of(CoreVectors.INSTANCE.getUnpacked()), proof));
+        assertFalse(TupleShape.compatible(proof, CoreVectors.unpacked32));
+        assertThrows(RuntimeFault.class, () -> proof.refine(CoreVectors.proof));
+        assertThrows(RuntimeFault.class, () -> CoreVectors.caseResult(List.of(proof, CoreVectors.proof)));
+        assertThrows(RuntimeFault.class, () -> CoreVectors.validate("plusInt32X4#", List.of(proof, CoreVectors.proof), proof));
+        assertThrows(RuntimeFault.class, () -> CoreVectors.validate("packInt32X4#", List.of(CoreVectors.unpacked), proof));
         var missing = new LinkedHashMap<>(metadata); missing.remove("vector");
-        assertThrows(RuntimeFault.class, () -> CoreRepresentations.INSTANCE.parse(missing));
+        assertThrows(RuntimeFault.class, () -> CoreRepresentations.parse(missing));
         // IntVector is supported; a three-lane vector still has no supported species.
         var unsupported = new LinkedHashMap<>(metadata);
         unsupported.put("primReps", List.of("VecRep 3 Int32ElemRep"));
         unsupported.put("vector", Map.of("lanes", 3L, "element", "Int32ElemRep"));
-        assertThrows(UnsupportedCore.class, () -> CoreRepresentations.INSTANCE.parse(unsupported));
+        assertThrows(UnsupportedCore.class, () -> CoreRepresentations.parse(unsupported));
     }
 
     private Object inline(Object value, Map<String, Object> vectorBinding) {

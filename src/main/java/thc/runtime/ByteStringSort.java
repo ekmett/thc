@@ -11,10 +11,10 @@ final class ByteStringSort {
      * Keep the variable-size scan outside partial evaluation, like other native leaves. */
     @TruffleBoundary
     public static void sort(ManagedAddress address, long count) {
-        var allocation = address.nativeAllocation$org_intelligence_thc();
+        var allocation = address.nativeAllocation();
         try (var borrow = allocation == null ? null : allocation.borrow()) {
-            if (address != ManagedAddress.Companion.nullAddress() || count != 0)
-                address.requireByteRegion$org_intelligence_thc(count, true);
+            if (address != ManagedAddress.nullAddress() || count != 0)
+                address.requireByteRegion(count, true);
             if (count <= 1) return;
             long[] frequencies = new long[256];
             long position = 0;

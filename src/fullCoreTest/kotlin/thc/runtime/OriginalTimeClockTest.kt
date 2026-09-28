@@ -214,8 +214,8 @@ class OriginalTimeClockTest {
             CoreCapiForeign.validateHead(call[1] as List<Any?>, false)
             assertThrows(RuntimeFault::class.java) { CoreCapiForeign.validateHead(call[1] as List<Any?>, true) }
             val admitted = validate(meta)!!
-            val state = CoreRepresentation(CoreKind.VOID, present = true, primReps = emptyList())
-            val number = CoreRepresentation(CoreKind.LONG, present = true, primReps = listOf("IntRep"))
+            val state = CoreRepresentation(CoreKind.VOID, false, true, emptyList())
+            val number = CoreRepresentation(CoreKind.LONG, false, true, listOf("IntRep"))
             assertThrows(RuntimeFault::class.java) { CoreCapiForeign.validateOperand(admitted, 2, number, null) }
             assertThrows(RuntimeFault::class.java) { CoreCapiForeign.validateOperand(admitted, 2, state, number) }
         }

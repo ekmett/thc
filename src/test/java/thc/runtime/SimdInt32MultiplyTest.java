@@ -340,4 +340,3 @@ class SimdInt32MultiplyTest {
         });
     }
 }
-

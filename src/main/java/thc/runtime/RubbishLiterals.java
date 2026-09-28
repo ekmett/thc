@@ -28,7 +28,7 @@ public final class RubbishLiterals {
             case LONG -> { if (proof.isInt()) yield Integer.valueOf(0); yield Long.valueOf(0L); }
             case FLOAT -> 0.0f;
             case DOUBLE -> 0.0;
-            case ADDRESS -> ManagedAddress.Companion.nullAddress();
+            case ADDRESS -> ManagedAddress.nullAddress();
             case CLOSURE -> closure();
             case DATA, OBJECT -> boxed();
             default -> throw new UnsupportedCore("Unsupported rubbish representation");
@@ -46,8 +46,8 @@ public final class RubbishLiterals {
             default -> null;
         } : null;
         if (expected == null) throw new UnsupportedCore("Unsupported rubbish representation: " + rep);
-        var metadata = CoreRepresentations.INSTANCE.metadata(expression);
-        var actual = CoreRepresentations.INSTANCE.parse(metadata == null ? null : metadata.get("rep"));
+        var metadata = CoreRepresentations.metadata(expression);
+        var actual = CoreRepresentations.parse(metadata == null ? null : metadata.get("rep"));
         boolean matchingKind = actual.getKind() == expected || expected == CoreKind.OBJECT &&
             (actual.getKind() == CoreKind.DATA || actual.getKind() == CoreKind.CLOSURE);
         if (!actual.getPresent() || !actual.getEvaluated() || !matchingKind || actual.isAggregate() || actual.isVector() ||

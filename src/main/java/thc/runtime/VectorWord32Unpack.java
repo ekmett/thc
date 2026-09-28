@@ -13,7 +13,7 @@ public final class VectorWord32Unpack extends Expr {
 
     public VectorWord32Unpack(Expr argument) {
         this.argument = argument;
-        setRepresentation(CoreVectors.INSTANCE.getUnpackedWord32());
+        setRepresentation(CoreVectors.unpackedWord32);
     }
 
     @Override public Object execute(VirtualFrame frame) {

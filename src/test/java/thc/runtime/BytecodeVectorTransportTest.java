@@ -192,7 +192,7 @@ class BytecodeVectorTransportTest {
                 var captured = (Closure) Calls.target(program.entryTarget("capturedPrefix"), new Object[]{0L, -129L}); var environment = Objects.requireNonNull(captured.environment);
                 var vectors = new ArrayList<Integer>(); for (int i = 0; i < environment.getLayout().getStorageSize(); i++) if (environment.getLayout().isVector(i)) vectors.add(i);
                 assertEquals(1, vectors.size()); new VectorLayout(CoreRepresentations.parse(family.vector)).require(environment.getLayout().inspect(environment, vectors.getFirst()));
-                assertEquals(0, ClosureInspection.INSTANCE.image(captured).getPointers().length, "Raw vectors are not guest references");
+                assertEquals(0, ClosureInspection.image(captured).getPointers().length, "Raw vectors are not guest references");
                 var shape = Objects.requireNonNull(((GuestRoot) captured.target.getRootNode()).getTupleResult()); var original = saved(captured, shape);
                 Calls.target(program.entryTarget("capturedPrefix"), new Object[]{0L, 99L}); assertEquals(original, saved(captured, shape), backend + "/" + family.name + " escaped capture");
                 if (Set.of("Int32X4", "Word8X16", "FloatX4", "DoubleX2").contains(family.name)) {

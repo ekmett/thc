@@ -165,7 +165,7 @@ class Simd128AddressTest {
                     var bytes = bytes(size, 47, 129); var model = bytes.clone(); if (op.isWrite()) store(model, offset * stride, shape);
                     Object storage;
                     if (owned) { var owner = ManagedByteArray.allocateGuest(size); owner.copyBytesIn(bytes, 0, 0, size); storage = owner; } else storage = bytes;
-                    var address = ManagedAddress.Companion.fromGuestByteArray(storage).plus(16);
+                    var address = ManagedAddress.fromGuestByteArray(storage).plus(16);
                     assertEquals(expected(model, offset * stride, shape), invoke(p, address, (long) offset - 16 / stride), backend + "/" + op + "/" + size + "/" + offset + "/" + owned);
                     assertArrayEquals(model, storage instanceof ManagedAllocation owner ? owner.copyBytesOut(0, size) : bytes); released(language);
                 }
@@ -177,23 +177,23 @@ class Simd128AddressTest {
             for (var op : operations) {
                 var p = program(language, backend, fixture(op)); int stride = op.getScalarOffset() ? new Shape(op).width : 16;
                 for (int size : List.of(0, 1, 15, 16, 17, 31, 48)) {
-                    var bytes = bytes(size, 1, 0); var original = bytes.clone(); var address = ManagedAddress.Companion.fromByteArray(bytes);
+                    var bytes = bytes(size, 1, 0); var original = bytes.clone(); var address = ManagedAddress.fromByteArray(bytes);
                     var invalid = List.of(-1L, Long.MIN_VALUE, Long.MAX_VALUE, size < 16 ? 0L : (long) (size - 16) / stride + 1);
                     for (long index : invalid) {
                         assertThrows(RuntimeFault.class, () -> invoke(p, address, index)); assertArrayEquals(original, bytes); released(language);
                     }
                 }
-                var owner = ManagedByteArray.allocateGuest(48); var address = ManagedAddress.Companion.fromAllocation(owner); owner.shrink(16);
+                var owner = ManagedByteArray.allocateGuest(48); var address = ManagedAddress.fromAllocation(owner); owner.shrink(16);
                 assertThrows(RuntimeFault.class, () -> invoke(p, address, 1));
-                for (var opaque : List.of(ManagedAddress.Companion.nullAddress(), ManagedAddress.Companion.unownedNumeric$org_intelligence_thc(123L)))
+                for (var opaque : List.of(ManagedAddress.nullAddress(), ManagedAddress.unownedNumeric(123L)))
                     assertThrows(RuntimeFault.class, () -> invoke(p, opaque, 0));
                 if (!op.isIndex()) {
                     var bytes = bytes(32, 1, 0); var original = bytes.clone();
-                    assertThrows(RuntimeFault.class, () -> invoke(p, ManagedAddress.Companion.fromByteArray(bytes), 0, 1L)); assertArrayEquals(original, bytes);
+                    assertThrows(RuntimeFault.class, () -> invoke(p, ManagedAddress.fromByteArray(bytes), 0, 1L)); assertArrayEquals(original, bytes);
                 }
                 var bytes = bytes(32, 7, 0);
-                for (var immutable : List.of(ManagedAddress.Companion.fromAllocation(ManagedAllocation.immutable(bytes, 8)),
-                    ManagedAddress.Companion.fromNativeImageSource$org_intelligence_thc(bytes, 0))) {
+                for (var immutable : List.of(ManagedAddress.fromAllocation(ManagedAllocation.immutable(bytes, 8)),
+                    ManagedAddress.fromNativeImageSource(bytes, 0))) {
                     if (op.isWrite()) assertThrows(RuntimeFault.class, () -> invoke(p, immutable, 0));
                     else assertEquals(expected(bytes, 0, new Shape(op)), invoke(p, immutable, 0));
                 }
@@ -203,8 +203,8 @@ class Simd128AddressTest {
     }
     @Test void pointerCellReadsAndPartialOverwritesRejectWithoutLosingReferences() throws Exception {
         withLanguage(language -> {
-            var pointer = ManagedAddress.Companion.fromByteArray(new byte[8]); var owner = ManagedAllocation.mutable(40, 8);
-            var address = ManagedAddress.Companion.fromAllocation(owner);
+            var pointer = ManagedAddress.fromByteArray(new byte[8]); var owner = ManagedAllocation.mutable(40, 8);
+            var address = ManagedAddress.fromAllocation(owner);
             address.writeAddressElementIndex(2, pointer); // bytes 16..23
             assertThrows(RuntimeFault.class, () -> address.readVectorBytes(8, 1, 16));
             var value = jdk.incubator.vector.ByteVector.broadcast(jdk.incubator.vector.ByteVector.SPECIES_128, (byte) 0x5a);
@@ -252,7 +252,7 @@ class Simd128AddressTest {
                     var f = fixture(op); list(list(f.app.get(2)).get(1)).set(2, m("rep", scalar("long", alias)));
                     var p = program(language, backend, f); var bytes = new byte[32]; var model = bytes.clone();
                     if (op.isWrite()) store(model, 0, new Shape(op));
-                    assertEquals(expected(model, 0, new Shape(op)), invoke(p, ManagedAddress.Companion.fromByteArray(bytes), 0));
+                    assertEquals(expected(model, 0, new Shape(op)), invoke(p, ManagedAddress.fromByteArray(bytes), 0));
                 }
                 if (op.isRead()) {
                     rejects(language, backend, op, f -> map(f.app.get(6)).put("rep", new Shape(op).proof));

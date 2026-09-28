@@ -45,7 +45,7 @@ public abstract class GuestRoot extends RootNode {
     @CompilationFinal private LeadingCaseReturn leadingCaseReturn = null;
     public final LeadingCaseReturn getLeadingCaseReturn() { return leadingCaseReturn; }
     public final LeadingCaseReturn getLeadingCaseReturn$org_intelligence_thc() { return leadingCaseReturn; }
-    @CompilationFinal private CoreRepresentation scalarResultProof = CoreRepresentation.Companion.getUNKNOWN();
+    @CompilationFinal private CoreRepresentation scalarResultProof = CoreRepresentation.UNKNOWN;
     public final CoreRepresentation getScalarResultProof() { return scalarResultProof; }
     public final CoreRepresentation getScalarResultProof$org_intelligence_thc() { return scalarResultProof; }
     @CompilationFinal private TupleShape tupleResult = null;

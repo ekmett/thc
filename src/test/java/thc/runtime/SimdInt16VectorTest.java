@@ -311,4 +311,3 @@ class SimdInt16VectorTest {
         });
     }
 }
-

@@ -5,7 +5,6 @@ package thc.runtime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import kotlin.Pair;
 import static thc.runtime.RuntimeServiceStatus.fault;
 
 public enum WeakOp {
@@ -58,10 +57,10 @@ public enum WeakOp {
                 throw fault("Weak primitive argument contradicts its binding proof: " + primitive);
         }
     }
-    public void validateAction(Pair<? extends List<CoreRepresentation>, CoreRepresentation> signature) {
+    public void validateAction(CoreFunctionSignature signature) {
         if (this != MAKE || signature == null) return;
-        var inputs = signature.getFirst();
-        var result = signature.getSecond();
+        var inputs = signature.getInputs();
+        var result = signature.getResult();
         var fields = result.getComponents();
         if (inputs.size() != 1 || !matches(inputs.getFirst(), "state") || result.getKind() != CoreKind.UNKNOWN ||
             !result.isTuple() || result.isSum() || result.isVector() || fields.size() != 2 ||

@@ -39,7 +39,7 @@ class RuntimeTraceServicesTest {
 
     private static long emit(RuntimeTraceServices service, int operation, String text, long token) {
         byte[] bytes = text.getBytes(UTF_8);
-        return service.emit(operation, token, ManagedAddress.Companion.fromByteArray(bytes), bytes.length);
+        return service.emit(operation, token, ManagedAddress.fromByteArray(bytes), bytes.length);
     }
 
     private static List<Map<?, ?>> records(ByteArrayOutputStream output) {
@@ -87,13 +87,13 @@ class RuntimeTraceServicesTest {
                 for (byte[] bad : List.of(new byte[]{(byte) 0xc0, (byte) 0x80},
                         new byte[]{0x61, (byte) 0xed, (byte) 0xa0, (byte) 0x80})) {
                     assertThrows(RuntimeFault.class, () ->
-                        trace.emit(0, 0, ManagedAddress.Companion.fromByteArray(bad), bad.length));
+                        trace.emit(0, 0, ManagedAddress.fromByteArray(bad), bad.length));
                 }
                 assertThrows(RuntimeFault.class, () -> trace.emit(0, 0,
-                    ManagedAddress.Companion.fromByteArray(new byte[]{0x61, 0x62}), 3));
-                assertThrows(RuntimeFault.class, () -> trace.emit(0, 0, ManagedAddress.Companion.nullAddress(), -1));
+                    ManagedAddress.fromByteArray(new byte[]{0x61, 0x62}), 3));
+                assertThrows(RuntimeFault.class, () -> trace.emit(0, 0, ManagedAddress.nullAddress(), -1));
                 assertThrows(RuntimeFault.class, () -> trace.emit(0, 0,
-                    ManagedAddress.Companion.nullAddress(), RuntimeTraceServices.MAX_INPUT_BYTES + 1));
+                    ManagedAddress.nullAddress(), RuntimeTraceServices.MAX_INPUT_BYTES + 1));
                 assertThrows(RuntimeFault.class, () -> emit(trace, 4, "", 0L));
                 assertThrows(RuntimeFault.class, () -> emit(trace, 0, "", 1L));
                 assertThrows(RuntimeFault.class, () -> emit(trace, 2, "", 0L));

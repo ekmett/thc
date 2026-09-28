@@ -144,10 +144,10 @@ public final class ManagedNativeAllocations {
             } catch (Throwable failure) { throw nativeFailure("Native malloc invocation failed", failure); }
             if (owner == null) {
                 Language.currentState(null).getStdio().nativeError(errno);
-                return ManagedAddress.Companion.nullAddress();
+                return ManagedAddress.nullAddress();
             }
             try {
-                var address = ManagedAddress.Companion.fromNativeAllocation$org_intelligence_thc(owner);
+                var address = ManagedAddress.fromNativeAllocation(owner);
                 live.add(owner);
                 return address;
             } catch (Throwable failure) { owner.release(); throw propagate(failure); }
@@ -163,7 +163,7 @@ public final class ManagedNativeAllocations {
             WindowsCodePages.Abi.requireLayout();
             if (pointer.address() == 0 || size <= 0) throw fault("Invalid Windows local allocation");
             owner = new Owner(pointer, size, Allocator.WINDOWS_LOCAL);
-            var address = ManagedAddress.Companion.fromNativeAllocation$org_intelligence_thc(owner);
+            var address = ManagedAddress.fromNativeAllocation(owner);
             live.add(owner);
             return address;
         } catch (Throwable failure) {
@@ -201,22 +201,22 @@ public final class ManagedNativeAllocations {
     public ManagedAddress realloc(ManagedAddress address, long size) {
         current();
         if (size < 0) throw fault("Native realloc size exceeds the signed Long segment domain");
-        if (address == ManagedAddress.Companion.nullAddress()) return malloc(size);
+        if (address == ManagedAddress.nullAddress()) return malloc(size);
         Owner owner;
         synchronized (this) {
             owner = freeableOwner(address, Allocator.MALLOC);
             freeing.add(owner);
         }
-        var replacement = ManagedAddress.Companion.nullAddress();
+        var replacement = ManagedAddress.nullAddress();
         boolean retired = false;
         try {
             // This is the selected Linux libc contract for realloc(p, 0).
             if (size != 0) {
                 replacement = malloc(size);
-                if (replacement == ManagedAddress.Companion.nullAddress()) return replacement;
+                if (replacement == ManagedAddress.nullAddress()) return replacement;
                 try (var source = owner.borrow()) {
                     var sourceSegment = source.segment();
-                    try (var destination = replacement.nativeAllocation$org_intelligence_thc().borrow()) {
+                    try (var destination = replacement.nativeAllocation().borrow()) {
                         var destinationSegment = destination.segment();
                         long copied = Math.min(owner.size, size);
                         destinationSegment.asSlice(0, copied).copyFrom(sourceSegment.asSlice(0, copied));
@@ -227,7 +227,7 @@ public final class ManagedNativeAllocations {
             retired = true;
             return replacement;
         } catch (Throwable failure) {
-            if (replacement != ManagedAddress.Companion.nullAddress()) {
+            if (replacement != ManagedAddress.nullAddress()) {
                 try { free(replacement); }
                 catch (Throwable cleanup) { failure.addSuppressed(cleanup); }
             }
@@ -246,12 +246,12 @@ public final class ManagedNativeAllocations {
 
     private Owner freeableOwner(ManagedAddress address, Allocator allocator) {
         if (closed) throw fault("Native allocation registry is closed");
-        if (address == ManagedAddress.Companion.nullAddress()) return null;
-        var owner = address.nativeAllocation$org_intelligence_thc();
+        if (address == ManagedAddress.nullAddress()) return null;
+        var owner = address.nativeAllocation();
         if (owner == null) throw fault("Native free requires an owned malloc base");
         if (owner.allocator != allocator) throw fault("Native deallocation requires its matching allocator");
         if (!live.contains(owner) || freeing.contains(owner)) throw fault("Native free requires a live allocation from this context");
-        if (!address.isNativeBase$org_intelligence_thc()) throw fault("Native free requires the allocation base");
+        if (!address.isNativeBase()) throw fault("Native free requires the allocation base");
         owner.requireFreeable();
         return owner;
     }
@@ -297,7 +297,7 @@ public final class ManagedNativeAllocations {
             long displacement;
             try (var loan = owner.borrow()) { displacement = bits - loan.segment().address(); }
             if (Long.compareUnsigned(displacement, owner.size) <= 0)
-                return ManagedAddress.Companion.fromNativeAllocation$org_intelligence_thc(owner).plus(displacement);
+                return ManagedAddress.fromNativeAllocation(owner).plus(displacement);
         }
         return null;
     }
