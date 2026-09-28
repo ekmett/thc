@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @Timeout(90)
 @SuppressWarnings("unchecked")
 public class ProcessLifecycleCoreTest {
+    private static <E extends Throwable> RuntimeException propagate(Throwable failure) throws E { throw (E) failure; }
     @TempDir Path directory;
     private final Path root = Path.of(System.getProperty("thc.projectRoot"));
     private final Path oracle = root.resolve("build/process-lifecycle/native/process-oracle");
@@ -119,7 +120,7 @@ public class ProcessLifecycleCoreTest {
                                     @Override protected void perform(Access access) {
                                         gateEntered.countDown();
                                         try { if (!gateRelease.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("Check failed."); }
-                                        catch (InterruptedException error) { throw new RuntimeException(error); }
+                                        catch (InterruptedException error) { throw propagate(error); }
                                         state.getMaskingState().set(MaskingState.UNMASKED);
                                     }
                                 }); assertTrue(gateEntered.await(10, TimeUnit.SECONDS));
