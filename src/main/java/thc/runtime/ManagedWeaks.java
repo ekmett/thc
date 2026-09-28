@@ -52,7 +52,7 @@ public final class ManagedWeaks {
         var payload = live.get(handle(weak));
         if (payload == null) return 0L;
         // The zero-flag RTS form ignores environment; lowering checks its Addr# carrier.
-        if (callback.getSymbol().equals("free")) Language.currentState(null).getNativeAllocations$org_intelligence_thc().requireFreeTarget(address);
+        if (callback.getSymbol().equals("free")) Language.currentState(null).getNativeAllocations().requireFreeTarget(address);
         else if (address != ManagedAddress.Companion.nullAddress()) address.requireByteRegion$org_intelligence_thc(0L, false);
         payload.callbacks.add(0, () -> callback.invoke(address));
         return 1L;
@@ -94,5 +94,5 @@ public final class ManagedWeaks {
     }
     public synchronized int retainedCount() { return live.size(); }
     public synchronized void close() { closed = true; live.clear(); }
-    public static ManagedWeaks current(Node node) { return Language.currentState(node).getWeaks$org_intelligence_thc(); }
+    public static ManagedWeaks current(Node node) { return Language.currentState(node).getWeaks(); }
 }

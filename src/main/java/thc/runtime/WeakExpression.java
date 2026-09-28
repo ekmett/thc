@@ -33,7 +33,7 @@ final class WeakExpression extends Expr {
             operands[3].executeRequiredAddress(frame);
             var weak = operands[4].execute(frame);
             TupleResultsKt.requireVoidCarrier(operands[5].execute(frame));
-            var provider = Language.currentState(this).cbits$org_intelligence_thc();
+            var provider = Language.currentState(this).cbits();
             FrameAccess.writeLong(frame, slots[offset], registry.addCFinalizer(function, address, flag, weak, provider));
         } else {
             TupleResultsKt.requireVoidCarrier(operands[1].execute(frame));
