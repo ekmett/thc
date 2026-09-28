@@ -88,7 +88,8 @@ public final class LocalJoinCall extends Expr {
         }
         for (int temporary : temporaries) if (temporary >= 0) frame.clear(temporary);
         for (int[] fields : typedTemporaries) if (fields != null) for (int field : fields) frame.clear(field);
-        if (metrics.getEnabled()) metrics.incrementLocalJoinTransfers();
+        Metrics invocation = metrics != null ? metrics : ((FunctionRoot) getRootNode()).invocationMetrics(frame);
+        if (invocation.getEnabled()) invocation.incrementLocalJoinTransfers();
         throw target.getJump();
     }
     @Override public long executeLong(VirtualFrame frame) { execute(frame); throw new AssertionError(); }

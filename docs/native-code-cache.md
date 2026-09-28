@@ -7,9 +7,12 @@ cache. It is not the ordinary `thc run` path or a general Haskell AOT distributi
 
 The current admission is synchronous, constructor- and foreign-free AST code:
 explicit machine-word input proofs, integer literals, globals, ordinary function
-applications, nested closures, non-join `let` bindings, and `+#`, `-#`, `*#`
-arithmetic. Closure formals still require machine-word arguments; higher-order
-formals, constructors, cases and joins remain outside this incremental admission.
+applications, nested closures, `let` bindings, `Int#` literal/default cases, local
+joins, and `+#`, `-#`, `*#` arithmetic. Function and join formals still require
+machine-word arguments; case binders/results and join results need exact
+machine-word proofs. Recursive local joins use the existing local-loop lowering.
+Higher-order formals, constructors and constructor cases remain outside this
+incremental admission.
 Reachable CAF code is prepared without evaluating the CAF;
 each load creates a fresh Program, CAF cells and metrics. Unselected definitions
 stay unprepared. Unused GHC module/constructor descriptors do not prevent scalar
@@ -49,6 +52,24 @@ entry's existing host ABI validating arity/carriers; arithmetic uses ordinary
 machine-word overflow. The selected entry is fixed in the cache; arguments are
 not compiled in. `src/examples/THC/CachedCalls.hs` exercises ordinary out-of-line
 guest functions through the same export/store/run commands and argument contract.
+
+`src/examples/THC/CachedWordLoop.hs` adds a word case and recursive local join:
+
+```sh
+THC_CORE_OUT="$PWD/build/cached-word-core" \
+  bin/export-core.sh src/examples/THC/CachedWordLoop.hs
+bin/native-cache store build/word-loop.cache \
+  build/cached-word-core/THC.CachedWordLoop.json sumFrom
+bin/native-cache run build/word-loop.cache 0 47
+# 47
+bin/native-cache run build/word-loop.cache 5 -40
+# -25
+```
+
+This example requires a nonnegative count and adds `1 + ... + count` to its
+dynamic seed. Prepared cases use their actual predicates without observed branch
+profiles; local joins use predeclared frame carriers and the invoking instance's
+metrics. Preparation does not execute branches or loop iterations.
 
 An existing package manifest may be supplied as `@PACKAGES.json`, with an exact
 qualified binding such as `main:THC.CachedCalls.affine`. JSON unit directories and

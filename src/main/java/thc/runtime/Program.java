@@ -202,7 +202,7 @@ public final class Program implements ExecutableProgram {
             throw new UnsupportedCore("Reusable AST admission currently requires a foreign-free, non-demand-loaded module");
         // Real GHC modules carry unused $trModule constructor descriptors. Retain
         // them during ordinary validation, but requireReusableBody still rejects
-        // every reachable constructor/case. None enters PreparedCode below.
+        // every reachable constructor. None enters PreparedCode below.
         Program builder = new Program(language, module, false, false, false, true, null);
         Map<String, CodeValue> values = new LinkedHashMap<>();
         ArrayDeque<String> pending = new ArrayDeque<>(entries);
@@ -288,13 +288,32 @@ public final class Program implements ExecutableProgram {
             }
             case "let" -> {
                 var bindings = (List<Map<String,Object>>) expression.get(2);
-                if (CoreJoins.definitions(bindings) != null) throw new UnsupportedCore("Reusable AST joins are not yet admitted");
+                var joins = CoreJoins.definitions(bindings);
+                if (joins != null) for (var join : joins) {
+                    if (!join.getResult().getPresent() || !join.getResult().isLong())
+                        throw new UnsupportedCore("Reusable AST join result requires a machine-word proof");
+                }
                 for (var binding : bindings) {
                     CoreRepresentation proof = CoreRepresentations.binder(binding);
                     if (proof.isTypedTransport()) throw new UnsupportedCore("Reusable AST typed locals are not yet admitted");
                     requireReusableBody((List<Object>) binding.get("expr"));
                 }
                 requireReusableBody((List<Object>) expression.get(3));
+            }
+            case "case" -> {
+                CoreRepresentation binder = CoreRepresentations.caseBinder(expression);
+                CoreRepresentation result = CoreRepresentations.expression(expression);
+                if (!binder.getPresent() || !binder.isLong() || !result.getPresent() || !result.isLong())
+                    throw new UnsupportedCore("Reusable AST case binder and result require machine-word proofs");
+                requireReusableBody((List<Object>) expression.get(1));
+                for (var alternative : (List<List<Object>>) expression.get(3)) {
+                    String kind = (String) alternative.getFirst();
+                    if (!(kind.equals("default") || kind.equals("lit") &&
+                            ((List<?>) alternative.get(1)).getFirst().equals("int")) ||
+                            !((List<?>) alternative.get(2)).isEmpty())
+                        throw new UnsupportedCore("Reusable AST case requires word literals or default alternatives");
+                    requireReusableBody((List<Object>) alternative.get(3));
+                }
             }
             default -> throw new UnsupportedCore("Reusable AST node is not yet admitted: " + expression.getFirst());
         }
@@ -1066,9 +1085,10 @@ public final class Program implements ExecutableProgram {
                 typedTemps[i] = new int[ArgumentLayout.leaves(target.getProofs()[i]).size()];
                 for (int j = 0; j < typedTemps[i].length; j++) typedTemps[i][j] = scope.layout.bind("<join typed argument " + i + " field " + j + ">");
                 temps[i] = -1;
-            } else temps[i] = scope.layout.bind("<join argument " + i + ">");
+            } else temps[i] = scope.layout.bind("<join argument " + i + ">", reusableCode ?
+                FrameLayout.carrierKind(target.getProofs()[i]) : FrameSlotKind.Illegal);
         }
-        return new LocalJoinCall((thc.Language) language, target, nodes, temps, metrics, typedTemps);
+        return new LocalJoinCall((thc.Language) language, target, nodes, temps, codeMetrics(), typedTemps);
     }
     private Expr compileJoins(List<Object> expr, Scope outer, boolean tail, List<CoreJoinDefinition> definitions) {
         boolean recursive = Boolean.TRUE.equals(expr.get(1));
@@ -1114,7 +1134,8 @@ public final class Program implements ExecutableProgram {
                     int[] lanes = new int[ArgumentLayout.leaves(proof).size()];
                     for (int j = 0; j < lanes.length; j++) lanes[j] = scope.layout.bind(parameter.get("id") + " join typed field " + j);
                     scope.bindTuple((String) parameter.get("id"), evaluated(proof, true), lanes);
-                } else scope.bind((String) parameter.get("id"), !lifted && !Boolean.TRUE.equals(parameter.get("coercion")), proof);
+                } else scope.bind((String) parameter.get("id"), !lifted && !Boolean.TRUE.equals(parameter.get("coercion")),
+                    proof, false, null, null, reusableCode ? FrameLayout.carrierKind(proof) : FrameSlotKind.Illegal);
             }
             bodyScopes.add(scope);
         }
@@ -1160,7 +1181,8 @@ public final class Program implements ExecutableProgram {
         for (int i = 0; i < tupleSlots.length; i++) tupleSlots[i] = local.layout.bind("<join tuple result " + i + ">");
         Expr[] nodes = new Expr[bodies.size() + 1]; nodes[0] = entry;
         for (int i = 0; i < bodies.size(); i++) nodes[i + 1] = bodies.get(i);
-        return new LocalJoinRegion(identity, local.layout.bind("<join selector>"), local.layout.bind("<join result>"),
+        return new LocalJoinRegion(identity, local.layout.bind("<join selector>", reusableCode ? FrameSlotKind.Long : FrameSlotKind.Illegal),
+            local.layout.bind("<join result>", reusableCode ? FrameLayout.carrierKind(result) : FrameSlotKind.Illegal),
             nodes, result, recursive, tuple, tupleSlots, delimited);
     }
     private DataLayout dataLayout(String id) {
@@ -1445,7 +1467,7 @@ public final class Program implements ExecutableProgram {
                 default -> throw new RuntimeFault("Invalid Core alternative kind " + kind);
             };
             Expr body = caseArm((List<Object>) alt.get(3), child, tail);
-            alternatives[a] = new Alternative(tag, value, ints(slots), body, vectorFields, alternatives.length > 1);
+            alternatives[a] = new Alternative(tag, value, ints(slots), body, vectorFields, !reusableCode && alternatives.length > 1);
             results.add(body.getRepresentation()); kinds.add(tag);
             allLong &= tag != LITERAL_ALTERNATIVE || value instanceof Long;
             anyAggregate |= body.getRepresentation().isAggregate();
@@ -1457,10 +1479,10 @@ public final class Program implements ExecutableProgram {
         CoreRepresentations.validateAggregateCaseResult(declared, results);
         CoreRepresentations.validateFloatingCaseResult(declared, results);
         return switch (CaseCategories.caseCategory(binderProof, kinds, allLong)) {
-            case DATA -> new DataCase(scrutinee, binder, alternatives, metrics, binderProof, delimited);
-            case LONG -> new LongCase(scrutinee, binder, alternatives, metrics, binderProof, delimited);
-            case DEFAULT_ONLY -> new DefaultCase(scrutinee, binder, alternatives, metrics, binderProof, delimited);
-            case GENERIC -> new Case(scrutinee, binder, alternatives, metrics, null, delimited);
+            case DATA -> new DataCase(scrutinee, binder, alternatives, codeMetrics(), binderProof, delimited);
+            case LONG -> new LongCase(scrutinee, binder, alternatives, codeMetrics(), binderProof, delimited);
+            case DEFAULT_ONLY -> new DefaultCase(scrutinee, binder, alternatives, codeMetrics(), binderProof, delimited);
+            case GENERIC -> new Case(scrutinee, binder, alternatives, codeMetrics(), null, delimited);
         };
     }
 
