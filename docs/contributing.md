@@ -188,6 +188,15 @@ Stock OSR events remain omitted from the separate per-context JIT counters.
 Full application, native-image and Windows native-library parity are not yet
 established for this mode.
 
+The pinned bytecode continuation entry reuses its saved materialized frame in
+compiled code as well as the interpreter. A fresh virtual operand frame can
+escape when a yield copies live operands across an exception-handler merge,
+causing a compiler bailout. `BytecodeStackPreparation` checks and replaces only
+that generated entry block; saved bytecode locations, raw slot carriers, stack
+balancing and transaction restoration are unchanged. `BytecodeLiveOperandResumeTest`
+compiles the first saved suffix before any resume and checks resuspension with a
+live operand, frame identity and the final result.
+
 Run `./gradlew testBytecodeMetadataSplit` for compiled before/after opcode checks
 and malformed-input controls. Add
 `-Pthc.metadataFixture=/absolute/path/to/BytecodeRootGen.java` to compare every
