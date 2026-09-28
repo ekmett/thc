@@ -15,10 +15,11 @@ OUT = ROOT / 'build/tag-to-enum'
 SOURCES = [ROOT / ('compiler/test-fixtures/' + name + '.hs') for name in
            ['TagToEnumAudit', 'TagToEnumExternal', 'TagToEnumAuditNative', 'TagToEnumFrontier']]
 CODES = {'boolCase': [-11, 29], 'orderingCase': [71, -23, 211], 'colourCase': [17, -31, 83],
+         'wrappedColourCase': [17, -31, 83],
          'externalCase': [43, -7, 91, 1009], 'papCase': [17, -31, 83], 'onceCase': [102, 204]}
 INPUTS = [(name, tag) for name, codes in CODES.items() for tag in range(len(codes))] + [
-    (name, n) for name in ['lazyCase', 'lazyTagCase'] for n in [-(1 << 63), -1, 0, 1, 17, (1 << 63) - 1]]
-ENTRIES = list(CODES) + ['lazyCase', 'lazyTagCase']
+    (name, n) for name in ['lazyCase', 'lazyTagCase', 'lazyWrappedTagCase'] for n in [-(1 << 63), -1, 0, 1, 17, (1 << 63) - 1]]
+ENTRIES = list(CODES) + ['lazyCase', 'lazyTagCase', 'lazyWrappedTagCase']
 
 def check(ok, detail):
     if not ok: raise AssertionError(detail)
@@ -51,16 +52,22 @@ def inventory(stage):
     cons = {c['id']: c for c in m['constructors']}
     uses = [x for x in walk(m['bindings']) if isinstance(x, list) and len(x) > 1 and x[0] == 'app'
             and isinstance(x[1], list) and x[1][:2] == ['prim', 'tagToEnum#']]
-    check(len(uses) == 4, 'Expected four genuine dynamic tagToEnum applications')
+    check(len(uses) == 5, 'Expected five genuine dynamic tagToEnum applications')
     sizes = []
     for app in uses:
         family = app[6]['enumFamily']; ids = family['constructors']; sizes.append(len(ids))
         check(app[3] == [False] and len(app[2]) == 1, 'Exact saturation/levity lost')
-        check(app[6]['rep']['kind'] == 'data' and app[6]['rep']['primReps'] == ['BoxedRep (Just Lifted)'], 'Result identity lost')
+        check(app[6]['rep']['kind'] in ['data', 'object'] and app[6]['rep']['primReps'] == ['BoxedRep (Just Lifted)'], 'Lifted result carrier lost')
         for i, key in enumerate(ids):
             c = cons[key]
             check(c['enumFamily'] == family and c['arity'] == 0 and c['tag'] == i + 1 and c['kind'] == 'boxed', 'Family order/completeness changed')
-    check(sorted(sizes) == [2, 3, 3, 4], 'Enum family inventory changed')
+    check(sorted(sizes) == [2, 3, 3, 3, 4], 'Enum family inventory changed')
+    wrapped = next(b for b in m['bindings'] if b['name'] == 'chooseWrappedColour')
+    cast_apps = [x for x in walk(wrapped['expr']) if isinstance(x, list) and len(x) > 1
+                 and x[0] == 'app' and isinstance(x[1], list) and x[1][:2] == ['prim', 'tagToEnum#']]
+    check(len(cast_apps) == 1 and cast_apps[0][6]['rep']['kind'] == 'object'
+          and cast_apps[0][6]['enumFamily']['typeConstructor'].endswith(':TagToEnumAudit.Colour'),
+          'Genuine newtype result cast must retain the original Colour family and outer object representation')
     check(len([k for k in cons if ':TagToEnumExternal.' in k]) == 4,
           'Imported family must be retained in the consumer module, independent of merging defining module')
     prefix = next(b for b in m['bindings'] if b['name'] == 'prefix')
@@ -71,6 +78,9 @@ def inventory(stage):
     choose = next(b for b in m['bindings'] if b['name'] == 'chooseBool')
     check(any(isinstance(x, list) and len(x) > 2 and x[0] == 'app' and x[1][:2] == ['var', choose['id']]
               for x in walk(lazy['expr'])), 'Unused dynamic enum application was erased')
+    lazy_wrapped = next(b for b in m['bindings'] if b['name'] == 'lazyWrappedTagCase')
+    check(any(isinstance(x, list) and len(x) > 2 and x[0] == 'app' and x[1][:2] == ['var', wrapped['id']]
+              for x in walk(lazy_wrapped['expr'])), 'Unused newtype-cast enum application was erased')
     frontier = json.loads((OUT / f'{stage}-core/TagToEnumFrontier.json').read_text())
     unknown = [x for x in walk(frontier['bindings']) if isinstance(x, list) and len(x) > 1 and x[0] == 'app'
                and isinstance(x[1], list) and x[1][:2] == ['prim', 'tagToEnum#']]
@@ -78,7 +88,7 @@ def inventory(stage):
           'Parameterized/data-family type must not receive a supported nominal descriptor')
     audit = json.loads((OUT / f'{stage}-audit.json').read_text())
     check(audit['accepted'], 'Strict tagToEnum audit failed')
-    return dict(stage=stage, families=4, audit=audit['summary'])
+    return dict(stage=stage, families=4, applications=5, resultCasts=1, audit=audit['summary'])
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__); parser.add_argument('--check-only', action='store_true'); args = parser.parse_args()

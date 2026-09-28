@@ -1288,8 +1288,10 @@ class Audit:
             return isinstance(rep, dict) and rep.get('kind') == kind and rep.get('primReps') == [register] and 'aggregate' not in rep and not is_vector(rep)
         if not scalar(actual, 'long', 'IntRep'):
             reject('exact IntRep operand required')
-        if not scalar(self.expression_rep(expr), 'data', 'BoxedRep (Just Lifted)'):
-            reject('exact lifted data result required')
+        # An erased result newtype cast retains its conservative object carrier;
+        # enumFamily below certifies the original nominal enum operation.
+        if not any(scalar(self.expression_rep(expr), kind, 'BoxedRep (Just Lifted)') for kind in ('data', 'object')):
+            reject('exact lifted data/object result required')
         family = expr[6].get('enumFamily') if len(expr) > 6 and isinstance(expr[6], dict) else None
         if not isinstance(family, dict) or set(family) != {'typeConstructor', 'constructors'} or not isinstance(family.get('typeConstructor'), str) or not family['typeConstructor']:
             reject('missing/malformed concrete family')

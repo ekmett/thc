@@ -27,10 +27,12 @@ final class CoreEnums {
                 || !List.of("IntRep").equals(operand.getPrimReps()) || operand.isAggregate() || operand.isVector())
             throw bad("Exact IntRep operand required");
         CoreRepresentation result = CoreRepresentations.expression(expression);
-        if (!result.getPresent() || result.getKind() != CoreKind.DATA
+        // An erased newtype result cast may retain OBJECT; the family below
+        // certifies the original enum operation, not the outer result type.
+        if (!result.getPresent() || (result.getKind() != CoreKind.DATA && result.getKind() != CoreKind.OBJECT)
                 || !List.of("BoxedRep (Just Lifted)").equals(result.getPrimReps())
                 || result.isAggregate() || result.isVector())
-            throw bad("Exact lifted data result required");
+            throw bad("Exact lifted data/object result required");
         if (expression.size() <= 6 || !(expression.get(6) instanceof Map<?, ?> metadata))
             throw bad("Missing application metadata");
         if (!(metadata.get("enumFamily") instanceof Map<?, ?> family))
