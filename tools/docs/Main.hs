@@ -173,9 +173,10 @@ repairJavadoc revision javaSources page html =
           let relative = drop (length prefix) resolved
               outer = takeWhile (/= '.') (takeFileName relative)
               source = "src/main/java" </> takeDirectory relative </> outer <.> "java"
-              line = drop (length "#line-") suffix
+              linePrefix = "#line-"
+              line = drop (length linePrefix) suffix
           unless (takeExtension relative == ".html" && Set.member source javaSources &&
-                  "#line-" `isPrefixOf` suffix && not (null line) &&
+                  linePrefix `isPrefixOf` suffix && not (null line) &&
                   all (`elem` ("0123456789" :: String)) line) $
             die ("Unrecognized Javadoc source link in " ++ page ++ ": " ++ url)
           pure ("href", repo ++ "/blob/" ++ revision ++ "/" ++ source ++ "#L" ++ line)
