@@ -9,16 +9,13 @@ import com.oracle.truffle.api.bytecode.ContinuationResult;
 final class BytecodeContinuations {
     private BytecodeContinuations() {}
 
-    // Do not resolve a new SavedGuestContinuation implementation while partially
-    // evaluating the ordinary force path. That can invalidate a hierarchy
-    // assumption already recorded earlier in the same compilation.
     @TruffleBoundary
     static SavedGuestContinuation view(ContinuationResult saved) {
         return new BytecodeSavedContinuation(saved);
     }
 
     /** State-5 storage keeps the original result, not this transient view. */
-    private static final class BytecodeSavedContinuation implements SavedGuestContinuation {
+    static final class BytecodeSavedContinuation implements SavedGuestContinuation {
         private final ContinuationResult saved;
 
         private BytecodeSavedContinuation(ContinuationResult saved) {

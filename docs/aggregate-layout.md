@@ -84,11 +84,13 @@ Each node retains the exact vector from `typePrimRep_maybe`, when available.
 GHC 9.14.1's `TupleRep` and `SumRep` callbacks internally call the partial
 `runtimeRepPrimRep`; the nominally optional query can panic on a valid native
 definition such as `forall r (a :: TYPE r). Box -> (# a, Int# #)`. For those
-aggregate kinds, the exporter first requires `typeHasFixedRuntimeRep`. Otherwise
-the enclosing vector is `null`, while independently known child vectors remain
-available. A levity-polymorphic boxed leaf retains `BoxedRep Nothing`; its
-enclosing unresolved aggregate remains conservative. The exporter never invents
-a register vector or flattens known children across an unresolved one.
+sum kinds, the exporter first requires `typeHasFixedRuntimeRep`. For a concrete
+tuple type it instead queries each child recursively and concatenates the known
+vectors. A levity-polymorphic boxed leaf retains `BoxedRep Nothing`, so a tuple
+containing it has a known pointer slot and can pass through ordinary guest
+transport without forcing it. If any child's runtime representation is unknown,
+the enclosing vector remains `null`. The exporter never flattens known children
+across an unresolved one.
 
 Child `evaluated` is true only when GHC proves that child's type is unlifted.
 An outer evaluated tuple or sum does not make a lifted data value, function,

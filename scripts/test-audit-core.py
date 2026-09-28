@@ -539,7 +539,8 @@ class ArchiveReachabilityTest(unittest.TestCase):
 
 def tuple_rep(*components):
     return dict(aggregate='unboxed-tuple', kind='unknown', evaluated=True,
-                components=list(components), primReps=[r for c in components for r in c['primReps']])
+                components=list(components), primReps=None if any(c['primReps'] is None for c in components) else
+                    [r for c in components for r in c['primReps']])
 
 
 def tuple_fixture(proof=None):
@@ -1464,7 +1465,7 @@ class AuditTest(unittest.TestCase):
                     mutations = [
                         tuple_rep(scalar, state),
                         tuple_rep(state, scalar, scalar),
-                        tuple_rep(state, dict(kind='object', primReps=['BoxedRep Nothing'], evaluated=True)),
+                        tuple_rep(state, dict(kind='unknown', primReps=None, evaluated=True)),
                         dict(tuple_rep(state, scalar), primReps=['DoubleRep']),
                         tuple_rep(state, dict(scalar, kind='float')),
                     ]
@@ -1480,7 +1481,7 @@ class AuditTest(unittest.TestCase):
         state = dict(kind='void', primReps=[], evaluated=True)
         unlifted = dict(kind='object', primReps=['BoxedRep (Just Unlifted)'], evaluated=True)
         floating = dict(kind='float', primReps=['FloatRep'], evaluated=True)
-        results = [REFERENCE, unlifted, state, tuple_rep(), floating,
+        results = [REFERENCE, unlifted, dict(kind='object', primReps=['BoxedRep Nothing'], evaluated=False), state, tuple_rep(), floating,
                    dict(kind='double', primReps=['DoubleRep'], evaluated=True),
                    tuple_rep(LONG, tuple_rep(floating, tuple_rep()))]
         results.extend(dict(kind='long', primReps=[rep], evaluated=True) for rep in
@@ -1497,7 +1498,7 @@ class AuditTest(unittest.TestCase):
                     with self.subTest(name=name, payload=payload, result=result):
                         self.assertNotIn('primitive-representation', {i['code'] for i in run(good)['issues']})
                         for malformed in (dict(kind='unknown', primReps=[], evaluated=True),
-                                          dict(kind='object', primReps=['BoxedRep Nothing'], evaluated=True)):
+                                          dict(kind='unknown', primReps=None, evaluated=True)):
                             bad = copy.deepcopy(good)
                             bad[-1]['rep'] = tuple_rep(state, malformed)
                             self.assertIn('primitive-representation', {i['code'] for i in run(bad)['issues']})
@@ -1764,7 +1765,7 @@ class EmptyTupleInputTests(unittest.TestCase):
         self.assertFalse(report['accepted'])
         self.assertIn('aggregate-shape', {i['code'] for i in report['issues']})
 
-    def test_exact_empty_join_formals_are_separately_gated_and_ordinary_empty_lets_stay_rejected(self):
+    def test_exact_empty_join_formals_and_unlifted_lets_are_separately_gated(self):
         module = self.fixture([self.empty])
         worker = module['bindings'].pop()
         worker.update(joinValueArity=1, joinResultRep=LONG, info=dict(joinArity=1))
@@ -1777,7 +1778,9 @@ class EmptyTupleInputTests(unittest.TestCase):
         value = module['bindings'][0]['expr'][2][0]
         local = dict(bind('e', value, False), rep=self.empty)
         module['bindings'][0]['expr'] = ['let', False, [local], [*lit(1), dict(rep=LONG)], dict(rep=LONG)]
-        self.assertIn('unboxed-tuple let binding', [i['detail'] for i in self.audit(module)['issues']])
+        self.assertTrue(self.audit(module)['accepted'])
+        disabled = dict(CAP, aggregateLetBindings=[])
+        self.assertIn('unboxed-tuple let binding', [i['detail'] for i in audit_core.Audit([('let', module)], disabled).run(['root'])['issues']])
 
     def test_known_partial_application_keeps_logical_positions(self):
         module = self.fixture([LONG, self.empty, LONG])

@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 import static thc.CoreExecutionTestSupport.*;
 
-/** Native metadata groundwork must not turn into accidental aggregate execution. */
+/** Native aggregate metadata preserves logical shape separately from storage. */
 class AggregateLayoutTest {
     private final Path root = Path.of(System.getProperty("thc.projectRoot"));
     private final Map<String, Object> boundaries = map(
@@ -25,6 +25,21 @@ class AggregateLayoutTest {
     private Object module(String stage) throws Exception { return Json.parse(Files.readString(root.resolve("build/aggregate-layout/" + stage + "-core/AggregateLayoutAudit.json"))); }
     private String request(Object module, String entry, String backend) {
         return Json.stringify(map("modules", list(module), "entry", entry, "backend", backend, "diagnosticUnsupported", false));
+    }
+    @Test void unknownBoxedLevityKeepsItsPhysicalPointerInsideTuples() throws Exception {
+        for (String stage : list("pre", "post")) {
+            var module = (Map<?, ?>) module(stage);
+            for (String name : list("levityPolymorphic", "boxedTupleThrough", "boxedThrough")) {
+                var binding = ((List<?>) module.get("bindings")).stream().map(value -> (Map<?, ?>) value)
+                    .filter(value -> name.equals(value.get("name"))).findFirst().orElseThrow();
+                var expression = (List<?>) binding.get("expr");
+                var proof = (Map<?, ?>) ((Map<?, ?>) expression.get(3)).get("resultRep");
+                assertEquals(name.equals("boxedThrough") ? list("BoxedRep Nothing") : list("BoxedRep Nothing", "IntRep"), proof.get("primReps"));
+                var pointer = name.equals("boxedThrough") ? proof : (Map<?, ?>) ((List<?>) proof.get("components")).getFirst();
+                assertEquals("object", pointer.get("kind"));
+                assertEquals(false, pointer.get("evaluated"), "A known pointer is not a WHNF certificate");
+            }
+        }
     }
     @Test void strictLoadingRejectsRecursivePolymorphicAndNewtypeAggregateBoundaries() throws Exception {
         for (String stage : list("pre", "post")) {

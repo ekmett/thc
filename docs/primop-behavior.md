@@ -79,7 +79,7 @@ still apply.
 
 | Primop | Current behavior and consequence |
 | --- | --- |
-| `catch#` | Uses the ordinary concrete recursive typed result layout in both backends, including supported integral, floating, address, boxed, zero-width/nested tuple, sum and vector carriers. The outer result keeps exactly two logical fields, State# and the action result. Unresolved layouts/boxed levity and shapes unsupported by the generic transport still reject. |
+| `catch#` | Uses the ordinary concrete recursive typed result layout in both backends, including supported integral, floating, address, boxed, zero-width/nested tuple, sum and vector carriers. `BoxedRep Nothing` results retain traced pointer storage without gaining evaluatedness. The outer result keeps exactly two logical fields, State# and the action result. Unresolved runtime layouts and shapes unsupported by the generic transport still reject. |
 | `raiseIO#` | Accepts concrete lifted or unlifted boxed exception payloads independently of its concrete typed result layout. Lifted payloads remain lazy; unlifted boxed references retain their identity. Unknown payload levity and scalar/unboxed payloads reject according to the pinned GHC signature. |
 | `maskAsyncExceptions#` | Implements interruptible masking/restoration with the same concrete typed result layouts as `catch#`; no exception-specific scalar whitelist. |
 | `maskUninterruptible#` | Implements uninterruptible masking/restoration, with the same supported result representations as `maskAsyncExceptions#`. |

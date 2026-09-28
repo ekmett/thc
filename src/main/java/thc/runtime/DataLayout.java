@@ -188,7 +188,7 @@ public final class DataLayout {
     public void restoreVector(DataValue value, int index, Frame frame, int[] slots, int offset) { checkedVector(value, index).restore(value, frame, slots, offset); }
     public void restoreVector(DataValue value, int index, BytecodeNode bytecode, VirtualFrame frame, LocalAccessor[] slots, int offset) { checkedVector(value, index).restore(value, bytecode, frame, slots, offset); }
     public Object read(DataValue value, int index) { checkField(value, index); return fields[index].read(value); }
-    public boolean compactPointer(int index) { return exactFieldReps[index].equals("LiftedRep") || exactFieldReps[index].equals("UnliftedRep"); }
+    public boolean compactPointer(int index) { return exactFieldReps[index].equals("LiftedRep") || exactFieldReps[index].equals("UnliftedRep") || exactFieldReps[index].equals("BoxedRep"); }
     public boolean inactiveSumReference(DataValue value, int index) {
         if (!compactPointer(index)) return false;
         for (SumField field : sumFields) {
@@ -326,7 +326,7 @@ public final class DataLayout {
             kind = vector != null ? VECTOR : narrowInteger != null ? INT : switch (representation) {
                 case "IntRep", "WordRep", "Int64Rep", "Word64Rep" -> LONG;
                 case "FloatRep" -> FLOAT; case "DoubleRep" -> DOUBLE;
-                case "LiftedRep", "UnliftedRep", "AddrRep" -> OBJECT;
+                case "LiftedRep", "UnliftedRep", "BoxedRep", "AddrRep" -> OBJECT;
                 case "VoidRep" -> VOID;
                 default -> throw new UnsupportedCore("Unsupported constructor field representation: " + representation);
             };

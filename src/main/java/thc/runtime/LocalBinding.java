@@ -11,13 +11,13 @@ import com.oracle.truffle.api.nodes.UnexpectedResultException;
 public final class LocalBinding extends Node {
     private final int slot;
     @Child private Expr value;
-    @CompilationFinal(dimensions = 1) private final int[] vectorSlots;
+    @CompilationFinal(dimensions = 1) private final int[] typedSlots;
     private final boolean exactLong;
     private final CoreKind referenceKind;
     @CompilationFinal private boolean generic;
     public LocalBinding(int slot, Expr value, boolean preferLong) { this(slot, value, preferLong, null); }
-    public LocalBinding(int slot, Expr value, boolean preferLong, int[] vectorSlots) {
-        this.slot = slot; this.value = value; this.vectorSlots = vectorSlots;
+    public LocalBinding(int slot, Expr value, boolean preferLong, int[] typedSlots) {
+        this.slot = slot; this.value = value; this.typedSlots = typedSlots;
         CoreRepresentation proof = value.getRepresentation();
         exactLong = proof.isLong();
         referenceKind = proof.getEvaluated() ? proof.getKind() : CoreKind.UNKNOWN;
@@ -34,14 +34,14 @@ public final class LocalBinding extends Node {
         catch (AstCapture cut) {
             throw cut.append(new AstResumeStep() {
                 @Override public Object resume(VirtualFrame frame, Object input) {
-                    if (vectorSlots == null) FrameAccess.INSTANCE.write(frame, slot, input);
+                    if (typedSlots == null) FrameAccess.INSTANCE.write(frame, slot, input);
                     return thc.runtime.Unit.INSTANCE;
                 }
             });
         }
     }
     private void writeValue(VirtualFrame frame) {
-        if (vectorSlots != null) { value.executeTuple(frame, vectorSlots, 0); return; }
+        if (typedSlots != null) { value.executeTuple(frame, typedSlots, 0); return; }
         if (value.getRepresentation().isInt()) { FrameAccess.INSTANCE.writeInt(frame, slot, value.executeRequiredInt(frame)); return; }
         if (exactLong) { FrameAccess.INSTANCE.writeLong(frame, slot, value.executeRequiredLong(frame)); return; }
         if (value.getRepresentation().isFloat()) { FrameAccess.INSTANCE.writeFloat(frame, slot, value.executeRequiredFloat(frame)); return; }

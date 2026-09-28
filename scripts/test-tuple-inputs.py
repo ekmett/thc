@@ -93,10 +93,24 @@ class TupleInputs(unittest.TestCase):
             module['bindings'][1]['expr'][1][0]['rep']['components'][0]['evaluated']=evaluated
             self.accepted(module)
 
+    def test_unknown_boxed_levity_retains_known_pointer_transport(self):
+        unknown = dict(REF, primReps=['BoxedRep Nothing'])
+        self.assertIsNone(proof_error(tup(unknown)))
+        module = fixture([unknown, tup(unknown)])
+        module['bindings'][1]['expr'][1][0]['lifted'] = None
+        module['bindings'][0]['expr'][3][0] = None
+        self.accepted(module)
+
+    def test_unknown_boxed_tuple_leaf_accepts_either_instantiated_levity(self):
+        unknown = dict(REF, primReps=['BoxedRep Nothing'])
+        for exact in (REF, dict(REF, primReps=['BoxedRep (Just Unlifted)'], evaluated=True)):
+            self.accepted(fixture([tup(unknown)], [tup(exact)]))
+            self.accepted(fixture([tup(exact)], [tup(unknown)]))
+
     def test_unknown_and_unsupported_leaf_proofs_fail_even_in_unused_formals(self):
         # A valid SIMD leaf is supported with tuple-fields enabled. Its negative
         # specimen must instead contradict the exact physical VecRep annotation.
-        bad=[dict(kind='unknown',primReps=None,evaluated=True),dict(REF,primReps=['BoxedRep Nothing']),
+        bad=[dict(kind='unknown',primReps=None,evaluated=True),
              dict(kind='address',primReps=['AddrRep'],evaluated=False),
              dict(kind='vector',primReps=['VecRep 2 Int64ElemRep'],vector=dict(lanes=4,element='Int64ElemRep'),evaluated=True),
              dict(kind='unknown',aggregate='unboxed-sum',alternatives=None,primReps=None,evaluated=True),
@@ -227,11 +241,11 @@ class TupleInputs(unittest.TestCase):
         module=fixture([tup(LONG)]);call=module['bindings'][0]['expr'];call[1]=var('f')
         module['bindings'][0]['expr']=['lam',[dict(id='f',rep=CLOSURE,lifted=True)],call,dict(rep=CLOSURE,resultRep=LONG)]
         self.accepted(module)
-        call[2][0][6]['rep']['components'][0]=dict(REF,primReps=['BoxedRep Nothing'])
-        call[2][0][6]['rep']['primReps']=['BoxedRep Nothing']
+        call[2][0][6]['rep']['components'][0]=dict(kind='unknown',primReps=None,evaluated=False)
+        call[2][0][6]['rep']['primReps']=None
         self.rejected(module,detail='unboxed-tuple argument')
 
-    def test_ordinary_and_join_captures_need_capabilities_but_let_and_primops_stay_excluded(self):
+    def test_ordinary_and_join_captures_need_capabilities_but_lifted_let_and_primops_stay_excluded(self):
         shape=tup(LONG)
         module=fixture([shape]);worker=module['bindings'].pop();worker.update(joinValueArity=1,joinResultRep=LONG,info=dict(joinArity=1))
         module['bindings'][0]['expr']=['let',False,[worker],module['bindings'][0]['expr'],dict(rep=LONG)]
@@ -248,6 +262,16 @@ class TupleInputs(unittest.TestCase):
             self.rejected(module,detail='unboxed-tuple let binding')
         module=fixture([shape]);module['bindings'][0]['expr'][1]=['prim','negateInt#']
         self.rejected(module,detail='unboxed-tuple argument')
+
+    def test_nonrecursive_unlifted_tuple_lets_keep_exact_shape(self):
+        for shape in (tup(), tup(STATE), tup(LONG, REF)):
+            module = fixture([shape]); value = module['bindings'][0]['expr'][2][0]
+            local = bind('stored', value, shape, lifted=False)
+            module['bindings'][0]['expr'] = ['let', False, [local], lit(), dict(rep=LONG)]
+            self.accepted(module)
+            self.rejected(module, cap=dict(ENABLED, aggregateLetBindings=[]), detail='unboxed-tuple let binding')
+            module['bindings'][0]['expr'][1] = True
+            self.rejected(module, code='recursive-unlifted')
 
     def test_boxed_constructor_fields_preserve_zero_or_single_slot_tuple_identity(self):
         for shape in (tup(),tup(STATE),tup(LONG)):
