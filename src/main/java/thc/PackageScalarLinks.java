@@ -167,7 +167,7 @@ public final class PackageScalarLinks {
         var selectedAbi = abi;
         var link = new PackageScalarLink(unit, target, componentHash, bitcodeHash, bytes, Collections.unmodifiableList(selectedAbi), format, finalizers, nativeLibrary, dataSymbols);
         if (nativeLink && !module.containsKey("staticForeignImports")) {
-            check(!module.containsKey("staticForeignImportStubs") && finalizers.isEmpty(), "unproved retained import obligations");
+            check(!module.containsKey("staticForeignImportStubs"), "unproved retained import obligations");
             if (module.containsKey("foreign")) {
                 var product = record(module.get("foreign"), "schema execution stubs files");
                 check(version(product.get("schema"), 1) && Objects.equals(product.get("execution"), "not-linked") &&
@@ -183,7 +183,10 @@ public final class PackageScalarLinks {
             // FCallIds need no recreated source-import annotations; each reached
             // call is still checked against this ABI by CorePackageScalarForeign.
             var admitted = new HashSet<String>();
-            for (var signature : selectedAbi) admitted.add(signature.entry());
+            // The shared component may include finalizers declared by another
+            // module. Only that module's typed CLabels can prove those entries.
+            for (var signature : selectedAbi)
+                if (!finalizers.contains(signature.entry())) admitted.add(signature.entry());
             return new PackageScalarAdmission(link, admitted);
         }
         boolean wrapperProof = module.get("staticForeignImports") instanceof Map<?,?> m && version(m.get("schema"), 3);

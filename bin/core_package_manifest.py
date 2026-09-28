@@ -740,7 +740,7 @@ def package_scalar_link(module, validate_archive=True):
                 entry['symbol'] not in ('free', 'libdwPoolRelease', 'backtraceFree'), 'finalizer ABI')
     selected_link = link
     if native and 'staticForeignImports' not in module:
-        require('staticForeignImportStubs' not in module and not finalizers, 'unproved retained import obligations')
+        require('staticForeignImportStubs' not in module, 'unproved retained import obligations')
         if 'foreign' in module:
             product = record(module['foreign'], 'schema execution stubs files')
             require(product['schema'] == 1 and product['execution'] == 'not-linked' and product['files'] == [], 'foreign product')
@@ -750,7 +750,8 @@ def package_scalar_link(module, validate_archive=True):
                         stubs['initializers'] == [] and stubs['finalizers'] == [], 'foreign registration requires its managed protocol')
         # Installed FCallIds retain their ABI without source annotations. The
         # compiled contract is checked against each reached call below.
-        return selected_link, available
+        # A shared component is not typed CLabel authority for its finalizers.
+        return selected_link, available - set(finalizers)
     proof = record(module.get('staticForeignImports'),
         'schema scope execution profile unit module status wordBits expectedForeign imports expectedCalls' +
         (' addresses' if module.get('staticForeignImports', {}).get('schema') in (2, 3) else '') +
