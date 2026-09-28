@@ -5116,8 +5116,34 @@ public final class BytecodeProgram implements ExecutableProgram {
     private Expression compileLet(List<Object> expr, Scope scope, boolean tail) {
         boolean recursive = (Boolean) expr.get(1);
         var group = (List<Map<String, Object>>) expr.get(2);
-        for (var binding : group) if (CoreRepresentations.joinArity(binding) != null)
+        for (var binding : group) if (CoreRepresentations.joinArity(binding) != null) {
+            var context = scope.function;
+            if (!context.preparingCaseRegion && context.caseRegions.size() < BytecodeCaseRegion.MAX_REGIONS) {
+                var prefix = new ArrayList<List<Object>>();
+                var joins = new LinkedHashSet<String>();
+                var body = expr;
+                while ("let".equals(body.getFirst()) && Boolean.FALSE.equals(body.get(1))) {
+                    var definitions = (List<Map<String, Object>>) body.get(2);
+                    if (definitions.isEmpty() || definitions.stream().anyMatch(d -> CoreRepresentations.joinArity(d) == null)) break;
+                    prefix.add(body);
+                    for (var definition : definitions) joins.add((String) definition.get("id"));
+                    body = (List<Object>) body.get(3);
+                }
+                if (!prefix.isEmpty() && "case".equals(body.getFirst()) && constructorCaseRegion(body)
+                        && CoreFreeVariables.coreFreeVariables(expr).stream().noneMatch(scope.joins::containsKey)
+                        && CoreFreeVariables.coreFreeVariables((List<Object>) body.get(1)).stream().noneMatch(joins::contains)) {
+                    // Move the closed join region, not a case escaping a live join
+                    // activation. Its definitions are inert and retain their exact
+                    // lexical order in each side; the scrutinee stays in the caller.
+                    context.preparingCaseRegion = true;
+                    try {
+                        var inline = joinRegion(group, (List<Object>) expr.get(3), recursive, scope, tail);
+                        return partitionedCase(body, scope, tail, false, inline, prefix);
+                    } finally { context.preparingCaseRegion = false; }
+                }
+            }
             return joinRegion(group, (List<Object>) expr.get(3), recursive, scope, tail);
+        }
         for (var binding : group) {
             var proof = CoreRepresentations.binder(binding);
             if (proof.isTypedTransport()) {
@@ -5261,13 +5287,17 @@ public final class BytecodeProgram implements ExecutableProgram {
         return closure(new FunctionSpec(build("constructor " + id, context, construct(layout, args)), null, List.of()), arity);
     }
 
+    private static boolean constructorCaseRegion(List<Object> expr) {
+        var alternatives = (List<List<Object>>) expr.get(3);
+        long dataCount = alternatives.stream().filter(a -> "data".equals(a.getFirst())).count();
+        return dataCount >= 64 && dataCount <= BytecodeCaseRegion.MAX_ALTERNATIVES
+                && alternatives.stream().allMatch(a -> "data".equals(a.getFirst()) || "default".equals(a.getFirst()))
+                && CoreRepresentations.caseBinder(expr).getKind() == CoreKind.DATA;
+    }
+
     private Expression compileCase(List<Object> expr, Scope scope, boolean tail) {
         var alternatives = (List<List<Object>>) expr.get(3);
         var context = scope.function;
-        long dataCount = alternatives.stream().filter(a -> "data".equals(a.getFirst())).count();
-        boolean constructorPartition = dataCount >= 64 && dataCount <= BytecodeCaseRegion.MAX_ALTERNATIVES
-                && alternatives.stream().allMatch(a -> "data".equals(a.getFirst()) || "default".equals(a.getFirst()))
-                && CoreRepresentations.caseBinder(expr).getKind() == CoreKind.DATA;
         long literalCount = alternatives.stream().filter(a -> "lit".equals(a.getFirst())).count();
         // A default-only continuation can be large even though it has no choice.
         // Preparation is inert; only a real graph bailout moves its suffix out of the caller.
@@ -5277,7 +5307,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 && alternatives.stream().allMatch(a -> "lit".equals(a.getFirst()) || "default".equals(a.getFirst()))
                 && caseRegionWork(scalarSuffix ? alternatives.getFirst().get(3) : expr, 64) >= 64;
         if (!context.preparingCaseRegion && context.caseRegions.size() < BytecodeCaseRegion.MAX_REGIONS
-                && (constructorPartition || scalarPartition)
+                && (constructorCaseRegion(expr) || scalarPartition)
                 && CoreFreeVariables.coreFreeVariables(expr).stream().noneMatch(scope.joins::containsKey)) {
             context.preparingCaseRegion = true;
             try { return partitionedCase(expr, scope, tail, scalarPartition); }
@@ -5301,7 +5331,11 @@ public final class BytecodeProgram implements ExecutableProgram {
     }
 
     private Expression partitionedCase(List<Object> expr, Scope scope, boolean tail, boolean scalar) {
-        var inline = inlineCase(expr, scope, tail, true);
+        return partitionedCase(expr, scope, tail, scalar, inlineCase(expr, scope, tail, true), List.of());
+    }
+
+    private Expression partitionedCase(List<Object> expr, Scope scope, boolean tail, boolean scalar,
+            Expression inline, List<List<Object>> joinPrefix) {
         var alternatives = (List<List<Object>>) expr.get(3);
         var explicit = alternatives.stream().filter(a -> !"default".equals(a.getFirst())).toList();
         var fallback = alternatives.stream().filter(a -> "default".equals(a.getFirst())).toList();
@@ -5334,6 +5368,11 @@ public final class BytecodeProgram implements ExecutableProgram {
                     var body = new ArrayList<>(expr);
                     body.set(1, List.of("var", binder));
                     body.set(3, chunk);
+                    for (int prefix = joinPrefix.size() - 1; prefix >= 0; prefix--) {
+                        var wrapper = new ArrayList<>(joinPrefix.get(prefix));
+                        wrapper.set(3, body);
+                        body = wrapper;
+                    }
                     specs.add(function("case region " + binder + " " + start, List.of(binderMetadata), body, scope,
                             inline.proof(), new boolean[1], tail, true));
                 }

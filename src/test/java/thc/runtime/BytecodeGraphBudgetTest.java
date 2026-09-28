@@ -84,6 +84,76 @@ class BytecodeGraphBudgetTest {
         return body;
     }
 
+    @Test void capacityExtractionKeepsAClosedJoinPrefixWithItsSelectedCase() throws Exception {
+        var finish = node("app", variable("later", CLOSURE), List.of(variable("value63", LONG)),
+                List.of(false), false, false, Map.of("rep", LONG));
+        var input = new LinkedHashMap<>(decision(64,
+                List.of(binder("step", CLOSURE, true), binder("pick", CLOSURE, true)), LONG,
+                arm -> capacityCalls(64, arm, finish, LONG)));
+        var bindings = new ArrayList<Map<String, Object>>((List<Map<String, Object>>) input.get("bindings"));
+        var binding = new LinkedHashMap<>(bindings.getFirst());
+        var lambda = new ArrayList<>((List<Object>) binding.get("expr"));
+        var choice = new ArrayList<>((List<Object>) lambda.get(2));
+        choice.set(1, node("app", variable("pick", CLOSURE), List.of(variable("x", DATA)),
+                List.of(true), false, false, Map.of("rep", DATA)));
+        var first = new LinkedHashMap<>(binder("first", CLOSURE, true));
+        first.put("joinValueArity", 1); first.put("joinResultRep", LONG);
+        first.put("expr", node("lam", List.of(binder("a", LONG, false)),
+                node("app", node("prim", "+#"), List.of(variable("a", LONG), variable("prefix", LONG)),
+                        List.of(false, false), false, false, Map.of("rep", LONG)), Map.of("resultRep", LONG)));
+        var later = new LinkedHashMap<>(binder("later", CLOSURE, true));
+        later.put("joinValueArity", 1); later.put("joinResultRep", LONG);
+        later.put("expr", node("lam", List.of(binder("b", LONG, false)),
+                node("app", variable("first", CLOSURE), List.of(
+                        node("app", node("prim", "+#"), List.of(variable("b", LONG), number(1)),
+                                List.of(false, false), false, false, Map.of("rep", LONG))),
+                        List.of(false), false, false, Map.of("rep", LONG)), Map.of("resultRep", LONG)));
+        var region = node("let", false, List.of(first),
+                node("let", false, List.of(later), choice, Map.of("rep", LONG)), Map.of("rep", LONG));
+        var prefix = new LinkedHashMap<>(binder("prefix", LONG, false));
+        prefix.put("expr", node("app", variable("step", CLOSURE), List.of(number(1000000)),
+                List.of(false), false, false, Map.of("rep", LONG)));
+        lambda.set(2, node("let", false, List.of(prefix), node("app", node("prim", "+#"),
+                List.of(region, number(99)), List.of(false, false), false, false, Map.of("rep", LONG)), Map.of("rep", LONG)));
+        binding.put("expr", lambda); bindings.set(0, binding); input.put("bindings", bindings);
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            var threads = Language.currentState().getThreads(); threads.enterCurrent();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new BytecodeProgram(language, input, true);
+                var target = program.entryTarget("entry"); var root = (BytecodeRoot) target.getRootNode();
+                assertEquals(0, root.prepareGraphBudgetRetry(0), "actual prepublication capacity recovery");
+                var original = instructions(root);
+                assertTrue(original.values().stream().noneMatch(value -> value.contains("InlineCaseRegions")));
+                assertTrue(compile(target)); bypass(target); assertEquals(0, entries(program));
+                var calls = new java.util.concurrent.atomic.AtomicInteger();
+                var picks = new java.util.concurrent.atomic.AtomicInteger();
+                var step = new Closure(null, 1, new RootNode(language) {
+                    @Override public Object execute(VirtualFrame frame) {
+                        int call = calls.getAndIncrement();
+                        assertEquals(call == 0 ? 1000000L : 63000L + call - 1, frame.getArguments()[1]);
+                        assertEquals(call == 0 ? 0 : 1, picks.get());
+                        return (Long) frame.getArguments()[1] + 1;
+                    }
+                }.getCallTarget());
+                var pick = new Closure(null, 1, new RootNode(language) {
+                    @Override public Object execute(VirtualFrame frame) {
+                        assertEquals(1, calls.get()); assertEquals(0, picks.getAndIncrement());
+                        return frame.getArguments()[1];
+                    }
+                }.getCallTarget());
+                assertEquals(1063165L, Calls.target(target, new Object[]{0L, program.entryValue("chosen"), step, pick}));
+                assertEquals(65, calls.get()); assertEquals(1, picks.get()); assertEquals(1, entries(program));
+                assertEquals(2L, ((Number) program.diagnostics().get("localJoinTransfers")).longValue());
+                assertSame(target, program.entryTarget("entry"));
+                assertEquals(original.keySet(), instructions(root).keySet());
+                var executed = instructions(root); root.getRootNodes().ensureSourceInformation();
+                assertEquals(executed, instructions(root), "source replay preserves the published instruction stream");
+            } finally { threads.leaveCurrent(); context.leave(); }
+        }
+    }
+
     @Test void onlyThePinnedLocalIdOverflowCanSelectCapacityRecovery() throws Exception {
         try (var context = context()) {
             context.initialize("thc"); context.enter();
@@ -1121,7 +1191,11 @@ class BytecodeGraphBudgetTest {
         var join = new LinkedHashMap<>(binder("finish", CLOSURE, true));
         join.put("joinValueArity", 1); join.put("joinResultRep", LONG);
         join.put("expr", node("lam", List.of(binder("answer", LONG, false)), variable("answer", LONG), Map.of("resultRep", LONG)));
-        lambda.set(2, node("let", false, List.of(join), lambda.get(2), Map.of("rep", LONG)));
+        // An ordinary let keeps finish outside the movable join-only prefix.
+        var barrier = new LinkedHashMap<>(binder("barrier", LONG, false));
+        barrier.put("expr", number(1));
+        lambda.set(2, node("let", false, List.of(join),
+                node("let", false, List.of(barrier), lambda.get(2), Map.of("rep", LONG)), Map.of("rep", LONG)));
         entry.put("expr", lambda); bindings.set(0, entry); input.put("bindings", bindings);
         try (var context = context()) {
             context.initialize("thc"); context.enter();

@@ -35,6 +35,15 @@ root. The generated interpreter executes those instructions directly; it does
 not call the AST interpreter to evaluate Core expressions. Layouts, call arities,
 and other metadata used during partial evaluation are constant operands.
 
+Large constructor cases can be split into prepared side roots when bytecode
+local-ID capacity is exhausted before publication. A contiguous, nonrecursive
+join-only let prefix can move with its case when it has no free outer joins and
+the scrutinee does not reference its joins. The scrutinee stays in the caller and
+runs once; each side retains the join definitions in their original lexical
+order. Ordinary lets remain outside this transformation. Recursive prefixes and
+cases needing an outer join activation stay on the existing inline path.
+Preparation does not execute guest code or change published bytecode PCs.
+
 Async- or delimited-enabled roots compile handler selection without adaptive
 exception-history guards; resolving a first suspension does not mark an
 exception profile as observed. Blocking-request handlers use declared Object
