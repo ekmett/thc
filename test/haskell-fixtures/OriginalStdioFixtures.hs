@@ -448,7 +448,7 @@ prepareOriginalProcessIdentity root = do
   scripts <- listDirectory (root </> "scripts")
   let sources = sort $ [coreSource, nativeSource, "thc.cabal", "test/haskell-fixtures/Main.hs",
         "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/OriginalStdioFixtures.hs",
-        "scripts/audit-core.py", "scripts/core-capabilities.json", "src/main/kotlin/thc/runtime/ProcessIdentity.kt",
+        "scripts/audit-core.py", "scripts/core-capabilities.json", "src/main/java/thc/runtime/ProcessIdentity.java",
         "src/main/resources/thc/scalar-primop-signatures.json",
         "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py"] ++
         ["compiler/THC" </> name | name <- plugin, takeExtension name == ".hs"] ++

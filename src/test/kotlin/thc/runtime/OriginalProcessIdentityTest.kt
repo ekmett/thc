@@ -78,7 +78,7 @@ class OriginalProcessIdentityTest {
         OriginalStdioChecks.hashes(root, manifest["inputHashes"], setOf(
             "compiler/test-fixtures/OriginalProcessIdentityAudit.hs", "compiler/test-fixtures/OriginalProcessIdentityNative.hs",
             "test/haskell-fixtures/OriginalStdioFixtures.hs", "scripts/core_original_foreign.py",
-            "src/main/kotlin/thc/runtime/ProcessIdentity.kt"))
+            "src/main/java/thc/runtime/ProcessIdentity.java"))
         OriginalStdioChecks.hashes(root, manifest["artifactHashes"], setOf("$prefix/oracle.json") +
             listOf("pre", "post").flatMap { stage -> listOf("$prefix/$stage/core/OriginalProcessIdentityAudit.json",
                 "$prefix/$stage/core/THC.InterfaceClosure.json") + entries.keys.map { "$prefix/$stage/$it.audit.json" } }, "$prefix/")
