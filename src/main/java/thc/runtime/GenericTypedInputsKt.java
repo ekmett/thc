@@ -118,12 +118,7 @@ public final class GenericTypedInputsKt {
     }
     public static HandoffStorage prepareGenericInput(VirtualFrame frame, Node node, Closure function, TypedInputLayout input,
             InputSource source, Object[] values, int maximum, int offset, int count, Force force) {
-        var root = function.target.getRootNode();
-        if (root == null) {
-            CompilerDirectives.transferToInterpreter();
-            throw new NullPointerException("null cannot be cast to non-null type thc.runtime.GuestRoot");
-        }
-        int[] strict = strictInputPositions((GuestRoot) root, input);
+        int[] strict = strictInputPositions(ColdCallChecks.guestRoot(function.target.getRootNode()), input);
         int prefixCount = function.suppliedCount, prefixWidth = input.getLogical().offset(prefixCount);
         boolean strictPrefix = false;
         for (int i : strict) if (i < prefixCount) strictPrefix = true;

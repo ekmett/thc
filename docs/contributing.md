@@ -161,12 +161,26 @@ The check is also part of Gradle's `check` task.
 
 Build configuration uses Groovy, with Java build logic in `buildSrc`.
 `processMainJava` runs the pinned annotation processor with `-proc:only`,
-then all five pinned normalizers transform its generated sources in order.
+then all six pinned normalizers transform its generated sources in order.
 `compileJava` consumes original and normalized sources with `-proc:none`;
 generated language-service resources are packaged separately. Test annotation
 processing remains enabled on its own pinned processor path. The build has no
 Kotlin plugin, compiler, KAPT stage or Kotlin runtime dependency.
 `./gradlew testJavaBuildPipeline` checks the realized task and toolchain contract.
+
+The final normalizer constructs the scalar and compact application children from
+immutable instruction operands when cached bytecode nodes are prepared. It does
+not seed generated specialization bits or invent a target observation. A cold
+compiled call uses the existing generic application algorithm; ordinary
+interpreter calls still populate the adaptive target cache. This preserves PAP,
+overapplication and typed-result ownership without a warmup call.
+
+`testBytecodeColdApplyPreparation` checks exact generated bodies, operand offsets,
+instruction width, processor version, idempotence and malformed-input rejection.
+`BytecodeColdApplicationTest` retains strict first-compiled-entry checks, source
+replay, clone independence, invalid-function behavior and the ordinary observed
+target-cache path. Only exceptional null diagnostics cross the shared cold-call
+boundary; dispatch, argument forcing and guest execution do not.
 
 The same pinned normalization adds a read-only `Builder.isParsingSources()`
 accessor. Callers can test the builder's existing mode before resolving lazy
