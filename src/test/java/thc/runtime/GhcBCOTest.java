@@ -28,6 +28,12 @@ class GhcBCOTest {
     private long expected(String entry, long n) { return switch (entry) { case "bcoConstant", "bcoFunction", "bcoLargeOperand" -> n; case "bcoApply" -> n + 7; case "bcoApplyTwo" -> n * 10 + 3; case "bcoArithmetic" -> 100 - n; case "bcoBranch" -> n < 0 ? -1 : 1; case "bcoSharing" -> n * 2 + 1; default -> throw new IllegalStateException(entry); }; }
     private Context context() { return Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.WarnInterpreterOnly", "false").option("compiler.Inlining", "false").option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.SingleTierCompilationThreshold", "10000000").option("engine.CompilationFailureAction", "Throw").build(); }
     @Test void nativeInstructionsExecuteThroughBothCoreBackends() throws Exception {
+        nativeInstructions(false);
+    }
+    @Test void nativeInstructionsExecuteThroughCapturingCoreBackends() throws Exception {
+        nativeInstructions(true);
+    }
+    private void nativeInstructions(boolean async) throws Exception {
         var manifest = (Map<?, ?>) Json.parse(Files.readString(new File(root, "build/ghc-bco/manifest.json").toPath())); assertEquals(entries, manifest.get("entries"));
         for (String group : List.of("inputHashes", "artifactHashes")) for (var row : ((Map<?, ?>) manifest.get(group)).entrySet()) assertEquals(row.getValue(), HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(new File(root, (String) row.getKey()).toPath()))), (String) row.getKey());
         var nativeResults = new ArrayList<Long>(); for (var value : (List<?>) manifest.get("native")) nativeResults.add(((Number) value).longValue()); var expectedResults = new ArrayList<Long>(); for (long n : new long[]{-2, 0, 7}) for (String entry : entries) expectedResults.add(expected(entry, n)); assertEquals(expectedResults, nativeResults);
@@ -35,7 +41,7 @@ class GhcBCOTest {
             context.initialize("thc"); context.enter(); try {
                 var module = (Map<String, Object>) Json.parse(Files.readString(new File(root, "build/ghc-bco/" + stage + "/core/GhcBCO.json").toPath())); var evidence = new ArrayCoreEvidence(module, entry);
                 assertEquals(1, evidence.getPrimitiveCounts().get("newBCO#"), "Actual primitive, not a synthetic BCO substitute"); assertEquals(List.of("bcoFunction", "bcoArithmetic").contains(entry) ? null : Integer.valueOf(1), evidence.getPrimitiveCounts().get("mkApUpd0#"));
-                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var linked = CoreModules.reachable(module, entry); ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked); var function = context.asValue(new EntryValue(program, entry, 1));
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var linked = CoreModules.reachable(module, entry); ExecutableProgram program = backend.equals("ast") ? new Program(language, linked, async) : new BytecodeProgram(language, linked, async); var function = context.asValue(new EntryValue(program, entry, 1));
                 long[] inputs = {-2, 0, 7}; for (int index = 0; index < inputs.length; index++) { long n = inputs[index]; assertEquals(nativeResults.get(index * entries.size() + entries.indexOf(entry)), function.execute(n).asLong(), stage + "/" + backend + "/" + entry + "/" + n); ThreadInventoryCoreEvidence.released(language); }
                 // Compile precisely the genuine public Core root. BCOs are
                 // dynamically created interpreter roots, not invented Core.
@@ -79,7 +85,7 @@ class GhcBCOTest {
             for (int i = 0; i < 2; i++) assertSame(payload, assertThrows(GuestException.class, () -> force.call(0L)).getPayload()); assertEquals(1, effects[0]); assertEquals(3, thunk.getState()); ThreadInventoryCoreEvidence.released(language);
         } finally { context.leave(); } }
     }
-    @Test void unsupportedSuspensionsCannotDiscardPendingBcoStackWork() {
+    @Test void malformedAndDelimitedContinuationsAreStillRejected() {
         try (var context = context()) { context.initialize("thc"); context.enter(); try {
             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var state = new CoreRepresentation(CoreKind.VOID, false, false, List.of(), null, null, null, null, null); var boxed = new CoreRepresentation(CoreKind.OBJECT, false, false, List.of("BoxedRep (Just Lifted)"), null, null, null, null, null); var shape = new TupleShape(new CoreRepresentation(CoreKind.UNKNOWN, false, false, boxed.getPrimReps(), List.of(state, boxed), null, null, null, null), language); int[] resumed = {0};
             for (boolean capture : new boolean[]{false, true}) {
@@ -94,7 +100,7 @@ class GhcBCOTest {
                         };
                     }
                 };
-                var bco = create(language, code(11, 1, 31, 11, 0, 58), 0, words(0), words(), new Object[]{new Closure(null, 1, worker.getCallTarget()), new Object()}); var failure = assertThrows(RuntimeFault.class, () -> bco.target.call(0L)); assertTrue(Objects.requireNonNull(failure.getMessage()).contains(capture ? "Delimited capture" : "asynchronous continuation"));
+                var bco = create(language, code(11, 1, 31, 11, 0, 58), 0, words(0), words(), new Object[]{new Closure(null, 1, worker.getCallTarget()), new Object()}); var failure = assertThrows(RuntimeFault.class, () -> bco.target.call(0L)); assertTrue(Objects.requireNonNull(failure.getMessage()).contains(capture ? "Delimited capture" : "non-guest continuation"));
             }
             assertEquals(0, resumed[0]); ThreadInventoryCoreEvidence.released(language);
         } finally { context.leave(); } }

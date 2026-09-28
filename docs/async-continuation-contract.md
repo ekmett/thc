@@ -193,7 +193,9 @@ the loop frame and invalidate its first installed invocation.
 
 STM aborts its carrier-local attempt before emitting a fresh restart capture;
 the old transactional child chain and log never enter the enclosing thunk's
-saved suffix. See [STM](stm.md). Compact traversal, GHC BCO interpreter frames,
+saved suffix. See [STM](stm.md). BCO instruction positions, operand stacks and
+pending applications survive one-shot
+asynchronous and stack cuts. Explicit delimited capture through BCO frames,
 opaque foreign execution and mixed asynchronous/delimited capture retain
 separate barriers. Ordinary Core capture does not remove those requirements.
 

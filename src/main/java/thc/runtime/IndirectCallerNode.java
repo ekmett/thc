@@ -26,8 +26,14 @@ public final class IndirectCallerNode extends Node {
         tailProfile = coldGeneric ? BranchProfile.getUncached() : BranchProfile.create();
     }
     public Object call(VirtualFrame frame, RootCallTarget target, Object[] arguments, boolean tailCall) {
+        if (AstControl.captures(this)) {
+            try { entryArguments.executeCaptured(frame, target, arguments); }
+            catch (AstCapture cut) { throw cut.append((saved, input) -> callEntered(saved, target, arguments, tailCall)); }
+        } else entryArguments.execute(frame, target, arguments);
+        return callEntered(frame, target, arguments, tailCall);
+    }
+    private Object callEntered(VirtualFrame frame, RootCallTarget target, Object[] arguments, boolean tailCall) {
         Metrics invocation = metrics != null ? metrics : ((FunctionRoot) getRootNode()).invocationMetrics(frame);
-        entryArguments.execute(frame, target, arguments);
         if (invocation.getEnabled()) invocation.incrementIndirectCalls();
         Object result;
         if (tailCall) { tailCheck.check(frame, target, arguments); result = Calls.indirect(callNode, target, arguments); }
