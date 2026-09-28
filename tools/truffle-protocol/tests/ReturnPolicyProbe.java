@@ -225,6 +225,37 @@ public final class ReturnPolicyProbe {
     }
   }
 
+  static void firstAotException(Language language, boolean overlay) throws Exception {
+    RuntimeException[] failures = {new GuestFailure(new Object()), new Control(), new IllegalStateException("host")};
+    for (RuntimeException failure : failures) {
+      State state = new State();
+      RootNode root = new RootNode(language) {
+        @Override protected ExecutionSignature prepareForAOT() {
+          state.aotPreparations++;
+          return ExecutionSignature.create(Long.class, new Class<?>[]{failure.getClass()});
+        }
+        @Override public Object execute(VirtualFrame frame) {
+          state.effects++;
+          if (CompilerDirectives.inCompiledCode()) state.compiled++; else state.interpreted++;
+          throw (RuntimeException)frame.getArguments()[0];
+        }
+      };
+      var target = (OptimizedCallTarget)root.getCallTarget();
+      require(target.prepareForAOT(), "cold exception AOT preparation");
+      install(target);
+      require(!target.wasExecuted() && state.effects == 0 && state.aotPreparations == 1,
+          "exception preparation executes no guest call");
+      try { target.call(failure); throw new AssertionError("missing first exception"); }
+      catch (RuntimeException actual) { require(actual == failure, "exact first AOT exception identity"); }
+      require(state.effects == 1 && state.compiled + state.interpreted == 1,
+          "first AOT exception executes once without replay");
+      require(!overlay || state.compiled == 1 && state.interpreted == 0,
+          "overlay first AOT exception executes installed code");
+      require(target.isValidLastTier() == overlay, "only AOT overlay retains the first exception");
+      System.out.println("PASS cold AOT " + failure.getClass().getSimpleName() + " retained=" + target.isValidLastTier() + " compiled=" + state.compiled + " interpreted=" + state.interpreted);
+    }
+  }
+
   static void cloneControl(Language language, boolean declared, boolean overlay) throws Exception {
     var source = new ProbeRoot(language, declared, false, new State());
     var original = source.getCallTarget();
@@ -261,6 +292,7 @@ public final class ReturnPolicyProbe {
       try {
         Language language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
         firstException(language, overlay);
+        firstAotException(language, overlay);
         for (boolean declared : new boolean[]{false, true}) {
           firstAlternate(new ProbeRoot(language, declared, false, new State()), overlay,
               "ordinary declared=" + declared);

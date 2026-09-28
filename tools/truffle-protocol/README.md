@@ -72,9 +72,14 @@ including clones. No returned value or continuation token is wrapped or replaced
 
 The pinned runtime samples the declaration in its real-root target constructor,
 before adoption or callbacks, and uses its existing polymorphic return state.
-Argument profiling and default exception profiling remain unchanged. Explicit AOT preparation
-retains its normal argument signature and initialization behavior while respecting
-the declared completion contract. This does not call AOT preparation implicitly,
+Argument profiling and ordinary non-AOT exception profiling remain unchanged.
+Successful explicit AOT preparation initializes the existing generic exception
+profile, alongside its argument/return metadata, so the first lawful control
+transfer or failure cannot invalidate the prepared root. This additional overlay
+policy is not available through stock `ExecutionSignature`; stock AOT still learns
+its first exception from execution. The runtime artifact suffix includes `aot1`.
+Explicit AOT retains its normal argument signature and initialization behavior
+while respecting the declared completion contract. This does not call AOT preparation implicitly,
 execute a dummy guest call, train a branch, or change compiler algorithms.
 
 `./gradlew protocolRuntimeJar` rebuilds `OptimizedCallTarget` and the OSR support
@@ -100,9 +105,14 @@ change for materializable roots, so these correctness checks make no throughput
 or ordinary-allocation performance claim. Native-image execution of the changed
 artifacts requires its own validation; JVM AOT preparation is not that evidence.
 
-THC's prepared cold-generic calls use ordinary `IndirectCallNode.create()` and
-its exception profiling in both runtime configurations. A first exception may
-invalidate compiled code; saved state and once-only effects must survive it.
+THC's prepared cold generic calls use the public location-aware
+`CallTarget.call(Node, ...)` API. This avoids a cached indirect node's observed
+exception profile while preserving the residual guest call; ordinary JIT calls
+retain their cached nodes. The stock-versus-overlay control also prepares fresh
+throwing roots without execution, then checks first installed exception identity,
+once-only effects and target retention. The overlay executes each first exception
+in installed code and remains valid; stock invalidates. Neither this check nor
+source inspection establishes Native Image execution or throughput.
 
 ## Graph-budget recovery lifecycle
 
