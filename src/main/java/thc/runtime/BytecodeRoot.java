@@ -2859,6 +2859,15 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation
+    @ConstantOperand(type = String.class, name = "message")
+    @ConstantOperand(type = Metrics.class, name = "metrics")
+    public static final class UnsupportedForeign {
+        @Specialization public static Object trap(String message, Metrics metrics) {
+            return UnsupportedForeignCall.trap(message, metrics);
+        }
+    }
+
+    @Operation
     public static final class FailCase {
         @Specialization public static Object failCase() { throw fail("Non-exhaustive Core case"); }
     }
