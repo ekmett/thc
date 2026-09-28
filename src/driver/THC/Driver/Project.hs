@@ -22,6 +22,7 @@ module THC.Driver.Project
 import Control.Exception (evaluate, finally)
 import Control.Monad (filterM, forM, forM_, unless, when)
 import Data.Char (isAlphaNum, isHexDigit)
+import GHC.ResponseFile (expandResponse)
 import Distribution.Types.Flag (mkFlagName, unFlagName)
 import qualified Distribution.InstalledPackageInfo as Package
 import Distribution.Pretty (prettyShow)
@@ -1723,6 +1724,9 @@ freshExport context component unit scalar runtimeShim helper nativeObjects build
     let objects = staging </> "objects"
         core = staging </> "core"
     createDirectoryIfMissing True objects
+    sourceDir <- field (componentValue component) "src-dir"
+    pluginArguments <- Directory.withCurrentDirectory sourceDir $
+      expandResponse (componentArguments component)
     -- The known THC exporter preserves GHC safety inference, as in GhcProxy.
     -- Without plugin trust, an inferred-safe home module becomes unsafe merely
     -- because it is exported, so a later Safe importer fails to compile.
@@ -1732,14 +1736,13 @@ freshExport context component unit scalar runtimeShim helper nativeObjects build
           then ["-plugin-package-id", contextPluginUnit context, "-fplugin=THC.Plugin"] ++
                map ("-fplugin-opt=THC.Plugin:" ++) pluginOptions
           else [directPlugin (contextPluginLibrary context) (contextPluginUnit context)
-                  pluginOptions (componentArguments component)]
+                  pluginOptions pluginArguments]
         arguments = ["--make", "-no-link"] ++ componentArguments component ++
           ["-outputdir", objects, "-odir", objects, "-hidir", objects,
            "-hiedir", objects </> "hie", "-stubdir", objects,
            "-package-db", contextPluginDb context, "-fplugin-trustworthy"] ++ pluginFlags ++ exportWayOptions ++
           ["-fforce-recomp", "-dcore-lint", "-fwrite-if-simplified-core", "-hisuf", "hi"] ++
           map snd (componentSources component)
-    sourceDir <- field (componentValue component) "src-dir"
     runCommand True (componentCompiler component) arguments sourceDir
     exported <- filter ((== ".json") . takeExtension) <$> recursiveFiles core
     checked <- forM exported $ \path -> do

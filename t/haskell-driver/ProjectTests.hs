@@ -34,6 +34,7 @@ interopTests :: Env -> Test
 interopTests env = TestLabel "interop acquisition skips only the selected native final link" $ TestCase $
   withFixtureNamed env "t/fixtures/run-interop" "interop café" $ \project ->
   withCache (scratch env </> "core-cache") $ do
+    writeText (project </> "component-options") "-fplugin-opt=THC.Plugin:pretty-diagnostics\n"
     -- A real source-distribution dependency also forces cold store capture.
     -- Its private rebuild must carry the same selected-unit no-link policy.
     assertSuccess =<< runExe env (project </> "support") Nothing 60 "cabal"
@@ -57,6 +58,12 @@ interopTests env = TestLabel "interop acquisition skips only the selected native
     let record = one ((== identifier) . string . (`field` "id")) (objects manifest "units")
     assertBool "normal acquisition publishes the selected application's original Core"
       (any ((== "Main") . string . (`field` "name")) (objects record "modules"))
+    let apiRecord = one (any ((== "InteropApi") . string . (`field` "name")) . (`objects` "modules"))
+          (objects manifest "units")
+        apiModule = one ((== "InteropApi") . string . (`field` "name")) (objects apiRecord "modules")
+    apiCore <- readPublishedCore apiRecord apiModule
+    assertBool "local component response-file plugin options survive direct loading"
+      (not (null (string $ field apiCore "sourceCore")))
     let support = one ((== "interop-support") . string . (`field` "pkg-name")) (objects plan "install-plan")
         supportRecord = one ((== field support "id") . (`field` "id")) (objects manifest "units")
     assertEqual "source distribution exercises cold store capture" "global" (string $ field support "style")
