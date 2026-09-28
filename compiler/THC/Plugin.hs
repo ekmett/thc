@@ -1059,9 +1059,10 @@ importProvenanceFields owner annotations original core = do
   pure $ case verdict of
     Nothing -> []
     Just value ->
-      let record = O (common ++ details value)
+      let schema = case value of ImportProvenance.Verified _ (_:_) -> 2; _ -> 1
+          record = O (("schema",num (schema::Int)) : common ++ details value)
           associations = case value of
-            ImportProvenance.Verified [] -> []
+            ImportProvenance.Verified [] [] -> []
             _ -> [("staticForeignImports", record)]
       in associations ++ [("staticForeignImportStubs", record) | not emptyProduct]
   where
@@ -1069,14 +1070,14 @@ importProvenanceFields owner annotations original core = do
       ForeignCore.IfaceForeign Nothing [] -> True
       ForeignCore.IfaceForeign (Just (ForeignCore.IfaceCStubs "" "" [] [])) [] -> True
       _ -> False
-    common = [("schema",num (1::Int)),("scope",S "retained-static-import-products"),("execution",S "not-linked"),
+    common = [("scope",S "retained-static-import-products"),("execution",S "not-linked"),
       ("profile",S "ghc-9.14.1-thc-only-static-c-imports-v1"),
       ("unit",S (unitString (moduleUnit owner))),("module",S (moduleNameString (moduleName owner)))]
     details (ImportProvenance.Unknown reason) = [("status",S "unclassified"),("reason",S reason)]
     details (ImportProvenance.Rejected reason) = [("status",S "rejected"),("reason",S reason)]
-    details (ImportProvenance.Verified imports) = [("status",S "verified"),("wordBits",num (64::Int)),
+    details (ImportProvenance.Verified imports addresses) = [("status",S "verified"),("wordBits",num (64::Int)),
       ("expectedForeign",foreignArtifactRecord original),("imports",A (map imported imports)),
-      ("expectedCalls",A (calls core))]
+      ("expectedCalls",A (calls core))] ++ [("addresses",A (map address addresses)) | not (null addresses)]
     calls (O fields) = [value | (key,value) <- fields, key == "foreignCall"] ++ concatMap (calls . snd) fields
     calls (A values) = concatMap calls values
     calls _ = []
@@ -1092,6 +1093,11 @@ importProvenanceFields owner annotations original core = do
       [("binder",identity binder),("header",maybe Z S header),("symbol",S symbol),("unit",maybe Z S unit),
        ("isFunction",B function),("convention",S conv),("safety",S safe),("declaredType",ty declared),
        ("normalizedType",ty normalized),("normalizationRole",S "representational"),("emitted",call emitted)]
+    address (ImportProvenance.Address binder header symbol function conv declared normalized callback) = O
+      [("binder",identity binder),("header",maybe Z S header),("symbol",S symbol),
+       ("isFunction",B function),("convention",S conv),("declaredType",ty declared),
+       ("normalizedType",ty normalized),("normalizationRole",S "representational"),
+       ("callback",maybe Z (\(arguments,result) -> O [("arguments",A (map S arguments)),("result",S result)]) callback)]
     call (ImportProvenance.Call symbol unit conv safe arguments result) = O
       [("symbol",S symbol),("unit",maybe Z S unit),("convention",S conv),("safety",S safe),
        ("arguments",A (map S arguments)),("result",A (map S result))]

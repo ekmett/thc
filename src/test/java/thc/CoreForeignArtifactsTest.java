@@ -14,6 +14,54 @@ import static org.junit.jupiter.api.Assertions.*;
 import static thc.CoreFormatTestSupport.*;
 
 class CoreForeignArtifactsTest {
+    private static final String CAPI_UNIT = "time-1.15-inplace";
+    private static final String CAPI_MODULE = "Data.Time.Clock.Internal.CTimespec";
+    private static final String CAPI_SYMBOL = "ghczuwrapperZC0ZCtimezm1zi15zminplaceZCDataziTimeziClockziInternalziCTimespecZCHSzuCLOCKzuREALTIME";
+    private Map<String,Object> capiCall() {
+        return map("schema", 1L, "target", map("kind", "static", "unit", CAPI_UNIT, "symbol", CAPI_SYMBOL, "isFunction", true),
+            "convention", "capi", "safety", "unsafe", "arity", 1L, "suppliedArity", 1L,
+            "argumentReps", list(scalar(null, false)), "resultRep", tuple("Int32Rep"));
+    }
+    // An already admitted header, never executable test bytes. Source/header/
+    // bitcode validation remains independently exercised below.
+    private ForeignBitcode capiLink(String unit, String module) {
+        return new ForeignBitcode(unit, module, "model", Set.of(CAPI_SYMBOL), Map.of(CAPI_SYMBOL, "time-clock-id"), new byte[]{0x42, 0x43});
+    }
+    @Test void demandedCrossModuleCapiResolvesOnlyItsOriginalDeclarationOnce() {
+        var selected = map("id", CAPI_UNIT + ":Data.Time.Clock.Internal.SystemTime.getSystemTime2",
+            "expr", list("app", map("foreignCall", capiCall()), map("foreignCall", capiCall()), list("var", "unopened:Cold.body")));
+        var original = map("foreignLinks", List.of(), "bindings", list(selected));
+        var lookups = new ArrayList<List<String>>();
+        var link = capiLink(CAPI_UNIT, CAPI_MODULE);
+        var result = CoreCapiProvenance.supplement(original, selected, (unit, module) -> {
+            lookups.add(List.of(unit, module)); return link;
+        });
+        assertEquals(List.of(List.of(CAPI_UNIT, CAPI_MODULE)), lookups);
+        assertEquals(List.of(link), result.get("foreignLinks"));
+        assertSame(original.get("bindings"), result.get("bindings"));
+        assertEquals(List.of(), original.get("foreignLinks"));
+        assertEquals(result, CoreCapiProvenance.supplement(result, selected, (unit, module) -> { throw new AssertionError("Already admitted owner reopened"); }));
+    }
+    @Test void crossModuleCapiKeepsExactAbiOwnerAndMissingLinkRejections() {
+        var input = map("foreignLinks", List.of());
+        for (var bad : List.of(with(capiCall(), "safety", "safe"), with(capiCall(), "arity", 2L),
+                with(capiCall(), "resultRep", scalar("Int32Rep", false)),
+                with(capiCall(), "target", with((Map<?,?>) capiCall().get("target"), "symbol", CAPI_SYMBOL.replace("HSzuCLOCKzuREALTIME", "notDeclared")))))
+            assertThrows(IllegalArgumentException.class, () -> CoreCapiProvenance.supplement(input, map("foreignCall", bad), (unit, module) -> capiLink(CAPI_UNIT, CAPI_MODULE)));
+        for (var bad : Arrays.asList(null, capiLink("other", CAPI_MODULE), capiLink(CAPI_UNIT, "Other")))
+            assertThrows(IllegalArgumentException.class, () -> CoreCapiProvenance.supplement(input, map("foreignCall", capiCall()), (unit, module) -> bad));
+        assertThrows(IllegalArgumentException.class, () -> CoreCapiProvenance.supplement(
+            map("foreignLinks", list(capiLink(CAPI_UNIT, CAPI_MODULE), capiLink(CAPI_UNIT, CAPI_MODULE))),
+            map("foreignCall", capiCall()), (unit, module) -> { throw new AssertionError("Duplicate owner must fail first"); }));
+    }
+    @Test void unrelatedOrUnknownCallsDoNotOpenCapiMetadata() {
+        var original = map("foreignLinks", List.of());
+        for (var binding : list(list("var", "unopened:Cold.body"),
+                map("foreignCall", with(capiCall(), "convention", "ccall")),
+                map("foreignCall", with(capiCall(), "target", map("unit", "another-unit", "symbol", CAPI_SYMBOL))),
+                map("foreignCall", with(capiCall(), "target", map("unit", CAPI_UNIT, "symbol", "unknown")))))
+            assertEquals(original, CoreCapiProvenance.supplement(original, binding, (unit, module) -> { throw new AssertionError("Cold header opened"); }));
+    }
     private String sha(byte[] bytes) throws Exception { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes)); }
     private Map<String, Object> scalar(String primitive, boolean evaluated) {
         return map("kind", primitive == null ? "void" : primitive.equals("AddrRep") ? "address" : "long",

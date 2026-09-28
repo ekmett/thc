@@ -16,7 +16,7 @@
 module THC.Driver.PackageNative
   ( captureNativeObject, captureNativeComponent, capturePackageNative, finishPackageNative
   , finishPackageNativeWithDependencies
-  , nativeSignatures, archiveNativeModule, archiveNativeModules, nativeWrapperSource, nativeCompilerArguments, nativeObjectOwned
+  , nativeSignatures, nativeFinalizers, archiveNativeModule, archiveNativeModules, nativeWrapperSource, nativeCompilerArguments, nativeObjectOwned
   ) where
 
 import Control.Monad (filterM, forM, forM_, unless, when)
@@ -39,7 +39,7 @@ import System.Process (CreateProcess(..), proc, readCreateProcessWithExitCode)
 import THC.Driver.ScalarBitcode (parseDependencies, sulongScalarTarget)
 import THC.Driver.NativeLibrarySources (zlibChecksumSources, nativeMathSymbols, validateNativeMathIR, validateNativeEntropyIR, validateNativeWidthIR,
   nativeCxxInitSymbols, nativeLifecycleSymbols, validateNativeLifecycleIR,
-  nativeLibcSymbols, validateNativeLibcIR)
+  nativeLibcSymbols, validateNativeLibcIR, nativeZlibSymbols, validateNativeZlibIR)
 import THC.Driver.NativeArgumentBridge (nativeArgumentBridge)
 import THC.Driver.NativeDependencies (COnlyProduct, cOnlyProductProof, cOnlyProductPieces)
 
@@ -49,7 +49,9 @@ type Signature = (String, String, String, [String], String)
 nativeSignatures :: String -> [Value] -> Either String [Signature]
 nativeSignatures unit modules = do
   imports <- concat <$> mapM moduleImports modules
-  signatures <- mapM (nativeSignature unit) imports
+  called <- mapM (nativeSignature unit) imports
+  finalizers <- nativeFinalizers unit modules
+  let signatures = called ++ [(symbol,"ccall","unsafe",["AddrRep"],"void") | symbol <- finalizers]
   require (all supportedSignature signatures) "package native call has unsupported safety/carriers"
   let ordered = sort (nub signatures)
   forM_ (groupBy (\a b -> first a == first b) ordered) $ \variants -> do
@@ -146,7 +148,7 @@ nativeImports unit value = do
   case member value "staticForeignImports" of
     Nothing -> Right []
     Just proof -> do
-      require (member proof "schema" == Just (toJSON (1::Int)) && member proof "unit" == Just (toJSON unit) &&
+      require (member proof "schema" `elem` map (Just . toJSON) ([1,2]::[Int]) && member proof "unit" == Just (toJSON unit) &&
         member proof "module" == member value "module" && member proof "scope" == Just "retained-static-import-products" &&
         member proof "execution" == Just "not-linked" && member proof "profile" == Just "ghc-9.14.1-thc-only-static-c-imports-v1")
         "package native imports lack typed provenance identity"
@@ -158,7 +160,8 @@ nativeImports unit value = do
           "package native imports have an unrecognized unclassified producer"
         pure []
       else do
-        requireKeys proof ["schema","scope","execution","profile","unit","module","status","wordBits","expectedForeign","expectedCalls","imports"]
+        requireKeys proof (["schema","scope","execution","profile","unit","module","status","wordBits","expectedForeign","expectedCalls","imports"] ++
+          ["addresses" | member proof "schema" == Just (toJSON (2::Int))])
         require (member proof "status" == Just "verified" && member proof "wordBits" == Just (toJSON (64::Int)))
           "package native imports lack verified typed provenance"
         expected <- field proof "expectedForeign"
@@ -171,7 +174,65 @@ nativeImports unit value = do
           binder <- field entry "binder"
           require (member binder "unit" == Just (toJSON unit) && member binder "module" == member value "module")
             "package native import binder owner differs"
+        _ <- nativeAddresses unit value
         pure imports
+
+-- Address declarations carry their own nominal type and stock-emitter evidence.
+-- They never become synthetic expectedCalls. Only the concrete one-pointer,
+-- IO-unit profile is eligible for a C finalizer adapter.
+nativeAddresses :: String -> Value -> Either String [Value]
+nativeAddresses unit value = case member value "staticForeignImports" of
+  Just proof | member proof "schema" == Just (toJSON (2::Int)), member proof "status" == Just "verified" -> do
+    addresses <- field proof "addresses"
+    require (not (null addresses) && length addresses == length (nub addresses)) "empty or duplicate native address inventory"
+    require (length addresses == length (nub (map (`member` "binder") addresses))) "duplicate native address binder"
+    forM_ addresses $ \entry -> do
+      requireKeys entry ["binder","header","symbol","isFunction","convention","declaredType","normalizedType","normalizationRole","callback"]
+      binder <- field entry "binder"
+      nativeIdentity binder
+      require (member binder "unit" == Just (toJSON unit) && member binder "module" == member value "module" &&
+        member binder "namespace" == Just "value") "native address binder owner differs"
+      symbol <- field entry "symbol"
+      function <- field entry "isFunction" :: Either String Bool
+      require (identifier symbol && member entry "convention" `elem` [Just "ccall",Just "capi"] &&
+        member entry "normalizationRole" == Just "representational" &&
+        (case member entry "header" of Just Null -> True; Just (String h) -> validHeader (T.unpack h); _ -> False))
+        "invalid native address declaration"
+      field entry "declaredType" >>= nativeType 0
+      field entry "normalizedType" >>= nativeType 0
+      require (member entry "callback" == Just Null || function &&
+        maybe False finalizerType (member entry "normalizedType") && member entry "callback" ==
+          Just (object ["arguments" .= (["AddrRep"]::[String]),"result" .= ("void"::String)]))
+        "unsupported native callback proof"
+    pure addresses
+  _ -> Right []
+
+-- The normalized nominal type is checked independently of the callback tag.
+-- It is deliberately a pointer-to-IO-unit profile, not arbitrary indirect FFI.
+finalizerType :: Value -> Bool
+finalizerType value
+  | member value "kind" == Just "forall" = maybe False finalizerType (member value "body")
+  | Just [function] <- named value "GHC.Internal.Ptr" "FunPtr",
+    member function "kind" == Just "function",
+    Just argument <- member function "argument", Just [_] <- named argument "GHC.Internal.Ptr" "Ptr",
+    Just result <- member function "result", Just [unit] <- named result "GHC.Internal.Types" "IO",
+    Just [] <- named unit "GHC.Internal.Tuple" "Unit" = True
+  | otherwise = False
+  where
+    named item modName occurrence
+      | member item "kind" == Just "tycon", member item "name" == Just (object
+          ["unit" .= ("ghc-internal"::String),"module" .= (modName::String),
+           "occurrence" .= (occurrence::String),"namespace" .= ("type"::String)]),
+        Just (Array args) <- member item "arguments" = Just (foldr (:) [] args)
+      | otherwise = Nothing
+
+nativeFinalizers :: String -> [Value] -> Either String [String]
+nativeFinalizers unit modules = do
+  mapM_ (nativeImports unit) modules
+  addresses <- concat <$> mapM (nativeAddresses unit) modules
+  sort . nub <$> mapM (\entry -> field entry "symbol")
+    [entry | entry <- addresses, member entry "callback" /= Just Null,
+      member entry "symbol" `notElem` [Just "free",Just "libdwPoolRelease",Just "backtraceFree"]]
 
 nativeSignature :: String -> Value -> Either String Signature
 nativeSignature unit entry = do
@@ -355,7 +416,8 @@ capturePackageNative repository helper libdir compiler arguments unit directory 
       objects = directory </> "objects"
   paths <- sort . filter ((== ".json") . takeExtension) <$> files core
   sourceValues <- mapM readJson paths
-  let needed = [(path,value) | (path,value) <- zip paths sourceValues, any (owned unit) (calls value)]
+  let needed = [(path,value) | (path,value) <- zip paths sourceValues,
+        any (owned unit) (calls value) || hasFunctionAddress value]
   unless (null needed) $ do
     root <- getCurrentDirectory >>= canonicalizePath
     configured <- either fail pure (nativeCompilerArguments arguments)
@@ -376,6 +438,7 @@ capturePackageNative repository helper libdir compiler arguments unit directory 
     retained <- either fail pure (archiveNativeModules unit hydrated)
     forM_ (zip needed retained) $ \((path,_),value) -> writeJson path value
     signatures <- either fail pure (nativeSignatures unit retained)
+    finalizers <- either fail pure (nativeFinalizers unit retained)
     when (null signatures) $ writeJson (directory </> "native.json")
       (object ["unit" .= unit,"archiveOnly" .= True])
     unless (null signatures) $ do
@@ -415,7 +478,7 @@ capturePackageNative repository helper libdir compiler arguments unit directory 
         else pure []
       let inputIdentity = object ["unit" .= unit,"compiler" .= compiler,"arguments" .= arguments,
             "sources" .= sources,"providers" .= providers,
-            "imports" .= map (\(a,b,c,d,e) -> toJSON (a,b,c,d,e)) signatures]
+            "imports" .= map (\(a,b,c,d,e) -> toJSON (a,b,c,d,e)) signatures,"finalizers" .= finalizers]
           provisional = sha (BL.toStrict (encode inputIdentity))
           makeEntries component = [(signature,"thc_native_" ++ component ++ "_" ++ show index) | (index,signature) <- zip [0::Int ..] signatures]
           -- GHC compiles each module's CAPI stubs as its own translation unit.
@@ -464,9 +527,18 @@ capturePackageNative repository helper libdir compiler arguments unit directory 
       writeJson (directory </> "native.json") (object
         ["unit" .= unit,"root" .= root,"objectRoots" .= roots,"bitcode" .= bitcode,"target" .= target,
          "componentSha256" .= component,"inputs" .= inputs,"sourceIdentity" .= inputIdentity,"providers" .= providers,
+         "finalizers" .= [entry | ((symbol,"ccall","unsafe",["AddrRep"],"void"),entry) <- entries,
+           symbol `elem` finalizers],
          "abi" .= [object ["symbol" .= symbol,"entry" .= entry,"convention" .= convention,"safety" .= safety,
            "arguments" .= arguments',"result" .= result] |
            ((symbol,convention,safety,arguments',result),entry) <- entries]])
+
+hasFunctionAddress :: Value -> Bool
+hasFunctionAddress (Array values) = case foldr (:) [] values of
+  String "lit" : String "function-addr" : _ -> True
+  items -> any hasFunctionAddress items
+hasFunctionAddress (Object fields) = any hasFunctionAddress (KM.elems fields)
+hasFunctionAddress _ = False
 
 zlibChecksumImport :: Value -> Bool
 zlibChecksumImport value = member value "header" == Just "zlib.h" &&
@@ -554,6 +626,7 @@ finishPackageNativeWithDependencies cOnlyProducts pieces directory unit currentO
     sourceInputs <- mapM (\value -> get value "inputs" :: IO Value) (record:native)
     bitcodes <- mapM (\value -> get value "bitcode") native
     abi <- get record "abi" :: IO [Value]
+    finalizers <- maybe (pure []) (either fail pure . parseValue) (member record "finalizers") :: IO [String]
     entries <- mapM (\value -> get value "entry") abi
     link <- tool "THC_LLVM_LINK" "llvm-link"
     opt <- tool "THC_LLVM_OPT" "opt"
@@ -564,6 +637,22 @@ finishPackageNativeWithDependencies cOnlyProducts pieces directory unit currentO
     _ <- command directory link (wrapper : bitcodes ++ ["-o",linked])
     _ <- command directory opt ["-S","-passes=verify",linked,"-o",linkedIR]
     linkedSource <- readFile linkedIR
+    -- A typed Haskell address is not a C definition proof. Require the actual
+    -- linked definition before allowing its namespaced one-pointer adapter.
+    forM_ [value | value <- abi, member value "entry" `elem` map (Just . toJSON) finalizers] $ \value -> do
+      symbol <- get value "symbol"
+      let definitions = [line | line <- lines linkedSource, "define " `isPrefixOf` line,
+            ("@" ++ symbol ++ "(") `isInfixOf` line]
+          valid line = let (before,rest) = break (== '@') line
+                           parameters = takeWhile (/= ')') (drop (length symbol + 2) rest)
+                           ordinary = ["dso_local","noundef"]
+                       in filter (`notElem` ordinary) (words before) == ["define","void"] &&
+                         case words parameters of
+                           "ptr":attributes -> not (',' `elem` parameters) && not (null attributes) &&
+                             "%" `isPrefixOf` last attributes && all (`elem` ["noundef","nocapture","readonly","writeonly"])
+                               (init attributes)
+                           _ -> False
+      check (length definitions == 1 && all valid definitions) ("package finalizer lacks an exact void(pointer) definition: " ++ symbol)
     -- Preserve actual constructor/destructor metadata. Sulong initializes each
     -- loaded component once and runs its destructors on normal context close.
     -- LLVM verification remains mandatory before and after trimming.
@@ -613,7 +702,7 @@ finishPackageNativeWithDependencies cOnlyProducts pieces directory unit currentO
     -- Other unresolved symbols retain this component as a non-executable archive.
     let unsupported = [name | name <- externals,
           name `notElem` (["memcpy","memmove","memset","memcmp","bcmp","getentropy","wcwidth"] ++
-            nativeMathSymbols ++ nativeCxxInitSymbols ++ nativeLifecycleSymbols ++ nativeLibcSymbols),
+            nativeMathSymbols ++ nativeCxxInitSymbols ++ nativeLifecycleSymbols ++ nativeLibcSymbols ++ nativeZlibSymbols),
           not ("llvm." `isPrefixOf` name)]
     let math = filter (`elem` nativeMathSymbols) externals
         entropy = "getentropy" `elem` externals
@@ -621,6 +710,7 @@ finishPackageNativeWithDependencies cOnlyProducts pieces directory unit currentO
         cxx = filter (`elem` nativeCxxInitSymbols) externals
         lifecycle = filter (`elem` nativeLifecycleSymbols) externals
         libc = filter (`elem` nativeLibcSymbols) externals
+        zlib = filter (`elem` nativeZlibSymbols) externals
         finalIR = directory </> "native/final.ll"
     _ <- command directory opt ["-S","-passes=verify",final,"-o",finalIR]
     ir <- readFile finalIR
@@ -632,13 +722,14 @@ finishPackageNativeWithDependencies cOnlyProducts pieces directory unit currentO
     when width (either fail pure (validateNativeWidthIR target ir))
     unless (null (cxx ++ lifecycle)) (either fail pure (validateNativeLifecycleIR target (cxx ++ lifecycle) ir))
     unless (null libc) (either fail pure (validateNativeLibcIR target libc ir))
-    (artifact,format,libraries) <- if (null math && not entropy && not width && null cxx && null libc) || not (null unsupported)
+    unless (null zlib) (either fail pure (validateNativeZlibIR target zlib ir))
+    (artifact,format,libraries) <- if (null math && not entropy && not width && null cxx && null libc && null zlib) || not (null unsupported)
       then pure (final,"llvm-bitcode",[]) else do
       clang <- tool "THC_CLANG" "clang"
       let container = directory </> "native/final.so"
           arguments = ["--target=" ++ target,"-fembed-bitcode","-shared","-fPIC",final] ++
             ["-lm" | not (null math)] ++ ["-lc" | entropy || width || not (null libc)] ++
-            ["-lstdc++" | not (null cxx)] ++ ["-o",container]
+            ["-lstdc++" | not (null cxx)] ++ ["-lz" | not (null zlib)] ++ ["-o",container]
       _ <- command directory clang arguments
       compilerHash <- sha <$> BS.readFile clang
       pure (container,"llvm-embedded-elf",[object ["provider" .= provider,
@@ -647,22 +738,24 @@ finishPackageNativeWithDependencies cOnlyProducts pieces directory unit currentO
           [("native-libc-getentropy-v1",["getentropy"]) | entropy] ++
           [("native-libc-wcwidth-v1",["wcwidth"]) | width] ++
           [("native-libc-package-lp64-v1",libc) | not (null libc)] ++
+          [("native-zlib-package-lp64-v1",zlib) | not (null zlib)] ++
           [("native-libstdcxx-ios-init-v1",cxx) | not (null cxx)]])
     bytes <- BS.readFile artifact
     component <- get record "componentSha256" :: IO String
     providerInputs <- mapM (\value -> get value "inputs") providers
     let inputs = sourceInputs ++ providerInputs
-    let proof = object ["schema" .= (1::Int),"format" .= (format::String),
+    let proof = object $ ["schema" .= (if null finalizers then 1 else 2::Int),"format" .= (format::String),
           "profile" .= ("thc-package-c-ffi-v1"::String),"unit" .= unit,"target" .= target,
           "componentSha256" .= component,"bitcodeSha256" .= sha bytes,"bitcodeHex" .= hex bytes,"abi" .= abi,
           "buildInputs" .= object ["translationUnits" .= inputs,"providers" .= providers,
             "dependencies" .= map cOnlyProductProof cOnlyProducts,
-            "nativeLibraries" .= libraries,"unresolved" .= externals,"argumentBridges" .= bridgeInputs]]
+            "nativeLibraries" .= libraries,"unresolved" .= externals,"argumentBridges" .= bridgeInputs]] ++
+          ["finalizers" .= finalizers | not (null finalizers)]
     -- Keep the complete failed link as evidence. LLVM, rather than a textual
     -- call-graph guess, computes each adapter's closure including global
     -- initializers, destructors, aliases and address-taken functions. Load one
     -- union of the usable closures so mutable C globals are never duplicated.
-    partial <- if null unsupported || format /= "llvm-bitcode" then pure Nothing else do
+    partial <- if null unsupported || not (null finalizers) || format /= "llvm-bitcode" then pure Nothing else do
       let selection = directory </> "native/entry-resolution"
       createDirectoryIfMissing True selection
       closures <- forM (zip [0::Int ..] entries) $ \(index,entry) -> do
@@ -707,7 +800,7 @@ finishPackageNativeWithDependencies cOnlyProducts pieces directory unit currentO
         Object fields -> do
           let prior = member value "packageNativeArchive"
               unclassified = prior >>= (`member` "unclassifiedReason")
-              ownsCalls = any (owned unit) (calls value)
+              ownsCalls = any (owned unit) (calls value) || hasFunctionAddress value
           next <- if not ownsCalls || maybe False (/= Null) unclassified then pure value
             else if null unsupported then pure (Object (KM.insert "packageNativeLink" proof fields))
             else do

@@ -13,15 +13,15 @@
 -- A closed producer profile for stock static-import C products. These are
 -- retained provenance records, not native links or execution capabilities.
 module THC.ForeignImportProvenance
-  ( Import(..), ImportType(..), Call(..), Verdict(..), recordImports, inspectImports ) where
+  ( Import(..), Address(..), ImportType(..), Call(..), Verdict(..), recordImports, inspectImports ) where
 
 import Control.Monad (unless)
 import Data.Data (Data)
 import Data.IORef (newIORef, readIORef)
 import Data.List (elemIndex, nub)
-import Data.Maybe (catMaybes)
+import Data.Either (partitionEithers)
 import GHC.Plugins
-import GHC.Builtin.Names (funPtrTyConKey)
+import GHC.Builtin.Names (funPtrTyConKey, ptrTyConKey)
 import GHC.Builtin.Types.Prim (byteArrayPrimTyCon, mutableByteArrayPrimTyCon)
 import GHC.Core.TyCo.Rep (Type(..), scaledThing)
 import GHC.Core.TyCo.Compare (eqType)
@@ -35,6 +35,7 @@ import GHC.Platform (Arch(..), platformArch)
 import GHC.Platform.Profile (profileIsProfiling)
 import GHC.Tc.Types (TcGblEnv(..), TcM)
 import GHC.Tc.Utils.Monad (getTopEnv, setGblEnv, updTopEnv)
+import GHC.Tc.Utils.TcType (tcSplitIOType_maybe)
 import GHC.Types.Error (isEmptyMessages)
 import GHC.Types.ForeignCall
 import GHC.Types.ForeignStubs
@@ -55,11 +56,19 @@ data ImportType
   deriving (Eq, Data)
 data Import = Import ExportName (Maybe String) String (Maybe String) Bool String String
   ImportType ImportType Call deriving (Eq, Data)
+-- A stock CLabel is an address, not a foreign call. Preserve the real nominal
+-- signature separately; consumers must prove a supported callback ABI before
+-- retaining or executing a package-owned function through this declaration.
+data Address = Address ExportName (Maybe String) String Bool String
+  ImportType ImportType (Maybe ([String],String)) deriving (Eq, Data)
 data Product = Product (Maybe (String,String,[(Bool,String,String,String)],[(Bool,String,String,String)]))
   [(String,String,String)] deriving (Eq, Data)
-data Evidence = Unclassified String | StockImports [Import] Product deriving Data
+-- Keep the original constructor and its field order: Data annotations already
+-- stored in .hi files use that serialized representation.
+data Evidence = Unclassified String | StockImports [Import] Product
+  | StockImportsWithAddresses [Import] [Address] Product deriving Data
 data ImportProof = ImportProof Int String String Evidence deriving Data
-data Verdict = Unknown String | Rejected String | Verified [Import]
+data Verdict = Unknown String | Rejected String | Verified [Import] [Address]
 
 productOf :: Foreign.IfaceForeign -> Product
 productOf (Foreign.IfaceForeign stubs files) = Product (fmap stub stubs) (map file files)
@@ -173,10 +182,13 @@ recordImports options environment
                       | (stubs,_) <- products]
                 original <- liftIO (Foreign.encodeIfaceForeign (hsc_logger top) flags
                   (ForeignStubs (mconcat headers) (mconcat sources)) [])
-                pure $ either Unclassified (\emitted -> StockImports (catMaybes emitted) (productOf original)) imports
+                pure $ either Unclassified (\emitted -> let (calls,addresses) = partitionEithers emitted in
+                  if null addresses then StockImports calls (productOf original)
+                  else StockImportsWithAddresses calls addresses (productOf original)) imports
               _ -> pure (Unclassified "stock-import-emitter-did-not-complete-cleanly")
       let owner = tcg_mod environment
-          proof = ImportProof 1 (unitString (moduleUnit owner)) (moduleNameString (moduleName owner)) evidence
+          version = case evidence of StockImportsWithAddresses {} -> 2; _ -> 1
+          proof = ImportProof version (unitString (moduleUnit owner)) (moduleNameString (moduleName owner)) evidence
       pure environment { tcg_anns = tcg_anns environment ++
         [Annotation (ModuleTarget owner) (toSerialized serializeWithData proof)] }
   where
@@ -191,30 +203,42 @@ recordImports options environment
           identity <- nameIdentity (varName binder)
           declared <- importTypeIdentity (idType binder)
           normalized <- importTypeIdentity (coercionLKind coercion)
-          pure $ \_ bindings -> Just . Import identity (fmap (\(Header _ name') -> unpackFS name') header) (unpackFS name)
+          pure $ \_ bindings -> Left . Import identity (fmap (\(Header _ name') -> unpackFS name') header) (unpackFS name)
             (unitString <$> unit) function (convention conv) (safetyName safe) declared normalized <$> oneCall bindings
     classify (L _ ForeignImport { fd_name = L _ binder, fd_i_ext = coercion,
-        fd_fi = CImport _ (L _ conv) _ _ (CLabel symbol) })
+        fd_fi = CImport _ (L _ conv) _ header (CLabel symbol) })
       | conv `elem` [CCallConv,CApiConv] = do
           unless (idType binder `eqType` coercionRKind coercion && coercionRole coercion == Representational)
             (Left "foreign-address normalization disagrees with actual binder")
-          _ <- nameIdentity (varName binder)
-          _ <- importTypeIdentity (idType binder)
-          _ <- importTypeIdentity (coercionLKind coercion)
+          identity <- nameIdentity (varName binder)
+          declared <- importTypeIdentity (idType binder)
+          normalized <- importTypeIdentity (coercionLKind coercion)
           let kind = case tyConAppTyCon_maybe (dropForAlls (coercionLKind coercion)) of
                 Just constructor | tyConUnique constructor == funPtrTyConKey -> IsFunction
                 _ -> IsData
+              callback = case splitTyConApp_maybe (dropForAlls (coercionLKind coercion)) of
+                Just (constructor,[function]) | tyConUnique constructor == funPtrTyConKey ->
+                  let (parameters,result) = splitFunTys function in
+                  case tcSplitIOType_maybe result of
+                    Just (_,value) | value `eqType` unitTy,
+                        [parameter] <- parameters,
+                        Just (pointer,[_]) <- splitTyConApp_maybe (scaledThing parameter),
+                        tyConUnique pointer == ptrTyConKey ->
+                      Just (["AddrRep"],"void")
+                    _ -> Nothing
+                _ -> Nothing
           -- GHC's stock CLabel desugaring ignores the ccall/capi convention
           -- and optional header: both emit one typed address, not a C wrapper.
-          -- Still verify the actual product and binding below. Omitting an
-          -- address from this stub inventory grants neither a call ABI nor
-          -- address/runtime admission for its retained Core literal.
+          -- Still verify the actual product and binding below. Recording this
+          -- declaration grants neither a call ABI nor runtime admission.
           pure $ \original bindings -> do
             unless (productOf original `elem` [Product Nothing [], Product (Just ("","",[],[])) []])
               (Left "static address import emitted foreign products")
             case bindings of
               [(actual,rhs)] | actual == binder && exprType rhs `eqType` idType binder &&
-                  null (callIn rhs) && addressLabels rhs == [(symbol,kind)] -> Right Nothing
+                  null (callIn rhs) && addressLabels rhs == [(symbol,kind)] ->
+                    Right (Right (Address identity (fmap (\(Header _ name') -> unpackFS name') header)
+                      (unpackFS symbol) (kind == IsFunction) (convention conv) declared normalized callback))
               _ -> Left "static address import did not emit its exact typed literal binding"
     classify _ = Left "non-static-c-import-declaration"
 
@@ -234,18 +258,22 @@ inspectImports :: Module -> [Annotation] -> Foreign.IfaceForeign -> Either Strin
 inspectImports owner annotations original = case proofs of
   [] -> Right Nothing
   [ImportProof version unit name evidence] -> do
-    unless (version == 1 && unit == unitString (moduleUnit owner) && name == moduleNameString (moduleName owner))
+    let expectedVersion = case evidence of StockImportsWithAddresses {} -> 2; _ -> 1
+    unless (version == expectedVersion && unit == unitString (moduleUnit owner) && name == moduleNameString (moduleName owner))
       (Left "static-import proof version/owner mismatch")
     pure $ Just $ case evidence of
       Unclassified reason -> Unknown reason
-      StockImports imports expected
-        | Product _ files <- productOf original, not (null files) -> Rejected "additional-foreign-files"
-        | productOf original /= expected -> Rejected "retained-foreign-product-differs"
-        | Product (Just (header,_,initializers,finalizers)) _ <- expected,
-            not (null header && null initializers && null finalizers) -> Rejected "unexpected-stub-obligations"
-        | length imports /= length (nub imports) -> Rejected "duplicate-static-import-evidence"
-        | otherwise -> Verified imports
+      StockImports imports expected -> verify imports [] expected
+      StockImportsWithAddresses imports addresses expected -> verify imports addresses expected
   _ -> Left "duplicate static-import proofs"
   where
+    verify imports addresses expected
+        | Product _ files <- productOf original, not (null files) = Rejected "additional-foreign-files"
+        | productOf original /= expected = Rejected "retained-foreign-product-differs"
+        | Product (Just (header,_,initializers,finalizers)) _ <- expected,
+            not (null header && null initializers && null finalizers) = Rejected "unexpected-stub-obligations"
+        | length imports /= length (nub imports) = Rejected "duplicate-static-import-evidence"
+        | length addresses /= length (nub addresses) = Rejected "duplicate-static-address-evidence"
+        | otherwise = Verified imports addresses
     proofs = [proof | Annotation (ModuleTarget target) payload <- annotations, target == owner,
       Just proof <- [fromSerialized deserializeWithData payload]]

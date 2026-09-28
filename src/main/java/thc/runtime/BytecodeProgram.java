@@ -4392,8 +4392,8 @@ public final class BytecodeProgram implements ExecutableProgram {
                 });
             } else {
                 b.beginBlock();
-                var result = b.createLocal("tuple tail result", null);
-                b.beginStoreLocal(result);
+                var result = b.createLocal("tuple tail result", FrameSlotKind.Object);
+                b.beginStaticStoreObject(result);
                 if (resumable) checkpointedTupleApplication(e, shape, function, arguments, inputLayout, destination, true);
                 else if (inputLayout != null && inputLayout.getRequiresTyped())
                     typedArguments(e, function, arguments, inputLayout, true, tupleSlots(shape, destination),
@@ -4407,16 +4407,17 @@ public final class BytecodeProgram implements ExecutableProgram {
                     b.emitLoadLocal(fn); for (var value : values) b.emitLoadLocal(value);
                     b.endTailApplyCompactTuple();
                 });
-                b.endStoreLocal();
+                b.endStaticStoreObject();
                 if (resumable) {
-                    b.beginIfThen();
-                    b.beginIsTailReentry(); b.emitLoadLocal(result); b.emitLoadConstant(true); b.endIsTailReentry();
-                    b.beginBlock(); b.beginReturn(); b.emitLoadLocal(result); b.endReturn(); b.endBlock();
-                    b.endIfThen();
+                    // A first saved tail is a normal control result, not an unseen guest branch.
+                    b.beginUnprofiledIfThen();
+                    b.beginIsTailReentry(); b.emitStaticLoadObject(result); b.emitLoadConstant(true); b.endIsTailReentry();
+                    b.beginBlock(); b.beginReturn(); b.emitStaticLoadObject(result); b.endReturn(); b.endBlock();
+                    b.endUnprofiledIfThen();
                 }
                 if (!context.passThrough) {
                     b.beginIfThenElse();
-                    b.beginIsTailReentry(); b.emitLoadLocal(result); b.emitLoadConstant(false); b.endIsTailReentry();
+                    b.beginIsTailReentry(); b.emitStaticLoadObject(result); b.emitLoadConstant(false); b.endIsTailReentry();
                     b.beginBlock();
                     restoreTailArguments(e, context, result);
                     b.emitBranch(Objects.requireNonNull(e.continueLabel));
@@ -4432,7 +4433,7 @@ public final class BytecodeProgram implements ExecutableProgram {
     private void checkpointedTupleCall(Emission e, BytecodeTupleSlots slots, BytecodeLocal fn,
             List<BytecodeLocal> values, ArgumentLayout inputLayout, int arity, BytecodeLocal callerMask) {
         var b = e.builder;
-        var suspended = b.createLocal("captured tuple suspension", "object");
+        var suspended = b.createLocal("captured tuple suspension", FrameSlotKind.Object);
         b.beginTryCatch();
         if (inputLayout != null && inputLayout.getRequiresTyped()) {
             var source = new BytecodeInputSource(inputLayout, accessors(values));
@@ -4450,20 +4451,20 @@ public final class BytecodeProgram implements ExecutableProgram {
             b.endApplyCompactTupleCheckpoint();
         }
         b.beginBlock();
-        b.beginStoreLocal(suspended);
+        b.beginStaticStoreObject(suspended);
         b.beginCallSuspensionOnly(); b.emitLoadException(); b.endCallSuspensionOnly();
-        b.endStoreLocal();
+        b.endStaticStoreObject();
         b.beginResumeTupleApplication(slots);
-        b.emitLoadLocal(suspended);
+        b.emitStaticLoadObject(suspended);
         b.beginReenterCallMask();
         beginAnnotationYield(e);
         b.beginParkCallMask();
-        b.emitLoadLocal(suspended);
+        b.emitStaticLoadObject(suspended);
         b.emitStaticLoadObject(Objects.requireNonNull(e.checkpointRootEntry));
-        b.emitLoadLocal(callerMask);
+        b.emitStaticLoadObject(callerMask);
         b.endParkCallMask();
         endAnnotationYield(e);
-        b.emitLoadLocal(callerMask);
+        b.emitStaticLoadObject(callerMask);
         b.endReenterCallMask();
         b.endResumeTupleApplication();
         b.endBlock(); b.endTryCatch();
@@ -4514,14 +4515,14 @@ public final class BytecodeProgram implements ExecutableProgram {
                 values.add(local);
             }
         }
-        var callerMask = b.createLocal("captured tuple caller mask", "object");
-        b.beginStoreLocal(callerMask); b.emitCurrentMask(); b.endStoreLocal();
-        var tailResult = tail ? b.createLocal("captured tuple tail result", "object") : null;
+        var callerMask = b.createLocal("captured tuple caller mask", FrameSlotKind.Object);
+        b.beginStaticStoreObject(callerMask); b.emitCurrentMask(); b.endStaticStoreObject();
+        var tailResult = tail ? b.createLocal("captured tuple tail result", FrameSlotKind.Object) : null;
         FinishTuple finish = (suffix, layout, arity) -> {
             if (tail) {
-                b.beginStoreLocal(Objects.requireNonNull(tailResult));
+                b.beginStaticStoreObject(Objects.requireNonNull(tailResult));
                 savedTailTuple(e, slots, fn, suffix, layout, arity);
-                b.endStoreLocal();
+                b.endStaticStoreObject();
             } else checkpointedTupleCall(e, slots, fn, suffix, layout, arity, callerMask);
         };
         if (arguments.isEmpty()) finish.emit(values, inputLayout, 0);
@@ -4539,7 +4540,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             finish.emit(values, inputLayout, arguments.size());
             b.endBlock(); b.endIfThenElse();
         }
-        if (tail) b.emitLoadLocal(Objects.requireNonNull(tailResult));
+        if (tail) b.emitStaticLoadObject(Objects.requireNonNull(tailResult));
         b.endBlock();
     }
 

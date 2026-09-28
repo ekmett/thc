@@ -74,6 +74,13 @@ public final class NativeAddresses {
         }
         return ManagedAddress.unownedNumeric(bits);
     }
+    /** Called only after a package boundary has validated and used this pinned owner. */
+    @TruffleBoundary synchronized void registerPackageAllocation(ManagedAllocation allocation) {
+        requireOpen();
+        if (Language.currentState(null).getNativeAddresses() != this || !env.isNativeAccessAllowed())
+            throw fault("Package pointer cells require their current native-enabled context");
+        pinned.put(allocation.nativeSegment().address(), new WeakReference<>(allocation));
+    }
     @TruffleBoundary public synchronized NativeReadOnlyPointer transport(ManagedAddress address) {
         requireOpen();
         Object key = address.nativeImageKey();

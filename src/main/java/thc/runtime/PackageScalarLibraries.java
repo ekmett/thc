@@ -25,6 +25,7 @@ public final class PackageScalarLibraries {
     private record Loaded(PackageScalarLink link, FutureTask<Map<String, PackageScalarFunction>> task) {}
     private final TruffleLanguage.Env env;
     private final HashMap<String, Loaded> libraries = new HashMap<>();
+    private final PackageFinalizerRegistry finalizers = new PackageFinalizerRegistry();
     private final Assumption alive = Assumption.create("THC package C libraries are open");
     private boolean closed;
     private final InteropLibrary interop = InteropLibrary.getUncached();
@@ -73,6 +74,7 @@ public final class PackageScalarLibraries {
                         if (!interop.isExecutable(function)) throw fault("Package C entry is not executable");
                         functions.put(signature.getEntry(), new PackageScalarFunction(owner, signature, function, alive));
                     }
+                    if (!link.getFinalizers().isEmpty()) finalizers.register(link, functions, owner.cbits());
                     return functions;
                 }));
                 libraries.put(link.getUnit(), selected);
@@ -149,6 +151,7 @@ public final class PackageScalarLibraries {
         if (function == null) throw new java.util.NoSuchElementException("Key " + signature.getEntry() + " is missing in the map.");
         return function;
     }
-    public synchronized void close() { closed = true; alive.invalidate(); libraries.clear(); }
+    @TruffleBoundary public CFinalizerFunction finalizer(String symbol) { current(); return finalizers.resolve(symbol); }
+    public synchronized void close() { closed = true; alive.invalidate(); finalizers.close(); libraries.clear(); }
     @SuppressWarnings("unchecked") private static <E extends Throwable> RuntimeException rethrow(Throwable failure) throws E { throw (E) failure; }
 }

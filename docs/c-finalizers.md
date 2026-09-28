@@ -65,6 +65,40 @@ Automatic guest GC finalization
 and arbitrary C function labels remain unsupported. The separate
 `enabled_capabilities` data label exposes a read-only live Word32 cell.
 
+Package-owned one-address finalizers use a separate typed admission path. The
+exporter retains the actual stock `CLabel` declaration, its declared and
+normalized nominal types, and the unchanged foreign product. A normalized
+`FunPtr (Ptr a -> IO ())` proves a candidate ABI; it does not by itself make the
+label executable. Acquisition must retain the original C definition with an
+exact `void(pointer)` ABI and root its namespaced adapter in a completely linked
+component. These declarations and roots use schema-two inner provenance records;
+ordinary schema-one call records and the CBD container framing remain unchanged.
+
+Runtime labels retain that component and owning context. Cross-context, closed
+component, ambiguous-label, malformed signature and disposed-allocation uses
+reject. Native allocation borrows cover callback execution, including known
+returned aliases. Registration and explicit finalization keep the existing
+DEAD-before-call, newest-first and no-replay rules. The reserved `free` label
+still uses checked allocation ownership; package labels do not acquire that
+special deallocation authority. Automatic GC finalization and arbitrary function
+pointer calls remain unsupported.
+
+The native zlib dependency profile currently supports Linux x86-64 LP64. It
+validates the original LLVM declarations before linking libz, preserving its
+integer widths, version/size checks and real library pointer results. This is a
+native library dependency, not a Java z_stream implementation.
+
+Package calls and typed package finalizers can project pointer-bearing pinned
+arrays into that same native storage. The boundary validates the complete
+transitive pointer-cell graph before writing native encodings, retains aliases
+and native allocation borrows, and reconciles native writes even when a call
+throws. Native-created pointers retain the originating context/library rather
+than an expired argument-view lease. Explicit typed address reads recover newly
+written pointer fields; the runtime does not scan scalar fields for pointers.
+Moving buffers and opaque guest objects cannot be embedded as native pointers,
+and raw byte exposure of a pointer-bearing allocation remains rejected. This
+does not add native-to-guest callback support or automatic GC finalization.
+
 Primary implementations at the pinned GHC revision:
 
 - [Weak primops](https://github.com/ghc/ghc/blob/902339d332fb4ce2b3c87dcac1ee6495d41ad886/rts/PrimOps.cmm#L827)

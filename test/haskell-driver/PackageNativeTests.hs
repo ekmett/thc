@@ -23,13 +23,78 @@ import Test.HUnit
 import THC.Driver.PackageNative
 import THC.Driver.NativeLibrarySources (validateNativeMathIR, validateNativeEntropyIR, validateNativeWidthIR,
   nativeCxxInitSymbols, nativeLifecycleSymbols, validateNativeLifecycleIR,
-  validateNativeLibcIR)
+  validateNativeLibcIR, validateNativeZlibIR)
 import THC.Driver.NativeArgumentBridge (nativeArgumentBridge)
 import THC.Driver.NativeDependencies (selectCOnlyPieces)
 
 tests :: Test
 tests = TestLabel "package-owned native C acquisition" $ TestList
   [ TestCase $ do
+      let named modName name args = object ["kind" .= ("tycon"::String), "name" .= object
+            ["unit" .= ("ghc-internal"::String), "module" .= (modName::String),
+             "occurrence" .= (name::String), "namespace" .= ("type"::String)], "arguments" .= (args::[Value])]
+          unit = named "GHC.Internal.Tuple" "Unit" []
+          pointer = named "GHC.Internal.Ptr" "Ptr" [unit]
+          integer = named "GHC.Internal.Int" "Int32" []
+          io result = named "GHC.Internal.Types" "IO" [result]
+          function argument result = object ["kind" .= ("function"::String),
+            "multiplicity" .= named "GHC.Internal.Types" "Many" [], "argument" .= argument, "result" .= result]
+          ty argument result = named "GHC.Internal.Ptr" "FunPtr" [function argument result]
+          address normalized = object ["binder" .= object ["unit" .= ("fixture-unit"::String),
+            "module" .= ("Fixture"::String), "occurrence" .= ("cleanup"::String), "namespace" .= ("value"::String)],
+            "symbol" .= ("cleanup"::String), "header" .= Null, "isFunction" .= True, "convention" .= ("capi"::String),
+            "declaredType" .= ty pointer (io unit), "normalizedType" .= normalized,
+            "normalizationRole" .= ("representational"::String),
+            "callback" .= object ["arguments" .= (["AddrRep"]::[String]), "result" .= ("void"::String)]]
+          module' addresses = changeProof "addresses" (toJSON addresses) (changeProof "schema" (toJSON (2::Int)) (moduleWith []))
+          original = address (ty pointer (io unit))
+      assertEqual "actual typed address creates a distinct retained adapter" (Right [("cleanup","ccall","unsafe",["AddrRep"],"void")])
+        (nativeSignatures "fixture-unit" [module' [original]])
+      assertEqual "address metadata does not manufacture call inventory" (Just (toJSON ([]::[Value])))
+        (lookupField "staticForeignImports" (module' [original]) >>= lookupField "expectedCalls")
+      forM_ [ty integer (io unit), ty pointer (io integer), ty pointer unit,
+          ty pointer (function pointer (io unit)), ty (named "Other" "Ptr" [unit]) (io unit),
+          named "Other" "FunPtr" [function pointer (io unit)]] $ \bad ->
+        assertBool "callback tag cannot replace normalized signature" (isLeft (nativeFinalizers "fixture-unit" [module' [address bad]]))
+      assertBool "duplicate binder cannot prove two labels" (isLeft (nativeFinalizers "fixture-unit"
+        [module' [original, set "symbol" "other" original]]))
+      assertEqual "inert labels are not granted executable adapters" (Right [])
+        (nativeFinalizers "fixture-unit" [module' [set "callback" Null (address integer)]])
+  , TestCase $ do
+      let target = "x86_64-unknown-linux-gnu"
+          declarations =
+            [ ("adler32", "i64", ["i64", "ptr", "i32"])
+            , ("crc32", "i64", ["i64", "ptr", "i32"])
+            , ("zlibVersion", "ptr", [])
+            , ("deflate", "i32", ["ptr", "i32"])
+            , ("inflate", "i32", ["ptr", "i32"])
+            , ("deflateInit2_", "i32", ["ptr", "i32", "i32", "i32", "i32", "i32", "ptr", "i32"])
+            , ("inflateInit2_", "i32", ["ptr", "i32", "ptr", "i32"])
+            , ("deflateSetDictionary", "i32", ["ptr", "ptr", "i32"])
+            , ("inflateSetDictionary", "i32", ["ptr", "ptr", "i32"])
+            , ("inflateReset", "i32", ["ptr"])
+            , ("deflateEnd", "i32", ["ptr"]), ("inflateEnd", "i32", ["ptr"])
+            ]
+          declaration name result parameters = "declare " ++ result ++ " @" ++ name ++ "(" ++
+            foldr (\a b -> a ++ if null b then "" else ", " ++ b) "" parameters ++ ")"
+      forM_ declarations $ \(name,result,parameters) -> do
+        let plain = declaration name result parameters
+            attributed = declaration name ("noundef " ++ result) (map (++ " noundef") parameters) ++ " #1"
+            validate = validateNativeZlibIR target [name]
+        assertEqual "original zlib ABI admitted" (Right ()) (validate plain)
+        assertEqual "ordinary noundef attributes preserved" (Right ()) (validate attributed)
+        forM_ ["", plain ++ "\n" ++ plain, declaration name "float" parameters,
+            declaration name ("fastcc " ++ result) parameters,
+            declaration name result (parameters ++ ["..."]),
+            declaration name result ("ptr addrspace(1)" : drop 1 parameters)] $ \bad ->
+          assertBool ("unproved zlib declaration rejected: " ++ name) (isLeft (validate bad))
+        assertBool "LP64 does not admit Windows ABI" (isLeft
+          (validateNativeZlibIR "x86_64-pc-windows-msvc" [name] plain))
+      assertBool "wrong uLong width remains rejected" (isLeft
+        (validateNativeZlibIR target ["adler32"] "declare i32 @adler32(i32, ptr, i32)"))
+      assertBool "unlisted zlib operation remains unsupported" (isLeft
+        (validateNativeZlibIR target ["gzopen"] "declare ptr @gzopen(ptr, ptr)"))
+  , TestCase $ do
       let caller = "define i64 @entry(ptr %0) {\n  %1 = call i64 @result(ptr %0)\n  ret i64 %1\n}\n"
           callee = "define i32 @result(ptr nocapture noundef readonly %0) {\n"
           body = "  %2 = getelementptr inbounds nuw i8, ptr %0, i64 12\n  %3 = load i32, ptr %2, align 4, !tbaa !117\n  ret i32 %3\n}\n"

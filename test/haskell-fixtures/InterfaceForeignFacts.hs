@@ -348,7 +348,8 @@ prepareImportStubs root directory ghc ghcPkg libdir unitName baseUnit pluginDb p
   let labelVariants = [("labels", ["-DTHC_LABELS"]),
                        ("labels-header", ["-DTHC_LABELS", "-DTHC_LABEL_HEADER"]),
                        ("capi-labels", ["-DTHC_LABELS", "-DTHC_CAPI_LABELS"]),
-                       ("capi-labels-header", ["-DTHC_LABELS", "-DTHC_CAPI_LABELS", "-DTHC_LABEL_HEADER"])]
+                       ("capi-labels-header", ["-DTHC_LABELS", "-DTHC_CAPI_LABELS", "-DTHC_LABEL_HEADER"]),
+                       ("finalizer-label", ["-DTHC_LABELS", "-DTHC_FINALIZER_LABEL"])]
       verifiedVariants = "plain" : map fst labelVariants
       variants = [("plain", [])] ++ labelVariants ++ [("extra-file", ["-DTHC_EXTRA_FILE"]),
                   ("wrapper", ["-DTHC_WRAPPER"]), ("instrumented", ["-finfo-table-map"])]
@@ -417,6 +418,19 @@ prepareImportStubs root directory ghc ghcPkg libdir unitName baseUnit pluginDb p
           [a,b] -> field "emitted" a /= field "emitted" b
           _ -> False)
           "Distinct CAPI aliases lost their original emitted wrappers"
+        let addresses = case field "addresses" proof of Just (Array values) -> toList values; _ -> []
+        check (if variant == "plain" then null addresses && field "schema" proof == Just (Number 1)
+          else length addresses == (if variant == "finalizer-label" then 3 else 2) && field "schema" proof == Just (Number 2) &&
+            all (\address -> field "normalizationRole" address == Just (String "representational") &&
+              field "declaredType" address /= Nothing && field "normalizedType" address /= Nothing &&
+              field "emitted" address == Nothing) addresses)
+          "Stock address declarations must retain nominal type evidence without inventing a foreign call"
+        let callbacks = [address | address <- addresses, field "callback" address /= Just Null]
+        check (if variant == "finalizer-label" then case callbacks of
+          [address] -> field "symbol" address == Just (String "thc_provenance_unlinked_finalizer") &&
+            field "callback" address == Just (object ["arguments" .= (["AddrRep"]::[String]), "result" .= ("void"::String)])
+          _ -> False
+          else null callbacks) "Only the actual FunPtr (Ptr a -> IO ()) type proves the finalizer ABI"
         case interfaceForeign core of
           ForeignCore.IfaceForeign (Just (ForeignCore.IfaceCStubs header body initializers finalizers)) [] -> do
             let details = interfaceDetails core

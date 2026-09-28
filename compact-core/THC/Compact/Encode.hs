@@ -178,11 +178,12 @@ blob :: Encoder -> BS.ByteString -> IO ()
 blob encoder bytes = number encoder (fromIntegral (BS.length bytes)) >> emit encoder (putByteString bytes)
 
 nativeLink :: Encoder -> NativeLink -> IO ()
-nativeLink encoder (NativeLink payload abi inputs entries) = do
+nativeLink encoder (NativeLink payload@(LinkPayload schema _ _ _ _ _ _ _) abi inputs entries finalizers) = do
   linkPayload encoder payload
   list encoder entry abi
   present encoder (nativeBuildInputs encoder) inputs
   present encoder (list encoder (string encoder)) entries
+  when (schema == 2) (list encoder (string encoder) finalizers)
   where entry (NativeABI symbol name convention safety arguments result) = do
           string encoder symbol
           string encoder name
@@ -299,13 +300,27 @@ importProof encoder (ImportProof schema scope execution profile unit moduleName 
   case status of
     ImportsUnclassified reason -> tag encoder 0 >> string encoder reason
     ImportsRejected reason -> tag encoder 1 >> string encoder reason
-    ImportsVerified wordBits original associations calls -> do
+    ImportsVerified wordBits original associations calls addresses -> do
       tag encoder 2
       number encoder wordBits
       foreignArtifacts encoder original
       list encoder association associations
       list encoder (foreignCallWith encoder (inlineRep encoder)) calls
+      when (schema == 2) (list encoder address addresses)
   where
+    address (AddressAssociation binderName header symbol function convention declared normalized role callback) = do
+      qualifiedName encoder binderName
+      present encoder (string encoder) header
+      string encoder symbol
+      boolean encoder function
+      enumeration encoder convention
+      foreignType encoder declared
+      foreignType encoder normalized
+      string encoder role
+      boolean encoder (case callback of Just _ -> True; Nothing -> False)
+      case callback of
+        Nothing -> pure ()
+        Just (arguments,result) -> list encoder (string encoder) arguments >> string encoder result
     association (ImportAssociation binderName header symbol owner function convention safety declared normalized role emitted) = do
       qualifiedName encoder binderName
       present encoder (string encoder) header
