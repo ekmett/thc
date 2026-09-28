@@ -601,19 +601,19 @@ class ReusableProgramTest {
         }
     }
 
-    @Test void admissionRejectsUnconvertedOwnershipAndConflictingCarrierProofs() {
+    @Test void admissionRejectsUnconvertedOwnershipAndAddressInputs() {
         try (var context = Main.executionContext(false)) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 var foreign = module(list(binding("read", lambda(variable("x")), true)));
                 foreign.put("selectedForeignExceptionBridge", map("unit", "u", "box", "b", "project", "p"));
-                var narrow = map("id", "x", "name", "x", "type", "Int#", "lifted", false, "coercion", false,
-                    "rep", map("kind", "long", "evaluated", true, "primReps", list("Int32Rep")));
-                var conflicting = module(list(binding("read", list("lam", list(narrow), variable("x")), true)));
+                var address = map("id", "x", "name", "x", "type", "Addr#", "lifted", false, "coercion", false,
+                    "rep", map("kind", "address", "evaluated", true, "primReps", list("AddrRep")));
+                var unsupported = module(list(binding("read", list("lam", list(address), variable("x")), true)));
                 assertAll(
                     () -> assertThrows(UnsupportedCore.class, () -> Program.prepareCode(language, foreign, List.of("read"))),
-                    () -> assertThrows(UnsupportedCore.class, () -> Program.prepareCode(language, conflicting, List.of("read"))));
+                    () -> assertThrows(UnsupportedCore.class, () -> Program.prepareCode(language, unsupported, List.of("read"))));
             } finally { context.leave(); }
         }
     }
