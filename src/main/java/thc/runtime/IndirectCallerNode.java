@@ -11,7 +11,7 @@ import com.oracle.truffle.api.profiles.BranchProfile;
 public final class IndirectCallerNode extends Node {
     private final Metrics metrics;
     @Child private IndirectEntryArguments entryArguments;
-    @Child private IndirectCallNode callNode = IndirectCallNode.create();
+    @Child private IndirectCallNode callNode;
     @Child private TailCallLoop loop;
     @Child private TailCheck tailCheck;
     private final BranchProfile normalProfile, tailProfile;
@@ -20,6 +20,8 @@ public final class IndirectCallerNode extends Node {
     }
     public IndirectCallerNode(Metrics metrics, boolean coldGeneric) {
         this.metrics = metrics; entryArguments = new IndirectEntryArguments(metrics);
+        callNode = coldGeneric ? com.oracle.truffle.runtime.OptimizedIndirectCallNode.createUnprofiledExceptions()
+            : IndirectCallNode.create();
         loop = new TailCallLoop(metrics); tailCheck = new TailCheck(metrics);
         normalProfile = coldGeneric ? BranchProfile.getUncached() : BranchProfile.create();
         tailProfile = coldGeneric ? BranchProfile.getUncached() : BranchProfile.create();

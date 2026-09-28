@@ -16,10 +16,15 @@ final class Alternative extends Node {
     @CompilationFinal(dimensions = 1) private final int[] fields;
     @Child private Expr body;
     @CompilationFinal(dimensions = 2) private final int[][] vectorFields;
-    private final CountingConditionProfile matchProfile = CountingConditionProfile.create();
+    private final CountingConditionProfile matchProfile;
     Alternative(int kind, Object value, int[] fields, Expr body) { this(kind, value, fields, body, new int[0][]); }
     Alternative(int kind, Object value, int[] fields, Expr body, int[][] vectorFields) {
+        this(kind, value, fields, body, vectorFields, true);
+    }
+    Alternative(int kind, Object value, int[] fields, Expr body, int[][] vectorFields, boolean profileChoice) {
         this.kind = kind; this.value = value; this.fields = fields; this.body = body; this.vectorFields = vectorFields;
+        // A singleton still checks its match, but has no competing arm to profile.
+        matchProfile = profileChoice ? CountingConditionProfile.create() : CountingConditionProfile.getUncached();
     }
     public int getKind() { return kind; }
     public Object getValue() { return value; }

@@ -160,13 +160,13 @@ The check is also part of Gradle's `check` task.
 
 Build configuration uses Groovy, with Java build logic in `buildSrc`.
 `processMainJava` runs the pinned annotation processor with `-proc:only`,
-then all six pinned normalizers transform its generated sources in order.
+then the pinned normalizers transform its generated sources in order.
 `compileJava` consumes original and normalized sources with `-proc:none`;
 generated language-service resources are packaged separately. Test annotation
 processing remains enabled on its own pinned processor path.
 `./gradlew testJavaBuildPipeline` checks the realized task and toolchain contract.
 
-The final normalizer constructs the scalar and compact application children from
+The application normalizer constructs scalar and compact application children from
 immutable instruction operands when cached bytecode nodes are prepared. It does
 not seed generated specialization bits or invent a target observation. A cold
 compiled call uses the existing generic application algorithm; ordinary

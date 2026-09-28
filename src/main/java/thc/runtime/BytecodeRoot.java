@@ -2848,6 +2848,22 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         public static Object object(DataLayout layout, int index, DataValue value) { return layout.read(value, index); }
     }
 
+    /** Restore an immutable constructor slot without observing a DSL specialization first. */
+    @Operation
+    @ConstantOperand(type = DataLayout.class, name = "layout")
+    @ConstantOperand(type = int.class, name = "index")
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class RestoreDataScalar {
+        @Specialization public static void restore(VirtualFrame frame, DataLayout layout, int index,
+                LocalAccessor destination, DataValue value, @Bind("$bytecodeNode") BytecodeNode bytecode) {
+            if (layout.isInt(index)) destination.setInt(bytecode, frame, layout.readInt(value, index));
+            else if (layout.isLong(index)) destination.setLong(bytecode, frame, layout.readLong(value, index));
+            else if (layout.isFloat(index)) destination.setFloat(bytecode, frame, layout.readFloat(value, index));
+            else if (layout.isDouble(index)) destination.setDouble(bytecode, frame, layout.readDouble(value, index));
+            else destination.setObject(bytecode, frame, layout.read(value, index));
+        }
+    }
+
     @Operation
     @ConstantOperand(type = String.class, name = "message")
     @ConstantOperand(type = Metrics.class, name = "metrics")
