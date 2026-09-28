@@ -95,6 +95,7 @@ writeModuleRecords policy destination facts bindings catalog = do
           _ -> False
         _ -> False
       declarations = case drop 2 (factsPendingProvenance facts) of
-        Known (ImportsRecord (ImportProof _ _ _ _ _ _ (ImportsVerified _ _ imports _))) : _ -> not (null imports)
+        Known (ImportsRecord (ImportProof _ _ _ _ _ _ (ImportsVerified _ _ imports _ addresses))) : _ ->
+          not (null imports && null addresses)
         _ -> False
   writeContainerStreamedWith policy destination prepare produce

@@ -1,6 +1,9 @@
 {
   "schema": 1,
   "fixtureFreeJunit": [
+    "thc.PackageFinalizersTest",
+    "thc.runtime.PackageFinalizerTest",
+    "thc.runtime.PackagePointerCellsTest",
     "thc.runtime.CpuAffinityApiTest",
     "thc.runtime.ManagedCompactsTest",
     "thc.runtime.CompactImagesTest",

@@ -228,6 +228,22 @@ semanticTests = TestList
           ordered = nativeFactsWithFlags [("a-config",True),("z-config",False)]
       assertEqual "Cabal flag object order does not leak into typed records" (Right (ordered,[]))
         (parseModuleWithoutDebug (moduleJSON reversed []))
+  , TestLabel "typed package address and finalizer facts preserve schema-one prefixes" $ TestCase $ do
+      let ImportProof _ scope execution profile owner name (ImportsVerified wordBits productRecord imports calls _) = completeImports
+          address = AddressAssociation qualified (Known "original.h") "original_finalizer" True CApi
+            nominal nominal "representational" (Just (["AddrRep"],"void"))
+          imports2 = ImportProof 2 scope execution profile owner name
+            (ImportsVerified wordBits productRecord imports calls [address])
+          NativeLink (LinkPayload _ format linkProfile unit target component digest artifact) abi inputs entries _ = completeNativeLink
+          linked2 = NativeLink (LinkPayload 2 format linkProfile unit target component digest artifact) abi inputs entries ["adapter"]
+          facts = completeFacts {factsPendingProvenance =
+            [Missing,Known (ImportsRecord imports2),Known (ImportsRecord imports2),Missing,Missing,Missing,
+             Known (NativeLinkRecord linked2),Missing]}
+      assertEqual "new evidence survives JSON without becoming a call" (Right (facts,[]))
+        (parseModuleWithoutDebug (moduleJSON facts []))
+      withEncoded (\_ encoder -> encodeFacts encoder facts) $ \payload strings bytes -> do
+        assertEqual "callback inventory is metadata, not executable DATA" BS.empty payload
+        assertEqual "versioned address identity, type and native roots survive" (Right facts) (decodeFacts bytes strings)
   , TestLabel "native artifact conversion rejects malformed hex and unknown nested facts" $ TestCase $ do
       let original = moduleJSON completeFacts {factsPendingProvenance =
             [Missing,Missing,Missing,Missing,Missing,Known (ScalarLinkRecord completeScalarLink),Missing,Missing]} []
@@ -373,7 +389,7 @@ completeImports = ImportProof 1 "retained-static-import-products" "not-linked"
     [ImportAssociation qualified Unknown "original_fn" (Known "main") True CApi InterruptibleCall
       nominal (ForeignApplication nominal (ForeignVariable 0)) "representational"
       (EmittedCall "original_fn" (Known "main") CApi InterruptibleCall ["IntRep","void"] ["void","IntRep"])]
-    [expected,expected])
+    [expected,expected] [])
   where
     expected = ForeignCall 1 (StaticTarget "original_fn" (Known "main") True) CApi InterruptibleCall
       2 2 [longRep,tupleCold] tupleHot Unknown Missing
@@ -415,8 +431,8 @@ nativeFactsWithFlags :: [(BS.ByteString,Bool)] -> Facts
 nativeFactsWithFlags flags = nativeProvenanceFacts
   {factsPendingProvenance=map replace (factsPendingProvenance nativeProvenanceFacts)}
   where
-    replace (Known (NativeLinkRecord (NativeLink payload abi (Known (NativeBuildInputs units providers (Known dependencies) libraries unresolved bridges)) entries))) =
-      Known (NativeLinkRecord (NativeLink payload abi (Known (NativeBuildInputs units providers (Known (map dependency dependencies)) libraries unresolved bridges)) entries))
+    replace (Known (NativeLinkRecord (NativeLink payload abi (Known (NativeBuildInputs units providers (Known dependencies) libraries unresolved bridges)) entries finalizers))) =
+      Known (NativeLinkRecord (NativeLink payload abi (Known (NativeBuildInputs units providers (Known (map dependency dependencies)) libraries unresolved bridges)) entries finalizers))
     replace value = value
     dependency (NativeDependency profile unit (SourceIdentity identifier depends kind style name version _ component sourceSha cabalSha)
         registrationText digest archives products) = NativeDependency profile unit
@@ -442,7 +458,7 @@ completeNativeLink = NativeLink completeLinkPayload [NativeABI "original" "adapt
       [NativeProduct (NativePiece "/source" "api.o" "object-sha" "api.bc" "actual-target" input) "bitcode-sha"]])
     [NativeLibrary "native-libc" ["free"] "clang" "compiler-sha" ["-lc"]] ["unknown"]
     [ArgumentBridge "actual-integer-width-bridge" "actual LLVM\n" "source-sha" "input-sha" [["define caller","define callee"]]]))
-  (Known ["adapter"])
+  (Known ["adapter"]) []
   where input = CompileInput "ghc" "clang" ["-c","api.c"] (Known "c") "native-target" "actual-target"
           [("api.c","actual-source-sha"),("yaml.h","actual-header-sha")]
 

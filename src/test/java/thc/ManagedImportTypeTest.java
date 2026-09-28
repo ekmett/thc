@@ -43,6 +43,40 @@ class ManagedImportTypeTest {
                 "expectedCalls", List.of()));
     }
     private ManagedImportAdmission read(Map<?, ?> module) { return ManagedImportAdmission.read(module, true); }
+    private Map<String,Object> address() {
+        var result = tycon("IO", map("kind", "tycon", "name", with(identity("Unit"), "module", "GHC.Internal.Tuple"), "arguments", List.of()));
+        var function = with(pointerFunction(tycon("Unit")), "result", result);
+        var callbackType = map("kind", "tycon", "name", with(identity("FunPtr"), "module", "GHC.Internal.Ptr"), "arguments", list(function));
+        return map("binder", map("unit", "fixture", "module", "Imports", "occurrence", "cleanup", "namespace", "value"),
+            "header", null, "symbol", "cleanup", "isFunction", true, "convention", "ccall", "normalizationRole", "representational",
+            "declaredType", callbackType, "normalizedType", callbackType, "callback", map("arguments", list("AddrRep"), "result", "void"));
+    }
+    private Map<String,Object> withAddresses() {
+        var original = module();
+        return with(original, "staticForeignImportStubs", with((Map<?,?>) original.get("staticForeignImportStubs"), "schema", 2L, "addresses", list(address())));
+    }
+    @Test void stubsOnlyAddressProofRetainsItsExactNominalInventory() {
+        var original = withAddresses();
+        assertNotNull(read(original));
+        assertFalse(original.containsKey("staticForeignImports"));
+        assertNotNull(read((Map<?,?>) Json.parse(Json.stringify(original))));
+    }
+    private void rejectInvalidSelectedAddresses(Map<String,Object> original) {
+        var selected = (Map<?,?>) original.get("staticForeignImportStubs");
+        for (var addresses : list(null, List.of(), list("not an address"),
+                list(with(address(), "binder", with((Map<?,?>) address().get("binder"), "unit", "other"))),
+                list(with(address(), "callback", map("arguments", list("AddrRep", "AddrRep"), "result", "void"))),
+                list(with(address(), "normalizedType", tycon("Int")))))
+            assertThrows(IllegalArgumentException.class, () -> read(with(original, "staticForeignImportStubs", with(selected, "addresses", addresses))));
+    }
+    @Test void malformedStubsOnlyAddressInventoryIsRejected() {
+        rejectInvalidSelectedAddresses(withAddresses());
+    }
+    @Test void anotherImportsFieldCannotHideMalformedSelectedStubAddresses() {
+        var original = withAddresses();
+        for (var parallel : List.of(module().get("staticForeignImportStubs"), original.get("staticForeignImportStubs")))
+            rejectInvalidSelectedAddresses(with(original, "staticForeignImports", parallel));
+    }
     @Test void quantifiedPointerImportsRetainTheirOriginalTypesAndScalarAbi() {
         var original = module(); var admission = Objects.requireNonNull(read(original));
         assertSame(original, admission.getModule());

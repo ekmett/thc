@@ -253,6 +253,45 @@ def managed_registration(module):
     return ids
 
 
+def package_address_declarations(module, typ, identity):
+    """Stock typed labels alone are inert; only linked callback entries execute."""
+    proof = module.get('staticForeignImports', module.get('staticForeignImportStubs', {}))
+    if proof.get('schema') != 2: return set()
+    def require(valid, detail):
+        if not valid: raise ValueError('Invalid package address provenance: ' + detail)
+    def named(value, module_name, name, count):
+        return isinstance(value, dict) and value.get('kind') == 'tycon' and value.get('name') == dict(
+            unit='ghc-internal', module=module_name, occurrence=name, namespace='type') and len(value['arguments']) == count
+    def finalizer_type(value):
+        while value.get('kind') == 'forall': value = value['body']
+        if not named(value, 'GHC.Internal.Ptr', 'FunPtr', 1): return False
+        function = value['arguments'][0]
+        if function.get('kind') != 'function' or not named(function['argument'], 'GHC.Internal.Ptr', 'Ptr', 1): return False
+        result = function['result']
+        return named(result, 'GHC.Internal.Types', 'IO', 1) and named(result['arguments'][0], 'GHC.Internal.Tuple', 'Unit', 0)
+    entries = proof.get('addresses')
+    require(proof.get('status') == 'verified' and isinstance(entries, list) and entries, 'inventory')
+    binders, symbols = [], set()
+    for item in entries:
+        require(isinstance(item, dict) and set(item) == set(
+            'binder header symbol isFunction convention declaredType normalizedType normalizationRole callback'.split()), 'fields')
+        binder = identity(item['binder'])
+        require(binder['unit'] == module.get('unit') and binder['module'] == module.get('module') and
+            binder['namespace'] == 'value' and binder not in binders, 'binder identity')
+        binders.append(binder)
+        require(isinstance(item['symbol'], str) and re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', item['symbol']) and
+            type(item['isFunction']) is bool and item['convention'] in ('ccall', 'capi') and
+            item['normalizationRole'] == 'representational', 'declaration')
+        require(item['header'] is None or isinstance(item['header'], str) and item['header'] and
+            not any(c in item['header'] for c in '\0\n\r"\\'), 'header')
+        typ(item['declaredType']); typ(item['normalizedType'])
+        if item['callback'] is not None:
+            require(item['isFunction'] and item['callback'] == dict(arguments=['AddrRep'], result='void') and
+                finalizer_type(item['normalizedType']), 'callback ABI differs from normalized type')
+            symbols.add(item['symbol'])
+    return symbols
+
+
 def managed_import_stubs(module):
     """Admit inert stock import products, never an arbitrary native call."""
     if 'staticForeignImportStubs' not in module:
@@ -305,8 +344,8 @@ def managed_import_stubs(module):
     require(isinstance(raw, dict), 'proof record')
     verified = raw.get('status') == 'verified'
     proof = record(raw, 'schema scope execution profile unit module status ' +
-                   ('wordBits expectedForeign imports expectedCalls' if verified else 'reason'))
-    require(type(proof['schema']) is int and proof['schema'] == 1 and
+                   ('wordBits expectedForeign imports expectedCalls' + (' addresses' if raw.get('schema') == 2 else '') if verified else 'reason'))
+    require(type(proof['schema']) is int and proof['schema'] in (1, 2) and
             proof['scope'] == 'retained-static-import-products' and proof['execution'] == 'not-linked' and
             proof['profile'] == 'ghc-9.14.1-thc-only-static-c-imports-v1' and module.get('ghc') == '9.14.1' and
             proof['unit'] == module.get('unit') and proof['module'] == module.get('module'), 'schema/profile/owner')
@@ -315,6 +354,7 @@ def managed_import_stubs(module):
         require(proof['status'] in ('unclassified', 'rejected'), 'status'); text(proof['reason'])
         return False
     require(type(proof['wordBits']) is int and proof['wordBits'] == 64, 'word width')
+    package_address_declarations(module, typ, identity)
     require(exact(proof['expectedForeign'], module.get('foreign')), 'retained foreign product differs')
     foreign = record(module.get('foreign'), 'schema execution stubs files')
     require(type(foreign['schema']) is int and foreign['schema'] == 1 and foreign['execution'] == 'not-linked', 'foreign schema/execution')
@@ -455,7 +495,7 @@ def package_native_archive(module):
             record(value, 'kind index'); require(type(value['index']) is int and 0 <= value['index'] < depth, 'free type variable')
         else: require(False, 'unknown type')
     def proof_identity(proof):
-        require(type(proof['schema']) is int and proof['schema'] == 1 and proof['scope'] == 'retained-static-import-products' and
+        require(type(proof['schema']) is int and proof['schema'] in (1, 2) and proof['scope'] == 'retained-static-import-products' and
             proof['execution'] == 'not-linked' and proof['profile'] == 'ghc-9.14.1-thc-only-static-c-imports-v1' and
             proof['unit'] == module['unit'] and proof['module'] == module['module'], 'typed provenance identity')
     raw_archive = module['packageNativeArchive']
@@ -494,7 +534,9 @@ def package_native_archive(module):
     elif proof is None:
         require('foreign' not in module and 'staticForeignImportStubs' not in module, 'missing import provenance')
     else:
-        record(proof, 'schema scope execution profile unit module status wordBits expectedForeign imports expectedCalls')
+        record(proof, 'schema scope execution profile unit module status wordBits expectedForeign imports expectedCalls' +
+            (' addresses' if proof.get('schema') == 2 else ''))
+        package_address_declarations(module, typ, identity)
         proof_identity(proof)
         require(proof['status'] == 'verified' and type(proof['wordBits']) is int and proof['wordBits'] == 64, 'verified import profile')
         product = record(proof['expectedForeign'], 'schema execution stubs files')
@@ -627,10 +669,11 @@ def package_scalar_link(module, validate_archive=True):
     raw_link = module['packageNativeLink' if native else 'packageScalarLink']
     inputs = native and isinstance(raw_link, dict) and 'buildInputs' in raw_link
     partial = native and isinstance(raw_link, dict) and 'availableEntries' in raw_link
+    callbacks = native and isinstance(raw_link, dict) and raw_link.get('schema') == 2
     link = record(raw_link, 'schema format profile unit target componentSha256 bitcodeSha256 bitcodeHex abi' +
-                  (' buildInputs' if inputs else '') + (' availableEntries' if partial else ''))
+                  (' buildInputs' if inputs else '') + (' availableEntries' if partial else '') + (' finalizers' if callbacks else ''))
     if inputs: require(isinstance(link['buildInputs'], dict), 'build inputs record')
-    require(type(link['schema']) is int and link['schema'] == 1 and (link['format'] == 'llvm-bitcode' or
+    require(type(link['schema']) is int and (link['schema'] == 1 or callbacks) and (link['format'] == 'llvm-bitcode' or
             native and link['format'] == 'llvm-embedded-elf' and platform.system() == 'Linux') and
             link['profile'] == ('thc-package-c-ffi-v1' if native else 'thc-local-scalar-ccall-v1'), 'link profile')
     unit = text(link['unit'])
@@ -683,16 +726,28 @@ def package_scalar_link(module, validate_archive=True):
         require(len({shape(entry, lambda rep: 'ByteArray#' if rep == 'MutableByteArray#' else rep, False)
                      for entry in variants}) == len(variants), 'ambiguous byte-array mutability variants')
     available = native_entry_resolution(module) if partial else {entry['entry'] for entry in link['abi']}
+    finalizers = link.get('finalizers', [])
+    if callbacks:
+        require(not partial and isinstance(finalizers, list) and finalizers and
+                all(isinstance(entry, str) for entry in finalizers) and len(finalizers) == len(set(finalizers)), 'finalizer inventory')
+        for name in finalizers:
+            selected = [entry for entry in abi.values() if entry['entry'] == name]
+            require(len(selected) == 1, 'finalizer missing from ABI')
+            entry = selected[0]
+            require(entry['arguments'] == ['AddrRep'] and entry['result'] == 'void' and
+                entry['convention'] == 'ccall' and entry['safety'] == 'unsafe' and
+                entry['symbol'] not in ('free', 'libdwPoolRelease', 'backtraceFree'), 'finalizer ABI')
     selected_link = dict(link, abi=[entry for entry in link['abi'] if entry['entry'] in available]) if partial else link
     if native and 'staticForeignImports' not in module:
         require('foreign' not in module and 'staticForeignImportStubs' not in module,
                 'foreign products lack import provenance')
         return selected_link, set()
     proof = record(module.get('staticForeignImports'),
-        'schema scope execution profile unit module status wordBits expectedForeign imports expectedCalls')
+        'schema scope execution profile unit module status wordBits expectedForeign imports expectedCalls' +
+        (' addresses' if module.get('staticForeignImports', {}).get('schema') == 2 else ''))
     if native and 'staticForeignImportStubs' in module:
         require(exact(module['staticForeignImportStubs'], proof), 'retained CAPI import provenance differs')
-    require(type(proof['schema']) is int and proof['schema'] == 1 and proof['scope'] == 'retained-static-import-products' and
+    require(type(proof['schema']) is int and proof['schema'] in (1, 2) and proof['scope'] == 'retained-static-import-products' and
         proof['execution'] == 'not-linked' and proof['profile'] == 'ghc-9.14.1-thc-only-static-c-imports-v1' and
         proof['unit'] == unit and proof['module'] == module.get('module') and proof['status'] == 'verified' and
         type(proof['wordBits']) is int and proof['wordBits'] == 64, 'typed import profile/owner')
@@ -706,7 +761,8 @@ def package_scalar_link(module, validate_archive=True):
                 stub['initializers'] == [] and stub['finalizers'] == [], 'nonempty foreign products')
         require(not native or 'foreign' in module or stub['source'] == '', 'missing retained C stubs')
     require(isinstance(proof['imports'], list) and (native or proof['imports']), 'empty import inventory')
-    binders, proved = [], set()
+    address_symbols = package_address_declarations(module, typ, identity)
+    binders, proved = [], {entry['entry'] for entry in link['abi'] if entry['entry'] in finalizers and entry['symbol'] in address_symbols}
     for item in proof['imports']:
         record(item, 'binder header symbol unit isFunction convention safety declaredType normalizedType normalizationRole emitted')
         if item['emitted'] in module.get('packageNativeArchive', {}).get('unsupportedImports', []): continue

@@ -124,6 +124,14 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
         if (admission == null) { sources.verifyModule(module); admission = new CoreModuleAdmission(metadata(module), this::binding); admissions.put(module, admission); }
         return admission;
     }
+    private ForeignBitcode capiProvenance(String unit, String name) {
+        var candidates = new ArrayList<CoreUnitDirectory.ModuleRecord>();
+        for (var module : directory.getModules()) if (module.unit().equals(unit) && module.name().equals(name)) candidates.add(module);
+        var loose = new ArrayList<Map<String,Object>>();
+        for (var module : consumers) if (Objects.equals(module.get("unit"), unit) && Objects.equals(module.get("module"), name)) loose.add(module);
+        require(candidates.size() + loose.size() == 1, "Missing or ambiguous CAPI declaration: " + unit + ":" + name);
+        return (loose.isEmpty() ? admission(candidates.getFirst()) : consumerAdmission(loose.getFirst())).getForeignLink();
+    }
     private List<PackageScalarAdmission> packageProvenance(String unit) {
         var provenance = packageProvenance.get(unit);
         if (provenance == null) {
@@ -131,7 +139,7 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
             for (var module : directory.getModules()) if (module.unit().equals(unit) && module.packageScalarDeclarations()) {
                 var link = admission(module).getPackageLink(); if (link != null) provenance.add(link);
             }
-            for (var module : consumers) if (Objects.equals(module.get("unit"), unit) && module.get("staticForeignImports") instanceof Map<?,?> proof && proof.get("imports") instanceof List<?> imports && !imports.isEmpty()) {
+            for (var module : consumers) if (Objects.equals(module.get("unit"), unit) && PackageFinalizers.hasDeclarations(module)) {
                 var link = consumerAdmission(module).getPackageLink(); if (link != null) provenance.add(link);
             }
             packageProvenance.put(unit, provenance);
@@ -156,12 +164,15 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
         else { var module = directory.owner(id); if (module == null) throw new IllegalStateException("Missing Core module owner: " + id); admitted = admission(module); }
         var merger = new CoreModules.Merger(availableModules); merger.addSelected(admitted, List.of(binding));
         if (admitted.getPackageLink() != null) packageProvenance((String) admitted.getModule().get("unit")).forEach(merger::addPackageProvenance);
-        var linked = new LinkedHashMap<>(CoreModules.demanded(merger.finish(), id, demand, this::bridge));
+        var provenance = CoreCapiProvenance.supplement(merger.finish(), binding, this::capiProvenance);
+        var linked = new LinkedHashMap<>(CoreModules.demanded(provenance, id, demand, this::bridge));
         linked.put("instrument", !Objects.equals(input.get("instrument"), false)); linked.put("diagnosticUnsupported", Objects.equals(input.get("diagnosticUnsupported"), true));
         linked.put("sourceNotesEnabled", !Objects.equals(input.get("sourceNotesEnabled"), false)); linked.put("demandBindings", demand); linked.put("captureDelimited", captureDelimited);
         if (directory.getTargetLayout() != null) linked.put("targetLayout", directory.getTargetLayout());
+        // Another binding may demand a new original CAPI owner. The context
+        // registry checks exact identity and links the component only once.
+        for (var link : (List<ForeignBitcode>) linked.get("foreignLinks")) owner.cbits().link(link);
         if (linkedAdmissions.add(admitted)) {
-            for (var link : (List<ForeignBitcode>) linked.get("foreignLinks")) owner.cbits().link(link);
             for (var link : (List<PackageScalarLink>) linked.get("packageScalarLinks")) owner.getPackageCbits().link(link);
         }
         return backend.equals("ast") ? new Program(language, linked, async, false) : new BytecodeProgram(language, linked, async);

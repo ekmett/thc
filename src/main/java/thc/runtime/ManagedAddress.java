@@ -627,8 +627,8 @@ public final class ManagedAddress {
             synchronized (owner) {
                 requireRange(0, owner.getAddressWidth(), true);
                 if (offset % owner.getAddressWidth() != 0) throw fault("Misaligned atomic pointer Addr#");
-                old = owner.readAddressByteOffset(offset);
             }
+            old = owner.readAddressByteOffset(offset);
             // Do not hold the cell owner across referent lifetime/registry locks.
             desired.sameLocation(desired);
             if (expected != null) expected.sameLocation(expected);
@@ -636,7 +636,7 @@ public final class ManagedAddress {
             boolean matches = expected == null || old.sameLocation(expected);
             synchronized (owner) {
                 requireRange(0, owner.getAddressWidth(), true);
-                if (owner.readAddressByteOffset(offset) == old) {
+                if (owner.knownAddressByteOffset(offset) == old) {
                     if (matches) owner.writeAddressByteOffset(offset, desired);
                     return old;
                 }

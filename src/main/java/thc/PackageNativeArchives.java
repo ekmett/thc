@@ -111,7 +111,9 @@ public final class PackageNativeArchives {
             check(Objects.equals(p.get("status"), "unclassified") && Objects.equals(p.get("reason"), unknown), "unclassified provenance");
         } else if (proof == null) check(!module.containsKey("foreign") && !module.containsKey("staticForeignImportStubs"), "missing import provenance");
         else {
-            var p = record(proof, "schema scope execution profile unit module status wordBits expectedForeign imports expectedCalls"); proofIdentity(p, module);
+            boolean addressProof = proof instanceof Map<?,?> m && version(m.get("schema"), 2);
+            var p = record(proof, "schema scope execution profile unit module status wordBits expectedForeign imports expectedCalls" + (addressProof ? " addresses" : "")); proofIdentity(p, module);
+            PackageFinalizers.declarations(module);
             check(Objects.equals(p.get("status"), "verified") && version(p.get("wordBits"), 64), "verified import profile");
             var product = record(p.get("expectedForeign"), "schema execution stubs files");
             check(version(product.get("schema"), 1) && Objects.equals(product.get("execution"), "not-linked") && Objects.equals(product.get("files"), List.of()), "foreign product");
@@ -181,6 +183,6 @@ public final class PackageNativeArchives {
         return new PackageNativeArchive(unit + ":" + module.get("module") + " has archive-only native obligations" + " (unsupported=" + expected.size() + ", conflicting=" + conflictSymbols + ", unclassified=" + unknown + ", unresolved=" + unresolved + ")", unknown != null || !unresolved.isEmpty() && available == null, unit, expected, unavailable);
     }
     private static void proofIdentity(Map<?,?> proof, Map<?,?> module) {
-        check(version(proof.get("schema"), 1) && Objects.equals(proof.get("scope"), "retained-static-import-products") && Objects.equals(proof.get("execution"), "not-linked") && Objects.equals(proof.get("profile"), "ghc-9.14.1-thc-only-static-c-imports-v1") && Objects.equals(proof.get("unit"), module.get("unit")) && Objects.equals(proof.get("module"), module.get("module")), "typed provenance identity");
+        check((version(proof.get("schema"), 1) || version(proof.get("schema"), 2)) && Objects.equals(proof.get("scope"), "retained-static-import-products") && Objects.equals(proof.get("execution"), "not-linked") && Objects.equals(proof.get("profile"), "ghc-9.14.1-thc-only-static-c-imports-v1") && Objects.equals(proof.get("unit"), module.get("unit")) && Objects.equals(proof.get("module"), module.get("module")), "typed provenance identity");
     }
 }

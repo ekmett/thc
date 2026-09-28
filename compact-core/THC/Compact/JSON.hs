@@ -439,9 +439,11 @@ hexBytes = withText "original artifact hex" $ \value -> do
 
 nativeLink :: Value -> Parser NativeLink
 nativeLink = withObject "native linked artifact" $ \fields -> do
-  checked fields (linkPayloadKeys ++ ["abi","buildInputs","availableEntries"])
+  schema <- fields .: "schema" :: Parser Word64
+  checked fields (linkPayloadKeys ++ ["abi","buildInputs","availableEntries"] ++ ["finalizers" | schema == 2])
   NativeLink <$> linkPayload fields <*> (fields .: "abi" >>= array entry)
     <*> optional fields "buildInputs" nativeBuildInputs <*> optional fields "availableEntries" (array bytes)
+    <*> (if schema == 2 then fields .: "finalizers" >>= array bytes else pure [])
   where entry = withObject "native linked ABI" $ \fields -> do
           checked fields ["symbol","entry","convention","safety","arguments","result"]
           NativeABI <$> bytesAt fields "symbol" <*> bytesAt fields "entry"
@@ -548,18 +550,32 @@ foreignType = withObject "nominal foreign type" $ \fields -> do
 
 importProof :: Value -> Parser ImportProof
 importProof = withObject "original import proof" $ \fields -> do
+  schema <- fields .: "schema" :: Parser Word64
   status <- fields .: "status" :: Parser Text.Text
   let common = ["schema","scope","execution","profile","unit","module","status"]
   details <- case status of
     "unclassified" -> checked fields (common ++ ["reason"]) >> (ImportsUnclassified <$> bytesAt fields "reason")
     "rejected" -> checked fields (common ++ ["reason"]) >> (ImportsRejected <$> bytesAt fields "reason")
-    "verified" -> checked fields (common ++ ["wordBits","expectedForeign","imports","expectedCalls"]) >>
+    "verified" -> checked fields (common ++ ["wordBits","expectedForeign","imports","expectedCalls"] ++ ["addresses" | schema == 2]) >>
       (ImportsVerified <$> fields .: "wordBits" <*> (fields .: "expectedForeign" >>= foreignArtifacts)
-        <*> (fields .: "imports" >>= array association) <*> (fields .: "expectedCalls" >>= array foreignCall))
+        <*> (fields .: "imports" >>= array association) <*> (fields .: "expectedCalls" >>= array foreignCall)
+        <*> (if schema == 2 then fields .: "addresses" >>= array address else pure []))
     _ -> fail "Unknown original import proof status"
   ImportProof <$> fields .: "schema" <*> bytesAt fields "scope" <*> bytesAt fields "execution"
     <*> bytesAt fields "profile" <*> bytesAt fields "unit" <*> bytesAt fields "module" <*> pure details
   where
+    address = withObject "original address association" $ \fields -> do
+      checked fields ["binder","header","symbol","isFunction","convention","declaredType","normalizedType","normalizationRole","callback"]
+      callback <- fields .: "callback"
+      typed <- case callback of
+        Null -> pure Nothing
+        value -> Just <$> withObject "typed address callback" (\signature -> do
+          checked signature ["arguments","result"]
+          (,) <$> (signature .: "arguments" >>= array bytes) <*> bytesAt signature "result") value
+      AddressAssociation <$> (fields .: "binder" >>= qualifiedName) <*> optional fields "header" bytes
+        <*> bytesAt fields "symbol" <*> fields .: "isFunction" <*> (fields .: "convention" >>= parseConvention)
+        <*> (fields .: "declaredType" >>= foreignType) <*> (fields .: "normalizedType" >>= foreignType)
+        <*> bytesAt fields "normalizationRole" <*> pure typed
     association = withObject "original import association" $ \fields -> do
       checked fields ["binder","header","symbol","unit","isFunction","convention","safety",
         "declaredType","normalizedType","normalizationRole","emitted"]

@@ -72,10 +72,11 @@ public final class PackageScalarLinks {
         check((nativeLink || !module.containsKey("foreign")) && !module.containsKey("foreignLink") && (nativeLink || !module.containsKey("staticForeignImportStubs")) && !module.containsKey("staticForeignExports") && !module.containsKey("staticForeignExportRegistration"), "mixed foreign obligations");
         boolean inputs = nativeLink && raw instanceof Map<?,?> m && m.containsKey("buildInputs");
         boolean partial = nativeLink && raw instanceof Map<?,?> m && m.containsKey("availableEntries");
-        var fields = record(raw, "schema format profile unit target componentSha256 bitcodeSha256 bitcodeHex abi" + (inputs ? " buildInputs" : "") + (partial ? " availableEntries" : ""));
+        boolean callbacks = nativeLink && raw instanceof Map<?,?> m && version(m.get("schema"), 2);
+        var fields = record(raw, "schema format profile unit target componentSha256 bitcodeSha256 bitcodeHex abi" + (inputs ? " buildInputs" : "") + (partial ? " availableEntries" : "") + (callbacks ? " finalizers" : ""));
         if (inputs) check(fields.get("buildInputs") instanceof Map<?,?>, "build inputs record");
         String format = text(fields.get("format"));
-        check(version(fields.get("schema"), 1) && (format.equals("llvm-bitcode") || nativeLink && format.equals("llvm-embedded-elf") && System.getProperty("os.name").equals("Linux")) && Objects.equals(fields.get("profile"), nativeLink ? "thc-package-c-ffi-v1" : "thc-local-scalar-ccall-v1"), "link profile");
+        check((version(fields.get("schema"), 1) || callbacks) && (format.equals("llvm-bitcode") || nativeLink && format.equals("llvm-embedded-elf") && System.getProperty("os.name").equals("Linux")) && Objects.equals(fields.get("profile"), nativeLink ? "thc-package-c-ffi-v1" : "thc-local-scalar-ccall-v1"), "link profile");
         String unit = text(fields.get("unit")); check(unit.equals(module.get("unit")), "component owner");
         String target = text(fields.get("target")); target(target);
         String componentHash = text(fields.get("componentSha256")), bitcodeHash = text(fields.get("bitcodeSha256"));
@@ -147,16 +148,19 @@ public final class PackageScalarLinks {
             check(mutabilityVariants.size() == variants.size(), "ambiguous byte-array mutability variants");
         }
         var available = partial ? PackageNativeArchives.available(module) : null;
+        var finalizers = PackageFinalizers.entries(fields, abi);
+        check(finalizers.isEmpty() || !partial, "partial finalizer archive");
         var selectedAbi = new ArrayList<PackageScalarSignature>();
         for (var item : abi) if (available == null || available.contains(item.entry())) selectedAbi.add(item);
-        var link = new PackageScalarLink(unit, target, componentHash, bitcodeHash, bytes, Collections.unmodifiableList(selectedAbi), format);
+        var link = new PackageScalarLink(unit, target, componentHash, bitcodeHash, bytes, Collections.unmodifiableList(selectedAbi), format, finalizers);
         if (nativeLink && !module.containsKey("staticForeignImports")) {
             check(!module.containsKey("foreign") && !module.containsKey("staticForeignImportStubs"), "foreign products lack import provenance");
             return new PackageScalarAdmission(link, Set.of());
         }
-        var proof = record(module.get("staticForeignImports"), "schema scope execution profile unit module status wordBits expectedForeign imports expectedCalls");
+        boolean addressProof = module.get("staticForeignImports") instanceof Map<?,?> m && version(m.get("schema"), 2);
+        var proof = record(module.get("staticForeignImports"), "schema scope execution profile unit module status wordBits expectedForeign imports expectedCalls" + (addressProof ? " addresses" : ""));
         if (nativeLink && module.containsKey("staticForeignImportStubs")) check(Objects.equals(module.get("staticForeignImportStubs"), proof), "retained CAPI import provenance differs");
-        check(version(proof.get("schema"), 1) && Objects.equals(proof.get("scope"), "retained-static-import-products") && Objects.equals(proof.get("execution"), "not-linked") && Objects.equals(proof.get("profile"), "ghc-9.14.1-thc-only-static-c-imports-v1") && Objects.equals(proof.get("unit"), unit) && Objects.equals(proof.get("module"), module.get("module")) && Objects.equals(proof.get("status"), "verified") && version(proof.get("wordBits"), 64), "typed import profile/owner");
+        check((version(proof.get("schema"), 1) || addressProof) && Objects.equals(proof.get("scope"), "retained-static-import-products") && Objects.equals(proof.get("execution"), "not-linked") && Objects.equals(proof.get("profile"), "ghc-9.14.1-thc-only-static-c-imports-v1") && Objects.equals(proof.get("unit"), unit) && Objects.equals(proof.get("module"), module.get("module")) && Objects.equals(proof.get("status"), "verified") && version(proof.get("wordBits"), 64), "typed import profile/owner");
         var product = record(proof.get("expectedForeign"), "schema execution stubs files");
         check(version(product.get("schema"), 1) && Objects.equals(product.get("execution"), "not-linked") && Objects.equals(product.get("files"), List.of()), "foreign product");
         if (nativeLink && module.containsKey("foreign")) check(product.equals(module.get("foreign")), "retained C stubs differ");
@@ -167,6 +171,7 @@ public final class PackageScalarLinks {
         }
         var imports = list(proof.get("imports")); check(nativeLink || !imports.isEmpty(), "empty import inventory");
         var binders = new HashSet<Map<?,?>>(); var proved = new HashSet<String>();
+        proved.addAll(PackageFinalizers.proved(module, link));
         for (Object value : imports) {
             var item = record(value, "binder header symbol unit isFunction convention safety declaredType normalizedType normalizationRole emitted");
             if (PackageNativeArchives.excluded(module).contains(item.get("emitted"))) continue;

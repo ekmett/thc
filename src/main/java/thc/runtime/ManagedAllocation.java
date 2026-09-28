@@ -19,6 +19,7 @@ public final class ManagedAllocation {
     private final boolean writable, staticImage;
     private final int pointerBytes;
     private Map<Integer, ManagedAddress> pointers;
+    private PackageScalarFunction nativePointerProvenance;
     private boolean exposedToNative, exposedAsRawBytes;
     private volatile boolean pointerCapable;
     private volatile int logicalSize;
@@ -68,6 +69,56 @@ public final class ManagedAllocation {
     private Map<Integer, ManagedAddress> cells() {
         if (pointers == null) pointers = new LinkedHashMap<>();
         return pointers;
+    }
+    synchronized Map<Integer, ManagedAddress> pointerSnapshot() {
+        return pointers == null ? Map.of() : new LinkedHashMap<>(pointers);
+    }
+    synchronized void requirePointerSnapshot(Map<Integer, ManagedAddress> expected, long size, PackageScalarFunction entry) {
+        if (!isPinned() || pointerBytes != ValueLayout.ADDRESS.byteSize())
+            throw fault("Package pointer cells require native pinned storage and host pointer width");
+        if (nativePointerProvenance != null) {
+            PackageFinalizerRegistry.requireCurrent(nativePointerProvenance);
+            if (nativePointerProvenance.getOwner() != entry.getOwner())
+                throw fault("Package pointer cells belong to another context");
+        }
+        if (getSize() != size || !expected.equals(pointers == null ? Map.of() : pointers))
+            throw fault("Package pointer cells changed during native preflight");
+    }
+    /** Only the package boundary materializes already validated pointer-cell encodings. */
+    synchronized void materializePointerCells(Map<Integer, Long> values) {
+        for (var cell : values.entrySet())
+            segment.set(ValueLayout.JAVA_LONG_UNALIGNED, cell.getKey(), cell.getValue());
+    }
+    synchronized Map<Integer, Long> nativePointerValues(Map<Integer, ManagedAddress> expected) {
+        var result = new LinkedHashMap<Integer, Long>();
+        for (int offset : expected.keySet())
+            result.put(offset, segment.get(ValueLayout.JAVA_LONG_UNALIGNED, offset));
+        return result;
+    }
+    synchronized void reconcilePointerCells(Map<Integer, ManagedAddress> before, Map<Integer, Long> nativeValues,
+            Map<Integer, ManagedAddress> after, PackageScalarFunction entry) {
+        nativePointerProvenance = entry;
+        for (var cell : after.entrySet()) {
+            int offset = cell.getKey();
+            // Registry recovery happens outside this monitor. A later guest write wins.
+            if (pointers != null && pointers.get(offset) == before.get(offset)
+                    && offset <= getSize() - pointerBytes
+                    && segment.get(ValueLayout.JAVA_LONG_UNALIGNED, offset) == nativeValues.get(offset))
+                pointers.put(offset, cell.getValue());
+        }
+    }
+    static <T> T withPointerLocks(java.util.List<ManagedAllocation> owners, Supplier<T> action) {
+        var ordered = new java.util.ArrayList<>(owners);
+        ordered.sort(java.util.Comparator.comparingInt(System::identityHashCode));
+        boolean collision = false;
+        for (int i = 1; i < ordered.size(); i++)
+            if (System.identityHashCode(ordered.get(i - 1)) == System.identityHashCode(ordered.get(i))) collision = true;
+        if (collision) synchronized (COPY_TIE_LOCK) { return pointerLock(ordered, 0, action); }
+        return pointerLock(ordered, 0, action);
+    }
+    private static <T> T pointerLock(java.util.List<ManagedAllocation> owners, int index, Supplier<T> action) {
+        if (index == owners.size()) return action.get();
+        synchronized (owners.get(index)) { return pointerLock(owners, index + 1, action); }
     }
     private int range(long offset, long count) {
         if (offset < 0 || count < 0 || offset > getSize() || count > getSize() - offset)
@@ -145,6 +196,7 @@ public final class ManagedAllocation {
     }
     public synchronized void requireAddressCell(long offset) {
         mutable();
+        if (nativePointerProvenance != null) PackageFinalizerRegistry.requireCurrent(nativePointerProvenance);
         if (exposedToNative || exposedAsRawBytes) throw fault("Cannot store a managed pointer in a raw-exposed array");
         range(offset, pointerBytes);
     }
@@ -153,11 +205,39 @@ public final class ManagedAllocation {
         if (writable) mutable();
         if (intersectsPointer(start, (int) count)) throw fault("Native byte transport overlaps a managed pointer cell");
     }
-    @TruffleBoundary public synchronized ManagedAddress readAddressByteOffset(long offset) {
+    @TruffleBoundary public ManagedAddress readAddressByteOffset(long offset) {
+        while (true) {
+            PackageScalarFunction provenance;
+            long bits;
+            int start;
+            synchronized (this) {
+                start = range(offset, pointerBytes);
+                provenance = nativePointerProvenance;
+                if (provenance != null) PackageFinalizerRegistry.requireCurrent(provenance);
+                var value = pointers == null ? null : pointers.get(start);
+                if (value != null) return value;
+                if (provenance == null || intersectsPointer(start, pointerBytes))
+                    throw fault("No managed pointer cell at this address");
+                bits = segment.get(ValueLayout.JAVA_LONG_UNALIGNED, start);
+            }
+            // Native pointer recovery can take registry/lifetime locks, never this monitor.
+            var recovered = PackagePointerCells.recover(provenance, bits);
+            synchronized (this) {
+                range(offset, pointerBytes);
+                var value = pointers == null ? null : pointers.get(start);
+                if (value != null) return value;
+                if (nativePointerProvenance != provenance || intersectsPointer(start, pointerBytes)
+                        || segment.get(ValueLayout.JAVA_LONG_UNALIGNED, start) != bits) continue;
+                pointerCapable = true;
+                cells().put(start, recovered);
+                return recovered;
+            }
+        }
+    }
+    /** Atomic pointer CAS already resolved the old value outside its owner monitor. */
+    synchronized ManagedAddress knownAddressByteOffset(long offset) {
         int start = range(offset, pointerBytes);
-        var value = pointers == null ? null : pointers.get(start);
-        if (value == null) throw fault("No managed pointer cell at this address");
-        return value;
+        return pointers == null ? null : pointers.get(start);
     }
     /** Package-only synchronous accesses: the caller holds this monitor through the final load/store. */
     MemorySegment elementSegment(long index, int width, boolean writable) {

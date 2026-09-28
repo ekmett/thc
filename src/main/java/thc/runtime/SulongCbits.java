@@ -147,13 +147,20 @@ public final class SulongCbits {
         } catch (Exception failure) { throw rethrow(failure); }
     }
     public ManagedAddress finalizerLabel(String symbol) {
-        var function = symbol.equals("free") ? ownedFree : await(finalizerTask).get(symbol);
+        var function = symbol.equals("free") ? ownedFree :
+            symbol.equals("libdwPoolRelease") || symbol.equals("backtraceFree") ? await(finalizerTask).get(symbol) :
+            Language.currentState(null).getPackageCbits().finalizer(symbol);
         if (function == null) throw fault("Unsupported original C function label: " + symbol);
         return ManagedAddress.fromCFinalizer(function);
     }
     public void invokeFinalizer(CFinalizerFunction function, ManagedAddress address) {
         function.requireOwner(this);
         if (Language.currentState(null).cbits() != this) throw fault("C finalizer belongs to another THC context");
+        if (function.getPackageFunction() != null) {
+            try { PackageFinalizerRegistry.invoke(function.getPackageFunction(), address); }
+            catch (Exception failure) { throw rethrow(failure); }
+            return;
+        }
         if (function.getSymbol().equals("free")) { Language.currentState(null).getNativeAllocations().free(address); return; }
         if (windows) {
             var threads = Language.currentState(null).getThreads();

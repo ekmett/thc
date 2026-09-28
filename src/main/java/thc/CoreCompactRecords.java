@@ -400,6 +400,15 @@ public final class CoreCompactRecords {
                 return entry;
             }));
             result.put("expectedCalls", list(cursor, () -> foreign(cursor, true)));
+            if (Objects.equals(result.get("schema"), 2L)) result.put("addresses", list(cursor, () -> {
+                var entry = map("binder", qualifiedName(cursor));
+                field(cursor, entry, "header", () -> text(cursor)); entry.put("symbol", text(cursor));
+                entry.put("isFunction", cursor.readBoolean()); entry.put("convention", convention(cursor));
+                entry.put("declaredType", foreignType(cursor)); entry.put("normalizedType", foreignType(cursor));
+                entry.put("normalizationRole", text(cursor));
+                entry.put("callback", cursor.readBoolean() ? map("arguments", texts(cursor), "result", text(cursor)) : null);
+                return entry;
+            }));
         }
         return result;
     }
@@ -453,6 +462,7 @@ public final class CoreCompactRecords {
             entry.put("arguments", texts(cursor)); entry.put("result", text(cursor)); return entry;
         }));
         field(cursor, result, "buildInputs", () -> nativeBuildInputs(cursor)); field(cursor, result, "availableEntries", () -> texts(cursor));
+        if (Objects.equals(result.get("schema"), 2L)) result.put("finalizers", texts(cursor));
         return result;
     }
     private Map<String,Object> compileInput(CoreCompactCursor cursor) throws Throwable {
