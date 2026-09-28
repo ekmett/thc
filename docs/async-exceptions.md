@@ -243,18 +243,16 @@ for current restrictions, and [scheduling](thread-scheduling.md) and
 tuple destination as ordinary calls. Their outer result remains exactly
 `(# State# RealWorld, result #)` even when `result` is an empty or nested tuple,
 a sum, or a vector. Known zero-width layouts are not unknown representations.
-Supported scalar carriers include all ten integral PrimReps, Float, Double,
-Addr and concrete boxed levities; aggregate/vector support is inherited from
-the generic transport, not a second exception-specific whitelist. Unknown
-boxed levity still rejects. Generic sum alternatives containing addresses,
-nested sums or vectors remain outside this checkpoint; vector species remain
-limited to the [implemented families](simd-families.md).
+Result carriers inherit the current generic [tuple](tuple-results.md),
+[sum](sum-results.md) and [vector](simd.md) layouts, including a known-pointer
+`BoxedRep Nothing` result without a WHNF guarantee. Unresolved RuntimeRep
+shapes still reject.
 
-The exception payload is a separate parameter. The pinned `raiseIO#` signature
-permits lifted or unlifted boxed payloads, not unboxed scalar payloads. The
-payload's actual levity determines its argument flag. Lifted payloads are not
-forced merely by raising them, and boxed-unlifted references pass unchanged
-to the handler. Action and handler functions remain lifted closures.
+The exception payload is a separate parameter. THC currently requires known
+lifted or unlifted boxed payloads; unknown-levity and unboxed scalar payloads
+reject. The payload's actual levity determines its argument flag. Lifted
+payloads are not forced merely by raising them, and boxed-unlifted references
+pass unchanged to the handler. Action and handler functions remain lifted closures.
 
 `ExceptionResultLayoutsAudit.hs` retains concrete original Core for narrow and
 64-bit integers, Float/Double, zero-width/nested tuples, a mixed sum, Int32X4#,

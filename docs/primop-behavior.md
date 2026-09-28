@@ -99,9 +99,9 @@ still apply.
 | `catchSTM#` | Catches synchronous Haskell exceptions with nested rollback. Async delivery aborts nested state and continues outward without invoking this handler. Explicit checkpoint/delimited capture remains unsupported. |
 | `readTVar#` | Validated reads belong to the current live attempt. Internal stack continuations retain its association, not a copy of the log; external interruption retires it. Explicit checkpoint/delimited capture remains unsupported. |
 | `writeTVar#` | Writes remain private until atomic commit and are discarded on async abort. Explicit checkpoint/delimited capture remains unsupported. |
-| `raiseDivZero#` | Raises the original GHC exception closure for scalar and concrete tuple bottom results; direct vector and unboxed-sum results are rejected. |
-| `raiseOverflow#` | Same result-shape restriction, with the original overflow exception. |
-| `raiseUnderflow#` | Same result-shape restriction, with the original underflow exception. |
+| `raiseDivZero#` | Raises the original GHC exception closure lazily, with no raiser-specific result restriction. Supported vector, unboxed-sum and nested-tuple bottom results use the generic layouts. Requires one exact unlifted empty-tuple operand. |
+| `raiseOverflow#` | Same bottom-result behavior, with the original overflow exception. |
+| `raiseUnderflow#` | Same bottom-result behavior, with the original underflow exception. |
 
 Do not apply the transaction-frame restriction to `newTVar#` or `readTVarIO#`:
 they do not require such a frame. The absence of GC-driven deadlock exceptions
@@ -109,7 +109,7 @@ is separate from functioning MVar handoff and STM read-set wakeups.
 
 The [concrete exception-layout controls](async-exceptions.md#concrete-exception-result-layouts)
 distinguish THC's typed-result semantics from GHC's narrower native continuation
-ABI and list remaining generic sum/vector transport limits.
+ABI and link to the current generic result-layout support.
 
 Details: [asynchronous exceptions](async-exceptions.md), [MVars](managed-mvars.md),
 [STM](stm.md), [arithmetic exception validation](../src/main/java/thc/runtime/CoreArithmeticExceptions.java)
