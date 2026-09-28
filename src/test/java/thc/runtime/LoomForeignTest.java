@@ -293,6 +293,134 @@ public class LoomForeignTest {
     @Test public void closingCallbackContextWaitsForItsEntryButDoesNotJoinTheForeignOrigin() throws Throwable {
         crossContextCallback(true);
     }
+    @Test public void pinnedSameContextCallbackPollHandsTheHecToAQueuedSibling() throws Throwable { pollingCallback(true, true); }
+    @Test public void pinnedCrossContextCallbackPollHandsTheHecToAQueuedSibling() throws Throwable { pollingCallback(false, true); }
+    @Test public void platformOriginCallbackPollHandsTheHecToAQueuedSibling() throws Throwable { pollingCallback(false, false); }
+    private void pollingCallback(boolean sameContext, boolean virtualOrigin) throws Throwable {
+        try (var origin = virtualOrigin ? context() : Context.newBuilder("thc").allowCreateThread(true).allowNativeAccess(true).build();
+             var arena = Arena.ofShared()) {
+            var destination = sameContext ? origin : context();
+            try {
+                var invoke = callbackInvoker(arena);
+                var entered = new CompletableFuture<Void>(); var produced = new java.util.concurrent.atomic.AtomicBoolean();
+                var failure = new AtomicReference<Throwable>();
+                destination.initialize("thc"); destination.enter();
+                Language.State destinationState; Task<Long> producer;
+                try {
+                    destinationState = Language.currentState(); destinationState.getThreads().setCapabilityCount(1);
+                    producer = task(destinationState, () -> { produced.set(true); return 1L; });
+                } finally { destination.leave(); }
+                origin.initialize("thc"); origin.enter();
+                try {
+                    var source = Language.currentState(); source.getThreads().setCapabilityCount(1);
+                    var caller = task(source, () -> {
+                        var javaThread = Thread.currentThread(); var sourceIdentity = source.getThreads().currentIdentity();
+                        try {
+                            long nativeThread = NativeGate.self(), nativeTls = NativeGate.tls();
+                            Runnable callback = () -> {
+                                destination.enter();
+                                try {
+                                    var threads = destinationState.getThreads(); threads.enterCurrent();
+                                    try {
+                                        var identity = threads.currentIdentity(); entered.complete(null);
+                                        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+                                        while (!produced.get() && System.nanoTime() < deadline) assertNull(GuestThreads.pollCurrent(null, false));
+                                        assertTrue(produced.get(), "native callback polling must admit its queued sole-HEC sibling");
+                                        assertSame(identity, threads.currentIdentity()); assertSame(javaThread, Thread.currentThread());
+                                        assertEquals(nativeThread, NativeGate.self()); assertEquals(nativeTls, NativeGate.tls());
+                                        assertEquals(MaskingState.UNMASKED, destinationState.getMaskingState().get());
+                                    } finally { threads.leaveCurrent(); }
+                                } catch (Throwable problem) { failure.set(problem); entered.completeExceptionally(problem); }
+                                finally { destination.leave(); }
+                            };
+                            var target = MethodHandles.lookup().findVirtual(Runnable.class, "run", MethodType.methodType(void.class)).bindTo(callback);
+                            var stub = Linker.nativeLinker().upcallStub(target, FunctionDescriptor.ofVoid(), arena);
+                            var permission = source.getThreads().enterForeign(ForeignSafety.SAFE);
+                            try { invoke.invokeExact(stub); } finally { source.getThreads().leaveForeign(permission); }
+                            if (failure.get() != null) throw new AssertionError(failure.get());
+                            assertSame(javaThread, Thread.currentThread()); assertSame(sourceIdentity, source.getThreads().currentIdentity());
+                            assertEquals(nativeThread, NativeGate.self()); assertEquals(nativeTls, NativeGate.tls()); return 1L;
+                        } catch (Throwable problem) { throw new AssertionError(problem); }
+                    });
+                    source.getThreads().startThread(caller.thread()); await(entered);
+                    destinationState.getThreads().startThread(producer.thread());
+                    assertEquals(1L, await(caller.result())); assertEquals(1L, await(producer.result()));
+                } finally { origin.leave(); }
+            } finally { if (!sameContext) destination.close(true); }
+        }
+    }
+
+    @Test public void parkedPlatformCallbackRejoinsTheSurvivingHecAfterShrink() throws Throwable {
+        try (var origin = Context.newBuilder("thc").allowCreateThread(true).allowNativeAccess(true).build();
+             var destination = context(); var arena = Arena.ofShared()) {
+            var invoke = callbackInvoker(arena); var cell = new ManagedMVar();
+            var entered = new CompletableFuture<Void>(); var occupied = new CompletableFuture<Void>();
+            var resumed = new CompletableFuture<Long>(); var failure = new AtomicReference<Throwable>();
+            var release = new java.util.concurrent.atomic.AtomicBoolean(); var active = new AtomicInteger(); var maximum = new AtomicInteger();
+            destination.initialize("thc"); destination.enter();
+            Language.State destinationState; Task<Long> blocker;
+            try {
+                destinationState = Language.currentState(); var threads = destinationState.getThreads(); threads.setCapabilityCount(2);
+                // Consume round-robin HEC 0; the external callback will enter HEC 1.
+                threads.hostEntry(null, () -> { threads.enterCurrent(); try { return 0L; } finally { threads.leaveCurrent(); } });
+                blocker = task(destinationState, () -> {
+                    maximum.accumulateAndGet(active.incrementAndGet(), Math::max); occupied.complete(null);
+                    try {
+                        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+                        while (!release.get() && System.nanoTime() < deadline) Thread.onSpinWait();
+                        assertTrue(release.get()); return 1L;
+                    } finally { active.decrementAndGet(); }
+                });
+            } finally { destination.leave(); }
+            origin.initialize("thc"); origin.enter();
+            try {
+                var source = Language.currentState();
+                var caller = task(source, () -> {
+                    var javaThread = Thread.currentThread();
+                    try {
+                        long nativeThread = NativeGate.self(), nativeTls = NativeGate.tls();
+                        Runnable callback = () -> {
+                            destination.enter();
+                            try {
+                                var threads = destinationState.getThreads(); threads.enterCurrent();
+                                try {
+                                    var identity = threads.currentIdentity(); assertEquals(1L, identity.getCapability()); entered.complete(null);
+                                    assertEquals(71L, cell.take(null));
+                                    maximum.accumulateAndGet(active.incrementAndGet(), Math::max);
+                                    try {
+                                        assertSame(identity, threads.currentIdentity()); assertSame(javaThread, Thread.currentThread());
+                                        assertEquals(nativeThread, NativeGate.self()); assertEquals(nativeTls, NativeGate.tls());
+                                        assertEquals(MaskingState.UNMASKED, destinationState.getMaskingState().get());
+                                        resumed.complete(identity.getCapability());
+                                    } finally { active.decrementAndGet(); }
+                                } finally { threads.leaveCurrent(); }
+                            } catch (Throwable problem) { failure.set(problem); entered.completeExceptionally(problem); resumed.completeExceptionally(problem); }
+                            finally { destination.leave(); }
+                        };
+                        var target = MethodHandles.lookup().findVirtual(Runnable.class, "run", MethodType.methodType(void.class)).bindTo(callback);
+                        var stub = Linker.nativeLinker().upcallStub(target, FunctionDescriptor.ofVoid(), arena);
+                        var permission = source.getThreads().enterForeign(ForeignSafety.SAFE);
+                        try { invoke.invokeExact(stub); } finally { source.getThreads().leaveForeign(permission); }
+                        if (failure.get() != null) throw new AssertionError(failure.get());
+                        assertSame(javaThread, Thread.currentThread()); assertEquals(nativeThread, NativeGate.self()); assertEquals(nativeTls, NativeGate.tls()); return 1L;
+                    } catch (Throwable problem) { throw new AssertionError(problem); }
+                });
+                source.getThreads().startThread(caller.thread());
+                try {
+                    await(entered);
+                    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+                    while (cell.pendingCounts().takers() == 0 && System.nanoTime() < deadline) Thread.yield();
+                    assertEquals(1, cell.pendingCounts().takers());
+                    destinationState.getThreads().startThread(blocker.thread()); await(occupied);
+                    destinationState.getThreads().setCapabilityCount(1); assertTrue(cell.tryPut(71L));
+                    assertThrows(java.util.concurrent.TimeoutException.class, () -> resumed.get(100, TimeUnit.MILLISECONDS),
+                        "callback must wait for the surviving HEC, not execute on retired HEC 1");
+                } finally { release.set(true); cell.tryPut(71L); }
+                assertEquals(1L, await(blocker.result())); assertEquals(0L, await(resumed)); assertEquals(1L, await(caller.result()));
+                assertEquals(1, maximum.get());
+            } finally { origin.leave(); }
+        }
+    }
     private void crossContextCallback(boolean cancel) throws Throwable {
         for (boolean virtualOrigin : new boolean[]{false, true})
         try (var origin = virtualOrigin ? context() : Context.newBuilder("thc").allowCreateThread(true).allowNativeAccess(true).build();

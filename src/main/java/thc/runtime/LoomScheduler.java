@@ -90,7 +90,6 @@ public final class LoomScheduler implements AutoCloseable {
         private boolean running, queued;
         private Carrier carrier;
         private volatile Admission admission = new Admission(this, null, false);
-        private long lastYield;
         Route(long capability, boolean locked) { this.capability = capability; this.locked = locked; }
         LoomScheduler owner() { return LoomScheduler.this; }
         @Override public void execute(Runnable continuation) {
@@ -137,6 +136,7 @@ public final class LoomScheduler implements AutoCloseable {
         GuestThreadId identity;
         final Semaphore ready = new Semaphore(0);
         Hec hec;
+        long lastYield;
         boolean suspended, held, waiting;
         Admission(Route route, Admission previous, boolean callback) {
             this.route = route; this.previous = previous; this.callback = callback;
@@ -164,13 +164,27 @@ public final class LoomScheduler implements AutoCloseable {
     }
 
     private void release(Admission admission) {
+        release(admission, false);
+    }
+
+    private void release(Admission admission, boolean preferRunnable) {
         if (!admission.held) return;
         var hec = admission.hec;
         if (hec.permit != admission) throw new IllegalStateException("Guest does not own its HEC permit");
         hec.permit = null; admission.held = false; refresh(admission);
-        var next = hec.waiting.pollFirst();
-        if (next != null) {
-            next.waiting = false; claim(next, hec); wakeups.addLast(next.ready);
+        // A pinned callback cannot yield its continuation. Reserve a queued
+        // guest's permit before the callback can attempt to reacquire it.
+        if (preferRunnable) for (var route : hec.ready) {
+            var next = route.admission;
+            if (next.owner() == this && !next.suspended && !next.waiting && !next.held) {
+                claim(next, hec); break;
+            }
+        }
+        if (hec.permit == null) {
+            var next = hec.waiting.pollFirst();
+            if (next != null) {
+                next.waiting = false; claim(next, hec); wakeups.addLast(next.ready);
+            }
         }
         ensureCarrier(hec); changed.signalAll();
     }
@@ -232,6 +246,7 @@ public final class LoomScheduler implements AutoCloseable {
         acquire();
         try {
             if (!admission.suspended || admission.held || admission.waiting) throw new IllegalStateException("Invalid guest readmission");
+            remapBoundCallback(admission);
             admission.suspended = false;
             wait = admission.hec.permit != null;
             if (wait) { admission.waiting = true; admission.hec.waiting.addLast(admission); }
@@ -244,6 +259,7 @@ public final class LoomScheduler implements AutoCloseable {
                 try {
                     // A retiring HEC may revoke and move an unmounted reservation.
                     // Its already-published wake is only a notification, not a permit.
+                    remapBoundCallback(admission);
                     wait = !admission.held;
                     if (!wait) admission.ready.drainPermits();
                 } finally { unlock(); }
@@ -314,6 +330,11 @@ public final class LoomScheduler implements AutoCloseable {
             if (hec.permit == null) { claim(admission, hec); wakeups.addLast(admission.ready); }
             else { admission.waiting = true; hec.waiting.addLast(admission); }
         }
+    }
+
+    /** A platform callback has no route unmount; releasing admission is its boundary. */
+    private void remapBoundCallback(Admission admission) {
+        if (admission.route == null) remap(admission, worker(Math.floorMod(admission.hec.id, capabilities)));
     }
 
     private Route take(Hec worker) {
@@ -422,12 +443,12 @@ public final class LoomScheduler implements AutoCloseable {
             for (var worker : workers.values()) { ready.addAll(worker.ready); worker.ready.clear(); }
             for (var route : managed.values()) if (!route.running) assign(route, Math.floorMod(route.capability, count));
             for (var route : ready) { route.queued = false; publish(route); }
+            for (var callback : callbacks) if (!callback.held) remapBoundCallback(callback);
             changed.signalAll();
         } finally { unlock(); }
     }
 
     public boolean isCurrent() { var admission = currentAdmission(); return admission != null && admission.owner() == this; }
-    private static LoomScheduler routeOwner(Route route) { return route.owner(); }
 
     void attach(GuestThreadId identity) {
         var admission = currentAdmission();
@@ -443,19 +464,23 @@ public final class LoomScheduler implements AutoCloseable {
 
     /** Polls yield only with a waiting competitor, at a bounded time interval. */
     @com.oracle.truffle.api.CompilerDirectives.TruffleBoundary public void checkpoint() {
-        if (!isCurrent()) return;
+        var admission = currentAdmission();
+        if (admission == null || admission.owner() != this) return;
         if (stopping) throw new Stopped();
-        var route = CURRENT.get();
-        if (route == null || routeOwner(route) != this) return;
         long now = System.nanoTime();
-        if (now - route.lastYield < 1_000_000L) return;
+        if (now - admission.lastYield < 1_000_000L) return;
         boolean yield;
         acquire();
         try {
-            var worker = workers.get(route.capability);
-            yield = route.capability >= capabilities || worker != null && !worker.ready.isEmpty();
+            if (admission.suspended || !admission.held) return;
+            var worker = admission.hec;
+            yield = worker.id >= capabilities || !worker.ready.isEmpty() || !worker.waiting.isEmpty();
+            if (yield && admission.callback) { admission.suspended = true; release(admission, true); }
         } finally { unlock(); }
-        if (yield) { route.lastYield = now; Thread.yield(); }
+        if (yield) {
+            admission.lastYield = now;
+            if (admission.callback) resumeGuest(admission, null); else Thread.yield();
+        }
     }
 
     public Thread newThread(Runnable task, Long pin, Node location) {
