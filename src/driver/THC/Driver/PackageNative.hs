@@ -431,7 +431,12 @@ nativeWrapperSource entries = fmap concat $ forM entries $ \((symbol,convention,
     cType "ByteArray#" = "void *"
     cType "MutableByteArray#" = "void *"
     cType "AddrRep" = "void *"
-    cType value = "Hs" ++ take (length value - 3) value
+    cType "IntRep" = "intptr_t"
+    cType "WordRep" = "uintptr_t"
+    cType "FloatRep" = "float"
+    cType "DoubleRep" = "double"
+    cType value = (if "Word" `isPrefixOf` value then "uint" ++ drop 4 width else "int" ++ drop 3 width) ++ "_t"
+      where width = take (length value - 3) value
 
 -- Preserve the configured C include/preprocessor options and package database
 -- inputs from the actual Haskell compile, without reusing Haskell-only flags.
@@ -599,10 +604,11 @@ writeNativeWrappers compiler root arguments configured unit directory signatures
             createDirectoryIfMissing True output
             wrappers <- either fail pure (nativeWrapperSource
               [(signature,entry,wrapperHeader symbol) | (signature@(symbol,_,_,_,_),entry) <- entries])
-            -- Direct ccall needs only the FFI scalar typedefs. Rts.h also
-            -- imports unrelated libc prototypes (FILE*, etc.), which can
-            -- conflict with GHC's otherwise valid opaque Addr# callers.
-            let preamble = ["#include <Rts.h>\n" | convention == "capi"] ++ ["#include <HsFFI.h>\n"]
+            -- Direct ccall declares the emitted ABI itself. Even HsFFI.h
+            -- declares RTS functions using nominal pointer types that can
+            -- conflict with valid opaque Addr# callers. CAPI keeps its actual
+            -- GHC stub headers; adapters need only standard scalar types.
+            let preamble = ["#include <Rts.h>\n" | convention == "capi"] ++ ["#include <stdint.h>\n"]
             (bitcode,target,inputs) <- compileC compiler root configured output
               (Just (concat preamble ++ source ++ wrappers))
             headers <- headerInputs (output </> "wrappers.c") inputs

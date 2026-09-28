@@ -330,7 +330,7 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
       Left message -> assertFailure message
       Right source -> do
         assertBool "C compiler supplies the ABI for word results"
-          ("HsWord64 thc_native_test_0(void * a0, HsWord64 a1) { return read_bytes(a0, a1); }" `isInfixOf` source)
+          ("uint64_t thc_native_test_0(void * a0, uint64_t a1) { return read_bytes(a0, a1); }" `isInfixOf` source)
         assertBool "void calls do not manufacture a result"
           ("void thc_native_test_1(void * a0, void * a1) { write_state(a0, a1); }" `isInfixOf` source)
   , TestCase $ do
@@ -344,7 +344,7 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
       mapM_ (\header -> assertBool "header injection rejected" (isLeft (nativeSignatures "fixture-unit" [moduleWith (withHeader header)])))
         ["", "bad\nheader", "bad\"header", "bad\\header"]
       assertEqual "actual header owns callee signedness, adapters retain Haskell types"
-        (Right "#include \"original.h\"\n#undef fill\nvoid thc_native_signed_0(void * a0, HsInt16 a1) { fill(a0, a1); }\n")
+        (Right "#include \"original.h\"\n#undef fill\nvoid thc_native_signed_0(void * a0, int16_t a1) { fill(a0, a1); }\n")
         (nativeWrapperSource [(signed,"thc_native_signed_0",Just "original.h")])
       assertBool "different widths still conflict" $ isLeft $ nativeSignatures "fixture-unit"
         [moduleWith [set "header" "original.h" (entry "fill" "ccall" [rep,"void"] ["void"]) | rep <- ["Int8Rep","Word16Rep"]]]
