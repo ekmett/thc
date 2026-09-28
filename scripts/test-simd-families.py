@@ -211,7 +211,7 @@ class SimdFamiliesTest(unittest.TestCase):
             for forbidden in ('kotlin.', 'Pair(', 'internal class ', 'fun ', '@field:'):
                 self.assertNotIn(forbidden, source)
         self.assertIn('IntFunction<int[]> allocate', proof)
-        self.assertIn('CoreVectors.INSTANCE.validateSignature', proof)
+        self.assertIn('CoreVectors.validateSignature', proof)
         self.assertIn('@Children private Expr[] arguments;', ast)
         self.assertIn('@CompilationFinal(dimensions = 1) private final int[] slots;', ast)
         for family in families:

@@ -155,7 +155,7 @@ def proof_code(fs):
             result=f'unpacked{n}' if op=='unpack' else f'proof{n}'
             lines.append(f'            case "{op}{n}#" -> {{ expected = List.of({args}); expectedResult = {result}; }}')
     lines += ['            default -> throw new UnsupportedCore("Unsupported generated vector primitive " + name);','        }',
-              '        CoreVectors.INSTANCE.validateSignature(name, arguments, result, expected, expectedResult);', '    }',
+              '        CoreVectors.validateSignature(name, arguments, result, expected, expectedResult);', '    }',
               '    public static Expr expression(String name, Expr[] arguments, int[] shuffleIndices, IntFunction<int[]> allocate) {',
               '        return switch (name) {']
     for f in fs:

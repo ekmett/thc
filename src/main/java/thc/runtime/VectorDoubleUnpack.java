@@ -13,7 +13,7 @@ public final class VectorDoubleUnpack extends Expr {
 
     public VectorDoubleUnpack(Expr argument) {
         this.argument = argument;
-        setRepresentation(CoreVectors.INSTANCE.getUnpackedDouble());
+        setRepresentation(CoreVectors.unpackedDouble);
     }
 
     @Override public Object execute(VirtualFrame frame) {

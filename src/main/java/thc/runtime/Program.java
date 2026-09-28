@@ -1004,7 +1004,7 @@ public final class Program implements ExecutableProgram {
                 Local local = scope.locals.get(id);
                 CoreRepresentation proof = local != null ? local.proof : globalProofs.get(id);
                 if (proof == null && demand != null) proof = demand.occurrence(id, occurrence);
-                CoreVectors.INSTANCE.requireVariableProof(proof, occurrence);
+                CoreVectors.requireVariableProof(proof, occurrence);
                 if (scope.joins.containsKey(id)) yield joinJump(scope.joins.get(id), List.of(), List.of(), scope);
                 if (local != null) {
                     if (local.tupleSlots != null) {
@@ -1676,14 +1676,14 @@ public final class Program implements ExecutableProgram {
             for (int i = 0; i < layouts.length; i++) layouts[i] = dataLayout(ids.get(i));
             return new DataToTag(new DataTagFamily(layouts), operand);
         }
-        if (primitive && CoreVectors.INSTANCE.getOperations().contains(fn.get(1))) {
+        if (primitive && CoreVectors.operations.contains(fn.get(1))) {
             String name = (String) fn.get(1);
             List<CoreRepresentation> proofs = new ArrayList<>();
-            for (List<Object> arg : args) proofs.add(CoreVectors.INSTANCE.argumentProof(arg));
-            CoreVectors.INSTANCE.validate(name, proofs, tupleProof);
-            CoreVectors.INSTANCE.validateFlags(flags);
+            for (List<Object> arg : args) proofs.add(CoreVectors.argumentProof(arg));
+            CoreVectors.validate(name, proofs, tupleProof);
+            CoreVectors.validateFlags(flags);
             Expr[] operands = compileOperands(args, scope);
-            int[] shuffle = name.startsWith("shuffle") ? CoreVectors.INSTANCE.shuffleIndices(args.get(2), tupleProof.getVector().getLanes()) : null;
+            int[] shuffle = name.startsWith("shuffle") ? CoreVectors.shuffleIndices(args.get(2), tupleProof.getVector().getLanes()) : null;
             if (GeneratedVectors.operations.contains(name))
                 return GeneratedVectors.expression(name, operands, shuffle, count -> vectorSlots(scope, count, "<vector lane "));
             if (name.equals("packInt64X2#")) return new VectorPack(operands[0], vectorSlots(scope, 2, "<vector lane "));
@@ -1692,30 +1692,30 @@ public final class Program implements ExecutableProgram {
             if (name.equals("unpackInt32X4#")) return new Vector32Unpack(operands[0]);
             if (name.equals("packDoubleX2#")) return new VectorDoublePack(operands[0], vectorSlots(scope, 2, "<double vector lane "));
             if (name.equals("unpackDoubleX2#")) return new VectorDoubleUnpack(operands[0]);
-            if (CoreVectors.INSTANCE.getOperationsDouble().contains(name)) return new VectorDoubleOperation(name, operands);
+            if (CoreVectors.operationsDouble.contains(name)) return new VectorDoubleOperation(name, operands);
             if (name.equals("packFloatX4#")) return new VectorFloatPack(operands[0], vectorSlots(scope, 4, "<float vector lane "));
             if (name.equals("unpackFloatX4#")) return new VectorFloatUnpack(operands[0]);
-            if (CoreVectors.INSTANCE.getOperationsFloat().contains(name)) return new VectorFloatOperation(name, operands);
-            if (CoreVectors.INSTANCE.getFusedFloat8().contains(name)) return new VectorFloat8Fused(name, operands);
-            if (CoreVectors.INSTANCE.getFusedFloat16().contains(name)) return new VectorFloat16Fused(name, operands);
-            if (CoreVectors.INSTANCE.getFusedDouble4().contains(name)) return new VectorDouble4Fused(name, operands);
-            if (CoreVectors.INSTANCE.getFusedDouble8().contains(name)) return new VectorDouble8Fused(name, operands);
-            if (CoreVectors.INSTANCE.getOperations32().contains(name)) return new Vector32Operation(name, operands);
+            if (CoreVectors.operationsFloat.contains(name)) return new VectorFloatOperation(name, operands);
+            if (CoreVectors.fusedFloat8.contains(name)) return new VectorFloat8Fused(name, operands);
+            if (CoreVectors.fusedFloat16.contains(name)) return new VectorFloat16Fused(name, operands);
+            if (CoreVectors.fusedDouble4.contains(name)) return new VectorDouble4Fused(name, operands);
+            if (CoreVectors.fusedDouble8.contains(name)) return new VectorDouble8Fused(name, operands);
+            if (CoreVectors.operations32.contains(name)) return new Vector32Operation(name, operands);
             if (name.equals("packInt16X8#")) return new Vector16Pack(operands[0], vectorSlots(scope, 8, "<int16 vector lane "));
             if (name.equals("unpackInt16X8#")) return new Vector16Unpack(operands[0]);
-            if (CoreVectors.INSTANCE.getOperations16().contains(name)) return new Vector16Operation(name, operands);
+            if (CoreVectors.operations16.contains(name)) return new Vector16Operation(name, operands);
             if (name.equals("packInt8X16#")) return new Vector8Pack(operands[0], vectorSlots(scope, 16, "<int8 vector lane "));
             if (name.equals("unpackInt8X16#")) return new Vector8Unpack(operands[0]);
-            if (CoreVectors.INSTANCE.getOperations8().contains(name)) return new Vector8Operation(name, operands);
+            if (CoreVectors.operations8.contains(name)) return new Vector8Operation(name, operands);
             if (name.equals("packWord8X16#")) return new VectorWord8Pack(operands[0], vectorSlots(scope, 16, "<word8 vector lane "));
             if (name.equals("unpackWord8X16#")) return new VectorWord8Unpack(operands[0]);
-            if (CoreVectors.INSTANCE.getOperationsWord8().contains(name)) return new VectorWord8Operation(name, operands);
+            if (CoreVectors.operationsWord8.contains(name)) return new VectorWord8Operation(name, operands);
             if (name.equals("packWord16X8#")) return new VectorWord16Pack(operands[0], vectorSlots(scope, 8, "<word16 vector lane "));
             if (name.equals("unpackWord16X8#")) return new VectorWord16Unpack(operands[0]);
-            if (CoreVectors.INSTANCE.getOperationsWord16().contains(name)) return new VectorWord16Operation(name, operands);
+            if (CoreVectors.operationsWord16.contains(name)) return new VectorWord16Operation(name, operands);
             if (name.equals("packWord32X4#")) return new VectorWord32Pack(operands[0], vectorSlots(scope, 4, "<word32 vector lane "));
             if (name.equals("unpackWord32X4#")) return new VectorWord32Unpack(operands[0]);
-            if (CoreVectors.INSTANCE.getOperationsWord32().contains(name)) return new VectorWord32Operation(name, operands);
+            if (CoreVectors.operationsWord32.contains(name)) return new VectorWord32Operation(name, operands);
             return new VectorOperation(name, operands);
         }
         if (primitive && CoreArithmeticExceptions.payload((String) fn.get(1)) != null) {

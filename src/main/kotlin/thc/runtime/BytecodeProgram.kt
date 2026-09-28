@@ -2582,7 +2582,7 @@ CoreStackForeign.validateHead(fn, defined)
                 }, tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && fn[1] in CoreVectors.operations) {
                 val name = fn[1] as String
-                CoreVectors.validate(name, args.map(CoreVectors::argumentProof), tupleProof)
+                CoreVectors.validate(name, args.map { CoreVectors.argumentProof(it) }, tupleProof)
                 CoreVectors.validateFlags(flags)
                 val operands = args.map { compile(it, scope, false) }
                 val shuffle = if (name.startsWith("shuffle"))

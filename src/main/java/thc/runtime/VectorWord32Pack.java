@@ -15,7 +15,7 @@ public final class VectorWord32Pack extends Expr {
     public VectorWord32Pack(Expr argument, int[] slots) {
         this.argument = argument;
         this.slots = slots;
-        setRepresentation(CoreVectors.INSTANCE.getProofWord32());
+        setRepresentation(CoreVectors.proofWord32);
     }
 
     @Override public IntVector execute(VirtualFrame frame) {
