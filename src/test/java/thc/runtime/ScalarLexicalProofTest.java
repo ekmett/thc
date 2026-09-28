@@ -40,7 +40,7 @@ class ScalarLexicalProofTest {
             finally { context.leave(); }
         }
     }
-    @Test void tupleAndScalarArithmeticUseLongCarriersAcrossIntegralAnnotations() throws Exception {
+    @Test void tupleAndScalarArithmeticRespectIntegralCarrierWidths() throws Exception {
         visit((language, backend) -> {
             for (var rep : list("IntRep", "WordRep", "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep", "Int32Rep", "Word32Rep", "Int64Rep", "Word64Rep")) {
                 var tupleModule = object(Json.INSTANCE.parse(Files.readString(root.resolve("build/tuple-arithmetic/pre-core/TupleArithmeticAudit.json"))));
@@ -48,15 +48,22 @@ class ScalarLexicalProofTest {
                 var bindings = objects(reached.get("bindings")); assertEquals(1, bindings.size());
                 var lambda = expression(bindings.getFirst().get("expr"));
                 objects(lambda.get(1)).getFirst().put("rep", proof(rep));
-                var tuple = program(language, reached, backend);
-                long[] expected = {-2L, -3L};
-                for (int field = 0; field < expected.length; field++)
-                    assertEquals(expected[field], Calls.target(tuple.hostEntryTarget(3),
-                        new Object[]{tuple.entryValue("quotRemInt"), new Object[]{-13L, 5L, (long) field}}), backend + "/" + rep + "/" + field);
-                var scalar = program(language, module(proof(rep), proof("Int8Rep")), backend);
-                for (long value : new long[]{-128L, -1L, 0L, 1L, 127L})
-                    assertEquals((long) (byte) (value * 2), Calls.target(scalar.hostEntryTarget(1),
-                        new Object[]{scalar.entryValue("entry"), new Object[]{value}}), backend + "/" + rep + "/" + value);
+                boolean narrow = list("Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep", "Int32Rep", "Word32Rep").contains(rep);
+                if (narrow) {
+                    assertThrows(RuntimeFault.class, () -> program(language, reached, backend), backend + "/" + rep + " cannot replace the native Long tuple input");
+                    var scalar = program(language, module(proof(rep), proof("Int8Rep")), backend);
+                    for (int value : new int[]{-128, -1, 0, 1, 127})
+                        assertEquals((int) (byte) (value * 2), Calls.target(scalar.hostEntryTarget(1),
+                            new Object[]{scalar.entryValue("entry"), new Object[]{value}}), backend + "/" + rep + "/" + value);
+                } else {
+                    var tuple = program(language, reached, backend);
+                    long[] expected = {-2L, -3L};
+                    for (int field = 0; field < expected.length; field++)
+                        assertEquals(expected[field], Calls.target(tuple.hostEntryTarget(3),
+                            new Object[]{tuple.entryValue("quotRemInt"), new Object[]{-13L, 5L, (long) field}}), backend + "/" + rep + "/" + field);
+                    assertThrows(RuntimeFault.class, () -> program(language, module(proof(rep), proof("Int8Rep")), backend),
+                        backend + "/" + rep + " cannot replace an Int scalar input");
+                }
             }
         });
     }
@@ -74,8 +81,8 @@ class ScalarLexicalProofTest {
             var unknown = map("kind", "unknown", "primReps", null, "evaluated", false);
             for (var pair : list(new ProofPair(null, exact), new ProofPair(unknown, exact), new ProofPair(exact, null), new ProofPair(exact, unknown), new ProofPair(exact, exact))) {
                 var program = program(language, module(pair.stored(), pair.occurrence()), backend);
-                for (long x : new long[]{-128L, -1L, 0L, 1L, 127L})
-                    assertEquals((long) (byte) (x * 2), Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue("entry"), new Object[]{x}}));
+                for (int x : new int[]{-128, -1, 0, 1, 127})
+                    assertEquals((int) (byte) (x * 2), Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue("entry"), new Object[]{x}}));
             }
             // The inner let is a different value, despite reusing the source identifier.
             var word = proof("WordRep");

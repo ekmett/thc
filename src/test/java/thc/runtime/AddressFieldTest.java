@@ -156,7 +156,7 @@ class AddressFieldTest {
             }
         });
     }
-    @Test void contradictoryFieldProofsAndAddressSumsStayRejected() throws Exception {
+    @Test void contradictoryFieldProofsRejectAndAddressSumsKeepManagedStorage() throws Exception {
         withLanguage(language -> {
             var original = constructor(true);
             for (var bad : list(with(original, "fieldTypes", list(with(address, "kind", "unknown"), wide, lazy)), with(original, "fieldTypes", list(with(address, "evaluated", false), wide, lazy)),
@@ -165,9 +165,17 @@ class AddressFieldTest {
                 for (var backend : list("ast", "bytecode")) assertThrows(RuntimeFault.class, () -> program(language, with(module(true, false), "constructors", list(bad)), backend));
             }
             var tuple = map("kind", "unknown", "aggregate", "unboxed-tuple", "components", list(address), "primReps", list("AddrRep"), "evaluated", true); assertTrue(CoreRepresentations.INSTANCE.parse(tuple).isTuple());
-            // GHC shares the WordSlot, but address sum payloads are rejected before allocation.
+            // GHC shares a WordSlot; JVM transport retains a separate managed-address field.
             var sum = map("kind", "unknown", "aggregate", "unboxed-sum", "alternatives", list(address, wide), "primReps", list("WordRep", "WordRep"), "tagSlot", 0, "alternativeSlots", list(list(1), list(1)), "evaluated", true);
-            assertThrows(UnsupportedCore.class, () -> CoreRepresentations.INSTANCE.parse(sum));
+            var sumProof = CoreRepresentations.INSTANCE.parse(sum); assertTrue(sumProof.isSum());
+            var transport = SumShape.transport(sumProof);
+            assertEquals(list(list("WordRep"), list("WordRep"), list("AddrRep")),
+                transport.getFields().stream().map(CoreRepresentation::getPrimReps).toList());
+            assertEquals(list(0, 1, 1), transport.getNativeSlots());
+            assertEquals(list(list(2), list(1)), transport.getProjections());
+            assertEquals(ManagedAddress.class, transport.getFields().get(2).referenceCarrier());
+            assertThrows(RuntimeFault.class, () -> CoreRepresentations.INSTANCE.parse(with(sum,
+                "alternatives", list(with(address, "evaluated", false), wide))));
             var state = map("kind", "void", "primReps", list(), "evaluated", true); var empty = map("kind", "unknown", "aggregate", "unboxed-tuple", "components", list(), "primReps", list(), "evaluated", true);
             var tagOnly = with(sum, "alternatives", list(state, empty), "primReps", list("WordRep"), "alternativeSlots", list(list(), list())); assertTrue(CoreRepresentations.INSTANCE.parse(tagOnly).isSum());
             var sumField = map("id", "SumField", "kind", "boxed", "arity", 1, "fieldReps", list(list("WordRep")), "fieldTypes", list(tagOnly), "fieldLifted", list(false), "strictFields", list(false));
