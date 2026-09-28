@@ -13,6 +13,7 @@ import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ControlFlowException;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
+import com.oracle.truffle.api.nodes.ExecutionSignature;
 import com.oracle.truffle.api.nodes.LoopNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.profiles.BranchProfile;
@@ -37,6 +38,7 @@ public final class FunctionRoot extends GuestRoot {
     private final Metrics metrics;
     @CompilationFinal private int programSlot = -1;
     @CompilationFinal private Object programCodeIdentity;
+    @CompilationFinal private boolean preparedForAOT;
     private final CoreSourceLocation coreSourceLocation;
     private final HandoffEntry handoff;
     private final boolean enableAsync;
@@ -165,6 +167,26 @@ public final class FunctionRoot extends GuestRoot {
     }
     Metrics invocationMetrics(VirtualFrame frame) {
         return metrics != null ? metrics : Program.instance(frame, programSlot).instanceMetrics();
+    }
+    boolean isPreparedForAOT() { return preparedForAOT; }
+    @Override protected ExecutionSignature prepareForAOT() {
+        // Only the admitted owner-free real-lowerer family is prepared here.
+        // Frame carriers were established structurally before target publication;
+        // no context lookup, guest execution or observed-profile seeding is needed.
+        if (programSlot < 0) return null;
+        List<CoreRepresentation> inputs = getInputProofs();
+        Class<?>[] signature = new Class<?>[getEntryArgumentOffset() + inputs.size()];
+        signature[0] = Long.class;
+        // ExecutionSignature requires an exact runtime class, not a superclass.
+        // StaticShape selects the concrete CapturedFrame subclass; keep its
+        // existing authenticated layout/owner checks, without inventing a class.
+        signature[1] = null;
+        for (int i = 0; i < inputs.size(); i++) {
+            if (!inputs.get(i).isLong()) throw new IllegalStateException("Unsupported reusable AOT argument");
+            signature[getEntryArgumentOffset() + i] = Long.class;
+        }
+        preparedForAOT = true;
+        return ExecutionSignature.create(getScalarResultProof().isLong() ? Long.class : null, signature);
     }
     public boolean getEnableAsync() { return enableAsync; }
     @Override public boolean getAsynchronousExceptions() { return enableAsync; }

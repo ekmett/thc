@@ -32,8 +32,18 @@ clones retain explicit ownership. This never changes per-instance guest metrics.
 
 In particular, asynchronous force/resumption, tail-transfer instrumentation,
 typed aggregates, constructor ownership and foreign bridges still need explicit
-instance routing before those families can be admitted. Context-independent
-`prepareForAOT` and actual THC auxiliary-cache persistence are separate work.
+instance routing before those families can be admitted.
+
+Admitted reusable AST roots implement context-independent `prepareForAOT` using
+their declared machine-word argument/result proofs and existing frame carriers.
+The environment's concrete StaticShape subclass is not an exact declared ABI
+class; its signature entry remains unknown, with layout and owner checks intact.
+Prepared roots demand unevaluated scalar operands directly instead of speculating
+that a cold CAF is already a primitive. This structural preparation mode does not
+execute guests or seed the ordinary JIT's observed profiles. Ordinary roots do
+not claim this preparation support. Actual THC auxiliary-cache persistence and
+fresh-process execution with lowering/compilation prohibited remain separate work.
+
 The same-context JIT control declares one call using its first instance before
 installation, then requires the untouched second instance's first call to enter
 and retain the original compiled target. That is not a zero-training AOT claim.

@@ -76,6 +76,99 @@ class ReusableProgramTest {
         return ((Number) ((Map<?, ?>) Json.parse(entry.getMember("diagnostics").asString())).get(key)).longValue();
     }
 
+    @Test void untouchedRealRootsPrepareOutsideContextAndRetainTheirFirstCompiledEntry() throws Exception {
+        var untouched = new AtomicInteger();
+        var lazy = new CoreBindingBody(new CoreBindingBody.Header(2, Map.of(0, "var", 1, "unused"), false), null,
+            () -> { untouched.incrementAndGet(); throw new AssertionError("untouched definition was decoded"); });
+        var data = module(list(binding("shared", plus(literal(17), literal(25)), true),
+            binding("read", lambda(plus(variable("shared"), variable("x"))), true),
+            binding("bottom", variable("bottom"), true), binding("unused", lazy, true)));
+        try (var engine = Engine.newBuilder().allowExperimentalOptions(true)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("engine.CompilationFailureAction", "Throw").build()) {
+            Program.PreparedCode code;
+            Program preparation;
+            com.oracle.truffle.api.RootCallTarget[] targets;
+            try (var context = Context.newBuilder("thc").engine(engine).build()) {
+                context.initialize("thc"); context.enter();
+                try {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    code = Program.prepareCode(language, data, List.of("read", "bottom"));
+                    preparation = code.newInstance(language);
+                    targets = new com.oracle.truffle.api.RootCallTarget[]{
+                        ((Closure) preparation.entryValue("read")).target,
+                        ((Thunk) preparation.entryValue("shared")).getTarget(),
+                        ((Thunk) preparation.entryValue("bottom")).getTarget()};
+                } finally { context.leave(); }
+            }
+            // No entered context, guest execution or profile-training call; the preparation context is gone.
+            var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget");
+            for (var target : targets) {
+                assertEquals(false, type.getMethod("wasExecuted").invoke(target));
+                assertEquals(true, type.getMethod("prepareForAOT").invoke(target), target.getRootNode().getName());
+                type.getMethod("compile", boolean.class).invoke(target, true);
+                assertEquals(true, type.getMethod("isValidLastTier").invoke(target));
+                assertEquals(false, type.getMethod("wasExecuted").invoke(target), "preparation/compilation must not execute a guest body");
+            }
+            assertEquals(0L, count(preparation, "thunkEvaluations"));
+            assertEquals(0L, count(preparation, "compiledEntries"));
+            assertEquals(0, untouched.get());
+            RuntimeFault previousFailure = null;
+            for (int owner = 0; owner < 2; owner++) {
+                try (var context = Context.newBuilder("thc").engine(engine).build()) {
+                    context.initialize("thc"); context.enter();
+                    try {
+                        var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                        var program = code.newInstance(language);
+                        var reader = (Closure) program.entryValue("read");
+                        assertSame(targets[0], reader.target);
+                        assertEquals(0, ((Thunk) program.entryValue("shared")).getState());
+                        var runtime = Truffle.getRuntime();
+                        runtime.getClass().getMethod("bypassedInstalledCode", type).invoke(runtime, targets[0]);
+                        assertEquals(true, type.getMethod("isValidLastTier").invoke(targets[0]), "original reader immediately before its first call");
+                        assertEquals(47L + owner, Calls.target(reader.target, new Object[]{0L, reader.environment, 5L + owner}));
+                        assertEquals(2L, count(program, "compiledEntries"), "first reader and shared CAF must both enter compiled code");
+                        assertEquals(true, type.getMethod("isValidLastTier").invoke(targets[0]), "original reader after its first call");
+                        assertEquals(true, type.getMethod("isValidLastTier").invoke(targets[1]), "original CAF after its first call");
+                        assertEquals(1L, count(program, "thunkEvaluations"));
+                        var sibling = code.newInstance(language);
+                        var siblingReader = (Closure) sibling.entryValue("read");
+                        assertSame(reader.target, siblingReader.target);
+                        assertEquals(0, ((Thunk) sibling.entryValue("shared")).getState());
+                        assertEquals(53L, Calls.target(siblingReader.target, new Object[]{0L, siblingReader.environment, 11L}));
+                        assertEquals(2L, count(sibling, "compiledEntries"));
+                        assertEquals(1L, count(sibling, "thunkEvaluations"));
+                        assertEquals(2L, count(program, "compiledEntries"));
+                        assertEquals(true, type.getMethod("isValidLastTier").invoke(targets[0]));
+                        var bottom = program.entryValue("bottom");
+                        var failure = assertThrows(RuntimeFault.class, () -> call(program, bottom));
+                        assertSame(failure, assertThrows(RuntimeFault.class, () -> call(program, bottom)));
+                        if (previousFailure != null) assertNotSame(previousFailure, failure);
+                        previousFailure = failure;
+                        assertEquals(2L, count(program, "thunkEvaluations"));
+                        assertEquals(0L, count(program, "loweredRootCount"));
+                        assertEquals(0, untouched.get());
+                    } finally { context.leave(); }
+                }
+            }
+            assertEquals(0L, count(preparation, "thunkEvaluations"));
+        }
+    }
+
+    @Test void ordinaryRootsDoNotClaimReusableAotPreparation() throws Exception {
+        try (var context = Main.executionContext(false)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var ordinary = new Program(language, module(list(binding("read", lambda(variable("x")), true))));
+                var target = ((Closure) ordinary.entryValue("read")).target;
+                var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget");
+                assertEquals(false, type.getMethod("prepareForAOT").invoke(target));
+                assertEquals(0L, count(ordinary, "compiledEntries"));
+            } finally { context.leave(); }
+        }
+    }
+
     @Test void preparationRejectsStrictGuestBodiesAndMissingInputProofs() {
         try (var context = Main.executionContext(false)) {
             context.initialize("thc"); context.enter();

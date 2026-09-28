@@ -73,7 +73,10 @@ public final class Evaluate extends Expr {
     @Override public long executeLong(VirtualFrame frame) throws UnexpectedResultException {
         if (AstControl.INSTANCE.captures(this)) return RuntimeTypesGen.expectLong(executeAsync(frame));
         if (value.getRepresentation().getEvaluated() || value.getRepresentation().isLong()) return value.executeLong(frame);
-        if (genericLong)
+        // A prepared root has no observed value history. Demand its unevaluated
+        // operand directly; do not speculate that a cold CAF is already a Long.
+        // Keep the ordinary JIT's observed genericLong profile unchanged.
+        if (genericLong || getRootNode() instanceof FunctionRoot root && root.isPreparedForAOT())
             return RuntimeTypesGen.expectLong(forceResult(frame, value.execute(frame)));
         try { return value.executeLong(frame); }
         catch (UnexpectedResultException unexpected) {
