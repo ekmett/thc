@@ -68,6 +68,14 @@ class ExplicitInteropLibraryTest {
                 assertFalse(metaAccess.isMetaInstance(meta, InteropFailure.create(UnsupportedMessageException.create())));
                 assertSame(failure, assertThrows(InteropFailure.class, () -> failureAccess.throwException(failure)));
                 assertEquals(-1L, ((InvalidArrayIndexException) failure.getOriginal()).getInvalidIndex());
+                for (String hint : new String[]{null, "protocol detail"}) {
+                    var original = UnsupportedTypeException.create(new Object[]{42L}, hint);
+                    var wrapped = InteropFailure.create(original);
+                    var messageAccess = InteropLibrary.getFactory().create(wrapped);
+                    assertTrue(messageAccess.hasExceptionMessage(wrapped));
+                    assertEquals(hint == null ? "UnsupportedTypeException" : hint, messageAccess.getExceptionMessage(wrapped));
+                    assertSame(original, wrapped.getOriginal());
+                }
                 assertThrows(InteropFailure.class, () -> acquisition.call(new Object()));
             } finally { owner.getThreads().leaveCurrent(GuestThreadStatus.FINISHED); context.leave(); }
         }

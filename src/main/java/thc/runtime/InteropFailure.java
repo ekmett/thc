@@ -19,7 +19,7 @@ public final class InteropFailure extends AbstractTruffleException {
     @ExportMessage RuntimeException throwException() { throw this; }
     @ExportMessage ExceptionType getExceptionType() { return ExceptionType.RUNTIME_ERROR; }
     @ExportMessage boolean hasExceptionMessage() { return true; }
-    @ExportMessage Object getExceptionMessage() { return getMessage() == null ? original.getClass().getSimpleName() : getMessage(); }
+    @ExportMessage @TruffleBoundary Object getExceptionMessage() { return getMessage() == null ? original.getClass().getSimpleName() : getMessage(); }
     @ExportMessage boolean hasMetaObject() { return true; }
     @ExportMessage Object getMetaObject() { return new Kind(original.getClass()); }
 
@@ -28,7 +28,7 @@ public final class InteropFailure extends AbstractTruffleException {
         private final Class<?> kind;
         Kind(Class<?> kind) { this.kind = kind; }
         @ExportMessage boolean isMetaObject() { return true; }
-        @ExportMessage Object getMetaQualifiedName() { return kind.getName(); }
+        @ExportMessage @TruffleBoundary Object getMetaQualifiedName() { return kind.getName(); }
         @ExportMessage @TruffleBoundary Object getMetaSimpleName() { return kind.getSimpleName(); }
         @ExportMessage boolean isMetaInstance(Object value) { return value instanceof InteropFailure failure && kind.isInstance(failure.original); }
     }
