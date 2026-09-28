@@ -1,7 +1,135 @@
+diff --git a/com/oracle/truffle/runtime/BaseOSRRootNode.java b/com/oracle/truffle/runtime/BaseOSRRootNode.java
+index d015fdc6..b8238f8d 100644
+--- a/com/oracle/truffle/runtime/BaseOSRRootNode.java
++++ b/com/oracle/truffle/runtime/BaseOSRRootNode.java
+@@ -84,6 +84,21 @@ public abstract class BaseOSRRootNode extends RootNode {
+         return OptimizedRuntimeAccessor.NODES.prepareForCompilation(getOriginalRootNode(), rootCompilation, compilationTier, lastTier);
+     }
+ 
++    @Override
++    public final long getGraphBudgetGeneration() {
++        return getOriginalRootNode().getGraphBudgetGeneration();
++    }
++
++    @Override
++    public final long prepareGraphBudgetRetry(long failedGeneration) {
++        return getOriginalRootNode().prepareGraphBudgetRetry(failedGeneration);
++    }
++
++    /** The existing non-adopted loop's source owner; no context is retained. */
++    public final RootNode getSourceRootNode() {
++        return getOriginalRootNode();
++    }
++
+     @Override
+     protected boolean isCaptureFramesForTrace(boolean compiledFrame) {
+         return OptimizedRuntimeAccessor.NODES.isCaptureFramesForTrace(getOriginalRootNode(), compiledFrame);
+diff --git a/com/oracle/truffle/runtime/BytecodeOSRMetadata.java b/com/oracle/truffle/runtime/BytecodeOSRMetadata.java
+index 9192644b..558c2fe1 100644
+--- a/com/oracle/truffle/runtime/BytecodeOSRMetadata.java
++++ b/com/oracle/truffle/runtime/BytecodeOSRMetadata.java
+@@ -250,6 +250,7 @@ public final class BytecodeOSRMetadata {
+         assert state.frameDescriptor == null || state.frameDescriptor == frame.getFrameDescriptor();
+         OptimizedCallTarget callTarget = state.compilationMap.get(target);
+         if (callTarget == null) {
++            OptimizedCallTarget.OSRCompilation[] initialRequest = new OptimizedCallTarget.OSRCompilation[1];
+             callTarget = ((Node) osrNode).atomic(() -> {
+                 OptimizedCallTarget lockedTarget = state.compilationMap.get(target);
+                 if (lockedTarget == null) {
+@@ -257,12 +258,13 @@ public final class BytecodeOSRMetadata {
+                     state.push(target, lockedTarget);
+                     if (stage == FRESH_STAGE) {
+                         // First attempt at compilation gets a free pass
+-                        requestOSRCompilation(target, lockedTarget, frame);
++                        initialRequest[0] = requestOSRCompilation(target, lockedTarget, frame);
+                         stage = HOT_STAGE;
+                     }
+                 }
+                 return lockedTarget;
+             });
++            finishOSRCompilation(initialRequest[0]);
+         } else if (seenMaterializedFrame(frame.getFrameDescriptor()) && !usesParentFrameTarget(callTarget)) {
+             // Update to a call target that uses the parent frame.
+             callTarget = ((Node) osrNode).atomic(() -> {
+@@ -290,7 +292,7 @@ public final class BytecodeOSRMetadata {
+             if (callTarget.isCompilationFailed()) {
+                 markOSRDisabled();
+             } else if (backEdgeCount >= secondaryOsrThreshold) {
+-                requestOSRCompilation(target, callTarget, frame);
++                finishOSRCompilation(requestOSRCompilation(target, callTarget, frame));
+                 // Can happen for very quick compilation or if background compilation is disabled.
+                 valid = callTarget.isValid();
+             }
+@@ -396,7 +398,7 @@ public final class BytecodeOSRMetadata {
+         return ((BytecodeOSRRootNode) callTarget.getRootNode()).usesParentFrame();
+     }
+ 
+-    private void requestOSRCompilation(long target, OptimizedCallTarget callTarget, FrameWithoutBoxing frame) {
++    private OptimizedCallTarget.OSRCompilation requestOSRCompilation(long target, OptimizedCallTarget callTarget, FrameWithoutBoxing frame) {
+         OptimizedCallTarget previousCompilation = getCurrentlyCompiling();
+         if (previousCompilation != null && !previousCompilation.isSubmittedForCompilation()) {
+             // Completed compilation of the previously scheduled compilation. Clear the reference.
+@@ -405,7 +407,7 @@ public final class BytecodeOSRMetadata {
+         if (!currentlyCompiling.compareAndSet(null, PLACEHOLDER)) {
+             // Prevent multiple OSR compilations of the same method at different entry points.
+             resetCounter();
+-            return;
++            return null;
+         }
+         compilationReAttempts.inc(target);
+         if (compilationReAttempts.total() > maxCompilationReAttempts) {
+@@ -421,22 +423,40 @@ public final class BytecodeOSRMetadata {
+             if (callTarget.getOptionValue(OptimizedRuntimeOptions.ThrowOnMaxOSRCompilationReAttemptsReached)) {
+                 throw new AssertionError("Max OSR compilation re-attempts reached for " + osrNode);
+             }
+-            return;
++            return null;
+         }
++        OptimizedCallTarget.OSRCompilation request;
+         try {
+             osrNode.prepareOSR(target);
+             updateFrameSlots(frame, getEntryCacheFromCallTarget(callTarget));
+-            callTarget.compile(true);
++            request = callTarget.submitOSRCompilation();
++        } catch (Throwable e) {
++            markOSRDisabled();
++            throw e;
++        }
++        // Even an already failed task must reach finish so foreground callers
++        // receive its original compilation exception.
++        return request;
++    }
++
++    private void finishOSRCompilation(OptimizedCallTarget.OSRCompilation request) {
++        if (request == null) {
++            return;
++        }
++        try {
++            request.finish();
+         } catch (Throwable e) {
+             markOSRDisabled();
+             throw e;
+         }
+-        if (callTarget.isCompilationFailed()) {
++        if (request.target.isCompilationFailed()) {
+             markOSRDisabled();
+             return;
+         }
+         resetCounter();
+-        boolean submitted = currentlyCompiling.compareAndSet(PLACEHOLDER, callTarget);
++        // Keep the original exclusion through foreground completion/retry;
++        // a different entry point cannot claim the gap between failed tasks.
++        boolean submitted = currentlyCompiling.compareAndSet(PLACEHOLDER, request.target);
+         assert submitted || currentlyCompiling.get() == DISABLE;
+     }
+ 
 diff --git a/com/oracle/truffle/runtime/OptimizedCallTarget.java b/com/oracle/truffle/runtime/OptimizedCallTarget.java
+index 69a95056..8e922f09 100644
 --- a/com/oracle/truffle/runtime/OptimizedCallTarget.java
 +++ b/com/oracle/truffle/runtime/OptimizedCallTarget.java
-@@ -149,3 +149,10 @@
+@@ -149,6 +149,13 @@ public abstract class OptimizedCallTarget implements TruffleCompilable, RootCall
+ 
+     /** The AST to be executed when this call target is called. */
      private final RootNode rootNode;
 +    private volatile long graphBudgetGeneration;
 +    private volatile long graphBudgetRecoveries;
@@ -12,7 +140,10 @@ diff --git a/com/oracle/truffle/runtime/OptimizedCallTarget.java b/com/oracle/tr
 +    }
      private final boolean declaredUnprofiledReturn;
  
-@@ -952,3 +958,13 @@
+     /** Versioned linkage check for the explicit per-root completion contract. */
+@@ -963,10 +970,55 @@ public abstract class OptimizedCallTarget implements TruffleCompilable, RootCall
+      * for compilation.
+      */
      public final boolean compile(boolean lastTierCompilation) {
 -        return compile(lastTierCompilation, CompilationTask.SubmissionReason.EXPLICIT);
 +        while (true) {
@@ -27,14 +158,69 @@ diff --git a/com/oracle/truffle/runtime/OptimizedCallTarget.java b/com/oracle/tr
 +            }
 +        }
      }
-@@ -1012,3 +1029,4 @@
  
+     private boolean compile(boolean lastTierCompilation, CompilationTask.SubmissionReason submissionReason) {
++        return compile(lastTierCompilation, submissionReason, null);
++    }
++
++    /** Submit while the OSR owner is locked; wait only after that lock is released. */
++    final OSRCompilation submitOSRCompilation() {
++        OSRCompilation request = new OSRCompilation(this);
++        compile(true, CompilationTask.SubmissionReason.EXPLICIT, request);
++        return request;
++    }
++
++    static final class OSRCompilation {
++        final OptimizedCallTarget target;
++        private long recoveries;
++        private CompilationTask task;
++
++        OSRCompilation(OptimizedCallTarget target) {
++            this.target = target;
++        }
++
++        void finish() {
++            if (task == null) {
++                return;
++            }
++            target.maybeWaitForTask(task);
++            // Only a completed foreground failure with a real structural
++            // change permits another request. Background submission stays
++            // nonwaiting; cancellation alone does not create a retry.
++            if (!target.engine.backgroundCompilation && !target.isValid() &&
++                            !target.isSubmittedForCompilation() && target.graphBudgetRecoveries > recoveries) {
++                target.compile(true);
++            }
++        }
++    }
++
++    private boolean compile(boolean lastTierCompilation, CompilationTask.SubmissionReason submissionReason, OSRCompilation osrRequest) {
+         boolean lastTier = !engine.firstTierOnly && lastTierCompilation;
+         if (!needsCompile(lastTier)) {
+             return true;
+@@ -1026,6 +1078,10 @@ public abstract class OptimizedCallTarget implements TruffleCompilable, RootCall
+                             return false;
+                         }
+ 
++                        if (osrRequest != null) {
++                            osrRequest.recoveries = graphBudgetRecoveries;
++                        }
 +                        this.graphBudgetGeneration = rootNode.getGraphBudgetGeneration();
                          this.compilationTask = task = runtime().submitForCompilation(this, lastTier, submissionReason);
                      } catch (RejectedExecutionException e) {
-@@ -1194,6 +1212,14 @@
-         if (graphTooBig) {
-             if (computeBlockCompilations()) {
+                         return false;
+@@ -1034,6 +1090,10 @@ public abstract class OptimizedCallTarget implements TruffleCompilable, RootCall
+             }
+             if (task != null) {
+                 runtime().getListener().onCompilationQueued(this, lastTier ? 2 : 1);
++                if (osrRequest != null) {
++                    osrRequest.task = task;
++                    return false;
++                }
+                 return maybeWaitForTask(task);
+             }
+         }
+@@ -1210,6 +1270,14 @@ public abstract class OptimizedCallTarget implements TruffleCompilable, RootCall
                  // retry compilation
                  return;
              }
@@ -47,18 +233,123 @@ diff --git a/com/oracle/truffle/runtime/OptimizedCallTarget.java b/com/oracle/tr
 +                return;
 +            }
          }
-diff --git a/com/oracle/truffle/runtime/BaseOSRRootNode.java b/com/oracle/truffle/runtime/BaseOSRRootNode.java
---- a/com/oracle/truffle/runtime/BaseOSRRootNode.java
-+++ b/com/oracle/truffle/runtime/BaseOSRRootNode.java
-@@ -80,6 +80,11 @@
-         return OptimizedRuntimeAccessor.NODES.prepareForCompilation(getOriginalRootNode(), rootCompilation, compilationTier, lastTier);
+ 
+         handleCompilationFailure(serializedException, silent, bailout, permanentBailout);
+diff --git a/com/oracle/truffle/runtime/OptimizedOSRLoopNode.java b/com/oracle/truffle/runtime/OptimizedOSRLoopNode.java
+index a48fb64b..a0166881 100644
+--- a/com/oracle/truffle/runtime/OptimizedOSRLoopNode.java
++++ b/com/oracle/truffle/runtime/OptimizedOSRLoopNode.java
+@@ -74,6 +74,9 @@ public abstract class OptimizedOSRLoopNode extends AbstractOptimizedLoopNode imp
+      */
+     private volatile OptimizedCallTarget compiledOSRLoop;
+ 
++    /** Retains this request's publication across foreground recovery attempts. */
++    private volatile OptimizedCallTarget reservedOSRLoop;
++
+     /**
+      * The speculation log used by the call target. If multiple compilations happen over time (with
+      * different call targets), the speculation log remains the same so that failed speculations are
+@@ -111,6 +114,7 @@ public abstract class OptimizedOSRLoopNode extends AbstractOptimizedLoopNode imp
+     public final Node copy() {
+         OptimizedOSRLoopNode copy = (OptimizedOSRLoopNode) super.copy();
+         copy.compiledOSRLoop = null;
++        copy.reservedOSRLoop = null;
+         return copy;
      }
  
-+    /** The existing non-adopted loop's source owner; no context is retained. */
-+    public final RootNode getSourceRootNode() {
-+        return getOriginalRootNode();
-+    }
-+
-     @Override
-     protected boolean isCaptureFramesForTrace(boolean compiledFrame) {
-         return OptimizedRuntimeAccessor.NODES.isCaptureFramesForTrace(getOriginalRootNode(), compiledFrame);
+@@ -227,7 +231,7 @@ public abstract class OptimizedOSRLoopNode extends AbstractOptimizedLoopNode imp
+                     if (target == null) {
+                         return loopBody.initialLoopStatus();
+                     }
+-                    if (!target.isSubmittedForCompilation()) {
++                    if (!target.isSubmittedForCompilation() && reservedOSRLoop != target) {
+                         if (target.isValid()) {
+                             return callOSR(target, frame);
+                         }
+@@ -258,29 +262,39 @@ public abstract class OptimizedOSRLoopNode extends AbstractOptimizedLoopNode imp
+     }
+ 
+     private void compileLoop(VirtualFrame frame) {
+-        atomic(new Runnable() {
+-            @Override
+-            public void run() {
+-                if (compilationDisabled) {
+-                    return;
+-                }
+-                /*
+-                 * Compilations need to run atomically as they may be scheduled by multiple threads
+-                 * at the same time. This strategy lets the first thread win. Later threads will not
+-                 * issue compiles.
+-                 */
+-                if (compiledOSRLoop == null) {
+-                    compiledOSRLoop = compileImpl(frame);
+-                }
++        OptimizedCallTarget.OSRCompilation request = atomic(() -> {
++            if (compilationDisabled || compiledOSRLoop != null || reservedOSRLoop != null) {
++                return null;
++            }
++            // Select and submit the first winner before publishing its target.
++            // A compiler callback may replace nodes, so never wait under the AST lock.
++            OptimizedCallTarget target = createOSRTarget(frame);
++            if (target == null) {
++                return null;
+             }
++            OptimizedCallTarget.OSRCompilation submitted = target.submitOSRCompilation();
++            reservedOSRLoop = target;
++            compiledOSRLoop = target;
++            return submitted;
+         });
++        if (request != null) {
++            try {
++                request.finish();
++            } finally {
++                atomic(() -> {
++                    if (reservedOSRLoop == request.target) {
++                        reservedOSRLoop = null;
++                    }
++                });
++            }
++        }
+     }
+ 
+     private AbstractLoopOSRRootNode createRootNodeImpl(RootNode root, Class<? extends VirtualFrame> frameClass) {
+         return createRootNode(root == null ? null : root.getFrameDescriptor(), frameClass);
+     }
+ 
+-    private OptimizedCallTarget compileImpl(VirtualFrame frame) {
++    private OptimizedCallTarget createOSRTarget(VirtualFrame frame) {
+         RootNode root = getRootNode();
+         if (speculationLog == null) {
+             speculationLog = OptimizedTruffleRuntime.getRuntime().createSpeculationLog();
+@@ -295,7 +309,6 @@ public abstract class OptimizedOSRLoopNode extends AbstractOptimizedLoopNode imp
+         }
+ 
+         osrTarget.setSpeculationLog(speculationLog);
+-        osrTarget.compile(true);
+         return osrTarget;
+     }
+ 
+@@ -311,7 +324,11 @@ public abstract class OptimizedOSRLoopNode extends AbstractOptimizedLoopNode imp
+             public void run() {
+                 OptimizedCallTarget target = compiledOSRLoop;
+                 if (target != null) {
+-                    resetCompiledOSRLoop();
++                    // Keep the submitted target discoverable until completion,
++                    // including replacement by its own graph-budget callback.
++                    if (!target.isSubmittedForCompilation() && reservedOSRLoop != target) {
++                        resetCompiledOSRLoop();
++                    }
+                     target.nodeReplaced(oldNode, newNode, reason);
+                 }
+             }
+@@ -332,7 +349,9 @@ public abstract class OptimizedOSRLoopNode extends AbstractOptimizedLoopNode imp
+             public void run() {
+                 OptimizedCallTarget target = compiledOSRLoop;
+                 if (target != null) {
+-                    resetCompiledOSRLoop();
++                    if (reservedOSRLoop != target) {
++                        resetCompiledOSRLoop();
++                    }
+                     target.invalidate(reason);
+                 }
+             }

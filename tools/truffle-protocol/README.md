@@ -133,8 +133,8 @@ once-only effects. Default nodes still invalidate on their first exception.
 The runtime's `BaseOSRRootNode.getSourceRootNode()` accessor exposes the existing
 original-root relationship without retaining a context. It covers both loop OSR
 and the copied/parent-frame bytecode OSR implementations. `testOsrSourceOwnership`
-checks actual compiled wrappers and clone ownership. This read-only accessor
-does not itself forward budget recovery hooks or change OSR compilation.
+checks actual compiled wrappers and clone ownership. The accessor is read-only;
+the budget recovery forwarding and scheduler behavior below are separate.
 
 The pinned API/runtime pair also provides an opt-in recovery hook for a real
 graph-size bailout. `RootNode.getGraphBudgetGeneration()` supplies the logical
@@ -154,6 +154,30 @@ the changed root eligible for a later request; it does not submit another task
 inside the callback. A successful recovery does not mark the caller permanently
 failed or universally uninlinable. Non-budget failures and exhausted plans retain
 the existing policy. Clones sample their current generation on each new task.
+
+OSR wrappers forward the generation and recovery hooks to their actual source
+root. Loop and bytecode OSR select and submit a task under the existing AST lock,
+then perform any foreground wait outside that lock, so a compiler-thread recovery
+can use ordinary node replacement. A cold per-request handle retains only its
+target, exact task and pre-submission recovery count, not a frame or context.
+Only a completed failure with a real newer generation permits the existing
+foreground retry. Background compilation remains nonwaiting and never submits
+recursively from its failure callback.
+
+A loop target is published only after actual submission. Replacement still
+invalidates/cancels it, but the exact target remains reserved through foreground
+completion, including the interval between a failed task and its structural retry.
+Other callers continue normal interpreter work during that interval. The
+reservation is cleared in finally and is not copied to cloned loops; ordinary
+validity/failure handling then applies. Bytecode OSR retains its existing target
+map, preparation, frame transfer and single-compilation exclusion. Even a task
+that fails before submission returns reaches foreground completion, preserving
+its original failure delivery.
+`testOsrGraphBudgetRecovery` checks real loop and bytecode graph failures, exact
+once-only effects, compiled suffixes, exhausted plans, background completion,
+concurrent first-winner publication, replacement, cancellation, fast failures and
+concurrent callers in the failed-task/retry interval. It does not
+establish an outlining policy for every oversized guest loop.
 
 `./gradlew testGraphBudgetRecovery` exercises a handwritten Java model with an
 actual oversized caller body, a structural replacement by a call to an extracted
