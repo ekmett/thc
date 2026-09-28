@@ -21,7 +21,7 @@ The standalone `--run-executable` launcher enables asynchronous exceptions on
 both backends by default, so original GHC startup can install its process signal
 handlers. An explicit `-Dthc.asyncExceptions=false` still selects synchronous
 execution. Raw `--run-io` and embedding requests retain the backend defaults
-above. Process signal dispatch requires the enabled mode; see
+above. Process signal dispatch requires platform hosting and the enabled mode; see
 [standalone process signals](process-signals.md).
 
 With async enabled, AST captures ordinary and typed calls, strict entry forcing,
@@ -43,14 +43,18 @@ the original request and the child's separate one-shot ownership. Non-delivery
 scheduling cuts through the image still reject; see
 [delimited continuations](delimited-continuations.md).
 
-Managed foreign reverse entries create fresh bound guest identities on the same
-carrier. They start unmasked and cannot claim the suspended caller's mailbox.
+In platform hosting, managed foreign reverse entries create fresh bound guest
+identities on the same carrier. They start unmasked and cannot claim the suspended
+caller's mailbox.
 Self-directed delivery compares logical identities, so sending to that caller
 from its callback is not a self-throw. Return retires the callback and restores
 the caller's mask, polling cell and AST stack scope. Allocation counters pause
 while a nested callback owns the carrier, including cross-context callbacks;
 resetting a suspended counter does not restart its accounting interval.
 Ordinary nested guest entries continue to share their current identity.
+Loom rejects general safe/interruptible foreign transitions and reverse callbacks;
+see [thread hosting](thread-scheduling.md#thread-hosting).
+
 Synchronous managed JavaScript, polyglot, private file-ABI and linked package calls retain their
 exact safe/unsafe declarations. An unsafe activation rejects reverse entry before
 creating a guest identity, even across contexts. A safe activation admits fresh

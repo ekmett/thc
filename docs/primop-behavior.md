@@ -39,12 +39,12 @@ test commands.
 | `spark#` | Discards the hint and returns the identical, unforced payload. |
 | `numSparks#` | Always returns `0`; there is no spark queue. |
 | `getSpark#` | Always returns failure flag `0` and the pinned GHC boxed `False` filler; no work is dequeued. |
-| `fork#` | Creates a real Java platform thread rather than a lightweight GHC scheduler thread. Thread creation must be allowed by the embedding. Attempts to clear inherited CPU affinity to the context baseline. Resumable external delivery requires `asyncExceptions: true`; see `killThread#` below. |
+| `fork#` | Creates a Truffle-managed platform thread by default, or one virtual thread per guest thread with opt-in `thc.ThreadHosting=loom`. Thread creation must be allowed by the embedding. Platform mode clears inherited CPU affinity; Loom routes unmounted work between exclusive logical HEC workers. Resumable external delivery requires `asyncExceptions: true`; see `killThread#` below. |
 | `forkOn#` | Same thread and delivery requirements as `fork#`. Chooses a dense logical capability modulo the context's current logical capability count, then maps modulo its immutable eligible CPU capacity. Native affinity is **best effort**: Linux requests a per-thread pin; Windows requests advisory CPU Sets and declines unresolved multi-group topology; macOS, unavailable native access, or a rejected request run unpinned without failing the fork. |
 | `threadStatus#` | Capability is a context-local assignment, not a measurement of the currently executing physical CPU. The lock flag records a `forkOn#` request, **not successful OS affinity**. Ordinary threads share logical capabilities. |
-| `listThreads#` | Lists context-owned guest identities, not every JVM thread. Retained completed identities and host carriers between guest invocations can appear; ordering is unspecified. |
-| `isCurrentThreadBound#` | Returns `1` inside an admitted safe managed foreign reverse entry and `0` for ordinary guest entries and forks. Unsafe activations reject reverse entry before changing thread state. Callback identities stay on their carrier; raw C callback transport and `forkOS` remain unsupported. |
-| `setThreadAllocationCounter#` | Accounts JVM heap bytes during outer guest-entry extents, including runtime bookkeeping and excluding native/Sulong allocations and host work between entries. Requires JVM thread-allocation accounting support. Does **not** enforce allocation limits. |
+| `listThreads#` | Lists context-owned guest identities, not every JVM thread. Retained completed identities and, in platform mode, host carriers between guest invocations can appear; ordering is unspecified. |
+| `isCurrentThreadBound#` | In platform mode, returns `1` inside an admitted safe managed foreign reverse entry and `0` for ordinary guest entries and forks. Unsafe activations reject reverse entry before changing thread state. Loom rejects callbacks. Callback identities stay on their carrier; raw C callback transport and `forkOS` remain unsupported. |
+| `setThreadAllocationCounter#` | Accounts JVM heap bytes during outer guest-entry extents, including runtime bookkeeping and excluding native/Sulong allocations and host work between entries. Requires JVM thread-allocation accounting support; Loom reads/resets reject. Does **not** enforce allocation limits. |
 | `setOtherThreadAllocationCounter#` | Same accounting and missing allocation-limit enforcement, for the selected context-owned thread. |
 
 Discarding sparks is a deliberate hint policy, not a claim of parallel speedup.
@@ -55,16 +55,19 @@ created earlier during initialization and unrecognized workers are not covered.
 Use the public [THC affinity API](cpu-affinity-api.md) to observe native request
 acceptance; `threadStatus#` cannot supply that information.
 
-**Virtual-thread safety:** guest forks explicitly use
-[`newTruffleThreadBuilder(...).virtual(false)`](../src/main/java/thc/runtime/GuestThreadOps.java).
-They do not migrate between Java virtual-thread carriers. Both the
+**Virtual-thread safety:** platform hosting is the default. Opt-in Loom hosting
+uses a lifetime routing executor per guest virtual thread, not the JVM's shared
+default scheduler; only its exclusive HEC platform workers receive native pins.
+Both the
 [Linux](../src/main/java/thc/runtime/LinuxCpuAffinity.java) and
 [Windows](../src/main/java/thc/runtime/WindowsCpuAffinity.java) affinity paths
 refuse native affinity changes on virtual threads, including when an embedding
-enters from one. Do not remove those guards or switch guest forks to virtual
-threads while retaining carrier-local pinning: a pin could otherwise affect
-unrelated work on a shared carrier. This safeguard does not eliminate the
-helper-inheritance caveat above.
+enters from one. Keep those guards: native pins on a migrating virtual thread
+could affect unrelated carrier work. Loom rejects general safe/interruptible
+foreign transitions, callbacks, process-signal handlers and explicit per-thread
+allocation counters. See the exact setup and limitations in
+[thread hosting](thread-scheduling.md#thread-hosting). The helper-inheritance
+caveat above still applies.
 
 Details: [scheduling and affinity](thread-scheduling.md),
 [thread status](thread-status.md), [thread inventory](thread-inventory.md).

@@ -18,10 +18,12 @@ guest exception. A runtime implementation failure remains a diagnostic error;
 it is not relabeled as a Haskell exception.
 
 Each context snapshots available CPU capacity before guest pinning and initializes
-its separate logical capability count from it. Ordinary carriers share logical
-indices round-robin; `forkOn#` selects modulo that count and maps to eligible CPUs
-for a best-effort affinity request. Original `setNumCapabilities` can change the
-logical count; shrinking normalizes retained indices without repinning carriers.
+its separate logical capability count from it. Ordinary platform threads receive
+logical indices round-robin; unmounted, unlocked Loom threads can migrate between
+HECs. `forkOn#` selects modulo that count and maps to eligible CPUs for a best-effort
+affinity request. Original `setNumCapabilities` changes the logical count. Platform
+hosting normalizes retained indices on shrink without repinning carriers. Loom
+normalizes parked and queued routes immediately, and mounted routes when they unmount.
 The locked result records that request, not OS acceptance. More guest threads do
 not increase the capability count. Weak carrier references let retained thread
 identities preserve their observable capability without retaining dead Java threads.
@@ -29,10 +31,11 @@ See [scheduling and affinity](thread-scheduling.md) for platform support and
 `fork#`'s inherited-affinity reset. Masking, Java-thread binding, capability
 locking, and physical CPU affinity remain separate concepts.
 
-`ThreadId#` equality remains Java thread ID plus context identity. A live host
-carrier outside all guest entries is in foreign execution, and subsequent host
-calls reuse its identity and capability. Nested callbacks temporarily restore
-running status and restore the enclosing foreign/blocking status on return.
+In platform hosting, a live host carrier outside all guest entries is in foreign
+execution, and subsequent host calls reuse its logical identity and capability.
+Nested callbacks temporarily restore running status and restore the enclosing
+foreign/blocking status on return. Loom creates a fresh virtual-thread identity
+for each outer public entry; nested entries retain it, and callbacks reject.
 A forked guest thread publishes its terminal outcome when its action unwinds.
 For host carriers, termination is observed through the weak Java thread reference
 and uses the last guest outcome. Host exceptions outside guest execution do not
