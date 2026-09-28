@@ -10,7 +10,7 @@
 -- Portability : Native GHC; fixture compiler and host process services
 --
 -- Tests for project.
-module ProjectTests (tests, acquisitionTests, exceptionBridgeTests) where
+module ProjectTests (tests, acquisitionTests, exceptionBridgeTests, interopTests) where
 
 import Control.Exception (bracket)
 import Control.Monad (forM, forM_)
@@ -28,7 +28,78 @@ import qualified THC.Driver.NativeRecipe as NativeRecipe
 import TestSupport
 
 tests :: Env -> Test
-tests env = TestList [acquisitionTests env, exceptionBridgeTests env, projectTests env, cstringTests env]
+tests env = TestList [acquisitionTests env, exceptionBridgeTests env, interopTests env, projectTests env, cstringTests env]
+
+interopTests :: Env -> Test
+interopTests env = TestLabel "interop acquisition skips only the selected native final link" $ TestCase $
+  withFixtureNamed env "t/fixtures/run-interop" "interop café" $ \project ->
+  withCache (scratch env </> "core-cache") $ do
+    -- A real source-distribution dependency also forces cold store capture.
+    -- Its private rebuild must carry the same selected-unit no-link policy.
+    assertSuccess =<< runExe env (project </> "support") Nothing 60 "cabal"
+      ["sdist", "--output-dir", project]
+    writeText (project </> "cabal.project")
+      ("packages: run-interop.cabal interop-support-0.1.0.0.tar.gz " ++ show (thcRoot env </> "thc.cabal") ++ "\n")
+    let output = takeDirectory project </> "output"
+        acquire target = run env project Nothing 300
+          ["acquire", target, "--project-dir", project, "--thc-root", thcRoot env,
+           "--installed-core", "pinned", "--dist-dir", output]
+        component plan name = one ((== name) . string . (`field` "component-name")) (objects plan "install-plan")
+    acquired <- acquire "interop-app"
+    assertSuccess acquired
+    plan <- readJson (output </> "native/cache/plan.json")
+    let entry = component plan "exe:interop-app"
+        identifier = string (field entry "id")
+    assertBool "no fake native executable is created for the guest-only app" . not
+      =<< doesFileExist (string $ field entry "bin-file")
+    requireFile (string $ field entry "build-info")
+    manifest <- readSourceManifest (output </> "packages.json")
+    let record = one ((== identifier) . string . (`field` "id")) (objects manifest "units")
+    assertBool "normal acquisition publishes the selected application's original Core"
+      (any ((== "Main") . string . (`field` "name")) (objects record "modules"))
+    let support = one ((== "interop-support") . string . (`field` "pkg-name")) (objects plan "install-plan")
+        supportRecord = one ((== field support "id") . (`field` "id")) (objects manifest "units")
+    assertEqual "source distribution exercises cold store capture" "global" (string $ field support "style")
+    assertBool "cold capture publishes the genuine support module"
+      (any ((== "InteropSupport") . string . (`field` "name")) (objects supportRecord "modules"))
+    copyFile (output </> "packages.json") (scratch env </> "interop-packages.json")
+    copyFile (output </> "native/cache/plan.json") (scratch env </> "interop-plan.json")
+    -- Export the same Safe application against Cabal's installed component via
+    -- the normal helper, not local include paths or a hand-written plugin spec.
+    let interop = component plan "lib:interop"
+        interopId = string (field interop "id")
+        packageDb = output </> "native/packagedb/ghc-9.14.1"
+    forM_ [("default", "true", []), ("off", "false", []),
+           ("explicit", "false", ["-fplugin-opt=THC.Plugin:source-notes", "-g"])] $
+      \(name, notes, extra) -> do
+        let exported = scratch env </> takeFileName (takeDirectory project) </> ("interop-helper-" ++ name)
+            options = ["-fplugin-opt=THC.Plugin:post-tidy", "-fplugin-opt=THC.Plugin:closure=snapshot",
+                       "-fplugin-opt=THC.Plugin:foreign-import-provenance"] ++ extra
+            response = project </> "helper-options"
+        writeText response (unlines options)
+        result <- runExe env project Nothing 120 "env"
+          (["THC_CORE_OUT=" ++ exported, "THC_GHC_OUT=" ++ exported </> "objects",
+            "THC_SOURCE_NOTES=" ++ notes, thcRoot env </> "bin/export-core.sh",
+            "-i", "-package-db", packageDb, "-package-id", interopId, "-fplugin-trustworthy"] ++
+            (if name == "explicit" then ["@" ++ response] else options) ++ [project </> "lib/InteropApi.hs"])
+        assertSuccess result
+        core <- readJson (exported </> "InteropApi.json")
+        assertEqual "caller post-tidy option survives direct loading"
+          "optimized-Core-after-Tidy-before-CorePrep" (string $ field core "boundary")
+        assertEqual "source-note default, opt-out, and explicit caller opt-in survive"
+          (name /= "off") (not (null (objects core "sourceFiles")))
+        requireFile (exported </> "THC.InterfaceClosure.json")
+    forM_ ["exe:generator", "exe:ordinary"] $ \name -> do
+      -- The build-tool executable is built by the interop app; the ordinary
+      -- consumer uses the same driver/native directory after that policy ends.
+      if name == "exe:ordinary" then assertSuccess =<< acquire "ordinary" else pure ()
+      current <- readJson (output </> "native/cache/plan.json")
+      let binary = string (field (component current name) "bin-file")
+      requireFile binary
+      native <- runExe env project Nothing 30 binary []
+      assertSuccess native
+      assertEqual "non-selected native programs still link and run" "42\n" (out native)
+    copyFile (output </> "packages.json") (scratch env </> "interop-ordinary-packages.json")
 
 exceptionBridgeTests :: Env -> Test
 exceptionBridgeTests env = TestLabel "automatic exact exception dictionary linking" $ TestCase $

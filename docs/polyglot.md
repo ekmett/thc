@@ -137,22 +137,22 @@ JavaScript may require serialized or isolated access even when Haskell code
 runs concurrently. An admitted callback stays on its carrier and obeys the
 other language's access rules; safety is not permission for concurrent entry.
 
-For an installed `thc:interop` component, export Core with GHC's direct plugin
-library option. Ordinary `-fplugin=THC.Plugin` eagerly links packages named by
-`-package-id` when loading the plugin, including THC-only prim symbols. Direct
-loading uses the same Cabal-built plugin without linking the guest component:
+The normal `thc acquire`/`thc run` project path recognizes `thc:interop` in the
+selected application's Cabal dependency closure and omits only that application's
+native final link. Dependencies and build-tool executables still compile and link
+normally; no native implementation of these prim symbols is invented.
+
+For standalone Core export against an installed component, the normal helper
+loads the Cabal-built plugin directly, avoiding ordinary `-fplugin`'s eager native
+link of guest dependencies. Caller `-fplugin-opt=THC.Plugin:...` options and
+`THC_SOURCE_NOTES` retain their usual meaning:
 
 ```sh
 cabal build lib:interop
-bin/build-compiler.sh
-plugin_library=$(python3 bin/plugin.py --field sharedLibrary)
-plugin_unit=$(python3 bin/plugin.py --field unitId)
-plugin_db=$(python3 bin/plugin.py --field packageDb)
 package_db=dist-newstyle/packagedb/ghc-9.14.1
 interop_unit=$(ghc-pkg --package-db "$package_db" field z-thc-z-interop id --simple-output)
-ghc --make -no-link -O2 -dynamic -i -package-db "$plugin_db" \
-  -package-db "$package_db" -package-id "$interop_unit" \
-  "-fplugin-library=$plugin_library;$plugin_unit;THC.Plugin;[\"build/core\",\"post-tidy\"]" \
+bin/export-core.sh -i -package-db "$package_db" -package-id "$interop_unit" \
+  -fplugin-trustworthy -fplugin-opt=THC.Plugin:post-tidy \
   Application.hs
 ```
 

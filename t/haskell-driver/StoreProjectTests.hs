@@ -10,14 +10,14 @@
 -- Portability : Native GHC; host filesystem/process services
 --
 -- Tests for store project.
-module StoreProjectTests (tests, inplaceTests, concurrentTests, exportSafetyTests) where
+module StoreProjectTests (tests, inplaceTests, concurrentTests, exportSafetyTests, proxyOptionsTest) where
 
 import Control.Concurrent (forkFinally, killThread, newEmptyMVar, putMVar, readMVar)
 import Control.Exception (bracket, throwIO)
 import Control.Monad (forM_, unless)
 import Data.Char (isHexDigit)
 import qualified Data.ByteString as BS
-import Data.List (isPrefixOf, sort)
+import Data.List (isPrefixOf, sort, stripPrefix)
 import System.Directory (getModificationTime, getPermissions, removeFile,
                          removePathForcibly, setPermissions)
 import qualified System.Directory as Directory
@@ -27,7 +27,7 @@ import System.FilePath ((</>), takeDirectory, takeFileName)
 import qualified System.Process as Process
 import Test.HUnit (Test(..), assertBool, assertEqual)
 import TestSupport
-import THC.Driver.GhcProxy (ghcProxyCommand)
+import THC.Driver.GhcProxy (ghcProxyCommand, directPlugin)
 import THC.Driver.Lock (withLock)
 
 tests :: Env -> Test
@@ -85,7 +85,10 @@ exportSafetyTests env = TestLabel "local export preserves inferred safety and re
     let pluginFlags = ["-package-db", string $ field plugin "packageDb",
           "-plugin-package-id", string $ field plugin "unitId",
           "-fplugin=THC.Plugin", "-fplugin-trustworthy"]
-    forM_ [("native", []), ("export", pluginFlags)] $ \(name, extra) -> do
+        directFlags = ["-package-db", string $ field plugin "packageDb", "-fplugin-trustworthy",
+          directPlugin (string $ field plugin "sharedLibrary") (string $ field plugin "unitId")
+            [base </> "direct-core"] []]
+    forM_ [("native", []), ("export", pluginFlags), ("direct", directFlags)] $ \(name, extra) -> do
       rejected <- runExe env (project </> "dep-data") Nothing 60 compiler
         (["--make", "-fno-code", "-fforce-recomp", "-isrc", "src/Answer.hs",
           "-outputdir", base </> ("unsafe-" ++ name)] ++ extra)
@@ -286,16 +289,18 @@ proxyOptionsTest env = TestLabel "compiler proxy preserves arguments and replay 
                     ("THC_PROXY_CAPTURE", project </> "capture"),
                     ("THC_PROXY_PLUGIN_DB", project </> "plugin-db"),
                     ("THC_PROXY_PLUGIN_UNIT", "thc-plugin"),
+                    ("THC_PROXY_PLUGIN_LIBRARY", project </> "plugin café.so"),
+                    ("THC_PROXY_NO_LINK_UNIT", ""),
                     ("THC_PROXY_ARGUMENTS", arguments)]
     writeText compiler "#!/bin/sh\nprintf 'BEGIN\\0' >> \"$THC_PROXY_ARGUMENTS\"\nprintf '%s\\0' \"$@\" >> \"$THC_PROXY_ARGUMENTS\"\n"
     writeText wrapper ("#!/bin/sh\n" ++ ghcProxyCommand)
-    writeText response "--make\n-this-unit-id\nsample\n+RTS\n-A8m\n-RTS\n"
+    writeText response "--make\n-this-unit-id\nsample\n-fplugin-opt=THC.Plugin:closure=response\n+RTS\n-A8m\n-RTS\n"
     forM_ [compiler, wrapper] $ \path -> do
       permissions <- getPermissions path
       setPermissions path permissions { Directory.executable = True }
     original <- getEnvironment
     let environment = settings ++ filter ((`notElem` map fst settings) . fst) original
-        cases = [ (True, ["--make", "-this-unit-id", "sample", "+RTS", "-A8m", "-RTS"])
+        ordinary = [ (True, ["--make", "-this-unit-id", "sample", "+RTS", "-A8m", "-RTS"])
                 , (False, ["--numeric-version", "+RTS", "-A8m", "-RTS", "--",
                            "space and café", "", "line\nbreak", "\"quoted\"", "$literal"])
                 , (True, ["@" ++ response])
@@ -303,16 +308,25 @@ proxyOptionsTest env = TestLabel "compiler proxy preserves arguments and replay 
                 , (True, ["--make", "-this-unit-id", "sample", "-g2"])
                 , (False, ["--numeric-version", "--RTS", "+RTS", "-A8m", "-RTS"])
                 ]
-    forM_ cases $ \(replays, supplied) -> do
+        cases = [(replays, False, "", supplied) | (replays, supplied) <- ordinary] ++
+          [(True, True, "sample", ["--make", "-this-unit-id", "sample",
+             "-fplugin-opt=THC.Plugin:closure=first", "-fplugin-opt", "THC.Plugin:closure=second"]),
+           (True, True, "sample", ["--make", "-this-unit-id=sample"]),
+           (True, True, "sample", ["@" ++ response]),
+           (False, False, "sample", ["--make", "-this-unit-id", "sample-tool"]),
+           (False, False, "sample", ["--numeric-version"])]
+    forM_ cases $ \(replays, noLink, policy, supplied) -> do
       writeText arguments ""
       let command = (Process.proc wrapper supplied)
-            { Process.cwd = Just project, Process.env = Just environment }
+            { Process.cwd = Just project, Process.env = Just
+                (("THC_PROXY_NO_LINK_UNIT", policy) : filter ((/= "THC_PROXY_NO_LINK_UNIT") . fst) environment) }
       (status, _, stderr) <- Process.readCreateProcessWithExitCode command ""
       assertEqual stderr ExitSuccess status
       calls <- splitArguments <$> readText arguments
       let (native, replay) = break (== "BEGIN") (drop 1 calls)
-          flag = "-fplugin-opt=THC.Plugin:foreign-import-provenance"
-      assertEqual "native compiler receives every original argument exactly" supplied native
+          externalPrefix = "-fplugin-library=" ++ project </> "plugin café.so" ++ ";thc-plugin;THC.Plugin;"
+      assertEqual "native arguments change only for the selected guest-only unit"
+        (supplied ++ ["-no-link" | noLink]) native
       assertEqual "only selected Core compilations replay" (if replays then 2 else 1)
         (length $ filter (== "BEGIN") calls)
       if replays then do
@@ -321,8 +335,19 @@ proxyOptionsTest env = TestLabel "compiler proxy preserves arguments and replay 
         assertBool "replay does not change native debug settings or hidden binder identities"
           (all (`notElem` ["-g", "-g0", "-g1", "-g2", "-g3"])
             (drop (length supplied) (drop 1 replay)))
-        assertEqual "replayed compiler receives exactly one provenance opt-in" 1
-          (length $ filter (== flag) replay)
+        let specifications = [value | Just value <- map (stripPrefix externalPrefix) replay]
+        assertEqual "replay loads exactly one actual direct plugin" 1 (length specifications)
+        pluginOptions <- case specifications of
+          [value] -> pure (read value :: [String])
+          _ -> fail "direct plugin specification missing"
+        assertEqual "required output and provenance options precede caller additions"
+          [project </> "capture/sample/core", "post-tidy", "unit-qualified", "source-notes", "foreign-import-provenance"]
+          (take 5 pluginOptions)
+        assertEqual "exactly one provenance opt-in" 1 (length $ filter (== "foreign-import-provenance") pluginOptions)
+        let wanted = if supplied == ["@" ++ response] then ["closure=response"]
+              else if "-fplugin-opt" `elem` supplied then ["closure=first", "closure=second"] else []
+        assertEqual "caller plugin options and response-file options survive in order" wanted (drop 5 pluginOptions)
+        assertBool "ordinary plugin loading does not eagerly link guest dependencies" ("-fplugin=THC.Plugin" `notElem` replay)
       else pure ()
   where
     splitArguments "" = []

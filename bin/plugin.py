@@ -284,6 +284,51 @@ def read(root):
     return data
 
 
+def response_arguments(contents):
+    """Pinned GHC.ResponseFile grammar: backslash escapes even inside quotes."""
+    words, word, quote, escaped = [], [], None, False
+    for character in contents:
+        if escaped:
+            word.append(character)
+            escaped = False
+        elif character == "\\":
+            escaped = True
+        elif quote:
+            if character == quote:
+                quote = None
+            else:
+                word.append(character)
+        elif character in "'\"":
+            quote = character
+        elif character.isspace():
+            words.append("".join(word))
+            word = []
+        else:
+            word.append(character)
+    return [value for value in words + ["".join(word)] if value]
+
+
+def external_plugin_argument(metadata, output, arguments):
+    """GHC's direct loader reads a Haskell list; ordinary fplugin-opt is separate."""
+    options = [output]
+    # Like GHC's expandResponse, expand one level only. Keep the original argv
+    # for GHC itself; this pass collects only the direct plugin's own options.
+    arguments = iter(value for argument in arguments for value in
+                     (response_arguments(Path(argument[1:]).read_text()) if argument.startswith("@") else [argument]))
+    for argument in arguments:
+        value = next(arguments, "") if argument == "-fplugin-opt" else \
+            argument.removeprefix("-fplugin-opt=") if argument.startswith("-fplugin-opt=") else ""
+        if value.startswith("THC.Plugin:"):
+            options.append(value.removeprefix("THC.Plugin:"))
+        elif value == "THC.Plugin":
+            options.append("")
+    def quoted(value):
+        return '"' + ''.join(character if ord(character) >= 32 and character not in '\\"' else
+                             "\\" + str(ord(character)) + "\\&" for character in value) + '"'
+    return ("-fplugin-library=" + metadata["sharedLibrary"] + ";" + metadata["unitId"] +
+            ";THC.Plugin;[" + ",".join(map(quoted, options)) + "]")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parent.parent)
@@ -292,10 +337,17 @@ if __name__ == "__main__":
     mode.add_argument("--publish", action="store_true")
     mode.add_argument("--registry-only", action="store_true",
                       help="Publish the actual package closure without requiring a shared THC library")
+    mode.add_argument("--external-plugin", nargs=argparse.REMAINDER,
+                      help="Render the direct plugin flag from OUTPUT followed by caller GHC arguments")
     parser.add_argument("--field", choices=("unitId", "packageDb", "sharedLibrary", "cabalSharedLibrary"))
     args = parser.parse_args()
     result = registry(args.root, args.ghc_pkg) if args.registry_only else \
         publish(args.root, args.ghc_pkg) if args.publish else read(args.root)
     if args.field and args.field not in result:
         parser.error("--registry-only does not locate shared-library fields")
-    print(result[args.field] if args.field else json.dumps(result, sort_keys=True))
+    if args.external_plugin is not None:
+        if not args.external_plugin or args.field:
+            parser.error("--external-plugin needs OUTPUT and does not accept --field")
+        print(external_plugin_argument(result, args.external_plugin[0], args.external_plugin[1:]))
+    else:
+        print(result[args.field] if args.field else json.dumps(result, sort_keys=True))

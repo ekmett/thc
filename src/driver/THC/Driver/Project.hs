@@ -58,7 +58,7 @@ import THC.Driver.Cabal (PlanOptions(..))
 import THC.Driver.Cache (coreCacheDirectory)
 import THC.Driver.CoreIndex (packageModules, modulePaths, moduleEntries)
 import THC.Driver.CoreSymbols (publishCoreUnit)
-import THC.Driver.GhcProxy (ghcProxyCommand, ghcProxyWindowsCommand)
+import THC.Driver.GhcProxy (ghcProxyCommand, ghcProxyWindowsCommand, directPlugin)
 import THC.Driver.NativeRecipe (NativeRecipe(..), componentRoots, componentNativeObjects,
   readNativeRecipe, ensureNativeRecipes, componentRuntimeShim, componentDeclaredModules, componentHomeInterfaces)
 import THC.Driver.ScalarBitcode (ScalarBitcode, scalarBuildInputs, linkScalarBitcode)
@@ -110,7 +110,8 @@ data ExportContext = ExportContext
   , contextDriver :: FilePath, contextRoot :: FilePath
   , contextProjectOptions :: [String]
   , contextNativeTools :: Value
-  , contextVerifyArtifacts :: Bool }
+  , contextVerifyArtifacts :: Bool
+  , contextNoLinkUnit :: Maybe String }
 
 boundary :: String
 boundary = "optimized-Core-after-Tidy-before-CorePrep"
@@ -213,13 +214,14 @@ prepareWindowsRuntimeWithVerification verify repository selectedCompiler selecte
     driverHash <- digestFile driver
     nativeTools <- nativeToolIdentity
     let context = ExportContext compilerId abi (arch ++ "-" ++ os) pluginDb pluginUnit
-          archive native cache driverHash compiler (Just pkg) driver root [] nativeTools verify
+          archive native cache driverHash compiler (Just pkg) driver root [] nativeTools verify Nothing
         proxy = nativeCompilerProxy context
     createDirectoryIfMissing True (takeDirectory proxy)
     writeFile proxy ghcProxyWindowsCommand
     inherited <- getEnvironment
     let overrides = [("THC_PROXY_DRIVER",driver),("THC_PROXY_GHC",compiler),
-          ("THC_PROXY_GLOBAL_UNITS",""),("THC_PROXY_NATIVE_RECIPES",native </> "cache/thc/native-recipes-v1")]
+          ("THC_PROXY_GLOBAL_UNITS",""),("THC_PROXY_NO_LINK_UNIT",""),
+          ("THC_PROXY_NATIVE_RECIPES",native </> "cache/thc/native-recipes-v1")]
         environment = overrides ++ filter ((`notElem` map fst overrides) . fst) inherited
     wired <- wiredGhcInternal context root
     (owner, records) <- linkForeignExceptionRuntime context environment "pinned" Nothing archive [wired]
@@ -395,11 +397,22 @@ runBuiltProject action project working thcRoot runtime output native target proj
   inherited <- getEnvironment
   let overrides = [("THC_PROXY_DRIVER", driver), ("THC_PROXY_GHC", ghc),
                    ("THC_PROXY_NATIVE_RECIPES", receipts), ("THC_PROXY_GLOBAL_UNITS", ""),
+                   ("THC_PROXY_NO_LINK_UNIT", ""),
                    ("THC_PROXY_NATIVE_PIECES", native </> "cache/thc/native-pieces-v1")]
-      environment = overrides ++ filter (\(key, _) -> key `notElem` map fst overrides) inherited
-      cabal = maybe "cabal" id (lookup "CABAL" environment)
+      selectionEnvironment = overrides ++ filter (\(key, _) -> key `notElem` map fst overrides) inherited
+      cabal = maybe "cabal" id (lookup "CABAL" selectionEnvironment)
+  selectedUnit <- resolveRunnable working target configuration selectionEnvironment native
+  selectionPlan <- readJson (native </> "cache/plan.json")
+  selectionUnits <- mapM readUnit =<< field selectionPlan "install-plan"
+  let selectionById = Map.fromList [(unitId unit, unit) | unit <- selectionUnits]
+  require (Map.size selectionById == length selectionUnits) "Cabal plan has duplicate unit IDs"
+  selectedClosure <- dependencyClosure selectionById (unitId selectedUnit)
+  let guestOnly = any (\unit -> jsonField (unitValue unit) "pkg-name" == Just ("thc" :: String) &&
+                              jsonField (unitValue unit) "component-name" == Just ("lib:interop" :: String)) selectedClosure
+      noLinkUnit = if guestOnly then Just (unitId selectedUnit) else Nothing
+      environment = ("THC_PROXY_NO_LINK_UNIT", maybe "" id noLinkUnit) :
+        filter ((/= "THC_PROXY_NO_LINK_UNIT") . fst) selectionEnvironment
       nativeBuild arguments = runCommandWithEnv True cabal arguments project (Just environment)
-  selectedUnit <- resolveRunnable working target configuration environment native
   selectedPackageName <- field (unitValue selectedUnit) "pkg-name"
   selectedComponentName <- field (unitValue selectedUnit) "component-name"
   require (takeWhile (/= ':') selectedComponentName `elem` ["exe", "bench", "test"])
@@ -419,12 +432,13 @@ runBuiltProject action project working thcRoot runtime output native target proj
   driverHash <- digestFile driver
   nativeTools <- nativeToolIdentity
   let context = ExportContext compilerId abi (arch ++ "-" ++ os) pluginDb pluginUnit
-                              pluginLibrary native cacheRoot driverHash ghc ghcPkg driver thcRoot projectOptions nativeTools verifyArtifacts
+                              pluginLibrary native cacheRoot driverHash ghc ghcPkg driver thcRoot projectOptions nativeTools verifyArtifacts noLinkUnit
   records <- field plan "install-plan" :: IO [Value]
   units <- mapM readUnit records
   let byId = Map.fromList [(unitId unit, unit) | unit <- units]
   require (Map.size byId == length units) "Cabal plan has duplicate unit IDs"
   selected <- selectRunnable selection units
+  require (unitId selected == unitId selectedUnit) "Cabal changed the selected unit identity during its build"
   -- The plan can also list unrelated executables, tests and benchmarks.
   -- Only the requested runnable component and its complete dependency
   -- closure have required build-info; a missing member of that closure fails.
@@ -1403,6 +1417,8 @@ captureGlobalUnits context project target planned requested missing validateInpu
                      ("THC_PROXY_CAPTURE", capture),
                      ("THC_PROXY_PLUGIN_DB", contextPluginDb context),
                      ("THC_PROXY_PLUGIN_UNIT", contextPluginUnit context),
+                     ("THC_PROXY_PLUGIN_LIBRARY", contextPluginLibrary context),
+                     ("THC_PROXY_NO_LINK_UNIT", maybe "" id (contextNoLinkUnit context)),
                      ("THC_PROXY_NATIVE_PIECES", staging </> "native-pieces"),
                      ("THC_PROXY_INTERFACE_HELPER", installedHelper helper),
                      ("THC_PROXY_INTERFACE_LIBDIR", installedLibdir helper),
@@ -1710,14 +1726,17 @@ freshExport context component unit scalar runtimeShim helper nativeObjects build
     -- The known THC exporter preserves GHC safety inference, as in GhcProxy.
     -- Without plugin trust, an inferred-safe home module becomes unsafe merely
     -- because it is exported, so a later Safe importer fails to compile.
-    let arguments = ["--make", "-no-link"] ++ componentArguments component ++
+    let pluginOptions = [core, "post-tidy", "unit-qualified", "source-notes", "foreign-import-provenance"]
+        -- The pinned Windows compiler loads a vanilla archive, not a shared plugin.
+        pluginFlags = if Host.os == "mingw32"
+          then ["-plugin-package-id", contextPluginUnit context, "-fplugin=THC.Plugin"] ++
+               map ("-fplugin-opt=THC.Plugin:" ++) pluginOptions
+          else [directPlugin (contextPluginLibrary context) (contextPluginUnit context)
+                  pluginOptions (componentArguments component)]
+        arguments = ["--make", "-no-link"] ++ componentArguments component ++
           ["-outputdir", objects, "-odir", objects, "-hidir", objects,
            "-hiedir", objects </> "hie", "-stubdir", objects,
-           "-package-db", contextPluginDb context, "-plugin-package-id", contextPluginUnit context,
-           "-fplugin=THC.Plugin", "-fplugin-trustworthy", "-fplugin-opt=THC.Plugin:" ++ core,
-           "-fplugin-opt=THC.Plugin:post-tidy", "-fplugin-opt=THC.Plugin:unit-qualified",
-           "-fplugin-opt=THC.Plugin:source-notes",
-           "-fplugin-opt=THC.Plugin:foreign-import-provenance"] ++ exportWayOptions ++
+           "-package-db", contextPluginDb context, "-fplugin-trustworthy"] ++ pluginFlags ++ exportWayOptions ++
           ["-fforce-recomp", "-dcore-lint", "-fwrite-if-simplified-core", "-hisuf", "hi"] ++
           map snd (componentSources component)
     sourceDir <- field (componentValue component) "src-dir"

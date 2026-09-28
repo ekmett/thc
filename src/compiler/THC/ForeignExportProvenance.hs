@@ -59,19 +59,21 @@ productOf (Foreign.IfaceForeign stubs files) = Product (fmap stub stubs) (map fi
       unpackFS (csl_name value))
     file (Foreign.IfaceForeignFile language contents extension) = (show language, contents, extension)
 
--- Check loaded objects, not -fplugin flags. Static/external plugin records do
--- not provide the normal loaded module interface, so this profile rejects them.
--- TypeRep identifies the package actually containing this producer's code.
+-- Check loaded objects, not -fplugin flags. Direct-library loading records the
+-- unit/module whose plugin closure GHC actually resolved, without loading its
+-- interface or linking the guest's native dependencies. TypeRep identifies the
+-- package actually containing this producer's code. Mixed pipelines stay closed.
 knownPipeline :: HscEnv -> Bool
-knownPipeline environment = null (staticPlugins plugins) && null (externalPlugins plugins) &&
-  case loadedPlugins plugins of
-    [loaded] -> let owner = mi_module (lpModule loaded) in
-      moduleNameString (moduleName owner) == "THC.Plugin" &&
-      unitString (moduleUnit owner) == producerUnit && noHooks (hsc_hooks environment)
+knownPipeline environment = null (staticPlugins plugins) && noHooks (hsc_hooks environment) &&
+  case (loadedPlugins plugins, externalPlugins plugins) of
+    ([loaded], []) -> let owner = mi_module (lpModule loaded) in
+      sameProducer (unitString (moduleUnit owner)) (moduleNameString (moduleName owner))
+    ([], [loaded]) -> sameProducer (epUnit loaded) (epModule loaded)
     _ -> False
   where
     plugins = hsc_plugins environment
     producerUnit = Typeable.tyConPackage (Typeable.typeRepTyCon (Typeable.typeRep (Proxy :: Proxy RegistrationProof)))
+    sameProducer unit name = unit == producerUnit && name == "THC.Plugin"
     noHooks hooks = and
       [ isNothing (dsForeignsHook hooks), isNothing (tcForeignImportsHook hooks)
       , isNothing (tcForeignExportsHook hooks), isNothing (hscFrontendHook hooks)

@@ -29,6 +29,14 @@ forward artifact verification to the JVM. The flag belongs before the guest
 `--` separator; it does not change FFI permissions or host access. Without it,
 an existing `audit.json` is neither refreshed nor evidence of the current run.
 
+If that actual dependency closure contains `thc`'s `lib:interop`, only the selected
+runnable unit's native final link is suppressed. Its source compilation and Cabal
+build information are retained. The same exact-unit policy applies during cold
+store capture; dependency libraries, build tools and unrelated executables keep
+their normal native builds. Core export loads the plugin directly so that loading
+it does not attempt to resolve THC-only prim symbols in guest libraries. This does
+not enable native execution or Template Haskell evaluation of those intrinsics.
+
 Project acquisition also acquires and selects the genuine
 `THC.Internal.Exception` dictionary. The
 [foreign-exception bridge](foreign-exceptions.md) automatically converts eligible

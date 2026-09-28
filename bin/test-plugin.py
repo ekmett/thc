@@ -29,6 +29,31 @@ class RegisteredPathTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "one Cabal"):
             one_package_path("/first /second")
 
+    def test_direct_plugin_collects_caller_options_in_order(self):
+        metadata = {"sharedLibrary": "/plugin café.so", "unitId": "actual-unit"}
+        result = plugin.external_plugin_argument(metadata, "/out café", [
+            "-g", "-fplugin-opt=THC.Plugin:source-notes", "-fplugin-opt=Other:ignored",
+            "-fplugin-opt", "THC.Plugin:post-tidy", "-fplugin-opt=THC.Plugin:closure=main", "Main.hs"])
+        self.assertEqual(result, '-fplugin-library=/plugin café.so;actual-unit;THC.Plugin;'
+                         '["/out café","source-notes","post-tidy","closure=main"]')
+
+    def test_direct_plugin_quotes_haskell_strings_not_shell_words(self):
+        metadata = {"sharedLibrary": "/plugin.so", "unitId": "actual-unit"}
+        result = plugin.external_plugin_argument(metadata, 'quote"back\\line\n\x01', [])
+        self.assertEqual(result, '-fplugin-library=/plugin.so;actual-unit;THC.Plugin;'
+                         '["quote\\34\\&back\\92\\&line\\10\\&\\1\\&"]')
+
+    def test_direct_plugin_reads_ghc_response_file_options(self):
+        with TemporaryDirectory(prefix="response café ") as directory:
+            response = Path(directory) / "options"
+            response.write_text('-fplugin-opt=THC.Plugin:closure=main\n'
+                                '-fplugin-opt "THC.Plugin:quoted=one\\ two"\n'
+                                "'-fplugin-opt=THC.Plugin:single=one\\ two'\n", encoding="utf-8")
+            metadata = {"sharedLibrary": "/plugin.so", "unitId": "actual-unit"}
+            self.assertEqual(plugin.external_plugin_argument(metadata, "/out", ["@" + str(response)]),
+                             '-fplugin-library=/plugin.so;actual-unit;THC.Plugin;'
+                             '["/out","closure=main","quoted=one two","single=one two"]')
+
 
 class PluginRegistryTest(unittest.TestCase):
     def setUp(self):
