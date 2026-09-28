@@ -30,8 +30,14 @@ public final class IndirectCallerNode extends Node {
         return call(frame, target, arguments, tailCall, null);
     }
     public Object call(VirtualFrame frame, RootCallTarget target, Object[] arguments, boolean tailCall, TupleShape tupleResult) {
+        if (AstControl.captures(this)) {
+            try { entryArguments.executeCaptured(frame, target, arguments); }
+            catch (AstCapture cut) { throw cut.append((saved, input) -> callEntered(saved, target, arguments, tailCall, tupleResult)); }
+        } else entryArguments.execute(frame, target, arguments);
+        return callEntered(frame, target, arguments, tailCall, tupleResult);
+    }
+    private Object callEntered(VirtualFrame frame, RootCallTarget target, Object[] arguments, boolean tailCall, TupleShape tupleResult) {
         Metrics invocation = metrics != null ? metrics : ((FunctionRoot) getRootNode()).invocationMetrics(frame);
-        entryArguments.execute(frame, target, arguments);
         if (invocation.getEnabled()) invocation.incrementIndirectCalls();
         // The public location-aware call preserves residual guest entry without
         // an observed exception profile on a cached IndirectCallNode.

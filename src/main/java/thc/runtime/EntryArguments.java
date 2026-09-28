@@ -43,4 +43,19 @@ public final class EntryArguments extends Node {
             packet[position] = forces[i].execute(frame, packet[position]);
         }
     }
+    public void executeCaptured(VirtualFrame frame, Object[] packet) { forceFrom(frame, packet, 0); }
+    @ExplodeLoop private void forceFrom(VirtualFrame frame, Object[] packet, int start) {
+        for (int i = start; i < positions.length; i++) {
+            int position = positions[i];
+            try { packet[position] = AstControl.forceCallback(frame, this, forces[i], packet[position]); }
+            catch (AstCapture cut) {
+                int next = i + 1;
+                throw cut.append((saved, input) -> {
+                    packet[position] = input;
+                    forceFrom(saved, packet, next);
+                    return Unit.INSTANCE;
+                });
+            }
+        }
+    }
 }

@@ -21,15 +21,21 @@ public final class GhcBCOExpression extends Expr {
         throw fault(name + " requires a tuple destination");
     }
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
-        Object value;
-        if (name.equals("mkApUpd0#")) value = GhcBCO.updating(this, operands[0].execute(frame));
-        else {
-            Object code = operands[0].execute(frame), literals = operands[1].execute(frame);
-            Object pointers = operands[2].execute(frame);
-            long arity = operands[3].executeRequiredLong(frame);
-            Object bitmap = operands[4].execute(frame), state = operands[5].execute(frame);
-            value = GhcBCO.create(this, language, metrics, code, literals, pointers, arity, bitmap, state);
+        return evaluate(frame, slots, offset, new Object[operands.length], 0);
+    }
+    private Object evaluate(VirtualFrame frame, int[] slots, int offset, Object[] values, int start) {
+        for (int i = start; i < operands.length; i++) {
+            try { values[i] = i == 3 ? operands[i].executeRequiredLong(frame) : operands[i].execute(frame); }
+            catch (AstCapture cut) {
+                int index = i;
+                throw cut.append((saved, input) -> {
+                    values[index] = input;
+                    return evaluate(saved, slots, offset, values, index + 1);
+                });
+            }
         }
+        Object value = name.equals("mkApUpd0#") ? GhcBCO.updating(this, values[0]) :
+            GhcBCO.create(this, language, metrics, values[0], values[1], values[2], (Long) values[3], values[4], values[5]);
         FrameAccess.write(frame, slots[offset], value);
         return null;
     }

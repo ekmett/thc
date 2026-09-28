@@ -216,7 +216,7 @@ Details: [native address projection](native-addresses.md), [managed pinning](pin
 | `compactAllocateBlock#` | Allocates blocks for that THC image, not arbitrary GHC heap images or cross-context/process import. Abandoned raw imports are retained until context disposal. |
 | `compactFixupPointers#` | Reconstructs a fresh graph using originating-context constructor metadata. Corrupt/incompatible images fail through the API's `Nothing` result; portable constructor resolution is not implemented. |
 | `newBCO#` | Decodes and executes the documented GHC 9.14.1 **scalar opcode/ABI subset**, not arbitrary GHCi bytecode. One physical 64-bit word per argument; unsupported opcodes and packed subword/tuple/vector result conventions reject. |
-| `mkApUpd0#` | Creates an updating wrapper for that scalar BCO subset. Native calls, info-table/PACK/AP instructions, case-continuation BCOs, breakpoints, asynchronous suspension and delimited capture through the interpreter remain unsupported. |
+| `mkApUpd0#` | Creates an updating wrapper for that scalar BCO subset. Native calls, info-table/PACK/AP instructions, case-continuation BCOs, breakpoints and explicit delimited capture through the interpreter remain unsupported. One-shot asynchronous and stack cuts preserve pending work and the shared update. |
 
 Details: [compact regions and serialization](compact-regions.md),
 [BCO opcode list and ABI](ghc-bco.md).
