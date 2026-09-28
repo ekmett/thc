@@ -40,6 +40,8 @@ public final class Language extends TruffleLanguage<Language.State> {
         private final ManagedExportRegistry managedExports;
         private final ManagedForeignRoots foreignRoots;
         private final HandoffLayouts handoffLayouts;
+        private record ConstructorLayoutKey(String id, CoreFields fields) {}
+        private final Map<ConstructorLayoutKey, DataLayout> constructorLayouts = new HashMap<>();
         private final JavaScriptImports javaScriptImports;
         private final PackageScalarLibraries packageCbits;
         private final CarrierLocal<MaskingState> maskingState;
@@ -138,6 +140,16 @@ public final class Language extends TruffleLanguage<Language.State> {
         public ManagedExportRegistry getManagedExports() { return managedExports; }
         public ManagedForeignRoots getForeignRoots() { return foreignRoots; }
         public HandoffLayouts getHandoffLayouts() { return handoffLayouts; }
+        /** Only parsed shape metadata enters this cache; demand loading happens before taking its lock. */
+        public synchronized DataLayout constructorLayout(TruffleLanguage<?> language, String id, String name, CoreFields fields) {
+            int unitEnd = id.indexOf(':');
+            // Symbolic constructor occurrences can contain or end in a dot.
+            int moduleEnd = id.indexOf('.', unitEnd + 1);
+            if (unitEnd <= 0 || moduleEnd <= unitEnd + 1 || moduleEnd == id.length() - 1)
+                return DataLayout.fromFields(language, id, name, fields);
+            return constructorLayouts.computeIfAbsent(new ConstructorLayoutKey(id, fields),
+                key -> DataLayout.fromFields(language, id, name, fields));
+        }
         public JavaScriptImports getJavaScriptImports() { return javaScriptImports; }
         public PackageScalarLibraries getPackageCbits() { return packageCbits; }
         public CarrierLocal<MaskingState> getMaskingState() { return maskingState; }

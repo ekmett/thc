@@ -994,7 +994,7 @@ public final class Program implements ExecutableProgram {
         if (info == null) throw new RuntimeFault("Missing constructor metadata " + id);
         CoreFields fields = new CoreFields(info);
         if (language == null) throw new RuntimeFault("Constructor layout requires a guest language");
-        layout = DataLayout.fromFields(language, id, (String) info.get("name"), fields);
+        layout = thc.Language.currentState().constructorLayout(language, id, (String) info.get("name"), fields);
         dataLayouts.put(id, layout);
         return layout;
     }
@@ -1844,7 +1844,7 @@ public final class Program implements ExecutableProgram {
                 DataLayout falseLayout = dataLayouts.get(CoreThreadScheduling.FALSE);
                 if (falseLayout == null) {
                     if (language == null) throw fault("Spark constructor requires a guest language");
-                    falseLayout = new DataLayout(language, CoreThreadScheduling.FALSE, "False", new String[0], new Class<?>[0]);
+                    falseLayout = thc.Language.currentState().constructorLayout(language, CoreThreadScheduling.FALSE, "False", CoreFields.EMPTY);
                     dataLayouts.put(CoreThreadScheduling.FALSE, falseLayout);
                 }
                 falseValue = falseLayout.allocate();
