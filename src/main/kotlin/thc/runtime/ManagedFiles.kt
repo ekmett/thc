@@ -496,7 +496,7 @@ internal class ManagedFiles @JvmOverloads constructor(private val env: TruffleLa
         var acquired = emptyList<NativeFileResource>()
         val epolls = mutableListOf<NativeEpoll>()
         try {
-            acquired = if (pipe) provider.pipe().let { listOf(it.first, it.second) }
+            acquired = if (pipe) provider.pipe().let { listOf(it.read(), it.write()) }
                 else if (kind == AnonymousKind.EPOLL) listOf(provider.epoll(initial))
                 else listOf(provider.eventfd(initial, flags))
             val owners = acquired.mapIndexed { index, resource -> OpenDescription(channel = resource,

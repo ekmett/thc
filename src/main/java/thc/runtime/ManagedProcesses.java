@@ -248,7 +248,7 @@ public final class ManagedProcesses implements Closeable {
             child.reaped = true;
             child.descriptor = -1;
             // Linux consumes close even on EINTR; retain the completed reap result.
-            child.pidfd.closeDirectory$org_intelligence_thc();
+            child.pidfd.closeDirectory();
         }
         return result;
     }
