@@ -54,7 +54,7 @@ internal class DelayThread(@field:Child private var duration: Expr, @field:Child
 
     override fun execute(frame: VirtualFrame): Any {
         val microseconds = duration.executeRequiredLong(frame)
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         await(ThreadDelayToken(GuestThreads.current(this), microseconds))
         return Unit
     }

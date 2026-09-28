@@ -97,7 +97,7 @@ class FloatingPrimitiveTest {
                     val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), descriptor)
                     FrameAccess.writeFloat(frame, slots[0], f); FrameAccess.writeDouble(frame, slots[1], d)
                     assertTrue(frame.isFloat(slots[0])); assertTrue(frame.isDouble(slots[1]))
-                    val box = data.create(arrayOf(f, d))
+                    val box = data.create(arrayOf<Any>(f, d))
                     assertEquals(f.toRawBits(), data.readFloat(box, 0).toRawBits())
                     assertEquals(d.toRawBits(), data.readDouble(box, 1).toRawBits())
                     val payloadTypes = box.javaClass.declaredFields.filterNot { Modifier.isStatic(it.modifiers) }.map { it.type }

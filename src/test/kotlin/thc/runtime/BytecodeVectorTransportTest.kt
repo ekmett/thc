@@ -150,7 +150,7 @@ class BytecodeVectorTransportTest {
         val shape = requireNotNull(root.tupleResult)
         assertEquals(1, shape.width)
         assertTrue(shape.proof.isVector); assertFalse(shape.proof.isTuple)
-        val result = ownedTupleResult(Calls.target(root.callTarget, arrayOf(0L, input)), shape)
+        val result = TupleResultsKt.ownedTupleResult(Calls.target(root.callTarget, arrayOf(0L, input)), shape)
         val raw = VectorLayout(shape.proof).require(shape.layout.getObject(result, 0))
         for (lane in 0 until family.lanes) {
             val value = input + lane
@@ -235,7 +235,7 @@ class BytecodeVectorTransportTest {
                 VectorLayout(CoreRepresentations.parse(family.vector)).require(environment.layout.inspect(environment, vectors.single()))
                 assertTrue(ClosureInspection.image(captured).pointers.isEmpty(), "Raw vectors are not guest references")
                 val shape = requireNotNull((captured.target.rootNode as GuestRoot).tupleResult)
-                fun saved(): Any = ownedTupleResult(Calls.target(captured.target,
+                fun saved(): Any = TupleResultsKt.ownedTupleResult(Calls.target(captured.target,
                     arrayOf(0L, environment, 31L)), shape).let { VectorLayout(shape.proof).require(shape.layout.getObject(it, 0)) }
                 val original = saved()
                 Calls.target(program.entryTarget("capturedPrefix"), arrayOf(0L, 99L))
@@ -312,7 +312,7 @@ class BytecodeVectorTransportTest {
                 val entry = program.entryTarget("bitsLet")
                 val shape = requireNotNull((entry.rootNode as BytecodeRoot).tupleResult)
                 fun check(value: Long) {
-                    val result = ownedTupleResult(Calls.target(entry, arrayOf(0L, value)), shape)
+                    val result = TupleResultsKt.ownedTupleResult(Calls.target(entry, arrayOf(0L, value)), shape)
                     val raw = shape.layout.getObject(result, 0)
                     for (index in 0 until family.lanes) {
                         if (floating) assertEquals(value.toInt(), (raw as FloatVector).lane(index).toRawBits())

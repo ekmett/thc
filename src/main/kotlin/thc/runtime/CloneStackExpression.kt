@@ -10,7 +10,7 @@ internal class CloneStackExpression(@field:Child private var state: Expr, proof:
     init { representation = proof.copy(evaluated = true) }
     override fun execute(frame: VirtualFrame): Nothing = fault("Stack clone requires a State/snapshot tuple destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         FrameAccess.write(frame, slots[offset], ManagedStackSnapshot.capture(this))
         return null
     }
