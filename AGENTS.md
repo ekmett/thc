@@ -35,6 +35,13 @@ lifetime, synchronization and ABI boundaries. Trust GHC's type checking after
 lowering instead of repeating it at every operation. Preserve typed execution,
 aggregate layouts, vector species, Truffle child ownership and context isolation.
 
+Foreign imports use ordinary package-declared linkage through Sulong by default.
+Keep an explicit override only where native code cannot implement THC-owned
+state or a required runtime boundary; document that reason at the override.
+Do not add supported-symbol lists or replacement implementations of ordinary
+library functions. Validate the ABI and transport at the FFI boundary, and let
+the native linker resolve symbols and report missing libraries.
+
 Changes to calls, loops or lowering must preserve thunk sharing, PAPs, tail-call
 handoffs, exception masking, resumable continuations and foreign-call safety.
 Consult the relevant runtime guide and existing tests before changing these

@@ -50,6 +50,12 @@ only on execution. None of this implements native object linking.
 
 ## Package-owned C, C++ and CAPI calls
 
+Native linkage is the default. `CoreForeignOverride` is the exception list for
+calls that must operate on THC-owned state or cross a THC runtime boundary. Each
+exception needs that concrete reason; ordinary library functions and data belong
+to their linked library. An ABI or transport gap is work on the shared FFI path,
+not a reason to add another per-symbol implementation.
+
 Both backends select semantic overrides by declaration owner and symbol (including
 the encoded owner of CAPI wrappers), before validating a generic package call.
 Only the selected override's strict ABI validator runs. These overrides retain
