@@ -1,6 +1,6 @@
 # Ordinary `Data.Map.Strict` on THC
 
-The [Map workload](../examples/THC/MapWorkload.hs) runs ordinary `containers` code through exported GHC Core and THC. In this run, a complete workload took **3.101 ms on THC versus 1.326 ms on native GHC: 2.339× GHC's time**. Both engines built the same unmodified `containers-0.8` sources. The native comparison, compiled-result checks, and graph inspection all use the real histogram/update/lookup/fold workload.
+The [Map workload](../src/examples/THC/MapWorkload.hs) runs ordinary `containers` code through exported GHC Core and THC. In this run, a complete workload took **3.101 ms on THC versus 1.326 ms on native GHC: 2.339× GHC's time**. Both engines built the same unmodified `containers-0.8` sources. The native comparison, compiled-result checks, and graph inspection all use the real histogram/update/lookup/fold workload.
 
 This report records the initial implementation at `60148ed`; the numbers and graph IDs below refer to that baseline. Current [call-packet inspection](call-packets.md) and [calling conventions](call-boundaries.md) have separate guides.
 

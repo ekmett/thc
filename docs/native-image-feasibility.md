@@ -19,7 +19,7 @@ pinned JDK and its `native-image` command. From a built THC checkout:
 
 ```sh
 ./gradlew --max-workers=2 installDist
-./bin/export-core.sh examples/THC/Fixtures.hs
+./bin/export-core.sh src/examples/THC/Fixtures.hs
 bash bin/native-image-pure.sh
 build/native-image/thc-pure -Xmx2g build/core/THC.Prim.json,build/core/THC.Fixtures.json sumLoop 100
 build/native-image/thc-pure -Xmx2g build/core/THC.Prim.json,build/core/THC.Fixtures.json caseList 20

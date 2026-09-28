@@ -32,7 +32,7 @@ unlifted thread identities do not require a lifted wrapper.
 
 ## Example and evidence
 
-[ThreadInventory.hs](../examples/ThreadInventory.hs) finds the current thread in
+[ThreadInventory.hs](../src/examples/ThreadInventory.hs) finds the current thread in
 a snapshot using identity, and observes its boundness. Its
 `forkSnapshot` example uses real `fork#`/MVar coordination to acquire a snapshot
 containing a live child and retain that snapshot across its completion signal.

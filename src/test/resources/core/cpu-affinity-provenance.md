@@ -20,7 +20,7 @@ THC_CORE_OUT="$PWD/build/runtime-services-export-concrete/core" \
 THC_GHC_OUT="$PWD/build/runtime-services-export-concrete/ghc" \
   bin/export-core.sh -XHaskell2010 -isrc/runtime \
     -fplugin-opt=THC.Plugin:post-tidy \
-    examples/THC/RuntimeServices.hs src/runtime/THC/Internal/JIT.hs
+    src/examples/THC/RuntimeServices.hs src/runtime/THC/Internal/JIT.hs
 ```
 
 The source is also compiled and linked natively by `cabal test cpu-affinity-api

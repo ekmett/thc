@@ -51,11 +51,11 @@ cabal run exe:thc-fixtures --offline -- atomic-address
   testDense --tests thc.runtime.AtomicAddressTest
 ```
 
-[AtomicTickets.hs](../examples/AtomicTickets.hs) shows a ticket dispenser whose
+[AtomicTickets.hs](../src/examples/AtomicTickets.hs) shows a ticket dispenser whose
 fetch-add returns the first reserved ticket. Export it from the repository root:
 
 ```sh
-bin/export-core.sh examples/AtomicTickets.hs
+bin/export-core.sh src/examples/AtomicTickets.hs
 ```
 
 `reserveTickets :: Int# -> Int# -> Int#` needs two arguments. The low-level

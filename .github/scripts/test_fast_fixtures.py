@@ -41,7 +41,7 @@ class FixturePreparationTest(unittest.TestCase):
         source = (project / "bin/prepare-tests.sh").read_text()
         option = "-fplugin-opt=THC.Plugin:pretty-diagnostics"
         commands = [line.split() for line in source.splitlines() if option in line]
-        inputs = ["examples/THC/Fixtures.hs"] + [
+        inputs = ["src/examples/THC/Fixtures.hs"] + [
             "test/fixtures/compiler/" + name + ".hs" for name in (
                 "StrictFields", "SpeculationAudit", "RepresentationAudit", "SourceNotes",
                 "CBVAudit", "CBVJoinAudit", "CBVCoercionAudit", "ConstructorFieldAudit", "DemandAudit")]
@@ -368,7 +368,7 @@ class FixturePreparationTest(unittest.TestCase):
         cache = fast_fixtures.fast_inputs
         self.assertEqual('boxed-cas', owners['thc.runtime.BoxedCasTest'])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'boxed-cas']}], group['commands'])
-        self.assertIn('examples/THC/BoxedCasCounter.hs', group['sources'])
+        self.assertIn('src/examples/THC/BoxedCasCounter.hs', group['sources'])
         self.assertIn('"$fixture_bin" boxed-cas', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertIn('build/boxed-cas/manifest.json', fast_fixtures.FULL_REQUIRED)
         for suffix in cache.BOXED_CAS_FILES:
@@ -408,7 +408,7 @@ class FixturePreparationTest(unittest.TestCase):
         cache = fast_fixtures.fast_inputs
         group = manifest['groups']['ghc-bco']
         self.assertEqual('ghc-bco', owners['thc.runtime.GhcBCOTest'])
-        self.assertIn('examples/GhcBCO.hs', group['sources'])
+        self.assertIn('src/examples/GhcBCO.hs', group['sources'])
         self.assertIn('"$fixture_bin" ghc-bco', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertEqual(82, len(cache.BCO_OUTPUTS))
         self.assertTrue(cache.BCO_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
@@ -435,7 +435,7 @@ class FixturePreparationTest(unittest.TestCase):
         cache = fast_fixtures.fast_inputs
         group = manifest['groups']['delimited-continuations']
         self.assertEqual('delimited-continuations', owners['thc.runtime.DelimitedContinuationsTest'])
-        self.assertIn('examples/DelimitedContinuations.hs', group['sources'])
+        self.assertIn('src/examples/DelimitedContinuations.hs', group['sources'])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'delimited-continuations']}], group['commands'])
         self.assertIn('"$fixture_bin" delimited-continuations', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertEqual(154, len(cache.DELIMITED_OUTPUTS))
@@ -489,7 +489,7 @@ class FixturePreparationTest(unittest.TestCase):
         group = manifest['groups']['thread-inventory']
         self.assertEqual('thread-inventory', owners['thc.runtime.ThreadInventoryNativeTest'])
         self.assertIn('thc.runtime.GuestThreadInventoryTest', manifest['fixtureFreeJunit'])
-        self.assertIn('examples/ThreadInventory.hs', group['sources'])
+        self.assertIn('src/examples/ThreadInventory.hs', group['sources'])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'thread-inventory']}], group['commands'])
         self.assertIn('"$fixture_bin" thread-inventory', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertIn('build/thread-inventory', fast_fixtures.FULL_OUTPUT_ROOTS)
@@ -1898,7 +1898,7 @@ class FixturePreparationTest(unittest.TestCase):
                         'original-stack-formatter/run-*/originals/target-layout.json',
                         'original-stack-formatter/run-*/native/formatter',
                         'src/driver/THC/Driver/Wired.hs', 'src/driver/cbits/target-layout.c',
-                        'third-party/pinned/ghc-9.14.1/libraries/ghc-internal', '**/*.hs-boot', '**/*.hsc', 'include/WordSize.h'):
+                        'nih/pinned/ghc-9.14.1/libraries/ghc-internal', '**/*.hs-boot', '**/*.hsc', 'include/WordSize.h'):
             self.assertIn('"' + pattern + '"', gradle)
         self.assertIn('build/original-stack-formatter/', (project / '.github/workflows/build.yml').read_text())
         sources = fast_fixtures._source_hashes(project, group)
@@ -1955,32 +1955,32 @@ class FixturePreparationTest(unittest.TestCase):
         # Includes the production exporter, all pinned source kinds and the
         # target-layout C probe, without a second hand-maintained source list.
         for name in (*group['sources'],
-                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs',
-                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Unsafe.hs',
-                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Heap/InfoTable/Types.hsc',
-                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Ptr.hs',
-                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Data/Either.hs',
-                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Word.hs',
-                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/Integer.hs',
-                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Classes.hs',
-                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Num.hs',
-                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/Integer.hs-boot',
-                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/BigNat.hs-boot',
-                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/Natural.hs-boot',
-                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Real.hs',
-                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Numeric.hs',
-                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Enum.hs',
-                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/ForeignPtr.hs',
-                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Foreign/C/String/Encoding.hs',
-                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Encoding/UTF8.hs',
-                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Encoding/Types.hs',
-                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Encoding/Failure.hs',
-                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Encoding.hs',
-                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Handle/Types.hs-boot',
-                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc',
-                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Num.hs-boot',
-                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/include/WordSize.h',
-                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE'):
+                     'nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs',
+                     'nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Unsafe.hs',
+                     'nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Heap/InfoTable/Types.hsc',
+                     'nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Ptr.hs',
+                     'nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Data/Either.hs',
+                     'nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Word.hs',
+                     'nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/Integer.hs',
+                     'nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Classes.hs',
+                     'nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Num.hs',
+                     'nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/Integer.hs-boot',
+                     'nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/BigNat.hs-boot',
+                     'nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/Natural.hs-boot',
+                     'nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Real.hs',
+                     'nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Numeric.hs',
+                     'nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Enum.hs',
+                     'nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/ForeignPtr.hs',
+                     'nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Foreign/C/String/Encoding.hs',
+                     'nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Encoding/UTF8.hs',
+                     'nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Encoding/Types.hs',
+                     'nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Encoding/Failure.hs',
+                     'nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Encoding.hs',
+                     'nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Handle/Types.hs-boot',
+                     'nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc',
+                     'nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Num.hs-boot',
+                     'nih/pinned/ghc-9.14.1/libraries/ghc-internal/include/WordSize.h',
+                     'nih/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE'):
             with self.subTest(name=name):
                 path = self.root / name
                 path.write_bytes(path.read_bytes() + b'\n-- changed\n')
@@ -2546,12 +2546,12 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(["build/floating-remainder"], group["outputs"])
         self.assertEqual({"test/haskell-fixtures/FloatingRemainderFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
                           "test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/FloatingRemainderAudit.hs",
-                          "test/fixtures/compiler/FloatingRemainderNative.hs", "examples/THC/InverseHyperbolic.hs"}, set(group["sources"]))
+                          "test/fixtures/compiler/FloatingRemainderNative.hs", "src/examples/THC/InverseHyperbolic.hs"}, set(group["sources"]))
         self.assertTrue(all((project / path).is_file() for path in group["sources"]))
         self.assertIn('"$fixture_bin" floating-remainder', (project / "bin/prepare-tests.sh").read_text().splitlines())
         self.assertIn('"floating-remainder/commands/**"', (project / "build.gradle").read_text())
         policy = json.loads((project / ".github/scripts/fast-tests.json").read_text())
-        for path in ("examples/THC/InverseHyperbolic.hs", "test/haskell-fixtures/FloatingRemainderFixtures.hs"):
+        for path in ("src/examples/THC/InverseHyperbolic.hs", "test/haskell-fixtures/FloatingRemainderFixtures.hs"):
             self.assertEqual(["thc.runtime.FloatingRemainderTest"], policy["owners"][path]["junit"])
         for path in ("src/main/java/thc/runtime/FloatingPrimitives.java", "src/main/java/thc/runtime/FloatDecodeExpression.java"):
             self.assertIn("thc.runtime.FloatingRemainderTest", policy["leafSources"][path]["junit"])
@@ -2566,12 +2566,12 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual({"build/float-decode"}, set(group["outputs"]))
         self.assertEqual({"test/haskell-fixtures/FloatDecodeFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
                           "test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/FloatDecodeAudit.hs",
-                          "test/fixtures/compiler/FloatDecodeNative.hs", "bin/export-boot.py", "examples/THC/FloatDecode.hs"} | fast_fixtures.fast_inputs.BIGNAT_SOURCES, set(group["sources"]))
+                          "test/fixtures/compiler/FloatDecodeNative.hs", "bin/export-boot.py", "src/examples/THC/FloatDecode.hs"} | fast_fixtures.fast_inputs.BIGNAT_SOURCES, set(group["sources"]))
         self.assertTrue(all((project / path).is_file() for path in group["sources"]))
         self.assertIn('"$fixture_bin" float-decode', (project / "bin/prepare-tests.sh").read_text().splitlines())
         self.assertIn('"float-decode/commands/**"', (project / "build.gradle").read_text())
         policy = json.loads((project / ".github/scripts/fast-tests.json").read_text())
-        self.assertEqual(["thc.runtime.FloatDecodeTest"], policy["owners"]["examples/THC/FloatDecode.hs"]["junit"])
+        self.assertEqual(["thc.runtime.FloatDecodeTest"], policy["owners"]["src/examples/THC/FloatDecode.hs"]["junit"])
 
     def test_float_decode_tracks_upstream_sources_without_bundling_them(self):
         cache = fast_fixtures.fast_inputs
@@ -2647,13 +2647,13 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertIn('"original-stack/manifest.json"', gradle)
         self.assertIn('"original-stack/run-*/**"', gradle)
         self.assertNotIn('"original-stack/proof.json"', gradle)
-        for name in ("thc.cabal", "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE",
-                     "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc",
-                     "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Heap/InfoTable.hsc"):
+        for name in ("thc.cabal", "nih/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE",
+                     "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc",
+                     "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Heap/InfoTable.hsc"):
             self.assertIn('"' + name + '"', gradle)
             self.assertIn(name, group["sources"])
         for name in ("Stack/CloneStack.hs", "Stack/Decode.hs"):
-            self.assertIn("third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/" + name, group["sources"])
+            self.assertIn("nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/" + name, group["sources"])
 
     def test_compiled_thunk_retention_prepares_both_native_families(self):
         project = Path(__file__).resolve().parents[2]

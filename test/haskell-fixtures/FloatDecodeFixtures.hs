@@ -34,9 +34,9 @@ entries = [family ++ suffix | family <- ["float","double"], suffix <- ["Direct",
   ["floatExampleExponent","doubleExampleExponent"]
 
 vendorSources :: [FilePath]
-vendorSources = ["third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum" </> name ++ suffix |
+vendorSources = ["nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum" </> name ++ suffix |
   name <- ["BigNat","Integer","Natural"], suffix <- [".hs",".hs-boot"]] ++
-  ["third-party/pinned/ghc-9.14.1/libraries/ghc-internal/include/WordSize.h","third-party/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE"]
+  ["nih/pinned/ghc-9.14.1/libraries/ghc-internal/include/WordSize.h","nih/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE"]
 
 -- Every exponent code, every leading subnormal bit, both signs, boundary
 -- fractions and deterministic integer-generated random encodings. No host FP.
@@ -60,7 +60,7 @@ prepareFloatDecode root = do
   let directory = "build/float-decode"
       output = root </> directory
       source = "test/fixtures/compiler/FloatDecodeAudit.hs"
-      example = "examples/THC/FloatDecode.hs"
+      example = "src/examples/THC/FloatDecode.hs"
       driver = "test/fixtures/compiler/FloatDecodeNative.hs"
       native = directory </> "native"
       binary = native </> "oracle"
@@ -82,7 +82,7 @@ prepareFloatDecode root = do
       requestPath = directory </> "inputs.tsv"
   writeFile (root </> requestPath) (unlines [name ++ "\t" ++ show bits | (name,bits) <- requests])
   compiled <- runLogged 300 root logs "native-build" [] ghc
-    ["--make","-O2","-fforce-recomp","-dcore-lint","-dstg-lint","-itest/fixtures/compiler","-iexamples",
+    ["--make","-O2","-fforce-recomp","-dcore-lint","-dstg-lint","-itest/fixtures/compiler","-isrc/examples",
      "-odir",root </> native,"-hidir",root </> native,driver,"-o",root </> binary]
   executed <- runLoggedWithInput requestPath 120 root logs "native-oracle" [] (root </> binary) []
   let parse line = case splitTab line of

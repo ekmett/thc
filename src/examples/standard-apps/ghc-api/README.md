@@ -25,7 +25,7 @@ For THC, use the project-directory driver path, complete installed Core, and
 the matching configured GHC source tree:
 
 ```sh
-thc run ghc-faststring --project-dir examples/standard-apps/ghc-api \
+thc run ghc-faststring --project-dir src/examples/standard-apps/ghc-api \
   --installed-core required --ghc-source /path/to/ghc-9.14.1 \
   --thc-root /path/to/thc --dist-dir /path/to/thc/build/ghc-api/guest-faststring \
   -- "THC λ" "GHC API"
@@ -35,7 +35,7 @@ The Haskell fixture runner retains native output, the ordinary THC run and
 provenance together. Strict auditing is opt-in. From the repository root, select the pinned GHC
 9.14.1 installation with complete Core for `ghc` and its dependencies, its
 matching configured source tree, and GraalVM 25.3.4.1 / JDK 25. Build the runtime
-with `./gradlew installDist`; see the [full-Core build guide](../../../docs/ghc-core.md).
+with `./gradlew installDist`; see the [full-Core build guide](../../../../docs/ghc-core.md).
 
 ```sh
 export THC_INSTALLED_CORE_GHC_SOURCE=/path/to/ghc-9.14.1
@@ -88,4 +88,4 @@ and aggregate boundaries; the retained report is `build/ghc-api/guest-session/au
 Module load/typecheck has not yet run in THC. Compiler RTS hook tests are
 separate lower-level coverage. `runGhc` temporarily installs process signal
 handlers; merely importing the `ghc` package does not. See the
-[standalone signal policy](../../../docs/process-signals.md) before embedding.
+[standalone signal policy](../../../../docs/process-signals.md) before embedding.

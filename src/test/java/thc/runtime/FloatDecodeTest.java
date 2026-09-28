@@ -102,11 +102,11 @@ class FloatDecodeTest {
     private void verifyEvidence(Map<String, Object> manifest) throws Exception {
         assertEquals(1L, manifest.get("schema")); assertEquals("9.14.1", manifest.get("ghc")); assertEquals(NAMES, manifest.get("entries"));
         assertEquals(inputs(32), manifest.get("floatInputs")); assertEquals(inputs(64), manifest.get("doubleInputs")); assertEquals(4L * (inputs(32).size() + inputs(64).size()), manifest.get("nativeRows"));
-        var sources = new HashSet<>(list("test/fixtures/compiler/FloatDecodeAudit.hs", "test/fixtures/compiler/FloatDecodeNative.hs", "examples/THC/FloatDecode.hs", "thc.cabal",
+        var sources = new HashSet<>(list("test/fixtures/compiler/FloatDecodeAudit.hs", "test/fixtures/compiler/FloatDecodeNative.hs", "src/examples/THC/FloatDecode.hs", "thc.cabal",
             "test/haskell-fixtures/Main.hs", "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/FloatDecodeFixtures.hs", "bin/core-capabilities.json",
             "bin/audit-core.py", "src/main/resources/thc/scalar-primop-signatures.json", "bin/build-compiler.sh", "bin/export-core.sh", "bin/export-boot.py", "bin/toolchain.sh", "bin/plugin.py",
-            "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/include/WordSize.h", "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE"));
-        for (var name : list("BigNat", "Integer", "Natural")) for (var suffix : list(".hs", ".hs-boot")) sources.add("third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/" + name + suffix);
+            "nih/pinned/ghc-9.14.1/libraries/ghc-internal/include/WordSize.h", "nih/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE"));
+        for (var name : list("BigNat", "Integer", "Natural")) for (var suffix : list(".hs", ".hs-boot")) sources.add("nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/" + name + suffix);
         for (var file : Objects.requireNonNull(new File(root, "src/compiler/THC").listFiles())) if (file.getName().endsWith(".hs")) sources.add(root.toPath().relativize(file.toPath()).toString());
         for (var file : Objects.requireNonNull(new File(root, "bin").listFiles())) if (file.getName().startsWith("core_") && file.getName().endsWith(".py")) sources.add(root.toPath().relativize(file.toPath()).toString());
         var commands = new ArrayList<>(list("native-build", "native-oracle", "boot-export"));

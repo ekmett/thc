@@ -285,22 +285,22 @@ def main():
     sequence_cold = sorted((set(range(18)) | {-3, -(1 << 63), (1 << 63) - 1,
         20, 21, 22, 24, 25, 26, 33, 34, 159, 160, 161, 255, 256, 257, 512, 1024}) - set(warm))
     groups = [
-        dict(id='set', module='THC.SetWorkload', source='examples/THC/SetWorkload.hs',
+        dict(id='set', module='THC.SetWorkload', source='src/examples/THC/SetWorkload.hs',
              execution='frontier', postTidy=True, names=['setAggregate'], warm=warm, cold=cold),
-        dict(id='intmap', module='THC.IntMapWorkload', source='examples/THC/IntMapWorkload.hs',
+        dict(id='intmap', module='THC.IntMapWorkload', source='src/examples/THC/IntMapWorkload.hs',
              execution='supported', postTidy=True, names=['intMapAggregate'], warm=warm, cold=cold),
-        dict(id='intmap-primops', module='THC.IntMapPrimops', source='examples/THC/IntMapPrimops.hs',
+        dict(id='intmap-primops', module='THC.IntMapPrimops', source='src/examples/THC/IntMapPrimops.hs',
              execution='supported', postTidy=False, names=['countLeadingZeros', 'unsignedLessThanZero', 'unsignedLessThanMaxSigned',
                                           'unsignedLessThanSignBit', 'unsignedLessThanAllOnes'],
              warm=primitive_warm, cold=primitive_cold),
-        dict(id='intset', module='THC.IntSetWorkload', source='examples/THC/IntSetWorkload.hs',
+        dict(id='intset', module='THC.IntSetWorkload', source='src/examples/THC/IntSetWorkload.hs',
              execution='supported', postTidy=True, names=['intSetAggregate'], warm=warm, cold=cold),
-        dict(id='intset-primops', module='THC.IntSetPrimops', source='examples/THC/IntSetPrimops.hs',
+        dict(id='intset-primops', module='THC.IntSetPrimops', source='src/examples/THC/IntSetPrimops.hs',
              execution='supported', postTidy=False, names=['populationCount', 'countTrailingZeros',
                  'unsignedLessEqualZero', 'unsignedLessEqualMaxSigned',
                  'unsignedLessEqualSignBit', 'unsignedLessEqualAllOnes'],
              warm=primitive_warm, cold=intset_primitive_cold),
-        dict(id='sequence', module='THC.SequenceWorkload', source='examples/THC/SequenceWorkload.hs',
+        dict(id='sequence', module='THC.SequenceWorkload', source='src/examples/THC/SequenceWorkload.hs',
              execution='frontier', postTidy=True, names=list(SEQUENCE_ENTRIES), warm=warm, cold=sequence_cold),
     ]
     violations = []
@@ -360,8 +360,8 @@ def main():
     native = BUILD / 'native'
     native.mkdir(exist_ok=True)
     run([ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint', '-dstg-lint',
-         '-i' + str(ROOT / 'examples'), '-i' + str(containers / 'src'), '-I' + str(containers / 'include'),
-         '-odir', native, '-hidir', native, 'examples/LibraryOracle.hs', '-o', native / 'library-oracle'])
+         '-i' + str(ROOT / 'src/examples'), '-i' + str(containers / 'src'), '-I' + str(containers / 'include'),
+         '-odir', native, '-hidir', native, 'src/examples/LibraryOracle.hs', '-o', native / 'library-oracle'])
     rows = []
     for group in groups:
         group['entries'] = []
@@ -397,7 +397,7 @@ def main():
                                 if entry.get('execution', group['execution']) == 'frontier'),
                allNativeResultsMatchIndependentModels=True, staticSupportViolations=violations))
     inputs = {ROOT / group['source'] for group in groups} | {
-        ROOT / 'examples/LibraryOracle.hs', ROOT / 'examples/THC/GraphWorkload.hs',
+        ROOT / 'src/examples/LibraryOracle.hs', ROOT / 'src/examples/THC/GraphWorkload.hs',
         ROOT / 'bin/prepare-library-tests.py',
         ROOT / 'bin/audit-core.py', ROOT / 'bin/core-capabilities.json',
         ROOT / 'src/main/resources/thc/scalar-primop-signatures.json',

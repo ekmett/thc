@@ -11,7 +11,7 @@ same-directory lookup and all actual loading/permission checks remain upstream
 code. No filesystem permission, DLL name allowlist, pointer representation or
 context ownership is changed.
 
-`gradle/windows-sulong.gradle` follows the existing pinned Truffle patch
+`src/gradle/windows-sulong.gradle` follows the existing pinned Truffle patch
 workflow. It validates both Maven source/binary archives and composes this
 Windows-only class correction with the shared
 [declared-global-mutability patch](../sulong-globals/README.md) in one runtime

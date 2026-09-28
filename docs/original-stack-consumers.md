@@ -68,7 +68,7 @@ alter any copied expression value. Both producer and JVM proof pin its file hash
 These are licensed retained excerpts, not a fresh export, executable Core module,
 full dependency closure, or replacement for missing installed unfoldings. The
 original source carries the GHC BSD-3-Clause copyright/license; the notice is
-retained in the resource and `third-party/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE`. No full
+retained in the resource and `nih/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE`. No full
 `peekItbl` binding or decoder body is duplicated. Fresh `peekItbl`/InfoProv
 consumer frontiers are still reported, without a retained substitute graph.
 

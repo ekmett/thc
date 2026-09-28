@@ -28,7 +28,7 @@ identity; tests do not mutate after freezing.
 
 ## Public source and independent evidence
 
-`examples/THC/Unboxed8Arrays.hs` uses the actual installed `array-0.5.8.0`
+`src/examples/THC/Unboxed8Arrays.hs` uses the actual installed `array-0.5.8.0`
 implementations of `accumArray`, `runSTUArray`, `newArray`, `readArray`,
 `writeArray` and `(!)` for public Int8/Word8 `UArray`/`STUArray` programs.
 Bounds `(-3,4)` and observed indices are constant; values and updates depend on

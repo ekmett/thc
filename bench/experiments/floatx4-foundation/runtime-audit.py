@@ -18,8 +18,8 @@ def digest(path): return hashlib.sha256(path.read_bytes()).hexdigest()
 def record(path): return dict(path=str(path), sha256=digest(path))
 def snapshot():
     sources = [ root/'tools/GraphInspect.java']
-    sources += [root / name for name in ('build.gradle', 'build.gradle.kts', 'settings.gradle', 'settings.gradle.kts', 'buildSrc/build.gradle') if (root / name).is_file()]
-    sources += sorted((root / 'gradle').glob('*.gradle*')) + sorted((root / 'buildSrc/src').rglob('*.java'))
+    sources += [root / name for name in ('build.gradle', 'build.gradle.kts', 'settings.gradle', 'settings.gradle.kts', 'src/build/build.gradle', 'src/build/settings.gradle') if (root / name).is_file()]
+    sources += sorted((root / 'src/gradle').glob('*.gradle*')) + sorted((root / 'src/build/java').rglob('*.java'))
     sources += [p for p in sorted((root/'src/main').rglob('*')) if p.is_file()]
     sources += [p for p in sorted((root/'bench/experiments/floatx4-foundation').iterdir()) if p.suffix in ('.py', '.sh', '.java')]
     jars = sorted((root/'build/install/thc/lib').glob('*.jar'))

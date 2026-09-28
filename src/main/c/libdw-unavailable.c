@@ -7,5 +7,5 @@
 #if USE_LIBDW
 #error "THC's unavailable DWARF provider requires the selected GHC USE_LIBDW=0 profile"
 #endif
-#include "../../../third-party/pinned/ghc-9.14.1/rts/Libdw.c"
-#include "../../../third-party/pinned/ghc-9.14.1/rts/LibdwPool.c"
+#include "../../../nih/pinned/ghc-9.14.1/rts/Libdw.c"
+#include "../../../nih/pinned/ghc-9.14.1/rts/LibdwPool.c"

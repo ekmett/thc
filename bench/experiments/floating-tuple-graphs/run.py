@@ -31,8 +31,8 @@ def check(condition, message):
 
 
 def source_hashes():
-    paths = subprocess.check_output(['git', 'ls-files', 'src/main', 'build.gradle', 'build.gradle.kts', 'buildSrc',
-        'settings.gradle', 'settings.gradle.kts', 'gradle.properties', 'gradle', 'gradlew', 'gradlew.bat'], cwd=ROOT, text=True).splitlines()
+    paths = subprocess.check_output(['git', 'ls-files', 'src/main', 'build.gradle', 'build.gradle.kts', 'src/build',
+        'settings.gradle', 'settings.gradle.kts', 'gradle.properties', 'src/gradle', 'gradlew', 'gradlew.bat'], cwd=ROOT, text=True).splitlines()
     return {path: digest(ROOT / path) for path in paths}
 
 

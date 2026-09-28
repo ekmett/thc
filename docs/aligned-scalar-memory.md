@@ -35,11 +35,11 @@ on the first and every subsequent measured call; compilation restores the
 shared call boundary without invoking the guest. Argument/result pool depths,
 retained references and allocation reuse are checked in both handoff modes.
 
-`examples/StableWideCells.hs` demonstrates preserving a caller-owned StablePtr
+`src/examples/StableWideCells.hs` demonstrates preserving a caller-owned StablePtr
 through an array and storing a supplementary-plane character in slot one:
 
 ```sh
-ghc -O2 examples/StableWideCells.hs -o build/stable-wide-cells
+ghc -O2 src/examples/StableWideCells.hs -o build/stable-wide-cells
 build/stable-wide-cells
 cabal run exe:thc-fixtures --offline -- aligned-scalar-memory
 ./gradlew test --tests thc.runtime.AlignedScalarMemoryTest

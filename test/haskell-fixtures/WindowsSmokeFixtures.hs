@@ -106,7 +106,7 @@ prepareWindowsBridge root = do
   let commands = [built,compiled,observed,exported] ++ audits ++ [rejected]
       sources = [source,"test/haskell-fixtures/WindowsSmokeFixtures.hs","test/haskell-fixtures/FixtureSupport.hs",
         "test/haskell-fixtures/Main.hs","thc.cabal","bin/export-core.ps1","src/compiler/THC/Plugin.hs",
-        "src/compiler/THC/Interface.hs","src/compiler/interface/Main.hs","config/ghc/9.14.1/windows-ghc-internal.json",
+        "src/compiler/THC/Interface.hs","src/compiler/interface/Main.hs","etc/ghc/9.14.1/windows-ghc-internal.json",
         "src/driver/cbits/target-layout.c","bin/windows-common.ps1",
         "bin/audit-core.py","bin/core-capabilities.json","bin/core_original_foreign.py",
         "bin/core_package_manifest.py","bin/core_md5_foreign.py",
@@ -141,10 +141,10 @@ prepareWindowsSmoke root = do
   createDirectoryIfMissing True (root </> native)
   powershell <- maybe "powershell.exe" id <$> findExecutable "pwsh"
   exported <- runLogged 300 root logs "export" [] powershell
-    ["-NoProfile", "-File", root </> "bin/export-core.ps1", "examples/THC/Fixtures.hs"]
+    ["-NoProfile", "-File", root </> "bin/export-core.ps1", "src/examples/THC/Fixtures.hs"]
   compiled <- runLogged 180 root logs "native-build" [] ghc
-    ["--make", "-O2", "-fforce-recomp", "-dcore-lint", "-dstg-lint", "-iexamples",
-     "-odir", root </> native, "-hidir", root </> native, "examples/NativeOracle.hs",
+    ["--make", "-O2", "-fforce-recomp", "-dcore-lint", "-dstg-lint", "-isrc/examples",
+     "-odir", root </> native, "-hidir", root </> native, "src/examples/NativeOracle.hs",
      "-o", root </> oracle]
   observed <- runLogged 60 root logs "native-oracle" [] (root </> oracle) []
   let rows = map (splitTab . BSC.unpack) (BSC.lines (commandStdout observed))
@@ -160,11 +160,11 @@ prepareWindowsSmoke root = do
   (cstringCommands, cstringArtifacts) <- prepareCString root logs ghc
   compiler <- listDirectory (root </> "src/compiler/THC")
   scripts <- listDirectory (root </> "bin")
-  let sources = ["examples/NativeOracle.hs", "examples/THC/Fixtures.hs",
-        "examples/THC/Prim.hs", "examples/THC/MapWorkload.hs",
+  let sources = ["src/examples/NativeOracle.hs", "src/examples/THC/Fixtures.hs",
+        "src/examples/THC/Prim.hs", "src/examples/THC/MapWorkload.hs",
         "test/haskell-fixtures/WindowsSmokeFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
         "test/haskell-fixtures/Main.hs",
-        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/CString.hs", "src/compiler/interface/Main.hs", "bin/export-core.ps1",
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/CString.hs", "src/compiler/interface/Main.hs", "bin/export-core.ps1",
         "bin/windows-common.ps1", "bin/audit-core.py", "bin/core-capabilities.json",
         "thc.cabal", "cabal.project"] ++
         ["src/compiler/THC" </> path | path <- compiler, takeExtension path == ".hs"] ++
@@ -188,7 +188,7 @@ prepareWindowsSmoke root = do
 -- No plugin interface is loaded into the ghc-internal unit being rebuilt.
 prepareCString :: FilePath -> FilePath -> FilePath -> IO ([CommandResult], [FilePath])
 prepareCString root logs ghc = do
-  let source = "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/CString.hs"
+  let source = "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/CString.hs"
       overlay = logs </> "cstring-interfaces"
       interface = overlay </> "GHC/Internal/CString.hi"
       output = "build/map/boot-core/GHC.Internal.CString.json"
@@ -291,7 +291,7 @@ prepareWindowsDriver root = do
         ["src/driver/THC/Driver" </> path | path <- drivers, takeExtension path == ".hs"] ++
         ["test/haskell-fixtures/WindowsSmokeFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
         "test/haskell-fixtures/Main.hs",
-         "bin/export-core.ps1", "src/compiler/interface/Main.hs", "config/ghc/9.14.1/windows-ghc-internal.json", "src/driver/WindowsRunMain.hs",
+         "bin/export-core.ps1", "src/compiler/interface/Main.hs", "etc/ghc/9.14.1/windows-ghc-internal.json", "src/driver/WindowsRunMain.hs",
          "bin/windows-common.ps1", "bin/windows.ps1", "thc.cabal"]
   sourceHashes <- hashes root sources
   exports <- fmap concat $ forM supportManifests $ \manifest -> do

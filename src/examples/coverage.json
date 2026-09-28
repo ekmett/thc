@@ -3,7 +3,7 @@
   "groups": [
     {
       "id": "int64-conversions",
-      "source": "examples/THC/Int64Conversions.hs",
+      "source": "src/examples/THC/Int64Conversions.hs",
       "module": "THC.Int64Conversions",
       "entries": [
         {
@@ -27,7 +27,7 @@
     },
     {
       "id": "lists",
-      "source": "examples/THC/ListCoverage.hs",
+      "source": "src/examples/THC/ListCoverage.hs",
       "module": "THC.ListCoverage",
       "sourceLibraryFrontier": "lists",
       "entries": [
@@ -199,7 +199,7 @@
     },
     {
       "id": "functions",
-      "source": "examples/THC/FunctionCoverage.hs",
+      "source": "src/examples/THC/FunctionCoverage.hs",
       "module": "THC.FunctionCoverage",
       "entries": [
         {
@@ -301,7 +301,7 @@
     },
     {
       "id": "trees",
-      "source": "examples/THC/TreeCoverage.hs",
+      "source": "src/examples/THC/TreeCoverage.hs",
       "module": "THC.TreeCoverage",
       "entries": [
         {
@@ -403,7 +403,7 @@
     },
     {
       "id": "numeric",
-      "source": "examples/THC/NumericCoverage.hs",
+      "source": "src/examples/THC/NumericCoverage.hs",
       "module": "THC.NumericCoverage",
       "entries": [
         {
@@ -533,7 +533,7 @@
     },
     {
       "id": "narrow-ints",
-      "source": "examples/THC/NarrowIntCoverage.hs",
+      "source": "src/examples/THC/NarrowIntCoverage.hs",
       "module": "THC.NarrowIntCoverage",
       "entries": [
         {
@@ -589,7 +589,7 @@
     },
     {
       "id": "narrow-words",
-      "source": "examples/THC/NarrowWordCoverage.hs",
+      "source": "src/examples/THC/NarrowWordCoverage.hs",
       "module": "THC.NarrowWordCoverage",
       "entries": [
         {
@@ -648,7 +648,7 @@
     },
     {
       "id": "pointers",
-      "source": "examples/THC/PointerCoverage.hs",
+      "source": "src/examples/THC/PointerCoverage.hs",
       "module": "THC.PointerCoverage",
       "entries": [
         {

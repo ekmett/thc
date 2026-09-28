@@ -11,7 +11,7 @@ Do not add `--recursive`: THC does not need GHC's nested submodules. To reduce
 the GHC working-tree footprint after checkout:
 
 ```sh
-git -C third-party/pinned/ghc-9.14.1 sparse-checkout set libraries/ghc-internal rts
+git -C nih/pinned/ghc-9.14.1 sparse-checkout set libraries/ghc-internal rts
 ```
 
 | Submodule | Release | Used sources |

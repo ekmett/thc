@@ -40,9 +40,9 @@ entries = ["integerRoundTrip","naturalRoundTrip","integerLiteral","naturalLitera
 arithmetic = ["integerAddFrontier","naturalAddFrontier"]
 modules = ["BigNat","Integer","Natural"]
 originals = [directory </> "boot/core/GHC.Internal.Bignum." ++ name ++ ".json" | name <- modules]
-vendorSources = ["third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum" </> name ++ suffix |
+vendorSources = ["nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum" </> name ++ suffix |
   name <- modules, suffix <- [".hs",".hs-boot"]] ++
-  ["third-party/pinned/ghc-9.14.1/libraries/ghc-internal/include/WordSize.h","third-party/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE"]
+  ["nih/pinned/ghc-9.14.1/libraries/ghc-internal/include/WordSize.h","nih/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE"]
 
 directory, logs, prefix :: String
 directory = "build/bignat-literals"

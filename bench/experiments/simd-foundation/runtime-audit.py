@@ -18,8 +18,8 @@ rows, arity = (81, 4) if shape32 else (49, 2)
 def digest(path): return hashlib.sha256(path.read_bytes()).hexdigest()
 def record(path): return dict(path=str(path), sha256=digest(path))
 def runtime_snapshot():
-    build_sources = [root / name for name in ('build.gradle', 'build.gradle.kts', 'settings.gradle', 'settings.gradle.kts', 'buildSrc/build.gradle') if (root / name).is_file()]
-    build_sources += sorted((root / 'gradle').glob('*.gradle*')) + sorted((root / 'buildSrc/src').rglob('*.java'))
+    build_sources = [root / name for name in ('build.gradle', 'build.gradle.kts', 'settings.gradle', 'settings.gradle.kts', 'src/build/build.gradle', 'src/build/settings.gradle') if (root / name).is_file()]
+    build_sources += sorted((root / 'src/gradle').glob('*.gradle*')) + sorted((root / 'src/build/java').rglob('*.java'))
     sources=[record(path) for path in build_sources] + [record(p) for p in sorted((root/'src/main').rglob('*')) if p.is_file()]
     sources += [record(p) for p in sorted((root/'bench/experiments/simd-foundation').glob('*')) if p.is_file() and p.suffix in ('.java', '.sh', '.py')]
     return dict(sources=sources, runtimeJars=[record(p) for p in sorted((root/'build/install/thc/lib').glob('*.jar'))])

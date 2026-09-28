@@ -40,7 +40,7 @@ prepareForeignExceptions root = do
   installed <- prepareInstalledCoreWithForeign root directory configuredSource
   support <- run "runtime-export"
     [("THC_CORE_OUT", root </> directory </> "runtime-core"), ("THC_GHC_OUT", root </> directory </> "runtime-ghc")]
-    "bin/export-core.sh" ["-isrc/runtime", "-fplugin-opt=THC.Plugin:post-tidy", "src/runtime/THC/Exception.hs", "examples/THC/Polyglot.hs"]
+    "bin/export-core.sh" ["-isrc/runtime", "-fplugin-opt=THC.Plugin:post-tidy", "src/runtime/THC/Exception.hs", "src/examples/THC/Polyglot.hs"]
   supportNames <- sort . filter (\name -> takeExtension name == ".json" && name /= "THC.InterfaceClosure.json") <$>
     listDirectory (root </> directory </> "runtime-core")
   let supportModules = map ((directory </> "runtime-core") </>) supportNames
@@ -74,7 +74,7 @@ prepareForeignExceptions root = do
     (die "Unsafe internal import failed for an unrelated reason")
   scripts <- listDirectory (root </> "bin")
   compiler <- listDirectory (root </> "src/compiler/THC")
-  let sources = ["examples/THC/Polyglot.hs", "src/runtime/THC/Exception.hs", "src/runtime/THC/Internal/Exception.hs", "src/runtime/exception.c", source,
+  let sources = ["src/examples/THC/Polyglot.hs", "src/runtime/THC/Exception.hs", "src/runtime/THC/Internal/Exception.hs", "src/runtime/exception.c", source,
         "test/fixtures/compiler/ForeignExceptionNative.hs", "test/fixtures/compiler/ForeignExceptionSafe.hs",
         "test/fixtures/compiler/ForeignExceptionUnsafeImport.hs", "test/haskell-fixtures/ForeignExceptionFixtures.hs",
         "test/haskell-fixtures/InstalledCoreFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",

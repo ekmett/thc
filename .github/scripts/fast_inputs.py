@@ -37,7 +37,7 @@ WIRED_SOURCE = "src/driver/THC/Driver/Wired.hs"
 
 
 def wired_source_path(name):
-    return "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/" + (
+    return "nih/pinned/ghc-9.14.1/libraries/ghc-internal/" + (
         "src/" if name.startswith("GHC/") else "") + name
 
 
@@ -1566,7 +1566,7 @@ def tracked_files(root):
     if submodules:
         # Cabal already declares the upstream files this project distributes.
         # Expand only those paths, not the full GHC tree or its nested modules.
-        declared = re.findall(r"^  (third-party/pinned/\S+)\s*$", (root / "thc.cabal").read_text(), re.M)
+        declared = re.findall(r"^  (nih/pinned/\S+)\s*$", (root / "thc.cabal").read_text(), re.M)
         for module in submodules:
             prefix = module + "/"
             patterns = [path[len(prefix):] for path in declared if path.startswith(prefix)]
@@ -1620,7 +1620,7 @@ def toolchain(root):
 
 def identity(root):
     tracked = tracked_files(root)
-    sources = {name for name in tracked if name.startswith(("src/compiler/", "src/cbd/", "test/fixtures/compiler/", "test/fixtures/package-roots/", "test/fixtures/putstrln/", "third-party/pinned/", "config/", "src/core-symbols/", "bin/", "examples/", "src/main/resources/", "test/haskell-fixtures/", "src/driver/THC/Driver/", "src/tools/primops/"))}
+    sources = {name for name in tracked if name.startswith(("src/compiler/", "src/cbd/", "test/fixtures/compiler/", "test/fixtures/package-roots/", "test/fixtures/putstrln/", "nih/pinned/", "etc/", "src/core-symbols/", "bin/", "src/examples/", "src/main/resources/", "test/haskell-fixtures/", "src/driver/THC/Driver/", "src/tools/primops/"))}
     sources.update((SELF, WIRED_SOURCE, *RUNTIME_INPUTS, *COMPILER_BUILD_INPUTS, *SIMD_BYTEARRAY_RETAINED,
                     "src/test/resources/core/original-unix-libc-descriptors.json",
                     "src/test/resources/core/original-bytestring-sort-descriptor.json",
@@ -1629,7 +1629,7 @@ def identity(root):
         sources.add(".gitmodules")
     require(all(name in tracked for name in sources), "Cache helper/runtime inputs must be tracked")
     require("bin/prepare-tests.sh" in sources and "bin/export-boot.py" in sources
-            and "examples/coverage.json" in sources, "Incomplete authoritative source set")
+            and "src/examples/coverage.json" in sources, "Incomplete authoritative source set")
     hashes = {name: digest(file_path(root, name)) for name in sorted(sources)}
     for name, expected in ghc_source_pins(root).items():
         require(hashes.get(name) == expected, "Pinned GHC source missing or changed: " + name)

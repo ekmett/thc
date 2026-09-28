@@ -81,7 +81,7 @@ prepareAlignedScalarMemory root = do
   exampleBuilt <- runLogged 120 root logs "example-build" [] ghc
     ["--make","-O2","-dynamic","-dcore-lint","-dstg-lint",
      "-odir",native </> "example","-hidir",native </> "example",
-     root </> "examples/StableWideCells.hs","-o",native </> "stable-wide-cells"]
+     root </> "src/examples/StableWideCells.hs","-o",native </> "stable-wide-cells"]
   exampleRun <- runLogged 60 root logs "example-run" [] (native </> "stable-wide-cells") []
   unless (BS.lines (commandStdout exampleRun) == ["retained opaque handle","128578"])
     (die "StablePtr/WideChar example output mismatch")
@@ -99,7 +99,7 @@ prepareAlignedScalarMemory root = do
   BS.writeFile (output </> "oracle.tsv") (commandStdout oracle)
   pluginFiles <- listDirectory (root </> "src/compiler/THC")
   coreScripts <- listDirectory (root </> "bin")
-  let sources = sort $ [source,driver,"examples/StableWideCells.hs","thc.cabal","test/haskell-fixtures/Main.hs",
+  let sources = sort $ [source,driver,"src/examples/StableWideCells.hs","thc.cabal","test/haskell-fixtures/Main.hs",
         "test/haskell-fixtures/FixtureSupport.hs","test/haskell-fixtures/AlignedScalarMemoryFixtures.hs",
         "bin/audit-core.py","bin/core-capabilities.json",
         "src/main/resources/thc/scalar-primop-signatures.json",

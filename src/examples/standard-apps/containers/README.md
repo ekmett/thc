@@ -13,7 +13,7 @@ and listing. The configured dependency is `tasty-bench-0.4.1`.
 ## Prepare the original project
 
 Use the complete-Core GHC, matching configured source tree, Cabal and Graal
-toolchain in the [driver guide](../../../docs/driver.md). Set `THC_ROOT`,
+toolchain in the [driver guide](../../../../docs/driver.md). Set `THC_ROOT`,
 `THC_DRIVER`, `GHC_SOURCE`, `GHC` and `GHC_PKG` as described there. Copy the
 upstream project to a fresh writable location, keeping its original Cabal
 declarations, Haskell sources and licenses:
@@ -93,4 +93,4 @@ repository dependency in-place because it depends on the project-local
 containers library. That attempt also published no package manifest and ran no
 THC guest. Supporting this dependency style requires content-sensitive cache
 keys for the local dependency closure, not ignoring changed store identities;
-see the [driver's source-dependency rules](../../../docs/driver.md).
+see the [driver's source-dependency rules](../../../../docs/driver.md).

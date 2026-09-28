@@ -22,7 +22,7 @@ def run(command, **kwargs):
 
 
 def prepare():
-    manifest = json.loads((ROOT / 'examples/coverage.json').read_text())
+    manifest = json.loads((ROOT / 'src/examples/coverage.json').read_text())
     assert manifest['schema'] == 1
     groups = manifest['groups']
     assert groups, 'Empty corpus'
@@ -33,7 +33,7 @@ def prepare():
         assert re.fullmatch(r'[A-Z][A-Za-z0-9]*(\.[A-Z][A-Za-z0-9]*)*', group['module'])
         assert group.get('sourceLibraryFrontier') in (None, 'lists')
         source = (ROOT / group['source']).resolve()
-        assert source.is_relative_to(ROOT / 'examples') and source.is_file()
+        assert source.is_relative_to(ROOT / 'src/examples') and source.is_file()
         names = set()
         assert group['entries']
         for entry in group['entries']:
@@ -54,8 +54,8 @@ def prepare():
     capabilities = json.loads((ROOT / 'bin/core-capabilities.json').read_text())
     prepared = []
     extra_artifacts = set()
-    inputs = set((ROOT / 'examples').rglob('*.hs')) | set((ROOT / 'src/compiler').rglob('*.hs'))
-    inputs.update(ROOT / p for p in ['examples/coverage.json', 'bin/build-compiler.sh', 'bin/export-core.sh',
+    inputs = set((ROOT / 'src/examples').rglob('*.hs')) | set((ROOT / 'src/compiler').rglob('*.hs'))
+    inputs.update(ROOT / p for p in ['src/examples/coverage.json', 'bin/build-compiler.sh', 'bin/export-core.sh',
         'bin/toolchain.sh', 'bin/export-boot.py', 'bin/prepare-corpus.py', 'bin/audit-core.py',
         'bin/core-capabilities.json', 'src/main/resources/thc/scalar-primop-signatures.json', 'bin/check-corpus-structure.py'])
     input_hashes = {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(inputs)}
@@ -114,7 +114,7 @@ def prepare():
     ghc = os.environ.get('GHC', 'ghc')
     executable = native_dir / 'corpus-oracle'
     run([ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint', '-dstg-lint',
-         '-i' + str(ROOT / 'examples'), '-odir', native_dir, '-hidir', native_dir,
+         '-i' + str(ROOT / 'src/examples'), '-odir', native_dir, '-hidir', native_dir,
          driver, '-o', executable])
     # The fixture inputs are deliberately bounded. A divergent oracle is a failed preparation.
     completed = subprocess.run([str(executable)], check=True, text=True, capture_output=True, timeout=60)
@@ -134,7 +134,7 @@ def prepare():
         artifactHashes={path: hashlib.sha256((ROOT / path).read_bytes()).hexdigest()
                         for path in sorted({p for entry in prepared for p in entry['modules']} | extra_artifacts |
                                            {'build/corpus/oracle.tsv', 'build/corpus/structure.json'})},
-        sourceManifestSha256=hashlib.sha256((ROOT / 'examples/coverage.json').read_bytes()).hexdigest()), indent=2) + '\n')
+        sourceManifestSha256=hashlib.sha256((ROOT / 'src/examples/coverage.json').read_bytes()).hexdigest()), indent=2) + '\n')
     print(f'Prepared {len(prepared)} strict Core entries / {len(expected)} native oracle rows')
 
 

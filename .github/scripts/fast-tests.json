@@ -1494,7 +1494,7 @@
     "src/core-symbols/THC/CoreSymbols.hs": {
       "junit": [], "python": [], "haskell": ["driver-tests", "compact-core-tests"]
     },
-    "examples/GhcBCO.hs": {
+    "src/examples/GhcBCO.hs": {
       "junit": ["thc.runtime.GhcBCOTest"], "python": []
     },
     "test/fixtures/compiler/GhcBCONative.hs": {
@@ -1554,7 +1554,7 @@
       ],
       "python": []
     },
-    "examples/DelimitedContinuations.hs": {
+    "src/examples/DelimitedContinuations.hs": {
       "junit": ["thc.runtime.DelimitedContinuationsTest"], "python": []
     },
     "test/fixtures/compiler/DelimitedContinuationsNative.hs": {
@@ -1570,7 +1570,7 @@
     "src/main/java/thc/runtime/StableNameOp.java": {"junit": ["thc.runtime.StableNamesTest"], "python": []},
     "src/main/java/thc/runtime/MakeStableName.java": {"junit": ["thc.runtime.StableNamesTest"], "python": []},
     "src/main/java/thc/runtime/HashStableName.java": {"junit": ["thc.runtime.StableNamesTest"], "python": []},
-    "examples/StableNames.hs": {"junit": ["thc.runtime.StableNamesTest"], "python": []},
+    "src/examples/StableNames.hs": {"junit": ["thc.runtime.StableNamesTest"], "python": []},
     "test/fixtures/compiler/StableNamesNative.hs": {"junit": ["thc.runtime.StableNamesTest"], "python": []},
     "test/haskell-fixtures/StableNameFixtures.hs": {"junit": ["thc.runtime.StableNamesTest"], "python": []},
     "test/haskell-fixtures/HintTraceFixtures.hs": {"junit": ["thc.runtime.HintTraceTest"], "python": []},
@@ -1606,8 +1606,8 @@
     "test/haskell-fixtures/FloatingRemainderFixtures.hs": {"junit": ["thc.runtime.FloatingRemainderTest"], "python": []},
     "test/fixtures/compiler/FloatingRemainderAudit.hs": {"junit": ["thc.runtime.FloatingRemainderTest"], "python": []},
     "test/fixtures/compiler/FloatingRemainderNative.hs": {"junit": ["thc.runtime.FloatingRemainderTest"], "python": []},
-    "examples/THC/InverseHyperbolic.hs": {"junit": ["thc.runtime.FloatingRemainderTest"], "python": []},
-    "examples/ThreadInventory.hs": {
+    "src/examples/THC/InverseHyperbolic.hs": {"junit": ["thc.runtime.FloatingRemainderTest"], "python": []},
+    "src/examples/ThreadInventory.hs": {
       "junit": ["thc.runtime.ThreadInventoryNativeTest"], "python": []
     },
     "test/fixtures/compiler/CallbackIdentityNative.hs": {
@@ -1623,7 +1623,7 @@
       "junit": ["thc.runtime.ThreadInventoryNativeTest"], "python": []
     },
     "test/haskell-fixtures/ThreadSchedulingFixtures.hs": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": []},
-    "examples/ThreadScheduling.hs": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": []},
+    "src/examples/ThreadScheduling.hs": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": []},
     "test/fixtures/compiler/ThreadSchedulingNative.hs": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": []},
     "src/main/java/thc/runtime/CoreThreadScheduling.java": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": ["bin/test-audit-core.py"]},
     "src/main/java/thc/runtime/SparkResult.java": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": ["bin/test-audit-core.py"]},
@@ -1631,7 +1631,7 @@
     "src/main/java/thc/runtime/ThreadDelayToken.java": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": []},
     "src/main/java/thc/runtime/DelayThread.java": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": []},
     "src/main/java/thc/runtime/GuestAllocationAccounting.java": {"junit": ["thc.runtime.ThreadSchedulingTest", "thc.runtime.GuestThreadsTest"], "python": []},
-    "examples/StableWideCells.hs": {
+    "src/examples/StableWideCells.hs": {
       "junit": ["thc.runtime.AlignedScalarMemoryTest"],
       "python": []
     },
@@ -1668,7 +1668,7 @@
     "test/haskell-fixtures/FloatDecodeFixtures.hs": {"junit": ["thc.runtime.FloatDecodeTest"], "python": []},
     "test/fixtures/compiler/FloatDecodeAudit.hs": {"junit": ["thc.runtime.FloatDecodeTest"], "python": []},
     "test/fixtures/compiler/FloatDecodeNative.hs": {"junit": ["thc.runtime.FloatDecodeTest"], "python": []},
-    "examples/THC/FloatDecode.hs": {"junit": ["thc.runtime.FloatDecodeTest"], "python": []},
+    "src/examples/THC/FloatDecode.hs": {"junit": ["thc.runtime.FloatDecodeTest"], "python": []},
     "test/haskell-fixtures/ScalarBitCastFixtures.hs": {"junit": ["thc.runtime.ScalarBitCastTest"], "python": []},
     "test/haskell-fixtures/PinnedAddressFixtures.hs": {"junit": ["thc.runtime.PinnedAddressTest"], "python": []},
     "test/fixtures/compiler/PinnedAddressAudit.hs": {"junit": ["thc.runtime.PinnedAddressTest"], "python": []},
@@ -2065,7 +2065,7 @@
     },
     "test/fixtures/compiler/BoxedCasAudit.hs": {"junit": ["thc.runtime.BoxedCasTest"], "python": []},
     "test/fixtures/compiler/BoxedCasNative.hs": {"junit": ["thc.runtime.BoxedCasTest"], "python": []},
-    "examples/THC/BoxedCasCounter.hs": {"junit": ["thc.runtime.BoxedCasTest"], "python": []},
+    "src/examples/THC/BoxedCasCounter.hs": {"junit": ["thc.runtime.BoxedCasTest"], "python": []},
     "test/haskell-fixtures/BoxedCasFixtures.hs": {"junit": ["thc.runtime.BoxedCasTest"], "python": []},
     "test/fixtures/compiler/BoxedArrayExtensionsNative.hs": {
       "junit": ["thc.runtime.BoxedArrayExtensionsTest"], "python": []
@@ -2513,7 +2513,7 @@
       ],
       "python": []
     },
-    "examples/NativeOracle.hs": {
+    "src/examples/NativeOracle.hs": {
       "junit": [
         "thc.FastSmokeTest",
         "thc.RuntimeTest",
@@ -2521,7 +2521,7 @@
       ],
       "python": []
     },
-    "examples/THC/Fixtures.hs": {
+    "src/examples/THC/Fixtures.hs": {
       "junit": [
         "thc.FastSmokeTest",
         "thc.RuntimeTest",
@@ -2530,14 +2530,14 @@
       ],
       "python": []
     },
-    "examples/THC/MapWorkload.hs": {
+    "src/examples/THC/MapWorkload.hs": {
       "junit": [
         "thc.RuntimeTest",
         "thc.BytecodeBackendTest"
       ],
       "python": []
     },
-    "examples/THC/Prim.hs": {
+    "src/examples/THC/Prim.hs": {
       "junit": [
         "thc.FastSmokeTest",
         "thc.RuntimeTest",
@@ -2546,20 +2546,20 @@
       ],
       "python": []
     },
-    "examples/THC/Unboxed8Arrays.hs": {
+    "src/examples/THC/Unboxed8Arrays.hs": {
       "junit": [
         "thc.runtime.Int8ArrayNativeTest"
       ],
       "python": []
     },
-    "examples/THC/Unboxed16Arrays.hs": {
+    "src/examples/THC/Unboxed16Arrays.hs": {
       "junit": [
         "thc.runtime.Int16ArrayNativeTest",
         "thc.runtime.Int16BoundaryCompilationTest"
       ],
       "python": []
     },
-    "examples/THC/Unboxed32Arrays.hs": {
+    "src/examples/THC/Unboxed32Arrays.hs": {
       "junit": [
         "thc.runtime.Int32ArrayNativeTest"
       ],
@@ -2956,7 +2956,7 @@
     "src/main/java/thc/runtime/ByteStringUtf8Expression.java": {"junit": ["thc.runtime.ByteStringUtf8Test"], "python": ["bin/test-audit-core.py"]},
     "src/main/java/thc/runtime/ManagedByteStringUtf8.java": {"junit": ["thc.runtime.ByteStringUtf8Test"], "python": ["bin/test-audit-core.py"]},
     "src/main/c/bytestring-utf8-api.c": {"junit": ["thc.runtime.ByteStringUtf8Test"], "python": ["bin/test-audit-core.py"]},
-    "third-party/pinned/bytestring-0.12.2.0/cbits/is-valid-utf8.c": {"junit": ["thc.runtime.ByteStringUtf8Test"], "python": ["bin/test-audit-core.py"]},
+    "nih/pinned/bytestring-0.12.2.0/cbits/is-valid-utf8.c": {"junit": ["thc.runtime.ByteStringUtf8Test"], "python": ["bin/test-audit-core.py"]},
     "test/haskell-fixtures/MemsetFixtures.hs": {"junit": ["thc.runtime.OriginalMemsetTest"], "python": []},
     "test/fixtures/compiler/OriginalMemsetAudit.hs": {"junit": ["thc.runtime.OriginalMemsetTest"], "python": []},
     "test/fixtures/compiler/OriginalMemsetNative.hs": {"junit": ["thc.runtime.OriginalMemsetTest"], "python": []},

@@ -9,10 +9,10 @@ the terms identified below.
 
 ## zlib checksum source provider
 
-`third-party/pinned/zlib-1.2.11` contains unchanged checksum sources and supporting
+`nih/pinned/zlib-1.2.11` contains unchanged checksum sources and supporting
 headers from zlib 1.2.11. They retain the zlib license and original Mark Adler /
 Jean-loup Gailly notices in `zlib.h` and `README`. The upstream repository is recorded in `.gitmodules`; Git pins its exact
-release commit. See `third-party/README.md` for checkout instructions. THC compiles
+release commit. See `nih/README.md` for checkout instructions. THC compiles
 these functions as LLVM over managed buffers; it does not replace them with
 handwritten checksum implementations.
 
@@ -53,7 +53,7 @@ normalization paths are intentionally absent.
 Cadenza's license terms and Oracle copyright notices are retained in
 [LICENSE.txt](LICENSE.txt), with Edward Kmett's copyright extended through 2026.
 The original notice is retained without modification in
-[third-party/licenses/cadenza-LICENSE.txt](third-party/licenses/cadenza-LICENSE.txt).
+[nih/licenses/cadenza-LICENSE.txt](nih/licenses/cadenza-LICENSE.txt).
 The incorporated portions and THC's original modifications use the same SPDX
 expression, `UPL-1.0 AND BSD-3-Clause`, including the retained Oracle notices.
 
@@ -78,17 +78,17 @@ The shift, GCD and floating-conversion adapters in `src/main/c/gmp-api.c`
 adapt GHC 9.14.1's `libraries/ghc-internal/cbits/gmp_wrappers.c`, copyright
 (c) 2014 Herbert Valerio Riedel <hvr@gnu.org>, under BSD-3-Clause. The original
 terms and University of Glasgow notice are retained in
-[`third-party/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE`](third-party/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE).
+[`nih/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE`](nih/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE).
 Host validation, transport and lifetime management are THC additions.
 
 ## Gradle wrapper
 
-`gradlew`, `gradlew.bat`, and `gradle/wrapper/gradle-wrapper.jar` are Gradle
+`gradlew`, `gradlew.bat`, and `src/gradle/wrapper/gradle-wrapper.jar` are Gradle
 wrapper artifacts, copied from Cadenza. They remain under **Apache-2.0**.
 The scripts retain their original copyright and license headers; the JAR
 contains its upstream `META-INF/LICENSE`. A full Apache-2.0 text is also
 provided in
-[third-party/licenses/gradle-LICENSE.txt](third-party/licenses/gradle-LICENSE.txt).
+[nih/licenses/gradle-LICENSE.txt](nih/licenses/gradle-LICENSE.txt).
 Copying the wrapper through
 Cadenza does not change its upstream license.
 
@@ -96,7 +96,7 @@ Cadenza does not change its upstream license.
 
 The pinned GHC submodule supplies the library source used by the boot exporter.
 It retains the complete upstream license collection and source-file notices.
-The GHC-specific THC patch is stored separately under `third-party/patches/`.
+The GHC-specific THC patch is stored separately under `nih/patches/`.
 
 The containers experiment downloads its source into an ignored cache:
 

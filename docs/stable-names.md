@@ -13,7 +13,7 @@ a thunk may change the identity subsequently named, as permitted by GHC's stable
 name contract. Hash numbers are target-local and are not native-GHC addresses or
 portable serialized identities.
 
-`examples/StableNames.hs` covers lifted sharing, unlifted sharing, distinct mutable
+`src/examples/StableNames.hs` covers lifted sharing, unlifted sharing, distinct mutable
 references and naming an unevaluated bottom. Its `Int#` entry wrappers match the
 development runner's scalar ABI. The Haskell fixture producer records 20 native
 observations, pre/post Core and eight strict audits. `StableNamesTest` runs the

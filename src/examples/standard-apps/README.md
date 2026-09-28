@@ -104,7 +104,7 @@ full-bytecode `--version` matches native stdout at that earlier checkpoint.
 All four generated sources match the native 34,688-byte output byte-for-byte
 when given the same absolute input path (Alex includes that path in line
 pragmas). Native GHC compiles all four lexers, which print `["sum","+","42"]`
-followed by a newline. See the [copy-paste commands](../../docs/driver.md#alex-generate-a-lexer).
+followed by a newline. See the [copy-paste commands](../../../docs/driver.md#alex-generate-a-lexer).
 
 Earlier bytecode runs on `a8774e09` failed in both modes with
 `GraphTooBigBailoutException` in the original Handle output lambda (graph size
@@ -117,7 +117,7 @@ remains a raw-main check, not a general executable-startup claim.
 ## Toolchain
 
 Use the supported GHC 9.14.1 complete-Core installation, matching ghc-pkg,
-Cabal 3.16 and Graal toolchain from [the driver guide](../../docs/driver.md).
+Cabal 3.16 and Graal toolchain from [the driver guide](../../../docs/driver.md).
 Keep an absolute `THC_ROOT`, `GHC_SOURCE`, `GHC` and `GHC_PKG` for the commands
 below. The root must have built `exe:thc`, `exe:thc-interface`, the plugin library
 and `build/install/thc`.
@@ -167,7 +167,7 @@ enables asynchronous exceptions by default. For the verified Happy/HsColour
 AST generated-main lifecycle, set `THC_BACKEND=ast` and add
 `-Dthc.asyncExceptions=true` to `JAVA_OPTS`; the AST default remains synchronous.
 Keep the Linux launcher's `-Xrs` process-signal setting. See the
-[full lifecycle command](../../docs/driver.md#happy-generate-a-parser).
+[full lifecycle command](../../../docs/driver.md#happy-generate-a-parser).
 Do not silently replace guest execution with native execution or synthetic Core.
 
 ## Real inputs

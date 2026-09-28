@@ -190,7 +190,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=root / "build/managed-md5-native",
                         help="Only the canonical default path is accepted; prior attempts are archived intact")
-    parser.add_argument("--reference-dir", type=Path, default=root / "third-party/pinned/ghc-9.14.1/libraries/ghc-internal")
+    parser.add_argument("--reference-dir", type=Path, default=root / "nih/pinned/ghc-9.14.1/libraries/ghc-internal")
     parser.add_argument("--cc", default=os.environ.get("CC", "cc"))
     parser.add_argument("--ghc", default=os.environ.get("GHC", "ghc"))
     args = parser.parse_args()

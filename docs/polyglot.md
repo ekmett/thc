@@ -68,7 +68,7 @@ main = do
     pure ()
 ```
 
-The complete example is [PolyglotDemo.hs](../examples/THC/PolyglotDemo.hs).
+The complete example is [PolyglotDemo.hs](../src/examples/THC/PolyglotDemo.hs).
 Run `bin/polyglot-demo.sh` from the repository root. The script builds the
 pinned GHC plugin, exports optimized Core before and after Tidy, audits the
 reachable `IO ()` entry, and runs the demo with the optional GraalVM JavaScript
@@ -129,7 +129,7 @@ or an interop operation rejects the value.
 The next useful API steps are ordinary `Text` or byte-buffer inputs, more
 typed conversions, multiple arguments and member invocation, and richer
 value-lifetime controls. The module would
-then move from `examples/THC` into a Cabal package. Loading another language
+then move from `src/examples/THC` into a Cabal package. Loading another language
 in one Polyglot Context also brings that language's thread-access rules:
 JavaScript may require serialized or isolated access even when Haskell code
 runs concurrently. An admitted callback stays on its carrier and obeys the

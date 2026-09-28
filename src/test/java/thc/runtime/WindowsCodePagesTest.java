@@ -108,7 +108,7 @@ class WindowsCodePagesTest {
         OriginalStdioChecks.hashes(root, proof.get("inputHashes"), Set.of("test/fixtures/compiler/WindowsCodePageAudit.hs",
             "test/haskell-fixtures/WindowsCodePageFixtures.hs", "bin/core_original_foreign.py"), null);
         OriginalStdioChecks.hashes(root, proof.get("artifactHashes"), Set.of(logs + "/pre.json", logs + "/post.json", logs + "/oracle.json"), logs + "/");
-        var upstream = "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/";
+        var upstream = "nih/pinned/ghc-9.14.1/libraries/ghc-internal/";
         var sourceHashes = new LinkedHashMap<String, String>();
         for (var entry : ((Map<String, String>) proof.get("sourceHashes")).entrySet()) {
             var relative = root.getCanonicalFile().toPath().relativize(new File(entry.getKey()).getCanonicalFile().toPath()).toString().replace('\\', '/');
@@ -116,7 +116,7 @@ class WindowsCodePagesTest {
         }
         OriginalStdioChecks.hashes(root, sourceHashes, Set.of(upstream + "src/GHC/Internal/Windows.hs",
             upstream + "src/GHC/Internal/IO/Encoding/CodePage.hs", upstream + "src/GHC/Internal/IO/Encoding/CodePage/API.hs",
-            upstream + "cbits/Win32Utils.c", "third-party/pinned/ghc-9.14.1-generated/include/HsBaseConfig.h.in"), "third-party/pinned/");
+            upstream + "cbits/Win32Utils.c", "nih/pinned/ghc-9.14.1-generated/include/HsBaseConfig.h.in"), "nih/pinned/");
         for (var command : (List<Map<String, Object>>) proof.get("commands")) assertEquals(command.get("expectedExit"), command.get("exit"));
         var oracle = json(logs + "/oracle.json");
         assertEquals(263, ((List<?>) oracle.get("mapping")).size());

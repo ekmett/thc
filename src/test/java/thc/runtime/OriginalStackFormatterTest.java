@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.*;
 public class OriginalStackFormatterTest {
     private final File root = new File(System.getProperty("thc.projectRoot"));
     private final String prefix = "build/original-stack-formatter/";
-    private final String sourceRoot = "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/";
+    private final String sourceRoot = "nih/pinned/ghc-9.14.1/libraries/ghc-internal/";
     private Map<String, String> pinned;
     private Set<String> requiredInputs;
     private final List<String> labels = OriginalStackFormatterCommands.labels;

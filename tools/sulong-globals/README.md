@@ -19,7 +19,7 @@ warmups, forced native conversions or compilation/inlining exclusions. This does
 not change the first-write policy for TLS or claim arbitrary racy C accesses are
 safe.
 
-The existing `gradle/windows-sulong.gradle` task names now build one pinned
+The existing `src/gradle/windows-sulong.gradle` task names now build one pinned
 artifact on every host. Windows additionally applies its existing optional-cwd
 locator patch; other hosts retain the original locator bytes. Both source and
 binary archives are hash-checked, and `verifyWindowsSulongSelection` checks the

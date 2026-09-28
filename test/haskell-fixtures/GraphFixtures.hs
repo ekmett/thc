@@ -59,7 +59,7 @@ prepareGraph :: FilePath -> IO ()
 prepareGraph root = do
   let directory = "build/graph-bfs"
       manifest = root </> directory </> "manifest.json"
-      source = "examples/THC/GraphWorkload.hs"
+      source = "src/examples/THC/GraphWorkload.hs"
       logs = directory </> "logs"
       execute = runLogged 600 root logs
       commandFiles label = [logs </> label <.> suffix | suffix <- ["stdout","stderr","command.json"]]
@@ -97,7 +97,7 @@ prepareGraph root = do
   writeFile (root </> inputs) (unlines [entry ++ "\t" ++ show n | (entry,n) <- requests])
   createDirectoryIfMissing True (root </> native)
   _ <- execute "native-build" [] ghc (["--make","-O2","-fforce-recomp","-dcore-lint","-dstg-lint",
-    "-iexamples","-odir",native,"-hidir",native,"examples/LibraryOracle.hs","-o",binary] ++ include)
+    "-isrc/examples","-odir",native,"-hidir",native,"src/examples/LibraryOracle.hs","-o",binary] ++ include)
   observed <- runLoggedWithInput inputs 120 root logs "native-oracle" [] (root </> binary) ["--batch"]
   let parse row = case splitTab row of
         [entry,n,result] -> do argument <- readInteger n; value <- readInteger result; pure (entry,argument,value)
@@ -207,13 +207,13 @@ prepareGraph root = do
       paths ++ [moduleList,closurePath] ++ commandFiles exportLabel ++ concat [[path] ++ commands | (_,path,_,commands) <- audits])
   plugin <- listDirectory (root </> "src/compiler/THC")
   scripts <- listDirectory (root </> "bin")
-  let sources = [source,"examples/LibraryOracle.hs","thc.cabal","test/haskell-fixtures/Main.hs",
+  let sources = [source,"src/examples/LibraryOracle.hs","thc.cabal","test/haskell-fixtures/Main.hs",
         "test/haskell-fixtures/GraphFixtures.hs","test/haskell-fixtures/FixtureSupport.hs",
         "test/haskell-fixtures/InstalledCoreFixtures.hs","bin/export-core.sh","bin/build-compiler.sh",
         "bin/toolchain.sh","bin/plugin.py","bin/export-boot.py","test/fixtures/package-roots/InterfaceRoots.hs",
         "bin/audit-core.py","bin/core-capabilities.json", "src/main/resources/thc/scalar-primop-signatures.json",
         "src/driver/THC/Driver/Installed.hs","src/compiler/interface/Main.hs"] ++
-        ["examples/THC" </> name <.> "hs" | name <- ["SetWorkload","IntMapWorkload","IntMapPrimops","IntSetWorkload","IntSetPrimops","SequenceWorkload"]] ++
+        ["src/examples/THC" </> name <.> "hs" | name <- ["SetWorkload","IntMapWorkload","IntMapPrimops","IntSetWorkload","IntSetPrimops","SequenceWorkload"]] ++
         ["src/compiler/THC" </> name | name <- plugin,takeExtension name == ".hs"] ++
         ["bin" </> name | name <- scripts,"core_" `isPrefixOf` name,takeExtension name == ".py"] ++ bootSourcePaths
       labels = ["ghc-version","containers-version","containers-extract","native-build","native-oracle","boot-export",

@@ -1,6 +1,6 @@
 # Breadth-first graph traversal
 
-`examples/THC/GraphWorkload.hs` is a pure dependency-graph workload using ordinary
+`src/examples/THC/GraphWorkload.hs` is a pure dependency-graph workload using ordinary
 `Data.IntMap.Strict` adjacency lists, a `Data.Sequence` FIFO and a `Data.IntSet`
 discovery set. No collection operation is implemented specially by THC.
 

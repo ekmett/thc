@@ -112,7 +112,7 @@ def main():
         sources = [*FIXTURES, Path(__file__).resolve(), ROOT/'bin/show_word_list_model.py', ROOT/'bin/export-boot.py',
                    ROOT/'bin/build-compiler.sh', ROOT/'bin/export-core.sh', ROOT/'bin/toolchain.sh',
                    *sorted((ROOT/'src/compiler/THC').glob('*.hs')), *audit_inputs(),
-                   ROOT/'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Show.hs', ROOT/'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE']
+                   ROOT/'nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Show.hs', ROOT/'nih/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE']
         for directory in ('boot', 'cstring'):
             boot = json.loads((OUT/directory/'boot-provenance.json').read_text())
             sources += [ROOT/item['path'] for item in boot['sources']]

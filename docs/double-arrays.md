@@ -23,7 +23,7 @@ frame/local accesses and the existing [floating tuple result](tuple-results.md)
 protocol. The optional scalar handoff ABI remains Long/reference-only; residual
 scalar floating calls can still box in their existing Object call packets.
 
-[Public examples](../examples/THC/UnboxedDoubleArrays.hs) use ordinary checked
+[Public examples](../src/examples/THC/UnboxedDoubleArrays.hs) use ordinary checked
 `accumArray` and `runSTUArray` APIs. Bounds and indices are fixed, while values
 depend on the input. GHC discharges the cold bounds checks itself; no exported
 Core is rewritten or cold branch discarded. Arithmetic uses bounded dyadic

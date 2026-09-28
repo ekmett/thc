@@ -208,7 +208,7 @@ generated executable-lifecycle claim.
 The low-level launchers retain their previous no-argument syntax;
 their optional suffix is `-- PROGRAM_NAME ARG...`.
 
-Reproducible [standard application inputs](../examples/standard-apps/README.md)
+Reproducible [standard application inputs](../src/examples/standard-apps/README.md)
 cover Alex, Happy, HsColour and doctest, distinguishing native baselines from
 actual guest execution and reporting original-package closure blockers.
 `cabal test library-memory-full-core -ffull-core-tests` exercises the original
@@ -226,7 +226,7 @@ executable startup/shutdown. Happy and HsColour also pass that full lifecycle
 on AST with explicit `-Dthc.asyncExceptions=true`; earlier synchronous AST
 checks used raw `Main.main`. This establishes these workloads, not arbitrary
 executable compatibility or whole-program JIT retention. See the
-[application results and pinned source hashes](../examples/standard-apps/README.md).
+[application results and pinned source hashes](../src/examples/standard-apps/README.md).
 
 Start in a built THC checkout with the complete-Core GHC 9.14.1 installation
 and matching `ghc-pkg` on `PATH`. Set `GHC_SOURCE` to its matching configured
@@ -265,7 +265,7 @@ THC_BACKEND=bytecode "$THC_DRIVER" run happy --project-dir "$THC_APPS/happy-2.2.
   --thc-root "$THC_ROOT" --dist-dir "$THC_APPS/happy-guest" \
   --with-ghc "$GHC" --with-ghc-pkg "$GHC_PKG" \
   --installed-core required --ghc-source "$GHC_SOURCE" -- \
-  -o "$THC_OUTPUT/Parser.hs" "$THC_ROOT/examples/standard-apps/TinyParser.y"
+  -o "$THC_OUTPUT/Parser.hs" "$THC_ROOT/src/examples/standard-apps/TinyParser.y"
 
 "$GHC" -O1 -outputdir "$THC_OUTPUT/parser-objects" \
   "$THC_OUTPUT/Parser.hs" -o "$THC_OUTPUT/parser"
@@ -283,7 +283,7 @@ invoking Cabal or the exporter again:
 THC_BACKEND=bytecode "$THC_ROOT/build/install/thc/bin/thc" \
   --run-executable "@$THC_APPS/happy-guest/packages.json" \
   main::Main.main ghc-internal:GHC.Internal.TopHandler.flushStdHandles -- \
-  happy -o "$THC_OUTPUT/Parser-again.hs" "$THC_ROOT/examples/standard-apps/TinyParser.y"
+  happy -o "$THC_OUTPUT/Parser-again.hs" "$THC_ROOT/src/examples/standard-apps/TinyParser.y"
 ```
 
 Keep `happy_lib_datadir` set and retain the manifest's referenced Core bundles.
@@ -296,7 +296,7 @@ THC_BACKEND=ast \
   "$THC_ROOT/build/install/thc/bin/thc" \
   --run-executable "@$THC_APPS/happy-guest/packages.json" \
   main::Main.main ghc-internal:GHC.Internal.TopHandler.flushStdHandles -- \
-  happy -o "$THC_OUTPUT/Parser-ast.hs" "$THC_ROOT/examples/standard-apps/TinyParser.y"
+  happy -o "$THC_OUTPUT/Parser-ast.hs" "$THC_ROOT/src/examples/standard-apps/TinyParser.y"
 ```
 
 The same environment selection works for the HsColour command below.
@@ -315,7 +315,7 @@ THC_BACKEND=bytecode "$THC_DRIVER" run HsColour --project-dir "$THC_APPS/hscolou
   --thc-root "$THC_ROOT" --dist-dir "$THC_APPS/hscolour-guest" \
   --with-ghc "$GHC" --with-ghc-pkg "$GHC_PKG" \
   --installed-core required --ghc-source "$GHC_SOURCE" -- \
-  -html "-o$THC_OUTPUT/TinyMath.html" "$THC_ROOT/examples/standard-apps/TinyMath.hs"
+  -html "-o$THC_OUTPUT/TinyMath.html" "$THC_ROOT/src/examples/standard-apps/TinyMath.hs"
 ```
 
 Open `build/real-programs/output/TinyMath.html` to see the highlighted file.
@@ -333,7 +333,7 @@ THC_BACKEND=bytecode "$THC_DRIVER" run alex --project-dir "$THC_APPS/alex-3.5.4.
   --thc-root "$THC_ROOT" --dist-dir "$THC_APPS/alex-guest" \
   --with-ghc "$GHC" --with-ghc-pkg "$GHC_PKG" \
   --installed-core required --ghc-source "$GHC_SOURCE" -- \
-  -o "$THC_OUTPUT/Lexer.hs" "$THC_ROOT/examples/standard-apps/TinyLexer.x"
+  -o "$THC_OUTPUT/Lexer.hs" "$THC_ROOT/src/examples/standard-apps/TinyLexer.x"
 
 "$GHC" -O1 -outputdir "$THC_OUTPUT/lexer-objects" \
   "$THC_OUTPUT/Lexer.hs" -o "$THC_OUTPUT/lexer"
@@ -347,14 +347,14 @@ Doctest and Pandoc remain development targets, not demonstrated runnable command
 here. Native baselines, strict Core admission and actual THC execution are
 reported separately in the application notes.
 
-For library-based programs, the [lens example](../examples/standard-apps/lens/README.md)
-has 14 passing public-API checks, and the [ad Kahn example](../examples/standard-apps/ad/README.md)
+For library-based programs, the [lens example](../src/examples/standard-apps/lens/README.md)
+has 14 passing public-API checks, and the [ad Kahn example](../src/examples/standard-apps/ad/README.md)
 has ten passing differentiation and sharing checks. Both run their original
 libraries with full startup/shutdown in both backends and handoff modes; the
 linked recipes distinguish these guest successes from the larger upstream
 test suites still being brought up.
 
-The [GHC library example](../examples/standard-apps/ghc-api/README.md) also runs
+The [GHC library example](../src/examples/standard-apps/ghc-api/README.md) also runs
 the original compiler's FastString interning code on bytecode and matches native
 stdout. Its recipe needs complete Core for the `ghc` package itself; the first
 acquisition includes all 822 compiler interfaces. That result does not yet
@@ -537,7 +537,7 @@ existing scope.
 Source-built store packages require a Cabal source hash and a successful Core
 capture; unsupported build modes fail before producing an incomplete manifest.
 Selected `ghc-internal` definitions come from exact, unmodified GHC 9.14.1
-sources pinned under `third-party/pinned/ghc-9.14.1/libraries/ghc-internal`. The driver compiles them
+sources pinned under `nih/pinned/ghc-9.14.1/libraries/ghc-internal`. The driver compiles them
 against installed dynamic interfaces in disposable staging under Cabal's build
 directory, then caches their post-Tidy Core in one checked ZIP under the OS
 cache. Other installed GHC/base units remain dependency identities without

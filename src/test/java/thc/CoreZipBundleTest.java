@@ -37,7 +37,7 @@ class CoreZipBundleTest {
     private List<Map<String, Object>> generatedReceipts() throws Exception {
         var result = new ArrayList<Map<String, Object>>();
         if (hostPlatform().equals("x86_64-windows")) {
-            var catalog = document(Files.readString(Path.of(System.getProperty("thc.projectRoot"), "config/ghc/9.14.1/windows-ghc-internal.json")));
+            var catalog = document(Files.readString(Path.of(System.getProperty("thc.projectRoot"), "etc/ghc/9.14.1/windows-ghc-internal.json")));
             for (var file : (List<?>) catalog.get("files")) { var path = (String) ((Map<?, ?>) file).get("path"); if (path.endsWith(".hsc")) result.add(map("path", path, "sha256", "a".repeat(64))); } assertEquals(27, result.size());
         } else {
             var source = Files.readString(Path.of(System.getProperty("thc.projectRoot"), "src/driver/THC/Driver/Wired.hs"));

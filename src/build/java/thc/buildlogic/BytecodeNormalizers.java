@@ -49,7 +49,7 @@ public final class BytecodeNormalizers {
     static final String END = "            }\n            throw CompilerDirectives.shouldNotReachHere(\"Invalid opcode\");\n        }\n";
     static final String BEGIN_MARKER = "        // THC argument-metadata split v1 BEGIN\n";
     static final String END_MARKER = "        // THC argument-metadata split v1 END\n";
-    private static final String METADATA_SHAPE = "Unexpected Truffle argument metadata shape; review gradle/bytecode-metadata.gradle for the pinned processor.";
+    private static final String METADATA_SHAPE = "Unexpected Truffle argument metadata shape; review src/gradle/bytecode-metadata.gradle for the pinned processor.";
     private static final Pattern CASE = Pattern.compile(" {16}case Instructions\\.[A-Z0-9_$]+ :\\n");
     private static final Pattern ARGUMENT = Pattern.compile(" {28}new [A-Za-z][A-Za-z0-9]*Argument\\([^;{}\\r\\n]*\\)(,|\\);)\\n");
     private static final String CALL_ARGS = "opcode, bci, bytecode, bytecodes, constants";

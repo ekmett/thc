@@ -76,8 +76,8 @@ def main():
         out.mkdir(parents=True, exist_ok=False)
         classes.mkdir()
         revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
-        paths = subprocess.check_output(['git', 'ls-files', 'src/main', 'build.gradle', 'buildSrc', 'settings.gradle',
-                                         'gradle.properties', 'gradle', 'gradlew', 'gradlew.bat'], cwd=ROOT, text=True).splitlines()
+        paths = subprocess.check_output(['git', 'ls-files', 'src/main', 'build.gradle', 'src/build', 'settings.gradle',
+                                         'gradle.properties', 'src/gradle', 'gradlew', 'gradlew.bat'], cwd=ROOT, text=True).splitlines()
         sources = {p: digest(ROOT / p) for p in paths}
         for path, sha in sources.items():
             require(hashlib.sha256(subprocess.check_output(['git', 'show', revision + ':' + path], cwd=ROOT)).hexdigest() == sha,
