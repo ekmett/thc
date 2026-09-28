@@ -203,7 +203,7 @@ internal class CompactExpression(private val op: CompactOp, @field:Children priv
         val registry = Language.currentState(this).compactRegions
         val region = registry.require(operands[0].execute(frame))
         val size = operands[1].executeRequiredLong(frame)
-        requireVoidCarrier(operands[2].execute(frame))
+        TupleResultsKt.requireVoidCarrier(operands[2].execute(frame))
         region.resize(size)
         return Unit
     }
@@ -212,23 +212,23 @@ internal class CompactExpression(private val op: CompactOp, @field:Children priv
         when (op) {
             CompactOp.NEW -> {
                 val size = operands[0].executeRequiredLong(frame)
-                requireVoidCarrier(operands[1].execute(frame))
+                TupleResultsKt.requireVoidCarrier(operands[1].execute(frame))
                 FrameAccess.write(frame, slots[offset], ManagedCompact(registry, size))
             }
             CompactOp.SIZE -> {
                 val region = registry.require(operands[0].execute(frame))
-                requireVoidCarrier(operands[1].execute(frame))
+                TupleResultsKt.requireVoidCarrier(operands[1].execute(frame))
                 FrameAccess.writeLong(frame, slots[offset], region.size())
             }
             CompactOp.CONTAINS_ANY -> {
                 val value = operands[0].execute(frame)
-                requireVoidCarrier(operands[1].execute(frame))
+                TupleResultsKt.requireVoidCarrier(operands[1].execute(frame))
                 FrameAccess.writeLong(frame, slots[offset], if (registry.containsAny(value)) 1 else 0)
             }
             CompactOp.CONTAINS, CompactOp.ADD, CompactOp.ADD_SHARING -> {
                 val region = registry.require(operands[0].execute(frame))
                 val value = operands[1].execute(frame)
-                requireVoidCarrier(operands[2].execute(frame))
+                TupleResultsKt.requireVoidCarrier(operands[2].execute(frame))
                 if (op == CompactOp.CONTAINS) FrameAccess.writeLong(frame, slots[offset], if (registry.contains(region, value)) 1 else 0)
                 else FrameAccess.write(frame, slots[offset], copier!!.execute(frame, region, value, op == CompactOp.ADD_SHARING))
             }

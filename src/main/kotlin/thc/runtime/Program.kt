@@ -1352,7 +1352,7 @@ CoreStackForeign.validateHead(fn, defined)
                     (constructors[fn[1]]?.get("arity") as? Number)?.toInt() != args.size)
                     throw RuntimeFault("Tuple constructor arity mismatch")
                 TupleConstruct(shape, args.mapIndexed { index, arg ->
-                    TupleShape.requireCompatible(shape.components[index], CoreRepresentations.expression(arg), component = true)
+                    TupleShape.requireCompatible(shape.components[index], CoreRepresentations.expression(arg), true)
                     if (shape.components[index].isTypedTransport && flags[index] != false)
                         throw RuntimeFault("Typed tuple field cannot be lifted")
                     if (shape.components[index].isTypedTransport) compile(arg, scope, false)
@@ -1377,7 +1377,7 @@ CoreStackForeign.validateHead(fn, defined)
                 val field = constructorLayout?.logicalProof(i)
                 if (field?.isAggregate == true) {
                     if (lifted) throw RuntimeFault("Aggregate constructor operand must be unlifted")
-                    compile(arg, scope, false).also { TupleShape.requireCompatible(field, it.representation, component = true) }
+                    compile(arg, scope, false).also { TupleShape.requireCompatible(field, it.representation, true) }
                 } else argument(arg, scope, lifted && !callStrict[i] && constructorStrictFields?.get(i) != true && entryStrict?.getOrNull(i) != true,
                     allowEmpty = fn[0] != "prim" && fn[0] != "con", declaredLifted = lifted)
             }.toTypedArray()
@@ -1495,7 +1495,7 @@ CoreStackForeign.validateHead(fn, defined)
                     if (aggregate != null) {
                         if (!raw.present || metadata.getOrNull(index)?.get("lifted") != false)
                             throw RuntimeFault("Aggregate constructor binder requires an unlifted shape")
-                        TupleShape.requireCompatible(aggregate, raw, component = true)
+                        TupleShape.requireCompatible(aggregate, raw, true)
                         val proof = aggregate.refine(raw)
                         val lanes = IntArray(layout.logicalWidth(index)) { child.layout.bind("$id constructor aggregate $it") }
                         child.bindTuple(id, proof, lanes)
@@ -1532,7 +1532,7 @@ CoreStackForeign.validateHead(fn, defined)
             CoreRepresentations.validateAggregateCaseResult(CoreRepresentations.expression(expr), alternatives.map { it.body.representation })
             CoreRepresentations.validateFloatingCaseResult(CoreRepresentations.expression(expr),
                 alternatives.map { it.body.representation })
-            when (caseCategory(binderProof, alternatives.map { it.kind },
+            when (CaseCategoriesKt.caseCategory(binderProof, alternatives.map { it.kind },
                 alternatives.all { it.kind != LITERAL_ALTERNATIVE || it.value is Long })) {
                 CaseCategory.DATA -> DataCase(scrutinee, binder, alternatives, metrics, binderProof, delimited)
                 CaseCategory.LONG -> LongCase(scrutinee, binder, alternatives, metrics, binderProof, delimited)
@@ -1693,7 +1693,7 @@ CoreStackForeign.validateHead(fn, defined)
             ids.forEachIndexed { index, id ->
                 val component = shape.components[index]
                 val raw = metadata.getOrNull(index)?.let(CoreRepresentations::binder) ?: component
-                TupleShape.requireCompatible(component, raw, component = true)
+                TupleShape.requireCompatible(component, raw, true)
                 val field = component.refine(raw)
                 val width = TupleShape.flatten(component).size
                 val offset = shape.offsets[index]

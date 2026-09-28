@@ -66,7 +66,7 @@ class StackAnnotationsTest {
         override fun bloom(frame: VirtualFrame) = 0L
     }
     private fun snapshot(result: Any?, shape: TupleShape): ManagedStackSnapshot =
-        shape.layout.getObject(ownedTupleResult(result, shape), 0) as ManagedStackSnapshot
+        shape.layout.getObject(TupleResultsKt.ownedTupleResult(result, shape), 0) as ManagedStackSnapshot
     private fun install(target: com.oracle.truffle.api.RootCallTarget) {
         target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
         assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
@@ -130,7 +130,7 @@ class StackAnnotationsTest {
         }
         StackAnnotations.set(null, resumer)
         val astResult = Calls.target(astDriver.callTarget, arrayOf(0L))
-        assertEquals(listOf("inside", "original"), shape.layout.getObject(ownedTupleResult(astResult, shape), 0))
+        assertEquals(listOf("inside", "original"), shape.layout.getObject(TupleResultsKt.ownedTupleResult(astResult, shape), 0))
         assertEquals(2, astSuspended.segment.state)
         assertEquals(2, astThunk.state)
         assertSame(resumer, StackAnnotations.current(null))

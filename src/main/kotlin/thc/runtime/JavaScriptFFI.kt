@@ -156,7 +156,7 @@ internal class JavaScriptAccess(private val declaration: JavaScriptImport) : Nod
 
     @ExplodeLoop
     private fun execute(arguments: Array<Any?>, state: Any?): Any {
-        requireVoidCarrier(state)
+        TupleResultsKt.requireVoidCarrier(state)
         if (arguments.size != declaration.arguments.size) fault("JavaScript import argument count mismatch")
         for (index in arguments.indices) when (declaration.arguments[index]) {
             CoreKind.LONG -> {

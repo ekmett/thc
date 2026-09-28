@@ -79,7 +79,7 @@ private abstract class MVarTupleExpression : Expr() {
 
 private class NewMVarExpression(@field:Child private var state: Expr) : MVarTupleExpression() {
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         FrameAccess.write(frame, slots[offset], ManagedMVar())
         return null
     }
@@ -101,7 +101,7 @@ private class ReadMVarExpression(@field:Child private var cell: Expr,
     }
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val reference = ManagedMVar.require(cell.execute(frame))
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         val value = try { if (remove) reference.take(this, async) else reference.read(this, async) }
         catch (blocked: AsyncBlocked) {
             throw AstCapture(blocked.request, SynchronousMasking.current(this)).append(Resume(this, reference, slots, offset))
@@ -115,7 +115,7 @@ private class TryReadMVarExpression(@field:Child private var cell: Expr,
     @field:Child private var state: Expr, private val remove: Boolean) : MVarTupleExpression() {
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val reference = ManagedMVar.require(cell.execute(frame))
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         val result = if (remove) reference.tryTake() else reference.tryRead()
         FrameAccess.writeLong(frame, slots[offset], if (result.present) 1L else 0L)
         // The failure payload is unspecified; overwrite the slot even on failure
@@ -141,7 +141,7 @@ private class PutMVarExpression(@field:Child private var cell: Expr,
     override fun execute(frame: VirtualFrame): Any {
         val reference = ManagedMVar.require(cell.execute(frame))
         val stored = value.execute(frame)
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         try { reference.put(stored, this, async) }
         catch (blocked: AsyncBlocked) {
             throw AstCapture(blocked.request, SynchronousMasking.current(this)).append(Resume(this, reference, stored))
@@ -155,7 +155,7 @@ private class TryPutMVarExpression(@field:Child private var cell: Expr,
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val reference = ManagedMVar.require(cell.execute(frame))
         val stored = value.execute(frame)
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         FrameAccess.writeLong(frame, slots[offset], if (reference.tryPut(stored)) 1L else 0L)
         return null
     }
@@ -165,7 +165,7 @@ private class IsEmptyMVarExpression(@field:Child private var cell: Expr,
     @field:Child private var state: Expr) : MVarTupleExpression() {
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val reference = ManagedMVar.require(cell.execute(frame))
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         FrameAccess.writeLong(frame, slots[offset], if (reference.isEmpty()) 1L else 0L)
         return null
     }

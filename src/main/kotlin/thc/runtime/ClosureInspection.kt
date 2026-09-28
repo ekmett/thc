@@ -151,7 +151,7 @@ internal object CoreProfileAction {
 internal class InspectionState(@field:Child private var state: Expr) : Expr() {
     init { representation = state.representation.copy(evaluated = true) }
     override fun execute(frame: VirtualFrame): Any {
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         return Unit
     }
 }
@@ -183,11 +183,11 @@ internal class ClosureInspectExpression(private val operation: ClosureInspectOp,
             FrameAccess.writeLong(frame, slots[offset], 0)
             FrameAccess.writeObject(frame, slots[offset + 1], value)
         } else if (operation == ClosureInspectOp.CCS) {
-            requireVoidCarrier(operands[1].execute(frame))
+            TupleResultsKt.requireVoidCarrier(operands[1].execute(frame))
             FrameAccess.writeObject(frame, slots[offset], ManagedAddress.nullAddress())
         } else if (operation == ClosureInspectOp.WHERE) {
             operands[1].executeRequiredAddress(frame)
-            requireVoidCarrier(operands[2].execute(frame))
+            TupleResultsKt.requireVoidCarrier(operands[2].execute(frame))
             // No closure IPE tables are registered for this JVM target. As
             // in lookupIPE's absence path, leave the destination untouched.
             FrameAccess.writeLong(frame, slots[offset], 0)

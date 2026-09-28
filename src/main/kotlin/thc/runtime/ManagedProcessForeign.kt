@@ -89,7 +89,7 @@ internal class ManagedProcessForeign {
         beforeBlock: (() -> Unit)? = null): Long {
         if (Language.currentState(node) !== context) fault("Process ABI adapter belongs to another context")
         if (arguments.size != operation.arguments.size) fault("Original process call arity mismatch")
-        requireVoidCarrier(arguments.last())
+        TupleResultsKt.requireVoidCarrier(arguments.last())
         if (operation == ProcessOp.CREATE) return create(arguments)
         val pid = cint(arguments[0])
         if (operation == ProcessOp.TERMINATE) {
