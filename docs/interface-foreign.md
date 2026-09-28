@@ -72,6 +72,14 @@ captured state is read by the retained `GetLastError`/`maperrno` operations.
 Native-only `GetACP`, unlike those writers, now requires generic linkage; its
 Windows acquisition path remains a platform gap rather than a managed fallback.
 
+Original `free`, `realloc` and `&free` accept genuine returned C pointers without
+inventing THC allocation ownership. Such pointers use the native allocator in
+their original LLVM context; its normal lifetime/base-pointer contract applies.
+Returned aliases with known THC backing still use the checked owner, allocator,
+base address and borrow lifetime. Arbitrary numeric addresses do not acquire
+deallocation authority. Successful native `realloc` returns a new external
+carrier, preserving neither an invented extent nor managed alias invalidation.
+
 The `thc-package-c-ffi-v1` profile acquires ordinary local and Cabal-store
 packages without a package-name whitelist. It compiles the configured C/C++ sources
 and GHC's genuine retained CAPI wrappers with Clang, then links their LLVM into

@@ -188,6 +188,11 @@ public final class ManagedNativeAllocations {
     @TruffleBoundary
     public void free(ManagedAddress address, Allocator allocator) {
         current();
+        address = deallocationAddress(address);
+        if (allocator == Allocator.MALLOC && address.returnedAddress() != null) {
+            Language.currentState(null).getPackageCbits().free(address.returnedAddress());
+            return;
+        }
         Owner owner;
         synchronized (this) {
             owner = freeableOwner(address, allocator);
@@ -211,6 +216,9 @@ public final class ManagedNativeAllocations {
     public ManagedAddress realloc(ManagedAddress address, long size) {
         current();
         if (size < 0) throw fault("Native realloc size exceeds the signed Long segment domain");
+        address = deallocationAddress(address);
+        if (address.returnedAddress() != null)
+            return Language.currentState(null).getPackageCbits().realloc(address.returnedAddress(), size);
         if (address == ManagedAddress.nullAddress()) return malloc(size);
         Owner owner;
         synchronized (this) {
@@ -251,7 +259,20 @@ public final class ManagedNativeAllocations {
     @TruffleBoundary
     public synchronized void requireFreeTarget(ManagedAddress address) {
         current();
-        freeableOwner(address, Allocator.MALLOC);
+        address = deallocationAddress(address);
+        if (address.returnedAddress() == null) freeableOwner(address, Allocator.MALLOC);
+    }
+
+    /** Known aliases retain our ownership checks; external C keeps its allocator contract. */
+    private synchronized ManagedAddress deallocationAddress(ManagedAddress address) {
+        if (closed) throw fault("Native allocation registry is closed");
+        while (address.returnedAddress() != null) {
+            var returned = address.returnedAddress();
+            returned.requireCurrent();
+            if (returned.getBacking() == null) break;
+            address = returned.getBacking();
+        }
+        return address;
     }
 
     private Owner freeableOwner(ManagedAddress address, Allocator allocator) {

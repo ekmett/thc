@@ -41,7 +41,7 @@ public final class PackageScalarLibraries {
             Object library = env.parseInternal(Source.newBuilder("llvm", ByteSequence.create(bytes), "package-pointer.bc").build()).call();
             var functions = new HashMap<String, Object>();
             for (String name : new String[]{"offset", "equal", "compare", "difference", "overlap", "read", "write",
-                    "read_address", "write_address", "strlen", "copy", "fill", "errno", "set_errno"})
+                    "read_address", "write_address", "strlen", "copy", "fill", "errno", "set_errno", "free", "realloc"})
                 functions.put(name, interop.readMember(library, "thc_package_pointer_" + name));
             return functions;
         });
@@ -129,6 +129,27 @@ public final class PackageScalarLibraries {
             int value = interop.asInt(interop.execute(await(pointerOperations).get("errno")));
             owner.getStdio().captureForeignErrno(value);
         } catch (Exception failure) { throw rethrow(failure); }
+    }
+    @TruffleBoundary void free(PackageReturnedAddress address) {
+        nativeAllocation("free", address.transport());
+    }
+    @TruffleBoundary ManagedAddress realloc(PackageReturnedAddress address, long size) {
+        Object result = nativeAllocation("realloc", address.transport(), size);
+        return interop.isNull(result) ? ManagedAddress.nullAddress()
+            : ManagedAddress.fromReturnedAddress(new PackageReturnedAddress(current(), alive, result, null));
+    }
+    private Object nativeAllocation(String operation, Object... arguments) {
+        var owner = current();
+        if (!alive.isValid()) throw fault("Package C library registry is closed");
+        pointerOperations.run();
+        Object function = await(pointerOperations).get(operation);
+        var previous = owner.getThreads().enterForeign(ForeignSafety.UNSAFE);
+        try {
+            seedErrno();
+            try { return Calls.interop(interop, function, arguments); }
+            finally { captureErrno(); }
+        } catch (Exception failure) { throw rethrow(failure); }
+        finally { owner.getThreads().leaveForeign(previous); Reference.reachabilityFence(arguments); }
     }
     @TruffleBoundary public Object transport(ManagedAddress address) {
         var owner = current();
