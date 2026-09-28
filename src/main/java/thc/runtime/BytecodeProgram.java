@@ -644,8 +644,10 @@ public final class BytecodeProgram implements ExecutableProgram {
         result.put("deferredUnsupported", new ArrayList<>(deferredUnsupported));
         result.put("unsupportedTraps", metrics.getUnsupportedTraps());
         result.put("frames", "Bytecode DSL primitive locals; selective StaticShape captures");
-        result.put("stackPolicy", "tail-safe; non-tail calls and nested thunk forcing use host stack");
-        result.put("threadPolicy", "context-owned Java threads; resumable asynchronous delivery");
+        result.put("stackPolicy", enableAsync ? "tail-safe; bounded bytecode activation chains" :
+            "tail-safe; non-tail calls and nested thunk forcing use host stack");
+        result.put("threadPolicy", enableAsync ? "context-owned Java threads; resumable asynchronous delivery" :
+            "context-owned Java threads; external asynchronous delivery disabled");
         if (loadingStatistics != null) result.putAll(loadingStatistics.get());
         return result;
     }

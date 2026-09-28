@@ -581,7 +581,7 @@ public final class Program implements ExecutableProgram {
         result.put("deferredUnsupported", new ArrayList<>(deferredUnsupported));
         result.put("unsupportedTraps", metrics.getUnsupportedTraps());
         result.put("frames", "indexed primitive slots; selective StaticShape captures");
-        result.put("stackPolicy", capturesContinuations ? "tail-safe; bounded AST activation chains; active STM spilling unsupported" :
+        result.put("stackPolicy", capturesContinuations ? "tail-safe; bounded AST activation chains" :
             "tail-safe; non-tail calls and nested thunk forcing use host stack");
         result.put("threadPolicy", enableAsync ? "context-owned Java threads; captured asynchronous delivery" :
             "context-owned Java threads; external asynchronous delivery disabled");
