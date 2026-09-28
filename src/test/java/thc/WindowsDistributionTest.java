@@ -130,13 +130,13 @@ class WindowsDistributionTest {
             assertEquals("IO ()", main.get("type"));
             var bindings = new ArrayList<>(original);
             bindings.addAll(host);
-            assertThrows(UnsupportedCore.class, () -> CoreRepresentations.INSTANCE.ioUnitMainResult(main, bindings));
+            assertThrows(UnsupportedCore.class, () -> CoreRepresentations.ioUnitMainResult(main, bindings));
             var entry = single(host, "id", "main:THC.WindowsRunMain.thcRunMain");
-            var result = CoreRepresentations.INSTANCE.ioUnitMainResult(entry, bindings);
+            var result = CoreRepresentations.ioUnitMainResult(entry, bindings);
             assertEquals(2, result.getComponents().size());
             var invalid = new LinkedHashMap<>(entry);
             invalid.put("type", "IO Int");
-            assertThrows(UnsupportedCore.class, () -> CoreRepresentations.INSTANCE.ioUnitMainResult(invalid, bindings));
+            assertThrows(UnsupportedCore.class, () -> CoreRepresentations.ioUnitMainResult(invalid, bindings));
             if (audited.contains(manifest)) {
                 var audit = document(output.resolve("audit.json"));
                 assertEquals(true, audit.get("accepted"));

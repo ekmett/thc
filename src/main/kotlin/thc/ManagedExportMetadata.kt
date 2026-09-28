@@ -166,7 +166,7 @@ internal class ManagedExportPlan(val linked: Map<String, Any?>, val exports: Lis
                 val expression = binding["expr"] as List<Any?>
                 val (inputs, result) = CoreRepresentations.knownFunctionSignature(expression, bindings)
                     ?: if (export.arguments.isEmpty() && !export.io)
-                        emptyList<CoreRepresentation>() to CoreRepresentations.expression(expression)
+                        thc.runtime.CoreFunctionSignature(emptyList(), CoreRepresentations.expression(expression))
                     else error("Managed export lacks a known Core function signature: ${export.binder}")
                 fun boxed(proof: CoreRepresentation) = !proof.isAggregate && !proof.isVector &&
                     proof.primReps == listOf("BoxedRep (Just Lifted)") && proof.kind in setOf(CoreKind.DATA, CoreKind.OBJECT)

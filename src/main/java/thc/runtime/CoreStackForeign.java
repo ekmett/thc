@@ -43,7 +43,7 @@ public final class CoreStackForeign {
         requireProof(function.size() == 3 && "var".equals(function.get(0)) &&
             function.get(1) instanceof String name && !name.isEmpty() && !defined,
             "unresolved declared foreign variable required");
-        var metadata = CoreRepresentations.INSTANCE.metadata(function);
+        var metadata = CoreRepresentations.metadata(function);
         requireProof(scalar(metadata == null ? null : metadata.get("rep"), "closure", List.of("BoxedRep (Just Lifted)"), true),
             "unresolved declared foreign variable required");
     }

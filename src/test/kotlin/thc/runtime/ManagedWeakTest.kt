@@ -279,10 +279,10 @@ class ManagedWeakTest {
             assertThrows(RuntimeFault::class.java) { op.validate(args, flags(args), result.copy(primReps = emptyList())) }
             assertThrows(RuntimeFault::class.java) { op.validate(args, flags(args), tuple(*result.components!!.drop(1).toTypedArray())) }
         }
-        WeakOp.MAKE.validateAction(listOf(state) to tuple(state, lifted))
-        assertThrows(RuntimeFault::class.java) { WeakOp.MAKE.validateAction(listOf(flag) to tuple(state, lifted)) }
-        assertThrows(RuntimeFault::class.java) { WeakOp.MAKE.validateAction(listOf(state) to tuple(state, weak)) }
-        assertThrows(RuntimeFault::class.java) { WeakOp.MAKE.validateAction(listOf(state) to state) }
+        WeakOp.MAKE.validateAction(CoreFunctionSignature(listOf(state), tuple(state, lifted)))
+        assertThrows(RuntimeFault::class.java) { WeakOp.MAKE.validateAction(CoreFunctionSignature(listOf(flag), tuple(state, lifted))) }
+        assertThrows(RuntimeFault::class.java) { WeakOp.MAKE.validateAction(CoreFunctionSignature(listOf(state), tuple(state, weak))) }
+        assertThrows(RuntimeFault::class.java) { WeakOp.MAKE.validateAction(CoreFunctionSignature(listOf(state), state)) }
     }
 
     private val root = File(System.getProperty("thc.projectRoot"))

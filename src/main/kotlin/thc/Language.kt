@@ -31,6 +31,7 @@ import thc.runtime.ExecutableProgram
 import thc.runtime.CoreArithmeticExceptions
 import thc.runtime.CoreRepresentations
 import thc.runtime.CoreRepresentation
+import thc.runtime.CoreFunctionSignature
 import thc.runtime.IoMainRoot
 import thc.runtime.TargetLayout
 import java.io.File
@@ -887,12 +888,12 @@ class Language : TruffleLanguage<Language.State>() {
                 ?: throw IllegalArgumentException("Missing exact executable shutdown entry: $name")
             CoreRepresentations.ioUnitMainResult(shutdown, bindings)
         }
-        var hostSignature: Pair<List<CoreRepresentation>, CoreRepresentation>? = null
+        var hostSignature: CoreFunctionSignature? = null
         val hostResultFault = if (ioResult != null) null else try {
             hostSignature = CoreRepresentations.knownFunctionSignature(selectedExpression, bindings)
                 ?: if ((selected["arity"] as Number).toInt() == 0)
-                    emptyList<CoreRepresentation>() to CoreRepresentations.binder(selected)
-                        .refine(CoreRepresentations.expression(selectedExpression)) else null
+                    CoreFunctionSignature(emptyList(), CoreRepresentations.binder(selected)
+                        .refine(CoreRepresentations.expression(selectedExpression))) else null
             hostSignature?.let { (inputs, result) ->
                 inputs.forEach { thc.runtime.CoreRepresentations.requireScalar(it, "host argument") }
                 thc.runtime.CoreRepresentations.requireScalar(result, "host result")
@@ -961,8 +962,8 @@ class Language : TruffleLanguage<Language.State>() {
                     val hostSignature = if (io != null) null else
                         CoreRepresentations.knownFunctionSignature(expression, bindings)
                             ?: if ((selected["arity"] as Number).toInt() == 0)
-                                emptyList<CoreRepresentation>() to CoreRepresentations.binder(selected)
-                                    .refine(CoreRepresentations.expression(expression)) else null
+                                CoreFunctionSignature(emptyList(), CoreRepresentations.binder(selected)
+                                    .refine(CoreRepresentations.expression(expression))) else null
                     hostSignature?.let { (inputs, result) ->
                         inputs.forEach { CoreRepresentations.requireScalar(it, "host argument") }
                         CoreRepresentations.requireScalar(result, "host result")
@@ -986,7 +987,7 @@ internal class EntryValue(private val program: ExecutableProgram, private val en
                  private val hostResultFault: String? = null, ioResult: CoreRepresentation? = null,
                  language: Language? = null, shutdownEntry: String? = null,
                  shutdownResult: CoreRepresentation? = null, private val processSignals: Boolean = false,
-                 private val hostSignature: Pair<List<CoreRepresentation>, CoreRepresentation>? = null) : TruffleObject {
+                 private val hostSignature: CoreFunctionSignature? = null) : TruffleObject {
     private val guestTarget = program.hostEntryTarget(argumentCount)
     private val guestEntry = program.entryValue(entry)
     private val ioTarget = ioResult?.let { IoMainRoot(language ?: error("Missing IO language"), it).callTarget }
@@ -1019,7 +1020,7 @@ internal class EntryValue(private val program: ExecutableProgram, private val en
             }
             // Admission follows aliases/PAPs without forcing them. Its inputs
             // are already the remaining public ABI, not the original formals.
-            val proof = if (hostSignature != null) hostSignature.first.getOrNull(index)
+            val proof = if (hostSignature != null) hostSignature.inputs.getOrNull(index)
                 else signature?.inputLayout?.proof(index + (closure?.suppliedCount ?: 0))
             val narrow = proof?.narrowInteger
             if (narrow == null) value else narrow.fromHost(value)
@@ -1031,7 +1032,7 @@ internal class EntryValue(private val program: ExecutableProgram, private val en
             try {
                 val result = thc.runtime.AsyncContinuations.publicResult(
                     dispatch.executePublic(guestTarget, arrayOf(guestEntry, normalized)), dispatch)
-                val narrow = (hostSignature?.second ?: signature?.scalarResultProof)?.narrowInteger
+                val narrow = (hostSignature?.result ?: signature?.scalarResultProof)?.narrowInteger
                 return if (narrow == null) result else narrow.widen(result as? Int
                     ?: throw thc.runtime.RuntimeFault("Expected narrow integer result at public boundary"))
             } catch (suspended: thc.runtime.ThunkSuspended) {

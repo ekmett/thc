@@ -37,7 +37,7 @@ public final class CoreFields {
         logicalProofs = new CoreRepresentation[arity];
         for (int i = 0; i < arity; i++) {
             Object raw = types == null ? null : types.get(i);
-            logicalProofs[i] = raw == null ? CoreRepresentation.Companion.getUNKNOWN() : CoreRepresentations.INSTANCE.parse(raw);
+            logicalProofs[i] = raw == null ? CoreRepresentation.Companion.getUNKNOWN() : CoreRepresentations.parse(raw);
         }
         var leaves = new ArrayList<List<CoreRepresentation>>(arity);
         for (CoreRepresentation proof : logicalProofs) {
@@ -88,7 +88,7 @@ public final class CoreFields {
             for (int i = 0; i < arity; i++) {
                 CoreRepresentation proof = logicalProofs[i];
                 if (proof.isVector()) VectorLayout.validate(proof);
-                else if (!proof.isAggregate()) CoreRepresentations.INSTANCE.requireScalar(proof, "constructor field");
+                else if (!proof.isAggregate()) CoreRepresentations.requireScalar(proof, "constructor field");
                 if (!proof.getPresent() || !Objects.equals(proof.getPrimReps(), reps.get(i))) throw new RuntimeFault("Constructor field type disagrees with its primitive representation: " + id + " field " + i);
                 if (!proof.isAggregate() && storage[offsets[i]].equals("AddrRep") && proof.getKind() != CoreKind.ADDRESS) throw new RuntimeFault("Address constructor field lacks its exact managed carrier: " + id + " field " + i);
                 if (!(strict.get(i) instanceof Boolean strictField)) throw new RuntimeFault("Unknown constructor field strictness: " + id);

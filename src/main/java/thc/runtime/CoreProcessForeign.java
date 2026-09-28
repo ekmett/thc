@@ -52,7 +52,7 @@ public final class CoreProcessForeign {
     public static void validateHead(List<?> function, boolean defined) {
         check(function.size() == 3 && "var".equals(function.get(0)) &&
             function.get(1) instanceof String name && !name.isEmpty() && !defined, "unresolved declared foreign variable required");
-        var metadata = CoreRepresentations.INSTANCE.metadata(function);
+        var metadata = CoreRepresentations.metadata(function);
         check(scalar(metadata == null ? null : metadata.get("rep"), "BoxedRep (Just Lifted)", true),
             "unresolved declared foreign variable required");
     }

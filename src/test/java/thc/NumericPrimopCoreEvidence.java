@@ -103,10 +103,10 @@ public final class NumericPrimopCoreEvidence {
         for (String argument : arguments) expectedReps.add(List.of(argument));
         List<List<String>> actualReps = new ArrayList<>();
         for (Object argument : actualArguments) {
-            actualReps.add(CoreRepresentations.INSTANCE.expression((List<Object>) argument).getPrimReps());
+            actualReps.add(CoreRepresentations.expression((List<Object>) argument).getPrimReps());
         }
         assertEquals(expectedReps, actualReps, label + "/" + primitive + " argument representations");
-        assertEquals(List.of(result), CoreRepresentations.INSTANCE.expression(app).getPrimReps(),
+        assertEquals(List.of(result), CoreRepresentations.expression(app).getPrimReps(),
             label + "/" + primitive + " result representation");
     }
 }

@@ -25,7 +25,7 @@ public final class CoreEntries {
     public static boolean[] lambda(List<?> expression) {
         if (expression.isEmpty() || !"lam".equals(expression.getFirst())) return new boolean[0];
         var arguments = (List<?>) expression.get(1);
-        var metadata = CoreRepresentations.INSTANCE.metadata(expression);
+        var metadata = CoreRepresentations.metadata(expression);
         return parse(metadata == null ? null : metadata.get("entryStrict"), arguments.size());
     }
 

@@ -231,7 +231,7 @@ public final class CoreVectors {
     }
     public static CoreRepresentation argumentProof(List<Object> expression) {
         if ("lit".equals(at(expression, 0)) && Arrays.asList("int8", "word8", "int16", "word16", "int32", "word32").contains(at(expression, 1)))
-            return CoreRepresentations.INSTANCE.narrowLiteralProof(expression);
-        return CoreRepresentations.INSTANCE.expression(expression);
+            return CoreRepresentations.narrowLiteralProof(expression);
+        return CoreRepresentations.expression(expression);
     }
 }

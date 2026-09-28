@@ -139,7 +139,7 @@ internal enum class WeakOp(val primitive: String, private val arguments: List<St
         }
     }
 
-    fun validateAction(signature: Pair<List<CoreRepresentation>, CoreRepresentation>?) {
+    fun validateAction(signature: CoreFunctionSignature?) {
         if (this != MAKE || signature == null) return
         val (inputs, result) = signature
         val fields = result.components

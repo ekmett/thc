@@ -3476,7 +3476,7 @@ CoreStackForeign.validateHead(fn, defined)
                 val argumentProofs = args.map(CoreRepresentations::expression)
                 val continuation = args.getOrNull(2)?.let { CoreRepresentations.knownFunctionSignature(it, bindings) }
                 CoreKeepAlive.validate(argumentProofs, flags, tupleProof,
-                    continuation?.first, continuation?.second)
+                    continuation?.inputs, continuation?.result)
                 val kept = argument(args[0], scope, flags[0] as Boolean)
                 val state = compile(args[1], scope, false)
                 val function = argument(args[2], scope, true)

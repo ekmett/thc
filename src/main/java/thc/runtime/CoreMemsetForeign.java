@@ -82,7 +82,7 @@ public final class CoreMemsetForeign {
         requireProof(function.size() == 3 && "var".equals(function.get(0)) &&
             function.get(1) instanceof String name && !name.isEmpty() && !defined,
             "unresolved original FCallId required");
-        var metadata = CoreRepresentations.INSTANCE.metadata(function);
+        var metadata = CoreRepresentations.metadata(function);
         requireProof(scalar(metadata == null ? null : metadata.get("rep"), "BoxedRep (Just Lifted)", true),
             "unresolved original FCallId required");
     }

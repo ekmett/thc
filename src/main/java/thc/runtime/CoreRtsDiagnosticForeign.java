@@ -45,7 +45,7 @@ public final class CoreRtsDiagnosticForeign {
     }
 
     public static void validateHead(List<?> function, boolean defined) {
-        var metadata = CoreRepresentations.INSTANCE.metadata(function);
+        var metadata = CoreRepresentations.metadata(function);
         Map<?, ?> proof = metadata != null && metadata.get("rep") instanceof Map<?, ?> value ? value : null;
         requireProof(function.size() == 3 && "var".equals(function.get(0)) && function.get(1) instanceof String name &&
             !name.isEmpty() && !defined && proof != null && proof.keySet().equals(SCALAR_KEYS) &&

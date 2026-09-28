@@ -48,7 +48,7 @@ public final class CoreInputCalls {
             if ("lam".equals(tag)) {
                 List<CoreRepresentation> result = new ArrayList<>();
                 for (Map<String, Object> parameter : (List<Map<String, Object>>) expr.get(1))
-                    result.add(CoreRepresentations.INSTANCE.binder(parameter));
+                    result.add(CoreRepresentations.binder(parameter));
                 return result;
             }
             if ("con".equals(tag)) {
@@ -60,7 +60,7 @@ public final class CoreInputCalls {
                 if (fields != null && fields.size() != arity) throw new RuntimeFault("Constructor field type count mismatch");
                 List<CoreRepresentation> result = new ArrayList<>(fields == null ? arity : fields.size());
                 if (fields == null) for (int i = 0; i < arity; i++) result.add(CoreRepresentation.Companion.getUNKNOWN());
-                else for (Object field : fields) result.add(CoreRepresentations.INSTANCE.parse(field));
+                else for (Object field : fields) result.add(CoreRepresentations.parse(field));
                 return result;
             }
             if ("var".equals(tag)) {
@@ -81,14 +81,14 @@ public final class CoreInputCalls {
             return null;
         }
         private CoreRepresentation proof(List<Object> expr, Map<String, Binding> scope) {
-            CoreRepresentation occurrence = CoreRepresentations.INSTANCE.expression(expr);
+            CoreRepresentation occurrence = CoreRepresentations.expression(expr);
             Binding binding = "var".equals(expr.getFirst()) ? scope.get(expr.get(1)) : null;
             return binding == null ? occurrence : binding.proof.refine(occurrence);
         }
         private Map<String, Binding> declarations(List<Map<String, Object>> group) {
             Map<String, Binding> result = new LinkedHashMap<>();
             for (Map<String, Object> binding : group)
-                result.put((String) binding.get("id"), new Binding(CoreRepresentations.INSTANCE.binder(binding), null));
+                result.put((String) binding.get("id"), new Binding(CoreRepresentations.binder(binding), null));
             return result;
         }
         private Map<String, Binding> merged(Map<String, Binding> first, Map<String, Binding> second) {
@@ -124,7 +124,7 @@ public final class CoreInputCalls {
                     Map<String, Binding> rhsScope = recursive ? merged(shadowed, declarations) : scope;
                     Map<String, Binding> next = new LinkedHashMap<>();
                     for (Map<String, Object> binding : group) next.put((String) binding.get("id"),
-                        new Binding(CoreRepresentations.INSTANCE.binder(binding), inputs((List<Object>) binding.get("expr"), rhsScope)));
+                        new Binding(CoreRepresentations.binder(binding), inputs((List<Object>) binding.get("expr"), rhsScope)));
                     declarations = next;
                 }
                 Map<String, Binding> local = merged(scope, declarations);
@@ -141,11 +141,11 @@ public final class CoreInputCalls {
                     return;
                 }
                 visit((List<Object>) expr.get(1), scope);
-                Map<String, Object> meta = CoreRepresentations.INSTANCE.metadata(expr);
+                Map<String, Object> meta = CoreRepresentations.metadata(expr);
                 Map<String, Object> binder = meta != null && meta.get("binder") instanceof Map<?, ?> value ? (Map<String, Object>) value : null;
                 Map<String, Binding> local = new LinkedHashMap<>(scope);
                 local.put((String) expr.get(2), new Binding(binder == null ? proof((List<Object>) expr.get(1), scope) :
-                    CoreRepresentations.INSTANCE.binder(binder), null));
+                    CoreRepresentations.binder(binder), null));
                 for (List<Object> alternative : (List<List<Object>>) expr.get(3)) {
                     Map<String, Object> info = alternative.size() > 4 && alternative.get(4) instanceof Map<?, ?> value ? (Map<String, Object>) value : null;
                     Map<Object, Map<String, Object>> records = new LinkedHashMap<>();
@@ -158,7 +158,7 @@ public final class CoreInputCalls {
                     for (String id : (List<String>) alternative.get(2)) {
                         Map<String, Object> record = records.get(id);
                         arm.put(id, new Binding(record == null ? CoreRepresentation.Companion.getUNKNOWN() :
-                            CoreRepresentations.INSTANCE.binder(record), null));
+                            CoreRepresentations.binder(record), null));
                     }
                     visit((List<Object>) alternative.get(3), arm);
                 }

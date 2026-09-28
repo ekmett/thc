@@ -46,8 +46,8 @@ public final class RubbishLiterals {
             default -> null;
         } : null;
         if (expected == null) throw new UnsupportedCore("Unsupported rubbish representation: " + rep);
-        var metadata = CoreRepresentations.INSTANCE.metadata(expression);
-        var actual = CoreRepresentations.INSTANCE.parse(metadata == null ? null : metadata.get("rep"));
+        var metadata = CoreRepresentations.metadata(expression);
+        var actual = CoreRepresentations.parse(metadata == null ? null : metadata.get("rep"));
         boolean matchingKind = actual.getKind() == expected || expected == CoreKind.OBJECT &&
             (actual.getKind() == CoreKind.DATA || actual.getKind() == CoreKind.CLOSURE);
         if (!actual.getPresent() || !actual.getEvaluated() || !matchingKind || actual.isAggregate() || actual.isVector() ||
