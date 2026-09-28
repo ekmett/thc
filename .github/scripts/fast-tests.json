@@ -2727,6 +2727,15 @@
       ],
       "python": []
     },
+    "src/test/java/thc/CoreExecutionTestSupport.java": {
+      "junit": [
+        "thc.AggregateFrontierTest", "thc.AggregateLayoutTest", "thc.LazyBindingTest",
+        "thc.RealCoreJoinTest", "thc.RuntimeTest", "thc.StrictFieldsTest",
+        "thc.SumLayoutMetadataTest", "thc.TailCycleTest", "thc.ThreadedThunkTest",
+        "thc.ThunkRetentionTest", "thc.TypedApplicationTest"
+      ],
+      "python": []
+    },
     "src/test/java/thc/ScalarPrimopModel.java": {
       "junit": [
         "thc.ScalarPrimopModelTest",
