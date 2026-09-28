@@ -57,7 +57,7 @@ internal class GetCurrentCCS(@field:Child private var dummy: Expr,
     override fun execute(frame: VirtualFrame): Nothing = fault("getCurrentCCS# requires a tuple destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         // The dummy is retained as a child for source/provenance, but never entered.
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         FrameAccess.write(frame, slots[offset], ManagedAddress.nullAddress())
         return null
     }

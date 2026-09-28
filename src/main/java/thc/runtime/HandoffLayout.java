@@ -33,7 +33,7 @@ public final class HandoffLayout {
                 default -> { if (!VECTOR_REPS.contains(rep)) throw fault("Invalid physical handoff field: " + rep); yield 10; }
             };
             fields[i] = new DefaultStaticProperty("handoff_" + i);
-            if (VECTOR_REPS.contains(rep)) vectors[i] = VectorLayout.Companion.fromStorageRep(rep);
+            if (VECTOR_REPS.contains(rep)) vectors[i] = VectorLayout.fromStorageRep(rep);
             Class<?> type = switch (kinds[i]) {
                 case 0 -> long.class; case 1 -> float.class; case 2 -> double.class;
                 case 4, 5 -> byte.class; case 6, 7 -> short.class; case 8, 9 -> int.class;

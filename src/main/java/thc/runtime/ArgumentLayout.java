@@ -26,7 +26,7 @@ public final class ArgumentLayout {
             CoreRepresentation proof = proofs[i];
             typed |= proof.isInt() || proof.isTypedTransport() && !proof.isEmptyTuple();
             if (proof.isTypedTransport()) {
-                reps.addAll(VectorLayout.Companion.storageReps(proof));
+                reps.addAll(VectorLayout.storageReps(proof));
                 tupleKeys[i] = TupleShape.Companion.compatibilityKey(proof);
             } else reps.add(proof.isInt() ? proof.getNarrowInteger().getRep() : proof.isLong() ? "IntRep" :
                 proof.isFloat() ? "FloatRep" : proof.isDouble() ? "DoubleRep" :

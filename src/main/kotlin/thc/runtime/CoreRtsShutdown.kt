@@ -105,7 +105,7 @@ internal object CoreRtsShutdown {
      * Unix signal encoding for an explicitly owning launcher to act on later. */
     @JvmStatic @TruffleBoundary(transferToInterpreterOnException = false)
     fun shutdown(node: Node, operation: RtsShutdownOp, code: Long, fast: Long, state: Any?): Nothing {
-        requireVoidCarrier(state)
+        TupleResultsKt.requireVoidCarrier(state)
         if (code != code.toInt().toLong() || fast != fast.toInt().toLong())
             fault("Shutdown arguments require signed CInt carriers")
         val status = when (operation) {

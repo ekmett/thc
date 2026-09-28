@@ -48,7 +48,7 @@ internal class SparkResult(private val name: String, @field:Child private var st
     override fun execute(frame: VirtualFrame): Nothing = fault("Spark result requires a tuple destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val value = payload?.execute(frame) // Retain a thunk, never enter it.
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         if (name == "spark#") FrameAccess.write(frame, slots[offset], value)
         else {
             FrameAccess.writeLong(frame, slots[offset], 0L)
@@ -67,7 +67,7 @@ internal class SetThreadAllocationCounter(@field:Child private var value: Expr,
         val threads = GuestThreads.current(this)
         val identity = if (target == null) threads.currentIdentity()
             else target!!.execute(frame) as? GuestThreadId ?: fault("Allocation counter requires ThreadId#")
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         threads.setAllocationCounter(counter, identity)
         return Unit
     }
