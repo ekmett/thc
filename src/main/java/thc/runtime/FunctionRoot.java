@@ -16,6 +16,9 @@ import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.ExecutionSignature;
 import com.oracle.truffle.api.nodes.LoopNode;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.NodeUtil;
+import com.oracle.truffle.api.nodes.DirectCallNode;
+import com.oracle.truffle.api.nodes.RepeatingNode;
 import com.oracle.truffle.api.profiles.BranchProfile;
 import com.oracle.truffle.api.source.SourceSection;
 import java.util.Arrays;
@@ -57,6 +60,45 @@ public final class FunctionRoot extends GuestRoot {
     private final BranchProfile tailCallProfile = BranchProfile.create();
     @Child private LoopNode loop;
     @Child private HandoffCaller delimitedHandoff;
+    @Child private volatile DirectCallNode recoveredEntry;
+
+    @Override public Node copy() {
+        FunctionRoot copy = (FunctionRoot) super.copy();
+        copy.recoveredEntry = null;
+        return copy;
+    }
+
+    @TruffleBoundary private DirectCallNode recoverEntry() {
+        var service = thc.Language.currentState(this).getGraphRecovery();
+        var claim = service.claim(this);
+        if (claim == null) return recoveredEntry;
+        try {
+            FunctionRoot replacement = NodeUtil.cloneNode(this);
+            freshLoops(replacement);
+            AstSameFrameArm.restoreCopiedExtractions(replacement);
+            // Default-arm prepared targets need independent side ownership before
+            // this family can participate; do not mutate a shared prepared body.
+            if (deferredBudget) return null;
+            if (!AstSameFrameArm.extract(replacement)) return null;
+            replacement.budgetGeneration = budgetGeneration + 1;
+            DirectCallNode prepared = DirectCallNode.create(replacement.getCallTarget());
+            return atomic(() -> {
+                if (recoveredEntry == null && service.publishable(this, claim)) {
+                    recoveredEntry = insert(prepared);
+                    reportReplace(this, this, "fresh entry after terminal graph-size failure");
+                }
+                return recoveredEntry;
+            });
+        } finally { graphFailure.compareAndSet(claim, null); }
+    }
+
+    private static void freshLoops(Node root) {
+        for (Node child : root.getChildren()) freshLoops(child);
+        if (root instanceof LoopNode loop) {
+            Node body = NodeUtil.cloneNode((Node) loop.getRepeatingNode());
+            loop.replace(Truffle.getRuntime().createLoopNode((RepeatingNode) body));
+        }
+    }
 
     public FunctionRoot(TruffleLanguage<?> language, FrameDescriptor descriptor, String label,
                         CaptureLayout captureLayout, int[] environmentSlots, int[] argumentSlots,
@@ -384,6 +426,10 @@ public final class FunctionRoot extends GuestRoot {
         } finally { entry.state().getArguments().release(input, entry.getArguments()); }
     }
     @Override public Object execute(VirtualFrame frame) {
+        DirectCallNode redirect = recoveredEntry;
+        if (redirect == null && CompilerDirectives.inInterpreter() && graphFailure.get() != null)
+            redirect = recoverEntry();
+        if (redirect != null) return Calls.direct(redirect, frame.getArguments());
         if (!capturesContinuations) return executeInitial(frame, false);
         AstStackScope stack = astStackScope(this);
         boolean driver = !stack.getDriving();
