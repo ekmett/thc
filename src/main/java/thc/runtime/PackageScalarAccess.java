@@ -283,6 +283,8 @@ public final class PackageScalarAccess extends Node {
         Long bits = numbers.isPointer(result) ? numbers.asPointer(result) : null;
         if (bits != null) {
             if (bits == 0) return ManagedAddress.nullAddress();
+            var callback = entry.getOwner().getNativeCallbacks().recover(bits);
+            if (callback != null) return callback;
             var stable = entry.getOwner().getStablePointers().recoverToken(bits);
             if (stable != null) return stable;
         }

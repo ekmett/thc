@@ -13,7 +13,8 @@ main = do
   mask_ $ allocaBytes 8 $ \pointer -> do
     poke pointer (7 :: Int32)
     callback <- DynamicCallback.makePointer
-    returned <- DynamicCallback.callPointer callback pointer
+    echoed <- DynamicCallback.echoPointer callback
+    returned <- DynamicCallback.callPointer echoed pointer
     value <- peek pointer
     state <- peekByteOff pointer 4 :: IO Int32
     DynamicCallback.releasePointer callback

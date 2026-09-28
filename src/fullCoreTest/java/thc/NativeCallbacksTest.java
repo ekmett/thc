@@ -172,13 +172,16 @@ class NativeCallbacksTest {
                     var callbackValue = (DataValue) io(program, language, ioProof, "makePointer");
                     var callback = (ManagedAddress) callbackValue.getLayout().read(callbackValue, 0);
                     assertNotEquals(0, callback.toNativeBits());
+                    var echoedValue = (DataValue) io(program, language, ioProof, "echoPointer", callbackValue);
+                    var echoed = (ManagedAddress) echoedValue.getLayout().read(echoedValue, 0);
+                    assertEquals(callback.toNativeBits(), echoed.toNativeBits());
                     try (var other = Main.withContextProfile(Context.newBuilder("thc").allowNativeAccess(true), ContextProfile.SYNCHRONOUS_TEST).build()) {
                         other.initialize("thc"); other.enter();
                         try { assertThrows(RuntimeFault.class, callback::toNativeBits); }
                         finally { other.leave(); }
                     }
                     var boxed = pointer(program, "Ptr", address);
-                    var returned = (DataValue) io(program, language, ioProof, "callPointer", callbackValue, boxed);
+                    var returned = (DataValue) io(program, language, ioProof, "callPointer", echoedValue, boxed);
                     var alias = (ManagedAddress) returned.getLayout().read(returned, 0);
                     assertSame(allocation, alias.cbitsOwner());
                     assertTrue(alias.sameLocation(address.plus(4)));
@@ -195,6 +198,10 @@ class NativeCallbacksTest {
                     assertSame(address, cells.readAddressElementIndex(0), "callback rejection must still reconcile and release its projection");
                     io(program, language, ioProof, "releasePointer", callbackValue);
                     assertThrows(RuntimeFault.class, callback::toNativeBits);
+                    assertThrows(RuntimeFault.class, echoed::toNativeBits, "ordinary native results must retain callback lifetime authority");
+                    assertSame(callback, echoed);
+                    assertThrows(RuntimeException.class, () -> io(program, language, ioProof, "callPointer", echoedValue, boxed));
+                    assertEquals(16, ManagedAddressRead.WORD32.readInt(address, 0));
                     assertThrows(RuntimeFault.class, () -> owner.getNativeCallbacks().free(callback));
                 } finally { owner.getThreads().leaveCurrent(GuestThreadStatus.FINISHED); }
                 assertEquals(0, language.getHandoffState().get().getResults().getDepth());

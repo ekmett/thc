@@ -3,7 +3,7 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
 
 -- | Original GHC wrapper/dynamic declarations, including C retention between calls.
-module DynamicCallback (run, makePointer, callPointer, unsafePointer, releasePointer) where
+module DynamicCallback (run, makePointer, callPointer, unsafePointer, releasePointer, echoPointer) where
 
 import Data.Int (Int32)
 import Data.IORef
@@ -30,6 +30,8 @@ foreign import ccall safe "dynamic"
   callPointer :: FunPtr (Ptr Int32 -> IO (Ptr Int32)) -> Ptr Int32 -> IO (Ptr Int32)
 foreign import ccall unsafe "dynamic"
   unsafePointer :: FunPtr (Ptr Int32 -> IO (Ptr Int32)) -> Ptr Int32 -> IO (Ptr Int32)
+foreign import ccall unsafe "thc_callback_echo"
+  echoPointer :: FunPtr (Ptr Int32 -> IO (Ptr Int32)) -> IO (FunPtr (Ptr Int32 -> IO (Ptr Int32)))
 
 {-# NOINLINE makePointer #-}
 makePointer :: IO (FunPtr (Ptr Int32 -> IO (Ptr Int32)))

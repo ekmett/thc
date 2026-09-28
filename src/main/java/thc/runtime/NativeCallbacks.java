@@ -117,6 +117,11 @@ public final class NativeCallbacks {
         }
         owner.getStablePointers().free(callback.stable);
     }
+    @TruffleBoundary synchronized ManagedAddress recover(long bits) {
+        checkOwner();
+        var callback = callbacks.get(bits);
+        return callback == null ? null : callback.address;
+    }
     @TruffleBoundary public ManagedAddress incoming(Object pointer) {
         checkOwner();
         var interop = InteropLibrary.getUncached();
@@ -124,7 +129,8 @@ public final class NativeCallbacks {
             if (interop.isNull(pointer)) return ManagedAddress.nullAddress();
             if (!interop.isPointer(pointer)) throw fault("Native callback argument is not a native pointer");
             long bits = interop.asPointer(pointer);
-            synchronized (this) { var callback = callbacks.get(bits); if (callback != null) return callback.address; }
+            var callback = recover(bits);
+            if (callback != null) return callback;
             for (var projection : pointerCalls.get()) {
                 var retained = projection.recoverBacking(bits);
                 if (retained != null) return retained;

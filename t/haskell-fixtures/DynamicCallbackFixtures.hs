@@ -73,7 +73,7 @@ prepareDynamicCallbacks root = do
   audited <- execute "strict-audit" [] "python3"
     (["bin/audit-core.py","--package-manifest",output </> "runtime-support.json",
       "--output",output </> "audit.json"] ++ concatMap (\name -> ["--entry","callback-fixture:DynamicCallback." ++ name])
-      ["run","makePointer","callPointer","unsafePointer","releasePointer"] ++ [output </> "DynamicCallback.json"])
+      ["run","makePointer","callPointer","unsafePointer","releasePointer","echoPointer"] ++ [output </> "DynamicCallback.json"])
   encoded <- execute "compact-encode" [] (line (commandStdout compactLocation))
     ["encode",output </> "DynamicCallback.json",output </> "DynamicCallback.cbd"]
   inputHashes <- hashes root (sources ++ ["t/haskell-fixtures/DynamicCallbackFixtures.hs",
