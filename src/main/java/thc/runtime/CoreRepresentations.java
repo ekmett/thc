@@ -171,7 +171,9 @@ public final class CoreRepresentations {
         }
         Integer tagSlot = alternatives == null ? null : exactInt(map.get("tagSlot"));
         List<List<Integer>> projections = null;
-        if (alternatives != null) {
+        if (alternatives != null && (!map.containsKey("alternativeSlots") || !map.containsKey("primReps")))
+            throw new UnsupportedCore("Unsupported Core aggregate representation: unboxed-sum lacks exact projection");
+        if (alternatives != null && map.get("alternativeSlots") != null) {
             if (!(map.get("alternativeSlots") instanceof List<?> rows))
                 throw new UnsupportedCore("Unsupported Core aggregate representation: unboxed-sum lacks exact projection");
             projections = new ArrayList<>();

@@ -115,9 +115,8 @@ public final class TupleShape {
         if (left.isTuple() || right.isTuple())
             return left.isTuple() && right.isTuple() && compatibleChildren(left.getComponents(), right.getComponents());
         if (left.isSum() || right.isSum())
-            return left.isSum() && right.isSum() && Objects.equals(left.getPrimReps(), right.getPrimReps()) &&
-                Objects.equals(left.getTagSlot(), right.getTagSlot()) && Objects.equals(left.getAlternativeSlots(), right.getAlternativeSlots()) &&
-                compatibleChildren(left.getAlternatives(), right.getAlternatives());
+            return left.isSum() && right.isSum() && compatibleChildren(left.getAlternatives(), right.getAlternatives()) &&
+                compatibleTransport(SumShape.transport(left), SumShape.transport(right));
         if (left.isVector() || right.isVector())
             return left.isVector() && right.isVector() && Objects.equals(left.getVector(), right.getVector()) &&
                 Objects.equals(left.getPrimReps(), right.getPrimReps());
@@ -128,6 +127,9 @@ public final class TupleShape {
         if (left.size() != right.size()) return false;
         for (int i = 0; i < left.size(); i++) if (!compatible(left.get(i), right.get(i))) return false;
         return true;
+    }
+    private static boolean compatibleTransport(SumShape.Transport left, SumShape.Transport right) {
+        return left.getProjections().equals(right.getProjections()) && compatibleChildren(left.getFields(), right.getFields());
     }
     public static String compatibilityKey(CoreRepresentation proof) { return signature(proof).toString().intern(); }
     public static void requireCompatible(CoreRepresentation expected, CoreRepresentation actual) { requireCompatible(expected, actual, false); }
@@ -147,7 +149,6 @@ public final class TupleShape {
     }
     public static void validate(CoreRepresentation proof) {
         if (proof.getKind() != CoreKind.UNKNOWN) throw new RuntimeFault("Tuple proof must retain its aggregate kind");
-        if (proof.getPrimReps() == null) throw new UnsupportedCore("Unsupported Core aggregate representation: unboxed-tuple has unresolved fields");
         if (proof.getComponents() != null) for (CoreRepresentation field : proof.getComponents()) if (field.isTuple()) validate(field);
         List<CoreRepresentation> fields = flatten(proof);
         for (CoreRepresentation field : fields) if (field.isVector()) VectorLayout.validate(field);
@@ -160,9 +161,12 @@ public final class TupleShape {
         }
         for (CoreRepresentation field : fields) if (field.getKind() == CoreKind.ADDRESS && !field.getEvaluated())
             throw new UnsupportedCore("Unsupported Core aggregate representation: AddrRep tuple field needs an evaluated carrier");
-        var reps = new ArrayList<String>();
-        for (CoreRepresentation leaf : logicalLeaves(proof)) reps.addAll(Objects.requireNonNull(leaf.getPrimReps()));
-        if (!proof.getPrimReps().equals(reps)) throw new RuntimeFault("Tuple components disagree with primitive representations");
+        List<String> reps = new ArrayList<>();
+        for (CoreRepresentation leaf : logicalLeaves(proof)) {
+            if (leaf.getPrimReps() == null) reps = null;
+            else if (reps != null) reps.addAll(leaf.getPrimReps());
+        }
+        if (!Objects.equals(proof.getPrimReps(), reps)) throw new RuntimeFault("Tuple components disagree with primitive representations");
     }
     /** Temporary mixed-source ABI; direct Java consumers use the static methods above. */
     public static final Companion Companion = new Companion();

@@ -59,6 +59,8 @@ EXPECTED = {
     'aliasIdentity': summ([VOID, EMPTY], ['WordRep'], True),
     'runtimePolymorphic': summ([UNKNOWN, INT], None),
     'levityPolymorphic': summ([leaf('object', ['BoxedRep Nothing'], False), INT], None),
+    'boxedSumThrough': summ([leaf('object', ['BoxedRep Nothing'], False), INT], None),
+    'boxedNestedThrough': dict(tup([summ([leaf('object', ['BoxedRep Nothing'], False), INT], None, True), INT], None), evaluated=False),
     'abstractSumIdentity': summ(None, ['WordRep', 'WordRep'], True),
     'abstractRuntimeSum': summ(None, None),
     'abstractAlternative': summ([tup(None, ['IntRep']), INT], ['WordRep', 'WordRep'], True),
@@ -66,10 +68,13 @@ EXPECTED = {
     'vectorResult': summ([V4, V2], ['WordRep', 'VecRep 2 Int64ElemRep', 'VecRep 4 Int32ElemRep']),
 }
 ENTRIES = ['sumCase', 'directCase', 'nestedCase', 'lazyCase', 'zeroCase', 'unitCase',
-           'boxedKindsCase', 'floatDoubleCase', 'narrowWideCase', 'threeWayCase']
+           'boxedKindsCase', 'floatDoubleCase', 'narrowWideCase', 'threeWayCase',
+           'boxedSumLiftedUse', 'boxedSumUnliftedUse', 'boxedNestedUse']
 SUPPORTED = {'sumCase', 'directCase', 'nestedCase', 'lazyCase', 'zeroCase', 'unitCase', 'boxedKindsCase', 'floatDoubleCase',
              'narrowWideCase', 'threeWayCase', 'returnedSum', 'nestedSum', 'lazySum', 'zeroSum', 'unitSum',
-             'boxedKindsSum', 'floatDoubleSum', 'narrowWideSum', 'threeWaySum', 'aliasIdentity', 'addressResult', 'vectorResult'}
+             'boxedKindsSum', 'floatDoubleSum', 'narrowWideSum', 'threeWaySum', 'aliasIdentity', 'addressResult', 'vectorResult',
+             'levityPolymorphic', 'boxedSumThrough', 'boxedNestedThrough',
+             'boxedSumLiftedUse', 'boxedSumUnliftedUse', 'boxedNestedUse'}
 INPUTS = [-(1 << 63), -2147483649, -2147483648, -5, -1, 0, 1, 7,
           2147483647, 2147483648, 4294967295, 4294967296, (1 << 63)-1]
 
@@ -86,6 +91,9 @@ def model(name, x):
     if name == 'floatDoubleCase': return 3 if x < 0 else 2
     if name == 'narrowWideCase': return signed(x, 32) if x < 0 else x
     if name == 'threeWayCase': return 13 if x < 0 else 17 if x == 0 else x
+    if name == 'boxedSumLiftedUse': return x
+    if name == 'boxedSumUnliftedUse': return 0 if x < 0 else x
+    if name == 'boxedNestedUse': return signed(x + 257)
     raise ValueError(name)
 
 def validate_layout(record):

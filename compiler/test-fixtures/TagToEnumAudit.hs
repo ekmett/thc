@@ -17,6 +17,7 @@ import GHC.Exts
 import TagToEnumExternal (External, externalCode)
 
 data Colour = Red | Green | Blue
+newtype WrappedColour = WrappedColour Colour
 {-# OPAQUE chooseBool #-}
 chooseBool :: Int# -> Bool
 chooseBool n = tagToEnum# n
@@ -26,6 +27,10 @@ chooseOrdering n = tagToEnum# n
 {-# OPAQUE chooseColour #-}
 chooseColour :: Int# -> Colour
 chooseColour n = tagToEnum# n
+{-# OPAQUE chooseWrappedColour #-}
+-- Keep the result cast inside a lazy tuple field, as in Binary enum readers.
+chooseWrappedColour :: Int# -> (# WrappedColour #)
+chooseWrappedColour n = (# WrappedColour (tagToEnum# n) #)
 {-# OPAQUE chooseExternal #-}
 chooseExternal :: Int# -> External
 chooseExternal n = tagToEnum# n
@@ -36,6 +41,9 @@ orderingCase :: Int# -> Int#
 orderingCase n = case chooseOrdering n of LT -> 71#; EQ -> -23#; GT -> 211#
 colourCase :: Int# -> Int#
 colourCase n = case chooseColour n of Red -> 17#; Green -> -31#; Blue -> 83#
+wrappedColourCase :: Int# -> Int#
+wrappedColourCase n = case chooseWrappedColour n of
+  (# WrappedColour colour #) -> case colour of Red -> 17#; Green -> -31#; Blue -> 83#
 externalCase :: Int# -> Int#
 externalCase n = externalCode (chooseExternal n)
 
@@ -48,6 +56,13 @@ lazyCase n = ignoreBool (chooseBool (raise# Red)) n
 -- Even tags outside the enum domain are harmless while the lifted result is unused.
 lazyTagCase :: Int# -> Int#
 lazyTagCase n = ignoreBool (chooseBool n) n
+{-# OPAQUE ignoreWrappedColour #-}
+ignoreWrappedColour :: WrappedColour -> Int# -> Int#
+ignoreWrappedColour _ n = n +# 5#
+-- The newtype cast does not demand the underlying enum or validate its tag.
+lazyWrappedTagCase :: Int# -> Int#
+lazyWrappedTagCase n = case chooseWrappedColour n of
+  (# wrapped #) -> ignoreWrappedColour wrapped n
 {-# OPAQUE consume #-}
 consume :: (Int# -> Colour) -> Int# -> Int#
 consume f n = case f n of Red -> 17#; Green -> -31#; Blue -> 83#

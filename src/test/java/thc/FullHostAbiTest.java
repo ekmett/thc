@@ -64,6 +64,101 @@ class FullHostAbiTest {
         var code = (Map<?,?>) diagnostic.get("explicitCompilation");
         assertEquals(true, code.get("sameTargets")); assertEquals(true, code.get("validLastTier"));
     }
+    private static Value box(Context context, String backend) {
+        var integer = scalar("long", "IntRep"); var data = scalar("data", "BoxedRep (Just Lifted)");
+        var constructor = map("id", "host:Host.Box", "name", "Box", "kind", "boxed", "arity", 1, "tag", 1,
+            "fieldReps", list(list("IntRep")), "fieldLifted", list(false), "strictFields", list(false), "fieldTypes", list(integer));
+        var expression = list("app", list("con", "host:Host.Box", 1), list(list("var", "x", map("rep", integer))),
+            list(false), true, true, map("rep", data));
+        var request = object(Json.parse(unary(backend, integer, data, expression)));
+        object(((List<?>) request.get("modules")).getFirst()).put("constructors", list(constructor));
+        return context.eval("thc", Json.stringify(request)).execute(73L);
+    }
+    private static Map<String,Object> referenceSum(Map<String,Object> pointer) {
+        return map("kind", "unknown", "evaluated", true, "aggregate", "unboxed-sum",
+            "primReps", list("WordRep", "BoxedRep (Just Lifted)", "WordRep"),
+            "alternatives", list(scalar("long", "IntRep"), pointer), "tagSlot", 0,
+            "alternativeSlots", list(list(2), list(1)));
+    }
+    @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
+    void rawTupleArraysAcceptNestedPolyglotReferences(String backend) {
+        var proof = tuple(scalar("data", "BoxedRep (Just Lifted)"));
+        try (var context = context()) {
+            var box = box(context, backend);
+            var entry = context.eval("thc", identity(backend, proof));
+            var result = entry.execute((Object) new Object[]{box});
+            assertEquals(box, result.getArrayElement(0));
+            assertEquals(box, entry.execute(result).getArrayElement(0));
+            released(context);
+        }
+    }
+    @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
+    void rawSumArraysAcceptNestedPolyglotReferences(String backend) {
+        var proof = referenceSum(scalar("data", "BoxedRep (Just Lifted)"));
+        try (var context = context()) {
+            var box = box(context, backend);
+            var entry = context.eval("thc", identity(backend, proof));
+            var result = entry.execute((Object) new Object[]{2L, box});
+            assertEquals(2L, result.getArrayElement(0).asLong());
+            assertEquals(box, result.getArrayElement(1));
+            assertEquals(box, entry.execute(result).getArrayElement(1));
+            released(context);
+        }
+    }
+    @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
+    void nestedReferenceValuesKeepContextAndShapeChecks(String backend) {
+        var data = scalar("data", "BoxedRep (Just Lifted)");
+        // A shared engine exercises value migration, not just incompatible engines.
+        try (var engine = Engine.create(); var context = Context.newBuilder("thc").engine(engine).allowHostAccess(HostAccess.ALL).build();
+                var other = Context.newBuilder("thc").engine(engine).allowHostAccess(HostAccess.ALL).build()) {
+            var owned = box(context, backend); var foreign = box(other, backend);
+            var tuple = context.eval("thc", identity(backend, tuple(data)));
+            var sum = context.eval("thc", identity(backend, referenceSum(data)));
+            assertThrows(RuntimeException.class, () -> tuple.execute((Object) new Object[]{foreign}));
+            assertThrows(RuntimeException.class, () -> sum.execute((Object) new Object[]{2L, foreign}));
+            for (Object invalid : new Object[]{new Object(), 73L, context.asValue(new Object())}) {
+                assertThrows(PolyglotException.class, () -> tuple.execute((Object) new Object[]{invalid}));
+                assertThrows(PolyglotException.class, () -> sum.execute((Object) new Object[]{2L, invalid}));
+            }
+            assertThrows(PolyglotException.class, () -> tuple.execute((Object) new Object[]{owned, owned}));
+            assertThrows(PolyglotException.class, () -> sum.execute((Object) new Object[]{3L, owned}));
+            assertThrows(PolyglotException.class, () -> sum.execute((Object) new Object[]{1L, owned}));
+            var raw = new Object[]{context.asValue(2L), owned};
+            var result = sum.execute((Object) raw);
+            assertSame(owned, raw[1]); assertEquals(owned, result.getArrayElement(1));
+            other.close();
+            assertThrows(RuntimeException.class, () -> tuple.execute((Object) new Object[]{foreign}));
+            released(context);
+        }
+    }
+    @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
+    void nestedValuesPreserveLazyPointersAndAggregateHandles(String backend) {
+        var lazy = map("kind", "data", "primReps", list("BoxedRep (Just Lifted)"), "evaluated", false);
+        var proof = tuple(referenceSum(lazy));
+        for (boolean hosted : new boolean[]{false, true}) try (var context = context(hosted)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = com.oracle.truffle.api.TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var poison = new thc.runtime.Thunk(new com.oracle.truffle.api.nodes.RootNode(language) {
+                    @Override public Object execute(com.oracle.truffle.api.frame.VirtualFrame frame) {
+                        throw new AssertionError("Nested host transport forced a lazy pointer");
+                    }
+                }.getCallTarget(), null);
+                var program = new thc.runtime.Program(language, map("bindings", list()), false);
+                var handle = context.asValue(new HostReference(Language.currentState(), poison,
+                    thc.runtime.CoreRepresentations.parse(lazy), program));
+                var sum = context.eval("thc", identity(backend, referenceSum(lazy)));
+                var aggregate = sum.execute((Object) new Object[]{2L, handle});
+                var tuple = context.eval("thc", identity(backend, proof));
+                var result = tuple.execute((Object) new Object[]{aggregate});
+                assertEquals(handle, result.getArrayElement(0).getArrayElement(1));
+                assertEquals(handle, tuple.execute((Object) new Object[]{new Object[]{2L, handle}})
+                    .getArrayElement(0).getArrayElement(1));
+                assertEquals(0, poison.getState());
+                released(context);
+            } finally { context.leave(); }
+        }
+    }
     @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
     void nullaryLambdaRunsWhileScalarValueEntryRemainsAValue(String backend) {
         var proof = scalar("double", "DoubleRep");
@@ -140,6 +235,9 @@ class FullHostAbiTest {
         try (var context = context()) {
             var entry = context.eval("thc", identity(backend, proof)); compiled(entry);
             assertSame(original, entry.execute(original).asHostObject()); firstEntry(entry);
+            var nested = context.eval("thc", identity(backend, tuple(proof)));
+            assertSame(original, nested.execute((Object) new Object[]{context.asValue(original)}).getArrayElement(0).asHostObject());
+            assertThrows(PolyglotException.class, () -> nested.execute((Object) new Object[]{context.asValue(LongVector.zero(LongVector.SPECIES_256))}));
             assertThrows(PolyglotException.class, () -> entry.execute(LongVector.zero(LongVector.SPECIES_256)));
             assertThrows(PolyglotException.class, () -> entry.execute(IntVector.zero(IntVector.SPECIES_128)));
             assertThrows(PolyglotException.class, () -> entry.execute((Object) new long[]{1, 2}));
@@ -180,6 +278,9 @@ class FullHostAbiTest {
             var same = identity.execute(function);
             assertEquals(function, same);
             assertEquals(1.25, same.execute(1.25).asDouble());
+            var nested = context.eval("thc", identity(backend, tuple(CLOSURE)));
+            var callable = nested.execute((Object) new Object[]{function}).getArrayElement(0);
+            assertEquals(function, callable); assertEquals(2.75, callable.execute(2.75).asDouble());
             var foreign = other.eval("thc", identity(backend, CLOSURE));
             assertThrows(RuntimeException.class, () -> foreign.execute(function));
         }
@@ -248,6 +349,10 @@ class FullHostAbiTest {
             assertFalse(retained.isNull()); assertFalse(retained.isHostObject());
             var identity = context.eval("thc", identity(backend, address));
             assertEquals(retained, identity.execute(retained));
+            var nested = context.eval("thc", identity(backend, tuple(address)));
+            assertEquals(retained, nested.execute((Object) new Object[]{retained}).getArrayElement(0));
+            var boxed = context.eval("thc", identity(backend, tuple(scalar("data", "BoxedRep (Just Lifted)"))));
+            assertThrows(PolyglotException.class, () -> boxed.execute((Object) new Object[]{retained}));
             assertEquals(66L, context.eval("thc", unary(backend, address, integer, read)).execute(retained).asLong());
             var foreign = other.eval("thc", identity(backend, address));
             assertThrows(RuntimeException.class, () -> foreign.execute(retained));
@@ -341,6 +446,9 @@ class FullHostAbiTest {
             var result = nested.execute((Object) new Object[]{null, 42L, null});
             assertEquals(3, result.getArraySize()); assertTrue(result.getArrayElement(0).isNull());
             assertEquals(42L, result.getArrayElement(1).asLong()); assertTrue(result.getArrayElement(2).isNull()); released(context);
+            var wrapped = nested.execute((Object) new Object[]{context.asValue(null), context.asValue(42L), context.asValue(null)});
+            assertTrue(wrapped.getArrayElement(0).isNull()); assertEquals(42L, wrapped.getArrayElement(1).asLong());
+            assertTrue(wrapped.getArrayElement(2).isNull()); released(context);
         }
     }
     @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})

@@ -18,12 +18,13 @@ supported leaves, shapes and ownership rules.
 Nonrecursive unlifted aggregate lets use typed frame locals. Recursive or lifted
 aggregate lets and global aggregate storage remain unsupported. Exact sums with
 two or more alternatives can occur inside recursive tuples and supported sum
-payloads. Unresolved layouts and unsupported physical leaves remain rejected;
-sum payloads have narrower leaf support than tuples.
+payloads. Complete logical shapes containing known boxed pointers remain
+transportable when unknown levity prevents a native sum layout. Genuinely unknown
+RuntimeRep payloads, missing logical components and unsupported leaves reject.
 Aggregate-field constructor workers require direct saturated applications.
-Boxed-constructor support includes the original compiler's unpacked `BoxedRep`
-payload, not arbitrary aggregate heap storage. The metadata fixtures below test
-shape evidence independently of these execution contracts.
+[Owned exact aggregate fields](aggregate-heap-fields.md) include the original
+compiler's unpacked `BoxedRep` payload. The metadata fixtures below test shape
+evidence independently of these execution contracts.
 
 Boxed tuples such as `(Int, Int)`, boxed unit `()`, and `Solo Box` retain one
 `BoxedRep (Just Lifted)` carrier with ordinary `data` evidence. They have no
@@ -81,17 +82,17 @@ ordinary `void` proof without an aggregate marker. An abstract type at that same
 kind could instead be a logical empty tuple, so its null layout conservatively
 retains the unsupported boundary until the logical type is known.
 
-Each node retains the exact vector from `typePrimRep_maybe`, when available.
-GHC 9.14.1's `TupleRep` and `SumRep` callbacks internally call the partial
-`runtimeRepPrimRep`; the nominally optional query can panic on a valid native
-definition such as `forall r (a :: TYPE r). Box -> (# a, Int# #)`. For those
-sum kinds, the exporter first requires `typeHasFixedRuntimeRep`. For a concrete
-tuple type it instead queries each child recursively and concatenates the known
-vectors. A levity-polymorphic boxed leaf retains `BoxedRep Nothing`, so a tuple
-containing it has a known pointer slot and can pass through ordinary guest
-transport without forcing it. If any child's runtime representation is unknown,
-the enclosing vector remains `null`. The exporter never flattens known children
-across an unresolved one.
+Each node retains exact native representation evidence when available.
+GHC 9.14.1's aggregate callbacks call the partial `runtimeRepPrimRep`, so the
+exporter queries concrete tuple/sum children recursively. Tuples concatenate
+child vectors; sums use GHC's placement APIs only when every native slot class
+is known. Abstract aggregate kinds still require `typeHasFixedRuntimeRep` before
+querying GHC. A levity-polymorphic boxed leaf retains `BoxedRep Nothing`: it is a
+known traced pointer, but supplies neither a native sum slot class nor a WHNF
+proof. A sum containing it has `primReps: null` and `alternativeSlots: null`;
+an enclosing tuple also has `primReps: null`. Complete logical shapes still
+permit JVM transport without forcing that pointer. A genuinely unknown RuntimeRep
+leaf has no known carrier and remains unsupported.
 
 Child `evaluated` is true only when GHC proves that child's type is unlifted.
 An outer evaluated tuple or sum does not make a lifted data value, function,
@@ -128,9 +129,9 @@ These generated records are included in CI artifacts.
 
 ## Sum storage projections
 
-A sum records `tagSlot: 0` and `alternativeSlots` alongside its ordered logical
-`alternatives` and exact physical `primReps`. The outer list follows constructor
-order; each inner list maps that alternative's ordered physical leaves to
+A sum with known native layout records `tagSlot: 0` and `alternativeSlots` alongside
+its ordered logical `alternatives` and exact physical `primReps`. The outer list
+follows constructor order; each inner list maps that alternative's ordered physical leaves to
 zero-based slots in the enclosing sum, excluding the tag from the payload.
 For `(# Int# | Word# #)`, GHC gives `[WordRep, WordRep]` and `[[1], [1]]`.
 For `(# State# s | (# #) #)`, the vector is `[WordRep]` and the map is `[[], []]`;
@@ -140,25 +141,30 @@ record adds `sumArity`, obtained from its GHC TyCon's constructor family. This i
 separate from the existing `arity`, which counts the single logical payload.
 Constructor tags remain one-based; slot indices are zero-based.
 
-The exporter calls pinned GHC 9.14.1 `ubxSumRepType`, `primRepSlot`, and
-`layoutUbxSum`, matching the layout computation in `GHC.Stg.Unarise.mkUbxSum`.
-It checks the resulting `slotPrimRep` vector against `typePrimRep_maybe` before
-publishing projections. Narrow/machine integral leaves use Word slots, while
-explicit Int64/Word64 leaves use Word64 slots; merging Word and Word64 selects
-Word64. Addresses share GHC word slots; vector slots share only the exact
-GHC lane-count/element pair. THC derives separate runtime storage when a GHC word
-slot can contain both integral bits and a traced managed address. This does not
-rewrite `primReps` or `alternativeSlots`; recursive nested-sum projections map
-the logical active payload into that storage. The only partial `primRepSlot` case in this pinned API is
-`BoxedRep Nothing`; it is rejected before calling either placement API.
-Unknown physical representations, and abstract sum types with unknown logical
-alternatives, retain `alternativeSlots: null`. A nested abstract tuple may have
-known physical slots while retaining `components: null`; a physical projection
-does not certify that missing logical structure. No printed type is parsed.
+For concrete native slots, the exporter calls pinned GHC 9.14.1
+`ubxSumRepType`, `primRepSlot`, and `layoutUbxSum`, matching
+`GHC.Stg.Unarise.mkUbxSum`. The `slotPrimRep` vector supplies `primReps` and is
+checked before publishing projections. Narrow/machine integral leaves use Word
+slots; explicit Int64/Word64 leaves use Word64 slots, and their merge selects
+Word64. Addresses share GHC word slots; vectors share only an exact species.
+`BoxedRep Nothing` is excluded from these partial native placement APIs and
+retains null native layout fields.
+
+THC derives canonical JVM slots separately from the complete logical shape.
+Lifted, unlifted and unknown-levity pointers share traced slots, preserving the
+order and multiplicity of pointer fields within each alternative. These slots
+supply no WHNF proof. Integral values share Long slots; Float, Double, managed
+addresses and each vector species have separate storage classes. Recursive
+projections place nested active payloads into that storage. Concrete native
+`primReps` and `alternativeSlots` remain unchanged.
+
+Missing native layout is accepted only for known-pointer unknown levity with a
+complete logical shape, including nested sums. Abstract alternatives and tuple
+`components: null` still reject, even when their native vector is known.
 
 [SumLayoutAudit.hs](../compiler/test-fixtures/SumLayoutAudit.hs) and its native
-driver check 130 values against an independent arithmetic model. Genuine exports
-before and after Tidy retain 17 exact sum shapes, including nested sums/tuples,
+driver check 169 values against an independent arithmetic model. Genuine exports
+before and after Tidy retain 19 result shapes, including nested sums/tuples,
 newtype aliases, runtime/levity polymorphism, three-way sums, lazy boxed payloads,
 and the zero-width distinctions above. Address/vector raising producers are
 native compilation and metadata controls, never native execution claims.
@@ -169,18 +175,15 @@ package, command and artifact hashes in `build/sum-layout/provenance.json`;
 running it without `--prepare` verifies those hashes before checking the exports.
 Normal test preparation and CI include these checks.
 
-[Sum lowering](sum-results.md) validates the complete logical
-alternatives, family arity, physical storage classes and projection before using
-typed destinations for exact families with at least two alternatives. The metadata
-suite accepts nine retained-sum consumers and the optimized scalar direct-case
-control; all unsupported families and boundaries
-still reject before execution on both backends and both export stages. This
-metadata does not define a hardware call-register ABI or permit generic
-object-array sum payloads.
+[Sum lowering](sum-results.md) validates complete logical alternatives, family
+arity, native evidence and JVM projections before using typed destinations.
+The metadata suite audits 32 roots at each export stage: 27 supported sum entries
+and the scalar `directCase` control are accepted; four unresolved shapes reject
+on both backends. This metadata does not define a hardware call-register ABI.
 
-Physical tuple flattening recursively expands a supported sum's storage slots,
+JVM tuple flattening recursively expands a supported sum's storage slots,
 while the logical tree still distinguishes sums, tuples, erased State tokens and
-empty tuples. A sum inside another sum's payload remains unsupported. The genuine
-`VirtualRegWithFormat` worker has two logical fields but three physical fields:
-Word tag, shared Word64 payload, then lifted Format at offset 2. See the
+empty tuples, including sums nested inside sum payloads. The genuine
+`VirtualRegWithFormat` worker has two logical fields but three JVM fields:
+Long tag, shared Long payload, then the Format reference at offset 2. See the
 [native four-way fixture](aggregate-heap-fields.md#four-way-and-nested-aggregate-fixture).

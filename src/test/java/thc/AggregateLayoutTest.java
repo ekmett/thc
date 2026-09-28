@@ -4,6 +4,8 @@ package thc;
 
 import java.nio.file.*;
 import java.util.*;
+import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.PolyglotException;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
@@ -13,12 +15,9 @@ import static thc.CoreExecutionTestSupport.*;
 class AggregateLayoutTest {
     private final Path root = Path.of(System.getProperty("thc.projectRoot"));
     private final Map<String, Object> boundaries = map(
-        "nestedIdentity", "unboxed-tuple", "lazyIdentity", "unboxed-tuple",
-        "alternativesIdentity", "unboxed-sum", "polymorphicTuple", "unboxed-tuple",
+        "polymorphicTuple", "unboxed-tuple",
         "polymorphicSum", "unboxed-sum", "polymorphicNested", "unboxed-tuple",
-        "levityPolymorphic", "unboxed-tuple", "tupleAliasIdentity", "unboxed-tuple",
-        "sumAliasIdentity", "unboxed-sum", "nestedAliasIdentity", "unboxed-tuple",
-        "emptyAliasIdentity", "unboxed-tuple", "abstractTupleRep", "unboxed-tuple",
+        "abstractTupleRep", "unboxed-tuple",
         "abstractFixedTupleIdentity", "unboxed-tuple", "abstractEmptyIdentity", "unboxed-tuple",
         "abstractSumIdentity", "unboxed-sum", "familyTupleIdentity", "unboxed-tuple",
         "abstractSumRep", "unboxed-sum", "abstractComponentIdentity", "unboxed-tuple");
@@ -41,7 +40,7 @@ class AggregateLayoutTest {
             }
         }
     }
-    @Test void strictLoadingRejectsRecursivePolymorphicAndNewtypeAggregateBoundaries() throws Exception {
+    @Test void strictLoadingRejectsUnresolvedRuntimeRepsAndAbstractLogicalComponents() throws Exception {
         for (String stage : list("pre", "post")) {
             var module = module(stage);
             for (String backend : list("ast", "bytecode")) try (var context = Main.executionContext(false)) {
@@ -53,6 +52,47 @@ class AggregateLayoutTest {
                 // Recursive scalar newtypes retain object evidence and terminate unwrapping.
                 context.eval("thc", request(module, "recursiveNewtypeIdentity", backend));
                 for (String entry : list("stateAliasIdentity", "proxyIdentity")) context.eval("thc", request(module, entry, backend));
+            }
+        }
+    }
+    @Test void retainedNestedAndAliasSignaturesAcceptLogicalHostValues() throws Exception {
+        for (String stage : list("pre", "post")) {
+            var module = module(stage);
+            for (String backend : list("ast", "bytecode")) try (var context = Context.newBuilder("thc").allowHostAccess(HostAccess.ALL).build()) {
+                for (String name : list("lazyIdentity", "levityPolymorphic", "boxedTupleThrough"))
+                    context.eval("thc", request(module, name, backend));
+                var nested = context.eval("thc", request(module, "nestedIdentity", backend));
+                var value = nested.execute((Object) new Object[]{new Object[0], null, new Object[]{-37L}, new Object[]{1L, 91L}});
+                assertEquals(4, value.getArraySize()); assertEquals(0, value.getArrayElement(0).getArraySize());
+                assertTrue(value.getArrayElement(1).isNull());
+                assertEquals(-37L, value.getArrayElement(2).getArrayElement(0).asLong());
+                assertEquals(1L, value.getArrayElement(3).getArrayElement(0).asLong());
+                assertEquals(91L, value.getArrayElement(3).getArrayElement(1).asLong());
+                for (String name : list("tupleAliasIdentity", "nestedAliasIdentity")) {
+                    var alias = context.eval("thc", request(module, name, backend));
+                    var answer = alias.execute((Object) new Object[]{new Object[0], Long.MIN_VALUE});
+                    assertEquals(2, answer.getArraySize()); assertEquals(0, answer.getArrayElement(0).getArraySize());
+                    assertEquals(Long.MIN_VALUE, answer.getArrayElement(1).asLong());
+                    assertThrows(PolyglotException.class, () -> alias.execute((Object) new Object[]{Long.MIN_VALUE}));
+                }
+                var empty = context.eval("thc", request(module, "emptyAliasIdentity", backend));
+                assertEquals(0, empty.execute((Object) new Object[0]).getArraySize());
+                var sum = context.eval("thc", request(module, "sumAliasIdentity", backend));
+                var token = sum.execute((Object) new Object[]{1L, null});
+                assertEquals(1L, token.getArrayElement(0).asLong()); assertTrue(token.getArrayElement(1).isNull());
+                var alternatives = context.eval("thc", request(module, "alternativesIdentity", backend));
+                var floating = alternatives.execute((Object) new Object[]{4L, new Object[]{-0.0f, Math.PI, Long.MAX_VALUE}});
+                assertEquals(4L, floating.getArrayElement(0).asLong());
+                var payload = floating.getArrayElement(1);
+                assertEquals(3, payload.getArraySize());
+                assertEquals(Float.floatToRawIntBits(-0.0f), Float.floatToRawIntBits(payload.getArrayElement(0).asFloat()));
+                assertEquals(Math.PI, payload.getArrayElement(1).asDouble()); assertEquals(Long.MAX_VALUE, payload.getArrayElement(2).asLong());
+                assertThrows(PolyglotException.class, () -> alternatives.execute((Object) new Object[]{0L, null}));
+                assertThrows(PolyglotException.class, () -> nested.execute(0L));
+                for (String name : list("boxedThroughUse", "boxedTupleThroughUse", "boxedTupleUnliftedThroughUse")) {
+                    var through = context.eval("thc", request(module, name, backend));
+                    for (long input : new long[]{Long.MIN_VALUE, 0L, Long.MAX_VALUE}) assertEquals(input, through.execute(input).asLong());
+                }
             }
         }
     }

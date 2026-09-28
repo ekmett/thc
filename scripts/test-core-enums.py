@@ -33,6 +33,11 @@ class EnumTests(unittest.TestCase):
         self.assertNotIn('tagToEnum#',CAP['primitives']);self.assertTrue(run(fixture())['accepted'])
     def test_disabled_capability(self):
         cap=copy.deepcopy(CAP);cap.pop('tagToEnum');self.assertFalse(run(fixture(),cap)['accepted'])
+    def test_lifted_object_result_preserves_the_certified_nominal_family(self):
+        m=fixture();m['bindings'][0]['expr'][2][6]['rep']=dict(DATA,kind='object')
+        self.assertTrue(run(m)['accepted'])
+        m['bindings'][0]['expr'][2][6].pop('enumFamily')
+        self.assertFalse(run(m)['accepted'])
     def test_missing_incomplete_contradictory_family(self):
         for variant in ['missing','type','empty','duplicate','reverse','missing-con','wrong-family','arity','fields','tag','floating-tag','newtype','truncated-family','extra-family-member']:
             with self.subTest(variant=variant):
@@ -57,7 +62,7 @@ class EnumTests(unittest.TestCase):
                 if variant in ['truncated-family','extra-family-member']:
                     self.assertTrue(any('contradictory supplied family record' in x['detail'] for x in result['issues']))
     def test_bare_partial_overapplied_and_invalid_proofs(self):
-        for variant in ['bare','zero','two','lifted','word','unknown','malformed','function-proof','result','aggregate']:
+        for variant in ['bare','zero','two','lifted','word','unknown','malformed','function-proof','result','unlifted-result','unknown-result','aggregate']:
             with self.subTest(variant=variant):
                 m=fixture();app=m['bindings'][0]['expr'][2]
                 if variant=='bare':m['bindings'][0]['expr'][2]=app[1]
@@ -69,6 +74,8 @@ class EnumTests(unittest.TestCase):
                 elif variant=='malformed':app[2][0][2]['rep']=[]
                 elif variant=='function-proof':app[1][2]['rep']=[]
                 elif variant=='result':app[6]['rep']=LONG
+                elif variant=='unlifted-result':app[6]['rep']=dict(DATA,kind='object',primReps=['BoxedRep (Just Unlifted)'])
+                elif variant=='unknown-result':app[6]['rep']=dict(DATA,kind='unknown')
                 elif variant=='aggregate':app[6]['rep']=dict(kind='unknown',aggregate='unboxed-tuple',components=[DATA],primReps=DATA['primReps'],evaluated=True)
                 self.assertFalse(run(m)['accepted'])
     def test_legacy_var_occurrence_uses_exact_lexical_proof(self):
@@ -89,6 +96,6 @@ class EnumTests(unittest.TestCase):
             folder=ROOT.parent/'build/tag-to-enum'/f'{stage}-core'
             self.assertTrue(folder.is_dir(),'Run prepare-tag-to-enum-audit.py')
             modules=[(str(p),json.loads(p.read_text())) for p in folder.glob('*.json')]
-            result=audit.Audit(modules,CAP).run(['boolCase','orderingCase','colourCase','externalCase','papCase','lazyCase','lazyTagCase','onceCase'])
+            result=audit.Audit(modules,CAP).run(['boolCase','orderingCase','colourCase','wrappedColourCase','externalCase','papCase','lazyCase','lazyTagCase','lazyWrappedTagCase','onceCase'])
             self.assertTrue(result['accepted'],result['issues'])
 if __name__=='__main__':unittest.main()

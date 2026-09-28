@@ -6,6 +6,7 @@ import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.api.nodes.NodeUtil;
 import java.math.BigInteger;
 import java.util.*;
 import org.junit.jupiter.api.Test;
@@ -176,6 +177,54 @@ class TypedCaseTest {
             assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), enabled + "/" + backend);
             assertEquals("Non-exhaustive Core case", assertThrows(RuntimeFault.class,
                 () -> Calls.target(target, new Object[]{0L, mismatch})).getMessage());
+        });
+    }
+    @Test void clonedSingletonCasesKeepTheirColdInstalledMatchAndRejectColdMismatch() throws Exception {
+        each((enabled, backend, unused) -> {
+            if (!backend.equals("ast")) return; // Alternative is the AST case node.
+            var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+            for (boolean constructor : new boolean[]{false, true}) for (boolean matching : new boolean[]{true, false}) {
+                var input = new LinkedHashMap<>(constructor ? data : wide);
+                input.put("evaluated", true);
+                var alternative = constructor
+                    ? list("data", "Box", list("payload"), variable("payload"), map("binders", list(param("payload", wide))))
+                    : arm(42, number(7));
+                var body = caseOf(variable("input"), "whole", input, list(alternative));
+                var function = list("lam", list(param("input", input)), body,
+                    map("rep", closure, "resultRep", wide, "entryStrict", list(true)));
+                var program = new Program(language, map("instrument", true, "bindings", list(binding("partial", function)),
+                    "constructors", list(
+                        map("id", "Box", "name", "Box", "arity", 1, "kind", "boxed", "fieldReps", list(list("IntRep")), "fieldLifted", list(false), "strictFields", list(false)),
+                        map("id", "Other", "name", "Other", "arity", 0, "kind", "boxed", "fieldReps", list(), "fieldLifted", list(), "strictFields", list()))));
+                Object match = 42L, mismatch = 43L;
+                if (constructor) {
+                    var layout = program.constructorLayout("Box");
+                    var value = layout.allocate(); layout.initializeLong(value, 0, 42L);
+                    match = value; mismatch = program.constructorLayout("Other").allocate();
+                }
+                var original = program.entryTarget("partial");
+                var root = NodeUtil.cloneNode(original.getRootNode());
+                var target = root.getCallTarget();
+                var originalArm = NodeUtil.findAllNodeInstances(original.getRootNode(), Alternative.class).getFirst();
+                var clonedArm = NodeUtil.findAllNodeInstances(root, Alternative.class).getFirst();
+                assertNotSame(originalArm, clonedArm, "exercise a real deep node clone");
+                assertEquals(0L, program.diagnostics().get("compiledEntries"), "no guest training before the first clone");
+                compile(target);
+                var runtime = com.oracle.truffle.api.Truffle.getRuntime();
+                runtime.getClass().getMethod("bypassedInstalledCode", Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"))
+                    .invoke(runtime, target);
+                long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
+                Object argument = matching ? match : mismatch;
+                if (matching) {
+                    assertEquals(constructor ? 42L : 7L, Calls.target(target, new Object[]{0L, argument}));
+                    assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
+                } else {
+                    assertEquals("Non-exhaustive Core case", assertThrows(RuntimeFault.class,
+                        () -> Calls.target(target, new Object[]{0L, argument})).getMessage());
+                }
+                assertSame(target, root.getCallTarget());
+                assertEquals(before + 1, program.diagnostics().get("compiledEntries"), "the first call must enter installed code");
+            }
         });
     }
     @Test void defaultOnlyCasesForwardConcreteReferencesAndForceSharedScrutineeOnce() throws Exception {

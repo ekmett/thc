@@ -11,30 +11,29 @@ arity or liftedness.
 
 Supported leaves include machine and fixed-width integral representations,
 `FloatRep`, `DoubleRep`, evaluated managed `AddrRep`, supported exact vector
-species, known lifted or unlifted references, and scalar void tokens such as
-`State#`. Concrete tuple and sum payloads nest recursively. Int and Word share
-one machine-word storage class without changing bits. `Int64Rep`/`Word64Rep`
-use the same lowered Long carrier; GHC's Word/Word64 max-slot merge chooses the
-physical payload class rather than counting the two classes independently.
-Narrow 8/16/32-bit payloads compute in `Int`, but GHC's original WordSlot proof
-remains unchanged: construction explicitly widens to the canonical Long slot,
-and only the selected alternative narrows back to its declared Int carrier.
-Float and Double slots, and lifted and unlifted reference slots, remain separate.
-GHC also shares address and integral word slots. THC retains that original
-proof unchanged, but derives a separate storage projection: a collision gets
-one primitive integral field and one traced managed-address field. No pointer
-bits are invented and no address backing is discarded. Nested projections
-compose through the original GHC slot map. Vector fields retain their exact
-supported species and typed vector carrier, not scalar lane arrays.
-The runtime recomputes
-and checks the complete placement map before lowering. It also checks
+species, boxed references with known or unknown levity, and scalar void tokens
+such as `State#`. Concrete tuple and sum payloads nest recursively. Integral
+payloads share canonical JVM Long slots; narrow 8/16/32-bit payloads widen from
+`Int` on construction and narrow only in the selected alternative. Float and
+Double retain separate slots. Lifted, unlifted and unknown-levity pointers share
+traced JVM slots by their order within each alternative, preserving repeated
+fields without adding a WHNF guarantee. Managed addresses use separate traced
+slots from integral bits, and vectors retain their exact species.
+
+Concrete GHC `primReps` and `alternativeSlots` remain exact native evidence,
+including distinct lifted/unlifted pointer slots and native address/word sharing.
+JVM projections are derived from the recursive logical shape independently of
+those native slots. A known-pointer `BoxedRep Nothing` payload leaves the native
+sum layout `null`; the complete logical alternatives still determine JVM storage.
+The runtime validates native evidence and computes JVM placement before lowering.
+It also checks
 constructor family arity, one-based tags, payload shape and levity, case binder
 shape, alternative binders and retained result proofs in every arm, including
 cold arms. Scalar `State#`, `(# #)` and `(# State# #)` stay distinct logical types
 even when they need no payload storage.
 
-A selected zero-width payload still executes; it may throw. A lifted reference
-is stored without forcing it, including when the payload itself is bottom.
+A selected zero-width payload still executes; it may throw. Lifted and
+unknown-levity references are stored without forcing them, including bottom.
 Constructors clear every inactive destination slot before evaluating the selected
 payload and write the tag only after successful evaluation. Cases check the tag
 and project typed caller-frame slots according to the selected alternative.
@@ -67,10 +66,9 @@ zero-width State/empty-tuple distinctions and lazy lifted neighbours. Inactive
 boxed reference fields use null; inactive address fields use the managed null
 address, and inactive vector fields use a zero of the exact species. These are
 THC padding values, never observations of native inactive registers.
-Unsupported vector species, integer-width conversion and unknown logical or
-physical layouts remain unsupported. Known-pointer `BoxedRep Nothing` values
-flow through [scalar and tuple transport](tuple-inputs.md) without forcing;
-sum payload slot classification still requires concrete boxed levity.
+A missing native layout is accepted only when known-pointer unknown levity,
+possibly in a nested sum, leaves every logical component and JVM carrier known.
+Genuinely unknown RuntimeRep payloads and incomplete logical shapes still reject.
 Partial sum constructors and recursive or lifted sum lets
 also remain unsupported; nonrecursive unlifted sum lets use typed locals.
 The [Core host ABI](site/embedding.md#load-a-core-entry) transports supported
@@ -82,9 +80,12 @@ Exact sum fields in saturated boxed constructors are supported separately throug
 [owned aggregate heap storage](aggregate-heap-fields.md), retaining their tag and
 payload projections. Ordinary sum function parameters are described [separately](sum-inputs.md).
 
-`check-sum-layout.py --prepare` retains 17 layout families and 130 native/model
-rows. Nine retained-sum consumers plus a GHC-eliminated scalar control are accepted;
-all other roots remain explicit frontiers. `prepare-sum-result-audit.py` adds
+`check-sum-layout.py --prepare` retains 19 result shapes and 169 native/model
+rows from 12 sum consumers and the scalar `directCase` control. Its 32 audit roots
+include 27 supported sum entries plus `directCase`; four unresolved shapes reject.
+The native consumers include lifted and unlifted instantiations of an
+unknown-levity sum forwarder and a tuple containing such a sum.
+`prepare-sum-result-audit.py` adds
 110 fresh native unary rows and seven independent input pairs, checks independent
 wraparound formulas, and strict-audits all 12 scalar entry roots before and after
 Tidy. The original `AggregateFrontier` sumPayload, sumZeroLazy and coldSum

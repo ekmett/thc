@@ -143,14 +143,18 @@ public final class CoreRepresentation {
             other.primReps != null ? other.primReps : primReps;
         List<CoreRepresentation> mergedComponents = refineChildren(components, other.components);
         if (components != null && other.components != null) {
-            var reps = new ArrayList<String>();
-            for (CoreRepresentation component : mergedComponents) reps.addAll(Objects.requireNonNull(component.primReps));
-            mergedReps = List.copyOf(reps);
+            List<String> reps = new ArrayList<>();
+            for (CoreRepresentation component : mergedComponents) {
+                if (component.primReps == null) reps = null;
+                else if (reps != null) reps.addAll(component.primReps);
+            }
+            mergedReps = reps == null ? null : List.copyOf(reps);
         }
-        return new CoreRepresentation(merged, evaluated || other.evaluated, present || other.present, mergedReps,
+        var result = new CoreRepresentation(merged, evaluated || other.evaluated, present || other.present, mergedReps,
             mergedComponents, other.vector != null ? other.vector : vector,
             refineChildren(alternatives, other.alternatives), other.tagSlot != null ? other.tagSlot : tagSlot,
             other.alternativeSlots != null ? other.alternativeSlots : alternativeSlots);
+        return result.isSum() ? SumShape.relayout(result) : result;
     }
     private static List<CoreRepresentation> refineChildren(List<CoreRepresentation> left, List<CoreRepresentation> right) {
         if (left == null) return right;
