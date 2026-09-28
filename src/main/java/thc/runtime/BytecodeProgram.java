@@ -7086,8 +7086,8 @@ public final class BytecodeProgram implements ExecutableProgram {
                 b.beginWriteMutVar(); for (var operand : operands) operand.emit(e); b.endWriteMutVar();
             }, evaluatedProof(tupleProof, true));
         }
-        if (WeakOp.Companion.named(name) != null) {
-            var operation = WeakOp.Companion.named(name);
+        if (WeakOp.named(name) != null) {
+            var operation = WeakOp.named(name);
             var proofs = argumentProofs(args);
             operation.validate(proofs, flags, tupleProof);
             operation.validateBindings(proofs, lexicalProofs(args, scope));

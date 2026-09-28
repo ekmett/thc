@@ -1879,8 +1879,8 @@ public final class Program implements ExecutableProgram {
             operation.validate(argumentProofs(args), flags, tupleProof);
             return MutVarOp.expression(operation, tupleProof, argumentOperands(args, scope, flags), language, metrics, enableAsync);
         }
-        if (primitive && WeakOp.Companion.named((String) fn.get(1)) != null) {
-            var operation = Objects.requireNonNull(WeakOp.Companion.named((String) fn.get(1)));
+        if (primitive && WeakOp.named((String) fn.get(1)) != null) {
+            var operation = Objects.requireNonNull(WeakOp.named((String) fn.get(1)));
             operation.validate(argumentProofs(args), flags, tupleProof);
             operation.validateBindings(argumentProofs(args), bindingProofs(args, scope));
             if (operation == WeakOp.MAKE) operation.validateAction(CoreRepresentations.INSTANCE.knownFunctionSignature(args.get(2), bindings));

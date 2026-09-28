@@ -260,8 +260,8 @@ class ManagedWeakTest {
     private fun flags(args: List<CoreRepresentation>) = args.map { it.primReps == listOf("BoxedRep (Just Lifted)") }
 
     @Test fun exactWeakContractsRejectForgedStateRepresentationOrBinding() {
-        assertEquals(5, WeakOp.entries.size)
-        for (op in WeakOp.entries) for (value in listOf(lifted, action, weak)) {
+        assertEquals(5, WeakOp.values().size)
+        for (op in WeakOp.values()) for (value in listOf(lifted, action, weak)) {
             val args = inputs(op, value)
             val result = output(op, value)
             op.validate(args, flags(args), result)

@@ -130,7 +130,23 @@
       "junit": ["thc.runtime.EnabledCapabilitiesTest", "thc.runtime.RtsFlagsTest"],
       "python": ["scripts/test-audit-core.py"]
     },
-    "src/main/kotlin/thc/runtime/ManagedWeaks.kt": {
+    "src/main/java/thc/runtime/ManagedWeaks.java": {
+      "junit": ["thc.runtime.ManagedWeakTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/WeakResult.java": {
+      "junit": ["thc.runtime.ManagedWeakTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/MainThreadWeakKey.java": {
+      "junit": ["thc.runtime.ManagedWeakTest", "thc.runtime.CoreMainThreadForeignTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/WeakOp.java": {
+      "junit": ["thc.runtime.ManagedWeakTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/WeakExpression.java": {
       "junit": ["thc.runtime.ManagedWeakTest"],
       "python": []
     },
