@@ -45,12 +45,18 @@ class ReusableHigherOrderTest {
         var value = binding(id, lambda(args, body, result));
         value.put("arity", args.size()); value.put("rep", closure(true)); return value;
     }
-    @SuppressWarnings("unchecked") private Map<String,Object> module(boolean fields) {
+    private List<Object> returningJoin(String id, List<Object> body, Map<String,Object> result) {
+        var join = binding(id, body); join.put("rep", result);
+        join.put("joinValueArity", 0); join.put("joinResultRep", result);
+        return list("let", false, list(join), variable(id), map("rep", result));
+    }
+    @SuppressWarnings("unchecked") private Map<String,Object> module(boolean fields, boolean joins) {
         var sum = plus(variable("shared"), plus(variable("seed"), variable("x")));
         var choice = list("case", variable("which"), "tag", list(
             list("lit", list("int", "0"), list(), variable("f")),
             list("default", null, list(), application(variable("partial"), list(literal(17)), closure(true)))),
             map("rep", closure(false), "binder", parameter("tag", false)));
+        if (joins) choice = returningJoin("chosen", choice, closure(false));
         var lazy = binding("lazyFunction", application(variable("capture"), list(literal(3)), closure(true)));
         lazy.put("rep", closure(false));
         var module = map("schema", 1, "ghc", "9.14.1", "module", "Synthetic.ReusableHigherOrder", "instrument", true,
@@ -78,8 +84,12 @@ class ReusableHigherOrderTest {
                 list("data", "Box", list("strict", "lazy", "next"), variable("strict"),
                     map("binders", list(strict, parameter("lazy", true), dataParameter("next"))))),
                 map("rep", closure(true), "binder", dataParameter("whole")));
-            bindings.add(function("box", list(parameter("seed", false)), box, data(true)));
-            bindings.add(function("unbox", list(dataParameter("box")), unbox, closure(true)));
+            bindings.add(function("box", list(parameter("seed", false)),
+                joins ? returningJoin("boxed", box, data(true)) : box, data(true)));
+            bindings.add(function("unbox", list(dataParameter("box")),
+                joins ? returningJoin("unboxed", unbox, closure(true)) : unbox, closure(true)));
+            if (joins) bindings.add(function("hold", list(dataParameter("value")),
+                returningJoin("held", variable("value"), data(false)), data(false)));
             var neighbour = binding("neighbour", variable("neighbour")); neighbour.put("rep", data(false));
             bindings.add(neighbour);
             module.put("bindings", bindings);
@@ -95,7 +105,7 @@ class ReusableHigherOrderTest {
     private Object call(Program program, String id, Object... arguments) { return call((Closure)program.entryValue(id), arguments); }
     private long count(Program program, String name) { return ((Number)program.diagnostics().get(name)).longValue(); }
 
-    @SuppressWarnings("unchecked") private void checks(boolean compiled, boolean fields) throws Exception {
+    @SuppressWarnings("unchecked") private void checks(boolean compiled, boolean fields, boolean joins) throws Exception {
         try (var engine = Engine.newBuilder().allowExperimentalOptions(true).option("engine.Compilation", Boolean.toString(compiled))
                 .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
                 .option("engine.CompilationFailureAction", "Throw").build()) {
@@ -103,7 +113,8 @@ class ReusableHigherOrderTest {
             try (var preparation = Context.newBuilder("thc").engine(engine).build()) {
                 preparation.initialize("thc"); preparation.enter();
                 try { code = Program.prepareCode(TruffleLanguage.LanguageReference.create(Language.class).get(null),
-                    module(fields), fields ? List.of("apply", "capture", "partial", "choose", "lazyFunction", "box", "unbox") :
+                    module(fields, joins), joins ? List.of("apply", "capture", "partial", "choose", "lazyFunction", "box", "unbox", "hold") :
+                        fields ? List.of("apply", "capture", "partial", "choose", "lazyFunction", "box", "unbox") :
                         List.of("apply", "capture", "partial", "choose", "lazyFunction")); }
                 finally { preparation.leave(); }
             }
@@ -148,6 +159,17 @@ class ReusableHigherOrderTest {
                         var chosen = assertInstanceOf(Closure.class, call(first, "choose", captured, 1L));
                         assertEquals(59L, call(second, "apply", chosen, 0L));
                         var lazy = (Thunk)first.entryValue("lazyFunction"); assertEquals(0, lazy.getState());
+                        if (joins) {
+                            // The join retains a lazy result proof; the enclosing
+                            // FunctionBody demands that result at its boundary.
+                            var returned = assertInstanceOf(Closure.class, call(first, "choose", lazy, 0L));
+                            assertSame(lazy.getValue(), returned);
+                            assertSame(first, returned.environment.getProgram());
+                            assertEquals(2, lazy.getState());
+                            assertEquals(2L, count(first, "thunkEvaluations"));
+                            assertEquals(3L, count(first, "localJoinTransfers"));
+                            assertEquals(0L, count(second, "localJoinTransfers"));
+                        }
                         assertEquals(47L, call(first, "apply", lazy, 2L));
                         assertEquals(2, lazy.getState()); assertEquals(2L, count(first, "thunkEvaluations"));
                         assertEquals(0, ((Thunk)second.entryValue("lazyFunction")).getState());
@@ -167,6 +189,10 @@ class ReusableHigherOrderTest {
                             assertSame(owner, strictField.environment.getProgram());
                             assertSame(owner, lazyField.getEnvironment().getProgram());
                             assertSame(owner.entryValue("neighbour"), neighbour);
+                            if (joins) {
+                                assertSame(value, call(owner, "hold", value));
+                                assertEquals(0, neighbour.getState(), "Returning a box must not evaluate its lazy neighbour");
+                            }
                             assertEquals(0, ownCaf.getState()); assertEquals(0, lazyField.getState()); assertEquals(0, neighbour.getState());
                             assertSame(strictField, call(owner, "unbox", value));
                             assertEquals(47L, call(receiver, "apply", strictField, 2L));
@@ -186,6 +212,10 @@ class ReusableHigherOrderTest {
                             assertEquals(2, lazyField.getState()); assertEquals(0, neighbour.getState());
                             assertEquals(1L, count(receiver, "thunkEvaluations"));
                             assertEquals(0L, count(owner, "loweredRootCount")); assertEquals(0L, count(receiver, "loweredRootCount"));
+                            if (joins) {
+                                assertEquals(3L, count(owner, "localJoinTransfers"));
+                                assertEquals(0L, count(receiver, "localJoinTransfers"));
+                            }
                             if (compiled) { code.requireInstalledCode(); assertTrue(count(owner, "compiledEntries") > 0); }
                             if (i == 1) assertThrows(RuntimeFault.class, () -> call(receiver, "unbox", value));
                         }
@@ -200,8 +230,10 @@ class ReusableHigherOrderTest {
             } finally { if (previous == null) System.clearProperty("thc.requireCompiledCode"); else System.setProperty("thc.requireCompiledCode", previous); }
         }
     }
-    @Test void higherOrderCallsKeepCapturedAndPartialOwnersAcrossInstances() throws Exception { checks(false, false); }
-    @Test void firstCompiledClosureInputsResultsAndLazyFunctionsNeedNoTraining() throws Exception { checks(true, false); }
-    @Test void constructorFunctionFieldsKeepLazyNeighboursAndCapturedOwners() throws Exception { checks(false, true); }
-    @Test void firstCompiledConstructorFunctionFieldsNeedNoTraining() throws Exception { checks(true, true); }
+    @Test void higherOrderCallsKeepCapturedAndPartialOwnersAcrossInstances() throws Exception { checks(false, false, false); }
+    @Test void firstCompiledClosureInputsResultsAndLazyFunctionsNeedNoTraining() throws Exception { checks(true, false, false); }
+    @Test void constructorFunctionFieldsKeepLazyNeighboursAndCapturedOwners() throws Exception { checks(false, true, false); }
+    @Test void firstCompiledConstructorFunctionFieldsNeedNoTraining() throws Exception { checks(true, true, false); }
+    @Test void referenceJoinsKeepLazyValuesAndInvocationOwners() throws Exception { checks(false, true, true); }
+    @Test void firstCompiledReferenceJoinsNeedNoTraining() throws Exception { checks(true, true, true); }
 }
