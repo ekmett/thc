@@ -95,7 +95,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         this.enableAsync = enableAsync;
         thc.CoreForeignArtifacts.INSTANCE.requireExecutableInput(moduleData);
         demand = moduleData.get("demandBindings") instanceof CoreDemandBindings value ? value : null;
-        foreignExceptionBridge = ForeignExceptionBridge.Companion.bind(moduleData, this::entryValue, this::dataLayout);
+        foreignExceptionBridge = ForeignExceptionBridge.bind(moduleData, this::entryValue, this::dataLayout);
         rubbishLiterals = new RubbishLiterals(language);
         foreignLinks = moduleData.get("foreignLinks") instanceof List<?> value
             ? (List<thc.ForeignBitcode>) value : List.of();
@@ -149,10 +149,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
         globals = demand == null ? localGlobals : demand.globals(localGlobals);
         if (diagnosticUnsupported) validateInputs = null;
-        else {
-            var validator = CoreInputCalls.INSTANCE.validator(bindings, constructors, demand);
-            validateInputs = requested -> validator.invoke(requested);
-        }
+        else validateInputs = CoreInputCalls.validator(bindings, constructors, demand);
         initialize(moduleData);
     }
 
