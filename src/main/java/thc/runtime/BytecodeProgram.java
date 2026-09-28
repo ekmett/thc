@@ -600,9 +600,13 @@ public final class BytecodeProgram implements ExecutableProgram {
         result.put("selfTailReentries", metrics.getSelfTailReentries());
         result.put("trampolineIterations", metrics.getTrampolineIterations());
         result.put("papAllocations", metrics.getPapAllocations());
-        result.put("unsupportedPolicy", diagnosticUnsupported ? "diagnostic-traps"
-            : bindings.stream().anyMatch(binding -> binding.get("expr") instanceof thc.CoreBindingBody)
-                ? "reject-at-binding-admission" : "reject-at-load");
+        String unsupportedPolicy = "reject-at-load";
+        if (diagnosticUnsupported) unsupportedPolicy = "diagnostic-traps";
+        else for (var binding : bindings) if (binding.get("expr") instanceof thc.CoreBindingBody) {
+            unsupportedPolicy = "reject-at-binding-admission";
+            break;
+        }
+        result.put("unsupportedPolicy", unsupportedPolicy);
         result.put("deferredUnsupported", new ArrayList<>(deferredUnsupported));
         result.put("unsupportedTraps", metrics.getUnsupportedTraps());
         result.put("frames", "Bytecode DSL primitive locals; selective StaticShape captures");
@@ -3752,7 +3756,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             b.endBlock();
             e.joins.remove(region);
             for (var target : targets) for (var fields : target.locals) for (var field : fields) e.locals.remove(field.id);
-        }), evaluatedProof(proof, entry.proof().getEvaluated() && bodies.stream().allMatch(body -> body.proof().getEvaluated())));
+        }), evaluatedProof(proof, entry.proof().getEvaluated() && allEvaluated(bodies)));
     }
 
     private Expression vectorWord8Primitive(String name, List<Expression> operands) {
@@ -4606,12 +4610,17 @@ public final class BytecodeProgram implements ExecutableProgram {
         };
         boolean unary = Set.of("PopulationCountWidth", "CountLeadingZerosWidth", "CountTrailingZerosWidth", "ByteSwapWidth", "BitReverseWidth", "Negate", "BitNot", "CountLeadingZeros", "CountTrailingZeros", "PopulationCount", "Narrow8", "Narrow16", "Narrow32", "NarrowWord", "Identity", "Raise", "AddressToInt", "IntToAddress").contains(operation);
         if (args.size() != (unary ? 1 : 2)) throw new RuntimeFault("Primitive arity mismatch: " + name);
-        if (operation.equals("MultiplyIntMayOverflow") && args.stream().anyMatch(arg -> !arg.proof().isLong()))
-            throw new RuntimeFault("Primitive requires Long operands: " + name);
+        if (operation.equals("MultiplyIntMayOverflow")) for (var arg : args)
+            if (!arg.proof().isLong()) throw new RuntimeFault("Primitive requires Long operands: " + name);
         if (operation.equals("Identity")) return evaluated(e -> {
             e.builder.beginToLong(); args.getFirst().emit(e); e.builder.endToLong();
         });
-        if (Set.of("Add", "Subtract", "Multiply").contains(operation) && args.stream().allMatch(arg -> staticWideLong(arg.proof())))
+        boolean wideArithmetic = Set.of("Add", "Subtract", "Multiply").contains(operation);
+        if (wideArithmetic) for (var arg : args) if (!staticWideLong(arg.proof())) {
+            wideArithmetic = false;
+            break;
+        }
+        if (wideArithmetic)
             return evaluated(e -> {
                 e.builder.beginStaticLongArithmetic(switch (operation) { case "Add" -> 0; case "Subtract" -> 1; default -> 2; });
                 for (var arg : args) arg.emit(e);
@@ -4741,17 +4750,24 @@ public final class BytecodeProgram implements ExecutableProgram {
         if (arms.isEmpty()) throw new RuntimeFault("Empty sum case");
         var result = arms.getFirst().body.proof().refine(CoreRepresentations.INSTANCE.expression(expr));
         for (var arm : arms) result.refine(arm.body.proof());
-        CoreRepresentations.INSTANCE.validateFloatingCaseResult(result, arms.stream().map(a -> a.body.proof()).toList());
+        var armProofs = new ArrayList<CoreRepresentation>(arms.size());
+        for (var arm : arms) armProofs.add(arm.body.proof());
+        CoreRepresentations.INSTANCE.validateFloatingCaseResult(result, armProofs);
         return new ProvenExpression(new ResultExpression((e, destination) -> {
             var b = e.builder;
             b.beginBlock();
             for (var field : fields) e.locals.put(field.id, b.createLocal(field.name, field.primitive ? "primitive" : "object"));
-            scrutinee.emitTuple(e, fields.stream().map(f -> e.locals.get(f.id)).toList());
+            scrutinee.emitTuple(e, localSlots(e, fields));
             b.beginStoreLocal(e.locals.get(fields.getFirst().id));
             b.beginCheckSumTag(proof.getAlternatives().size());
             read(fields.getFirst()).emit(e); b.endCheckSumTag(); b.endStoreLocal();
-            var explicit = arms.stream().filter(a -> a.tag != null).toList();
-            var fallback = arms.stream().filter(a -> a.tag == null).findFirst().orElse(null);
+            var explicit = new ArrayList<Arm>();
+            Arm defaultArm = null;
+            for (var arm : arms) {
+                if (arm.tag != null) explicit.add(arm);
+                else if (defaultArm == null) defaultArm = arm;
+            }
+            var fallback = defaultArm;
             class Choice {
                 void emitArm(Arm arm) {
                     b.beginBlock();
@@ -4782,11 +4798,11 @@ public final class BytecodeProgram implements ExecutableProgram {
             new Choice().emit(0);
             b.endBlock();
             for (var field : fields) e.locals.remove(field.id);
-        }), evaluatedProof(result, arms.stream().allMatch(a -> a.body.proof().getEvaluated())));
+        }), evaluatedProof(result, allProofsEvaluated(armProofs)));
     }
 
     private Expression vectorReadCase(VectorReadCase read, Scope scope, boolean tail) {
-        var operands = read.getArguments().stream().map(a -> compile(a, scope, false)).toList();
+        var operands = compileOperands(read.getArguments(), scope);
         var value = vectorMemory(read.getOperation(), operands);
         var local = scope.child();
         local.bindVoid(read.getStateBinder(), CoreVectorMemory.INSTANCE.getStateProof());
@@ -4801,7 +4817,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             var b = e.builder;
             b.beginBlock();
             for (var lane : lanes) e.locals.put(lane.id, b.createLocal(lane.name, "object"));
-            value.emitTuple(e, lanes.stream().map(l -> e.locals.get(l.id)).toList());
+            value.emitTuple(e, localSlots(e, lanes));
             emitResult(body, e, destination);
             b.endBlock();
             for (var lane : lanes) e.locals.remove(lane.id);
@@ -4818,7 +4834,8 @@ public final class BytecodeProgram implements ExecutableProgram {
         if (alternatives.isEmpty() && proof.isTuple()) return new ProvenExpression(new ResultExpression((e, destination) -> {
             var b = e.builder;
             b.beginBlock();
-            var slots = fields.stream().map(f -> b.createLocal(f.name, f.primitive ? "primitive" : "object")).toList();
+            var slots = new ArrayList<BytecodeLocal>(fields.size());
+            for (var field : fields) slots.add(b.createLocal(field.name, field.primitive ? "primitive" : "object"));
             scrutinee.emitTuple(e, slots); b.emitFailCase(); b.endBlock();
         }), CoreRepresentations.INSTANCE.expression(expr));
         if (alternatives.size() != 1) throw new RuntimeFault("Tuple or vector case requires one alternative");
@@ -4855,7 +4872,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             var b = e.builder;
             b.beginBlock();
             for (var field : fields) e.locals.put(field.id, b.createLocal(field.name, field.primitive ? "primitive" : "object"));
-            scrutinee.emitTuple(e, fields.stream().map(f -> e.locals.get(f.id)).toList());
+            scrutinee.emitTuple(e, localSlots(e, fields));
             emitResult(body, e, destination); b.endBlock();
             for (var field : fields) e.locals.remove(field.id);
         }), body.proof());
@@ -4951,7 +4968,8 @@ public final class BytecodeProgram implements ExecutableProgram {
             case "void" -> constant(kotlin.Unit.INSTANCE);
             case "lam" -> {
                 var args = (List<Map<String, Object>>) expr.get(1);
-                var names = args.stream().map(a -> String.valueOf(a.get("name"))).toList();
+                var names = new ArrayList<String>(args.size());
+                for (var arg : args) names.add(String.valueOf(arg.get("name")));
                 yield closure(function("lambda " + String.join(", ", names), args, (List<Object>) expr.get(2), scope,
                     CoreRepresentations.INSTANCE.lambdaResult(expr), CoreEntries.lambda(expr)), args.size());
             }
@@ -4967,7 +4985,7 @@ public final class BytecodeProgram implements ExecutableProgram {
     private Expression compileLet(List<Object> expr, Scope scope, boolean tail) {
         boolean recursive = (Boolean) expr.get(1);
         var group = (List<Map<String, Object>>) expr.get(2);
-        if (group.stream().anyMatch(b -> CoreRepresentations.INSTANCE.joinArity(b) != null))
+        for (var binding : group) if (CoreRepresentations.INSTANCE.joinArity(binding) != null)
             return joinRegion(group, (List<Object>) expr.get(3), recursive, scope, tail);
         for (var binding : group) {
             var proof = CoreRepresentations.INSTANCE.binder(binding);
@@ -5015,7 +5033,8 @@ public final class BytecodeProgram implements ExecutableProgram {
             }
         }
         var body = compile((List<Object>) expr.get(3), local, tail);
-        var physicalSlots = slots.stream().flatMap(List::stream).toList();
+        var physicalSlots = new ArrayList<Local>();
+        for (var fields : slots) physicalSlots.addAll(fields);
         return new ProvenExpression(new ResultExpression((e, destination) -> {
             var b = e.builder;
             b.beginBlock();
@@ -5035,7 +5054,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             } else for (int index = 0; index < slots.size(); ++index) {
                 var fields = slots.get(index);
                 if (CoreRepresentations.INSTANCE.binder(group.get(index)).isVector())
-                    rhs.get(index).emitTuple(e, fields.stream().map(f -> e.locals.get(f.id)).toList());
+                    rhs.get(index).emitTuple(e, localSlots(e, fields));
                 else {
                     b.beginStoreLocal(e.locals.get(fields.getFirst().id)); rhs.get(index).emit(e); b.endStoreLocal();
                 }
@@ -5065,8 +5084,12 @@ public final class BytecodeProgram implements ExecutableProgram {
         var constructorScope = new Scope(context);
         var records = constructor.get("fieldTypes") instanceof List<?> list ? list : null;
         if (records != null && records.size() != arity) throw new RuntimeFault("Constructor field type count mismatch: " + id);
-        var proofs = records != null ? records.stream().map(CoreRepresentations.INSTANCE::parse).toList()
-            : Collections.nCopies(arity, UNKNOWN);
+        List<CoreRepresentation> proofs;
+        if (records == null) proofs = Collections.nCopies(arity, UNKNOWN);
+        else {
+            proofs = new ArrayList<>(records.size());
+            for (var record : records) proofs.add(CoreRepresentations.INSTANCE.parse(record));
+        }
         context.inputLayout = ArgumentLayout.fromProofs(proofs);
         context.typedInput = TypedInputLayout.create(language, context.inputLayout, false);
         var physical = new ArrayList<TypedArgument>();
@@ -5096,7 +5119,13 @@ public final class BytecodeProgram implements ExecutableProgram {
         var arguments = new ArrayList<Local>();
         for (int index = 0; index < proofs.size(); ++index) {
             int offset = ArgumentLayout.offset(context.inputLayout, index);
-            arguments.add(layout.isVector(index) ? null : physical.stream().filter(p -> p.index == offset).findFirst().orElseThrow().local);
+            if (layout.isVector(index)) arguments.add(null);
+            else {
+                TypedArgument selected = null;
+                for (var candidate : physical) if (candidate.index == offset) { selected = candidate; break; }
+                if (selected == null) throw new java.util.NoSuchElementException("No value present");
+                arguments.add(selected.local);
+            }
         }
         context.arguments = arguments; context.typedArguments = physical;
         return closure(new FunctionSpec(build("constructor " + id, context, construct(layout, args)), null, List.of()), arity);
@@ -5176,30 +5205,50 @@ public final class BytecodeProgram implements ExecutableProgram {
             }
             alternatives.add(new Alternative(kind, value, fields, compile((List<Object>) alt.get(3), child, tail)));
         }
-        var explicit = alternatives.stream().filter(a -> !"default".equals(a.kind)).toList();
-        var fallback = alternatives.reversed().stream().filter(a -> "default".equals(a.kind)).findFirst().orElse(null);
-        var category = CaseCategoriesKt.caseCategory(binderProof,
-            alternatives.stream().map(a -> switch (a.kind) { case "default" -> 0; case "data" -> 1; default -> 2; }).toList(),
-            alternatives.stream().allMatch(a -> !"lit".equals(a.kind) || a.value instanceof Long));
+        var explicit = new ArrayList<Alternative>();
+        Alternative defaultArm = null;
+        var categories = new ArrayList<Integer>(alternatives.size());
+        boolean longLiterals = true;
+        for (var alt : alternatives) {
+            if ("default".equals(alt.kind)) defaultArm = alt;
+            else explicit.add(alt);
+            categories.add(switch (alt.kind) { case "default" -> 0; case "data" -> 1; default -> 2; });
+            if ("lit".equals(alt.kind) && !(alt.value instanceof Long)) longLiterals = false;
+        }
+        var fallback = defaultArm;
+        var category = CaseCategoriesKt.caseCategory(binderProof, categories, longLiterals);
         // Preserve original order for small cases and duplicate labels; signed comparison retains all Word# bits.
-        var ordered = binderProof.isLong() && explicit.size() > 8
-                && explicit.stream().allMatch(a -> "lit".equals(a.kind) && a.value instanceof Long)
-                && explicit.stream().map(a -> a.value).distinct().count() == explicit.size()
-            ? explicit.stream().sorted(java.util.Comparator.comparingLong(a -> (Long) a.value)).toList() : null;
+        boolean orderLiterals = binderProof.isLong() && explicit.size() > 8;
+        if (orderLiterals) {
+            var values = new HashSet<Long>();
+            for (var alt : explicit) if (!"lit".equals(alt.kind) || !(alt.value instanceof Long value) || !values.add(value)) {
+                orderLiterals = false;
+                break;
+            }
+        }
+        var ordered = orderLiterals ? new ArrayList<>(explicit) : null;
+        if (ordered != null) ordered.sort(java.util.Comparator.comparingLong(a -> (Long) a.value));
         var resultProof = CoreRepresentations.INSTANCE.expression(expr);
-        var results = alternatives.stream().map(a -> a.body.proof()).toList();
+        var results = new ArrayList<CoreRepresentation>(alternatives.size());
+        for (var alt : alternatives) results.add(alt.body.proof());
         CoreRepresentations.INSTANCE.validateDeclaredCaseResult(resultProof, results);
         CoreRepresentations.INSTANCE.validateAggregateCaseResult(resultProof, results);
         CoreRepresentations.INSTANCE.validateFloatingCaseResult(resultProof, results);
         CoreRepresentation effectiveResult;
-        if (!resultProof.isAggregate() && results.stream().anyMatch(CoreRepresentation::isAggregate)) {
-            if (!results.stream().allMatch(CoreRepresentation::isAggregate))
+        boolean anyAggregate = false;
+        boolean allAggregate = true;
+        if (!resultProof.isAggregate()) for (var result : results) {
+            if (result.isAggregate()) anyAggregate = true;
+            else allAggregate = false;
+        }
+        if (!resultProof.isAggregate() && anyAggregate) {
+            if (!allAggregate)
                 throw new UnsupportedCore("Missing exact aggregate case result proof");
             effectiveResult = results.getFirst().refine(resultProof);
         } else effectiveResult = resultProof;
         var vectorResult = CoreVectors.INSTANCE.caseResult(results);
         var mergedProof = vectorResult != null ? vectorResult.refine(effectiveResult)
-            : evaluatedProof(effectiveResult, results.stream().allMatch(CoreRepresentation::getEvaluated));
+            : evaluatedProof(effectiveResult, allProofsEvaluated(results));
         return new LoweredCaseExpression(new ProvenExpression(new ResultExpression((e, destination) -> {
             var b = e.builder;
             b.beginBlock();
@@ -5217,7 +5266,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                         var layout = (DataLayout) alt.value;
                         if (layout.isVector(index)) {
                             b.beginTransferDataVector(new BytecodeRoot.DataVectorTransfer(layout, index,
-                                accessors(fields.stream().map(f -> e.locals.get(f.id)).toList()), false));
+                                accessors(localSlots(e, fields)), false));
                             read(binder, false).emit(e); b.endTransferDataVector();
                         } else {
                             b.beginStoreLocal(e.locals.get(fields.getFirst().id)); b.beginReadDataField(layout, index);
@@ -5250,7 +5299,8 @@ public final class BytecodeProgram implements ExecutableProgram {
             else {
                 // One copy of each arm and one shared default avoid nested merge growth.
                 var result = destination == null ? b.createLocal("literal case result", null) : null;
-                var labels = ordered.stream().map(a -> b.createLabel()).toList();
+                var labels = new ArrayList<BytecodeLabel>(ordered.size());
+                for (int index = 0; index < ordered.size(); ++index) labels.add(b.createLabel());
                 var unmatched = b.createLabel();
                 var complete = b.createLabel();
                 class Dispatch {
@@ -5450,10 +5500,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 ? demand.isDefined((String) fn.get(1)) : globals.containsKey(fn.get(1))));
         var cpuAffinity = CoreCpuAffinity.INSTANCE.validate(expr, defined || fn.size() > 1 && scope.joins.containsKey(fn.get(1)));
         var runtimeService = CoreRuntimeServices.validate(expr, defined || fn.size() > 1 && scope.joins.containsKey(fn.get(1)));
-        var representations = args.stream().map(a -> {
-            var record = CoreRepresentations.INSTANCE.metadata(a);
-            return record == null ? null : record.get("rep");
-        }).toList();
+        var representations = argumentMetadata(args);
         var resultRepresentation = metadata == null ? null : metadata.get("rep");
         var packageScalar = cpuAffinity == null && runtimeService == null
             ? CorePackageScalarForeign.INSTANCE.validate(metadata, representations, flags, resultRepresentation, packageScalarLinks) : null;
@@ -5677,7 +5724,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
         if (stableFree) {
             CoreStablePointers.INSTANCE.validateHead(fn, defined);
-            var operands = args.stream().map(a -> compile(a, scope, false)).toList();
+            var operands = compileOperands(args, scope);
             return tupleExpression(tupleProof, (e, destination) -> {
                 if (!destination.isEmpty()) throw new RuntimeFault("StablePtr free has no result field");
                 e.builder.beginFreeStablePointer(); for (var operand : operands) operand.emit(e); e.builder.endFreeStablePointer();
@@ -5896,7 +5943,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
         if (managedFile != null) {
             CoreManagedFiles.INSTANCE.validateHead(fn, defined);
-            var operands = args.stream().map(a -> compile(a, scope, false)).toList();
+            var operands = compileOperands(args, scope);
             return tupleExpression(tupleProof, (e, destination) -> {
                 var b = e.builder;
                 var result = destination.getFirst();
@@ -6127,7 +6174,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
         if (md5 != null) {
             CoreMd5Foreign.INSTANCE.validateHead(fn, defined);
-            var operands = args.stream().map(a -> compile(a, scope, false)).toList();
+            var operands = compileOperands(args, scope);
             return tupleExpression(tupleProof, (e, destination) -> {
                 var b = e.builder;
                 switch (md5) {
@@ -6140,7 +6187,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             });
         }
         if (javascript != null) {
-            var operands = args.stream().map(a -> argument(a, scope, false)).toList();
+            var operands = argumentOperands(args, scope);
             return tupleExpression(tupleProof, (e, destination) -> {
                 var b = e.builder;
                 var locals = new ArrayList<LocalAccessor>();
@@ -6187,7 +6234,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             if (special != null) return special;
         }
         if (floatDecode != null) {
-            floatDecode.validate(args.stream().map(CoreRepresentations.INSTANCE::expression).toList(), flags, tupleProof);
+            floatDecode.validate(argumentProofs(args), flags, tupleProof);
             var operand = argument(args.getFirst(), scope, false);
             return tupleExpression(tupleProof, (e, destination) -> {
                 var b = e.builder;
@@ -6202,8 +6249,8 @@ public final class BytecodeProgram implements ExecutableProgram {
             });
         }
         if (tupleOperation != null) {
-            tupleOperation.validate(args.stream().map(CoreRepresentations.INSTANCE::expression).toList(), flags, tupleProof);
-            var operands = args.stream().map(a -> argument(a, scope, false)).toList();
+            tupleOperation.validate(argumentProofs(args), flags, tupleProof);
+            var operands = argumentOperands(args, scope);
             return tupleExpression(tupleProof, (e, destination) -> {
                 var b = e.builder;
                 if (tupleOperation == TupleArithmeticOp.QUOT_REM_WORD_2) {
@@ -6216,6 +6263,61 @@ public final class BytecodeProgram implements ExecutableProgram {
             });
         }
         return compileOrdinaryApplication(expr, scope, tail, fn, args, flags, callStrict, tupleProof);
+    }
+
+    private static List<CoreRepresentation> argumentProofs(List<List<Object>> args) {
+        var proofs = new ArrayList<CoreRepresentation>(args.size());
+        for (var arg : args) proofs.add(CoreRepresentations.INSTANCE.expression(arg));
+        return proofs;
+    }
+
+    private static List<CoreRepresentation> loweredProofs(List<Expression> operands) {
+        var proofs = new ArrayList<CoreRepresentation>(operands.size());
+        for (var operand : operands) proofs.add(operand.proof());
+        return proofs;
+    }
+
+    private static List<Object> argumentMetadata(List<List<Object>> args) {
+        var representations = new ArrayList<Object>(args.size());
+        for (var arg : args) {
+            var record = CoreRepresentations.INSTANCE.metadata(arg);
+            representations.add(record == null ? null : record.get("rep"));
+        }
+        return representations;
+    }
+
+    private List<Expression> compileOperands(List<List<Object>> args, Scope scope) {
+        var operands = new ArrayList<Expression>(args.size());
+        for (var arg : args) operands.add(compile(arg, scope, false));
+        return operands;
+    }
+
+    private List<Expression> argumentOperands(List<List<Object>> args, Scope scope) {
+        var operands = new ArrayList<Expression>(args.size());
+        for (var arg : args) operands.add(argument(arg, scope, false));
+        return operands;
+    }
+
+    private List<CoreRepresentation> lexicalProofs(List<List<Object>> args, Scope scope) {
+        var proofs = new ArrayList<CoreRepresentation>(args.size());
+        for (var arg : args) proofs.add(lexicalProof(arg, scope));
+        return proofs;
+    }
+
+    private static List<BytecodeLocal> localSlots(Emission emission, List<Local> fields) {
+        var slots = new ArrayList<BytecodeLocal>(fields.size());
+        for (var field : fields) slots.add(emission.locals.get(field.id));
+        return slots;
+    }
+
+    private static boolean allEvaluated(List<Expression> operands) {
+        for (var operand : operands) if (!operand.proof().getEvaluated()) return false;
+        return true;
+    }
+
+    private static boolean allProofsEvaluated(List<CoreRepresentation> proofs) {
+        for (var proof : proofs) if (!proof.getEvaluated()) return false;
+        return true;
     }
 
     private CoreRepresentation lexicalProof(List<Object> expr, Scope scope) {
@@ -6419,7 +6521,9 @@ public final class BytecodeProgram implements ExecutableProgram {
             if (args.size() != 1) throw new RuntimeFault("tagToEnum#: Exactly one operand required");
             var operand = compile(args.get(0), scope, false);
             var ids = CoreEnums.validate(expr, operand.proof(), constructors);
-            var family = new EnumFamily(ids.stream().map(id -> dataLayout(id).allocate()).toArray(DataValue[]::new));
+            var values = new DataValue[ids.size()];
+            for (int index = 0; index < values.length; ++index) values[index] = dataLayout(ids.get(index)).allocate();
+            var family = new EnumFamily(values);
             return new ProvenExpression(e -> {
                 e.builder.beginTagToEnum(family); operand.emit(e); e.builder.endTagToEnum();
             }, evaluatedProof(tupleProof, true));
@@ -6428,20 +6532,24 @@ public final class BytecodeProgram implements ExecutableProgram {
             if (args.size() != 1) throw new RuntimeFault("dataToTag: Exactly one operand required");
             var operand = argument(args.get(0), scope, false);
             var ids = CoreDataTags.validate(expr, operand.proof(), constructors);
-            var family = new DataTagFamily(ids.stream().map(this::dataLayout).toArray(DataLayout[]::new));
+            var layouts = new DataLayout[ids.size()];
+            for (int index = 0; index < layouts.length; ++index) layouts[index] = dataLayout(ids.get(index));
+            var family = new DataTagFamily(layouts);
             return new ProvenExpression(e -> {
                 e.builder.beginDataToTag(family); operand.emit(e); e.builder.endDataToTag();
             }, evaluatedProof(tupleProof, true));
         }
         if (CoreVectors.INSTANCE.getOperations().contains(name)) {
-            CoreVectors.INSTANCE.validate(name, args.stream().map(CoreVectors.INSTANCE::argumentProof).toList(), tupleProof);
+            var vectorProofs = new ArrayList<CoreRepresentation>(args.size());
+            for (var arg : args) vectorProofs.add(CoreVectors.INSTANCE.argumentProof(arg));
+            CoreVectors.INSTANCE.validate(name, vectorProofs, tupleProof);
             CoreVectors.INSTANCE.validateFlags(flags);
-            var operands = args.stream().map(a -> compile(a, scope, false)).toList();
+            var operands = compileOperands(args, scope);
             var shuffle = name.startsWith("shuffle") ? CoreVectors.INSTANCE.shuffleIndices(args.get(2), tupleProof.getVector().getLanes()) : null;
             return vectorPrimitive(name, operands, shuffle);
         }
         if (CoreArithmeticExceptions.payload(name) != null) {
-            CoreArithmeticExceptions.validate(name, args.stream().map(CoreRepresentations.INSTANCE::expression).toList(), flags, tupleProof);
+            CoreArithmeticExceptions.validate(name, argumentProofs(args), flags, tupleProof);
             var operand = argument(args.getFirst(), scope, false, "argument thunk", true, false);
             CoreArithmeticExceptions.validate(name, List.of(operand.proof()), flags, tupleProof);
             var id = Objects.requireNonNull(CoreArithmeticExceptions.payload(name));
@@ -6456,7 +6564,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             }), evaluatedProof(tupleProof, true));
         }
         if (Set.of("newBCO#", "mkApUpd0#").contains(name)) {
-            GhcBCO.INSTANCE.validate(name, args.stream().map(CoreRepresentations.INSTANCE::expression).toList(), flags, tupleProof);
+            GhcBCO.INSTANCE.validate(name, argumentProofs(args), flags, tupleProof);
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
             return tupleExpression(tupleProof, (e, destination) -> {
@@ -6470,7 +6578,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
         if (Set.of("newPromptTag#", "prompt#", "control0#").contains(name)
                 || delimited && Set.of("annotateStack#", "catch#", "unmaskAsyncExceptions#", "maskAsyncExceptions#", "maskUninterruptible#").contains(name)) {
-            var proofs = args.stream().map(CoreRepresentations.INSTANCE::expression).toList();
+            var proofs = argumentProofs(args);
             if (Set.of("newPromptTag#", "prompt#", "control0#").contains(name)) DelimitedControl.validate(name, proofs, flags, tupleProof);
             else if (name.equals("annotateStack#")) StackAnnotations.INSTANCE.validate(proofs, flags, tupleProof);
             else CoreSynchronousExceptions.validate(name, proofs, flags, tupleProof);
@@ -6505,7 +6613,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             });
         }
         if (Set.of("raiseIO#", "catch#", "getMaskingState#", "unmaskAsyncExceptions#", "maskAsyncExceptions#", "maskUninterruptible#").contains(name)) {
-            CoreSynchronousExceptions.validate(name, args.stream().map(CoreRepresentations.INSTANCE::expression).toList(), flags, tupleProof);
+            CoreSynchronousExceptions.validate(name, argumentProofs(args), flags, tupleProof);
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
             return tupleExpression(tupleProof, (e, destination) -> {
@@ -6599,7 +6707,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             });
         }
         if (name.equals("noDuplicate#")) {
-            CoreNoDuplicate.validate(args.stream().map(CoreRepresentations.INSTANCE::expression).toList(), flags, tupleProof);
+            CoreNoDuplicate.validate(argumentProofs(args), flags, tupleProof);
             var operand = argument(args.get(0), scope, false);
             return new ProvenExpression(e -> {
                 var b = e.builder;
@@ -6613,10 +6721,10 @@ public final class BytecodeProgram implements ExecutableProgram {
             }, evaluatedProof(tupleProof, true));
         }
         if (CoreThreadScheduling.INSTANCE.named(name)) {
-            CoreThreadScheduling.INSTANCE.validate(name, args.stream().map(CoreRepresentations.INSTANCE::expression).toList(), flags, tupleProof);
+            CoreThreadScheduling.INSTANCE.validate(name, argumentProofs(args), flags, tupleProof);
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
-            CoreThreadScheduling.INSTANCE.validate(name, operands.stream().map(Expression::proof).toList(), flags, tupleProof);
+            CoreThreadScheduling.INSTANCE.validate(name, loweredProofs(operands), flags, tupleProof);
             if (name.equals("par#")) return new ProvenExpression(e -> e.builder.emitLoadConstant(1L), evaluatedProof(tupleProof, true));
             if (name.equals("delay#")) return new ProvenExpression(e -> {
                 var b = e.builder;
@@ -6653,7 +6761,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             });
         }
         if (CoreThreadObservation.INSTANCE.named(name)) {
-            CoreThreadObservation.INSTANCE.validate(name, args.stream().map(CoreRepresentations.INSTANCE::expression).toList(), flags, tupleProof);
+            CoreThreadObservation.INSTANCE.validate(name, argumentProofs(args), flags, tupleProof);
             var state = argument(args.get(0), scope, false);
             CoreThreadObservation.INSTANCE.validate(name, List.of(state.proof()), flags, tupleProof);
             return tupleExpression(tupleProof, (e, destination) -> {
@@ -6661,7 +6769,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             });
         }
         if (name.equals("yield#")) {
-            CoreYield.validate(args.stream().map(CoreRepresentations.INSTANCE::expression).toList(), flags, tupleProof);
+            CoreYield.validate(argumentProofs(args), flags, tupleProof);
             var operand = argument(args.get(0), scope, false);
             return new ProvenExpression(e -> {
                 var b = e.builder;
@@ -6670,9 +6778,9 @@ public final class BytecodeProgram implements ExecutableProgram {
             }, evaluatedProof(tupleProof, true));
         }
         if (CoreFileWait.INSTANCE.named(name)) {
-            CoreFileWait.INSTANCE.validate(name, args.stream().map(CoreRepresentations.INSTANCE::expression).toList(), flags, tupleProof);
-            var operands = args.stream().map(a -> argument(a, scope, false)).toList();
-            CoreFileWait.INSTANCE.validate(name, operands.stream().map(Expression::proof).toList(), flags, tupleProof);
+            CoreFileWait.INSTANCE.validate(name, argumentProofs(args), flags, tupleProof);
+            var operands = argumentOperands(args, scope);
+            CoreFileWait.INSTANCE.validate(name, loweredProofs(operands), flags, tupleProof);
             var payload = globals.get(CoreFileWait.badFd);
             if (payload == null) throw new UnsupportedCore(name + " requires original blockedOnBadFD payload");
             boolean writing = name.equals("waitWrite#");
@@ -6691,7 +6799,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             }, evaluatedProof(tupleProof, true));
         }
         if (name.equals("annotateStack#")) {
-            StackAnnotations.INSTANCE.validate(args.stream().map(CoreRepresentations.INSTANCE::expression).toList(), flags, tupleProof);
+            StackAnnotations.INSTANCE.validate(argumentProofs(args), flags, tupleProof);
             var annotation = argument(args.get(0), scope, true);
             var action = argument(args.get(1), scope, true);
             var state = argument(args.get(2), scope, false);
@@ -6707,7 +6815,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             });
         }
         if (name.equals("clearCCS#")) {
-            CoreProfileAction.INSTANCE.validate(args.stream().map(CoreRepresentations.INSTANCE::expression).toList(), flags, tupleProof);
+            CoreProfileAction.INSTANCE.validate(argumentProofs(args), flags, tupleProof);
             var state = compile(args.get(1), scope, false);
             var checked = new ProvenExpression(e -> {
                 var b = e.builder;
@@ -6717,7 +6825,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
         if (ClosureInspectOp.Companion.named(name) != null) {
             var operation = ClosureInspectOp.Companion.named(name);
-            operation.validate(args.stream().map(CoreRepresentations.INSTANCE::expression).toList(), flags, tupleProof);
+            operation.validate(argumentProofs(args), flags, tupleProof);
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, index == 0));
             if (operation == ClosureInspectOp.SIZE) return new ProvenExpression(e -> {
@@ -6735,7 +6843,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             });
         }
         if (name.equals("getCurrentCCS#")) {
-            CoreCurrentCCS.INSTANCE.validate(args.stream().map(CoreRepresentations.INSTANCE::expression).toList(), flags, tupleProof);
+            CoreCurrentCCS.INSTANCE.validate(argumentProofs(args), flags, tupleProof);
             argument(args.get(0), scope, true); // Prove the lifted dummy without entering it.
             var state = argument(args.get(1), scope, false);
             return tupleExpression(tupleProof, (e, destination) -> {
@@ -6743,9 +6851,9 @@ public final class BytecodeProgram implements ExecutableProgram {
             });
         }
         if (name.equals("labelThread#") || name.equals("threadLabel#")) {
-            CoreGuestThreads.INSTANCE.validate(name, args.stream().map(CoreRepresentations.INSTANCE::expression).toList(), flags, tupleProof);
-            var operands = args.stream().map(a -> argument(a, scope, false)).toList();
-            CoreGuestThreads.INSTANCE.validate(name, operands.stream().map(Expression::proof).toList(), flags, tupleProof);
+            CoreGuestThreads.INSTANCE.validate(name, argumentProofs(args), flags, tupleProof);
+            var operands = argumentOperands(args, scope);
+            CoreGuestThreads.INSTANCE.validate(name, loweredProofs(operands), flags, tupleProof);
             if (name.equals("threadLabel#")) return tupleExpression(tupleProof, (e, destination) -> {
                 e.builder.beginThreadLabel(destination.get(0), destination.get(1)); for (var operand : operands) operand.emit(e); e.builder.endThreadLabel();
             });
@@ -6756,16 +6864,16 @@ public final class BytecodeProgram implements ExecutableProgram {
             }, evaluatedProof(tupleProof, true));
         }
         if (name.equals("threadStatus#")) {
-            CoreGuestThreads.INSTANCE.validate(name, args.stream().map(CoreRepresentations.INSTANCE::expression).toList(), flags, tupleProof);
-            var operands = args.stream().map(a -> argument(a, scope, false)).toList();
-            CoreGuestThreads.INSTANCE.validate(name, operands.stream().map(Expression::proof).toList(), flags, tupleProof);
+            CoreGuestThreads.INSTANCE.validate(name, argumentProofs(args), flags, tupleProof);
+            var operands = argumentOperands(args, scope);
+            CoreGuestThreads.INSTANCE.validate(name, loweredProofs(operands), flags, tupleProof);
             return tupleExpression(tupleProof, (e, destination) -> {
                 e.builder.beginThreadStatus(destination.get(0), destination.get(1), destination.get(2));
                 for (var operand : operands) operand.emit(e); e.builder.endThreadStatus();
             });
         }
         if (Set.of("fork#", "forkOn#", "myThreadId#", "killThread#").contains(name)) {
-            CoreGuestThreads.INSTANCE.validate(name, args.stream().map(CoreRepresentations.INSTANCE::expression).toList(), flags, tupleProof);
+            CoreGuestThreads.INSTANCE.validate(name, argumentProofs(args), flags, tupleProof);
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
             if (name.equals("killThread#")) {
@@ -6823,10 +6931,10 @@ public final class BytecodeProgram implements ExecutableProgram {
             var operation = STMOp.Companion.named(name);
             if ((checkpoint != null || containsDelimited) && operation != STMOp.NEW && operation != STMOp.READ_IO)
                 throw new UnsupportedCore("STM transaction frames do not support explicit checkpoint/delimited capture");
-            operation.validate(args.stream().map(CoreRepresentations.INSTANCE::expression).toList(), flags, tupleProof);
+            operation.validate(argumentProofs(args), flags, tupleProof);
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
-            operation.validate(operands.stream().map(Expression::proof).toList(), flags, tupleProof);
+            operation.validate(loweredProofs(operands), flags, tupleProof);
             var nested = operation == STMOp.ATOMICALLY ? globals.get(STMOp.NESTED) : null;
             if (operation == STMOp.ATOMICALLY && nested == null) throw new UnsupportedCore("atomically# requires original nestedAtomically payload");
             if (operation == STMOp.WRITE) return new ProvenExpression(e -> {
@@ -6858,12 +6966,12 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
         if (MVarOp.Companion.named(name) != null) {
             var operation = MVarOp.Companion.named(name);
-            var proofs = args.stream().map(CoreRepresentations.INSTANCE::expression).toList();
+            var proofs = argumentProofs(args);
             operation.validate(proofs, flags, tupleProof);
-            operation.validateBindings(proofs, args.stream().map(a -> lexicalProof(a, scope)).toList());
+            operation.validateBindings(proofs, lexicalProofs(args, scope));
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
-            operation.validate(operands.stream().map(Expression::proof).toList(), flags, tupleProof);
+            operation.validate(loweredProofs(operands), flags, tupleProof);
             if (operation.getTuple()) return tupleExpression(tupleProof, (e, destination) -> {
                 var b = e.builder;
                 if (enableAsync && (operation == MVarOp.TAKE || operation == MVarOp.READ)) emitBlockingRequest(e, operands, false, values -> {
@@ -6897,7 +7005,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
         if (CompactImageOp.Companion.named(name) != null) {
             var operation = CompactImageOp.Companion.named(name);
-            operation.validate(args.stream().map(CoreRepresentations.INSTANCE::expression).toList(), flags, tupleProof);
+            operation.validate(argumentProofs(args), flags, tupleProof);
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
             return tupleExpression(tupleProof, (e, destination) -> {
@@ -6921,7 +7029,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         if (CompactOp.Companion.named(name) != null) {
             var operation = CompactOp.Companion.named(name);
             if (enableAsync && operation.getAdds()) throw new UnsupportedCore("Compact graph traversal does not yet support resumable asynchronous forcing");
-            operation.validate(args.stream().map(CoreRepresentations.INSTANCE::expression).toList(), flags, tupleProof);
+            operation.validate(argumentProofs(args), flags, tupleProof);
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
             var failures = new ArrayList<GlobalBinding>();
@@ -6949,7 +7057,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
         if (MutVarOp.named(name) != null) {
             var operation = MutVarOp.named(name);
-            operation.validate(args.stream().map(CoreRepresentations.INSTANCE::expression).toList(), flags, tupleProof);
+            operation.validate(argumentProofs(args), flags, tupleProof);
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
             if (operation.getTuple()) return tupleExpression(tupleProof, (e, destination) -> {
@@ -6979,13 +7087,13 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
         if (WeakOp.Companion.named(name) != null) {
             var operation = WeakOp.Companion.named(name);
-            var proofs = args.stream().map(CoreRepresentations.INSTANCE::expression).toList();
+            var proofs = argumentProofs(args);
             operation.validate(proofs, flags, tupleProof);
-            operation.validateBindings(proofs, args.stream().map(a -> lexicalProof(a, scope)).toList());
+            operation.validateBindings(proofs, lexicalProofs(args, scope));
             if (operation == WeakOp.MAKE) operation.validateAction(CoreRepresentations.INSTANCE.knownFunctionSignature(args.get(2), bindings));
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
-            operation.validate(operands.stream().map(Expression::proof).toList(), flags, tupleProof);
+            operation.validate(loweredProofs(operands), flags, tupleProof);
             return tupleExpression(tupleProof, (e, destination) -> {
                 var b = e.builder;
                 switch (operation) {
@@ -7003,7 +7111,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
         if (StableNameOp.Companion.named(name) != null) {
             var operation = StableNameOp.Companion.named(name);
-            operation.validate(args.stream().map(CoreRepresentations.INSTANCE::expression).toList(), flags, tupleProof);
+            operation.validate(argumentProofs(args), flags, tupleProof);
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
             if (operation == StableNameOp.MAKE) return tupleExpression(tupleProof, (e, destination) -> {
@@ -7015,7 +7123,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
         if (StablePointerOp.Companion.named(name) != null) {
             var operation = StablePointerOp.Companion.named(name);
-            operation.validate(args.stream().map(CoreRepresentations.INSTANCE::expression).toList(), flags, tupleProof);
+            operation.validate(argumentProofs(args), flags, tupleProof);
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
             if (operation.getTuple()) return tupleExpression(tupleProof, (e, destination) -> {
@@ -7027,7 +7135,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
         if (ArrayOp.named(name) != null) {
             var operation = ArrayOp.named(name);
-            operation.validate(args.stream().map(CoreRepresentations.INSTANCE::expression).toList(), flags, tupleProof);
+            operation.validate(argumentProofs(args), flags, tupleProof);
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
             if (operation.getTuple()) return tupleExpression(tupleProof, (e, destination) -> {
@@ -7071,7 +7179,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
         if (SmallArrayOp.named(name) != null) {
             var operation = SmallArrayOp.named(name);
-            operation.validate(args.stream().map(CoreRepresentations.INSTANCE::expression).toList(), flags, tupleProof);
+            operation.validate(argumentProofs(args), flags, tupleProof);
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
             if (operation.getTuple()) return tupleExpression(tupleProof, (e, destination) -> {
@@ -7119,8 +7227,8 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
         if (VectorMemoryOp.Companion.named(name) != null) {
             var operation = VectorMemoryOp.Companion.named(name);
-            operation.validate(args.stream().map(CoreRepresentations.INSTANCE::expression).toList(), flags, tupleProof);
-            return vectorMemory(operation, args.stream().map(a -> compile(a, scope, false)).toList());
+            operation.validate(argumentProofs(args), flags, tupleProof);
+            return vectorMemory(operation, compileOperands(args, scope));
         }
         if (HintTracePrimopsKt.getPrefetchArities().containsKey(name)) {
             if (args.size() != HintTracePrimopsKt.getPrefetchArities().get(name)) throw RuntimeFault.fault("Wrong prefetch arity");
@@ -7136,7 +7244,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         if (TraceOp.Companion.named(name) != null) {
             var operation = TraceOp.Companion.named(name);
             if (args.size() != operation.getArity()) throw RuntimeFault.fault("Wrong trace arity");
-            var operands = args.stream().map(a -> compile(a, scope, false)).toList();
+            var operands = compileOperands(args, scope);
             return new ProvenExpression(e -> {
                 e.builder.beginTraceEvent(operation); operands.get(0).emit(e);
                 if (operation == TraceOp.BINARY) operands.get(1).emit(e); else e.builder.emitLoadConstant(0L);
@@ -7145,9 +7253,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
         if (name.equals("touch#")) {
             var metadata = CoreRepresentations.INSTANCE.metadata(expr);
-            CoreTouch.INSTANCE.validateRaw(args.stream().map(a -> {
-                var record = CoreRepresentations.INSTANCE.metadata(a); return record == null ? null : record.get("rep");
-            }).toList(), flags, metadata == null ? null : metadata.get("rep"));
+            CoreTouch.INSTANCE.validateRaw(argumentMetadata(args), flags, metadata == null ? null : metadata.get("rep"));
             var lowered = argument(args.get(0), scope, (Boolean) flags.get(0));
             var kept = new ProvenExpression(lowered, lowered.proof().refine(evaluatedProof(CoreRepresentations.INSTANCE.expression(args.get(0)), false)));
             var state = compile(args.get(1), scope, false);
@@ -7157,7 +7263,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             }, evaluatedProof(tupleProof, true));
         }
         if (name.equals("keepAlive#")) {
-            CoreKeepAlive.INSTANCE.validate(args.stream().map(CoreRepresentations.INSTANCE::expression).toList(), flags, tupleProof,
+            CoreKeepAlive.INSTANCE.validate(argumentProofs(args), flags, tupleProof,
                 args.size() > 2 ? CoreRepresentations.INSTANCE.knownFunctionSignature(args.get(2), bindings) : null);
             var kept = argument(args.get(0), scope, (Boolean) flags.get(0));
             var state = compile(args.get(1), scope, false);
@@ -7195,8 +7301,8 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
         if (AtomicAddressOp.Companion.named(name) != null) {
             var operation = AtomicAddressOp.Companion.named(name);
-            operation.validate(args.stream().map(CoreRepresentations.INSTANCE::expression).toList(), flags, tupleProof);
-            var operands = args.stream().map(a -> compile(a, scope, false)).toList();
+            operation.validate(argumentProofs(args), flags, tupleProof);
+            var operands = compileOperands(args, scope);
             if (operation == AtomicAddressOp.WRITE) return new ProvenExpression(e -> {
                 e.builder.beginAtomicAddressWrite(); for (var operand : operands) operand.emit(e); e.builder.endAtomicAddressWrite();
             }, evaluatedProof(tupleProof, true));
@@ -7214,8 +7320,8 @@ public final class BytecodeProgram implements ExecutableProgram {
         if (FloatingAddressOp.Companion.named(name) != null) {
             var operation = FloatingAddressOp.Companion.named(name);
             boolean byteOffset = name.contains("Word8") && name.contains("As");
-            operation.validate(args.stream().map(CoreRepresentations.INSTANCE::expression).toList(), flags, tupleProof);
-            var operands = args.stream().map(a -> compile(a, scope, false)).toList();
+            operation.validate(argumentProofs(args), flags, tupleProof);
+            var operands = compileOperands(args, scope);
             if (operation.getTuple()) return tupleExpression(tupleProof, (e, destination) -> {
                 var b = e.builder;
                 if (operation.getFloating()) b.beginReadFloatOffAddr(byteOffset, destination.get(0)); else b.beginReadDoubleOffAddr(byteOffset, destination.get(0));
@@ -7239,8 +7345,8 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
         if (AddressArrayCopyOp.Companion.named(name) != null) {
             var operation = AddressArrayCopyOp.Companion.named(name);
-            operation.validate(args.stream().map(CoreRepresentations.INSTANCE::expression).toList(), flags, tupleProof);
-            var operands = args.stream().map(a -> compile(a, scope, false)).toList();
+            operation.validate(argumentProofs(args), flags, tupleProof);
+            var operands = compileOperands(args, scope);
             return new ProvenExpression(e -> {
                 var b = e.builder;
                 if (operation.getToArray()) b.beginCopyAddressToByteArray(); else b.beginCopyByteArrayToAddress();
@@ -7251,8 +7357,8 @@ public final class BytecodeProgram implements ExecutableProgram {
         if (PinnedMemoryOp.Companion.named(name) != null) {
             var operation = PinnedMemoryOp.Companion.named(name);
             boolean byteOffset = name.contains("Word8") && name.contains("As");
-            operation.validate(args.stream().map(CoreRepresentations.INSTANCE::expression).toList(), flags, tupleProof);
-            var operands = args.stream().map(a -> compile(a, scope, false)).toList();
+            operation.validate(argumentProofs(args), flags, tupleProof);
+            var operands = compileOperands(args, scope);
             if (operation.getTuple()) return tupleExpression(tupleProof, (e, destination) -> {
                 var b = e.builder;
                 switch (operation) {
@@ -7315,8 +7421,8 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
         if (AtomicIntArrayOp.named(name) != null) {
             var operation = AtomicIntArrayOp.named(name);
-            operation.validate(args.stream().map(CoreRepresentations.INSTANCE::expression).toList(), flags, tupleProof);
-            var operands = args.stream().map(a -> compile(a, scope, false)).toList();
+            operation.validate(argumentProofs(args), flags, tupleProof);
+            var operands = compileOperands(args, scope);
             if (operation.getTuple()) return tupleExpression(tupleProof, (e, destination) -> {
                 var b = e.builder;
                 b.beginAtomicIntArray(operation, destination.get(0)); operands.get(0).emit(e); operands.get(1).emit(e);
@@ -7331,8 +7437,8 @@ public final class BytecodeProgram implements ExecutableProgram {
         if (ByteArrayOp.named(name) != null) {
             var operation = ByteArrayOp.named(name);
             boolean byteOffset = name.contains("Word8") && name.contains("As");
-            operation.validate(args.stream().map(CoreRepresentations.INSTANCE::expression).toList(), flags, tupleProof);
-            var operands = args.stream().map(a -> compile(a, scope, false)).toList();
+            operation.validate(argumentProofs(args), flags, tupleProof);
+            var operands = compileOperands(args, scope);
             if (operation.getTuple()) return tupleExpression(tupleProof, (e, destination) -> {
                 var b = e.builder;
                 switch (operation) {
