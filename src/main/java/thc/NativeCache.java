@@ -28,14 +28,15 @@ public final class NativeCache {
 
     public static void main(String[] args) throws Exception {
         if (args.length == 1 && args[0].equals("--help")) {
-            System.out.println("store CACHE MODULE.json[,MODULE.json...] ENTRY\nrun CACHE [INTEGER...]");
+            System.out.println("store CACHE MODULE.json[,MODULE.json...]|@PACKAGES.json ENTRY [--verify-artifacts]\nrun CACHE [INTEGER...]");
             return;
         }
-        if (args.length < 2 || !(args[0].equals("store") && args.length == 4 || args[0].equals("run")))
+        if (args.length < 2 || !(args[0].equals("store") && (args.length == 4 ||
+                args.length == 5 && args[4].equals("--verify-artifacts")) || args[0].equals("run")))
             throw new IllegalArgumentException("Expected store CACHE MODULES ENTRY or run CACHE [INTEGER...]");
         if (!ImageInfo.inImageRuntimeCode()) throw new IllegalStateException("Use the experimental native-cache image, not the JVM launcher");
         Path cache = Path.of(args[1]).toAbsolutePath();
-        if (args[0].equals("store")) store(cache, request(Arrays.asList(args[2].split(",", -1)), args[3]));
+        if (args[0].equals("store")) store(cache, request(Arrays.asList(args[2].split(",", -1)), args[3], args.length == 5));
         else {
             Object[] arguments = new Object[args.length - 2];
             for (int i = 2; i < args.length; i++) arguments[i - 2] = Long.parseLong(args[i]);
@@ -43,16 +44,18 @@ public final class NativeCache {
         }
     }
 
-    @SuppressWarnings("unchecked")
     static String request(List<String> modules, String entry) {
+        return request(modules, entry, false);
+    }
+
+    @SuppressWarnings("unchecked")
+    static String request(List<String> modules, String entry, boolean verifyArtifacts) {
         if (modules.isEmpty() || modules.stream().anyMatch(String::isBlank) || entry.isBlank())
             throw new IllegalArgumentException("Core modules and selected entry are required");
         var request = new LinkedHashMap<>((Map<String, Object>) Json.parse(CoreModules.request(
-            modules, entry, true, false, "ast", true, false, null, false, false, true)));
-        if (!request.containsKey("modules"))
-            throw new IllegalArgumentException("Cached preparation currently requires self-contained Core JSON, not deferred package/CBD loading");
+            modules, entry, true, false, "ast", true, false, null, false, false, verifyArtifacts)));
         request.put("prepareCode", true);
-        return Json.stringify(request);
+        return CoreModules.detachedRequest(request, entry);
     }
 
     static String sourceName(String request) {

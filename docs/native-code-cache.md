@@ -6,13 +6,16 @@ cache provider. It produces two artifacts: a native launcher and a matching code
 cache. It is not the ordinary `thc run` path or a general Haskell AOT distribution.
 
 The current admission is synchronous, constructor- and foreign-free AST code:
-explicit machine-word input proofs, integer literals, globals, and `+#`, `-#`,
-`*#` arithmetic. Reachable CAF code is prepared without evaluating the CAF;
+explicit machine-word input proofs, integer literals, globals, ordinary function
+applications, nested closures, non-join `let` bindings, and `+#`, `-#`, `*#`
+arithmetic. Closure formals still require machine-word arguments; higher-order
+formals, constructors, cases and joins remain outside this incremental admission.
+Reachable CAF code is prepared without evaluating the CAF;
 each load creates a fresh Program, CAF cells and metrics. Unselected definitions
 stay unprepared. Unused GHC module/constructor descriptors do not prevent scalar
 selection; reachable constructor code remains rejected and no constructor layout
 is retained in the prepared code. Unsupported code fails admission rather than falling back to
-runtime lowering. Bytecode, general function application, typed aggregates,
+runtime lowering. Bytecode, typed aggregates,
 async delivery, IO and FFI are not admitted by this workflow.
 
 ## Build and select a program
@@ -44,8 +47,25 @@ JSON files may be supplied as one comma-separated argument. Entry selection uses
 the existing Core linker. Inputs to `run` are signed 64-bit integers, with the
 entry's existing host ABI validating arity/carriers; arithmetic uses ordinary
 machine-word overflow. The selected entry is fixed in the cache; arguments are
-not compiled in. Deferred package and CBD loading remain outside the prepared
-code admission; this command does not pretend that packaging Core alone is AOT.
+not compiled in. `src/examples/THC/CachedCalls.hs` exercises ordinary out-of-line
+guest functions through the same export/store/run commands and argument contract.
+
+An existing package manifest may be supplied as `@PACKAGES.json`, with an exact
+qualified binding such as `main:THC.CachedCalls.affine`. JSON unit directories and
+CBD module entries use the existing lazy readers. Store preparation reads the
+selected transitive code dependencies, not unrelated module files or cold bodies,
+then closes those readers. The persisted public source contains detached selected
+Core: no package capability, input-file path, mapping, debug-reader resource or
+runtime demand-loader is retained. Optional compact debug origins are omitted.
+Runtime loads therefore need neither the original manifest nor its CBD files.
+This route currently takes one package directory, not mixed loose consumers.
+
+Artifact verification is opt-in: append `--verify-artifacts` to `store` to request
+the existing manifest/artifact hash and complete touched-module checks. The default
+does not add full-file hash scans or decode cold definitions. Structural admission,
+strict selected linking and the persisted source's content-derived identity remain
+mandatory. See the [CBD format](compact-core-format.md) for conversion and package
+metadata; supplying a CBD container alone is not a compiled-code cache.
 
 The build command consumes the checkout's existing `installDist`; it does not
 validate that distribution against the source revision. Rerun `installDist`
@@ -66,7 +86,7 @@ Do not substitute `AuxiliaryImagePath`, which would eagerly load it twice.
 `run` requires exactly one cached THC source with its content-derived name,
 disables guest compilation and rejects cache misses, runtime parsing/lowering,
 missing installed targets and interpreter guest entry. The actual cached factory
-checks its own target and its prepared dependency targets before creating a fresh
+checks its own target and every prepared dependency/nested target before creating a fresh
 instance. No private polyglot `Source` access or copied polyglot module is used.
 Results go to stdout; cache identity/status goes to stderr.
 

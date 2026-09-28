@@ -37,8 +37,9 @@ public final class PreparedDispatch extends Node {
     }
 
     public Object execute(VirtualFrame frame, Closure function, Object[] arguments) {
-        if (!observed && CompilerDirectives.inCompiledCode()) {
-            return GenericDispatch.apply(frame, this, function, arguments, count, layout, tail, metrics, 0,
+        if (metrics == null || !observed && CompilerDirectives.inCompiledCode()) {
+            Metrics invocation = metrics != null ? metrics : ((FunctionRoot) getRootNode()).invocationMetrics(frame);
+            return GenericDispatch.apply(frame, this, function, arguments, count, layout, tail, invocation, 0,
                 caller, force, typed, InlinedConditionProfile.getUncached(), InlinedConditionProfile.getUncached());
         }
         if (!observed) {

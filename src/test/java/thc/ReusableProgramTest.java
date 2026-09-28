@@ -15,6 +15,131 @@ import static thc.CoreExecutionTestSupport.*;
 
 /** Real lowerer ownership checks; auxiliary-cache persistence remains a separate acceptance. */
 class ReusableProgramTest {
+    private Map<String,Object> ordinaryClosureModule() {
+        var longRep = map("kind", "long", "evaluated", true, "primReps", list("IntRep"));
+        var closureRep = map("kind", "closure", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)"));
+        var helper = binding("add", list("lam", list(wordParameter("a"), wordParameter("b")),
+            plus(variable("a"), variable("b")), map("rep", closureRep, "resultRep", longRep)), true);
+        helper.put("rep", closureRep); helper.put("arity", 2);
+        var captured = binding("f", list("lam", list(wordParameter("y")),
+            list("app", variable("add"), list(variable("x"), variable("y")), list(false, false), map("rep", longRep)),
+            map("rep", closureRep, "resultRep", longRep)), true);
+        captured.put("rep", closureRep); captured.put("arity", 1);
+        var local = binding("z", plus(variable("shared"), literal(1)), false);
+        local.put("rep", longRep);
+        var reader = binding("read", list("lam", list(wordParameter("x")),
+            list("let", false, list(captured, local),
+                list("app", variable("f"), list(variable("z")), list(false), map("rep", longRep))),
+            map("rep", closureRep, "resultRep", longRep)), true);
+        reader.put("arity", 1); reader.put("rep", closureRep);
+        return module(list(binding("shared", plus(literal(17), literal(25)), true), helper, reader,
+            binding("untouched", list("unsupported-never-selected"), true)));
+    }
+
+    @Test void preparedOrdinaryCallsAndCapturedLetClosuresKeepCafAndMetricsPerLoad() {
+        var data = ordinaryClosureModule();
+        var source = org.graalvm.polyglot.Source.newBuilder("thc", Json.stringify(map("modules", list(data),
+            "entry", "read", "backend", "ast", "asyncExceptions", false, "prepareCode", true)),
+            "ordinary-reusable-closures").cached(true).buildLiteral();
+        try (var engine = Engine.newBuilder().allowExperimentalOptions(true).option("engine.Compilation", "false").build()) {
+            try (var preparation = Context.newBuilder("thc").engine(engine).build()) { preparation.parse(source); }
+            for (int i = 0; i < 2; i++) try (var context = Context.newBuilder("thc").engine(engine).build()) {
+                var first = context.parse(source).execute();
+                var second = context.parse(source).execute();
+                assertEquals(47L, first.execute(4L).asLong());
+                assertEquals(1L, publicCount(first, "thunkEvaluations"));
+                assertEquals(0L, publicCount(second, "thunkEvaluations"));
+                assertEquals(0L, publicCount(second, "indirectCalls"));
+                assertTrue(publicCount(first, "indirectCalls") >= 2);
+                assertEquals(-25L, second.execute(-68L).asLong());
+                assertEquals(1L, publicCount(second, "thunkEvaluations"));
+                assertEquals(49L, first.execute(6L).asLong());
+                assertEquals(1L, publicCount(first, "thunkEvaluations"));
+                assertEquals(0L, publicCount(first, "loweredRootCount"));
+            }
+        }
+    }
+
+    @Test @SuppressWarnings("unchecked")
+    void nestedTargetsMustBeInstalledAndEnterCompiledWithoutTraining() throws Exception {
+        try (var engine = Engine.newBuilder().allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false")
+                .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build()) {
+            Program.PreparedCode code;
+            try (var context = Context.newBuilder("thc").engine(engine).build()) {
+                context.initialize("thc"); context.enter();
+                try {
+                    code = Program.prepareCode(TruffleLanguage.LanguageReference.create(Language.class).get(null),
+                        ordinaryClosureModule(), List.of("read"));
+                } finally { context.leave(); }
+            }
+            var field = Program.PreparedCode.class.getDeclaredField("targets"); field.setAccessible(true);
+            var targets = (List<com.oracle.truffle.api.RootCallTarget>) field.get(code);
+            var nested = targets.stream().filter(target -> target.getRootNode().getName().equals("lambda y")).findFirst().orElseThrow();
+            var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget");
+            for (var target : targets) {
+                assertEquals(false, type.getMethod("wasExecuted").invoke(target));
+                assertEquals(true, type.getMethod("prepareForAOT").invoke(target));
+                if (target != nested) type.getMethod("compile", boolean.class).invoke(target, true);
+                assertEquals(false, type.getMethod("wasExecuted").invoke(target));
+            }
+            assertTrue(assertThrows(IllegalStateException.class, code::requireInstalledCode).getMessage().contains("lambda y"));
+            type.getMethod("compile", boolean.class).invoke(nested, true);
+            code.requireInstalledCode();
+            String previous = System.getProperty("thc.requireCompiledCode");
+            System.setProperty("thc.requireCompiledCode", "true");
+            try (var context = Context.newBuilder("thc").engine(engine).build()) {
+                context.initialize("thc"); context.enter();
+                try {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    var program = code.newInstance(language);
+                    var reader = (Closure) program.entryValue("read");
+                    var runtime = Truffle.getRuntime();
+                    runtime.getClass().getMethod("bypassedInstalledCode", type).invoke(runtime, reader.target);
+                    assertEquals(true, type.getMethod("isValidLastTier").invoke(reader.target), "nested-call reader before first entry");
+                    assertEquals(47L, Calls.target(reader.target, new Object[]{0L, reader.environment, 4L}));
+                    assertEquals(4L, count(program, "compiledEntries"));
+                    assertEquals(1L, count(program, "thunkEvaluations"));
+                    assertEquals(0L, count(program, "loweredRootCount"));
+                    code.requireInstalledCode();
+                } finally { context.leave(); }
+            } finally {
+                if (previous == null) System.clearProperty("thc.requireCompiledCode");
+                else System.setProperty("thc.requireCompiledCode", previous);
+            }
+        }
+    }
+
+    @Test void reusableForceTailBounceUpdatesItsCafWithInvocationOwnedMetrics() {
+        try (var context = Main.executionContext(false)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var code = Program.prepareCode(language, module(list(
+                    binding("shared", plus(literal(17), literal(25)), true),
+                    binding("read", lambda(plus(variable("shared"), variable("x"))), true))), List.of("read"));
+                var first = code.newInstance(language);
+                var sibling = code.newInstance(language);
+                var caf = (Thunk) first.entryValue("shared");
+                var actualBody = caf.getTarget();
+                // Deterministically take the existing tail-transfer protocol at
+                // the thunk call boundary, then run the real lowered CAF body.
+                caf.setTarget(new com.oracle.truffle.api.nodes.RootNode(null) {
+                    @Override public Object execute(com.oracle.truffle.api.frame.VirtualFrame frame) {
+                        throw new TailCall(actualBody, new Object[]{0L, frame.getArguments()[1]});
+                    }
+                }.getCallTarget());
+                assertEquals(47L, call(first, first.entryValue("read"), 5L));
+                assertEquals(2, caf.getState()); assertNull(caf.getEnvironment());
+                assertEquals(1L, count(first, "thunkEvaluations"));
+                assertEquals(1L, count(first, "trampolineIterations"));
+                assertEquals(0L, count(sibling, "thunkEvaluations"));
+                assertEquals(0L, count(sibling, "trampolineIterations"));
+                assertEquals(49L, call(first, first.entryValue("read"), 7L));
+                assertEquals(1L, count(first, "thunkEvaluations"));
+            } finally { context.leave(); }
+        }
+    }
+
     @Test void unusedConstructorMetadataDoesNotAdmitConstructorCode() {
         var data = module(list(binding("read", lambda(plus(variable("x"), literal(1))), true),
             binding("constructed", list("con", "Unused", list()), true)));
@@ -486,11 +611,9 @@ class ReusableProgramTest {
                 var narrow = map("id", "x", "name", "x", "type", "Int#", "lifted", false, "coercion", false,
                     "rep", map("kind", "long", "evaluated", true, "primReps", list("Int32Rep")));
                 var conflicting = module(list(binding("read", list("lam", list(narrow), variable("x")), true)));
-                var nested = module(list(binding("read", lambda(lambda(variable("x"))), true)));
                 assertAll(
                     () -> assertThrows(UnsupportedCore.class, () -> Program.prepareCode(language, foreign, List.of("read"))),
-                    () -> assertThrows(UnsupportedCore.class, () -> Program.prepareCode(language, conflicting, List.of("read"))),
-                    () -> assertThrows(UnsupportedCore.class, () -> Program.prepareCode(language, nested, List.of("read"))));
+                    () -> assertThrows(UnsupportedCore.class, () -> Program.prepareCode(language, conflicting, List.of("read"))));
             } finally { context.leave(); }
         }
     }

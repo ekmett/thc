@@ -43,6 +43,7 @@ public final class Program implements ExecutableProgram {
     private final Object codeIdentity;
     private final thc.Language.State contextOwner;
     private final Set<String> codeDependencies = new LinkedHashSet<>();
+    private final List<RootCallTarget> codeTargets;
     private final Supplier<Map<String, Object>> loadingStatistics;
     private final boolean delimited;
     private final boolean containsDelimited;
@@ -83,6 +84,7 @@ public final class Program implements ExecutableProgram {
             throw new UnsupportedCore("Runtime THC lowering is disabled; prepared code is required");
         this.language = language; this.enableAsync = enableAsync; this.outlineCaseArms = outlineCaseArms;
         this.reusableCode = reusableCode;
+        this.codeTargets = reusableCode && prepared == null ? new ArrayList<>() : List.of();
         this.codeIdentity = prepared == null ? new Object() : prepared.identity;
         this.contextOwner = reusableCode ? thc.Language.currentState() : null;
         this.deferDefaultArm = deferDefaultArm;
@@ -163,7 +165,7 @@ public final class Program implements ExecutableProgram {
                     List<Object> body = (List<Object>) binding.get("expr");
                     if (!representation(binding) && !Arrays.asList("lit", "void").contains(body.getFirst()))
                         throw new UnsupportedCore("Reusable AST preparation cannot execute strict global bodies");
-                    requireReusableBody(body, true);
+                    requireReusableBody(body);
                 }
                 validateBindings(List.of(binding));
                 Scope scope = new Scope(new FrameLayout());
@@ -219,16 +221,18 @@ public final class Program implements ExecutableProgram {
                 "lifted", builder.representation(binding), "expr", List.of("void")));
         }
         return new PreparedCode(Map.of("bindings", List.copyOf(headers), "constructors", List.of(),
-            "instrument", builder.metrics.getEnabled()), Map.copyOf(values), builder.codeIdentity, language);
+            "instrument", builder.metrics.getEnabled()), Map.copyOf(values), List.copyOf(builder.codeTargets), builder.codeIdentity, language);
     }
     private static boolean absentOrEmpty(Object value) { return value == null || value instanceof List<?> list && list.isEmpty(); }
     public static final class PreparedCode {
         private final Map<String, Object> module;
         private final Map<String, CodeValue> values;
+        private final List<RootCallTarget> targets;
         private final Object identity;
         private final TruffleLanguage<?> language;
-        private PreparedCode(Map<String, Object> module, Map<String, CodeValue> values, Object identity, TruffleLanguage<?> language) {
-            this.module = module; this.values = values; this.identity = identity; this.language = language;
+        private PreparedCode(Map<String, Object> module, Map<String, CodeValue> values, List<RootCallTarget> targets,
+                             Object identity, TruffleLanguage<?> language) {
+            this.module = module; this.values = values; this.targets = targets; this.identity = identity; this.language = language;
         }
         public Program newInstance(TruffleLanguage<?> language) {
             if (language != this.language || language != LANGUAGES.get(null))
@@ -237,10 +241,9 @@ public final class Program implements ExecutableProgram {
         }
         /** Observe existing installation only: no binding demand, execution or compilation. */
         public void requireInstalledCode() {
-            for (CodeValue value : values.values()) {
-                if (value.target == null) continue;
-                if (!(value.target instanceof com.oracle.truffle.runtime.OptimizedCallTarget target) || !target.isValidLastTier())
-                    throw new IllegalStateException("Cached compiled target required: " + value.target.getRootNode().getName());
+            for (RootCallTarget value : targets) {
+                if (!(value instanceof com.oracle.truffle.runtime.OptimizedCallTarget target) || !target.isValidLastTier())
+                    throw new IllegalStateException("Cached compiled target required: " + value.getRootNode().getName());
             }
         }
     }
@@ -261,26 +264,37 @@ public final class Program implements ExecutableProgram {
             return arity < 0 ? new Thunk(target, environment) : new Closure(environment, arity, target);
         }
     }
-    private static void requireReusableBody(List<Object> expression, boolean outerLambda) {
+    private static void requireReusableBody(List<Object> expression) {
         switch ((String) expression.getFirst()) {
             case "var", "void" -> { }
             case "lit" -> {
                 if (!"int".equals(expression.get(1))) throw new UnsupportedCore("Reusable AST literal is not a machine word");
             }
             case "lam" -> {
-                if (!outerLambda) throw new UnsupportedCore("Nested reusable AST closures are not yet admitted");
                 for (Map<String, Object> argument : (List<Map<String, Object>>) expression.get(1)) {
                     CoreRepresentation proof = CoreRepresentations.binder(argument);
                     if (representationLifted(argument) || !proof.getPresent() || !proof.isLong())
                         throw new UnsupportedCore("Reusable AST input requires a machine-word proof");
                 }
-                requireReusableBody((List<Object>) expression.get(2), false);
+                requireReusableBody((List<Object>) expression.get(2));
             }
             case "app" -> {
                 List<Object> function = (List<Object>) expression.get(1);
-                if (!"prim".equals(function.getFirst()) || !Set.of("+#", "-#", "*#").contains(function.get(1)))
-                    throw new UnsupportedCore("Reusable AST application is outside the admitted arithmetic family");
-                for (List<Object> argument : (List<List<Object>>) expression.get(2)) requireReusableBody(argument, false);
+                if ("prim".equals(function.getFirst())) {
+                    if (!Set.of("+#", "-#", "*#").contains(function.get(1)))
+                        throw new UnsupportedCore("Reusable AST primitive is outside the admitted arithmetic family");
+                } else requireReusableBody(function);
+                for (List<Object> argument : (List<List<Object>>) expression.get(2)) requireReusableBody(argument);
+            }
+            case "let" -> {
+                var bindings = (List<Map<String,Object>>) expression.get(2);
+                if (CoreJoins.definitions(bindings) != null) throw new UnsupportedCore("Reusable AST joins are not yet admitted");
+                for (var binding : bindings) {
+                    CoreRepresentation proof = CoreRepresentations.binder(binding);
+                    if (proof.isTypedTransport()) throw new UnsupportedCore("Reusable AST typed locals are not yet admitted");
+                    requireReusableBody((List<Object>) binding.get("expr"));
+                }
+                requireReusableBody((List<Object>) expression.get(3));
             }
             default -> throw new UnsupportedCore("Reusable AST node is not yet admitted: " + expression.getFirst());
         }
@@ -709,7 +723,9 @@ public final class Program implements ExecutableProgram {
             root.configureLeadingCaseReturn(LeadingCaseReturn.discover(args, expression, resultProof, root.getEntryArgumentOffset(),
                 used, captures != null, this::dataLayout, sources, body.getCoreSourceLocation()));
         }
-        return new FunctionSpec(root.getCallTarget(), captures, captureSources);
+        RootCallTarget target = root.getCallTarget();
+        if (reusableCode) codeTargets.add(target);
+        return new FunctionSpec(target, captures, captureSources);
     }
     private boolean sameFrameCandidate(List<Object> expression, Scope scope) {
         if (!enableAsync || outlineCaseArms || deferDefaultArm || scope.joins.isEmpty() ||
@@ -779,6 +795,8 @@ public final class Program implements ExecutableProgram {
         return new AstCaseArm(fn.target, fn.captureLayout, fn.captures, tail).located(currentSource);
     }
     private FrameSlotKind outlinedSlotKind(CoreRepresentation proof, boolean cell) {
+        if (reusableCode) return cell || !proof.getEvaluated() || proof.getKind() == CoreKind.UNKNOWN
+            ? FrameSlotKind.Object : FrameLayout.carrierKind(proof);
         if (!outlineCaseArms && !deferDefaultArm) return FrameSlotKind.Illegal;
         if (cell || proof.isVector()) return FrameSlotKind.Object;
         if (!proof.getEvaluated()) return FrameSlotKind.Illegal;
@@ -1334,7 +1352,9 @@ public final class Program implements ExecutableProgram {
                 slots[index] = local.bindTuple((String) binding.get("id"), proof, lanes).slot;
             } else slots[index] = local.bind((String) binding.get("id"), !representation(binding),
                 evaluated(proof, false), recursive, CoreEntries.binding(binding),
-                CoreApplicationCertificates.binding(binding), FrameSlotKind.Illegal).slot;
+                CoreApplicationCertificates.binding(binding), reusableCode ?
+                    recursive || representation(binding) || proof.getKind() == CoreKind.UNKNOWN
+                        ? FrameSlotKind.Object : FrameLayout.carrierKind(proof) : FrameSlotKind.Illegal).slot;
         }
         Expr[] rhs = new Expr[group.size()];
         for (int i = 0; i < rhs.length; i++) {
@@ -2389,9 +2409,9 @@ public final class Program implements ExecutableProgram {
         AstSelfLayout self = scope.self;
         boolean emptyTuple = false;
         for (Expr node : nodes) if (node.getRepresentation().isEmptyTuple()) { emptyTuple = true; break; }
-        if (tail && !capturesContinuations && self != null && self.getInputLayout() == null && !emptyTuple && self.getArity() > 0 && nodes.length <= self.getArity())
+        if (!reusableCode && tail && !capturesContinuations && self != null && self.getInputLayout() == null && !emptyTuple && self.getArity() > 0 && nodes.length <= self.getArity())
             return new AstTailApplication(function, nodes, self, vectorSlots(scope, self.getArity(), "<self argument "), metrics);
-        return new Application(function, nodes, tail, metrics);
+        return new Application(function, nodes, tail, codeMetrics());
     }
 
 
