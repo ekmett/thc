@@ -19,7 +19,7 @@ import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.Test;
 import thc.ContextProfile;
 import thc.Language;
-import thc.MainKt;
+import thc.Main;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -45,7 +45,7 @@ class RtsFlagsTest {
 
     private static Context context() { return context(new ByteArrayOutputStream()); }
     private static Context context(ByteArrayOutputStream output) {
-        return MainKt.withContextProfile(Context.newBuilder("thc"), ContextProfile.SYNCHRONOUS_TEST).err(output).build();
+        return Main.withContextProfile(Context.newBuilder("thc"), ContextProfile.SYNCHRONOUS_TEST).err(output).build();
     }
     private static void valid(RootCallTarget target) throws ReflectiveOperationException {
         assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
@@ -155,7 +155,7 @@ class RtsFlagsTest {
         var layout = layout();
         for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
             context.initialize("thc"); context.enter();
-            var threads = Language.currentState(null).getThreads$org_intelligence_thc();
+            var threads = Language.currentState(null).getThreads();
             threads.enterCurrent(null, false, true, null);
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
@@ -214,7 +214,7 @@ class RtsFlagsTest {
                 var output = new ByteArrayOutputStream();
                 try (var context = context(output)) {
                     context.initialize("thc"); context.enter();
-                    var threads = Language.currentState(null).getThreads$org_intelligence_thc();
+                    var threads = Language.currentState(null).getThreads();
                     threads.enterCurrent(null, false, true, null);
                     try {
                         assertEquals(1L, CoreDataLabels.fromCore("RtsFlags", proof(), layout).readWord8(403));

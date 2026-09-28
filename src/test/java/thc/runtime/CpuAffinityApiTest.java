@@ -112,7 +112,7 @@ class CpuAffinityApiTest {
                 context.initialize("thc"); context.enter();
                 try {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                    var threads = Language.currentState(null).getThreads$org_intelligence_thc();
+                    var threads = Language.currentState(null).getThreads();
                     var guest = program(language, backend);
                     threads.enterCurrent(null, false, true, null);
                     try {
@@ -140,7 +140,7 @@ class CpuAffinityApiTest {
                 try {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                     var guest = program(language, backend);
-                    var threads = Language.currentState(null).getThreads$org_intelligence_thc();
+                    var threads = Language.currentState(null).getThreads();
                     threads.enterCurrent(null, false, true, null);
                     try {
                         for (long capability : new long[]{0L, -1L, Long.MAX_VALUE}) {

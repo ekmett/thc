@@ -15,7 +15,7 @@ import thc.Language
 import thc.CoreModules
 import thc.EntryValue
 import thc.Json
-import thc.executionContext
+import thc.Main.executionContext
 import java.io.File
 import java.security.MessageDigest
 import java.util.concurrent.CompletableFuture

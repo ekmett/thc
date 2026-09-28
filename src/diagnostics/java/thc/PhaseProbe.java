@@ -106,7 +106,7 @@ public final class PhaseProbe {
         header.put("asyncExceptions", async);
         header.put("sourceNotesEnabled", notes);
         System.out.println(Json.INSTANCE.stringify(header));
-        var context = phases.measure("context", () -> MainKt.executionContext(false));
+        var context = phases.measure("context", () -> Main.executionContext(false));
         try {
             phases.memoryCheckpoint("preLoad");
             var request = phases.measure("request", () -> CoreModules.INSTANCE.request(List.of(args[1]), args[2],
@@ -148,7 +148,7 @@ public final class PhaseProbe {
         String entry = args[1];
         long input = Long.parseLong(args[2]), expected = Long.parseLong(args[3]);
         var phases = new PhaseMeasurements();
-        var launcher = Class.forName("thc.MainKt");
+        var launcher = Class.forName("thc.Main");
         var context = phases.measure("context", () -> {
             // Select the stable public signature, not internal launcher overloads.
             var factories = Arrays.stream(launcher.getMethods()).filter(method -> method.getName().equals("executionContext")

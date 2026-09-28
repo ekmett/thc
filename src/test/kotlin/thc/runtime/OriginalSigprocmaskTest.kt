@@ -21,7 +21,7 @@ import thc.ContextProfile
 import thc.CoreModules
 import thc.Json
 import thc.Language
-import thc.withContextProfile
+import thc.Main.withContextProfile
 import java.io.File
 import java.util.Collections
 import java.util.IdentityHashMap
@@ -39,7 +39,7 @@ class OriginalSigprocmaskTest {
     private fun module(stage: String) = CoreModules.merge(listOf("OriginalSigprocmaskAudit", "THC.InterfaceClosure")
         .map { json("$prefix/$stage/core/$it.json") })
     private fun context() = Context.newBuilder("thc").allowNativeAccess(true)
-        .withContextProfile(ContextProfile.SYNCHRONOUS_TEST).build()
+        .let { withContextProfile(it, ContextProfile.SYNCHRONOUS_TEST) }.build()
     private fun size() = TermiosImage.scalar(OriginalStdioOp.SIZEOF_SIGSET, nil, 0).toInt()
     private fun constant(operation: OriginalStdioOp) = TermiosImage.scalar(operation, nil, 0)
     private fun address(bytes: ByteArray) = ManagedAddress.fromByteArray(bytes)

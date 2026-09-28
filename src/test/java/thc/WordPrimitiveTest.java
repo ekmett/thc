@@ -41,7 +41,7 @@ public final class WordPrimitiveTest {
             inputs.add(single + 1);
         }
         inputs.addAll(List.of(0L, -1L, alternating, ~alternating));
-        for (String backend : List.of("ast", "bytecode")) try (Context context = MainKt.executionContext(false)) {
+        for (String backend : List.of("ast", "bytecode")) try (Context context = Main.executionContext(false)) {
             for (String name : List.of("clz#", "ctz#", "popCnt#")) {
                 var function = context.eval("thc", request(backend, name, 1, 1, false));
                 for (long input : inputs) {
@@ -63,7 +63,7 @@ public final class WordPrimitiveTest {
         // This literal order is the unsigned order, independent of the runtime comparator.
         long alternating = 0x5555_5555_5555_5555L;
         List<Long> ordered = List.of(0L, 1L, alternating, Long.MAX_VALUE, Long.MIN_VALUE, ~alternating, -1L);
-        for (String backend : List.of("ast", "bytecode")) try (Context context = MainKt.executionContext(false)) {
+        for (String backend : List.of("ast", "bytecode")) try (Context context = Main.executionContext(false)) {
             for (String name : List.of("ltWord#", "leWord#")) {
                 var function = context.eval("thc", request(backend, name, 2, 2, false));
                 for (int leftIndex = 0; leftIndex < ordered.size(); leftIndex++) {
@@ -81,7 +81,7 @@ public final class WordPrimitiveTest {
     @Test void wrongAritiesAreRejectedAtLoadEvenInDiagnosticMode() {
         record Primitive(String name, int arity) {}
         for (String backend : List.of("ast", "bytecode")) for (boolean diagnostic : new boolean[] {false, true}) {
-            try (Context context = MainKt.executionContext(false)) {
+            try (Context context = Main.executionContext(false)) {
                 for (var primitive : List.of(new Primitive("clz#", 1), new Primitive("ctz#", 1), new Primitive("popCnt#", 1),
                         new Primitive("ltWord#", 2), new Primitive("leWord#", 2))) {
                     for (int supplied : new int[] {primitive.arity() - 1, primitive.arity() + 1}) {

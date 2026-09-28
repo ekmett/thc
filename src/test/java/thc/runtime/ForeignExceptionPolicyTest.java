@@ -15,7 +15,7 @@ import java.util.List;
 import java.util.concurrent.CancellationException;
 import org.junit.jupiter.api.Test;
 import thc.Language;
-import thc.MainKt;
+import thc.Main;
 import static org.junit.jupiter.api.Assertions.*;
 
 @ExportLibrary(InteropLibrary.class)
@@ -48,7 +48,7 @@ class ForeignExceptionPolicyTest {
         PrivateTransfer() { super("private transfer"); }
     }
     @Test void classificationNeverCallsForeignMessageAndPreservesControlKinds() {
-        try (var context = MainKt.executionContext(false)) {
+        try (var context = Main.executionContext(false)) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);

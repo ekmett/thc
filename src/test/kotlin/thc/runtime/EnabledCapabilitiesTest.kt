@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.ContextProfile
 import thc.Language
-import thc.withContextProfile
+import thc.Main.withContextProfile
 import java.util.concurrent.atomic.AtomicReference
 
 class EnabledCapabilitiesTest {
@@ -41,7 +41,7 @@ class EnabledCapabilitiesTest {
                 "expr" to listOf("lam", listOf(parameter), body, mapOf("rep" to closure, "resultRep" to word32)))))
     }
 
-    private fun context() = Context.newBuilder("thc").withContextProfile(ContextProfile.SYNCHRONOUS_TEST).build()
+    private fun context() = Context.newBuilder("thc").let { withContextProfile(it, ContextProfile.SYNCHRONOUS_TEST) }.build()
     private fun valid(target: RootCallTarget) = assertEquals(true,
         target.javaClass.getMethod("isValidLastTier").invoke(target))
 

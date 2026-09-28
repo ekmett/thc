@@ -3,6 +3,8 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
+import thc.Main.withContextProfile
+
 import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.bytecode.Instruction
@@ -142,7 +144,7 @@ class PackageScalarCbitsTest {
     }
 
     private fun context(native: Boolean = true): Context = Context.newBuilder("thc").allowNativeAccess(native)
-        .withContextProfile(ContextProfile.SYNCHRONOUS_TEST).build()
+        .let { withContextProfile(it, ContextProfile.SYNCHRONOUS_TEST) }.build()
     private fun valid(target: RootCallTarget, label: String) =
         assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target), label)
     private fun targets(entry: RootCallTarget): List<RootCallTarget> {
@@ -202,9 +204,7 @@ class PackageScalarCbitsTest {
         val fixture = fixture()
         val rows = fixture.records.flatMap { record -> (record["observations"] as List<Map<String, Any?>>).map { record to it } }
         for (backend in listOf("ast", "bytecode")) context().use { context ->
-            context.eval("thc", CoreModules.request(listOf("@${fixture.programManifest}"),
-                identity(rows.first().first, rows.first().second), backend = backend,
-                asyncExceptions = false, verifyArtifacts = true))
+            context.eval("thc", CoreModules.request(listOf("@${fixture.programManifest}"), identity(rows.first().first, rows.first().second), true, false, backend, true, false, null, false, null, true))
             context.enter()
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)

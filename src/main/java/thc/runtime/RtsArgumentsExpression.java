@@ -27,12 +27,12 @@ final class RtsArgumentsExpression extends Expr {
             var argc = operands[0].executeRequiredAddress(frame);
             var argv = operands[1].executeRequiredAddress(frame);
             TupleResultsKt.requireVoidCarrier(operands[2].execute(frame));
-            Language.currentState(this).getArguments$org_intelligence_thc().get(argc, argv);
+            Language.currentState(this).getArguments().get(argc, argv);
         } else {
             long argc = operands[0].executeRequiredInt(frame);
             var argv = operands[1].executeRequiredAddress(frame);
             TupleResultsKt.requireVoidCarrier(operands[2].execute(frame));
-            Language.currentState(this).getArguments$org_intelligence_thc().set(argc, argv);
+            Language.currentState(this).getArguments().set(argc, argv);
         }
         return null;
     }

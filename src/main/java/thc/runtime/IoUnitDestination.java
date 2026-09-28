@@ -16,7 +16,7 @@ public final class IoUnitDestination extends TupleDestination {
         TupleShape shape = getShape();
         Object raw;
         if (result == TupleComplete.INSTANCE) {
-            TupleResultPool pool = language.getHandoffState$org_intelligence_thc().get().getResults();
+            TupleResultPool pool = language.getHandoffState().get().getResults();
             HandoffStorage storage = pool.completed();
             try {
                 if (storage.getLayout() != shape.getLayout()) throw fault("IO main returned the wrong tuple layout");

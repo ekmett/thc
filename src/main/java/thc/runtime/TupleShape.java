@@ -30,7 +30,7 @@ public final class TupleShape {
         leaves = flatten(proof).toArray(CoreRepresentation[]::new);
         vectors = new VectorLayout[leaves.length];
         for (int i = 0; i < leaves.length; i++) if (leaves[i].isVector()) vectors[i] = new VectorLayout(leaves[i]);
-        layout = language.getHandoffLayouts$org_intelligence_thc().intern(VectorLayout.storageReps(proof));
+        layout = language.getHandoffLayouts().intern(VectorLayout.storageReps(proof));
         offsets = new int[components.length];
         int next = 0;
         for (int i = 0; i < components.length; i++) { offsets[i] = next; next += flatten(components[i]).size(); }
@@ -75,14 +75,14 @@ public final class TupleShape {
             if (capturesFrame) CompilerDirectives.ensureVirtualizedHere(virtual); else CompilerDirectives.ensureVirtualized(virtual);
             return virtual;
         }
-        TupleResultPool pool = language.getHandoffState$org_intelligence_thc().get().getResults();
+        TupleResultPool pool = language.getHandoffState().get().getResults();
         HandoffStorage output = pool.acquire(layout);
         try { write(frame, slots, output); return pool.complete(output); }
         catch (Throwable failure) { pool.release(output, layout); throw failure; }
     }
     public void consume(VirtualFrame frame, Object result, int[] slots, int offset) {
         if (result == TupleComplete.INSTANCE) {
-            TupleResultPool pool = language.getHandoffState$org_intelligence_thc().get().getResults();
+            TupleResultPool pool = language.getHandoffState().get().getResults();
             HandoffStorage output = pool.completed();
             try { copyFrom(frame, output, slots, offset); } finally { pool.releaseChecked(output, layout); }
         } else {

@@ -25,9 +25,9 @@ public final class ManagedMd5 {
     @TruffleBoundary
     public static void init(ManagedAddress context) {
         requireContext(context);
-        var threads = Language.currentState(null).getThreads$org_intelligence_thc();
+        var threads = Language.currentState(null).getThreads();
         var previous = threads.enterForeign(ForeignSafety.UNSAFE);
-        try { Language.currentState(null).cbits$org_intelligence_thc().init(context); }
+        try { Language.currentState(null).cbits().init(context); }
         finally { threads.leaveForeign(previous); }
     }
 
@@ -50,9 +50,9 @@ public final class ManagedMd5 {
             destination = INPUT;
             chunk = Math.min(64, length - source);
         }
-        var threads = Language.currentState(null).getThreads$org_intelligence_thc();
+        var threads = Language.currentState(null).getThreads();
         var previous = threads.enterForeign(ForeignSafety.UNSAFE);
-        try { Language.currentState(null).cbits$org_intelligence_thc().update(context, input, (int) length); }
+        try { Language.currentState(null).cbits().update(context, input, (int) length); }
         finally { threads.leaveForeign(previous); }
     }
 
@@ -62,9 +62,9 @@ public final class ManagedMd5 {
         output.requireRange(0, 16, true);
         // C copies ctx->buf, then clears the entire context. Other overlap is defined and cleared too.
         if (context.overlaps(0, 16, output, 0, 16)) throw fault("MD5Final overlapping memcpy regions");
-        var threads = Language.currentState(null).getThreads$org_intelligence_thc();
+        var threads = Language.currentState(null).getThreads();
         var previous = threads.enterForeign(ForeignSafety.UNSAFE);
-        try { Language.currentState(null).cbits$org_intelligence_thc().finish(output, context); }
+        try { Language.currentState(null).cbits().finish(output, context); }
         finally { threads.leaveForeign(previous); }
     }
 

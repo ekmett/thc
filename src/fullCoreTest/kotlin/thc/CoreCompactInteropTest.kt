@@ -36,8 +36,7 @@ class CoreCompactInteropTest {
                 .option("engine.CompilationFailureAction", "Throw")
                 .option("engine.SingleTierCompilationThreshold", "10000000").build().use { context ->
                     val id = "main:SourceNotes.$name"
-                    val entry = context.eval("thc", CoreModules.request(listOf("@$selectedManifest"), id,
-                        backend = backend, sourceNotesEnabled = sourceNotes, asyncExceptions = false, verifyArtifacts = verify))
+                    val entry = context.eval("thc", CoreModules.request(listOf("@$selectedManifest"), id, true, false, backend, sourceNotes, false, null, false, null, verify))
                     context.enter()
                     val program = try { Language.currentState().coreUnitPrograms.single() } finally { context.leave() }
                     fun count(field: String) = (program.diagnostics().getValue(field) as Number).toLong()
@@ -73,8 +72,7 @@ class CoreCompactInteropTest {
             .option("engine.CompilationFailureAction", "Throw")
             .option("engine.SingleTierCompilationThreshold", "10000000").build().use { context ->
                 val id = "main:SourceNotes.unicode"
-                val entry = context.eval("thc", CoreModules.request(listOf("@$reference"), id,
-                    backend = backend, sourceNotesEnabled = false, asyncExceptions = false))
+                val entry = context.eval("thc", CoreModules.request(listOf("@$reference"), id, true, false, backend, false, false, null, false))
                 context.enter()
                 val program = try { Language.currentState().coreUnitPrograms.single() } finally { context.leave() }
                 val target = program.entryTarget(id)
@@ -93,8 +91,7 @@ class CoreCompactInteropTest {
             for (backend in listOf("ast", "bytecode")) for (verify in listOf(false, true))
                 for ((name, values) in oracle) Context.newBuilder("thc").allowExperimentalOptions(true)
                     .option("engine.Compilation", "false").build().use { context ->
-                        val entry = context.eval("thc", CoreModules.request(listOf("@$path"), "main:SourceNotes.$name",
-                            backend = backend, sourceNotesEnabled = false, asyncExceptions = false, verifyArtifacts = verify))
+                        val entry = context.eval("thc", CoreModules.request(listOf("@$path"), "main:SourceNotes.$name", true, false, backend, false, false, null, false, null, verify))
                         for (row in values) assertEquals(row.expected, entry.execute(row.input).asLong(),
                             "$backend/$verify/$path/$row")
                         val diagnostics = Json.parse(entry.getMember("diagnostics").asString()) as Map<*, *>

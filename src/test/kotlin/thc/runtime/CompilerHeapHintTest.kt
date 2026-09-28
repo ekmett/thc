@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.ContextProfile
 import thc.Language
-import thc.withContextProfile
+import thc.Main.withContextProfile
 
 /** Small ABI models; the retained original parseDynamicFlagsFull is checked separately. */
 class CompilerHeapHintTest {
@@ -74,7 +74,7 @@ class CompilerHeapHintTest {
                     mapOf("rep" to closure, "resultRep" to int)))))
     }
 
-    private fun context() = Context.newBuilder("thc").withContextProfile(ContextProfile.SYNCHRONOUS_TEST).build()
+    private fun context() = Context.newBuilder("thc").let { withContextProfile(it, ContextProfile.SYNCHRONOUS_TEST) }.build()
 
     @Test fun bothBackendsEvaluateTheHintAndPreserveTheStateOnlyResult() {
         for (backend in listOf("ast", "bytecode")) context().use { context ->

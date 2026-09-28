@@ -103,8 +103,7 @@ class CoreCompactDebugInteropTest {
         for (backend in listOf("ast", "bytecode")) for ((name, delta) in listOf("unicode" to 1L, "tabbed" to 2L, "missing" to 3L))
             Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.Compilation", "false").build().use { context ->
                 val id = "main:SourceNotes.$name"
-                val entry = context.eval("thc", CoreModules.request(listOf("@$manifest"), id,
-                    backend = backend, sourceNotesEnabled = true, asyncExceptions = false))
+                val entry = context.eval("thc", CoreModules.request(listOf("@$manifest"), id, true, false, backend, true, false, null, false))
                 context.enter()
                 try {
                     val program = Language.currentState().coreUnitPrograms.single()

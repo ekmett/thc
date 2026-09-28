@@ -14,7 +14,7 @@ import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.Language
-import thc.executionContext
+import thc.Main.executionContext
 
 class GenericInputCallInvariantTest {
     private class ReferenceAccess(language: Language, private val write: Boolean) : RootNode(language) {

@@ -16,7 +16,7 @@ import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.Language
-import thc.executionContext
+import thc.Main.executionContext
 
 /** The object boundary remains real; every transport assertion also runs interpreted. */
 class HandoffTest {

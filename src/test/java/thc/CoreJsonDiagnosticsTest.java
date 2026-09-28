@@ -32,7 +32,7 @@ public final class CoreJsonDiagnosticsTest {
         return result;
     }
     private CoreJsonIndex source(Object value) {
-        return CoreJsonIndex.Companion.fromBytes(Json.INSTANCE.stringify(value).getBytes(StandardCharsets.UTF_8));
+        return CoreJsonIndex.fromBytes(Json.stringify(value).getBytes(StandardCharsets.UTF_8));
     }
     private Map<String, Object> binding(String id, Object expression) {
         return orderedMap("id", id, "name", id, "arity", 1, "type", "Int# -> Int#", "lifted", true,
@@ -128,7 +128,7 @@ public final class CoreJsonDiagnosticsTest {
 
     @Test void unusedModuleIsCollectibleWhileColdCalleeDemandUpdatesCumulativeDiagnosticsOnce() throws InterruptedException {
         for (String backend : List.of("ast", "bytecode")) for (boolean sharedAdapter : new boolean[] {false, true}) {
-            try (Context context = MainKt.executionContext(false)) {
+            try (Context context = Main.executionContext(false)) {
                 context.initialize("thc");
                 context.enter();
                 try {

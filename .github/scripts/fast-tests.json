@@ -2528,6 +2528,54 @@
       ],
       "python": []
     },
+    "src/test/java/thc/CoreFormatTestSupport.java": {
+      "junit": [
+        "thc.CoreBindingBodyTest",
+        "thc.CoreCompactCursorTest",
+        "thc.CoreCompactDebugTest",
+        "thc.CoreCompactDirectoryTest",
+        "thc.CoreCompactFileTest",
+        "thc.CoreCompactFormatTest",
+        "thc.CoreCompactGoldenTest",
+        "thc.CoreCompactLoadTest",
+        "thc.CoreCompactRecordsTest",
+        "thc.CoreJsonBindingsTest",
+        "thc.CoreJsonConsumersTest",
+        "thc.CoreJsonLoadTest",
+        "thc.CoreJsonMd5SymbolsTest",
+        "thc.CoreJsonPackageTest",
+        "thc.CoreJsonSymbolsTest",
+        "thc.CoreRequestTest",
+        "thc.JsonWriterTest",
+        "thc.CoreCbdArchiveTest",
+        "thc.CoreCbdSlabsTest",
+        "thc.CoreForeignArtifactsTest",
+        "thc.CoreJsonIndexTest",
+        "thc.CoreLinkerTest",
+        "thc.CoreLoweringRootsTest",
+        "thc.CoreUnitAsyncPolicyTest",
+        "thc.CoreUnitCafLifetimeTest",
+        "thc.CoreUnitColdControlTest",
+        "thc.CoreUnitLoadTest",
+        "thc.CoreUnitManagedExportTest",
+        "thc.CoreZipBundleTest",
+        "thc.ManagedImportTypeTest",
+        "thc.PackageScalarLinksTest"
+      ],
+      "python": []
+    },
+    "src/test/java/thc/CoreCbdTestSupport.java": {
+      "junit": [
+        "thc.CoreCbdArchiveTest",
+        "thc.CoreCbdSlabsTest",
+        "thc.CoreCompactDebugTest",
+        "thc.CoreCompactFileTest",
+        "thc.CoreCompactFormatTest",
+        "thc.CoreCompactLoadTest",
+        "thc.CoreCompactRecordsTest"
+      ],
+      "python": []
+    },
     "src/test/java/thc/ScalarPrimopModel.java": {
       "junit": [
         "thc.ScalarPrimopModelTest",

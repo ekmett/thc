@@ -12,7 +12,7 @@ import java.util.Set;
 import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.Test;
 import thc.Language;
-import thc.MainKt;
+import thc.Main;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -33,7 +33,7 @@ class GuestArgumentsTest {
     private record ArgumentImage(int count, ManagedAddress vector) {}
 
     private static ArgumentImage get(GuestArguments arguments) {
-        var allocations = Language.currentState(null).getNativeAllocations$org_intelligence_thc();
+        var allocations = Language.currentState(null).getNativeAllocations();
         var count = allocations.malloc(4);
         var vector = allocations.malloc(8);
         try {
@@ -58,7 +58,7 @@ class GuestArgumentsTest {
 
     @Test void nativeImagePreservesProgramNameEmptyUnicodeAndOptions() {
         inside(() -> {
-            var arguments = Language.currentState(null).getArguments$org_intelligence_thc();
+            var arguments = Language.currentState(null).getArguments();
             arguments.initialize("program", new String[]{"", "\u03bb\uD834\uDD1E", "--help", "--"});
             var image = get(arguments);
             assertEquals(List.of("program", "", "\u03bb\uD834\uDD1E", "--help", "--"), values(image));
@@ -74,7 +74,7 @@ class GuestArgumentsTest {
 
     @Test void setCopiesBeforeRetiringEvenSelfAliasedInputAndAllowsEmptyArgv() {
         inside(() -> {
-            var arguments = Language.currentState(null).getArguments$org_intelligence_thc();
+            var arguments = Language.currentState(null).getArguments();
             arguments.initialize("original", new String[]{"one", "two"});
             var old = get(arguments);
             var oldString = old.vector().readAddressElementIndex(1);
@@ -89,7 +89,7 @@ class GuestArgumentsTest {
 
     @Test void setCopiesManagedInputsAndRejectsInvalidCountsAndUnterminatedStrings() {
         inside(() -> {
-            var arguments = Language.currentState(null).getArguments$org_intelligence_thc();
+            var arguments = Language.currentState(null).getArguments();
             var storage = ManagedAllocation.mutable(16, 8);
             var vector = ManagedAddress.Companion.fromAllocation(storage);
             vector.writeAddressElementIndex(0, ManagedAddress.Companion.fromHex("6100"));
@@ -109,7 +109,7 @@ class GuestArgumentsTest {
 
     @Test void contextIsolationAndDisposalInvalidateNativeArgumentAliases() {
         inside(() -> {
-            var outer = Language.currentState(null).getArguments$org_intelligence_thc();
+            var outer = Language.currentState(null).getArguments();
             var outerImage = get(outer);
             ManagedAddress escaped;
             try (var inner = context("inner")) {
@@ -117,7 +117,7 @@ class GuestArgumentsTest {
                 try {
                     assertThrows(RuntimeFault.class, () -> get(outer));
                     assertThrows(RuntimeFault.class, () -> outerImage.vector().readAddressElementIndex(0));
-                    var image = get(Language.currentState(null).getArguments$org_intelligence_thc());
+                    var image = get(Language.currentState(null).getArguments());
                     assertEquals(List.of("", "inner"), values(image));
                     escaped = image.vector();
                 } finally { inner.leave(); }
@@ -129,7 +129,7 @@ class GuestArgumentsTest {
 
     @Test void pointerCellsKeepRangeOwnershipAndOpaqueUnknownBitsChecks() {
         inside(() -> {
-            var allocations = Language.currentState(null).getNativeAllocations$org_intelligence_thc();
+            var allocations = Language.currentState(null).getNativeAllocations();
             var vector = allocations.malloc(16);
             var payload = allocations.malloc(2);
             payload.writeWord8(0, 65); payload.writeWord8(1, 0);
@@ -150,7 +150,7 @@ class GuestArgumentsTest {
 
     @Test void invalidOutputStorageAndNulCannotMutateTheArguments() {
         inside(() -> {
-            var arguments = Language.currentState(null).getArguments$org_intelligence_thc();
+            var arguments = Language.currentState(null).getArguments();
             var nil = ManagedAddress.Companion.nullAddress();
             assertThrows(RuntimeFault.class, () -> arguments.get(ManagedAddress.Companion.fromHex("00000000"), nil));
             arguments.initialize("program", new String[]{"bad\u0000argument"});
@@ -161,12 +161,12 @@ class GuestArgumentsTest {
     }
 
     @Test void launcherSuffixKeepsOpaqueArgumentsAndLegacyNoArgumentCalls() {
-        assertEquals("thc", MainKt.launcherArguments(new String[]{"--run-io", "modules", "entry"}, 3).getFirst());
-        var parsed = MainKt.launcherArguments(new String[]{"--run-io", "modules", "entry", "--", "program", "", "--", "--help"}, 3);
-        assertEquals("program", parsed.getFirst());
-        assertArrayEquals(new String[]{"", "--", "--help"}, parsed.getSecond());
-        assertThrows(IllegalArgumentException.class, () -> MainKt.launcherArguments(new String[]{"a", "b", "c", "--"}, 3));
-        assertThrows(IllegalArgumentException.class, () -> MainKt.launcherArguments(new String[]{"a", "b", "c", "bad", "name"}, 3));
+        assertEquals("thc", Main.launcherArguments(new String[]{"--run-io", "modules", "entry"}, 3).programName());
+        var parsed = Main.launcherArguments(new String[]{"--run-io", "modules", "entry", "--", "program", "", "--", "--help"}, 3);
+        assertEquals("program", parsed.programName());
+        assertArrayEquals(new String[]{"", "--", "--help"}, parsed.arguments());
+        assertThrows(IllegalArgumentException.class, () -> Main.launcherArguments(new String[]{"a", "b", "c", "--"}, 3));
+        assertThrows(IllegalArgumentException.class, () -> Main.launcherArguments(new String[]{"a", "b", "c", "bad", "name"}, 3));
     }
 
     private static Map<String, Object> scalar(String primitive, boolean evaluated) {
