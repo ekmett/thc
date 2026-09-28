@@ -201,7 +201,29 @@ def compileRuntimeLinkageControl = tasks.register("compileRuntimeLinkageControl"
     options.compilerArgs.add("-proc:none")
     destinationDirectory.set(layout.buildDirectory.dir("protocol-runtime/checks/linkage"))
 }
-for (mode in ["stock", "overlay"]) {
+def testRuntimeLinkageConfiguration = tasks.register("testRuntimeLinkageConfiguration") {
+    group = "verification"
+    description = "Check deferred linkage tasks retain distinct arguments and exact stock/overlay artifacts."
+    doLast {
+        ["stock", "overlay"].each { expected ->
+            def linkage = tasks.named("testRuntimeLinkage" + expected.capitalize(), JavaExec).get()
+            checkBuild(linkage.args == [expected]) { "${linkage.name} selected arguments ${linkage.args}, expected $expected" }
+            def expectedApi = expected == "stock" ? configurations.getByName("materializableApiBinary").singleFile :
+                tasks.named("materializableApiJar", Jar).get().archiveFile.get().asFile
+            def expectedRuntime = expected == "stock" ? protocolRuntimeBinary.singleFile : protocolRuntimeJar.get().archiveFile.get().asFile
+            def paths = linkage.classpath.files
+            checkBuild(paths.findAll { it.name.startsWith("truffle-api-") || it.name.startsWith("thc-truffle-api-") } == [expectedApi].toSet()) {
+                "${linkage.name} selected the wrong API artifacts"
+            }
+            checkBuild(paths.findAll { it.name.startsWith("truffle-runtime-") || it.name.startsWith("thc-truffle-runtime-") } == [expectedRuntime].toSet()) {
+                "${linkage.name} selected the wrong runtime artifacts"
+            }
+        }
+    }
+}
+tasks.named("check") { dependsOn(testRuntimeLinkageConfiguration) }
+tasks.named("testReturnPolicy") { dependsOn(testRuntimeLinkageConfiguration) }
+["stock", "overlay"].each { mode ->
     def task = tasks.register("testRuntimeLinkage" + mode.capitalize(), JavaExec) {
         dependsOn("verifyProtocolRuntimeSelection")
         def api = mode == "stock" ? files(configurations.getByName("materializableApiBinary")) : files(tasks.named("materializableApiJar", Jar).flatMap { it.archiveFile })
