@@ -41,7 +41,7 @@ cbdTests headerGolden = TestList
       assertEqual "logical lengths" (Right ()) (validateContainer header [2,3,0,0,0,24])
   , TestLabel "header and member invariants" $ TestCase $ do
       forM_ [BS.empty,BS.init headerGolden,replace 0 0 headerGolden,
-        replace 8 2 headerGolden,replace 10 1 headerGolden,replace 12 16 headerGolden,
+        replace 8 2 headerGolden,replace 10 1 headerGolden,replace 12 32 headerGolden,
         replace 24 8 headerGolden,replace 28 1 headerGolden] $ \bad ->
           assertBool "malformed header" (isLeft (decodeExact getHeader bad))
       assertBool "count mismatch" (isLeft (validateContainer header (replicate 6 0)))

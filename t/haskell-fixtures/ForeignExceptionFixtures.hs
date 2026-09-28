@@ -20,6 +20,8 @@ import Data.List (sort)
 import qualified Data.Map.Strict as Map
 import FixtureSupport hiding (run)
 import InstalledCoreFixtures
+import THC.Compact.JSON (parseModuleWithoutDebug)
+import THC.Compact.Module (writeModule)
 import System.Directory (createDirectoryIfMissing, listDirectory, doesFileExist, removeFile, canonicalizePath, copyFile)
 import System.Exit (die)
 import System.Environment (lookupEnv)
@@ -75,14 +77,23 @@ prepareForeignExceptions root = do
   support <- run "runtime-export"
     [("THC_CORE_OUT", root </> directory </> "runtime-core"), ("THC_GHC_OUT", root </> directory </> "runtime-ghc")]
     "bin/export-core.sh" ["-isrc/runtime", "-fplugin-opt=THC.Plugin:post-tidy", "src/runtime/THC/Exception.hs", "src/runtime/THC/Polyglot.hs",
-      "t/fixtures/compiler/PolyglotStorage.hs"]
+      "t/fixtures/compiler/PolyglotStorage.hs", "t/fixtures/compiler/InteropPrimitives.hs", "src/runtime/THC/Interop.hs"]
   supportNames <- sort . filter (\name -> takeExtension name == ".json" && name /= "THC.InterfaceClosure.json") <$>
     listDirectory (root </> directory </> "runtime-core")
   let supportModules = map ((directory </> "runtime-core") </>) supportNames
+      compactInterop = directory </> "runtime-core/InteropPrimitives.cbd"
+      interopEntries = ["getLibrary", "readOne", "writeOne", "sumBytes", "arrayLong", "caughtRead"]
+  (interopFacts, interopBindings) <- readJson (root </> directory </> "runtime-core/InteropPrimitives.json")
+    >>= either die pure . parseModuleWithoutDebug
+  _ <- writeModule (root </> compactInterop) interopFacts interopBindings
   storageAudits <- forM ["copySlice", "view", "mutableView", "copyInto", "readByte"] $ \entry ->
     run ("storage-audit-" ++ entry) [] "python3"
       (["bin/audit-core.py", "--package-manifest", packages, "--entry", "main:PolyglotStorage." ++ entry ++ "#",
         "--output", directory </> "storage-" ++ entry ++ "-audit.json"] ++ supportModules)
+  interopAudits <- forM interopEntries $ \entry ->
+    run ("interop-audit-" ++ entry) [] "python3"
+      (["bin/audit-core.py", "--package-manifest", packages, "--entry", "main:InteropPrimitives." ++ entry,
+        "--output", directory </> "interop-" ++ entry ++ "-audit.json"] ++ supportModules)
   stages <- forM ["pre", "post"] $ \stage -> do
     let output = directory </> stage </> "core"
         options = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
@@ -113,8 +124,10 @@ prepareForeignExceptions root = do
     (die "Unsafe internal import failed for an unrelated reason")
   scripts <- listDirectory (root </> "bin")
   compiler <- listDirectory (root </> "src/compiler/THC")
+  codec <- listDirectory (root </> "src/cbd/THC/Compact")
   let sources = ["src/runtime/THC/Polyglot.hs", "src/runtime/THC/Internal/Polyglot.hs", "src/runtime/THC/Interop/Buffer.hs",
-        "src/runtime/THC/Interop/Array.hs", "src/runtime/THC/Interop/Array/Unsafe.hs",
+        "src/runtime/THC/Interop/Array.hs", "src/runtime/THC/Interop/Array/Unsafe.hs", "src/runtime/THC/Prim.hs", "src/runtime/THC/Interop.hs",
+        "t/fixtures/compiler/InteropPrimitives.hs", "src/test/resources/thc/polyglot-abi.json",
         "t/fixtures/compiler/PolyglotStorage.hs", "src/runtime/THC/Exception.hs", "src/runtime/THC/Internal/Exception.hs", "src/runtime/exception.c", source,
         "t/fixtures/compiler/ForeignExceptionNative.hs", "t/fixtures/compiler/ForeignExceptionSafe.hs",
         "t/fixtures/compiler/ForeignExceptionUnsafeImport.hs", "t/haskell-fixtures/ForeignExceptionFixtures.hs",
@@ -123,13 +136,15 @@ prepareForeignExceptions root = do
         "bin/audit-core.py", "bin/core-capabilities.json", "src/driver/cbits/target-layout.c",
         "bin/export-core.sh", "bin/build-compiler.sh", "bin/toolchain.sh", "bin/plugin.py"] ++
         ["src/compiler/THC" </> file | file <- compiler, takeExtension file == ".hs"] ++
+        ["src/cbd/THC/Compact" </> file | file <- codec, takeExtension file == ".hs"] ++
         ["bin" </> file | file <- scripts, take 5 file == "core_", takeExtension file == ".py"]
-      commands = installedCommands ++ [plugin, support] ++ storageAudits ++ concat [runs | (_, _, runs) <- stages] ++ [built, oracle, safe, rejected]
-      outputs = installedArtifacts ++ concatMap commandArtifacts commands ++
+      commands = installedCommands ++ [plugin, support] ++ storageAudits ++ interopAudits ++ concat [runs | (_, _, runs) <- stages] ++ [built, oracle, safe, rejected]
+      outputs = compactInterop : installedArtifacts ++ concatMap commandArtifacts commands ++
         concat [modules ++ [directory </> stage </> "core/THC.InterfaceClosure.json"] ++
           [directory </> stage </> entry ++ "-audit.json" | entry <- entries] | (stage, modules, _) <- stages] ++
         [native </> "oracle"] ++ [directory </> "storage-" ++ entry ++ "-audit.json" |
-          entry <- ["copySlice", "view", "mutableView", "copyInto", "readByte"]]
+          entry <- ["copySlice", "view", "mutableView", "copyInto", "readByte"]] ++
+        [directory </> "interop-" ++ entry ++ "-audit.json" | entry <- interopEntries]
   inputs <- hashes root (sort sources)
   artifacts <- hashes root (sort outputs)
   writeJson (root </> directory </> "manifest.json") $ object

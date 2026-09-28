@@ -54,6 +54,11 @@ data Shape = Shape
 data Evaluation = Evaluation !(Presence Bool) ![Evaluation] deriving (Eq, Ord, Show)
 data Rep = Rep !Shape !Evaluation deriving (Eq, Ord, Show)
 
+-- | Nominal host-only annotations do not change shared execution shapes.
+data HostCarrier = HostPlain | HostObject | HostInteropLibrary deriving (Eq, Ord, Enum, Bounded, Show)
+data HostType = HostType !Rep ![HostCarrier] deriving (Eq, Show)
+data HostSignature = HostSignature ![HostType] !HostType deriving (Eq, Show)
+
 data IdInfo = IdInfo !(Presence Word64) !(Presence Bool) !(Presence [Bool])
   deriving (Eq, Show)
 data Binder = Binder
@@ -75,6 +80,7 @@ data Binding = Binding
   , bindingEntryStrictSource :: !(Presence BS.ByteString)
   , bindingJoinValueArity :: !(Presence Word64)
   , bindingJoinResultRep :: !(Presence Rep)
+  , bindingHostSignature :: !(Presence HostSignature)
   , bindingExpr :: !Expr
   } deriving (Eq, Show)
 

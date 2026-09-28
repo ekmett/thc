@@ -6422,6 +6422,33 @@ public final class BytecodeProgram implements ExecutableProgram {
             // Opaque Value handles are demanded before foreign execution, using
             // the same saved force checkpoint as other strict guest operands.
             for (var arg : args) operands.add(argument(arg, scope, false));
+            if (polyglot == PolyglotOp.GET_LIBRARY) return new ProvenExpression(e -> {
+                e.builder.beginInteropLibraryGet(); operands.getFirst().emit(e); e.builder.endInteropLibraryGet();
+            }, evaluatedProof(tupleProof, true));
+            if (polyglot.explicitLibrary()) {
+                java.util.function.Consumer<Emission> message = e -> {
+                    e.builder.beginInteropMessage(polyglot);
+                    for (var operand : operands) operand.emit(e);
+                    e.builder.endInteropMessage();
+                };
+                if (polyglot.scalarResult()) return new ProvenExpression(e -> {
+                    var b = e.builder;
+                    b.beginBlock(); b.beginStoreLocal(b.createLocal()); message.accept(e); b.endStoreLocal();
+                    if (enableAsync) emitAsyncPoll(e);
+                    b.emitLoadConstant(Unit.INSTANCE); b.endBlock();
+                }, evaluatedProof(tupleProof, true));
+                return tupleExpression(tupleProof, (e, destination) -> {
+                    storeTupleResult(e, destination.getFirst(), () -> {
+                        var b = e.builder;
+                        switch (polyglot.getResult()) {
+                            case "Int8Rep" -> { b.beginToInt(); message.accept(e); b.endToInt(); }
+                            case "IntRep", "Int64Rep" -> { b.beginToLong(); message.accept(e); b.endToLong(); }
+                            default -> message.accept(e);
+                        }
+                    });
+                    if (enableAsync) emitAsyncPoll(e);
+                });
+            }
             return tupleExpression(tupleProof, (e, destination) -> {
                 var b = e.builder;
                 switch (polyglot) {

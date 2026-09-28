@@ -37,7 +37,9 @@ public final class CoreCompactRecords {
     }
     private String ordinal(CoreCompactCursor cursor) { return "\u0000compact-local:" + cursor.unsigned(); }
     private String id(CoreCompactCursor cursor) throws Throwable {
-        int tag = cursor.readByte();
+        return id(cursor, cursor.readByte());
+    }
+    private String id(CoreCompactCursor cursor, int tag) throws Throwable {
         return switch (tag) { case 0 -> text(cursor); case 1 -> ordinal(cursor); default -> throw error("Invalid compact Core identity tag: " + tag); };
     }
     private void entry(CoreCompactCursor cursor, Map<String,Object> target) {
@@ -168,8 +170,17 @@ public final class CoreCompactRecords {
     }
     private Map<String,Object> binding(CoreCompactCursor cursor) throws Throwable {
         var origin = origin(cursor.getPosition());
-        String id = id(cursor);
+        int tag = cursor.readByte();
+        Object signature = MISSING;
+        if (tag == 2) {
+            require(file.header().getContainsHostSignatures(), "Compact host signature lacks header flag");
+            signature = presence(cursor, () -> hostSignature(cursor));
+            require(signature != MISSING, "Missing compact host signature extension");
+            tag = cursor.readByte();
+        }
+        String id = id(cursor, tag);
         var result = map("id", id, "name", id, "compactOrigin", origin);
+        if (signature != MISSING) result.put("hostSignature", signature);
         entry(cursor, result);
         field(cursor, result, "lifted", cursor::readBoolean);
         result.put("arity", cursor.unsigned());
@@ -181,6 +192,17 @@ public final class CoreCompactRecords {
         field(cursor, result, "joinResultRep", () -> rep(cursor));
         result.put("expr", expression(cursor));
         return result;
+    }
+    private Map<String,Object> hostSignature(CoreCompactCursor cursor) throws Throwable {
+        return map("inputs", list(cursor, () -> hostType(cursor)), "result", hostType(cursor));
+    }
+    private Map<String,Object> hostType(CoreCompactCursor cursor) throws Throwable {
+        return map("rep", rep(cursor), "carriers", list(cursor, () -> switch (cursor.readByte()) {
+            case 0 -> null;
+            case 1 -> "object";
+            case 2 -> "interop-library";
+            default -> throw error("Invalid compact host carrier");
+        }));
     }
     private Map<String,Object> demand(CoreCompactCursor cursor) throws Throwable { return map("arity", cursor.unsigned(), "strictArgs", list(cursor, cursor::readBoolean)); }
     private Map<String,Object> family(CoreCompactCursor cursor) throws Throwable { return map("typeConstructor", text(cursor), "constructors", texts(cursor)); }

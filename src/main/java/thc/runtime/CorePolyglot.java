@@ -14,7 +14,7 @@ public final class CorePolyglot {
         return !proof.isAggregate() && !proof.isVector() && proof.getPresent() &&
             (rep.equals(STATE) ? List.of() : List.of(rep)).equals(proof.getPrimReps()) &&
             proof.getKind() == switch (rep) { case STATE -> CoreKind.VOID; case "AddrRep" -> CoreKind.ADDRESS;
-                case "IntRep" -> CoreKind.LONG; default -> CoreKind.OBJECT; };
+                case "IntRep", "Int8Rep", "Int64Rep" -> CoreKind.LONG; default -> CoreKind.OBJECT; };
     }
     private static boolean result(CoreRepresentation proof, String rep) {
         var components = proof.getComponents();
@@ -53,8 +53,10 @@ public final class CorePolyglot {
                 Boolean.valueOf(BOXED.equals(op.getArguments().get(i))).equals(flags.get(i)))) { compatible = false; break; }
         }
         requireProof(compatible, "argument representations");
-        requireProof(result(CoreRepresentations.parse(descriptor.get("resultRep")), op.getResult()) &&
-            result(CoreRepresentations.expression((List<Object>) expr), op.getResult()), "state/result tuple");
+        var declaredResult = CoreRepresentations.parse(descriptor.get("resultRep"));
+        var actualResult = CoreRepresentations.expression((List<Object>) expr);
+        requireProof(op.scalarResult() ? matches(declaredResult, op.getResult()) && matches(actualResult, op.getResult()) :
+            result(declaredResult, op.getResult()) && result(actualResult, op.getResult()), "exact scalar or state/result tuple");
         return op;
     }
 }

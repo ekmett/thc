@@ -54,8 +54,9 @@ references remain relative to `strings`; executable origins are relative to
 
 Summary bits 0 through 3 are, respectively, `containsDelimitedControl`,
 `registrationObligations`, `mainAlias`, and `packageScalarDeclarations`, with
-the same actual producer-derived meanings as the JSON unit manifest. Remaining
-bits are zero. Debug bits 0 through 2 indicate nonempty names, filename intervals,
+the same actual producer-derived meanings as the JSON unit manifest. Bit 4 is
+`containsHostSignatures`, permitting the binding extension below. Remaining bits
+are zero. Debug bits 0 through 2 indicate nonempty names, filename intervals,
 and line/column intervals respectively; remaining bits are zero.
 
 The uncompressed `symbols` length is `24 * bindingCount`, checked without
@@ -136,7 +137,18 @@ not in scope in its own RHS. Debug labels cannot change this resolution.
 p(list(b) entryStrict), p(str entryStrictSource), p(u joinValueArity),
 p(Rep joinResultRep), Expr`.
 Top-level bindings use global identity; let bindings use local identity. The
-fingerprint points to the first identity tag, not the first expression byte.
+fingerprint points to the binding's first byte, not the first expression byte.
+
+An optional declared `hostSignature` uses prefix byte 2, `p(HostSignature)`,
+then the unchanged `Binding` record. Presence 0 is invalid in this extension;
+an absent field emits no prefix and preserves the original record bytes.
+The extension requires header summary bit 4, so older readers reject it before
+decoding records. `HostSignature` is `list(HostType) inputs, HostType result`;
+`HostType` is `Rep, list(HostCarrier)`. Carrier tags are 0 (ordinary), 1 (`Object#`),
+and 2 (`InteropLibrary#`), in logical scalar-leaf preorder including void tokens.
+The nominal tags do not alter shared execution shapes. Host entry checks the
+declared representation against the optimized worker before admitting raw Java
+references; unannotated unlifted guest arrays retain their existing boundary.
 
 `Expr` is a tag byte, then `Meta`, then the tag-specific payload:
 

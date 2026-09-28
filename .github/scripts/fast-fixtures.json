@@ -1,6 +1,8 @@
 {
   "schema": 1,
   "fixtureFreeJunit": [
+    "thc.HostInteropAbiTest",
+    "thc.runtime.ExplicitInteropLibraryTest",
     "thc.runtime.SemanticForeignOverrideTest",
     "thc.runtime.PackageNativeForeignTest",
     "thc.runtime.PackageScalarForeignTest",
@@ -1279,12 +1281,12 @@
         {"argv": ["bin/native-oracle.sh"], "stdout": "build/native/oracle.tsv"}
       ],
       "outputs": [
-        "build/core/THC.Prim.json",
+        "build/core/THC.ExamplePrim.json",
         "build/core/THC.Fixtures.json",
         "build/native/oracle.tsv"
       ],
       "sources": [
-        "src/examples/THC/Prim.hs",
+        "src/examples/THC/ExamplePrim.hs",
         "src/examples/THC/Fixtures.hs",
         "src/examples/NativeOracle.hs",
         "src/examples/THC/MapWorkload.hs",

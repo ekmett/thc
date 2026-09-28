@@ -1746,7 +1746,7 @@ class Audit:
         def exact(rep, register):
             if not isinstance(rep, dict) or 'aggregate' in rep or is_vector(rep):
                 return False
-            kinds = {'AddrRep': 'address', 'IntRep': 'long',
+            kinds = {'AddrRep': 'address', 'IntRep': 'long', 'Int8Rep': 'long', 'Int64Rep': 'long',
                      'BoxedRep (Just Lifted)': 'object', 'BoxedRep (Just Unlifted)': 'object', 'State# RealWorld': 'void'}
             return (rep.get('kind') == kinds[register] and
                     rep.get('primReps') == ([] if register == 'State# RealWorld' else [register]))
@@ -1764,12 +1764,16 @@ class Audit:
         result = call.get('resultRep')
         components = result.get('components') if isinstance(result, dict) else None
         wanted = spec['result']
-        if (not isinstance(components, list) or len(components) != len(wanted) or
+        if spec.get('scalar') is True:
+            compatible = len(wanted) == 1 and exact(result, wanted[0]) and exact(self.expression_rep(expr), wanted[0])
+        else:
+            compatible = not (not isinstance(components, list) or len(components) != len(wanted) or
                 result.get('aggregate') != 'unboxed-tuple' or result.get('kind') != 'unknown' or
                 any(not exact(rep, register) for rep, register in zip(components, wanted)) or
                 result.get('primReps') != [r for rep in components for r in rep['primReps']] or
-                self.shape(self.expression_rep(expr)) != self.shape(result)):
-            return reject('GHC declared State# tuple result differs from polyglot ABI')
+                self.shape(self.expression_rep(expr)) != self.shape(result))
+        if not compatible:
+            return reject('GHC declared scalar or State# tuple result differs from polyglot ABI')
         self.foreign_calls.append(dict(symbol=symbol, owner=owner, path=path))
         self.require_exception_bridge(owner, path)
         return True

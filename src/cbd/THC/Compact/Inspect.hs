@@ -19,6 +19,7 @@ module THC.Compact.Inspect (inspectContainer, inspectName, inspectSource, unpack
 import Data.Aeson
 import qualified Data.Aeson.Key as Key
 import Data.Binary.Get (getByteString, getWord64le)
+import Data.Bits ((.&.))
 import qualified Data.ByteString as BS
 import Data.List (sortOn)
 import qualified Data.Text as Text
@@ -36,13 +37,14 @@ import THC.Compact.Zip (readZip)
 -- the one container to inspect; normal runtime demand loading is independent.
 inspectContainer :: BS.ByteString -> Either String Value
 inspectContainer bytes = do
-  (_,factsBytes,segments) <- unpackContainer bytes
+  (header,factsBytes,segments) <- unpackContainer bytes
   case segments of
     [payload,strings,_,_,_,directory] -> do
       facts <- decodeFacts factsBytes strings
       rows <- mapM (\start -> decodeExact ((,) <$> getByteString 16 <*> getWord64le)
         (BS.take 24 (BS.drop start directory))) [0,24..BS.length directory-1]
-      bindings <- mapM (\(_,offset) -> fst <$> decodeBindingAt payload strings offset) (sortOn snd rows)
+      let hasSignatures = headerSummaries header .&. 16 /= 0
+      bindings <- mapM (\(_,offset) -> fst <$> decodeBindingAtWithHostSignatures hasSignatures payload strings offset) (sortOn snd rows)
       pure (moduleJSON facts bindings)
     _ -> Left "Compact container requires six segments"
 
@@ -121,6 +123,15 @@ binding value = object $ [("id",identity (bindingIdentity value)),("name",identi
   ++ p "rep" rep (bindingRep value) ++ p "info" idInfo (bindingInfo value)
   ++ p "entryStrict" toJSON (bindingEntryStrict value) ++ p "entryStrictSource" str (bindingEntryStrictSource value)
   ++ p "joinValueArity" toJSON (bindingJoinValueArity value) ++ p "joinResultRep" rep (bindingJoinResultRep value)
+  ++ p "hostSignature" hostSignature (bindingHostSignature value)
+
+hostSignature :: HostSignature -> Value
+hostSignature (HostSignature inputs result) = object [("inputs",arr hostType inputs),("result",hostType result)]
+  where
+    hostType (HostType proof carriers) = object [("rep",rep proof),("carriers",arr carrier carriers)]
+    carrier HostPlain = Null
+    carrier HostObject = String "object"
+    carrier HostInteropLibrary = String "interop-library"
 
 binder :: Binder -> Value
 binder value = object $ [("id",identity (Local (binderOrdinal value))),("name",identity (Local (binderOrdinal value)))]

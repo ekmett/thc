@@ -176,6 +176,50 @@ blindly forcing their contents would change Haskell evaluation and space behavio
 
 ## Buffers and fixed arrays
 
+### Explicit dispatch
+
+`THC.Prim` provides raw, state-indexed `Object# s` and `InteropLibrary# s`
+references. Both are genuinely unlifted boxed values. The latter holds the
+actual dispatcher acquired by `getInteropLibrary#`, not a receiver wrapper.
+Raw messages take both references and a `State# s`; their unboxed results keep
+the declared primitive widths. The first operation group covers buffer byte
+access, array element access, their capability/size queries, and signed 64-bit
+conversion.
+
+`THC.Interop` pairs those references in the lifted `Interop s` handle and
+provides `ST s` operations. External receivers enter `RealWorld` through
+`fromValue`; use `stToIO` to access them from `IO`:
+
+```haskell
+{-# LANGUAGE MagicHash #-}
+import Control.Monad.ST (stToIO)
+import qualified THC.Polyglot as P
+import qualified THC.Interop as I
+
+firstByte = do
+  value <- P.evalJS "new Uint8Array([10,20,30]).buffer"# "bytes.js"#
+  bytes <- I.fromValue value
+  stToIO (I.readBufferByte bytes 0)
+```
+
+Access invokes the receiver's protocol without copying the collection. Array
+elements are heterogeneous; `readArrayElement` returns another handle, not an
+unchecked Haskell element type. Unsupported messages and invalid indices use
+the genuine foreign-exception bridge described above.
+
+The acquisition site owns bounded dispatcher children. A use site profiles
+only the supplied dispatcher's identity and never creates a replacement.
+Monomorphic dispatch can specialize after acquisition and profiling;
+polymorphic dispatch remains correct without promising inlining. Neither the
+state index nor reuse of a dispatcher makes a foreign receiver thread-safe.
+The nominal state roles prohibit coercing a `RealWorld` handle into a confined
+`ST` region. Raw primitives are in the explicitly Unsafe `THC.Prim` module.
+Raw host exports remain opaque: an underlying Java array or closure does not
+grant guest storage or callable authority. Genuine Haskell storage views retain
+their explicit permissions and owning context.
+
+### Storage views and explicit copies
+
 `THC.Interop.Buffer.view` aliases a `ByteArray#` as a read-only buffer;
 `mutableView` explicitly grants writes to a `MutableByteArray# RealWorld`.
 Both retain the allocation. They support byte access and explicit little/big-endian

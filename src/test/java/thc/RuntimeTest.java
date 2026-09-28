@@ -15,7 +15,7 @@ import static thc.CoreExecutionTestSupport.*;
 
 class RuntimeTest {
     private final Path root = Path.of(System.getProperty("thc.projectRoot"));
-    private final List<String> modules = list("THC.Prim", "THC.Fixtures").stream().map(name -> root.resolve("build/core/" + name + ".json").toString()).toList();
+    private final List<String> modules = list("THC.ExamplePrim", "THC.Fixtures").stream().map(name -> root.resolve("build/core/" + name + ".json").toString()).toList();
     record Example(String entry, long input, long expected) {}
     private List<Example> oracle() throws Exception {
         var result = new ArrayList<Example>();

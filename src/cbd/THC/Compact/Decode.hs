@@ -12,7 +12,7 @@
 -- Native selected-record decoder for round-trip controls and flat inspection.
 -- Earlier shape definitions are addressed directly; no preceding Core tree is
 -- decoded to find a selected binding. Runtime mmap ownership is independent.
-module THC.Compact.Decode (decodeBindingAt, decodeExprAt, decodeRepAt, decodeFacts) where
+module THC.Compact.Decode (decodeBindingAt, decodeBindingAtWithHostSignatures, decodeExprAt, decodeRepAt, decodeFacts) where
 
 import Control.Monad (replicateM, unless)
 import Data.Binary.Get hiding (Decoder)
@@ -32,21 +32,28 @@ data Decoder = Decoder
   , sourceStrings :: !BS.ByteString
   , recordBase :: !Word64
   , activeShapes :: !(Set.Set Word64)
+  , allowHostSignatures :: !Bool
   }
 
 -- | Return a selected typed binding and its end-exclusive relative byte offset.
 decodeBindingAt :: BS.ByteString -> BS.ByteString -> Word64 -> Either String (Binding, Word64)
-decodeBindingAt bytes strings offset = runAt bytes offset (binding (Decoder bytes strings offset Set.empty))
+decodeBindingAt = decodeBindingAtWithHostSignatures True
+
+-- | Container readers pass the declared feature bit; standalone record tests
+-- can decode the complete current record vocabulary with 'decodeBindingAt'.
+decodeBindingAtWithHostSignatures :: Bool -> BS.ByteString -> BS.ByteString -> Word64 -> Either String (Binding, Word64)
+decodeBindingAtWithHostSignatures allow bytes strings offset =
+  runAt bytes offset (binding (Decoder bytes strings offset Set.empty allow))
 
 decodeExprAt :: BS.ByteString -> BS.ByteString -> Word64 -> Either String (Expr, Word64)
-decodeExprAt bytes strings offset = runAt bytes offset (expression (Decoder bytes strings offset Set.empty))
+decodeExprAt bytes strings offset = runAt bytes offset (expression (Decoder bytes strings offset Set.empty True))
 
 decodeRepAt :: BS.ByteString -> BS.ByteString -> Word64 -> Either String (Rep, Word64)
-decodeRepAt bytes strings offset = runAt bytes offset (representation (Decoder bytes strings offset Set.empty))
+decodeRepAt bytes strings offset = runAt bytes offset (representation (Decoder bytes strings offset Set.empty True))
 
 -- | Header facts decode independently of all executable and debug bytes.
 decodeFacts :: BS.ByteString -> BS.ByteString -> Either String Facts
-decodeFacts bytes strings = decodeExact (facts (Decoder bytes strings 0 Set.empty)) bytes
+decodeFacts bytes strings = decodeExact (facts (Decoder bytes strings 0 Set.empty True)) bytes
 
 facts :: Decoder -> Get Facts
 facts decoder = Facts <$> getUVar <*> string decoder <*> string decoder <*> string decoder <*> string decoder
@@ -294,10 +301,22 @@ identity decoder = getWord8 >>= \kind -> case kind of
   _ -> fail "Unknown compact identity tag"
 
 binding :: Decoder -> Get Binding
-binding decoder = Binding <$> identity decoder <*> enumeration <*> present boolean <*> getUVar
-  <*> present (representation decoder) <*> present (idInfo decoder)
-  <*> present (list decoder boolean) <*> present (string decoder) <*> present getUVar
-  <*> present (representation decoder) <*> expression decoder
+binding decoder = do
+  prefix <- lookAhead getWord8
+  signature <- if prefix /= 2 then pure Missing else do
+    unless (allowHostSignatures decoder) (fail "Compact host signature lacks header flag")
+    _ <- getWord8
+    value <- present (hostSignature decoder)
+    unless (value /= Missing) (fail "Empty compact host-signature extension")
+    pure value
+  Binding <$> identity decoder <*> enumeration <*> present boolean <*> getUVar
+    <*> present (representation decoder) <*> present (idInfo decoder)
+    <*> present (list decoder boolean) <*> present (string decoder) <*> present getUVar
+    <*> present (representation decoder) <*> pure signature <*> expression decoder
+
+hostSignature :: Decoder -> Get HostSignature
+hostSignature decoder = HostSignature <$> list decoder hostType <*> hostType
+  where hostType = HostType <$> representation decoder <*> list decoder enumeration
 
 binder :: Decoder -> Get Binder
 binder decoder = Binder <$> getUVar <*> enumeration <*> present boolean <*> present boolean
