@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime
 
+import thc.runtime.ManagedMutVar.completedBoxedIdentity
+
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
 import java.lang.ref.Reference
 import java.lang.ref.ReferenceQueue

@@ -11,7 +11,7 @@ import java.util.concurrent.atomic.AtomicReference
 class ManagedByteArrayCompareTest {
     private fun storage(bytes: ByteArray): List<Any> = listOf(bytes,
         ManagedAllocation.mutable(bytes.size.toLong(), 8).also { it.copyBytesIn(bytes, 0, 0, bytes.size.toLong()) },
-        ManagedAllocation.mutable(bytes.size.toLong(), 8, pinned = true).also { it.copyBytesIn(bytes, 0, 0, bytes.size.toLong()) },
+        ManagedAllocation.mutable(bytes.size.toLong(), 8, true).also { it.copyBytesIn(bytes, 0, 0, bytes.size.toLong()) },
         ManagedAllocation.immutable(bytes, 8))
     private fun expected(a: ByteArray, from: Int, b: ByteArray, to: Int, count: Int) =
         java.util.Arrays.compareUnsigned(a, from, from + count, b, to, to + count).compareTo(0)
@@ -49,7 +49,7 @@ class ManagedByteArrayCompareTest {
                     ManagedByteArray.compareGuest(value, from.toLong(), value, to.toLong(), count.toLong()).compareTo(0))
             }
         for (pinned in listOf(false, true)) {
-            val allocation = ManagedAllocation.mutable(40, 8, pinned = pinned)
+            val allocation = ManagedAllocation.mutable(40, 8, pinned)
             allocation.copyBytesIn(bytes, 0, 0, 40)
             val backing = allocation.nativeSegment()
             assertEquals(0L, ManagedByteArray.compareGuest(allocation, 0, bytes, 0, 40))
@@ -81,7 +81,7 @@ class ManagedByteArrayCompareTest {
             Triple(Long.MAX_VALUE, 0L, 0L), Triple(0L, Long.MAX_VALUE, 0L), Triple(0L, 0L, Long.MAX_VALUE),
             Triple(Long.MIN_VALUE, 0L, 0L), Triple(0L, Long.MIN_VALUE, 0L), Triple(0L, 0L, Long.MIN_VALUE))
         for (pinned in listOf(false, true)) {
-            val owner = ManagedAllocation.mutable(64, 8, pinned = pinned)
+            val owner = ManagedAllocation.mutable(64, 8, pinned)
             owner.fill(0, 64, 255)
             owner.shrink(17)
             for (other in storage(ByteArray(17))) {
@@ -102,7 +102,7 @@ class ManagedByteArrayCompareTest {
 
     @Test fun completePointerOverlapChecksPrecedeAnyEarlyMismatchOrAliasShortcut() {
         for (pinned in listOf(false, true)) {
-            val owner = ManagedAllocation.mutable(40, 8, pinned = pinned)
+            val owner = ManagedAllocation.mutable(40, 8, pinned)
             owner.fill(0, 40, 255)
             val address = ManagedAddress.fromByteArray(byteArrayOf(73))
             owner.writeAddressByteOffset(24, address)
@@ -123,7 +123,7 @@ class ManagedByteArrayCompareTest {
 
     @Test fun opposedComparisonsAndCopiesShareOwnerOrdering() {
         val first = ManagedAllocation.mutable(513, 8)
-        val second = ManagedAllocation.mutable(513, 8, pinned = true)
+        val second = ManagedAllocation.mutable(513, 8, true)
         first.fill(0, 513, 0xa5); second.fill(0, 513, 0xa5)
         val ready = CountDownLatch(4)
         val start = CountDownLatch(1)

@@ -4,6 +4,8 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
+import thc.runtime.SmallArrayOp.expression as smallArrayExpression
+
 import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
@@ -65,7 +67,7 @@ class SmallArrayTest {
             assertEquals(17 * x + 224, safe, "native safe-slice model $x")
         }
         // CAS and shrink have native corpora in BoxedCasTest and ScalarMemoryUtilitiesTest.
-        val names = SmallArrayOp.entries.filterNot { it == SmallArrayOp.CAS || it == SmallArrayOp.SHRINK }.map { it.primitive }.toSet()
+        val names = SmallArrayOp.values().filterNot { it == SmallArrayOp.CAS || it == SmallArrayOp.SHRINK }.map { it.primitive }.toSet()
         for ((stage, path) in manifest["stages"] as Map<String, String>) {
             val auditPath = (manifest["audits"] as Map<String, String>).getValue(stage)
             assertEquals(true, (Json.parse(File(root, auditPath).readText()) as Map<*, *>)["accepted"])

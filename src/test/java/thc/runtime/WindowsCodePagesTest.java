@@ -55,7 +55,7 @@ class WindowsCodePagesTest {
         return backend.equals("ast") ? new Program(language, module, false, false) : new BytecodeProgram(language, module);
     }
     private ManagedAddress buffer(int size, long fill, boolean pinned) {
-        var address = ManagedAddress.Companion.fromAllocation(ManagedAllocation.Companion.mutable(size, 8, pinned, 8));
+        var address = ManagedAddress.Companion.fromAllocation(ManagedAllocation.mutable(size, 8, pinned, 8));
         address.fill(size, fill);
         return address;
     }

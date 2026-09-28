@@ -70,7 +70,7 @@ class ByteStringUtf8Test {
         return when (kind) {
             0 -> ManagedAddress.fromByteArray(bytes)
             3 -> ManagedAddress.fromHex(HexFormat.of().formatHex(bytes))
-            else -> ManagedAddress.fromAllocation(ManagedAllocation.mutable(bytes.size.toLong(), 8, pinned = kind == 2))
+            else -> ManagedAddress.fromAllocation(ManagedAllocation.mutable(bytes.size.toLong(), 8, kind == 2))
                 .also { result -> bytes.forEachIndexed { index, byte -> result.writeWord8(index.toLong(), byte.toLong()) } }
         }
     }
