@@ -3,6 +3,7 @@
 package thc.runtime;
 
 import com.oracle.truffle.api.RootCallTarget;
+import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -39,6 +40,121 @@ class AstContinuationTest {
         var parameters = list(map("id", "cell", "name", "cell", "lifted", false, "coercion", false, "rep", unevaluatedCell ? lazyMvar : mvarRep), map("id", "state", "name", "state", "lifted", false, "coercion", false, "rep", stateRep));
         var lambda = list("lam", parameters, body, map("resultRep", nestedTuple ? nestedTupleRep : wrongCaseResult || casePayload ? dataRep : caseLiteral ? longRep : tupleRep, "entryStrict", list(strict, false)));
         return map("bindings", list(map("id", "direct", "name", "direct", "lifted", true, "expr", lambda)), "instrument", true, "constructors", list(map("id", "Pair", "name", "Pair", "kind", "unboxed-tuple", "arity", 2), map("id", "Outer", "name", "Outer", "kind", "unboxed-tuple", "arity", 2)));
+    }
+    @ParameterizedTest @ValueSource(strings = {"ast-tail", "ast-suffix", "bytecode-tail", "bytecode-suffix"})
+    void tupleCallerRetainsItsFirstCompiledAsyncCaptureAndResumesWithoutReplay(String mode) throws Exception {
+        boolean tail = mode.endsWith("tail");
+        var module = directMVarModule(false, false, false, false, false, false, false);
+        var closure = map("kind", "closure", "primReps", list("BoxedRep (Just Lifted)"), "evaluated", true);
+        var state = list("void", map("rep", stateRep));
+        var duration = list("var", "duration", map("rep", longRep));
+        var direct = ((List<Map<String, Object>>) module.get("bindings")).getFirst();
+        var directLambda = (List<Object>) direct.get("expr");
+        var directArguments = new ArrayList<>((List<Object>) directLambda.get(1));
+        directArguments.add(map("id", "duration", "lifted", false, "rep", longRep));
+        directLambda.set(1, directArguments);
+        var delay = list("app", list("prim", "delay#"), list(duration, state), list(false, false), false, false, map("rep", stateRep));
+        directLambda.set(2, list("case", delay, "delayed", list(list("default", null, List.of(), directLambda.get(2))),
+                map("rep", tupleRep, "binder", map("id", "delayed", "rep", stateRep))));
+        directLambda.set(3, map("resultRep", tupleRep, "entryStrict", list(false, false, false)));
+        var call = list("app", list("var", "direct", map("rep", closure)),
+                list(list("var", "cell", map("rep", mvarRep)), state, duration), list(false, false, false), false, false, map("rep", tupleRep));
+        var resultRep = tail ? tupleRep : nestedTupleRep;
+        var suffix = tail ? call : list("app", list("con", "Outer", 2),
+                list(call, list("lit", "int", "7", map("rep", longRep))), list(false, false), false, false, map("rep", resultRep));
+        var prefix = list("app", list("prim", "takeMVar#"),
+                list(list("var", "prefix", map("rep", mvarRep)), state), list(false, false), false, false, map("rep", tupleRep));
+        var body = list("case", prefix, "prefixPair", list(list("data", "Pair", list("prefixState", "before"), suffix,
+                map("binders", list(map("id", "prefixState", "rep", stateRep), map("id", "before", "rep", dataRep))))),
+                map("rep", resultRep, "binder", map("id", "prefixPair", "rep", tupleRep)));
+        var bindings = new ArrayList<>((List<Map<String, Object>>) module.get("bindings"));
+        bindings.add(map("id", "caller", "name", "caller", "lifted", true, "expr", list("lam",
+                list(map("id", "prefix", "lifted", false, "rep", mvarRep), map("id", "cell", "lifted", false, "rep", mvarRep),
+                        map("id", "duration", "lifted", false, "rep", longRep)),
+                body, map("resultRep", resultRep))));
+        module.put("bindings", bindings);
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("engine.Splitting", "false").option("engine.CompilationFailureAction", "Throw").build()) {
+            context.initialize("thc"); context.enter();
+            final ExecutableProgram program; final Language.State owner; final RootCallTarget caller, callee, resume; final TupleShape shape;
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); owner = Language.currentState();
+                program = mode.startsWith("ast") ? new Program(language, module, true) : new BytecodeProgram(language, module, true);
+                caller = program.entryTarget("caller"); callee = program.entryTarget("direct");
+                shape = Objects.requireNonNull(((GuestRoot) caller.getRootNode()).getTupleResult());
+                // Same ordinary pre-install setup as the direct MVar controls above; no prior suspension.
+                for (int i = 0; i < 5; i++) {
+                    var readyPrefix = new ManagedMVar(); var ready = new ManagedMVar(); var payload = new Object();
+                    assertTrue(readyPrefix.tryPut("setup")); assertTrue(ready.tryPut(payload));
+                    var value = TupleResults.ownedTupleResult(Calls.target(caller, new Object[]{0L, readyPrefix, ready, 0L}), shape);
+                    assertSame(payload, shape.getLayout().getObject(value, 0));
+                    if (!tail) assertEquals(7L, shape.getLayout().getLong(value, 1));
+                }
+                for (var target : List.of(callee, caller)) {
+                    assertEquals(true, target.getClass().getMethod("compile", boolean.class).invoke(target, true));
+                    assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
+                    var runtime = Truffle.getRuntime();
+                    runtime.getClass().getMethod("bypassedInstalledCode", Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"))
+                            .invoke(runtime, target);
+                }
+                resume = new RootNode(language) {
+                    @Child private Force force = new Force(new Metrics(false), true);
+                    @Override public Object execute(VirtualFrame frame) {
+                        return force.drainStack((SavedGuestContinuation) frame.getArguments()[0], shape);
+                    }
+                }.getCallTarget();
+            } finally { context.leave(); }
+            var prefixCell = new ManagedMVar(); var blocked = new ManagedMVar(); var payload = new Object();
+            assertTrue(prefixCell.tryPut("once"));
+            long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
+            var answer = new CompletableFuture<SavedGuestContinuation>();
+            var identity = new java.util.concurrent.atomic.AtomicReference<GuestThreadId>();
+            var worker = new Thread(() -> {
+                context.enter(); owner.getThreads().enterCurrent(null, false, true, null);
+                try {
+                    identity.set(owner.getThreads().currentIdentity());
+                    var result = Calls.target(caller, new Object[]{0L, prefixCell, blocked, 300_000L});
+                    var saved = Objects.requireNonNull(SavedGuestContinuations.savedGuestContinuation(
+                            result instanceof TailYield yielded ? yielded.getContinuation() : result));
+                    Objects.requireNonNull(saved.asyncRequest()).acknowledge(); answer.complete(saved);
+                } catch (Throwable failure) { answer.completeExceptionally(failure); }
+                finally { owner.getThreads().leaveCurrent(GuestThreadStatus.FINISHED); context.leave(); }
+            });
+            worker.start();
+            try {
+                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+                while ((identity.get() == null || identity.get().getStatus() != GuestThreadStatus.DELAY)
+                        && !answer.isDone() && System.nanoTime() < deadline) Thread.sleep(1);
+                if (answer.isCompletedExceptionally()) answer.get(1, TimeUnit.SECONDS);
+                assertEquals(GuestThreadStatus.DELAY, identity.get() == null ? null : identity.get().getStatus());
+                assertTrue(prefixCell.isEmpty());
+                var request = owner.getThreads().send(identity.get(), "tuple call cut");
+                var saved = answer.get(10, TimeUnit.SECONDS); worker.join(5000); assertFalse(worker.isAlive());
+                assertSame(request, saved.asyncRequest()); assertEquals(AsyncRequestState.ACKNOWLEDGED, request.getState());
+                assertTrue(request.compiledCapture, "The exact first tuple request is claimed in installed code");
+                assertEquals(before + 2, ((Number) program.diagnostics().get("compiledEntries")).longValue(), "Both original roots enter installed code once");
+                var retainedCaller = caller.getClass().getMethod("isValidLastTier").invoke(caller);
+                var retainedCallee = callee.getClass().getMethod("isValidLastTier").invoke(callee);
+                context.enter();
+                try {
+                    assertTrue(blocked.tryPut(payload));
+                    var value = TupleResults.ownedTupleResult(Calls.target(resume, new Object[]{saved}), shape);
+                    assertSame(payload, shape.getLayout().getObject(value, 0));
+                    if (!tail) assertEquals(7L, shape.getLayout().getLong(value, 1));
+                    assertTrue(prefixCell.isEmpty(), "Completed caller prefix cannot replay"); assertTrue(blocked.isEmpty());
+                    assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(caller.getRootNode()));
+                    var handoff = shape.getLanguage().getHandoffState().get(); assertNull(handoff.getPending());
+                    assertEquals(0, handoff.getArguments().getDepth()); assertEquals(0, handoff.getResults().getDepth());
+                    assertEquals(0, handoff.getArguments().retainedReferences()); assertEquals(0, handoff.getResults().retainedReferences());
+                    assertSame(caller, program.entryTarget("caller")); assertSame(callee, program.entryTarget("direct"));
+                    assertEquals(true, retainedCaller, "First tuple capture must retain the original installed caller");
+                    assertEquals(true, retainedCallee, "First tuple capture must retain the original installed callee");
+                    assertEquals(true, caller.getClass().getMethod("isValidLastTier").invoke(caller));
+                    assertEquals(true, callee.getClass().getMethod("isValidLastTier").invoke(callee));
+                } finally { context.leave(); }
+            } finally { if (worker.isAlive()) context.close(true); worker.join(5000); }
+        }
     }
     @Test void ordinaryCallerAndEntryRoutesAreCapturedAndConflictingProofsStillFail() {
         try (var context = Context.newBuilder("thc").build()) { context.initialize("thc"); context.enter(); try {

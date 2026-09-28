@@ -2481,9 +2481,9 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     /** Only an exact callee tuple root may become a resumable cold call segment. */
+    @TruffleBoundary(transferToInterpreterOnException = false)
     private static RuntimeException captureTupleCall(Closure function, int arity, BytecodeTupleSlots destination,
             TupleCallYield yielded, Node node, MaskingState callerMask) {
-        CompilerDirectives.transferToInterpreterAndInvalidate();
         try {
             ContinuationResult continuation = yielded.getContinuation();
             Object source = continuation.getContinuationRootNode().getSourceRootNode();
@@ -2503,9 +2503,9 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     /** An exact tuple tail has no caller suffix and can return its trusted callee continuation. */
+    @TruffleBoundary(transferToInterpreterOnException = false)
     private static TailYield tailTupleYield(Closure function, int arity, BytecodeTupleSlots destination,
             TupleCallYield yielded, Node node, MaskingState callerMask) {
-        CompilerDirectives.transferToInterpreterAndInvalidate();
         try {
             ContinuationResult continuation = yielded.getContinuation();
             Object source = continuation.getContinuationRootNode().getSourceRootNode();
