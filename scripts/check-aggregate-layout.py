@@ -6,7 +6,7 @@
 
 --prepare rebuilds the exporter, compiles the fixture without the plugin, exports
 both native stages, and records the exact toolchain, inputs, commands and outputs.
-This is metadata and rejection coverage, never supported THC execution coverage.
+This records metadata and host-admission expectations; JVM execution is tested separately.
 """
 import argparse
 from datetime import datetime, timezone
@@ -105,6 +105,9 @@ BOXED_CONTROLS = {
     'boxedSoloIdentity': leaf('data', [LIFTED], False),
     'unliftedProductIdentity': leaf('data', ['BoxedRep (Just Unlifted)']),
 }
+SUPPORTED = {'nestedIdentity', 'lazyIdentity', 'alternativesIdentity',
+             'levityPolymorphic', 'boxedTupleThrough', 'tupleAliasIdentity',
+             'sumAliasIdentity', 'nestedAliasIdentity', 'emptyAliasIdentity'}
 
 
 def inventory(stage):
@@ -137,9 +140,11 @@ def inventory(stage):
             check(expr[1][0]['rep'] == expected, f'{stage}/{name}: wrong formal layout')
             check(expr[2][0] == 'var', f'{stage}/{name}: identity must remain constructor-free')
         report = audit_core.Audit([(str(path), module)], CAP).run([name])
-        check(not report['accepted'], f'{stage}/{name}: aggregates must remain rejected')
-        check(any(i['code'] in ('aggregate-representation', 'aggregate-boundary') for i in report['issues']),
-              f'{stage}/{name}: missing explicit aggregate rejection')
+        check(report['accepted'] == (name in SUPPORTED),
+              f'{stage}/{name}: retained host signature admission mismatch: {report["issues"]}')
+        if name not in SUPPORTED:
+            check(any(i['code'] in ('aggregate-representation', 'aggregate-boundary') for i in report['issues']),
+                  f'{stage}/{name}: missing explicit aggregate rejection')
         check(not report['missingGlobals'], f'{stage}/{name}: unrelated missing globals')
         if name.endswith('Identity'):
             check(not report['constructors'], f'{stage}/{name}: constructor fallback masks the boundary')
@@ -184,7 +189,7 @@ def inventory(stage):
               f'{stage}/{name}: product evaluatedness must not make its lifted fields strict')
     return dict(stage=stage, boundary=module['boundary'], aggregateRecords=records,
                 checkedLayouts=list(EXPECTED), boxedControls=list(BOXED_CONTROLS),
-                lazyBoxedObservers=['boxedLazyUse', 'unliftedLazyUse'], supportedEntries=0)
+                lazyBoxedObservers=['boxedLazyUse', 'unliftedLazyUse'], supportedEntries=len(SUPPORTED))
 
 
 def output(command):
@@ -264,11 +269,11 @@ def main():
     coverage = [inventory(stage) for stage in STAGES]
     if args.prepare:
         provenance_path.write_text(json.dumps(provenance, indent=2) + '\n')
-    report = dict(schema=1, category='unsupported-aggregate-layout', supportedEntries=0,
+    report = dict(schema=1, category='aggregate-layout', supportedEntries=len(SUPPORTED),
                   coverage=coverage, provenance=record(provenance_path))
     (OUT / 'checks.json').write_text(json.dumps(report, indent=2) + '\n')
     print(f'Aggregate layout: {len(EXPECTED)} recursive/unknown layout proofs in both native stages; '
-          'polymorphic/alias regressions checked; 0 supported entries')
+          f'polymorphic/alias regressions checked; {len(SUPPORTED)} supported entries')
 
 
 if __name__ == '__main__':
