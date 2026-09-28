@@ -8,11 +8,11 @@ import static thc.runtime.RuntimeFault.fault;
 
 public final class EntryRoot extends RootNode {
     private final int arity;
-    @Child private Dispatch dispatch;
+    @Child private PreparedDispatch dispatch;
     @Child private Force force;
     public EntryRoot(TruffleLanguage<?> language, int arity, Metrics metrics) {
         super(language, new FrameLayout().build());
-        this.arity = arity; dispatch = Dispatch.create(arity, false, metrics); force = new Force(metrics);
+        this.arity = arity; dispatch = new PreparedDispatch(arity, false, metrics, new boolean[0], null); force = new Force(metrics);
     }
     @Override public Object execute(VirtualFrame frame) {
         frame.setLong(FrameLayout.BLOOM_FILTER, 0L);

@@ -881,7 +881,10 @@ public final class BytecodeProgram implements ExecutableProgram {
                 } else if (singleWrite && staticLiftedReference(local.proof)) {
                     e.staticObjectLocals.add(local.id);
                     info = FrameSlotKind.Object;
-                } else info = local.primitive ? "primitive" : "object";
+                } else {
+                    // Initial carrier metadata does not make a multi-write local static.
+                    info = local.cell ? FrameSlotKind.Object : FrameLayout.carrierKind(local.proof);
+                }
                 e.locals.put(local.id, b.createLocal(local.name, info));
             }
             var typed = context.typedInput;
@@ -4835,7 +4838,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             var b = e.builder;
             b.beginBlock();
             var slots = new ArrayList<BytecodeLocal>(fields.size());
-            for (var field : fields) slots.add(b.createLocal(field.name, field.primitive ? "primitive" : "object"));
+            for (var field : fields) slots.add(b.createLocal(field.name, FrameLayout.carrierKind(field.proof)));
             scrutinee.emitTuple(e, slots); b.emitFailCase(); b.endBlock();
         }), CoreRepresentations.expression(expr));
         if (alternatives.size() != 1) throw new RuntimeFault("Tuple or vector case requires one alternative");
@@ -4871,7 +4874,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         return new ProvenExpression(new ResultExpression((e, destination) -> {
             var b = e.builder;
             b.beginBlock();
-            for (var field : fields) e.locals.put(field.id, b.createLocal(field.name, field.primitive ? "primitive" : "object"));
+            for (var field : fields) e.locals.put(field.id, b.createLocal(field.name, FrameLayout.carrierKind(field.proof)));
             scrutinee.emitTuple(e, localSlots(e, fields));
             emitResult(body, e, destination); b.endBlock();
             for (var field : fields) e.locals.remove(field.id);
@@ -5252,7 +5255,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         return new LoweredCaseExpression(new ProvenExpression(new ResultExpression((e, destination) -> {
             var b = e.builder;
             b.beginBlock();
-            e.locals.put(binder.id, b.createLocal(binder.name, null));
+            e.locals.put(binder.id, b.createLocal(binder.name, FrameLayout.carrierKind(binderProof)));
             if (category == CaseCategory.GENERIC) {
                 b.beginStoreLocal(e.locals.get(binder.id)); scrutinee.emit(e); b.endStoreLocal();
             } else restoreArgument(e, binder, () -> scrutinee.emit(e));
