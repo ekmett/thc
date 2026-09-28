@@ -577,12 +577,12 @@ importProof = withObject "original import proof" $ \fields -> do
   where
     wrapper = withObject "original callback wrapper" $ \fields -> do
       checked fields ["binder","helper","convention","declaredType","normalizedType","normalizationRole","arguments","result","effect","typeString"]
-      association <- ExportAssociation <$> (fields .: "binder" >>= qualifiedName) <*> bytesAt fields "helper"
+      wrapperAssociation <- ExportAssociation <$> (fields .: "binder" >>= qualifiedName) <*> bytesAt fields "helper"
         <*> (fields .: "convention" >>= parseConvention) <*> (fields .: "declaredType" >>= foreignType)
         <*> (fields .: "normalizedType" >>= foreignType) <*> bytesAt fields "normalizationRole"
         <*> (fields .: "arguments" >>= array foreignType) <*> (fields .: "result" >>= foreignType)
         <*> (fields .: "effect" >>= choice [("pure",PureExport),("io",IOExport)])
-      WrapperAssociation association <$> bytesAt fields "typeString"
+      WrapperAssociation wrapperAssociation <$> bytesAt fields "typeString"
     address = withObject "original address association" $ \fields -> do
       checked fields ["binder","header","symbol","isFunction","convention","declaredType","normalizedType","normalizationRole","callback"]
       callback <- fields .: "callback"

@@ -23,8 +23,10 @@ prepareDynamicCallbacks root = do
       objects = output </> "objects"
       native = output </> "native-oracle"
       pieces = output </> "pieces"
-      sources = ["t/fixtures/compiler/DynamicCallback.hs", "t/fixtures/compiler/DynamicCallbackNative.hs",
-        "t/fixtures/compiler/dynamic-callback.c"]
+      source = "t/fixtures/compiler/DynamicCallback.hs"
+      nativeSource = "t/fixtures/compiler/DynamicCallbackNative.hs"
+      cSource = "t/fixtures/compiler/dynamic-callback.c"
+      sources = [source, nativeSource, cSource]
       execute = runLogged 180 root (relative </> "logs")
   forM_ [objects,native,output </> "core"] (createDirectoryIfMissing True)
   support <- lookupEnv "THC_PACKAGE_NATIVE_SUPPORT" >>= maybe
@@ -46,7 +48,7 @@ prepareDynamicCallbacks root = do
      "-fwrite-if-simplified-core","-package-db",pluginDb,"-plugin-package-id",pluginUnit,"-fplugin=THC.Plugin",
      "-fplugin-opt=THC.Plugin:" ++ output </> "core","-fplugin-opt=THC.Plugin:post-tidy",
      "-fplugin-opt=THC.Plugin:unit-qualified","-fplugin-opt=THC.Plugin:foreign-import-provenance",
-     "-odir",objects,"-hidir",objects,"-stubdir",objects,head sources]
+     "-odir",objects,"-hidir",objects,"-stubdir",objects,source]
   libdirResult <- execute "libdir" [] ghc ["--print-libdir"]
   let libdir = line (commandStdout libdirResult)
   hydrated <- execute "original-interface" [] helper ["--libdir",libdir,"--unit","callback-fixture",
@@ -56,7 +58,7 @@ prepareDynamicCallbacks root = do
   response <- readJson (output </> "interface-response.json")
   original <- field response "core" :: IO Value
   writeJson (output </> "core/DynamicCallback.json") original
-  let cArguments = ["-c","-O2",last sources,"-o",objects </> "callback.o"]
+  let cArguments = ["-c","-O2",cSource,"-o",objects </> "callback.o"]
   cCompiled <- execute "native-component" [] ghc cArguments
   captureNativeObject pieces ghc cArguments
   capturePackageNative root helper libdir ghc ["-dynamic","-odir",objects] "callback-fixture" output
@@ -65,7 +67,7 @@ prepareDynamicCallbacks root = do
   forM_ linked $ \(name,bytes) -> BS.writeFile (output </> name) bytes
   oracleBuilt <- execute "native-build" [] ghc
     ["--make","-O2","-fforce-recomp","-dcore-lint","-i","-it/fixtures/compiler",
-     "-odir",native,"-hidir",native,"-stubdir",native,sources !! 1,last sources,"-o",native </> "oracle"]
+     "-odir",native,"-hidir",native,"-stubdir",native,nativeSource,cSource,"-o",native </> "oracle"]
   oracle <- execute "native-oracle" [] (native </> "oracle") []
   unless (commandStdout oracle == "(12,13,2,24)\n(16,1,4)\n" && BS.null (commandStderr oracle))
     (fail "Original callback oracle differs")

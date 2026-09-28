@@ -14,7 +14,7 @@
 module InterfaceForeignFacts (prepareForeignAssociation, prepareTypedForeignAssociation, prepareImportStubs, inspectInstalledBound) where
 
 import Control.Monad (forM, forM_, unless)
-import Data.Aeson (Value(..), object, (.=), eitherDecodeStrict')
+import Data.Aeson (Value(..), object, (.=), eitherDecodeStrict', toJSON)
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString.Char8 as BSC
 import Data.Foldable (toList)
@@ -341,8 +341,8 @@ inspectInstalledBound environment charPath output = do
         "executableAssociation" .= False])
   writeJson output value
 
--- Stock import products are inert, but arbitrary C files and wrapper callbacks
--- are not. Recover the exact annotation through a fresh interface session.
+-- Recover exact static-import and typed-wrapper provenance through a fresh
+-- interface session; neither record grants native execution or admits arbitrary C.
 prepareImportStubs :: FilePath -> FilePath -> FilePath -> FilePath -> FilePath -> String -> String -> FilePath -> String -> IO [CommandResult]
 prepareImportStubs root directory ghc ghcPkg libdir unitName baseUnit pluginDb pluginUnit = do
   let labelVariants = [("labels", ["-DTHC_LABELS"]),
@@ -350,7 +350,7 @@ prepareImportStubs root directory ghc ghcPkg libdir unitName baseUnit pluginDb p
                        ("capi-labels", ["-DTHC_LABELS", "-DTHC_CAPI_LABELS"]),
                        ("capi-labels-header", ["-DTHC_LABELS", "-DTHC_CAPI_LABELS", "-DTHC_LABEL_HEADER"]),
                        ("finalizer-label", ["-DTHC_LABELS", "-DTHC_FINALIZER_LABEL"])]
-      verifiedVariants = "plain" : map fst labelVariants
+      verifiedVariants = "plain" : "wrapper" : map fst labelVariants
       variants = [("plain", [])] ++ labelVariants ++ [("extra-file", ["-DTHC_EXTRA_FILE"]),
                   ("wrapper", ["-DTHC_WRAPPER"]), ("instrumented", ["-finfo-table-map"])]
       source = directory </> "source/ForeignImportStubs.hs"
@@ -401,7 +401,6 @@ prepareImportStubs root directory ghc ghcPkg libdir unitName baseUnit pluginDb p
           proof = maybe Null id (field "staticForeignImportStubs" value)
           (status, reason) = case variant of
             "extra-file" -> ("rejected", "additional-foreign-files")
-            "wrapper" -> ("unclassified", "non-static-c-import-declaration")
             _ | variant `elem` verifiedVariants -> ("verified", "")
               | otherwise -> ("unclassified", "unclassified-target-or-instrumentation")
       check (field "status" proof == Just (String status) &&
@@ -419,7 +418,8 @@ prepareImportStubs root directory ghc ghcPkg libdir unitName baseUnit pluginDb p
           _ -> False)
           "Distinct CAPI aliases lost their original emitted wrappers"
         let addresses = case field "addresses" proof of Just (Array values) -> toList values; _ -> []
-        check (if variant == "plain" then null addresses && field "schema" proof == Just (Number 1)
+        check (if variant `elem` ["plain", "wrapper"] then null addresses &&
+            field "schema" proof == Just (Number (if variant == "wrapper" then 3 else 1))
           else length addresses == (if variant == "finalizer-label" then 3 else 2) && field "schema" proof == Just (Number 2) &&
             all (\address -> field "normalizationRole" address == Just (String "representational") &&
               field "declaredType" address /= Nothing && field "normalizedType" address /= Nothing &&
@@ -433,6 +433,26 @@ prepareImportStubs root directory ghc ghcPkg libdir unitName baseUnit pluginDb p
           else null callbacks) "Only the actual FunPtr (Ptr a -> IO ()) type proves the finalizer ABI"
         case interfaceForeign core of
           ForeignCore.IfaceForeign (Just (ForeignCore.IfaceCStubs header body initializers finalizers)) [] -> do
+            let wrappers = case field "wrappers" proof of Just (Array values) -> toList values; _ -> []
+                int32 = object ["kind" .= ("tycon" :: String), "arguments" .= ([] :: [Value]),
+                  "name" .= object ["unit" .= ("ghc-internal" :: String),
+                    "module" .= ("GHC.Internal.Int" :: String), "occurrence" .= ("Int32" :: String),
+                    "namespace" .= ("type" :: String)]]
+            check (if variant == "wrapper" then case wrappers of
+              [record] -> field "binder" record == Just (object ["unit" .= unitName,
+                  "module" .= ("ForeignImportStubs" :: String), "occurrence" .= ("callback" :: String),
+                  "namespace" .= ("value" :: String)]) &&
+                field "convention" record == Just (String "ccall") &&
+                field "normalizationRole" record == Just (String "representational") &&
+                field "declaredType" record /= Nothing && field "normalizedType" record /= Nothing &&
+                field "arguments" record == Just (toJSON [int32]) && field "result" record == Just int32 &&
+                field "effect" record == Just (String "io") && field "typeString" record == Just (String "W") &&
+                case field "helper" record of
+                  Just (String helper) -> not (Text.null helper) &&
+                    Text.unpack helper `isInfixOf` header && Text.unpack helper `isInfixOf` body
+                  _ -> False
+              _ -> False
+              else null wrappers) "Typed wrapper provenance lost its original binder, helper or callback ABI"
             let details = interfaceDetails core
                 label kind = ForeignCore.IfaceCLabel CStubLabel { csl_is_initializer = kind,
                   csl_module = expected, csl_name = fsLit "extra" }
