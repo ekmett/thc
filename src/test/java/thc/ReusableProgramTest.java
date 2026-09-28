@@ -76,6 +76,48 @@ class ReusableProgramTest {
         return ((Number) ((Map<?, ?>) Json.parse(entry.getMember("diagnostics").asString())).get(key)).longValue();
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"ast", "bytecode"})
+    void ordinaryCompiledFactoryRetainsItsFirstLoadAndGuestEntry(String backend) throws Exception {
+        var longRep = map("kind", "long", "evaluated", true, "primReps", list("IntRep"));
+        var closureRep = map("kind", "closure", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)"));
+        var reader = binding("read", list("lam", list(wordParameter("x")), variable("x"),
+            map("rep", closureRep, "resultRep", longRep)), true);
+        reader.put("arity", 1); reader.put("rep", closureRep);
+        var request = Json.stringify(map("modules", list(module(list(reader))), "entry", "read",
+            "backend", backend, "asyncExceptions", false));
+        try (var engine = Engine.newBuilder().allowExperimentalOptions(true)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("engine.CompilationFailureAction", "Throw").build();
+             var context = Context.newBuilder("thc").engine(engine).build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var factory = Language.currentState().getEnv().parsePublic(com.oracle.truffle.api.source.Source
+                    .newBuilder("thc", request, "ordinary-compiled-factory-" + backend).cached(true).build());
+                var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget");
+                assertEquals(false, type.getMethod("wasExecuted").invoke(factory));
+                type.getMethod("compile", boolean.class).invoke(factory, true);
+                assertEquals(true, type.getMethod("isValidLastTier").invoke(factory));
+                assertEquals(false, type.getMethod("wasExecuted").invoke(factory));
+                var runtime = Truffle.getRuntime();
+                runtime.getClass().getMethod("bypassedInstalledCode", type).invoke(runtime, factory);
+                var entry = (EntryValue) factory.call();
+                assertEquals(true, type.getMethod("isValidLastTier").invoke(factory), "first load must retain its original installed factory");
+                var interop = com.oracle.truffle.api.interop.InteropLibrary.getUncached();
+                var before = (Map<?, ?>) Json.parse((String) interop.readMember(entry, "diagnostics"));
+                assertEquals(0L, ((Number) before.get("compiledEntries")).longValue());
+                assertEquals(true, interop.invokeMember(entry, "compile"));
+                assertEquals(47L, interop.execute(entry, 47L));
+                var after = (Map<?, ?>) Json.parse((String) interop.readMember(entry, "diagnostics"));
+                assertTrue(((Number) after.get("compiledEntries")).longValue() > 0);
+                var compilation = (Map<?, ?>) after.get("explicitCompilation");
+                assertEquals(true, compilation.get("sameTargets"));
+                assertEquals(true, compilation.get("validLastTier"));
+                assertEquals(true, type.getMethod("isValidLastTier").invoke(factory));
+            } finally { context.leave(); }
+        }
+    }
+
     @Test void preparedPublicSourceInstantiatesWithoutLoweringAndRejectsCacheMisses() throws Exception {
         var longRep = map("kind", "long", "evaluated", true, "primReps", list("IntRep"));
         var closureRep = map("kind", "closure", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)"));

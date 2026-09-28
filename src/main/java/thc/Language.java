@@ -391,7 +391,8 @@ public final class Language extends TruffleLanguage<Language.State> {
                 ((Number) selected.get("arity")).intValue(), acceptedInputs, acceptedResult).getCallTarget();
         }
         return new RootNode(this) {
-            @Override public Object execute(VirtualFrame frame) {
+            @Override public Object execute(VirtualFrame frame) { return instantiate(); }
+            @TruffleBoundary private EntryValue instantiate() {
                 // Parsed roots may be Engine-shared; programs, CAFs and registrations are context-owned.
                 var owner = currentState(this);
                 for (var link : (List<ForeignBitcode>) linked.get("foreignLinks")) owner.cbits().link(link);
