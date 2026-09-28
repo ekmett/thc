@@ -72,7 +72,7 @@ class OriginalProcessIdentityTest {
         val manifest = json("$prefix/manifest.json") as Map<String, Any?>
         assertEquals(1L, manifest["schema"]); assertEquals("9.14.1", manifest["ghc"])
         assertEquals(true, manifest["strictAccepted"]); assertEquals(entries.keys.toList(), manifest["entries"])
-        assertTrue(isOriginalUnixUnit(manifest["unixUnit"]))
+        assertTrue(CoreOriginalStdio.isOriginalUnixUnit(manifest["unixUnit"]))
         for (stage in listOf("pre", "post"))
             assertEquals(manifest["unixUnit"], (((original(source(stage), "geteuid")[6] as Map<*, *>)["foreignCall"] as Map<*, *>)["target"] as Map<*, *>)["unit"])
         OriginalStdioChecks.hashes(root, manifest["inputHashes"], setOf(

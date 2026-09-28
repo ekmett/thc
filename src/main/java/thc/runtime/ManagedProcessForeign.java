@@ -54,7 +54,7 @@ public final class ManagedProcessForeign {
                 } : null);
             } catch (InterruptedWait ignored) {
                 // No waitpid/reap occurred and the caller's output is untouched.
-                context.getStdio().captureForeignErrno$org_intelligence_thc(4);
+                context.getStdio().captureForeignErrno(4);
                 return -1;
             }
         } finally { threads.leaveForeign(previous); }
@@ -149,7 +149,7 @@ public final class ManagedProcessForeign {
         int pid = cint(arguments[0]);
         if (operation == ProcessOp.TERMINATE) {
             var result = context.getFiles().processOperation$org_intelligence_thc(operation, pid, node, beforeBlock);
-            context.getStdio().nativeError$org_intelligence_thc(result.getErrno());
+            context.getStdio().nativeError(result.getErrno());
             return result.getStatus();
         }
         var destination = pointer(arguments[1]);
@@ -157,7 +157,7 @@ public final class ManagedProcessForeign {
             destination.requireByteRegion$org_intelligence_thc(4, true);
             var result = context.getFiles().processOperation$org_intelligence_thc(operation, pid, node, beforeBlock);
             if (result.getExitCode() != null) destination.writeNativeScalar(0, 4, result.getExitCode().longValue());
-            context.getStdio().nativeError$org_intelligence_thc(result.getErrno());
+            context.getStdio().nativeError(result.getErrno());
             return result.getStatus();
         });
     }
@@ -174,7 +174,7 @@ public final class ManagedProcessForeign {
 
     private long rejected(ManagedAddress failure, int error, ProcessFailureStage stage) {
         failure.writeAddressElementIndex(0, failures.get(stage));
-        context.getStdio().nativeError$org_intelligence_thc(error);
+        context.getStdio().nativeError(error);
         return -1;
     }
 
