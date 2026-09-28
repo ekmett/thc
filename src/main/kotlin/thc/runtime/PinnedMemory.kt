@@ -12,7 +12,7 @@ internal object PinnedMemory {
     @JvmStatic @TruffleBoundary fun allocate(size: Long, alignment: Long): ManagedAllocation {
         if (alignment <= 0 || alignment and (alignment - 1) != 0L)
             fault("Pinned ByteArray# alignment must be a positive power of two")
-        return ManagedAllocation.mutable(size, ValueLayout.ADDRESS.byteSize().toInt(), pinned = true, alignment = alignment)
+        return ManagedAllocation.mutable(size, ValueLayout.ADDRESS.byteSize().toInt(), true, alignment)
     }
 
     private fun pointerArray(value: Any?): ManagedAllocation = value as? ManagedAllocation

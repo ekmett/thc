@@ -68,8 +68,12 @@ class HandoffTest {
                 override fun execute(frame: VirtualFrame): Any? = caller.call(frame, frame.arguments, dispatch, true)
             }
             val descriptor = layout.build()
-            val root = FunctionRoot(language, descriptor, "invalid tail destination", null, intArrayOf(),
-                intArrayOf(), intArrayOf(), body, Metrics(false), resultProof = proof, handoff = entry)
+            val root = FunctionRoot(language, descriptor, "invalid tail destination", null,
+                intArrayOf(), intArrayOf(), intArrayOf(), body,
+                Metrics(false), emptyArray(), proof, body.coreSourceLocation,
+                booleanArrayOf(), entry, null, intArrayOf(),
+                null, false, emptyArray(), false,
+                FunctionRootRole.FUNCTION, false)
             root.adoptChildren()
             val frame = Truffle.getRuntime().createVirtualFrame(packet, descriptor)
             frame.setLong(entry.destinationSlot, 0L)
@@ -117,8 +121,8 @@ class HandoffTest {
         assertEquals(true, type.getMethod("isValidLastTier").invoke(target))
     }
     private fun withLanguage(inlining: Boolean = true, action: (Language) -> Unit) {
-        val previous = System.getProperty(HANDOFF_PROPERTY)
-        System.setProperty(HANDOFF_PROPERTY, "true")
+        val previous = System.getProperty(HandoffKt.HANDOFF_PROPERTY)
+        System.setProperty(HandoffKt.HANDOFF_PROPERTY, "true")
         try {
             (if (inlining) executionContext() else Context.newBuilder("thc").allowExperimentalOptions(true)
                 .option("compiler.Inlining", "false").option("engine.BackgroundCompilation", "false")
@@ -129,7 +133,7 @@ class HandoffTest {
                 finally { context.leave() }
             }
         } finally {
-            if (previous == null) System.clearProperty(HANDOFF_PROPERTY) else System.setProperty(HANDOFF_PROPERTY, previous)
+            if (previous == null) System.clearProperty(HandoffKt.HANDOFF_PROPERTY) else System.setProperty(HandoffKt.HANDOFF_PROPERTY, previous)
         }
     }
     private fun assertReleased(state: HandoffState) {
@@ -142,11 +146,11 @@ class HandoffTest {
         // Unlike withLanguage, this proof never changes the process property.
         // Named Gradle forks supply an independent expectation; legacy `test`
         // still accepts the caller's JAVA_TOOL_OPTIONS setting.
-        val actual = java.lang.Boolean.getBoolean(HANDOFF_PROPERTY)
+        val actual = java.lang.Boolean.getBoolean(HandoffKt.HANDOFF_PROPERTY)
         val expected = System.getProperty("thc.expectedHandoffSlabs")
         if (expected != null) {
             assertTrue(expected == "true" || expected == "false")
-            assertEquals(expected, System.getProperty(HANDOFF_PROPERTY),
+            assertEquals(expected, System.getProperty(HandoffKt.HANDOFF_PROPERTY),
                 "The fork must receive its requested handoff mode")
         }
         executionContext().use { context ->
@@ -346,8 +350,12 @@ class HandoffTest {
         val entry = HandoffEntry.create(language, layout, listOf(proof), proof, false)!!
         val saved = ArrayList<MaterializedFrame>()
         val body = RememberFrame(argument, saved)
-        val root = FunctionRoot(language, layout.build(), "retained slab frame", null, intArrayOf(), intArrayOf(argument), intArrayOf(0),
-            body, Metrics(false), arrayOf(proof), proof, null, booleanArrayOf(false), entry)
+        val root = FunctionRoot(language, layout.build(), "retained slab frame", null,
+            intArrayOf(), intArrayOf(argument), intArrayOf(0), body,
+            Metrics(false), arrayOf(proof), proof, null,
+            booleanArrayOf(false), entry, null, intArrayOf(),
+            null, false, emptyArray(), false,
+            FunctionRootRole.FUNCTION, false)
         val caller = InvokeWorker(root.callTarget)
         assertEquals(3_000_000_018L, Calls.target(caller.callTarget, arrayOf(0L, 3_000_000_017L)))
         assertThrows(RuntimeFault::class.java) { Calls.target(caller.callTarget, arrayOf(0L, 999L)) }

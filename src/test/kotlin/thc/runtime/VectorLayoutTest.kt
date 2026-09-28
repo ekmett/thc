@@ -100,15 +100,15 @@ class VectorLayoutTest {
             val source = AstInputSource(ArgumentLayout.fromProofs(listOf(proof))!!, original.slots)
             val input = TypedInputLayout.create(language,
                 ArgumentLayout.fromProofs(listOf(proof, proof, integer)), false)!!
-            val closure = Closure(null, arity = 3, target = target)
+            val closure = Closure(null, 3, target)
             fun append(function: Closure) = if (generic)
-                genericTypedPap(function, input, source, original.frame, node, null, 1, 0, 1)
-            else typedPap(function, input, source, original.frame, node, null, 0, 1,
+                GenericTypedInputsKt.genericTypedPap(function, input, source, original.frame, node, null, 1, 0, 1)
+            else TypedInputsKt.typedPap(function, input, source, original.frame, node, null, 0, 1,
                 function.suppliedCount, function.arity)
             val first = append(closure)
             val second = append(first)
             assertEquals(1, first.suppliedCount); assertEquals(2, second.suppliedCount)
-            assertSame(NO_PAP_ARGUMENTS, first.supplied); assertSame(NO_PAP_ARGUMENTS, second.supplied)
+            assertSame(Closure.NO_PAP_ARGUMENTS, first.supplied); assertSame(Closure.NO_PAP_ARGUMENTS, second.supplied)
             assertNotSame(first.typedSupplied, second.typedSupplied)
             val expected = Slots(1)
             vector.write(expected.frame, expected.slots, 0, vector.read(original.frame, original.slots, 0))

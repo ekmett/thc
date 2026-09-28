@@ -1,0 +1,311 @@
+// SPDX-FileCopyrightText: 2026 Edward Kmett
+// SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+package thc;
+
+import java.io.RandomAccessFile;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.HexFormat;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+import java.util.zip.ZipFile;
+import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.io.IOAccess;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
+import org.junit.jupiter.api.io.TempDir;
+import thc.runtime.CoreRepresentations;
+import thc.runtime.ManagedAddress;
+import thc.runtime.ManagedMd5;
+import thc.runtime.RuntimeFault;
+import thc.runtime.UnsupportedCore;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+/** Native Windows packaging and authority regressions; never a full-platform parity gate. */
+@EnabledOnOs(OS.WINDOWS)
+@SuppressWarnings("unchecked")
+class WindowsDistributionTest {
+    private final Path root = Path.of(System.getProperty("thc.projectRoot"));
+    @TempDir Path temporary;
+
+    private String digest(Path file) throws Exception {
+        var hash = MessageDigest.getInstance("SHA-256");
+        try (var input = Files.newInputStream(file)) {
+            var buffer = new byte[64 * 1024];
+            int count;
+            while ((count = input.read(buffer)) >= 0) hash.update(buffer, 0, count);
+        }
+        return HexFormat.of().formatHex(hash.digest());
+    }
+    private Map<String, Object> document(Path path) throws Exception {
+        return (Map<String, Object>) Json.INSTANCE.parse(Files.readString(path));
+    }
+    private Map<String, Object> document(ZipFile zip, String path) throws Exception {
+        try (var input = zip.getInputStream(zip.getEntry(path))) {
+            return (Map<String, Object>) Json.INSTANCE.parse(new String(input.readAllBytes(), StandardCharsets.UTF_8));
+        }
+    }
+    private Map<String, Object> single(List<Map<String, Object>> rows, String key, Object value) {
+        var matches = rows.stream().filter(row -> value.equals(row.get(key))).toList();
+        assertEquals(1, matches.size());
+        return matches.getFirst();
+    }
+    private Map<String, Object> verifiedReceipt(String path) throws Exception {
+        var receipt = document(root.resolve(path));
+        assertEquals("9.14.1", receipt.get("ghc"));
+        assertEquals("mingw32", receipt.get("system"));
+        for (var field : List.of("inputHashes", "artifactHashes")) {
+            var hashes = (Map<String, String>) receipt.get(field);
+            assertFalse(hashes.isEmpty(), field);
+            for (var entry : hashes.entrySet()) assertEquals(entry.getValue(), digest(root.resolve(entry.getKey())), entry.getKey());
+        }
+        for (var command : (List<Map<String, Object>>) receipt.get("commands"))
+            assertEquals(command.get("expectedExit"), command.get("exit"), command.toString());
+        return receipt;
+    }
+
+    @Test void nativeSmokeInputsAndArtifactsHaveCurrentProvenance() throws Exception {
+        var receipt = verifiedReceipt("build/windows-smoke/provenance.json");
+        assertEquals(133L, ((Number) receipt.get("nativeRows")).longValue());
+        assertEquals(19, ((List<?>) receipt.get("entries")).size());
+        var commands = (List<Map<String, Object>>) receipt.get("commands");
+        assertTrue(commands.stream().anyMatch(command -> ((Number) command.get("expectedExit")).longValue() == 1L));
+        assertNotNull(getClass().getResource("/thc/cbits/md5.dll"));
+        try (var input = getClass().getResourceAsStream("/thc/native/stdio-host-abi.json")) {
+            assertNotNull(input);
+            var abi = (Map<String, Object>) Json.INSTANCE.parse(new String(input.readAllBytes(), StandardCharsets.UTF_8));
+            assertEquals("Windows", abi.get("system"));
+            assertEquals("windows-managed-descriptors", abi.get("profile"));
+            assertEquals(2L, abi.get("schema"));
+            assertEquals(digest(root.resolve("src/main/c/windows-stdio-abi-probe.c")), abi.get("sourceSha256"));
+        }
+        for (var path : List.of("/thc/cbits/iconv.bc", "/thc/cbits/strerror.bc", "/thc/cbits/strerror-locale.bc",
+            "/thc/native/posix-stat-abi.json", "/thc/native/termios-abi.json", "/thc/native/sigset-abi.json"))
+            assertNull(getClass().getResource(path), path);
+    }
+
+    @Test void publicDriverMatchesNativeCompletionInEveryBackendAndHandoffMode() throws Exception {
+        var receipt = verifiedReceipt("build/windows-driver/provenance.json");
+        assertEquals(4L, ((Number) receipt.get("runs")).longValue());
+        var commands = (List<Map<String, Object>>) receipt.get("commands");
+        assertEquals(6, commands.size());
+        var runs = commands.subList(2, commands.size());
+        assertEquals(List.of(true, false, false, false), runs.stream()
+            .map(command -> ((List<?>) command.get("argv")).contains("--verify-artifacts")).toList());
+        var environments = new HashSet<List<String>>();
+        for (var command : runs) {
+            var environment = (Map<String, String>) command.get("environment");
+            environments.add(List.of(environment.get("THC_BACKEND"), environment.get("JAVA_OPTS")));
+        }
+        assertEquals(Set.of(
+            List.of("ast", "-Dthc.diagnostics=true -Dthc.handoffSlabs=false"),
+            List.of("ast", "-Dthc.diagnostics=true -Dthc.handoffSlabs=true"),
+            List.of("bytecode", "-Dthc.diagnostics=true -Dthc.handoffSlabs=false"),
+            List.of("bytecode", "-Dthc.diagnostics=true -Dthc.handoffSlabs=true")), environments);
+    }
+
+    @Test void genuineHaskellHostEntryPreservesTheThunkAndStrictIoSignature() throws Exception {
+        var receipt = verifiedReceipt("build/windows-driver/provenance.json");
+        var manifests = (List<String>) receipt.get("supportManifests");
+        var audited = (List<String>) receipt.get("auditedManifests");
+        assertEquals(4, manifests.size());
+        assertEquals(manifests.subList(0, 1), audited);
+        for (var manifest : manifests) {
+            var output = root.resolve(manifest).getParent().getParent();
+            var original = (List<Map<String, Object>>) document(output.resolve("core/Main.json")).get("bindings");
+            var host = (List<Map<String, Object>>) document(output.resolve("core/THC.WindowsRunMain.json")).get("bindings");
+            var main = single(original, "id", "main:Main.main");
+            assertEquals(0L, main.get("arity"), "The actual no-interface-pragmas main remains a thunk");
+            assertEquals("IO ()", main.get("type"));
+            var bindings = new ArrayList<>(original);
+            bindings.addAll(host);
+            assertThrows(UnsupportedCore.class, () -> CoreRepresentations.INSTANCE.ioUnitMainResult(main, bindings));
+            var entry = single(host, "id", "main:THC.WindowsRunMain.thcRunMain");
+            var result = CoreRepresentations.INSTANCE.ioUnitMainResult(entry, bindings);
+            assertEquals(2, result.getComponents().size());
+            var invalid = new LinkedHashMap<>(entry);
+            invalid.put("type", "IO Int");
+            assertThrows(UnsupportedCore.class, () -> CoreRepresentations.INSTANCE.ioUnitMainResult(invalid, bindings));
+            if (audited.contains(manifest)) {
+                var audit = document(output.resolve("audit.json"));
+                assertEquals(true, audit.get("accepted"));
+                assertEquals(List.of(entry.get("id")), audit.get("roots"));
+                assertEquals(List.of(), audit.get("issues"));
+                assertEquals(List.of(), audit.get("missingGlobals"));
+            } else assertFalse(Files.exists(output.resolve("audit.json")), "Auditing must remain opt-in: " + manifest);
+        }
+    }
+
+    @Test void nativeSourceArchiveAndRuntimeProjectionKeepExactModuleBytes() throws Exception {
+        var receipt = verifiedReceipt("build/windows-driver/provenance.json");
+        var manifests = (List<String>) receipt.get("supportManifests");
+        assertEquals(4, manifests.size());
+        var units = new ArrayList<Map<String, Object>>();
+        for (var path : manifests) {
+            var manifest = document(root.resolve(path));
+            units.add(single((List<Map<String, Object>>) manifest.get("units"), "id", "ghc-internal"));
+        }
+        assertEquals(1, new HashSet<>(units).size(), "All CLI modes must reuse the same exact support publication");
+        var unit = units.getFirst();
+        var direct = (Map<String, String>) unit.get("json");
+        Map<String, String> bundle;
+        if (direct == null) bundle = (Map<String, String>) unit.get("bundle");
+        else {
+            assertFalse(unit.containsKey("bundle"));
+            var symbols = (Map<String, String>) unit.get("symbols");
+            for (var artifact : List.of(direct, symbols)) assertEquals(artifact.get("sha256"), digest(Path.of(artifact.get("path"))));
+            // The producer keeps the original validated archive for its native
+            // source-build receipts; the runtime itself selects only the pair.
+            var publication = document(Path.of(direct.get("path")).getParent().resolve("publication.json"));
+            var published = (Map<String, Object>) publication.get("unit");
+            for (var key : List.of("id", "modules", "json", "symbols")) assertEquals(unit.get(key), published.get(key), key);
+            bundle = (Map<String, String>) publication.get("source");
+        }
+        assertEquals(bundle.get("sha256"), digest(Path.of(bundle.get("path"))));
+        try (var projected = new ZipFile(bundle.get("path"))) {
+            var inputs = document(projected, "inplace-manifest.json");
+            var complete = (Map<String, String>) inputs.get("completeSourceBundle");
+            var excluded = (List<Map<String, String>>) inputs.get("archiveOnlyModules");
+            assertEquals(List.of("GHC.Internal.Conc.Bound"), excluded.stream().map(module -> module.get("module")).toList());
+            assertEquals(complete.get("sha256"), digest(Path.of(complete.get("path"))));
+            try (var full = new ZipFile(complete.get("path"))) {
+                var fullManifest = document(full, "manifest.json");
+                var fullInputs = document(full, "inplace-manifest.json");
+                assertEquals(fullInputs.get("generatedSources"), inputs.get("generatedSources"));
+                var steps = (List<Map<String, Object>>) ((Map<?, ?>) fullInputs.get("sourceBuild")).get("steps");
+                assertEquals(235, steps.size());
+                assertEquals(24L, steps.stream().filter(step -> Boolean.TRUE.equals(step.get("boot"))).count());
+                for (var step : steps) {
+                    assertEquals(0L, step.get("exit"));
+                    var arguments = (List<String>) step.get("arguments");
+                    assertTrue(arguments.containsAll(List.of("-O2", "-dcore-lint", "-fwrite-if-simplified-core", "-DBIGNUM_GMP")));
+                    assertFalse(arguments.contains("-fignore-interface-pragmas"));
+                }
+                var fullModules = (List<Map<String, Object>>) fullManifest.get("modules");
+                var projectedModules = new LinkedHashMap<Object, Map<String, Object>>();
+                for (var module : (List<Map<String, Object>>) document(projected, "manifest.json").get("modules"))
+                    projectedModules.put(module.get("name"), module);
+                var selected = (List<Map<String, Object>>) unit.get("modules");
+                assertEquals(211, fullModules.size());
+                assertEquals(210, selected.size());
+                for (var module : selected) {
+                    var original = single(fullModules, "name", module.get("name"));
+                    assertEquals(original, projectedModules.get(module.get("name")), "original source projection retains its full record");
+                    for (var field : original.entrySet()) if (direct == null || !field.getKey().equals("index"))
+                        assertEquals(field.getValue(), module.get(field.getKey()), field.getKey());
+                    var member = (String) module.get("path");
+                    // Source-rich genuine modules can each exceed the test heap.
+                    // Compare every byte and the checked digest with bounded buffers.
+                    var hash = MessageDigest.getInstance("SHA-256");
+                    try (var expected = full.getInputStream(full.getEntry(member));
+                         var actual = projected.getInputStream(projected.getEntry(member));
+                         var pair = direct == null ? null : new RandomAccessFile(direct.get("path"), "r")) {
+                        if (pair != null) pair.seek((Long) module.get("start"));
+                        var left = new byte[64 * 1024];
+                        var right = new byte[left.length];
+                        var published = new byte[left.length];
+                        while (true) {
+                            int count = expected.readNBytes(left, 0, left.length);
+                            assertEquals(count, actual.readNBytes(right, 0, right.length), member);
+                            if (count == 0) break;
+                            assertEquals(-1, Arrays.mismatch(left, 0, count, right, 0, count), member);
+                            if (pair != null) {
+                                pair.readFully(published, 0, count);
+                                assertEquals(-1, Arrays.mismatch(left, 0, count, published, 0, count), member);
+                            }
+                            hash.update(right, 0, count);
+                        }
+                        if (pair != null) assertEquals(module.get("end"), pair.getFilePointer(), "exact published module span");
+                    }
+                    assertEquals(module.get("sha256"), HexFormat.of().formatHex(hash.digest()));
+                }
+                var archived = single(fullModules, "name", "GHC.Internal.Conc.Bound");
+                assertNull(projected.getEntry((String) archived.get("path")));
+                var module = document(full, (String) archived.get("path"));
+                assertTrue(assertThrows(IllegalArgumentException.class, () -> CoreModules.INSTANCE.merge(List.of(module)))
+                    .getMessage().contains("Unsupported foreign"));
+            }
+        }
+    }
+
+    @Test void relocatedBatchLauncherAcceptsPathsWithSpacesOnBothBackends() throws Exception {
+        var destination = temporary.resolve("THC distribution with spaces");
+        var installed = root.resolve("build/install/thc");
+        try (var paths = Files.walk(installed)) {
+            for (var path : paths.toList()) {
+                var target = destination.resolve(installed.relativize(path));
+                if (Files.isDirectory(path)) Files.createDirectories(target);
+                else Files.copy(path, target);
+            }
+        }
+        var core = Files.createDirectories(temporary.resolve("Core inputs with spaces"));
+        var modules = new ArrayList<String>();
+        for (var module : List.of("THC.Prim", "THC.Fixtures"))
+            modules.add(Files.copy(root.resolve("build/core/" + module + ".json"), core.resolve(module + ".json")).toAbsolutePath().toString());
+        var evidence = Files.createDirectories(root.resolve("build/windows-launcher/" + UUID.randomUUID()));
+        var oracle = Files.readAllLines(root.resolve("build/native/oracle.tsv")).stream().map(line -> line.split("\t", -1)).toList();
+        for (var backend : List.of("ast", "bytecode")) {
+            var output = evidence.resolve(backend + ".stdout");
+            var errors = evidence.resolve(backend + ".stderr");
+            var command = List.of("cmd.exe", "/d", "/c", "call", destination.resolve("bin/thc.bat").toAbsolutePath().toString(),
+                String.join(",", modules), "sumLoop", "10");
+            var builder = new ProcessBuilder(command).directory(temporary.toFile()).redirectOutput(output.toFile()).redirectError(errors.toFile());
+            builder.environment().put("THC_BACKEND", backend);
+            builder.environment().put("JAVA_OPTS", "-Dthc.handoffSlabs=" + System.getProperty("thc.handoffSlabs", "false"));
+            var receipt = new LinkedHashMap<String, Object>();
+            receipt.put("argv", command);
+            receipt.put("backend", backend);
+            receipt.put("handoffSlabs", System.getProperty("thc.handoffSlabs"));
+            Files.writeString(evidence.resolve(backend + ".command.json"), Json.INSTANCE.stringify(receipt));
+            var child = builder.start();
+            try {
+                assertTrue(child.waitFor(60, TimeUnit.SECONDS), "Launcher timed out: " + evidence);
+                Files.writeString(evidence.resolve(backend + ".exit"), Integer.toString(child.exitValue()));
+                assertEquals(0, child.exitValue(), Files.readString(errors));
+                var expected = oracle.stream().filter(row -> row[0].equals("sumLoop") && row[1].equals("10")).toList();
+                assertEquals(1, expected.size());
+                assertEquals(expected.getFirst()[2], Files.readString(output).trim());
+                var diagnostics = Files.readAllLines(errors).stream().filter(line -> line.startsWith("{")).toList().getLast();
+                assertEquals(backend, ((Map<?, ?>) Json.INSTANCE.parse(diagnostics)).get("backend"));
+            } finally { if (child.isAlive()) child.destroyForcibly().waitFor(); }
+        }
+    }
+
+    @Test void nativeMd5NeedsNativeAuthorityButNoGuestFilesystemAuthority() throws Exception {
+        for (boolean nativeAccess : new boolean[] {false, true, false, true}) {
+            try (var context = Context.newBuilder("thc").allowNativeAccess(nativeAccess).allowIO(IOAccess.NONE).build()) {
+                context.initialize("thc");
+                context.enter();
+                try {
+                    var bytes = new byte[88];
+                    Arrays.fill(bytes, (byte) 0xa5);
+                    var address = ManagedAddress.Companion.fromByteArray(bytes);
+                    if (!nativeAccess) {
+                        assertThrows(RuntimeFault.class, () -> ManagedMd5.INSTANCE.init(address));
+                        var untouched = new byte[88];
+                        Arrays.fill(untouched, (byte) 0xa5);
+                        assertArrayEquals(untouched, bytes);
+                    } else {
+                        ManagedMd5.INSTANCE.init(address);
+                        var output = new byte[16];
+                        ManagedMd5.INSTANCE.update(address, ManagedAddress.Companion.fromHex("616263"), 3);
+                        ManagedMd5.INSTANCE.finish(ManagedAddress.Companion.fromByteArray(output), address);
+                        assertArrayEquals(MessageDigest.getInstance("MD5").digest("abc".getBytes(StandardCharsets.UTF_8)), output);
+                        assertArrayEquals(new byte[88], bytes);
+                    }
+                } finally { context.leave(); }
+            }
+        }
+    }
+}

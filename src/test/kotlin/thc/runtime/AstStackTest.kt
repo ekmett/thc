@@ -51,9 +51,12 @@ class AstStackTest {
                             return (result as Long) + 1
                         }
                     }
-                    val root = FunctionRoot(language, layout.build(), "sync spilled suffix", null, intArrayOf(),
-                        intArrayOf(argument), intArrayOf(0), body, Metrics(false), arrayOf(proof), proof,
-                        stackCapture = true)
+                    val root = FunctionRoot(language, layout.build(), "sync spilled suffix", null,
+                        intArrayOf(), intArrayOf(argument), intArrayOf(0), body,
+                        Metrics(false), arrayOf(proof), proof, body.coreSourceLocation,
+                        booleanArrayOf(), null, null, intArrayOf(),
+                        null, false, emptyArray(), false,
+                        FunctionRootRole.FUNCTION, true)
                     body.install(root.callTarget)
                     assertFalse(root.enableAsync)
                     assertEquals(4097L, Calls.target(root.callTarget, arrayOf(0L, 4096L)))
@@ -82,10 +85,13 @@ class AstStackTest {
                     }
                 }
                 val root = FunctionRoot(language, FrameLayout().build(), "sync parked side exit", null,
-                    intArrayOf(), intArrayOf(), intArrayOf(), body, Metrics(false),
-                    role = FunctionRootRole.PASS_THROUGH, stackCapture = true)
+                    intArrayOf(), intArrayOf(), intArrayOf(), body,
+                    Metrics(false), emptyArray(), body.representation, body.coreSourceLocation,
+                    booleanArrayOf(), null, null, intArrayOf(),
+                    null, false, emptyArray(), false,
+                    FunctionRootRole.PASS_THROUGH, true)
                 body.transfer = TailCall(root.callTarget, arrayOf(0L))
-                val stack = astStackScope(root)
+                val stack = AstStackKt.astStackScope(root)
                 stack.depth = AstStackScope.MAX_DEPTH - 1
                 stack.driving = true
                 val saved = try { Calls.target(root.callTarget, arrayOf(0L)) as AstContinuation }
@@ -101,9 +107,10 @@ class AstStackTest {
 
     @Test fun stackSpillRecognizesOnlyThePrivateIdentityAndTypedSuspensions() {
         fun saved(marker: Any?) = object : SavedGuestContinuation {
-            override val identity: Any get() = this
-            override val yielded: Any? = marker
-            override val sourceRoot: Any = Any()
+            override fun getIdentity(): Any = this
+            override fun getYielded(): Any? = marker
+            private val savedRoot = Any()
+            override fun getSourceRoot(): Any = savedRoot
             override fun continueWith(input: Any?): Any? = error("Classification must not resume a continuation")
         }
         val spoof = object {
@@ -114,15 +121,15 @@ class AstStackTest {
             override fun equals(other: Any?): Boolean = error("Classification must not invoke guest equality")
             override fun hashCode(): Int = 0
         }
-        assertTrue(saved(AstStackSpill).stackSpill())
+        assertTrue(saved(AstStackSpill.INSTANCE).stackSpill())
         for (marker in listOf(null, Any(), spoof, hostile)) assertFalse(saved(marker).stackSpill())
         val thunk = Thunk(object : RootNode(null) {
             override fun execute(frame: VirtualFrame): Any? = error("Classification must not force a thunk")
         }.callTarget, null)
         val segment = CallSegment(saved(null))
         for (spill in listOf(false, true)) {
-            assertEquals(spill, saved(ThunkSuspended(thunk, stackSpill = spill)).stackSpill())
-            assertEquals(spill, saved(CallSegmentSuspended(segment, stackSpill = spill)).stackSpill())
+            assertEquals(spill, saved(ThunkSuspended(thunk, null, spill)).stackSpill())
+            assertEquals(spill, saved(CallSegmentSuspended(segment, null, SavedGuestContinuationKt.savedGuestContinuation(segment.value)?.asyncRequest(), spill)).stackSpill())
         }
     }
 
@@ -192,7 +199,7 @@ class AstStackTest {
                     val program = Program(language, module(), true)
                     var effects = 0
                     var failAt = -1
-                    val tick = Closure(environment = null, arity = 1, target = object : RootNode(language) {
+                    val tick = Closure(null, 1, object : RootNode(language) {
                         override fun execute(frame: VirtualFrame): Any {
                             assertEquals(MaskingState.MASKED_INTERRUPTIBLE, state.maskingState.get())
                             effects++
@@ -243,7 +250,7 @@ class AstStackTest {
                     val program = Program(language, module(), true)
                     var effects = 0
                     var request: AsyncRequest? = null
-                    val tick = Closure(null, arity = 1, target = object : RootNode(language) {
+                    val tick = Closure(null, 1, object : RootNode(language) {
                         override fun execute(frame: VirtualFrame): Any {
                             if (++effects == 100)
                                 request = state.threads.send(state.threads.currentIdentity(), "interrupt after spill")
@@ -252,7 +259,7 @@ class AstStackTest {
                     }.callTarget)
                     val result = Calls.target(program.hostEntryTarget(2),
                         arrayOf(program.entryValue("loop"), arrayOf(4096L, tick)))
-                    val saved = savedGuestContinuation(result) ?: error("Expected the actual async continuation")
+                    val saved = SavedGuestContinuationKt.savedGuestContinuation(result) ?: error("Expected the actual async continuation")
                     assertSame(request, saved.asyncRequest()); assertFalse(saved.stackSpill())
                     assertEquals(AsyncRequestState.CLAIMED, request!!.state)
                     assertEquals(100, effects, "The autonomous driver must stop before delivering an async request")
@@ -286,7 +293,7 @@ class AstStackTest {
                     val payload = program.constructorLayout("Unit").create(emptyArray())
                     var effects = 0
                     var request: AsyncRequest? = null
-                    val tick = Closure(null, arity = 1, target = object : RootNode(language) {
+                    val tick = Closure(null, 1, object : RootNode(language) {
                         override fun execute(frame: VirtualFrame): Any {
                             if (++effects == 100) request = state.threads.send(state.threads.currentIdentity(), payload)
                             return 1L
@@ -314,7 +321,7 @@ class AstStackTest {
                 state.threads.enterCurrent()
                 try {
                     val program = Program(language, module(), true)
-                    val tick = Closure(null, arity = 1, target = object : RootNode(language) {
+                    val tick = Closure(null, 1, object : RootNode(language) {
                         override fun execute(frame: VirtualFrame): Any = 1L
                     }.callTarget)
                     val cell = state.stm.newTVar(17L)
@@ -359,9 +366,9 @@ class AstStackTest {
                     lateinit var request: AsyncRequest
                     var prefixes = 0
                     val childRecord = object : SavedGuestContinuation {
-                        override val identity: Any get() = this
-                        override val sourceRoot: Any get() = root
-                        override val yielded: Any get() = Unit
+                        override fun getIdentity(): Any = this
+                        override fun getSourceRoot(): Any = root
+                        override fun getYielded(): Any = Unit
                         override fun continueWith(input: Any?): Any? {
                             prefixes++
                             // Deterministically model another evaluator re-parking the
@@ -403,7 +410,7 @@ class AstStackTest {
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                 val program = Program(language, module(), true)
-                val tick = Closure(null, arity = 1, target = object : RootNode(language) {
+                val tick = Closure(null, 1, object : RootNode(language) {
                     override fun execute(frame: VirtualFrame): Any = 1L
                 }.callTarget)
                 val state = Language.currentState()

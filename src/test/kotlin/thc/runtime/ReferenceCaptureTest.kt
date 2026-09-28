@@ -68,7 +68,7 @@ class ReferenceCaptureTest {
         val target = object : RootNode(null) { override fun execute(frame: VirtualFrame): Any? = 0L }.callTarget
         val constructor = DataLayout(language, "Box", "Box", arrayOf("IntRep"))
         val boxed = constructor.create(arrayOf(3_000_000_017L))
-        val function = Closure(null, arity = 1, target = target)
+        val function = Closure(null, 1, target)
         val literal = ManagedAddress.fromHex("41ff")
         val thunk = Thunk(target, null)
         val cell = RecCell()

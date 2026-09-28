@@ -54,7 +54,7 @@ class ThreadAsyncNativeTest {
                         }
                     }, true, stateProof)
                     override fun bloom(frame: VirtualFrame): Long = 0L
-                    override fun execute(frame: VirtualFrame): Any = try { yielding.execute(frame) }
+                    override fun execute(frame: VirtualFrame): Any? = try { yielding.execute(frame) }
                     catch (cut: AstCapture) {
                         CompilerDirectives.transferToInterpreter()
                         cut.freeze(this, frame.materialize())

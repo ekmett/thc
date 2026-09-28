@@ -442,7 +442,7 @@ class CoreContinuationNativeTest {
                     b.endRoot()
                 }.getNode(0).callTarget
                 val continuation = Calls.target(callee, arrayOf(0L)) as ContinuationResult
-                val function = Closure(null, NO_PAP_ARGUMENTS, 0, callee)
+                val function = Closure(null, Closure.NO_PAP_ARGUMENTS, 0, callee)
                 val call = assertThrows(CapturedCallSuspension::class.java) {
                     BytecodeRoot.CaptureApplicationResult.capture(0, function, continuation,
                         MaskingState.UNMASKED, Driver())
@@ -635,7 +635,7 @@ class CoreContinuationNativeTest {
                     b.endRoot()
                 }.getNode(0).callTarget
                 val segment = CallSegment(Calls.target(target, arrayOf(0L)) as ContinuationResult,
-                    tupleShape = tuple)
+                    MaskingState.UNMASKED, MaskingState.UNMASKED, tuple)
                 segment to Thunk(callSegmentCaller(language, segment), null)
             }
             val driver = entered(context) { Driver() }
@@ -1820,7 +1820,7 @@ class CoreContinuationNativeTest {
                 val target = ThunkYieldProofRoot.target(language, effects, AtomicInteger(),
                     ThunkYieldProofRoot.Gate(), marker)
                 val segment = CallSegment(Calls.target(target, arrayOf(0L)) as ContinuationResult,
-                    tupleShape = tuple)
+                    MaskingState.UNMASKED, MaskingState.UNMASKED, tuple)
                 segment to Thunk(callSegmentCaller(language, segment), null)
             }
             entered(context) {

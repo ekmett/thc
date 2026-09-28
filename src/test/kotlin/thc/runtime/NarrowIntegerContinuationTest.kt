@@ -30,9 +30,12 @@ class NarrowIntegerContinuationTest {
             val body = object : Expr() {
                 override fun execute(frame: VirtualFrame): Any? = error("Policy preparation must not execute guest code")
             }
-            val root = FunctionRoot(null, layout.build(), "capture policy", null, intArrayOf(),
-                intArrayOf(slot), intArrayOf(0), body, Metrics(true), arrayOf(proof),
-                enableAsync = async, enableDelimited = delimited)
+            val root = FunctionRoot(null, layout.build(), "capture policy", null,
+                intArrayOf(), intArrayOf(slot), intArrayOf(0), body,
+                Metrics(true), arrayOf(proof), body.representation, body.coreSourceLocation,
+                booleanArrayOf(), null, null, intArrayOf(),
+                null, async, emptyArray(), delimited,
+                FunctionRootRole.FUNCTION, false)
             assertEquals(async || delimited, declaration.invoke(root))
             assertEquals(FrameSlotKind.Int, root.frameDescriptor.getSlotKind(slot))
             assertSame(root, root.callTarget.rootNode)
@@ -145,7 +148,7 @@ class NarrowIntegerContinuationTest {
                 val worker = Thread {
                     context.enter(); owner.threads.enterCurrent()
                     try {
-                        val captured = checkNotNull(savedGuestContinuation(callScalarTestTarget(target, arguments(prefix, blocked))))
+                        val captured = checkNotNull(SavedGuestContinuationKt.savedGuestContinuation(callScalarTestTarget(target, arguments(prefix, blocked))))
                         checkNotNull(captured.asyncRequest()).acknowledge()
                         answer.complete(captured)
                     } catch (failure: Throwable) { answer.completeExceptionally(failure) }

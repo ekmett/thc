@@ -82,9 +82,9 @@ class VectorHeapStorageTest {
                 val thunk = Thunk(never, null)
                 val self = Slots(3)
                 val selfLayout = AstSelfLayout(captures, self.slots, intArrayOf(), emptyArray(), booleanArrayOf(),
-                    environmentVectorSlots = arrayOf(intArrayOf(self.slots[0])))
-                assertSame(AstSelfCall, assertThrows(AstSelfCall::class.java) {
-                    selfLayout.transfer(self.frame, Closure(environment, arity = 0, target = never), intArrayOf())
+                    null, arrayOf(intArrayOf(self.slots[0])))
+                assertSame(AstSelfCall.INSTANCE, assertThrows(AstSelfCall::class.java) {
+                    selfLayout.transfer(self.frame, Closure(environment, 0, never), intArrayOf())
                 })
                 compare(proof, expected, self)
                 assertEquals(Long.MIN_VALUE, FrameAccess.read(self.frame, self.slots[1]))

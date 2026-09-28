@@ -11,7 +11,11 @@
     ]
   },
   "leafSources": {
-    "src/main/kotlin/thc/runtime/AstStack.kt": {"junit": ["thc.runtime.AstStackTest", "thc.runtime.AstStackNativeTest", "thc.runtime.AstContinuationTest"], "python": []},
+    "src/main/java/thc/runtime/AstStackScope.java": {"junit": ["thc.runtime.AstStackTest", "thc.runtime.AstStackNativeTest", "thc.runtime.AstContinuationTest"], "python": []},
+    "src/main/java/thc/runtime/AstStackSpill.java": {"junit": ["thc.runtime.AstStackTest", "thc.runtime.AstStackNativeTest", "thc.runtime.AstContinuationTest"], "python": []},
+    "src/main/java/thc/runtime/AstStackContinuation.java": {"junit": ["thc.runtime.AstStackTest", "thc.runtime.AstStackNativeTest", "thc.runtime.AstContinuationTest"], "python": []},
+    "src/main/java/thc/runtime/AstChildSuspension.java": {"junit": ["thc.runtime.AstStackTest", "thc.runtime.AstStackNativeTest", "thc.runtime.AstContinuationTest"], "python": []},
+    "src/main/java/thc/runtime/AstStackKt.java": {"junit": ["thc.runtime.AstStackTest", "thc.runtime.AstStackNativeTest", "thc.runtime.AstContinuationTest"], "python": []},
     "src/main/kotlin/thc/runtime/NativeEpoll.kt": {
       "junit": ["thc.runtime.NativeEpollTest"], "python": []
     },
@@ -84,7 +88,11 @@
       "junit": ["thc.runtime.GuestThreadInventoryTest", "thc.runtime.ThreadInventoryNativeTest"],
       "python": ["scripts/test-audit-core.py"]
     },
-    "src/main/kotlin/thc/runtime/AtomicIntArrays.kt": {
+    "src/main/java/thc/runtime/AtomicIntArrayOp.java": {
+      "junit": ["thc.runtime.AtomicIntArrayTest", "thc.runtime.FetchAddIntArrayTest", "thc.runtime.IntArrayTest"],
+      "python": ["scripts/test-core-bytearrays.py"]
+    },
+    "src/main/java/thc/runtime/AtomicIntArrayExpression.java": {
       "junit": ["thc.runtime.AtomicIntArrayTest", "thc.runtime.FetchAddIntArrayTest", "thc.runtime.IntArrayTest"],
       "python": ["scripts/test-core-bytearrays.py"]
     },
@@ -141,7 +149,19 @@
       "junit": ["thc.runtime.FileWaitPrimitiveTest"],
       "python": ["scripts/test-audit-core.py"]
     },
-    "src/main/kotlin/thc/runtime/ManagedMutVars.kt": {
+    "src/main/java/thc/runtime/ManagedMutVar.java": {
+      "junit": ["thc.runtime.MutVarTest", "thc.runtime.BoxedCasTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/ModifiedMutVar.java": {
+      "junit": ["thc.runtime.MutVarTest", "thc.runtime.BoxedCasTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/MutVarModifySite.java": {
+      "junit": ["thc.runtime.MutVarTest", "thc.runtime.BoxedCasTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/MutVarOp.java": {
       "junit": ["thc.runtime.MutVarTest", "thc.runtime.BoxedCasTest"],
       "python": []
     },
@@ -181,7 +201,15 @@
       "junit": ["thc.runtime.FloatingAddressTest", "thc.runtime.UnalignedScalarMemoryTest"],
       "python": []
     },
-    "src/main/kotlin/thc/runtime/ManagedSmallArrays.kt": {
+    "src/main/java/thc/runtime/ManagedSmallArray.java": {
+      "junit": ["thc.runtime.SmallArrayTest", "thc.runtime.BoxedCasTest", "thc.runtime.ScalarMemoryUtilitiesTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/SmallArrayStorage.java": {
+      "junit": ["thc.runtime.SmallArrayTest", "thc.runtime.BoxedCasTest", "thc.runtime.ScalarMemoryUtilitiesTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/SmallArrayOp.java": {
       "junit": ["thc.runtime.SmallArrayTest", "thc.runtime.BoxedCasTest", "thc.runtime.ScalarMemoryUtilitiesTest"],
       "python": []
     },

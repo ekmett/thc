@@ -56,14 +56,14 @@ internal class BytecodeTypedInputSlots(
             val bytecode = root.bytecodeNode
             for (i in arguments.indices) {
                 val from = indices[i]
-                if (entry.packet.isInt(entry.header + from)) arguments[i].setInt(bytecode, frame, source.int(frame, root, null, from))
-                else if (entry.packet.isLong(entry.header + from)) arguments[i].setLong(bytecode, frame, source.long(frame, root, null, from))
-                else if (entry.packet.isFloat(entry.header + from)) arguments[i].setFloat(bytecode, frame, source.float(frame, root, null, from))
-                else if (entry.packet.isDouble(entry.header + from)) arguments[i].setDouble(bytecode, frame, source.double(frame, root, null, from))
+                if (entry.packet.isInt(entry.header + from)) arguments[i].setInt(bytecode, frame, source.readInt(frame, root, null, from))
+                else if (entry.packet.isLong(entry.header + from)) arguments[i].setLong(bytecode, frame, source.readLong(frame, root, null, from))
+                else if (entry.packet.isFloat(entry.header + from)) arguments[i].setFloat(bytecode, frame, source.readFloat(frame, root, null, from))
+                else if (entry.packet.isDouble(entry.header + from)) arguments[i].setDouble(bytecode, frame, source.readDouble(frame, root, null, from))
                 else {
                     val value = source.reference(frame, root, null, from)
                     val expected = references[i]
-                    arguments[i].setObject(bytecode, frame, if (expected == null) value else requireReferenceCarrier(value, expected))
+                    arguments[i].setObject(bytecode, frame, if (expected == null) value else AstSelfCallsKt.requireReferenceCarrier(value, expected))
                 }
             }
             if (captureLayout != null) restoreCaptured(frame, bytecode, function.environment ?: fault("Invalid captured frame"))
@@ -82,7 +82,7 @@ internal class BytecodeTypedInputSlots(
             else {
                 val value = layout.read(environment, i)
                 val expected = captureReferences[i]
-                captures[i].setObject(bytecode, frame, if (expected == null) value else requireReferenceCarrier(value, expected))
+                captures[i].setObject(bytecode, frame, if (expected == null) value else AstSelfCallsKt.requireReferenceCarrier(value, expected))
             }
         }
         for (vector in vectorCaptures) vector.restore(frame, bytecode, environment)
@@ -102,7 +102,7 @@ internal class BytecodeTypedInputSlots(
                 else {
                     val value = entry.packet.getObject(input, from)
                     val expected = references[i]
-                    arguments[i].setObject(bytecode, frame, if (expected == null) value else requireReferenceCarrier(value, expected))
+                    arguments[i].setObject(bytecode, frame, if (expected == null) value else AstSelfCallsKt.requireReferenceCarrier(value, expected))
                 }
             }
             if (captureLayout != null) {

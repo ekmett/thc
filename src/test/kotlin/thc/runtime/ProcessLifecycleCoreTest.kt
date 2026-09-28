@@ -124,7 +124,7 @@ class ProcessLifecycleCoreTest {
                             state.stdio.setErrno(73)
                             try {
                                 val result = Calls.target(wait, arrayOf(0L, pid, destination))
-                                val continuation = savedGuestContinuation(result)
+                                val continuation = SavedGuestContinuationKt.savedGuestContinuation(result)
                                 if (scenario == "uninterruptible") {
                                     assertNull(continuation); assertEquals(0L, result); assertEquals(73L, state.stdio.errno())
                                     assertEquals(mask, state.maskingState.get())

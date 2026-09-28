@@ -67,7 +67,7 @@ class CallMaskSegmentsTest {
                 // A later evaluator may replace a segment's mutable answer. A
                 // missing immutable delivery token must not be recovered from it.
                 val changed = CallSegment(Calls.target(target, arrayOf(0L)) as ContinuationResult)
-                val noToken = CallSegmentSuspended(changed, asyncRequest = null)
+                val noToken = CallSegmentSuspended(changed, null, null)
                 changed.value = Calls.target(target, arrayOf(0L)) as ContinuationResult
                 assertThrows(RuntimeFault::class.java) {
                     AsyncContinuations.publicSuspension(noToken, Driver())
@@ -107,7 +107,7 @@ class CallMaskSegmentsTest {
 
     /** Exactly the private Core call stages, including root-entry and call-active locals. */
     private fun maskedCaller(language: Language, callee: RootCallTarget, targetMask: MaskingState): RootCallTarget {
-        val function = Closure(null, NO_PAP_ARGUMENTS, 0, callee)
+        val function = Closure(null, Closure.NO_PAP_ARGUMENTS, 0, callee)
         val metrics = Metrics(true)
         return BytecodeRootGen.create(language, BytecodeConfig.DEFAULT) { b ->
             b.beginRoot()
@@ -277,7 +277,7 @@ class CallMaskSegmentsTest {
                 val target = object : RootNode(null) {
                     override fun execute(frame: VirtualFrame): Any = 42L
                 }.callTarget
-                val function = Closure(null, NO_PAP_ARGUMENTS, 0, target)
+                val function = Closure(null, Closure.NO_PAP_ARGUMENTS, 0, target)
                 SynchronousMasking.set(driver, MaskingState.MASKED_UNINTERRUPTIBLE)
                 val failure = assertThrows(IllegalStateException::class.java) {
                     BytecodeRoot.CaptureApplicationResult.capture(0, function, 42L,

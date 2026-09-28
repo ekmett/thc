@@ -92,7 +92,7 @@ internal object GhcBCO {
                 fault("BCO jump does not name an instruction boundary")
         }
         val root = GhcBCORoot(language, Language.currentState(node), metrics, instructions, data, refs, nonPointers)
-        return Closure(null, arity = arity.toInt(), target = root.callTarget)
+        return Closure(null, arity.toInt(), root.callTarget)
     }
 
     @JvmStatic fun updating(node: Node, value: Any?): Thunk {
@@ -145,7 +145,7 @@ internal class GhcBCORoot(language: Language, val owner: Language.State, metrics
                     val arguments = Array(apply.count) { pop() }
                     val function = force.execute(frame, answer) as? Closure ?: fault("BCO application requires a function")
                     answer = calls[apply.count - 1].execute(frame, function, arguments)
-                    if (answer is TailYield || savedGuestContinuation(answer) != null)
+                    if (answer is TailYield || SavedGuestContinuationKt.savedGuestContinuation(answer) != null)
                         fault("GHC BCO asynchronous continuation is not supported")
                     answer = force.execute(frame, answer)
                 }

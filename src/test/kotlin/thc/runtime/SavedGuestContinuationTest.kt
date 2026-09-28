@@ -21,11 +21,13 @@ class SavedGuestContinuationTest {
     }
 
     private class Saved(
-        override val sourceRoot: Any,
-        override val yielded: Any?,
+        private val savedRoot: Any,
+        private val savedYield: Any?,
         private val resume: (Any?) -> Any?
     ) : SavedGuestContinuation {
-        override val identity: Any get() = this
+        override fun getSourceRoot(): Any = savedRoot
+        override fun getYielded(): Any? = savedYield
+        override fun getIdentity(): Any = this
         var resumes = 0
         override fun continueWith(input: Any?): Any? {
             resumes++
@@ -59,9 +61,12 @@ class SavedGuestContinuationTest {
             context.initialize("thc"); context.enter()
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                fun root(probe: CompletionProbe, enabled: Boolean) = FunctionRoot(language,
-                    FrameLayout().build(), "completion control", null, intArrayOf(), intArrayOf(),
-                    intArrayOf(), probe, Metrics(false), enableAsync = enabled)
+                fun root(probe: CompletionProbe, enabled: Boolean) = FunctionRoot(language, FrameLayout().build(), "completion control", null,
+                    intArrayOf(), intArrayOf(), intArrayOf(), probe,
+                    Metrics(false), emptyArray(), probe.representation, probe.coreSourceLocation,
+                    booleanArrayOf(), null, null, intArrayOf(),
+                    null, enabled, emptyArray(), false,
+                    FunctionRootRole.FUNCTION, false)
                 val probe = CompletionProbe()
                 val root = root(probe, true)
                 val target = root.callTarget

@@ -22,7 +22,7 @@ fun main(arguments: Array<String>) {
     val enabled = arguments[0].toBooleanStrict()
     val inlining = arguments[1].toBooleanStrict()
     val workload = arguments[2]
-    System.setProperty(HANDOFF_PROPERTY, enabled.toString())
+    System.setProperty(HandoffKt.HANDOFF_PROPERTY, enabled.toString())
     val builder = Context.newBuilder("thc").allowExperimentalOptions(true)
         .option("compiler.Inlining", inlining.toString()).option("engine.BackgroundCompilation", "false")
         .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw")

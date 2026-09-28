@@ -253,7 +253,7 @@ class LibdwUnavailableTest {
                 val state = Language.currentState()
                 label = state.cbits().finalizerLabel("backtraceFree")
                 val buffers = listOf(false, true).map { pinned ->
-                    ManagedAddress.fromAllocation(ManagedAllocation.mutable(16, 8, pinned = pinned))
+                    ManagedAddress.fromAllocation(ManagedAllocation.mutable(16, 8, pinned))
                         .also { it.fill(16, 165) }
                 }
                 for (pointer in buffers + ManagedAddress.fromHex("001122334455")) {

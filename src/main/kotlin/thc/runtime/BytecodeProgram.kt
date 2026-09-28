@@ -4,6 +4,10 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
+import thc.runtime.CoreFreeVariables.coreFreeVariables
+
+import thc.runtime.CoreCallDemands.CALL_DEMANDS_PROPERTY
+
 import thc.runtime.Scalar64Primitives.scalar64PrimitiveOperation
 import thc.runtime.Scalar64Primitives.word64Literal
 
@@ -30,8 +34,8 @@ import thc.Language
 class BytecodeProgram internal constructor(private val language: Language, moduleData: Map<String, Any?>,
                                            private val checkpoint: BytecodeCheckpoint?,
                                            internal val enableAsync: Boolean) : ExecutableProgram {
-    override val asynchronousExceptions get() = enableAsync
-    override val hasBytecode get() = true
+    override fun getAsynchronousExceptions() = enableAsync
+    override fun getHasBytecode() = true
     init { thc.CoreForeignArtifacts.requireExecutableInput(moduleData) }
     private val demand = moduleData["demandBindings"] as? CoreDemandBindings
     private val foreignExceptionBridge = ForeignExceptionBridge.bind(moduleData, ::entryValue, ::dataLayout)
@@ -318,7 +322,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         CoreSignalForeign.validateHeads(requested)
         if (!diagnosticUnsupported) {
             CoreRepresentations.validateAggregates(requested, constructors)
-            checkNotNull(validateInputs).invoke(requested)
+            checkNotNull(validateInputs).accept(requested)
         }
     }
 
@@ -338,7 +342,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val fn = function("lambda ${args.joinToString { it["name"].toString() }}", args,
                 expr[2] as List<Any?>, scope, CoreRepresentations.lambdaResult(expr), CoreEntries.lambda(expr))
             check(fn.captureLayout == null && fn.captures.isEmpty()) { "Top-level closure has lexical captures" }
-            Closure(null, arity = args.size, target = fn.target)
+            Closure(null, args.size, fn.target)
         } else {
             val fn = function(binding["name"] as String, emptyList(), expr, scope)
             (fn.target.rootNode as GuestRoot).tupleResult?.let { CoreRepresentations.requireScalar(it.proof, "thunk") }
@@ -1292,7 +1296,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 checkpointedApplication(e, function, arguments, evaluatedArguments, inputLayout, tail)
             } else if (inputLayout?.requiresTyped == true) {
                 typedArguments(e, function, arguments, inputLayout, tail,
-                    selfTransfer = tail && !resumable && supportsTypedSelf(context.inputLayout, context.entryStrict, inputLayout))
+                    selfTransfer = tail && !resumable && TypedInputsKt.supportsTypedSelf(context.inputLayout, context.entryStrict, inputLayout))
             } else if (inputLayout != null) {
                 compactArguments(e, function, arguments, inputLayout) { fn, values ->
                     b.beginApplyCompact(inputLayout, tail, metrics, evaluatedArguments)
@@ -4314,7 +4318,7 @@ CoreStackForeign.validateHead(fn, defined)
                     checkpointedTupleApplication(e, shape, function, arguments, inputLayout, destination, true)
                 } else if (inputLayout?.requiresTyped == true) {
                     typedArguments(e, function, arguments, inputLayout, true, tupleSlots(shape, destination),
-                        selfTransfer = supportsTypedSelf(context.inputLayout, context.entryStrict, inputLayout))
+                        selfTransfer = TypedInputsKt.supportsTypedSelf(context.inputLayout, context.entryStrict, inputLayout))
                 } else if (inputLayout == null) {
                     b.beginTailApplyTuple(tupleSlots(shape, destination), arguments.size, metrics)
                     requireClosure(function).emit(e); arguments.forEach { it.emit(e) }; b.endTailApplyTuple()

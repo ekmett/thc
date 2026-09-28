@@ -324,7 +324,7 @@ internal class SignalDispatchRoot(language: Language, program: ExecutableProgram
     }
     override fun execute(frame: VirtualFrame): Any {
         frame.setLong(FrameLayout.BLOOM_FILTER, 0L)
-        val closure = requireClosure(force.execute(frame, action))
+        val closure = ApplicationKt.requireClosure(force.execute(frame, action))
         val target = closure.target.rootNode
         val async = when (target) {
             is FunctionRoot -> target.enableAsync

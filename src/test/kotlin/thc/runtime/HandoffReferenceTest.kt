@@ -40,8 +40,8 @@ class HandoffReferenceTest {
             mapOf("id" to "Box", "name" to "Box", "arity" to 1, "kind" to "boxed", "fieldReps" to listOf(listOf("IntRep")), "strictFields" to listOf(false), "fieldLifted" to listOf(false)),
             mapOf("id" to "Pair", "name" to "Pair", "arity" to 2, "kind" to "boxed", "fieldReps" to List(2) { listOf("BoxedRep (Just Lifted)") }, "strictFields" to listOf(false, false), "fieldLifted" to listOf(true, true))))
     private fun withLanguage(action: (Language) -> Unit) {
-        val old = System.getProperty(HANDOFF_PROPERTY)
-        System.setProperty(HANDOFF_PROPERTY, "true")
+        val old = System.getProperty(HandoffKt.HANDOFF_PROPERTY)
+        System.setProperty(HandoffKt.HANDOFF_PROPERTY, "true")
         try {
             Context.newBuilder("thc").allowExperimentalOptions(true).option("compiler.Inlining", "false")
                 .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
@@ -50,7 +50,7 @@ class HandoffReferenceTest {
                     try { action(TruffleLanguage.LanguageReference.create(Language::class.java).get(null)) }
                     finally { context.leave() }
                 }
-        } finally { if (old == null) System.clearProperty(HANDOFF_PROPERTY) else System.setProperty(HANDOFF_PROPERTY, old) }
+        } finally { if (old == null) System.clearProperty(HandoffKt.HANDOFF_PROPERTY) else System.setProperty(HandoffKt.HANDOFF_PROPERTY, old) }
     }
     private fun compile(target: RootCallTarget) {
         val type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")
@@ -149,8 +149,12 @@ class HandoffReferenceTest {
         val layout = FrameLayout(); val slot = layout.bind("value")
         val entry = HandoffEntry.create(language, layout, listOf(reference, number), reference, false)!!
         val saved = ArrayList<MaterializedFrame>(); val body = RememberReference(slot, saved).also { it.representation = reference }
-        val root = FunctionRoot(language, layout.build(), "rejected packet", null, intArrayOf(), intArrayOf(slot), intArrayOf(0),
-            body, Metrics(false), arrayOf(reference), reference, null, booleanArrayOf(false, false), entry)
+        val root = FunctionRoot(language, layout.build(), "rejected packet", null,
+            intArrayOf(), intArrayOf(slot), intArrayOf(0), body,
+            Metrics(false), arrayOf(reference), reference, null,
+            booleanArrayOf(false, false), entry, null, intArrayOf(),
+            null, false, emptyArray(), false,
+            FunctionRootRole.FUNCTION, false)
         val caller = InvokeWorker(root.callTarget)
         val original = Any()
         // Copying the final primitive fails after the reference field is written.
@@ -164,8 +168,11 @@ class HandoffReferenceTest {
         val capturedBody = RememberReference(capturedSlot, saved).also { it.representation = reference }
         val captures = CaptureLayout(language, booleanArrayOf(false))
         val capturedRoot = FunctionRoot(language, capturedLayout.build(), "rejected environment", captures,
-            intArrayOf(capturedSlot), intArrayOf(), intArrayOf(), capturedBody, Metrics(false), emptyArray(), reference,
-            null, booleanArrayOf(), capturedEntry)
+            intArrayOf(capturedSlot), intArrayOf(), intArrayOf(), capturedBody,
+            Metrics(false), emptyArray(), reference, null,
+            booleanArrayOf(), capturedEntry, null, intArrayOf(),
+            null, false, emptyArray(), false,
+            FunctionRootRole.FUNCTION, false)
         val capturedCaller = InvokeWorker(capturedRoot.callTarget)
         // The entry owns the loan when capture validation fails after snapshotting.
         assertThrows(RuntimeFault::class.java) { Calls.target(capturedCaller.callTarget, arrayOf(0L, Any())) }
@@ -183,8 +190,12 @@ class HandoffReferenceTest {
         val layout = FrameLayout(); val slot = layout.bind("value")
         val entry = HandoffEntry.create(language, layout, listOf(proof), proof, false)!!
         val saved = ArrayList<MaterializedFrame>(); val body = RememberReference(slot, saved).also { it.representation = proof }
-        val root = FunctionRoot(language, layout.build(), "reference snapshots", null, intArrayOf(), intArrayOf(slot), intArrayOf(0),
-            body, Metrics(false), arrayOf(proof), proof, null, booleanArrayOf(false), entry)
+        val root = FunctionRoot(language, layout.build(), "reference snapshots", null,
+            intArrayOf(), intArrayOf(slot), intArrayOf(0), body,
+            Metrics(false), arrayOf(proof), proof, null,
+            booleanArrayOf(false), entry, null, intArrayOf(),
+            null, false, emptyArray(), false,
+            FunctionRootRole.FUNCTION, false)
         val caller = InvokeWorker(root.callTarget)
         val original = Any(); assertSame(original, Calls.target(caller.callTarget, arrayOf(0L, original)))
         assertThrows(RuntimeFault::class.java) { Calls.target(caller.callTarget, arrayOf<Any?>(0L, "fail")) }; released(language)

@@ -467,7 +467,7 @@ class OriginalStackFormatterTest {
                     val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                     val program: ExecutableProgram = if (backend == "ast") Program(language, linked) else BytecodeProgram(language, linked)
                     val action = DeferredAction(language, TupleShape(CoreRepresentations.parse(result), language))
-                    val argument = Closure(null, arity = 1, target = action.callTarget)
+                    val argument = Closure(null, 1, action.callTarget)
                     val target = program.entryTarget(entry["id"] as String)
                     fun check(compiled: Boolean) {
                         val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()

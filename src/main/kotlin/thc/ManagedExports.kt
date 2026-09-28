@@ -157,9 +157,9 @@ internal class ManagedExportValue(private val registry: ManagedExportRegistry, p
                     dispatch.executePublic(ioTarget, arrayOf(applied)), dispatch)
                 return result.toHost(boxed)
             } catch (suspended: ThunkSuspended) {
-                AsyncContinuations.publicSuspension(suspended, dispatch)
+                throw AsyncContinuations.publicSuspension(suspended, dispatch)
             } catch (suspended: CallSegmentSuspended) {
-                AsyncContinuations.publicSuspension(suspended, dispatch)
+                throw AsyncContinuations.publicSuspension(suspended, dispatch)
             }
         } catch (failure: Throwable) {
             outcome = GuestThreadStatus.uncaught(failure)
