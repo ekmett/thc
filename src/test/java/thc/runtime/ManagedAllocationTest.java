@@ -14,7 +14,7 @@ import thc.Language;
 import kotlin.Unit;
 import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
-import static thc.PrimopTestContextKt.primopTestContext;
+import static thc.PrimopTestContext.primopTestContext;
 
 class ManagedAllocationTest {
     private void valid(RootCallTarget target) throws Exception {

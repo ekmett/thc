@@ -21,7 +21,7 @@ import org.junit.jupiter.api.Timeout;
 import thc.Json;
 import thc.Language;
 import static org.junit.jupiter.api.Assertions.*;
-import static thc.runtime.NarrowIntegerCarrierTestKt.callScalarTestTarget;
+import static thc.runtime.ScalarTestCalls.callScalarTestTarget;
 
 /** Retained genuine GHC declarations; synthetic callers isolate the versioned host ABI. */
 @Timeout(60)

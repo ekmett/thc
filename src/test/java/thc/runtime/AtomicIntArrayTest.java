@@ -433,7 +433,7 @@ public class AtomicIntArrayTest {
                 args.add(replacement);
         }
         args.add(state);
-        return NarrowIntegerCarrierTestKt.callScalarTestTarget(entry, args.toArray());
+        return ScalarTestCalls.callScalarTestTarget(entry, args.toArray());
     }
     private void positives(boolean compiled, AtomicIntArrayOp operation, RootCallTarget entry,
         ExecutableProgram program, Language language, String backend) throws Exception {

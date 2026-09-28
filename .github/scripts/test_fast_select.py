@@ -1219,8 +1219,9 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                         self.assertEqual("runtime-core-native", name)
                         self.assertLessEqual({"thc.RuntimeTest", "thc.BytecodeBackendTest"}, actual)
         self.assertEqual({"thc.runtime.BitPrimopsTest", "thc.IntegerPrimopsTest",
-                          "thc.SignedNarrowPrimopsTest"},
-                         set(owners["src/test/kotlin/thc/PrimopTestContext.kt"]["junit"]))
+                          "thc.SignedNarrowPrimopsTest", "thc.runtime.AddressIdentityNativeTest",
+                          "thc.runtime.ManagedAddressStorageTest", "thc.runtime.ManagedAllocationTest"},
+                         set(owners["src/test/java/thc/PrimopTestContext.java"]["junit"]))
 
     def test_tcsetattr_sources_select_the_original_native_comparison(self):
         for path in ("compiler/test-fixtures/OriginalTcsetattrAudit.hs", "compiler/test-fixtures/OriginalTcsetattrNative.hs",
@@ -1432,7 +1433,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         owners = self.policy["owners"]
         for path in ("test/haskell-fixtures/ProxyVoidFixtures.hs",
                      "compiler/test-fixtures/ProxyVoidAudit.hs", "compiler/test-fixtures/ProxyVoidAuditNative.hs",
-                     "compiler/test-fixtures/ProxyVoidPredicate.hs", "src/test/kotlin/thc/runtime/ProxyVoidTest.kt"):
+                     "compiler/test-fixtures/ProxyVoidPredicate.hs", "src/test/java/thc/runtime/ProxyVoidTest.java"):
             self.assertEqual({"junit": ["thc.runtime.ProxyVoidTest"], "python": []}, owners[path])
         self.assertIn("thc.runtime.ProxyVoidTest", owners["test/haskell-fixtures/Main.hs"]["junit"])
 
@@ -1440,7 +1441,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         owners = self.policy["owners"]
         for path in ("test/haskell-fixtures/BigNatLiteralFixtures.hs",
                      "compiler/test-fixtures/BigNatLiteralAudit.hs", "compiler/test-fixtures/BigNatLiteralAuditNative.hs",
-                     "src/test/kotlin/thc/runtime/BigNatLiteralTest.kt"):
+                     "src/test/java/thc/runtime/BigNatLiteralTest.java"):
             self.assertEqual(["thc.runtime.BigNatLiteralTest"], owners[path]["junit"])
             self.assertEqual(["scripts/test-audit-core.py"], owners[path]["python"])
         self.assertIn("thc.runtime.BigNatLiteralTest", owners["test/haskell-fixtures/Main.hs"]["junit"])

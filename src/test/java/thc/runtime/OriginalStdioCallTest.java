@@ -17,7 +17,7 @@ import java.util.function.Consumer;
 import thc.Language;
 import static org.junit.jupiter.api.Assertions.*;
 import static thc.runtime.OriginalStdioChecks.*;
-import static thc.runtime.NarrowIntegerCarrierTestKt.callScalarTestTarget;
+import static thc.runtime.ScalarTestCalls.callScalarTestTarget;
 
 /** Synthetic lowering controls; authentic imported consumers are tested separately. */
 @SuppressWarnings("unchecked")

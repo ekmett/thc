@@ -18,7 +18,7 @@ import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.function.BiConsumer;
 import static org.junit.jupiter.api.Assertions.*;
-import static thc.runtime.NarrowIntegerCarrierTestKt.callScalarTestTarget;
+import static thc.runtime.ScalarTestCalls.callScalarTestTarget;
 import static thc.runtime.OriginalStdioChecks.*;
 
 /** Genuine installed __hscore_fstat FCallIds; context descriptors, never host fds. */

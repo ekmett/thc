@@ -16,7 +16,7 @@ import java.util.*;
 import java.util.concurrent.Callable;
 import static org.junit.jupiter.api.Assertions.*;
 import static thc.runtime.OriginalStdioChecks.*;
-import static thc.runtime.NarrowIntegerCarrierTestKt.callScalarTestTarget;
+import static thc.runtime.ScalarTestCalls.callScalarTestTarget;
 
 @SuppressWarnings("unchecked")
 class OriginalMemsetTest {

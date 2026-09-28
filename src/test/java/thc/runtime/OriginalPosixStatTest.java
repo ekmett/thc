@@ -17,7 +17,7 @@ import java.util.*;
 import java.util.function.BiConsumer;
 import static org.junit.jupiter.api.Assertions.*;
 import static thc.runtime.OriginalStdioChecks.*;
-import static thc.runtime.NarrowIntegerCarrierTestKt.callScalarTestTarget;
+import static thc.runtime.ScalarTestCalls.callScalarTestTarget;
 
 /** Original imported declarations and native observations, not replacement FFIs. */
 @EnabledOnOs(value = OS.LINUX,disabledReason = "Only original Linux stat scalar declarations have native/Core proof")

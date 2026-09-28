@@ -1418,7 +1418,15 @@
   },
   "owners": {
     "src/test/java/thc/runtime/SumEvidence.java": {"junit": ["thc.runtime.SumProtocolTest", "thc.runtime.SumResultTest"], "python": []},
-    "src/test/kotlin/thc/runtime/ByteStringSortTest.kt": {"junit": ["thc.runtime.ByteStringSortTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/test/java/thc/runtime/ScalarTestCalls.java": {
+      "junit": ["thc.runtime.AtomicIntArrayTest","thc.runtime.CaseArmOutliningTest","thc.runtime.CpuAffinityApiTest","thc.runtime.Md5ForeignCallTest","thc.runtime.NarrowIntegerContinuationTest","thc.runtime.NarrowReturnedPointerTest","thc.runtime.OriginalErrnoTest","thc.runtime.OriginalFcntlTest","thc.runtime.OriginalFstatAtTest","thc.runtime.OriginalFstatTest","thc.runtime.OriginalMemorySearchTest","thc.runtime.OriginalMemsetTest","thc.runtime.OriginalOpenTest","thc.runtime.OriginalPathAccessTest","thc.runtime.OriginalPathModeTest","thc.runtime.OriginalPosixStatTest","thc.runtime.OriginalStdioCallTest","thc.runtime.OriginalStrerrorNativeTest","thc.runtime.OriginalTermiosTest","thc.runtime.OriginalUnlinkAtTest","thc.runtime.ProcessSignalsTest","thc.runtime.RuntimeServicesApiTest","thc.runtime.ScalarBitCastTest","thc.runtime.UnixWaitStatusTest"],
+      "python": []
+    },
+    "src/test/java/thc/runtime/ScalarValueTestSupport.java": {
+      "junit": ["thc.runtime.ArithmeticExceptionLazinessTest","thc.runtime.BigNatLiteralTest","thc.runtime.ByteStringDecimalTest","thc.runtime.ByteStringSortTest","thc.runtime.ByteStringUtf8Test","thc.runtime.CoreFloatingLiteralTest","thc.runtime.CoreKeepAliveTest","thc.runtime.CoreTouchTest","thc.runtime.DataToTagTest","thc.runtime.EmptyArgumentRuntimeTest","thc.runtime.FloatDecodeTest","thc.runtime.FloatingPrimitiveTest","thc.runtime.FloatingRemainderTest","thc.runtime.FloatingTupleTest","thc.runtime.FusedFloatingTest","thc.runtime.IntegerCompletionTest","thc.runtime.NarrowIntegerCarrierTest","thc.runtime.NarrowIntegerContinuationTest","thc.runtime.ProxyVoidTest","thc.runtime.RubbishLiteralTest","thc.runtime.ScalarBitCastTest","thc.runtime.ScalarExceptionResultsNativeTest","thc.runtime.ShowIntTest","thc.runtime.ShowWordListTest","thc.runtime.SqrtPrimitiveTest","thc.runtime.TagToEnumTest","thc.runtime.TextCbitsTest","thc.runtime.UnsafeEqualityTest","thc.runtime.WordCarryTest","thc.runtime.WordFloatingTest"],
+      "python": []
+    },
+    "src/test/java/thc/runtime/ByteStringSortTest.java": {"junit": ["thc.runtime.ByteStringSortTest"], "python": ["scripts/test-audit-core.py"]},
     "src/main/java/thc/runtime/CoreByteStringSort.java": {"junit": ["thc.runtime.ByteStringSortTest"], "python": ["scripts/test-audit-core.py"]},
     "src/main/java/thc/runtime/ByteStringSort.java": {"junit": ["thc.runtime.ByteStringSortTest"], "python": ["scripts/test-audit-core.py"]},
     "src/main/java/thc/runtime/ByteStringSortExpression.java": {"junit": ["thc.runtime.ByteStringSortTest"], "python": ["scripts/test-audit-core.py"]},
@@ -1426,7 +1434,7 @@
     "test/haskell-fixtures/ByteStringSortFixtures.hs": {"junit": ["thc.runtime.ByteStringSortTest"], "python": ["scripts/test-audit-core.py"]},
     "src/test/resources/core/original-bytestring-sort-descriptor.json": {"junit": ["thc.runtime.ByteStringSortTest"], "python": ["scripts/test-audit-core.py"]},
 
-    "src/test/kotlin/thc/runtime/ByteStringDecimalTest.kt": {"junit": ["thc.runtime.ByteStringDecimalTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/test/java/thc/runtime/ByteStringDecimalTest.java": {"junit": ["thc.runtime.ByteStringDecimalTest"], "python": ["scripts/test-audit-core.py"]},
     "src/main/java/thc/runtime/CoreByteStringDecimal.java": {"junit": ["thc.runtime.ByteStringDecimalTest"], "python": ["scripts/test-audit-core.py"]},
     "src/main/java/thc/runtime/ByteStringDecimal.java": {"junit": ["thc.runtime.ByteStringDecimalTest"], "python": ["scripts/test-audit-core.py"]},
     "src/main/java/thc/runtime/ByteStringDecimalOp.java": {"junit": ["thc.runtime.ByteStringDecimalTest"], "python": ["scripts/test-audit-core.py"]},
@@ -1463,10 +1471,10 @@
     "compiler/test-fixtures/ProxyVoidAudit.hs": {"junit": ["thc.runtime.ProxyVoidTest"], "python": []},
     "compiler/test-fixtures/ProxyVoidAuditNative.hs": {"junit": ["thc.runtime.ProxyVoidTest"], "python": []},
     "compiler/test-fixtures/ProxyVoidPredicate.hs": {"junit": ["thc.runtime.ProxyVoidTest"], "python": []},
-    "src/test/kotlin/thc/runtime/ProxyVoidTest.kt": {"junit": ["thc.runtime.ProxyVoidTest"], "python": []},
+    "src/test/java/thc/runtime/ProxyVoidTest.java": {"junit": ["thc.runtime.ProxyVoidTest"], "python": []},
     "test/haskell-fixtures/RubbishLiteralFixtures.hs": {"junit": ["thc.runtime.RubbishLiteralTest"], "python": ["scripts/test-audit-core.py"]},
     "compiler/test-fixtures/RubbishLiteralAudit.hs": {"junit": ["thc.runtime.RubbishLiteralTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/test/kotlin/thc/runtime/RubbishLiteralTest.kt": {"junit": ["thc.runtime.RubbishLiteralTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/test/java/thc/runtime/RubbishLiteralTest.java": {"junit": ["thc.runtime.RubbishLiteralTest"], "python": ["scripts/test-audit-core.py"]},
     "test/primop-tools/Main.hs": {
       "junit": [], "python": [], "haskell": ["primop-tools"]
     },
@@ -1656,7 +1664,7 @@
     },
     "test/haskell-fixtures/IntegerCompletionFixtures.hs": {"junit": ["thc.runtime.IntegerCompletionTest"], "python": ["scripts/test-audit-core.py"]},
     "compiler/test-fixtures/IntegerCompletionAudit.hs": {"junit": ["thc.runtime.IntegerCompletionTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/test/kotlin/thc/runtime/IntegerCompletionTest.kt": {"junit": ["thc.runtime.IntegerCompletionTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/test/java/thc/runtime/IntegerCompletionTest.java": {"junit": ["thc.runtime.IntegerCompletionTest"], "python": ["scripts/test-audit-core.py"]},
     "compiler/test-fixtures/UnalignedScalarMemoryAudit.hs": {
       "junit": ["thc.runtime.UnalignedScalarMemoryTest"],
       "python": []
@@ -1684,7 +1692,7 @@
     "test/haskell-fixtures/BigNatLiteralFixtures.hs": {"junit": ["thc.runtime.BigNatLiteralTest"], "python": ["scripts/test-audit-core.py"]},
     "compiler/test-fixtures/BigNatLiteralAudit.hs": {"junit": ["thc.runtime.BigNatLiteralTest"], "python": ["scripts/test-audit-core.py"]},
     "compiler/test-fixtures/BigNatLiteralAuditNative.hs": {"junit": ["thc.runtime.BigNatLiteralTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/test/kotlin/thc/runtime/BigNatLiteralTest.kt": {"junit": ["thc.runtime.BigNatLiteralTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/test/java/thc/runtime/BigNatLiteralTest.java": {"junit": ["thc.runtime.BigNatLiteralTest"], "python": ["scripts/test-audit-core.py"]},
     "compiler/test-fixtures/ScalarBitCastAudit.hs": {"junit": ["thc.runtime.ScalarBitCastTest"], "python": []},
     "compiler/test-fixtures/ScalarBitCastNative.hs": {"junit": ["thc.runtime.ScalarBitCastTest"], "python": []},
     "test/haskell-fixtures/RtsShutdownFixtures.hs": {"junit": ["thc.runtime.RtsShutdownTest"], "python": []},
@@ -2701,12 +2709,19 @@
       ],
       "python": []
     },
-    "src/test/kotlin/thc/PrimopTestContext.kt": {
+    "src/test/java/thc/PrimopTestContext.java": {
       "junit": [
         "thc.runtime.BitPrimopsTest",
         "thc.IntegerPrimopsTest",
-        "thc.SignedNarrowPrimopsTest"
+        "thc.SignedNarrowPrimopsTest",
+        "thc.runtime.AddressIdentityNativeTest",
+        "thc.runtime.ManagedAddressStorageTest",
+        "thc.runtime.ManagedAllocationTest"
       ],
+      "python": []
+    },
+    "src/test/java/thc/runtime/ProcessSignalJvmProbe.java": {
+      "junit": ["thc.runtime.ProcessSignalsTest"],
       "python": []
     },
     "src/test/java/thc/CoreFormatTestSupport.java": {

@@ -17,7 +17,7 @@ import java.nio.file.Files;
 import java.util.*;
 import kotlin.Unit;
 import static org.junit.jupiter.api.Assertions.*;
-import static thc.runtime.NarrowIntegerCarrierTestKt.callScalarTestTarget;
+import static thc.runtime.ScalarTestCalls.callScalarTestTarget;
 
 @SuppressWarnings("unchecked")
 class OriginalMemorySearchTest {

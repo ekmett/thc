@@ -30,7 +30,7 @@ import thc.Json;
 import thc.Language;
 import thc.Main;
 import thc.NumericPrimopCoreEvidence;
-import thc.PrimopTestContextKt;
+import thc.PrimopTestContext;
 import thc.ScalarPrimopModel;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -120,7 +120,7 @@ public final class BitPrimopsTest {
                 NumericPrimopCoreEvidence.assertCall(NumericPrimopCoreEvidence.calls(merged, name), primitive, arguments, result, stage.getKey() + "/" + name);
                 NumericPrimopCoreEvidence.assertCall(compositeCalls, primitive, arguments, result, stage.getKey() + "/" + composite);
             }
-            for (String backend : List.of("ast", "bytecode")) try (Context context = PrimopTestContextKt.primopTestContext()) {
+            for (String backend : List.of("ast", "bytecode")) try (Context context = PrimopTestContext.primopTestContext()) {
                 NumericPrimopCoreEvidence.assertLoadableWrappers(context, merged, entries.stream().map(e -> (String) e.get("name")).toList(), backend);
                 context.enter();
                 try {

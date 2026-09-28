@@ -97,7 +97,7 @@ class AddressIdentityNativeTest {
                     .anyMatch(
                         node -> node.subList(0, Math.min(3, node.size())).equals(List.of("lit", "null-addr", "0"))));
             for (String backend : List.of("ast", "bytecode"))
-                try (var context = PrimopTestContextKt.primopTestContext()) {
+                try (var context = PrimopTestContext.primopTestContext()) {
                     context.initialize("thc");
                     context.enter();
                     try {

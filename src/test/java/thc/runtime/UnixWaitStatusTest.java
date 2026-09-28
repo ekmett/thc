@@ -13,7 +13,7 @@ import java.nio.file.Files;
 import java.security.MessageDigest;
 import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
-import static thc.runtime.NarrowIntegerCarrierTestKt.callScalarTestTarget;
+import static thc.runtime.ScalarTestCalls.callScalarTestTarget;
 import static thc.Main.withContextProfile;
 import static thc.runtime.OriginalStdioChecks.*;
 

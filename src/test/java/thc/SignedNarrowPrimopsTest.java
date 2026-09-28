@@ -103,7 +103,7 @@ public final class SignedNarrowPrimopsTest {
         }
         long total = cases.values().stream().mapToLong(List::size).sum();
         assertEquals(((Number) manifest.get("nativeRows")).longValue(), total);
-        for (String backend : List.of("ast", "bytecode")) try (Context context = PrimopTestContextKt.primopTestContext()) {
+        for (String backend : List.of("ast", "bytecode")) try (Context context = PrimopTestContext.primopTestContext()) {
             NumericPrimopCoreEvidence.assertLoadableWrappers(context, merged, entries.stream().map(e -> (String) e.get("name")).toList(), backend);
             Value function = context.eval("thc", Json.INSTANCE.stringify(Map.of("modules", modules,
                 "entry", manifest.get("compositeEntry"), "backend", backend, "instrument", true)));

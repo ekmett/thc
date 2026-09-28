@@ -13,7 +13,7 @@ import java.math.BigInteger;
 import java.util.*;
 import org.junit.jupiter.api.Test;
 import thc.Language;
-import static thc.PrimopTestContextKt.primopTestContext;
+import static thc.PrimopTestContext.primopTestContext;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ManagedAddressStorageTest {
