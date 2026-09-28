@@ -38,7 +38,7 @@ public final class KillThread extends Expr {
         boolean polledCompiled = CompilerDirectives.inCompiledCode();
         AsyncRequest incoming = GuestThreads.pollCurrent(this, false);
         if (incoming != null) {
-            if (sent.getForceSelf$org_intelligence_thc()) {
+            if (sent.getForceSelf()) {
                 if (incoming != sent) throw RuntimeFault.fault("Self-directed killThread# claimed a different request");
                 incoming.compiledCapture = polledCompiled;
                 if (captureWait) throw new AstCapture(incoming, SynchronousMasking.current(this)).append(new ResumeCompleted());
@@ -49,7 +49,7 @@ public final class KillThread extends Expr {
             incoming.compiledCapture = polledCompiled;
             throw new AstCapture(incoming, SynchronousMasking.current(this)).append(new ResumeCompleted());
         }
-        if (sent.getForceSelf$org_intelligence_thc()) throw RuntimeFault.fault("Self-directed killThread# was not delivered at its guest poll");
+        if (sent.getForceSelf()) throw RuntimeFault.fault("Self-directed killThread# was not delivered at its guest poll");
         return kotlin.Unit.INSTANCE;
     }
     @Override public Object execute(VirtualFrame frame) {

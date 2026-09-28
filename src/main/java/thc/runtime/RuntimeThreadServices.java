@@ -39,7 +39,7 @@ public final class RuntimeThreadServices {
         return switch (selector) {
             case 100 -> Thread.currentThread().isVirtual() ? 2L : 1L;
             case 101 -> threads.currentIdentity().getCapability();
-            case 102 -> threads.currentIdentity().getCapabilityLocked$org_intelligence_thc() ? 1L : 0L;
+            case 102 -> threads.currentIdentity().getCapabilityLocked() ? 1L : 0L;
             case 103 -> Thread.currentThread().isVirtual() ? RuntimeServiceStatus.UNSUPPORTED :
                 affinitySupport(threads.getCpuAffinity(), nativeAccess);
             case 104 -> threads.currentIdentity().getAffinityApplied() ? 1L : 0L;

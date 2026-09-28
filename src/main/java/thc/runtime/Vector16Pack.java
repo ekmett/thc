@@ -15,7 +15,7 @@ public final class Vector16Pack extends Expr {
     public Vector16Pack(Expr argument, int[] slots) {
         this.argument = argument;
         this.slots = slots;
-        setRepresentation(CoreVectors.INSTANCE.getProof16());
+        setRepresentation(CoreVectors.proof16);
     }
 
     @Override public ShortVector execute(VirtualFrame frame) {

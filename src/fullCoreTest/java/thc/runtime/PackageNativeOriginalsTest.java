@@ -150,7 +150,7 @@ public class PackageNativeOriginalsTest {
     private void checkDigest(List<String> row, PackageScalarLink link, Map<PackageScalarSignature, RootCallTarget> entries) {
         String symbol = row.getFirst(), carrier = row.get(1); int offset = Integer.parseInt(row.get(2)), count = Integer.parseInt(row.get(3)); long seed = Long.parseLong(row.get(4));
         byte[] bytes = checksumBytes(count + offset);
-        Object pointer = carrier.equals("AddrRep") ? ManagedAddress.Companion.fromByteArray(bytes).plus(offset) : Arrays.copyOfRange(bytes, offset, bytes.length);
+        Object pointer = carrier.equals("AddrRep") ? ManagedAddress.fromByteArray(bytes).plus(offset) : Arrays.copyOfRange(bytes, offset, bytes.length);
         PackageScalarSignature signature = null;
         for (var abi : link.getAbi()) if (abi.getSymbol().equals(symbol) && abi.getArguments().contains(carrier)) { assertNull(signature); signature = abi; }
         assertNotNull(signature);
@@ -193,7 +193,7 @@ public class PackageNativeOriginalsTest {
     }
     private void checkPrimitive(List<String> row, List<PackageScalarSignature> setters, Map<PackageScalarSignature, RootCallTarget> entries) {
         String rep = row.getFirst(), carrier = row.get(1); byte[] expected = HexFormat.of().parseHex(row.get(5)), bytes = new byte[expected.length]; Arrays.fill(bytes, (byte) 0xa5);
-        Object pointer = carrier.equals("AddrRep") ? ManagedAddress.Companion.fromByteArray(bytes) : bytes;
+        Object pointer = carrier.equals("AddrRep") ? ManagedAddress.fromByteArray(bytes) : bytes;
         PackageScalarSignature signature = null;
         for (var abi : setters) if (abi.getArguments().getFirst().equals(carrier) && abi.getArguments().getLast().equals(rep)) { assertNull(signature); signature = abi; }
         assertNotNull(signature); long value = new BigInteger(row.get(4)).longValue(); Object argument;

@@ -37,7 +37,7 @@ public final class ClosureInspectExpression extends Expr {
             FrameAccess.writeObject(frame, slots[offset + 1], value);
         } else if (operation == ClosureInspectOp.CCS) {
             TupleResultsKt.requireVoidCarrier(operands[1].execute(frame));
-            FrameAccess.writeObject(frame, slots[offset], ManagedAddress.Companion.nullAddress());
+            FrameAccess.writeObject(frame, slots[offset], ManagedAddress.nullAddress());
         } else if (operation == ClosureInspectOp.WHERE) {
             operands[1].executeRequiredAddress(frame);
             TupleResultsKt.requireVoidCarrier(operands[2].execute(frame));

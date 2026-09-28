@@ -13,7 +13,7 @@ public final class VectorUnpack extends Expr {
 
     public VectorUnpack(Expr argument) {
         this.argument = argument;
-        setRepresentation(CoreVectors.INSTANCE.getUnpacked());
+        setRepresentation(CoreVectors.unpacked);
     }
 
     @Override public Object execute(VirtualFrame frame) {

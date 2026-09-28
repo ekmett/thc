@@ -12,22 +12,20 @@ import java.lang.ref.WeakReference
 
 /** Model/contract controls; authentic compiled consumers live in PinnedPointerCellsTest. */
 class MutableByteArrayContentsTest {
-    private val reference = CoreRepresentation(CoreKind.OBJECT, evaluated = true, present = true,
-        primReps = listOf("BoxedRep (Just Unlifted)"))
-    private val address = CoreRepresentation(CoreKind.ADDRESS, evaluated = true, present = true,
-        primReps = listOf("AddrRep"))
+    private val reference = CoreRepresentation(CoreKind.OBJECT, true, true, listOf("BoxedRep (Just Unlifted)"))
+    private val address = CoreRepresentation(CoreKind.ADDRESS, true, true, listOf("AddrRep"))
     private val operation = PinnedMemoryOp.MUTABLE_CONTENTS
 
     @Test fun exactUnliftedInputAndAddressResultDoNotAdmitOtherLogicalCarriers() {
         assertSame(operation, PinnedMemoryOp.named("mutableByteArrayContents#"))
         assertDoesNotThrow { operation.validate(listOf(reference), listOf(false), address) }
-        for (bad in listOf(CoreRepresentation.UNKNOWN, reference.copy(kind = CoreKind.DATA),
-                reference.copy(primReps = listOf("BoxedRep (Just Lifted)")),
-                reference.copy(primReps = listOf("BoxedRep Nothing")),
-                reference.copy(components = emptyList()), address))
+        for (bad in listOf(CoreRepresentation.UNKNOWN, reference.let { originalProof -> originalProof.copy(CoreKind.DATA, originalProof.evaluated, originalProof.present, originalProof.primReps, originalProof.components, originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) },
+                reference.withPrimReps(listOf("BoxedRep (Just Lifted)")),
+                reference.withPrimReps(listOf("BoxedRep Nothing")),
+                reference.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, originalProof.primReps, emptyList(), originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) }, address))
             assertThrows(RuntimeFault::class.java) { operation.validate(listOf(bad), listOf(false), address) }
-        for (bad in listOf(CoreRepresentation.UNKNOWN, reference, address.copy(kind = CoreKind.OBJECT),
-                address.copy(primReps = listOf("WordRep")), address.copy(components = listOf(address))))
+        for (bad in listOf(CoreRepresentation.UNKNOWN, reference, address.let { originalProof -> originalProof.copy(CoreKind.OBJECT, originalProof.evaluated, originalProof.present, originalProof.primReps, originalProof.components, originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) },
+                address.withPrimReps(listOf("WordRep")), address.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, originalProof.primReps, listOf(address), originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) }))
             assertThrows(RuntimeFault::class.java) { operation.validate(listOf(reference), listOf(false), bad) }
         for (flags in listOf(emptyList(), listOf(true), listOf(0L), listOf(false, false)))
             assertThrows(RuntimeFault::class.java) { operation.validate(listOf(reference), flags, address) }

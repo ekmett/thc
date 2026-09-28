@@ -25,14 +25,14 @@ public final class TermiosImage {
     }
     public long getSize() { return size; }
     private <T> T image(ManagedAddress address, boolean writable, Supplier<T> body) {
-        var allocation = address.cbitsOwner$org_intelligence_thc();
+        var allocation = address.cbitsOwner();
         if (allocation == null) return checked(address, writable, body);
         synchronized (allocation) { return checked(address, writable, body); }
     }
     private <T> T checked(ManagedAddress address, boolean writable, Supplier<T> body) {
-        var nativeOwner = address.nativeAllocation$org_intelligence_thc();
+        var nativeOwner = address.nativeAllocation();
         try (var ignored = nativeOwner == null ? null : nativeOwner.borrow()) {
-            address.requireByteRegion$org_intelligence_thc(size, writable);
+            address.requireByteRegion(size, writable);
             return body.get();
         }
     }
@@ -120,7 +120,7 @@ public final class TermiosImage {
             byte[] bytes = new byte[(int) abi.size];
             for (int i = 0; i < bytes.length; i++) bytes[i] = (byte) address.readWord8(i);
             try { return operation.apply(bytes); }
-            finally { if (copyBack) ManagedAddress.Companion.fromByteArray(bytes).copyNonOverlappingTo(address, abi.size); }
+            finally { if (copyBack) ManagedAddress.fromByteArray(bytes).copyNonOverlappingTo(address, abi.size); }
         });
     }
     @TruffleBoundary public static long scalar(OriginalStdioOp operation, ManagedAddress address, long value) {

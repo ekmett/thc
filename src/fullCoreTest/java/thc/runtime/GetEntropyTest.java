@@ -95,9 +95,9 @@ public class GetEntropyTest {
                 PackageScalarSignature signature = null;
                 for (var candidate : link.getAbi()) if (candidate.getSymbol().equals("entropy_write")) { assertNull(signature); signature = candidate; }
                 assertNotNull(signature); var target = new Entry(language, new PackageScalarCall(link, signature)).getCallTarget();
-                var pinned = PinnedMemory.INSTANCE.allocate(258, 64); long bits = pinned.nativeSegment().address();
+                var pinned = PinnedMemory.allocate(258, 64); long bits = pinned.nativeSegment().address();
                 for (long i = 0; i <= 257; i++) pinned.writeByte(i, 0xa5);
-                var address = ManagedAddress.Companion.fromAllocation(pinned).plus(1);
+                var address = ManagedAddress.fromAllocation(pinned).plus(1);
                 assertEquals(0L, target.call(address, 256L)); assertEquals(bits, pinned.nativeSegment().address());
                 assertEquals(0xa5L, pinned.readByte(0)); assertEquals(0xa5L, pinned.readByte(257));
                 var actual = new ArrayList<Long>(); boolean changed = false;
@@ -107,7 +107,7 @@ public class GetEntropyTest {
                 var after = new ArrayList<Long>(); for (long i = 1; i <= 256; i++) after.add(pinned.readByte(i));
                 assertEquals(actual, after, "oversized request leaves bytes untouched");
                 var heap = ManagedAllocation.mutable(8, 8);
-                assertThrows(Exception.class, () -> target.call(ManagedAddress.Companion.fromAllocation(heap), 8L));
+                assertThrows(Exception.class, () -> target.call(ManagedAddress.fromAllocation(heap), 8L));
                 assertNull(heap.nativeSegment(), "ordinary heap storage must not gain a native copy");
                 for (long i = 0; i < 8; i++) assertEquals(0L, heap.readByte(i)); released(language);
             } finally { context.leave(); }

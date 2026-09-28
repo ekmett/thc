@@ -91,7 +91,7 @@ public class FourWayAggregateStorageTest {
             for (int index : new int[] {0, 1, 3, 5, 6}) assertEquals(layout.readLong(source, index), layout.readLong(value, index));
             if (tag == 1L) assertSame(layout.read(value, 2), layout.read(value, 4)); else assertNull(layout.read(value, 2)); assertNotSame(child, layout.read(value, 4));
             var image = state.compactImages.first(region); byte[] bytes = new byte[(int) image.availableBytes()]; image.copyToByteArray(bytes, 0, bytes.length);
-            var block = state.compactImages.allocate(bytes.length, ManagedAddress.Companion.nullAddress()); block.copyFromByteArray(bytes, 0, bytes.length);
+            var block = state.compactImages.allocate(bytes.length, ManagedAddress.nullAddress()); block.copyFromByteArray(bytes, 0, bytes.length);
             var fixed = state.compactImages.fixup(block, state.heapAddresses.address(value)); var restored = (DataValue) state.heapAddresses.dereference(fixed.getRoot());
             assertEquals(tag, layout.readLong(restored, 1)); assertEquals(Long.MIN_VALUE, layout.readLong(restored, 3));
             if (tag == 1L) assertSame(layout.read(restored, 2), layout.read(restored, 4)); else assertNull(layout.read(restored, 2));

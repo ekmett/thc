@@ -162,7 +162,7 @@ public final class CoreUnitDirectory {
                         "Core source metadata differs from original module");
                 CoreForeignArtifacts.INSTANCE.validateArchive(original, true);
                 CoreModules.admission(original, null);
-                thc.runtime.CoreForeignExceptionBridge.INSTANCE.read(original);
+                thc.runtime.CoreForeignExceptionBridge.read(original);
             });
             verified.add(module);
         }

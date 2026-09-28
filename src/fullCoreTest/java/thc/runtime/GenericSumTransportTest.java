@@ -55,7 +55,7 @@ public class GenericSumTransportTest {
     private CoreRepresentation result(String name) throws Exception {
         var module = json(new File(directory, "pre/core/GenericSumTransport.json")); Map<String, Object> binding = null;
         for (var candidate : (List<Map<String, Object>>) module.get("bindings")) if (name.equals(candidate.get("name"))) { assertNull(binding); binding = candidate; }
-        assertNotNull(binding); return CoreRepresentations.INSTANCE.lambdaResult((List<?>) binding.get("expr"));
+        assertNotNull(binding); return CoreRepresentations.lambdaResult((List<?>) binding.get("expr"));
     }
     private List<List<?>> walk(Object value) {
         var result = new ArrayList<List<?>>();
@@ -109,7 +109,7 @@ public class GenericSumTransportTest {
     private void observeAddress(long selector, long bits, TupleShape shape, VirtualFrame frame, RootCallTarget target, ManagedAddress address, int[] slots, Language language) throws Exception {
         shape.consume(frame, Calls.target(target, new Object[] {0L, selector, address, bits}), slots, 0); assertEquals(selector + 1, frame.getLong(slots[0]));
         if (selector == 0L) { assertSame(address, frame.getObject(slots[2])); assertEquals(0L, frame.getLong(slots[1])); }
-        else { assertSame(ManagedAddress.Companion.nullAddress(), frame.getObject(slots[2])); assertEquals(bits, frame.getLong(slots[1])); }
+        else { assertSame(ManagedAddress.nullAddress(), frame.getObject(slots[2])); assertEquals(bits, frame.getLong(slots[1])); }
         released(language);
     }
     @Test public void addressIdentityAndPrimitiveBitsSurviveReuseWithoutRetainingInactiveBacking() throws Exception {
@@ -119,7 +119,7 @@ public class GenericSumTransportTest {
             var shape = new TupleShape(result("addressMake"), language); assertEquals(List.of("long", "long", "reference"), shape.getLayout().getReps());
             var frameLayout = new FrameLayout(); int[] slots = new int[shape.getWidth()]; for (int i = 0; i < slots.length; i++) slots[i] = frameLayout.bind("field" + i);
             var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], frameLayout.build()); byte[] bytes = {7, 19, 31};
-            var address = ManagedAddress.Companion.fromNativeImageSource$org_intelligence_thc(bytes, 1);
+            var address = ManagedAddress.fromNativeImageSource(bytes, 1);
             observeAddress(0, Long.MIN_VALUE, shape, frame, target, address, slots, language); observeAddress(1, Long.MAX_VALUE, shape, frame, target, address, slots, language); compile(target);
             for (long bits : new long[] {Long.MIN_VALUE, -1L, 0L, Long.MAX_VALUE}) for (long selector : new long[] {0L, 1L}) {
                 long before = (Long) program.diagnostics().get("compiledEntries"); observeAddress(selector, bits, shape, frame, target, address, slots, language);
@@ -132,7 +132,7 @@ public class GenericSumTransportTest {
         var alternatives = Objects.requireNonNull(vectors.getAlternatives()); var longVector = new VectorLayout(alternatives.getFirst()).getSpecies().zero(); assertSame(longVector, shape.checkedReference(1, longVector));
         var floatVector = new VectorLayout(alternatives.get(1)).getSpecies().zero(); assertThrows(RuntimeFault.class, () -> shape.checkedReference(1, floatVector));
         assertThrows(RuntimeFault.class, () -> shape.checkedReference(2, longVector)); assertThrows(RuntimeFault.class, () -> shape.checkedReference(1, null));
-        var original = alternatives.getFirst(); var wrong = original.copy(original.getKind(), original.getEvaluated(), original.getPresent(), original.getPrimReps(), original.getComponents(), CoreVector.Companion.getINT32X4(), original.getAlternatives(), original.getTagSlot(), original.getAlternativeSlots());
+        var original = alternatives.getFirst(); var wrong = original.copy(original.getKind(), original.getEvaluated(), original.getPresent(), original.getPrimReps(), original.getComponents(), CoreVector.INT32X4, original.getAlternatives(), original.getTagSlot(), original.getAlternativeSlots());
         var changed = new ArrayList<>(alternatives); changed.set(0, wrong);
         assertThrows(RuntimeFault.class, () -> SumShape.validate(vectors.copy(vectors.getKind(), vectors.getEvaluated(), vectors.getPresent(), vectors.getPrimReps(), vectors.getComponents(), vectors.getVector(), changed, vectors.getTagSlot(), vectors.getAlternativeSlots())));
         var address = new TupleShape(result("addressMake"), language); assertThrows(RuntimeFault.class, () -> address.checkedReference(2, 7L));
@@ -145,9 +145,9 @@ public class GenericSumTransportTest {
             Map<String, Object> maker = null; for (var candidate : (List<Map<String, Object>>) module.get("bindings")) if ("vectorMake".equals(candidate.get("name"))) { assertNull(maker); maker = candidate; } assertNotNull(maker);
             List<Object> constructor = null;
             for (var expression : walk(maker.get("expr"))) {
-                if (expression.isEmpty() || !"app".equals(expression.getFirst()) || !(expression.get(1) instanceof List<?> head) || head.isEmpty() || !"con".equals(head.getFirst()) || !CoreRepresentations.INSTANCE.expression(expression).isSum()) continue;
+                if (expression.isEmpty() || !"app".equals(expression.getFirst()) || !(expression.get(1) instanceof List<?> head) || head.isEmpty() || !"con".equals(head.getFirst()) || !CoreRepresentations.expression(expression).isSum()) continue;
                 var arguments = (List<List<?>>) expression.get(2); assertEquals(1, arguments.size());
-                if (CoreRepresentations.INSTANCE.expression(arguments.getFirst()).isVector()) { constructor = (List<Object>) expression; break; }
+                if (CoreRepresentations.expression(arguments.getFirst()).isVector()) { constructor = (List<Object>) expression; break; }
             }
             assertNotNull(constructor); assertEquals(List.of(false), constructor.get(3)); constructor.set(3, List.of(flag));
             var linked = CoreModules.reachable(CoreModules.merge(source), "main:GenericSumTransport.vectorCase", true);

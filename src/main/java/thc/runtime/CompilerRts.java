@@ -9,8 +9,8 @@ import thc.Language;
 
 /** Context-owned original RTS unique-supply cells; atomics lock their backing arrays. */
 public final class CompilerRts {
-    private final ManagedAddress counter = ManagedAddress.Companion.compilerCell$org_intelligence_thc(new byte[8], this);
-    private final ManagedAddress increment = ManagedAddress.Companion.compilerCell$org_intelligence_thc(
+    private final ManagedAddress counter = ManagedAddress.compilerCell(new byte[8], this);
+    private final ManagedAddress increment = ManagedAddress.compilerCell(
         ByteBuffer.allocate(8).order(ByteOrder.nativeOrder()).putLong(1L).array(), this);
     private ManagedAddress flags;
     private volatile boolean closed;
@@ -31,7 +31,7 @@ public final class CompilerRts {
 
     /** Preserve lazy, synchronized publication and retry after initialization failure. */
     private synchronized ManagedAddress flags() {
-        if (flags == null) flags = ManagedAddress.Companion.rtsFlags$org_intelligence_thc(this);
+        if (flags == null) flags = ManagedAddress.rtsFlags(this);
         return flags;
     }
 

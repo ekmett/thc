@@ -9,14 +9,14 @@ final class ByteStringDecimal {
     private ByteStringDecimal() {}
 
     public static ManagedAddress signed(long value, ManagedAddress destination) {
-        var allocation = destination.nativeAllocation$org_intelligence_thc();
+        var allocation = destination.nativeAllocation();
         try (var borrow = allocation == null ? null : allocation.borrow()) {
             // Stay nonpositive so Long.MIN_VALUE never needs an overflowing negation.
             long remaining = value > 0 ? -value : value;
             long probe = remaining;
             long width = value < 0 ? 2 : 1;
             while (probe <= -10) { width++; probe /= 10; }
-            destination.requireByteRegion$org_intelligence_thc(width, true);
+            destination.requireByteRegion(width, true);
             if (value < 0) destination.writeWord8(0, 45);
             long position = width;
             do {
@@ -32,9 +32,9 @@ final class ByteStringDecimal {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             throw new RuntimeFault("ByteString padded18 requires 0 <= value < 10^18");
         }
-        var allocation = destination.nativeAllocation$org_intelligence_thc();
+        var allocation = destination.nativeAllocation();
         try (var borrow = allocation == null ? null : allocation.borrow()) {
-            destination.requireByteRegion$org_intelligence_thc(18, true);
+            destination.requireByteRegion(18, true);
             long remaining = value;
             long position = 18;
             while (position > 0) {

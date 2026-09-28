@@ -98,14 +98,14 @@ public enum ArrayOp {
                 var proofs = new ArrayList<CoreRepresentation>();
                 for (var argument : args) {
                     if (!(argument instanceof List<?> expression)) throw fault("Malformed Array# argument");
-                    var metadata = CoreRepresentations.INSTANCE.metadata(expression);
+                    var metadata = CoreRepresentations.metadata(expression);
                     var rep = metadata == null ? null : metadata.get("rep");
                     rawProof(rep);
-                    proofs.add(CoreRepresentations.INSTANCE.parse(rep));
+                    proofs.add(CoreRepresentations.parse(rep));
                 }
                 var rep = list.get(6) instanceof Map<?, ?> meta ? meta.get("rep") : null;
                 rawProof(rep);
-                operation.validate(proofs, flags, CoreRepresentations.INSTANCE.parse(rep));
+                operation.validate(proofs, flags, CoreRepresentations.parse(rep));
             }
             for (var child : list) validateApplications(child);
         }

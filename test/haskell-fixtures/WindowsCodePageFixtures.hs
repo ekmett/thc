@@ -233,7 +233,7 @@ prepareWindowsCodePages root = do
       inputs = [source,"compiler/windows-ghc-internal.json","thc.cabal","test/haskell-fixtures/Main.hs",
         "test/haskell-fixtures/FixtureSupport.hs","test/haskell-fixtures/WindowsCodePageFixtures.hs",
         "compiler/THC/Plugin.hs","compiler/THC/Interface.hs","scripts/audit-core.py","scripts/core_original_foreign.py",
-        "scripts/core-capabilities.json","src/main/kotlin/thc/runtime/CoreOriginalStdio.kt","src/main/c/windows-directory-abi.c"]
+        "scripts/core-capabilities.json","src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java","src/main/c/windows-directory-abi.c"]
   inputHashes <- hashes root inputs
   rawArtifacts <- hashes root ([logs </> file | file <- ["pre.json","post.json","oracle.json"]] ++
     [makeRelative root (overlay </> relative name ++ ".hi") | name <- modules] ++ concatMap commandArtifacts commands ++

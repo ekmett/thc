@@ -530,13 +530,13 @@ class PinnedPointerCellsTest {
             // The selected primop interprets a lowered Long; lexical WordRep
             // versus IntRep is the exporter's concern, not a carrier difference.
             operation.validate(
-                arguments.toMutableList().also { it[2] = it[2].copy(primReps = listOf("WordRep")) },
+                arguments.toMutableList().also { it[2] = it[2].withPrimReps(listOf("WordRep")) },
                 flags, result)
             assertThrows(RuntimeFault::class.java) { operation.validate(
-                arguments.toMutableList().also { it[2] = it[2].copy(kind = CoreKind.DOUBLE, primReps = listOf("DoubleRep")) },
+                arguments.toMutableList().also { it[2] = it[2].let { originalProof -> originalProof.copy(CoreKind.DOUBLE, originalProof.evaluated, originalProof.present, listOf("DoubleRep"), originalProof.components, originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) } },
                 flags, result) }
             assertThrows(RuntimeFault::class.java) { operation.validate(arguments, flags,
-                result.copy(kind = CoreKind.LONG, primReps = listOf("IntRep"))) }
+                result.let { originalProof -> originalProof.copy(CoreKind.LONG, originalProof.evaluated, originalProof.present, listOf("IntRep"), originalProof.components, originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) }) }
             for (backend in listOf("ast", "bytecode")) for (inlining in listOf(false, true))
                 strictContext(inlining).use { context ->
                 context.initialize("thc"); context.enter()

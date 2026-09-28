@@ -34,7 +34,7 @@ public final class LeadingCaseReturn {
         if (!"var".equals(scrutinee.getFirst())) return null;
         int scrutineeIndex = indexOf(args, scrutinee.get(1));
         if (scrutineeIndex < 0) return null;
-        CoreKind kind = CoreRepresentations.INSTANCE.binder(args.get(scrutineeIndex)).getKind();
+        CoreKind kind = CoreRepresentations.binder(args.get(scrutineeIndex)).getKind();
         if (kind != CoreKind.UNKNOWN && kind != CoreKind.OBJECT && kind != CoreKind.DATA) return null;
         HashSet<String> seen = new HashSet<>();
         for (Object raw : (List<?>) expression.get(3)) {
@@ -47,7 +47,7 @@ public final class LeadingCaseReturn {
             if (!"var".equals(value.getFirst()) || Objects.equals(value.get(1), expression.get(2))) continue;
             int resultIndex = indexOf(args, value.get(1));
             if (resultIndex < 0 || resultIndex == scrutineeIndex ||
-                !CoreRepresentations.INSTANCE.binder(args.get(resultIndex)).isLong()) continue;
+                !CoreRepresentations.binder(args.get(resultIndex)).isLong()) continue;
             boolean otherLive = false;
             for (String formal : usedFormals)
                 if (!Objects.equals(formal, scrutinee.get(1)) && !Objects.equals(formal, value.get(1))) otherLive = true;

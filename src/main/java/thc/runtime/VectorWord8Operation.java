@@ -21,7 +21,7 @@ public final class VectorWord8Operation extends Expr {
             default -> throw new RuntimeFault("Invalid Word8X16 operation");
         };
         this.arguments = arguments;
-        setRepresentation(CoreVectors.INSTANCE.getProofWord8());
+        setRepresentation(CoreVectors.proofWord8);
     }
 
     @Override public ByteVector execute(VirtualFrame frame) {

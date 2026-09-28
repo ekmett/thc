@@ -209,7 +209,7 @@ class RuntimeServicesApiTest {
                     var guest = program(language, backend);
                     var text = "runtime λ\uD83D\uDE00\n\"event\"\u0000tail";
                     var bytes = text.getBytes(StandardCharsets.UTF_8);
-                    var pointer = ManagedAddress.Companion.fromByteArray(bytes);
+                    var pointer = ManagedAddress.fromByteArray(bytes);
                     var targets = new LinkedHashMap<String, RootCallTarget>();
                     for (var name : List.of("control", "trace", "enableThenTrace")) targets.put(name, guest.entryTarget(name));
                     assertEquals(0L, query(guest, 500));
@@ -235,7 +235,7 @@ class RuntimeServicesApiTest {
                             assertEquals(1L, query(guest, 500));
                             long token = checked("trace", 1L, 0L, pointer, (long) bytes.length);
                             assertTrue(token > 0);
-                            assertEquals(0L, checked("trace", 2L, token, ManagedAddress.Companion.nullAddress(), 0L));
+                            assertEquals(0L, checked("trace", 2L, token, ManagedAddress.nullAddress(), 0L));
                             var actual = records(output);
                             assertEquals(List.of("event", "begin", "end"), actual.stream().map(record -> record.get("phase")).toList());
                             assertEquals(List.of(0L, token, token), actual.stream().map(record -> record.get("span")).toList());
@@ -260,7 +260,7 @@ class RuntimeServicesApiTest {
                     assertEquals(0, output.size());
                     assertEquals(0L, call(guest, "control", 500L, 1L));
                     for (var invalid : List.of(Map.entry(pointer, -1L), Map.entry(pointer, bytes.length + 1L),
-                            Map.entry(ManagedAddress.Companion.fromByteArray(new byte[]{(byte) 0xc3, 0x28}), 2L))) {
+                            Map.entry(ManagedAddress.fromByteArray(new byte[]{(byte) 0xc3, 0x28}), 2L))) {
                         assertThrows(RuntimeFault.class, () -> call(guest, "trace", 0L, 0L, invalid.getKey(), invalid.getValue()));
                         released(language);
                     }
@@ -281,7 +281,7 @@ class RuntimeServicesApiTest {
             try (var first = context(left); var second = context(right)) {
                 first.initialize("thc"); second.initialize("thc");
                 var bytes = "context-local".getBytes(StandardCharsets.UTF_8);
-                var pointer = ManagedAddress.Companion.fromByteArray(bytes);
+                var pointer = ManagedAddress.fromByteArray(bytes);
                 ExecutableProgram owner;
                 long token;
                 first.enter();
@@ -300,7 +300,7 @@ class RuntimeServicesApiTest {
                     assertEquals(0L, query(guest, 500));
                     assertEquals(RuntimeServiceStatus.DISABLED, call(guest, "trace", 0L, 0L, pointer, (long) bytes.length));
                     assertEquals(0L, call(guest, "control", 500L, 1L));
-                    assertThrows(RuntimeFault.class, () -> call(guest, "trace", 2L, token, ManagedAddress.Companion.nullAddress(), 0L));
+                    assertThrows(RuntimeFault.class, () -> call(guest, "trace", 2L, token, ManagedAddress.nullAddress(), 0L));
                     assertEquals(0, right.size());
                     released(language);
                 } finally { second.leave(); }
@@ -308,8 +308,8 @@ class RuntimeServicesApiTest {
                 try {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                     assertEquals(1L, query(owner, 500));
-                    assertEquals(0L, call(owner, "trace", 3L, token, ManagedAddress.Companion.nullAddress(), 0L));
-                    assertThrows(RuntimeFault.class, () -> call(owner, "trace", 2L, token, ManagedAddress.Companion.nullAddress(), 0L));
+                    assertEquals(0L, call(owner, "trace", 3L, token, ManagedAddress.nullAddress(), 0L));
+                    assertThrows(RuntimeFault.class, () -> call(owner, "trace", 2L, token, ManagedAddress.nullAddress(), 0L));
                     assertEquals(List.of("begin", "exception"), records(left).stream().map(record -> record.get("phase")).toList());
                     released(language);
                 } finally { first.leave(); }

@@ -94,7 +94,7 @@ public final class EntryValue implements TruffleObject {
             catch (CallSegmentSuspended suspended) { throw AsyncContinuations.publicSuspension(suspended, dispatch); }
             catch (AsyncDelivery delivered) { throw AsyncContinuations.uncaught(delivered.getRequest(), dispatch); }
         } catch (Throwable failure) {
-            outcome = GuestThreadStatus.Companion.uncaught(failure);
+            outcome = GuestThreadStatus.uncaught(failure);
             if (failure instanceof GuestException guest) dispatch.escaping(guest);
             throw failure;
         } finally { threads.leaveCurrent(outcome); }
@@ -166,7 +166,7 @@ public final class EntryValue implements TruffleObject {
                 catch (CallSegmentSuspended suspended) { throw AsyncContinuations.publicSuspension(suspended, dispatch); }
                 catch (AsyncDelivery delivered) { throw AsyncContinuations.uncaught(delivered.getRequest(), dispatch); }
             } catch (Throwable failure) {
-                outcome = GuestThreadStatus.Companion.uncaught(failure);
+                outcome = GuestThreadStatus.uncaught(failure);
                 if (failure instanceof GuestException guest) dispatch.escaping(guest);
                 throw failure;
             } finally {

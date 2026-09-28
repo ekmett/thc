@@ -38,7 +38,7 @@ public class FloatForeignNativeTest {
             var metadata = (Map<String, Object>) call.getLast(); var descriptor = (Map<String, Object>) metadata.get("foreignCall");
             var target = (Map<String, Object>) descriptor.get("target"); seen.add((String) target.get("symbol"));
             var operands = new ArrayList<Object>();
-            for (var operand : (List<List<?>>) call.get(2)) { var proof = CoreRepresentations.INSTANCE.metadata(operand); operands.add(proof == null ? null : proof.get("rep")); }
+            for (var operand : (List<List<?>>) call.get(2)) { var proof = CoreRepresentations.metadata(operand); operands.add(proof == null ? null : proof.get("rep")); }
             var operation = CoreFloatForeign.validate(metadata, operands, (List<?>) call.get(3), metadata.get("rep")); assertNotNull(operation);
             CoreFloatForeign.validateHead((List<?>) call.get(1), false);
             assertThrows(RuntimeFault.class, () -> CoreFloatForeign.validateHead((List<?>) call.get(1), true));

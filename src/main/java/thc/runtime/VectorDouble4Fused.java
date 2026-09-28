@@ -13,7 +13,7 @@ public final class VectorDouble4Fused extends Expr {
     @Children private Expr[] arguments;
 
     public VectorDouble4Fused(String name, Expr[] arguments) {
-        this.operation = CoreVectors.INSTANCE.getFusedDouble4().indexOf(name);
+        this.operation = CoreVectors.fusedDouble4.indexOf(name);
         this.arguments = arguments;
         setRepresentation(GeneratedVectors.proofDoubleX4);
     }

@@ -107,7 +107,7 @@ class CoreBoundThreadForeignTest {
                 var program = load.apply(module(state, application())); var target = program.entryTarget("query");
                 var builder = FrameDescriptor.newBuilder(); builder.addSlot(FrameSlotKind.Long, null, null);
                 var destination = Truffle.getRuntime().createVirtualFrame(new Object[0], builder.build());
-                var shape = new TupleShape(CoreRepresentations.INSTANCE.parse(tuple()), language);
+                var shape = new TupleShape(CoreRepresentations.parse(tuple()), language);
                 Consumer<Object> call = token -> {
                     var result = Calls.target(target, new Object[]{0L, token});
                     shape.consume(destination, result, new int[]{0}, 0); assertEquals(0L, destination.getLong(0));

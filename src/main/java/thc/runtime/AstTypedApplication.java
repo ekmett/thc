@@ -35,7 +35,7 @@ public final class AstTypedApplication extends Expr {
             vectorSlots = new int[vector.getWidth()];
             for (int i = 0; i < vectorSlots.length; i++) vectorSlots[i] = frameLayout.bind("<vector result " + i + ">");
         } else vectorSlots = null;
-        CoreRepresentation proof = shape == null ? CoreRepresentation.Companion.getUNKNOWN() : shape.getProof();
+        CoreRepresentation proof = shape == null ? CoreRepresentation.UNKNOWN : shape.getProof();
         setRepresentation(proof.copy(proof.getKind(), true, proof.getPresent(), proof.getPrimReps(), proof.getComponents(), proof.getVector(),
             proof.getAlternatives(), proof.getTagSlot(), proof.getAlternativeSlots()));
     }

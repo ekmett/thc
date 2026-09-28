@@ -20,13 +20,13 @@ public final class RtsDiagnostics {
             byte[] bytes;
             if (operation == TraceOp.BINARY) {
                 if (count < 0 || count > Integer.MAX_VALUE) throw RuntimeFault.fault("Invalid binary trace length");
-                bytes = count == 0 ? new byte[0] : address.withNativeBorrow$org_intelligence_thc(() -> {
-                    address.requireByteRegion$org_intelligence_thc(count, false);
+                bytes = count == 0 ? new byte[0] : address.withNativeBorrow(() -> {
+                    address.requireByteRegion(count, false);
                     byte[] result = new byte[(int) count];
                     for (int i = 0; i < result.length; i++) result[i] = (byte) address.readWord8(i);
                     return result;
                 });
-            } else bytes = address.withNativeBorrow$org_intelligence_thc(() -> cstring(address));
+            } else bytes = address.withNativeBorrow(() -> cstring(address));
             var output = context.getEnv().err();
             synchronized (output) {
                 try {
@@ -59,7 +59,7 @@ public final class RtsDiagnostics {
             } else {
                 if (!(first instanceof ManagedAddress format)) throw RuntimeFault.fault(operation.getSymbol() + " requires a format Addr#");
                 if (!(second instanceof ManagedAddress text)) throw RuntimeFault.fault(operation.getSymbol() + " requires a message Addr#");
-                message = format.withNativeBorrows$org_intelligence_thc(text, () -> {
+                message = format.withNativeBorrows(text, () -> {
                     // Only original Debug.Trace and TopHandler/Conc.Sync CString formats are admitted.
                     byte[] expected = operation == RtsDiagnosticOp.DEBUG ? new byte[] {37, 115, 10} : new byte[] {37, 115};
                     if (!Arrays.equals(cstring(format), expected)) throw RuntimeFault.fault(operation.getSymbol() + " supports only its original CString format");
@@ -80,7 +80,7 @@ public final class RtsDiagnostics {
         while (length < available && address.readWord8(length) != 0) length++;
         if (length == available) throw RuntimeFault.fault("Unterminated diagnostic CString");
         if (length > Integer.MAX_VALUE) throw RuntimeFault.fault("Diagnostic CString exceeds managed array capacity");
-        address.requireByteRegion$org_intelligence_thc(length + 1, false);
+        address.requireByteRegion(length + 1, false);
         byte[] bytes = new byte[(int) length];
         for (int i = 0; i < bytes.length; i++) bytes[i] = (byte) address.readWord8(i);
         return bytes;

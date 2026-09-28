@@ -29,9 +29,9 @@ public final class ManagedExportValue implements TruffleObject {
     public ManagedExportValue(ManagedExportRegistry registry, Language.State owner, Language language, ExecutableProgram program, ManagedExportSignature signature) {
         this.registry = registry; this.owner = owner; this.program = program; this.signature = signature;
         var argumentTypes = new ArrayList<ManagedExportScalar>();
-        for (var type : signature.arguments()) argumentTypes.add(ManagedExportScalar.Companion.fromNormalizedType(type, ManagedExportScalar.Role.ARGUMENT, signature.wordBits(), program::constructorLayout));
+        for (var type : signature.arguments()) argumentTypes.add(ManagedExportScalar.fromNormalizedType(type, ManagedExportScalar.Role.ARGUMENT, signature.wordBits(), program::constructorLayout));
         arguments = Collections.unmodifiableList(argumentTypes);
-        result = ManagedExportScalar.Companion.fromNormalizedType(signature.result(), ManagedExportScalar.Role.RESULT, signature.wordBits(), program::constructorLayout);
+        result = ManagedExportScalar.fromNormalizedType(signature.result(), ManagedExportScalar.Role.RESULT, signature.wordBits(), program::constructorLayout);
         guestTarget = program.hostEntryTarget(arguments.size()); guestEntry = program.entryValue(signature.binder());
         ioTarget = signature.ioResult() == null ? null : new ManagedExportIoRoot(language, signature.ioResult()).getCallTarget();
     }
@@ -65,7 +65,7 @@ public final class ManagedExportValue implements TruffleObject {
             } catch (ThunkSuspended suspended) { throw AsyncContinuations.publicSuspension(suspended, dispatch); }
             catch (CallSegmentSuspended suspended) { throw AsyncContinuations.publicSuspension(suspended, dispatch); }
         } catch (Throwable failure) {
-            outcome = GuestThreadStatus.Companion.uncaught(failure);
+            outcome = GuestThreadStatus.uncaught(failure);
             if (failure instanceof GuestException guest) dispatch.escaping(guest);
             throw failure;
         } finally { threads.leaveCurrent(outcome); }

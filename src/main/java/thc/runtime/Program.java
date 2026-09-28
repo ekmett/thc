@@ -103,8 +103,8 @@ public final class Program implements ExecutableProgram {
         for (Map<String, Object> binding : bindings) {
             List<Object> expression = (List<Object>) binding.get("expr");
             boolean delayed = representation(binding) && !Arrays.asList("lam", "lit", "con", "void").contains(expression.getFirst());
-            globalProofs.put((String) binding.get("id"), diagnosticUnsupported ? CoreRepresentation.Companion.getUNKNOWN() :
-                evaluated(CoreRepresentations.INSTANCE.binder(binding), demand == null && !delayed &&
+            globalProofs.put((String) binding.get("id"), diagnosticUnsupported ? CoreRepresentation.UNKNOWN :
+                evaluated(CoreRepresentations.binder(binding), demand == null && !delayed &&
                     Arrays.asList("lam", "lit", "con", "void").contains(expression.getFirst())));
         }
         for (int i = 0; i < bindings.size(); i++) indices.put((String) bindings.get(i).get("id"), i);
@@ -254,7 +254,7 @@ public final class Program implements ExecutableProgram {
         ArrayOp.validateApplications(requested);
         CoreStackForeign.validateHeads(requested);
         CoreStackInfoForeign.validateHeads(requested);
-        CoreOriginalStdio.INSTANCE.validateHeads(requested);
+        CoreOriginalStdio.validateHeads(requested);
         CoreProcessForeign.validateHeads(requested);
         CoreStablePointers.validateHeads(requested);
         CoreRtsShutdown.validateHeads(requested);
@@ -273,15 +273,15 @@ public final class Program implements ExecutableProgram {
         CoreMemoryCopyForeign.MEMCPY.validateHeads(requested);
         CoreSignalForeign.validateHeads(requested);
         if (!diagnosticUnsupported) {
-            CoreRepresentations.INSTANCE.validateAggregates(requested, constructors);
+            CoreRepresentations.validateAggregates(requested, constructors);
             Objects.requireNonNull(validateInputs).accept(requested);
         }
     }
     private Expr initializer(Map<String, Object> binding, Scope scope) {
-        CoreRepresentations.INSTANCE.requireNoSum(CoreRepresentations.INSTANCE.binder(binding), "global binding");
+        CoreRepresentations.requireNoSum(CoreRepresentations.binder(binding), "global binding");
         return withSource(sources.binding(binding, null), () -> {
             List<Object> expr = (List<Object>) binding.get("expr");
-            CoreRepresentations.INSTANCE.requireNoSum(CoreRepresentations.INSTANCE.expression(expr), "global binding");
+            CoreRepresentations.requireNoSum(CoreRepresentations.expression(expr), "global binding");
             if (demand != null && !representation(binding) && !Arrays.asList("lit", "void").contains(expr.getFirst()))
                 throw new UnsupportedCore("Demand loading does not yet support effectful strict global initialization");
             if (representation(binding) && (!Arrays.asList("lam", "lit", "con", "void").contains(expr.getFirst()) ||
@@ -367,7 +367,7 @@ public final class Program implements ExecutableProgram {
         return lifted;
     }
     private FunctionSpec function(String label, List<Map<String, Object>> args, List<Object> expression, Scope outer) {
-        return function(label, args, expression, outer, CoreRepresentations.INSTANCE.expression(expression),
+        return function(label, args, expression, outer, CoreRepresentations.expression(expression),
             new boolean[args.size()], FunctionRootRole.FUNCTION, true);
     }
     private FunctionSpec function(String label, List<Map<String, Object>> args, List<Object> expression, Scope outer,
@@ -377,9 +377,9 @@ public final class Program implements ExecutableProgram {
         Set<String> free = coreFreeVariables(expression);
         Set<String> argumentIds = new LinkedHashSet<>();
         for (Map<String, Object> arg : args) argumentIds.add((String) arg.get("id"));
-        for (Map<String, Object> arg : args) CoreRepresentations.INSTANCE.requireInput(CoreRepresentations.INSTANCE.binder(arg));
+        for (Map<String, Object> arg : args) CoreRepresentations.requireInput(CoreRepresentations.binder(arg));
         List<CoreRepresentation> inputProofs = new ArrayList<>();
-        for (Map<String, Object> arg : args) inputProofs.add(CoreRepresentations.INSTANCE.binder(arg));
+        for (Map<String, Object> arg : args) inputProofs.add(CoreRepresentations.binder(arg));
         ArgumentLayout inputLayout = ArgumentLayout.fromProofs(inputProofs);
         List<String> freeLocals = new ArrayList<>();
         for (String id : free) if (!argumentIds.contains(id) && outer.locals.containsKey(id)) freeLocals.add(id);
@@ -398,7 +398,7 @@ public final class Program implements ExecutableProgram {
         for (String id : captured) {
             Local local = required(outer.locals, id);
             if (local.proof.isTypedTransport()) {
-                CoreRepresentations.INSTANCE.requireInput(local.proof);
+                CoreRepresentations.requireInput(local.proof);
                 List<CoreRepresentation> fields = ArgumentLayout.leaves(local.proof);
                 int[] from = local.tupleSlots;
                 if (local.cell || from == null || from.length != fields.size())
@@ -414,7 +414,7 @@ public final class Program implements ExecutableProgram {
                 }
                 scope.bindTuple(id, local.proof, destinations);
             } else {
-                CoreRepresentations.INSTANCE.requireScalar(local.proof, "capture");
+                CoreRepresentations.requireScalar(local.proof, "capture");
                 captureFields.add(local);
                 vectorDestinations.add(null);
                 captureDestinations.add(scope.bind(id, local.primitive, local.proof, local.cell, local.entry,
@@ -433,7 +433,7 @@ public final class Program implements ExecutableProgram {
         for (int i = 0; i < args.size(); i++) {
             Map<String, Object> arg = args.get(i);
             boolean lifted = representation(arg);
-            CoreRepresentation proof = CoreRepresentations.INSTANCE.binder(arg);
+            CoreRepresentation proof = CoreRepresentations.binder(arg);
             if (lifted) proof = evaluated(proof, entryStrict[i]);
             if (proof.isTypedTransport()) {
                 if (lifted) throw new RuntimeFault("Typed formal cannot be lifted");
@@ -476,7 +476,7 @@ public final class Program implements ExecutableProgram {
         int[] allArgumentSlots = new int[args.size()];
         Arrays.fill(allArgumentSlots, -1);
         CoreRepresentation[] allArgumentProofs = new CoreRepresentation[args.size()];
-        Arrays.fill(allArgumentProofs, CoreRepresentation.Companion.getUNKNOWN());
+        Arrays.fill(allArgumentProofs, CoreRepresentation.UNKNOWN);
         for (int i = 0; i < args.size(); i++) {
             Local local = scope.locals.get(args.get(i).get("id"));
             if (local != null && !local.proof.isTypedTransport()) { allArgumentSlots[i] = local.slot; allArgumentProofs[i] = local.proof; }
@@ -487,7 +487,7 @@ public final class Program implements ExecutableProgram {
         HandoffEntry handoff = null;
         if (!capturesContinuations && (inputLayout == null || !inputLayout.getRequiresTyped())) {
             List<CoreRepresentation> declared = new ArrayList<>();
-            for (Map<String, Object> arg : args) declared.add(CoreRepresentations.INSTANCE.binder(arg));
+            for (Map<String, Object> arg : args) declared.add(CoreRepresentations.binder(arg));
             handoff = HandoffEntry.create(language, scope.layout, declared, resultProof, captures != null);
         }
         if ((body.getRepresentation().isSum() || resultProof.isSum()) && (!body.getRepresentation().isSum() || !resultProof.isSum()))
@@ -520,7 +520,7 @@ public final class Program implements ExecutableProgram {
         OperandBuilder operands = operandBuilder;
         operandBuilder = null;
         FunctionSpec fn;
-        try { fn = function("case arm", List.of(), expression, scope, CoreRepresentations.INSTANCE.expression(expression),
+        try { fn = function("case arm", List.of(), expression, scope, CoreRepresentations.expression(expression),
             new boolean[0], FunctionRootRole.PASS_THROUGH, tail); }
         finally { operandBuilder = operands; }
         return new AstCaseArm(fn.target, fn.captureLayout, fn.captures, tail).located(currentSource);
@@ -539,8 +539,8 @@ public final class Program implements ExecutableProgram {
     private Expr delay(List<Object> expr, Scope scope, String label) {
         FunctionSpec fn = function(label, List.of(), expr, scope);
         TupleShape shape = ((GuestRoot) fn.target.getRootNode()).getTupleResult();
-        if (shape != null) CoreRepresentations.INSTANCE.requireScalar(shape.getProof(), "thunk");
-        return new Delay(fn.target, fn.captureLayout, fn.captures).proven(evaluated(CoreRepresentations.INSTANCE.expression(expr), false))
+        if (shape != null) CoreRepresentations.requireScalar(shape.getProof(), "thunk");
+        return new Delay(fn.target, fn.captureLayout, fn.captures).proven(evaluated(CoreRepresentations.expression(expr), false))
             .located(sources.expression(expr, currentSource));
     }
     private Expr argument(List<Object> expr, Scope scope, boolean lifted) { return argument(expr, scope, lifted, "argument thunk", false, lifted); }
@@ -553,12 +553,12 @@ public final class Program implements ExecutableProgram {
         return operands == null ? result : operands.operand(result);
     }
     private void checkArgument(CoreRepresentation proof, boolean allowEmpty, boolean declaredLifted) {
-        if (allowEmpty || proof.isVector()) CoreRepresentations.INSTANCE.requireInput(proof);
-        else CoreRepresentations.INSTANCE.requireScalar(proof, "argument");
+        if (allowEmpty || proof.isVector()) CoreRepresentations.requireInput(proof);
+        else CoreRepresentations.requireScalar(proof, "argument");
         if (proof.isTypedTransport() && declaredLifted) throw new RuntimeFault("Typed argument cannot be lifted");
     }
     private Expr argumentUnsequenced(List<Object> expr, Scope scope, boolean lifted, String label, boolean allowEmpty, boolean declaredLifted) {
-        CoreRepresentation proof = CoreRepresentations.INSTANCE.expression(expr);
+        CoreRepresentation proof = CoreRepresentations.expression(expr);
         checkArgument(proof, allowEmpty, declaredLifted);
         Local local = "var".equals(expr.getFirst()) ? scope.locals.get(expr.get(1)) : null;
         CoreRepresentation lexical = local == null ? null : local.proof;
@@ -609,10 +609,10 @@ public final class Program implements ExecutableProgram {
             case "float" -> Float.parseFloat(value);
             case "double" -> Double.parseDouble(value);
             case "word8", "word16", "word32" -> ScalarLiterals.narrowWordLiteral(kind, value);
-            case "string-bytes" -> ManagedAddress.Companion.fromHex(value);
+            case "string-bytes" -> ManagedAddress.fromHex(value);
             case "null-addr" -> {
                 if (!value.equals("0")) throw new UnsupportedCore("Malformed null Addr# literal");
-                yield ManagedAddress.Companion.nullAddress();
+                yield ManagedAddress.nullAddress();
             }
             case "function-addr" -> CFinalizerLabels.INSTANCE.fromCore(value, proof);
             case "data-addr" -> CoreDataLabels.fromCore(value, proof, stackTargetLayout instanceof TargetLayout target ? target : null);
@@ -640,8 +640,8 @@ public final class Program implements ExecutableProgram {
     private Expr compileLocated(List<Object> expr, Scope scope, boolean tail) {
         try {
             Expr lowered = compileSupported(expr, scope, tail);
-            CoreRepresentation metadata = diagnosticUnsupported && lowered instanceof GlobalRead ? CoreRepresentation.Companion.getUNKNOWN() :
-                CoreRepresentations.INSTANCE.expression(expr);
+            CoreRepresentation metadata = diagnosticUnsupported && lowered instanceof GlobalRead ? CoreRepresentation.UNKNOWN :
+                CoreRepresentations.expression(expr);
             return lowered.proven(lowered.getRepresentation().refine(evaluated(metadata, false)));
         } catch (UnsupportedCore gap) {
             if (!diagnosticUnsupported) throw gap;
@@ -673,7 +673,7 @@ public final class Program implements ExecutableProgram {
             List<Expr> conversionValues = new ArrayList<>();
             List<String> ids = (List<String>) alt.get(2);
             if ("default".equals(alt.getFirst())) {
-                if (fallback >= 0 || !ids.isEmpty() || !CoreRepresentations.INSTANCE.alternativeBinders(alt).isEmpty())
+                if (fallback >= 0 || !ids.isEmpty() || !CoreRepresentations.alternativeBinders(alt).isEmpty())
                     throw new RuntimeFault("Invalid sum DEFAULT alternative");
                 fallback = index;
             } else {
@@ -681,10 +681,10 @@ public final class Program implements ExecutableProgram {
                 int tag = SumShape.constructor(proof, constructors.get(alt.get(1)), ids.size());
                 if (!tags.add(tag)) throw new RuntimeFault("Duplicate sum alternative tag");
                 CoreRepresentation component = Objects.requireNonNull(proof.getAlternatives()).get(tag - 1);
-                List<Map<String, Object>> metadata = CoreRepresentations.INSTANCE.alternativeBinders(alt);
+                List<Map<String, Object>> metadata = CoreRepresentations.alternativeBinders(alt);
                 if (metadata.size() != 1 || !Objects.equals(metadata.getFirst().get("id"), ids.getFirst()))
                     throw new RuntimeFault("Missing sum payload binder proof");
-                CoreRepresentation actual = CoreRepresentations.INSTANCE.binder(metadata.getFirst());
+                CoreRepresentation actual = CoreRepresentations.binder(metadata.getFirst());
                 if (!(metadata.getFirst().get("lifted") instanceof Boolean lifted)) throw new RuntimeFault("Unknown sum payload binder levity");
                 SumShape.payload(component, actual, lifted);
                 CoreRepresentation field = evaluated(component.refine(actual), component.getEvaluated());
@@ -722,12 +722,12 @@ public final class Program implements ExecutableProgram {
                 }
             }
         }
-        CoreRepresentation result = arms[0].getRepresentation().refine(CoreRepresentations.INSTANCE.expression(expr));
+        CoreRepresentation result = arms[0].getRepresentation().refine(CoreRepresentations.expression(expr));
         for (Expr arm : arms) result.refine(arm.getRepresentation());
         List<CoreRepresentation> armProofs = new ArrayList<>();
         boolean allEvaluated = true;
         for (Expr arm : arms) { armProofs.add(arm.getRepresentation()); allEvaluated = allEvaluated && arm.getRepresentation().getEvaluated(); }
-        CoreRepresentations.INSTANCE.validateFloatingCaseResult(result, armProofs);
+        CoreRepresentations.validateFloatingCaseResult(result, armProofs);
         return new SumCase(scrutinee, slots, arms, selected, evaluated(result, allEvaluated));
     }
     private Expr compileVectorReadCase(VectorReadCase read, Scope scope, boolean tail) {
@@ -745,7 +745,7 @@ public final class Program implements ExecutableProgram {
         return new Let(new int[] {-1}, new Expr[] {value}, new boolean[] {false}, body, false, new int[][] {lanes});
     }
     private Expr compileVectorCase(List<Object> expr, Expr scrutinee, CoreRepresentation proof, Scope scope, boolean tail) {
-        CoreRepresentations.INSTANCE.requireInput(proof);
+        CoreRepresentations.requireInput(proof);
         List<List<Object>> alternatives = (List<List<Object>>) expr.get(3);
         if (alternatives.size() != 1) throw new RuntimeFault("Vector case requires one default alternative");
         List<Object> only = alternatives.getFirst();
@@ -763,7 +763,7 @@ public final class Program implements ExecutableProgram {
         for (int i = 0; i < slots.length; i++) slots[i] = local.layout.bind("<tuple case " + i + ">");
         local.bindTuple((String) expr.get(2), proof, slots);
         List<List<Object>> alternatives = (List<List<Object>>) expr.get(3);
-        if (alternatives.isEmpty()) return new TupleCase(scrutinee, slots, new EmptyCaseResult(CoreRepresentations.INSTANCE.expression(expr)));
+        if (alternatives.isEmpty()) return new TupleCase(scrutinee, slots, new EmptyCaseResult(CoreRepresentations.expression(expr)));
         if (alternatives.size() != 1) throw new RuntimeFault("Tuple case requires at most one alternative");
         List<Object> alt = alternatives.getFirst();
         List<String> ids = (List<String>) alt.get(2);
@@ -772,11 +772,11 @@ public final class Program implements ExecutableProgram {
             if (constructor == null || !"unboxed-tuple".equals(constructor.get("kind")) || ids.size() != shape.getComponents().length ||
                 !(constructor.get("arity") instanceof Number number) || number.intValue() != ids.size())
                 throw new RuntimeFault("Tuple alternative shape mismatch");
-            List<Map<String, Object>> metadata = CoreRepresentations.INSTANCE.alternativeBinders(alt);
+            List<Map<String, Object>> metadata = CoreRepresentations.alternativeBinders(alt);
             for (int i = 0; i < ids.size(); i++) {
                 String id = ids.get(i);
                 CoreRepresentation component = shape.getComponents()[i];
-                CoreRepresentation raw = i < metadata.size() ? CoreRepresentations.INSTANCE.binder(metadata.get(i)) : component;
+                CoreRepresentation raw = i < metadata.size() ? CoreRepresentations.binder(metadata.get(i)) : component;
                 TupleShape.requireCompatible(component, raw, true);
                 CoreRepresentation field = component.refine(raw);
                 int width = TupleShape.flatten(component).size(), offset = shape.getOffsets()[i];
@@ -797,7 +797,7 @@ public final class Program implements ExecutableProgram {
             if (!(at(flags, i) instanceof Boolean lifted)) throw new RuntimeFault("Missing join argument levity");
             nodes[i] = argument(args.get(i), scope, lifted && !callStrict[i] && !target.getEntryStrict()[i],
                 "argument thunk", target.getProofs()[i].isTypedTransport(), lifted);
-            CoreRepresentations.INSTANCE.requireJoinArgument(target.getProofs()[i], nodes[i].getRepresentation());
+            CoreRepresentations.requireJoinArgument(target.getProofs()[i], nodes[i].getRepresentation());
         }
         int[][] typedTemps = new int[nodes.length][];
         int[] temps = new int[nodes.length];
@@ -816,8 +816,8 @@ public final class Program implements ExecutableProgram {
         if (recursive) for (CoreJoinDefinition definition : definitions) shadowed.add(definition.getId());
         for (CoreJoinDefinition definition : definitions) {
             for (Map<String, Object> parameter : definition.getParameters()) {
-                CoreRepresentation proof = CoreRepresentations.INSTANCE.binder(parameter);
-                CoreRepresentations.INSTANCE.requireInput(proof);
+                CoreRepresentation proof = CoreRepresentations.binder(parameter);
+                CoreRepresentations.requireInput(proof);
                 if (proof.isTypedTransport() && representation(parameter)) throw new RuntimeFault("Typed join formal must be unlifted");
             }
             Set<String> formals = new LinkedHashSet<>();
@@ -827,16 +827,16 @@ public final class Program implements ExecutableProgram {
                 Local captured = outer.locals.get(id);
                 if (captured == null) continue;
                 if (captured.proof.isTypedTransport()) {
-                    CoreRepresentations.INSTANCE.requireInput(captured.proof);
+                    CoreRepresentations.requireInput(captured.proof);
                     int[] slots = captured.tupleSlots;
                     if (slots == null) throw new RuntimeFault("Missing typed join capture slots");
                     boolean invalid = slots.length != ArgumentLayout.leaves(captured.proof).size();
                     if (!invalid) for (int slot : slots) if (slot < 0) { invalid = true; break; }
                     if (invalid) throw new RuntimeFault("Typed join capture disagrees with its physical slots");
-                } else CoreRepresentations.INSTANCE.requireScalar(captured.proof, "join capture");
+                } else CoreRepresentations.requireScalar(captured.proof, "join capture");
             }
         }
-        CoreJoins.INSTANCE.validate((List<Map<String, Object>>) expr.get(2), (List<Object>) expr.get(3), recursive);
+        CoreJoins.validate((List<Map<String, Object>>) expr.get(2), (List<Object>) expr.get(3), recursive);
         Object identity = new Object();
         Scope local = outer.child();
         List<boolean[]> entryContracts = new ArrayList<>();
@@ -848,7 +848,7 @@ public final class Program implements ExecutableProgram {
             for (int i = 0; i < definition.getParameters().size(); i++) {
                 Map<String, Object> parameter = definition.getParameters().get(i);
                 boolean lifted = representation(parameter);
-                CoreRepresentation proof = CoreRepresentations.INSTANCE.binder(parameter);
+                CoreRepresentation proof = CoreRepresentations.binder(parameter);
                 if (lifted) proof = evaluated(proof, entryStrict[i]);
                 if (proof.isTypedTransport()) {
                     int[] lanes = new int[ArgumentLayout.leaves(proof).size()];
@@ -890,7 +890,7 @@ public final class Program implements ExecutableProgram {
                 return node;
             }));
         }
-        CoreRepresentation result = entry.getRepresentation().refine(evaluated(CoreRepresentations.INSTANCE.expression(expr), false));
+        CoreRepresentation result = entry.getRepresentation().refine(evaluated(CoreRepresentations.expression(expr), false));
         for (Expr body : bodies) TupleShape.requireCompatible(result, body.getRepresentation(), false);
         boolean allEvaluated = entry.getRepresentation().getEvaluated();
         for (Expr body : bodies) allEvaluated = allEvaluated && body.getRepresentation().getEvaluated();
@@ -1000,11 +1000,11 @@ public final class Program implements ExecutableProgram {
         return switch ((String) expr.get(0)) {
             case "var" -> {
                 String id = (String) expr.get(1);
-                CoreRepresentation occurrence = CoreRepresentations.INSTANCE.expression(expr);
+                CoreRepresentation occurrence = CoreRepresentations.expression(expr);
                 Local local = scope.locals.get(id);
                 CoreRepresentation proof = local != null ? local.proof : globalProofs.get(id);
                 if (proof == null && demand != null) proof = demand.occurrence(id, occurrence);
-                CoreVectors.INSTANCE.requireVariableProof(proof, occurrence);
+                CoreVectors.requireVariableProof(proof, occurrence);
                 if (scope.joins.containsKey(id)) yield joinJump(scope.joins.get(id), List.of(), List.of(), scope);
                 if (local != null) {
                     if (local.tupleSlots != null) {
@@ -1020,9 +1020,9 @@ public final class Program implements ExecutableProgram {
             }
             case "lit" -> {
                 String tag = (String) expr.get(1);
-                Literal value = new Literal(literal(tag, expr.get(2), CoreRepresentations.INSTANCE.expression(expr)));
+                Literal value = new Literal(literal(tag, expr.get(2), CoreRepresentations.expression(expr)));
                 if (Arrays.asList("int8", "word8", "int16", "word16", "int32", "word32").contains(tag))
-                    yield value.proven(CoreRepresentations.INSTANCE.narrowLiteralProof(expr));
+                    yield value.proven(CoreRepresentations.narrowLiteralProof(expr));
                 if (tag.equals("bignat")) yield value.proven(BigNatLiterals.proof(expr));
                 if (tag.equals("rubbish")) yield value.proven(RubbishLiterals.proof(expr));
                 yield value;
@@ -1033,7 +1033,7 @@ public final class Program implements ExecutableProgram {
                 StringJoiner names = new StringJoiner(", ");
                 for (Map<String, Object> arg : args) names.add(String.valueOf(arg.get("name")));
                 FunctionSpec fn = function("lambda " + names, args, (List<Object>) expr.get(2), scope,
-                    CoreRepresentations.INSTANCE.lambdaResult(expr), CoreEntries.lambda(expr), FunctionRootRole.FUNCTION, true);
+                    CoreRepresentations.lambdaResult(expr), CoreEntries.lambda(expr), FunctionRootRole.FUNCTION, true);
                 yield new MakeClosure(fn.target, args.size(), fn.captureLayout, fn.captures);
             }
             case "app" -> compileApplication(expr, scope, tail);
@@ -1048,21 +1048,21 @@ public final class Program implements ExecutableProgram {
     private Expr compileLet(List<Object> expr, Scope scope, boolean tail) {
         boolean recursive = (Boolean) expr.get(1);
         List<Map<String, Object>> group = (List<Map<String, Object>>) expr.get(2);
-        var definitions = CoreJoins.INSTANCE.definitions(group);
+        var definitions = CoreJoins.definitions(group);
         if (definitions != null) return compileJoins(expr, scope, tail, definitions);
         for (Map<String, Object> binding : group) {
-            CoreRepresentation proof = CoreRepresentations.INSTANCE.binder(binding);
+            CoreRepresentation proof = CoreRepresentations.binder(binding);
             if (proof.isVector()) {
                 if (recursive || representation(binding)) throw new UnsupportedCore("Vector let binding must be nonrecursive and unlifted");
-                CoreRepresentations.INSTANCE.requireInput(proof);
-            } else CoreRepresentations.INSTANCE.requireScalar(proof, "let binding");
+                CoreRepresentations.requireInput(proof);
+            } else CoreRepresentations.requireScalar(proof, "let binding");
         }
         Scope local = scope.child();
         int[][] vectorSlots = new int[group.size()][];
         int[] slots = new int[group.size()];
         for (int index = 0; index < group.size(); index++) {
             Map<String, Object> binding = group.get(index);
-            CoreRepresentation proof = CoreRepresentations.INSTANCE.binder(binding);
+            CoreRepresentation proof = CoreRepresentations.binder(binding);
             if (proof.isVector()) {
                 List<CoreRepresentation> fields = TupleShape.flatten(proof);
                 int[] lanes = new int[fields.size()];
@@ -1079,12 +1079,12 @@ public final class Program implements ExecutableProgram {
             rhs[i] = withSource(sources.binding(binding, currentSource), () -> {
                 List<Object> body = (List<Object>) binding.get("expr");
                 boolean lifted = representation(binding);
-                CoreRepresentations.INSTANCE.requireNoSum(CoreRepresentations.INSTANCE.expression(body), "let binding");
+                CoreRepresentations.requireNoSum(CoreRepresentations.expression(body), "let binding");
                 if (recursive && !lifted) throw new UnsupportedCore("Recursive unlifted binding unsupported");
                 Expr node = recursive && lifted && !Arrays.asList("lam", "lit", "con", "void").contains(body.get(0))
                     ? delay(body, local, String.valueOf(binding.get("name")))
                     : argument(body, recursive ? local : scope, lifted, String.valueOf(binding.get("name")), false, lifted);
-                return node.proven(node.getRepresentation().refine(evaluated(CoreRepresentations.INSTANCE.binder(binding), false)));
+                return node.proven(node.getRepresentation().refine(evaluated(CoreRepresentations.binder(binding), false)));
             });
         }
         boolean[] unlifted = new boolean[group.size()];
@@ -1107,7 +1107,7 @@ public final class Program implements ExecutableProgram {
             if (binding != null) local.refine(id, evaluated(binding.proof, true));
         }
         CoreRepresentation binderProof = evaluated(scrutinee.getRepresentation().refine(
-            evaluated(CoreRepresentations.INSTANCE.caseBinder(expr), false)), true);
+            evaluated(CoreRepresentations.caseBinder(expr), false)), true);
         if (binderProof.isSum()) return compileSumCase(expr, scrutinee, binderProof, local, tail);
         if (binderProof.isTuple()) return compileTupleCase(expr, scrutinee, binderProof, local, tail);
         if (binderProof.isVector()) return compileVectorCase(expr, scrutinee, binderProof, local, tail);
@@ -1132,14 +1132,14 @@ public final class Program implements ExecutableProgram {
             List<String> ids = (List<String>) alt.get(2);
             DataLayout layout = value instanceof DataLayout found ? found : null;
             if (layout != null && layout.getLogicalArity() != ids.size()) throw new RuntimeFault("Constructor field/binder mismatch");
-            var metadata = CoreRepresentations.INSTANCE.alternativeBinders(alt);
+            var metadata = CoreRepresentations.alternativeBinders(alt);
             boolean[] strict = kind.equals("data") ? strictConstructorFields((String) alt.get(1), ids.size()) : null;
             int[][] vectorFields = new int[layout != null ? layout.getArity() : ids.size()][];
             List<Integer> slots = new ArrayList<>();
             for (int index = 0; index < ids.size(); index++) {
                 String id = ids.get(index);
                 Map<String, Object> meta = at(metadata, index);
-                CoreRepresentation raw = meta != null ? CoreRepresentations.INSTANCE.binder(meta) : CoreRepresentation.Companion.getUNKNOWN();
+                CoreRepresentation raw = meta != null ? CoreRepresentations.binder(meta) : CoreRepresentation.UNKNOWN;
                 int physical = layout != null ? layout.fieldOffset(index) : index;
                 CoreRepresentation aggregate = layout != null ? layout.logicalProof(index) : null;
                 if (aggregate != null && !aggregate.isAggregate()) aggregate = null;
@@ -1186,11 +1186,11 @@ public final class Program implements ExecutableProgram {
             anyAggregate |= body.getRepresentation().isAggregate();
             anyScalar |= !body.getRepresentation().isAggregate();
         }
-        CoreRepresentation declared = CoreRepresentations.INSTANCE.expression(expr);
+        CoreRepresentation declared = CoreRepresentations.expression(expr);
         if (!declared.isAggregate() && anyAggregate && anyScalar) throw new RuntimeFault("Missing exact aggregate case result proof");
-        CoreRepresentations.INSTANCE.validateDeclaredCaseResult(declared, results);
-        CoreRepresentations.INSTANCE.validateAggregateCaseResult(declared, results);
-        CoreRepresentations.INSTANCE.validateFloatingCaseResult(declared, results);
+        CoreRepresentations.validateDeclaredCaseResult(declared, results);
+        CoreRepresentations.validateAggregateCaseResult(declared, results);
+        CoreRepresentations.validateFloatingCaseResult(declared, results);
         return switch (CaseCategoriesKt.caseCategory(binderProof, kinds, allLong)) {
             case DATA -> new DataCase(scrutinee, binder, alternatives, metrics, binderProof, delimited);
             case LONG -> new LongCase(scrutinee, binder, alternatives, metrics, binderProof, delimited);
@@ -1203,7 +1203,7 @@ public final class Program implements ExecutableProgram {
         String id = (String) expr.get(1);
         int arity = ((Number) expr.get(2)).intValue();
         Map<String, Object> info = constructors.get(id);
-        CoreRepresentation proof = CoreRepresentations.INSTANCE.expression(expr);
+        CoreRepresentation proof = CoreRepresentations.expression(expr);
         if (info != null && "unboxed-tuple".equals(info.get("kind")) && arity == 0 && proof.isTuple()) {
             if (proof.getComponents() == null || !proof.getComponents().isEmpty()) throw new RuntimeFault("Empty tuple constructor has nonempty logical components");
             return new TupleConstruct(new TupleShape(proof, (thc.Language) language), new Expr[0]);
@@ -1216,7 +1216,7 @@ public final class Program implements ExecutableProgram {
         List<?> fieldTypes = fieldData instanceof List<?> found ? found : null;
         List<CoreRepresentation> proofs = new ArrayList<>();
         for (int i = 0; i < arity; i++) proofs.add(fieldTypes != null && fieldTypes.get(i) != null ?
-            CoreRepresentations.INSTANCE.parse(fieldTypes.get(i)) : CoreRepresentation.Companion.getUNKNOWN());
+            CoreRepresentations.parse(fieldTypes.get(i)) : CoreRepresentation.UNKNOWN);
         ArgumentLayout inputLayout = ArgumentLayout.fromProofs(proofs);
         List<Integer> slots = new ArrayList<>(), indices = new ArrayList<>();
         List<CoreRepresentation> argumentProofs = new ArrayList<>();
@@ -1259,12 +1259,12 @@ public final class Program implements ExecutableProgram {
         return result;
     }
     private Object metadataRepresentation(List<Object> expr) {
-        Map<String, Object> metadata = CoreRepresentations.INSTANCE.metadata(expr);
+        Map<String, Object> metadata = CoreRepresentations.metadata(expr);
         return metadata == null ? null : metadata.get("rep");
     }
     private List<CoreRepresentation> argumentProofs(List<List<Object>> args) {
         List<CoreRepresentation> result = new ArrayList<>(args.size());
-        for (List<Object> arg : args) result.add(CoreRepresentations.INSTANCE.expression(arg));
+        for (List<Object> arg : args) result.add(CoreRepresentations.expression(arg));
         return result;
     }
     private List<CoreRepresentation> loweredProofs(Expr[] args) {
@@ -1293,11 +1293,11 @@ public final class Program implements ExecutableProgram {
         if (!(at(expr, 3) instanceof List<?> flags)) throw new RuntimeFault("Application lacks representation flags");
         if (flags.size() != args.size()) throw new RuntimeFault("Application representation flag count mismatch");
         boolean[] callStrict = CoreCallDemands.lowerApplication(expr, callDemandsEnabled);
-        CoreRepresentation tupleProof = CoreRepresentations.INSTANCE.expression(expr);
+        CoreRepresentation tupleProof = CoreRepresentations.expression(expr);
         boolean primitive = "prim".equals(fn.get(0));
         var tupleOperation = primitive ? TupleArithmeticOp.named((String) fn.get(1)) : null;
         var floatDecode = primitive ? FloatDecodeOp.named((String) fn.get(1)) : null;
-        var metadata = CoreRepresentations.INSTANCE.metadata(expr);
+        var metadata = CoreRepresentations.metadata(expr);
         boolean defined = "var".equals(fn.get(0)) &&
             (scope.locals.containsKey(fn.get(1)) || scope.joins.containsKey(fn.get(1)) ||
                 (demand != null && metadata != null && metadata.containsKey("foreignCall") ?
@@ -1309,11 +1309,11 @@ public final class Program implements ExecutableProgram {
         var foreignMetadata = packageScalar == null ? metadata : null;
         var stackClone = CoreStackForeign.validate(foreignMetadata, argumentMetadata(args), flags);
         var stackInfo = CoreStackInfoForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
-        var originalStdio = CoreOriginalStdio.INSTANCE.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
+        var originalStdio = CoreOriginalStdio.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
         var originalProcess = CoreProcessForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
         var capi = CoreCapiForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr), foreignLinks);
         var stableFree = CoreStablePointers.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
-        var sharedCAF = CoreSharedCAFStores.INSTANCE.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
+        var sharedCAF = CoreSharedCAFStores.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
         var shutdown = CoreRtsShutdown.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
         var mainThreadForeign = CoreMainThreadForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
         var boundThreadForeign = CoreBoundThreadForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr), false);
@@ -1329,7 +1329,7 @@ public final class Program implements ExecutableProgram {
         var managedFile = CoreManagedFiles.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
 
         var javascript = packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && managedFile == null
-            ? CoreJavaScript.INSTANCE.validate(expr, defined) : null;
+            ? CoreJavaScript.validate(expr, defined) : null;
         var md5 = javascript == null ? CoreMd5Foreign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr)) : null;
         var gmp = CoreGmpForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
         var processSignal = CoreSignalForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
@@ -1349,7 +1349,7 @@ public final class Program implements ExecutableProgram {
             stackInfo == null && originalStdio == null && capi == null && !stableFree && shutdown == null && !mainThreadForeign &&
             !boundThreadForeign && stringRts == null && rtsDiagnostic == null && rtsArguments == null && sharedCAF == null &&
             managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null &&
-            !memmove && !memcpy && !memset && processSignal == null ? CorePolyglot.INSTANCE.validate(expr, defined) : null;
+            !memmove && !memcpy && !memset && processSignal == null ? CorePolyglot.validate(expr, defined) : null;
         if ((packageScalar != null || javascript != null || polyglot != null || runtimeService == RuntimeServiceCall.EXCEPTION_TEXT) &&
             foreignExceptionBridge == null) throw fault("Foreign execution requires a linked genuine THC.Exception runtime bundle");
         if (runtimeService != null) {
@@ -1400,12 +1400,12 @@ public final class Program implements ExecutableProgram {
             return new ProcessForeignExpression(originalProcess, operands, tupleProof);
         }
         if (originalStdio != null) {
-            CoreOriginalStdio.INSTANCE.validateHead(fn, defined);
+            CoreOriginalStdio.validateHead(fn, defined);
             Expr[] operands = new Expr[args.size()];
             for (int i = 0; i < operands.length; i++) {
                 operands[i] = compile(args.get(i), scope, false);
                 if (originalStdio.getProcessIdentity() || originalStdio.getEventDescriptor() || originalStdio.getWaitStatus() || originalStdio.getPathRemoval() || originalStdio.getFlagConstant() || originalStdio.getFcntl() || originalStdio.getReadiness() || originalStdio.getSeekConstant() || originalStdio.getStat() || originalStdio.getTermios() || originalStdio.getSigset() || originalStdio.getSavedTermios() || originalStdio.getReadImage() || originalStdio.getPathStat() || originalStdio.getPathMode() || originalStdio.getPathLink() || originalStdio.getCurrentDirectory() || originalStdio.getDirectoryStream() || originalStdio.getOpening() || originalStdio.getIconv() || originalStdio.getStrerror() || originalStdio.getDuplication() || originalStdio.getLocking() || originalStdio == OriginalStdioOp.SET_ERRNO || originalStdio == OriginalStdioOp.SIGPROCMASK || originalStdio == OriginalStdioOp.ACCESS || originalStdio == OriginalStdioOp.UNLINKAT || originalStdio == OriginalStdioOp.FSTATAT || originalStdio == OriginalStdioOp.TCSETATTR)
-                    CoreOriginalStdio.INSTANCE.validateScalarOperand(originalStdio, i, operands[i].getRepresentation(), bindingProof(args.get(i), scope));
+                    CoreOriginalStdio.validateScalarOperand(originalStdio, i, operands[i].getRepresentation(), bindingProof(args.get(i), scope));
             }
             return new OriginalStdioExpression(originalStdio, operands, tupleProof);
         }
@@ -1432,11 +1432,11 @@ public final class Program implements ExecutableProgram {
             return new FreeStablePointer(compile(args.get(0), scope, false), compile(args.get(1), scope, false)).proven(evaluated(tupleProof, true));
         }
         if (sharedCAF != null) {
-            CoreSharedCAFStores.INSTANCE.validateHead(fn, defined);
+            CoreSharedCAFStores.validateHead(fn, defined);
             Expr[] operands = new Expr[args.size()];
             for (int i = 0; i < operands.length; i++) {
                 operands[i] = compile(args.get(i), scope, false);
-                CoreSharedCAFStores.INSTANCE.validateOperand(i, operands[i].getRepresentation(), bindingProof(args.get(i), scope));
+                CoreSharedCAFStores.validateOperand(i, operands[i].getRepresentation(), bindingProof(args.get(i), scope));
             }
             return new SharedCAFStoreExpression(sharedCAF, operands[0], operands[1]).proven(evaluated(tupleProof, true));
         }
@@ -1651,7 +1651,7 @@ public final class Program implements ExecutableProgram {
         if (primitive && Set.of("newBCO#", "mkApUpd0#").contains(fn.get(1))) {
             String name = (String) fn.get(1);
             if (capturesContinuations) throw new UnsupportedCore("GHC BCO frames do not yet preserve AST captures");
-            GhcBCO.INSTANCE.validate(name, argumentProofs(args), flags, tupleProof);
+            GhcBCO.validate(name, argumentProofs(args), flags, tupleProof);
             return new GhcBCOExpression(name, argumentOperands(args, scope, flags), (thc.Language) language, metrics, tupleProof);
         }
         if (primitive && Set.of("newPromptTag#", "prompt#", "control0#").contains(fn.get(1))) {
@@ -1676,14 +1676,14 @@ public final class Program implements ExecutableProgram {
             for (int i = 0; i < layouts.length; i++) layouts[i] = dataLayout(ids.get(i));
             return new DataToTag(new DataTagFamily(layouts), operand);
         }
-        if (primitive && CoreVectors.INSTANCE.getOperations().contains(fn.get(1))) {
+        if (primitive && CoreVectors.operations.contains(fn.get(1))) {
             String name = (String) fn.get(1);
             List<CoreRepresentation> proofs = new ArrayList<>();
-            for (List<Object> arg : args) proofs.add(CoreVectors.INSTANCE.argumentProof(arg));
-            CoreVectors.INSTANCE.validate(name, proofs, tupleProof);
-            CoreVectors.INSTANCE.validateFlags(flags);
+            for (List<Object> arg : args) proofs.add(CoreVectors.argumentProof(arg));
+            CoreVectors.validate(name, proofs, tupleProof);
+            CoreVectors.validateFlags(flags);
             Expr[] operands = compileOperands(args, scope);
-            int[] shuffle = name.startsWith("shuffle") ? CoreVectors.INSTANCE.shuffleIndices(args.get(2), tupleProof.getVector().getLanes()) : null;
+            int[] shuffle = name.startsWith("shuffle") ? CoreVectors.shuffleIndices(args.get(2), tupleProof.getVector().getLanes()) : null;
             if (GeneratedVectors.operations.contains(name))
                 return GeneratedVectors.expression(name, operands, shuffle, count -> vectorSlots(scope, count, "<vector lane "));
             if (name.equals("packInt64X2#")) return new VectorPack(operands[0], vectorSlots(scope, 2, "<vector lane "));
@@ -1692,30 +1692,30 @@ public final class Program implements ExecutableProgram {
             if (name.equals("unpackInt32X4#")) return new Vector32Unpack(operands[0]);
             if (name.equals("packDoubleX2#")) return new VectorDoublePack(operands[0], vectorSlots(scope, 2, "<double vector lane "));
             if (name.equals("unpackDoubleX2#")) return new VectorDoubleUnpack(operands[0]);
-            if (CoreVectors.INSTANCE.getOperationsDouble().contains(name)) return new VectorDoubleOperation(name, operands);
+            if (CoreVectors.operationsDouble.contains(name)) return new VectorDoubleOperation(name, operands);
             if (name.equals("packFloatX4#")) return new VectorFloatPack(operands[0], vectorSlots(scope, 4, "<float vector lane "));
             if (name.equals("unpackFloatX4#")) return new VectorFloatUnpack(operands[0]);
-            if (CoreVectors.INSTANCE.getOperationsFloat().contains(name)) return new VectorFloatOperation(name, operands);
-            if (CoreVectors.INSTANCE.getFusedFloat8().contains(name)) return new VectorFloat8Fused(name, operands);
-            if (CoreVectors.INSTANCE.getFusedFloat16().contains(name)) return new VectorFloat16Fused(name, operands);
-            if (CoreVectors.INSTANCE.getFusedDouble4().contains(name)) return new VectorDouble4Fused(name, operands);
-            if (CoreVectors.INSTANCE.getFusedDouble8().contains(name)) return new VectorDouble8Fused(name, operands);
-            if (CoreVectors.INSTANCE.getOperations32().contains(name)) return new Vector32Operation(name, operands);
+            if (CoreVectors.operationsFloat.contains(name)) return new VectorFloatOperation(name, operands);
+            if (CoreVectors.fusedFloat8.contains(name)) return new VectorFloat8Fused(name, operands);
+            if (CoreVectors.fusedFloat16.contains(name)) return new VectorFloat16Fused(name, operands);
+            if (CoreVectors.fusedDouble4.contains(name)) return new VectorDouble4Fused(name, operands);
+            if (CoreVectors.fusedDouble8.contains(name)) return new VectorDouble8Fused(name, operands);
+            if (CoreVectors.operations32.contains(name)) return new Vector32Operation(name, operands);
             if (name.equals("packInt16X8#")) return new Vector16Pack(operands[0], vectorSlots(scope, 8, "<int16 vector lane "));
             if (name.equals("unpackInt16X8#")) return new Vector16Unpack(operands[0]);
-            if (CoreVectors.INSTANCE.getOperations16().contains(name)) return new Vector16Operation(name, operands);
+            if (CoreVectors.operations16.contains(name)) return new Vector16Operation(name, operands);
             if (name.equals("packInt8X16#")) return new Vector8Pack(operands[0], vectorSlots(scope, 16, "<int8 vector lane "));
             if (name.equals("unpackInt8X16#")) return new Vector8Unpack(operands[0]);
-            if (CoreVectors.INSTANCE.getOperations8().contains(name)) return new Vector8Operation(name, operands);
+            if (CoreVectors.operations8.contains(name)) return new Vector8Operation(name, operands);
             if (name.equals("packWord8X16#")) return new VectorWord8Pack(operands[0], vectorSlots(scope, 16, "<word8 vector lane "));
             if (name.equals("unpackWord8X16#")) return new VectorWord8Unpack(operands[0]);
-            if (CoreVectors.INSTANCE.getOperationsWord8().contains(name)) return new VectorWord8Operation(name, operands);
+            if (CoreVectors.operationsWord8.contains(name)) return new VectorWord8Operation(name, operands);
             if (name.equals("packWord16X8#")) return new VectorWord16Pack(operands[0], vectorSlots(scope, 8, "<word16 vector lane "));
             if (name.equals("unpackWord16X8#")) return new VectorWord16Unpack(operands[0]);
-            if (CoreVectors.INSTANCE.getOperationsWord16().contains(name)) return new VectorWord16Operation(name, operands);
+            if (CoreVectors.operationsWord16.contains(name)) return new VectorWord16Operation(name, operands);
             if (name.equals("packWord32X4#")) return new VectorWord32Pack(operands[0], vectorSlots(scope, 4, "<word32 vector lane "));
             if (name.equals("unpackWord32X4#")) return new VectorWord32Unpack(operands[0]);
-            if (CoreVectors.INSTANCE.getOperationsWord32().contains(name)) return new VectorWord32Operation(name, operands);
+            if (CoreVectors.operationsWord32.contains(name)) return new VectorWord32Operation(name, operands);
             return new VectorOperation(name, operands);
         }
         if (primitive && CoreArithmeticExceptions.payload((String) fn.get(1)) != null) {
@@ -1780,11 +1780,11 @@ public final class Program implements ExecutableProgram {
             CoreYield.validate(argumentProofs(args), flags, tupleProof);
             return new YieldThread(argument(args.get(0), scope, false), enableAsync, tupleProof);
         }
-        if (primitive && CoreFileWait.INSTANCE.named((String) fn.get(1))) {
+        if (primitive && CoreFileWait.named((String) fn.get(1))) {
             String name = (String) fn.get(1);
-            CoreFileWait.INSTANCE.validate(name, argumentProofs(args), flags, tupleProof);
+            CoreFileWait.validate(name, argumentProofs(args), flags, tupleProof);
             Expr[] operands = argumentOperands(args, scope, false);
-            CoreFileWait.INSTANCE.validate(name, loweredProofs(operands), flags, tupleProof);
+            CoreFileWait.validate(name, loweredProofs(operands), flags, tupleProof);
             GlobalBinding payload = globals.get(CoreFileWait.badFd);
             if (payload == null) throw new UnsupportedCore(name + " requires original blockedOnBadFD payload");
             return new WaitFileDescriptor(operands[0], operands[1], payload, name.equals("waitWrite#"), enableAsync, tupleProof);
@@ -1810,7 +1810,7 @@ public final class Program implements ExecutableProgram {
                 argument(args.get(0), scope, true), argument(args.get(1), scope, true), argument(args.get(2), scope, false), metrics, enableAsync);
             return new AnnotatedTuple(argument(args.get(0), scope, true), argument(args.get(2), scope, false),
                 new TupleApplication((thc.Language) language, new TupleShape(tupleProof, (thc.Language) language),
-                    argument(args.get(1), scope, true), new Expr[]{new Literal(kotlin.Unit.INSTANCE).proven(CoreRepresentations.INSTANCE.expression(args.get(2)))},
+                    argument(args.get(1), scope, true), new Expr[]{new Literal(kotlin.Unit.INSTANCE).proven(CoreRepresentations.expression(args.get(2)))},
                     false, metrics, null));
         }
         if (primitive && "clearCCS#".equals(fn.get(1))) {
@@ -1827,12 +1827,12 @@ public final class Program implements ExecutableProgram {
             return new ClosureInspectExpression(operation, operands, tupleProof);
         }
         if (primitive && "getCurrentCCS#".equals(fn.get(1))) {
-            CoreCurrentCCS.INSTANCE.validate(argumentProofs(args), flags, tupleProof);
+            CoreCurrentCCS.validate(argumentProofs(args), flags, tupleProof);
             return new GetCurrentCCS(argument(args.get(0), scope, true), argument(args.get(1), scope, false), tupleProof);
         }
 
-        if (primitive && STMOp.Companion.named((String) fn.get(1)) != null) {
-            var operation = Objects.requireNonNull(STMOp.Companion.named((String) fn.get(1)));
+        if (primitive && STMOp.named((String) fn.get(1)) != null) {
+            var operation = Objects.requireNonNull(STMOp.named((String) fn.get(1)));
             if (containsDelimited && operation != STMOp.NEW && operation != STMOp.READ_IO)
                 throw new UnsupportedCore("STM transaction frames do not support explicit delimited capture");
             operation.validate(argumentProofs(args), flags, tupleProof);
@@ -1860,13 +1860,13 @@ public final class Program implements ExecutableProgram {
             operation.validate(argumentProofs(args), flags, tupleProof);
             return new CompactImageExpression(operation, argumentOperands(args, scope, flags)).proven(evaluated(tupleProof, true));
         }
-        if (primitive && CompactOp.Companion.named((String) fn.get(1)) != null) {
-            var operation = Objects.requireNonNull(CompactOp.Companion.named((String) fn.get(1)));
+        if (primitive && CompactOp.named((String) fn.get(1)) != null) {
+            var operation = Objects.requireNonNull(CompactOp.named((String) fn.get(1)));
             if (capturesContinuations && operation.getAdds())
                 throw new UnsupportedCore("Compact graph traversal does not yet support resumable asynchronous forcing");
             operation.validate(argumentProofs(args), flags, tupleProof);
             List<GlobalBinding> failures = new ArrayList<>();
-            if (operation.getAdds()) for (String id : CompactOp.Companion.getFailures()) {
+            if (operation.getAdds()) for (String id : CompactOp.getFailures()) {
                 GlobalBinding failure = globals.get(id);
                 if (failure == null) throw new UnsupportedCore("Compact addition requires original exception payload: " + id);
                 failures.add(failure);
@@ -1879,11 +1879,11 @@ public final class Program implements ExecutableProgram {
             operation.validate(argumentProofs(args), flags, tupleProof);
             return MutVarOp.expression(operation, tupleProof, argumentOperands(args, scope, flags), language, metrics, enableAsync);
         }
-        if (primitive && WeakOp.Companion.named((String) fn.get(1)) != null) {
-            var operation = Objects.requireNonNull(WeakOp.Companion.named((String) fn.get(1)));
+        if (primitive && WeakOp.named((String) fn.get(1)) != null) {
+            var operation = Objects.requireNonNull(WeakOp.named((String) fn.get(1)));
             operation.validate(argumentProofs(args), flags, tupleProof);
             operation.validateBindings(argumentProofs(args), bindingProofs(args, scope));
-            if (operation == WeakOp.MAKE) operation.validateAction(CoreRepresentations.INSTANCE.knownFunctionSignature(args.get(2), bindings));
+            if (operation == WeakOp.MAKE) operation.validateAction(CoreRepresentations.knownFunctionSignature(args.get(2), bindings));
             Expr[] operands = argumentOperands(args, scope, flags);
             operation.validate(loweredProofs(operands), flags, tupleProof);
             return new WeakExpression(operation, operands).proven(evaluated(tupleProof, true));
@@ -1947,9 +1947,9 @@ public final class Program implements ExecutableProgram {
         }
         if (primitive && "keepAlive#".equals(fn.get(1))) {
             var proofs = argumentProofs(args);
-            var signature = at(args, 2) != null ? CoreRepresentations.INSTANCE.knownFunctionSignature(args.get(2), bindings) : null;
+            var signature = at(args, 2) != null ? CoreRepresentations.knownFunctionSignature(args.get(2), bindings) : null;
             CoreKeepAlive.validate(proofs, flags, tupleProof,
-                signature == null ? null : signature.getFirst(), signature == null ? null : signature.getSecond());
+                signature == null ? null : signature.getInputs(), signature == null ? null : signature.getResult());
             Expr kept = argument(args.get(0), scope, (Boolean) flags.get(0));
             Expr state = compile(args.get(1), scope, false);
             Expr function = compile(args.get(2), scope, false);
@@ -1959,27 +1959,27 @@ public final class Program implements ExecutableProgram {
                 new Application(function, stateArgument, false, metrics);
             return new KeepAliveExpression(kept, state, action, tupleProof);
         }
-        if (primitive && AtomicAddressOp.Companion.named((String) fn.get(1)) != null) {
-            var operation = Objects.requireNonNull(AtomicAddressOp.Companion.named((String) fn.get(1)));
+        if (primitive && AtomicAddressOp.named((String) fn.get(1)) != null) {
+            var operation = Objects.requireNonNull(AtomicAddressOp.named((String) fn.get(1)));
             operation.validate(argumentProofs(args), flags, tupleProof);
             return new AtomicAddressExpression(operation, tupleProof, compileOperands(args, scope));
         }
-        if (primitive && FloatingAddressOp.Companion.named((String) fn.get(1)) != null) {
-            var operation = Objects.requireNonNull(FloatingAddressOp.Companion.named((String) fn.get(1)));
+        if (primitive && FloatingAddressOp.named((String) fn.get(1)) != null) {
+            var operation = Objects.requireNonNull(FloatingAddressOp.named((String) fn.get(1)));
             String name = (String) fn.get(1);
             boolean byteOffset = name.contains("Word8") && name.contains("As");
             operation.validate(argumentProofs(args), flags, tupleProof);
             return new FloatingAddressExpression(operation, tupleProof, compileOperands(args, scope), byteOffset);
         }
-        if (primitive && AddressArrayCopyOp.Companion.named((String) fn.get(1)) != null) {
-            var operation = Objects.requireNonNull(AddressArrayCopyOp.Companion.named((String) fn.get(1)));
+        if (primitive && AddressArrayCopyOp.named((String) fn.get(1)) != null) {
+            var operation = Objects.requireNonNull(AddressArrayCopyOp.named((String) fn.get(1)));
             operation.validate(argumentProofs(args), flags, tupleProof);
             Expr[] operands = compileOperands(args, scope);
             return operation.getToArray() ? new AddressToByteArrayExpression(tupleProof, operands[0], operands[1], operands[2], operands[3], operands[4]) :
                 new ByteArrayToAddressExpression(tupleProof, operands[0], operands[1], operands[2], operands[3], operands[4]);
         }
-        if (primitive && PinnedMemoryOp.Companion.named((String) fn.get(1)) != null) {
-            var operation = Objects.requireNonNull(PinnedMemoryOp.Companion.named((String) fn.get(1)));
+        if (primitive && PinnedMemoryOp.named((String) fn.get(1)) != null) {
+            var operation = Objects.requireNonNull(PinnedMemoryOp.named((String) fn.get(1)));
             String name = (String) fn.get(1);
             boolean byteOffset = name.contains("Word8") && name.contains("As");
             operation.validate(argumentProofs(args), flags, tupleProof);
@@ -2064,7 +2064,7 @@ public final class Program implements ExecutableProgram {
             Expr[] operands = new Expr[args.size()];
             for (int i = 0; i < operands.length; i++) {
                 CoreRepresentation field = shape.getComponents()[i];
-                TupleShape.requireCompatible(field, CoreRepresentations.INSTANCE.expression(args.get(i)), true);
+                TupleShape.requireCompatible(field, CoreRepresentations.expression(args.get(i)), true);
                 if (field.isTypedTransport() && !Boolean.FALSE.equals(flags.get(i))) throw new RuntimeFault("Typed tuple field cannot be lifted");
                 if (field.isTypedTransport()) operands[i] = compile(args.get(i), scope, false);
                 else {
@@ -2099,7 +2099,7 @@ public final class Program implements ExecutableProgram {
                 "argument thunk", !"prim".equals(fn.get(0)) && !"con".equals(fn.get(0)), lifted);
         }
         if ("prim".equals(fn.get(0))) {
-            for (Expr node : nodes) CoreRepresentations.INSTANCE.requireScalar(node.getRepresentation(), "argument");
+            for (Expr node : nodes) CoreRepresentations.requireScalar(node.getRepresentation(), "argument");
             return primitive((String) fn.get(1), nodes, CoreExceptionPayload.validate(expr));
         }
         if (constructorStrict != null) {

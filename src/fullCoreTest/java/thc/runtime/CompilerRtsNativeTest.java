@@ -47,7 +47,7 @@ public class CompilerRtsNativeTest {
     }
     private Object validate(String symbol, Map<String, Object> updated, List<Object> operands, List<?> flags, Object result) {
         return symbol.equals("keepCAFsForGHCi") ? CoreStringRtsForeign.validate(updated, operands, flags, result)
-            : CoreSharedCAFStores.INSTANCE.validate(updated, operands, flags, result);
+            : CoreSharedCAFStores.validate(updated, operands, flags, result);
     }
     @Test public void genuineDeclarationsRejectOtherUnitsSafetyAndArity() throws Exception {
         var actual = new ArrayList<List<?>>(); calls(json(new File(directory, "post.json")), actual);
@@ -60,7 +60,7 @@ public class CompilerRtsNativeTest {
             String symbol = (String) target.get("symbol"); seen.add(symbol);
             var operands = new ArrayList<Object>();
             for (var operand : (List<List<Object>>) call.get(2)) {
-                var proof = CoreRepresentations.INSTANCE.metadata(operand);
+                var proof = CoreRepresentations.metadata(operand);
                 operands.add(proof == null ? null : proof.get("rep"));
             }
             var flags = (List<?>) call.get(3); Object result = metadata.get("rep");

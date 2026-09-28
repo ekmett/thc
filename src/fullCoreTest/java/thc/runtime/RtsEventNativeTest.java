@@ -44,7 +44,7 @@ public class RtsEventNativeTest {
     private Map<String, Object> with(Map<String, Object> source, String key, Object value) { var result = new LinkedHashMap<>(source); result.put(key, value); return result; }
     private List<Object> operands(List<?> call) {
         var result = new ArrayList<Object>(); for (var operand : (List<List<?>>) call.get(2)) {
-            var metadata = CoreRepresentations.INSTANCE.metadata(operand); result.add(metadata == null ? null : metadata.get("rep"));
+            var metadata = CoreRepresentations.metadata(operand); result.add(metadata == null ? null : metadata.get("rep"));
         }
         return result;
     }
@@ -68,21 +68,21 @@ public class RtsEventNativeTest {
         var manifest = json(new File(directory, "manifest.json")); var entries = entries(manifest.get("descriptorEntries")); var rows = rows(json(new File(directory, "oracle.json")).get("descriptorRows"));
         assertEquals(Set.of("eventfdCycle", "pipeCycle", "epollCycle", "epollSafeCycle", "pollCycle", "pollSafeCycle", "controlCycle"), entries.keySet()); assertEquals(entries.keySet(), rows.keySet()); assertEquals(21, count(rows));
         for (String stage : List.of("pre", "post")) for (var group : rows.entrySet()) for (String backend : List.of("ast", "bytecode"))
-            try (var context = NativeFileProvider.Companion.createContext$org_intelligence_thc(Set.of(), ContextProfile.SYNCHRONOUS_TEST, FfiMode.NATIVE, false)) {
+            try (var context = NativeFileProvider.createContext(Set.of(), ContextProfile.SYNCHRONOUS_TEST, FfiMode.NATIVE, false)) {
                 String entry = group.getKey(), label = stage + "/" + backend + "/" + entry; var cases = group.getValue(); context.enter();
                 try {
                     assertEquals(true, json(new File(directory, entry + "-" + stage + ".audit.json")).get("accepted")); var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                     var module = json(new File(directory, entry + "-" + stage + ".json"));
                     for (var call : calls(module)) {
                         var meta = (Map<String, Object>) call.getLast(); var descriptor = (Map<String, Object>) meta.get("foreignCall"); var target = (Map<String, Object>) descriptor.get("target"); var operands = operands(call);
-                        assertNotNull(CoreOriginalStdio.INSTANCE.validate(meta, operands, (List<?>) call.get(3), meta.get("rep")));
-                        assertThrows(RuntimeFault.class, () -> CoreOriginalStdio.INSTANCE.validate(with(meta, "foreignCall", with(descriptor, "target", with(target, "unit", "main"))), operands, (List<?>) call.get(3), meta.get("rep")));
-                        if (Objects.requireNonNull(CoreOriginalStdio.INSTANCE.validate(meta, operands, (List<?>) call.get(3), meta.get("rep"))).getEventManager()) {
+                        assertNotNull(CoreOriginalStdio.validate(meta, operands, (List<?>) call.get(3), meta.get("rep")));
+                        assertThrows(RuntimeFault.class, () -> CoreOriginalStdio.validate(with(meta, "foreignCall", with(descriptor, "target", with(target, "unit", "main"))), operands, (List<?>) call.get(3), meta.get("rep")));
+                        if (Objects.requireNonNull(CoreOriginalStdio.validate(meta, operands, (List<?>) call.get(3), meta.get("rep"))).getEventManager()) {
                             for (var bad : List.of(with(descriptor, "arity", 0L), with(descriptor, "safety", "interruptible"), with(descriptor, "target", with(target, "isFunction", false)),
                                 with(descriptor, "resultRep", Map.of("kind", "long", "primReps", List.of("IntRep")))))
-                                assertThrows(RuntimeFault.class, () -> CoreOriginalStdio.INSTANCE.validate(with(meta, "foreignCall", bad), operands, (List<?>) call.get(3), meta.get("rep")));
+                                assertThrows(RuntimeFault.class, () -> CoreOriginalStdio.validate(with(meta, "foreignCall", bad), operands, (List<?>) call.get(3), meta.get("rep")));
                             var wrong = new ArrayList<>(operands); wrong.set(0, with((Map<String, Object>) operands.getFirst(), "primReps", List.of("IntRep")));
-                            assertThrows(RuntimeFault.class, () -> CoreOriginalStdio.INSTANCE.validate(meta, wrong, (List<?>) call.get(3), meta.get("rep")));
+                            assertThrows(RuntimeFault.class, () -> CoreOriginalStdio.validate(meta, wrong, (List<?>) call.get(3), meta.get("rep")));
                         }
                     }
                     var program = program(language, backend, entry, stage); var callable = context.asValue(new EntryValue(program, entries.get(entry), 1));
@@ -113,12 +113,12 @@ public class RtsEventNativeTest {
                     SynchronousMasking.set(root, mask); var self = threads.currentIdentity(); var incoming = CompletableFuture.supplyAsync(() -> threads.send(self, "after setter")).get(5, TimeUnit.SECONDS);
                     var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], root.getFrameDescriptor());
                     if (mask == MaskingState.UNMASKED) {
-                        var cut = assertThrows(AstCapture.class, () -> leaf.executeTuple(frame, new int[0], 0)); assertSame(incoming, cut.getYielded()); assertEquals(3L, threads.capabilityCount$org_intelligence_thc());
-                        incoming.acknowledge(); var saved = cut.freeze(root, frame.materialize()); threads.setCapabilityCount$org_intelligence_thc(5);
-                        assertNull(saved.continueWith(kotlin.Unit.INSTANCE)); assertEquals(5L, threads.capabilityCount$org_intelligence_thc(), "Resumption must not replay the completed setter");
+                        var cut = assertThrows(AstCapture.class, () -> leaf.executeTuple(frame, new int[0], 0)); assertSame(incoming, cut.getYielded()); assertEquals(3L, threads.capabilityCount());
+                        incoming.acknowledge(); var saved = cut.freeze(root, frame.materialize()); threads.setCapabilityCount(5);
+                        assertNull(saved.continueWith(kotlin.Unit.INSTANCE)); assertEquals(5L, threads.capabilityCount(), "Resumption must not replay the completed setter");
                         assertThrows(RuntimeFault.class, () -> saved.continueWith(kotlin.Unit.INSTANCE));
                     } else {
-                        assertNull(leaf.executeTuple(frame, new int[0], 0)); assertEquals(3L, threads.capabilityCount$org_intelligence_thc()); assertEquals(AsyncRequestState.PENDING, incoming.getState());
+                        assertNull(leaf.executeTuple(frame, new int[0], 0)); assertEquals(3L, threads.capabilityCount()); assertEquals(AsyncRequestState.PENDING, incoming.getState());
                         SynchronousMasking.set(root, MaskingState.UNMASKED); assertSame(incoming, threads.poll(root, false)); incoming.acknowledge();
                     }
                     assertEquals(1, evaluations[0]); assertEquals(AsyncRequestState.ACKNOWLEDGED, incoming.getState());
@@ -128,8 +128,8 @@ public class RtsEventNativeTest {
     }
     private Object validate(Map<String, Object> metadata, List<Object> operands, List<?> flags) {
         Object result = CoreRtsEventForeign.validate(metadata, operands, flags, metadata.get("rep"));
-        if (result == null) result = CoreOriginalStdio.INSTANCE.validate(metadata, operands, flags, metadata.get("rep"));
-        if (result == null) result = CoreSharedCAFStores.INSTANCE.validate(metadata, operands, flags, metadata.get("rep")); return result;
+        if (result == null) result = CoreOriginalStdio.validate(metadata, operands, flags, metadata.get("rep"));
+        if (result == null) result = CoreSharedCAFStores.validate(metadata, operands, flags, metadata.get("rep")); return result;
     }
     @Test public void originalInstalledDeclarationsRetainExactAbiAndUnresolvedIdentity() throws Exception {
         var entries = (List<List<String>>) json(new File(directory, "manifest.json")).get("entries"); var seen = new LinkedHashSet<String>();
@@ -153,7 +153,7 @@ public class RtsEventNativeTest {
         // JVM quotas may differ from the native GHC processor count.
         long expected = entry.equals("processors") ? physicalCount : answer; assertEquals(expected, callable.execute(input).asLong(), label);
         if (entry.equals("capabilities")) {
-            assertEquals(input, threads.capabilityCount$org_intelligence_thc()); var address = CoreDataLabels.fromCore("enabled_capabilities", new CoreRepresentation(CoreKind.ADDRESS, true, true, List.of("AddrRep"), null, null, null, null, null));
+            assertEquals(input, threads.capabilityCount()); var address = CoreDataLabels.fromCore("enabled_capabilities", new CoreRepresentation(CoreKind.ADDRESS, true, true, List.of("AddrRep"), null, null, null, null, null));
             assertEquals(input, Integer.toUnsignedLong(ManagedAddressRead.WORD32.readInt(address, 0))); assertEquals(physicalCount, (long) threads.getCpuAffinity().getCount());
         }
         released(language);
@@ -177,7 +177,7 @@ public class RtsEventNativeTest {
                     assertEquals(before + 1, program.diagnostics().get("compiledEntries"), label + " exact entry"); assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
                 }
                 if (entry.equals("capabilities")) {
-                    long previous = threads.capabilityCount$org_intelligence_thc(); assertThrows(PolyglotException.class, () -> callable.execute(0L)); assertEquals(previous, threads.capabilityCount$org_intelligence_thc()); released(language);
+                    long previous = threads.capabilityCount(); assertThrows(PolyglotException.class, () -> callable.execute(0L)); assertEquals(previous, threads.capabilityCount()); released(language);
                 }
             } finally { context.leave(); }
         }

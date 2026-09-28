@@ -21,7 +21,7 @@ public final class Language extends TruffleLanguage<Language.State> {
     public HandoffLayouts getHandoffLayouts() { return currentState(null).handoffLayouts; }
     private final ContextThreadLocal<HandoffState> handoffState = locals.createContextThreadLocal((context, thread) -> new HandoffState());
     public ContextThreadLocal<HandoffState> getHandoffState() { return handoffState; }
-    private final ContextThreadLocal<GuestThreads.PollState> threadPollState = locals.createContextThreadLocal((context, thread) -> context.threads.pollState$org_intelligence_thc(thread));
+    private final ContextThreadLocal<GuestThreads.PollState> threadPollState = locals.createContextThreadLocal((context, thread) -> context.threads.pollState(thread));
     private final ContextThreadLocal<CarrierLocal.Cell<MaskingState>> threadMaskingState = locals.createContextThreadLocal((context, thread) -> context.maskingState.cell$org_intelligence_thc(thread));
     private final ContextThreadLocal<CarrierLocal.Cell<StackAnnotationState>> threadAnnotations = locals.createContextThreadLocal((context, thread) -> context.stackAnnotations.cell$org_intelligence_thc(thread));
     private static final ContextReference<State> CONTEXTS = ContextReference.create(Language.class);
@@ -219,7 +219,7 @@ public final class Language extends TruffleLanguage<Language.State> {
     @Override protected Object getScope(State context) { return context.managedExports.getScope(); }
     @Override protected boolean isThreadAccessAllowed(Thread thread, boolean singleThreaded) { return true; }
     @Override protected void exitContext(State context, ExitMode exitMode, int exitCode) {
-        try { context.files.shutdownEventManagers$org_intelligence_thc(); }
+        try { context.files.shutdownEventManagers(); }
         finally {
             context.signals.requestStop();
             // LLVM calls remain permitted before hard exit unwinds all contexts; dispose is idempotent.
@@ -227,7 +227,7 @@ public final class Language extends TruffleLanguage<Language.State> {
         }
     }
     @Override protected void finalizeContext(State context) {
-        try { context.files.shutdownEventManagers$org_intelligence_thc(); }
+        try { context.files.shutdownEventManagers(); }
         finally { try { context.signals.close(); } finally { context.iconv.dispose(); } }
     }
     @Override protected void disposeContext(State context) {
@@ -308,32 +308,32 @@ public final class Language extends TruffleLanguage<Language.State> {
         var byId = singleOrNull(bindings, binding -> entry.equals(binding.get("id")));
         var selected = byId == null ? single(bindings, binding -> entry.equals(binding.get("name"))) : byId;
         var expression = (List<Object>) selected.get("expr");
-        var ioResult = Boolean.TRUE.equals(input.get("ioMain")) ? CoreRepresentations.INSTANCE.ioUnitMainResult(selected, bindings) : null;
+        var ioResult = Boolean.TRUE.equals(input.get("ioMain")) ? CoreRepresentations.ioUnitMainResult(selected, bindings) : null;
         CoreRepresentation shutdownResult = null;
         if (shutdownEntry != null) {
             var shutdown = singleOrNull(bindings, binding -> shutdownEntry.equals(binding.get("id")));
             if (shutdown == null) throw new IllegalArgumentException("Missing exact executable shutdown entry: " + shutdownEntry);
-            shutdownResult = CoreRepresentations.INSTANCE.ioUnitMainResult(shutdown, bindings);
+            shutdownResult = CoreRepresentations.ioUnitMainResult(shutdown, bindings);
         }
         List<CoreRepresentation> hostInputs = null;
         CoreRepresentation hostResult = null;
         String hostResultFault = null;
         if (ioResult == null) {
             try {
-                var signature = CoreRepresentations.INSTANCE.knownFunctionSignature(expression, bindings);
-                if (signature != null) { hostInputs = signature.getFirst(); hostResult = signature.getSecond(); }
+                var signature = CoreRepresentations.knownFunctionSignature(expression, bindings);
+                if (signature != null) { hostInputs = signature.getInputs(); hostResult = signature.getResult(); }
                 else if (((Number) selected.get("arity")).intValue() == 0) {
-                    hostResult = CoreRepresentations.INSTANCE.binder(selected).refine(CoreRepresentations.INSTANCE.expression(expression));
+                    hostResult = CoreRepresentations.binder(selected).refine(CoreRepresentations.expression(expression));
                     hostInputs = List.of();
                 }
                 if (hostInputs != null) {
-                    for (var proof : hostInputs) CoreRepresentations.INSTANCE.requireScalar(proof, "host argument");
-                    CoreRepresentations.INSTANCE.requireScalar(hostResult, "host result");
+                    for (var proof : hostInputs) CoreRepresentations.requireScalar(proof, "host argument");
+                    CoreRepresentations.requireScalar(hostResult, "host result");
                 }
                 if (!expression.isEmpty() && "lam".equals(expression.getFirst())) {
                     for (var parameter : (List<Map<String, Object>>) expression.get(1))
-                        CoreRepresentations.INSTANCE.requireScalar(CoreRepresentations.INSTANCE.binder(parameter), "host argument");
-                    CoreRepresentations.INSTANCE.requireScalar(CoreRepresentations.INSTANCE.lambdaResult(expression), "host result");
+                        CoreRepresentations.requireScalar(CoreRepresentations.binder(parameter), "host argument");
+                    CoreRepresentations.requireScalar(CoreRepresentations.lambdaResult(expression), "host result");
                 }
             } catch (UnsupportedCore gap) {
                 if (!Boolean.TRUE.equals(input.get("diagnosticUnsupported"))) throw gap;
@@ -392,25 +392,25 @@ public final class Language extends TruffleLanguage<Language.State> {
                     var bindings = program.signatureBindings(entry);
                     var selected = single(bindings, binding -> entry.equals(binding.get("id")));
                     var expression = (List<Object>) selected.get("expr");
-                    var io = Boolean.TRUE.equals(input.get("ioMain")) ? CoreRepresentations.INSTANCE.ioUnitMainResult(selected, bindings) : null;
+                    var io = Boolean.TRUE.equals(input.get("ioMain")) ? CoreRepresentations.ioUnitMainResult(selected, bindings) : null;
                     CoreRepresentation shutdownResult = null;
                     if (shutdown != null) {
                         var definitions = program.signatureBindings(shutdown);
-                        shutdownResult = CoreRepresentations.INSTANCE.ioUnitMainResult(single(definitions, binding -> shutdown.equals(binding.get("id"))), definitions);
+                        shutdownResult = CoreRepresentations.ioUnitMainResult(single(definitions, binding -> shutdown.equals(binding.get("id"))), definitions);
                     }
                     List<CoreRepresentation> hostInputs = null;
                     CoreRepresentation hostResult = null;
                     if (io == null) {
-                        var signature = CoreRepresentations.INSTANCE.knownFunctionSignature(expression, bindings);
-                        if (signature != null) { hostInputs = signature.getFirst(); hostResult = signature.getSecond(); }
+                        var signature = CoreRepresentations.knownFunctionSignature(expression, bindings);
+                        if (signature != null) { hostInputs = signature.getInputs(); hostResult = signature.getResult(); }
                         else if (((Number) selected.get("arity")).intValue() == 0) {
-                            hostResult = CoreRepresentations.INSTANCE.binder(selected).refine(CoreRepresentations.INSTANCE.expression(expression));
+                            hostResult = CoreRepresentations.binder(selected).refine(CoreRepresentations.expression(expression));
                             hostInputs = List.of();
                         }
                     }
                     if (hostInputs != null) {
-                        for (var proof : hostInputs) CoreRepresentations.INSTANCE.requireScalar(proof, "host argument");
-                        CoreRepresentations.INSTANCE.requireScalar(hostResult, "host result");
+                        for (var proof : hostInputs) CoreRepresentations.requireScalar(proof, "host argument");
+                        CoreRepresentations.requireScalar(hostResult, "host result");
                     }
                     var registrations = program.registerStartup();
                     var value = new EntryValue(program, entry, ((Number) selected.get("arity")).intValue(), null,

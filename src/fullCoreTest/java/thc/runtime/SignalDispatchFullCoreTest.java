@@ -67,13 +67,13 @@ public class SignalDispatchFullCoreTest {
                         @Override public void resetWake() { events.removeIf(event -> event.getInfo().length == 0); }
                         @Override public void close() { closed.incrementAndGet(); }
                     };
-                    var service = new ManagedSignals(owner, language, true, () -> NativeSignalTransport.Companion.userSignalAvailable$org_intelligence_thc(), () -> transport);
-                    service.bind(program); service.authorizeLauncher$org_intelligence_thc(); // Test-only transport, never changes host process handlers.
+                    var service = new ManagedSignals(owner, language, true, () -> NativeSignalTransport.userSignalAvailable(), () -> transport);
+                    service.bind(program); service.authorizeLauncher(); // Test-only transport, never changes host process handlers.
                     owner.getThreads().enterCurrent(null, false, true, null);
                     try {
                         for (var row : nativeRows.entrySet()) {
                             long signal = row.getKey(), expected = row.getValue(); assertEquals(signal, call(program, "setupHandler", signal), stage.getKey() + "/" + backend + " original setHandler");
-                            assertEquals(-1L, service.install(signal, -4L, ManagedAddress.Companion.nullAddress()));
+                            assertEquals(-1L, service.install(signal, -4L, ManagedAddress.nullAddress()));
                             byte[] info = ByteBuffer.allocate(128).order(ByteOrder.nativeOrder()).putInt((int) signal).array(); events.put(new ProcessSignalTransport.Event((int) signal, info));
                             // The original forked Haskell handler decodes the actual info pointer,
                             // observes its mask and publishes through the original MVar action.

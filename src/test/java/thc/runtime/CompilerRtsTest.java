@@ -77,7 +77,7 @@ class CompilerRtsTest {
     @Test void fastStringSlotKeepsWinnerAliveAndSeparateFromOtherRtsSlots() {
         var registry = new StablePointers(); var foreign = new StablePointers();
         var value = new Object(); var winner = registry.make(value); var loser = registry.make(new Object());
-        var none = ManagedAddress.Companion.nullAddress(); var slot = SharedCAFStore.FAST_STRING;
+        var none = ManagedAddress.nullAddress(); var slot = SharedCAFStore.FAST_STRING;
         assertSame(none, registry.getOrSetSharedCAF(slot, none));
         assertSame(winner, registry.getOrSetSharedCAF(slot, winner));
         assertTrue(registry.equal(winner, registry.getOrSetSharedCAF(slot, loser)));
@@ -109,7 +109,7 @@ class CompilerRtsTest {
     @Test void everySharedSlotHasOneConcurrentWinnerAndIndependentLifetime() throws Exception {
         var registry = new StablePointers(); var foreign = new StablePointers();
         var pool = Executors.newFixedThreadPool(4);
-        var none = ManagedAddress.Companion.nullAddress(); var winners = new ArrayList<ManagedAddress>();
+        var none = ManagedAddress.nullAddress(); var winners = new ArrayList<ManagedAddress>();
         try {
             for (var slot : SharedCAFStore.values()) {
                 assertSame(none, registry.getOrSetSharedCAF(slot, none));

@@ -67,7 +67,7 @@ class CoreUnitAsyncPolicyTest {
     private long count(ExecutableProgram program, String name) { return ((Number) program.diagnostics().get(name)).longValue(); }
     private AsyncRequest externalSend(GuestThreads threads, long id) throws Exception {
         var pending = CompletableFuture.supplyAsync(() -> threads.send(id, "pending demand")).get(5, TimeUnit.SECONDS);
-        assertFalse(pending.getForceSelf$org_intelligence_thc()); return pending;
+        assertFalse(pending.getForceSelf()); return pending;
     }
     private Context context(ByteArrayOutputStream output) { return Context.newBuilder("thc").err(output).build(); }
     private CoreUnitProgram program(Language.State owner) { var programs = owner.getCoreUnitPrograms(); assertEquals(1, programs.size()); return programs.getFirst(); }
@@ -79,12 +79,12 @@ class CoreUnitAsyncPolicyTest {
                 @Override public void write(byte[] bytes, int start, int length) {
                     if (!observed[0]) {
                         observed[0] = true; var threads = Language.currentState(null).getThreads();
-                        var slot = Objects.requireNonNull(threads.pollState$org_intelligence_thc(Thread.currentThread()).getCurrent$org_intelligence_thc());
+                        var slot = Objects.requireNonNull(threads.pollState(Thread.currentThread()).getCurrent());
                         assertEquals(async, slot.getExternalAsync(), backend + " wrapper policy");
                         // A different Java thread prevents self-throwTo from bypassing policy.
                         try { CompletableFuture.runAsync(() -> {
                             if (async) {
-                                var pending = threads.send(slot.getIdentity(), "policy probe"); assertFalse(pending.getForceSelf$org_intelligence_thc());
+                                var pending = threads.send(slot.getIdentity(), "policy probe"); assertFalse(pending.getForceSelf());
                                 assertEquals(AsyncRequestState.PENDING, pending.getState()); assertTrue(pending.cancel()); assertEquals(AsyncRequestState.CANCELLED, pending.getState());
                             } else assertThrows(UnsupportedCore.class, () -> threads.send(slot.getIdentity(), "rejected"));
                         }).get(5, TimeUnit.SECONDS); } catch (Exception failure) { throw new AssertionError(failure); }
@@ -106,7 +106,7 @@ class CoreUnitAsyncPolicyTest {
             try {
                 var owner = Language.currentState(null); var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var program = program(owner);
                 assertEquals(async, program.getAsynchronousExceptions()); long decoded = count(program, "coreUnitDecodedBindings");
-                var signals = new ManagedSignals(owner, language, true, () -> NativeSignalTransport.Companion.userSignalAvailable$org_intelligence_thc(),
+                var signals = new ManagedSignals(owner, language, true, () -> NativeSignalTransport.userSignalAvailable(),
                     () -> { throw new IllegalStateException("binding alone must not acquire the native signal transport"); });
                 try {
                     if (async) signals.bind(program); else assertTrue(Objects.toString(assertThrows(RuntimeFault.class, () -> signals.bind(program)).getMessage(), "").contains("asyncExceptions=true"));

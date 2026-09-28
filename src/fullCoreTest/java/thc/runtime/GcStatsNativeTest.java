@@ -46,7 +46,7 @@ public class GcStatsNativeTest {
             for (var call : actual) {
                 var metadata = (Map<String, Object>) call.getLast(); var descriptor = (Map<String, Object>) metadata.get("foreignCall");
                 var target = (Map<String, Object>) descriptor.get("target"); seen.add((String) target.get("symbol")); var operands = new ArrayList<Object>();
-                for (var operand : (List<List<?>>) call.get(2)) { var proof = CoreRepresentations.INSTANCE.metadata(operand); operands.add(proof == null ? null : proof.get("rep")); }
+                for (var operand : (List<List<?>>) call.get(2)) { var proof = CoreRepresentations.metadata(operand); operands.add(proof == null ? null : proof.get("rep")); }
                 assertNotNull(CoreGcForeign.validate(metadata, operands, (List<?>) call.get(3), metadata.get("rep")));
                 CoreGcForeign.validateHead((List<?>) call.get(1), false); assertThrows(RuntimeFault.class, () -> CoreGcForeign.validateHead((List<?>) call.get(1), true));
                 for (var bad : List.of(with(descriptor, "target", with(target, "unit", "main")), with(descriptor, "target", with(target, "isFunction", false)),
@@ -94,7 +94,7 @@ public class GcStatsNativeTest {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var program = program(language, backend, "stats", stage);
-                var address = ManagedAddress.Companion.fromByteArray(new byte[] {11, 22, 33, 44});
+                var address = ManagedAddress.fromByteArray(new byte[] {11, 22, 33, 44});
                 var failure = assertThrows(RuntimeFault.class, () -> Calls.target(program.hostEntryTarget(2), new Object[] {program.entryValue("originalStats"), new Object[] {address, 1L}}));
                 assertEquals("GHC RTS statistics are unavailable on the JVM; getRTSStatsEnabled is false", failure.getMessage());
                 var actual = new ArrayList<Long>(); for (long i = 0; i <= 3; i++) actual.add(address.readWord8(i)); assertEquals(List.of(11L, 22L, 33L, 44L), actual); released(language);

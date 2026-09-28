@@ -10,7 +10,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class ClosureInfoTables {
     private final ConcurrentHashMap<String, ManagedAddress> tables = new ConcurrentHashMap<>();
     @TruffleBoundary public ManagedAddress address(String descriptor) {
-        return tables.computeIfAbsent(descriptor, key -> ManagedAddress.Companion.fromStaticBytes$org_intelligence_thc(
+        return tables.computeIfAbsent(descriptor, key -> ManagedAddress.fromStaticBytes(
             ("THC closure v1: " + key + "\u0000").getBytes(StandardCharsets.UTF_8), 8));
     }
 }

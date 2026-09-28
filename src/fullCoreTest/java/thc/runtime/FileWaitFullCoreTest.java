@@ -49,12 +49,12 @@ public class FileWaitFullCoreTest {
                 boolean writing = entry.getValue(); var audit = document(stage.getKey() + "/" + entry.getKey() + "-audit.json");
                 assertEquals(true, audit.get("accepted")); assertEquals(List.of(), audit.get("missingGlobals")); boolean found = false;
                 for (var primitive : (List<Map<String, Object>>) audit.get("primitives")) if ((writing ? "waitWrite#" : "waitRead#").equals(primitive.get("name"))) found = true; assertTrue(found);
-                for (String backend : List.of("ast", "bytecode")) try (var context = NativeFileProvider.Companion.createContext$org_intelligence_thc(Set.of(), ContextProfile.SYNCHRONOUS_TEST, FfiMode.NATIVE, false)) {
+                for (String backend : List.of("ast", "bytecode")) try (var context = NativeFileProvider.createContext(Set.of(), ContextProfile.SYNCHRONOUS_TEST, FfiMode.NATIVE, false)) {
                     context.enter();
                     try {
                         var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var files = Language.currentState().getFiles();
                         var file = directory.resolve(stage.getKey() + "-" + backend + "-" + entry.getKey()); Files.writeString(file, "ready");
-                        byte[] raw = file.toString().getBytes(StandardCharsets.UTF_8); var address = ManagedAddress.Companion.fromByteArray(Arrays.copyOf(raw, raw.length + 1));
+                        byte[] raw = file.toString().getBytes(StandardCharsets.UTF_8); var address = ManagedAddress.fromByteArray(Arrays.copyOf(raw, raw.length + 1));
                         long descriptor = files.open(address, writing ? 2L : 0L, ForeignSafety.UNSAFE); assertTrue(descriptor >= 3L);
                         var linked = new LinkedHashMap<>(CoreModules.reachable(combined, entry.getKey(), true)); linked.put("instrument", true);
                         ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked); var target = program.entryTarget(entry.getKey());

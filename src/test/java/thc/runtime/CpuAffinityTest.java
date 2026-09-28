@@ -20,14 +20,14 @@ class CpuAffinityTest {
         assertEquals(Runtime.getRuntime().availableProcessors(), affinity.getCount());
         assertNull(affinity.bindCurrent(Long.MIN_VALUE));
         assertNull(affinity.resetCurrent());
-        var threads = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), new CpuAffinity(null, 3), ignored -> Unit.INSTANCE);
+        var threads = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), new CpuAffinity(null, 3), ignored -> {});
         for (long requested : new long[]{Long.MIN_VALUE, -1, 0, 4, Long.MAX_VALUE}) inThread(() -> {
             threads.enterCurrent(null, true, true, requested);
             try {
                 assertEquals(Math.floorMod(requested, 3L), threads.currentIdentity().getCapability());
-                assertTrue(threads.currentIdentity().getCapabilityLocked$org_intelligence_thc());
+                assertTrue(threads.currentIdentity().getCapabilityLocked());
                 assertFalse(threads.currentIdentity().getAffinityApplied());
-                assertEquals(3L, threads.capabilityCount$org_intelligence_thc());
+                assertEquals(3L, threads.capabilityCount());
             } finally { threads.leaveCurrent(GuestThreadStatus.FINISHED); }
         });
     }

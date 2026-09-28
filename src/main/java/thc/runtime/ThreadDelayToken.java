@@ -29,7 +29,7 @@ public final class ThreadDelayToken {
                     }
                     long remaining = token.deadline - System.nanoTime();
                     if (remaining <= 0) break;
-                    try (GuestThreadExtent ignored = GuestThreads.Companion.blocking$org_intelligence_thc(GuestThreadStatus.DELAY)) {
+                    try (GuestThreadExtent ignored = GuestThreads.blocking(GuestThreadStatus.DELAY)) {
                         Thread.sleep(remaining / 1_000_000L, (int) (remaining % 1_000_000L));
                     }
                 }

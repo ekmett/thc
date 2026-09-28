@@ -33,7 +33,7 @@ public final class GuestThreadOps {
     @TruffleBoundary public static GuestThreadSnapshot threadStatus(Node node, Object id) {
         GuestThreads threads = Language.currentState(node).getThreads();
         if (!(id instanceof GuestThreadId target)) throw RuntimeFault.fault("threadStatus# requires a ThreadId#");
-        return new GuestThreadSnapshot(threads.status(target).getCode(), target.getCapability(), target.getCapabilityLocked$org_intelligence_thc() ? 1L : 0L);
+        return new GuestThreadSnapshot(threads.status(target).getCode(), target.getCapability(), target.getCapabilityLocked() ? 1L : 0L);
     }
     @TruffleBoundary public static void labelThread(Node node, Object id, Object bytes) {
         if (!(id instanceof GuestThreadId target)) throw RuntimeFault.fault("labelThread# requires a ThreadId#");
@@ -78,7 +78,7 @@ public final class GuestThreadOps {
                 outcome = GuestThreadStatus.DIED;
                 uncaught.getRequest().acknowledge();
             } catch (Throwable failure) {
-                outcome = GuestThreadStatus.Companion.uncaught(failure);
+                outcome = GuestThreadStatus.uncaught(failure);
                 if (!registered) registrationFailure.set(failure);
                 GuestThreadOps.<RuntimeException, Object>rethrow(failure);
             } finally {
@@ -112,7 +112,7 @@ public final class GuestThreadOps {
         AsyncRequest sent = beginKill(node, id, payload);
         boolean compiled = CompilerDirectives.inCompiledCode();
         AsyncRequest incoming = GuestThreads.pollCurrent(node, false);
-        if (!sent.getForceSelf$org_intelligence_thc() || incoming != sent) throw RuntimeFault.fault("Self-directed killThread# did not claim its own request");
+        if (!sent.getForceSelf() || incoming != sent) throw RuntimeFault.fault("Self-directed killThread# did not claim its own request");
         sent.compiledCapture = compiled;
         throw new AsyncDelivery(sent, node);
     }

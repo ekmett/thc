@@ -63,9 +63,9 @@ final class WindowsMd5 {
                 ProgramKt.fault("Native Windows MD5 requires native access");
         }
         private MemorySegment image(ManagedAddress address) {
-            var owner = address.cbitsOwner$org_intelligence_thc();
-            if (owner != null && owner.isPinned()) return address.cbitsSegment$org_intelligence_thc();
-            var bytes = address.cbitsBacking$org_intelligence_thc();
+            var owner = address.cbitsOwner();
+            if (owner != null && owner.isPinned()) return address.cbitsSegment();
+            var bytes = address.cbitsBacking();
             var image = images.get(bytes);
             if (image == null) {
                 image = arena.allocate(Math.max(1, (long) bytes.length), 8);
@@ -75,10 +75,10 @@ final class WindowsMd5 {
             return image;
         }
         private void copyBack(ManagedAddress address, MemorySegment image, long size) {
-            var owner = address.cbitsOwner$org_intelligence_thc();
+            var owner = address.cbitsOwner();
             if (owner != null && owner.isPinned()) { Reference.reachabilityFence(address); return; }
-            long offset = address.cbitsOffset$org_intelligence_thc();
-            MemorySegment.copy(image, offset, MemorySegment.ofArray(address.cbitsBacking$org_intelligence_thc()), offset, size);
+            long offset = address.cbitsOffset();
+            MemorySegment.copy(image, offset, MemorySegment.ofArray(address.cbitsBacking()), offset, size);
             Reference.reachabilityFence(address);
         }
         @Override public void close() { arena.close(); }
@@ -87,7 +87,7 @@ final class WindowsMd5 {
     public static void init(ManagedAddress context) {
         try (var call = new Call()) {
             var image = call.image(context);
-            try { Api.init.invokeExact(image, context.cbitsOffset$org_intelligence_thc()); }
+            try { Api.init.invokeExact(image, context.cbitsOffset()); }
             finally { call.copyBack(context, image, 88); }
         } catch (Throwable failure) { throw propagate(failure); }
     }
@@ -96,8 +96,8 @@ final class WindowsMd5 {
         try (var call = new Call()) {
             var contextImage = call.image(context);
             var inputImage = call.image(input);
-            try { Api.update.invokeExact(contextImage, context.cbitsOffset$org_intelligence_thc(), inputImage,
-                input.cbitsOffset$org_intelligence_thc(), length); }
+            try { Api.update.invokeExact(contextImage, context.cbitsOffset(), inputImage,
+                input.cbitsOffset(), length); }
             finally {
                 call.copyBack(context, contextImage, 88);
                 Reference.reachabilityFence(input);
@@ -109,8 +109,8 @@ final class WindowsMd5 {
         try (var call = new Call()) {
             var outputImage = call.image(output);
             var contextImage = call.image(context);
-            try { Api.finish.invokeExact(outputImage, output.cbitsOffset$org_intelligence_thc(), contextImage,
-                context.cbitsOffset$org_intelligence_thc()); }
+            try { Api.finish.invokeExact(outputImage, output.cbitsOffset(), contextImage,
+                context.cbitsOffset()); }
             finally {
                 call.copyBack(output, outputImage, 16);
                 call.copyBack(context, contextImage, 88);

@@ -127,7 +127,7 @@ public class PackageNativeArchiveFullCoreTest {
                         assertEquals(0L, Calls.target(count, new Object[] {0L, 0L}), backend + "/" + entry + " must not enter native code");
                     }
                     assertEquals(46L, Calls.target(allowed, new Object[] {0L, 9L}));
-                    byte[] stateBytes = new byte[8]; stateBytes[0] = 7; var stateAddress = ManagedAddress.Companion.fromByteArray(stateBytes);
+                    byte[] stateBytes = new byte[8]; stateBytes[0] = 7; var stateAddress = ManagedAddress.fromByteArray(stateBytes);
                     String[] headers = {mixedHeader, wideHeader, word16Header, staticPointer};
                     for (int i = 0; i < headers.length; i++) {
                         String name = headers[i]; int column = i + 2; var target = program.entryTarget(name);

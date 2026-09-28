@@ -39,7 +39,7 @@ public final class CoreRtsShutdown {
         return true;
     }
     public static void validateHead(List<?> function, boolean defined) {
-        Map<?, ?> metadata = CoreRepresentations.INSTANCE.metadata(function);
+        Map<?, ?> metadata = CoreRepresentations.metadata(function);
         Object raw = metadata == null ? null : metadata.get("rep");
         requireProof(function.size() == 3 && "var".equals(function.getFirst()) && function.get(1) instanceof String name && !name.isEmpty() &&
             !defined && raw instanceof Map<?, ?> proof && proof.keySet().equals(SCALAR_KEYS) && "closure".equals(proof.get("kind")) &&

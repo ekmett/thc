@@ -182,10 +182,10 @@ internal class PackageReturnedAddress(val owner: Language.State, private val ali
         return InteropLibrary.getUncached().isPointer(transport())
     }
     /** A single IO request's window, not an allocation-size or ownership claim. */
-    @TruffleBoundary fun <T> withNativeWindow(count: Long, writable: Boolean, body: (MemorySegment) -> T): T {
+    @TruffleBoundary fun <T> withNativeWindow(count: Long, writable: Boolean, body: java.util.function.Function<MemorySegment, T>): T {
         requireRange(0, count, writable)
         val segment = MemorySegment.ofAddress(bits()).reinterpret(count)
-        try { return body(segment) } finally { Reference.reachabilityFence(this) }
+        try { return body.apply(segment) } finally { Reference.reachabilityFence(this) }
     }
     @TruffleBoundary fun compare(other: ManagedAddress, operation: String): Long {
         requireCurrent()

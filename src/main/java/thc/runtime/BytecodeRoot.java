@@ -935,7 +935,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation
     public static final class ByteArrayContents {
         @Specialization public static ManagedAddress address(Object array) {
-            return ManagedAddress.Companion.fromGuestByteArray(array);
+            return ManagedAddress.fromGuestByteArray(array);
         }
     }
 
@@ -3279,7 +3279,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
             destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
-                    ManagedAddress.Companion.nullAddress());
+                    ManagedAddress.nullAddress());
         }
     }
 
@@ -3436,7 +3436,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class PrepareFileWait {
         @Specialization public static Object prepare(boolean writing, long fd, Object state,
                 @Bind("$node") Node node) {
-            return FileWaitPrimitivesKt.prepareFileWait(fd, state, writing, node);
+            return FileWaitPrimitives.prepareFileWait(fd, state, writing, node);
         }
     }
 
@@ -3449,7 +3449,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             // The native wait crosses a boundary; sample before leaving this
             // resumable bytecode operation, then tag only a claimed request.
             boolean compiledAtCut = CompilerDirectives.inCompiledCode();
-            FileWaitPrimitivesKt.awaitFileWait(token, payload, async, compiledAtCut, node);
+            FileWaitPrimitives.awaitFileWait(token, payload, async, compiledAtCut, node);
         }
     }
 
@@ -3549,7 +3549,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 : context.compactImages.next(compact, (ManagedAddress) previous);
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
             addressDestination.setObject(bytecode, frame, address);
-            sizeDestination.setLong(bytecode, frame, address == ManagedAddress.Companion.nullAddress() ? 0L : address.availableBytes());
+            sizeDestination.setLong(bytecode, frame, address == ManagedAddress.nullAddress() ? 0L : address.availableBytes());
         }
     }
     @Operation

@@ -18,7 +18,7 @@ final class CoreEnums {
         // Special primitive lowering still validates supplied function-node metadata.
         if (expression.size() <= 1 || !(expression.get(1) instanceof List<?> function))
             throw bad("Missing primitive function");
-        CoreRepresentations.INSTANCE.expression(function);
+        CoreRepresentations.expression(function);
         if (expression.size() <= 2 || !(expression.get(2) instanceof List<?> args))
             throw bad("Missing operands");
         if (args.size() != 1 || expression.size() <= 3 || !List.of(false).equals(expression.get(3)))
@@ -26,7 +26,7 @@ final class CoreEnums {
         if (!operand.getPresent() || operand.getKind() != CoreKind.LONG
                 || !List.of("IntRep").equals(operand.getPrimReps()) || operand.isAggregate() || operand.isVector())
             throw bad("Exact IntRep operand required");
-        CoreRepresentation result = CoreRepresentations.INSTANCE.expression(expression);
+        CoreRepresentation result = CoreRepresentations.expression(expression);
         if (!result.getPresent() || result.getKind() != CoreKind.DATA
                 || !List.of("BoxedRep (Just Lifted)").equals(result.getPrimReps())
                 || result.isAggregate() || result.isVector())

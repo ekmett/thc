@@ -65,7 +65,7 @@ class OriginalDirectoryStreamsTest {
     @Test fun genuineStreamsMatchNativeAtEveryFirstInstalledEntry() {
         val manifest = json("$prefix/manifest.json")
         assertEquals(operations.keys.toList(), manifest["entries"])
-        assertTrue(isOriginalUnixUnit(manifest["unixUnit"])); assertEquals(true, manifest["privateRebuiltUnix"])
+        assertTrue(CoreOriginalStdio.isOriginalUnixUnit(manifest["unixUnit"])); assertEquals(true, manifest["privateRebuiltUnix"])
         OriginalStdioChecks.hashes(root, manifest["inputHashes"], setOf(
             "compiler/test-fixtures/OriginalDirectoryStreamsAudit.hs", "test/haskell-fixtures/OriginalDirectoryStreamsFixtures.hs",
             "scripts/core_original_foreign.py", "scripts/core-capabilities.json"))

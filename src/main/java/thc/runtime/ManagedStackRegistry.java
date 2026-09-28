@@ -61,7 +61,7 @@ public final class ManagedStackRegistry {
         layouts.add(layout);
     }
     private static ManagedAddress address(ManagedStackInfoImage image, TargetLayout layout) {
-        return ManagedAddress.Companion.fromStaticBytes$org_intelligence_thc(image.copyBytes(), layout.getWordBytes());
+        return ManagedAddress.fromStaticBytes(image.copyBytes(), layout.getWordBytes());
     }
     private Images images(Object value, TargetLayout layout) {
         validate(layout);
@@ -131,7 +131,7 @@ public final class ManagedStackRegistry {
         ManagedAllocation scratch = ManagedAllocation.mutable(count, layout.getWordBytes());
         scratch.copyFrom(template, 0, 0, count);
         scratch.writeAddressByteOffset(layout.offset("infoProvEntInfoOffset"), key);
-        destination.copyFromAllocationBytes$org_intelligence_thc(scratch, 0, count); // Sole destination mutation, after all validation.
+        destination.copyFromAllocationBytes(scratch, 0, count); // Sole destination mutation, after all validation.
         return 1;
     }
     private ManagedAllocation buildIpeTemplate(Provenance entry) {
@@ -166,7 +166,7 @@ public final class ManagedStackRegistry {
         for (int i = 0; i < TEXT_FIELDS.length; i++) {
             String value = values[i];
             if (value.indexOf('\u0000') >= 0) throw RuntimeFault.fault("NUL in managed stack provenance");
-            ManagedAddress text = ManagedAddress.Companion.fromHex(HexFormat.of().formatHex(value.getBytes(StandardCharsets.UTF_8)));
+            ManagedAddress text = ManagedAddress.fromHex(HexFormat.of().formatHex(value.getBytes(StandardCharsets.UTF_8)));
             scratch.writeAddressByteOffset(base + layout.offset("infoProv" + TEXT_FIELDS[i] + "Offset"), text);
         }
         byte[] descriptor = ByteBuffer.allocate(4).order(layout.getEndianness().equals("little") ? ByteOrder.LITTLE_ENDIAN : ByteOrder.BIG_ENDIAN)

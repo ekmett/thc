@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 class RuntimeThreadServicesTest {
     private GuestThreads threads() { return threads(new CpuAffinity(null, 4)); }
     private GuestThreads threads(CpuAffinity affinity) {
-        return new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), affinity, ignored -> Unit.INSTANCE);
+        return new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), affinity, ignored -> {});
     }
     private long query(GuestThreads threads, int selector) { return query(threads, selector, 0, 0, true); }
     private long query(GuestThreads threads, int selector, long index) { return query(threads, selector, index, 0, true); }

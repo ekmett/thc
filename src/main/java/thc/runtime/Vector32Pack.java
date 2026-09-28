@@ -15,7 +15,7 @@ public final class Vector32Pack extends Expr {
     public Vector32Pack(Expr argument, int[] slots) {
         this.argument = argument;
         this.slots = slots;
-        setRepresentation(CoreVectors.INSTANCE.getProof32());
+        setRepresentation(CoreVectors.proof32);
     }
 
     @Override public IntVector execute(VirtualFrame frame) {

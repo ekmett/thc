@@ -313,7 +313,7 @@ class FastSelectionTest(unittest.TestCase):
         self.assertEqual(["example.SmokeTest"], result["junit"]["classes"])
 
     def test_shared_core_and_frontend_changes_require_polyglot_but_leaf_does_not(self):
-        for path in ("src/main/kotlin/thc/runtime/CoreRepresentations.kt",
+        for path in ("src/main/java/thc/runtime/CoreRepresentations.java",
                      "compiler/THC/Plugin.hs", "src/main/java/thc/runtime/Calls.java",
                      "src/main/java/thc/runtime/WindowsMalloc.java", "src/main/java/thc/runtime/StdioHostAbi.java",
                      "scripts/audit-core.py", "build.gradle", "Makefile",
@@ -410,7 +410,7 @@ private val text = "class FakeString { @Test }"
         self.assertEqual(["example.LeafTest", "example.SmokeTest"], result["junit"]["classes"])
 
     def test_owned_runtime_file_keeps_polyglot_lane_and_shared_program_widens(self):
-        path = "src/main/kotlin/thc/runtime/ManagedFiles.kt"
+        path = "src/main/java/thc/runtime/ManagedFiles.java"
         self.policy["owners"][path] = dict(junit=["example.OtherTest"], python=[])
         self.write(select.POLICY, json.dumps(self.policy))
         self.write(path, "package thc.runtime\nclass ManagedFiles\n")
@@ -1135,9 +1135,10 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
             self.assertNotIn("src/test/kotlin/thc/" + helper + ".kt", self.policy["owners"])
 
     def test_every_mapping_target_is_a_real_test_and_each_path_is_explicit(self):
-        self.assertEqual({"RubbishLiterals", "CoreMemoryCopyForeign", "MemcpyExpression", "MemmoveExpression",
-                           "CoreStringRtsForeign", "StringRtsOp", "StringRtsExpression", "GuestEnvironment", "CoreEnvironmentForeign", "GuestArguments", "CoreRtsArgumentsForeign", "EnvironmentOp", "EnvironmentExpression", "RtsArgumentsOp", "RtsArgumentsExpression", "AddressIdentity", "AtomicAddresses", "BitPrimitives", "RawBitCasts", "FloatingPrimitives", "FloatingAddresses", "ManagedSmallArray", "SmallArrayStorage", "SmallArrayOp", "ManagedMutVar", "ModifiedMutVar", "MutVarModifySite", "MutVarOp", "ManagedNativeAllocations", "StablePointers", "CoreStablePointers", "StablePointerOp", "MakeStablePointer", "DereferenceStablePointer", "EqualStablePointers", "FreeStablePointer", "CoreSharedCAFStores", "ManagedWeaks", "CoreMainThreadForeign", "CoreBoundThreadForeign",
-                         "VectorAddresses", "VectorIntegerDivision", "FloatDecodeExpression", "CoreDataLabels", "FileWaitPrimitives", "CoreRtsShutdown", "AddressArrayCopy", "AtomicIntArrayOp", "AtomicIntArrayExpression", "ThreadObservation", "ManagedSTM", "ManagedCompacts", "CompactImages", "HeapAddresses", "CompactImageOp", "CompactImageExpression", "BoundThreadSupport", "RegisterMainThread", "CpuAffinityQuery", "STMPrimops", "PrefetchExpression", "TraceExpression", "TraceOp", "GhcBCO", "CoreCpuAffinity", "NativeEpoll", "NativeEventWait", "AstStackScope", "AstStackSpill", "AstStackContinuation", "AstChildSuspension", "AstStackKt"} |
+        self.assertEqual({"RubbishLiterals", "CoreMemoryCopyForeign", "MemcpyExpression", "MemmoveExpression", "CoreFileWait", "WaitFileDescriptor",
+                           "CoreStringRtsForeign", "StringRtsOp", "StringRtsExpression", "GuestEnvironment", "CoreEnvironmentForeign", "GuestArguments", "CoreRtsArgumentsForeign", "EnvironmentOp", "EnvironmentExpression", "RtsArgumentsOp", "RtsArgumentsExpression", "CoreCurrentCCS", "ManagedAddressOrder", "CompareManagedAddress", "CompareOrderedManagedAddress", "GetCurrentCCS", "AddressToInt", "IntToAddress", "SubtractManagedAddress", "RemainderManagedAddress", "AtomicAddressOp", "AtomicAddressExpression", "NativeNarrowAtomic", "BitPrimitives", "RawBitCasts", "FloatingPrimitives", "FloatingAddresses", "FloatingAddressOp", "FloatingAddressExpression", "ManagedSmallArray", "SmallArrayStorage", "SmallArrayOp", "ManagedMutVar", "ModifiedMutVar", "MutVarModifySite", "MutVarOp", "ManagedNativeAllocations", "StablePointers", "StablePointerToken", "CoreStablePointers", "StablePointerOp", "MakeStablePointer", "DereferenceStablePointer", "EqualStablePointers", "FreeStablePointer", "CoreSharedCAFStores", "SharedCAFStore", "SharedCAFStoreExpression", "ManagedWeaks", "CoreMainThreadForeign", "CoreBoundThreadForeign",
+                         "VectorAddresses", "VectorIntegerDivision", "FloatDecodeExpression", "CoreDataLabels", "FileWaitPrimitives", "CoreRtsShutdown", "AddressArrayCopyOp", "AddressToByteArrayExpression", "ByteArrayToAddressExpression", "AtomicIntArrayOp", "AtomicIntArrayExpression", "ThreadObservation", "ManagedSTM", "ManagedTVar", "STMRetry", "STMConflict", "ManagedCompacts", "CompactImages", "HeapAddresses", "CompactImageOp", "CompactImageExpression", "BoundThreadSupport", "RegisterMainThread", "CpuAffinityQuery", "STMCall", "STMExpression", "STMOp", "STMRestart", "PrefetchExpression", "TraceExpression", "TraceOp", "GhcBCO", "GhcInstruction", "GhcBCORoot", "GhcBCOExpression", "CoreCpuAffinity", "NativeEpoll", "NativeEventWait", "AstStackScope", "AstStackSpill", "AstStackContinuation", "AstChildSuspension", "AstStackKt"} |
+                         {"WeakResult", "WeakExpression", "WeakOp", "MainThreadWeakKey", "ManagedCompact", "CompactCopyNode", "CompactOp", "CompactExpression"} |
                          set(self.integer_vector_nodes + self.floating_vector_nodes),
                          {Path(path).stem for path in self.families})
         for path, group in self.families.items():
@@ -1189,7 +1190,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         for fixture in ("Audit", "Native"):
             self.assertEqual([original], owners[f"compiler/test-fixtures/OriginalSavedTermios{fixture}.hs"]["junit"])
         for path in ("test/haskell-fixtures/OriginalTermiosFixtures.hs", "test/haskell-fixtures/Main.hs",
-                     "src/main/kotlin/thc/runtime/CoreOriginalStdio.kt", "src/main/kotlin/thc/runtime/OriginalStdioExpression.kt"):
+                     "src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java", "src/main/java/thc/runtime/OriginalStdioExpression.java"):
             self.assertIn(original, owners[path]["junit"])
 
     def test_fixture_owners_match_the_preparation_manifest(self):
@@ -1222,24 +1223,24 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
     def test_tcsetattr_sources_select_the_original_native_comparison(self):
         for path in ("compiler/test-fixtures/OriginalTcsetattrAudit.hs", "compiler/test-fixtures/OriginalTcsetattrNative.hs",
                      "test/haskell-fixtures/OriginalTcsetattrFixtures.hs", "src/main/c/native-file-api.c",
-                     "src/main/kotlin/thc/runtime/NativeFileProvider.kt", "src/main/java/thc/runtime/NativeOpenRequest.java", "src/main/java/thc/runtime/NativeFileResource.java", "src/main/java/thc/runtime/OpenedNativeFile.java",
-                     "src/main/kotlin/thc/runtime/ManagedStdio.kt", "src/main/kotlin/thc/runtime/ManagedFiles.kt",
-                     "src/main/kotlin/thc/runtime/CoreOriginalStdio.kt", "src/main/kotlin/thc/runtime/OriginalStdioExpression.kt",
+                     "src/main/java/thc/runtime/NativeFileProvider.java", "src/main/java/thc/runtime/NativeOpenRequest.java", "src/main/java/thc/runtime/NativeFileResource.java", "src/main/java/thc/runtime/OpenedNativeFile.java",
+                     "src/main/java/thc/runtime/ManagedStdio.java", "src/main/java/thc/runtime/ManagedFiles.java",
+                     "src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java", "src/main/java/thc/runtime/OriginalStdioExpression.java",
                      "test/haskell-fixtures/Main.hs"):
             self.assertIn("thc.runtime.OriginalTcsetattrTest", self.policy["owners"][path]["junit"], path)
     def test_sigprocmask_sources_select_the_platform_thread_controls(self):
         for path in ("compiler/test-fixtures/OriginalSigprocmaskAudit.hs", "compiler/test-fixtures/OriginalSigprocmaskNative.hs",
                      "test/haskell-fixtures/OriginalSigprocmaskFixtures.hs", "src/main/c/native-signal-api.c",
-                     "src/main/kotlin/thc/runtime/ManagedSignalMask.kt", "src/main/kotlin/thc/runtime/CoreOriginalStdio.kt",
-                     "src/main/kotlin/thc/runtime/OriginalStdioExpression.kt", "test/haskell-fixtures/Main.hs"):
+                     "src/main/kotlin/thc/runtime/ManagedSignalMask.kt", "src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java",
+                     "src/main/java/thc/runtime/OriginalStdioExpression.java", "test/haskell-fixtures/Main.hs"):
             self.assertIn("thc.runtime.OriginalSigprocmaskTest", self.policy["owners"][path]["junit"], path)
 
     def test_tcgetattr_sources_select_the_original_native_comparison(self):
         for path in ("compiler/test-fixtures/OriginalTcgetattrAudit.hs", "compiler/test-fixtures/OriginalTcgetattrNative.hs",
                      "test/haskell-fixtures/OriginalTcgetattrFixtures.hs", "src/main/c/native-file-api.c",
-                     "src/main/kotlin/thc/runtime/NativeFileProvider.kt", "src/main/java/thc/runtime/NativeOpenRequest.java", "src/main/java/thc/runtime/NativeFileResource.java", "src/main/java/thc/runtime/OpenedNativeFile.java",
-                     "src/main/kotlin/thc/runtime/ManagedStdio.kt", "src/main/kotlin/thc/runtime/ManagedFiles.kt",
-                     "src/main/kotlin/thc/runtime/CoreOriginalStdio.kt", "src/main/kotlin/thc/runtime/OriginalStdioExpression.kt",
+                     "src/main/java/thc/runtime/NativeFileProvider.java", "src/main/java/thc/runtime/NativeOpenRequest.java", "src/main/java/thc/runtime/NativeFileResource.java", "src/main/java/thc/runtime/OpenedNativeFile.java",
+                     "src/main/java/thc/runtime/ManagedStdio.java", "src/main/java/thc/runtime/ManagedFiles.java",
+                     "src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java", "src/main/java/thc/runtime/OriginalStdioExpression.java",
                      "test/haskell-fixtures/Main.hs"):
             self.assertIn("thc.runtime.OriginalTcgetattrTest", self.policy["owners"][path]["junit"], path)
 
@@ -1249,12 +1250,12 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                      "src/test/kotlin/thc/runtime/OriginalUnlinkAtTest.kt",
                      "test/haskell-fixtures/OriginalPosixStatFixtures.hs",
                      "src/main/c/native-file-api.c", "src/main/c/stdio-abi-probe.c",
-                     "src/main/kotlin/thc/runtime/NativeFileProvider.kt",
+                     "src/main/java/thc/runtime/NativeFileProvider.java",
                      "src/main/java/thc/runtime/NativeOpenRequest.java", "src/main/java/thc/runtime/NativeFileResource.java", "src/main/java/thc/runtime/OpenedNativeFile.java",
-                     "src/main/kotlin/thc/runtime/ManagedStdio.kt",
-                     "src/main/kotlin/thc/runtime/ManagedFiles.kt",
-                     "src/main/kotlin/thc/runtime/CoreOriginalStdio.kt",
-                     "src/main/kotlin/thc/runtime/OriginalStdioExpression.kt",
+                     "src/main/java/thc/runtime/ManagedStdio.java",
+                     "src/main/java/thc/runtime/ManagedFiles.java",
+                     "src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java",
+                     "src/main/java/thc/runtime/OriginalStdioExpression.java",
                      "test/haskell-fixtures/Main.hs"):
             self.assertIn("thc.runtime.OriginalUnlinkAtTest", self.policy["owners"][path]["junit"], path)
         self.assertIn("thc.runtime.StdioHostAbiTest",
@@ -1266,12 +1267,12 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                      "src/test/kotlin/thc/runtime/OriginalFstatAtTest.kt",
                      "test/haskell-fixtures/OriginalPosixStatFixtures.hs",
                      "src/main/c/native-file-api.c", "src/main/c/stdio-abi-probe.c",
-                     "src/main/kotlin/thc/runtime/NativeFileProvider.kt",
+                     "src/main/java/thc/runtime/NativeFileProvider.java",
                      "src/main/java/thc/runtime/NativeOpenRequest.java", "src/main/java/thc/runtime/NativeFileResource.java", "src/main/java/thc/runtime/OpenedNativeFile.java",
-                     "src/main/kotlin/thc/runtime/ManagedStdio.kt",
-                     "src/main/kotlin/thc/runtime/ManagedFiles.kt",
-                     "src/main/kotlin/thc/runtime/CoreOriginalStdio.kt",
-                     "src/main/kotlin/thc/runtime/OriginalStdioExpression.kt",
+                     "src/main/java/thc/runtime/ManagedStdio.java",
+                     "src/main/java/thc/runtime/ManagedFiles.java",
+                     "src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java",
+                     "src/main/java/thc/runtime/OriginalStdioExpression.java",
                      "test/haskell-fixtures/Main.hs"):
             self.assertIn("thc.runtime.OriginalFstatAtTest", self.policy["owners"][path]["junit"], path)
         self.assertIn("thc.runtime.StdioHostAbiTest",
@@ -1283,23 +1284,23 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                      "src/test/kotlin/thc/runtime/OriginalCurrentDirectoryTest.kt",
                      "test/haskell-fixtures/OriginalPosixStatFixtures.hs",
                      "src/main/c/native-file-api.c", "src/main/c/stdio-abi-probe.c",
-                     "src/main/kotlin/thc/runtime/NativeDirectoryOwner.kt",
-                     "src/main/kotlin/thc/NativeFileSystem.kt",
-                     "src/main/kotlin/thc/runtime/NativeFileProvider.kt",
+                     "src/main/java/thc/runtime/NativeDirectoryOwner.java",
+                     "src/main/java/thc/NativeFileSystem.java",
+                     "src/main/java/thc/runtime/NativeFileProvider.java",
                      "src/main/java/thc/runtime/NativeOpenRequest.java", "src/main/java/thc/runtime/NativeFileResource.java", "src/main/java/thc/runtime/OpenedNativeFile.java",
-                     "src/main/kotlin/thc/runtime/ManagedStdio.kt",
-                     "src/main/kotlin/thc/runtime/ManagedFiles.kt",
-                     "src/main/kotlin/thc/runtime/CoreOriginalStdio.kt",
-                     "src/main/kotlin/thc/runtime/OriginalStdioExpression.kt",
+                     "src/main/java/thc/runtime/ManagedStdio.java",
+                     "src/main/java/thc/runtime/ManagedFiles.java",
+                     "src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java",
+                     "src/main/java/thc/runtime/OriginalStdioExpression.java",
                      "test/haskell-fixtures/Main.hs"):
             self.assertIn("thc.runtime.OriginalCurrentDirectoryTest", self.policy["owners"][path]["junit"], path)
         self.assertIn("thc.runtime.StdioHostAbiTest",
                       self.policy["owners"]["src/main/c/stdio-abi-probe.c"]["junit"])
 
     def test_directory_filesystem_owner_selects_lifetime_and_original_controls(self):
-        for path in ("src/main/kotlin/thc/runtime/NativeDirectoryOwner.kt",
-                     "src/main/kotlin/thc/NativeFileSystem.kt", "src/main/kotlin/thc/NativeIO.kt",
-                     "src/main/kotlin/thc/runtime/NativeFileProvider.kt", "src/main/c/native-file-api.c",
+        for path in ("src/main/java/thc/runtime/NativeDirectoryOwner.java",
+                     "src/main/java/thc/NativeFileSystem.java", "src/main/java/thc/NativeIO.java",
+                     "src/main/java/thc/runtime/NativeFileProvider.java", "src/main/c/native-file-api.c",
                      "src/main/c/native-directory-api.c"):
             self.assertIn("thc.runtime.NativeDirectoryFileSystemTest", self.policy["owners"][path]["junit"], path)
             self.assertIn("thc.runtime.OriginalCurrentDirectoryTest", self.policy["owners"][path]["junit"], path)
@@ -1515,16 +1516,18 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         self.assertEqual({"src/main/java/thc/runtime/" + name + ".java"
                           for name in self.integer_vector_nodes + self.floating_vector_nodes +
                           ("BitPrimitives", "RawBitCasts", "FloatingPrimitives", "FloatDecodeExpression",
-                           "CoreMemoryCopyForeign", "MemcpyExpression", "MemmoveExpression",
+                           "CoreMemoryCopyForeign", "MemcpyExpression", "MemmoveExpression", "CoreFileWait", "WaitFileDescriptor", "FileWaitPrimitives",
                            "RubbishLiterals", "PrefetchExpression", "TraceExpression", "TraceOp",
                            "CoreStringRtsForeign", "StringRtsOp", "StringRtsExpression",
                            "GuestArguments", "GuestEnvironment", "CoreEnvironmentForeign", "CoreRtsArgumentsForeign",
                            "EnvironmentOp", "EnvironmentExpression", "RtsArgumentsOp", "RtsArgumentsExpression",
                            "CoreCpuAffinity", "CpuAffinityQuery", "CoreDataLabels", "CoreBoundThreadForeign",
                            "BoundThreadSupport", "CoreMainThreadForeign", "RegisterMainThread",
-                           "CompactImageOp", "CompactImageExpression", "CoreStablePointers", "StablePointerOp",
+                           "CompactImageOp", "CompactImageExpression", "StablePointers", "StablePointerToken", "CoreStablePointers", "StablePointerOp",
                            "MakeStablePointer", "DereferenceStablePointer", "EqualStablePointers", "FreeStablePointer",
-                           "AstStackScope", "AstStackSpill", "AstStackContinuation", "AstChildSuspension", "AstStackKt", "ManagedSmallArray", "SmallArrayStorage", "SmallArrayOp", "ManagedMutVar", "ModifiedMutVar", "MutVarModifySite", "MutVarOp", "ManagedNativeAllocations", "NativeEventWait", "NativeEpoll", "AtomicIntArrayOp", "AtomicIntArrayExpression")},
+                           "ManagedWeaks", "WeakResult", "WeakExpression", "WeakOp", "MainThreadWeakKey",
+                           "ManagedCompacts", "ManagedCompact", "CompactCopyNode", "CompactOp", "CompactExpression", "CompactImages",
+                           "AstStackScope", "AstStackSpill", "AstStackContinuation", "AstChildSuspension", "AstStackKt", "ManagedSmallArray", "SmallArrayStorage", "SmallArrayOp", "ManagedMutVar", "ModifiedMutVar", "MutVarModifySite", "MutVarOp", "ManagedNativeAllocations", "NativeEventWait", "NativeEpoll", "AtomicIntArrayOp", "AtomicIntArrayExpression", "AddressArrayCopyOp", "AddressToByteArrayExpression", "ByteArrayToAddressExpression", "AtomicAddressOp", "AtomicAddressExpression", "NativeNarrowAtomic", "FloatingAddresses", "FloatingAddressOp", "FloatingAddressExpression", "CoreCurrentCCS", "ManagedAddressOrder", "CompareManagedAddress", "CompareOrderedManagedAddress", "GetCurrentCCS", "AddressToInt", "IntToAddress", "SubtractManagedAddress", "RemainderManagedAddress", "GhcBCO", "GhcInstruction", "GhcBCORoot", "GhcBCOExpression", "ManagedSTM", "ManagedTVar", "STMRetry", "STMConflict", "STMCall", "STMExpression", "STMOp", "STMRestart", "CoreSharedCAFStores", "SharedCAFStore", "SharedCAFStoreExpression")},
                          {path for path in self.families if path.startswith("src/main/java/")})
 
     def test_file_and_stdio_owners_keep_native_and_lifecycle_controls(self):
@@ -1535,20 +1538,19 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                   "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest",
                   "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest"}
         for name in ("ManagedFiles", "ManagedStdio", "StdioHostAbi", "CoreOriginalStdio",
-                     "OriginalStdioExpression"):
-            path = ("src/main/java/thc/runtime/" + name + ".java" if name == "StdioHostAbi"
-                    else "src/main/kotlin/thc/runtime/" + name + ".kt")
+                     "OriginalStdioExpression", "OriginalStdioOp"):
+            path = "src/main/java/thc/runtime/" + name + ".java"
             with self.subTest(path=path):
                 self.assertLessEqual(native, set(owners[path]["junit"]))
                 self.assertNotIn(path, self.families)  # Preserve the foreign callback lane.
         self.assertLessEqual({"thc.runtime.NativeFileBuffersTest", "thc.runtime.ManagedFilesTest", "thc.runtime.GuestThreadsTest",
-                              "thc.GuestExceptionsTest"}, set(owners["src/main/kotlin/thc/runtime/ManagedFiles.kt"]["junit"]))
+                              "thc.GuestExceptionsTest"}, set(owners["src/main/java/thc/runtime/ManagedFiles.java"]["junit"]))
         self.assertLessEqual({"thc.runtime.CoreManagedFilesTest", "thc.runtime.ManagedFileCallTest"},
                              set(owners["src/main/java/thc/runtime/CoreManagedFiles.java"]["junit"]))
         self.assertLessEqual({"thc.runtime.StdioHostAbiTest", *native},
                              set(owners["src/main/c/stdio-abi-probe.c"]["junit"]))
         for path in ("src/main/kotlin/thc/runtime/Program.kt", "src/main/kotlin/thc/runtime/BytecodeProgram.kt",
-                     "src/main/kotlin/thc/runtime/CoreRepresentations.kt", "src/main/java/thc/runtime/BytecodeRoot.java"):
+                     "src/main/java/thc/runtime/CoreRepresentations.java", "src/main/java/thc/runtime/BytecodeRoot.java"):
             self.assertNotIn(path, owners)
 
     def test_cabal_plugin_build_inputs_are_not_driver_only(self):

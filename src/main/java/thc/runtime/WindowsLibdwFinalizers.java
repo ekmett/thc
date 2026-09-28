@@ -51,24 +51,24 @@ public final class WindowsLibdwFinalizers {
     }
     public static void invoke(MethodHandle function, ManagedAddress address) {
         try {
-            if (address == ManagedAddress.Companion.nullAddress()) {
+            if (address == ManagedAddress.nullAddress()) {
                 function.invokeExact(MemorySegment.NULL);
                 return;
             }
-            var nativeOwner = address.nativeAllocation$org_intelligence_thc();
+            var nativeOwner = address.nativeAllocation();
             try (var ignored = nativeOwner == null ? null : nativeOwner.borrow()) {
-                address.requireByteRegion$org_intelligence_thc(0, false);
-                if (address.hasNativeStorage$org_intelligence_thc()) {
-                    address.withNativeSegmentInt$org_intelligence_thc(pointer -> {
+                address.requireByteRegion(0, false);
+                if (address.hasNativeStorage()) {
+                    address.withNativeSegmentInt(pointer -> {
                         try { function.invokeExact(pointer); }
                         catch (Throwable failure) { throw propagate(failure); }
                         return 0;
                     });
                 } else {
-                    var owner = address.cbitsOwner$org_intelligence_thc();
+                    var owner = address.cbitsOwner();
                     synchronized (owner == null ? address : owner) {
-                        address.requireByteRegion$org_intelligence_thc(0, false);
-                        function.invokeExact(address.cbitsSegment$org_intelligence_thc().asSlice(address.cbitsOffset$org_intelligence_thc()));
+                        address.requireByteRegion(0, false);
+                        function.invokeExact(address.cbitsSegment().asSlice(address.cbitsOffset()));
                     }
                 }
             }

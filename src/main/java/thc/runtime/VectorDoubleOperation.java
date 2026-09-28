@@ -19,13 +19,13 @@ public final class VectorDoubleOperation extends Expr {
             case "minusDoubleX2#" -> 2;
             case "timesDoubleX2#" -> 3;
             default -> {
-                int fused = CoreVectors.INSTANCE.getFusedDouble().indexOf(name);
+                int fused = CoreVectors.fusedDouble.indexOf(name);
                 if (fused < 0) throw new RuntimeFault("Invalid DoubleX2 operation");
                 yield 4 + fused;
             }
         };
         this.arguments = arguments;
-        setRepresentation(CoreVectors.INSTANCE.getProofDouble());
+        setRepresentation(CoreVectors.proofDouble);
     }
 
     @Override public DoubleVector execute(VirtualFrame frame) {
