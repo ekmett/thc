@@ -652,7 +652,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         return dataLayouts.computeIfAbsent(id, key -> {
             var info = constructors.get(key);
             if (info == null) throw new RuntimeFault("Missing constructor metadata " + key);
-            return DataLayout.fromFields(language, key, (String) info.get("name"),
+            return thc.Language.currentState().constructorLayout(language, key, (String) info.get("name"),
                 new CoreFields(info));
         });
     }
@@ -6748,7 +6748,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 operands.getLast().emit(e); b.endSetThreadAllocationCounter(); b.emitLoadConstant(thc.runtime.Unit.INSTANCE); b.endBlock();
             }, evaluatedProof(tupleProof, true));
             var empty = name.equals("getSpark#") ? dataLayouts.computeIfAbsent(CoreThreadScheduling.FALSE,
-                id -> new DataLayout(language, id, "False", new String[0], new Class<?>[0])).allocate() : null;
+                id -> thc.Language.currentState().constructorLayout(language, id, "False", CoreFields.EMPTY)).allocate() : null;
             return tupleExpression(tupleProof, (e, destination) -> {
                 var b = e.builder;
                 b.beginBlock();
