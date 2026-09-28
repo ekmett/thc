@@ -37,7 +37,7 @@ public final class BytecodeTupleSlots extends TupleDestination {
             if (capturesFrame) CompilerDirectives.ensureVirtualizedHere(virtual); else CompilerDirectives.ensureVirtualized(virtual);
             return virtual;
         }
-        TupleResultPool pool = shape.getLanguage().getHandoffState$org_intelligence_thc().get().getResults();
+        TupleResultPool pool = shape.getLanguage().getHandoffState().get().getResults();
         HandoffStorage output = pool.acquire(shape.getLayout());
         try { write(frame, node, output); return pool.complete(output); }
         catch (Throwable failure) { pool.release(output, shape.getLayout()); throw failure; }
@@ -60,7 +60,7 @@ public final class BytecodeTupleSlots extends TupleDestination {
         }
         BytecodeRoot root = (BytecodeRoot) rootValue;
         if (result == TupleComplete.INSTANCE) {
-            TupleResultPool pool = getShape().getLanguage().getHandoffState$org_intelligence_thc().get().getResults();
+            TupleResultPool pool = getShape().getLanguage().getHandoffState().get().getResults();
             HandoffStorage output = pool.completed();
             try {
                 if (output.getLayout() != getShape().getLayout()) throw new IllegalStateException("Check failed.");

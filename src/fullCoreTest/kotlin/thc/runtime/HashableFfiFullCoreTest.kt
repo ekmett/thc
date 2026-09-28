@@ -16,7 +16,7 @@ import thc.CorePackageManifest
 import thc.ContextProfile
 import thc.Json
 import thc.Language
-import thc.withContextProfile
+import thc.Main.withContextProfile
 import java.io.File
 
 /** Genuine Hackage Hashable instances, typed retained CAPI stubs and native GHC results. */
@@ -127,9 +127,9 @@ class HashableFfiFullCoreTest {
             entries.map { name ->
                 DynamicTest.dynamicTest("$backend/$name") {
                     Context.newBuilder("thc").allowNativeAccess(true)
-                        .withContextProfile(ContextProfile.SYNCHRONOUS_TEST).build().use { context ->
+                        .let { withContextProfile(it, ContextProfile.SYNCHRONOUS_TEST) }.build().use { context ->
                             val entry = "${fixture.unit}:HashableProbe.$name"
-                            val function = context.eval("thc", CoreModules.request(listOf("@${fixture.packages.path}"), entry, backend = backend))
+                            val function = context.eval("thc", CoreModules.request(listOf("@${fixture.packages.path}"), entry, true, false, backend))
                             val selected = fixture.rows.filter { it.entry == name }
                             fun diagnostics() = Json.parse(function.getMember("diagnostics").asString()) as Map<String, Any?>
                             fun check(row: Row) {

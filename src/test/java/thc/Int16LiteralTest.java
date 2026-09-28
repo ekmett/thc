@@ -40,7 +40,7 @@ public final class Int16LiteralTest {
 
     @Test void canonicalSigned16LiteralsAndCaseAlternativesEnforceRangeInBothLoadModes() {
         for (String backend : List.of("ast", "bytecode")) for (boolean diagnostic : new boolean[] {false, true}) {
-            try (Context context = MainKt.executionContext(false)) {
+            try (Context context = Main.executionContext(false)) {
                 for (boolean alternative : new boolean[] {false, true}) {
                     for (String text : List.of("-32768", "-1", "0", "1", "32767")) {
                         var fn = context.eval("thc", request(backend, body(text, alternative), diagnostic,
@@ -60,7 +60,7 @@ public final class Int16LiteralTest {
 
     @Test void intCarrierMetadataAliasesPreserveLiteralValuesButOtherCarriersFail() {
         for (String backend : List.of("ast", "bytecode")) for (boolean diagnostic : new boolean[] {false, true}) {
-            try (Context context = MainKt.executionContext(false)) {
+            try (Context context = Main.executionContext(false)) {
                 for (var literal : List.of(List.of("int16", "-32768"), List.of("word16", "65535"))) {
                     String kind = literal.get(0), value = literal.get(1);
                     String resultRep = kind.equals("int16") ? "Int16Rep" : "Word16Rep";
@@ -91,7 +91,7 @@ public final class Int16LiteralTest {
 
     @Test void intrinsicNarrowLiteralsRefineUnconstrainedButNotMalformedProofs() {
         for (String backend : List.of("ast", "bytecode")) for (boolean diagnostic : new boolean[] {false, true}) {
-            try (Context context = MainKt.executionContext(false)) {
+            try (Context context = Main.executionContext(false)) {
                 for (String kind : List.of("int16", "word16")) {
                     String resultRep = kind.equals("int16") ? "Int16Rep" : "Word16Rep";
                     for (boolean evaluated : new boolean[] {false, true}) for (boolean nullRegisters : new boolean[] {false, true}) {

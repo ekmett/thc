@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
 import thc.CoreModules
 import thc.Language
-import thc.executionContext
+import thc.Main.executionContext
 
 class CoreFunctionIdentityTest {
     private fun module(unit: String): Map<String, Any?> {

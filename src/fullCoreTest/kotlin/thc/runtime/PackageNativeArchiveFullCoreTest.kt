@@ -3,6 +3,8 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
+import thc.Main.withContextProfile
+
 import com.oracle.truffle.api.TruffleLanguage
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
@@ -78,7 +80,7 @@ class PackageNativeArchiveFullCoreTest {
             "native-archive-poisoned-0.1.0.0-inplace:Poisoned.poisoned",
             "native-archive-provider-0.1.0.0-inplace:Provider.nativeMath")
         for (backend in listOf("ast", "bytecode")) Context.newBuilder("thc").allowNativeAccess(true)
-            .withContextProfile(ContextProfile.SYNCHRONOUS_TEST).build().use { context ->
+            .let { withContextProfile(it, ContextProfile.SYNCHRONOUS_TEST) }.build().use { context ->
                 context.initialize("thc"); context.enter()
                 try {
                     val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)

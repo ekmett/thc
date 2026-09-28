@@ -3,6 +3,9 @@
 
 package thc
 
+import thc.Main.loadEntry
+import thc.Main.executionContext
+
 import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
@@ -321,7 +324,7 @@ class RuntimeTest {
 
     @Test fun repeatedHostEntryKeepsGuestAndInteropCompilable() {
         executionContext().use { context ->
-            val fn = loadEntry(context, modules, "under", instrument = false)
+            val fn = loadEntry(context, modules, "under", false)
             repeat(40) { fn.execute(100L + (it and 15)).asLong() }
             assertTrue(fn.invokeMember("compile").asBoolean())
             repeat(20_000) {

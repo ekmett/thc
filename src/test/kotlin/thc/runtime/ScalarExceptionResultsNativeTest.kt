@@ -84,7 +84,7 @@ class ScalarExceptionResultsNativeTest {
     @Test fun genuineScalarProofsAndMalformedBoundaries() {
         oracle()
         for (stage in listOf("pre", "post")) for (entry in entries) {
-            val linked = CoreModules.reachable(module(stage), entry, strictLink = true)
+            val linked = CoreModules.reachable(module(stage), entry, true)
             val primitives = calls(linked).filter { (it[1] as List<*>)[1] in setOf(
                 "catch#", "raiseIO#", "maskAsyncExceptions#", "maskUninterruptible#", "unmaskAsyncExceptions#") }
             assertTrue(primitives.isNotEmpty(), "$stage/$entry retains original exception primops")
@@ -138,7 +138,7 @@ class ScalarExceptionResultsNativeTest {
                 context.initialize("thc"); context.enter()
                 try {
                     val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                    val linked = CoreModules.reachable(module(stage), entry, strictLink = true) + ("instrument" to true)
+                    val linked = CoreModules.reachable(module(stage), entry, true) + ("instrument" to true)
                     val program: ExecutableProgram = if (backend == "ast") Program(language, linked, async)
                         else BytecodeProgram(language, linked, async)
                     val target = program.entryTarget(entry)

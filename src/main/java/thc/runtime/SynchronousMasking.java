@@ -7,6 +7,6 @@ import thc.Language;
 public final class SynchronousMasking {
     public static final SynchronousMasking INSTANCE = new SynchronousMasking();
     private SynchronousMasking() {}
-    public static MaskingState current(Node node) { return Language.currentState(node).getThreadMaskingState$org_intelligence_thc().get().getValue(); }
-    @TruffleBoundary public static void set(Node node, MaskingState state) { Language.currentState(node).getMaskingState$org_intelligence_thc().set(state); }
+    public static MaskingState current(Node node) { return Language.currentState(node).getThreadMaskingState().get().getValue(); }
+    @TruffleBoundary public static void set(Node node, MaskingState state) { Language.currentState(node).getMaskingState().set(state); }
 }

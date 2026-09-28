@@ -8,7 +8,7 @@ import thc.Language;
 public final class AstStackKt {
     private AstStackKt() {}
     public static AstStackScope astStackScope(Node node) {
-        return Language.currentState(node).getThreadPollState$org_intelligence_thc().get().getAstStack$org_intelligence_thc();
+        return Language.currentState(node).getThreadPollState().get().getAstStack$org_intelligence_thc();
     }
     public static boolean stackSpill(SavedGuestContinuation saved) { return saved.stackSpill(); }
 }

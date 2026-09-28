@@ -412,7 +412,7 @@ class BoxedCasTest {
                 context.initialize("thc"); context.enter()
                 try {
                     val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                    val p = program(language, CoreModules.reachable(merged, name, strictLink = true) + ("instrument" to true), backend)
+                    val p = program(language, CoreModules.reachable(merged, name, true) + ("instrument" to true), backend)
                     val entry = context.asValue(EntryValue(p, name, 1)); val host = p.hostEntryTarget(1)
                     val cases = rows.filter { it[0] == name }
                     fun check(row: List<String>) {

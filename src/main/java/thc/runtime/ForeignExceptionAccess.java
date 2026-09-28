@@ -50,9 +50,9 @@ public final class ForeignExceptionAccess extends Node {
     @TruffleBoundary public RuntimeException raise(AbstractTruffleException error) {
         var owner = Language.currentState(this);
         var bridge = getRootNode() instanceof GuestRoot root ? root.getForeignExceptionBridge() : null;
-        if (bridge == null || owner.getForeignExceptionNormalization$org_intelligence_thc().get() || !eligible(error)) throw error;
+        if (bridge == null || owner.getForeignExceptionNormalization().get() || !eligible(error)) throw error;
         var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], descriptor);
-        var flag = Language.currentState(this).getForeignExceptionNormalization$org_intelligence_thc();
+        var flag = Language.currentState(this).getForeignExceptionNormalization();
         boolean active = flag.get();
         flag.set(true);
         Object payload;
@@ -60,7 +60,7 @@ public final class ForeignExceptionAccess extends Node {
             var box = ApplicationKt.requireClosure(force.execute(frame, bridge.box()));
             var project = ApplicationKt.requireClosure(force.execute(frame, bridge.project()));
             var retained = bridge.projector(project);
-            owner.getForeignExceptionRegistry$org_intelligence_thc().register(retained);
+            owner.getForeignExceptionRegistry().register(retained);
             payload = invoke(frame, box, new ForeignFailure(owner, error, retained));
         } finally {
             flag.set(active);
@@ -73,10 +73,10 @@ public final class ForeignExceptionAccess extends Node {
     @TruffleBoundary public RuntimeException escaping(GuestException failure) {
         if (!failure.getSomeException()) throw failure;
         var owner = Language.currentState(this);
-        var projectors = owner.getForeignExceptionRegistry$org_intelligence_thc().snapshot();
+        var projectors = owner.getForeignExceptionRegistry().snapshot();
         if (!projectors.isEmpty()) {
             var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], descriptor);
-            var flag = Language.currentState(this).getForeignExceptionNormalization$org_intelligence_thc();
+            var flag = Language.currentState(this).getForeignExceptionNormalization();
             boolean active = flag.get();
             flag.set(true);
             try {
@@ -106,7 +106,7 @@ public final class ForeignExceptionAccess extends Node {
         TupleResultsKt.requireVoidCarrier(state);
         var owner = Language.currentState(this);
         var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], descriptor);
-        if (!(force.execute(frame, owner.getStablePointers$org_intelligence_thc().dereference(handle)) instanceof ForeignFailure value))
+        if (!(force.execute(frame, owner.getStablePointers().dereference(handle)) instanceof ForeignFailure value))
             throw RuntimeFault.fault("Expected a genuine ForeignException origin");
         if (value.getOwner() != owner || selector < 0L || selector > 1L)
             throw RuntimeFault.fault("Foreign exception metadata owner or selector");
@@ -116,7 +116,7 @@ public final class ForeignExceptionAccess extends Node {
             // field inspected until that operation successfully returns. Concurrent
             // first readers may query independently; first successful publication
             // wins, and no monitor is held while foreign code executes.
-            var previous = owner.getThreads$org_intelligence_thc().enterForeign(ForeignSafety.SAFE);
+            var previous = owner.getThreads().enterForeign(ForeignSafety.SAFE);
             String result;
             try {
                 try {
@@ -130,7 +130,7 @@ public final class ForeignExceptionAccess extends Node {
                             ? interop.asString(interop.getExceptionMessage(value.getOriginal())) : null;
                     }
                 } finally {
-                    owner.getThreads$org_intelligence_thc().leaveForeign(previous);
+                    owner.getThreads().leaveForeign(previous);
                 }
             } catch (AbstractTruffleException error) {
                 throw raise(error);

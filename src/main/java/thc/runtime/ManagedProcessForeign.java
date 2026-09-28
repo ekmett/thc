@@ -39,13 +39,13 @@ public final class ManagedProcessForeign {
     }
 
     public static ManagedProcessForeign current(Node node) {
-        return Language.currentState(node).getFiles$org_intelligence_thc().getProcessForeign$org_intelligence_thc();
+        return Language.currentState(node).getFiles().getProcessForeign$org_intelligence_thc();
     }
 
     /** Cancellation observes pending work; the interpreter claims it after saving the scalar/errno. */
     @TruffleBoundary
     public long invoke(ProcessOp operation, Object[] arguments, Node node) {
-        var threads = context.getThreads$org_intelligence_thc();
+        var threads = context.getThreads();
         var previous = threads.enterForeign(operation == ProcessOp.WAIT ? ForeignSafety.INTERRUPTIBLE : ForeignSafety.UNSAFE);
         try {
             try {
@@ -54,7 +54,7 @@ public final class ManagedProcessForeign {
                 } : null);
             } catch (InterruptedWait ignored) {
                 // No waitpid/reap occurred and the caller's output is untouched.
-                context.getStdio$org_intelligence_thc().captureForeignErrno$org_intelligence_thc(4);
+                context.getStdio().captureForeignErrno$org_intelligence_thc(4);
                 return -1;
             }
         } finally { threads.leaveForeign(previous); }
@@ -148,16 +148,16 @@ public final class ManagedProcessForeign {
         if (operation == ProcessOp.CREATE) return create(arguments);
         int pid = cint(arguments[0]);
         if (operation == ProcessOp.TERMINATE) {
-            var result = context.getFiles$org_intelligence_thc().processOperation$org_intelligence_thc(operation, pid, node, beforeBlock);
-            context.getStdio$org_intelligence_thc().nativeError$org_intelligence_thc(result.getErrno());
+            var result = context.getFiles().processOperation$org_intelligence_thc(operation, pid, node, beforeBlock);
+            context.getStdio().nativeError$org_intelligence_thc(result.getErrno());
             return result.getStatus();
         }
         var destination = pointer(arguments[1]);
         return outputs(List.of(new Region(destination, 4)), () -> {
             destination.requireByteRegion$org_intelligence_thc(4, true);
-            var result = context.getFiles$org_intelligence_thc().processOperation$org_intelligence_thc(operation, pid, node, beforeBlock);
+            var result = context.getFiles().processOperation$org_intelligence_thc(operation, pid, node, beforeBlock);
             if (result.getExitCode() != null) destination.writeNativeScalar(0, 4, result.getExitCode().longValue());
-            context.getStdio$org_intelligence_thc().nativeError$org_intelligence_thc(result.getErrno());
+            context.getStdio().nativeError$org_intelligence_thc(result.getErrno());
             return result.getStatus();
         });
     }
@@ -174,7 +174,7 @@ public final class ManagedProcessForeign {
 
     private long rejected(ManagedAddress failure, int error, ProcessFailureStage stage) {
         failure.writeAddressElementIndex(0, failures.get(stage));
-        context.getStdio$org_intelligence_thc().nativeError$org_intelligence_thc(error);
+        context.getStdio().nativeError$org_intelligence_thc(error);
         return -1;
     }
 
@@ -182,7 +182,7 @@ public final class ManagedProcessForeign {
         var arguments = vector(pointer(values[0]));
         var cwdPointer = pointer(values[1]);
         byte[] cwd = cwdPointer == ManagedAddress.Companion.nullAddress() ? null : string(cwdPointer);
-        var parentEnvironment = context.getEnvironment$org_intelligence_thc().snapshotForProcess();
+        var parentEnvironment = context.getEnvironment().snapshotForProcess();
         var environmentPointer = pointer(values[2]);
         var environment = environmentPointer == ManagedAddress.Companion.nullAddress() ? parentEnvironment.getEntries() : vector(environmentPointer);
         int[] streams = new int[3];
@@ -203,7 +203,7 @@ public final class ManagedProcessForeign {
                 if (streams[index] == -1) destinations[index].requireByteRegion$org_intelligence_thc(4, true);
             failure.writeAddressElementIndex(0, ManagedAddress.Companion.nullAddress());
             try {
-                return context.getFiles$org_intelligence_thc().launchProcess$org_intelligence_thc(
+                return context.getFiles().launchProcess$org_intelligence_thc(
                     arguments, environment, cwd, streams, flags, group, user, parentEnvironment.getSearchPath(), (pid, returned) -> {
                         for (int index = 0; index < streams.length; index++)
                             if (streams[index] == -1) destinations[index].writeNativeScalar(0, 4, returned[index]);

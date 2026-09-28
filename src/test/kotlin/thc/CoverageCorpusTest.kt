@@ -3,6 +3,8 @@
 
 package thc
 
+import thc.Main.executionContext
+
 import org.graalvm.polyglot.Value
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.DynamicTest
@@ -49,8 +51,7 @@ class CoverageCorpusTest {
             DynamicTest.dynamicTest("$backend $id: ${entry["focus"]}") {
                 executionContext().use { context ->
                     // Strict loading is deliberate: unsupported branches cannot silently become traps.
-                    val function = context.eval("thc", CoreModules.request(modules, entry["name"] as String,
-                        instrument = true, diagnosticUnsupported = false, backend = backend))
+                    val function = context.eval("thc", CoreModules.request(modules, entry["name"] as String, true, false, backend))
                     assertEquals(backend, diagnostics(function)["backend"])
                     fun labelCount(label: String): Long =
                         ((diagnostics(function)["thunkEvaluationsByLabel"] as Map<*, *>)[label] as? Number)?.toLong() ?: 0L

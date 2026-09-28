@@ -108,7 +108,7 @@ class WindowsStdioHostAbiTest {
             context.initialize("thc");
             context.enter();
             try {
-                var stdio = Language.currentState(null).getStdio$org_intelligence_thc();
+                var stdio = Language.currentState(null).getStdio();
                 var bytes = new byte[6];
                 Arrays.fill(bytes, (byte) 91);
                 var alias = ManagedAddress.Companion.fromByteArray(bytes).plus(2);

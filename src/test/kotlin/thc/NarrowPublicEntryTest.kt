@@ -59,8 +59,7 @@ class NarrowPublicEntryTest {
         val manifest = directory.resolve("packages.json")
         Files.writeString(manifest, Json.stringify(mapOf("format" to "thc-core-packages", "schema" to 1,
             "ghc" to "9.14.1", "units" to listOf(unit))))
-        return CoreModules.request(listOf("@$manifest"), "uN:N.entry", backend = backend,
-            asyncExceptions = false, sourceNotesEnabled = false, verifyArtifacts = true)
+        return CoreModules.request(listOf("@$manifest"), "uN:N.entry", true, false, backend, false, false, null, false, null, true)
     }
     private fun check(bindings: List<Map<String, Any?>>, backend: String, indexed: Boolean, body: (Value) -> Unit) {
         Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false")

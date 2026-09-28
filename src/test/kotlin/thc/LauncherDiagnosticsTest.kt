@@ -2,6 +2,12 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc
 
+import thc.Main.main
+
+import thc.Main.launch
+import thc.Main.launcherJsonSidecars
+import thc.Main.launcherArtifactVerification
+
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -60,27 +66,27 @@ class LauncherDiagnosticsTest {
 
     @Test fun artifactVerificationIsExplicitAndNeverConsumesGuestArguments() {
         val host = arrayOf("--ffi=native", "--run-io", "@packages.json", "main")
-        val (normal, default) = launcherArtifactVerification(host)
-        assertFalse(default)
-        assertArrayEquals(host, normal)
-        val (selected, verify) = launcherArtifactVerification(arrayOf("--verify-artifacts") + host +
+        val normal = launcherArtifactVerification(host)
+        assertFalse(normal.verifyArtifacts)
+        assertArrayEquals(host, normal.arguments)
+        val selected = launcherArtifactVerification(arrayOf("--verify-artifacts") + host +
             arrayOf("--", "program", "--verify-artifacts"))
-        assertTrue(verify)
-        assertArrayEquals(host + arrayOf("--", "program", "--verify-artifacts"), selected)
-        assertFalse(launcherArtifactVerification(host + arrayOf("--", "program", "--verify-artifacts")).second)
+        assertTrue(selected.verifyArtifacts)
+        assertArrayEquals(host + arrayOf("--", "program", "--verify-artifacts"), selected.arguments)
+        assertFalse(launcherArtifactVerification(host + arrayOf("--", "program", "--verify-artifacts")).verifyArtifacts)
         assertThrows(IllegalArgumentException::class.java) {
             launcherArtifactVerification(arrayOf("--verify-artifacts", "--verify-artifacts") + host)
         }
     }
 
     @Test fun explicitSidecarPairsAreRepeatableAndStopAtTheGuestSeparator() {
-        val (arguments, pairs) = launcherJsonSidecars(arrayOf("--ffi", "native", "--json-sidecar", "a.json", "a.idx",
+        val parsed = launcherJsonSidecars(arrayOf("--ffi", "native", "--json-sidecar", "a.json", "a.idx",
             "--run-io", "a.json,b.json,@packages.json", "main", "--json-sidecar", "b.json", "b.idx",
             "--", "program", "--json-sidecar", "guest.json", "guest.idx"))
         assertArrayEquals(arrayOf("--ffi", "native", "--run-io", "a.json,b.json,@packages.json", "main",
-            "--", "program", "--json-sidecar", "guest.json", "guest.idx"), arguments)
-        assertEquals(linkedMapOf("a.json" to "a.idx", "b.json" to "b.idx"), pairs)
-        assertNull(launcherJsonSidecars(arrayOf("--", "--json-sidecar", "guest")).second)
+            "--", "program", "--json-sidecar", "guest.json", "guest.idx"), parsed.arguments)
+        assertEquals(linkedMapOf("a.json" to "a.idx", "b.json" to "b.idx"), parsed.sidecars)
+        assertNull(launcherJsonSidecars(arrayOf("--", "--json-sidecar", "guest")).sidecars)
         for (invalid in listOf(arrayOf("--json-sidecar"), arrayOf("--json-sidecar", "a.json"),
                 arrayOf("--json-sidecar", "a.json", "--"), arrayOf("--json-sidecar", "@packages.json", "a.idx"),
                 arrayOf("--json-sidecar", "a.json", "a.idx", "--json-sidecar", "a.json", "b.idx"))) {
@@ -134,7 +140,7 @@ class LauncherDiagnosticsTest {
                     listOf("--", "program") + guest).toTypedArray()
                 // Several development executables share this Kotlin package;
                 // invoke the installed launcher class, not an ambiguous main().
-                try { Class.forName("thc.MainKt").getMethod("main", Array<String>::class.java).invoke(null, args) }
+                try { Class.forName("thc.Main").getMethod("main", Array<String>::class.java).invoke(null, args) }
                 catch (failure: InvocationTargetException) { throw failure.targetException }
             } finally {
                 System.setErr(stderr)

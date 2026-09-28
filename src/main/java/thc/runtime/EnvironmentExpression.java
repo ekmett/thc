@@ -25,7 +25,7 @@ final class EnvironmentExpression extends Expr {
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
         var address = operation == EnvironmentOp.ENUMERATE ? null : operands[0].executeRequiredAddress(frame);
         TupleResultsKt.requireVoidCarrier(operands[operands.length - 1].execute(frame));
-        var environment = Language.currentState(this).getEnvironment$org_intelligence_thc();
+        var environment = Language.currentState(this).getEnvironment();
         switch (operation) {
             case GET -> FrameAccess.INSTANCE.writeObject(frame, slots[offset], environment.get(address));
             case PUT -> FrameAccess.INSTANCE.writeInt(frame, slots[offset], (int) environment.put(address));

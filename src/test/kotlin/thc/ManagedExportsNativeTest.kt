@@ -3,6 +3,8 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc
 
+import thc.Main.loadManagedExports
+
 import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.bytecode.Instruction

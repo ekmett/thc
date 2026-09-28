@@ -31,10 +31,10 @@ public final class TypedInputLayout {
         packetReps.add("WordRep");
         if (hasEnvironment) packetReps.add("BoxedRep (Just Unlifted)");
         packetReps.addAll(reps);
-        packet = language.getHandoffLayouts$org_intelligence_thc().intern(packetReps);
+        packet = language.getHandoffLayouts().intern(packetReps);
         prefixes = new HandoffLayout[logical.getLogicalArity() + 1];
         for (int count = 0; count < prefixes.length; count++)
-            prefixes[count] = language.getHandoffLayouts$org_intelligence_thc().intern(reps.subList(0, logical.offset(count)));
+            prefixes[count] = language.getHandoffLayouts().intern(reps.subList(0, logical.offset(count)));
     }
     public Language getLanguage() { return language; }
     public ArgumentLayout getLogical() { return logical; }
@@ -42,7 +42,7 @@ public final class TypedInputLayout {
     public int getHeader() { return header; }
     public CoreRepresentation[] getLeaves() { return leaves; }
     public HandoffLayout getPacket() { return packet; }
-    public HandoffState state() { return language.getHandoffState$org_intelligence_thc().get(); }
+    public HandoffState state() { return language.getHandoffState().get(); }
     public HandoffLayout prefix(int count) { return prefixes[count]; }
     @ExplodeLoop public void validateSelfSource(InputSource source, VirtualFrame frame, Node node) {
         ArgumentLayout.validate(logical, 0, source.getLayout(), 0, logical.getLogicalArity());

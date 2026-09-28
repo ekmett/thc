@@ -30,9 +30,9 @@ public final class GuestArguments {
 
     private ManagedNativeAllocations current() {
         var state = Language.currentState(null);
-        if (state.getArguments$org_intelligence_thc() != this)
+        if (state.getArguments() != this)
             throw fault("Program arguments belong to another context");
-        return state.getNativeAllocations$org_intelligence_thc();
+        return state.getNativeAllocations();
     }
 
     /** The owning CLI supplies argv before any guest code has observed it. */
@@ -153,6 +153,6 @@ public final class GuestArguments {
     // The existing native allocation registry releases the final image during
     // context disposal, and all escaped addresses retain its lifetime checks.
     public static GuestArguments current(Node node) {
-        return Language.currentState(node).getArguments$org_intelligence_thc();
+        return Language.currentState(node).getArguments();
     }
 }

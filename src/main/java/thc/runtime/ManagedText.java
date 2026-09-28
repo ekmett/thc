@@ -16,7 +16,7 @@ public final class ManagedText {
     @TruffleBoundary
     public static void reverse(Object destination, Object source, long offset, long length) {
         var owner = Language.currentState(null);
-        var cbits = owner.cbits$org_intelligence_thc();
+        var cbits = owner.cbits();
         var function = cbits.textFunction$org_intelligence_thc(TextForeignOp.REVERSE);
         if (destination instanceof ManagedAllocation output && source instanceof ManagedAllocation input) {
             output.withOrderedLocks(input, () -> {
@@ -63,7 +63,7 @@ public final class ManagedText {
             throw fault("Text reverse requires distinct input and output storage");
         var input = view(source, false, sourceSize);
         var output = view(destination, true, length);
-        var threads = owner.getThreads$org_intelligence_thc();
+        var threads = owner.getThreads();
         var previous = threads.enterForeign(ForeignSafety.UNSAFE);
         try {
             // The empty original call writes nothing; avoid forming dst - 1.
@@ -80,7 +80,7 @@ public final class ManagedText {
     @TruffleBoundary
     public static long invoke(TextForeignOp operation, Object bytes, long offset, long length, long count) {
         var owner = Language.currentState(null);
-        var cbits = owner.cbits$org_intelligence_thc();
+        var cbits = owner.cbits();
         // Loading another guest language must not hold a ByteArray owner lock.
         var function = cbits.textFunction$org_intelligence_thc(operation);
         if (bytes instanceof byte[] array) {
@@ -108,7 +108,7 @@ public final class ManagedText {
     private static long call(Language.State owner, SulongCbits cbits, Object function, TextForeignOp operation,
                              Object bytes, ByteBuffer buffer, long size, long offset, long length, long count) {
         var view = new CbitsBuffer(buffer.asReadOnlyBuffer(), false, () -> size);
-        var threads = owner.getThreads$org_intelligence_thc();
+        var threads = owner.getThreads();
         var previous = threads.enterForeign(ForeignSafety.UNSAFE);
         try { return cbits.text$org_intelligence_thc(function, operation, view, offset, length, count); }
         finally {

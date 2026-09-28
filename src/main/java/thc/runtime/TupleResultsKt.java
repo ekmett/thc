@@ -9,7 +9,7 @@ public final class TupleResultsKt {
         if (value != kotlin.Unit.INSTANCE) throw fault("Invalid zero-width scalar carrier");
     }
     public static HandoffStorage ownedTupleResult(Object result, TupleShape shape) {
-        TupleResultPool pool = shape.getLanguage().getHandoffState$org_intelligence_thc().get().getResults();
+        TupleResultPool pool = shape.getLanguage().getHandoffState().get().getResults();
         boolean pooled = result == TupleComplete.INSTANCE;
         HandoffStorage source;
         if (pooled) source = pool.completed();

@@ -3,6 +3,8 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
+import thc.Main.withContextProfile
+
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.bytecode.Instruction
@@ -82,7 +84,7 @@ class PackageNativeOriginalsTest {
         val rows = File(directory, "erf-native.tsv").readLines().map { it.split('\t') }
         assertEquals(88, rows.size)
         for (backend in listOf("ast", "bytecode")) Context.newBuilder("thc").allowNativeAccess(true)
-            .withContextProfile(ContextProfile.SYNCHRONOUS_TEST).build().use { context ->
+            .let { withContextProfile(it, ContextProfile.SYNCHRONOUS_TEST) }.build().use { context ->
                 context.initialize("thc"); context.enter()
                 try {
                     val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
@@ -153,7 +155,7 @@ class PackageNativeOriginalsTest {
         val inputs = profile["buildInputs"] as Map<*, *>
         assertEquals(emptyList<Any>(), inputs["unresolved"])
         assertEquals(2, (inputs["providers"] as List<*>).size)
-        Context.newBuilder("thc").allowNativeAccess(true).withContextProfile(ContextProfile.SYNCHRONOUS_TEST)
+        Context.newBuilder("thc").allowNativeAccess(true).let { withContextProfile(it, ContextProfile.SYNCHRONOUS_TEST) }
             .build().use { context ->
                 context.initialize("thc"); context.enter()
                 try {
@@ -212,7 +214,7 @@ class PackageNativeOriginalsTest {
         assertEquals(10, setters.map { it.arguments.last() }.distinct().size)
         val rows = File(directory, "primitive-native.tsv").readLines().map { it.split('\t') }
         assertEquals(720, rows.size)
-        Context.newBuilder("thc").allowNativeAccess(true).withContextProfile(ContextProfile.SYNCHRONOUS_TEST)
+        Context.newBuilder("thc").allowNativeAccess(true).let { withContextProfile(it, ContextProfile.SYNCHRONOUS_TEST) }
             .build().use { context ->
                 context.initialize("thc"); context.enter()
                 try {
@@ -282,7 +284,7 @@ class PackageNativeOriginalsTest {
         val merged = CoreModules.merge(modules)
         val link = (merged["packageScalarLinks"] as List<PackageScalarLink>).single()
         for (backend in listOf("ast", "bytecode")) Context.newBuilder("thc").allowNativeAccess(true)
-            .withContextProfile(ContextProfile.SYNCHRONOUS_TEST).build().use { context ->
+            .let { withContextProfile(it, ContextProfile.SYNCHRONOUS_TEST) }.build().use { context ->
                 context.initialize("thc"); context.enter()
                 try {
                     val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)

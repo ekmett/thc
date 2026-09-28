@@ -140,7 +140,7 @@ public final class IntegerPrimopsTest {
     @Test void everyAddedPrimitiveRejectsWrongAritiesEvenInDiagnosticMode() throws Exception {
         var entries = (List<Map<String, Object>>) manifest().get("entries");
         for (String backend : List.of("ast", "bytecode")) for (boolean diagnostic : new boolean[] {false, true}) {
-            try (Context context = MainKt.executionContext(false)) {
+            try (Context context = Main.executionContext(false)) {
                 for (var entry : entries) {
                     String name = (String) entry.get("primitive");
                     int arity = ((Number) entry.get("arity")).intValue();

@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test
 import thc.EntryValue
 import thc.Language
 import thc.Json
-import thc.executionContext
+import thc.Main.executionContext
 
 /** Explicit host compilation must follow the direct call's actual split target. */
 class HostEntryCompilationTest {

@@ -20,7 +20,7 @@ a different numeric representation or a different constructor is not cached.
 Out-of-range Int and Char payloads keep their full-width ordinary behavior.
 The cache does not introduce a Unicode validation rule.
 
-[`DataLayout`](../src/main/kotlin/thc/runtime/DataValues.kt) owns its immutable
+[`DataLayout`](../src/main/java/thc/runtime/DataLayout.java) owns its immutable
 table. Each cached object is fully initialized through that layout's private
 allocation path before publication. Distinct layouts and contexts do not share
 cached objects; array-based static storage also keeps separate backing storage.

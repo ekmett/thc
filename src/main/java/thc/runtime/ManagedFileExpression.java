@@ -25,7 +25,7 @@ final class ManagedFileExpression extends Expr {
 
     private ManagedFiles files(VirtualFrame frame) {
         TupleResultsKt.requireVoidCarrier(operands[operands.length - 1].execute(frame));
-        return Language.currentState(this).getFiles$org_intelligence_thc();
+        return Language.currentState(this).getFiles();
     }
 
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
