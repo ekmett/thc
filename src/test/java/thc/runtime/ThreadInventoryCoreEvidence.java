@@ -188,8 +188,8 @@ public final class ThreadInventoryCoreEvidence {
     }
     public static void joinCompletedForks(GuestThreads registry) throws InterruptedException {
         // Join only context-owned completed-child fixture forks, never host threads.
-        for (var value : registry.snapshot()) if (value instanceof GuestThreadId identity && identity.getForked$org_intelligence_thc()) {
-            var carrier = identity.getCarrier$org_intelligence_thc().get();
+        for (var value : registry.snapshot()) if (value instanceof GuestThreadId identity && identity.getForked()) {
+            var carrier = identity.getCarrier().get();
             if (carrier != null) {
                 carrier.join(5000);
                 assertFalse(carrier.isAlive(), "Completed guest child must terminate before context close");

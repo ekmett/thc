@@ -56,7 +56,7 @@ public class AstStackNativeTest {
                 var state = Language.currentState();
                 state.getThreads().enterCurrent(null, false, true, null);
                 try {
-                    var scope = state.getThreadPollState().get().getAstStack$org_intelligence_thc();
+                    var scope = state.getThreadPollState().get().getAstStack();
                     for (var row : rows) {
                         var before = scope.getSpills();
                         assertEquals(row.expected(), Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue("probe"), new Object[]{row.input()}}), stage + "/" + row.input());

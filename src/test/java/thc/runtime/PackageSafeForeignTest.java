@@ -134,7 +134,7 @@ public class PackageSafeForeignTest {
                         entries.get("reset").call(); ready.countDown(); if (!begin.await(30, TimeUnit.SECONDS)) throw new IllegalStateException("Check failed.");
                         var result = Calls.target(target, new Object[]{0L, argument, kotlin.Unit.INSTANCE}); var continuation = Objects.requireNonNull(SavedGuestContinuationKt.savedGuestContinuation(result)); var request = continuation.asyncRequest();
                         assertSame(pending.get(), request, "delivery occurs at the completed foreign-call cut");
-                        if (mode.endsWith("compiled")) { assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > compiledBefore.get()); assertTrue(request.getCompiledCapture(), "first installed call reaches the return cut in compiled code"); }
+                        if (mode.endsWith("compiled")) { assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > compiledBefore.get()); assertTrue(request.compiledCapture, "first installed call reaches the return cut in compiled code"); }
                         request.acknowledge(); completed.set(continuation);
                     } catch (Throwable problem) { failure.set(problem); } finally { ready.countDown(); owner.getThreads().leaveCurrent(); context.leave(); }
                 });

@@ -15,7 +15,7 @@ public final class VectorWord16Pack extends Expr {
     public VectorWord16Pack(Expr argument, int[] slots) {
         this.argument = argument;
         this.slots = slots;
-        setRepresentation(CoreVectors.INSTANCE.getProofWord16());
+        setRepresentation(CoreVectors.proofWord16);
     }
 
     @Override public ShortVector execute(VirtualFrame frame) {

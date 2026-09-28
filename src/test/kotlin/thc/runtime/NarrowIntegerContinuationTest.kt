@@ -25,8 +25,7 @@ class NarrowIntegerContinuationTest {
         for ((async, delimited) in listOf(false to false, true to false, false to true)) {
             val layout = FrameLayout()
             val slot = layout.bind("narrow")
-            val proof = CoreRepresentation(CoreKind.LONG, evaluated = true, present = true,
-                primReps = listOf("Int32Rep"))
+            val proof = CoreRepresentation(CoreKind.LONG, true, true, listOf("Int32Rep"))
             val body = object : Expr() {
                 override fun execute(frame: VirtualFrame): Any? = error("Policy preparation must not execute guest code")
             }

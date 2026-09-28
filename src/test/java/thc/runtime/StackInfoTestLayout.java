@@ -43,6 +43,6 @@ public final class StackInfoTestLayout {
     }
     public static TargetLayout layout() { return layout(Map.of()); }
     public static TargetLayout layout(Map<String, ?> changes) {
-        var fields = fields(); fields.putAll(changes); return TargetLayout.Companion.fromDocument(document(fields));
+        var fields = fields(); fields.putAll(changes); return TargetLayout.fromDocument(document(fields));
     }
 }

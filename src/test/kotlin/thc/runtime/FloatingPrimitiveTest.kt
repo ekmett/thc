@@ -238,7 +238,7 @@ class FloatingPrimitiveTest {
             val destination = layout.bind("formal")
             val temporary = layout.bind("temporary")
             val self = AstSelfLayout(null, intArrayOf(), intArrayOf(destination),
-                arrayOf(CoreRepresentation(kind, evaluated = true)), booleanArrayOf(true))
+                arrayOf(CoreRepresentation(kind, true)), booleanArrayOf(true))
             val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), layout.build())
             FrameAccess.writeLong(frame, temporary, 1L)
             assertThrows(RuntimeFault::class.java) { self.transfer(frame, closure, intArrayOf(temporary)) }

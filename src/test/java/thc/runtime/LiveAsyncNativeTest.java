@@ -116,7 +116,7 @@ public class LiveAsyncNativeTest {
                 var request = state.getThreads().send(state.getThreads().pollState(victim).getCurrent().getIdentity(), program.entryValue("asyncPayload"));
                 assertEquals(-1L, answer.get(15, TimeUnit.SECONDS), "Original catch# must handle delivery");
                 victim.join(5000); assertFalse(victim.isAlive()); assertEquals(AsyncRequestState.ACKNOWLEDGED, request.getState());
-                if (running) assertTrue(request.getCompiledCapture(), "The executing compiled loop must claim the exception");
+                if (running) assertTrue(request.compiledCapture, "The executing compiled loop must claim the exception");
                 assertEquals(ownerWait ? 1 : 5, shared.getState(), "An interrupted waiter must not change the other thread's ownership");
                 assertEquals(1L, session.call("prefixCount"));
                 if (repeat) {

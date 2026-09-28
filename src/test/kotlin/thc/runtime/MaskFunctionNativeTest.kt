@@ -195,7 +195,7 @@ class MaskFunctionNativeTest {
             }
             assertThrows(RuntimeFault::class.java) {
                 CoreSynchronousExceptions.validate(primitive, arguments, flags,
-                    result.copy(components = result.components!!.reversed()))
+                    result.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, originalProof.primReps, result.components!!.reversed(), originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) })
             }
             val mutations: List<(List<Any?>) -> List<Any?>> = listOf(
                 { call -> call.toMutableList().also { it[2] = (it[2] as List<*>).take(1); it[3] = listOf(true) } },

@@ -237,7 +237,7 @@ def main():
     sources = [Path(__file__), driver, reference / "md5.c", reference / "md5.h",
                root / "src/main/java/thc/runtime/ManagedAddress.java",
                root / "src/main/java/thc/runtime/ManagedMd5.java",
-               root / "src/main/java/thc/runtime/SulongCbits.java",
+               root / "src/main/kotlin/thc/runtime/SulongCbits.kt",
                root / "src/main/java/thc/runtime/WindowsMd5.java",
                root / "src/main/c/md5-api.c", root / "scripts/build-cbits.py",
                root / "src/test/java/thc/runtime/ManagedMd5Test.java"]

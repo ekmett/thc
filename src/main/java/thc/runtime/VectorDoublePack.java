@@ -15,7 +15,7 @@ public final class VectorDoublePack extends Expr {
     public VectorDoublePack(Expr argument, int[] slots) {
         this.argument = argument;
         this.slots = slots;
-        setRepresentation(CoreVectors.INSTANCE.getProofDouble());
+        setRepresentation(CoreVectors.proofDouble);
     }
 
     @Override public DoubleVector execute(VirtualFrame frame) {

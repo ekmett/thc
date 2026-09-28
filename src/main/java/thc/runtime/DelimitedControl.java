@@ -71,7 +71,7 @@ public final class DelimitedControl {
         if (!(value instanceof PromptTag tag)) throw fault("Expected PromptTag# carrier");
         Language.State owner = Language.currentState(node);
         if (owner != tag.getOwner()) throw fault("Prompt tag belongs to another context");
-        if (owner.stm.hasTransaction$org_intelligence_thc()) throw fault("STM transaction frames do not support explicit delimited capture");
+        if (owner.stm.hasTransaction()) throw fault("STM transaction frames do not support explicit delimited capture");
         return tag;
     }
     public static void captureBytecode(Object result, TupleShape shape) {

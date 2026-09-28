@@ -358,7 +358,7 @@ public final class FunctionRoot extends GuestRoot {
     }
     /** A root-entry cut has no executed body or caller suffix to unwind here. */
     @TruffleBoundary private AstContinuation captureStack(MaterializedFrame frame) {
-        if (thc.Language.currentState(this).stm.hasTransaction$org_intelligence_thc())
+        if (thc.Language.currentState(this).stm.hasTransaction())
             throw new UnsupportedCore("AST stack spilling across an active STM transaction is unsupported");
         AstStackScope stack = astStackScope(this);
         stack.setSpills(stack.getSpills() + 1);

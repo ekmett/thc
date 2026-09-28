@@ -77,7 +77,7 @@ public class ManagedExportScalarsTest {
         return codec(layouts, module, occurrence, ManagedExportScalar.Role.ARGUMENT, 64);
     }
     private ManagedExportScalar codec(Map<String, DataLayout> layouts, String module, String occurrence, ManagedExportScalar.Role role, int wordBits) {
-        return ManagedExportScalar.Companion.fromNormalizedType(normalized(module, occurrence), role, wordBits, id -> {
+        return ManagedExportScalar.fromNormalizedType(normalized(module, occurrence), role, wordBits, id -> {
             var layout = layouts.get(id); if (layout == null) throw new IllegalStateException("Missing test layout: " + id); return layout;
         });
     }
@@ -147,9 +147,9 @@ public class ManagedExportScalarsTest {
             var layouts = layouts(language); var type = normalized("GHC.Internal.Int", "Int8");
             assertThrows(RuntimeFault.class, () -> {
                 var applied = new LinkedHashMap<>(type); applied.put("arguments", List.of(type));
-                ManagedExportScalar.Companion.fromNormalizedType(applied, ManagedExportScalar.Role.ARGUMENT, 64, id -> Objects.requireNonNull(layouts.get(id)));
+                ManagedExportScalar.fromNormalizedType(applied, ManagedExportScalar.Role.ARGUMENT, 64, id -> Objects.requireNonNull(layouts.get(id)));
             });
-            assertThrows(RuntimeFault.class, () -> ManagedExportScalar.Companion.fromNormalizedType(normalized("GHC.Internal.Word", "Int8"), ManagedExportScalar.Role.ARGUMENT, 64, id -> Objects.requireNonNull(layouts.get(id))));
+            assertThrows(RuntimeFault.class, () -> ManagedExportScalar.fromNormalizedType(normalized("GHC.Internal.Word", "Int8"), ManagedExportScalar.Role.ARGUMENT, 64, id -> Objects.requireNonNull(layouts.get(id))));
             var wrong = new LinkedHashMap<>(layouts); wrong.put("ghc-internal:GHC.Internal.Int.I8#", new DataLayout(language, "ghc-internal:GHC.Internal.Int.I8#", "I8#", new String[]{"Word8Rep"}));
             assertThrows(RuntimeFault.class, () -> codec(wrong, "GHC.Internal.Int", "Int8"));
             var anotherProgram = layouts(language); var scalar = codec(layouts, "GHC.Internal.Int", "Int8");

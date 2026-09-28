@@ -114,7 +114,7 @@ public class AsyncStrictEntryNativeTest {
                     assertTrue(ready.isDone(), "The dynamic worker returned before demanding its strict PAP prefix");
                     assertEquals(1007L, ready.get(1, TimeUnit.SECONDS));
                     assertFalse(result.isDone(), "The PAP prefix must be demanded before the worker returns");
-                    var request = state.getThreads().send(Objects.requireNonNull(state.getThreads().pollState$org_intelligence_thc(target).getCurrent$org_intelligence_thc()).getIdentity(), program.entryValue("asyncPayload"));
+                    var request = state.getThreads().send(Objects.requireNonNull(state.getThreads().pollState(target).getCurrent()).getIdentity(), program.entryValue("asyncPayload"));
                     assertEquals(-1L, result.get(15, TimeUnit.SECONDS), "The original catch# handles delivery");
                     assertEquals(AsyncRequestState.ACKNOWLEDGED, request.getState());
                     assertEquals(5, shared.getState()); assertEquals(1L, call(functions, "prefixCount"));

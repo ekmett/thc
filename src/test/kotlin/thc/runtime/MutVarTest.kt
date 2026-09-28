@@ -510,13 +510,11 @@ class MutVarTest {
     }
 
     @Test fun exactContractsAcceptLiftedAndUnliftedBoxedPayloadCarriers() {
-        val state = CoreRepresentation(CoreKind.VOID, present = true, primReps = emptyList())
-        val reference = CoreRepresentation(CoreKind.OBJECT, present = true,
-            primReps = listOf("BoxedRep (Just Unlifted)"))
+        val state = CoreRepresentation(CoreKind.VOID, false, true, emptyList())
+        val reference = CoreRepresentation(CoreKind.OBJECT, false, true, listOf("BoxedRep (Just Unlifted)"))
         for (kind in listOf(CoreKind.DATA, CoreKind.CLOSURE, CoreKind.OBJECT))
             for (levity in listOf("Lifted", "Unlifted")) {
-                val payload = CoreRepresentation(kind, present = true,
-                    primReps = listOf("BoxedRep (Just $levity)"))
+                val payload = CoreRepresentation(kind, false, true, listOf("BoxedRep (Just $levity)"))
                 for (operation in listOf(MutVarOp.NEW, MutVarOp.READ, MutVarOp.SWAP, MutVarOp.WRITE)) {
                     val arguments = when (operation) {
                         MutVarOp.NEW -> listOf(payload, state)
@@ -525,13 +523,12 @@ class MutVarTest {
                         else -> error("Separate atomic contract in BoxedCasTest")
                     }
                     val returned = if (operation == MutVarOp.NEW) reference else payload
-                    val result = if (operation.tuple) CoreRepresentation(CoreKind.UNKNOWN, present = true,
-                        primReps = returned.primReps, components = listOf(state, returned)) else state
+                    val result = if (operation.tuple) CoreRepresentation(CoreKind.UNKNOWN, false, true, returned.primReps, listOf(state, returned)) else state
                     val flags = arguments.map { it.primReps == listOf("BoxedRep (Just Lifted)") }
                     operation.validate(arguments, flags, result)
-                    val scalar = CoreRepresentation(CoreKind.LONG, present = true, primReps = listOf("IntRep"))
+                    val scalar = CoreRepresentation(CoreKind.LONG, false, true, listOf("IntRep"))
                     if (operation == MutVarOp.READ) {
-                        val wrongResult = result.copy(primReps = scalar.primReps, components = listOf(state, scalar))
+                        val wrongResult = result.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, scalar.primReps, listOf(state, scalar), originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) }
                         assertThrows(RuntimeFault::class.java) { operation.validate(arguments, flags, wrongResult) }
                     } else {
                         val payloadIndex = if (operation == MutVarOp.NEW) 0 else 1
@@ -599,22 +596,20 @@ class MutVarTest {
     }
 
     @Test fun atomicModifyRequiresLiftedFunctionAndTwoLiftedResults() {
-        val state = CoreRepresentation(CoreKind.VOID, present = true, primReps = emptyList())
-        val reference = CoreRepresentation(CoreKind.OBJECT, present = true,
-            primReps = listOf("BoxedRep (Just Unlifted)"))
+        val state = CoreRepresentation(CoreKind.VOID, false, true, emptyList())
+        val reference = CoreRepresentation(CoreKind.OBJECT, false, true, listOf("BoxedRep (Just Unlifted)"))
         val lifted = listOf("BoxedRep (Just Lifted)")
-        val function = CoreRepresentation(CoreKind.CLOSURE, present = true, primReps = lifted)
-        val old = CoreRepresentation(CoreKind.DATA, present = true, primReps = lifted)
-        val record = CoreRepresentation(CoreKind.DATA, present = true, primReps = lifted)
-        val tuple = CoreRepresentation(CoreKind.UNKNOWN, present = true,
-            primReps = lifted + lifted, components = listOf(state, old, record))
+        val function = CoreRepresentation(CoreKind.CLOSURE, false, true, lifted)
+        val old = CoreRepresentation(CoreKind.DATA, false, true, lifted)
+        val record = CoreRepresentation(CoreKind.DATA, false, true, lifted)
+        val tuple = CoreRepresentation(CoreKind.UNKNOWN, false, true, lifted + lifted, listOf(state, old, record))
         val args = listOf(reference, function, state)
         MutVarOp.MODIFY2.validate(args, listOf(false, true, false), tuple)
         assertThrows(RuntimeFault::class.java) {
             MutVarOp.MODIFY2.validate(args, listOf(false, false, false), tuple)
         }
         assertThrows(RuntimeFault::class.java) {
-            MutVarOp.MODIFY2.validate(args, listOf(false, true, false), tuple.copy(components = listOf(state, old)))
+            MutVarOp.MODIFY2.validate(args, listOf(false, true, false), tuple.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, originalProof.primReps, listOf(state, old), originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) })
         }
     }
 

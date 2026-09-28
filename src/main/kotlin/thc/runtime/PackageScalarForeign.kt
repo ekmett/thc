@@ -88,7 +88,7 @@ internal object CorePackageScalarForeign {
 internal class PackageScalarExpression(private val call: PackageScalarCall,
     @field:Children private var operands: Array<Expr>, proof: CoreRepresentation) : Expr() {
     @Child private var access = PackageScalarAccess(call)
-    init { representation = proof.copy(evaluated = true) }
+    init { representation = proof.withEvaluated(true) }
     override fun execute(frame: VirtualFrame): Nothing = fault("Package C call requires its State/result tuple")
     @ExplodeLoop override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val values = arrayOfNulls<Any>(call.arguments.size)

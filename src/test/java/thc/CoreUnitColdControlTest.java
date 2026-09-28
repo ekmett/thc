@@ -105,11 +105,11 @@ class CoreUnitColdControlTest {
             var entry = context.eval("thc", request("@" + manifest, selected, backend, false)); context.enter();
             try {
                 var stm = Language.currentState(null).stm; boolean[] completed = {false};
-                var failure = assertThrows(PolyglotException.class, () -> stm.atomically$org_intelligence_thc(null,
+                var failure = assertThrows(PolyglotException.class, () -> stm.atomically(null,
                     () -> { throw new IllegalStateException("unexpected nested transaction"); }, false,
                     () -> { entry.execute(2); completed[0] = true; return kotlin.Unit.INSTANCE; }));
                 assertTrue(Objects.toString(failure.getMessage(), "").contains("STM transaction frames do not support explicit delimited capture"), failure.getMessage());
-                assertFalse(completed[0]); assertFalse(stm.hasTransaction$org_intelligence_thc());
+                assertFalse(completed[0]); assertFalse(stm.hasTransaction());
             } finally { context.leave(); }
             // A failed transaction must not poison the prepared nontransactional definition.
             assertEquals(selected.equals("uA:A.entry") ? 18L : 13L, entry.execute(2).asLong());

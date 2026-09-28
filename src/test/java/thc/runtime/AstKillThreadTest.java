@@ -82,7 +82,7 @@ public class AstKillThreadTest {
                                     var request = delivered.getRequest(); assertSame(Thread.currentThread(), request.getTarget());
                                     assertEquals(self.getLogicalId(), request.getTargetId()); assertTrue(request.getForceSelf()); assertSame(payload, request.getPayload());
                                     assertEquals(AsyncRequestState.CLAIMED, request.getState());
-                                    if (compiled) assertTrue(request.getCompiledCapture(), backend + " first installed self-delivery");
+                                    if (compiled) assertTrue(request.compiledCapture, backend + " first installed self-delivery");
                                     assertSame(payload, BytecodeRoot.RequireCaughtIOFailure.payload(delivered)); assertEquals(AsyncRequestState.ACKNOWLEDGED, request.getState());
                                     assertNull(threads.poll(target.getRootNode())); assertEquals(mask, SynchronousMasking.current(target.getRootNode())); assertEquals(0, payload.getState()); assertEquals(0, forced.get());
                                 }
@@ -189,7 +189,7 @@ public class AstKillThreadTest {
                         threads.enterCurrent();
                         try {
                             senderReady.complete(threads.currentIdentity()); var cut = (AstContinuation) Calls.target(captured.entryTarget("direct"), new Object[]{0L, targetId, "outbound", Unit.INSTANCE});
-                            var incoming = (AsyncRequest) cut.getYielded(); assertEquals("first", incoming.getPayload()); assertTrue(incoming.getCompiledCapture(), "The first interruption entered compiled AST");
+                            var incoming = (AsyncRequest) cut.getYielded(); assertEquals("first", incoming.getPayload()); assertTrue(incoming.compiledCapture, "The first interruption entered compiled AST");
                             incoming.acknowledge(); firstCut.complete(cut);
                         } finally { threads.leaveCurrent(); }
                     } catch (Throwable failure) { firstCut.completeExceptionally(failure); } finally { context.leave(); }

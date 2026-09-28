@@ -5,7 +5,7 @@ package thc.runtime;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.ControlFlowException;
 import kotlin.Unit;
-import kotlin.jvm.functions.Function0;
+import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import java.util.ArrayList;
@@ -17,8 +17,8 @@ import static org.junit.jupiter.api.Assertions.*;
 @Timeout(30)
 class ManagedSTMTest {
     private final Node location = new Node() {};
-    private <T> T atomic(ManagedSTM stm, Function0<T> action) {
-        return stm.atomically$org_intelligence_thc(null, () -> { throw new GuestException("nested", location); }, false, action);
+    private <T> T atomic(ManagedSTM stm, Supplier<T> action) {
+        return stm.atomically(null, () -> { throw new GuestException("nested", location); }, false, action);
     }
     private void await(CountDownLatch gate) {
         try { assertTrue(gate.await(5, TimeUnit.SECONDS), "gate timed out"); }
@@ -29,8 +29,8 @@ class ManagedSTMTest {
     private static <E extends Throwable> void rethrow(Throwable failure) throws E { throw (E) failure; }
     private void queued(ManagedSTM stm) {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-        while (stm.pendingWaiters$org_intelligence_thc() != 1 && System.nanoTime() < deadline) Thread.yield();
-        assertEquals(1, stm.pendingWaiters$org_intelligence_thc(), "retry did not register");
+        while (stm.pendingWaiters() != 1 && System.nanoTime() < deadline) Thread.yield();
+        assertEquals(1, stm.pendingWaiters(), "retry did not register");
     }
 
     @Test void bufferedWritesRollbackAndPayloadsStayLazy() {
@@ -51,7 +51,7 @@ class ManagedSTMTest {
         }));
         assertSame(payload, failure.getPayload());
         assertSame(replacement, stm.readIO(cell));
-        assertFalse(stm.hasTransaction$org_intelligence_thc());
+        assertFalse(stm.hasTransaction());
         assertThrows(RuntimeFault.class, () -> stm.read(cell));
         assertThrows(RuntimeFault.class, () -> stm.write(cell, null));
         assertThrows(RuntimeFault.class, stm::retry);
@@ -63,24 +63,24 @@ class ManagedSTMTest {
         var payload = new Object();
         atomic(stm, () -> {
             stm.write(cell, 2L);
-            var result = stm.catchSTM$org_intelligence_thc(() -> { stm.write(cell, 999L); throw new GuestException(payload, location); }, received -> {
+            var result = stm.catchSTM(() -> { stm.write(cell, 999L); throw new GuestException(payload, location); }, received -> {
                 assertSame(payload, received);
                 assertEquals(2L, stm.read(cell));
                 stm.write(cell, 3L); return 17L;
             });
             assertEquals(17L, result);
-            assertEquals(3L, stm.orElse$org_intelligence_thc(() -> { stm.write(cell, 666L); return stm.retry(); }, () -> stm.read(cell)));
-            assertEquals(23L, stm.orElse$org_intelligence_thc(() -> 23L, () -> { throw new IllegalStateException("right branch must stay lazy"); }));
+            assertEquals(3L, stm.orElse(() -> { stm.write(cell, 666L); return stm.retry(); }, () -> stm.read(cell)));
+            assertEquals(23L, stm.orElse(() -> 23L, () -> { throw new IllegalStateException("right branch must stay lazy"); }));
             return Unit.INSTANCE;
         });
         assertEquals(3L, stm.readIO(cell));
-        assertThrows(IllegalStateException.class, () -> atomic(stm, () -> stm.catchSTM$org_intelligence_thc(
+        assertThrows(IllegalStateException.class, () -> atomic(stm, () -> stm.catchSTM(
             () -> { throw new IllegalStateException("host fault"); }, received -> { throw new IllegalStateException("not a Haskell exception"); })));
         var second = new Object();
-        var failure = assertThrows(GuestException.class, () -> atomic(stm, () -> stm.catchSTM$org_intelligence_thc(
+        var failure = assertThrows(GuestException.class, () -> atomic(stm, () -> stm.catchSTM(
             () -> { throw new GuestException(payload, location); }, received -> { throw new GuestException(second, location); })));
         assertSame(second, failure.getPayload());
-        assertFalse(stm.hasTransaction$org_intelligence_thc());
+        assertFalse(stm.hasTransaction());
     }
 
     @Test void concurrentCommitConflictRestartsWithoutLosingAnUpdate() throws Exception {
@@ -97,7 +97,7 @@ class ManagedSTMTest {
                     if (attempts.incrementAndGet() == 1) { read.countDown(); await(release); }
                     return old + 1;
                 });
-                assertFalse(stm.hasTransaction$org_intelligence_thc()); return answer;
+                assertFalse(stm.hasTransaction()); return answer;
             });
             await(read);
             assertEquals(0L, stm.readIO(cell), "buffered update was published before commit");
@@ -115,21 +115,21 @@ class ManagedSTMTest {
         var abandoned = new ControlFlowException() {};
         var failure = assertThrows(ControlFlowException.class, () -> atomic(stm, () -> {
             stm.write(cell, 2L);
-            return stm.orElse$org_intelligence_thc(() -> stm.catchSTM$org_intelligence_thc(() -> { stm.write(cell, 3L); throw abandoned; },
+            return stm.orElse(() -> stm.catchSTM(() -> { stm.write(cell, 3L); throw abandoned; },
                 received -> { throw new IllegalStateException("A control unwind is not catchSTM's synchronous exception"); }),
                 () -> { throw new IllegalStateException("A control unwind is not retry"); });
         }));
         assertSame(abandoned, failure);
-        assertFalse(stm.hasTransaction$org_intelligence_thc());
+        assertFalse(stm.hasTransaction());
         assertEquals(1L, stm.readIO(cell));
         var carrier = Executors.newSingleThreadExecutor();
         try {
             assertEquals(4L, carrier.submit(() -> {
-                assertFalse(stm.hasTransaction$org_intelligence_thc());
+                assertFalse(stm.hasTransaction());
                 long answer = atomic(stm, () -> {
                     assertEquals(1L, stm.read(cell)); stm.write(cell, 4L); return 4L;
                 });
-                assertFalse(stm.hasTransaction$org_intelligence_thc()); return answer;
+                assertFalse(stm.hasTransaction()); return answer;
             }).get(5, TimeUnit.SECONDS));
             assertEquals(4L, stm.readIO(cell));
         } finally { carrier.shutdownNow(); stm.close(); }
@@ -167,7 +167,7 @@ class ManagedSTMTest {
             var a = stm.newTVar(0L); var b = stm.newTVar(0L); var sentinel = stm.newTVar(123L);
             var worker = Executors.newSingleThreadExecutor();
             try {
-                var result = worker.submit(() -> atomic(stm, () -> stm.orElse$org_intelligence_thc(() -> {
+                var result = worker.submit(() -> atomic(stm, () -> stm.orElse(() -> {
                     long x = (Long) stm.read(a);
                     if (x == 0L) { stm.write(sentinel, 999L); stm.retry(); }
                     return x * 17;
@@ -179,7 +179,7 @@ class ManagedSTMTest {
                 atomic(stm, () -> { stm.write(changeLeft ? a : b, 7L); return Unit.INSTANCE; });
                 assertEquals(changeLeft ? 119L : 7L, result.get(5, TimeUnit.SECONDS));
                 assertEquals(123L, stm.readIO(sentinel));
-                assertEquals(0, stm.pendingWaiters$org_intelligence_thc());
+                assertEquals(0, stm.pendingWaiters());
             } finally { stm.close(); worker.shutdownNow(); }
         }
     }
@@ -188,13 +188,13 @@ class ManagedSTMTest {
         var stm = new ManagedSTM(); var cell = stm.newTVar(0L);
         var worker = Executors.newSingleThreadExecutor();
         try {
-            var result = worker.submit(() -> atomic(stm, () -> stm.catchSTM$org_intelligence_thc(() -> {
+            var result = worker.submit(() -> atomic(stm, () -> stm.catchSTM(() -> {
                 long x = (Long) stm.read(cell); if (x == 0L) throw new GuestException(null, location); return x;
             }, received -> { stm.retry(); throw new AssertionError("retry returned"); })));
             queued(stm);
             atomic(stm, () -> { stm.write(cell, 31L); return Unit.INSTANCE; });
             assertEquals(31L, result.get(5, TimeUnit.SECONDS));
-            assertEquals(0, stm.pendingWaiters$org_intelligence_thc());
+            assertEquals(0, stm.pendingWaiters());
         } finally { stm.close(); worker.shutdownNow(); }
     }
 
@@ -204,12 +204,12 @@ class ManagedSTMTest {
         try {
             var result = worker.submit(() -> {
                 assertThrows(RuntimeFault.class, () -> atomic(stm, stm::retry));
-                return !stm.hasTransaction$org_intelligence_thc();
+                return !stm.hasTransaction();
             });
             queued(stm); stm.close();
             assertTrue(result.get(5, TimeUnit.SECONDS));
-            assertEquals(0, stm.pendingWaiters$org_intelligence_thc());
-            assertNull(cell.getValue$org_intelligence_thc(), "context disposal retained a TVar payload");
+            assertEquals(0, stm.pendingWaiters());
+            assertNull(cell.getValue(), "context disposal retained a TVar payload");
             assertThrows(RuntimeFault.class, () -> stm.readIO(cell));
             assertThrows(RuntimeFault.class, () -> stm.newTVar(null));
         } finally { stm.close(); worker.shutdownNow(); }
@@ -221,10 +221,10 @@ class ManagedSTMTest {
         assertThrows(RuntimeFault.class, () -> atomic(other, () -> { other.write(cell, 9L); return Unit.INSTANCE; }));
         assertEquals(1L, stm.readIO(cell));
         atomic(stm, () -> {
-            assertEquals("nested", stm.catchSTM$org_intelligence_thc(() -> atomic(stm, () -> { throw new IllegalStateException("cannot enter nested action"); }), value -> value));
-            assertTrue(stm.hasTransaction$org_intelligence_thc()); return Unit.INSTANCE;
+            assertEquals("nested", stm.catchSTM(() -> atomic(stm, () -> { throw new IllegalStateException("cannot enter nested action"); }), value -> value));
+            assertTrue(stm.hasTransaction()); return Unit.INSTANCE;
         });
-        assertFalse(stm.hasTransaction$org_intelligence_thc()); assertFalse(other.hasTransaction$org_intelligence_thc());
+        assertFalse(stm.hasTransaction()); assertFalse(other.hasTransaction());
     }
 
     @Test void manyConcurrentTransactionsPreserveTwoCellInvariant() throws Exception {
@@ -264,7 +264,7 @@ class ManagedSTMTest {
             atomic(stm, () -> { stm.write(cell, 47L); return Unit.INSTANCE; });
             updated.countDown();
             assertEquals(47L, result.get(5, TimeUnit.SECONDS));
-            assertEquals(2, attempts.get()); assertEquals(0, stm.pendingWaiters$org_intelligence_thc());
+            assertEquals(2, attempts.get()); assertEquals(0, stm.pendingWaiters());
         } finally { updated.countDown(); stm.close(); worker.shutdownNow(); }
     }
 
@@ -277,12 +277,12 @@ class ManagedSTMTest {
                 assertThrows(InterruptedException.class, () -> atomic(stm, () -> {
                     stm.read(dependency); stm.write(sentinel, 999L); return stm.retry();
                 }));
-                return !stm.hasTransaction$org_intelligence_thc();
+                return !stm.hasTransaction();
             });
             queued(stm);
             carrier.get().interrupt(); // Direct host protocol, not guest throwTo support.
             assertTrue(result.get(5, TimeUnit.SECONDS));
-            assertEquals(0, stm.pendingWaiters$org_intelligence_thc()); assertEquals(123L, stm.readIO(sentinel));
+            assertEquals(0, stm.pendingWaiters()); assertEquals(123L, stm.readIO(sentinel));
         } finally { stm.close(); worker.shutdownNow(); }
     }
 }

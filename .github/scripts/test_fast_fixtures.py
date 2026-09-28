@@ -751,7 +751,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertNotIn('thc.runtime.OriginalStackDecoderTest', owners)
         self.assertEqual('original-stack', owners['thc.runtime.OriginalStackDecoderCallTest'])
         for name in ('OriginalStackDecoderCallTest', 'ManagedStackRuntimeTest'):
-            self.assertTrue((project / f'src/test/kotlin/thc/runtime/{name}.kt').is_file())
+            self.assertTrue((project / f'src/test/java/thc/runtime/{name}.java').is_file())
         self.assertNotIn('build/original-stack-decoder', fast_fixtures.FULL_OUTPUT_ROOTS)
         self.assertNotIn('build/original-stack-decoder/manifest.json', fast_fixtures.FULL_REQUIRED)
         self.assertNotIn('"$fixture_bin" original-stack-decoder', (project / 'scripts/prepare-tests.sh').read_text())

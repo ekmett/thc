@@ -105,7 +105,7 @@ public class ProcessLifecycleCoreTest {
                                     state.getMaskingState().set(MaskingState.UNMASKED); var request = state.getThreads().poll(new Node() {}, true); assertNotNull(request); request.acknowledge();
                                 } else {
                                     assertNotNull(continuation, scenario + " must yield after its completed result"); var request = Objects.requireNonNull(continuation.asyncRequest());
-                                    assertEquals("process wait delivery", request.getPayload()); if (installed) assertTrue(request.getCompiledCapture(), scenario + " first installed completion cut");
+                                    assertEquals("process wait delivery", request.getPayload()); if (installed) assertTrue(request.compiledCapture, scenario + " first installed completion cut");
                                     request.acknowledge(); captured.set(continuation);
                                 }
                             } catch (Throwable error) { failure.set(error); }

@@ -36,7 +36,7 @@ class ColdFunctionFrameTest {
             CoreKind.DOUBLE to FrameSlotKind.Double, CoreKind.DATA to FrameSlotKind.Object,
             CoreKind.CLOSURE to FrameSlotKind.Object, CoreKind.ADDRESS to FrameSlotKind.Object)
         for ((kind, slotKind) in expected) {
-            val (root, slot) = root(CoreRepresentation(kind, evaluated = true, present = true))
+            val (root, slot) = root(CoreRepresentation(kind, true, true))
             assertEquals(slotKind, root.frameDescriptor.getSlotKind(slot))
             val target = root.callTarget
             assertSame(root, target.rootNode)
@@ -50,7 +50,7 @@ class ColdFunctionFrameTest {
             val (root, slot) = root(proof)
             assertEquals(FrameSlotKind.Illegal, root.frameDescriptor.getSlotKind(slot))
         }
-        val (root, slot) = root(CoreRepresentation(CoreKind.LONG, evaluated = true), asyncStrict = true)
+        val (root, slot) = root(CoreRepresentation(CoreKind.LONG, true), asyncStrict = true)
         assertEquals(FrameSlotKind.Illegal, root.frameDescriptor.getSlotKind(slot))
         val frame = Truffle.getRuntime().createVirtualFrame(arrayOf(0L, Any()), root.frameDescriptor)
         // The entry can hold a suspended/lazy value before the strict force.
@@ -59,7 +59,7 @@ class ColdFunctionFrameTest {
     }
 
     @Test fun preparedScalarSlotsStillWidenMonotonicallyAndDoNotNarrowExistingObjectSlots() {
-        val proof = CoreRepresentation(CoreKind.LONG, evaluated = true, present = true)
+        val proof = CoreRepresentation(CoreKind.LONG, true, true)
         val (root, slot) = root(proof)
         val first = Truffle.getRuntime().createVirtualFrame(arrayOf(0L, Long.MIN_VALUE), root.frameDescriptor)
         root.buildFrame(first.arguments, first)

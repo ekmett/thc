@@ -171,7 +171,7 @@ public class ClosureInspectionTest {
                 assertEquals(40, image.getBytes().length); assertEquals(5L, ClosureInspection.size(value));
                 assertEquals(Long.MIN_VALUE, words.getLong(8)); assertEquals(Float.floatToRawIntBits(-0.0f), words.getInt(16));
                 assertEquals(0x7ff8000000000055L, words.getLong(24)); assertEquals(0L, words.getLong(32)); assertArrayEquals(new Object[]{thunk}, image.getPointers());
-                assertEquals(0, thunk.getState()); var info = Language.currentState(null).getClosureInfo();
+                assertEquals(0, thunk.getState()); var info = Language.currentState(null).closureInfo;
                 assertTrue(info.address(image.getDescriptor()).sameLocation(info.address(image.getDescriptor())));
                 assertFalse(info.address(image.getDescriptor()).sameLocation(new ClosureInfoTables().address(image.getDescriptor())));
                 var fresh = ClosureInspection.image(value); Arrays.fill(image.getBytes(), (byte) 0); image.getPointers()[0] = null;

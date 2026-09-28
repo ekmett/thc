@@ -123,7 +123,7 @@ public class ManagedProcessesTest {
                 var cwd = assertThrows(ProcessSpawnException.class, () -> processes.spawn(childArgs("exit", "0"), List.of(), "missing".getBytes(StandardCharsets.UTF_8), CLOSED, CLOSED, CLOSED, 0, null, null, null));
                 assertEquals(2, cwd.getErrno()); assertEquals(ProcessFailureStage.SPAWN, cwd.getStage());
             }
-            assertThrows(UnsupportedOperationException.class, () -> processes.spawn(childArgs("exit", "0"), List.of(), null, CLOSED, CLOSED, CLOSED, 0, null, 0, null));
+            assertThrows(UnsupportedOperationException.class, () -> processes.spawn(childArgs("exit", "0"), List.of(), null, CLOSED, CLOSED, CLOSED, 0, null, 0L, null));
             assertThrows(UnsupportedOperationException.class, () -> processes.spawn(childArgs("exit", "0"), List.of(), null, CLOSED, CLOSED, CLOSED, 0x4, null, null, null));
             assertThrows(IllegalArgumentException.class, () -> processes.spawn(List.of(new byte[]{47, 0, 98}), List.of())); assertEquals(before, fdCount());
         });

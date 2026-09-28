@@ -55,7 +55,7 @@ class ForeignExceptionPolicyTest {
                 var classifier = new RootNode(language) {
                     @Child private ForeignExceptionAccess access = new ForeignExceptionAccess();
                     @Override public Object execute(VirtualFrame frame) {
-                        return access.eligible$org_intelligence_thc((AbstractTruffleException) frame.getArguments()[0]);
+                        return access.eligible((AbstractTruffleException) frame.getArguments()[0]);
                     }
                 }.getCallTarget();
                 for (var kind : ExceptionType.values()) {
@@ -76,13 +76,13 @@ class ForeignExceptionPolicyTest {
         }
     }
     @Test void applicationHostFailuresAreDistinctFromFatalCancellationAndRuntimeFailures() {
-        assertTrue(ForeignExceptionPolicy.INSTANCE.host(new IllegalStateException("application")));
-        assertTrue(ForeignExceptionPolicy.INSTANCE.host(new AssertionError("application assertion")));
-        assertFalse(ForeignExceptionPolicy.INSTANCE.host(new VirtualMachineError("synthetic classification control") {}));
-        assertFalse(ForeignExceptionPolicy.INSTANCE.host(new LinkageError("infrastructure")));
-        assertFalse(ForeignExceptionPolicy.INSTANCE.host(new InterruptedException()));
-        assertFalse(ForeignExceptionPolicy.INSTANCE.host(new CancellationException()));
-        assertFalse(ForeignExceptionPolicy.INSTANCE.host(new RuntimeFault("runtime invariant")));
+        assertTrue(ForeignExceptionPolicy.host(new IllegalStateException("application")));
+        assertTrue(ForeignExceptionPolicy.host(new AssertionError("application assertion")));
+        assertFalse(ForeignExceptionPolicy.host(new VirtualMachineError("synthetic classification control") {}));
+        assertFalse(ForeignExceptionPolicy.host(new LinkageError("infrastructure")));
+        assertFalse(ForeignExceptionPolicy.host(new InterruptedException()));
+        assertFalse(ForeignExceptionPolicy.host(new CancellationException()));
+        assertFalse(ForeignExceptionPolicy.host(new RuntimeFault("runtime invariant")));
     }
     @Test void unknownPrimitivePayloadIsNotProjectedOrForcedAtPublicExit() {
         var opaque = new Object();

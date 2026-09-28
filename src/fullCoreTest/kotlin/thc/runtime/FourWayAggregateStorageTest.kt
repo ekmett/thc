@@ -70,8 +70,8 @@ class FourWayAggregateStorageTest {
         val input = TypedInputLayout.create(language, arguments, false)!!
         assertEquals(6, input.prefix(2).reps.size)
         // A real logical mismatch remains a mismatch even at equal physical width.
-        val changedInner = inner.copy(components = innerComponents.toMutableList().also { it[1] = innerComponents[0] })
-        val changed = nested.copy(components = nested.components!!.toMutableList().also { it[1] = changedInner })
+        val changedInner = inner.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, originalProof.primReps, innerComponents.toMutableList().also { it[1] = innerComponents[0] }, originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) }
+        val changed = nested.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, originalProof.primReps, nested.components!!.toMutableList().also { it[1] = changedInner }, originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) }
         val other = ArgumentLayout.fromProofs(listOf(scalar, changed, scalar))!!
         assertEquals(arguments.physicalArity, other.physicalArity)
         assertThrows(RuntimeFault::class.java) { ArgumentLayout.validate(arguments, 0, other, 0, 3) }

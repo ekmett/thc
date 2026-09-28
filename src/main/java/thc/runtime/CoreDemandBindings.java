@@ -82,7 +82,7 @@ public final class CoreDemandBindings {
         synchronized (lock) {
             if (!owns.test(id)) return null;
             uses.computeIfAbsent(id, ignored -> new ArrayList<>()).add(proof);
-            var binding = definitions.get(id); if (binding != null) validateOccurrence(CoreRepresentations.INSTANCE.binder(binding), proof);
+            var binding = definitions.get(id); if (binding != null) validateOccurrence(CoreRepresentations.binder(binding), proof);
             return new CoreRepresentation(proof.getKind(), false, proof.getPresent(), proof.getPrimReps(), proof.getComponents(), proof.getVector(), proof.getAlternatives(), proof.getTagSlot(), proof.getAlternativeSlots());
         }
     }
@@ -90,7 +90,7 @@ public final class CoreDemandBindings {
         synchronized (lock) { calls.computeIfAbsent(id, ignored -> new ArrayList<>()).add(arguments); if (programs.containsKey(id)) validateCall(id, arguments); }
     }
     private static void validateOccurrence(CoreRepresentation expected, CoreRepresentation actual) {
-        CoreVectors.INSTANCE.requireVariableProof(expected, actual);
+        CoreVectors.requireVariableProof(expected, actual);
         if (expected.isTypedTransport() || actual.isTypedTransport()) {
             if (!expected.isTypedTransport() || !actual.isTypedTransport() || !TupleShape.Companion.compatible(expected, actual)) throw new UnsupportedCore("Conflicting demanded global representation proof");
         }
@@ -101,7 +101,7 @@ public final class CoreDemandBindings {
         return switch (Objects.toString(expression.getFirst(), "")) {
             case "lam" -> {
                 var arguments = new ArrayList<CoreRepresentation>();
-                for (var binding : (List<Map<String,Object>>) expression.get(1)) arguments.add(CoreRepresentations.INSTANCE.binder(binding));
+                for (var binding : (List<Map<String,Object>>) expression.get(1)) arguments.add(CoreRepresentations.binder(binding));
                 yield Collections.unmodifiableList(arguments);
             }
             case "var" -> { String next = (String) expression.get(1); yield !owns.test(next) || !seen.add(next) ? null : resolve((List<Object>) definition(next).get("expr"), seen); }
@@ -122,7 +122,7 @@ public final class CoreDemandBindings {
         var expected = signature(id); if (expected != null) CoreInputCalls.requireArguments(expected, arguments);
     }
     private void validateUses(String id, Map<String,Object> binding) {
-        var proof = CoreRepresentations.INSTANCE.binder(binding);
+        var proof = CoreRepresentations.binder(binding);
         for (var occurrence : uses.getOrDefault(id, List.of())) validateOccurrence(proof, occurrence);
         for (var arguments : calls.getOrDefault(id, List.of())) validateCall(id, arguments);
     }

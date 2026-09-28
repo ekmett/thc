@@ -29,18 +29,18 @@ class RtsFlagsTest {
     private final Map<String, Object> integer = Map.of("kind", "long", "primReps", List.of("IntRep"), "evaluated", true);
     private final Map<String, Object> byteRep = Map.of("kind", "long", "primReps", List.of("Word8Rep"), "evaluated", true);
     private final Map<String, Object> closure = Map.of("kind", "closure", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", true);
-    private CoreRepresentation proof() { return CoreRepresentations.INSTANCE.parse(address); }
+    private CoreRepresentation proof() { return CoreRepresentations.parse(address); }
 
     private static TargetLayout layout() { return layout("inplace"); }
     @SuppressWarnings("unchecked")
     private static TargetLayout layout(String abi) {
         assumeTrue(System.getProperty("os.name").startsWith("Linux") &&
             Set.of("amd64", "x86_64").contains(System.getProperty("os.arch")), "Only the evidenced Linux producing layout is supported");
-        var document = new LinkedHashMap<>(StackInfoTestLayout.INSTANCE.document(StackInfoTestLayout.INSTANCE.fields()));
+        var document = new LinkedHashMap<>(StackInfoTestLayout.document(StackInfoTestLayout.fields()));
         var compiler = new LinkedHashMap<>((Map<String, Object>) document.get("compiler"));
         compiler.put("abi", abi);
         document.put("compiler", compiler);
-        return TargetLayout.Companion.fromDocument(document);
+        return TargetLayout.fromDocument(document);
     }
 
     private static Context context() { return context(new ByteArrayOutputStream()); }
@@ -121,7 +121,7 @@ class RtsFlagsTest {
                     CoreDataLabels.fromCore("RtsFlags", proof.copy(proof.getKind(), false, proof.getPresent(), proof.getPrimReps(),
                         proof.getComponents(), proof.getVector(), proof.getAlternatives(), proof.getTagSlot(), proof.getAlternativeSlots()), valid);
                 });
-                assertThrows(RuntimeFault.class, () -> CoreDataLabels.fromCore("RtsFlags", CoreRepresentations.INSTANCE.parse(integer), valid));
+                assertThrows(RuntimeFault.class, () -> CoreDataLabels.fromCore("RtsFlags", CoreRepresentations.parse(integer), valid));
                 assertThrows(RuntimeFault.class, () -> CoreDataLabels.fromCore("RtsFlags_extra", proof(), valid));
             } finally { context.leave(); }
         }

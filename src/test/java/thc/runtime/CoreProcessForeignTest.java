@@ -37,7 +37,7 @@ public class CoreProcessForeignTest {
     private ProcessOp validate(List<Object> call) {
         var reps = new ArrayList<Object>();
         for (var argument : (List<List<Object>>) call.get(2)) {
-            var metadata = CoreRepresentations.INSTANCE.metadata(argument); reps.add(metadata == null ? null : metadata.get("rep"));
+            var metadata = CoreRepresentations.metadata(argument); reps.add(metadata == null ? null : metadata.get("rep"));
         }
         return CoreProcessForeign.validate(call.get(6), reps, (List<?>) call.get(3), ((Map<?, ?>) call.get(6)).get("rep"));
     }

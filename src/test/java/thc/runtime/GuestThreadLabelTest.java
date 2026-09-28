@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class GuestThreadLabelTest {
     private static GuestThreads registry() {
         return new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED),
-            CpuAffinity.Companion.discover(false), ignored -> Unit.INSTANCE);
+            CpuAffinity.discover(false), ignored -> {});
     }
 
     @Test void exactArrayIdentityLogicalSizeAndHostNameSurviveReentry() {
@@ -87,20 +87,20 @@ class GuestThreadLabelTest {
         var integer = new CoreRepresentation(CoreKind.LONG, false, false, List.of("IntRep"), null, null, null, null, null);
         var tuple = new CoreRepresentation(CoreKind.UNKNOWN, false, false,
             List.of("IntRep", "BoxedRep (Just Unlifted)"), List.of(state, integer, opaque), null, null, null, null);
-        CoreGuestThreads.INSTANCE.validate("labelThread#", List.of(opaque, opaque, state), List.of(false, false, false), state);
-        CoreGuestThreads.INSTANCE.validate("threadLabel#", List.of(opaque, state), List.of(false, false), tuple);
-        assertThrows(RuntimeFault.class, () -> CoreGuestThreads.INSTANCE.validate("labelThread#", List.of(opaque,
+        CoreGuestThreads.validate("labelThread#", List.of(opaque, opaque, state), List.of(false, false, false), state);
+        CoreGuestThreads.validate("threadLabel#", List.of(opaque, state), List.of(false, false), tuple);
+        assertThrows(RuntimeFault.class, () -> CoreGuestThreads.validate("labelThread#", List.of(opaque,
             opaque.copy(opaque.getKind(), opaque.getEvaluated(), opaque.getPresent(), List.of("BoxedRep (Just Lifted)"),
                 opaque.getComponents(), opaque.getVector(), opaque.getAlternatives(), opaque.getTagSlot(), opaque.getAlternativeSlots()),
             state), List.of(false, false, false), state));
-        assertThrows(RuntimeFault.class, () -> CoreGuestThreads.INSTANCE.validate(
+        assertThrows(RuntimeFault.class, () -> CoreGuestThreads.validate(
             "labelThread#", List.of(opaque, opaque, state), List.of(false, true, false), state));
         for (var bad : List.of(
                 tuple.copy(tuple.getKind(), tuple.getEvaluated(), tuple.getPresent(), List.of("IntRep"),
                     tuple.getComponents(), tuple.getVector(), tuple.getAlternatives(), tuple.getTagSlot(), tuple.getAlternativeSlots()),
                 tuple.copy(tuple.getKind(), tuple.getEvaluated(), tuple.getPresent(), tuple.getPrimReps(),
                     List.of(state, opaque, integer), tuple.getVector(), tuple.getAlternatives(), tuple.getTagSlot(), tuple.getAlternativeSlots()))) {
-            assertThrows(RuntimeFault.class, () -> CoreGuestThreads.INSTANCE.validate(
+            assertThrows(RuntimeFault.class, () -> CoreGuestThreads.validate(
                 "threadLabel#", List.of(opaque, state), List.of(false, false), bad));
         }
     }

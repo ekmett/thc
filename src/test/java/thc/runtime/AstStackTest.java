@@ -37,7 +37,7 @@ public class AstStackTest {
                         }
                     }
                     var body = new Body(); var root = new FunctionRoot(language, layout.build(), "sync spilled suffix", null, new int[0], new int[]{argument}, new int[]{0}, body,
-                        new Metrics(false), new CoreRepresentation[]{proof}, proof, body.getCoreSourceLocation(), new boolean[0], null, null, new int[0], null, false, new String[0], false, FunctionRootRole.FUNCTION, true);
+                        new Metrics(false), new CoreRepresentation[]{proof}, proof, body.getCoreSourceLocation(), new boolean[0], null, null, new int[0], null, false, new int[0][], false, FunctionRootRole.FUNCTION, true);
                     body.install(root.getCallTarget()); assertFalse(root.getEnableAsync()); assertEquals(4097L, Calls.target(root.getCallTarget(), new Object[]{0L, 4096L})); assertEquals(4097, body.prefixes); assertEquals(4096, body.suffixes);
                     var stack = state.getThreadPollState().get().getAstStack(); assertTrue(stack.getSpills() > 0); assertEquals(0, stack.getDepth()); assertFalse(stack.getDriving()); assertEquals(MaskingState.MASKED_INTERRUPTIBLE, state.getMaskingState().get()); assertEquals(0, language.getHandoffState().get().getResults().getDepth());
                 } finally { state.getThreads().leaveCurrent(); }
@@ -51,7 +51,7 @@ public class AstStackTest {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 class Body extends Expr { TailCall transfer; int entries; @Override public Object execute(VirtualFrame frame) { entries++; if (entries != 1) throw new IllegalStateException("Pass-through resume installed a loop"); throw transfer; } }
                 var body = new Body(); var root = new FunctionRoot(language, new FrameLayout().build(), "sync parked side exit", null, new int[0], new int[0], new int[0], body,
-                    new Metrics(false), new CoreRepresentation[0], body.getRepresentation(), body.getCoreSourceLocation(), new boolean[0], null, null, new int[0], null, false, new String[0], false, FunctionRootRole.PASS_THROUGH, true);
+                    new Metrics(false), new CoreRepresentation[0], body.getRepresentation(), body.getCoreSourceLocation(), new boolean[0], null, null, new int[0], null, false, new int[0][], false, FunctionRootRole.PASS_THROUGH, true);
                 body.transfer = new TailCall(root.getCallTarget(), new Object[]{0L}); var stack = AstStackKt.astStackScope(root); stack.setDepth(AstStackScope.MAX_DEPTH - 1); stack.setDriving(true);
                 final AstContinuation saved; try { saved = (AstContinuation) Calls.target(root.getCallTarget(), new Object[]{0L}); } finally { stack.setDepth(0); stack.setDriving(false); }
                 assertTrue(saved.stackSpill()); assertNull(saved.asyncRequest()); assertEquals(0, body.entries, "Entry spill precedes the side body's effects");
@@ -163,9 +163,9 @@ public class AstStackTest {
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var state = Language.currentState(); state.getThreads().enterCurrent();
                 try {
-                    var program = new Program(language, module(), true); var tick = new Closure(null, 1, new RootNode(language) { @Override public Object execute(VirtualFrame frame) { return 1L; } }.getCallTarget()); var cell = state.getStm().newTVar(17L);
-                    var failure = assertThrows(UnsupportedCore.class, () -> state.getStm().atomically(null, () -> { throw new IllegalStateException("Unexpected nested transaction"); }, () -> { state.getStm().write(cell, 99L); return Calls.target(program.hostEntryTarget(2), new Object[]{program.entryValue("loop"), new Object[]{4096L, tick}}); }));
-                    assertTrue(failure.getMessage().contains("active STM transaction")); assertEquals(17L, state.getStm().readIO(cell)); assertFalse(state.getStm().hasTransaction());
+                    var program = new Program(language, module(), true); var tick = new Closure(null, 1, new RootNode(language) { @Override public Object execute(VirtualFrame frame) { return 1L; } }.getCallTarget()); var cell = state.stm.newTVar(17L);
+                    var failure = assertThrows(UnsupportedCore.class, () -> state.stm.atomically(null, () -> { throw new IllegalStateException("Unexpected nested transaction"); }, () -> { state.stm.write(cell, 99L); return Calls.target(program.hostEntryTarget(2), new Object[]{program.entryValue("loop"), new Object[]{4096L, tick}}); }));
+                    assertTrue(failure.getMessage().contains("active STM transaction")); assertEquals(17L, state.stm.readIO(cell)); assertFalse(state.stm.hasTransaction());
                     var scope = state.getThreadPollState().get().getAstStack(); assertEquals(0L, scope.getSpills()); assertEquals(0, scope.getDepth()); assertFalse(scope.getDriving()); assertEquals(4097L, Calls.target(program.hostEntryTarget(2), new Object[]{program.entryValue("loop"), new Object[]{4096L, tick}}));
                 } finally { state.getThreads().leaveCurrent(); }
             } finally { context.leave(); }

@@ -65,7 +65,7 @@ public final class ManagedAddress {
             throw fault("RTS data label belongs to another THC context");
         if (width != 4 || elementOffset != 0)
             throw fault("enabled_capabilities permits only an aligned Word32 read at offset zero");
-        long count = Math.max(1L, capabilities.capabilityCount$org_intelligence_thc());
+        long count = Math.max(1L, capabilities.capabilityCount());
         if (count > 0xffff_ffffL) throw fault("enabled_capabilities exceeds Word32");
         return count;
     }

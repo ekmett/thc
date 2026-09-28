@@ -90,7 +90,7 @@ public final class ManagedWeaks {
     @TruffleBoundary synchronized Long mainThreadJavaId(Object value, GuestThreads threads) {
         if (closed) return null;
         var payload = live.get(handle(value));
-        return payload == null ? null : threads.liveJavaId$org_intelligence_thc(threadKey(payload, threads));
+        return payload == null ? null : threads.liveJavaId(threadKey(payload, threads));
     }
     public synchronized int retainedCount() { return live.size(); }
     public synchronized void close() { closed = true; live.clear(); }

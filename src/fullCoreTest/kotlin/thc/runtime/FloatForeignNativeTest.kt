@@ -45,8 +45,7 @@ class FloatForeignNativeTest {
                 descriptor + ("target" to (target + ("isFunction" to false))), descriptor + ("convention" to "capi"),
                 descriptor + ("safety" to "safe"), descriptor + ("arity" to 1L), descriptor + ("suppliedArity" to 1L)))
                 assertThrows(RuntimeFault::class.java) { validate(metadata + ("foreignCall" to bad)) }
-            val wrong = CoreRepresentation(if (operation.single) CoreKind.DOUBLE else CoreKind.FLOAT,
-                evaluated = true, present = true, primReps = listOf(if (operation.single) "DoubleRep" else "FloatRep"))
+            val wrong = CoreRepresentation(if (operation.single) CoreKind.DOUBLE else CoreKind.FLOAT, true, true, listOf(if (operation.single) "DoubleRep" else "FloatRep"))
             assertThrows(RuntimeFault::class.java) { CoreFloatForeign.validateOperand(operation, 0, wrong, null) }
         }
         assertEquals(FloatForeignOp.values().map { it.symbol }.toSet(), seen)

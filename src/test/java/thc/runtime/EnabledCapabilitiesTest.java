@@ -81,7 +81,7 @@ class EnabledCapabilitiesTest {
                     assertEquals(cpuCount, read.getAsLong(), "Guest carriers share the available CPU capacity");
                     valid(target);
 
-                    var cell = CoreDataLabels.fromCore("enabled_capabilities", CoreRepresentations.INSTANCE.parse(address));
+                    var cell = CoreDataLabels.fromCore("enabled_capabilities", CoreRepresentations.parse(address));
                     assertEquals(cpuCount, Integer.toUnsignedLong(ManagedAddressRead.WORD32.readInt(cell, 0)));
                     for (var operation : ManagedAddressRead.values()) if (operation != ManagedAddressRead.WORD32)
                         assertThrows(RuntimeFault.class, () -> {
@@ -94,20 +94,20 @@ class EnabledCapabilitiesTest {
                     assertThrows(RuntimeFault.class, () -> cell.plus(1));
                     assertThrows(RuntimeFault.class, cell::toNativeBits);
                     for (String bad : List.of("other_symbol", "enabled_capabilities_extra"))
-                        assertThrows(RuntimeFault.class, () -> CoreDataLabels.fromCore(bad, CoreRepresentations.INSTANCE.parse(address)));
+                        assertThrows(RuntimeFault.class, () -> CoreDataLabels.fromCore(bad, CoreRepresentations.parse(address)));
                     var wrongRep = new LinkedHashMap<>(address);
                     wrongRep.put("primReps", List.of("WordRep"));
-                    assertThrows(RuntimeFault.class, () -> CoreDataLabels.fromCore("enabled_capabilities", CoreRepresentations.INSTANCE.parse(wrongRep)));
+                    assertThrows(RuntimeFault.class, () -> CoreDataLabels.fromCore("enabled_capabilities", CoreRepresentations.parse(wrongRep)));
                     var unevaluated = new LinkedHashMap<>(address);
                     unevaluated.put("evaluated", false);
-                    assertThrows(RuntimeFault.class, () -> CoreDataLabels.fromCore("enabled_capabilities", CoreRepresentations.INSTANCE.parse(unevaluated)));
+                    assertThrows(RuntimeFault.class, () -> CoreDataLabels.fromCore("enabled_capabilities", CoreRepresentations.parse(unevaluated)));
 
                     ManagedAddress foreignCell;
                     try (var foreign = context()) {
                         foreign.initialize("thc"); foreign.enter();
                         try {
                             assertThrows(RuntimeFault.class, () -> ManagedAddressRead.WORD32.readInt(cell, 0));
-                            foreignCell = CoreDataLabels.fromCore("enabled_capabilities", CoreRepresentations.INSTANCE.parse(address));
+                            foreignCell = CoreDataLabels.fromCore("enabled_capabilities", CoreRepresentations.parse(address));
                         } finally { foreign.leave(); }
                     }
                     assertEquals(cpuCount, Integer.toUnsignedLong(ManagedAddressRead.WORD32.readInt(cell, 0)));

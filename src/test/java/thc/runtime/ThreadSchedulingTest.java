@@ -113,7 +113,7 @@ public class ThreadSchedulingTest {
     @Test public void unavailableAccountingCannotBreakGuestThreadCleanup() {
         var bean = (com.sun.management.ThreadMXBean) java.lang.management.ManagementFactory.getThreadMXBean(); var threads = threads(); threads.enterCurrent(); var identity = threads.currentIdentity(); boolean entered = true;
         try {
-            bean.setThreadAllocatedMemoryEnabled(false); assertThrows(RuntimeFault.class, threads::allocationCounter); assertDoesNotThrow(threads::leaveCurrent); entered = false;
+            bean.setThreadAllocatedMemoryEnabled(false); assertThrows(RuntimeFault.class, threads::allocationCounter); assertDoesNotThrow(() -> { threads.leaveCurrent(); }); entered = false;
             assertThrows(RuntimeFault.class, threads::currentIdentity); assertTrue(identity.getAllocationUnavailable());
         } finally { bean.setThreadAllocatedMemoryEnabled(true); if (entered) { threads.leaveCurrent(); threads.close(); } }
         threads.enterCurrent();
@@ -156,7 +156,7 @@ public class ThreadSchedulingTest {
             }
             var runner = new Runner(); long before = ((Number) program.diagnostics().get("compiledEntries")).longValue(); var first = runner.start(300_000L, MaskingState.MASKED_INTERRUPTIBLE); runner.awaitBlocked(first);
             var request = state.getThreads().send(identity.get(), "wake delay"); var saved = (ContinuationResult) first.get(5, TimeUnit.SECONDS);
-            assertSame(request, AsyncContinuations.request(saved)); assertTrue(request.getCompiledCapture()); assertEquals(AsyncRequestState.ACKNOWLEDGED, request.getState()); assertEquals(before + 1, ((Number) program.diagnostics().get("compiledEntries")).longValue());
+            assertSame(request, AsyncContinuations.request(saved)); assertTrue(request.compiledCapture); assertEquals(AsyncRequestState.ACKNOWLEDGED, request.getState()); assertEquals(before + 1, ((Number) program.diagnostics().get("compiledEntries")).longValue());
             Thread.sleep(400); context.enter();
             try { long resumed = System.nanoTime(); assertSame(kotlin.Unit.INSTANCE, saved.continueWith(kotlin.Unit.INSTANCE)); assertTrue(System.nanoTime() - resumed < 250_000_000L, "Resume must not restart the original duration"); }
             finally { context.leave(); }

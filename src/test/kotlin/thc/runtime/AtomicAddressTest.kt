@@ -383,13 +383,13 @@ class AtomicAddressTest {
     }
 
     @Test fun loweredLongCarriersStayValidButShapeAndStateErrorsHaveNoEffects() {
-        val address = CoreRepresentation(CoreKind.ADDRESS, primReps = listOf("AddrRep"))
-        val integer = CoreRepresentation(CoreKind.LONG, primReps = listOf("Int8Rep"))
-        val state = CoreRepresentation(CoreKind.VOID, primReps = emptyList())
-        val tuple = CoreRepresentation(CoreKind.UNKNOWN, components = listOf(state,integer))
+        val address = CoreRepresentation(CoreKind.ADDRESS, false, false, listOf("AddrRep"))
+        val integer = CoreRepresentation(CoreKind.LONG, false, false, listOf("Int8Rep"))
+        val state = CoreRepresentation(CoreKind.VOID, false, false, emptyList())
+        val tuple = CoreRepresentation(CoreKind.UNKNOWN, false, false, null, listOf(state,integer))
         AtomicAddressOp.CAS16.validate(listOf(address,integer,integer,state), List(4) { false },tuple)
-        for (bad in listOf(tuple.copy(components = listOf(integer,state)),
-            tuple.copy(components = listOf(state,address)), integer))
+        for (bad in listOf(tuple.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, originalProof.primReps, listOf(integer,state), originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) },
+            tuple.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, originalProof.primReps, listOf(state,address), originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) }, integer))
             assertThrows(RuntimeFault::class.java) {
                 AtomicAddressOp.CAS16.validate(listOf(address,integer,integer,state),List(4) { false },bad)
             }

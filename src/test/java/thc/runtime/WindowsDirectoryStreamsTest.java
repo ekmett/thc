@@ -82,7 +82,7 @@ class WindowsDirectoryStreamsTest {
     }
     private OriginalStdioOp validate(List<Object> call) {
         var reps = ((List<List<Object>>) call.get(2)).stream().map(argument -> {
-            var metadata = CoreRepresentations.INSTANCE.metadata(argument);
+            var metadata = CoreRepresentations.metadata(argument);
             return metadata == null ? null : metadata.get("rep");
         }).toList();
         return CoreOriginalStdio.validate(call.get(6), reps, (List<?>) call.get(3), ((Map<?, ?>) call.get(6)).get("rep"));

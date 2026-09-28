@@ -13,8 +13,8 @@ public final class BigNatLiterals {
         List.of("BoxedRep (Just Unlifted)"), null, null, null, null, null);
     public static CoreRepresentation getProof() { return PROOF; }
     public static CoreRepresentation proof(List<Object> expression) {
-        var metadata = CoreRepresentations.INSTANCE.metadata(expression);
-        var actual = CoreRepresentations.INSTANCE.parse(metadata == null ? null : metadata.get("rep"));
+        var metadata = CoreRepresentations.metadata(expression);
+        var actual = CoreRepresentations.parse(metadata == null ? null : metadata.get("rep"));
         boolean unconstrained = actual.getKind() == CoreKind.UNKNOWN && actual.getPrimReps() == null && !actual.isAggregate() && !actual.isVector();
         if (actual.getPresent() && !unconstrained && (actual.getKind() != CoreKind.OBJECT ||
             !PROOF.getPrimReps().equals(actual.getPrimReps()) || actual.isAggregate() || actual.isVector()))

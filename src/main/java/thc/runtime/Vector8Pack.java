@@ -15,7 +15,7 @@ public final class Vector8Pack extends Expr {
     public Vector8Pack(Expr argument, int[] slots) {
         this.argument = argument;
         this.slots = slots;
-        setRepresentation(CoreVectors.INSTANCE.getProof8());
+        setRepresentation(CoreVectors.proof8);
     }
 
     @Override public ByteVector execute(VirtualFrame frame) {

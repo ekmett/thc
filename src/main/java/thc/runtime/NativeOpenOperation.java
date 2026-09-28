@@ -49,7 +49,7 @@ public final class NativeOpenOperation implements AutoCloseable, TruffleSafepoin
         var request = request();
         TruffleSafepoint.InterruptibleFunction<MemorySegment, Void> action = pending -> {
             while (!Api.done(pending)) {
-                if (interruptible && threads.interruptibleForeignPending$org_intelligence_thc()) Api.cancel(pending);
+                if (interruptible && threads.interruptibleForeignPending()) Api.cancel(pending);
                 if (interrupted.get()) throw new InterruptedException();
                 Api.await(pending);
                 if (interrupted.get()) throw new InterruptedException();

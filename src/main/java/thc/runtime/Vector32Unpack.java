@@ -13,7 +13,7 @@ public final class Vector32Unpack extends Expr {
 
     public Vector32Unpack(Expr argument) {
         this.argument = argument;
-        setRepresentation(CoreVectors.INSTANCE.getUnpacked32());
+        setRepresentation(CoreVectors.unpacked32);
     }
 
     @Override public Object execute(VirtualFrame frame) {

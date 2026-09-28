@@ -86,7 +86,7 @@ class StackAnnotationsTest {
 
     @Test void lazyPayloadIsVisibleInSnapshotAndReturnsOnSuccessAndException() throws Exception {
         entered(language -> {
-            var shape = new TupleShape(CoreRepresentations.INSTANCE.parse(tupleRep), language);
+            var shape = new TupleShape(CoreRepresentations.parse(tupleRep), language);
             var probe = new Probe(language, shape); var action = new Closure(null, 1, probe.getCallTarget());
             var never = new GuestRoot(language, new FrameLayout().build()) {
                 @Override public Object execute(VirtualFrame frame) { throw new IllegalStateException("annotation was forced"); }
@@ -118,7 +118,7 @@ class StackAnnotationsTest {
 
     @Test void oneShotActionsParkAnnotationsAndRestoreCapturedStateOnResume() throws Exception {
         entered(language -> {
-            var shape = new TupleShape(CoreRepresentations.INSTANCE.parse(tupleRep), language);
+            var shape = new TupleShape(CoreRepresentations.parse(tupleRep), language);
             var probe = new Probe(language, shape); var action = new Closure(null, 1, probe.getCallTarget());
             var outside = StackAnnotationState.EMPTY.push("original"); var resumer = StackAnnotationState.EMPTY.push("resumer");
             StackAnnotations.set(null, outside);
@@ -165,7 +165,7 @@ class StackAnnotationsTest {
 
     @Test void multiShotAnnotationReturnRebasesOnResumerAmbientAndRecapture() throws Exception {
         entered(language -> {
-            var shape = new TupleShape(CoreRepresentations.INSTANCE.parse(tupleRep), language);
+            var shape = new TupleShape(CoreRepresentations.parse(tupleRep), language);
             var probe = new Probe(language, shape); var action = new Closure(null, 1, probe.getCallTarget());
             var owner = new GuestRoot(language, new FrameLayout().build()) {
                 @Child DelimitedActionSite site = new DelimitedActionSite(language, new Metrics(false));

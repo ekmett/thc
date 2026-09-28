@@ -40,7 +40,7 @@ import static thc.runtime.BitPrimitives.scalarBitPrimitiveShift;
  */
 @SuppressWarnings("unchecked")
 public final class BytecodeProgram implements ExecutableProgram {
-    private static final CoreRepresentation UNKNOWN = CoreRepresentation.Companion.getUNKNOWN();
+    private static final CoreRepresentation UNKNOWN = CoreRepresentation.UNKNOWN;
     private final Language language;
     private final BytecodeCheckpoint checkpoint;
     private final boolean enableAsync;
@@ -140,7 +140,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             indices.put(id, i);
             names.computeIfAbsent(name, unused -> new ArrayList<>()).add(i);
             var rhs = (List<Object>) binding.get("expr");
-            var proof = CoreRepresentations.INSTANCE.binder(binding);
+            var proof = CoreRepresentations.binder(binding);
             globalProofs.put(id, diagnosticUnsupported ? UNKNOWN : evaluatedProof(proof,
                 demand == null && (Boolean.FALSE.equals(binding.get("lifted"))
                     || Set.of("lam", "lit", "con", "void").contains(rhs.getFirst()))));
@@ -444,9 +444,9 @@ public final class BytecodeProgram implements ExecutableProgram {
             var scope = new Scope(new FunctionContext(0));
             var initializers = new ArrayList<Expression>();
             for (var binding : eager) {
-                CoreRepresentations.INSTANCE.requireNoSum(CoreRepresentations.INSTANCE.binder(binding), "global binding");
+                CoreRepresentations.requireNoSum(CoreRepresentations.binder(binding), "global binding");
                 var expr = (List<Object>) binding.get("expr");
-                CoreRepresentations.INSTANCE.requireNoSum(CoreRepresentations.INSTANCE.expression(expr), "global binding");
+                CoreRepresentations.requireNoSum(CoreRepresentations.expression(expr), "global binding");
                 var bindingScope = scope.withSource(sources.binding(binding, null));
                 String label = (String) binding.get("name");
                 initializers.add(representation(binding) && !Set.of("lam", "lit", "con", "void").contains(expr.getFirst())
@@ -482,7 +482,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         CoreOriginalStdio.validateHeads(requested);
         CoreProcessForeign.validateHeads(requested);
         CoreStablePointers.validateHeads(requested);
-        CoreRtsShutdown.INSTANCE.validateHeads(requested);
+        CoreRtsShutdown.validateHeads(requested);
         CoreMainThreadForeign.validateHeads(requested);
         CoreBoundThreadForeign.validateHeads(requested);
         CoreStringRtsForeign.validateHeads(requested);
@@ -498,35 +498,35 @@ public final class BytecodeProgram implements ExecutableProgram {
         CoreMemoryCopyForeign.MEMCPY.validateHeads(requested);
         CoreSignalForeign.validateHeads(requested);
         if (!diagnosticUnsupported) {
-            CoreRepresentations.INSTANCE.validateAggregates(requested, constructors);
+            CoreRepresentations.validateAggregates(requested, constructors);
             Objects.requireNonNull(validateInputs).accept(requested);
         }
     }
 
     private Object prepareClosedBinding(Map<String, Object> binding) {
-        CoreRepresentations.INSTANCE.requireNoSum(CoreRepresentations.INSTANCE.binder(binding), "global binding");
+        CoreRepresentations.requireNoSum(CoreRepresentations.binder(binding), "global binding");
         var expr = (List<Object>) binding.get("expr");
-        CoreRepresentations.INSTANCE.requireNoSum(CoreRepresentations.INSTANCE.expression(expr), "global binding");
+        CoreRepresentations.requireNoSum(CoreRepresentations.expression(expr), "global binding");
         if (demand != null && !representation(binding)) return switch ((String) expr.getFirst()) {
-            case "lit" -> literal((String) expr.get(1), expr.get(2), CoreRepresentations.INSTANCE.expression(expr));
+            case "lit" -> literal((String) expr.get(1), expr.get(2), CoreRepresentations.expression(expr));
             case "void" -> kotlin.Unit.INSTANCE;
             default -> throw new UnsupportedCore("Demand loading does not yet support effectful strict global initialization");
         };
         var scope = new Scope(new FunctionContext(0), sources.binding(binding, null));
         if ("lam".equals(expr.getFirst())) {
-            CoreRepresentations.INSTANCE.requireScalar(CoreRepresentations.INSTANCE.expression(expr), "argument");
+            CoreRepresentations.requireScalar(CoreRepresentations.expression(expr), "argument");
             var args = (List<Map<String, Object>>) expr.get(1);
             var names = new ArrayList<String>();
             for (var arg : args) names.add(String.valueOf(arg.get("name")));
             var fn = function("lambda " + String.join(", ", names), args, (List<Object>) expr.get(2), scope,
-                CoreRepresentations.INSTANCE.lambdaResult(expr), CoreEntries.lambda(expr));
+                CoreRepresentations.lambdaResult(expr), CoreEntries.lambda(expr));
             if (fn.captureLayout != null || !fn.captures.isEmpty())
                 throw new IllegalStateException("Top-level closure has lexical captures");
             return new Closure(null, args.size(), fn.target);
         }
         var fn = function((String) binding.get("name"), List.of(), expr, scope);
         var tuple = ((GuestRoot) fn.target.getRootNode()).getTupleResult();
-        if (tuple != null) CoreRepresentations.INSTANCE.requireScalar(tuple.getProof(), "thunk");
+        if (tuple != null) CoreRepresentations.requireScalar(tuple.getProof(), "thunk");
         if (fn.captureLayout != null || !fn.captures.isEmpty())
             throw new IllegalStateException("Top-level thunk has lexical captures");
         return new Thunk(fn.target, null);
@@ -697,7 +697,7 @@ public final class BytecodeProgram implements ExecutableProgram {
     private record CapturedLocal(Local source, Local destination) {}
 
     private FunctionSpec function(String label, List<Map<String, Object>> args, List<Object> expression, Scope outer) {
-        return function(label, args, expression, outer, CoreRepresentations.INSTANCE.expression(expression), new boolean[args.size()]);
+        return function(label, args, expression, outer, CoreRepresentations.expression(expression), new boolean[args.size()]);
     }
 
     private FunctionSpec function(String label, List<Map<String, Object>> args, List<Object> expression, Scope outer,
@@ -710,8 +710,8 @@ public final class BytecodeProgram implements ExecutableProgram {
         var argumentProofs = new ArrayList<CoreRepresentation>();
         for (var arg : args) {
             argumentIds.add((String) arg.get("id"));
-            var proof = CoreRepresentations.INSTANCE.binder(arg);
-            CoreRepresentations.INSTANCE.requireInput(proof);
+            var proof = CoreRepresentations.binder(arg);
+            CoreRepresentations.requireInput(proof);
             argumentProofs.add(proof);
         }
         context.inputLayout = ArgumentLayout.fromProofs(argumentProofs);
@@ -721,7 +721,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             if (argumentIds.contains(id)) continue;
             var aggregate = outer.tuples.get(id);
             if (aggregate != null) {
-                CoreRepresentations.INSTANCE.requireInput(aggregate.proof);
+                CoreRepresentations.requireInput(aggregate.proof);
                 if (aggregate.fields.size() != ArgumentLayout.leaves(aggregate.proof).size())
                     throw new RuntimeFault("Aggregate capture slot count mismatch");
                 freeAggregates.put(id, aggregate);
@@ -733,7 +733,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             if (local.id < 0 && local.proof.getKind() == CoreKind.VOID) scope.bindVoid(local.name, local.proof);
             else scalarSources.add(local);
         }
-        for (var local : scalarSources) CoreRepresentations.INSTANCE.requireScalar(local.proof, "capture");
+        for (var local : scalarSources) CoreRepresentations.requireScalar(local.proof, "capture");
         var captureSources = new ArrayList<>(scalarSources);
         var captureDestinations = new ArrayList<Local>();
         for (var local : scalarSources)
@@ -795,7 +795,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             var arg = args.get(index);
             String id = (String) arg.get("id");
             boolean lifted = representation(arg);
-            var proof = evaluatedProof(CoreRepresentations.INSTANCE.binder(arg), !lifted || context.entryStrict[index]);
+            var proof = evaluatedProof(CoreRepresentations.binder(arg), !lifted || context.entryStrict[index]);
             int offset = ArgumentLayout.offset(context.inputLayout, index);
             if (proof.isTypedTransport()) {
                 if (lifted) throw new RuntimeFault(proof.isVector() ? "Vector formal cannot be lifted" : "Tuple formal cannot be lifted");
@@ -1272,7 +1272,7 @@ public final class BytecodeProgram implements ExecutableProgram {
     private Expression delay(List<Object> expr, Scope scope, String label) {
         var fn = function(label, List.of(), expr, scope);
         var tuple = ((GuestRoot) fn.target.getRootNode()).getTupleResult();
-        if (tuple != null) CoreRepresentations.INSTANCE.requireScalar(tuple.getProof(), "thunk");
+        if (tuple != null) CoreRepresentations.requireScalar(tuple.getProof(), "thunk");
         var template = new BytecodeRoot.ClosureTemplate(fn.target, 0, fn.captureLayout);
         return sourced(new ProvenExpression(e -> {
             if (fn.hasVectorCaptures) {
@@ -1285,7 +1285,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 for (var capture : fn.captures) read(capture, false).emit(e);
                 e.builder.endMakeThunk();
             }
-        }, evaluatedProof(CoreRepresentations.INSTANCE.expression(expr), false)), sources.expression(expr, scope.source));
+        }, evaluatedProof(CoreRepresentations.expression(expr), false)), sources.expression(expr, scope.source));
     }
 
     private Expression closure(FunctionSpec fn, int arity) {
@@ -1312,7 +1312,7 @@ public final class BytecodeProgram implements ExecutableProgram {
     }
     private Expression argument(List<Object> expr, Scope scope, boolean lifted, String label,
             boolean allowEmpty, boolean declaredLifted) {
-        var proof = CoreRepresentations.INSTANCE.expression(expr);
+        var proof = CoreRepresentations.expression(expr);
         checkArgumentProof(proof, allowEmpty, declaredLifted);
         CoreRepresentation lexical = null;
         if ("var".equals(expr.getFirst())) {
@@ -1350,8 +1350,8 @@ public final class BytecodeProgram implements ExecutableProgram {
     }
 
     private static void checkArgumentProof(CoreRepresentation proof, boolean allowEmpty, boolean declaredLifted) {
-        if (allowEmpty) CoreRepresentations.INSTANCE.requireInput(proof);
-        else CoreRepresentations.INSTANCE.requireScalar(proof, "argument");
+        if (allowEmpty) CoreRepresentations.requireInput(proof);
+        else CoreRepresentations.requireScalar(proof, "argument");
         if (proof.isTypedTransport() && declaredLifted)
             throw new RuntimeFault(proof.isVector() ? "Vector argument cannot be lifted" : "Tuple argument cannot be lifted");
     }
@@ -1405,7 +1405,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         Expression value;
         try {
             var lowered = compileSupported(expr, scope.withSource(source), tail);
-            var proof = CoreRepresentations.INSTANCE.expression(expr);
+            var proof = CoreRepresentations.expression(expr);
             // The denoted value's Core proof cannot assert that a lowered thunk is WHNF.
             boolean diagnosticGlobal = diagnosticUnsupported && "var".equals(expr.getFirst())
                 && !scope.locals.containsKey(expr.get(1)) && !scope.joins.containsKey(expr.get(1))
@@ -3588,7 +3588,7 @@ public final class BytecodeProgram implements ExecutableProgram {
     private Expression joinCall(JoinTarget target, List<Expression> arguments) {
         if (arguments.size() != target.parameters.size()) throw new UnsupportedCore("Local join is not exactly saturated");
         for (int i = 0; i < arguments.size(); ++i)
-            CoreRepresentations.INSTANCE.requireJoinArgument(CoreRepresentations.INSTANCE.binder(target.parameters.get(i)),
+            CoreRepresentations.requireJoinArgument(CoreRepresentations.binder(target.parameters.get(i)),
                 arguments.get(i).proof());
         return new ProvenExpression(new ResultExpression((e, destination) -> {
             var b = e.builder;
@@ -3601,7 +3601,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 var slots = new ArrayList<BytecodeLocal>();
                 for (int lane = 0; lane < target.locals.get(i).size(); ++lane)
                     slots.add(b.createLocal("join operand " + i + " lane " + lane, null));
-                if (CoreRepresentations.INSTANCE.binder(target.parameters.get(i)).isTypedTransport()) argument.emitTuple(e, slots);
+                if (CoreRepresentations.binder(target.parameters.get(i)).isTypedTransport()) argument.emitTuple(e, slots);
                 else {
                     if (slots.size() != 1) throw new IllegalArgumentException("List has more than one element.");
                     b.beginStoreLocal(slots.getFirst()); argument.emit(e); b.endStoreLocal();
@@ -3631,8 +3631,8 @@ public final class BytecodeProgram implements ExecutableProgram {
 
     private Expression joinRegion(List<Map<String, Object>> group, List<Object> expression, boolean recursive,
             Scope scope, boolean tail) {
-        CoreJoins.INSTANCE.validate(group, expression, recursive);
-        var definitions = CoreJoins.INSTANCE.definitions(group);
+        CoreJoins.validate(group, expression, recursive);
+        var definitions = CoreJoins.definitions(group);
         if (definitions == null) throw new RuntimeFault("Missing local join definitions");
         var shadowed = new LinkedHashSet<String>();
         if (recursive) for (var definition : definitions) shadowed.add(definition.getId());
@@ -3640,8 +3640,8 @@ public final class BytecodeProgram implements ExecutableProgram {
         for (var definition : definitions) {
             var formals = new LinkedHashSet<String>();
             for (var parameter : definition.getParameters()) {
-                var proof = CoreRepresentations.INSTANCE.binder(parameter);
-                CoreRepresentations.INSTANCE.requireInput(proof);
+                var proof = CoreRepresentations.binder(parameter);
+                CoreRepresentations.requireInput(proof);
                 if (proof.isTypedTransport() && representation(parameter)) throw new RuntimeFault("Typed join formal must be unlifted");
                 formals.add((String) parameter.get("id"));
             }
@@ -3649,7 +3649,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 if (formals.contains(id) || shadowed.contains(id)) continue;
                 var tuple = scope.tuples.get(id);
                 if (tuple == null) continue;
-                CoreRepresentations.INSTANCE.requireInput(tuple.proof);
+                CoreRepresentations.requireInput(tuple.proof);
                 var leaves = ArgumentLayout.leaves(tuple.proof);
                 if (tuple.fields.size() != leaves.size()) throw new RuntimeFault("Tuple join capture disagrees with its physical slots");
                 for (int i = 0; i < tuple.fields.size(); ++i) {
@@ -3672,7 +3672,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             var parameters = new ArrayList<List<Local>>();
             for (int index = 0; index < definition.getParameters().size(); ++index) {
                 var parameter = definition.getParameters().get(index);
-                var proof = evaluatedProof(CoreRepresentations.INSTANCE.binder(parameter), !representation(parameter) || entryStrict[index]);
+                var proof = evaluatedProof(CoreRepresentations.binder(parameter), !representation(parameter) || entryStrict[index]);
                 String id = (String) parameter.get("id");
                 var fields = new ArrayList<Local>();
                 if (proof.isTypedTransport()) {
@@ -3698,7 +3698,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             for (int index = 0; index < parameters.size(); ++index) {
                 var fields = parameters.get(index);
                 var raw = definition.getParameters().get(index);
-                var formal = CoreRepresentations.INSTANCE.binder(raw);
+                var formal = CoreRepresentations.binder(raw);
                 if (formal.isTypedTransport()) bodyScope.bindTuple((String) raw.get("id"), evaluatedProof(formal, true), fields);
                 else {
                     if (fields.size() != 1) throw new IllegalArgumentException("List has more than one element.");
@@ -3709,7 +3709,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             bodies.add(new ProvenExpression(body, body.proof().refine(evaluatedProof(definition.getResult(), false))));
         }
         var entry = compile(expression, local, tail);
-        var proof = entry.proof().refine(evaluatedProof(CoreRepresentations.INSTANCE.expression(expression), false));
+        var proof = entry.proof().refine(evaluatedProof(CoreRepresentations.expression(expression), false));
         for (var body : bodies) TupleShape.requireCompatible(proof, body.proof(), false);
         return new ProvenExpression(new ResultExpression((e, destination) -> {
             if (proof.isTypedTransport() != (destination != null)) throw new RuntimeFault("Join result destination disagrees with its representation");
@@ -3760,7 +3760,7 @@ public final class BytecodeProgram implements ExecutableProgram {
     }
 
     private Expression vectorWord8Primitive(String name, List<Expression> operands) {
-        if (name.equals("unpackWord8X16#")) return tupleExpression(CoreVectors.INSTANCE.getUnpackedWord8(), (e, destination) -> {
+        if (name.equals("unpackWord8X16#")) return tupleExpression(CoreVectors.unpackedWord8, (e, destination) -> {
             e.builder.beginVectorWord8Unpack(destination.get(0), destination.get(1), destination.get(2), destination.get(3), destination.get(4), destination.get(5), destination.get(6), destination.get(7), destination.get(8), destination.get(9), destination.get(10), destination.get(11), destination.get(12), destination.get(13), destination.get(14), destination.get(15));
             operands.getFirst().emit(e);
             e.builder.endVectorWord8Unpack();
@@ -3789,11 +3789,11 @@ public final class BytecodeProgram implements ExecutableProgram {
                     b.endVectorWord8Binary();
                 }
             }
-        }, CoreVectors.INSTANCE.getProofWord8());
+        }, CoreVectors.proofWord8);
     }
 
     private Expression vector8Primitive(String name, List<Expression> operands) {
-        if (name.equals("unpackInt8X16#")) return tupleExpression(CoreVectors.INSTANCE.getUnpacked8(), (e, destination) -> {
+        if (name.equals("unpackInt8X16#")) return tupleExpression(CoreVectors.unpacked8, (e, destination) -> {
             e.builder.beginVector8Unpack(destination.get(0), destination.get(1), destination.get(2), destination.get(3), destination.get(4), destination.get(5), destination.get(6), destination.get(7), destination.get(8), destination.get(9), destination.get(10), destination.get(11), destination.get(12), destination.get(13), destination.get(14), destination.get(15));
             operands.getFirst().emit(e);
             e.builder.endVector8Unpack();
@@ -3823,11 +3823,11 @@ public final class BytecodeProgram implements ExecutableProgram {
                     b.endVector8Binary();
                 }
             }
-        }, CoreVectors.INSTANCE.getProof8());
+        }, CoreVectors.proof8);
     }
 
     private Expression vectorWord32Primitive(String name, List<Expression> operands) {
-        if (name.equals("unpackWord32X4#")) return tupleExpression(CoreVectors.INSTANCE.getUnpackedWord32(), (e, destination) -> {
+        if (name.equals("unpackWord32X4#")) return tupleExpression(CoreVectors.unpackedWord32, (e, destination) -> {
             e.builder.beginVectorWord32Unpack(destination.get(0), destination.get(1), destination.get(2), destination.get(3));
             operands.getFirst().emit(e);
             e.builder.endVectorWord32Unpack();
@@ -3856,11 +3856,11 @@ public final class BytecodeProgram implements ExecutableProgram {
                     b.endVectorWord32Binary();
                 }
             }
-        }, CoreVectors.INSTANCE.getProofWord32());
+        }, CoreVectors.proofWord32);
     }
 
     private Expression vectorWord16Primitive(String name, List<Expression> operands) {
-        if (name.equals("unpackWord16X8#")) return tupleExpression(CoreVectors.INSTANCE.getUnpackedWord16(), (e, destination) -> {
+        if (name.equals("unpackWord16X8#")) return tupleExpression(CoreVectors.unpackedWord16, (e, destination) -> {
             e.builder.beginVectorWord16Unpack(destination.get(0), destination.get(1), destination.get(2), destination.get(3), destination.get(4), destination.get(5), destination.get(6), destination.get(7));
             operands.getFirst().emit(e);
             e.builder.endVectorWord16Unpack();
@@ -3889,11 +3889,11 @@ public final class BytecodeProgram implements ExecutableProgram {
                     b.endVectorWord16Binary();
                 }
             }
-        }, CoreVectors.INSTANCE.getProofWord16());
+        }, CoreVectors.proofWord16);
     }
 
     private Expression vector16Primitive(String name, List<Expression> operands) {
-        if (name.equals("unpackInt16X8#")) return tupleExpression(CoreVectors.INSTANCE.getUnpacked16(), (e, destination) -> {
+        if (name.equals("unpackInt16X8#")) return tupleExpression(CoreVectors.unpacked16, (e, destination) -> {
             e.builder.beginVector16Unpack(destination.get(0), destination.get(1), destination.get(2), destination.get(3), destination.get(4), destination.get(5), destination.get(6), destination.get(7));
             operands.getFirst().emit(e);
             e.builder.endVector16Unpack();
@@ -3923,11 +3923,11 @@ public final class BytecodeProgram implements ExecutableProgram {
                     b.endVector16Binary();
                 }
             }
-        }, CoreVectors.INSTANCE.getProof16());
+        }, CoreVectors.proof16);
     }
 
     private Expression vector32Primitive(String name, List<Expression> operands) {
-        if (name.equals("unpackInt32X4#")) return tupleExpression(CoreVectors.INSTANCE.getUnpacked32(), (e, destination) -> {
+        if (name.equals("unpackInt32X4#")) return tupleExpression(CoreVectors.unpacked32, (e, destination) -> {
             e.builder.beginVector32Unpack(destination.get(0), destination.get(1), destination.get(2), destination.get(3));
             operands.getFirst().emit(e);
             e.builder.endVector32Unpack();
@@ -3952,11 +3952,11 @@ public final class BytecodeProgram implements ExecutableProgram {
                     b.endVector32Binary();
                 }
             }
-        }, CoreVectors.INSTANCE.getProof32());
+        }, CoreVectors.proof32);
     }
 
     private Expression vectorFloatPrimitive(String name, List<Expression> operands) {
-        if (name.equals("unpackFloatX4#")) return tupleExpression(CoreVectors.INSTANCE.getUnpackedFloat(), (e, destination) -> {
+        if (name.equals("unpackFloatX4#")) return tupleExpression(CoreVectors.unpackedFloat, (e, destination) -> {
             e.builder.beginVectorFloatUnpack(destination.get(0), destination.get(1), destination.get(2), destination.get(3));
             operands.getFirst().emit(e);
             e.builder.endVectorFloatUnpack();
@@ -3974,8 +3974,8 @@ public final class BytecodeProgram implements ExecutableProgram {
                 }
                 case "broadcastFloatX4#" -> { b.beginVectorFloatBroadcast(); operands.getFirst().emit(e); b.endVectorFloatBroadcast(); }
                 default -> {
-                    if (CoreVectors.INSTANCE.getFusedFloat().contains(name)) {
-                        b.beginVectorFloatFused(CoreVectors.INSTANCE.getFusedFloat().indexOf(name));
+                    if (CoreVectors.fusedFloat.contains(name)) {
+                        b.beginVectorFloatFused(CoreVectors.fusedFloat.indexOf(name));
                         for (var operand : operands) operand.emit(e);
                         b.endVectorFloatFused();
                     } else {
@@ -3991,11 +3991,11 @@ public final class BytecodeProgram implements ExecutableProgram {
                     }
                 }
             }
-        }, CoreVectors.INSTANCE.getProofFloat());
+        }, CoreVectors.proofFloat);
     }
 
     private Expression vectorDoublePrimitive(String name, List<Expression> operands) {
-        if (name.equals("unpackDoubleX2#")) return tupleExpression(CoreVectors.INSTANCE.getUnpackedDouble(), (e, destination) -> {
+        if (name.equals("unpackDoubleX2#")) return tupleExpression(CoreVectors.unpackedDouble, (e, destination) -> {
             e.builder.beginVectorDoubleUnpack(destination.get(0), destination.get(1));
             operands.getFirst().emit(e);
             e.builder.endVectorDoubleUnpack();
@@ -4013,8 +4013,8 @@ public final class BytecodeProgram implements ExecutableProgram {
                 }
                 case "broadcastDoubleX2#" -> { b.beginVectorDoubleBroadcast(); operands.getFirst().emit(e); b.endVectorDoubleBroadcast(); }
                 default -> {
-                    if (CoreVectors.INSTANCE.getFusedDouble().contains(name)) {
-                        b.beginVectorDoubleFused(CoreVectors.INSTANCE.getFusedDouble().indexOf(name));
+                    if (CoreVectors.fusedDouble.contains(name)) {
+                        b.beginVectorDoubleFused(CoreVectors.fusedDouble.indexOf(name));
                         for (var operand : operands) operand.emit(e);
                         b.endVectorDoubleFused();
                     } else {
@@ -4030,7 +4030,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                     }
                 }
             }
-        }, CoreVectors.INSTANCE.getProofDouble());
+        }, CoreVectors.proofDouble);
     }
 
     private Expression vectorMemory(VectorMemoryOp operation, List<Expression> operands) {
@@ -4288,35 +4288,35 @@ public final class BytecodeProgram implements ExecutableProgram {
 
     private Expression vectorPrimitive(String name, List<Expression> operands, int[] shuffleIndices) {
         if (GeneratedVectors.operations.contains(name)) return generatedVectorPrimitive(name, operands, shuffleIndices);
-        if (CoreVectors.INSTANCE.getOperationsWord32().contains(name)) return vectorWord32Primitive(name, operands);
-        if (CoreVectors.INSTANCE.getOperationsWord16().contains(name)) return vectorWord16Primitive(name, operands);
-        if (CoreVectors.INSTANCE.getOperationsWord8().contains(name)) return vectorWord8Primitive(name, operands);
-        if (CoreVectors.INSTANCE.getOperations8().contains(name)) return vector8Primitive(name, operands);
-        if (CoreVectors.INSTANCE.getOperations16().contains(name)) return vector16Primitive(name, operands);
-        if (CoreVectors.INSTANCE.getOperationsDouble().contains(name)) return vectorDoublePrimitive(name, operands);
-        if (CoreVectors.INSTANCE.getOperationsFloat().contains(name)) return vectorFloatPrimitive(name, operands);
-        if (CoreVectors.INSTANCE.getFusedFloat8().contains(name)) return new ProvenExpression(e -> {
-            e.builder.beginVectorFloat8Fused(CoreVectors.INSTANCE.getFusedFloat8().indexOf(name));
+        if (CoreVectors.operationsWord32.contains(name)) return vectorWord32Primitive(name, operands);
+        if (CoreVectors.operationsWord16.contains(name)) return vectorWord16Primitive(name, operands);
+        if (CoreVectors.operationsWord8.contains(name)) return vectorWord8Primitive(name, operands);
+        if (CoreVectors.operations8.contains(name)) return vector8Primitive(name, operands);
+        if (CoreVectors.operations16.contains(name)) return vector16Primitive(name, operands);
+        if (CoreVectors.operationsDouble.contains(name)) return vectorDoublePrimitive(name, operands);
+        if (CoreVectors.operationsFloat.contains(name)) return vectorFloatPrimitive(name, operands);
+        if (CoreVectors.fusedFloat8.contains(name)) return new ProvenExpression(e -> {
+            e.builder.beginVectorFloat8Fused(CoreVectors.fusedFloat8.indexOf(name));
             for (var operand : operands) operand.emit(e);
             e.builder.endVectorFloat8Fused();
         }, GeneratedVectors.proofFloatX8);
-        if (CoreVectors.INSTANCE.getFusedFloat16().contains(name)) return new ProvenExpression(e -> {
-            e.builder.beginVectorFloat16Fused(CoreVectors.INSTANCE.getFusedFloat16().indexOf(name));
+        if (CoreVectors.fusedFloat16.contains(name)) return new ProvenExpression(e -> {
+            e.builder.beginVectorFloat16Fused(CoreVectors.fusedFloat16.indexOf(name));
             for (var operand : operands) operand.emit(e);
             e.builder.endVectorFloat16Fused();
         }, GeneratedVectors.proofFloatX16);
-        if (CoreVectors.INSTANCE.getFusedDouble4().contains(name)) return new ProvenExpression(e -> {
-            e.builder.beginVectorDouble4Fused(CoreVectors.INSTANCE.getFusedDouble4().indexOf(name));
+        if (CoreVectors.fusedDouble4.contains(name)) return new ProvenExpression(e -> {
+            e.builder.beginVectorDouble4Fused(CoreVectors.fusedDouble4.indexOf(name));
             for (var operand : operands) operand.emit(e);
             e.builder.endVectorDouble4Fused();
         }, GeneratedVectors.proofDoubleX4);
-        if (CoreVectors.INSTANCE.getFusedDouble8().contains(name)) return new ProvenExpression(e -> {
-            e.builder.beginVectorDouble8Fused(CoreVectors.INSTANCE.getFusedDouble8().indexOf(name));
+        if (CoreVectors.fusedDouble8.contains(name)) return new ProvenExpression(e -> {
+            e.builder.beginVectorDouble8Fused(CoreVectors.fusedDouble8.indexOf(name));
             for (var operand : operands) operand.emit(e);
             e.builder.endVectorDouble8Fused();
         }, GeneratedVectors.proofDoubleX8);
-        if (CoreVectors.INSTANCE.getOperations32().contains(name)) return vector32Primitive(name, operands);
-        if (name.equals("unpackInt64X2#")) return tupleExpression(CoreVectors.INSTANCE.getUnpacked(), (e, destination) -> {
+        if (CoreVectors.operations32.contains(name)) return vector32Primitive(name, operands);
+        if (name.equals("unpackInt64X2#")) return tupleExpression(CoreVectors.unpacked, (e, destination) -> {
             e.builder.beginVectorUnpack(destination.get(0), destination.get(1));
             operands.getFirst().emit(e);
             e.builder.endVectorUnpack();
@@ -4339,7 +4339,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                     b.endVectorBinary();
                 }
             }
-        }, CoreVectors.INSTANCE.getProof());
+        }, CoreVectors.proof);
     }
 
     private Expression tupleApplication(TupleShape shape, Expression function, List<Expression> arguments, Scope scope, boolean tail) {
@@ -4701,17 +4701,17 @@ public final class BytecodeProgram implements ExecutableProgram {
             var ids = (List<String>) alt.get(2);
             Integer tag;
             if ("default".equals(alt.getFirst())) {
-                if (!ids.isEmpty() || !CoreRepresentations.INSTANCE.alternativeBinders(alt).isEmpty())
+                if (!ids.isEmpty() || !CoreRepresentations.alternativeBinders(alt).isEmpty())
                     throw new RuntimeFault("Invalid sum DEFAULT alternative");
                 tag = null;
             } else {
                 if (!"data".equals(alt.getFirst()) || ids.size() != 1) throw new RuntimeFault("Invalid sum alternative");
                 int selected = SumShape.constructor(proof, constructors.get(alt.get(1)), ids.size());
                 var component = proof.getAlternatives().get(selected - 1);
-                var metadata = CoreRepresentations.INSTANCE.alternativeBinders(alt);
+                var metadata = CoreRepresentations.alternativeBinders(alt);
                 if (metadata.size() != 1 || !Objects.equals(metadata.getFirst().get("id"), ids.getFirst()))
                     throw new RuntimeFault("Missing sum payload binder proof");
-                var actual = CoreRepresentations.INSTANCE.binder(metadata.getFirst());
+                var actual = CoreRepresentations.binder(metadata.getFirst());
                 if (!(metadata.getFirst().get("lifted") instanceof Boolean lifted))
                     throw new RuntimeFault("Unknown sum payload binder levity");
                 SumShape.payload(component, actual, lifted);
@@ -4748,11 +4748,11 @@ public final class BytecodeProgram implements ExecutableProgram {
             arms.add(new Arm(tag, compile((List<Object>) alt.get(3), child, tail), conversions));
         }
         if (arms.isEmpty()) throw new RuntimeFault("Empty sum case");
-        var result = arms.getFirst().body.proof().refine(CoreRepresentations.INSTANCE.expression(expr));
+        var result = arms.getFirst().body.proof().refine(CoreRepresentations.expression(expr));
         for (var arm : arms) result.refine(arm.body.proof());
         var armProofs = new ArrayList<CoreRepresentation>(arms.size());
         for (var arm : arms) armProofs.add(arm.body.proof());
-        CoreRepresentations.INSTANCE.validateFloatingCaseResult(result, armProofs);
+        CoreRepresentations.validateFloatingCaseResult(result, armProofs);
         return new ProvenExpression(new ResultExpression((e, destination) -> {
             var b = e.builder;
             b.beginBlock();
@@ -4837,12 +4837,12 @@ public final class BytecodeProgram implements ExecutableProgram {
             var slots = new ArrayList<BytecodeLocal>(fields.size());
             for (var field : fields) slots.add(b.createLocal(field.name, field.primitive ? "primitive" : "object"));
             scrutinee.emitTuple(e, slots); b.emitFailCase(); b.endBlock();
-        }), CoreRepresentations.INSTANCE.expression(expr));
+        }), CoreRepresentations.expression(expr));
         if (alternatives.size() != 1) throw new RuntimeFault("Tuple or vector case requires one alternative");
         var alt = alternatives.getFirst();
         var ids = (List<String>) alt.get(2);
         if (proof.isVector() && (!"default".equals(alt.getFirst()) || !ids.isEmpty()
-                || !CoreRepresentations.INSTANCE.alternativeBinders(alt).isEmpty()))
+                || !CoreRepresentations.alternativeBinders(alt).isEmpty()))
             throw new RuntimeFault("Vector case requires a binder-free DEFAULT alternative");
         if ("data".equals(alt.getFirst())) {
             var constructor = constructors.get(alt.get(1));
@@ -4850,12 +4850,12 @@ public final class BytecodeProgram implements ExecutableProgram {
                     || ids.size() != shape.getComponents().length
                     || !(constructor.get("arity") instanceof Number arity) || arity.intValue() != ids.size())
                 throw new RuntimeFault("Tuple alternative shape mismatch");
-            var metadata = CoreRepresentations.INSTANCE.alternativeBinders(alt);
+            var metadata = CoreRepresentations.alternativeBinders(alt);
             for (int index = 0; index < ids.size(); ++index) {
                 var id = ids.get(index);
                 var component = shape.getComponents()[index];
                 if (index < metadata.size()) TupleShape.requireCompatible(component,
-                    CoreRepresentations.INSTANCE.binder(metadata.get(index)), true);
+                    CoreRepresentations.binder(metadata.get(index)), true);
                 int offset = shape.getOffsets()[index];
                 int width = TupleShape.flatten(component).size();
                 if (component.isTypedTransport()) scope.bindTuple(id, component, fields.subList(offset, offset + width));
@@ -4929,13 +4929,13 @@ public final class BytecodeProgram implements ExecutableProgram {
         return switch ((String) expr.getFirst()) {
             case "var" -> {
                 var id = (String) expr.get(1);
-                var occurrence = CoreRepresentations.INSTANCE.expression(expr);
+                var occurrence = CoreRepresentations.expression(expr);
                 var aggregate = scope.tuples.get(id);
                 var local = scope.locals.get(id);
                 var proof = aggregate != null ? aggregate.proof : local != null ? local.proof
                     : globalProofs.containsKey(id) ? globalProofs.get(id)
                     : demand == null ? null : demand.occurrence(id, occurrence);
-                CoreVectors.INSTANCE.requireVariableProof(proof, occurrence);
+                CoreVectors.requireVariableProof(proof, occurrence);
                 if (aggregate != null) {
                     TupleShape.requireCompatible(aggregate.proof, occurrence, false);
                     yield tupleExpression(aggregate.proof, (e, destination) -> {
@@ -4956,10 +4956,10 @@ public final class BytecodeProgram implements ExecutableProgram {
             }
             case "lit" -> {
                 var kind = (String) expr.get(1);
-                var value = constant(literal(kind, expr.get(2), CoreRepresentations.INSTANCE.expression(expr)));
+                var value = constant(literal(kind, expr.get(2), CoreRepresentations.expression(expr)));
                 yield switch (kind) {
                     case "int8", "word8", "int16", "word16", "int32", "word32" ->
-                        new ProvenExpression(value, CoreRepresentations.INSTANCE.narrowLiteralProof(expr));
+                        new ProvenExpression(value, CoreRepresentations.narrowLiteralProof(expr));
                     case "bignat" -> new ProvenExpression(value, BigNatLiterals.proof(expr));
                     case "rubbish" -> new ProvenExpression(value, RubbishLiterals.proof(expr));
                     default -> value;
@@ -4971,7 +4971,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 var names = new ArrayList<String>(args.size());
                 for (var arg : args) names.add(String.valueOf(arg.get("name")));
                 yield closure(function("lambda " + String.join(", ", names), args, (List<Object>) expr.get(2), scope,
-                    CoreRepresentations.INSTANCE.lambdaResult(expr), CoreEntries.lambda(expr)), args.size());
+                    CoreRepresentations.lambdaResult(expr), CoreEntries.lambda(expr)), args.size());
             }
             case "app" -> compileApplication(expr, scope, tail);
             case "let" -> compileLet(expr, scope, tail);
@@ -4985,19 +4985,19 @@ public final class BytecodeProgram implements ExecutableProgram {
     private Expression compileLet(List<Object> expr, Scope scope, boolean tail) {
         boolean recursive = (Boolean) expr.get(1);
         var group = (List<Map<String, Object>>) expr.get(2);
-        for (var binding : group) if (CoreRepresentations.INSTANCE.joinArity(binding) != null)
+        for (var binding : group) if (CoreRepresentations.joinArity(binding) != null)
             return joinRegion(group, (List<Object>) expr.get(3), recursive, scope, tail);
         for (var binding : group) {
-            var proof = CoreRepresentations.INSTANCE.binder(binding);
+            var proof = CoreRepresentations.binder(binding);
             if (proof.isVector()) {
                 if (recursive || representation(binding)) throw new UnsupportedCore("Vector let binding must be nonrecursive and unlifted");
-                CoreRepresentations.INSTANCE.requireInput(proof);
-            } else CoreRepresentations.INSTANCE.requireScalar(proof, "let binding");
+                CoreRepresentations.requireInput(proof);
+            } else CoreRepresentations.requireScalar(proof, "let binding");
         }
         var local = scope.child();
         var slots = new ArrayList<List<Local>>();
         for (var binding : group) {
-            var proof = CoreRepresentations.INSTANCE.binder(binding);
+            var proof = CoreRepresentations.binder(binding);
             var id = (String) binding.get("id");
             if (proof.isVector()) {
                 var lanes = new ArrayList<Local>();
@@ -5011,19 +5011,19 @@ public final class BytecodeProgram implements ExecutableProgram {
         for (var binding : group) {
             var rhsExpr = (List<Object>) binding.get("expr");
             boolean lifted = representation(binding);
-            CoreRepresentations.INSTANCE.requireNoSum(CoreRepresentations.INSTANCE.expression(rhsExpr), "let binding");
+            CoreRepresentations.requireNoSum(CoreRepresentations.expression(rhsExpr), "let binding");
             if (recursive && !lifted) throw new UnsupportedCore("Recursive unlifted binding unsupported");
             var rhsScope = (recursive ? local : scope).withSource(sources.binding(binding, scope.source));
             if (recursive && lifted && !Set.of("lam", "lit", "con", "void").contains(rhsExpr.getFirst()))
                 rhs.add(delay(rhsExpr, rhsScope, String.valueOf(binding.get("name"))));
             else rhs.add(argument(rhsExpr, rhsScope, lifted, String.valueOf(binding.get("name")),
-                CoreRepresentations.INSTANCE.binder(binding).isVector(), lifted));
+                CoreRepresentations.binder(binding).isVector(), lifted));
         }
         for (int index = 0; index < slots.size(); ++index) {
             var fields = slots.get(index);
-            if (CoreRepresentations.INSTANCE.binder(group.get(index)).isVector()) {
+            if (CoreRepresentations.binder(group.get(index)).isVector()) {
                 if (!rhs.get(index).proof().isVector()) throw new RuntimeFault("Vector let binding requires an exact vector result proof");
-                TupleShape.requireCompatible(CoreRepresentations.INSTANCE.binder(group.get(index)), rhs.get(index).proof(), false);
+                TupleShape.requireCompatible(CoreRepresentations.binder(group.get(index)), rhs.get(index).proof(), false);
             } else {
                 var slot = fields.getFirst();
                 var proof = evaluatedProof(slot.proof.refine(rhs.get(index).proof()), rhs.get(index).proof().getEvaluated());
@@ -5053,7 +5053,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 }
             } else for (int index = 0; index < slots.size(); ++index) {
                 var fields = slots.get(index);
-                if (CoreRepresentations.INSTANCE.binder(group.get(index)).isVector())
+                if (CoreRepresentations.binder(group.get(index)).isVector())
                     rhs.get(index).emitTuple(e, localSlots(e, fields));
                 else {
                     b.beginStoreLocal(e.locals.get(fields.getFirst().id)); rhs.get(index).emit(e); b.endStoreLocal();
@@ -5069,8 +5069,8 @@ public final class BytecodeProgram implements ExecutableProgram {
         int arity = ((Number) expr.get(2)).intValue();
         var constructor = constructors.get(id);
         if (constructor != null && "unboxed-tuple".equals(constructor.get("kind")) && arity == 0
-                && CoreRepresentations.INSTANCE.expression(expr).isTuple()) {
-            var proof = CoreRepresentations.INSTANCE.expression(expr);
+                && CoreRepresentations.expression(expr).isTuple()) {
+            var proof = CoreRepresentations.expression(expr);
             if (proof.getComponents() == null || !proof.getComponents().isEmpty())
                 throw new RuntimeFault("Empty tuple constructor has nonempty logical components");
             return tupleExpression(proof, (e, destination) -> { e.builder.beginBlock(); e.builder.endBlock(); });
@@ -5088,7 +5088,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         if (records == null) proofs = Collections.nCopies(arity, UNKNOWN);
         else {
             proofs = new ArrayList<>(records.size());
-            for (var record : records) proofs.add(CoreRepresentations.INSTANCE.parse(record));
+            for (var record : records) proofs.add(CoreRepresentations.parse(record));
         }
         context.inputLayout = ArgumentLayout.fromProofs(proofs);
         context.typedInput = TypedInputLayout.create(language, context.inputLayout, false);
@@ -5137,7 +5137,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         var local = scope.child();
         var scrutineeExpr = (List<Object>) expr.get(1);
         var scrutinee = force(compile(scrutineeExpr, scope, false));
-        var binderProof = evaluatedProof(scrutinee.proof().refine(CoreRepresentations.INSTANCE.caseBinder(expr)), true);
+        var binderProof = evaluatedProof(scrutinee.proof().refine(CoreRepresentations.caseBinder(expr)), true);
         if (binderProof.isSum()) return sumCase(expr, scrutinee, binderProof, local, tail);
         if (binderProof.isTuple() || binderProof.isVector()) return tupleOrVectorCase(expr, scrutinee, binderProof, local, tail);
         var binder = bind(local, (String) expr.get(2), true, binderProof);
@@ -5168,7 +5168,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             var ids = (List<String>) alt.get(2);
             var layout = value instanceof DataLayout data ? data : null;
             if (layout != null && layout.getLogicalArity() != ids.size()) throw new RuntimeFault("Constructor field/binder mismatch");
-            var metadata = CoreRepresentations.INSTANCE.alternativeBinders(alt);
+            var metadata = CoreRepresentations.alternativeBinders(alt);
             var fields = new ArrayList<List<Local>>();
             for (int index = 0; index < ids.size(); ++index) {
                 var id = ids.get(index);
@@ -5180,7 +5180,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                     if (index >= metadata.size()) throw new RuntimeFault("Missing aggregate constructor binder proof");
                     var record = metadata.get(index);
                     if (!Boolean.FALSE.equals(record.get("lifted"))) throw new RuntimeFault("Aggregate constructor binder must be unlifted");
-                    var actual = CoreRepresentations.INSTANCE.binder(record);
+                    var actual = CoreRepresentations.binder(record);
                     TupleShape.requireCompatible(aggregate, actual, true);
                     var proof = aggregate.refine(actual);
                     var leaves = proof.isSum() ? SumShape.storage(proof) : TupleShape.flatten(proof);
@@ -5192,13 +5192,13 @@ public final class BytecodeProgram implements ExecutableProgram {
                     if (index >= metadata.size()) throw new UnsupportedCore("Missing vector constructor binder proof");
                     var record = metadata.get(index);
                     if (!Boolean.FALSE.equals(record.get("lifted"))) throw new UnsupportedCore("Vector constructor binder must be unlifted");
-                    var proof = CoreRepresentations.INSTANCE.binder(record).refine(vector);
+                    var proof = CoreRepresentations.binder(record).refine(vector);
                     var lanes = new ArrayList<Local>();
                     for (var leaf : TupleShape.flatten(proof))
                         lanes.add(new Local(nextLocal++, id + " vector lane " + lanes.size(), leaf.isLong(), leaf));
                     child.bindTuple(id, proof, lanes); fields.add(lanes);
                 } else {
-                    var proof = index < metadata.size() ? CoreRepresentations.INSTANCE.binder(metadata.get(index)) : UNKNOWN;
+                    var proof = index < metadata.size() ? CoreRepresentations.binder(metadata.get(index)) : UNKNOWN;
                     fields.add(List.of(bind(child, id, layout != null && layout.isLong(physical),
                         evaluatedProof(proof, layout != null && fieldIsEvaluated((String) alt.get(1), index)))));
                 }
@@ -5228,12 +5228,12 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
         var ordered = orderLiterals ? new ArrayList<>(explicit) : null;
         if (ordered != null) ordered.sort(java.util.Comparator.comparingLong(a -> (Long) a.value));
-        var resultProof = CoreRepresentations.INSTANCE.expression(expr);
+        var resultProof = CoreRepresentations.expression(expr);
         var results = new ArrayList<CoreRepresentation>(alternatives.size());
         for (var alt : alternatives) results.add(alt.body.proof());
-        CoreRepresentations.INSTANCE.validateDeclaredCaseResult(resultProof, results);
-        CoreRepresentations.INSTANCE.validateAggregateCaseResult(resultProof, results);
-        CoreRepresentations.INSTANCE.validateFloatingCaseResult(resultProof, results);
+        CoreRepresentations.validateDeclaredCaseResult(resultProof, results);
+        CoreRepresentations.validateAggregateCaseResult(resultProof, results);
+        CoreRepresentations.validateFloatingCaseResult(resultProof, results);
         CoreRepresentation effectiveResult;
         boolean anyAggregate = false;
         boolean allAggregate = true;
@@ -5246,7 +5246,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 throw new UnsupportedCore("Missing exact aggregate case result proof");
             effectiveResult = results.getFirst().refine(resultProof);
         } else effectiveResult = resultProof;
-        var vectorResult = CoreVectors.INSTANCE.caseResult(results);
+        var vectorResult = CoreVectors.caseResult(results);
         var mergedProof = vectorResult != null ? vectorResult.refine(effectiveResult)
             : evaluatedProof(effectiveResult, allProofsEvaluated(results));
         return new LoweredCaseExpression(new ProvenExpression(new ResultExpression((e, destination) -> {
@@ -5403,7 +5403,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             for (int index = 0; index < args.size(); ++index) {
                 var arg = args.get(index);
                 var component = shape.getComponents()[index];
-                TupleShape.requireCompatible(component, CoreRepresentations.INSTANCE.expression(arg), true);
+                TupleShape.requireCompatible(component, CoreRepresentations.expression(arg), true);
                 if (component.isTypedTransport() && !Boolean.FALSE.equals(flags.get(index)))
                     throw new RuntimeFault("Typed tuple field cannot be lifted");
                 if (component.isTypedTransport()) operands.add(compile(arg, scope, false));
@@ -5492,10 +5492,10 @@ public final class BytecodeProgram implements ExecutableProgram {
         if (expr.size() <= 3 || !(expr.get(3) instanceof List<?> flags)) throw new RuntimeFault("Application lacks representation flags");
         if (flags.size() != args.size()) throw new RuntimeFault("Application representation flag count mismatch");
         var callStrict = CoreCallDemands.lowerApplication(expr, callDemandsEnabled);
-        var tupleProof = CoreRepresentations.INSTANCE.expression(expr);
+        var tupleProof = CoreRepresentations.expression(expr);
         var tupleOperation = "prim".equals(fn.getFirst()) ? TupleArithmeticOp.named((String) fn.get(1)) : null;
         var floatDecode = "prim".equals(fn.getFirst()) ? FloatDecodeOp.named((String) fn.get(1)) : null;
-        var metadata = CoreRepresentations.INSTANCE.metadata(expr);
+        var metadata = CoreRepresentations.metadata(expr);
         boolean defined = "var".equals(fn.getFirst()) && (scope.locals.containsKey(fn.get(1)) || scope.joins.containsKey(fn.get(1))
             || (demand != null && metadata != null && metadata.containsKey("foreignCall")
                 ? demand.isDefined((String) fn.get(1)) : globals.containsKey(fn.get(1))));
@@ -5513,8 +5513,8 @@ public final class BytecodeProgram implements ExecutableProgram {
         var originalProcess = CoreProcessForeign.validate(foreignMetadata, representations, flags, resultRepresentation);
         var capi = CoreCapiForeign.validate(foreignMetadata, representations, flags, resultRepresentation, foreignLinks);
         boolean stableFree = CoreStablePointers.validate(foreignMetadata, representations, flags, resultRepresentation);
-        var sharedCAF = CoreSharedCAFStores.INSTANCE.validate(foreignMetadata, representations, flags, resultRepresentation);
-        var shutdown = CoreRtsShutdown.INSTANCE.validate(foreignMetadata, representations, flags, resultRepresentation);
+        var sharedCAF = CoreSharedCAFStores.validate(foreignMetadata, representations, flags, resultRepresentation);
+        var shutdown = CoreRtsShutdown.validate(foreignMetadata, representations, flags, resultRepresentation);
         boolean mainThreadForeign = CoreMainThreadForeign.validate(foreignMetadata, representations, flags, resultRepresentation);
         boolean boundThreadForeign = CoreBoundThreadForeign.validate(foreignMetadata, representations, flags, resultRepresentation, false);
         var gcForeign = CoreGcForeign.validate(foreignMetadata, representations, flags, resultRepresentation);
@@ -5528,7 +5528,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         var rtsArguments = CoreRtsArgumentsForeign.validate(foreignMetadata, representations, flags, resultRepresentation);
         var managedFile = CoreManagedFiles.validate(foreignMetadata, representations, flags, resultRepresentation);
         var javascript = packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && managedFile == null
-            ? CoreJavaScript.INSTANCE.validate(expr, defined) : null;
+            ? CoreJavaScript.validate(expr, defined) : null;
         var md5 = javascript == null ? CoreMd5Foreign.validate(foreignMetadata, representations, flags, resultRepresentation) : null;
         var gmp = CoreGmpForeign.validate(foreignMetadata, representations, flags, resultRepresentation);
         var processSignal = CoreSignalForeign.validate(foreignMetadata, representations, flags, resultRepresentation);
@@ -5547,7 +5547,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 && stackInfo == null && originalStdio == null && capi == null && !stableFree && shutdown == null && !mainThreadForeign
                 && !boundThreadForeign && stringRts == null && rtsDiagnostic == null && rtsArguments == null && sharedCAF == null
                 && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null
-                && !memmove && !memcpy && !memset && processSignal == null ? CorePolyglot.INSTANCE.validate(expr, defined) : null;
+                && !memmove && !memcpy && !memset && processSignal == null ? CorePolyglot.validate(expr, defined) : null;
         if ((packageScalar != null || javascript != null || polyglot != null || runtimeService == RuntimeServiceCall.EXCEPTION_TEXT)
                 && foreignExceptionBridge == null)
             throw RuntimeFault.fault("Foreign execution requires a linked genuine THC.Exception runtime bundle");
@@ -5732,12 +5732,12 @@ public final class BytecodeProgram implements ExecutableProgram {
             });
         }
         if (sharedCAF != null) {
-            CoreSharedCAFStores.INSTANCE.validateHead(fn, defined);
+            CoreSharedCAFStores.validateHead(fn, defined);
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) {
                 var argument = args.get(index);
                 var operand = compile(argument, scope, false);
-                CoreSharedCAFStores.INSTANCE.validateOperand(index, operand.proof(), lexicalProof(argument, scope));
+                CoreSharedCAFStores.validateOperand(index, operand.proof(), lexicalProof(argument, scope));
                 operands.add(operand);
             }
             return tupleExpression(tupleProof, (e, destination) -> {
@@ -5913,12 +5913,12 @@ public final class BytecodeProgram implements ExecutableProgram {
             });
         }
         if (shutdown != null) {
-            CoreRtsShutdown.INSTANCE.validateHead(fn, defined);
+            CoreRtsShutdown.validateHead(fn, defined);
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) {
                 var argument = args.get(index);
                 var operand = compile(argument, scope, false);
-                CoreRtsShutdown.INSTANCE.validateOperand(shutdown, index, operand.proof(), lexicalProof(argument, scope));
+                CoreRtsShutdown.validateOperand(shutdown, index, operand.proof(), lexicalProof(argument, scope));
                 operands.add(operand);
             }
             return tupleExpression(tupleProof, (e, destination) -> {
@@ -6268,7 +6268,7 @@ public final class BytecodeProgram implements ExecutableProgram {
 
     private static List<CoreRepresentation> argumentProofs(List<List<Object>> args) {
         var proofs = new ArrayList<CoreRepresentation>(args.size());
-        for (var arg : args) proofs.add(CoreRepresentations.INSTANCE.expression(arg));
+        for (var arg : args) proofs.add(CoreRepresentations.expression(arg));
         return proofs;
     }
 
@@ -6281,7 +6281,7 @@ public final class BytecodeProgram implements ExecutableProgram {
     private static List<Object> argumentMetadata(List<List<Object>> args) {
         var representations = new ArrayList<Object>(args.size());
         for (var arg : args) {
-            var record = CoreRepresentations.INSTANCE.metadata(arg);
+            var record = CoreRepresentations.metadata(arg);
             representations.add(record == null ? null : record.get("rep"));
         }
         return representations;
@@ -6540,13 +6540,13 @@ public final class BytecodeProgram implements ExecutableProgram {
                 e.builder.beginDataToTag(family); operand.emit(e); e.builder.endDataToTag();
             }, evaluatedProof(tupleProof, true));
         }
-        if (CoreVectors.INSTANCE.getOperations().contains(name)) {
+        if (CoreVectors.operations.contains(name)) {
             var vectorProofs = new ArrayList<CoreRepresentation>(args.size());
-            for (var arg : args) vectorProofs.add(CoreVectors.INSTANCE.argumentProof(arg));
-            CoreVectors.INSTANCE.validate(name, vectorProofs, tupleProof);
-            CoreVectors.INSTANCE.validateFlags(flags);
+            for (var arg : args) vectorProofs.add(CoreVectors.argumentProof(arg));
+            CoreVectors.validate(name, vectorProofs, tupleProof);
+            CoreVectors.validateFlags(flags);
             var operands = compileOperands(args, scope);
-            var shuffle = name.startsWith("shuffle") ? CoreVectors.INSTANCE.shuffleIndices(args.get(2), tupleProof.getVector().getLanes()) : null;
+            var shuffle = name.startsWith("shuffle") ? CoreVectors.shuffleIndices(args.get(2), tupleProof.getVector().getLanes()) : null;
             return vectorPrimitive(name, operands, shuffle);
         }
         if (CoreArithmeticExceptions.payload(name) != null) {
@@ -6565,7 +6565,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             }), evaluatedProof(tupleProof, true));
         }
         if (Set.of("newBCO#", "mkApUpd0#").contains(name)) {
-            GhcBCO.INSTANCE.validate(name, argumentProofs(args), flags, tupleProof);
+            GhcBCO.validate(name, argumentProofs(args), flags, tupleProof);
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
             return tupleExpression(tupleProof, (e, destination) -> {
@@ -6581,7 +6581,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 || delimited && Set.of("annotateStack#", "catch#", "unmaskAsyncExceptions#", "maskAsyncExceptions#", "maskUninterruptible#").contains(name)) {
             var proofs = argumentProofs(args);
             if (Set.of("newPromptTag#", "prompt#", "control0#").contains(name)) DelimitedControl.validate(name, proofs, flags, tupleProof);
-            else if (name.equals("annotateStack#")) StackAnnotations.INSTANCE.validate(proofs, flags, tupleProof);
+            else if (name.equals("annotateStack#")) StackAnnotations.validate(proofs, flags, tupleProof);
             else CoreSynchronousExceptions.validate(name, proofs, flags, tupleProof);
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
@@ -6721,11 +6721,11 @@ public final class BytecodeProgram implements ExecutableProgram {
                 }
             }, evaluatedProof(tupleProof, true));
         }
-        if (CoreThreadScheduling.INSTANCE.named(name)) {
-            CoreThreadScheduling.INSTANCE.validate(name, argumentProofs(args), flags, tupleProof);
+        if (CoreThreadScheduling.named(name)) {
+            CoreThreadScheduling.validate(name, argumentProofs(args), flags, tupleProof);
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
-            CoreThreadScheduling.INSTANCE.validate(name, loweredProofs(operands), flags, tupleProof);
+            CoreThreadScheduling.validate(name, loweredProofs(operands), flags, tupleProof);
             if (name.equals("par#")) return new ProvenExpression(e -> e.builder.emitLoadConstant(1L), evaluatedProof(tupleProof, true));
             if (name.equals("delay#")) return new ProvenExpression(e -> {
                 var b = e.builder;
@@ -6761,10 +6761,10 @@ public final class BytecodeProgram implements ExecutableProgram {
                 b.endBlock();
             });
         }
-        if (CoreThreadObservation.INSTANCE.named(name)) {
-            CoreThreadObservation.INSTANCE.validate(name, argumentProofs(args), flags, tupleProof);
+        if (CoreThreadObservation.named(name)) {
+            CoreThreadObservation.validate(name, argumentProofs(args), flags, tupleProof);
             var state = argument(args.get(0), scope, false);
-            CoreThreadObservation.INSTANCE.validate(name, List.of(state.proof()), flags, tupleProof);
+            CoreThreadObservation.validate(name, List.of(state.proof()), flags, tupleProof);
             return tupleExpression(tupleProof, (e, destination) -> {
                 e.builder.beginObserveThreads(destination.get(0), name.equals("listThreads#")); state.emit(e); e.builder.endObserveThreads();
             });
@@ -6800,7 +6800,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             }, evaluatedProof(tupleProof, true));
         }
         if (name.equals("annotateStack#")) {
-            StackAnnotations.INSTANCE.validate(argumentProofs(args), flags, tupleProof);
+            StackAnnotations.validate(argumentProofs(args), flags, tupleProof);
             var annotation = argument(args.get(0), scope, true);
             var action = argument(args.get(1), scope, true);
             var state = argument(args.get(2), scope, false);
@@ -6816,7 +6816,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             });
         }
         if (name.equals("clearCCS#")) {
-            CoreProfileAction.INSTANCE.validate(argumentProofs(args), flags, tupleProof);
+            CoreProfileAction.validate(argumentProofs(args), flags, tupleProof);
             var state = compile(args.get(1), scope, false);
             var checked = new ProvenExpression(e -> {
                 var b = e.builder;
@@ -6824,8 +6824,8 @@ public final class BytecodeProgram implements ExecutableProgram {
             }, evaluatedProof(state.proof(), true));
             return tupleApplication(new TupleShape(tupleProof, language), argument(args.get(0), scope, true), List.of(checked), scope, tail);
         }
-        if (ClosureInspectOp.Companion.named(name) != null) {
-            var operation = ClosureInspectOp.Companion.named(name);
+        if (ClosureInspectOp.named(name) != null) {
+            var operation = ClosureInspectOp.named(name);
             operation.validate(argumentProofs(args), flags, tupleProof);
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, index == 0));
@@ -6852,9 +6852,9 @@ public final class BytecodeProgram implements ExecutableProgram {
             });
         }
         if (name.equals("labelThread#") || name.equals("threadLabel#")) {
-            CoreGuestThreads.INSTANCE.validate(name, argumentProofs(args), flags, tupleProof);
+            CoreGuestThreads.validate(name, argumentProofs(args), flags, tupleProof);
             var operands = argumentOperands(args, scope);
-            CoreGuestThreads.INSTANCE.validate(name, loweredProofs(operands), flags, tupleProof);
+            CoreGuestThreads.validate(name, loweredProofs(operands), flags, tupleProof);
             if (name.equals("threadLabel#")) return tupleExpression(tupleProof, (e, destination) -> {
                 e.builder.beginThreadLabel(destination.get(0), destination.get(1)); for (var operand : operands) operand.emit(e); e.builder.endThreadLabel();
             });
@@ -6865,16 +6865,16 @@ public final class BytecodeProgram implements ExecutableProgram {
             }, evaluatedProof(tupleProof, true));
         }
         if (name.equals("threadStatus#")) {
-            CoreGuestThreads.INSTANCE.validate(name, argumentProofs(args), flags, tupleProof);
+            CoreGuestThreads.validate(name, argumentProofs(args), flags, tupleProof);
             var operands = argumentOperands(args, scope);
-            CoreGuestThreads.INSTANCE.validate(name, loweredProofs(operands), flags, tupleProof);
+            CoreGuestThreads.validate(name, loweredProofs(operands), flags, tupleProof);
             return tupleExpression(tupleProof, (e, destination) -> {
                 e.builder.beginThreadStatus(destination.get(0), destination.get(1), destination.get(2));
                 for (var operand : operands) operand.emit(e); e.builder.endThreadStatus();
             });
         }
         if (Set.of("fork#", "forkOn#", "myThreadId#", "killThread#").contains(name)) {
-            CoreGuestThreads.INSTANCE.validate(name, argumentProofs(args), flags, tupleProof);
+            CoreGuestThreads.validate(name, argumentProofs(args), flags, tupleProof);
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
             if (name.equals("killThread#")) {
@@ -6928,8 +6928,8 @@ public final class BytecodeProgram implements ExecutableProgram {
                 b.endThreadPrimitive(); b.endStoreLocal();
             });
         }
-        if (STMOp.Companion.named(name) != null) {
-            var operation = STMOp.Companion.named(name);
+        if (STMOp.named(name) != null) {
+            var operation = STMOp.named(name);
             if ((checkpoint != null || containsDelimited) && operation != STMOp.NEW && operation != STMOp.READ_IO)
                 throw new UnsupportedCore("STM transaction frames do not support explicit checkpoint/delimited capture");
             operation.validate(argumentProofs(args), flags, tupleProof);
@@ -7091,7 +7091,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             var proofs = argumentProofs(args);
             operation.validate(proofs, flags, tupleProof);
             operation.validateBindings(proofs, lexicalProofs(args, scope));
-            if (operation == WeakOp.MAKE) operation.validateAction(CoreRepresentations.INSTANCE.knownFunctionSignature(args.get(2), bindings));
+            if (operation == WeakOp.MAKE) operation.validateAction(CoreRepresentations.knownFunctionSignature(args.get(2), bindings));
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
             operation.validate(loweredProofs(operands), flags, tupleProof);
@@ -7253,10 +7253,10 @@ public final class BytecodeProgram implements ExecutableProgram {
             }, evaluatedProof(tupleProof, true));
         }
         if (name.equals("touch#")) {
-            var metadata = CoreRepresentations.INSTANCE.metadata(expr);
+            var metadata = CoreRepresentations.metadata(expr);
             CoreTouch.validateRaw(argumentMetadata(args), flags, metadata == null ? null : metadata.get("rep"));
             var lowered = argument(args.get(0), scope, (Boolean) flags.get(0));
-            var kept = new ProvenExpression(lowered, lowered.proof().refine(evaluatedProof(CoreRepresentations.INSTANCE.expression(args.get(0)), false)));
+            var kept = new ProvenExpression(lowered, lowered.proof().refine(evaluatedProof(CoreRepresentations.expression(args.get(0)), false)));
             var state = compile(args.get(1), scope, false);
             CoreTouch.validate(List.of(kept.proof(), state.proof()), flags, tupleProof);
             return new ProvenExpression(e -> {
@@ -7265,9 +7265,9 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
         if (name.equals("keepAlive#")) {
             var proofs = argumentProofs(args);
-            var signature = args.size() > 2 ? CoreRepresentations.INSTANCE.knownFunctionSignature(args.get(2), bindings) : null;
+            var signature = args.size() > 2 ? CoreRepresentations.knownFunctionSignature(args.get(2), bindings) : null;
             CoreKeepAlive.validate(proofs, flags, tupleProof,
-                signature == null ? null : signature.getFirst(), signature == null ? null : signature.getSecond());
+                signature == null ? null : signature.getInputs(), signature == null ? null : signature.getResult());
             var kept = argument(args.get(0), scope, (Boolean) flags.get(0));
             var state = compile(args.get(1), scope, false);
             var function = argument(args.get(2), scope, true);

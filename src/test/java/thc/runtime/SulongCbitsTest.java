@@ -58,10 +58,10 @@ public class SulongCbitsTest {
         try (var context = Context.newBuilder("thc").allowNativeAccess(true).build()) {
             context.initialize("thc"); context.enter(); SulongCbits cbits;
             try { cbits = Language.currentState().cbits(); } finally { context.leave(); }
-            var backing = new byte[96]; var owner = cbits.buffer(ManagedAddress.fromByteArray(backing)); var pool = Executors.newFixedThreadPool(8);
+            var backing = new byte[96]; var owner = cbits.buffer$org_intelligence_thc(ManagedAddress.fromByteArray(backing), true); var pool = Executors.newFixedThreadPool(8);
             try {
                 var start = new CountDownLatch(1); var calls = new ArrayList<Future<CbitsBuffer>>();
-                for (int i = 0; i < 64; i++) { int index = i; calls.add(pool.submit(() -> { start.await(); return cbits.buffer(ManagedAddress.fromByteArray(backing).plus(index % 4)); })); }
+                for (int i = 0; i < 64; i++) { int index = i; calls.add(pool.submit(() -> { start.await(); return cbits.buffer$org_intelligence_thc(ManagedAddress.fromByteArray(backing).plus(index % 4), true); })); }
                 start.countDown(); for (var call : calls) assertSame(owner, call.get());
             } finally { pool.shutdownNow(); }
         }
@@ -89,9 +89,9 @@ public class SulongCbitsTest {
         try (var context = Context.newBuilder("thc").allowNativeAccess(true).build()) {
             context.initialize("thc"); context.enter();
             try {
-                var cbits = Language.currentState().cbits(); var bytes = new byte[96]; var first = ManagedAddress.fromByteArray(bytes); var owner = cbits.buffer(first);
-                assertSame(owner, cbits.buffer(ManagedAddress.fromByteArray(bytes).plus(4))); assertNotSame(owner, cbits.buffer(ManagedAddress.fromByteArray(bytes.clone())));
-                assertFalse(InteropLibrary.getUncached().isBufferWritable(cbits.buffer(ManagedAddress.fromHex("00"))));
+                var cbits = Language.currentState().cbits(); var bytes = new byte[96]; var first = ManagedAddress.fromByteArray(bytes); var owner = cbits.buffer$org_intelligence_thc(first, true);
+                assertSame(owner, cbits.buffer$org_intelligence_thc(ManagedAddress.fromByteArray(bytes).plus(4), true)); assertNotSame(owner, cbits.buffer$org_intelligence_thc(ManagedAddress.fromByteArray(bytes.clone()), true));
+                assertFalse(InteropLibrary.getUncached().isBufferWritable(cbits.buffer$org_intelligence_thc(ManagedAddress.fromHex("00"), true)));
                 // C at offset zero sees byte storage, not struct members.
                 ManagedMd5.init(first); assertEquals((byte) 0x67, bytes[3]);
             } finally { context.leave(); }

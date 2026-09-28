@@ -13,7 +13,7 @@ public final class VectorFloatUnpack extends Expr {
 
     public VectorFloatUnpack(Expr argument) {
         this.argument = argument;
-        setRepresentation(CoreVectors.INSTANCE.getUnpackedFloat());
+        setRepresentation(CoreVectors.unpackedFloat);
     }
 
     @Override public Object execute(VirtualFrame frame) {

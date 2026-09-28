@@ -224,8 +224,7 @@ class BoxedCasTest {
         val flag = CoreRepresentations.parse(int); val function = CoreRepresentations.parse(closure)
         for (unlifted in listOf(false, true)) {
             val element = if (unlifted) ref else CoreRepresentations.parse(data)
-            val tuple = CoreRepresentation(CoreKind.UNKNOWN, present = true, components = listOf(void, flag, element),
-                primReps = flag.primReps!! + element.primReps!!)
+            val tuple = run { val proofArgument0: CoreKind = CoreKind.UNKNOWN; val proofArgument1: Boolean = true; val proofArgument2: List<CoreRepresentation>? = listOf(void, flag, element); val proofArgument3: List<String>? = flag.primReps!! + element.primReps!!; CoreRepresentation(proofArgument0, false, proofArgument1, proofArgument3, proofArgument2) }
             for (primitive in cases) {
                 val arguments = if (primitive == "casMutVar#") listOf(ref, element, element, void)
                     else listOf(ref, flag, element, element, void)
@@ -239,18 +238,17 @@ class BoxedCasTest {
                 assertThrows(RuntimeFault::class.java) { validate(arguments.dropLast(1), tuple) }
                 assertThrows(RuntimeFault::class.java) { validate(listOf(flag) + arguments.drop(1), tuple) }
                 assertThrows(RuntimeFault::class.java) { validate(arguments.dropLast(1) + flag, tuple) }
-                assertThrows(RuntimeFault::class.java) { validate(arguments, tuple.copy(components = listOf(void, element, flag))) }
+                assertThrows(RuntimeFault::class.java) { validate(arguments, tuple.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, originalProof.primReps, listOf(void, element, flag), originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) }) }
             }
         }
         val lifted = CoreRepresentations.parse(data)
-        val tuple = CoreRepresentation(CoreKind.UNKNOWN, present = true, components = listOf(void, lifted, lifted),
-            primReps = lifted.primReps!! + lifted.primReps)
+        val tuple = run { val proofArgument0: CoreKind = CoreKind.UNKNOWN; val proofArgument1: Boolean = true; val proofArgument2: List<CoreRepresentation>? = listOf(void, lifted, lifted); val proofArgument3: List<String>? = lifted.primReps!! + lifted.primReps; CoreRepresentation(proofArgument0, false, proofArgument1, proofArgument3, proofArgument2) }
         MutVarOp.MODIFY.validate(listOf(ref, function, void), listOf(false, true, false), tuple)
         assertThrows(RuntimeFault::class.java) {
             MutVarOp.MODIFY.validate(listOf(ref, ref, void), listOf(false, false, false), tuple)
         }
         assertThrows(RuntimeFault::class.java) {
-            MutVarOp.MODIFY.validate(listOf(ref, function, void), listOf(false, true, false), tuple.copy(components = listOf(void, lifted)))
+            MutVarOp.MODIFY.validate(listOf(ref, function, void), listOf(false, true, false), tuple.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, originalProof.primReps, listOf(void, lifted), originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) })
         }
     }
 

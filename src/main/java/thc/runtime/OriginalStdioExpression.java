@@ -125,7 +125,7 @@ final class OriginalStdioExpression extends Expr {
             // A safe-call poll resumes after the saved result, never at the effect.
             if (AstControl.enabled(this)) {
                 boolean compiled = CompilerDirectives.inCompiledCode();
-                var request = GuestThreads.Companion.pollCurrent(this, false);
+                var request = GuestThreads.pollCurrent(this, false);
                 if (request != null) {
                     request.compiledCapture = compiled;
                     throw new AstCapture(request, SynchronousMasking.current(this)).append(ResumeCompleted.INSTANCE);

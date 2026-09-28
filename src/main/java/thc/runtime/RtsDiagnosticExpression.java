@@ -25,7 +25,7 @@ final class RtsDiagnosticExpression extends Expr {
         var first = operands.length > 1 ? operands[0].execute(frame) : null;
         var second = operands.length > 2 ? operands[1].executeRequiredAddress(frame) : null;
         TupleResultsKt.requireVoidCarrier(operands[operands.length - 1].execute(frame));
-        RtsDiagnostics.INSTANCE.report(this, operation, first, second);
+        RtsDiagnostics.report(this, operation, first, second);
         return null;
     }
 }

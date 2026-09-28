@@ -79,7 +79,7 @@ public final class NativeFileProvider implements Closeable {
                 var provider = new NativeFileProvider(state.getEnv(), state.getThreads(), filesystem.getDirectoryOwner());
                 state.getFiles().installNative(provider, endpoints);
                 state.setNativeFiles(provider);
-                if (profile == ContextProfile.LAUNCHER) state.getSignals().authorizeLauncher$org_intelligence_thc();
+                if (profile == ContextProfile.LAUNCHER) state.getSignals().authorizeLauncher();
             } finally { context.leave(); }
             return context;
         } catch (Throwable failure) {

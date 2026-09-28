@@ -16,7 +16,7 @@ public class ManagedStackInfoImageTest {
     private Map<String, Object> document(Map<String, Object> fields) { return StackInfoTestLayout.document(fields); }
     private TargetLayout layout() { return layout(Map.of()); }
     private TargetLayout layout(Map<String, ?> changes) { return StackInfoTestLayout.layout(changes); }
-    private final List<Function<TargetLayout, ManagedStackInfoImage>> factories = List.of(ManagedStackInfoImage.Companion::stack, ManagedStackInfoImage.Companion::frame);
+    private final List<Function<TargetLayout, ManagedStackInfoImage>> factories = List.of(ManagedStackInfoImage::stack, ManagedStackInfoImage::frame);
     @Test public void exactStackAndZeroPayloadDiagnosticFrameBytes() {
         var layout = layout();
         for (int i = 0; i < factories.size(); i++) {
@@ -66,10 +66,10 @@ public class ManagedStackInfoImageTest {
         }
     }
     @Test public void missingLayoutAndAlreadyInvalidTypedFieldsFailAtTheCallerBoundary() {
-        assertNull(TargetLayout.Companion.fromReceipts(Map.of(), Map.of()));
-        assertThrows(RuntimeException.class, () -> TargetLayout.Companion.fromDocument(null));
+        assertNull(TargetLayout.fromReceipts(Map.of(), Map.of()));
+        assertThrows(RuntimeException.class, () -> TargetLayout.fromDocument(null));
         for (var missing : List.of("tablesNextToCode", "infoTableTypeBytes", "infoTableTypeOffset")) assertThrows(RuntimeException.class, () -> {
-            var fields = fields(); fields.remove(missing); TargetLayout.Companion.fromDocument(document(fields));
+            var fields = fields(); fields.remove(missing); TargetLayout.fromDocument(document(fields));
         });
         for (var changes : List.of(Map.of("tablesNextToCode", "true"), Map.of("infoTableTypeBytes", 0), Map.of("infoTableTypeOffset", 16),
             Map.of("closureStack", 256), Map.of("closureRetSmall", -1), Map.of("wordBytes", 4), Map.of("endianness", endian.equals("little") ? "big" : "little")))

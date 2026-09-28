@@ -107,8 +107,8 @@ public final class Explicit64PrimopsTest {
                 assertEquals(1, bindings.size());
                 var lambda = (List<Object>) bindings.getFirst().get("expr");
                 assertEquals(((List<String>) entry.get("arguments")).stream().map(List::of).toList(),
-                    ((List<Map<String, Object>>) lambda.get(1)).stream().map(b -> CoreRepresentations.INSTANCE.binder(b).getPrimReps()).toList());
-                assertEquals(List.of(entry.get("result")), CoreRepresentations.INSTANCE.lambdaResult(lambda).getPrimReps());
+                    ((List<Map<String, Object>>) lambda.get(1)).stream().map(b -> CoreRepresentations.binder(b).getPrimReps()).toList());
+                assertEquals(List.of(entry.get("result")), CoreRepresentations.lambdaResult(lambda).getPrimReps());
                 var program = program(language, module, backend);
                 Object value = program.entryValue(name);
                 RootCallTarget host = program.hostEntryTarget(arity);
