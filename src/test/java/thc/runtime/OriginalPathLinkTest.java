@@ -26,7 +26,7 @@ class OriginalPathLinkTest {
     private final File root=new File(System.getProperty("thc.projectRoot"));
     private final String prefix="build/original-path-link";
     private final Map<String,OriginalStdioOp> operations=new LinkedHashMap<>();
-    OriginalPathLinkTest() { operations.put("pathSymlink",OriginalStdioOp.SYMLINK); operations.put("pathReadlink",OriginalStdioOp.READLINK); }
+    OriginalPathLinkTest() { operations.put("pathSymlink",OriginalStdioOp.SYMLINK); operations.put("pathReadlink",OriginalStdioOp.READLINK); operations.put("pathRename",OriginalStdioOp.RENAME); }
     private Map<String,Object> json(String path) throws Exception { return (Map<String,Object>)Json.parse(Files.readString(new File(root,path).toPath())); }
     private Map<String,Object> source(String stage) throws Exception { return json(prefix+"/"+stage+".json"); }
     private Object copy(Object value) { return Json.parse(Json.stringify(value)); }
@@ -45,9 +45,88 @@ class OriginalPathLinkTest {
     private Path rawPath(Path directory,byte[] bytes) { var suffix=new StringBuilder(); for(byte value:bytes) suffix.append(String.format(Locale.ROOT,"%%%02X",value&255)); return Path.of(URI.create(directory.toUri().toASCIIString()+suffix)); }
     private Path rawTarget(byte[] bytes) { boolean rooted=bytes.length>0&&bytes[0]==47; var absolute=rawPath(Path.of("/"),rooted?Arrays.copyOfRange(bytes,1,bytes.length):bytes); return rooted?absolute:absolute.subpath(0,absolute.getNameCount()); }
     private Path setup() throws Exception { var scratch=Files.createTempDirectory(directory,"case-"); Files.writeString(scratch.resolve("target"),"unchanged"); Files.createDirectory(scratch.resolve("sub")); Files.createSymbolicLink(scratch.resolve("existing-link"),Path.of("target")); return scratch; }
+    @Test void genuineRenameMatchesNativeReplacementAndFailureSemantics() throws Exception {
+        var rows = (List<Map<String,Object>>) json(prefix + "/oracle.json").get("renameRows");
+        assertEquals(List.of("new", "replace", "missing", "self", "directory-target"),
+            rows.stream().map(row -> row.get("name")).toList());
+        for (var stage : List.of("pre", "post")) {
+            assertNotNull(validate(original("pathRename", stage)), "Original rename declaration must be implemented");
+            var linked = with(CoreModules.reachable(source(stage), "pathRename"), "instrument", true);
+            for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
+                context.initialize("thc"); context.enter();
+                try {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    var executable = program(language, backend, linked);
+                    var entry = executable.entryTarget("pathRename");
+                    var stdio = Language.currentState().getStdio();
+                    for (boolean compiled : new boolean[]{false, true}) {
+                        if (compiled) { entry.getClass().getMethod("compile", boolean.class).invoke(entry, true); valid(entry); }
+                        for (var row : rows) {
+                            var scratch = setup(); Files.writeString(scratch.resolve("source"), "payload");
+                            var old = (String) row.get("source"); var destination = (String) row.get("destination");
+                            assertEquals(-1L, stdio.close(-1));
+                            long before = ((Number) executable.diagnostics().get("compiledEntries")).longValue();
+                            var status = Calls.target(entry, new Object[]{0L,
+                                path(scratch, old.getBytes(StandardCharsets.UTF_8)),
+                                path(scratch, destination.getBytes(StandardCharsets.UTF_8))});
+                            assertEquals(row.get("status"), status, stage + "/" + backend + "/" + row.get("name"));
+                            assertEquals(row.get("errno"), stdio.errno());
+                            assertEquals(row.get("sourceExists"), Files.exists(scratch.resolve("source")));
+                            var target = scratch.resolve(destination);
+                            assertEquals(row.get("contents"), Files.isRegularFile(target) ? Files.readString(target) : null);
+                            if (compiled) { assertEquals(before + 1, ((Number) executable.diagnostics().get("compiledEntries")).longValue()); valid(entry); }
+                            released(language);
+                        }
+                    }
+                } finally { context.leave(); }
+            }
+        }
+    }
+    @Test void renamePreservesDirectoryIdentityAndRejectsInvalidStateBeforeEffects() throws Exception {
+        for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var entry = program(language, backend, raw(original("pathRename"))).entryTarget("entry");
+                var stdio = Language.currentState().getStdio();
+                var original = setup(); Files.writeString(original.resolve("source"), "payload");
+                assertEquals(0L, stdio.changeDirectory(cstring(original.toString())));
+                var moved = original.resolveSibling(original.getFileName() + "-moved");
+                Files.move(original, moved); Files.createDirectory(original);
+                Files.writeString(original.resolve("source"), "replacement");
+                assertEquals(-1L, stdio.close(-1)); long error = stdio.errno();
+                assertThrows(RuntimeFault.class, () -> Calls.target(entry,
+                    new Object[]{0L, cstring("source"), cstring("target"), 9L}));
+                assertThrows(RuntimeFault.class, () -> Calls.target(entry,
+                    new Object[]{0L, cstring("source"), ManagedAddress.nullAddress(), Unit.INSTANCE}));
+                assertEquals("payload", Files.readString(moved.resolve("source")));
+                assertEquals("unchanged", Files.readString(moved.resolve("target")));
+                assertEquals(error, stdio.errno());
+                assertEquals(0, Calls.target(entry, new Object[]{0L, cstring("source"), cstring("target"), Unit.INSTANCE}));
+                assertEquals("payload", Files.readString(moved.resolve("target")));
+                assertFalse(Files.exists(moved.resolve("source")));
+                assertEquals("replacement", Files.readString(original.resolve("source")));
+                assertFalse(Files.exists(original.resolve("target")));
+                assertEquals(error, stdio.errno()); released(language);
+            } finally { context.leave(); }
+        }
+        for (var backend : List.of("ast", "bytecode")) try (var context = Context.newBuilder("thc").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var entry = program(language, backend, raw(original("pathRename"))).entryTarget("entry");
+                var scratch = setup();
+                assertEquals(-1, Calls.target(entry, new Object[]{0L, cstring(scratch.resolve("target").toString()),
+                    cstring(scratch.resolve("new").toString()), Unit.INSTANCE}));
+                assertEquals(StdioHostAbi.load().error(7), Language.currentState().getStdio().errno());
+                assertEquals("unchanged", Files.readString(scratch.resolve("target")));
+                assertFalse(Files.exists(scratch.resolve("new"))); released(language);
+            } finally { context.leave(); }
+        }
+    }
     @Test void genuineNativeLinksMatchBothBackendsAndFirstInstalledCalls() throws Exception {
         var manifest=json(prefix+"/manifest.json"); assertEquals(new ArrayList<>(operations.keySet()),manifest.get("entries")); assertTrue(CoreOriginalStdio.isOriginalUnixUnit(manifest.get("unixUnit"))); hashes(root,manifest.get("inputHashes"),Set.of("t/fixtures/compiler/OriginalPathLinkAudit.hs","t/haskell-fixtures/OriginalPathLinkFixtures.hs","bin/core_original_foreign.py","bin/core-capabilities.json")); var artifacts=new HashSet<>(Set.of(prefix+"/oracle.json")); for(var stage:List.of("pre","post")) { artifacts.add(prefix+"/"+stage+".json"); for(var name:operations.keySet()) artifacts.add(prefix+"/"+stage+"-"+name+".audit.json"); } hashes(root,manifest.get("artifactHashes"),artifacts,prefix+"/"); var oracle=json(prefix+"/oracle.json"); var symlinkRows=(List<Map<String,Object>>)oracle.get("symlinkRows"); var readlinkRows=(List<Map<String,Object>>)oracle.get("readlinkRows"); var symlinkNames=new ArrayList<Object>(); for(var row:symlinkRows) symlinkNames.add(row.get("name")); var readlinkNames=new ArrayList<Object>(); for(var row:readlinkRows) readlinkNames.add(row.get("name")); assertEquals(List.of("relative","dot-segments","parent-relative","absolute","dangling","raw-target","raw-link","empty-target","empty-path","existing-file","existing-link","missing-parent","not-directory"),symlinkNames); assertEquals(List.of("full","exact","short","one","zero","dangling","raw-target","raw-link","missing","regular","not-directory","empty"),readlinkNames);
-        for(var stage:List.of("pre","post")) for(var operation:operations.entrySet()) { var name=operation.getKey(); var audit=json(prefix+"/"+stage+"-"+name+".audit.json"); assertEquals(true,audit.get("accepted")); assertEquals(List.of(),audit.get("issues")); assertEquals(List.of(),audit.get("missingGlobals")); var linked=with(CoreModules.reachable(source(stage),name),"instrument",true); var evidence=new ArrayCoreEvidence(linked,name); assertEquals(1,evidence.getBindings().size()); assertEquals(1,evidence.guestLambdas(evidence.getRoot().get("expr")).size()); assertEquals(1,evidence.loweredGuestLambdas(evidence.getRoot().get("expr")).size()); assertEquals(operation.getValue(),validate(original(name,stage))); assertEquals(manifest.get("unixUnit"),((Map<?,?>)((Map<?,?>)((Map<?,?>)original(name,stage).get(6)).get("foreignCall")).get("target")).get("unit")); var rows=name.equals("pathSymlink")?symlinkRows:readlinkRows;
+        for(var stage:List.of("pre","post")) for(var operation:operations.entrySet()) { var name=operation.getKey(); var audit=json(prefix+"/"+stage+"-"+name+".audit.json"); assertEquals(true,audit.get("accepted")); assertEquals(List.of(),audit.get("issues")); assertEquals(List.of(),audit.get("missingGlobals")); var linked=with(CoreModules.reachable(source(stage),name),"instrument",true); var evidence=new ArrayCoreEvidence(linked,name); assertEquals(1,evidence.getBindings().size()); assertEquals(1,evidence.guestLambdas(evidence.getRoot().get("expr")).size()); assertEquals(1,evidence.loweredGuestLambdas(evidence.getRoot().get("expr")).size()); assertEquals(operation.getValue(),validate(original(name,stage))); assertEquals(manifest.get("unixUnit"),((Map<?,?>)((Map<?,?>)((Map<?,?>)original(name,stage).get(6)).get("foreignCall")).get("target")).get("unit")); if(name.equals("pathRename")) continue; var rows=name.equals("pathSymlink")?symlinkRows:readlinkRows;
             for(var backend:List.of("ast","bytecode")) try(var context=context()) { context.initialize("thc"); context.enter(); try { var language=TruffleLanguage.LanguageReference.create(Language.class).get(null); var executable=program(language,backend,linked); var entry=executable.entryTarget(name); var stdio=Language.currentState().getStdio();
                 class Exercise { void run(boolean compiled) throws Exception { for(var row:rows) { var scratch=setup(); var pathBytes=bytes(row,"path"); var target=bytes(row,"target"); int capacity=row.get("capacity") instanceof Long n?n.intValue():0; byte[] output=new byte[capacity+16]; Arrays.fill(output,(byte)90); if(name.equals("pathReadlink")) { Files.createSymbolicLink(scratch.resolve("link"),rawTarget(target)); if(Objects.equals(row.get("name"),"raw-link")) Files.createSymbolicLink(rawPath(scratch,pathBytes),rawTarget(target)); } assertEquals(-1L,stdio.close(-1)); long before=((Number)executable.diagnostics().get("compiledEntries")).longValue(); if(compiled) valid(entry); var actual=name.equals("pathSymlink")?Calls.target(entry,new Object[]{0L,address(target),path(scratch,pathBytes)}):Calls.target(entry,new Object[]{0L,path(scratch,pathBytes),ManagedAddress.fromByteArray(output).plus(8),(long)capacity}); assertEquals(row.get("status"),actual,stage+"/"+backend+"/"+name+"/"+row.get("name")); assertEquals(row.get("errno"),stdio.errno()); if(compiled) { assertEquals(before+1,((Number)executable.diagnostics().get("compiledEntries")).longValue()); valid(entry); }
                     if(name.equals("pathSymlink")) { var link=pathBytes.length==0?null:rawPath(scratch,pathBytes); var observed=link!=null&&Files.isSymbolicLink(link)?Files.readSymbolicLink(link):null; var expected=row.get("linkTarget") instanceof List<?>?rawTarget(bytes(row,"linkTarget")):null; assertEquals(expected,observed); } else { assertEquals(row.get("bufferHex"),hex(output)); long count=(Long)actual; if(count>=0) { assertEquals(Math.min((long)target.length,(long)capacity),count); assertArrayEquals(Arrays.copyOfRange(target,0,(int)count),Arrays.copyOfRange(output,8,8+(int)count)); for(int i=8+(int)count;i<output.length;i++) assertEquals((byte)90,output[i]); } else for(byte value:output) assertEquals((byte)90,value); } assertEquals("unchanged",Files.readString(scratch.resolve("target"))); released(language);

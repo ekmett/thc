@@ -213,15 +213,15 @@ public final class NativeFileProvider implements Closeable {
             return result("unlink", anchor.getLease(), name);
         }
     }
-    /** Only the link pathname is anchored; target bytes remain data. */
-    public synchronized long symlinkRaw(byte[] target, byte[] path) {
+    /** Rename anchors both paths; symlink anchors only the link, leaving target bytes as data. */
+    public synchronized long pathPairRaw(OriginalStdioOp operation, byte[] target, byte[] path) {
         requireCurrent(); if (disposed) throw propagate(new ClosedChannelException());
         try (var anchor = directory.borrow(); var scope = new NativeLimbScope()) {
             var targetName = scope.allocate((target.length + 7L) & -8L);
             targetName.copyFrom(target, 0, target.length);
             var name = scope.allocate((path.length + 7L) & -8L);
             name.copyFrom(path, 0, path.length);
-            return result("symlink", anchor.getLease(), targetName, name);
+            return result(operation == OriginalStdioOp.RENAME ? "rename" : "symlink", anchor.getLease(), targetName, name);
         }
     }
     public synchronized byte[] readlinkRaw(byte[] path, int capacity) {

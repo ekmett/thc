@@ -6857,7 +6857,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             b.beginOriginalDirectoryRelease(result, originalStdio);
             else if (originalStdio == OriginalStdioOp.CHDIR) b.beginOriginalChdir(result);
             else if (originalStdio == OriginalStdioOp.GETCWD) b.beginOriginalGetcwd(result);
-            else if (originalStdio == OriginalStdioOp.SYMLINK) b.beginOriginalSymlink(result);
+            else if (originalStdio.getPathPair()) b.beginOriginalPathPair(originalStdio, result);
             else if (originalStdio == OriginalStdioOp.READLINK) b.beginOriginalReadlink(result);
             else if (originalStdio == OriginalStdioOp.ACCESS) b.beginOriginalPathAccess(result);
             else if (originalStdio == OriginalStdioOp.UNLINKAT) b.beginOriginalUnlinkAt(result);
@@ -6922,7 +6922,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             b.endOriginalDirectoryRelease();
             else if (originalStdio == OriginalStdioOp.CHDIR) b.endOriginalChdir();
             else if (originalStdio == OriginalStdioOp.GETCWD) b.endOriginalGetcwd();
-            else if (originalStdio == OriginalStdioOp.SYMLINK) b.endOriginalSymlink();
+            else if (originalStdio.getPathPair()) b.endOriginalPathPair();
             else if (originalStdio == OriginalStdioOp.READLINK) b.endOriginalReadlink();
             else if (originalStdio == OriginalStdioOp.ACCESS) b.endOriginalPathAccess();
             else if (originalStdio == OriginalStdioOp.UNLINKAT) b.endOriginalUnlinkAt();

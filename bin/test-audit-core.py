@@ -3809,7 +3809,7 @@ class OriginalPathnameDeclarationTest(unittest.TestCase):
         address = dict(kind='address', primReps=['AddrRep'], evaluated=False)
         state = dict(kind='void', primReps=[], evaluated=False)
         capacity = dict(kind='long', primReps=['Word64Rep'], evaluated=False)
-        args = {'symlink': [address, address, state], 'readlink': [address, address, capacity, state],
+        args = {'symlink': [address, address, state], 'rename': [address, address, state], 'readlink': [address, address, capacity, state],
                 'rmdir': [address, state], 'chdir': [address, state], 'getcwd': [address, capacity, state]}[symbol]
         output = dict(address, evaluated=True) if symbol == 'getcwd' else dict(kind='long', primReps=['Int32Rep'], evaluated=True)
         return dict(schema=1, target=dict(kind='static', symbol=symbol, isFunction=True,
@@ -3819,7 +3819,7 @@ class OriginalPathnameDeclarationTest(unittest.TestCase):
 
     def test_exact_original_pathname_signatures_and_result(self):
         fixture = LibdwUnavailableAuditTest()
-        for symbol in ('symlink', 'readlink', 'chdir', 'getcwd', 'rmdir'):
+        for symbol in ('symlink', 'rename', 'readlink', 'chdir', 'getcwd', 'rmdir'):
             declaration = self.declaration(symbol)
             report = fixture.audit(fixture.fixture(declaration))
             self.assertTrue(report['accepted'], report)
@@ -3847,7 +3847,7 @@ class OriginalPathnameDeclarationTest(unittest.TestCase):
 
     def test_stored_and_lowered_pathname_operands_cannot_be_relabelled(self):
         fixture = LibdwUnavailableAuditTest()
-        for symbol in ('symlink', 'readlink', 'chdir', 'getcwd', 'rmdir'):
+        for symbol in ('symlink', 'rename', 'readlink', 'chdir', 'getcwd', 'rmdir'):
             declaration = self.declaration(symbol)
             for index in range(declaration['arity']):
                 module = fixture.fixture(declaration)
