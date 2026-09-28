@@ -186,16 +186,18 @@ public final class PackageScalarLinks {
             for (var signature : selectedAbi) admitted.add(signature.entry());
             return new PackageScalarAdmission(link, admitted);
         }
-        boolean addressProof = module.get("staticForeignImports") instanceof Map<?,?> m && version(m.get("schema"), 2);
-        var proof = record(module.get("staticForeignImports"), "schema scope execution profile unit module status wordBits expectedForeign imports expectedCalls" + (addressProof ? " addresses" : ""));
+        boolean wrapperProof = module.get("staticForeignImports") instanceof Map<?,?> m && version(m.get("schema"), 3);
+        boolean addressProof = wrapperProof || module.get("staticForeignImports") instanceof Map<?,?> m && version(m.get("schema"), 2);
+        var proof = record(module.get("staticForeignImports"), "schema scope execution profile unit module status wordBits expectedForeign imports expectedCalls" + (addressProof ? " addresses" : "") + (wrapperProof ? " wrappers" : ""));
         if (nativeLink && module.containsKey("staticForeignImportStubs")) check(Objects.equals(module.get("staticForeignImportStubs"), proof), "retained CAPI import provenance differs");
         check((version(proof.get("schema"), 1) || addressProof) && Objects.equals(proof.get("scope"), "retained-static-import-products") && Objects.equals(proof.get("execution"), "not-linked") && Objects.equals(proof.get("profile"), "ghc-9.14.1-thc-only-static-c-imports-v1") && Objects.equals(proof.get("unit"), unit) && Objects.equals(proof.get("module"), module.get("module")) && Objects.equals(proof.get("status"), "verified") && version(proof.get("wordBits"), 64), "typed import profile/owner");
+        var wrappers = ManagedCallbackMetadata.read(module, proof);
         var product = record(proof.get("expectedForeign"), "schema execution stubs files");
         check(version(product.get("schema"), 1) && Objects.equals(product.get("execution"), "not-linked") && Objects.equals(product.get("files"), List.of()), "foreign product");
         if (nativeLink && module.containsKey("foreign")) check(product.equals(module.get("foreign")), "retained C stubs differ");
         if (product.get("stubs") != null) {
             var stubs = record(product.get("stubs"), "header source initializers finalizers");
-            check(Objects.equals(stubs.get("header"), "") && (nativeLink ? stubs.get("source") instanceof String : Objects.equals(stubs.get("source"), "")) && Objects.equals(stubs.get("initializers"), List.of()) && Objects.equals(stubs.get("finalizers"), List.of()), "nonempty foreign products");
+            check((Objects.equals(stubs.get("header"), "") || nativeLink && !wrappers.isEmpty() && stubs.get("header") instanceof String) && (nativeLink ? stubs.get("source") instanceof String : Objects.equals(stubs.get("source"), "")) && Objects.equals(stubs.get("initializers"), List.of()) && Objects.equals(stubs.get("finalizers"), List.of()), "nonempty foreign products");
             check(!nativeLink || module.containsKey("foreign") || Objects.equals(stubs.get("source"), ""), "missing retained C stubs");
         }
         var imports = list(proof.get("imports")); check(nativeLink || !imports.isEmpty(), "empty import inventory");

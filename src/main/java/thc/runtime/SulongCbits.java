@@ -150,7 +150,7 @@ public final class SulongCbits {
         var function = symbol.equals("free") ? ownedFree :
             symbol.equals("libdwPoolRelease") || symbol.equals("backtraceFree") ? await(finalizerTask).get(symbol) :
             Language.currentState(null).getPackageCbits().finalizer(symbol);
-        if (function == null) throw fault("Unsupported original C function label: " + symbol);
+        if (function == null) return Language.currentState(null).getPackageCbits().dataAddress(null, symbol);
         return ManagedAddress.fromCFinalizer(function);
     }
     public void invokeFinalizer(CFinalizerFunction function, ManagedAddress address) {

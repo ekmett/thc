@@ -14,7 +14,7 @@ import static thc.runtime.RuntimeFault.fault;
 public final class CorePackageScalarForeign {
     private CorePackageScalarForeign() {}
     private static void check(boolean value, String detail) { if (!value) throw fault("Invalid package scalar call: " + detail); }
-    private static boolean number(Object value, int wanted) { return Integer.valueOf(wanted).equals(value) || Long.valueOf(wanted).equals(value); }
+    static boolean number(Object value, int wanted) { return Integer.valueOf(wanted).equals(value) || Long.valueOf(wanted).equals(value); }
     private static CoreKind kind(String rep) {
         if (rep == null) return CoreKind.VOID;
         return switch (rep) {
@@ -26,12 +26,12 @@ public final class CorePackageScalarForeign {
         if (rep == null) return List.of();
         return List.of(rep.equals("ByteArray#") || rep.equals("MutableByteArray#") ? "BoxedRep (Just Unlifted)" : rep);
     }
-    private static boolean scalar(Object value, String rep, boolean declared) {
+    static boolean scalar(Object value, String rep, boolean declared) {
         return value instanceof Map<?, ?> raw && raw.keySet().equals(Set.of("kind", "primReps", "evaluated"))
             && kind(rep).name().toLowerCase(Locale.ROOT).equals(raw.get("kind")) && primReps(rep).equals(raw.get("primReps"))
             && raw.get("evaluated") instanceof Boolean && (!declared || Boolean.FALSE.equals(raw.get("evaluated")));
     }
-    private static boolean result(Object value, String rep, boolean declared) {
+    static boolean result(Object value, String rep, boolean declared) {
         if (!(value instanceof Map<?, ?> raw) || !(raw.get("components") instanceof List<?> fields)) return false;
         boolean empty = rep.equals("void");
         if (!raw.keySet().equals(Set.of("kind", "primReps", "evaluated", "aggregate", "components"))
@@ -45,6 +45,8 @@ public final class CorePackageScalarForeign {
     public static PackageScalarCall validate(Object metadata, List<?> arguments, List<?> flags, Object output, List<PackageScalarLink> links) {
         if (!(metadata instanceof Map<?, ?> meta) || !(meta.get("foreignCall") instanceof Map<?, ?> descriptor)
             || !(descriptor.get("target") instanceof Map<?, ?> target)) return null;
+        var dynamic = CoreDynamicForeign.validate(meta, descriptor, target, arguments, flags, output);
+        if (dynamic != null) return dynamic;
         PackageScalarLink link = null;
         for (var candidate : links) if (Objects.equals(candidate.getUnit(), target.get("unit"))) {
             if (link != null) return null;

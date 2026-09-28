@@ -45,6 +45,7 @@ public final class Language extends TruffleLanguage<Language.State> {
         private final Map<ConstructorLayoutKey, DataLayout> constructorLayouts = new HashMap<>();
         private final JavaScriptImports javaScriptImports;
         private final PackageScalarLibraries packageCbits;
+        private final NativeCallbacks nativeCallbacks;
         private final CarrierLocal<MaskingState> maskingState;
         private final CarrierLocal<StackAnnotationState> stackAnnotations;
         private final GuestThreads threads;
@@ -97,6 +98,7 @@ public final class Language extends TruffleLanguage<Language.State> {
             handoffLayouts = new HandoffLayouts(language);
             javaScriptImports = new JavaScriptImports();
             packageCbits = new PackageScalarLibraries(env);
+            nativeCallbacks = new NativeCallbacks(this);
             maskingState = new CarrierLocal<>(MaskingState.UNMASKED);
             stackAnnotations = new CarrierLocal<>(StackAnnotationState.EMPTY);
             threads = new GuestThreads(env, maskingState, env.getOptions().get(THREAD_HOSTING));
@@ -156,6 +158,7 @@ public final class Language extends TruffleLanguage<Language.State> {
         }
         public JavaScriptImports getJavaScriptImports() { return javaScriptImports; }
         public PackageScalarLibraries getPackageCbits() { return packageCbits; }
+        public NativeCallbacks getNativeCallbacks() { return nativeCallbacks; }
         public CarrierLocal<MaskingState> getMaskingState() { return maskingState; }
         public CarrierLocal<StackAnnotationState> getStackAnnotations() { return stackAnnotations; }
         public GuestThreads getThreads() { return threads; }
@@ -267,6 +270,7 @@ public final class Language extends TruffleLanguage<Language.State> {
         context.compactImages.close();
         context.heapAddresses.close();
         context.managedExports.close();
+        context.nativeCallbacks.close();
         context.packageCbits.close();
         context.foreignRoots.close();
         context.savedTermios.close();

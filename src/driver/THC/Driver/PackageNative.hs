@@ -233,7 +233,7 @@ nativeImports unit value = do
   case member value "staticForeignImports" of
     Nothing -> Right []
     Just proof -> do
-      require (member proof "schema" `elem` map (Just . toJSON) ([1,2]::[Int]) && member proof "unit" == Just (toJSON unit) &&
+      require (member proof "schema" `elem` map (Just . toJSON) ([1,2,3]::[Int]) && member proof "unit" == Just (toJSON unit) &&
         member proof "module" == member value "module" && member proof "scope" == Just "retained-static-import-products" &&
         member proof "execution" == Just "not-linked" && member proof "profile" == Just "ghc-9.14.1-thc-only-static-c-imports-v1")
         "package native imports lack typed provenance identity"
@@ -246,7 +246,8 @@ nativeImports unit value = do
         pure []
       else do
         requireKeys proof (["schema","scope","execution","profile","unit","module","status","wordBits","expectedForeign","expectedCalls","imports"] ++
-          ["addresses" | member proof "schema" == Just (toJSON (2::Int))])
+          ["addresses" | member proof "schema" `elem` map (Just . toJSON) ([2,3]::[Int])] ++
+          ["wrappers" | member proof "schema" == Just (toJSON (3::Int))])
         require (member proof "status" == Just "verified" && member proof "wordBits" == Just (toJSON (64::Int)))
           "package native imports lack verified typed provenance"
         expected <- field proof "expectedForeign"
@@ -267,9 +268,10 @@ nativeImports unit value = do
 -- IO-unit profile is eligible for a C finalizer adapter.
 nativeAddresses :: String -> Value -> Either String [Value]
 nativeAddresses unit value = case member value "staticForeignImports" of
-  Just proof | member proof "schema" == Just (toJSON (2::Int)), member proof "status" == Just "verified" -> do
+  Just proof | member proof "schema" `elem` map (Just . toJSON) ([2,3]::[Int]), member proof "status" == Just "verified" -> do
     addresses <- field proof "addresses"
-    require (not (null addresses) && length addresses == length (nub addresses)) "empty or duplicate native address inventory"
+    require ((not (null addresses) || member proof "schema" == Just (toJSON (3::Int))) &&
+      length addresses == length (nub addresses)) "empty or duplicate native address inventory"
     require (length addresses == length (nub (map (`member` "binder") addresses))) "duplicate native address binder"
     forM_ addresses $ \entry -> do
       requireKeys entry ["binder","header","symbol","isFunction","convention","declaredType","normalizedType","normalizationRole","callback"]
@@ -543,7 +545,10 @@ capturePackageNative repository helper libdir compiler arguments unit directory 
       (object ["unit" .= unit,"archiveOnly" .= True])
     unless (null signatures && null addresses) $ do
       perModule <- mapM (either fail pure . nativeSignatures unit . (:[])) retained
-      sources <- mapM (\(value,signatures') -> if null signatures' then pure "" else stubSource value)
+      -- Ordinary ccall adapters never consume GHC's C stubs. In particular a
+      -- wrapper's RTS callback helper belongs to the managed NFI bridge, not LLVM.
+      sources <- mapM (\(value,signatures') -> if any (\(_,convention,_,_,_) -> convention == "capi") signatures'
+          then stubSource value else pure "")
         (zip retained perModule)
       let nativeDirectory = directory </> "native"
       imports <- concat <$> mapM (either fail pure . nativeImports unit) retained

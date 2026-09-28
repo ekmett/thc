@@ -47,6 +47,7 @@ public final class CoreModules {
         private final Map<ModuleKey,ForeignBitcode> foreignLinks = new LinkedHashMap<>();
         private final Map<String,PackageScalarLink> packageScalarLinks = new LinkedHashMap<>();
         private final Map<String,Set<String>> packageScalarProofs = new LinkedHashMap<>();
+        private final Map<String,ManagedCallbackSignature> nativeCallbacks = new LinkedHashMap<>();
         private final Map<String,String> archiveBindings = new LinkedHashMap<>();
         private final Map<String,Map<String,Object>> exceptionBridges = new LinkedHashMap<>();
         private String exceptionBridgeUnit;
@@ -85,6 +86,9 @@ public final class CoreModules {
             var link = prepared == null ? CoreForeignArtifacts.linked(module) : prepared.getForeignLink();
             boolean archiveOnly = Objects.equals(module.get("schema"), 2L) || Objects.equals(module.get("schema"), 2), managedExport = admission != null;
             boolean managedImports = prepared == null ? packageLink == null && ManagedImportAdmission.read(module) != null : prepared.getImports() != null;
+            if (module.get("staticForeignImportStubs") instanceof Map<?,?> callbackProof)
+                for (var callback : ManagedCallbackMetadata.read(module, callbackProof))
+                    require(nativeCallbacks.putIfAbsent(callback.signature().symbol(), callback) == null, "Duplicate native callback helper");
             if (archiveOnly && link == null && packageLink == null && !managedExport && !managedImports && CoreForeignArtifacts.hasRegistrationObligations(module)) CoreForeignArtifacts.requireExecutable(module);
             if (link != null) require(foreignLinks.putIfAbsent(new ModuleKey(link.unit(), link.module()), link) == null, "Duplicate linked foreign module: " + link.unit() + ":" + link.module());
             require(Objects.equals(module.get("ghc"), "9.14.1"), "This adapter requires GHC 9.14.1 exports");
@@ -136,6 +140,7 @@ public final class CoreModules {
             result.put("bindings", new ArrayList<>(bindings.values())); result.put("constructors", new ArrayList<>(constructors.values())); result.put("bindingOrigins", bindingOrigins);
             result.put("foreignExceptionBridges", new ArrayList<>(exceptionBridges.values())); result.put("foreignExceptionBridgeUnit", exceptionBridgeUnit);
             result.put("archiveBindings", archiveBindings); result.put("managedRegistrations", new ArrayList<>(admissions)); result.put("foreignLinks", new ArrayList<>(foreignLinks.values()));
+            result.put("nativeCallbacks", Map.copyOf(nativeCallbacks));
             result.put("packageScalarLinks", new ArrayList<>(packageScalarLinks.values())); result.put("sourceFiles", new ArrayList<>(sourceFiles.values())); result.put("sourceSpans", new ArrayList<>(sourceSpans.values())); return result;
         }
     }

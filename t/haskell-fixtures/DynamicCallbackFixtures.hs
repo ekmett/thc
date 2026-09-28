@@ -1,0 +1,89 @@
+-- SPDX-FileCopyrightText: 2026 Edward Kmett
+-- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+{-# LANGUAGE OverloadedStrings #-}
+
+-- | Original wrapper/dynamic imports through the existing native package producer.
+module DynamicCallbackFixtures (prepareDynamicCallbacks) where
+
+import Control.Monad (forM_, unless)
+import Data.Aeson (Value, object, (.=))
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as BSC
+import FixtureSupport
+import InstalledCoreFixtures (field, readJson)
+import System.Directory
+import System.Environment (lookupEnv)
+import System.FilePath
+import THC.Driver.PackageNative
+
+prepareDynamicCallbacks :: FilePath -> IO ()
+prepareDynamicCallbacks root = do
+  let relative = "build/dynamic-callback"
+      output = root </> relative
+      objects = output </> "objects"
+      native = output </> "native-oracle"
+      pieces = output </> "pieces"
+      sources = ["t/fixtures/compiler/DynamicCallback.hs", "t/fixtures/compiler/DynamicCallbackNative.hs",
+        "t/fixtures/compiler/dynamic-callback.c"]
+      execute = runLogged 180 root (relative </> "logs")
+  forM_ [objects,native,output </> "core"] (createDirectoryIfMissing True)
+  support <- lookupEnv "THC_PACKAGE_NATIVE_SUPPORT" >>= maybe
+    (fail "Set THC_PACKAGE_NATIVE_SUPPORT to a genuine GHC/exception-runtime manifest") canonicalizePath
+  copyFile support (output </> "runtime-support.json")
+  ghc <- maybe "ghc" id <$> lookupEnv "GHC"
+  cabal <- maybe "cabal" id <$> lookupEnv "CABAL"
+  built <- execute "helper-build" [] cabal ["build","--offline","-j2","lib:thc","exe:thc-interface","exe:thc-compact"]
+  located <- execute "helper-location" [] cabal ["list-bin","--offline","exe:thc-interface"]
+  let helper = line (commandStdout located)
+  compactLocation <- execute "compact-location" [] cabal ["list-bin","--offline","exe:thc-compact"]
+  pluginRecord <- execute "plugin-registry" [] "python3" ["bin/plugin.py","--root",root,"--registry-only"]
+  BS.writeFile (output </> "plugin.json") (commandStdout pluginRecord)
+  plugin <- readJson (output </> "plugin.json")
+  pluginDb <- field plugin "packageDb"
+  pluginUnit <- field plugin "unitId"
+  compiled <- execute "original-export" [] ghc
+    ["-c","-O2","-dynamic","-fforce-recomp","-dcore-lint","-this-unit-id","callback-fixture",
+     "-fwrite-if-simplified-core","-package-db",pluginDb,"-plugin-package-id",pluginUnit,"-fplugin=THC.Plugin",
+     "-fplugin-opt=THC.Plugin:" ++ output </> "core","-fplugin-opt=THC.Plugin:post-tidy",
+     "-fplugin-opt=THC.Plugin:unit-qualified","-fplugin-opt=THC.Plugin:foreign-import-provenance",
+     "-odir",objects,"-hidir",objects,"-stubdir",objects,head sources]
+  libdirResult <- execute "libdir" [] ghc ["--print-libdir"]
+  let libdir = line (commandStdout libdirResult)
+  hydrated <- execute "original-interface" [] helper ["--libdir",libdir,"--unit","callback-fixture",
+    "--module","DynamicCallback","--interface",objects </> "DynamicCallback.hi","--way","dynamic",
+    "--home-interfaces",objects]
+  BS.writeFile (output </> "interface-response.json") (commandStdout hydrated)
+  response <- readJson (output </> "interface-response.json")
+  original <- field response "core" :: IO Value
+  writeJson (output </> "core/DynamicCallback.json") original
+  let cArguments = ["-c","-O2",last sources,"-o",objects </> "callback.o"]
+  cCompiled <- execute "native-component" [] ghc cArguments
+  captureNativeObject pieces ghc cArguments
+  capturePackageNative root helper libdir ghc ["-dynamic","-odir",objects] "callback-fixture" output
+  retained <- BS.readFile (output </> "core/DynamicCallback.json")
+  linked <- finishPackageNative pieces output "callback-fixture" (Just [objects </> "callback.o"]) [("DynamicCallback.json",retained)]
+  forM_ linked $ \(name,bytes) -> BS.writeFile (output </> name) bytes
+  oracleBuilt <- execute "native-build" [] ghc
+    ["--make","-O2","-fforce-recomp","-dcore-lint","-i","-it/fixtures/compiler",
+     "-odir",native,"-hidir",native,"-stubdir",native,sources !! 1,last sources,"-o",native </> "oracle"]
+  oracle <- execute "native-oracle" [] (native </> "oracle") []
+  unless (commandStdout oracle == "(12,13,2,24)\n(16,1,4)\n" && BS.null (commandStderr oracle))
+    (fail "Original callback oracle differs")
+  BS.writeFile (output </> "oracle.txt") (commandStdout oracle)
+  audited <- execute "strict-audit" [] "python3"
+    (["bin/audit-core.py","--package-manifest",output </> "runtime-support.json",
+      "--output",output </> "audit.json"] ++ concatMap (\name -> ["--entry","callback-fixture:DynamicCallback." ++ name])
+      ["run","makePointer","callPointer","unsafePointer","releasePointer"] ++ [output </> "DynamicCallback.json"])
+  encoded <- execute "compact-encode" [] (line (commandStdout compactLocation))
+    ["encode",output </> "DynamicCallback.json",output </> "DynamicCallback.cbd"]
+  inputHashes <- hashes root (sources ++ ["t/haskell-fixtures/DynamicCallbackFixtures.hs",
+    "src/compiler/THC/ForeignImportProvenance.hs","src/compiler/THC/Plugin.hs",
+    "src/driver/THC/Driver/PackageNative.hs","bin/audit-core.py","bin/core_package_manifest.py"])
+  artifactHashes <- hashes root [relative </> name | name <-
+    ["DynamicCallback.json","DynamicCallback.cbd","runtime-support.json","interface-response.json","oracle.txt","audit.json"]]
+  writeJson (output </> "manifest.json") $ object ["schema" .= (1 :: Int),"inputHashes" .= inputHashes,
+    "artifactHashes" .= artifactHashes,"commands" .= map commandRecord
+      [built,located,compactLocation,pluginRecord,compiled,libdirResult,hydrated,cCompiled,oracleBuilt,oracle,audited,encoded]]
+  putStrLn "dynamic-callback: original scalar/address callbacks, retained native pointer and native GHC oracle"
+  where
+    line bytes = case BSC.lines bytes of [value] -> BSC.unpack value; _ -> error "Expected one selected tool path"

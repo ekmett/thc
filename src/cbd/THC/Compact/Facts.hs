@@ -114,7 +114,7 @@ data ImportAssociation = ImportAssociation !QualifiedName !(Presence BS.ByteStri
   !BS.ByteString !(Presence BS.ByteString) !Bool !Convention !Safety !ForeignType !ForeignType
   !BS.ByteString !EmittedCall deriving (Eq, Show)
 data ImportStatus = ImportsUnclassified !BS.ByteString | ImportsRejected !BS.ByteString
-  | ImportsVerified !Word64 !ForeignArtifacts ![ImportAssociation] ![ForeignCall] ![AddressAssociation]
+  | ImportsVerified !Word64 !ForeignArtifacts ![ImportAssociation] ![ForeignCall] ![AddressAssociation] ![WrapperAssociation]
   deriving (Eq, Show)
 data AddressAssociation = AddressAssociation !QualifiedName !(Presence BS.ByteString)
   !BS.ByteString !Bool !Convention !ForeignType !ForeignType !BS.ByteString
@@ -125,6 +125,7 @@ data ExportEffect = PureExport | IOExport deriving (Eq, Ord, Enum, Bounded, Show
 data ExportAssociation = ExportAssociation !QualifiedName !BS.ByteString !Convention
   !ForeignType !ForeignType !BS.ByteString ![ForeignType] !ForeignType !ExportEffect
   deriving (Eq, Show)
+data WrapperAssociation = WrapperAssociation !ExportAssociation !BS.ByteString deriving (Eq, Show)
 data Exports = Exports !Word64 !BS.ByteString !BS.ByteString !BS.ByteString
   !BS.ByteString !BS.ByteString ![ExportAssociation] deriving (Eq, Show)
 data RegistrationStatus = RegistrationUnclassified !BS.ByteString | RegistrationRejected !BS.ByteString

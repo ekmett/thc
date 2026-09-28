@@ -50,6 +50,7 @@ public final class BytecodeProgram implements ExecutableProgram {
     private final RubbishLiterals rubbishLiterals;
     private final List<thc.ForeignBitcode> foreignLinks;
     private final List<thc.PackageScalarLink> packageScalarLinks;
+    private final Map<String,thc.ManagedCallbackSignature> nativeCallbacks;
     private final boolean delimited;
     private final boolean containsDelimited;
     private final boolean resumable;
@@ -102,6 +103,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             ? (List<thc.ForeignBitcode>) value : List.of();
         packageScalarLinks = moduleData.get("packageScalarLinks") instanceof List<?> value
             ? (List<thc.PackageScalarLink>) value : List.of();
+        nativeCallbacks = moduleData.get("nativeCallbacks") instanceof Map<?,?> value ? (Map<String,thc.ManagedCallbackSignature>) value : Map.of();
         boolean containsDelimited = false;
         if (moduleData.get("bindings") instanceof List<?> values) {
             for (Object binding : values) {
@@ -1442,7 +1444,9 @@ public final class BytecodeProgram implements ExecutableProgram {
                 if (!"0".equals(value)) throw new UnsupportedCore("Malformed null Addr# literal");
                 yield ManagedAddress.nullAddress();
             }
-            case "function-addr" -> CFinalizerLabels.fromCore(value, proof);
+            case "function-addr" -> nativeCallbacks.containsKey(value)
+                ? Language.currentState(null).getNativeCallbacks().helper(nativeCallbacks.get(value), this, language)
+                : CFinalizerLabels.fromCore(value, proof);
             case "data-addr" -> CoreDataLabels.fromCore(value, proof,
                 stackTargetLayout instanceof TargetLayout layout ? layout : null);
             case "bignat" -> BigNatLiterals.decode(value);
@@ -5937,7 +5941,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 }
             };
         }
-        if ((packageScalar != null || javascript != null || polyglot != null || runtimeService == RuntimeServiceCall.EXCEPTION_TEXT)
+        if ((packageScalar != null && packageScalar.executesForeign() || javascript != null || polyglot != null || runtimeService == RuntimeServiceCall.EXCEPTION_TEXT)
                 && foreignExceptionBridge == null)
             throw RuntimeFault.fault("Foreign execution requires a linked genuine THC.Exception runtime bundle");
         if (runtimeService != null) {

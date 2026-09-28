@@ -587,8 +587,8 @@ Focused tests execute the same C source through Sulong and an actual host-native
 shared library, including context and lifetime controls. This does not implement
 GHC's C `hs_deref_stable_ptr`/closure ABI or callbacks into guest Haskell.
 
-This slice does not support full GHC safe-FFI semantics, interruptible calls, general retained buffers,
-callbacks, foreign exports, initialization/finalization or arbitrary extra
+The buffer-transport slice does not implement full GHC safe-FFI semantics,
+interruptible calls, general retained buffers, foreign exports, initialization/finalization or arbitrary extra
 native libraries. Within one call, aliases share their allocation transport and
 a small C bridge produces Sulong's allocation-relative pointer, preserving C
 pointer equality, distances, and backward access from an interior address.
@@ -598,6 +598,26 @@ permitted writable alias permits writes to that shared storage, while genuinely
 immutable allocations remain read-only. The original Hashable XXH3 end-to-end
 fixture remains integration work; focused C buffer tests alone are not evidence
 that Hashable or Pandoc runs.
+
+### Dynamic imports and native wrappers
+
+Scalar/address `foreign import ccall "dynamic"` calls use the original FCall
+argument/result representations as their NFI signature. A function-address
+getter does not guess the eventual invocation ABI. Original `"wrapper"`
+declarations retain their normalized callback type and exact emitted
+`createAdjustor` helper/type-string association in import-proof schema 3,
+including compact Core. The runtime uses public NFI `createClosure`, not GHC
+RTS heap objects or generated C callback bodies.
+
+Each context strongly retains the NFI closure and its guest StablePtr until
+`freeHaskellFunPtr` or context disposal. Checked pointers reject foreign-context
+and freed use; raw native bits do not extend a callback's lifetime. Safe calls
+reenter through the existing guest-thread protocol and start unmasked; unsafe
+reentry is rejected. Callback entry while managed pointer cells await native
+writeback is rejected before guest execution. This does not introduce general
+cross-thread callbacks, aggregate callback ABIs, or retained moving buffers.
+The `dynamic-callback` fixture producer and `nativeCallbacksDefault` /
+`nativeCallbacksDense` tasks exercise original Haskell declarations and C calls.
 
 ## Why compiling the stubs through Sulong is insufficient
 

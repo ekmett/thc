@@ -64,11 +64,12 @@ public final class PackageFinalizers {
     }
 
     static Set<String> declarations(Map<?, ?> module, Map<?, ?> proof) {
-        if (!version(proof.get("schema"), 2)) return Set.of();
+        boolean wrappers = version(proof.get("schema"), 3);
+        if (!version(proof.get("schema"), 2) && !wrappers) return Set.of();
         require("verified".equals(proof.get("status")), "verified address inventory");
         require(proof.get("addresses") instanceof List<?>, "address inventory");
         List<?> addresses = (List<?>) proof.get("addresses");
-        require(!addresses.isEmpty(), "empty address inventory");
+        require(wrappers || !addresses.isEmpty(), "empty address inventory");
         Set<Object> binders = new HashSet<>();
         Set<String> eligible = new LinkedHashSet<>();
         for (Object raw : addresses) {

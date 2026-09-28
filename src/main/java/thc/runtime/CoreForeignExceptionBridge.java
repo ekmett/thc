@@ -90,7 +90,8 @@ public final class CoreForeignExceptionBridge {
         if (metadata == null) return false;
         if (!(metadata.get("foreignCall") instanceof Map<?, ?> call)) return false;
         if (!(call.get("target") instanceof Map<?, ?> target)) return false;
-        if (!(target.get("symbol") instanceof String symbol)) return false;
+        String symbol = target.get("symbol") instanceof String value ? value : "dynamic".equals(target.get("kind")) ? "<dynamic>" : null;
+        if (symbol == null) return false;
         var runtime = CoreRuntimeServices.validate(expr, defined);
         if (runtime != null) return runtime == RuntimeServiceCall.EXCEPTION_TEXT;
         if (CoreCpuAffinity.validate(expr, defined) != null) return false;
@@ -105,7 +106,7 @@ public final class CoreForeignExceptionBridge {
         var scalar = CorePackageScalarForeign.validate(metadata, proofs, flags, metadata.get("rep"), links);
         if (scalar != null) {
             CoreBoundThreadForeign.validateHead((List<?>) expr.get(1), defined);
-            return true;
+            return scalar.executesForeign();
         }
         if (CoreJavaScript.validate((List<Object>) expr, defined) != null) return true;
         for (var operation : PolyglotOp.values()) {

@@ -107,6 +107,27 @@ class PackageFinalizerProvenanceTest(ManagedImportTypeTest):
     def test_typed_pointer_callback_is_inert_until_native_link_proves_it(self):
         self.assertTrue(core_package_manifest.managed_import_stubs(self.finalizer()))
 
+    def test_wrapper_abi_projects_its_exact_normalized_callback_type(self):
+        scalar = self.named('GHC.Internal.Int', 'Int32')
+        callback = dict(kind='function', multiplicity=self.tycon('Many'), argument=scalar,
+            result=self.named('GHC.Internal.Types', 'IO', scalar))
+        wrapper = dict(kind='function', multiplicity=self.tycon('Many'), argument=callback,
+            result=self.named('GHC.Internal.Types', 'IO', self.named('GHC.Internal.Ptr', 'FunPtr', callback)))
+        original = self.module()
+        proof = original['staticForeignImportStubs']
+        proof.update(schema=3, addresses=[], wrappers=[dict(
+            binder=dict(unit='fixture', module='Imports', occurrence='wrap', namespace='value'),
+            helper='actual_helper', convention='ccall', declaredType=wrapper, normalizedType=wrapper,
+            normalizationRole='representational', arguments=[scalar], result=scalar, effect='io', typeString='W')])
+        self.assertTrue(core_package_manifest.managed_import_stubs(original))
+        for field, value in [('arguments', []), ('result', self.named('GHC.Internal.Types', 'Int')),
+                             ('effect', 'pure'), ('helper', 'bad label'), ('typeString', ''),
+                             ('binder', dict(unit='other', module='Imports', occurrence='wrap', namespace='value'))]:
+            changed = json.loads(json.dumps(original))
+            changed['staticForeignImportStubs']['wrappers'][0][field] = value
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                core_package_manifest.managed_import_stubs(changed)
+
     def test_parallel_import_proof_cannot_hide_invalid_selected_stub_addresses(self):
         for parallel in (self.module()['staticForeignImportStubs'], self.finalizer()['staticForeignImportStubs']):
             valid = self.finalizer()

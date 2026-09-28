@@ -373,10 +373,16 @@ importProof (ImportProof schema scope execution profile unit moduleName status) 
    "unit" .= str unit,"module" .= str moduleName] ++ case status of
     ImportsUnclassified reason -> ["status" .= String "unclassified","reason" .= str reason]
     ImportsRejected reason -> ["status" .= String "rejected","reason" .= str reason]
-    ImportsVerified wordBits original associations calls addresses -> ["status" .= String "verified","wordBits" .= wordBits,
+    ImportsVerified wordBits original associations calls addresses wrappers -> ["status" .= String "verified","wordBits" .= wordBits,
       "expectedForeign" .= foreignArtifacts original,"imports" .= arr association associations,"expectedCalls" .= arr foreignCall calls] ++
-      ["addresses" .= arr address addresses | schema == 2]
+      ["addresses" .= arr address addresses | schema >= 2] ++ ["wrappers" .= arr wrapper wrappers | schema == 3]
   where
+    wrapper (WrapperAssociation (ExportAssociation binderName helper convention declared normalized role arguments result effect) encoding) = object
+      ["binder" .= qualifiedName binderName,"helper" .= str helper,
+       "convention" .= tagName ["ccall","capi","stdcall","prim","javascript"] convention,
+       "declaredType" .= foreignType declared,"normalizedType" .= foreignType normalized,"normalizationRole" .= str role,
+       "arguments" .= arr foreignType arguments,"result" .= foreignType result,"effect" .= tagName ["pure","io"] effect,
+       "typeString" .= str encoding]
     address (AddressAssociation binderName header symbol function convention declared normalized role callback) = object $
       ["binder" .= qualifiedName binderName,"symbol" .= str symbol,"isFunction" .= function,
        "convention" .= tagName ["ccall","capi","stdcall","prim","javascript"] convention,

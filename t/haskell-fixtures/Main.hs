@@ -106,6 +106,7 @@ import OriginalOpenFixtures (prepareOriginalOpen)
 import PackageScalarFixtures (preparePackageScalar)
 import PackageNativeOriginalsFixtures (preparePackageNativeOriginals)
 import PackageNativeArchiveFixtures (preparePackageNativeArchives)
+import DynamicCallbackFixtures (prepareDynamicCallbacks)
 import GetEntropyFixtures (prepareGetEntropy)
 import LibyamlNativeFixtures (prepareLibyamlNative)
 import WcwidthFixtures (prepareWcwidth)
@@ -1029,6 +1030,7 @@ main = do
     ["package-native-originals"] -> preparePackageNativeOriginals root
     ["libyaml-native"] -> prepareLibyamlNative root
     ["package-native-archives"] -> preparePackageNativeArchives root
+    ["dynamic-callback"] -> prepareDynamicCallbacks root
     ["getentropy"] -> prepareGetEntropy root
     ["wcwidth"] -> prepareWcwidth root
     ["text-cbits"] -> prepareTextCbits root

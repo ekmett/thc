@@ -36,6 +36,7 @@ public final class Program implements ExecutableProgram {
     private final RubbishLiterals rubbishLiterals;
     private final List<thc.ForeignBitcode> foreignLinks;
     private final List<thc.PackageScalarLink> packageScalarLinks;
+    private final Map<String,thc.ManagedCallbackSignature> nativeCallbacks;
     private final Object stackTargetLayout;
     private final boolean callDemandsEnabled = Boolean.getBoolean(CALL_DEMANDS_PROPERTY);
     private final Metrics metrics;
@@ -97,6 +98,7 @@ public final class Program implements ExecutableProgram {
         rubbishLiterals = new RubbishLiterals(language);
         foreignLinks = moduleData.get("foreignLinks") instanceof List<?> found ? (List<thc.ForeignBitcode>) found : List.of();
         packageScalarLinks = moduleData.get("packageScalarLinks") instanceof List<?> found ? (List<thc.PackageScalarLink>) found : List.of();
+        nativeCallbacks = moduleData.get("nativeCallbacks") instanceof Map<?,?> found ? (Map<String,thc.ManagedCallbackSignature>) found : Map.of();
         stackTargetLayout = moduleData.get("targetLayout");
         metrics = demand != null ? demand.getMetrics() : new Metrics(!Boolean.FALSE.equals(moduleData.get("instrument")));
         loadingStatistics = moduleData.get("coreLoadingStatistics") instanceof Supplier<?> found ? (Supplier<Map<String, Object>>) found : null;
@@ -207,7 +209,7 @@ public final class Program implements ExecutableProgram {
     public static PreparedCode prepareCode(TruffleLanguage<?> language, Map<String, Object> module, List<String> entries) {
         if (language != LANGUAGES.get(null)) throw new UnsupportedCore("Reusable AST preparation requires the current language");
         if (module.containsKey("demandBindings") || !absentOrEmpty(module.get("foreignLinks")) || !absentOrEmpty(module.get("packageScalarLinks")) ||
-                module.get("selectedForeignExceptionBridge") != null)
+                !absentOrEmpty(module.get("nativeCallbacks")) || module.get("selectedForeignExceptionBridge") != null)
             throw new UnsupportedCore("Reusable AST admission currently requires a foreign-free, non-demand-loaded module");
         // Validate with the real module descriptors, retaining only storage
         // metadata for constructors actually reached during selected lowering.
@@ -916,7 +918,9 @@ public final class Program implements ExecutableProgram {
                 if (!value.equals("0")) throw new UnsupportedCore("Malformed null Addr# literal");
                 yield ManagedAddress.nullAddress();
             }
-            case "function-addr" -> CFinalizerLabels.fromCore(value, proof);
+            case "function-addr" -> nativeCallbacks.containsKey(value)
+                ? thc.Language.currentState(null).getNativeCallbacks().helper(nativeCallbacks.get(value), this, (thc.Language) language)
+                : CFinalizerLabels.fromCore(value, proof);
             case "data-addr" -> CoreDataLabels.fromCore(value, proof, stackTargetLayout instanceof TargetLayout target ? target : null);
             case "bignat" -> BigNatLiterals.decode(value);
             default -> throw new UnsupportedCore("Unsupported literal kind " + kind);
@@ -1664,7 +1668,7 @@ public final class Program implements ExecutableProgram {
             deferredUnsupported.add(unavailable.getMessage());
             return new UnsupportedForeignCall(unavailable.getMessage(), metrics);
         }
-        if ((packageScalar != null || javascript != null || polyglot != null || runtimeService == RuntimeServiceCall.EXCEPTION_TEXT) &&
+        if ((packageScalar != null && packageScalar.executesForeign() || javascript != null || polyglot != null || runtimeService == RuntimeServiceCall.EXCEPTION_TEXT) &&
             foreignExceptionBridge == null) throw fault("Foreign execution requires a linked genuine THC.Exception runtime bundle");
         if (runtimeService != null) {
             Expr[] operands = new Expr[args.size()];

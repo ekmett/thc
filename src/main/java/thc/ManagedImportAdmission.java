@@ -83,9 +83,10 @@ public final class ManagedImportAdmission {
         requireProof(!module.containsKey("foreignLink"), "ambiguous native/managed link");
         requireProof(raw instanceof Map<?,?>, "proof record");
         Object status = ((Map<?,?>) raw).get("status");
-        boolean addresses = PackageFinalizers.version(((Map<?,?>) raw).get("schema"), 2);
+        boolean wrappers = PackageFinalizers.version(((Map<?,?>) raw).get("schema"), 3);
+        boolean addresses = wrappers || PackageFinalizers.version(((Map<?,?>) raw).get("schema"), 2);
         var proof = record(raw, "schema scope execution profile unit module status" +
-                (Objects.equals(status, "verified") ? " wordBits expectedForeign imports expectedCalls" + (addresses ? " addresses" : "") : " reason"));
+                (Objects.equals(status, "verified") ? " wordBits expectedForeign imports expectedCalls" + (addresses ? " addresses" : "") + (wrappers ? " wrappers" : "") : " reason"));
         requireProof((version(proof.get("schema"), 1) || addresses) && Objects.equals(proof.get("scope"), "retained-static-import-products") &&
                 Objects.equals(proof.get("execution"), "not-linked") && Objects.equals(proof.get("profile"), "ghc-9.14.1-thc-only-static-c-imports-v1") &&
                 Objects.equals(proof.get("unit"), module.get("unit")) && Objects.equals(proof.get("module"), module.get("module")) && Objects.equals(module.get("ghc"), "9.14.1"),
@@ -96,15 +97,16 @@ public final class ManagedImportAdmission {
         }
         requireProof(version(proof.get("wordBits"), 64), "word width");
         PackageFinalizers.declarations(module, proof); // Validate the selected inventory; this grants no callback execution.
+        var callbacks = ManagedCallbackMetadata.read(module, proof);
         requireProof(Objects.equals(proof.get("expectedForeign"), module.get("foreign")), "retained foreign product differs");
         var foreign = record(module.get("foreign"), "schema execution stubs files");
         requireProof(version(foreign.get("schema"), 1) && Objects.equals(foreign.get("execution"), "not-linked"), "foreign schema/execution");
         var stubs = record(foreign.get("stubs"), "header source initializers finalizers");
-        requireProof(Objects.equals(stubs.get("header"), "") && Objects.equals(stubs.get("initializers"), List.of()) &&
+        requireProof((Objects.equals(stubs.get("header"), "") || !callbacks.isEmpty() && stubs.get("header") instanceof String) && Objects.equals(stubs.get("initializers"), List.of()) &&
                 Objects.equals(stubs.get("finalizers"), List.of()) && Objects.equals(foreign.get("files"), List.of()), "unclassified native obligations");
         text(stubs.get("source"));
         if (!(proof.get("imports") instanceof List<?> imports)) throw new IllegalArgumentException("Missing typed static imports");
-        requireProof(!imports.isEmpty(), "empty import inventory");
+        requireProof(!imports.isEmpty() || !callbacks.isEmpty(), "empty import inventory");
         var binders = new HashSet<Map<?,?>>();
         var generated = new LinkedHashMap<Target,Map<String,Object>>();
         for (Object entry : imports) {
@@ -130,7 +132,13 @@ public final class ManagedImportAdmission {
             if (Objects.equals(item.get("convention"), "ccall")) requireProof(Objects.equals(emitted.get("symbol"), item.get("symbol")), "direct C symbol changed");
             else requireProof(generated.put(new Target(emitted.get("unit"), emitted.get("symbol")), descriptor(emitted)) == null, "duplicate generated CAPI target");
         }
-        requireProof(!generated.isEmpty(), "no generated CAPI products");
+        if (!callbacks.isEmpty()) {
+            var adjustor = new LinkedHashMap<String,Object>();
+            adjustor.put("symbol", "createAdjustor"); adjustor.put("unit", null); adjustor.put("convention", "ccall"); adjustor.put("safety", "unsafe");
+            adjustor.put("arguments", List.of("AddrRep", "AddrRep", "AddrRep", "void")); adjustor.put("result", List.of("void", "AddrRep"));
+            generated.put(new Target(null, "createAdjustor"), descriptor(adjustor));
+        }
+        requireProof(!generated.isEmpty(), "no generated CAPI or callback products");
         var actual = calls(module.get("bindings")); CoreCallInventory.check(proof.get("expectedCalls"), actual, completeBindings);
         var admission = new ManagedImportAdmission(module, generated); admission.validateCalls(actual); return admission;
     }

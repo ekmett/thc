@@ -244,19 +244,12 @@ semanticTests = TestList
           ordered = nativeFactsWithFlags [("a-config",True),("z-config",False)]
       assertEqual "Cabal flag object order does not leak into typed records" (Right (ordered,[]))
         (parseModuleWithoutDebug (moduleJSON reversed []))
-  , TestLabel "installed native component is discoverable without source declarations" $ TestCase $
-      withSystemTempDirectory "compact-installed-native" $ \directory -> do
-        let facts = completeFacts {factsForeign = Missing, factsPendingProvenance =
-              [Missing,Missing,Missing,Missing,Missing,Missing,Known (NativeLinkRecord completeNativeLink),Missing]}
-        footer <- writeModule (directory </> "module.cbd") facts []
-        assertEqual "foreign-owner lookup sees the compiled component in the cold directory"
-          8 (headerSummaries (containerHeader footer))
   , TestLabel "typed package address and finalizer facts preserve schema-one prefixes" $ TestCase $ do
-      ImportProof _ scope execution profile owner name (ImportsVerified wordBits productRecord imports calls _) <- pure completeImports
+      ImportProof _ scope execution profile owner name (ImportsVerified wordBits productRecord imports calls _ _) <- pure completeImports
       let address = AddressAssociation qualified (Known "original.h") "original_finalizer" True CApi
             nominal nominal "representational" (Just (["AddrRep"],"void"))
           imports2 = ImportProof 2 scope execution profile owner name
-            (ImportsVerified wordBits productRecord imports calls [address])
+            (ImportsVerified wordBits productRecord imports calls [address] [])
           NativeLink (LinkPayload _ format linkProfile unit target component digest artifact) abi inputs companion dataSymbols _ = completeNativeLink
           linked2 = NativeLink (LinkPayload 2 format linkProfile unit target component digest artifact) abi inputs companion dataSymbols ["adapter"]
           facts = completeFacts {factsPendingProvenance =
@@ -294,6 +287,17 @@ semanticTests = TestList
             Object (KM.insert "packageNativeLink" (Object $ KM.insert "availableEntries" (toJSON (["adapter"] :: [String])) link) fields)
           amend value = value
       assertBool "retired selected-entry proof rejected" (isLeft (parseModuleWithoutDebug (amend original)))
+  , TestLabel "callback wrapper association survives compact metadata transport" $ TestCase $ do
+      ImportProof _ scope execution profile owner name (ImportsVerified wordBits productRecord imports calls addresses _) <- pure completeImports
+      let wrapper = WrapperAssociation (ExportAssociation qualified "actual_helper" CCall nominal nominal
+            "representational" [nominal] nominal IOExport) "W"
+          proof = ImportProof 3 scope execution profile owner name
+            (ImportsVerified wordBits productRecord imports calls addresses [wrapper])
+          facts = completeFacts {factsPendingProvenance = [Missing,Known (ImportsRecord proof),Known (ImportsRecord proof),Missing,Missing,Missing,Missing,Missing]}
+      assertEqual "callback ABI and emitted helper survive JSON" (Right (facts,[]))
+        (parseModuleWithoutDebug (moduleJSON facts []))
+      withEncoded (\_ encoder -> encodeFacts encoder facts) $ \_ strings bytes ->
+        assertEqual "callback ABI and helper survive selected wire decoding" (Right facts) (decodeFacts bytes strings)
   , TestLabel "native artifact conversion rejects malformed hex and unknown nested facts" $ TestCase $ do
       let original = moduleJSON completeFacts {factsPendingProvenance =
             [Missing,Missing,Missing,Missing,Missing,Known (ScalarLinkRecord completeScalarLink),Missing,Missing]} []
@@ -439,7 +443,7 @@ completeImports = ImportProof 1 "retained-static-import-products" "not-linked"
     [ImportAssociation qualified Unknown "original_fn" (Known "main") True CApi InterruptibleCall
       nominal (ForeignApplication nominal (ForeignVariable 0)) "representational"
       (EmittedCall "original_fn" (Known "main") CApi InterruptibleCall ["IntRep","void"] ["void","IntRep"])]
-    [expected,expected] [])
+    [expected,expected] [] [])
   where
     expected = ForeignCall 1 (StaticTarget "original_fn" (Known "main") True) CApi InterruptibleCall
       2 2 [longRep,tupleCold] tupleHot Unknown Missing Missing

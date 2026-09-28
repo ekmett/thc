@@ -954,6 +954,24 @@ tasks.register("packageScalarFullCoreTest", Test) {
         }
     }
 }
+[["nativeCallbacksDefault", false], ["nativeCallbacksDense", true]].each { taskName, dense ->
+    tasks.register(taskName, Test) {
+        group = "verification"
+        description = "Checks original dynamic/wrapper imports and native callback ownership."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        systemProperty("thc.handoffSlabs", dense.toString())
+        inputs.files(fileTree("build/dynamic-callback") { include("*.json", "*.cbd", "*.txt") })
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.NativeCallbacksTest") }
+        outputs.upToDateWhen { false }
+        doFirst {
+            checkBuild(file("build/dynamic-callback/manifest.json").isFile()) {
+                "Run cabal run exe:thc-fixtures -- dynamic-callback with genuine THC_PACKAGE_NATIVE_SUPPORT"
+            }
+        }
+    }
+}
 [["packageNativeOriginalsDefault", false],[ "packageNativeOriginalsDense", true]].each { taskName, dense ->
     tasks.register(taskName, Test) {
         group = "verification"

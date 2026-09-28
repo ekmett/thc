@@ -652,6 +652,7 @@ class Audit:
         self.linked_foreign = _InputRecords(store, 'linked-foreign', compound=True) if store is not None else {}
         self.package_scalar_links = _InputRecords(store, 'package-links') if store is not None else {}
         self.package_scalar_proofs = _ProofSets(store) if store is not None else {}
+        self.native_callback_helpers = set()
         self.archive_bindings = _InputRecords(store, 'archive-bindings') if store is not None else {}
         self.retained_exports = _EventList(store, 'retained-exports') if store is not None else []
         self.exception_bridges = _InputRecords(store, 'exception-bridges') if store is not None else {}
@@ -740,6 +741,14 @@ class Audit:
             self.issue('module-format', None, source, str(error))
         linked = (type(module.get('schema')) is int and module['schema'] == 2 and
                   'foreignLink' in module and core_package_manifest.linked_foreign(module))
+        if scalar_link or managed_imports:
+            callback_proof = module.get('staticForeignImportStubs', module.get('staticForeignImports', {}))
+            if callback_proof.get('schema') == 3:
+                for wrapper in callback_proof['wrappers']:
+                    helper = wrapper['helper']
+                    if helper in self.native_callback_helpers:
+                        self.issue('module-format', None, source, 'Duplicate native callback helper ' + helper)
+                    self.native_callback_helpers.add(helper)
         archive = core_package_manifest.foreign_execution_issue(module) if native_archive or (not linked and not scalar_link and not retained and not managed_imports) else None
         if archive:
             try:
@@ -975,10 +984,11 @@ class Audit:
             return
         if kind == 'rubbish' and (not isinstance(value, str) or value not in RUBBISH_KINDS):
             self.issue('invalid-literal-value', owner, path, 'Unsupported rubbish representation')
-        if kind == 'function-addr' and value not in self.cap.get('functionLabels', []):
+        if kind == 'function-addr' and value not in self.cap.get('functionLabels', []) and value not in self.native_callback_helpers:
             selected = [(unit, entry['entry']) for unit, link in self.package_scalar_links.items()
-                for entry in link['abi'] if entry['symbol'] == value and entry['entry'] in link.get('finalizers', []) and
-                    entry['entry'] in self.package_scalar_proofs[unit]]
+                for entry in link['abi'] if entry['symbol'] == value and
+                    (entry['entry'] in link.get('dataSymbols', []) or
+                     entry['entry'] in link.get('finalizers', []) and entry['entry'] in self.package_scalar_proofs[unit])]
             if len(selected) != 1:
                 self.issue('unsupported-literal', owner, path, f'uncertified or ambiguous C function label {value}')
         if kind == 'data-addr' and value not in self.cap.get('dataLabels', []):
@@ -1391,6 +1401,51 @@ class Audit:
 
         target = call.get('target') if isinstance(call, dict) else None
         symbol = target.get('symbol') if isinstance(target, dict) else None
+        dynamic = isinstance(target, dict) and target.get('kind') == 'dynamic'
+        callback_runtime = isinstance(target, dict) and (
+            symbol == 'createAdjustor' and target.get('unit') is None or
+            symbol == 'freeHaskellFunctionPtr' and target.get('unit') == 'ghc-internal')
+        if dynamic or callback_runtime:
+            try:
+                require = core_original_foreign.require
+                core_original_foreign.validate_head(function, function[1] in bound or function[1] in self.bindings)
+                require(isinstance(call, dict) and set(call) == core_original_foreign.DESCRIPTOR_KEYS and
+                    type(call['schema']) is int and call['schema'] == 1 and call['convention'] == 'ccall' and
+                    call['safety'] in ('safe', 'unsafe'), 'dynamic synchronous C ABI')
+                require(target == {'kind': 'dynamic'} if dynamic else set(target) == {'kind', 'symbol', 'unit', 'isFunction'} and
+                    target['kind'] == 'static' and target['isFunction'] is True, 'dynamic/runtime target')
+                declared = call['argumentReps']
+                require(isinstance(declared, list) and len(declared) >= 2, 'dynamic argument inventory')
+                primitives = {'IntRep', 'WordRep', 'Int8Rep', 'Word8Rep', 'Int16Rep', 'Word16Rep',
+                    'Int32Rep', 'Word32Rep', 'Int64Rep', 'Word64Rep', 'FloatRep', 'DoubleRep', 'AddrRep'}
+                reps = []
+                for proof in declared[:-1]:
+                    require(isinstance(proof, dict) and isinstance(proof.get('primReps'), list) and
+                        len(proof['primReps']) == 1 and proof['primReps'][0] in primitives, 'dynamic scalar argument')
+                    reps.append(proof['primReps'][0])
+                wanted = reps + [None]
+                require(reps[0] == 'AddrRep' and len(arguments) == len(wanted) and expr[3] == [False] * len(wanted) and
+                    all(type(call[k]) is int and call[k] == len(wanted) for k in ('arity', 'suppliedArity')),
+                    'dynamic function pointer/arity')
+                for i, (actual, proof, rep) in enumerate(zip(arguments, declared, wanted)):
+                    require(core_original_foreign.scalar(proof, rep, True) and core_original_foreign.scalar(
+                        core_original_foreign.raw_rep(actual), rep), 'dynamic operand ABI')
+                    self.original_stack_operand(actual, rep, bound, i)
+                parts = call['resultRep'].get('components')
+                require(isinstance(parts, list) and len(parts) in (1, 2), 'dynamic State/result tuple')
+                result = None if len(parts) == 1 else parts[1]['primReps'][0]
+                require(result is None or result in primitives, 'dynamic scalar result')
+                outputs = (None,) if result is None else (None, result)
+                require(core_original_foreign.result(call['resultRep'], outputs, True) and
+                    core_original_foreign.result(core_original_foreign.raw_rep(expr), outputs), 'dynamic result ABI')
+                if callback_runtime:
+                    require(call['safety'] == 'unsafe' and (reps == ['AddrRep'] * 3 and result == 'AddrRep'
+                        if symbol == 'createAdjustor' else reps == ['AddrRep'] and result is None), 'callback runtime ABI')
+                self.foreign_calls.append(dict(symbol='<dynamic>' if dynamic else symbol, owner=owner, path=path))
+                if dynamic: self.require_exception_bridge(owner, path)
+            except (ValueError, KeyError, TypeError, IndexError) as error:
+                self.issue('foreign-call', owner, path, str(error))
+            return True
         runtime_arguments = self.cap.get('runtimeServiceCalls', {}).get(symbol) if isinstance(symbol, str) else None
         if runtime_arguments is not None:
             try:

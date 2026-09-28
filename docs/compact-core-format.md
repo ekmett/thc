@@ -344,6 +344,12 @@ one-pointer IO-unit callback profile requires the actual normalized `FunPtr
 (Ptr a -> IO ())` identity and a checked native component; the address record
 alone does not grant executable authority.
 
+Import proof schema 3 retains the schema-2 address list and then appends
+`list(WrapperAssociation)`. Each wrapper is the `ExportAssociation` layout
+below, with its symbol field naming the emitted helper, followed by
+`str typeString`. It preserves the declared callback ABI and the actual
+`createAdjustor` helper/encoding association; it does not link GHC's RTS stub.
+
 `Exports` is `u schema, str producer, str scope, str execution, str unit,
 str module, list(ExportAssociation)`. `ExportAssociation` is `QualifiedName
 binder, str symbol, Convention, ForeignType declaredType, ForeignType

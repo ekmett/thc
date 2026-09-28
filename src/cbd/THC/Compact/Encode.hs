@@ -306,14 +306,26 @@ importProof encoder (ImportProof schema scope execution profile unit moduleName 
   case status of
     ImportsUnclassified reason -> tag encoder 0 >> string encoder reason
     ImportsRejected reason -> tag encoder 1 >> string encoder reason
-    ImportsVerified wordBits original associations calls addresses -> do
+    ImportsVerified wordBits original associations calls addresses wrappers -> do
       tag encoder 2
       number encoder wordBits
       foreignArtifacts encoder original
       list encoder association associations
       list encoder (foreignCallWith encoder (inlineRep encoder)) calls
-      when (schema == 2) (list encoder address addresses)
+      when (schema >= 2) (list encoder address addresses)
+      when (schema == 3) (list encoder wrapper wrappers)
   where
+    wrapper (WrapperAssociation (ExportAssociation binderName helper convention declared normalized role arguments result effect) encoding) = do
+      qualifiedName encoder binderName
+      string encoder helper
+      enumeration encoder convention
+      foreignType encoder declared
+      foreignType encoder normalized
+      string encoder role
+      list encoder (foreignType encoder) arguments
+      foreignType encoder result
+      enumeration encoder effect
+      string encoder encoding
     address (AddressAssociation binderName header symbol function convention declared normalized role callback) = do
       qualifiedName encoder binderName
       present encoder (string encoder) header

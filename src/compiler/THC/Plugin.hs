@@ -1063,7 +1063,7 @@ importProvenanceFields owner annotations original core = do
   pure $ case verdict of
     Nothing -> []
     Just value ->
-      let schema = case value of ImportProvenance.Verified _ (_:_) -> 2; _ -> 1
+      let schema = case value of ImportProvenance.VerifiedWrappers {} -> 3; ImportProvenance.Verified _ (_:_) -> 2; _ -> 1
           record = O (("schema",num (schema::Int)) : common ++ details value)
           associations = case value of
             ImportProvenance.Verified [] [] -> []
@@ -1082,6 +1082,9 @@ importProvenanceFields owner annotations original core = do
     details (ImportProvenance.Verified imports addresses) = [("status",S "verified"),("wordBits",num (64::Int)),
       ("expectedForeign",foreignArtifactRecord original),("imports",A (map imported imports)),
       ("expectedCalls",A (calls core))] ++ [("addresses",A (map address addresses)) | not (null addresses)]
+    details (ImportProvenance.VerifiedWrappers imports addresses wrappers) =
+      details (ImportProvenance.Verified imports []) ++
+      [("addresses",A (map address addresses)),("wrappers",A (map wrapper wrappers))]
     calls (O fields) = [value | (key,value) <- fields, key == "foreignCall"] ++ concatMap (calls . snd) fields
     calls (A values) = concatMap calls values
     calls _ = []
@@ -1102,6 +1105,11 @@ importProvenanceFields owner annotations original core = do
        ("isFunction",B function),("convention",S conv),("declaredType",ty declared),
        ("normalizedType",ty normalized),("normalizationRole",S "representational"),
        ("callback",maybe Z (\(arguments,result) -> O [("arguments",A (map S arguments)),("result",S result)]) callback)]
+    wrapper (ImportProvenance.Wrapper binder helper conv declared normalized arguments result io encoding) = O
+      [("binder",identity binder),("helper",S helper),("convention",S conv),
+       ("declaredType",ty declared),("normalizedType",ty normalized),("normalizationRole",S "representational"),
+       ("arguments",A (map ty arguments)),("result",ty result),("effect",S (if io then "io" else "pure")),
+       ("typeString",S encoding)]
     call (ImportProvenance.Call symbol unit conv safe arguments result) = O
       [("symbol",S symbol),("unit",maybe Z S unit),("convention",S conv),("safety",S safe),
        ("arguments",A (map S arguments)),("result",A (map S result))]

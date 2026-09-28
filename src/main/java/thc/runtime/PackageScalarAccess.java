@@ -72,7 +72,8 @@ public final class PackageScalarAccess extends Node {
         return entry;
     }
     @TruffleBoundary private PackageScalarFunction initialize(Language.State owner) {
-        var resolved = owner.getPackageCbits().resolve(call.getLink(), call.getSignature());
+        var resolved = call.getKind() != PackageScalarCall.Kind.STATIC ? owner.getNativeCallbacks().function(call)
+            : owner.getPackageCbits().resolve(call.getLink(), call.getSignature());
         synchronized (this) {
             if (cached == null) { CompilerDirectives.transferToInterpreterAndInvalidate(); cached = resolved; }
             return cached;
@@ -98,6 +99,11 @@ public final class PackageScalarAccess extends Node {
         return function();
     }
     private Object invoke(PackageScalarFunction entry, Object[] arguments) {
+        if (call.getKind() == PackageScalarCall.Kind.CREATE_CALLBACK)
+            return entry.getOwner().getNativeCallbacks().create((ManagedAddress) arguments[0], (ManagedAddress) arguments[1], (ManagedAddress) arguments[2]);
+        if (call.getKind() == PackageScalarCall.Kind.FREE_CALLBACK) {
+            entry.getOwner().getNativeCallbacks().free((ManagedAddress) arguments[0]); return null;
+        }
         var threads = entry.getOwner().getThreads();
         var previous = threads.enterForeign(call.getSafety());
         try {
@@ -201,8 +207,11 @@ public final class PackageScalarAccess extends Node {
                     converted[indices[i]] = convertedAddress;
                 }
                 return () -> {
+                    var callbacks = entry.getOwner().getNativeCallbacks();
+                    callbacks.enterPointerCall(projection);
                     try { return invokeNative(entry, converted); }
                     catch (Exception failure) { throw rethrow(failure); }
+                    finally { callbacks.leavePointerCall(); }
                 };
               } catch (Exception failure) { throw rethrow(failure); }
             }, (projection, result) -> {

@@ -1306,6 +1306,7 @@ executable thc-fixtures
     StablePtrFFIFixtures
     PackageNativeOriginalsFixtures
     PackageNativeArchiveFixtures
+    DynamicCallbackFixtures
     GetEntropyFixtures
     LibyamlNativeFixtures
     WcwidthFixtures

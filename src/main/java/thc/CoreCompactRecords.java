@@ -302,7 +302,13 @@ public final class CoreCompactRecords {
     public Map<String,Object> constructor(CoreCompactCursor cursor) {
         try {
             String id = text(cursor);
-            var result = map("id", id, "name", id, "arity", cursor.unsigned(), "tag", cursor.unsigned(),
+            // Reconstruct the JSON adapter's occurrence without reading debug tables.
+            // Strip module components, not the last dot: an operator may contain dots.
+            String name = id.substring(id.indexOf(':') + 1);
+            int dot;
+            while (!name.isEmpty() && Character.isUpperCase(name.charAt(0)) && (dot = name.indexOf('.')) >= 0)
+                name = name.substring(dot + 1);
+            var result = map("id", id, "name", name, "arity", cursor.unsigned(), "tag", cursor.unsigned(),
                     "kind", enumeration(cursor, List.of("boxed", "unboxed-tuple", "unboxed-sum", "newtype")),
                     "strictFields", list(cursor, cursor::readBoolean),
                     "fieldLifted", list(cursor, () -> element(cursor, cursor::readBoolean)),
@@ -403,7 +409,7 @@ public final class CoreCompactRecords {
                 return entry;
             }));
             result.put("expectedCalls", list(cursor, () -> foreign(cursor, true)));
-            if (Objects.equals(result.get("schema"), 2L)) result.put("addresses", list(cursor, () -> {
+            if (Objects.equals(result.get("schema"), 2L) || Objects.equals(result.get("schema"), 3L)) result.put("addresses", list(cursor, () -> {
                 var entry = map("binder", qualifiedName(cursor));
                 field(cursor, entry, "header", () -> text(cursor)); entry.put("symbol", text(cursor));
                 entry.put("isFunction", cursor.readBoolean()); entry.put("convention", convention(cursor));
@@ -412,6 +418,11 @@ public final class CoreCompactRecords {
                 entry.put("callback", cursor.readBoolean() ? map("arguments", texts(cursor), "result", text(cursor)) : null);
                 return entry;
             }));
+            if (Objects.equals(result.get("schema"), 3L)) result.put("wrappers", list(cursor, () -> map(
+                "binder", qualifiedName(cursor), "helper", text(cursor), "convention", convention(cursor),
+                "declaredType", foreignType(cursor), "normalizedType", foreignType(cursor), "normalizationRole", text(cursor),
+                "arguments", list(cursor, () -> foreignType(cursor)), "result", foreignType(cursor),
+                "effect", enumeration(cursor, List.of("pure", "io")), "typeString", text(cursor))));
         }
         return result;
     }
