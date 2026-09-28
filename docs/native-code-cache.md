@@ -47,8 +47,9 @@ machine-word overflow. The selected entry is fixed in the cache; arguments are
 not compiled in. Deferred package and CBD loading remain outside the prepared
 code admission; this command does not pretend that packaging Core alone is AOT.
 
-The build command expects the current checkout's `installDist`; it does not
-silently reuse another revision's runtime. It reserves an 8 GiB builder heap and
+The build command consumes the checkout's existing `installDist`; it does not
+validate that distribution against the source revision. Rerun `installDist`
+after source changes and before building the launcher. It reserves an 8 GiB builder heap and
 two compiler threads. On a shared host, use the existing build-directory resource
 gate. The output is `build/native-image/thc-native-cache`. Set
 `THC_NATIVE_CACHE_IMAGE=/absolute/path/to/thc-native-cache` to run another matching
