@@ -79,6 +79,15 @@ retaining the first installed target. Compiled-entry controls do not warm up a
 capture; they check request identity, masks, once-only effects and returned loans
 across managed SAFE completion, tail forwarding and non-tail tuple suffixes.
 
+`AggregateLetContinuationTest` keeps separate declared-policy retention and stock
+semantic-parity controls, selected by the runtime's versioned return-policy
+capability, not a same-named method on a guest root. Both require the first
+installed entry, original target identity, exact payloads, once-only effects and
+returned handoff loans. The declared-policy control also requires code retention
+after capture and resumption; stock Truffle may invalidate when an ordinary
+result is first replaced by a saved continuation. Neither control warms up a
+capture or disables return-type speculation.
+
 Closures can cross between the AST and bytecode backends in the same context.
 Saved scalar and tuple calls use the common continuation protocol, including
 typed-input PAPs, exact tail targets, IO actions/handlers and recovered bytecode
