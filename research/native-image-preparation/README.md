@@ -131,6 +131,15 @@ entries do not construct a host receiver, guest value, context or dispatch node.
 They follow the existing explicit export-family preparation contract, without
 adding a general generated-class recognizer.
 
+The `InteropFailureGen` and `KindGen` families follow the same explicit contract:
+their declaring initializers resolve the dynamic-dispatch factory and register
+literal receiver/library descriptors. Each export creates only fieldless,
+unadoptable cached/uncached libraries whose constructors delegate to
+`InteropLibrary`; the remaining initializer state is assertion flags. These
+eight entries do not construct an `InteropFailure`, its original protocol
+exception, a `Kind` receiver, a context or a native handle. The receiver classes
+remain covered by the existing stateless inventory, with no new receiver policy.
+
 `SavedGuestContinuations` and `TupleDestination` each initialize only a private
 array of literal production carrier classes. They construct no carrier, frame,
 context or thread. Resolving these class literals does not run their initializers.
