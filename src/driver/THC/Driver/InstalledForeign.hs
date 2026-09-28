@@ -67,7 +67,7 @@ directoryModule = "System.Directory.Internal.Posix"
 
 unixModules :: [String]
 unixModules = ["System.Posix.Files.PosixString", "System.Posix.Process.Internals", "System.Posix.Signals",
-  "System.Posix.Directory.PosixPath", "System.Posix.Env.PosixString"]
+  "System.Posix.Directory.PosixPath", "System.Posix.Env.PosixString", "System.Posix.IO.Common"]
 
 -- | Determine whether a configured producer module lacks retained provenance.
 -- Presence is not permission to replace bad evidence. The helper has already

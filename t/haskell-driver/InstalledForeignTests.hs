@@ -14,7 +14,7 @@
 module InstalledForeignTests (tests, viewTests, sourceTests) where
 
 import Control.Exception (bracket)
-import Control.Monad (foldM, forM, forM_)
+import Control.Monad (foldM, forM, forM_, when)
 import qualified Crypto.Hash.SHA256 as SHA
 import Data.Aeson (Value(..), object, (.=))
 import qualified Data.Text as Text
@@ -40,7 +40,7 @@ import TestSupport (Env(..), runExe, assertSuccess, out, field, string, array, j
 
 unixModules :: [String]
 unixModules = ["System.Posix.Files.PosixString", "System.Posix.Process.Internals", "System.Posix.Signals",
-  "System.Posix.Directory.PosixPath", "System.Posix.Env.PosixString"]
+  "System.Posix.Directory.PosixPath", "System.Posix.Env.PosixString", "System.Posix.IO.Common"]
 
 directoryModule :: String
 directoryModule = "System.Directory.Internal.Posix"
@@ -192,6 +192,30 @@ sourceTests env = TestLabel "original Unix/directory configured-source provenanc
               (all ((/= Null) . field entry) ["declaredType", "normalizedType"])
             assertBool "producer retained the actual emitted wrapper"
               ("ghczuwrapper" `isPrefixOf` string (field (field entry "emitted") "symbol"))
+        when (name == "System.Posix.IO.Common") $ do
+          let artifacts = field core "foreign"
+              stubs = field artifacts "stubs"
+              openat = [entry | entry <- array (field proof "imports"),
+                field entry "symbol" == String "openat", field entry "convention" == String "capi"]
+          assertEqual "IO.Common has no extra foreign files" [] (array (field artifacts "files"))
+          assertEqual "IO.Common has no callback header" (String "") (field stubs "header")
+          forM_ ["initializers", "finalizers"] $ \key ->
+            assertEqual "IO.Common has no registration obligations" [] (array (field stubs key))
+          assertEqual "one original openat declaration" 1 (length openat)
+          forM_ openat $ \entry -> do
+            let emitted = field entry "emitted"
+                calls = [call | call <- array (field proof "expectedCalls"),
+                  field (field call "target") "symbol" == field emitted "symbol"]
+            assertBool "openat wrapper is present in actual Core calls" (not (null calls))
+            forM_ calls $ \call -> do
+              assertEqual "openat keeps its unsafe CAPI convention" (String "capi", String "unsafe")
+                (field call "convention", field call "safety")
+              assertEqual "openat uses exact fd/path/flags/mode/state carriers"
+                [[String "Int32Rep"], [String "AddrRep"], [String "Int32Rep"], [String "Word32Rep"], []]
+                (map (array . (`field` "primReps")) (array (field call "argumentReps")))
+              assertEqual "openat returns state and CInt"
+                [[], [String "Int32Rep"]]
+                (map (array . (`field` "primReps")) (array (field (field call "resultRep") "components")))
         path <- maybe (fail "missing regenerated interface") pure (lookup name (installedInterfaces regenerated))
         forM_ ["o", "dyn_o"] $ \suffix -> do
           bytes <- BS.readFile (replaceExtension path suffix)
@@ -199,6 +223,7 @@ sourceTests env = TestLabel "original Unix/directory configured-source provenanc
     expectedCapi =
       [("System.Posix.Directory.PosixPath", [("opendir", "HsUnix.h", "unsafe")]),
        ("System.Posix.Env.PosixString", [("unsetenv", "HsUnix.h", "unsafe")]),
+       ("System.Posix.IO.Common", [("openat", "HsUnix.h", "unsafe")]),
        (directoryModule, [("fchmodat", "sys/stat.h", "safe"), ("fstatat", "sys/stat.h", "safe")])]
     readOriginal context unit name = do
       path <- maybe (fail ("missing original interface: " ++ name)) pure (lookup name (installedInterfaces unit))
