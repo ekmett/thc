@@ -2847,6 +2847,22 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         public static Object object(DataLayout layout, int index, DataValue value) { return layout.read(value, index); }
     }
 
+    /** Restore an immutable constructor slot without observing a DSL specialization first. */
+    @Operation
+    @ConstantOperand(type = DataLayout.class, name = "layout")
+    @ConstantOperand(type = int.class, name = "index")
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class RestoreDataScalar {
+        @Specialization public static void restore(VirtualFrame frame, DataLayout layout, int index,
+                LocalAccessor destination, DataValue value, @Bind("$bytecodeNode") BytecodeNode bytecode) {
+            if (layout.isInt(index)) destination.setInt(bytecode, frame, layout.readInt(value, index));
+            else if (layout.isLong(index)) destination.setLong(bytecode, frame, layout.readLong(value, index));
+            else if (layout.isFloat(index)) destination.setFloat(bytecode, frame, layout.readFloat(value, index));
+            else if (layout.isDouble(index)) destination.setDouble(bytecode, frame, layout.readDouble(value, index));
+            else destination.setObject(bytecode, frame, layout.read(value, index));
+        }
+    }
+
     @Operation
     @ConstantOperand(type = String.class, name = "message")
     @ConstantOperand(type = Metrics.class, name = "metrics")
@@ -5687,6 +5703,69 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static long apply(VirtualFrame frame, LocalAccessor local,
                 @Bind("$bytecodeNode") BytecodeNode bytecode) {
             return staticLong(local.getObject(bytecode, frame));
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "local")
+    public static final class StaticStoreInt {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor local, Object value,
+                @Bind("$bytecodeNode") BytecodeNode bytecode) {
+            if (!(value instanceof Integer exact)) throw fail("Expected primitive Integer");
+            local.setInt(bytecode, frame, exact);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "local")
+    public static final class StaticLoadInt {
+        @Specialization public static int apply(VirtualFrame frame, LocalAccessor local,
+                @Bind("$bytecodeNode") BytecodeNode bytecode) {
+            Object value = local.getObject(bytecode, frame);
+            if (!(value instanceof Integer exact)) throw fail("Expected primitive Integer");
+            return exact;
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "local")
+    public static final class StaticStoreFloat {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor local, Object value,
+                @Bind("$bytecodeNode") BytecodeNode bytecode) {
+            if (!(value instanceof Float exact)) throw fail("Expected primitive Float");
+            local.setFloat(bytecode, frame, exact);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "local")
+    public static final class StaticLoadFloat {
+        @Specialization public static float apply(VirtualFrame frame, LocalAccessor local,
+                @Bind("$bytecodeNode") BytecodeNode bytecode) {
+            Object value = local.getObject(bytecode, frame);
+            if (!(value instanceof Float exact)) throw fail("Expected primitive Float");
+            return exact;
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "local")
+    public static final class StaticStoreDouble {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor local, Object value,
+                @Bind("$bytecodeNode") BytecodeNode bytecode) {
+            if (!(value instanceof Double exact)) throw fail("Expected primitive Double");
+            local.setDouble(bytecode, frame, exact);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "local")
+    public static final class StaticLoadDouble {
+        @Specialization public static double apply(VirtualFrame frame, LocalAccessor local,
+                @Bind("$bytecodeNode") BytecodeNode bytecode) {
+            Object value = local.getObject(bytecode, frame);
+            if (!(value instanceof Double exact)) throw fail("Expected primitive Double");
+            return exact;
         }
     }
 

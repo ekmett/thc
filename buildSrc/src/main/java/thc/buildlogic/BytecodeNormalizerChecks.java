@@ -8,6 +8,7 @@ import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import javax.tools.ToolProvider;
@@ -49,6 +50,35 @@ public final class BytecodeNormalizerChecks {
         reject(patch, before.replace("createCachedTags(numLocals);", "createCachedTags(other);"));
         reject(patch, after.replace("info == FrameSlotKind.Long", "info instanceof FrameSlotKind"));
         reject(patch, after.replace("super.prepareForCompilation", "otherPreparation"));
+        for (String kind : List.of("Int", "Float", "Double", "Boolean"))
+            reject(patch, after.replace("info == FrameSlotKind." + kind, "info == null"));
+    }
+
+    public static void staticTags(Path directory) throws Exception {
+        String source = """
+            import java.util.Arrays;
+            public class StaticTagsFixture {
+                static final int LOCALS_LENGTH = 2, LOCALS_OFFSET_LOCAL_INDEX = 0, LOCALS_OFFSET_INFO = 1;
+                enum FrameSlotKind {
+                    Illegal(0), Long(1), Object(2), Int(3), Float(4), Double(5), Boolean(6);
+                    final byte tag; FrameSlotKind(int tag) { this.tag = (byte) tag; }
+                }
+                public static byte[] probe(int count, int[] locals, String[] names) {
+                    Object[] constants = new Object[names.length];
+                    for (int i = 0; i < names.length; i++)
+                        constants[i] = names[i] == null ? null : FrameSlotKind.valueOf(names[i]);
+                    return createCachedTags(count, locals, constants);
+                }
+            """ + NEW_TAGS + "}\n";
+        try (var loader = compile(directory.resolve("staticTags"), "StaticTagsFixture", source)) {
+            var probe = loader.loadClass("StaticTagsFixture").getMethod("probe", int.class, int[].class, String[].class);
+            var names = new String[]{"Long", "Object", "Int", "Float", "Double", null, "Boolean"};
+            check(Arrays.equals((byte[]) probe.invoke(null, 8,
+                new int[]{0,0, 1,1, 2,2, 3,3, 4,4, 5,5, 6,-1, 7,6}, names), new byte[]{1,2,3,4,5,0,0,6}));
+            // Reused physical slots retain a tag only when every logical lifetime agrees.
+            check(Arrays.equals((byte[]) probe.invoke(null, 3,
+                new int[]{0,2, 0,2, 1,2, 1,0, 1,2, 2,3, 2,-1}, names), new byte[]{3,0,0}));
+        }
     }
 
     public static void handlers(Path directory) throws Exception {

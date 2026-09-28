@@ -54,6 +54,51 @@ public final class BranchProbe {
       return (BranchRoot) ((com.oracle.truffle.api.RootCallTarget) call.getCurrentCallTarget()).getRootNode();
     }
   }
+  static void loop(Language language, boolean unprofiled) throws Exception {
+    BytecodeParser<BranchRootGen.Builder> parser = b -> {
+      b.beginRoot(); b.emitMark();
+      if (unprofiled) b.beginUnprofiledWhile(); else b.beginWhile();
+      b.beginNext(); b.emitLoadArgument(0); b.endNext();
+      b.emitLoadConstant(0);
+      if (unprofiled) b.endUnprofiledWhile(); else b.endWhile();
+      b.beginReturn(); b.emitLoadConstant(42L); b.endReturn(); b.endRoot();
+    };
+    BranchRoot root = BranchRootGen.create(language, BytecodeConfig.DEFAULT, parser).getNode(0);
+    root.getBytecodeNode().setUncachedThreshold(0);
+    OptimizedCallTarget target = (OptimizedCallTarget) root.getCallTarget();
+    // Prepare the operation specializations, never the loop's taken direction.
+    // The native saved-scheduling test separately requires zero prior calls.
+    for (int i = 0; i < 3; i++) target.call(new java.util.concurrent.atomic.AtomicInteger(0));
+    target.compile(true);
+    Object runtime = Truffle.getRuntime();
+    runtime.getClass().getMethod("bypassedInstalledCode", OptimizedCallTarget.class).invoke(runtime, target);
+    require(target.isValidLastTier(), "loop installed");
+    int effects = BranchRoot.effects.get();
+    var remaining = new java.util.concurrent.atomic.AtomicInteger(3);
+    require(target.call(remaining).equals(42L), "loop result");
+    require(remaining.get() == -1 && BranchRoot.effects.get() == effects + 1, "loop count and prefix once");
+    require(target.isValidLastTier() == unprofiled, "loop first taken direction policy");
+    if (unprofiled) {
+      var bytes = new ByteArrayOutputStream();
+      root.getRootNodes().serialize(new DataOutputStream(bytes), (c, out, value) -> BranchRoot.writeConstant(out, value));
+      var copy = BranchRootGen.deserialize(language, BytecodeConfig.DEFAULT,
+        () -> new DataInputStream(new ByteArrayInputStream(bytes.toByteArray())), (c, in) -> BranchRoot.readConstant(in)).getNode(0);
+      remaining.set(20000);
+      require(copy.getCallTarget().call(remaining).equals(42L) && remaining.get() == -1, "loop backedge/OSR roundtrip");
+      boolean found = false;
+      for (Instruction instruction : copy.getBytecodeNode().getInstructions())
+        if (instruction.getName().startsWith("branch.false.unprofiled")) {
+          found = true;
+          for (Instruction.Argument argument : instruction.getArguments())
+            require(argument.getKind() != Instruction.Argument.Kind.BRANCH_PROFILE, "loop invented profile");
+        }
+      require(found, "unprofiled loop instruction");
+      copy.getBytecodeNode().setUncachedThreshold(Integer.MAX_VALUE);
+      remaining.set(2);
+      require(copy.getCallTarget().call(remaining).equals(42L) && remaining.get() == -1, "uncached loop");
+    }
+    System.out.println("PASS first opposite loop direction unprofiled=" + unprofiled);
+  }
   static void structure(Language language) throws Exception {
     var source = com.oracle.truffle.api.source.Source.newBuilder("thc", "branch", "protocol-control").build();
     BranchRoot nested = BranchRootGen.create(language, BytecodeConfig.DEFAULT, b -> {
@@ -99,6 +144,7 @@ public final class BranchProbe {
       try {
         Language lang=TruffleLanguage.LanguageReference.create(Language.class).get(null);
         structure(lang);
+        loop(lang, false); loop(lang, true);
         for(boolean policy:new boolean[]{false,true}) for(boolean initial:new boolean[]{false,true}) compiled(lang,policy,initial);
         BranchRoot uncached=BranchRootGen.create(lang,BytecodeConfig.DEFAULT,parser(true)).getNode(0);
         uncached.getBytecodeNode().setUncachedThreshold(Integer.MAX_VALUE); semantic(uncached);

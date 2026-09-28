@@ -244,7 +244,9 @@ public final class BytecodeProgram implements ExecutableProgram {
         final BytecodeRootGen.Builder builder;
         final Map<Integer, BytecodeLocal> locals = new LinkedHashMap<>();
         final Set<Integer> staticLocals = new LinkedHashSet<>();
+        final Map<Integer, FrameSlotKind> staticScalars = new HashMap<>();
         final Set<Integer> staticObjectLocals = new LinkedHashSet<>();
+        final Map<BytecodeLocal, FrameSlotKind> staticResults = new HashMap<>();
         BytecodeLocal checkpointRootEntry;
         BytecodeLocal annotationRootEntry;
         BytecodeLabel continueLabel;
@@ -357,6 +359,17 @@ public final class BytecodeProgram implements ExecutableProgram {
             var b = emission.builder;
             if (emission.staticLocals.contains(local.id)) {
                 b.emitStaticLoadLong(Objects.requireNonNull(emission.locals.get(local.id)));
+                return;
+            }
+            var scalar = emission.staticScalars.get(local.id);
+            if (scalar != null) {
+                var slot = Objects.requireNonNull(emission.locals.get(local.id));
+                switch (scalar) {
+                    case Int -> b.emitStaticLoadInt(slot);
+                    case Float -> b.emitStaticLoadFloat(slot);
+                    case Double -> b.emitStaticLoadDouble(slot);
+                    default -> throw new AssertionError(scalar);
+                }
                 return;
             }
             if (emission.staticObjectLocals.contains(local.id)) {
@@ -862,21 +875,32 @@ public final class BytecodeProgram implements ExecutableProgram {
                 if (local != null) argumentIndices.put(local.id, i);
             }
             var locals = new ArrayList<>(context.captures);
+            var typedFormals = new HashSet<Integer>();
+            for (var argument : context.typedArguments) typedFormals.add(argument.local.id);
             for (var capture : context.vectorCaptures) locals.addAll(capture.destinations);
             if (!context.typedArguments.isEmpty())
                 for (var argument : context.typedArguments) locals.add(argument.local);
             else for (var local : context.arguments) if (local != null) locals.add(local);
             for (var local : locals) {
-                // Joins, loops, captures and typed ingress keep adaptive locals.
+                // Loops, captures and deferred demands keep adaptive locals.
                 int argumentIndex = argumentIndices.getOrDefault(local.id, -1);
-                boolean singleWrite = !context.mayLoop && context.typedInput == null
+                boolean typedFormal = context.typedInput != null && typedFormals.contains(local.id) && !enableAsync;
+                boolean singleWrite = !context.mayLoop
                     && context.captures.isEmpty() && context.vectorCaptures.isEmpty() && !local.cell
-                    && argumentIndex >= 0 && !(enableAsync && context.entryStrict[argumentIndex]);
+                    && (typedFormal || context.typedInput == null && argumentIndex >= 0
+                        && !(enableAsync && context.entryStrict[argumentIndex]));
                 Object info;
-                if (singleWrite && staticWideLong(local.proof)) {
+                if (singleWrite && (staticWideLong(local.proof)
+                        || typedFormal && local.proof.isLong() && local.proof.getEvaluated())) {
                     e.staticLocals.add(local.id);
                     info = FrameSlotKind.Long;
-                } else if (singleWrite && staticLiftedReference(local.proof)) {
+                } else if (singleWrite && local.proof.getEvaluated() && !local.proof.isTypedTransport() &&
+                        (local.proof.isInt() || local.proof.isFloat() || local.proof.isDouble())) {
+                    var kind = FrameLayout.carrierKind(local.proof);
+                    e.staticScalars.put(local.id, kind);
+                    info = kind;
+                } else if (singleWrite && (staticLiftedReference(local.proof)
+                        || typedFormal && FrameLayout.carrierKind(local.proof) == FrameSlotKind.Object)) {
                     e.staticObjectLocals.add(local.id);
                     info = FrameSlotKind.Object;
                 } else {
@@ -887,7 +911,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             }
             var typed = context.typedInput;
             if (typed != null) {
-                var bloom = LocalAccessor.constantOf(b.createLocal("typed input bloom", "primitive"));
+                var bloom = LocalAccessor.constantOf(b.createLocal("typed input bloom", FrameSlotKind.Long));
                 typedBloom[0] = bloom;
                 var physical = context.typedArguments;
                 var deferredStrict = new HashSet<Integer>();
@@ -949,7 +973,12 @@ public final class BytecodeProgram implements ExecutableProgram {
             var tuple = context.tuple;
             if (tuple != null) {
                 var result = new ArrayList<BytecodeLocal>();
-                for (int i = 0; i < tuple.getWidth(); ++i) result.add(b.createLocal("tuple result " + i, null));
+                for (int i = 0; i < tuple.getWidth(); ++i) {
+                    var kind = FrameLayout.carrierKind(tuple.getLeaves()[i]);
+                    var slot = b.createLocal("tuple result " + i, kind);
+                    result.add(slot);
+                    if (!context.mayLoop) e.staticResults.put(slot, kind);
+                }
                 body.emitTuple(e, result);
                 b.beginReturn(); b.emitFinishTuple(tupleSlots(tuple, result)); b.endReturn();
             } else {
@@ -1094,39 +1123,36 @@ public final class BytecodeProgram implements ExecutableProgram {
         if (!enableAsync) { attempt.run(); return; }
         var b = e.builder;
         b.beginBlock();
-        var retry = b.createLocal("owner wait pending", "primitive");
-        var request = b.createLocal("owner wait async request", "object");
-        var active = b.createLocal("owner wait logical mask", "object");
-        var discard = b.createLocal("owner wait resume value", "object");
-        b.beginStoreLocal(retry); b.emitLoadConstant(true); b.endStoreLocal();
-        b.beginWhile();
-        b.emitLoadLocal(retry);
-        b.beginBlock();
+        var complete = b.createLabel();
+        var request = b.createLocal("owner wait async request", FrameSlotKind.Object);
+        var active = b.createLocal("owner wait logical mask", FrameSlotKind.Object);
+        var discard = b.createLocal("owner wait resume value", FrameSlotKind.Object);
+        b.beginUnprofiledWhile(); b.emitLoadConstant(true); b.beginBlock();
         b.beginTryCatch();
         b.beginBlock();
         attempt.run();
-        b.beginStoreLocal(retry); b.emitLoadConstant(false); b.endStoreLocal();
+        b.emitBranch(complete);
         b.endBlock();
         b.beginBlock();
-        b.beginStoreLocal(request);
+        b.beginStaticStoreObject(request);
         b.beginCallSuspensionOnly(); b.emitLoadException(); b.endCallSuspensionOnly();
-        b.endStoreLocal();
-        b.beginStoreLocal(active); b.emitCurrentMask(); b.endStoreLocal();
-        b.beginStoreLocal(discard);
+        b.endStaticStoreObject();
+        b.beginStaticStoreObject(active); b.emitCurrentMask(); b.endStaticStoreObject();
+        b.beginStaticStoreObject(discard);
         b.beginReenterCallMask();
         beginAnnotationYield(e);
         b.beginParkAsyncMask();
-        b.emitLoadLocal(request);
+        b.emitStaticLoadObject(request);
         b.emitStaticLoadObject(Objects.requireNonNull(e.checkpointRootEntry));
         b.endParkAsyncMask();
         endAnnotationYield(e);
-        b.emitLoadLocal(active);
+        b.emitStaticLoadObject(active);
         b.endReenterCallMask();
-        b.endStoreLocal();
+        b.endStaticStoreObject();
         b.endBlock();
         b.endTryCatch();
-        b.endBlock();
-        b.endWhile();
+        b.endBlock(); b.endUnprofiledWhile();
+        b.emitLabel(complete);
         b.endBlock();
     }
 
@@ -1135,6 +1161,18 @@ public final class BytecodeProgram implements ExecutableProgram {
     /** Choose checked reference identities while emitting code, never by a guest-time enum switch. */
     private void restoreArgument(Emission e, Local local, boolean deferStrictDemand, Runnable value) {
         var b = e.builder;
+        var scalar = e.staticScalars.get(local.id);
+        if (scalar != null) {
+            if (deferStrictDemand) throw new IllegalStateException("Check failed.");
+            var slot = Objects.requireNonNull(e.locals.get(local.id));
+            switch (scalar) {
+                case Int -> { b.beginStaticStoreInt(slot); value.run(); b.endStaticStoreInt(); }
+                case Float -> { b.beginStaticStoreFloat(slot); value.run(); b.endStaticStoreFloat(); }
+                case Double -> { b.beginStaticStoreDouble(slot); value.run(); b.endStaticStoreDouble(); }
+                default -> throw new AssertionError(scalar);
+            }
+            return;
+        }
         if (e.staticLocals.contains(local.id)) {
             if (deferStrictDemand) throw new IllegalStateException("Check failed.");
             b.beginStaticStoreLong(Objects.requireNonNull(e.locals.get(local.id)));
@@ -1190,6 +1228,8 @@ public final class BytecodeProgram implements ExecutableProgram {
 
     private Expression force(Expression value) {
         if (value.proof().isTypedTransport() || value.proof().getEvaluated()) return value;
+        // Generic force and resume return boxed Object carriers, including when
+        // the proved WHNF is primitive. Keep that ABI in their private scratch.
         var forced = evaluated(new ResultExpression((e, destination) -> {
             if (destination != null) { value.emitTuple(e, destination); return; }
             var b = e.builder;
@@ -1198,62 +1238,62 @@ public final class BytecodeProgram implements ExecutableProgram {
                 var local = Objects.requireNonNull(e.locals.get(localExpression.local.id));
                 if (!resumable) {
                     b.beginForceLocal(metrics, local, localExpression.local.cell, false);
-                    b.emitLoadLocal(local); b.endForceLocal();
+                    b.emitStaticLoadObject(local); b.endForceLocal();
                 } else {
-                    var result = b.createLocal("forced local result", null);
-                    var suspended = b.createLocal("forced local suspension", "object");
+                    var result = b.createLocal("forced local result", FrameSlotKind.Object);
+                    var suspended = b.createLocal("forced local suspension", FrameSlotKind.Object);
                     b.beginBlock();
                     emitOwnerWaitRetry(e, () -> {
                         b.beginTryCatch();
-                        b.beginStoreLocal(result);
+                        b.beginStaticStoreObject(result);
                         b.beginForceLocal(metrics, local, localExpression.local.cell, enableAsync);
-                        b.emitLoadLocal(local); b.endForceLocal();
-                        b.endStoreLocal();
+                        b.emitStaticLoadObject(local); b.endForceLocal();
+                        b.endStaticStoreObject();
                         b.beginBlock();
-                        b.beginStoreLocal(suspended);
+                        b.beginStaticStoreObject(suspended);
                         b.beginSuspensionOnly(); b.emitLoadException(); b.endSuspensionOnly();
-                        b.endStoreLocal();
-                        b.beginStoreLocal(result);
+                        b.endStaticStoreObject();
+                        b.beginStaticStoreObject(result);
                         b.beginResumeForcedLocal(local, localExpression.local.cell);
-                        b.emitLoadLocal(suspended);
-                        beginAnnotationYield(e); b.emitLoadLocal(suspended); endAnnotationYield(e);
+                        b.emitStaticLoadObject(suspended);
+                        beginAnnotationYield(e); b.emitStaticLoadObject(suspended); endAnnotationYield(e);
                         b.endResumeForcedLocal();
-                        b.endStoreLocal();
+                        b.endStaticStoreObject();
                         b.endBlock();
                         b.endTryCatch();
                     });
-                    b.emitLoadLocal(result);
+                    b.emitStaticLoadObject(result);
                     b.endBlock();
                 }
             } else if (!resumable) {
                 b.beginForceValue(metrics, false); value.emit(e); b.endForceValue();
             } else {
-                var operand = b.createLocal("saved force operand", null);
-                var result = b.createLocal("forced value result", null);
-                var suspended = b.createLocal("forced value suspension", "object");
+                var operand = b.createLocal("saved force operand", FrameSlotKind.Object);
+                var result = b.createLocal("forced value result", FrameSlotKind.Object);
+                var suspended = b.createLocal("forced value suspension", FrameSlotKind.Object);
                 b.beginBlock();
                 // Evaluate the producer once, before any child ownership is claimed.
-                b.beginStoreLocal(operand); value.emit(e); b.endStoreLocal();
+                b.beginStaticStoreObject(operand); value.emit(e); b.endStaticStoreObject();
                 emitOwnerWaitRetry(e, () -> {
                     b.beginTryCatch();
-                    b.beginStoreLocal(result);
-                    b.beginForceValue(metrics, enableAsync); b.emitLoadLocal(operand); b.endForceValue();
-                    b.endStoreLocal();
+                    b.beginStaticStoreObject(result);
+                    b.beginForceValue(metrics, enableAsync); b.emitStaticLoadObject(operand); b.endForceValue();
+                    b.endStaticStoreObject();
                     b.beginBlock();
-                    b.beginStoreLocal(suspended);
+                    b.beginStaticStoreObject(suspended);
                     b.beginSuspensionOnly(); b.emitLoadException(); b.endSuspensionOnly();
-                    b.endStoreLocal();
-                    b.beginStoreLocal(result);
+                    b.endStaticStoreObject();
+                    b.beginStaticStoreObject(result);
                     b.beginResumeForcedValue();
-                    b.emitLoadLocal(operand);
-                    b.emitLoadLocal(suspended);
-                    beginAnnotationYield(e); b.emitLoadLocal(suspended); endAnnotationYield(e);
+                    b.emitStaticLoadObject(operand);
+                    b.emitStaticLoadObject(suspended);
+                    beginAnnotationYield(e); b.emitStaticLoadObject(suspended); endAnnotationYield(e);
                     b.endResumeForcedValue();
-                    b.endStoreLocal();
+                    b.endStaticStoreObject();
                     b.endBlock();
                     b.endTryCatch();
                 });
-                b.emitLoadLocal(result);
+                b.emitStaticLoadObject(result);
                 b.endBlock();
             }
         }));
@@ -4872,10 +4912,23 @@ public final class BytecodeProgram implements ExecutableProgram {
         return new ProvenExpression(new ResultExpression((e, destination) -> {
             var b = e.builder;
             b.beginBlock();
-            for (var field : fields) e.locals.put(field.id, b.createLocal(field.name, FrameLayout.carrierKind(field.proof)));
+            for (var field : fields) {
+                var kind = FrameLayout.carrierKind(field.proof);
+                var slot = b.createLocal(field.name, kind);
+                e.locals.put(field.id, slot);
+                if (kind != FrameSlotKind.Illegal && !field.proof.isTypedTransport()) {
+                    if (kind == FrameSlotKind.Object) e.staticObjectLocals.add(field.id);
+                    else if (kind == FrameSlotKind.Long) e.staticLocals.add(field.id);
+                    else e.staticScalars.put(field.id, kind);
+                    e.staticResults.put(slot, kind);
+                }
+            }
             scrutinee.emitTuple(e, localSlots(e, fields));
             emitResult(body, e, destination); b.endBlock();
-            for (var field : fields) e.locals.remove(field.id);
+            for (var field : fields) {
+                e.staticResults.remove(e.locals.remove(field.id));
+                e.staticObjectLocals.remove(field.id); e.staticLocals.remove(field.id); e.staticScalars.remove(field.id);
+            }
         }), body.proof());
     }
 
@@ -4941,8 +4994,30 @@ public final class BytecodeProgram implements ExecutableProgram {
                     TupleShape.requireCompatible(aggregate.proof, occurrence, false);
                     yield tupleExpression(aggregate.proof, (e, destination) -> {
                         for (int index = 0; index < aggregate.fields.size(); ++index) {
-                            e.builder.beginStoreLocal(destination.get(index));
-                            read(aggregate.fields.get(index)).emit(e); e.builder.endStoreLocal();
+                            var slot = destination.get(index);
+                            var kind = e.staticResults.get(slot);
+                            if (kind == null) {
+                                e.builder.beginStoreLocal(slot);
+                                read(aggregate.fields.get(index)).emit(e); e.builder.endStoreLocal();
+                            } else {
+                                switch (kind) {
+                                    case Int -> e.builder.beginStaticStoreInt(slot);
+                                    case Long -> e.builder.beginStaticStoreLong(slot);
+                                    case Float -> e.builder.beginStaticStoreFloat(slot);
+                                    case Double -> e.builder.beginStaticStoreDouble(slot);
+                                    case Object -> e.builder.beginStaticStoreObject(slot);
+                                    default -> throw new AssertionError(kind);
+                                }
+                                read(aggregate.fields.get(index)).emit(e);
+                                switch (kind) {
+                                    case Int -> e.builder.endStaticStoreInt();
+                                    case Long -> e.builder.endStaticStoreLong();
+                                    case Float -> e.builder.endStaticStoreFloat();
+                                    case Double -> e.builder.endStaticStoreDouble();
+                                    case Object -> e.builder.endStaticStoreObject();
+                                    default -> throw new AssertionError(kind);
+                                }
+                            }
                         }
                     });
                 }
@@ -5253,8 +5328,17 @@ public final class BytecodeProgram implements ExecutableProgram {
             var b = e.builder;
             b.beginBlock();
             e.locals.put(binder.id, b.createLocal(binder.name, FrameLayout.carrierKind(binderProof)));
+            // A case binder is written once, before its alternatives. A saved
+            // activation retains that same slot; resumption does not rebind it.
+            if (staticWideLong(binderProof)) e.staticLocals.add(binder.id);
+            else if (binderProof.getKind() == CoreKind.VOID || staticLiftedReference(binderProof))
+                e.staticObjectLocals.add(binder.id);
             if (category == CaseCategory.GENERIC) {
-                b.beginStoreLocal(e.locals.get(binder.id)); scrutinee.emit(e); b.endStoreLocal();
+                if (e.staticObjectLocals.contains(binder.id)) {
+                    b.beginStaticStoreObject(e.locals.get(binder.id)); scrutinee.emit(e); b.endStaticStoreObject();
+                } else {
+                    b.beginStoreLocal(e.locals.get(binder.id)); scrutinee.emit(e); b.endStoreLocal();
+                }
             } else restoreArgument(e, binder, () -> scrutinee.emit(e));
             class Choice {
                 void emitAlternative(Alternative alt) {
@@ -5262,19 +5346,29 @@ public final class BytecodeProgram implements ExecutableProgram {
                     for (int index = 0; index < alt.fields.size(); ++index) {
                         var fields = alt.fields.get(index);
                         for (var field : fields)
-                            e.locals.put(field.id, b.createLocal(field.name, field.primitive ? "primitive" : "object"));
+                            e.locals.put(field.id, b.createLocal(field.name, FrameLayout.carrierKind(field.proof)));
                         var layout = (DataLayout) alt.value;
                         if (layout.isVector(index)) {
                             b.beginTransferDataVector(new BytecodeRoot.DataVectorTransfer(layout, index,
                                 accessors(localSlots(e, fields)), false));
                             read(binder, false).emit(e); b.endTransferDataVector();
                         } else {
-                            b.beginStoreLocal(e.locals.get(fields.getFirst().id)); b.beginReadDataField(layout, index);
-                            read(binder, false).emit(e); b.endReadDataField(); b.endStoreLocal();
+                            var field = fields.getFirst();
+                            var kind = layout.isInt(index) ? FrameSlotKind.Int : layout.isLong(index) ? FrameSlotKind.Long
+                                : layout.isFloat(index) ? FrameSlotKind.Float : layout.isDouble(index) ? FrameSlotKind.Double
+                                : FrameSlotKind.Object;
+                            if (kind == FrameSlotKind.Object) e.staticObjectLocals.add(field.id);
+                            else if (kind == FrameSlotKind.Long) e.staticLocals.add(field.id);
+                            else e.staticScalars.put(field.id, kind);
+                            b.beginRestoreDataScalar(layout, index, e.locals.get(field.id));
+                            read(binder, false).emit(e); b.endRestoreDataScalar();
                         }
                     }
                     emitResult(alt.body, e, destination); b.endBlock();
-                    for (var fields : alt.fields) for (var field : fields) e.locals.remove(field.id);
+                    for (var fields : alt.fields) for (var field : fields) {
+                        e.locals.remove(field.id); e.staticScalars.remove(field.id);
+                        e.staticLocals.remove(field.id); e.staticObjectLocals.remove(field.id);
+                    }
                 }
                 void emit(int index) {
                     if (index == explicit.size()) {
@@ -5282,6 +5376,19 @@ public final class BytecodeProgram implements ExecutableProgram {
                         return;
                     }
                     var alt = explicit.get(index);
+                    if (explicit.size() == 1 && fallback == null && "data".equals(alt.kind)) {
+                        // This is a checked constructor projection, not a choice
+                        // between guest arms. Keep the mismatch failure cold.
+                        var matched = b.createLabel();
+                        b.beginUnprofiledIfThen();
+                        if (category == CaseCategory.DATA) b.beginMatchDataValue((DataLayout) alt.value);
+                        else b.beginMatchData((DataLayout) alt.value);
+                        read(binder, false).emit(e);
+                        if (category == CaseCategory.DATA) b.endMatchDataValue(); else b.endMatchData();
+                        b.emitBranch(matched); b.endUnprofiledIfThen();
+                        b.emitFailCase(); b.emitLabel(matched); emitAlternative(alt);
+                        return;
+                    }
                     if (destination == null) b.beginConditional(); else b.beginIfThenElse();
                     if (category == CaseCategory.DATA) b.beginMatchDataValue((DataLayout) alt.value);
                     else if ("data".equals(alt.kind)) b.beginMatchData((DataLayout) alt.value);
@@ -5337,6 +5444,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 if (result != null) b.emitLoadLocal(result);
             }
             b.endBlock(); e.locals.remove(binder.id);
+            e.staticLocals.remove(binder.id); e.staticObjectLocals.remove(binder.id);
         }), mergedProof));
     }
 
@@ -6591,8 +6699,8 @@ public final class BytecodeProgram implements ExecutableProgram {
                 var slots = tupleSlots(shape, destination);
                 switch (name) {
                     case "newPromptTag#" -> {
-                        b.beginStoreLocal(destination.getFirst()); b.beginNewPromptTag(); operands.getFirst().emit(e);
-                        b.endNewPromptTag(); b.endStoreLocal();
+                        b.beginStaticStoreObject(destination.getFirst()); b.beginNewPromptTag(); operands.getFirst().emit(e);
+                        b.endNewPromptTag(); b.endStaticStoreObject();
                     }
                     case "control0#" -> {
                         b.beginConsumeDelimited(slots); beginAnnotationYield(e);
@@ -6601,14 +6709,14 @@ public final class BytecodeProgram implements ExecutableProgram {
                     }
                     default -> {
                         b.beginBlock();
-                        var result = b.createLocal("delimited boundary result", null);
-                        b.beginTryCatch(); b.beginStoreLocal(result); b.beginDelimitedBoundary(name, shape, language, metrics);
+                        var result = b.createLocal("delimited boundary result", FrameSlotKind.Object);
+                        b.beginTryCatch(); b.beginStaticStoreObject(result); b.beginDelimitedBoundary(name, shape, language, metrics);
                         operands.get(0).emit(e); if (operands.size() == 3) operands.get(1).emit(e); else b.emitLoadNull();
-                        operands.getLast().emit(e); b.endDelimitedBoundary(); b.endStoreLocal();
-                        b.beginBlock(); b.beginStoreLocal(result); beginAnnotationYield(e);
+                        operands.getLast().emit(e); b.endDelimitedBoundary(); b.endStaticStoreObject();
+                        b.beginBlock(); b.beginStaticStoreObject(result); beginAnnotationYield(e);
                         b.beginDelimitedOnly(); b.emitLoadException(); b.endDelimitedOnly(); endAnnotationYield(e);
-                        b.endStoreLocal(); b.endBlock(); b.endTryCatch();
-                        b.beginConsumeDelimited(slots); b.emitLoadLocal(result); b.endConsumeDelimited(); b.endBlock();
+                        b.endStaticStoreObject(); b.endBlock(); b.endTryCatch();
+                        b.beginConsumeDelimited(slots); b.emitStaticLoadObject(result); b.endConsumeDelimited(); b.endBlock();
                     }
                 }
             });

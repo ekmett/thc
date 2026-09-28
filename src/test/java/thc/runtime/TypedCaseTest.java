@@ -130,6 +130,54 @@ class TypedCaseTest {
             } finally { context.leave(); }
         }
     }
+    @Test void singletonLiteralKeepsItsFirstInstalledMatchAndStillRejectsMismatch() throws Exception {
+        try (var context = Main.executionContext(false)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var body = caseOf(variable("input"), "scrutinee", wide, list(arm(42, number(7))));
+                var program = load(language, "ast", body, wide);
+                var target = program.entryTarget("select");
+                compile(target);
+                var runtime = com.oracle.truffle.api.Truffle.getRuntime();
+                runtime.getClass().getMethod("bypassedInstalledCode", Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"))
+                    .invoke(runtime, target);
+                assertEquals(7L, Calls.target(target, new Object[]{0L, 42L}));
+                assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
+                assertEquals("Non-exhaustive Core case", assertThrows(RuntimeFault.class,
+                    () -> Calls.target(target, new Object[]{0L, 43L})).getMessage());
+            } finally { context.leave(); }
+        }
+    }
+    @Test void singletonConstructorKeepsFirstInstalledMatchAndRejectsMismatch() throws Exception {
+        each((enabled, backend, unused) -> {
+            var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+            var exactData = new LinkedHashMap<>(data); exactData.put("evaluated", true);
+            var alternative = list("data", "Box", list("payload"), variable("payload"),
+                map("binders", list(param("payload", wide))));
+            var body = caseOf(variable("input"), "whole", exactData, list(alternative));
+            var function = list("lam", list(param("input", exactData)), body,
+                map("rep", closure, "resultRep", wide, "entryStrict", list(true)));
+            var module = map("bindings", list(binding("partial", function)),
+                "constructors", list(
+                    map("id", "Box", "name", "Box", "arity", 1, "kind", "boxed", "fieldReps", list(list("IntRep")), "fieldLifted", list(false), "strictFields", list(false)),
+                    map("id", "Other", "name", "Other", "arity", 0, "kind", "boxed", "fieldReps", list(), "fieldLifted", list(), "strictFields", list())));
+            ExecutableProgram program = backend.equals("ast") ? new Program(language, module) : new BytecodeProgram(language, module);
+            var layout = program.constructorLayout("Box");
+            var value = layout.allocate();
+            layout.initializeLong(value, 0, 42L);
+            var mismatch = program.constructorLayout("Other").allocate();
+            var target = program.entryTarget("partial");
+            compile(target);
+            var runtime = com.oracle.truffle.api.Truffle.getRuntime();
+            runtime.getClass().getMethod("bypassedInstalledCode", Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"))
+                .invoke(runtime, target);
+            assertEquals(42L, Calls.target(target, new Object[]{0L, value}));
+            assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), enabled + "/" + backend);
+            assertEquals("Non-exhaustive Core case", assertThrows(RuntimeFault.class,
+                () -> Calls.target(target, new Object[]{0L, mismatch})).getMessage());
+        });
+    }
     @Test void defaultOnlyCasesForwardConcreteReferencesAndForceSharedScrutineeOnce() throws Exception {
         each((enabled, backend, p) -> {
             var value = call(p, "make", Long.MIN_VALUE); var function = p.entryValue("plus"); var literal = ManagedAddress.fromHex("41ff");

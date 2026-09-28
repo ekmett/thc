@@ -1254,7 +1254,8 @@ public final class Program implements ExecutableProgram {
                         int[] lanes = {child.layout.bind(id + " constructor vector")};
                         vectorFields[physical] = lanes;
                         slots.add(child.bindTuple(id, proof, lanes).slot);
-                    } else slots.add(child.bind(id, layout != null && layout.isLong(physical), proof).slot);
+                    } else slots.add(child.bind(id, layout != null && layout.isLong(physical), proof,
+                        false, null, null, FrameLayout.carrierKind(proof)).slot);
                 }
             }
             int tag = switch (kind) {
@@ -1264,7 +1265,7 @@ public final class Program implements ExecutableProgram {
                 default -> throw new RuntimeFault("Invalid Core alternative kind " + kind);
             };
             Expr body = caseArm((List<Object>) alt.get(3), child, tail);
-            alternatives[a] = new Alternative(tag, value, ints(slots), body, vectorFields);
+            alternatives[a] = new Alternative(tag, value, ints(slots), body, vectorFields, alternatives.length > 1);
             results.add(body.getRepresentation()); kinds.add(tag);
             allLong &= tag != LITERAL_ALTERNATIVE || value instanceof Long;
             anyAggregate |= body.getRepresentation().isAggregate();

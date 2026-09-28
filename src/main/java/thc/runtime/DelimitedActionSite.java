@@ -17,12 +17,13 @@ import static thc.runtime.TupleResults.*;
 public final class DelimitedActionSite extends Node {
     private final Language language;
     private final Metrics metrics;
-    @Child private Dispatch one, two;
+    @Child private PreparedDispatch one, two;
     @Child private Force force;
     @Child private TailCallLoop trampoline;
     public DelimitedActionSite(Language language, Metrics metrics) {
         this.language = language; this.metrics = metrics;
-        one = Dispatch.create(1, false, metrics); two = Dispatch.create(2, false, metrics);
+        one = new PreparedDispatch(1, false, metrics, new boolean[0], null);
+        two = new PreparedDispatch(2, false, metrics, new boolean[0], null);
         force = new Force(metrics); trampoline = new TailCallLoop(metrics);
     }
     public Object tail(TailCall transfer) { return trampoline.execute(transfer); }
