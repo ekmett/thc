@@ -49,7 +49,7 @@ import javax.crypto.spec.SecretKeySpec
  * of unused source snapshots or projections. Reachable spans retain their own
  * source independently; their existing operation monitors publish live counts.
  */
-internal class CoreJsonLoadingStatistics : () -> Map<String, Any> {
+internal class CoreJsonLoadingStatistics : () -> Map<String, Any>, java.util.function.Supplier<Map<String, Any>> {
     private val sources = ArrayList<CoreJsonIndex.Counters>()
     private val adapters = linkedSetOf<CoreJsonBindings.Counters>()
     val isEmpty: Boolean get() = sources.isEmpty()
@@ -57,6 +57,7 @@ internal class CoreJsonLoadingStatistics : () -> Map<String, Any> {
         sources += source.counters
         adapters += adapter.counters
     }
+    override fun get(): Map<String, Any> = invoke()
     override fun invoke(): Map<String, Any> {
         val sourceTotals = sources.map(CoreJsonIndex.Counters::statistics)
         val adapterTotals = adapters.map(CoreJsonBindings.Counters::statistics)

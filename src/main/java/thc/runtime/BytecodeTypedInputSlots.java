@@ -3,12 +3,13 @@
 
 package thc.runtime;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.bytecode.BytecodeNode;
 import com.oracle.truffle.api.bytecode.LocalAccessor;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
+
+import static thc.runtime.RuntimeFault.fault;
 
 /** Replay-local destinations for a typed input loan; never retains an activation. */
 public final class BytecodeTypedInputSlots {
@@ -150,8 +151,4 @@ public final class BytecodeTypedInputSlots {
         for (var slot : source.getSlots()) slot.clear(root.getBytecodeNode(), frame);
     }
 
-    private static RuntimeFault fault(String message) {
-        CompilerDirectives.transferToInterpreterAndInvalidate();
-        return new RuntimeFault(message);
-    }
 }
