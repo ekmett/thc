@@ -255,7 +255,7 @@ Details: [delimited continuations](delimited-continuations.md),
 
 | Primop | Current behavior and consequence |
 | --- | --- |
-| `tagToEnum#` | Only saturated applications to concrete, parameterless ordinary enumeration types are admitted. Valid phantom-parameter enumerations and enumeration data-family instances are excluded by the exporter. |
+| `tagToEnum#` | Only saturated applications to concrete, parameterless ordinary enumeration types are admitted. An erased newtype result cast is supported with the original complete enum family and exact lifted scalar result carrier; using a newtype as the enum type is not supported. Valid phantom-parameter enumerations and enumeration data-family instances are excluded by the exporter. |
 
 This is not a restriction on `dataToTagSmall#` or `dataToTagLarge#`, which admit
 parameterized algebraic families and data-family representation types.
