@@ -180,6 +180,7 @@ foreignCall value = object $ ["schema" .= foreignSchema value,"target" .= target
   "arity" .= foreignArity value,"suppliedArity" .= foreignSuppliedArity value,
   "argumentReps" .= arr rep (foreignArgumentReps value),"resultRep" .= rep (foreignResultRep value)]
   ++ p "intrinsic" str (foreignIntrinsic value) ++ p "javascriptSource" str (foreignJavaScriptSource value)
+  ++ p "argumentTypes" (arr (\value' -> case value' of Known name -> str name; _ -> Null)) (foreignArgumentTypes value)
   where
     target DynamicTarget = object ["kind" .= String "dynamic"]
     target (StaticTarget symbol unit function) = object $

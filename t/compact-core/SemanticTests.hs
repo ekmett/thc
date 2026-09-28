@@ -76,6 +76,22 @@ semanticTests = TestList
       withEncoded (\_ encoder -> encodeBinding encoder completeBinding) $ \bytes strings offset ->
         assertEqual "all fields" (Right (completeBinding,fromIntegral (BS.length bytes)))
           (decodeBindingAt bytes strings offset)
+  , TestLabel "foreign byte-array argument identity survives selected wire records" $ TestCase $
+      forM_ ["ByteArray#", "MutableByteArray#"] $ \arrayType -> do
+        let amend (Object fields)
+              | KM.member "argumentReps" fields = Object (KM.insert "schema" (Number 2)
+                  (KM.insert "argumentTypes" (toJSON [Just arrayType :: Maybe Text.Text]) fields))
+              | otherwise = Object (fmap amend fields)
+            amend (Array values) = Array (fmap amend values)
+            amend value = value
+            original = amend (moduleJSON completeFacts [completeBinding])
+        (facts, bindings) <- either fail pure (parseModuleWithoutDebug original)
+        assertEqual "JSON retains the actual array mutability" original (moduleJSON facts bindings)
+        case bindings of
+          [binding] -> withEncoded (\_ encoder -> encodeBinding encoder binding) $ \bytes strings offset ->
+            assertEqual "selected bytecode record retains array identity" (Right binding)
+              (fst <$> decodeBindingAt bytes strings offset)
+          _ -> assertFailure "Expected one unchanged binding"
   , TestLabel "shape sharing never shares occurrence evaluatedness" $ TestCase $
       withEncoded (\streams encoder -> do
         encodeRep encoder tupleCold
@@ -353,7 +369,7 @@ completeBinding = Binding (Global "main:Typed.all") IOUnit (Known True) 1 (Known
       , metaEntryStrict = Known [True], metaEntryStrictSource = Known "ghc-cbv"
       , metaCallDemand = Known (CallDemand 1 [True])
       , metaForeignCall = Known (ForeignCall 1 (StaticTarget "original_fn" (Known "real-unit") True)
-          CApi SafeCall 1 1 [longRep] longRep Unknown (Known "return $1"))
+          CApi SafeCall 1 1 [longRep] longRep Unknown (Known "return $1") Missing)
       , metaExceptionPayload = Known (ExceptionPayload 1 "ghc-internal:GHC.Internal.Exception.Type.SomeException")
       , metaEnumFamily = Known (EnumFamily "main:T" ["main:T.A","main:T.B"])
       , metaTagFamily = Known (TagFamily (EnumFamily "main:T" ["main:T.A"]) 7 True)
@@ -399,7 +415,7 @@ completeImports = ImportProof 1 "retained-static-import-products" "not-linked"
     [expected,expected] [])
   where
     expected = ForeignCall 1 (StaticTarget "original_fn" (Known "main") True) CApi InterruptibleCall
-      2 2 [longRep,tupleCold] tupleHot Unknown Missing
+      2 2 [longRep,tupleCold] tupleHot Unknown Missing Missing
 
 qualified :: QualifiedName
 qualified = QualifiedName "main" "Typed" "original" "value"

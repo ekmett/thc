@@ -332,9 +332,13 @@ foreignCall :: Decoder -> Get ForeignCall
 foreignCall decoder = foreignCallWith decoder (representation decoder)
 
 foreignCallWith :: Decoder -> Get Rep -> Get ForeignCall
-foreignCallWith decoder representationValue = ForeignCall <$> getUVar <*> target <*> enumeration <*> enumeration
-  <*> getUVar <*> getUVar <*> list decoder representationValue <*> representationValue
-  <*> present (string decoder) <*> present (string decoder)
+foreignCallWith decoder representationValue = do
+  schema <- getUVar
+  unless (schema == 1 || schema == 2) (fail "Unsupported compact foreign-call schema")
+  ForeignCall schema <$> target <*> enumeration <*> enumeration
+    <*> getUVar <*> getUVar <*> list decoder representationValue <*> representationValue
+    <*> present (string decoder) <*> present (string decoder)
+    <*> (if schema == 2 then present (list decoder (arrayElement (string decoder))) else pure Missing)
   where
     target = getWord8 >>= \kind -> case kind of
       0 -> StaticTarget <$> string decoder <*> present (string decoder) <*> boolean

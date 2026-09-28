@@ -362,12 +362,24 @@ tagFamily = withObject "nominal data-to-tag family" $ \fields -> do
 
 foreignCall :: Value -> Parser ForeignCall
 foreignCall = withObject "foreign call" $ \fields -> do
-  checked fields ["schema","target","convention","safety","arity","suppliedArity","argumentReps","resultRep","intrinsic","javascriptSource"]
-  ForeignCall <$> fields .: "schema" <*> (fields .: "target" >>= target)
+  checked fields ["schema","target","convention","safety","arity","suppliedArity","argumentReps","resultRep","intrinsic","javascriptSource","argumentTypes"]
+  schema <- fields .: "schema"
+  types <- optional fields "argumentTypes" (array (\value -> case value of
+    Null -> pure Unknown
+    String "ByteArray#" -> pure (Known "ByteArray#")
+    String "MutableByteArray#" -> pure (Known "MutableByteArray#")
+    _ -> fail "Foreign argument type must be a primitive byte array or null"))
+  arity <- fields .: "arity"
+  unless (case (schema,types) of
+      (1,Missing) -> True
+      (2,Known values) -> fromIntegral (length values) == (arity :: Word64) && any (/= Unknown) values
+      _ -> False) (fail "Foreign argument types disagree with schema or arity")
+  ForeignCall schema <$> (fields .: "target" >>= target)
     <*> (fields .: "convention" >>= parseConvention)
     <*> (fields .: "safety" >>= parseSafety)
-    <*> fields .: "arity" <*> fields .: "suppliedArity" <*> (fields .: "argumentReps" >>= array rep)
+    <*> pure arity <*> fields .: "suppliedArity" <*> (fields .: "argumentReps" >>= array rep)
     <*> (fields .: "resultRep" >>= rep) <*> optional fields "intrinsic" bytes <*> optional fields "javascriptSource" bytes
+    <*> pure types
   where
     target = withObject "foreign target" $ \fields -> do
       kind <- fields .: "kind" :: Parser Text.Text

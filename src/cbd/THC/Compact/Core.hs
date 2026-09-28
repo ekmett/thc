@@ -98,6 +98,7 @@ data ForeignCall = ForeignCall
   , foreignResultRep :: !Rep
   , foreignIntrinsic :: !(Presence BS.ByteString)
   , foreignJavaScriptSource :: !(Presence BS.ByteString)
+  , foreignArgumentTypes :: !(Presence [Presence BS.ByteString])
   } deriving (Eq, Show)
 
 data Meta = Meta

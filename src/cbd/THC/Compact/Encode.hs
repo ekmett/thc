@@ -516,6 +516,11 @@ foreignCall encoder = foreignCallWith encoder (encodeRep encoder)
 
 foreignCallWith :: Encoder -> (Rep -> IO ()) -> ForeignCall -> IO ()
 foreignCallWith encoder representation value = do
+  unless (case (foreignSchema value,foreignArgumentTypes value) of
+      (1,Missing) -> True
+      (2,Known types) -> fromIntegral (length types) == foreignArity value &&
+        any (/= Unknown) types && all (`elem` [Unknown,Known "ByteArray#",Known "MutableByteArray#"]) types
+      _ -> False) (fail "Foreign argument types disagree with schema or arity")
   number encoder (foreignSchema value)
   case foreignTarget value of
     StaticTarget symbol unit isFunction -> do
@@ -532,6 +537,8 @@ foreignCallWith encoder representation value = do
   representation (foreignResultRep value)
   present encoder (string encoder) (foreignIntrinsic value)
   present encoder (string encoder) (foreignJavaScriptSource value)
+  when (foreignSchema value == 2) $
+    present encoder (list encoder (present encoder (string encoder))) (foreignArgumentTypes value)
 
 alternative :: Encoder -> Alternative -> IO ()
 alternative encoder value = case value of

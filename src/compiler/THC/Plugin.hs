@@ -41,6 +41,7 @@ import GHC.Types.Name.Occurrence (occNameMangledFS)
 import GHC.Utils.Encoding.UTF8 (utf8DecodeByteString)
 import GHC.Builtin.Names (ioTyConName)
 import GHC.Builtin.Types (intTy, doubleTy, unitTy)
+import GHC.Builtin.Types.Prim (byteArrayPrimTyCon, mutableByteArrayPrimTyCon)
 import GHC.Tc.Types (TcGblEnv(..))
 import qualified THC.Sources as Sources
 import qualified THC.CBV as CBV
@@ -647,13 +648,22 @@ foreignCallFields d f@(Var v) args
   , let instantiated = exprType (mkApps f types)
   , null (fst (splitForAllTyVars instantiated))
   , let (parameters,result) = splitFunTys instantiated
+        arrays = map (arrayType . scaledThing) parameters
+        hasArrays = any (\case S _ -> True; _ -> False) arrays
   = [("foreignCall",O (
-      [("schema",num (1 :: Int)),("target",targetRecord target)
+      [("schema",num (if hasArrays then 2 else 1 :: Int)),("target",targetRecord target)
       ,("convention",S (callConvention convention)),("safety",S (callSafety safety))
       ,("arity",num (length parameters)),("suppliedArity",num (length values))
       ,("argumentReps",A [typeRep (scaledThing parameter) False | parameter <- parameters])
-      ,("resultRep",typeRep result False)] ++ javascriptFields target convention safety))]
+      ,("resultRep",typeRep result False)] ++ [("argumentTypes",A arrays) | hasArrays]
+      ++ javascriptFields target convention safety))]
   where
+    -- Runtime reps erase byte-array mutability. Retain only the two actual
+    -- primitive type identities; scalar widths remain owned by argumentReps.
+    arrayType ty = case splitTyConApp_maybe (unwrapType ty) of
+      Just (constructor, _) | constructor == byteArrayPrimTyCon -> S "ByteArray#"
+      Just (constructor, _) | constructor == mutableByteArrayPrimTyCon -> S "MutableByteArray#"
+      _ -> Z
     isTypeArg Type{} = True
     isTypeArg _ = False
     targetRecord (Foreign.StaticTarget _ symbol unit isFunction) = O

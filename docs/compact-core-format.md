@@ -173,6 +173,12 @@ p(str javascriptSource)`. `Target` tag 0 STATIC carries `str symbol, p(str unit)
 b isFunction`; tag 1 DYNAMIC carries nothing. Convention tags 0..4 are ccall,
 capi, stdcall, prim, javascript. Safety tags 0..2 are unsafe, safe, interruptible.
 These fields do not confer provenance on a similarly named ordinary Haskell call.
+Schema 1 ends at `javascriptSource`. Schema 2 appends
+`p(list(p(str))) argumentTypes`, aligned with the declared argument list. It is
+present only when GHC supplied a primitive `ByteArray#` or `MutableByteArray#`
+argument: those entries retain that exact identity and all other entries are
+null. Existing `argumentReps` still owns scalar widths; schema-1 bytes do not
+change.
 
 ### Representation shapes and occurrences
 

@@ -24,10 +24,13 @@ class CoreCompactRecordsTest {
     private final byte[] id = "unit:M.f".getBytes(StandardCharsets.UTF_8);
     @FunctionalInterface private interface Action { void run(CoreCompactRecords records, CoreCompactFile file) throws Exception; }
     private void module(byte[] data, Action action) throws Exception {
+        module(data, id, action);
+    }
+    private void module(byte[] data, byte[] strings, Action action) throws Exception {
         var symbols = ByteBuffer.allocate(24).order(ByteOrder.LITTLE_ENDIAN)
             .put(MessageDigest.getInstance("MD5").digest(id)).putLong(0).array();
         var encoded = CoreCbdTestSupport.archive(CoreCbdTestSupport.header(new byte[0], 1, 0, 0),
-            List.of(data, id, new byte[0], new byte[0], new byte[0], symbols), Set.of(), false);
+            List.of(data, strings, new byte[0], new byte[0], new byte[0], symbols), Set.of(), false);
         var path = directory.resolve("module.cbd");
         Files.write(path, encoded);
         var sha = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(encoded));
@@ -43,6 +46,22 @@ class CoreCompactRecordsTest {
     private byte[] literal(int kind, byte[] payload) { return concat(bytes(2), new byte[10], bytes(kind), payload); }
     private byte[] binding(byte[] expression) { return concat(bytes(0, 0, id.length, 0, 2, 1, 0, 0, 0, 0, 0, 0, 0), expression); }
     private record LiteralCase(int kind, byte[] payload, String tag, Object expected) {}
+    @Test void schemaTwoForeignArgumentsKeepArrayIdentityAndScalarNullPositions() throws Exception {
+        byte[] immutable = "ByteArray#".getBytes(StandardCharsets.UTF_8);
+        byte[] mutable = "MutableByteArray#".getBytes(StandardCharsets.UTF_8);
+        // Void expression with only Meta.foreignCall present. Shapes are
+        // deliberately unevidenced; this is a codec control, not call admission.
+        var expression = concat(bytes(8), new byte[5], bytes(2, 2, 1, 0, 0, 3, 3, 3),
+            new byte[40], bytes(0, 0, 2, 3, 2, id.length, immutable.length, 1,
+                2, id.length + immutable.length, mutable.length), new byte[4]);
+        module(binding(expression), concat(id, immutable, mutable), (records, file) -> {
+            var body = (List<?>) records.binding(0).get("expr");
+            var call = (Map<?, ?>) ((Map<?, ?>) body.getLast()).get("foreignCall");
+            assertEquals(2L, call.get("schema"));
+            assertEquals(Arrays.asList("ByteArray#", null, "MutableByteArray#"), call.get("argumentTypes"));
+            assertEquals(3, ((List<?>) call.get("argumentReps")).size());
+        });
+    }
     @Test void explicitLiteralRecordsPreserveRawBytesIntegersAndIeeeBits() throws Exception {
         var cases = List.of(
             new LiteralCase(0, bytes(83), "int", "-42"),
