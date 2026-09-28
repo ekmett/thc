@@ -143,7 +143,7 @@ public final class ManagedNativeAllocations {
                 }
             } catch (Throwable failure) { throw nativeFailure("Native malloc invocation failed", failure); }
             if (owner == null) {
-                Language.currentState(null).getStdio().nativeError$org_intelligence_thc(errno);
+                Language.currentState(null).getStdio().nativeError(errno);
                 return ManagedAddress.Companion.nullAddress();
             }
             try {

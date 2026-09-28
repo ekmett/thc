@@ -85,7 +85,7 @@ class WindowsDirectoryStreamsTest {
             var metadata = CoreRepresentations.INSTANCE.metadata(argument);
             return metadata == null ? null : metadata.get("rep");
         }).toList();
-        return CoreOriginalStdio.INSTANCE.validate(call.get(6), reps, (List<?>) call.get(3), ((Map<?, ?>) call.get(6)).get("rep"));
+        return CoreOriginalStdio.validate(call.get(6), reps, (List<?>) call.get(3), ((Map<?, ?>) call.get(6)).get("rep"));
     }
 
     @Test void genuineWindowsCoreMatchesNativeOracleInInterpreterAndEveryFirstCompiledCall() throws Exception {

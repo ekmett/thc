@@ -217,7 +217,7 @@ prepareUnixLibc root = do
   inputHashes <- hashes root [source, "thc.cabal", "test/haskell-fixtures/Main.hs", "test/haskell-fixtures/FixtureSupport.hs",
     "src/test/resources/core/original-unix-libc-descriptors.json", "test/haskell-fixtures/UnixLibcFixtures.hs",
     "compiler/THC/Plugin.hs", "compiler/THC/Interface.hs", "scripts/core_original_foreign.py",
-    "scripts/audit-core.py", "scripts/core-capabilities.json", "src/main/kotlin/thc/runtime/CoreOriginalStdio.kt", "src/main/java/thc/runtime/CoreEnvironmentForeign.java", "src/main/java/thc/runtime/EnvironmentOp.java", "src/main/java/thc/runtime/EnvironmentExpression.java"]
+    "scripts/audit-core.py", "scripts/core-capabilities.json", "src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java", "src/main/java/thc/runtime/CoreEnvironmentForeign.java", "src/main/java/thc/runtime/EnvironmentOp.java", "src/main/java/thc/runtime/EnvironmentExpression.java"]
   artifactHashes <- hashes root ([directory </> file | file <- ["pre.json", "post.json", "oracle.json"]] ++
     [directory </> stage ++ "-" ++ name ++ ".audit.json" | stage <- ["pre","post"], name <- entries] ++
     concatMap commandArtifacts commands)

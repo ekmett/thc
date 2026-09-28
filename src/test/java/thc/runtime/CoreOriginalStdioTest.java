@@ -30,7 +30,7 @@ class CoreOriginalStdioTest {
         }
         Map<String, Object> target() { return (Map<String, Object>) descriptor.get("target"); }
         List<Map<String, Object>> declared() { return (List<Map<String, Object>>) descriptor.get("argumentReps"); }
-        OriginalStdioOp validate() { return CoreOriginalStdio.INSTANCE.validate(metadata, arguments, flags, result); }
+        OriginalStdioOp validate() { return CoreOriginalStdio.validate(metadata, arguments, flags, result); }
         Map<String, Object> proof(int site) {
             return site == 0 ? (Map<String, Object>) descriptor.get("resultRep") : site == 1 ? (Map<String, Object>) metadata.get("rep") : result;
         }
@@ -57,7 +57,7 @@ class CoreOriginalStdioTest {
             var input = new Input("safe_write"); input.target().put("symbol", unknown); assertNull(input.validate());
         }
         for (var metadata : Arrays.asList(null, Map.of(), Collections.singletonMap("foreignCall", null)))
-            assertNull(CoreOriginalStdio.INSTANCE.validate(metadata, List.of(), List.of(), null));
+            assertNull(CoreOriginalStdio.validate(metadata, List.of(), List.of(), null));
     }
     @Test void exactTargetDescriptorAndIntegerFields() {
         for (var name : fixtures.getSignatures().keySet()) {
@@ -148,15 +148,15 @@ class CoreOriginalStdioTest {
     private List<Object> head(Object id) { return Arrays.asList("var", id, Map.of("rep", fixtures.closure())); }
     @Test void foreignHeadsAreUnboundDeclarationsNotCallerNameAliases() {
         for (var name : List.of("arbitrary", "other-package:Caller.inlined", "write"))
-            CoreOriginalStdio.INSTANCE.validateHead(head(name), false);
+            CoreOriginalStdio.validateHead(head(name), false);
         var malformed = List.of(List.of(), List.of("var", "foreign"), List.of("prim", "foreign"),
             head(null), head(""), head(3), List.of("var", "foreign", Map.of()));
-        for (var value : malformed) assertThrows(RuntimeFault.class, () -> CoreOriginalStdio.INSTANCE.validateHead(value, false));
-        assertThrows(RuntimeFault.class, () -> CoreOriginalStdio.INSTANCE.validateHead(head("foreign"), true));
+        for (var value : malformed) assertThrows(RuntimeFault.class, () -> CoreOriginalStdio.validateHead(value, false));
+        assertThrows(RuntimeFault.class, () -> CoreOriginalStdio.validateHead(head("foreign"), true));
         for (var change : new Object[][]{{"kind","long"},{"primReps",List.of("IntRep")},
             {"evaluated",false},{"evaluated",1},{"extra",null}}) {
             var proof = fixtures.closure(); proof.put((String) change[0], change[1]);
-            assertThrows(RuntimeFault.class, () -> CoreOriginalStdio.INSTANCE.validateHead(List.of("var", "foreign", Map.of("rep", proof)), false));
+            assertThrows(RuntimeFault.class, () -> CoreOriginalStdio.validateHead(List.of("var", "foreign", Map.of("rep", proof)), false));
         }
     }
 }

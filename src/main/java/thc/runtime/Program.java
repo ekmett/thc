@@ -254,7 +254,7 @@ public final class Program implements ExecutableProgram {
         ArrayOp.validateApplications(requested);
         CoreStackForeign.validateHeads(requested);
         CoreStackInfoForeign.validateHeads(requested);
-        CoreOriginalStdio.INSTANCE.validateHeads(requested);
+        CoreOriginalStdio.validateHeads(requested);
         CoreProcessForeign.validateHeads(requested);
         CoreStablePointers.validateHeads(requested);
         CoreRtsShutdown.INSTANCE.validateHeads(requested);
@@ -1309,7 +1309,7 @@ public final class Program implements ExecutableProgram {
         var foreignMetadata = packageScalar == null ? metadata : null;
         var stackClone = CoreStackForeign.validate(foreignMetadata, argumentMetadata(args), flags);
         var stackInfo = CoreStackInfoForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
-        var originalStdio = CoreOriginalStdio.INSTANCE.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
+        var originalStdio = CoreOriginalStdio.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
         var originalProcess = CoreProcessForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
         var capi = CoreCapiForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr), foreignLinks);
         var stableFree = CoreStablePointers.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
@@ -1400,12 +1400,12 @@ public final class Program implements ExecutableProgram {
             return new ProcessForeignExpression(originalProcess, operands, tupleProof);
         }
         if (originalStdio != null) {
-            CoreOriginalStdio.INSTANCE.validateHead(fn, defined);
+            CoreOriginalStdio.validateHead(fn, defined);
             Expr[] operands = new Expr[args.size()];
             for (int i = 0; i < operands.length; i++) {
                 operands[i] = compile(args.get(i), scope, false);
                 if (originalStdio.getProcessIdentity() || originalStdio.getEventDescriptor() || originalStdio.getWaitStatus() || originalStdio.getPathRemoval() || originalStdio.getFlagConstant() || originalStdio.getFcntl() || originalStdio.getReadiness() || originalStdio.getSeekConstant() || originalStdio.getStat() || originalStdio.getTermios() || originalStdio.getSigset() || originalStdio.getSavedTermios() || originalStdio.getReadImage() || originalStdio.getPathStat() || originalStdio.getPathMode() || originalStdio.getPathLink() || originalStdio.getCurrentDirectory() || originalStdio.getDirectoryStream() || originalStdio.getOpening() || originalStdio.getIconv() || originalStdio.getStrerror() || originalStdio.getDuplication() || originalStdio.getLocking() || originalStdio == OriginalStdioOp.SET_ERRNO || originalStdio == OriginalStdioOp.SIGPROCMASK || originalStdio == OriginalStdioOp.ACCESS || originalStdio == OriginalStdioOp.UNLINKAT || originalStdio == OriginalStdioOp.FSTATAT || originalStdio == OriginalStdioOp.TCSETATTR)
-                    CoreOriginalStdio.INSTANCE.validateScalarOperand(originalStdio, i, operands[i].getRepresentation(), bindingProof(args.get(i), scope));
+                    CoreOriginalStdio.validateScalarOperand(originalStdio, i, operands[i].getRepresentation(), bindingProof(args.get(i), scope));
             }
             return new OriginalStdioExpression(originalStdio, operands, tupleProof);
         }

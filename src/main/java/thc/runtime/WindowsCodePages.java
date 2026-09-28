@@ -240,7 +240,7 @@ public final class WindowsCodePages {
     }
     @TruffleBoundary public void setErrno() {
         current();
-        context.getStdio().captureForeignErrno$org_intelligence_thc(mapErrno(lastError.get()));
+        context.getStdio().captureForeignErrno(mapErrno(lastError.get()));
     }
     @TruffleBoundary public ManagedAddress message(long errorCode) {
         current();

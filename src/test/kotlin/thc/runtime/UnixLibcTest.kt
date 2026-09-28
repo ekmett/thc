@@ -66,7 +66,7 @@ class UnixLibcTest {
         val manifest = json("manifest.json")
         assertEquals("9.14.1", manifest["ghc"])
         val installedUnit = manifest["unixUnit"]
-        assertTrue(isOriginalUnixUnit(installedUnit))
+        assertTrue(CoreOriginalStdio.isOriginalUnixUnit(installedUnit))
         assertEquals(entries.keys, (manifest["entries"] as List<String>).toSet())
         for (key in listOf("inputHashes", "artifactHashes")) {
             val hashes = manifest[key] as Map<String, String>

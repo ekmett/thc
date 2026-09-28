@@ -74,7 +74,7 @@ class OriginalCurrentDirectoryTest {
     @Test fun originalUnixCallsMatchNativeAndTheFirstInstalledEntry() {
         val manifest = json("$prefix/manifest.json")
         assertEquals(operations.keys.toList(), manifest["entries"])
-        assertTrue(isOriginalUnixUnit(manifest["unixUnit"]))
+        assertTrue(CoreOriginalStdio.isOriginalUnixUnit(manifest["unixUnit"]))
         assertEquals(true, manifest["nativeIsolatedChild"])
         assertEquals(true, manifest["coordinatorCwdUnchanged"])
         assertEquals(true, manifest["privateRebuiltUnix"])

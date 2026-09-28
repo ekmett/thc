@@ -35,7 +35,7 @@ public final class SigsetImage {
             return 0;
         }
         long bit = signal >= 1 && signal <= signalBits.length ? signalBits[(int) signal - 1] : -1;
-        if (bit < 0) { stdio.nativeError$org_intelligence_thc(invalidErrno); return -1; }
+        if (bit < 0) { stdio.nativeError(invalidErrno); return -1; }
         long offset = bit / 8;
         address.writeWord8(offset, address.readWord8(offset) | (1L << ((int) bit % 8)));
         return 0;

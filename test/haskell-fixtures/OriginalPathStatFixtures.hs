@@ -199,7 +199,7 @@ prepareOriginalPathStat root = do
   inputHashes <- hashes root [source, "thc.cabal", "test/haskell-fixtures/Main.hs", "test/haskell-fixtures/FixtureSupport.hs",
     "test/haskell-fixtures/OriginalPathStatFixtures.hs",
     "compiler/THC/Plugin.hs", "compiler/THC/Interface.hs", "scripts/core_original_foreign.py",
-    "scripts/audit-core.py", "scripts/core-capabilities.json", "src/main/kotlin/thc/runtime/CoreOriginalStdio.kt"]
+    "scripts/audit-core.py", "scripts/core-capabilities.json", "src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java"]
   artifactHashes <- hashes root ([directory </> file | file <- ["pre.json", "post.json", "oracle.json"]] ++
     [directory </> stage ++ "-" ++ name ++ ".audit.json" | stage <- ["pre","post"], name <- entries] ++
     concatMap commandArtifacts commands)
