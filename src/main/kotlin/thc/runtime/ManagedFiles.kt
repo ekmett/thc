@@ -540,7 +540,7 @@ internal class ManagedFiles @JvmOverloads constructor(private val env: TruffleLa
         require(streams.size == 3)
         val claims = arrayOfNulls<OpenClaim>(3)
         val pins = mutableListOf<OpenDescription>()
-        val endpoints = Array<ManagedProcesses.Stream>(3) { ManagedProcesses.Stream.Closed }
+        val endpoints = Array<ManagedProcesses.Stream>(3) { ManagedProcesses.Stream.Endpoint.CLOSED }
         val acquired = mutableListOf<NativeFileResource>()
         var launch: ManagedProcesses.Launch? = null
         var processes: ManagedProcesses? = null
@@ -564,7 +564,7 @@ internal class ManagedFiles @JvmOverloads constructor(private val env: TruffleLa
                         fd == -1 -> {
                             val claim = OpenClaim(null, index == 0, unusedDescriptor(0))
                             claims[index] = claim; opening.add(claim)
-                            endpoints[index] = ManagedProcesses.Stream.Pipe
+                            endpoints[index] = ManagedProcesses.Stream.Endpoint.PIPE
                         }
                         fd == -2 -> Unit
                         fd >= 0 -> {

@@ -599,16 +599,16 @@ public final class Program implements ExecutableProgram {
                 if (proof == null) throw new IllegalArgumentException("Required value was null.");
                 yield rubbishLiterals.decode(proof);
             }
-            case "int8" -> ProgramKt.int8Literal(value);
-            case "int16" -> ProgramKt.int16Literal(value);
-            case "int32" -> ProgramKt.int32Literal(value);
-            case "int64" -> ProgramKt.int64Literal(value);
+            case "int8" -> ScalarLiterals.int8Literal(value);
+            case "int16" -> ScalarLiterals.int16Literal(value);
+            case "int32" -> ScalarLiterals.int32Literal(value);
+            case "int64" -> ScalarLiterals.int64Literal(value);
             case "word64" -> word64Literal(value);
             case "int", "char" -> Long.parseLong(value);
             case "word" -> Long.parseUnsignedLong(value);
             case "float" -> Float.parseFloat(value);
             case "double" -> Double.parseDouble(value);
-            case "word8", "word16", "word32" -> ProgramKt.narrowWordLiteral(kind, value);
+            case "word8", "word16", "word32" -> ScalarLiterals.narrowWordLiteral(kind, value);
             case "string-bytes" -> ManagedAddress.Companion.fromHex(value);
             case "null-addr" -> {
                 if (!value.equals("0")) throw new UnsupportedCore("Malformed null Addr# literal");

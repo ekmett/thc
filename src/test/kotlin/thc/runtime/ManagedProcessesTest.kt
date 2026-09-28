@@ -15,6 +15,8 @@ import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
 import org.junit.jupiter.api.io.TempDir
 import thc.Language
+import thc.runtime.ManagedProcesses.Stream.Endpoint.CLOSED
+import thc.runtime.ManagedProcesses.Stream.Endpoint.PIPE
 import java.lang.foreign.Arena
 import java.lang.foreign.FunctionDescriptor
 import java.lang.foreign.Linker
@@ -48,8 +50,7 @@ class ManagedProcessesTest {
         } }
     private fun line(result: ProcessResult) = "${result.status} ${result.exitCode ?: 991} ${result.errno}"
     private fun launchHeld(service: ManagedProcesses): ManagedProcesses.Launch {
-        val child = service.spawn(childArgs("hold"), emptyList(), input = ManagedProcesses.Stream.Pipe,
-            output = ManagedProcesses.Stream.Pipe)
+        val child = service.spawn(childArgs("hold"), emptyList(), null, PIPE, PIPE, CLOSED, 0, null, null, null)
         assertEquals("R", pipeRead(child.output!!, 1))
         return child
     }
@@ -89,7 +90,7 @@ class ManagedProcessesTest {
         val second = launchHeld(processes)
         same("terminate", processes.terminate(second.handle))
         same("terminated-wait", processes.waitFor(second.handle))
-        val third = processes.spawn(childArgs("exit", "17"), emptyList(), output = ManagedProcesses.Stream.Pipe)
+        val third = processes.spawn(childArgs("exit", "17"), emptyList(), null, CLOSED, PIPE, CLOSED, 0, null, null, null)
         assertEquals("", pipeRead(third.output!!, 1))
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
         var result = processes.poll(third.handle)
@@ -100,20 +101,20 @@ class ManagedProcessesTest {
         same("poll-after-poll", processes.poll(third.handle))
         same("wait-after-poll", processes.waitFor(third.handle))
         assertEquals(ProcessResult(0, null, 3), processes.terminate(third.handle), "Retired identity cannot signal a reused PID")
-        val searched = processes.spawn(args("true"), args("PATH=/missing-child-path"), searchPath = "/bin".toByteArray())
+        val searched = processes.spawn(args("true"), args("PATH=/missing-child-path"), null, CLOSED, CLOSED, CLOSED,
+            0, null, null, "/bin".toByteArray())
         same("parent-path", processes.waitFor(searched.handle))
     }
 
     @Test fun pipesEnvironmentAndContextDirectoryReachTheRealChild() = service { processes, _, owner ->
-        val pipes = processes.spawn(childArgs("pipes"), emptyList(), input = ManagedProcesses.Stream.Pipe,
-            output = ManagedProcesses.Stream.Pipe, error = ManagedProcesses.Stream.Pipe)
+        val pipes = processes.spawn(childArgs("pipes"), emptyList(), null, PIPE, PIPE, PIPE, 0, null, null, null)
         pipeWrite(pipes.input!!, "hello\n")
         assertEquals("out:hello\n", pipeRead(pipes.output!!, 1024))
         assertEquals("err:hello\n", pipeRead(pipes.error!!, 1024))
         assertEquals(ProcessResult(0, 0, 0), processes.waitFor(pipes.handle))
 
         val environment = processes.spawn(childArgs("environment"), args("THC_CHILD_VALUE=context-only"),
-            output = ManagedProcesses.Stream.Pipe)
+            null, CLOSED, PIPE, CLOSED, 0, null, null, null)
         assertEquals("context-only\n", pipeRead(environment.output!!, 1024))
         assertEquals(0, processes.waitFor(environment.handle).exitCode)
         assertNotEquals("context-only", System.getenv("THC_CHILD_VALUE"))
@@ -126,12 +127,13 @@ class ManagedProcessesTest {
         Files.createDirectory(old)
         Files.writeString(old.resolve("value"), "wrong")
         val shell = processes.spawn(args("/bin/sh", "-c", "cat value"), args("PATH=/usr/bin:/bin"),
-            output = ManagedProcesses.Stream.Pipe)
+            null, CLOSED, PIPE, CLOSED, 0, null, null, null)
         assertEquals("anchored", pipeRead(shell.output!!, 1024))
         assertEquals(0, processes.waitFor(shell.handle).exitCode)
         // The parent's explicit search PATH uses the child cwd.
         Files.createSymbolicLink(moved.resolve("own-command"), oracle)
-        val searched = processes.spawn(args("own-command", "exit", "19"), args("PATH=/missing-child-path"), searchPath = ".".toByteArray())
+        val searched = processes.spawn(args("own-command", "exit", "19"), args("PATH=/missing-child-path"),
+            null, CLOSED, CLOSED, CLOSED, 0, null, null, ".".toByteArray())
         assertEquals(19, processes.waitFor(searched.handle).exitCode)
     }
 
@@ -139,22 +141,23 @@ class ManagedProcessesTest {
         val before = fdCount()
         repeat(12) {
             val failure = assertThrows(ProcessSpawnException::class.java) {
-                processes.spawn(args("/definitely-missing-thc-command"), emptyList(),
-                    input = ManagedProcesses.Stream.Pipe, output = ManagedProcesses.Stream.Pipe, error = ManagedProcesses.Stream.Pipe)
+                processes.spawn(args("/definitely-missing-thc-command"), emptyList(), null, PIPE, PIPE, PIPE,
+                    0, null, null, null)
             }
             assertEquals(2, failure.errno)
             assertEquals(ProcessFailureStage.SPAWN, failure.stage)
             val cwd = assertThrows(ProcessSpawnException::class.java) {
-                processes.spawn(childArgs("exit", "0"), emptyList(), cwd = "missing".toByteArray())
+                processes.spawn(childArgs("exit", "0"), emptyList(), "missing".toByteArray(), CLOSED, CLOSED, CLOSED,
+                    0, null, null, null)
             }
             assertEquals(2, cwd.errno)
             assertEquals(ProcessFailureStage.SPAWN, cwd.stage)
         }
         assertThrows(UnsupportedOperationException::class.java) {
-            processes.spawn(childArgs("exit", "0"), emptyList(), childUser = 0)
+            processes.spawn(childArgs("exit", "0"), emptyList(), null, CLOSED, CLOSED, CLOSED, 0, null, 0, null)
         }
         assertThrows(UnsupportedOperationException::class.java) {
-            processes.spawn(childArgs("exit", "0"), emptyList(), flags = 0x4)
+            processes.spawn(childArgs("exit", "0"), emptyList(), null, CLOSED, CLOSED, CLOSED, 0x4, null, null, null)
         }
         assertThrows(IllegalArgumentException::class.java) {
             processes.spawn(listOf(byteArrayOf(47, 0, 98)), emptyList())
@@ -173,7 +176,8 @@ class ManagedProcessesTest {
             for ((name, command, cwd) in listOf(Triple("missing-command", "/definitely-missing-thc-command", null),
                 Triple("missing-cwd", "/bin/true", "/definitely-missing-thc-directory"))) {
                 val failed = assertThrows(ProcessSpawnException::class.java) {
-                    processes.spawn(args(command), emptyList(), cwd = cwd?.toByteArray())
+                    processes.spawn(args(command), emptyList(), cwd?.toByteArray(), CLOSED, CLOSED, CLOSED,
+                        0, null, null, null)
                 }
                 val fields = observed.first { it.startsWith(name) }.split(' ')
                 assertEquals(fields[2].toInt(), failed.errno)
@@ -259,7 +263,7 @@ class ManagedProcessesTest {
             class Cancelled : RuntimeException()
             entered(context) {
                 assertThrows(Cancelled::class.java) {
-                    processes.waitFor(child.handle, beforeBlock = { throw Cancelled() })
+                    processes.waitFor(child.handle, null) { throw Cancelled() }
                 }
                 assertEquals(ProcessResult(0, 0, 0), processes.poll(child.handle))
                 pipeWrite(child.input!!, "x")
