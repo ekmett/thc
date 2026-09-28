@@ -476,7 +476,7 @@ public final class BytecodeProgram implements ExecutableProgram {
 
     private void validateBindings(List<Map<String, Object>> requested) {
         if (requested.isEmpty()) return;
-        ArrayOp.Companion.validateApplications(requested);
+        ArrayOp.validateApplications(requested);
         CoreStackForeign.INSTANCE.validateHeads(requested);
         CoreStackInfoForeign.INSTANCE.validateHeads(requested);
         CoreOriginalStdio.INSTANCE.validateHeads(requested);
@@ -6947,8 +6947,8 @@ public final class BytecodeProgram implements ExecutableProgram {
                 }
             });
         }
-        if (MutVarOp.Companion.named(name) != null) {
-            var operation = MutVarOp.Companion.named(name);
+        if (MutVarOp.named(name) != null) {
+            var operation = MutVarOp.named(name);
             operation.validate(args.stream().map(CoreRepresentations.INSTANCE::expression).toList(), flags, tupleProof);
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
@@ -7025,8 +7025,8 @@ public final class BytecodeProgram implements ExecutableProgram {
                 e.builder.beginEqualStablePointers(); for (var operand : operands) operand.emit(e); e.builder.endEqualStablePointers();
             }, evaluatedProof(tupleProof, true));
         }
-        if (ArrayOp.Companion.named(name) != null) {
-            var operation = ArrayOp.Companion.named(name);
+        if (ArrayOp.named(name) != null) {
+            var operation = ArrayOp.named(name);
             operation.validate(args.stream().map(CoreRepresentations.INSTANCE::expression).toList(), flags, tupleProof);
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
@@ -7069,8 +7069,8 @@ public final class BytecodeProgram implements ExecutableProgram {
                 }
             }, evaluatedProof(tupleProof, true));
         }
-        if (SmallArrayOp.Companion.named(name) != null) {
-            var operation = SmallArrayOp.Companion.named(name);
+        if (SmallArrayOp.named(name) != null) {
+            var operation = SmallArrayOp.named(name);
             operation.validate(args.stream().map(CoreRepresentations.INSTANCE::expression).toList(), flags, tupleProof);
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
@@ -7313,8 +7313,8 @@ public final class BytecodeProgram implements ExecutableProgram {
                 }
             }, evaluatedProof(tupleProof, true));
         }
-        if (AtomicIntArrayOp.Companion.named(name) != null) {
-            var operation = AtomicIntArrayOp.Companion.named(name);
+        if (AtomicIntArrayOp.named(name) != null) {
+            var operation = AtomicIntArrayOp.named(name);
             operation.validate(args.stream().map(CoreRepresentations.INSTANCE::expression).toList(), flags, tupleProof);
             var operands = args.stream().map(a -> compile(a, scope, false)).toList();
             if (operation.getTuple()) return tupleExpression(tupleProof, (e, destination) -> {
@@ -7328,8 +7328,8 @@ public final class BytecodeProgram implements ExecutableProgram {
                 e.builder.beginAtomicWriteIntArray(); for (var operand : operands) operand.emit(e); e.builder.endAtomicWriteIntArray();
             }, evaluatedProof(tupleProof, true));
         }
-        if (ByteArrayOp.Companion.named(name) != null) {
-            var operation = ByteArrayOp.Companion.named(name);
+        if (ByteArrayOp.named(name) != null) {
+            var operation = ByteArrayOp.named(name);
             boolean byteOffset = name.contains("Word8") && name.contains("As");
             operation.validate(args.stream().map(CoreRepresentations.INSTANCE::expression).toList(), flags, tupleProof);
             var operands = args.stream().map(a -> compile(a, scope, false)).toList();

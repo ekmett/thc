@@ -9,6 +9,7 @@ import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.Language
+import thc.runtime.SavedGuestContinuationKt.savedGuestContinuation
 
 class AstStackTest {
     @Test fun synchronousCaptureCapabilityDrainsSpillsWithoutEnablingDeliveryOrReplayingPrefixes() {
