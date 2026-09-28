@@ -1,0 +1,33 @@
+// Java-source counterpart of the archived Kotlin build, not the measured input.
+// Original immutable source identity is recorded in bench/HISTORICAL-SOURCE-PORTS.md.
+plugins { id 'application' }
+repositories { mavenCentral() }
+def graalVersion = '25.3.4.1'
+dependencies {
+    implementation "org.graalvm.polyglot:polyglot:$graalVersion"
+    implementation "org.graalvm.truffle:truffle-api:$graalVersion"
+    runtimeOnly "org.graalvm.truffle:truffle-runtime:$graalVersion"
+    annotationProcessor "org.graalvm.truffle:truffle-dsl-processor:$graalVersion"
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.13.4'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+java { toolchain { languageVersion = JavaLanguageVersion.of(25) } }
+application {
+    mainClass = 'thc.Main'
+    applicationDefaultJvmArgs = ['--enable-native-access=ALL-UNNAMED', '-Xss2m']
+}
+tasks.named('test', Test) {
+    useJUnitPlatform()
+    jvmArgs(application.applicationDefaultJvmArgs)
+    systemProperty 'thc.projectRoot', projectDir.absolutePath
+    // Bytecode tests still select their backend explicitly.
+    systemProperty 'thc.backend', 'ast'
+    testLogging { events 'failed', 'skipped', 'passed' }
+}
+tasks.register('probe', JavaExec) {
+    group = 'verification'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'thc.Probe'
+    jvmArgs(application.applicationDefaultJvmArgs)
+    workingDir projectDir
+}
