@@ -38,6 +38,7 @@ public final class GraphRecovery implements AutoCloseable {
     }
 
     static ContextRoot source(RootNode root) {
+        if (root instanceof AstSameFrameArm.ArmRoot arm) return source(arm.sourceRoot());
         if (root instanceof ContextRoot contextRoot) return contextRoot;
         if (root instanceof ContinuationRootNode continuation)
             return continuation.getSourceRootNode() instanceof RootNode original ? source(original) : null;

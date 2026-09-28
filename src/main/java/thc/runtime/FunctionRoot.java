@@ -73,13 +73,11 @@ public final class FunctionRoot extends GuestRoot {
         var claim = service.claim(this);
         if (claim == null) return recoveredEntry;
         try {
-            FunctionRoot replacement = NodeUtil.cloneNode(this);
-            freshLoops(replacement);
-            AstSameFrameArm.restoreCopiedExtractions(replacement);
-            // Default-arm prepared targets need independent side ownership before
-            // this family can participate; do not mutate a shared prepared body.
-            if (deferredBudget) return null;
-            if (!AstSameFrameArm.extract(replacement)) return null;
+            FunctionRoot replacement = copyForRecovery();
+            boolean reduced = claim.target().getRootNode() instanceof AstSameFrameArm.ArmRoot side
+                    ? side.extractInCopy(replacement)
+                    : deferredBudget ? AstDeferredArm.extractFresh(replacement) : AstSameFrameArm.extract(replacement);
+            if (!reduced) return null;
             replacement.budgetGeneration = budgetGeneration + 1;
             DirectCallNode prepared = DirectCallNode.create(replacement.getCallTarget());
             return atomic(() -> {
@@ -90,6 +88,13 @@ public final class FunctionRoot extends GuestRoot {
                 return recoveredEntry;
             });
         } finally { graphFailure.compareAndSet(claim, null); }
+    }
+
+    final FunctionRoot copyForRecovery() {
+        FunctionRoot replacement = NodeUtil.cloneNode(this);
+        freshLoops(replacement);
+        AstSameFrameArm.restoreCopiedExtractions(replacement);
+        return replacement;
     }
 
     private static void freshLoops(Node root) {
@@ -427,8 +432,10 @@ public final class FunctionRoot extends GuestRoot {
     }
     @Override public Object execute(VirtualFrame frame) {
         DirectCallNode redirect = recoveredEntry;
-        if (redirect == null && CompilerDirectives.inInterpreter() && graphFailure.get() != null)
+        if (redirect == null && graphFailure.get() != null) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
             redirect = recoverEntry();
+        }
         if (redirect != null) return Calls.direct(redirect, frame.getArguments());
         if (!capturesContinuations) return executeInitial(frame, false);
         AstStackScope stack = astStackScope(this);

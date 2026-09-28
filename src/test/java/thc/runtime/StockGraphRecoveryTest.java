@@ -71,6 +71,26 @@ class StockGraphRecoveryTest {
         Truffle.getRuntime();
         Controls.launcherPolicy();
     }
+    @Test void realBytecodeOsrFailureFinishesOldLoopThenFreshEntryRunsCompiledOsr() {
+        Truffle.getRuntime();
+        Controls.recoverBytecodeOsr();
+    }
+    @Test void realDeferredDefaultFailureKeepsPreparedSidesReplacementLocal() {
+        Truffle.getRuntime();
+        Controls.recoverDeferred();
+    }
+    @Test void typedLoansAndRealOldAndFreshResumeBodiesSurviveRecovery() {
+        Truffle.getRuntime();
+        Controls.typedResume();
+    }
+    @Test void failedExtractedSideRecoversAtNextEntryWithoutMutatingActiveBody() {
+        Truffle.getRuntime();
+        Controls.recoverSide();
+    }
+    @Test void realFailureReceiptsRespectContextCloseSharedRootsAndFiniteEligibility() {
+        Truffle.getRuntime();
+        Controls.lifecycle();
+    }
 
     private static void ownership(boolean bytecode) {
         try (var engine = Engine.newBuilder().allowExperimentalOptions(true)
@@ -90,6 +110,347 @@ class StockGraphRecoveryTest {
         private static final CoreRepresentation LONG = new CoreRepresentation(CoreKind.LONG, true, true,
                 List.of("IntRep"), null, null, null, null, null);
         private record Event(OptimizedCallTarget target, ContextRoot source, Object owner) {}
+
+        static void lifecycle() {
+            try (var engine = Engine.newBuilder().allowExperimentalOptions(true)
+                    .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                    .option("engine.SingleTierCompilationThreshold", "10000000")
+                    .option("engine.CompilationFailureAction", "Throw")
+                    .option("compiler.MaximumGraalGraphSize", "10000").build();
+                 var first = Context.newBuilder("thc").engine(engine).build();
+                 var second = Context.newBuilder("thc").engine(engine).build()) {
+                first.initialize("thc"); second.initialize("thc");
+                FunctionRoot pending; GraphRecovery service; GraphRecovery.Failure receipt;
+                var effects = new AtomicInteger(); var source = new AtomicReference<RootNode>();
+                first.enter();
+                try {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    service = Language.currentState().getGraphRecovery();
+                    pending = new FunctionRoot(language, new FrameLayout().build(), "owned failure", null,
+                            new int[0], new int[0], new int[0],
+                            new AstSameFrameArm(new Heavy(new long[4096], effects, source)), new Metrics(false));
+                    var target = (OptimizedCallTarget) pending.getCallTarget();
+                    assertSame(target, assertThrows(OptimizationFailedException.class, () -> target.compile(true)).getCallTarget());
+                    receipt = pending.graphFailure.get(); assertNotNull(receipt);
+                    assertFalse(target.isSubmittedForCompilation()); assertFalse(receipt.claimed());
+                    assertTrue(GraphRecovery.graphTooBig(receipt.reason(), true, true));
+                    assertFalse(GraphRecovery.graphTooBig(receipt.reason(), false, true));
+                    assertFalse(GraphRecovery.graphTooBig(receipt.reason(), true, false));
+                    assertFalse(GraphRecovery.graphTooBig(null, true, true));
+                    assertFalse(GraphRecovery.graphTooBig("unrelated compiler error: " + receipt.reason(), true, true));
+
+                    var shared = new FunctionRoot(language, new FrameLayout().build(), "shared failure", null,
+                            new int[0], new int[0], new int[0],
+                            new AstSameFrameArm(new Heavy(new long[4096], effects, source)), new Metrics(false));
+                    shared.shareCompilationOwnership(); var sharedTarget = (OptimizedCallTarget) shared.getCallTarget();
+                    assertThrows(OptimizationFailedException.class, () -> sharedTarget.compile(true));
+                    assertNull(shared.graphFailure.get(), "a shared root cannot choose one context's recovery service");
+                    assertNull(service.claim(shared));
+
+                    var exhausted = new FunctionRoot(language, new FrameLayout().build(), "no eligible boundary", null,
+                            new int[0], new int[0], new int[0], new Heavy(new long[4096], effects, source), new Metrics(false));
+                    var exhaustedTarget = (OptimizedCallTarget) exhausted.getCallTarget();
+                    assertThrows(OptimizationFailedException.class, () -> exhaustedTarget.compile(true));
+                    assertNotNull(exhausted.graphFailure.get()); assertEquals(0, effects.get());
+                    assertEquals(-6705412340454524911L, Calls.target(exhaustedTarget, new Object[]{0L}));
+                    assertEquals(1, effects.get()); assertSame(exhausted, source.get());
+                    assertNull(recovered(exhausted)); assertNull(exhausted.graphFailure.get());
+                } finally { first.leave(); }
+                second.enter();
+                try {
+                    assertNull(Language.currentState().getGraphRecovery().claim(pending));
+                    assertNull(service.claim(pending), "even the owning service requires its entered context");
+                    assertSame(receipt, pending.graphFailure.get());
+                } finally { second.leave(); }
+                first.enter();
+                try {
+                    service.close(); service.close();
+                    assertNull(service.claim(pending)); assertSame(receipt, pending.graphFailure.get());
+                    assertEquals(-6705412340454524911L, Calls.target(pending.getCallTarget(), new Object[]{0L}));
+                    assertEquals(2, effects.get()); assertSame(pending, source.get()); assertNull(recovered(pending));
+                } finally { first.leave(); }
+            }
+        }
+
+        static void recoverSide() {
+            try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                    .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                    .option("engine.SingleTierCompilationThreshold", "1")
+                    .option("engine.CompilationFailureAction", "Print")
+                    .option("compiler.MaximumGraalGraphSize", "10000").build()) {
+                context.initialize("thc"); context.enter();
+                try {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    var effects = new AtomicInteger(); var source = new AtomicReference<RootNode>();
+                    var body = new AstSameFrameArm(new AstSameFrameArm(new Heavy(new long[4096], effects, source)));
+                    var root = new FunctionRoot(language, new FrameLayout().build(), "nested recovery", null,
+                            new int[0], new int[0], new int[0], body, new Metrics(true));
+                    var target = root.getCallTarget();
+                    assertEquals(-6705412340454524911L, Calls.target(target, new Object[]{0L}));
+                    assertEquals(1, effects.get(), "root and side compilation failures cannot replay the guest");
+                    var first = (FunctionRoot) recovered(root).getRootNode();
+                    assertSame(first, source.get()); assertEquals(1, first.getGraphBudgetGeneration());
+                    assertTrue(((OptimizedCallTarget) first.getCallTarget()).isValidLastTier());
+                    var pending = first.graphFailure.get();
+                    assertNotNull(pending, "a failed extracted side must be attributed to its actual function owner");
+                    assertInstanceOf(AstSameFrameArm.ArmRoot.class, pending.target().getRootNode());
+                    assertFalse(pending.target().isSubmittedForCompilation()); assertFalse(pending.target().isValid());
+                    ((OptimizedTruffleRuntime) Truffle.getRuntime()).bypassedInstalledCode((OptimizedCallTarget) first.getCallTarget());
+                    assertEquals(-6705412340454524911L, Calls.target(target, new Object[]{0L}));
+                    assertEquals(2, effects.get());
+                    var second = recovered(first); assertNotNull(second, "even a valid enclosing entry must claim the failed side");
+                    assertSame(second.getRootNode(), source.get()); assertTrue(root.isSelf(second));
+                    assertEquals(2, ((FunctionRoot) second.getRootNode()).getGraphBudgetGeneration());
+                    assertEquals(0, root.getGraphBudgetGeneration()); assertEquals(1, first.getGraphBudgetGeneration());
+                } finally { context.leave(); }
+            }
+        }
+
+        static void typedResume() {
+            try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                    .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                    .option("engine.SingleTierCompilationThreshold", "10000000")
+                    .option("engine.CompilationFailureAction", "Throw")
+                    .option("compiler.MaximumGraalGraphSize", "10000").build()) {
+                context.initialize("thc"); context.enter();
+                try {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    var owner = Language.currentState(); var metrics = new Metrics(true);
+                    var reference = new CoreRepresentation(CoreKind.OBJECT, false, true,
+                            List.of("BoxedRep (Just Lifted)"), null, null, null, null, null);
+                    var pair = new CoreRepresentation(CoreKind.UNKNOWN, true, true,
+                            List.of("IntRep", "BoxedRep (Just Lifted)"), List.of(LONG, reference), null, null, null, null);
+                    var arguments = ArgumentLayout.fromProofs(List.of(pair));
+                    var input = new TypedInputLayout(language, arguments, false); var tuple = new TupleShape(pair, language);
+                    var layout = new FrameLayout();
+                    int number = layout.bind("number", FrameSlotKind.Long), ref = layout.bind("reference", FrameSlotKind.Object);
+                    int[] results = {layout.bind("output number", FrameSlotKind.Long), layout.bind("output reference", FrameSlotKind.Object)};
+                    var effects = new AtomicInteger(); var source = new AtomicReference<RootNode>();
+                    var observedMask = new AtomicReference<MaskingState>();
+                    var body = new TupleWork(new AstSameFrameArm(new Heavy(new long[4096], effects, source)), pair, number, ref, observedMask);
+                    var root = new FunctionRoot(language, layout.build(), "typed recovery", null, new int[0],
+                            new int[]{number, ref}, new int[]{0, 1}, body, metrics, new CoreRepresentation[]{LONG, reference},
+                            pair, null, new boolean[]{false}, null, tuple, results, arguments, true, new int[0][], false,
+                            FunctionRootRole.FUNCTION, false);
+                    root.configureTypedInput(input);
+                    var target = (OptimizedCallTarget) root.getCallTarget();
+                    var lazy = new Thunk(new RootNode(language) {
+                        @Override public Object execute(VirtualFrame frame) { throw new AssertionError("lazy reference was forced"); }
+                    }.getCallTarget(), null);
+                    owner.getThreads().enterCurrent(null, false, true, null);
+                    try {
+                        SynchronousMasking.set(root, MaskingState.MASKED_INTERRUPTIBLE);
+                        var oldRequest = owner.getThreads().send(owner.getThreads().currentIdentity(), new Object());
+                        var oldPacket = packet(input, 23L, lazy); long generation = oldPacket.getGeneration();
+                        var old = assertInstanceOf(AstContinuation.class, Calls.target(target, new Object[]{oldPacket}));
+                        assertSame(root, old.getSourceRoot()); assertSame(oldRequest, old.asyncRequest());
+                        consumed(input, oldPacket); oldRequest.acknowledge(); assertEquals(0, effects.get());
+                        SynchronousMasking.set(root, MaskingState.UNMASKED);
+                        var failure = assertThrows(OptimizationFailedException.class, () -> target.compile(true));
+                        assertSame(target, failure.getCallTarget()); assertFalse(target.isSubmittedForCompilation());
+                        assertEquals(0, effects.get(), "old poll suspension and compilation do not execute the body");
+
+                        var nextPacket = packet(input, 29L, lazy);
+                        assertSame(oldPacket, nextPacket); assertTrue(nextPacket.getGeneration() > generation);
+                        Object next = Calls.target(target, new Object[]{nextPacket}); consumed(input, nextPacket);
+                        answer(language, tuple, next, -6705412340454524882L, lazy);
+                        assertEquals(1, effects.get()); assertEquals(MaskingState.UNMASKED, observedMask.get());
+                        var fresh = (FunctionRoot) recovered(root).getRootNode();
+                        assertSame(fresh, source.get()); assertSame(input, fresh.getTypedInput());
+                        assertSame(tuple, fresh.getTupleResult()); assertSame(arguments, fresh.getInputLayout());
+                        assertEquals(root.mask, fresh.mask); assertTrue(root.isSelf(fresh.getCallTarget()));
+                        var optimized = (OptimizedCallTarget) fresh.getCallTarget();
+                        assertTrue(optimized.compile(true)); assertTrue(optimized.isValidLastTier());
+                        ((OptimizedTruffleRuntime) Truffle.getRuntime()).bypassedInstalledCode(optimized);
+                        long entries = metrics.getCompiledEntries();
+                        var request = owner.getThreads().send(owner.getThreads().currentIdentity(), new Object());
+                        var lastPacket = packet(input, 31L, lazy);
+                        var saved = assertInstanceOf(AstContinuation.class, Calls.target(target, new Object[]{lastPacket}));
+                        assertSame(fresh, saved.getSourceRoot()); assertSame(request, saved.asyncRequest());
+                        assertTrue(metrics.getCompiledEntries() > entries); assertTrue(request.compiledCapture);
+                        consumed(input, lastPacket); request.acknowledge(); assertEquals(1, effects.get());
+
+                        answer(language, tuple, old.continueWith(Unit.INSTANCE), -6705412340454524888L, lazy);
+                        assertSame(root, source.get()); assertEquals(MaskingState.MASKED_INTERRUPTIBLE, observedMask.get());
+                        assertThrows(RuntimeFault.class, () -> old.continueWith(Unit.INSTANCE));
+                        answer(language, tuple, saved.continueWith(Unit.INSTANCE), -6705412340454524880L, lazy);
+                        assertSame(fresh, source.get()); assertEquals(MaskingState.UNMASKED, observedMask.get());
+                        assertThrows(RuntimeFault.class, () -> saved.continueWith(Unit.INSTANCE));
+                        assertEquals(3, effects.get()); assertEquals(0, lazy.getState());
+                        assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(root)); clean(language);
+                    } finally {
+                        SynchronousMasking.set(root, MaskingState.UNMASKED);
+                        owner.getThreads().leaveCurrent(GuestThreadStatus.FINISHED);
+                    }
+                } finally { context.leave(); }
+            }
+        }
+
+        private static final class TupleWork extends Expr {
+            @Child private Expr body;
+            private final int number, reference;
+            private final AtomicReference<MaskingState> observed;
+            TupleWork(Expr body, CoreRepresentation proof, int number, int reference, AtomicReference<MaskingState> observed) {
+                this.body = body; this.number = number; this.reference = reference; this.observed = observed; setRepresentation(proof);
+            }
+            @Override public Object execute(VirtualFrame frame) { throw new AssertionError("aggregate requires typed result"); }
+            @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
+                recordMask();
+                try { frame.setLong(slots[offset], body.executeLong(frame) + frame.getLong(number)); }
+                catch (com.oracle.truffle.api.nodes.UnexpectedResultException failure) { throw new AssertionError(failure); }
+                frame.setObject(slots[offset + 1], frame.getObject(reference)); return null;
+            }
+            @CompilerDirectives.TruffleBoundary private void recordMask() { observed.set(SynchronousMasking.current(this)); }
+        }
+
+        private static HandoffStorage packet(TypedInputLayout input, long number, Object reference) {
+            HandoffStorage packet = input.state().getArguments().acquire(input.getPacket()); packet.setInputMode(1);
+            input.getPacket().setLong(packet, 0, 0L); input.getPacket().setLong(packet, input.getHeader(), number);
+            input.getPacket().setObject(packet, input.getHeader() + 1, reference); return packet;
+        }
+        private static void consumed(TypedInputLayout input, HandoffStorage packet) {
+            assertFalse(packet.getLive()); assertEquals(0, packet.getInputMode());
+            assertNull(input.getPacket().getObject(packet, input.getHeader() + 1));
+            assertEquals(0, input.state().getArguments().getDepth()); assertEquals(0, input.state().getArguments().retainedReferences());
+        }
+        private static void answer(Language language, TupleShape tuple, Object answer, long number, Object reference) {
+            assertSame(TupleComplete.INSTANCE, answer);
+            var pool = language.getHandoffState().get().getResults(); assertEquals(1, pool.getDepth());
+            var storage = pool.completed();
+            var layout = new FrameLayout(); int[] slots = {layout.bind("number", FrameSlotKind.Long), layout.bind("reference", FrameSlotKind.Object)};
+            var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], layout.build());
+            tuple.consume(frame, answer, slots, 0); assertEquals(number, frame.getLong(slots[0])); assertSame(reference, frame.getObject(slots[1]));
+            assertFalse(storage.getLive()); assertNull(tuple.getLayout().getObject(storage, 1)); clean(language);
+        }
+        private static void clean(Language language) {
+            var handoff = language.getHandoffState().get(); assertNull(handoff.getPending());
+            assertEquals(0, handoff.getArguments().getDepth()); assertEquals(0, handoff.getResults().getDepth());
+            assertEquals(0, handoff.getArguments().retainedReferences()); assertEquals(0, handoff.getResults().retainedReferences());
+        }
+
+        static void recoverDeferred() {
+            try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                    .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                    .option("engine.SingleTierCompilationThreshold", "10000000")
+                    .option("engine.CompilationFailureAction", "Throw")
+                    .option("compiler.MaximumGraalGraphSize", "10000").build()) {
+                context.initialize("thc"); context.enter();
+                try {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    var module = new java.util.LinkedHashMap<>(arithmeticSuffix(1024));
+                    module.put("sourceFiles", List.of(Map.of("id", "control", "path", "StockRecovery.hs")));
+                    module.put("sourceSpans", List.of(Map.of("id", "body", "file", "control", "startLine", 1,
+                            "startColumn", 1, "endLine", 1, "endColumn", 2)));
+                    var binding = new java.util.LinkedHashMap<>((Map<String, Object>) ((List<?>) module.get("bindings")).getFirst());
+                    binding.put("source", "body"); module.put("bindings", List.of(binding));
+                    var program = new Program(language, module, false, false, true);
+                    var root = (FunctionRoot) program.entryTarget("entry").getRootNode();
+                    var target = (OptimizedCallTarget) root.getCallTarget();
+                    assertEquals(1, NodeUtil.findAllNodeInstances(root, AstDeferredArm.class).size());
+                    var failure = assertThrows(OptimizationFailedException.class, () -> target.compile(true));
+                    assertSame(target, failure.getCallTarget()); assertFalse(target.isSubmittedForCompilation());
+                    assertEquals(526848L, Calls.target(target, new Object[]{0L, 3L}));
+                    var fresh = recovered(root); assertNotNull(fresh, "deferred candidate must reduce only a fresh entry body");
+                    assertTrue(root.isSelf(fresh)); assertNotSame(target, fresh);
+                    assertEquals(1, NodeUtil.findAllNodeInstances(root, AstDeferredArm.class).size());
+                    assertEquals(0, NodeUtil.findAllNodeInstances(fresh.getRootNode(), AstDeferredArm.class).size());
+                    assertEquals(1, NodeUtil.findAllNodeInstances(fresh.getRootNode(), AstCaseArm.class).size());
+                    assertEquals(0, root.getGraphBudgetGeneration());
+                    assertEquals(1, ((FunctionRoot) fresh.getRootNode()).getGraphBudgetGeneration());
+                    var optimized = (OptimizedCallTarget) fresh;
+                    assertTrue(optimized.compile(true)); assertTrue(optimized.isValidLastTier());
+                    ((OptimizedTruffleRuntime) Truffle.getRuntime()).bypassedInstalledCode(optimized);
+                    long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
+                    assertEquals(527872L, Calls.target(target, new Object[]{0L, 4L}));
+                    assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > before);
+                    assertSame(target, program.entryTarget("entry"));
+                } finally { context.leave(); }
+            }
+        }
+
+        static void recoverBytecodeOsr() {
+            try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                    .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                    .option("engine.SingleTierCompilationThreshold", "10000000")
+                    .option("engine.OSRCompilationThreshold", "1024")
+                    .option("engine.CompilationFailureAction", "Print")
+                    .option("compiler.MaximumGraalGraphSize", "10000").build()) {
+                context.initialize("thc"); context.enter();
+                try {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    var side = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT, b -> {
+                        b.beginRoot(); b.beginReturn(); emitArithmetic(b, 0, 1024, () -> b.emitLoadArgument(1));
+                        b.endReturn(); b.endRoot();
+                    }).getNode(0);
+                    side.configureCaseRegions(true, false, new BytecodeCaseRegion[0]);
+                    var checkpoint = new BytecodeCheckpoint(); checkpoint.setArmed(true);
+                    var source = new BytecodeCaseRegion.Source(new com.oracle.truffle.api.bytecode.LocalAccessor[][]{
+                            new com.oracle.truffle.api.bytecode.LocalAccessor[0]}, null);
+                    var root = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT, b -> {
+                        b.beginRoot(); b.beginBlock();
+                        var counter = b.createLocal("counter", FrameSlotKind.Long);
+                        var total = b.createLocal("total", FrameSlotKind.Long);
+                        var answer = b.createLocal("case result", FrameSlotKind.Object);
+                        b.beginStaticStoreLong(counter); b.emitLoadConstant(0L); b.endStaticStoreLong();
+                        b.beginStaticStoreLong(total); b.emitLoadConstant(0L); b.endStaticStoreLong();
+                        b.beginWhile(); b.beginLiteralBelow(4096L); b.emitStaticLoadLong(counter); b.endLiteralBelow();
+                        b.beginBlock(); b.emitCheckpointArmed(checkpoint);
+                        // Use the same branch/store shape as BytecodeProgram.partitionedCase.
+                        var complete = b.createLabel();
+                        b.beginIfThen(); b.emitInlineCaseRegions(); b.beginBlock();
+                        b.beginStaticStoreObject(answer);
+                        emitArithmetic(b, 0, 1024, () -> b.emitStaticLoadLong(counter));
+                        b.endStaticStoreObject(); b.emitBranch(complete); b.endBlock(); b.endIfThen();
+                        b.beginStaticStoreObject(answer);
+                        b.beginCallCaseRegion(0, source); b.emitStaticLoadLong(counter);
+                        b.emitLoadConstant(MaskingState.UNMASKED); b.endCallCaseRegion();
+                        b.endStaticStoreObject(); b.emitLabel(complete);
+                        b.beginStaticStoreLong(total); b.beginAdd(); b.emitStaticLoadLong(total);
+                        b.emitStaticLoadObject(answer); b.endAdd(); b.endStaticStoreLong();
+                        b.beginStaticStoreLong(counter); b.beginAdd(); b.emitStaticLoadLong(counter);
+                        b.emitLoadConstant(1L); b.endAdd(); b.endStaticStoreLong();
+                        b.endBlock(); b.endWhile(); b.beginReturn(); b.emitStaticLoadLong(total); b.endReturn();
+                        b.endBlock(); b.endRoot();
+                    }).getNode(0);
+                    root.configureCaseRegions(false, true, new BytecodeCaseRegion[]{
+                            new BytecodeCaseRegion(new Object[0], 1, new com.oracle.truffle.api.RootCallTarget[]{side.getCallTarget()},
+                                    new CaptureLayout[]{null}, false)});
+                    var target = root.getCallTarget();
+                    assertEquals(10733223936L, Calls.target(target, new Object[]{0L}));
+                    assertEquals(4096, checkpoint.getVisits().get()); assertEquals(0, checkpoint.getCompiledVisits().get());
+                    var failure = root.graphFailure.get(); assertNotNull(failure, "actual bytecode OSR must fail the fixed budget");
+                    assertInstanceOf(BaseOSRRootNode.class, failure.target().getRootNode());
+                    assertSame(root, GraphRecovery.source(failure.target().getRootNode()));
+                    assertTrue(GraphRecovery.graphTooBig(failure.reason(), true, true));
+                    assertFalse(failure.target().isSubmittedForCompilation()); assertFalse(failure.target().isValid());
+                    var failedBytecode = root.getBytecodeNode();
+                    assertEquals(10733223936L, Calls.target(target, new Object[]{0L}));
+                    assertEquals(8192, checkpoint.getVisits().get());
+                    assertTrue(checkpoint.getCompiledVisits().get() > 0, "replacement must execute actual OSR-compiled loop visits");
+                    var fresh = (BytecodeRoot) recovered(root).getRootNode();
+                    assertTrue(root.isSelf(fresh.getCallTarget())); assertEquals(0, root.getGraphBudgetGeneration());
+                    assertEquals(1, fresh.getGraphBudgetGeneration());
+                    assertSame(failedBytecode, root.getBytecodeNode()); assertNotSame(failedBytecode, fresh.getBytecodeNode());
+                    System.out.println("STOCK BYTECODE OSR RECOVERY effects=" + checkpoint.getVisits().get() +
+                            " compiledVisits=" + checkpoint.getCompiledVisits().get());
+                } finally { context.leave(); }
+            }
+        }
+
+        private static void emitArithmetic(BytecodeRootGen.Builder b, int from, int end, Runnable value) {
+            b.beginAdd();
+            if (end - from == 1) { value.run(); b.emitLoadConstant((long) from); }
+            else { emitArithmetic(b, from, (from + end) / 2, value); emitArithmetic(b, (from + end) / 2, end, value); }
+            b.endAdd();
+        }
+
+        private static com.oracle.truffle.api.RootCallTarget recovered(GuestRoot root) {
+            for (Node child : root.getChildren()) {
+                if (child instanceof com.oracle.truffle.api.nodes.DirectCallNode call &&
+                        call.getCallTarget() instanceof com.oracle.truffle.api.RootCallTarget called && root.isSelf(called)) return called;
+            }
+            return null;
+        }
 
         static void concurrentEntry() throws Exception {
             try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)

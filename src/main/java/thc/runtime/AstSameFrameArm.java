@@ -140,6 +140,14 @@ final class AstSameFrameArm extends Expr implements ReplaceObserver {
             this.arm = arm;
             this.mode = mode;
         }
+        ContextRoot sourceRoot() { return (ContextRoot) arm.getRootNode(); }
+
+        boolean extractInCopy(FunctionRoot replacement) {
+            var originalArms = NodeUtil.findAllNodeInstances(sourceRoot(), AstSameFrameArm.class);
+            var copiedArms = NodeUtil.findAllNodeInstances(replacement, AstSameFrameArm.class);
+            int index = originalArms.indexOf(arm);
+            return index >= 0 && originalArms.size() == copiedArms.size() && extract(copiedArms.get(index).body);
+        }
         @Override public Object execute(VirtualFrame callFrame) {
             Object[] args = callFrame.getArguments();
             VirtualFrame frame = (MaterializedFrame) args[0];
