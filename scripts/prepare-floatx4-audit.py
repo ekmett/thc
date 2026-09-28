@@ -161,7 +161,7 @@ def inventory(module, stage):
               and all(arg['rep'].get('primReps') == ['IntRep'] for arg in lam[1])
               and lam[3]['resultRep'].get('primReps') == ['IntRep'], 'Host entry ABI drift: '+entry['name'])
     frontier = bindings['vectorArgument']['expr']
-    check(frontier[0] == 'lam' and frontier[1][0]['rep'].get('kind') == 'vector', 'Missing actual vector formal frontier')
+    check(frontier[0] == 'lam' and frontier[1][0]['rep'].get('kind') == 'vector', 'Missing exact vector formal control')
     return dict(vectorProofs=len(vectors), packSites=len(packs), unpackSites=len(unpacked), primitives=sorted(PRIMITIVES))
 
 
@@ -206,9 +206,9 @@ def main():
         structure[stage] = inventory(module, stage)
         audits[stage] = {name: auditor.Audit([(str(module_path), module)], capabilities).run([name])
                          for name in [e['name'] for e in entries()] + ['vectorArgument']}
-        check(not audits[stage]['vectorArgument']['accepted'] and any(
-              i['code'] == 'vector-boundary' and i['detail'] == ('vector host argument' if 'arguments' in capabilities.get('vectorTransport', []) else 'vector formal argument')
-              for i in audits[stage]['vectorArgument']['issues']), 'Vector ABI frontier was not rejected specifically')
+        host = audits[stage]['vectorArgument']
+        check(host['accepted'] and not host['issues'] and not host['missingGlobals'],
+              'Exact retained host vector signature was not admitted')
         audit_path = OUT / f'{stage}-audit.json'
         audit_path.write_text(json.dumps(audits[stage], indent=2)+'\n')
         artifacts += [module_path, audit_path]
@@ -235,7 +235,7 @@ def main():
     positives = all(audits[s][e['name']]['accepted'] for s in stages for e in entries())
     provenance = dict(schema=1, vector='floatx4', stages=stages, nativeRows=native_rows,
         modelMatched=True if native_rows is not None else None, modelRows=len(wanted), entries=entries(),
-        frontiers=[dict(name='vectorArgument', arity=1, reason='public host vector arguments are unsupported')],
+        hostEntries=[dict(name='vectorArgument', arity=1)],
         positiveAuditsAccepted=positives, audits=audits, structure=structure, commands=commands,
         sources=[record(p) for p in sources], artifacts=[record(p) for p in artifacts],
         toolchain=dict(ghcVersion='9.14.1', host=platform.node(), machine=platform.machine(), system=platform.platform(),

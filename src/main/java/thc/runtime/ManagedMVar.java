@@ -126,19 +126,23 @@ public final class ManagedMVar {
         }
         /** InterruptedException leaves this same request queued at the same position. */
         public Object await() throws InterruptedException {
+            if (checkpoint != null) GuestThreads.checkpointCurrent(checkpoint);
             lock.lockInterruptibly();
             try {
                 submitLocked();
                 while (status == RequestState.PENDING) {
-                    var interruption = checkpoint == null ? null : GuestThreads.pollCurrent(checkpoint, true);
+                    var interruption = checkpoint == null ? null : GuestThreads.pollCurrentWithoutYield(checkpoint, true);
                     if (interruption != null) {
                         // Commitment and cancellation share the lock: only uncommitted requests retry.
                         check(cancel());
                         throw new AsyncBlocked(interruption, checkpoint);
                     }
-                    try (var blocked = GuestThreads.blocking(
-                        operation == Operation.READ ? GuestThreadStatus.MVAR_READ : GuestThreadStatus.MVAR)) {
-                        completed.await();
+                    var blocked = GuestThreads.blocking(operation == Operation.READ ? GuestThreadStatus.MVAR_READ : GuestThreadStatus.MVAR);
+                    try { completed.await(); }
+                    finally {
+                        lock.unlock();
+                        try { blocked.close(); }
+                        finally { lock.lock(); }
                     }
                 }
                 if (status == RequestState.CANCELLED) throw new CancellationException("Managed MVar request cancelled");

@@ -37,8 +37,11 @@ public final class BytecodeNormalizers {
 
     /** Keep the order explicit: each transform independently checks its version and source shape. */
     public static String all(String source, String version) {
-        return BytecodeBudgetChoice.transform(BytecodeColdApplyPreparation.transform(
-            unprofiledBranch(handlers(staticPreparation(sourceMode(metadata(source, version), version), version), version), version), version), version);
+        String result = unprofiledBranch(handlers(staticPreparation(sourceMode(metadata(source, version), version), version), version), version);
+        result = BytecodeColdApplyPreparation.transform(result, version);
+        result = BytecodeColdDelimitedPreparation.transform(result, version);
+        result = BytecodeColdForcePreparation.transform(result, version);
+        return BytecodeBudgetChoice.transform(result, version);
     }
 
     static final String SIGNATURE = "        private static List<Instruction.Argument> getArguments(int opcode, long bci, AbstractBytecodeNode bytecode, byte[] bytecodes, Object[] constants) {\n";

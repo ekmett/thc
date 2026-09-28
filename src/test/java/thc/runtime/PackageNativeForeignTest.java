@@ -50,6 +50,21 @@ public class PackageNativeForeignTest {
             }
             uint32_t complement32(uint32_t value) { return ~value; }
             uint8_t complement8(uint8_t value) { return (uint8_t) ~value; }
+            static uint64_t scalar_state;
+            void advance(uint64_t value) { scalar_state += value; }
+            uint64_t current(void) { return scalar_state; }
+            const uint64_t fixed_state = 29;
+            uint64_t read_fixed(void) { return *(volatile const uint64_t *)&fixed_state; }
+            static unsigned char choices[] = {17, 41, 59};
+            static unsigned char *selected = choices;
+            void select_pointer(uint64_t index) { selected = choices + index; }
+            uint64_t read_selected(void) { return *selected; }
+            uint32_t same_selected(uint64_t index) { return selected == choices + index; }
+            static _Thread_local uint64_t local_state;
+            void advance_tls(uint64_t value) { local_state += value; }
+            uint64_t current_tls(void) { return local_state; }
+            uint64_t state_bits(void) { return ((uintptr_t)&scalar_state) ^ UINT64_C(0x5a5a123456787654); }
+            unsigned char *null_pointer(void) { return NULL; }
             uint32_t equal(const unsigned char *a, const unsigned char *b) { return a == b; }
             uint32_t next_equal(const unsigned char *a, const unsigned char *b) { return a + 1 == b; }
             int64_t distance(const unsigned char *a, const unsigned char *b) { return b - a; }
@@ -63,6 +78,20 @@ public class PackageNativeForeignTest {
               a[0] = 91;
               return b[0];
             }
+            #ifdef NATIVE_ORACLE
+            #include <stdio.h>
+            int main(void) {
+              advance(3); printf("%llu ", (unsigned long long)current());
+              advance(7); printf("%llu ", (unsigned long long)current());
+              printf("%llu ", (unsigned long long)read_fixed());
+              select_pointer(1); printf("%llu ", (unsigned long long)read_selected());
+              if (!same_selected(1)) return 2;
+              advance_tls(5); printf("%llu ", (unsigned long long)current_tls());
+              if (!state_bits()) return 3;
+              advance(1); printf("%llu\\n", (unsigned long long)current());
+              return 0;
+            }
+            #endif
             """.stripTrailing());
         var command = new ArrayList<String>(); command.add(System.getenv("THC_CLANG") == null ? "clang" : System.getenv("THC_CLANG"));
         if (System.getProperty("os.name").equals("Linux")) command.add("--target=" + (System.getProperty("os.arch").equals("amd64") ? "x86_64" : System.getProperty("os.arch")) + "-unknown-linux-gnu");
@@ -74,6 +103,16 @@ public class PackageNativeForeignTest {
             new PackageScalarSignature("alias", "alias", List.of("AddrRep", "AddrRep"), "Word32Rep"),
             new PackageScalarSignature("complement32", "complement32", List.of("Word32Rep"), "Word32Rep"),
             new PackageScalarSignature("complement8", "complement8", List.of("Word8Rep"), "Word8Rep"),
+            new PackageScalarSignature("advance", "advance", List.of("Word64Rep"), "void"),
+            new PackageScalarSignature("current", "current", List.of(), "Word64Rep"),
+            new PackageScalarSignature("read_fixed", "read_fixed", List.of(), "Word64Rep"),
+            new PackageScalarSignature("select_pointer", "select_pointer", List.of("Word64Rep"), "void"),
+            new PackageScalarSignature("read_selected", "read_selected", List.of(), "Word64Rep"),
+            new PackageScalarSignature("same_selected", "same_selected", List.of("Word64Rep"), "Word32Rep"),
+            new PackageScalarSignature("advance_tls", "advance_tls", List.of("Word64Rep"), "void"),
+            new PackageScalarSignature("current_tls", "current_tls", List.of(), "Word64Rep"),
+            new PackageScalarSignature("state_bits", "state_bits", List.of(), "Word64Rep"),
+            new PackageScalarSignature("null_pointer", "null_pointer", List.of(), "AddrRep"),
             new PackageScalarSignature("equal", "equal", List.of("AddrRep", "AddrRep"), "Word32Rep"),
             new PackageScalarSignature("next_equal", "next_equal", List.of("AddrRep", "AddrRep"), "Word32Rep"),
             new PackageScalarSignature("distance", "distance", List.of("AddrRep", "AddrRep"), "Int64Rep"),
@@ -87,11 +126,14 @@ public class PackageNativeForeignTest {
     private static final class Entry extends RootNode {
         private final PackageScalarCall operation; private final boolean forceIntegerResult;
         @Child private PackageScalarAccess access;
+        long compiledEntries;
         Entry(Language language, PackageScalarCall operation) { this(language, operation, false); }
         Entry(Language language, PackageScalarCall operation, boolean forceIntegerResult) { super(language); this.operation = operation; this.forceIntegerResult = forceIntegerResult; access = new PackageScalarAccess(operation); }
         @Override public Object execute(VirtualFrame frame) {
+            if (com.oracle.truffle.api.CompilerDirectives.inCompiledCode()) compiledEntries++;
             var arguments = frame.getArguments();
             if (operation.getResult().equals("void") && !forceIntegerResult) { access.executeVoid(arguments, thc.runtime.Unit.INSTANCE); return thc.runtime.Unit.INSTANCE; }
+            if (operation.getResult().equals("AddrRep")) return access.executeAddress(arguments, thc.runtime.Unit.INSTANCE);
             if (NarrowInteger.fromRep(operation.getResult()) != null) return access.executeInt(arguments, thc.runtime.Unit.INSTANCE);
             return access.executeLong(arguments, thc.runtime.Unit.INSTANCE);
         }
@@ -100,6 +142,168 @@ public class PackageNativeForeignTest {
         PackageScalarSignature result = null;
         for (var value : link.getAbi()) if (value.symbol().equals(symbol)) { if (result != null) throw new IllegalArgumentException("Multiple signatures"); result = value; }
         if (result == null) throw new java.util.NoSuchElementException(symbol); return result;
+    }
+    @Test public void pointerFreeVoidAndPointerResultsKeepEffectsAndFirstInstalledCalls() throws Exception {
+        var link = library();
+        try (var context = Context.newBuilder("thc").allowNativeAccess(true).allowExperimentalOptions(true)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("engine.CompilationFailureAction", "Throw").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                Language.currentState().getPackageCbits().link(link);
+                var advance = new Entry(language, new PackageScalarCall(link, signature(link, "advance")));
+                var current = new Entry(language, new PackageScalarCall(link, signature(link, "current"))).getCallTarget();
+                var absent = new Entry(language, new PackageScalarCall(link, signature(link, "null_pointer")));
+                assertSame(Unit.INSTANCE, advance.getCallTarget().call(3L)); assertEquals(3L, current.call());
+                assertThrows(RuntimeFault.class, () -> advance.getCallTarget().call(1)); assertEquals(3L, current.call());
+                assertSame(ManagedAddress.nullAddress(), absent.getCallTarget().call());
+                for (var entry : List.of(advance, absent)) {
+                    var target = entry.getCallTarget();
+                    target.getClass().getMethod("compile", boolean.class).invoke(target, true);
+                    assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), entry.operation.getSignature().symbol() + " before");
+                    long before = entry.compiledEntries;
+                    if (entry == advance) {
+                        assertSame(Unit.INSTANCE, target.call(7L));
+                        assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), "advance immediately after call");
+                        assertEquals(10L, current.call());
+                    }
+                    else assertSame(ManagedAddress.nullAddress(), target.call());
+                    assertEquals(before + 1, entry.compiledEntries);
+                    assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), entry.operation.getSignature().symbol() + " after");
+                }
+            } finally { context.leave(); }
+        }
+    }
+    private Context globalContext() {
+        return Context.newBuilder("thc").allowNativeAccess(true).allowExperimentalOptions(true)
+            .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+            .option("engine.CompilationFailureAction", "Throw").build();
+    }
+    private Entry globalEntry(PackageScalarLink link, String name) {
+        return new Entry(TruffleLanguage.LanguageReference.create(Language.class).get(null),
+            new PackageScalarCall(link, signature(link, name)));
+    }
+    private RootCallTarget compileEntry(Entry entry) throws Exception {
+        var target = entry.getCallTarget();
+        target.getClass().getMethod("compile", boolean.class).invoke(target, true);
+        assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
+        return target;
+    }
+    private void assertInstalled(Entry entry, RootCallTarget target, long before) throws Exception {
+        assertSame(target, entry.getCallTarget());
+        assertEquals(before + 1, entry.compiledEntries);
+        assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
+    }
+    @Test public void mutableAndReadonlyGlobalReadersRemainInstalledAcrossWrites() throws Exception {
+        var link = library();
+        // The independent native oracle uses the Linux C linker/runtime. The
+        // Sulong controls below run everywhere without requiring a host SDK.
+        if (System.getProperty("os.name").equals("Linux")) {
+            var executable = directory.resolve("native");
+            var compiler = System.getenv().getOrDefault("THC_CLANG", "clang");
+            var process = new ProcessBuilder(compiler, "-O1", "-DNATIVE_ORACLE", directory.resolve("native.c").toString(),
+                "-o", executable.toString()).redirectErrorStream(true).start();
+            String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            assertEquals(0, process.waitFor(), output);
+            process = new ProcessBuilder(executable.toString()).redirectErrorStream(true).start();
+            output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            assertEquals(0, process.waitFor(), output);
+            assertEquals("3 10 29 41 5 11", output.trim());
+        }
+        try (var context = globalContext()) {
+            context.initialize("thc"); context.enter();
+            try {
+                Language.currentState().getPackageCbits().link(link);
+                var advance = globalEntry(link, "advance").getCallTarget();
+                var current = globalEntry(link, "current"); var fixed = globalEntry(link, "read_fixed");
+                advance.call(3L); assertEquals(3L, current.getCallTarget().call()); assertEquals(29L, fixed.getCallTarget().call());
+                var currentTarget = compileEntry(current); var fixedTarget = compileEntry(fixed);
+                long currentBefore = current.compiledEntries, fixedBefore = fixed.compiledEntries;
+                advance.call(7L);
+                assertEquals(true, currentTarget.getClass().getMethod("isValidLastTier").invoke(currentTarget), "write must not invalidate compiled mutable reader");
+                assertEquals(10L, currentTarget.call()); assertInstalled(current, currentTarget, currentBefore);
+                assertEquals(29L, fixedTarget.call()); assertInstalled(fixed, fixedTarget, fixedBefore);
+            } finally { context.leave(); }
+        }
+    }
+    @Test public void globalPointerWritesRetainAliasesAndInstalledReaders() throws Exception {
+        var link = library();
+        try (var context = globalContext()) {
+            context.initialize("thc"); context.enter();
+            try {
+                Language.currentState().getPackageCbits().link(link);
+                var select = globalEntry(link, "select_pointer"); var read = globalEntry(link, "read_selected");
+                var same = globalEntry(link, "same_selected").getCallTarget();
+                select.getCallTarget().call(0L); assertEquals(17L, read.getCallTarget().call()); assertEquals(1, same.call(0L));
+                var selectTarget = compileEntry(select); var readTarget = compileEntry(read);
+                long selectBefore = select.compiledEntries, readBefore = read.compiledEntries;
+                assertSame(Unit.INSTANCE, selectTarget.call(1L)); assertInstalled(select, selectTarget, selectBefore);
+                assertEquals(true, readTarget.getClass().getMethod("isValidLastTier").invoke(readTarget));
+                assertEquals(41L, readTarget.call()); assertInstalled(read, readTarget, readBefore);
+                assertEquals(1, same.call(1L)); assertEquals(0, same.call(0L));
+            } finally { context.leave(); }
+        }
+    }
+    @Test public void globalsRemainContextLocalAndTlsRemainsThreadLocal() throws Exception {
+        var link = library();
+        for (int index = 0; index < 2; index++) try (var context = globalContext()) {
+            context.initialize("thc"); context.enter();
+            try {
+                Language.currentState().getPackageCbits().link(link);
+                var current = globalEntry(link, "current").getCallTarget();
+                var local = globalEntry(link, "current_tls").getCallTarget();
+                var advanceLocal = globalEntry(link, "advance_tls").getCallTarget();
+                assertEquals(0L, current.call()); assertEquals(0L, local.call());
+                globalEntry(link, "advance").getCallTarget().call(3L + index);
+                advanceLocal.call(5L);
+                var worker = java.util.concurrent.Executors.newSingleThreadExecutor();
+                try {
+                    worker.submit(() -> {
+                        context.enter();
+                        try { assertEquals(0L, local.call()); advanceLocal.call(11L); assertEquals(11L, local.call()); }
+                        finally { context.leave(); }
+                    }).get(10, java.util.concurrent.TimeUnit.SECONDS);
+                } finally { worker.shutdownNow(); assertTrue(worker.awaitTermination(10, java.util.concurrent.TimeUnit.SECONDS)); }
+                assertEquals(5L, local.call()); assertEquals(3L + index, current.call());
+            } finally { context.leave(); }
+        }
+    }
+    @Test public void nativeGlobalTransitionPreservesValuesAndStableAddress() throws Exception {
+        var link = library();
+        try (var context = globalContext()) {
+            context.initialize("thc"); context.enter();
+            try {
+                Language.currentState().getPackageCbits().link(link);
+                var advance = globalEntry(link, "advance").getCallTarget();
+                var current = globalEntry(link, "current").getCallTarget(); var bits = globalEntry(link, "state_bits").getCallTarget();
+                advance.call(3L); assertEquals(3L, current.call());
+                long address = (Long) bits.call(); assertNotEquals(0L, address ^ 0x5a5a123456787654L);
+                assertEquals(3L, current.call(), "native transition preserves fallback contents");
+                advance.call(7L); assertEquals(10L, current.call()); assertEquals(address, bits.call());
+            } finally { context.leave(); }
+        }
+    }
+    @Test public void pointerFreeNullResultRetainsItsFirstInstalledCall() throws Exception {
+        var link = library();
+        try (var context = Context.newBuilder("thc").allowNativeAccess(true).allowExperimentalOptions(true)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("engine.CompilationFailureAction", "Throw").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                Language.currentState().getPackageCbits().link(link);
+                var entry = new Entry(language, new PackageScalarCall(link, signature(link, "null_pointer")));
+                var target = entry.getCallTarget();
+                assertSame(ManagedAddress.nullAddress(), target.call());
+                target.getClass().getMethod("compile", boolean.class).invoke(target, true);
+                assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), "before");
+                long before = entry.compiledEntries;
+                assertSame(ManagedAddress.nullAddress(), target.call());
+                assertEquals(before + 1, entry.compiledEntries);
+                assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), "after");
+            } finally { context.leave(); }
+        }
     }
     @Test public void integerCallSitesRetainFirstInstalledCodeAndRejectWrongResultsBeforeEffects() throws Exception {
         var link = library();

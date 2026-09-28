@@ -84,14 +84,16 @@ public class ProcessSignalsTest {
             Map.of("id", "tuple2", "name", "(#,#)", "kind", "unboxed-tuple", "arity", 2, "tag", 1)));
     }
     @FunctionalInterface private interface BackendAction { void run(Language language, String backend) throws Exception; }
-    private void onBackends(BackendAction body) throws Exception {
+    private void onBackends(BackendAction body) throws Exception { onBackends(false, body); }
+    private void onBackends(boolean loom, BackendAction body) throws Exception {
         for (var backend : List.of("ast", "bytecode")) try (var context = Context.newBuilder("thc").allowCreateThread(true).allowNativeAccess(true).allowExperimentalOptions(true)
+            .option("thc.ThreadHosting", loom ? "loom" : "platform")
             .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build()) {
             context.initialize("thc"); context.enter();
             try { body.run(TruffleLanguage.LanguageReference.create(Language.class).get(null), backend); } finally { context.leave(); }
         }
     }
-    private ExecutableProgram program(Language language, String backend) { return program(language, backend, false, true, descriptor); }
+    ExecutableProgram program(Language language, String backend) { return program(language, backend, false, true, descriptor); }
     private ExecutableProgram program(Language language, String backend, boolean recordSignal, boolean async, Map<String, Object> original) {
         return backend.equals("ast") ? new Program(language, module(recordSignal, original), async) : new BytecodeProgram(language, module(recordSignal, original), async);
     }
@@ -104,6 +106,24 @@ public class ProcessSignalsTest {
         var laterDeath = new ThreadDeath(); var failure = new RuntimeFault("reader failure"); var unregistered = new boolean[1];
         assertSame(laterDeath, assertThrows(ThreadDeath.class, () -> finishSignalConsumer(failure, () -> { throw laterDeath; }, () -> { unregistered[0] = true; })));
         assertTrue(unregistered[0]); assertEquals(List.of(failure), Arrays.asList(laterDeath.getSuppressed()));
+    }
+    @Test public void failedInitialInstallationPreservesHardExitAndClosesStartup() throws Exception {
+        for (boolean loom : new boolean[]{false, true}) onBackends(loom, (language, backend) -> {
+            var owner = Language.currentState(); var death = new ThreadDeath();
+            var cleanup = new RuntimeFault("native installation cleanup failed"); var closes = new AtomicInteger();
+            var transport = new ProcessSignalTransport() {
+                public Result install(int signal, int action) { throw death; }
+                public Event take() { throw new AssertionError("failed installation started a reader"); }
+                public void wake() { throw new AssertionError("failed installation retained its transport"); }
+                public void resetWake() { }
+                public void close() { closes.incrementAndGet(); throw cleanup; }
+            };
+            var service = new ManagedSignals(owner, language, true, () -> true, () -> transport);
+            service.bind(program(language, backend)); service.authorizeLauncher();
+            assertSame(death, assertThrows(ThreadDeath.class, () -> service.install(2, -4, ManagedAddress.nullAddress())));
+            assertEquals(List.of(cleanup), Arrays.asList(death.getSuppressed()));
+            service.close(); assertEquals(1, closes.get());
+        });
     }
     @Test public void genuineOriginalDeclarationRejectsWidthHeadStateAndDescriptorNearMisses() {
         // Original TopHandler core/246.json SHA256 6dd8a0de3bfc8664c9ea1cd2cfee6d687438761adf15a192dfde3c8e21a6fbea.
@@ -180,13 +200,21 @@ public class ProcessSignalsTest {
         } finally { property("thc.asyncExceptions", previous); }
     }
     @Test public void contextTransportKeepsOldActionsAndClosesAfterDelivery() throws Exception {
+        contextTransport(false);
+    }
+    @Test public void loomTransportKeepsOldActionsAndClosesAfterDelivery() throws Exception {
+        contextTransport(true);
+    }
+    private void contextTransport(boolean loom) throws Exception {
         assumeTrue(System.getProperty("os.name").equals("Linux"));
-        onBackends((language, backend) -> {
+        onBackends(loom, (language, backend) -> {
             var owner = Language.currentState(); var events = new LinkedBlockingQueue<ProcessSignalTransport.Event>(); var delivered = new CountDownLatch(8); var closed = new AtomicInteger();
+            owner.getThreads().setCapabilityCount(1);
             var fake = new ProcessSignalTransport() {
                 private final Map<Integer, Integer> old = new HashMap<>(); private boolean received;
                 @Override public Result install(int signal, int action) { var previous = old.put(signal, action); return new Result(previous == null ? -1 : previous, 0); }
                 @Override public Event take() {
+                    assertEquals(loom, Thread.currentThread().isVirtual());
                     if (received) delivered.countDown(); received = false;
                     final Event event; try { event = events.take(); } catch (InterruptedException failure) { return rethrow(failure); }
                     if (event.info().length == 0) return null; received = true; return event;
@@ -196,11 +224,16 @@ public class ProcessSignalsTest {
                 @Override public void close() { closed.incrementAndGet(); }
             };
             var service = new ManagedSignals(owner, language, true, () -> true, () -> fake); var program = program(language, backend); service.bind(program);
+            java.util.function.LongBinaryOperator install = (signal, action) -> loom ? owner.getThreads().hostEntry(null, () -> {
+                owner.getThreads().enterCurrent();
+                try { return service.install(signal, action, ManagedAddress.nullAddress()); }
+                finally { owner.getThreads().leaveCurrent(); }
+            }) : service.install(signal, action, ManagedAddress.nullAddress());
             assertThrows(RuntimeFault.class, () -> service.install(2L, -5L, ManagedAddress.nullAddress())); service.authorizeLauncher();
             for (var bad : List.of(new long[] {64L, -5L}, new long[] {11L, -5L}, new long[] {2L, -3L}, new long[] {2L, 1L}))
                 assertThrows(RuntimeFault.class, () -> service.install(bad[0], bad[1], ManagedAddress.nullAddress()));
             for (long signal : new long[] {1L, 2L, 3L, 10L, 12L, 15L, 24L, 25L}) {
-                var actual = new ArrayList<Long>(); for (long action : new long[] {-2L, -4L, -5L, -1L}) actual.add(service.install(signal, action, ManagedAddress.nullAddress()));
+                var actual = new ArrayList<Long>(); for (long action : new long[] {-2L, -4L, -5L, -1L}) actual.add(install.applyAsLong(signal, action));
                 assertEquals(List.of(-1L, -2L, -4L, -5L), actual);
             }
             try {

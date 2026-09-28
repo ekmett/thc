@@ -175,7 +175,7 @@ inventory f stage modul = do
   when (width f /= 16 || not (signed f)) $ ensure (not (null literals) && all validLiteral literals) "Missing/noncanonical narrow literals"
   ensure (case frontiers of
     [frontier] -> at 0 frontier == String "lam" && length (items (at 1 frontier)) == 1 && get "kind" (get "rep" (at 0 (at 1 frontier))) == String "vector"
-    _ -> False) "Missing vector argument frontier"
+    _ -> False) "Missing exact vector argument control"
   pure $ object $ ["vectorProofs" .= length vectors,"packSites" .= length packs,"unpackSites" .= length unpacks,"primitives" .= primitives f] ++
     [Key.fromString (map toLower (take (length (laneRep f)-3) (laneRep f)) ++ "LiteralSites") .= length literals | width f /= 16 || not (signed f)]
   where vectors = filter ((== String "vector") . get "kind") (walk modul)
@@ -297,16 +297,11 @@ prepareIntegerSimd root family options = do
     structure <- checked (inventory f stage modul)
     audited <- forM (entryNames f ++ ["vectorArgument"]) $ \name -> do
       let reportPath = out </> stage ++ "-" ++ name ++ "-audit.json"
-          frontier = name == "vectorArgument"
-      command <- runLoggedExpect (if frontier then 1 else 0) 120 root logs (stage ++ "-audit-" ++ name) [] python
+      command <- runLoggedExpect 0 120 root logs (stage ++ "-audit-" ++ name) [] python
         ["scripts/audit-core.py","--entry",name,"--output",reportPath,path]
       report <- readJson (root </> reportPath)
       unless (get "missingGlobals" report == toJSON ([] :: [Value])) $ die (name ++ ": missing globals")
-      if frontier then do
-        capabilities <- readJson (root </> "scripts/core-capabilities.json")
-        let detail = if String "arguments" `elem` items (get "vectorTransport" capabilities) then "vector host argument" else "vector formal argument" :: String
-        unless (get "accepted" report == Bool False && [(get "code" i,get "detail" i) | i <- items (get "issues" report)] == [(String "vector-boundary",toJSON detail)]) $ die "Vector frontier changed"
-      else unless (get "accepted" report == Bool True && null (items (get "issues" report))) $ die "Strict positive audit failed"
+      unless (get "accepted" report == Bool True && null (items (get "issues" report))) $ die "Strict positive audit failed"
       pure (name,report,command,reportPath)
     let reports = Map.fromList [(name,report) | (name,report,_,_) <- audited]
     proofs <- forM (entryNames f) $ \name -> do p <- checked (guestStructure f name (reports Map.! name) modul); pure (name,p)
@@ -362,7 +357,7 @@ prepareIntegerSimd root family options = do
      "expectedGuestCallsByEntry" .= Map.fromList [(name,guestCalls name) | name <- entryNames f],
      "checkedGuestCallsByStage" .= Map.fromList [(stage ++ "/" ++ name,guestCalls name) | stage <- stages,name <- entryNames f],
      "proofNegativeControlsPassed" .= True,
-     "frontiers" .= [object ["name" .= ("vectorArgument" :: String),"arity" .= (1 :: Int),"reason" .= ("public host vector arguments are unsupported" :: String)]],
+     "hostEntries" .= [object ["name" .= ("vectorArgument" :: String),"arity" .= (1 :: Int)]],
      "guestCountPolicy" .= ("Same exact per-call guest-entry count with Truffle inlining enabled or disabled; no host bridge." :: String),
      "sources" .= sourceRecords,"artifacts" .= artifactRecords,"commands" .= map commandRecord commands,
      "toolchain" .= object ["ghcVersion" .= ("9.14.1" :: String),"machine" .= arch,"system" .= os,"ghcInfo" .= BSC.unpack (commandStdout info)],

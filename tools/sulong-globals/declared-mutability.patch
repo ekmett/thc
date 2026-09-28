@@ -1,0 +1,48 @@
+diff --git a/com/oracle/truffle/llvm/runtime/global/LLVMGlobalContainer.java b/com/oracle/truffle/llvm/runtime/global/LLVMGlobalContainer.java
+--- a/com/oracle/truffle/llvm/runtime/global/LLVMGlobalContainer.java
++++ b/com/oracle/truffle/llvm/runtime/global/LLVMGlobalContainer.java
+@@ -94,11 +94,19 @@ public final class LLVMGlobalContainer extends LLVMInternalTruffleObject {
+     private Object fallbackContents = 0L;
+ 
+     public LLVMGlobalContainer() {
+-        State state = new State(0L, 0);
+-        contents = state;
++        this(true);
++    }
++
++    public LLVMGlobalContainer(boolean assumeConstant) {
++        // Declared mutable globals need no speculative constant/write-count phase.
++        // Preserve the original policy for readonly globals and default callers.
++        contents = assumeConstant ? new State(0L, 0) : null;
+     }
+ 
+     public Object get() {
++        if (contents == null) {
++            return getFallback();
++        }
+         while (true) {
+             State c = contents;
+             if (c.assumption.isValid()) {
+@@ -117,6 +125,10 @@ public final class LLVMGlobalContainer extends LLVMInternalTruffleObject {
+ 
+     public void set(Object value) {
+         assert value != null;
++        if (contents == null) {
++            setFallback(value);
++            return;
++        }
+         while (true) {
+             State c = contents;
+ 
+diff --git a/com/oracle/truffle/llvm/initialization/InitializeSymbolsNode.java b/com/oracle/truffle/llvm/initialization/InitializeSymbolsNode.java
+--- a/com/oracle/truffle/llvm/initialization/InitializeSymbolsNode.java
++++ b/com/oracle/truffle/llvm/initialization/InitializeSymbolsNode.java
+@@ -228,7 +228,7 @@ public final class InitializeSymbolsNode extends LLVMNode {
+                 // already bound before to a different target location
+                 LLVMPointer ref;
+                 if (globalOffsets[i] == -1) {
+-                    ref = LLVMManagedPointer.create(new LLVMGlobalContainer());
++                    ref = LLVMManagedPointer.create(new LLVMGlobalContainer(globalIsReadOnly[i]));
+                 } else {
+                     LLVMPointer base = globalIsReadOnly[i] ? roBase : rwBase;
+                     ref = base.increment(globalOffsets[i]);

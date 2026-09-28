@@ -197,9 +197,11 @@ public class LoomHostingTest {
                 var state = Language.currentState();
                 await(start(state, null, () -> {
                     var threads = state.getThreads();
-                    assertThrows(UnsupportedCore.class, () -> threads.enterForeign(ForeignSafety.SAFE));
-                    assertThrows(UnsupportedCore.class, () -> threads.enterForeign(ForeignSafety.INTERRUPTIBLE));
-                    assertThrows(UnsupportedCore.class, () -> state.getSignals().install(2, -1, ManagedAddress.nullAddress()));
+                    for (var safety : new ForeignSafety[]{ForeignSafety.SAFE, ForeignSafety.INTERRUPTIBLE}) {
+                        var permission = threads.enterForeign(safety); threads.leaveForeign(permission);
+                    }
+                    var denied = assertThrows(RuntimeFault.class, () -> state.getSignals().install(2, -1, ManagedAddress.nullAddress()));
+                    assertTrue(denied.getMessage().contains("launcher authority"));
                     assertThrows(RuntimeFault.class, threads::allocationCounter);
                     assertThrows(RuntimeFault.class, () -> threads.setAllocationCounter(10));
                     assertEquals(RuntimeServiceStatus.UNSUPPORTED, RuntimeThreadServices.accounting(107));
@@ -211,16 +213,24 @@ public class LoomHostingTest {
         }
     }
 
-    @Test public void mixedContextCallbacksCannotReplaceTheHostedThreadIdentity() {
+    @Test public void mixedContextCallbacksRestoreTheHostedThreadIdentity() {
         try (var context = context(); var platform = Context.newBuilder("thc").build()) {
             context.initialize("thc"); platform.initialize("thc"); context.enter();
             var release = new ManagedMVar();
+            var callbackStarted = new ManagedMVar(); var callbackResult = new ManagedMVar();
             try {
                 var state = Language.currentState(); var threads = state.getThreads(); threads.setCapabilityCount(2);
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 var effects = new AtomicInteger();
                 var target = new RootNode(language) {
-                    @Override public Object execute(VirtualFrame frame) { effects.incrementAndGet(); return 17L; }
+                    @Override public Object execute(VirtualFrame frame) {
+                        effects.incrementAndGet(); assertTrue(threads.isCurrentBound());
+                        assertEquals(MaskingState.UNMASKED, state.getMaskingState().get());
+                        var identity = threads.currentIdentity(); var thread = Thread.currentThread();
+                        callbackStarted.put(1L, null); var value = callbackResult.take(null);
+                        assertSame(identity, threads.currentIdentity()); assertSame(thread, Thread.currentThread());
+                        return value;
+                    }
                 }.getCallTarget();
                 var program = new ExecutableProgram() {
                     public boolean getAsynchronousExceptions() { return true; }
@@ -247,10 +257,12 @@ public class LoomHostingTest {
                                 try {
                                     RuntimeException rejected = null;
                                     try { entry.execute(); } catch (RuntimeException failure) { rejected = failure; }
-                                    assertEquals(0, effects.get(), safety + " callback must be rejected before guest effects");
-                                    assertNotNull(rejected, safety + " callback must be rejected");
-                                    assertTrue(rejected.getMessage().contains(safety == ForeignSafety.UNSAFE
-                                        ? "Unsafe foreign call cannot re-enter guest code" : "Loom hosting does not yet support foreign callbacks"));
+                                    if (safety == ForeignSafety.UNSAFE) {
+                                        assertEquals(0, effects.get(), "Unsafe callback must reject before effects");
+                                        assertNotNull(rejected); assertTrue(rejected.getMessage().contains("Unsafe foreign call cannot re-enter guest code"));
+                                    } else {
+                                        assertNull(rejected); assertEquals(safety == ForeignSafety.SAFE ? 1 : 2, effects.get());
+                                    }
                                     assertSame(foreignState, Language.currentState());
                                     assertSame(foreignIdentity, foreignThreads.currentIdentity());
                                     assertFalse(foreignIdentity.getAllocationSuspended());
@@ -266,10 +278,14 @@ public class LoomHostingTest {
                     assertEquals(MaskingState.MASKED_INTERRUPTIBLE, state.getMaskingState().get());
                     return identity.getCapability();
                 });
-                await(CompletableFuture.anyOf(ready, task.result()));
+                var producer = start(state, 1L, () -> {
+                    for (int i = 0; i < 2; i++) { assertEquals(1L, callbackStarted.take(null)); callbackResult.put(17L, null); }
+                    return null;
+                });
+                await(producer.result()); await(CompletableFuture.anyOf(ready, task.result()));
                 await(start(state, 1L, () -> null).result());
                 threads.setCapabilityCount(1); assertTrue(release.tryPut(Unit.INSTANCE));
-                assertEquals(0L, await(task.result())); assertEquals(0, effects.get());
+                assertEquals(0L, await(task.result())); assertEquals(2, effects.get());
             } finally { release.tryPut(Unit.INSTANCE); context.leave(); }
         }
     }
@@ -399,6 +415,99 @@ public class LoomHostingTest {
                 latch(second); assertNull(failure.get()); assertEquals(1, maximum.get());
             } catch (InterruptedException failure) { throw new AssertionError(failure); }
             finally { context.leave(); }
+        }
+    }
+
+    @Test public void resizeTransfersAnUnmountedReadmissionReservationToTheSurvivingHec() throws Exception {
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try (var scheduler = new LoomScheduler(Language.currentState().getEnv(), new CpuAffinity(null, 2))) {
+                var field = LoomScheduler.class.getDeclaredField("lock"); field.setAccessible(true);
+                var metadata = (java.util.concurrent.locks.ReentrantLock) field.get(scheduler);
+                var admissionField = LoomScheduler.Route.class.getDeclaredField("admission"); admissionField.setAccessible(true);
+                var runningField = LoomScheduler.Route.class.getDeclaredField("running"); runningField.setAccessible(true);
+                var route = scheduler.new Route(1L, true); var initialized = new CountDownLatch(1);
+                route.execute(initialized::countDown); latch(initialized);
+                var admission = (LoomScheduler.Admission) admissionField.get(route);
+                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+                for (;;) {
+                    metadata.lock();
+                    try { if (!runningField.getBoolean(route)) break; }
+                    finally { metadata.unlock(); }
+                    assertTrue(System.nanoTime() < deadline); Thread.yield();
+                }
+                var occupied = new CountDownLatch(1); var release = new CountDownLatch(1); var completed = new CountDownLatch(1);
+                var active = new AtomicInteger(); var maximum = new AtomicInteger();
+                var blocker = scheduler.new Route(0L, true);
+                blocker.execute(() -> {
+                    maximum.accumulateAndGet(active.incrementAndGet(), Math::max); occupied.countDown();
+                    try { assertTrue(release.await(5, TimeUnit.SECONDS)); }
+                    catch (InterruptedException failure) { throw new AssertionError(failure); }
+                    finally { active.decrementAndGet(); }
+                });
+                try {
+                    latch(occupied); metadata.lock();
+                    try {
+                        Object retired = admission.hec;
+                        var permit = retired.getClass().getDeclaredField("permit"); permit.setAccessible(true);
+                        var claim = LoomScheduler.class.getDeclaredMethod("claim", LoomScheduler.Admission.class, retired.getClass()); claim.setAccessible(true);
+                        // Exact state after another carrier grants readmission, before the unmounted VT runs.
+                        claim.invoke(scheduler, admission, retired); admission.ready.release();
+                        route.execute(() -> {
+                            maximum.accumulateAndGet(active.incrementAndGet(), Math::max);
+                            active.decrementAndGet(); completed.countDown();
+                        });
+                        scheduler.resize(1);
+                        assertNull(permit.get(retired), "retiring HEC must relinquish its unmounted reservation");
+                        assertNotSame(retired, admission.hec); assertFalse(admission.held); assertTrue(admission.waiting);
+                        assertEquals(1L, completed.getCount(), "surviving HEC is still occupied");
+                    } finally { metadata.unlock(); }
+                } finally { release.countDown(); }
+                latch(completed); assertEquals(1, maximum.get());
+            } finally { context.leave(); }
+        }
+    }
+
+    @Test public void resizeRemapsAForeignRoutesReservedCallbackBeforeItsNextMount() throws Exception {
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try (var destination = new LoomScheduler(Language.currentState().getEnv(), new CpuAffinity(null, 2));
+                 var source = new LoomScheduler(Language.currentState().getEnv(), new CpuAffinity(null, 1))) {
+                var field = LoomScheduler.class.getDeclaredField("lock"); field.setAccessible(true);
+                var metadata = (java.util.concurrent.locks.ReentrantLock) field.get(destination);
+                var admissionField = LoomScheduler.Route.class.getDeclaredField("admission"); admissionField.setAccessible(true);
+                var worker = LoomScheduler.class.getDeclaredMethod("worker", long.class); worker.setAccessible(true);
+                var route = source.new Route(0L, true);
+                var callback = destination.new Admission(route, null, true);
+                admissionField.set(route, callback);
+                var occupied = new CountDownLatch(1); var release = new CountDownLatch(1); var completed = new CountDownLatch(1);
+                var active = new AtomicInteger(); var maximum = new AtomicInteger();
+                destination.new Route(0L, true).execute(() -> {
+                    maximum.accumulateAndGet(active.incrementAndGet(), Math::max); occupied.countDown();
+                    try { assertTrue(release.await(5, TimeUnit.SECONDS)); }
+                    catch (InterruptedException failure) { throw new AssertionError(failure); }
+                    finally { active.decrementAndGet(); }
+                });
+                try {
+                    latch(occupied); metadata.lock();
+                    try {
+                        Object retired = worker.invoke(destination, 1L);
+                        var claim = LoomScheduler.class.getDeclaredMethod("claim", LoomScheduler.Admission.class, retired.getClass()); claim.setAccessible(true);
+                        // The destination granted readmission, but the foreign route has not remounted.
+                        claim.invoke(destination, callback, retired); callback.ready.release();
+                        destination.resize(1);
+                    } finally { metadata.unlock(); }
+                    route.execute(() -> {
+                        maximum.accumulateAndGet(active.incrementAndGet(), Math::max);
+                        active.decrementAndGet(); completed.countDown();
+                    });
+                    assertFalse(completed.await(100, TimeUnit.MILLISECONDS), "callback must join the surviving HEC's occupied permit");
+                } finally { release.countDown(); }
+                latch(completed); assertEquals(1, maximum.get());
+                Object surviving = callback.hec;
+                var id = surviving.getClass().getDeclaredField("id"); id.setAccessible(true);
+                assertEquals(0L, id.getLong(surviving));
+            } finally { context.leave(); }
         }
     }
 

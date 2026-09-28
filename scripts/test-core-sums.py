@@ -251,12 +251,12 @@ class SumAuditTest(unittest.TestCase):
         module=fixture();module['bindings'][0]['expr'][2][3]=[['default',None,[],lit()]];self.accepted(module)
         module=fixture();module['bindings'][0]['expr'][2][3]=module['bindings'][0]['expr'][2][3][:1];self.accepted(module)
 
-    def test_sum_host_producer_alias_pap_and_global_storage_reject(self):
-        self.rejected(fixture(),'producer')
-        module=fixture();module['bindings'].append(binding('alias',var('producer',CLOSURE)));self.rejected(module,'alias')
+    def test_sum_host_producer_alias_pap_accept_but_global_storage_rejects(self):
+        self.accepted(fixture(),'producer')
+        module=fixture();module['bindings'].append(binding('alias',var('producer',CLOSURE)));self.accepted(module,'alias')
         module=fixture();producer=module['bindings'][1]['expr'];producer[1].append(binder('y',INT))
         module['bindings'].append(binding('pap',['app',var('producer',CLOSURE),[lit()],[False],True,True,dict(rep=CLOSURE)]))
-        self.rejected(module,'pap')
+        self.accepted(module,'pap')
         module=fixture();proof=summ();value=module['bindings'][1]['expr'][2]
         module['bindings']=[binding('root',value,proof)];self.rejected(module)
         # The exact RHS still exposes unsupported storage if the binder lies or
@@ -338,9 +338,8 @@ class SumAuditTest(unittest.TestCase):
         disabled=dict(ENABLED,aggregateInputs=[])
         self.assertTrue(any(i['detail']=='unboxed-sum argument' for i in run(module,cap=disabled)['issues']))
         self.assertTrue(any(i['detail']=='unboxed-sum formal argument' for i in run(module,cap=disabled)['issues']))
-        # A supported internal sum worker is not a signed-Long public host ABI.
-        report=self.rejected(module,'consume')
-        self.assertTrue(any(i['path']=='/entry' and i['detail']=='unboxed-sum host argument' for i in report['issues']))
+        # The retained logical signature also admits the tagged host protocol.
+        self.accepted(module,'consume')
         changed=copy.deepcopy(module)
         changed['bindings'][0]['expr'][2][3]=[True]
         self.assertTrue(any(i['code']=='application-levity' for i in self.rejected(changed)['issues']))
@@ -380,12 +379,11 @@ class SumAuditTest(unittest.TestCase):
             self.rejected(module)
 
     @unittest.skipUnless((ROOT/'build/sum-layout/pre-core/SumLayoutAudit.json').exists(),'Prepare genuine sum metadata fixtures')
-    def test_genuine_pre_and_post_core_accept_only_bounded_consumers(self):
+    def test_genuine_pre_and_post_core_accept_retained_host_signatures(self):
         positive=['sumCase','directCase','nestedCase','lazyCase','zeroCase','unitCase','boxedKindsCase','floatDoubleCase',
-                  'narrowWideCase','threeWayCase']
-        negative=['returnedSum','lazySum','zeroSum','unitSum','boxedKindsSum',
-                  'floatDoubleSum','aliasIdentity','runtimePolymorphic','levityPolymorphic','abstractSumIdentity','abstractRuntimeSum',
-                  'abstractAlternative','addressResult','vectorResult']
+                  'narrowWideCase','threeWayCase','returnedSum','lazySum','zeroSum','unitSum','boxedKindsSum',
+                  'floatDoubleSum','aliasIdentity','addressResult','vectorResult']
+        negative=['runtimePolymorphic','levityPolymorphic','abstractSumIdentity','abstractRuntimeSum','abstractAlternative']
         for stage in ('pre','post'):
             module=json.loads((ROOT/f'build/sum-layout/{stage}-core/SumLayoutAudit.json').read_text())
             for entry in positive:

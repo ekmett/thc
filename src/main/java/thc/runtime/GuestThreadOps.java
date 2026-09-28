@@ -98,7 +98,9 @@ public final class GuestThreadOps {
         // pthreads inherit their creator's mask. Broaden even across Truffle entry.
         try { threads.startThread(child); }
         catch (Throwable failure) { return GuestThreadOps.<RuntimeException, GuestThreadId>rethrow(failure); }
-        TruffleSafepoint.setBlockedThreadInterruptibleFunction(node, AWAIT_REGISTRATION, ready);
+        try (var admission = LoomScheduler.suspendCurrentGuest()) {
+            TruffleSafepoint.setBlockedThreadInterruptibleFunction(node, AWAIT_REGISTRATION, ready);
+        }
         Throwable failure = registrationFailure.get();
         if (failure != null) throw new RuntimeFault("fork# child registration failed: " + failure.getClass().getSimpleName());
         GuestThreadId result = identity.get();

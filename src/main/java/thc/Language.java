@@ -247,8 +247,11 @@ public final class Language extends TruffleLanguage<Language.State> {
     @Override protected void finalizeContext(State context) {
         try { context.files.shutdownEventManagers(); }
         finally {
-            try { context.signals.close(); }
-            finally { try { context.threads.stopHostedThreads(); } finally { context.iconv.dispose(); } }
+            try { context.signals.requestStop(); }
+            finally {
+                try { context.threads.stopHostedThreads(); }
+                finally { try { context.signals.close(); } finally { context.iconv.dispose(); } }
+            }
         }
     }
     @Override protected void disposeContext(State context) {

@@ -1,0 +1,125 @@
+diff --git a/com/oracle/truffle/dsl/processor/bytecode/generator/BuilderElement.java b/com/oracle/truffle/dsl/processor/bytecode/generator/BuilderElement.java
+index bf68a41..3c47d35 100644
+--- a/com/oracle/truffle/dsl/processor/bytecode/generator/BuilderElement.java
++++ b/com/oracle/truffle/dsl/processor/bytecode/generator/BuilderElement.java
+@@ -458,6 +458,7 @@ final class BuilderElement extends AbstractElement {
+                     b.statement("return");
+                     b.end();
+                     break;
++                case WHILE_UNPROFILED:
+                 case WHILE:
+                     b.startCase().tree(parent.createOperationConstant(op)).end().startCaseBlock();
+                     b.startIf().string("operation.childCount == 0").end().startBlock();
+@@ -574,6 +575,7 @@ final class BuilderElement extends AbstractElement {
+                     b.end();
+                     b.end();
+                     break;
++                case WHILE_UNPROFILED:
+                 case WHILE:
+                     b.startCase().tree(parent.createOperationConstant(op)).end().startBlock();
+                     b.startIf().string("operation.childCount == 0").end().startBlock();
+@@ -1814,6 +1816,7 @@ final class BuilderElement extends AbstractElement {
+                 values.put(operationFields.thenReachable, "state.reachable");
+                 values.put(operationFields.elseReachable, "state.reachable");
+                 break;
++            case WHILE_UNPROFILED:
+             case WHILE:
+                 values.put(operationFields.whileStartBci, requestLeaderBci("while loop header"));
+                 values.put(operationFields.bodyReachable, "state.reachable");
+@@ -2159,6 +2162,7 @@ final class BuilderElement extends AbstractElement {
+                 break;
+             case IF_THEN_UNPROFILED:
+                 case IF_THEN:
++            case WHILE_UNPROFILED:
+             case WHILE:
+                 b.lineComment("Control flow merged. Set state.reachable to the enclosing operation's reachability.");
+                 b.statement("state.reachable = resolveReachable()");
+@@ -4119,10 +4123,13 @@ final class BuilderElement extends AbstractElement {
+                     emitPatchBranchFixupBci(b, op, operationFields.endBranchFixupBci, "conditional merge point");
+                     b.end();
+                     break;
++                case WHILE_UNPROFILED:
+                 case WHILE:
+-                    InstructionImmediate branchTarget = model.branchFalseInstruction.findImmediate(ImmediateKind.BYTECODE_INDEX, "branch_target");
++                    InstructionModel loopBranch = op == model.unprofiledWhileOperation
++                                    ? model.unprofiledBranchFalseInstruction : model.branchFalseInstruction;
++                    InstructionImmediate branchTarget = loopBranch.findImmediate(ImmediateKind.BYTECODE_INDEX, "branch_target");
+                     b.startIf().string("childIndex == 0").end().startBlock();
+-                    buildEmitInstruction(b, "branchFalseBci", model.branchFalseInstruction, emitBranchFalseArguments(model.branchFalseInstruction));
++                    buildEmitInstruction(b, "branchFalseBci", loopBranch, emitBranchFalseArguments(loopBranch));
+                     b.startIf().string("branchFalseBci != -1").end().startBlock();
+                     b.tree(operationStack.write(op, operationFields.endBranchFixupBci, "branchFalseBci + " + branchTarget.offset()));
+                     emitRequestLeaderBci(b, "start of while body");
+@@ -4134,14 +4141,18 @@ final class BuilderElement extends AbstractElement {
+                      * instruction. Since we have the offset of the branch target (toUpdate) we can
+                      * obtain the branch profile with a bit of offset math.
+                      */
+-                    InstructionImmediate branchProfile = model.branchFalseInstruction.findImmediate(ImmediateKind.BRANCH_PROFILE, "branch_profile");
+-                    int offset = branchProfile.offset() - branchTarget.offset();
+-                    if (ImmediateKind.BRANCH_PROFILE.width != ImmediateWidth.INT) {
+-                        throw new AssertionError("branch profile width changed");
++                    String loopProfile = "-1";
++                    if (op != model.unprofiledWhileOperation) {
++                        InstructionImmediate branchProfile = loopBranch.findImmediate(ImmediateKind.BRANCH_PROFILE, "branch_profile");
++                        int offset = branchProfile.offset() - branchTarget.offset();
++                        if (ImmediateKind.BRANCH_PROFILE.width != ImmediateWidth.INT) {
++                            throw new AssertionError("branch profile width changed");
++                        }
++                        String readBranchProfile = BytecodeRootNodeElement.readInt("state.bc", "toUpdate + " + offset + " /* loop branch profile */");
++                        loopProfile = "toUpdate != " + UNINIT + " ? " + readBranchProfile + " : -1";
+                     }
+-                    String readBranchProfile = BytecodeRootNodeElement.readInt("state.bc", "toUpdate + " + offset + " /* loop branch profile */");
+                     buildEmitInstruction(b, null, model.branchBackwardInstruction,
+-                                    new String[]{operationStack.read(op, operationFields.whileStartBci), "toUpdate != " + UNINIT + " ? " + readBranchProfile + " : -1"});
++                                    new String[]{operationStack.read(op, operationFields.whileStartBci), loopProfile});
+                     b.startIf().string("toUpdate != ", UNINIT).end().startBlock();
+                     b.statement(BytecodeRootNodeElement.writeInt("state.bc", "toUpdate", requestLeaderBci("while loop exit")));
+                     b.end();
+@@ -7735,6 +7746,7 @@ final class BuilderElement extends AbstractElement {
+                         fields.add(getChildBci(1, true));
+                     }
+                     break;
++                case WHILE_UNPROFILED:
+                 case WHILE:
+                     fields.add(whileStartBci); // init
+                     fields.add(bodyReachable); // init
+diff --git a/com/oracle/truffle/dsl/processor/bytecode/model/BytecodeDSLBuiltins.java b/com/oracle/truffle/dsl/processor/bytecode/model/BytecodeDSLBuiltins.java
+index cb9b029..0be5915 100644
+--- a/com/oracle/truffle/dsl/processor/bytecode/model/BytecodeDSLBuiltins.java
++++ b/com/oracle/truffle/dsl/processor/bytecode/model/BytecodeDSLBuiltins.java
+@@ -410,6 +410,11 @@ public class BytecodeDSLBuiltins {
+                         Use it for runtime protocol events that must remain valid on their first arrival.
+                         Ordinary guest conditionals should use IfThen to retain branch profiling.
+                         """).setVoid(true).setDynamicOperands(child("condition"), voidableChild("thens"));
++        m.unprofiledWhileOperation = m.operation(OperationKind.WHILE_UNPROFILED, "UnprofiledWhile", """
++                        UnprofiledWhile preserves While stack, reachability, backedge and OSR semantics.
++                        Its condition does not count or specialize observed branch directions.
++                        Use it only for runtime protocol retries; guest loops should retain While.
++                        """).setVoid(true).setDynamicOperands(child("condition"), voidableChild("body"));
+     }
+ 
+     public static void addInvalidateBuiltinsOnFinalize(BytecodeDSLModel m) {
+diff --git a/com/oracle/truffle/dsl/processor/bytecode/model/BytecodeDSLModel.java b/com/oracle/truffle/dsl/processor/bytecode/model/BytecodeDSLModel.java
+index e86b88d..eba159a 100644
+--- a/com/oracle/truffle/dsl/processor/bytecode/model/BytecodeDSLModel.java
++++ b/com/oracle/truffle/dsl/processor/bytecode/model/BytecodeDSLModel.java
+@@ -228,6 +228,7 @@ public class BytecodeDSLModel extends Template implements PrettyPrintable {
+     public InstructionModel branchFalseInstruction;
+     public InstructionModel unprofiledBranchFalseInstruction;
+     public OperationModel unprofiledIfThenOperation;
++    public OperationModel unprofiledWhileOperation;
+     public InstructionModel storeLocalInstruction;
+     public InstructionModel throwInstruction;
+     public InstructionModel loadConstantInstruction;
+diff --git a/com/oracle/truffle/dsl/processor/bytecode/model/OperationModel.java b/com/oracle/truffle/dsl/processor/bytecode/model/OperationModel.java
+index 2dc5f2f..2605c0f 100644
+--- a/com/oracle/truffle/dsl/processor/bytecode/model/OperationModel.java
++++ b/com/oracle/truffle/dsl/processor/bytecode/model/OperationModel.java
+@@ -90,6 +90,7 @@ public class OperationModel implements PrettyPrintable {
+         CUSTOM_RETURN,
+         CUSTOM_INSTRUMENTATION,
+         IF_THEN_UNPROFILED,
++        WHILE_UNPROFILED,
+     }
+ 
+     /**

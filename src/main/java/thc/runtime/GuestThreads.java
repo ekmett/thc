@@ -49,10 +49,13 @@ public final class GuestThreads {
     }
     public CpuAffinity getCpuAffinity() { return cpuAffinity; }
     public boolean isLoom() { return loom != null; }
-    public boolean needsHosting() { return loom != null && !loom.isCurrent(); }
+    public boolean needsHosting() {
+        var foreign = foreignActivations.get();
+        return loom != null && !loom.isCurrent() && (foreign == null || foreign.top() == null);
+    }
     @TruffleBoundary public <T> T hostEntry(Node node, Callable<T> action) {
         var foreign = foreignActivations.get();
-        if (foreign != null && foreign.top() != null) throw new UnsupportedCore("Loom hosting does not yet support foreign callbacks or native TLS binding");
+        if (foreign != null && foreign.top() != null) throw new UnsupportedCore("Foreign callbacks must enter on their native origin thread");
         return loom.invoke(node, action);
     }
     @TruffleBoundary public Thread newThread(TruffleLanguage.Env env, Runnable task, Long capability, Node node) {
@@ -94,9 +97,11 @@ public final class GuestThreads {
         final AstStackScope astStack;
         final GuestThread prior;
         final MaskingState mask;
+        final LoomScheduler.Admission callbackAdmission;
         final boolean externalAsync;
-        public GuestEntry(GuestThreadId active, GuestThreadStatus status, AstStackScope astStack, GuestThread prior, MaskingState mask, boolean externalAsync) {
-            this.active = active; this.status = status; this.astStack = astStack; this.prior = prior; this.mask = mask; this.externalAsync = externalAsync;
+        public GuestEntry(GuestThreadId active, GuestThreadStatus status, AstStackScope astStack, GuestThread prior, MaskingState mask, boolean externalAsync, LoomScheduler.Admission callbackAdmission) {
+            this.active = active; this.status = status; this.astStack = astStack; this.prior = prior; this.mask = mask;
+            this.externalAsync = externalAsync; this.callbackAdmission = callbackAdmission;
         }
         public GuestThreadId getActive() { return active; }
         public GuestThreadStatus getStatus() { return status; }
@@ -160,6 +165,7 @@ public final class GuestThreads {
         ForeignSafety safety = ForeignSafety.UNSAFE;
         DeliveryPermission previous = DeliveryPermission.NONE;
         GuestThreadStatus status;
+        LoomScheduler.Admission admission;
     }
     private static final class ForeignStack {
         final ArrayList<ForeignActivation> frames = new ArrayList<>();
@@ -173,8 +179,6 @@ public final class GuestThreads {
     @TruffleBoundary public DeliveryPermission enterForeignForDisposal() { return enterForeignImpl(ForeignSafety.UNSAFE, true); }
     private DeliveryPermission enterForeignImpl(ForeignSafety safety, boolean disposal) {
         if (closed && !disposal) throw fault("Guest context has closed");
-        if (loom != null && loom.isCurrent() && safety != ForeignSafety.UNSAFE)
-            throw new UnsupportedCore("Loom hosting does not yet support safe or interruptible foreign calls; use platform hosting");
         var state = deliveryState();
         var stack = foreignActivations.get();
         if (stack == null) { stack = new ForeignStack(); foreignActivations.set(stack); }
@@ -185,7 +189,9 @@ public final class GuestThreads {
         activation.previous = state.permission;
         activation.status = activation.caller == null ? null : activation.caller.status;
         if (activation.caller != null && !activation.caller.status.getTerminal()) activation.caller.status = GuestThreadStatus.FOREIGN;
-        state.permission = DeliveryPermission.FOREIGN; return activation.previous;
+        state.permission = DeliveryPermission.FOREIGN;
+        if (safety != ForeignSafety.UNSAFE) activation.admission = LoomScheduler.suspendCurrentGuest();
+        return activation.previous;
     }
     @TruffleBoundary public void leaveForeign(DeliveryPermission previous) {
         var state = delivery.get();
@@ -196,14 +202,18 @@ public final class GuestThreads {
         var activation = stack.top();
         if (activation == null) throw new IllegalStateException("Foreign execution has no Java-thread origin");
         if (activation.owner != this || activation.previous != previous) throw new IllegalStateException("Foreign execution exited out of order");
-        if (activation.caller != null && !activation.caller.status.getTerminal()) {
-            if (activation.status == null) throw new IllegalStateException("Required value was null.");
-            activation.caller.status = activation.status;
+        try {
+            if (activation.admission != null) activation.admission.owner().resumeGuest(activation.admission, null);
+        } finally {
+            if (activation.caller != null && !activation.caller.status.getTerminal()) {
+                if (activation.status == null) throw new IllegalStateException("Required value was null.");
+                activation.caller.status = activation.status;
+            }
+            activation.owner = null; activation.caller = null; activation.status = null; activation.admission = null;
+            activation.previous = DeliveryPermission.NONE; activation.safety = ForeignSafety.UNSAFE;
+            stack.depth--; state.permission = previous;
+            if (previous == DeliveryPermission.NONE && state.guestPrevious.isEmpty()) delivery.remove();
         }
-        activation.owner = null; activation.caller = null; activation.status = null;
-        activation.previous = DeliveryPermission.NONE; activation.safety = ForeignSafety.UNSAFE;
-        stack.depth--; state.permission = previous;
-        if (previous == DeliveryPermission.NONE && state.guestPrevious.isEmpty()) delivery.remove();
     }
     private void enterGuestPermission() {
         var state = deliveryState(); state.guestPrevious.addLast(state.permission); state.permission = DeliveryPermission.GUEST;
@@ -234,13 +244,17 @@ public final class GuestThreads {
         if (callback) {
             if (activation.owner.closed) throw fault("Foreign caller context has closed");
             if (activation.safety == ForeignSafety.UNSAFE) throw fault("Unsafe foreign call cannot re-enter guest code");
-            if (loom != null) throw new UnsupportedCore("Loom hosting does not yet support foreign callbacks or native TLS binding");
         }
         var suspended = callback ? activeIdentity.get() : null;
         // Cross-context reverse entries must never acquire two registry locks.
         if (suspended != null) suspended.owner.pauseAllocation(suspended);
-        try { return enterCurrentImpl(inheritedMask, forked, externalAsync, capability, callback); }
+        LoomScheduler.Admission admission = null;
+        try {
+            if (callback && loom != null) admission = loom.enterCallback(null);
+            return enterCurrentImpl(inheritedMask, forked, externalAsync, capability, callback, admission);
+        }
         catch (Throwable failure) {
+            if (admission != null) admission.owner().leaveCallback(admission);
             if (suspended != null) suspended.owner.resumeAllocation(suspended);
             throw propagate(failure);
         }
@@ -253,7 +267,7 @@ public final class GuestThreads {
         if (loom != null) loom.attach(identity);
         knownThreads.put(identity, Boolean.TRUE); return identity;
     }
-    private synchronized long enterCurrentImpl(MaskingState inheritedMask, boolean forked, boolean externalAsync, Long capability, boolean callback) {
+    private synchronized long enterCurrentImpl(MaskingState inheritedMask, boolean forked, boolean externalAsync, Long capability, boolean callback, LoomScheduler.Admission admission) {
         if (closed) throw new IllegalStateException("Guest context has closed");
         var current = Thread.currentThread(); var prior = currentSlot.get(); var previousMask = maskingState.get();
         GuestThreadId identity;
@@ -275,7 +289,7 @@ public final class GuestThreads {
             if (identity.allocationBaseline < 0) identity.allocationUnavailable = true;
         }
         var poll = pollState(current);
-        slot.entriesPrevious.addLast(new GuestEntry(activeIdentity.get(), slot.identity.status, poll.astStack, prior, previousMask, slot.externalAsync));
+        slot.entriesPrevious.addLast(new GuestEntry(activeIdentity.get(), slot.identity.status, poll.astStack, prior, previousMask, slot.externalAsync, admission));
         if (!callback && prior != null) slot.externalAsync &= externalAsync;
         poll.astStack = new AstStackScope(); slot.identity.status = GuestThreadStatus.RUNNING; activeIdentity.set(slot.identity);
         slot.entries++; currentSlot.set(slot); pollState(current).current = slot; enterGuestPermission(); return identity.logicalId;
@@ -429,6 +443,7 @@ public final class GuestThreads {
         if (!outcome.getTerminal()) throw new IllegalArgumentException("Failed requirement.");
         leaveGuestPermission();
         GuestThreadId resumed = null;
+        LoomScheduler.Admission admission = null;
         List<AsyncRequest> finished = List.of();
         synchronized (this) {
             var current = Thread.currentThread(); var target = currentSlot.get();
@@ -436,6 +451,7 @@ public final class GuestThreads {
                 if (target.thread != current) throw new IllegalStateException("Guest completion ran on a different Java thread");
                 if (target.entries <= 0) throw new IllegalStateException("Check failed.");
                 var previous = target.entriesPrevious.removeLast(); pollState(current).astStack = previous.astStack;
+                admission = previous.callbackAdmission;
                 if (previous.active == null) activeIdentity.remove(); else activeIdentity.set(previous.active);
                 if (--target.entries != 0) {
                     target.externalAsync = previous.externalAsync;
@@ -452,6 +468,7 @@ public final class GuestThreads {
                 }
             }
         }
+        if (admission != null) admission.owner().leaveCallback(admission);
         if (resumed != null) resumed.owner.resumeAllocation(resumed);
         for (var request : finished) request.finish(AsyncRequestState.TARGET_FINISHED);
     }
@@ -511,12 +528,20 @@ public final class GuestThreads {
         var identity = activeIdentity.get();
         var previous = identity == null ? null : identity.status;
         if (identity != null && !identity.status.getTerminal()) identity.status = status;
-        return new GuestThreadExtent(identity, previous);
+        return new GuestThreadExtent(identity, previous, identity == null ? null : LoomScheduler.suspendCurrentGuest());
     }
     /** Java-callable poll for bytecode roots; it never delivers from a wake action. */
     public static AsyncRequest pollCurrent(Node node, boolean interruptible) {
+        checkpointCurrent(node);
+        return pollCurrentWithoutYield(node, interruptible);
+    }
+    public static void checkpointCurrent(Node node) {
         var context = Language.currentState(node);
         if (context.getThreads().loom != null) context.getThreads().loom.checkpoint();
+    }
+    /** Used under commit/owner locks; scheduling yield happens before acquiring them. */
+    public static AsyncRequest pollCurrentWithoutYield(Node node, boolean interruptible) {
+        var context = Language.currentState(node);
         var slot = context.getThreadPollState().get().current;
         return slot == null ? null : context.getThreads().poll(slot, node, interruptible);
     }

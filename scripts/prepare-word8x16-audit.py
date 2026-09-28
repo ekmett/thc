@@ -119,7 +119,7 @@ def inventory(module, stage):
           'Missing or noncanonical genuine Word8 literal')
     frontier = next(b for b in module['bindings'] if b['name'] == 'vectorArgument')['expr']
     check(frontier[0] == 'lam' and len(frontier[1]) == 1
-          and frontier[1][0]['rep'].get('kind') == 'vector', 'Missing vector-formal negative control')
+          and frontier[1][0]['rep'].get('kind') == 'vector', 'Missing exact vector formal control')
     return dict(vectorProofs=len(vectors), word8LiteralSites=len(literals), packSites=len(packs), unpackSites=len(unpacked), primitives=sorted(PRIMITIVES))
 
 
@@ -201,10 +201,9 @@ def main():
         structure[stage] = inventory(module, stage)
         audits[stage] = {name: auditor.Audit([(str(module_path), module)], capabilities).run([name])
                          for name in [e['name'] for e in entries()]+['vectorArgument']}
-        frontier = audits[stage]['vectorArgument']
-        check(not frontier['accepted'] and not frontier['missingGlobals'] and len(frontier['issues']) == 1 and
-              {(i['code'], i['detail']) for i in frontier['issues']} == {('vector-boundary', 'vector host argument' if 'arguments' in capabilities.get('vectorTransport', []) else 'vector formal argument')},
-              'Vector-formal frontier must be rejected for exactly its actual boundary')
+        host = audits[stage]['vectorArgument']
+        check(host['accepted'] and not host['issues'] and not host['missingGlobals'],
+              'Exact retained host vector signature was not admitted')
         audit_path = OUT/f'{stage}-audit.json'
         audit_path.write_text(json.dumps(audits[stage], indent=2)+'\n')
         artifacts += [module_path, audit_path]
@@ -238,7 +237,7 @@ def main():
                *[ROOT/'compiler'/name for name in ('build.sh', 'export.sh', 'toolchain.sh')]]
     provenance = dict(schema=1, vector='word8x16', stages=stages, nativeRows=native_rows,
         modelMatched=True if native_rows is not None else None, modelRows=len(wanted), entries=entries(),
-        frontiers=[dict(name='vectorArgument', arity=1, reason='public host vector arguments are unsupported')],
+        hostEntries=[dict(name='vectorArgument', arity=1)],
         positiveAuditsAccepted=True, audits=audits, structure=structure, commands=commands,
         signedUnsignedNegativeControls=signed_controls,
         expectedGuestCallsByEntry=EXPECTED_CALLS, checkedGuestCallsByStage=guest_calls,

@@ -118,10 +118,11 @@ public final class ManagedStdio {
         if (result < 0) lastError.set(fileError(abi));
         return result;
     }
-    @TruffleBoundary public long poll(ManagedAddress address, long count, long timeout, Node node) {
+    public long poll(ManagedAddress address, long count, long timeout, Node node) { return poll(address, count, timeout, node, ForeignSafety.UNSAFE); }
+    @TruffleBoundary public long poll(ManagedAddress address, long count, long timeout, Node node, ForeignSafety safety) {
         var abi = hostAbi();
         if (timeout != (long) (int) timeout) throw fault("Original poll requires a canonical CInt timeout");
-        long result = files.poll(address, count, (int) timeout, node);
+        long result = files.poll(address, count, (int) timeout, node, safety);
         if (result < 0) lastError.set(fileError(abi));
         return result;
     }
@@ -153,11 +154,12 @@ public final class ManagedStdio {
         if (result < 0) lastError.set(fileError(abi));
         return result;
     }
-    @TruffleBoundary public long epollWait(long fd, ManagedAddress events, long maximum, long timeout, Node node) {
+    public long epollWait(long fd, ManagedAddress events, long maximum, long timeout, Node node) { return epollWait(fd, events, maximum, timeout, node, ForeignSafety.UNSAFE); }
+    @TruffleBoundary public long epollWait(long fd, ManagedAddress events, long maximum, long timeout, Node node, ForeignSafety safety) {
         var abi = hostAbi();
         if (fd != (long) (int) fd || maximum != (long) (int) maximum || timeout != (long) (int) timeout)
             throw fault("Original epoll_wait requires canonical CInt operands");
-        long result = files.epollWait(fd, events, (int) maximum, (int) timeout, node);
+        long result = files.epollWait(fd, events, (int) maximum, (int) timeout, node, safety);
         if (result < 0) lastError.set(fileError(abi));
         return result;
     }

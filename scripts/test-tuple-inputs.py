@@ -301,16 +301,19 @@ class TupleInputs(unittest.TestCase):
                 call[1]=var('constructorAlias');call[6]['rep']=REF
                 self.rejected(module,code='aggregate-shape')
 
-    def test_host_lambda_alias_and_residual_pap_boundaries_are_rejected(self):
+    def test_host_lambda_alias_and_residual_pap_retain_exact_tuple_signatures(self):
         for target in ('worker','alias','pap'):
             module=fixture([LONG,tup(LONG)]);module['bindings'].append(bind('alias',var('worker')))
             call=module['bindings'][0]['expr'];module['bindings'].append(bind('pap',['app',call[1],call[2][:1],[False],False,False,dict(rep=CLOSURE)]))
-            self.rejected(module,entry=target,detail='unboxed-tuple host argument')
+            self.accepted(module,entry=target)
+            malformed=copy.deepcopy(module)
+            malformed['bindings'][1]['expr'][1][1]['rep']['primReps']=[]
+            self.rejected(malformed,entry=target,code='representation-proof')
         module=fixture([LONG]);worker=module['bindings'][1];shape=tup(LONG)
         module['constructors'].extend(fixture([shape])['constructors'])
         worker['expr'][2]=fixture([shape])['bindings'][0]['expr'][2][0];worker['expr'][3]['resultRep']=shape
         module['bindings'].append(bind('alias',var('worker')))
-        for target in ('worker','alias'):self.rejected(module,entry=target,detail='unboxed-tuple host result')
+        for target in ('worker','alias'):self.accepted(module,entry=target)
 
     def test_genuine_pre_post_exports_require_enabled_typed_ingress(self):
         directory=Path(os.environ.get('THC_TUPLE_INPUT_FIXTURE',ROOT.parent/'build/tuple-input'))

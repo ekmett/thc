@@ -2830,18 +2830,19 @@ class Audit:
                 if io_main:
                     self.io_main_contract(key, expression, formals, result)
                 else:
-                    if formals is not None and any(self.supported_vector(proof, 'arguments') for proof in formals):
-                        self.issue('vector-boundary', key, '/entry', 'vector host argument')
-                    if self.supported_vector(result, 'results'):
-                        self.issue('vector-boundary', key, '/entry', 'vector host result')
-                    if formals is not None and any(self.is_tuple(proof) for proof in formals):
-                        self.issue('aggregate-boundary', key, '/entry', 'unboxed-tuple host argument')
-                    if formals is not None and any(is_sum(proof) for proof in formals):
-                        self.issue('aggregate-boundary', key, '/entry', 'unboxed-sum host argument')
-                    if self.is_tuple(result):
-                        self.issue('aggregate-boundary', key, '/entry', 'unboxed-tuple host result')
-                if is_sum(self.known_result(expression)) or is_sum(self.bindings[key].get('rep')):
-                    self.issue('aggregate-boundary', key, '/entry', 'unboxed-sum host result')
+                    # The public protocol consumes the same retained logical
+                    # signature as guest transport, including aliases and PAPs.
+                    # Missing legacy evidence is not a license to infer a shape.
+                    try:
+                        signature = self.known_function_signature(expression)
+                    except (IndexError, KeyError, TypeError):
+                        signature = None  # walk() diagnoses malformed expressions.
+                    if signature is not None:
+                        for index, proof in enumerate(signature[0]):
+                            if proof is not None:
+                                self.representation(proof, key, f'/entry/arguments/{index}')
+                        if signature[1] is not None:
+                            self.representation(signature[1], key, '/entry/result')
                 self._discover(key)
                 del expression, formals, result
         # Retention does not call an export. The current backends must still

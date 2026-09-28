@@ -727,10 +727,11 @@ public final class ManagedFiles {
         for (int b = 0; b < width; b++) value |= address.readWord8(offset + b) << (b * 8);
         return value;
     }
-    @TruffleBoundary public long poll(ManagedAddress address, long count, int timeout, Node node) {
+    public long poll(ManagedAddress address, long count, int timeout, Node node) { return poll(address, count, timeout, node, ForeignSafety.UNSAFE); }
+    @TruffleBoundary public long poll(ManagedAddress address, long count, int timeout, Node node, ForeignSafety safety) {
         if (count < 0 || count > Integer.MAX_VALUE / 8) throw RuntimeFault.fault("poll descriptor image exceeds managed capacity");
         if (count != 0) address.requireByteRegion(count * 8, true);
-        return address.withNativeBorrow(() -> result(() -> {
+        return result(safety, () -> address.withNativeBorrow(() -> {
             long[] fds = new long[(int) count];
             for (int i = 0; i < fds.length; i++) fds[i] = (int) integer(address, i * 8L, 4);
             short[] events = new short[fds.length];
@@ -821,8 +822,9 @@ public final class ManagedFiles {
     private static long remaining(int timeout, long started) {
         return timeout < 0 ? -1 : Math.max(0, timeout - Math.max(0, System.nanoTime() - started) / 1_000_000);
     }
-    @TruffleBoundary public long epollWait(long fd, ManagedAddress destination, int maximum, int timeout, Node node) {
-        return result(() -> {
+    public long epollWait(long fd, ManagedAddress destination, int maximum, int timeout, Node node) { return epollWait(fd, destination, maximum, timeout, node, ForeignSafety.UNSAFE); }
+    @TruffleBoundary public long epollWait(long fd, ManagedAddress destination, int maximum, int timeout, Node node, ForeignSafety safety) {
+        return result(safety, () -> {
             if (maximum <= 0) throw new NativeFileException("epoll_wait", 22);
             if (maximum > Integer.MAX_VALUE / 12) throw RuntimeFault.fault("epoll output image exceeds managed capacity");
             destination.requireByteRegion(maximum * 12L, true);
@@ -974,7 +976,8 @@ public final class ManagedFiles {
         if (flags != (long) (int) flags || mode < 0 || mode > 0xffff_ffffL)
             throw RuntimeFault.fault("Original open requires canonical CInt flags and Word32 mode");
         byte[] bytes = originalPathBytes(path);
-        return result(() -> {
+        var safety = operation == OriginalStdioOp.OPEN_INTERRUPTIBLE ? ForeignSafety.INTERRUPTIBLE : ForeignSafety.synchronous(operation.getSafety());
+        return result(safety, () -> {
             NativeFileProvider provider;
             OpenClaim claim;
             synchronized (this) {
