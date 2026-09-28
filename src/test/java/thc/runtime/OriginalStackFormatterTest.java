@@ -35,7 +35,7 @@ public class OriginalStackFormatterTest {
             while (matcher.find()) entries.add(Map.entry(matcher.group(1), matcher.group(2))); var names = new HashSet<String>(); for (var entry : entries) names.add(entry.getKey()); require(entries.size() == 70 && names.size() == 70);
             var sorted = new ArrayList<>(entries); sorted.sort(Map.Entry.comparingByKey()); var catalog = new StringBuilder(); for (var entry : sorted) catalog.append(entry.getKey()).append('\0').append(entry.getValue()).append('\n');
             require(hash(catalog.toString().getBytes(StandardCharsets.UTF_8)).equals("e49b897efc3f06fd3967f4ddd700298c4949fd8918a0142eabad54abc5ba454e"));
-            var result = new LinkedHashMap<String, String>(); for (var entry : entries) result.put(sourceRoot + entry.getKey(), entry.getValue()); pinned = result;
+            var result = new LinkedHashMap<String, String>(); for (var entry : entries) result.put(sourceRoot + (entry.getKey().startsWith("GHC/") ? "src/" : "") + entry.getKey(), entry.getValue()); pinned = result;
         } return pinned;
     }
     private synchronized Set<String> requiredInputs() throws Exception {
@@ -55,7 +55,7 @@ public class OriginalStackFormatterTest {
         require(Objects.equals(value.get("format"), "thc-original-stack-formatter-fixture") && Objects.equals(value.get("schema"), 1L)); require(Objects.equals(value.get("ghc"), "9.14.1") && Objects.equals(value.get("installedArtifactsHashed"), false));
         require(Objects.equals(value.get("limit"), "Original prettyStackEntry only; not full original stack decoding or native-frame equivalence.")); var inputs = (Map<String, String>) value.get("inputHashes"); require(inputs.keySet().equals(requiredInputs())); for (var entry : pinned().entrySet()) require(Objects.equals(inputs.get(entry.getKey()), entry.getValue()));
         var output = (String) value.get("nativeOutput"); require(output.matches("build/original-stack-formatter/run-[1-9][0-9]*/logs/native-observations\\.stdout")); var attempt = output.substring(0, output.indexOf("/logs/"));
-        var sources = new ArrayList<String>(); for (var path : pinned().keySet()) { var source = path.substring(sourceRoot.length()); if (source.endsWith(".hs") || source.endsWith(".hsc")) sources.add(source); }
+        var sources = new ArrayList<String>(); for (var path : pinned().keySet()) { var source = path.substring(sourceRoot.length()); if (source.startsWith("src/")) source = source.substring(4); if (source.endsWith(".hs") || source.endsWith(".hsc")) sources.add(source); }
         var expectedOriginals = new ArrayList<String>(); var generated = new ArrayList<String>(); for (var source : sources) { expectedOriginals.add(attempt + "/originals/core/" + source.substring(0, source.lastIndexOf('.')).replace('/', '.') + ".json"); if (source.endsWith(".hsc")) generated.add(attempt + "/originals/generated/" + source.substring(0, source.length() - 4) + ".hs"); } Collections.sort(expectedOriginals);
         var expectedStages = new LinkedHashMap<String, String>(); var expectedAudits = new ArrayList<String>(); for (var stage : List.of("pre", "post")) { expectedStages.put(stage, attempt + "/" + stage + "-core/OriginalStackFormatter.json"); expectedAudits.add(attempt + "/" + stage + "-audit.json"); }
         var expectedArtifacts = new LinkedHashSet<>(expectedOriginals); expectedArtifacts.addAll(expectedStages.values()); expectedArtifacts.addAll(expectedAudits); expectedArtifacts.addAll(generated); expectedArtifacts.addAll(List.of(attempt + "/native/formatter", attempt + "/originals/generated.json", attempt + "/originals/target-layout.json"));
@@ -131,7 +131,7 @@ public class OriginalStackFormatterTest {
         // Source identity and resolution, not recovery/error execution or admission.
     }
     @Test void freshOriginalEnumWorkerResolvesClosureTypeErrorWithoutAlias() throws Exception {
-        var receipt = manifest(); assertEquals("e4dcf86915b01dcc732ed319fe02759858aea1534c68427826ba5f9c6908860f", hash(contained(sourceRoot + "GHC/Internal/Enum.hs", true))); var originals = (List<String>) receipt.get("originals"); var full = json(single(originals, value -> value.endsWith("/GHC.Internal.Enum.json"))); var id = "ghc-internal:GHC.Internal.Enum.$wtoEnumError";
+        var receipt = manifest(); assertEquals("e4dcf86915b01dcc732ed319fe02759858aea1534c68427826ba5f9c6908860f", hash(contained(sourceRoot + "src/GHC/Internal/Enum.hs", true))); var originals = (List<String>) receipt.get("originals"); var full = json(single(originals, value -> value.endsWith("/GHC.Internal.Enum.json"))); var id = "ghc-internal:GHC.Internal.Enum.$wtoEnumError";
         var original = binding(full, id); assertEquals("$wtoEnumError", original.get("name")); var callerModule = json(single(originals, value -> value.endsWith("/GHC.Internal.ClosureTypes.json"))); var caller = binding(callerModule, "ghc-internal:GHC.Internal.ClosureTypes.$wlvl"); assertEquals(1, references(caller.get("expr"), id), "Fresh original caller must resolve the exact Enum worker"); assertEquals(original, binding(CoreModules.merge(List.of(full, callerModule)), id));
         // Does not admit the cold ErrorCall/Typeable/backtrace dependency graph.
     }

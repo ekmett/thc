@@ -198,7 +198,11 @@ lowerer halves the side width down to one and retries before publishing the
 original root. Actual emission determines whether a side fits; syntax size is
 not an encoding bound. A capacity cut omits the parent's inline copy entirely,
 including when only that copy exceeds the limit. Such a root has no graph-retry
-generation: its instruction positions are fixed at publication. Other encoding
+generation: its instruction positions are fixed at publication. Up to eight
+disjoint eligible regions share the root's one preparation choice and graph
+generation; a hard capacity cut omits all of their inline copies. Later region
+preparation cannot reset that choice. Nested regions in the same root and
+regions referencing an outer join remain excluded. Other encoding
 failures, a single unencodable side, and unpartitionable regions still fail.
 The same exact captures, original tail position and continuation protocol apply.
 

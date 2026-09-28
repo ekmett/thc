@@ -205,6 +205,129 @@ class BytecodeGraphBudgetTest {
     }
 
     @ParameterizedTest @ValueSource(booleans = {false, true})
+    void capacityRecoveryExtractsBothSiblingRegionsBeforePublication(boolean second) throws Exception {
+        var input = new LinkedHashMap<>(decision(64, List.of(binder("step", CLOSURE, true), binder("y", DATA, true)), LONG,
+                arm -> capacityCalls(64, arm, variable("value63", LONG), LONG)));
+        var bindings = new ArrayList<Map<String, Object>>((List<Map<String, Object>>) input.get("bindings"));
+        var entry = new LinkedHashMap<>(bindings.getFirst());
+        var lambda = new ArrayList<>((List<Object>) entry.get("expr"));
+        var first = new ArrayList<>((List<Object>) lambda.get(2));
+        var later = new ArrayList<>(first);
+        later.set(1, variable("y", DATA));
+        later.set(2, "later"); later.set(4, Map.of("rep", LONG, "binder", binder("later", DATA, true)));
+        var branches = node("app", node("prim", "+#"), List.of(first, later),
+                List.of(false, false), false, false, Map.of("rep", LONG));
+        // Genuine return work remains in the original root after the side call.
+        lambda.set(2, node("app", node("prim", "+#"), List.of(branches, number(99)),
+                List.of(false, false), false, false, Map.of("rep", LONG)));
+        entry.put("expr", lambda); bindings.set(0, entry); input.put("bindings", bindings);
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            var threads = Language.currentState().getThreads(); threads.enterCurrent();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new BytecodeProgram(language, input, true);
+                var target = program.entryTarget("entry"); var root = (BytecodeRoot) target.getRootNode();
+                assertEquals(0, root.prepareGraphBudgetRetry(0));
+                var regionField = BytecodeRoot.class.getDeclaredField("caseRegions"); regionField.setAccessible(true);
+                assertEquals(2, ((BytecodeCaseRegion[]) regionField.get(root)).length);
+                var original = instructions(root);
+                assertTrue(original.values().stream().noneMatch(value -> value.contains("InlineCaseRegions")));
+                assertEquals(0, entries(program));
+                assertTrue(compile(target)); bypass(target); assertTrue(valid(target));
+                var calls = new java.util.concurrent.atomic.AtomicInteger();
+                var step = new Closure(null, 1, new RootNode(language) {
+                    @Override public Object execute(VirtualFrame frame) {
+                        int call = calls.getAndIncrement();
+                        int arm = (call < 64) != second ? 63 : 17;
+                        assertEquals(arm * 1000L + call % 64, frame.getArguments()[1]);
+                        return (Long) frame.getArguments()[1] + 1;
+                    }
+                }.getCallTarget());
+                var high = program.entryValue("chosen"); var low = program.constructorLayout("C17").allocate();
+                assertEquals(80227L, Calls.target(target, new Object[]{0L, second ? low : high, step, second ? high : low}));
+                assertEquals(128, calls.get()); assertEquals(1, entries(program));
+                assertSame(target, program.entryTarget("entry")); assertTrue(valid(target));
+                root.getRootNodes().ensureSourceInformation(); assertEquals(original, instructions(root));
+                var cloneMethod = root.getClass().getDeclaredMethod("cloneUninitialized"); cloneMethod.setAccessible(true);
+                var clone = (BytecodeRoot) cloneMethod.invoke(root);
+                assertEquals(original, instructions(clone)); assertEquals(0, clone.getGraphBudgetGeneration());
+                var handoff = language.getHandoffState().get(); assertNull(handoff.getPending());
+                assertEquals(0, handoff.getArguments().getDepth()); assertEquals(0, handoff.getResults().getDepth());
+                assertEquals(0, handoff.getArguments().retainedReferences()); assertEquals(0, handoff.getResults().retainedReferences());
+            } finally { threads.leaveCurrent(); context.leave(); }
+        }
+    }
+
+    private static Map<String, Object> siblingCapacityInput(int... repetitions) {
+        var alternatives = new ArrayList<List<Object>>();
+        Map<String, Object> input = null;
+        List<Object> lambda = null;
+        for (int region = 0; region < repetitions.length; region++) {
+            int count = repetitions[region];
+            input = new LinkedHashMap<>(decision(64, List.of(binder("step", CLOSURE, true)), LONG,
+                    arm -> count == 0 ? number(arm) : capacityCalls(count, arm, variable("value" + (count - 1), LONG), LONG)));
+            var entry = ((List<Map<String, Object>>) input.get("bindings")).getFirst();
+            lambda = new ArrayList<>((List<Object>) entry.get("expr"));
+            var part = new ArrayList<>((List<Object>) lambda.get(2));
+            String id = "region" + region;
+            part.set(2, id); part.set(4, Map.of("rep", LONG, "binder", binder(id, DATA, true)));
+            alternatives.add(node("data", "C" + region, List.of(), part));
+        }
+        lambda.set(2, node("case", node("con", "C0", 0, Map.of("rep", DATA)), "branch", alternatives,
+                Map.of("rep", LONG, "binder", binder("branch", DATA, true))));
+        var bindings = new ArrayList<Map<String, Object>>((List<Map<String, Object>>) input.get("bindings"));
+        var entry = new LinkedHashMap<>(bindings.getFirst()); entry.put("expr", lambda); bindings.set(0, entry);
+        input.put("bindings", bindings); return input;
+    }
+
+    @Test void aLaterSmallRegionCannotRestoreAnUnencodableInlineCopy() throws Exception {
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new BytecodeProgram(language, siblingCapacityInput(64, 0), true);
+                var root = (BytecodeRoot) program.entryTarget("entry").getRootNode();
+                assertEquals(0, root.prepareGraphBudgetRetry(0));
+                assertTrue(instructions(root).values().stream().noneMatch(value -> value.contains("InlineCaseRegions")));
+                assertEquals(0, entries(program));
+            } finally { context.leave(); }
+        }
+    }
+
+    @ParameterizedTest @ValueSource(booleans = {false, true})
+    void theFiniteRegionCapDoesNotRetryAnUncoveredCapacityOverflow(boolean overflow) throws Exception {
+        int[] calls = new int[9]; calls[8] = overflow ? 64 : 0;
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                if (overflow) {
+                    var failure = assertThrows(com.oracle.truffle.api.bytecode.BytecodeEncodingException.class,
+                            () -> new BytecodeProgram(language, siblingCapacityInput(calls), true));
+                    var check = BytecodeProgram.class.getDeclaredMethod("localIndexOverflow",
+                            com.oracle.truffle.api.bytecode.BytecodeEncodingException.class);
+                    check.setAccessible(true); assertEquals(true, check.invoke(null, failure));
+                } else {
+                    var program = new BytecodeProgram(language, siblingCapacityInput(calls), true);
+                    var target = program.entryTarget("entry"); var root = (BytecodeRoot) target.getRootNode();
+                    var field = BytecodeRoot.class.getDeclaredField("caseRegions"); field.setAccessible(true);
+                    assertEquals(8, ((BytecodeCaseRegion[]) field.get(root)).length);
+                    var original = instructions(root);
+                    assertEquals(0, root.getGraphBudgetGeneration());
+                    assertEquals(1, root.prepareGraphBudgetRetry(0)); // Explicit plan control, not a compiler bailout.
+                    assertEquals(1, root.prepareGraphBudgetRetry(0)); assertEquals(1, root.prepareGraphBudgetRetry(1));
+                    root.getRootNodes().ensureSourceInformation(); assertEquals(original, instructions(root));
+                    var cloneMethod = root.getClass().getDeclaredMethod("cloneUninitialized"); cloneMethod.setAccessible(true);
+                    var clone = (BytecodeRoot) cloneMethod.invoke(root);
+                    assertEquals(original, instructions(clone)); assertEquals(1, clone.getGraphBudgetGeneration());
+                    assertSame(target, program.entryTarget("entry")); assertEquals(0, entries(program));
+                }
+            } finally { context.leave(); }
+        }
+    }
+
+    @ParameterizedTest @ValueSource(booleans = {false, true})
     void localEncodingCapacityNarrowsSidesBeforePublishingTheOriginalTarget(boolean parentOnly) throws Exception {
         int arms = parentOnly ? 256 : 64, repetitions = parentOnly ? 8 : 64;
         var input = decision(arms, List.of(binder("step", CLOSURE, true)), LONG,
@@ -723,6 +846,41 @@ class BytecodeGraphBudgetTest {
                 assertEquals(1, entries(program)); assertTrue(valid(target));
                 assertSame(target, program.entryTarget("entry"));
                 assertEquals(1, root.prepareGraphBudgetRetry(1), "the finite plan is exhausted");
+            } finally { context.leave(); }
+        }
+    }
+
+    @Test void disjointRegionsShareOneRealGraphRecoveryWithoutChangingPublishedPcs() throws Exception {
+        var input = new LinkedHashMap<>(decision(768));
+        var bindings = new ArrayList<Map<String, Object>>((List<Map<String, Object>>) input.get("bindings"));
+        var entry = new LinkedHashMap<>(bindings.getFirst());
+        var lambda = new ArrayList<>((List<Object>) entry.get("expr"));
+        var first = (List<Object>) lambda.get(2);
+        var second = new ArrayList<>(first);
+        second.set(2, "later"); second.set(4, Map.of("rep", LONG, "binder", binder("later", DATA, true)));
+        lambda.set(2, node("app", node("prim", "+#"), List.of(first, second),
+                List.of(false, false), false, false, Map.of("rep", LONG)));
+        entry.put("expr", lambda); bindings.set(0, entry); input.put("bindings", bindings);
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new BytecodeProgram(language, input); var target = program.entryTarget("entry");
+                var root = (BytecodeRoot) target.getRootNode(); var original = instructions(root);
+                var field = BytecodeRoot.class.getDeclaredField("caseRegions"); field.setAccessible(true);
+                assertEquals(2, ((BytecodeCaseRegion[]) field.get(root)).length);
+                assertEquals(0, root.getGraphBudgetGeneration()); assertEquals(0, entries(program));
+                assertTrue(compile(target));
+                assertEquals(1, root.getGraphBudgetGeneration(), "a real normal-limit bailout must select both regions");
+                assertEquals(0, entries(program)); assertEquals(original, instructions(root));
+                bypass(target);
+                assertEquals(4636L, Calls.target(target, new Object[]{0L, program.entryValue("chosen")}));
+                assertEquals(1, entries(program)); assertTrue(valid(target)); assertSame(target, program.entryTarget("entry"));
+                assertEquals(1, root.prepareGraphBudgetRetry(0)); assertEquals(1, root.prepareGraphBudgetRetry(1));
+                root.getRootNodes().ensureSourceInformation(); assertEquals(original, instructions(root));
+                var cloneMethod = root.getClass().getDeclaredMethod("cloneUninitialized"); cloneMethod.setAccessible(true);
+                var clone = (BytecodeRoot) cloneMethod.invoke(root);
+                assertEquals(original, instructions(clone)); assertEquals(1, clone.getGraphBudgetGeneration());
             } finally { context.leave(); }
         }
     }

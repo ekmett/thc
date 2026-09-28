@@ -19,6 +19,7 @@ import com.oracle.truffle.runtime.OptimizedCallTarget;
 public final class BytecodeCaseRegion extends Node {
     static final int WIDTH = 32;
     static final int MAX_ALTERNATIVES = 1024;
+    static final int MAX_REGIONS = 8;
 
     static final class Plan {
         final Assumption inline = Truffle.getRuntime().createAssumption("inline bytecode case regions");
