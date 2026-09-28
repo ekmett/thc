@@ -4,8 +4,8 @@
 
 """Check staged aggregate support against genuine GHC exports and a native oracle.
 
-Supported tuple and binary-sum results execute in the JVM suite; aggregate
-argument boundaries remain rejected. These rows stay separate from the library corpus.
+Supported tuple and binary-sum results and logical host arguments execute in
+the JVM suite. These rows stay separate from the library corpus.
 """
 import argparse
 import importlib.util
@@ -16,10 +16,11 @@ ROOT = Path(__file__).resolve().parent.parent
 spec = importlib.util.spec_from_file_location('audit_core', ROOT / 'scripts/audit-core.py')
 audit_core = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(audit_core)
-SUPPORTED = {'tupleOutstanding', 'tupleZeroLazy', 'coldTuple'}
+SUPPORTED = {'tupleOutstanding', 'tupleZeroLazy', 'coldTuple',
+             'emptyIdentity', 'emptyDiscard', 'singletonIdentity', 'pairIdentity'}
 CAP = json.loads((ROOT / 'scripts/core-capabilities.json').read_text())
 if 'unboxed-sum' in CAP.get('aggregateResults', []):
-    SUPPORTED |= {'sumPayload', 'sumZeroLazy', 'coldSum'}
+    SUPPORTED |= {'sumPayload', 'sumZeroLazy', 'coldSum', 'sumIdentity'}
 CASES = {
     'tupleOutstanding': ['tuple', 'opaque-producer', 'forwarder', 'two-outstanding-results', 'unequal-weights'],
     'tupleZeroLazy': ['tuple', 'nested-zero-width', 'lazy-bottom-payload'],
@@ -157,7 +158,7 @@ def main():
                   nativeOracle=check_native(args.oracle))
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + '\n')
-    print(f'Aggregate frontier: {len(SUPPORTED)} supported result-only entries, {len(CASES)-len(SUPPORTED)} rejected boundaries; {report["nativeOracle"]["rows"]} native oracle rows')
+    print(f'Aggregate frontier: {len(SUPPORTED)} supported entries, {len(CASES)-len(SUPPORTED)} rejected boundaries; {report["nativeOracle"]["rows"]} native oracle rows')
 
 
 if __name__ == '__main__':
