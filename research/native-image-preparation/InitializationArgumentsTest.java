@@ -4,6 +4,13 @@
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.lang.classfile.ClassFile;
+import java.lang.classfile.ClassTransform;
+import java.lang.classfile.Opcode;
+import java.lang.classfile.instruction.ReturnInstruction;
+import java.lang.classfile.instruction.ExceptionCatch;
+import java.lang.constant.ClassDesc;
+import java.lang.constant.MethodTypeDesc;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
 import javax.tools.ToolProvider;
@@ -86,6 +93,85 @@ public final class InitializationArgumentsTest {
         return Files.readString(root.resolve("build/native-image/reproduction-inventory").resolve(name));
     }
 
+    private static String switches(Path root, String approved) throws Exception {
+        var command = new ProcessBuilder(javaHome.resolve("bin/java").toString(), "-XX:-UseJVMCICompiler",
+            "-cp", root.resolve("build/native-image/reproduction-probe").toString(),
+            "ClassInitializationInventory", root.resolve("build/install/thc/lib/thc-0.1-experiment.jar").toString(),
+            "switches", approved);
+        command.redirectError(root.resolve("switches.err").toFile());
+        var process = command.start();
+        var result = new String(process.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        check(process.waitFor() == 0, "switch classifier failed");
+        return result;
+    }
+
+    private static void switchChecks() throws Exception {
+        var root = fixture("switches", false, "thc.fixture.SafeTag\nthc.fixture.OtherTag\n", "# empty\n");
+        var source = root.resolve("Switches.java");
+        Files.writeString(source, """
+            package thc.fixture;
+            enum SafeTag { A, B }
+            enum OtherTag { C, D }
+            enum StatefulTag { E; static { throwIfInitialized(); }
+                static void throwIfInitialized() { throw new AssertionError("must not initialize"); }
+            }
+            class SafeSwitch {
+                static int select(SafeTag value) { return switch(value) { case A -> 1; case B -> 2; }; }
+                static int select(OtherTag value) { return switch(value) { case C -> 3; case D -> 4; }; }
+            }
+            class StatefulSwitch {
+                static int select(StatefulTag value) { return switch(value) { case E -> 5; }; }
+            }
+            class ForeignState { static int value; }
+            """);
+        var compiled = root.resolve("classes");
+        check(ToolProvider.getSystemJavaCompiler().run(null, null, null, "-d", compiled.toString(), source.toString()) == 0,
+            "switch fixture javac failed");
+        var holder = compiled.resolve("thc/fixture/SafeSwitch$1.class");
+        var original = Files.readAllBytes(holder);
+        var cf = ClassFile.of();
+        var model = cf.parse(original);
+        var jar = root.resolve("build/install/thc/lib/thc-0.1-experiment.jar");
+        writeClasses(jar, compiled);
+        check(prepare(root) == 0, "switch preparation failed");
+        check(inventory(root, "switches.txt").equals("thc.fixture.SafeSwitch$1\n"),
+            "admit multi-map holder only for prepared enum dependencies");
+        check(switches(root, "thc.fixture.SafeTag").equals("\n"), "do not automatically prepare the second enum");
+        check(switches(root, "").equals("\n"), "no approved enums means no switch holders");
+        check(switches(root, "thc.fixture.SafeTag,thc.fixture.OtherTag").equals("thc.fixture.SafeSwitch$1\n"),
+            "stateful unapproved enum and its holder stay out; no initializers execute");
+
+        // Keep the real synthetic holder and fields, but add an unexpected
+        // effect or change its handler. Flags/names alone must not admit it.
+        for (String mutation : List.of("call", "foreign write", "handler")) {
+            Files.write(holder, cf.transformClass(model, ClassTransform.transformingMethodBodies((builder, element) -> {
+                if (mutation.equals("handler") && element instanceof ExceptionCatch handler) {
+                    builder.exceptionCatch(handler.tryStart(), handler.tryEnd(), handler.handler(), ClassDesc.of("java.lang.RuntimeException"));
+                    return;
+                }
+                if (!mutation.equals("handler") && element instanceof ReturnInstruction instruction && instruction.opcode() == Opcode.RETURN) {
+                    if (mutation.equals("foreign write")) builder.iconst_1().putstatic(ClassDesc.of("thc.fixture.ForeignState"), "value", java.lang.constant.ConstantDescs.CD_int);
+                    else builder.invokestatic(ClassDesc.of("java.lang.System"), "nanoTime",
+                        MethodTypeDesc.of(java.lang.constant.ConstantDescs.CD_long)).pop2();
+                }
+                builder.with(element);
+            })));
+            writeClasses(jar, compiled);
+            check(switches(root, "thc.fixture.SafeTag,thc.fixture.OtherTag").equals("\n"),
+                "reject synthetic holder with unexpected " + mutation);
+        }
+    }
+
+    private static void writeClasses(Path jar, Path compiled) throws Exception {
+        try (var output = new JarOutputStream(Files.newOutputStream(jar)); var files = Files.walk(compiled)) {
+            for (var file : files.filter(Files::isRegularFile).sorted().toList()) {
+                output.putNextEntry(new JarEntry(compiled.relativize(file).toString().replace('\\', '/')));
+                Files.copy(file, output);
+                output.closeEntry();
+            }
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         if (args.length != 2) throw new IllegalArgumentException("RECIPE OUTPUT required");
         recipe = Path.of(args[0]).toAbsolutePath();
@@ -141,6 +227,7 @@ public final class InitializationArgumentsTest {
         check(prepare(manual) == 0, "ordinary preparation after cache mode");
         check(inventory(manual, "prepared-initialization.args").equals(
             "--initialize-at-build-time=thc.fixture.Tag\n"), "ordinary image must not inherit cached-mode holders");
+        switchChecks();
         System.out.println("PASS " + checks + " initialization-argument checks; prepare-only, no image execution");
     }
 }

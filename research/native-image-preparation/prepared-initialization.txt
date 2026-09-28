@@ -27,6 +27,17 @@ thc.runtime.NativeCallbackPointerGen
 thc.runtime.NativeCallbackPointerGen$InteropLibraryExports
 thc.runtime.NativeCallbackPointerGen$InteropLibraryExports$Cached
 thc.runtime.NativeCallbackPointerGen$InteropLibraryExports$Uncached
+# Generated checked-interop failure/metaobject descriptors only: framework
+# factories, class literals, assertion flags and fieldless/unadoptable libraries.
+# No exception receiver, original protocol exception, context or handle is created.
+thc.runtime.InteropFailureGen
+thc.runtime.InteropFailureGen$InteropLibraryExports
+thc.runtime.InteropFailureGen$InteropLibraryExports$Cached
+thc.runtime.InteropFailureGen$InteropLibraryExports$Uncached
+thc.runtime.KindGen
+thc.runtime.KindGen$InteropLibraryExports
+thc.runtime.KindGen$InteropLibraryExports$Cached
+thc.runtime.KindGen$InteropLibraryExports$Uncached
 # The unique fieldless guest state/void value; no guest context is captured.
 thc.runtime.Unit
 thc.runtime.Applications

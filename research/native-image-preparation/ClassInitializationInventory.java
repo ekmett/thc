@@ -5,12 +5,23 @@ import java.lang.classfile.ClassFile;
 import java.lang.classfile.ClassModel;
 import java.lang.classfile.Instruction;
 import java.lang.classfile.MethodModel;
+import java.lang.classfile.Label;
+import java.lang.classfile.Opcode;
+import java.lang.classfile.TypeKind;
+import java.lang.classfile.instruction.BranchInstruction;
+import java.lang.classfile.instruction.ConstantInstruction;
+import java.lang.classfile.instruction.LabelTarget;
+import java.lang.classfile.instruction.NewPrimitiveArrayInstruction;
+import java.lang.classfile.instruction.StoreInstruction;
+import java.lang.classfile.instruction.TypeCheckInstruction;
 import java.lang.classfile.instruction.FieldInstruction;
 import java.lang.classfile.instruction.InvokeInstruction;
 import java.lang.classfile.instruction.NewObjectInstruction;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
+import java.lang.reflect.AccessFlag;
 import java.util.jar.JarFile;
 
 // Read-only diagnostic of the pinned JDK ClassFile API. Does not load classes.
@@ -129,6 +140,113 @@ public final class ClassInitializationInventory {
         return true;
     }
 
+    private static boolean field(Instruction instruction, Opcode opcode, String owner, String name, String type) {
+        return instruction instanceof FieldInstruction access && access.opcode() == opcode
+            && access.owner().asInternalName().equals(owner) && access.name().equalsString(name)
+            && access.type().equalsString(type);
+    }
+
+    private static boolean call(Instruction instruction, Opcode opcode, String owner, String name, String type) {
+        return instruction instanceof InvokeInstruction invoke && invoke.opcode() == opcode
+            && invoke.owner().asInternalName().equals(owner) && invoke.name().equalsString(name)
+            && invoke.type().equalsString(type);
+    }
+
+    // A switch holder may depend ONLY on an enum already selected by the other
+    // policies. Prove its values() is just the compiler's array clone as well;
+    // this category never authorizes an enum initializer itself.
+    private static boolean switchEnum(String name, Set<String> approved) {
+        var model = classes.get(name);
+        if (!approved.contains(name) || model == null || !model.flags().has(AccessFlag.ENUM)
+            || model.superclass().isEmpty() || !model.superclass().get().asInternalName().equals("java/lang/Enum")) return false;
+        var array = "[L" + name + ";";
+        var values = model.methods().stream().filter(m -> m.methodName().equalsString("values")
+            && m.methodType().equalsString("()" + array) && m.flags().has(AccessFlag.STATIC)).findFirst();
+        if (values.isEmpty() || values.get().code().isEmpty()
+            || !values.get().code().get().exceptionHandlers().isEmpty()) return false;
+        var body = instructions(values.get());
+        return body.size() == 4 && body.get(0) instanceof FieldInstruction source
+            && field(source, Opcode.GETSTATIC, name, "$VALUES", array)
+            && model.fields().stream().anyMatch(f -> f.fieldName().equalsString("$VALUES")
+                && f.fieldType().equalsString(array) && f.flags().has(AccessFlag.STATIC)
+                && f.flags().has(AccessFlag.FINAL) && f.flags().has(AccessFlag.SYNTHETIC))
+            && call(body.get(1), Opcode.INVOKEVIRTUAL, array, "clone", "()Ljava/lang/Object;")
+            && body.get(2) instanceof TypeCheckInstruction cast && cast.opcode() == Opcode.CHECKCAST
+            && cast.type().asInternalName().equals(array) && body.get(3).opcode() == Opcode.ARETURN;
+    }
+
+    // Exact javac synthetic enum-switch grammar: fresh private-to-the-holder
+    // int[] maps, ordinal/literal stores, and only forward NoSuchFieldError
+    // handlers. No calls to arbitrary helpers, resource allocation or writes to
+    // another class. A changed compiler shape fails closed for manual review.
+    private static boolean switchHolder(ClassModel model, Set<String> approved) {
+        if (model.flags().flagsMask() != (ClassFile.ACC_SUPER | ClassFile.ACC_SYNTHETIC)
+            || model.superclass().isEmpty() || !model.superclass().get().asInternalName().equals("java/lang/Object")
+            || !model.interfaces().isEmpty() || model.fields().isEmpty() || model.methods().size() != 1) return false;
+        var fields = new java.util.HashSet<String>();
+        for (var f : model.fields()) {
+            if (f.flags().flagsMask() != (ClassFile.ACC_STATIC | ClassFile.ACC_FINAL | ClassFile.ACC_SYNTHETIC)
+                || !f.fieldType().equalsString("[I") || !f.fieldName().stringValue().startsWith("$SwitchMap$")) return false;
+            fields.add(f.fieldName().stringValue());
+        }
+        var initializer = model.methods().getFirst();
+        if (!initializer.methodName().equalsString("<clinit>") || !initializer.methodType().equalsString("()V")
+            || initializer.flags().flagsMask() != ClassFile.ACC_STATIC || initializer.code().isEmpty()) return false;
+        var code = initializer.code().get();
+        var body = instructions(initializer);
+        var labels = new java.util.HashMap<Label, Integer>();
+        int index = 0;
+        for (var element : code) {
+            if (element instanceof LabelTarget target) labels.put(target.label(), index);
+            else if (element instanceof Instruction) index++;
+        }
+        var owner = model.thisClass().asInternalName();
+        var maps = new LinkedHashMap<String, String>();
+        int assignments = 0;
+        for (int i = 0; i < body.size() - 1;) {
+            if (body.get(i) instanceof InvokeInstruction values && values.opcode() == Opcode.INVOKESTATIC) {
+                var enumName = values.owner().asInternalName();
+                var map = "$SwitchMap$" + enumName.replace('/', '$');
+                if (i + 4 >= body.size() || !fields.contains(map) || maps.containsKey(map)
+                    || !switchEnum(enumName, approved)
+                    || !call(values, Opcode.INVOKESTATIC, enumName, "values", "()[L" + enumName + ";")
+                    || body.get(i + 1).opcode() != Opcode.ARRAYLENGTH
+                    || !(body.get(i + 2) instanceof NewPrimitiveArrayInstruction array) || array.typeKind() != TypeKind.INT
+                    || !field(body.get(i + 3), Opcode.PUTSTATIC, owner, map, "[I")) return false;
+                maps.put(map, enumName);
+                i += 4;
+            } else {
+                if (i + 7 >= body.size() || !(body.get(i) instanceof FieldInstruction load)) return false;
+                var map = load.name().stringValue();
+                var enumName = maps.get(map);
+                if (enumName == null || !field(load, Opcode.GETSTATIC, owner, map, "[I")
+                    || !(body.get(i + 1) instanceof FieldInstruction constant)
+                    || !field(constant, Opcode.GETSTATIC, enumName, constant.name().stringValue(), "L" + enumName + ";")
+                    || !classes.get(enumName).fields().stream().anyMatch(f -> f.fieldName().equalsString(constant.name().stringValue())
+                        && f.fieldType().equalsString(constant.type().stringValue()) && f.flags().has(AccessFlag.ENUM)
+                        && f.flags().has(AccessFlag.STATIC) && f.flags().has(AccessFlag.FINAL))
+                    || !call(body.get(i + 2), Opcode.INVOKEVIRTUAL, enumName, "ordinal", "()I")
+                    || !(body.get(i + 3) instanceof ConstantInstruction literal)
+                    || !(literal.constantValue() instanceof Integer value) || value <= 0
+                    || body.get(i + 4).opcode() != Opcode.IASTORE
+                    || !(body.get(i + 5) instanceof BranchInstruction branch) || branch.opcode() != Opcode.GOTO
+                    || !Integer.valueOf(i + 7).equals(labels.get(branch.target()))
+                    || !(body.get(i + 6) instanceof StoreInstruction store)
+                    || store.typeKind() != TypeKind.REFERENCE || store.slot() != 0) return false;
+                int start = i;
+                if (code.exceptionHandlers().stream().filter(handler -> handler.catchType().isPresent()
+                    && handler.catchType().get().asInternalName().equals("java/lang/NoSuchFieldError")
+                    && Integer.valueOf(start).equals(labels.get(handler.tryStart()))
+                    && Integer.valueOf(start + 5).equals(labels.get(handler.tryEnd()))
+                    && Integer.valueOf(start + 6).equals(labels.get(handler.handler()))).count() != 1) return false;
+                assignments++;
+                i += 7;
+            }
+        }
+        return !body.isEmpty() && body.getLast().opcode() == Opcode.RETURN && maps.keySet().equals(fields)
+            && assignments > 0 && code.exceptionHandlers().size() == assignments;
+    }
+
     public static void main(String[] args) throws Exception {
         try (var jar = new JarFile(args[0])) {
             for (var entry : jar.stream().filter(e -> e.getName().startsWith("thc/") && e.getName().endsWith(".class")).toList()) {
@@ -138,7 +256,13 @@ public final class ClassInitializationInventory {
                 }
             }
         }
-        if (args[1].equals("enums")) {
+        if (args[1].equals("switches")) {
+            var approved = new java.util.HashSet<String>();
+            for (var name : args[2].split(",")) if (!name.isEmpty()) approved.add(name.replace('.', '/'));
+            System.out.println(String.join(",", classes.values().stream().filter(m -> switchHolder(m, approved))
+                .map(m -> m.thisClass().asInternalName().replace('/', '.')).filter(n -> !approved.contains(n.replace('.', '/')))
+                .sorted().toList()));
+        } else if (args[1].equals("enums")) {
             System.out.println(String.join(",", classes.values().stream().filter(ClassInitializationInventory::metadataEnum)
                 .map(m -> m.thisClass().asInternalName().replace('/', '.')).sorted().toList()));
         } else if (args[1].equals("enum-audit")) {
