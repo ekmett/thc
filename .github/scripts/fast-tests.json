@@ -1578,7 +1578,7 @@
     "test/haskell-fixtures/DelimitedContinuationsFixtures.hs": {
       "junit": ["thc.runtime.DelimitedContinuationsTest"], "python": []
     },
-    "src/test/kotlin/thc/runtime/ThreadInventoryCoreEvidence.kt": {
+    "src/test/java/thc/runtime/ThreadInventoryCoreEvidence.java": {
       "junit": ["thc.runtime.ThreadInventoryNativeTest", "thc.runtime.DelimitedContinuationsTest", "thc.runtime.StableNamesTest", "thc.runtime.GhcBCOTest", "thc.runtime.ProcessSignalsTest"], "python": []
     },
     "src/main/java/thc/runtime/StableNames.java": {"junit": ["thc.runtime.StableNamesTest"], "python": []},
@@ -2071,7 +2071,7 @@
       "junit": ["thc.runtime.OriginalStackConsumerProofTest", "thc.runtime.OriginalStackFormatterTest"],
       "python": []
     },
-    "src/test/kotlin/thc/runtime/ManagedStackInfoImageTest.kt": {
+    "src/test/java/thc/runtime/ManagedStackInfoImageTest.java": {
       "junit": ["thc.runtime.ManagedStackInfoImageTest", "thc.runtime.OriginalStackInfoCallTest", "thc.runtime.OriginalStackDecoderCallTest", "thc.runtime.RtsFlagsTest", "thc.runtime.ReturnedForeignPointerTest"],
       "python": []
     },

@@ -244,7 +244,7 @@ def main():
                root / "src/main/java/thc/runtime/CFinalizerLabels.java",
                root / "src/main/java/thc/runtime/WindowsMd5.java",
                root / "src/main/c/md5-api.c", root / "scripts/build-cbits.py",
-               root / "src/test/kotlin/thc/runtime/ManagedMd5Test.kt"]
+               root / "src/test/java/thc/runtime/ManagedMd5Test.java"]
     artifacts = sorted(p for p in output.iterdir() if p.is_file())
     provenance = {"schema": 1, "byteOrder": sys.byteorder, "contextSize": 88,
                   "contextOffsets": [0, 16, 24], "contextAlignment": 4,

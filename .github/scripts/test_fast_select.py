@@ -1352,7 +1352,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         self.assertTrue(expected <= self.classes)
 
     def test_stack_info_layout_helper_selects_all_consumers(self):
-        group = self.policy["owners"]["src/test/kotlin/thc/runtime/ManagedStackInfoImageTest.kt"]
+        group = self.policy["owners"]["src/test/java/thc/runtime/ManagedStackInfoImageTest.java"]
         consumers = set()
         for path in (self.root / "src/test").glob("*/thc/runtime/*"):
             if path.suffix not in (".kt", ".java"):
@@ -1367,7 +1367,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         self.assertEqual([], group["python"])
 
     def test_thread_inventory_evidence_helper_selects_all_consumers(self):
-        group = self.policy["owners"]["src/test/kotlin/thc/runtime/ThreadInventoryCoreEvidence.kt"]
+        group = self.policy["owners"]["src/test/java/thc/runtime/ThreadInventoryCoreEvidence.java"]
         consumers = set()
         for path in (self.root / "src/test").glob("*/thc/runtime/*"):
             if path.suffix not in (".kt", ".java"):

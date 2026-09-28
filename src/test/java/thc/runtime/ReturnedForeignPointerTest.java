@@ -64,7 +64,7 @@ public class ReturnedForeignPointerTest {
 
     @Test public void rtsComparisonRejectsFreedReturnedAllocationInEitherOrder() throws Exception {
         org.junit.jupiter.api.Assumptions.assumeTrue(System.getProperty("os.name").startsWith("Linux") && Set.of("amd64", "x86_64").contains(System.getProperty("os.arch")));
-        var document = new LinkedHashMap<String, Object>(StackInfoTestLayout.INSTANCE.document(StackInfoTestLayout.INSTANCE.fields()));
+        var document = new LinkedHashMap<String, Object>(StackInfoTestLayout.document(StackInfoTestLayout.fields()));
         @SuppressWarnings("unchecked") var compiler = new LinkedHashMap<String, Object>((Map<String, Object>) document.get("compiler"));
         compiler.put("abi", "inplace"); document.put("compiler", compiler);
         var layout = TargetLayout.fromDocument(document);

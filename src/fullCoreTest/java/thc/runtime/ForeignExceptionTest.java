@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @Tag("foreign-exceptions-full-core")
 @SuppressWarnings("unchecked")
 public class ForeignExceptionTest {
-    private Map<String, Object> source(String stage) { return ForeignExceptionFixtureSupport.INSTANCE.source(stage); }
+    private Map<String, Object> source(String stage) throws Exception { return ForeignExceptionFixtureSupport.source(stage); }
     private Context context() { return Context.newBuilder("thc", "js").allowExperimentalOptions(true).allowNativeAccess(true).allowPolyglotAccess(PolyglotAccess.ALL)
         .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.SingleTierCompilationThreshold", "10000000").option("engine.CompilationFailureAction", "Throw").build(); }
     private Map<String, Object> with(Map<String, Object> source, String key, Object value) { var result = new LinkedHashMap<>(source); result.put(key, value); return result; }
@@ -28,7 +28,7 @@ public class ForeignExceptionTest {
     private List<PolyglotException.StackFrame> stack(PolyglotException failure, int limit) {
         var frames = new ArrayList<PolyglotException.StackFrame>(); for (var frame : failure.getPolyglotStackTrace()) { if (frames.size() == limit) break; frames.add(frame); } return frames;
     }
-    @Test public void foreignExecutionRequiresAnUnambiguousGenuineLinkedBridge() {
+    @Test public void foreignExecutionRequiresAnUnambiguousGenuineLinkedBridge() throws Exception {
         var source = source("post"); String id = "main:ForeignExceptionAudit.caught"; var proofs = (List<Map<String, Object>>) source.get("foreignExceptionBridges"); assertEquals(1, proofs.size()); var proof = proofs.getFirst();
         for (var invalid : List.of(without(source, "foreignExceptionBridges"), with(source, "foreignExceptionBridgeUnit", "missing-runtime-unit"), with(source, "foreignExceptionBridges", List.of(proof, proof)))) {
             var failure = assertThrows(RuntimeFault.class, () -> CoreModules.reachable(invalid, id, true));
@@ -46,7 +46,7 @@ public class ForeignExceptionTest {
             } finally { context.leave(); }
         }
     }
-    @Test public void genuineCatchCleanupInspectionAndLazyOrdinaryExceptions() {
+    @Test public void genuineCatchCleanupInspectionAndLazyOrdinaryExceptions() throws Exception {
         var cases = new LinkedHashMap<String, Long>(); cases.put("caught", 42L); cases.put("cleanup", 142L); cases.put("metadata", 19L); cases.put("displayIsInert", 17L); cases.put("parseCleanup", 142L); cases.put("lazyOrdinary", 99L); cases.put("ordinary", 0L);
         for (String stage : List.of("pre", "post")) {
             var source = source(stage);
@@ -65,7 +65,7 @@ public class ForeignExceptionTest {
             }
         }
     }
-    @Test public void ordinarySomeExceptionRethrowRetainsExactForeignIdentityAfterCatch() {
+    @Test public void ordinarySomeExceptionRethrowRetainsExactForeignIdentityAfterCatch() throws Exception {
         for (String stage : List.of("pre", "post")) {
             var source = source(stage);
             for (String backend : List.of("ast", "bytecode")) try (Context context = context()) {
@@ -85,7 +85,7 @@ public class ForeignExceptionTest {
     private Map<String, Object> binding(String id, List<?> body) {
         var result = new LinkedHashMap<String, Object>(); result.put("id", id); result.put("name", id); result.put("type", "opaque primitive control"); result.put("lifted", true); result.put("arity", 0); result.put("expr", body); return result;
     }
-    @Test public void registeredProjectorDoesNotInspectRawPrimitiveValuesOrBottoms() {
+    @Test public void registeredProjectorDoesNotInspectRawPrimitiveValuesOrBottoms() throws Exception {
         var source = source("post");
         for (String backend : List.of("ast", "bytecode")) try (Context context = context()) {
             context.initialize("thc"); context.initialize("js"); context.enter();
@@ -112,7 +112,7 @@ public class ForeignExceptionTest {
         String id = "main:ForeignExceptionAudit." + name; var linked = CoreModules.reachable(source, id, true);
         ExecutableProgram program = backend.equals("ast") ? new Program(language, linked, true) : new BytecodeProgram(language, linked, true); return context.asValue(new EntryValue(program, id, 1));
     }
-    @Test public void explicitMetadataSupportsReverseEntryAndNewFailureCleanup() {
+    @Test public void explicitMetadataSupportsReverseEntryAndNewFailureCleanup() throws Exception {
         var source = source("post");
         for (String backend : List.of("ast", "bytecode")) try (Context context = context()) {
             context.initialize("thc"); context.initialize("js"); context.enter();

@@ -36,7 +36,7 @@ class RtsFlagsTest {
     private static TargetLayout layout(String abi) {
         assumeTrue(System.getProperty("os.name").startsWith("Linux") &&
             Set.of("amd64", "x86_64").contains(System.getProperty("os.arch")), "Only the evidenced Linux producing layout is supported");
-        var document = new LinkedHashMap<>(StackInfoTestLayout.INSTANCE.document(StackInfoTestLayout.INSTANCE.fields()));
+        var document = new LinkedHashMap<>(StackInfoTestLayout.document(StackInfoTestLayout.fields()));
         var compiler = new LinkedHashMap<>((Map<String, Object>) document.get("compiler"));
         compiler.put("abi", abi);
         document.put("compiler", compiler);
