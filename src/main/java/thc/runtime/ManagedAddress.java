@@ -333,10 +333,19 @@ public final class ManagedAddress {
         try { return Math.addExact(offset, displacement); } catch (ArithmeticException failure) { throw fault("Managed Addr# offset overflow"); }
     }
     public long difference(ManagedAddress other) {
-        if (foreign != null) foreign.requireCurrent(); if (other.foreign != null) other.foreign.requireCurrent();
-        if (foreign != null && foreign.getBacking() != null || other.foreign != null && other.foreign.getBacking() != null)
-            return (foreign != null && foreign.getBacking() != null ? foreign.getBacking() : this)
-                .difference(other.foreign != null && other.foreign.getBacking() != null ? other.foreign.getBacking() : other);
+        var address = this;
+        // Keep backing chains iterative so partial evaluation cannot recursively inline them.
+        while (true) {
+            if (address.foreign != null) address.foreign.requireCurrent();
+            if (other.foreign != null) other.foreign.requireCurrent();
+            var backing = address.foreign == null ? null : address.foreign.getBacking();
+            var otherBacking = other.foreign == null ? null : other.foreign.getBacking();
+            if (backing == null && otherBacking == null) return address.differenceUnwrapped(other);
+            if (backing != null) address = backing;
+            if (otherBacking != null) other = otherBacking;
+        }
+    }
+    private long differenceUnwrapped(ManagedAddress other) {
         if (foreign != null) return foreign.compare(other, "difference");
         if (other.foreign != null) return -other.foreign.compare(this, "difference");
         if (nativeOwner != null) nativeOwner.requireLive(); if (other.nativeOwner != null) other.nativeOwner.requireLive();
