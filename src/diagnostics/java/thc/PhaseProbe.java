@@ -88,20 +88,19 @@ public final class PhaseProbe {
     }
 
     /** Loading experiment only: no training, compilation or throughput claim.
-     * Eager and indexed variants use identical JSON and settings in fresh JVMs.
+     * Uses authenticated lazy JSON loading without a sidecar index.
      * The compiled-call probe below remains a separate strict control.
      */
     private static void jsonLoadProbe(String[] args) throws Throwable {
         if (args.length != 5 && args.length != 7) throw new IllegalArgumentException(
-            "Usage: phase-probe --load-json MODULE ENTRY INPUT EXPECTED [NEXT_INPUT NEXT_EXPECTED]; optional -Dthc.jsonIndex=PATH");
+            "Usage: phase-probe --load-json MODULE ENTRY INPUT EXPECTED [NEXT_INPUT NEXT_EXPECTED]");
         var phases = new PhaseMeasurements();
         String backend = System.getProperty("thc.backend", "bytecode");
         boolean async = strictBoolean(System.getProperty("thc.asyncExceptions", "true"));
         boolean notes = strictBoolean(System.getProperty("thc.sourceNotesEnabled", "false"));
-        String index = System.getProperty("thc.jsonIndex");
         Map<String, Object> header = new LinkedHashMap<>();
         header.put("mode", "load-only");
-        header.put("indexed", index != null);
+        header.put("indexed", true);
         header.put("backend", backend);
         header.put("asyncExceptions", async);
         header.put("sourceNotesEnabled", notes);
@@ -109,8 +108,8 @@ public final class PhaseProbe {
         var context = phases.measure("context", () -> Main.executionContext(false));
         try {
             phases.memoryCheckpoint("preLoad");
-            var request = phases.measure("request", () -> CoreModules.INSTANCE.request(List.of(args[1]), args[2],
-                true, false, backend, notes, false, null, async, index == null ? null : Map.of(args[1], index), false));
+            var request = phases.measure("request", () -> CoreModules.request(List.of(args[1]), args[2],
+                true, false, backend, notes, false, null, async, true, false));
             var function = phases.measure("eval", () -> context.eval("thc", request));
             System.out.println(function.getMember("diagnostics").asString());
             phases.memoryCheckpoint("postLoadPreEntry");
