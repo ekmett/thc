@@ -5,18 +5,17 @@ process starts**, using THC's existing AST lowerer and the pinned Truffle auxili
 cache provider. It produces two artifacts: a native launcher and a matching code
 cache. It is not the ordinary `thc run` path or a general Haskell AOT distribution.
 
-The current admission is synchronous, foreign-free AST code:
-exact numeric scalar input proofs, numeric literals, globals, ordinary function
-applications, nested closures, `let` bindings, integral literal/default cases, local
-joins, saturated boxed constructors and constructor cases. Numeric carriers include
-machine words, signed/unsigned 8/16/32-bit integers, `Float#` and `Double#`.
-The admitted arithmetic includes `+#`, `-#`, `*#`, existing narrow scalar operations,
-floating arithmetic/comparisons and integer/floating conversions. Floating cases
-may use defaults, not floating literal alternatives (which GHC Core disallows).
-Internal function formals, case binders/results and local-join results require
-exact numeric, data or closure proofs. Constructor fields support numeric
-carriers, boxed data and ordinary guest closures with exact field descriptors,
-including strict function fields, lazy function thunks and lazy data tails.
+The reusable runtime used by this workflow admits synchronous, foreign-free AST
+code with exact numeric, data, closure, tuple, sum, vector and State#/Void# proofs.
+Ordinary calls, nested closures, partial applications, cases, nonrecursive
+unlifted aggregate lets and local joins use the existing runtime transport.
+Numeric carriers include machine words, signed/unsigned 8/16/32-bit integers,
+`Float#` and `Double#`; admitted scalar and vector operations use their existing
+validated lowering. Floating cases use defaults, not floating literal alternatives
+(which GHC Core disallows). Saturated boxed constructors support numeric, boxed
+data and guest-closure fields with exact descriptors, including strict function
+fields, lazy function thunks and lazy data tails. Reusable aggregate/vector heap
+fields remain excluded.
 Recursive local joins use the existing local-loop lowering;
 ordinary self recursion uses the existing function loop, prepared before publication.
 Ordinary higher-order calls preserve each closure's captured program owner,
@@ -28,11 +27,17 @@ stay unprepared. Unused GHC module/constructor descriptors do not prevent scalar
 selection. Prepared code retains only immutable constructor storage descriptors;
 each load receives fresh allocation keys, nullary values and optional boxed-value
 caches. Constructor matches authenticate that exact load's layout, not just its
-name, tag or shared carrier class. Unsupported code fails admission rather than falling back to
-runtime lowering. Bytecode, typed aggregates,
-async delivery, IO and FFI are not admitted by this workflow.
-These are experimental cache-admission limits, not restrictions on THC's ordinary
-runtime ABI for scalar widths, references, vectors, tuples, sums or zero-width values.
+name, tag or shared carrier class. Unsupported code fails admission rather than
+falling back to runtime lowering. Nonliteral strict globals remain rejected;
+global aggregate storage and recursive/lifted aggregate lets retain their ordinary
+limits. Bytecode, async delivery, IO and FFI remain outside this workflow.
+
+The CLI accepts numeric arguments and results only. Reusable AST code and the
+public host ABI support tuple/sum/vector/unit transport; the CLI's parser and
+printer have not acquired those representations. Existing scalar/reference
+Native Image cache evidence is unchanged. The newly admitted typed family has
+JVM first-call evidence described below; fresh-process image persistence and
+execution for that family remain to be verified.
 
 ## Build and select a program
 
@@ -63,7 +68,9 @@ JSON files may be supplied as one comma-separated argument. Entry selection uses
 the existing Core linker. Plain inputs to `run` are signed 64-bit integers; prefix
 floating inputs with `f:` for Float or `d:` for Double. The entry's existing host
 ABI validates arity, carriers and narrow integer ranges; signed and unsigned results
-keep that ABI's widening rules. Arithmetic uses the primitive's ordinary wrapping
+keep that ABI's widening rules. The CLI rejects nonnumeric results even though
+the public host ABI can export aggregates, vectors and unit values.
+Arithmetic uses the primitive's ordinary wrapping
 or floating-point behavior. The selected entry is fixed in the cache; arguments are
 not compiled in. `src/examples/THC/CachedCalls.hs` exercises ordinary out-of-line
 guest functions through the same export/store/run commands and argument contract.
@@ -190,7 +197,22 @@ bin/native-cache run build/reference-joins.cache 3 -10 -10
 
 Join results use the existing reference slots: returning a lazy value does not
 force it, and returning a closure does not change its captured program owner.
-Typed aggregate join results remain outside this cache's admission.
+
+`src/examples/THC/CachedTyped.hs` provides a numeric `calculate count seed selector`
+entry that composes ordinary tuple/sum/vector/unit calls, a typed local join,
+captured closures and a thunk, and a partial application. Preparation prebinds
+existing destinations and physical frame carriers without guest profiling.
+Captured program ownership stays exact, and fresh-context handoff pools distinguish
+prepared and local layout identities even when their numeric IDs collide.
+
+For this typed example, real pre/post-Tidy Core matches 135 native GHC rows with
+default/dense handoffs in four JVM lanes (interpreted/compiled, inlining off/on),
+each with two fresh contexts: 4,320 comparisons. Its 18 prepared roots remain untouched before AOT compilation
+after the preparation context closes. Compiled calls retain installed targets;
+instances neither lower code nor retain argument/result loans. GHC removes
+ordinary unlifted lets from this example, so structural runtime tests cover them.
+This evidence does not yet establish typed-family Native Image cache store/load,
+allocation freedom or emitted SIMD instructions.
 
 An existing package manifest may be supplied as `@PACKAGES.json`, with an exact
 qualified binding such as `main:THC.CachedCalls.affine`. JSON unit directories and

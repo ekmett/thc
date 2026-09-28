@@ -33,11 +33,23 @@ public final class AstTypedApplication extends Expr {
         vector = shape != null && shape.getProof().isVector() ? new VectorLayout(shape.getProof()) : null;
         if (vector != null) {
             vectorSlots = new int[vector.getWidth()];
-            for (int i = 0; i < vectorSlots.length; i++) vectorSlots[i] = frameLayout.bind("<vector result " + i + ">");
+            for (int i = 0; i < vectorSlots.length; i++) vectorSlots[i] = frameLayout.bind("<vector result " + i + ">", com.oracle.truffle.api.frame.FrameSlotKind.Object);
         } else vectorSlots = null;
+        if (vector != null) prepareTuple(vectorSlots, 0);
         CoreRepresentation proof = shape == null ? CoreRepresentation.UNKNOWN : shape.getProof();
         setRepresentation(proof.copy(proof.getKind(), true, proof.getPresent(), proof.getPrimReps(), proof.getComponents(), proof.getVector(),
             proof.getAlternatives(), proof.getTagSlot(), proof.getAlternativeSlots()));
+    }
+    @Override public void prepareTuple(int[] slots, int offset) {
+        if (metrics != null || shape == null) return;
+        if (vector != null) { slots = vectorSlots; offset = 0; }
+        if (dispatch != null) {
+            if (destinationSlots != slots || destinationOffset != offset) throw new IllegalStateException("Conflicting typed destination");
+            return;
+        }
+        destinationSlots = slots; destinationOffset = offset;
+        dispatch = new InputDispatch(operands.getSource(), operands.getLayout().getLogicalArity(), tail, null,
+            new AstTupleDestination(shape, slots, offset));
     }
     @Override public Object execute(VirtualFrame frame) {
         if (vector != null) {

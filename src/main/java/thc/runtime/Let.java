@@ -23,6 +23,7 @@ final class Let extends Expr {
         for (int i = 0; i < rhs.length; i++)
             bindings[i] = new LocalBinding(slots[i], rhs[i], !recursive && primitiveEligible[i], typedSlots[i]);
     }
+    @Override public void prepareTuple(int[] slots, int offset) { body.prepareTuple(slots, offset); }
     @Override public Object execute(VirtualFrame frame) { initialize(frame, null, 0); return body.execute(frame); }
     @Override public int executeInt(VirtualFrame frame) throws UnexpectedResultException {
         initialize(frame, null, 0); return body.executeInt(frame);

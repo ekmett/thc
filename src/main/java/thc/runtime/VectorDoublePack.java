@@ -15,6 +15,7 @@ public final class VectorDoublePack extends Expr {
     public VectorDoublePack(Expr argument, int[] slots) {
         this.argument = argument;
         this.slots = slots;
+        argument.prepareTuple(slots, 0);
         setRepresentation(CoreVectors.proofDouble);
     }
 

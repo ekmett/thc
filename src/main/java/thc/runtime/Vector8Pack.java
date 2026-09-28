@@ -15,6 +15,7 @@ public final class Vector8Pack extends Expr {
     public Vector8Pack(Expr argument, int[] slots) {
         this.argument = argument;
         this.slots = slots;
+        argument.prepareTuple(slots, 0);
         setRepresentation(CoreVectors.proof8);
     }
 

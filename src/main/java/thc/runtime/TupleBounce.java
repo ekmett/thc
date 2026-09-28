@@ -15,6 +15,7 @@ public final class TupleBounce extends Node {
     @Child private IndirectCallNode call = IndirectCallNode.create();
     public TupleBounce(TupleDestination destination, Metrics metrics) { this.destination = destination; this.metrics = metrics; }
     public void execute(VirtualFrame frame, TailCall initial) {
+        Metrics metrics = this.metrics != null ? this.metrics : ((FunctionRoot) getRootNode()).invocationMetrics(frame);
         TailCall next = initial;
         while (true) {
             try { TruffleSafepoint.poll(this); }

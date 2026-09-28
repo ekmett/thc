@@ -23,15 +23,21 @@ public final class EntryRoot extends ContextRoot {
         dispatch = new PreparedDispatch(arity, false, metrics, new boolean[0], null); force = new Force(metrics);
     }
     /** A signature-specific host root; it does not change the program's arity-only cache. */
-    public EntryRoot withSignature(Language language, List<CoreRepresentation> inputs, CoreRepresentation result) {
-        return new EntryRoot(language, inputs, result, metrics);
+    public EntryRoot withSignature(Language language, List<CoreRepresentation> inputs, CoreRepresentation result, TupleShape resultShape) {
+        return new EntryRoot(language, inputs, result, metrics, resultShape);
     }
     public EntryRoot(Language language, List<CoreRepresentation> inputs, CoreRepresentation result, Metrics metrics) {
+        this(language, inputs, result, metrics, null);
+    }
+    public EntryRoot(Language language, List<CoreRepresentation> inputs, CoreRepresentation result, Metrics metrics, TupleShape resultShape) {
         super(language, new FrameLayout().build());
         arity = inputs.size(); this.metrics = metrics; typedResult = result.isTypedTransport();
         forceResult = result.isInt() || result.isLong() || result.isFloat() || result.isDouble();
         force = new Force(metrics);
-        TupleDestination destination = typedResult ? new HostDestination(new TupleShape(result, language)) : null;
+        // A shared root's descriptor survives its preparation context, while the
+        // host signature still authenticates its logical shape and vector species.
+        if (resultShape != null) TupleShape.requireCompatible(result, resultShape.getProof());
+        TupleDestination destination = typedResult ? new HostDestination(resultShape != null ? resultShape : new TupleShape(result, language)) : null;
         typedDispatch = new GenericInputCall(new HostInputSource(ArgumentLayout.fromProofs(inputs)), arity, false, metrics, destination, 0, true);
     }
     @Override public Object execute(VirtualFrame frame) {
