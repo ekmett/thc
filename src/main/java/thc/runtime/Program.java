@@ -671,6 +671,10 @@ public final class Program implements ExecutableProgram {
             rootSource(body), entryStrict, handoff, tuple, tupleSlots, inputLayout, enableAsync, environmentVectorSlots,
             delimited, role, outlineCaseArms || deferDefaultArm,
             scope.deferredArms != null && !scope.deferredArms.isEmpty(), false);
+        // Same-frame regions deliberately expose the running activation to side roots.
+        // Keep their frame identity even before any graph-budget extraction occurs.
+        root.configureInitialFrameCopy(!delimited &&
+            com.oracle.truffle.api.nodes.NodeUtil.findFirstNodeInstance(body, AstSameFrameArm.class) == null);
         root.configureInputProofs(inputProofs);
         if (reusableCode) root.configureProgramSlot(scope.programSlot, codeIdentity);
         if (scope.deferredArms != null) for (DeferredArm candidate : scope.deferredArms) {

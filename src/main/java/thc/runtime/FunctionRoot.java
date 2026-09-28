@@ -46,6 +46,7 @@ public final class FunctionRoot extends GuestRoot {
     private final FunctionRootRole role;
     private final boolean stackCapture;
     private final boolean capturesContinuations;
+    @CompilationFinal private boolean copyInitialFrame;
     private final boolean deferredBudget;
     private final boolean budgetBoundary;
     private volatile long budgetGeneration;
@@ -159,6 +160,8 @@ public final class FunctionRoot extends GuestRoot {
             layout.isDouble(field) ? FrameSlotKind.Double : FrameSlotKind.Object);
     }
     public HandoffEntry getHandoff() { return handoff; }
+    /** Set by lowering before publication, only for bodies without exposed frame aliases. */
+    void configureInitialFrameCopy(boolean enabled) { copyInitialFrame = enabled; }
     void configureProgramSlot(int slot, Object codeIdentity) {
         if (slot < 0 || programSlot >= 0 || metrics != null) throw new IllegalStateException("Invalid reusable root configuration");
         programSlot = slot;
@@ -419,10 +422,19 @@ public final class FunctionRoot extends GuestRoot {
             Metrics invocation = invocationMetrics(frame);
             if (invocation.getEnabled() && CompilerDirectives.inCompiledCode()) invocation.incrementCompiledEntries();
         }
-        if (spill) return captureStack(frame.materialize());
+        if (spill) return captureStack(initialCaptureFrame(frame));
         if (!capturesContinuations) return executeCapturableBody(frame);
         try { return executeCapturableBody(frame); }
-        catch (AstCapture cut) { return finishCapture(cut, frame.materialize()); }
+        catch (AstCapture cut) { return finishCapture(cut, initialCaptureFrame(frame)); }
+    }
+    private MaterializedFrame initialCaptureFrame(VirtualFrame frame) {
+        if (!copyInitialFrame) return frame.materialize();
+        FrameDescriptor descriptor = frame.getFrameDescriptor();
+        MaterializedFrame saved = Truffle.getRuntime().createMaterializedFrame(frame.getArguments().clone(), descriptor);
+        frame.copyTo(0, saved, 0, descriptor.getNumberOfSlots());
+        for (int index = 0; index < descriptor.getNumberOfAuxiliarySlots(); index++)
+            saved.setAuxiliarySlot(index, frame.getAuxiliarySlot(index));
+        return saved;
     }
     @TruffleBoundary public Object finishCapture(AstCapture cut, MaterializedFrame frame) {
         if (cut.getYielded() instanceof AstPendingTail && isTailSpillIdentityRoot()) {
