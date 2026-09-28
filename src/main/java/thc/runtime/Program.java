@@ -2040,7 +2040,8 @@ public final class Program implements ExecutableProgram {
     }
     private Expr compileOrdinaryApplication(List<Object> expr, List<Object> fn, List<List<Object>> args, List<?> flags,
                                             CoreRepresentation tupleProof, boolean[] callStrict, Scope scope, boolean tail) {
-        var constructor = constructors.get(fn.get(1));
+        var constructor = (tupleProof.isSum() || tupleProof.isTuple()) && "con".equals(fn.get(0))
+            ? constructors.get(fn.get(1)) : null;
         if (tupleProof.isSum() && "con".equals(fn.get(0)) && constructor != null && "unboxed-sum".equals(constructor.get("kind"))) {
             int tag = SumShape.constructor(tupleProof, constructor, fn.get(2));
             if (args.size() != 1) throw new RuntimeFault("Sum constructor must be saturated");
