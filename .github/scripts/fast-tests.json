@@ -186,7 +186,7 @@
       "python": []
     },
     "src/main/java/thc/runtime/CoreDataLabels.java": {
-      "junit": ["thc.runtime.EnabledCapabilitiesTest", "thc.runtime.RtsFlagsTest"],
+      "junit": ["thc.runtime.EnabledCapabilitiesTest", "thc.runtime.RtsFlagsTest", "thc.runtime.ByteStringDataLabelsTest"],
       "python": ["scripts/test-audit-core.py"]
     },
     "src/main/java/thc/runtime/ManagedWeaks.java": {
