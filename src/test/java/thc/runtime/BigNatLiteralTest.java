@@ -36,8 +36,8 @@ class BigNatLiteralTest {
     private static final List<Long> SEEDS = seeds();
     private static List<Long> seeds() { var seeds = new ArrayList<>(list(Long.MIN_VALUE, Long.MAX_VALUE, -1000L, -17L, -1L)); for (long i = 0; i <= 16; i++) seeds.add(i); seeds.addAll(list(31L, 1L << 32)); return seeds; }
     private static List<String> vendorSources() {
-        var result = new ArrayList<String>(); for (var name : MODULES) for (var suffix : list(".hs", ".hs-boot")) result.add("vendor/ghc-9.14.1/GHC/Internal/Bignum/" + name + suffix);
-        result.addAll(list("vendor/ghc-9.14.1/include/WordSize.h", "vendor/ghc-9.14.1/LICENSE")); return result;
+        var result = new ArrayList<String>(); for (var name : MODULES) for (var suffix : list(".hs", ".hs-boot")) result.add("third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/" + name + suffix);
+        result.addAll(list("third-party/pinned/ghc-9.14.1/libraries/ghc-internal/include/WordSize.h", "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE")); return result;
     }
     private static <T> List<T> concat(List<T> first, List<T> second) { var result = new ArrayList<>(first); result.addAll(second); return result; }
     private Map<String, Object> evidence() throws Exception { return report(DIRECTORY + "/manifest.json"); }
@@ -50,11 +50,11 @@ class BigNatLiteralTest {
         var stages = new LinkedHashMap<String, List<String>>();
         for (var stage : list("pre", "post")) { var paths = new ArrayList<>(list(DIRECTORY + "/" + stage + "-core/BigNatLiteralAudit.json")); for (var module : MODULES) paths.add(DIRECTORY + "/boot/core/GHC.Internal.Bignum." + module + ".json"); stages.put(stage, paths); }
         assertEquals(stages, manifest.get("stages"));
-        var sources = concat(vendorSources(), list("compiler/test-fixtures/BigNatLiteralAudit.hs", "compiler/test-fixtures/BigNatLiteralAuditNative.hs", "test/haskell-fixtures/BigNatLiteralFixtures.hs",
-            "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal", "compiler/export-boot.py", "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py",
-            "scripts/audit-core.py", "scripts/core-capabilities.json", "tools/primops/PrimopTools.hs", "src/main/resources/thc/scalar-primop-signatures.json"));
-        for (var file : Objects.requireNonNull(new File(root, "compiler/THC").listFiles())) if (file.getName().endsWith(".hs")) sources.add(root.toPath().relativize(file.toPath()).toString());
-        for (var file : Objects.requireNonNull(new File(root, "scripts").listFiles())) if (file.getName().startsWith("core_") && file.getName().endsWith(".py")) sources.add(root.toPath().relativize(file.toPath()).toString());
+        var sources = concat(vendorSources(), list("test/fixtures/compiler/BigNatLiteralAudit.hs", "test/fixtures/compiler/BigNatLiteralAuditNative.hs", "test/haskell-fixtures/BigNatLiteralFixtures.hs",
+            "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal", "bin/export-boot.py", "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py",
+            "bin/audit-core.py", "bin/core-capabilities.json", "src/tools/primops/PrimopTools.hs", "src/main/resources/thc/scalar-primop-signatures.json"));
+        for (var file : Objects.requireNonNull(new File(root, "src/compiler/THC").listFiles())) if (file.getName().endsWith(".hs")) sources.add(root.toPath().relativize(file.toPath()).toString());
+        for (var file : Objects.requireNonNull(new File(root, "bin").listFiles())) if (file.getName().startsWith("core_") && file.getName().endsWith(".py")) sources.add(root.toPath().relativize(file.toPath()).toString());
         var commands = new ArrayList<>(list("plugin-build", "boot-export", "native-build", "native-oracle"));
         var auditNames = concat(concat(ENTRIES, ARITHMETIC), list("missing-source"));
         var artifacts = new ArrayList<>(list(DIRECTORY + "/requests.tsv", DIRECTORY + "/oracle.tsv", DIRECTORY + "/boot/boot-provenance.json"));
@@ -221,7 +221,7 @@ class BigNatLiteralTest {
     private void audit(Path temporary, int serial, List<Object> body, boolean accepted, String issue) throws Exception {
         var modules = expression(object(Json.parse(request("ast", body))).get("modules")); assertEquals(1, modules.size()); var name = "control-" + serial;
         var source = temporary.resolve(name + ".json"); Files.writeString(source, Json.stringify(modules.getFirst())); var output = temporary.resolve(name + "-report.json");
-        var process = new ProcessBuilder("python3", "scripts/audit-core.py", source.toString(), "--entry", "root", "--output", output.toString()).directory(root)
+        var process = new ProcessBuilder("python3", "bin/audit-core.py", source.toString(), "--entry", "root", "--output", output.toString()).directory(root)
             .redirectOutput(temporary.resolve(name + ".stdout").toFile()).redirectError(temporary.resolve(name + ".stderr").toFile()).start();
         if (!process.waitFor(60, TimeUnit.SECONDS)) { process.destroyForcibly().waitFor(); fail("Shared BigNat auditor timed out: " + name); }
         assertEquals(accepted ? 0 : 1, process.exitValue(), name); var actual = object(Json.parse(Files.readString(output))); assertEquals(accepted, actual.get("accepted"), name);

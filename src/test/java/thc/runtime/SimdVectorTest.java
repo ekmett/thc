@@ -167,7 +167,7 @@ class SimdVectorTest {
     }
     @Test void realCoreVectorArithmeticRemainsInstalledAfterCompiledExecution() throws Exception {
         var provenance = map(Json.parse(Files.readString(new File(root, "build/simd/provenance.json").toPath())));
-        var stages = (List<String>) provenance.get("stages"); assertTrue(stages.contains("pre"), "Run scripts/prepare-simd-audit.py first");
+        var stages = (List<String>) provenance.get("stages"); assertTrue(stages.contains("pre"), "Run bin/prepare-simd-audit.py first");
         for (var artifact : (List<Map<String, String>>) provenance.get("artifacts")) {
             var bytes = Files.readAllBytes(new File(root, artifact.get("path")).toPath());
             var digest = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes)); assertEquals(artifact.get("sha256"), digest, "Stale SIMD artifact");

@@ -1,0 +1,1563 @@
+{
+  "schema": 1,
+  "ghc": "9.14.1",
+  "archiveOnlyModules": [
+    {
+      "module": "GHC.Internal.Conc.Bound",
+      "reason": "Original native forkOS foreign-export initializers require executable callback registration; retained in the complete source archive."
+    }
+  ],
+  "upstream": {
+    "repository": "https://github.com/ghc/ghc",
+    "revision": "902339d332fb4ce2b3c87dcac1ee6495d41ad886",
+    "root": "libraries/ghc-internal"
+  },
+  "files": [
+    {
+      "path": "ghc-internal.cabal.in",
+      "sha256": "e886b8139e20687c2a6213ded9c480bd009cd64ac67e679a8c47eed20caeb508"
+    },
+    {
+      "path": "include/consUtils.h",
+      "sha256": "ff71a069425e25bdd67c4354ef52a2c13d142ddc69ff9b8bcfbdfa26620d9dc6"
+    },
+    {
+      "path": "include/CTypes.h",
+      "sha256": "80df0d3e581ba61e474338772a9bc1b5e9216fa804ee03fc52fa9f3d3c20b1eb"
+    },
+    {
+      "path": "include/EventConfig.h.in",
+      "sha256": "d4d9ec7d80819deea3e00ee6be6a0357d8d4066d18a497f71097204f4a902869"
+    },
+    {
+      "path": "include/HsBase.h",
+      "sha256": "2e7c83be8fd3f8dce78789e2f277d44591a80cecd6de9b4c0f77eca983d0d85f"
+    },
+    {
+      "path": "include/HsBaseConfig.h.in",
+      "source": "third-party/pinned/ghc-9.14.1-generated/include/HsBaseConfig.h.in",
+      "sha256": "45ab1cf2ee1b8c226941e0c084cf01f44f9f418a65483b336e847aae6459f4da"
+    },
+    {
+      "path": "include/HsEvent.h",
+      "sha256": "1f512eb3bfcaf5e02db3e03ca7fccca7287f6c9b181b2e56da4580f049f173e7"
+    },
+    {
+      "path": "include/HsIntegerGmp.h.in",
+      "sha256": "02b6e20b50eececbb70178b949ac9e30dbf274f690ddef83972e4c5482ae0311"
+    },
+    {
+      "path": "include/ieee-flpt.h",
+      "sha256": "6260e15976b66ea796e04efb6fdd820f09fff4d4af35a9acabc0edbac3318204"
+    },
+    {
+      "path": "include/md5.h",
+      "sha256": "be128d81cad7364be65ce3b6d86f246cb4addfc0b7b7fe32b50af8876999cd15"
+    },
+    {
+      "path": "include/RtsIfaceSymbols.h",
+      "sha256": "9b6e05e85e54ef411b7f45b82c79385da5953908170deddc5becb3ab6310ceb5"
+    },
+    {
+      "path": "include/winio_structs.h",
+      "sha256": "5cd9f25d48bf5c0b9ba2191cdd58333fc3cbbcee3b2ebf638df4c47d64d5bc38"
+    },
+    {
+      "path": "include/WordSize.h",
+      "sha256": "16e46daa3e38bfc98adb9360e54af211cada707d551a7720c00af4af907af090"
+    },
+    {
+      "path": "LICENSE",
+      "sha256": "768c070bd0b7d820d169ee8153d5487acfc262cbbc10dfce18d05c0bb2d2800d"
+    },
+    {
+      "path": "src/GHC/Internal/AllocationLimitHandler.hs",
+      "sha256": "aa6a280278a4219d1375a938715fdca06061744d02283e3e87c8301646a6d34e"
+    },
+    {
+      "path": "src/GHC/Internal/Arr.hs",
+      "sha256": "d91e8d645309242c5a7b849d6d14884816cd4b04f4fc741e21f62d75a4d2bc4d"
+    },
+    {
+      "path": "src/GHC/Internal/ArrayArray.hs",
+      "sha256": "2f18c4ce94b7ade4cd3bcb7274f8581d107e441cdf91b9274c280e15d87bc47d"
+    },
+    {
+      "path": "src/GHC/Internal/Base.hs",
+      "sha256": "bc38ea9356f90aeb38298ef1269fbdc2dee433528374948375da112b273a89e2"
+    },
+    {
+      "path": "src/GHC/Internal/Bignum/Backend.hs",
+      "sha256": "bfe3a260b3d6a2b60caf3e9cb251c952ab0586cf1eff160e758e66dc7266f6d1"
+    },
+    {
+      "path": "src/GHC/Internal/Bignum/Backend/Check.hs",
+      "sha256": "31f1fd1cf01c094fe9be7f02464fb8b945a2c432c6220ae787d78b3f3ab3369b"
+    },
+    {
+      "path": "src/GHC/Internal/Bignum/Backend/FFI.hs",
+      "sha256": "54fd4f9a7cb0dd04f6484a48c1ba7c16aa65dd31d4dcf5aa9dd941bc67df8a3a"
+    },
+    {
+      "path": "src/GHC/Internal/Bignum/Backend/GMP.hs",
+      "sha256": "5d44612eb70ef1337ce547796f1e2675a3732b485937258327c277109abea893"
+    },
+    {
+      "path": "src/GHC/Internal/Bignum/Backend/Native.hs",
+      "sha256": "b6139046c787528c9128fe1816ba2d127250a5ec5c4e4a458db6071e81c4e36d"
+    },
+    {
+      "path": "src/GHC/Internal/Bignum/Backend/Selected.hs",
+      "sha256": "32af7a20eb2885a3723377d627cff0058f771e238beaa4b484f6a125737f14a1"
+    },
+    {
+      "path": "src/GHC/Internal/Bignum/BigNat.hs",
+      "sha256": "71c334a0bf1bea1772e0801255e92960a4d8b815c3c293a5b2c099c1f97ec18e"
+    },
+    {
+      "path": "src/GHC/Internal/Bignum/BigNat.hs-boot",
+      "sha256": "230a6ac303323e0d0716a39eef450af81bc81494a72192cbe9d20e74f5af45d4"
+    },
+    {
+      "path": "src/GHC/Internal/Bignum/Integer.hs",
+      "sha256": "1f8ec2a8e12ecbab7eb0b59f249fae663d8066f2fb14224177a4538653bb17f4"
+    },
+    {
+      "path": "src/GHC/Internal/Bignum/Integer.hs-boot",
+      "sha256": "f486bbc9637cbcc4b03ea5dcaab9dba71286cadd4a29df3e4f68d2d098eee779"
+    },
+    {
+      "path": "src/GHC/Internal/Bignum/Natural.hs",
+      "sha256": "6895337089fc3ab8a5102b0853c28a4b70281b49ba7705b00eb9750a7e13d8df"
+    },
+    {
+      "path": "src/GHC/Internal/Bignum/Natural.hs-boot",
+      "sha256": "2e7bb92e28f5fa9601b6874b449cfd75bad66a3144bfddb4a445996eaa991026"
+    },
+    {
+      "path": "src/GHC/Internal/Bignum/Primitives.hs",
+      "sha256": "c76aaaaa436ff2e2bb52d4e10378730561fcad57b2e27c76934e36f305ab61b2"
+    },
+    {
+      "path": "src/GHC/Internal/Bignum/WordArray.hs",
+      "sha256": "d24a5d78f8eca4a87346662517e42e208a4dbc662359dc6ce265d76daee3ff84"
+    },
+    {
+      "path": "src/GHC/Internal/Bits.hs",
+      "sha256": "49a6534942c7c5c5e3c09fc1cd309252a515eb9b1085c60e894060647c71b325"
+    },
+    {
+      "path": "src/GHC/Internal/ByteOrder.hs",
+      "sha256": "0a9fbd4e801c32349ee42cf1342f0a020ff6770346c36ade874ed0f62e8b4c27"
+    },
+    {
+      "path": "src/GHC/Internal/ByteOrder.hs-boot",
+      "sha256": "89ea7f9250f9b15ca6b85b6b320bbd8dea703fe3fc79d2a2ccbe3818e3d2bb12"
+    },
+    {
+      "path": "src/GHC/Internal/Char.hs",
+      "sha256": "0af433ffc5ad88394ab05cd569a6ffc59d42b34b6078685c450638eedefb50be"
+    },
+    {
+      "path": "src/GHC/Internal/Classes.hs",
+      "sha256": "9f07eab1df0c2c9892ba5b8e35236e45868f738cb6a755234a7c49e70fb150cd"
+    },
+    {
+      "path": "src/GHC/Internal/Clock.hsc",
+      "sha256": "4999269b94d5a1521c3969c507e5d63b5caabaccd73ac944bd3fe748a5801a8f"
+    },
+    {
+      "path": "src/GHC/Internal/ClosureTypes.hs",
+      "sha256": "38ca5c8e07a5b807efdce7ac283f42f281347f36195b447067c71dd3c59647ca"
+    },
+    {
+      "path": "src/GHC/Internal/Conc/Bound.hs",
+      "sha256": "a92c973b8e8fbe98f251a4271a74004fed60ca709e9511cd3ae81de542e76af0"
+    },
+    {
+      "path": "src/GHC/Internal/Conc/IO.hs",
+      "sha256": "215fdc6fa94c423f343bd7952c061f69b648048a89afece3e61fe8006847c55a"
+    },
+    {
+      "path": "src/GHC/Internal/Conc/POSIX.hs",
+      "sha256": "86d6c4d44d130e434a2e0fd54c190672818bbc0a25a65f319f48d9e88ce1e445"
+    },
+    {
+      "path": "src/GHC/Internal/Conc/POSIX/Const.hsc",
+      "sha256": "201f32b122e547a80edfaeaf620f764e21897589eb69bc6720a0056f938a2e34"
+    },
+    {
+      "path": "src/GHC/Internal/Conc/Signal.hs",
+      "sha256": "8fc746fa31e9418be8c121c1a8beb5eebc5f37d8ae5842b2b8ca7d978751aabb"
+    },
+    {
+      "path": "src/GHC/Internal/Conc/Sync.hs",
+      "sha256": "e3260e974fc1bf45f6bac1b6795b360b2c3cefb6640322a71e7b0e1529f63729"
+    },
+    {
+      "path": "src/GHC/Internal/Conc/Sync.hs-boot",
+      "sha256": "db3e427dab30959fe3ff68bc2209e175c8928b5e57598d03b73a531b76e0ae18"
+    },
+    {
+      "path": "src/GHC/Internal/Conc/Windows.hs",
+      "sha256": "8a66273672de97f948497085c242eadbafe1aec8bb8c3f5f9dfd2fe2e2656ab2"
+    },
+    {
+      "path": "src/GHC/Internal/ConsoleHandler.hsc",
+      "sha256": "20deded7c69d57f4885aced70c74d3cc14323a228688f032ac44973e6e5fc8b0"
+    },
+    {
+      "path": "src/GHC/Internal/Control/Arrow.hs",
+      "sha256": "f740affbfb63185d4c8d799c95f91953e633e439984c3929ad9a25f3a6336d3b"
+    },
+    {
+      "path": "src/GHC/Internal/Control/Category.hs",
+      "sha256": "8886dde6cdb2511aa1ee3afcdc7a45e53eb9aaa58c5a3bdea336bc82d650a719"
+    },
+    {
+      "path": "src/GHC/Internal/Control/Concurrent/MVar.hs",
+      "sha256": "2bc668344138af61ceca2399569906b0baf5c26356bd50a924d98c89946e11d6"
+    },
+    {
+      "path": "src/GHC/Internal/Control/Exception.hs",
+      "sha256": "0bbdc905c44c3de9053f5f9900a1cf1947a680246b4a4b13ec252916804998a2"
+    },
+    {
+      "path": "src/GHC/Internal/Control/Exception/Base.hs",
+      "sha256": "c91d752cdb3e749512e7967cfb7ca62ac9f290000eb0c180ae7b59babfa8413d"
+    },
+    {
+      "path": "src/GHC/Internal/Control/Monad.hs",
+      "sha256": "72a59db24ca7b0c799d38816ae28d823f2184db7343dc84a004818d11c352404"
+    },
+    {
+      "path": "src/GHC/Internal/Control/Monad/Fail.hs",
+      "sha256": "695c8290891399db66075b86ecb1fd0a6242788985023d3edfb9c7155b97ecb7"
+    },
+    {
+      "path": "src/GHC/Internal/Control/Monad/Fix.hs",
+      "sha256": "12ab704ee192bd392fef4fe0a0b977c29104a632b9b61e8b3258744dbe9babdd"
+    },
+    {
+      "path": "src/GHC/Internal/Control/Monad/IO/Class.hs",
+      "sha256": "cfc3949c483f6925e1cc91160192afaeeba22d2c34a0748fe1282dd3b98021d3"
+    },
+    {
+      "path": "src/GHC/Internal/Control/Monad/ST.hs",
+      "sha256": "87f6b7f7d2bcc13921b68cdd5a079f3ddf1a19e0087654c96efc560bb16f5d64"
+    },
+    {
+      "path": "src/GHC/Internal/Control/Monad/ST/Imp.hs",
+      "sha256": "5b045420ef37be43323568a914bcdeb3923f76c11fdb3c6a58619e3d85e25956"
+    },
+    {
+      "path": "src/GHC/Internal/Control/Monad/ST/Lazy.hs",
+      "sha256": "ed9bcbebddd1beb1e179d6482577e06554ae4e1a52ccb058e5d30b1625a95946"
+    },
+    {
+      "path": "src/GHC/Internal/Control/Monad/ST/Lazy/Imp.hs",
+      "sha256": "a0705de47372c1dabef45c64b3b69fa2298159617dd079df644a3f7efbac28ca"
+    },
+    {
+      "path": "src/GHC/Internal/Control/Monad/Zip.hs",
+      "sha256": "d1ad02e6f7ee2563f36cff962312a0f88fa0774e091fca173fe5d360010aa407"
+    },
+    {
+      "path": "src/GHC/Internal/CString.hs",
+      "sha256": "3b2e7a0fb2880d8f98cb002adfbaa36a8469667b7494f8f695fe1a6f181de573"
+    },
+    {
+      "path": "src/GHC/Internal/Data/Bits.hs",
+      "sha256": "e09fa25faf4e036659f2f60410dc5381d1cdf7bd6ecec103935ad8d3b28e5842"
+    },
+    {
+      "path": "src/GHC/Internal/Data/Bool.hs",
+      "sha256": "070bf559cf7058f180f8a72e66a419de2b1cd273e1b066c97f32750892900829"
+    },
+    {
+      "path": "src/GHC/Internal/Data/Coerce.hs",
+      "sha256": "154cce4ba15b713c4dbc769bf40cc1b8ef8ac1d19c5430004deb264b78254907"
+    },
+    {
+      "path": "src/GHC/Internal/Data/Data.hs",
+      "sha256": "db5b6f24727415d1a475c1fcda6ae58805ae859d40ac6d72847ff5dcee7178f6"
+    },
+    {
+      "path": "src/GHC/Internal/Data/Dynamic.hs",
+      "sha256": "764493a0eb778d1e7623efda5076c6c48fbf7394e9ba213ca3b8578bcc8d4056"
+    },
+    {
+      "path": "src/GHC/Internal/Data/Either.hs",
+      "sha256": "cbac81710a7e01a8a43616d8d88f9a387d6b0e1bbe5f4410dc1f172dc5f765e6"
+    },
+    {
+      "path": "src/GHC/Internal/Data/Eq.hs",
+      "sha256": "0666e022fa967ed7d7a35994536a0b261f60720dbb3d4cc93e08a6493bd51311"
+    },
+    {
+      "path": "src/GHC/Internal/Data/Foldable.hs",
+      "sha256": "e466b61555fd4bd9a8fe7483ef4bf26b6f9c03658634ba77349603bd8411af32"
+    },
+    {
+      "path": "src/GHC/Internal/Data/Function.hs",
+      "sha256": "c8a373c623a198614ca86584bc99fd2b83a0e828cad6e50606229ab549847414"
+    },
+    {
+      "path": "src/GHC/Internal/Data/Functor.hs",
+      "sha256": "651072ea6acc06bca76652ae9c87f8900cde6d94f5e7418f28b2f964a0278600"
+    },
+    {
+      "path": "src/GHC/Internal/Data/Functor/Const.hs",
+      "sha256": "a06a981ba5efb2594cfdae2960161d0882221540492b4392112b40b648bb82ee"
+    },
+    {
+      "path": "src/GHC/Internal/Data/Functor/Identity.hs",
+      "sha256": "a5be157f468eb1c04885d776e4049ef2a20e7181d701a584ecc21ccfbe3d5225"
+    },
+    {
+      "path": "src/GHC/Internal/Data/Functor/Utils.hs",
+      "sha256": "2159f941aa9560e58f174fdefd5830b8e649925025b0b71e7765b4cfcd962504"
+    },
+    {
+      "path": "src/GHC/Internal/Data/IORef.hs",
+      "sha256": "d54a747c761cf44aa3c4a0d4145e8d39737aacac33c0e940dfb19d0fc01eb2ba"
+    },
+    {
+      "path": "src/GHC/Internal/Data/Ix.hs",
+      "sha256": "7c57543f31785d364ac9df711a86cbbbb73ba54babe25c23ff470dbe069f15d0"
+    },
+    {
+      "path": "src/GHC/Internal/Data/List.hs",
+      "sha256": "9f8f3d2b317b06c1ea65b03d0cd95b50a6125642d6836847e3a755ff1c91d79b"
+    },
+    {
+      "path": "src/GHC/Internal/Data/List/NonEmpty.hs",
+      "sha256": "749d9ab63cfbed389da8451d731011079bd165c435d911fb34699c8537153175"
+    },
+    {
+      "path": "src/GHC/Internal/Data/Maybe.hs",
+      "sha256": "c1e3833e2becd8d0ac4ee9ccb9e7615cb7f469c25cf9cfde500e21b46f586057"
+    },
+    {
+      "path": "src/GHC/Internal/Data/Monoid.hs",
+      "sha256": "289c53d91c1eebbcacec43495735b0e9761c93594179628b623c9ba55c255657"
+    },
+    {
+      "path": "src/GHC/Internal/Data/NonEmpty.hs",
+      "sha256": "b60576116bafec7cb368533a9bbc27057c0141681393b0feb0497f12712036b1"
+    },
+    {
+      "path": "src/GHC/Internal/Data/OldList.hs",
+      "sha256": "4b519356f7bcbd705866551e26552c84b08d527fe93b060cc89b27882aec6248"
+    },
+    {
+      "path": "src/GHC/Internal/Data/Ord.hs",
+      "sha256": "35c82ab7cb11befca24c55853b63f2833f49606a7882f1cf10740862508a193c"
+    },
+    {
+      "path": "src/GHC/Internal/Data/Proxy.hs",
+      "sha256": "d03677cf95f1d3ebb9ca0dc5b53657ff0e0998e7b29c81c59badb2cfe1c9a10d"
+    },
+    {
+      "path": "src/GHC/Internal/Data/Semigroup/Internal.hs",
+      "sha256": "762b7d8dfa0360110ef6a1e0599bf03ad5f0377de2199f706e0870cbf93e3d04"
+    },
+    {
+      "path": "src/GHC/Internal/Data/STRef.hs",
+      "sha256": "c74c8852bbab078f75885991aaf71556428146520fc4a8d83e6a2c879649ceb0"
+    },
+    {
+      "path": "src/GHC/Internal/Data/STRef/Strict.hs",
+      "sha256": "61acfa6bed6313305401388bc91d123adb8af5e7669b1e00f1a735b2eb537683"
+    },
+    {
+      "path": "src/GHC/Internal/Data/String.hs",
+      "sha256": "e84b34625c678013d45ebbd3e6db67679b40554835ed2ea572dbf839aa55bf5d"
+    },
+    {
+      "path": "src/GHC/Internal/Data/Traversable.hs",
+      "sha256": "306c0df1a63f13b32fd03f7faaa53a7e74719f71fd2fd979c361917f96cc24f6"
+    },
+    {
+      "path": "src/GHC/Internal/Data/Tuple.hs",
+      "sha256": "97658f1c5b9be7910c23480641fb8f1aedbdbe96d0e2d68b5c6106aa48e7a7ad"
+    },
+    {
+      "path": "src/GHC/Internal/Data/Type/Bool.hs",
+      "sha256": "9f7235db442400f807dd30e1f6b7f173be67b8d0ec60d334a103c636f66f43fb"
+    },
+    {
+      "path": "src/GHC/Internal/Data/Type/Coercion.hs",
+      "sha256": "71d55862d967aa0420b45b40c88adb293491be029201b9bf4b23a038c5cb42ff"
+    },
+    {
+      "path": "src/GHC/Internal/Data/Type/Equality.hs",
+      "sha256": "c7b7530d4385e05f758615b29f79ed3bea7c7a25ccbf25a5b625bb453fddd493"
+    },
+    {
+      "path": "src/GHC/Internal/Data/Type/Ord.hs",
+      "sha256": "fc69f7884aecf09dbe6cddc1858f7ba5c7072e7ae79c62812fb94071752a2c3c"
+    },
+    {
+      "path": "src/GHC/Internal/Data/Typeable.hs",
+      "sha256": "4b911156040347128f601c4cefb954c7f227e3a6ba80f87b0dcd17884db8808a"
+    },
+    {
+      "path": "src/GHC/Internal/Data/Typeable/Internal.hs",
+      "sha256": "ff1a002f75f349dbc4699273c3ce6e8e4dba9841aa5ad4aee20d3beb8d8b54e8"
+    },
+    {
+      "path": "src/GHC/Internal/Data/Unique.hs",
+      "sha256": "b7a44de46676ea21b7c63b93bcb3e77480f21e91d0233db21e86087067d3b154"
+    },
+    {
+      "path": "src/GHC/Internal/Data/Version.hs",
+      "sha256": "0c50d0e2b7f9a07a9dc4d94c1ae7d9d830e6c6f9e61ff60763c899999ce7c5b3"
+    },
+    {
+      "path": "src/GHC/Internal/Data/Version.hs-boot",
+      "sha256": "89e9ab0611fccc34cac218c99f98dada9ee904ac22babfd5bdd9e0be6990089e"
+    },
+    {
+      "path": "src/GHC/Internal/Data/Void.hs",
+      "sha256": "3e6901954a686387a790715983d11b5493c1ffef4f58df3089eb76d5fc90e5b8"
+    },
+    {
+      "path": "src/GHC/Internal/Debug.hs",
+      "sha256": "0cef8515d1dc8e43cc7b68386df3fa86f0d5eefe814cbb4f086b2131f19299e8"
+    },
+    {
+      "path": "src/GHC/Internal/Debug/Trace.hs",
+      "sha256": "2c010ddb58214ff0bb1bf35faaddff98442af6b63365ecea1dd168b813b0ba42"
+    },
+    {
+      "path": "src/GHC/Internal/Debug/Trace.hs-boot",
+      "sha256": "f513816c247912919a60c26b7947d58379fa97dc51b6da56f3ccb6e67f83731b"
+    },
+    {
+      "path": "src/GHC/Internal/Desugar.hs",
+      "sha256": "4e1e2668fb55ec36b5d838f89b2c6cada79150706ed64a8c7a6d9b32d5ef81b0"
+    },
+    {
+      "path": "src/GHC/Internal/Encoding/UTF8.hs",
+      "sha256": "0a1beefb86154a8751accacafd459ea169ad5c7a1b7574646319119a55cf293f"
+    },
+    {
+      "path": "src/GHC/Internal/Enum.hs",
+      "sha256": "e4dcf86915b01dcc732ed319fe02759858aea1534c68427826ba5f9c6908860f"
+    },
+    {
+      "path": "src/GHC/Internal/Enum.hs-boot",
+      "sha256": "47353434d99287294958f62ae98303fa3cf6775dc416f95055bd41a2f95a8449"
+    },
+    {
+      "path": "src/GHC/Internal/Environment.hs",
+      "sha256": "4e1a5c79e33cb49ea2b737e38b00d4a0720da97454bde7909e2c4d1564bebf6c"
+    },
+    {
+      "path": "src/GHC/Internal/Err.hs",
+      "sha256": "f109ac925928a0e7fed063bcfd03c93e3d8629d8054d984e600aab26c0122478"
+    },
+    {
+      "path": "src/GHC/Internal/Event.hs",
+      "sha256": "a6d2d26f8d2319068831a4c5abececde3b0c798e87446102ab59ea97e986078f"
+    },
+    {
+      "path": "src/GHC/Internal/Event/Arr.hs",
+      "sha256": "2a3baaedf6de88e044942cc4b737004cb137747752ba0f97cbb2b3a0896ed2b9"
+    },
+    {
+      "path": "src/GHC/Internal/Event/Array.hs",
+      "sha256": "7a19d8ebccb18779871144576bd08bc7a2aca45c95dd6efed148b6f2956e61b3"
+    },
+    {
+      "path": "src/GHC/Internal/Event/Control.hs",
+      "sha256": "8f171cb0bfa246267c9ea4e3a4a543ed9ff69adfd7667b6e937c2a5b49d7c83e"
+    },
+    {
+      "path": "src/GHC/Internal/Event/EPoll.hsc",
+      "sha256": "1ca98efe895ef400821c1b3f2e806173ec822d9d5b31ac59e097a2bd0f756eb5"
+    },
+    {
+      "path": "src/GHC/Internal/Event/Internal.hs",
+      "sha256": "74f4558d6ff199e08900c2779efefa5eb02fec1aed582ee2d43f84e476d21a69"
+    },
+    {
+      "path": "src/GHC/Internal/Event/Internal/Types.hs",
+      "sha256": "780c7f21cafca795654f1cbfb0b20334572fc5fc839730b8b377b48127e1a2d7"
+    },
+    {
+      "path": "src/GHC/Internal/Event/IntTable.hs",
+      "sha256": "a3381421259efd19978bdea4d13b6fe249e07012edcde8fa0dd2c63e3aea78ef"
+    },
+    {
+      "path": "src/GHC/Internal/Event/IntVar.hs",
+      "sha256": "b867bb27ab5e194d0443f07c84400a7f23480c4302798bb7cd508bd50762f891"
+    },
+    {
+      "path": "src/GHC/Internal/Event/KQueue.hsc",
+      "sha256": "22fe019ae02b988410bbc9f6904e6d0e3641b6fd670c0e5b6a3c3cef39f814aa"
+    },
+    {
+      "path": "src/GHC/Internal/Event/Manager.hs",
+      "sha256": "bf83c98d871fd6afdd434b57f39551f66ad790aa9bf68f41c8482bd651517cc6"
+    },
+    {
+      "path": "src/GHC/Internal/Event/Poll.hsc",
+      "sha256": "7d4ffb15ad908567fea9f15deb6ce987b44336f122c4188ea59221e9214fbecb"
+    },
+    {
+      "path": "src/GHC/Internal/Event/PSQ.hs",
+      "sha256": "4694449c2a9a79df87c40d5472111f2d981ce14a1754e8c8715596537550c1f1"
+    },
+    {
+      "path": "src/GHC/Internal/Event/Thread.hs",
+      "sha256": "bc163bb415fff2099497078521fcb738ec202e6c9f1464b6bc6d74f876bbd61d"
+    },
+    {
+      "path": "src/GHC/Internal/Event/TimeOut.hs",
+      "sha256": "76bf0b3822fff2ab1f8ddecb6e03d76f064f72ea7d367fca586c5dce536da382"
+    },
+    {
+      "path": "src/GHC/Internal/Event/TimerManager.hs",
+      "sha256": "920587919b9bce1ef3e25b99d63a9948e173c3ef6f7e463d46b13941b8308c05"
+    },
+    {
+      "path": "src/GHC/Internal/Event/Unique.hs",
+      "sha256": "2df387178035176e76a21ba5292c8d8d2eb88fbe1fb2b4c635b065ced35a6072"
+    },
+    {
+      "path": "src/GHC/Internal/Event/Windows.hsc",
+      "sha256": "3ce205772573b10b0b18b8908313ac4e02c454b5f2036dc8e4e70f2a2e369111"
+    },
+    {
+      "path": "src/GHC/Internal/Event/Windows/Clock.hs",
+      "sha256": "ca2ccfcbffa19520ff7b1afa8958d6756571f360781f67e733a8c5b8ff04cc3c"
+    },
+    {
+      "path": "src/GHC/Internal/Event/Windows/ConsoleEvent.hsc",
+      "sha256": "e0132284f0916d7f7638d407368109422cfee0e6b382963bd542de62af018c9a"
+    },
+    {
+      "path": "src/GHC/Internal/Event/Windows/FFI.hsc",
+      "sha256": "26c998ec55383e2fea86ea7e61647e7a22022dd5034a11425729b9cff459fe14"
+    },
+    {
+      "path": "src/GHC/Internal/Event/Windows/ManagedThreadPool.hs",
+      "sha256": "3ce21c8e144c5077f801810f969057351308913d885ccb3328036dcee3b52250"
+    },
+    {
+      "path": "src/GHC/Internal/Event/Windows/Thread.hs",
+      "sha256": "7c9f211b2e887dc4fbb9e188458198aee1bf3c5e808276d16b3c3543643aa605"
+    },
+    {
+      "path": "src/GHC/Internal/Exception.hs",
+      "sha256": "890128de0336c4762b44f709131a8959bf47bc0313b55bed4c071a17b62a9327"
+    },
+    {
+      "path": "src/GHC/Internal/Exception.hs-boot",
+      "sha256": "7422fa92308439db3c0ca034b02522c96e7961cff00754d0bdca964a4f98bc15"
+    },
+    {
+      "path": "src/GHC/Internal/Exception/Backtrace.hs",
+      "sha256": "2f062109b7a7b40db88bffaef4c9529123008403600bbf6c87b529305625fba8"
+    },
+    {
+      "path": "src/GHC/Internal/Exception/Backtrace.hs-boot",
+      "sha256": "7a57658044a20df0c72ea4ce2b15168b61542c94ed0a8befdf6e29792b549df7"
+    },
+    {
+      "path": "src/GHC/Internal/Exception/Context.hs",
+      "sha256": "49ac1971d2e8f4947ef3d5dd28fe9497d178f24ac367f2767542257799fb4dc6"
+    },
+    {
+      "path": "src/GHC/Internal/Exception/Context.hs-boot",
+      "sha256": "be7800761c23157defa14a486bf1b75cb3c04430f30e32156b1c00ae70ecf166"
+    },
+    {
+      "path": "src/GHC/Internal/Exception/Type.hs",
+      "sha256": "70180e8a8a9a8c74e057a8ec1f4dce5f810eedffeff4ce8370cf33118d222d38"
+    },
+    {
+      "path": "src/GHC/Internal/Exception/Type.hs-boot",
+      "sha256": "f2a0440d35e33a8688d692cf50e4d33e74e92f08e84b04ab8aec20fd4861d2e0"
+    },
+    {
+      "path": "src/GHC/Internal/ExecutionStack.hs",
+      "sha256": "d6d60e36484be835257d13f120bdc46fca07ecd1350d12f62fd8416c1af02b84"
+    },
+    {
+      "path": "src/GHC/Internal/ExecutionStack/Internal.hsc",
+      "sha256": "1ef77fe1313327ecb505c3d600e8324610bf31fc3de11266f767abe5da57442f"
+    },
+    {
+      "path": "src/GHC/Internal/Exts.hs",
+      "sha256": "6988700838f37c6599583b9133a998ab43d37c33eded6515989198da67e95c43"
+    },
+    {
+      "path": "src/GHC/Internal/Fingerprint.hs",
+      "sha256": "d97e24beb911ef802c3020690480eb4ac59ec0757ab9b482337c94a6963a7e5b"
+    },
+    {
+      "path": "src/GHC/Internal/Fingerprint.hs-boot",
+      "sha256": "72b19673ee571ca87ebc67470efc62b1ec75c4d4dfe579b4c33d7ac1a90bb246"
+    },
+    {
+      "path": "src/GHC/Internal/Fingerprint/Type.hs",
+      "sha256": "08cbee6d16f7144dbe69b5231a19e966ada40b9c58734a4525aee8c03d27d0df"
+    },
+    {
+      "path": "src/GHC/Internal/Float.hs",
+      "sha256": "7df253547b90c0e2bd6136611be41c462b8bcfe0d17dfc846dc4037dbc01af27"
+    },
+    {
+      "path": "src/GHC/Internal/Float/ConversionUtils.hs",
+      "sha256": "d19319680a0de903d3957cc53866a4f7b3c603daf8ccb505361113c8ae32476c"
+    },
+    {
+      "path": "src/GHC/Internal/Float/RealFracMethods.hs",
+      "sha256": "46abaaf017b3d0ec914030b6414ac6ff3c754ee7fb385d4b9e961e10726c5d3c"
+    },
+    {
+      "path": "src/GHC/Internal/Foreign/C/ConstPtr.hs",
+      "sha256": "86828a4ade83e155b34bc145ba4b5e46f0d999da9e4de6f53289f6881e32a376"
+    },
+    {
+      "path": "src/GHC/Internal/Foreign/C/Error.hs",
+      "sha256": "7d907e45b55f3574dffa9a19cb26ece2e670e7172083cb7911000c38df6f1c1b"
+    },
+    {
+      "path": "src/GHC/Internal/Foreign/C/String.hs",
+      "sha256": "98ce02533ddd7abc9e84eb38f4e5906ada2d29539485a607cfe1f4d001c0602d"
+    },
+    {
+      "path": "src/GHC/Internal/Foreign/C/String/Encoding.hs",
+      "sha256": "a1956c04e77737b5796af679df63e884fdb8d0acc6bff40373dbbbd732837d57"
+    },
+    {
+      "path": "src/GHC/Internal/Foreign/C/Types.hs",
+      "sha256": "62ddafbbc4d476bb9263d942a284b61bc5882b055a386ed5eea11d8ddf7bf24b"
+    },
+    {
+      "path": "src/GHC/Internal/Foreign/Concurrent.hs",
+      "sha256": "a44b64eca1a8840794f6de942bc782d1d61a9b56d6b3398e5f3060921308e3d1"
+    },
+    {
+      "path": "src/GHC/Internal/Foreign/ForeignPtr.hs",
+      "sha256": "dc39871042b686834501237f6f287c2db16a8faf4d86ce3d0c3c467151c91972"
+    },
+    {
+      "path": "src/GHC/Internal/Foreign/ForeignPtr/Imp.hs",
+      "sha256": "a8f1d9289139bd7b197f180b5cb118da8638876f404a37fbb82fcb8fab05934c"
+    },
+    {
+      "path": "src/GHC/Internal/Foreign/ForeignPtr/Unsafe.hs",
+      "sha256": "352da90531bd2656d668560c46c204e406017141a8de08c0b6abd924b2b47788"
+    },
+    {
+      "path": "src/GHC/Internal/Foreign/Marshal/Alloc.hs",
+      "sha256": "76bbfcaf09561b667f49c595b9669f1e0808ac495b5754184bd6daa2a961458f"
+    },
+    {
+      "path": "src/GHC/Internal/Foreign/Marshal/Array.hs",
+      "sha256": "0a0cb7e36925c5332e5fb4dda03ad11f10b1ffa0e96d71e56de657d32f52216d"
+    },
+    {
+      "path": "src/GHC/Internal/Foreign/Marshal/Error.hs",
+      "sha256": "ad9cf1ba7a64285ca1465b017909fbc9421f2e3d23a0c0788b74ca486490b9f7"
+    },
+    {
+      "path": "src/GHC/Internal/Foreign/Marshal/Pool.hs",
+      "sha256": "38b1229cb73a517fd546aed7ab460aa67b84cac7d5010c704f43f6c07ebb05f5"
+    },
+    {
+      "path": "src/GHC/Internal/Foreign/Marshal/Safe.hs",
+      "sha256": "0d4f9534b95be98e844b11a4c3643d4b251c87c07eb525708785cca0ce63db69"
+    },
+    {
+      "path": "src/GHC/Internal/Foreign/Marshal/Unsafe.hs",
+      "sha256": "8691e22b38d40ee57965abf9ee37c0df321d65247d0f4d1b48578483f94c5f2e"
+    },
+    {
+      "path": "src/GHC/Internal/Foreign/Marshal/Utils.hs",
+      "sha256": "805407f0e1c9397d8fa2e69b5a3596c32e0448690b181404628829394864a93b"
+    },
+    {
+      "path": "src/GHC/Internal/Foreign/Ptr.hs",
+      "sha256": "b1eff07e46780f5c14fe7f55c72ecea817801c3df7bfe771278a4f416a81d022"
+    },
+    {
+      "path": "src/GHC/Internal/Foreign/StablePtr.hs",
+      "sha256": "e6cbe0d6afa67193a322201bc944d5180307c2f6f69c658b6768b7fad8f924c3"
+    },
+    {
+      "path": "src/GHC/Internal/Foreign/Storable.hs",
+      "sha256": "dda27f3c55cda6fbce4d44c127b6b26f5f18aa1e8b7ade6510e51cd4eec9e9cd"
+    },
+    {
+      "path": "src/GHC/Internal/ForeignPtr.hs",
+      "sha256": "8b7b040cd30b3e72c81957b616c13587e14caf9db9dec25e4a7580dac3ca3272"
+    },
+    {
+      "path": "src/GHC/Internal/ForeignSrcLang.hs",
+      "sha256": "d2ba9db612330e709c82e1414c651226b88c730897e68865dc4546c9ede7ef98"
+    },
+    {
+      "path": "src/GHC/Internal/Functor/ZipList.hs",
+      "sha256": "e510ba8508f3de1263ab4d2e6a4f0620e3384ecca184bb1681eb35fc33f03c6f"
+    },
+    {
+      "path": "src/GHC/Internal/Generics.hs",
+      "sha256": "353936dade1afe0e2f34bb327fe1be4aafd70bfd071a77cb652e66cbf753ad7c"
+    },
+    {
+      "path": "src/GHC/Internal/GHCi.hs",
+      "sha256": "5d7108a02d19e7a2370488cba1ed3ed117b092d9848b6f539c6d47433bc62e6c"
+    },
+    {
+      "path": "src/GHC/Internal/GHCi/Helpers.hs",
+      "sha256": "a96022256db4943c11c46a946778712835b2c916c6c0392c1615d9fe625c32ee"
+    },
+    {
+      "path": "src/GHC/Internal/Heap/Closures.hs",
+      "sha256": "d2e891979f6c561db40168bdb736a9f3ce67e915459f7ca301a57b1a547c0539"
+    },
+    {
+      "path": "src/GHC/Internal/Heap/Constants.hsc",
+      "sha256": "fe6012d406045f3808c8e2cb693b0bdc627a0bd524b44e0708769e59317a5b77"
+    },
+    {
+      "path": "src/GHC/Internal/Heap/InfoTable.hsc",
+      "sha256": "3936cce70289fa88996eed01ecef793faa4a5f750eb182d195b9e6dbd33ee5a0"
+    },
+    {
+      "path": "src/GHC/Internal/Heap/InfoTable/Types.hsc",
+      "sha256": "f1de0789ad600bd757fd27be9fc92bd9ef77e4520a17f4df2d759ef25b9ad8ef"
+    },
+    {
+      "path": "src/GHC/Internal/Heap/InfoTableProf.hsc",
+      "sha256": "b22430983f13a7f97f62d20a82b36deb318fc28935d549f781ba0714eb8d7d59"
+    },
+    {
+      "path": "src/GHC/Internal/Heap/ProfInfo/Types.hs",
+      "sha256": "ea4835139ca4eda8cb7b51300a88e05509c86a9f1a40876a732fcb9fef435b66"
+    },
+    {
+      "path": "src/GHC/Internal/InfoProv.hs",
+      "sha256": "5afda7f7d0810a181187a4f66aef468562c38c46db5e73b852f44f1375a4e959"
+    },
+    {
+      "path": "src/GHC/Internal/InfoProv/Types.hsc",
+      "sha256": "63f455d41df424cf2dc20713a34d43991a261fb012a3f7f56895233a9b594315"
+    },
+    {
+      "path": "src/GHC/Internal/Int.hs",
+      "sha256": "72273714af0c635f27fba3ab22a0449592096a0c7cb0a75906519be6c05d40e2"
+    },
+    {
+      "path": "src/GHC/Internal/Integer.hs",
+      "sha256": "8624cebc6834c771a9e3f661fc959e837ddba52e6c3ffd89860f690939eb9833"
+    },
+    {
+      "path": "src/GHC/Internal/Integer/Logarithms.hs",
+      "sha256": "e2932ecc34694b4c375178ee2ce23b97b388024a38fa0dceb0450b4d3d2b7cdb"
+    },
+    {
+      "path": "src/GHC/Internal/IO.hs",
+      "sha256": "e621ee438883f255d6a540ef761b9d462060f2ad3ed9557e118d55cf964ea25e"
+    },
+    {
+      "path": "src/GHC/Internal/IO.hs-boot",
+      "sha256": "a687801a14b3b423d45bca16ea03facd5fa0a428f049bcf04c2d3726e272c702"
+    },
+    {
+      "path": "src/GHC/Internal/IO/Buffer.hs",
+      "sha256": "3e39009aa11a819a851c47de14bacd20962f9a25372d536555317302f8f14700"
+    },
+    {
+      "path": "src/GHC/Internal/IO/BufferedIO.hs",
+      "sha256": "7371862db649ff14ad3ea22f842d0cbbdc9d1418dfb0e5f971300a1537277cf4"
+    },
+    {
+      "path": "src/GHC/Internal/IO/Device.hs",
+      "sha256": "09f884a86fee1db34f7bf3b4ae1d36145e1bfe7833e06fefbb03ecaf44ba51e7"
+    },
+    {
+      "path": "src/GHC/Internal/IO/Encoding.hs",
+      "sha256": "1b517e6f7c3cd2753c5dd9fe210873cfed7a545eaaf92605d8909d2643539b64"
+    },
+    {
+      "path": "src/GHC/Internal/IO/Encoding.hs-boot",
+      "sha256": "b11c7455c4f8e0513698197ae07180e91239c839d5f27e75264458c32a8ad003"
+    },
+    {
+      "path": "src/GHC/Internal/IO/Encoding/CodePage.hs",
+      "sha256": "98d4c75144fb6711c2d5e47d7b601d563af858375bf160cd0c2dfd5ebdd60050"
+    },
+    {
+      "path": "src/GHC/Internal/IO/Encoding/CodePage/API.hs",
+      "sha256": "3e60a0d3ba1bf422209bf8cb8ba7c1ded53debb9b18db4f1f6aac5ef125adfe9"
+    },
+    {
+      "path": "src/GHC/Internal/IO/Encoding/CodePage/Table.hs",
+      "sha256": "c2d5f7607aa4e1641a61adbd4e2ba36ed76042ab5f2209f5840fc2bfbf88a137"
+    },
+    {
+      "path": "src/GHC/Internal/IO/Encoding/Failure.hs",
+      "sha256": "ce27efe1405d4e299d45af597cd6fddea3d205638d766f673241f7aa7f8c5f10"
+    },
+    {
+      "path": "src/GHC/Internal/IO/Encoding/Iconv.hs",
+      "sha256": "91c3f524bc839f0017154078e49fa79d538a05ffd36e889cd71797bffedfc6f2"
+    },
+    {
+      "path": "src/GHC/Internal/IO/Encoding/Latin1.hs",
+      "sha256": "b26bf7c09fecb0417baa7e208f04d9ec82fb5c370239f32e434bbf1363e472dc"
+    },
+    {
+      "path": "src/GHC/Internal/IO/Encoding/Types.hs",
+      "sha256": "17ab1ca2385becc376ed5727204999e07989848349fb9235abbb092a7eaabd8a"
+    },
+    {
+      "path": "src/GHC/Internal/IO/Encoding/UTF16.hs",
+      "sha256": "f2109fd2122c08f70dac7dd93c38462eddf8977bfadf27d4837e3251e6ad2f77"
+    },
+    {
+      "path": "src/GHC/Internal/IO/Encoding/UTF32.hs",
+      "sha256": "6ba742090003f551b9e17fe38524287c7387ea041f2c46fac4acd9201b8403ba"
+    },
+    {
+      "path": "src/GHC/Internal/IO/Encoding/UTF8.hs",
+      "sha256": "00db78df7e4a9a5404bd3dc9e379d59392ab698c907393a5fe61d74b9020194a"
+    },
+    {
+      "path": "src/GHC/Internal/IO/Exception.hs",
+      "sha256": "39aded90d3cce7be4282ea6df2fa0cbf754942ab1aa7c740b5409021170b7ce6"
+    },
+    {
+      "path": "src/GHC/Internal/IO/Exception.hs-boot",
+      "sha256": "bda7e1dd1ac680f0f1126b467207fd4682175ecf1e6871c7b2786b7a25506dcf"
+    },
+    {
+      "path": "src/GHC/Internal/IO/FD.hs",
+      "sha256": "e0c26ace171f4d2ec1b7ddbe958a252edd08792e62dcbaf59725d5d47fcbc604"
+    },
+    {
+      "path": "src/GHC/Internal/IO/Handle.hs",
+      "sha256": "20cbc7a36bdf8421d7c2e0df16041b2bad314403b2e94c2db5e5e968d96afec9"
+    },
+    {
+      "path": "src/GHC/Internal/IO/Handle.hs-boot",
+      "sha256": "cd339ac1d3fb0de0b85d072c202236164a99208d09ee8e55b3be95c77415ed76"
+    },
+    {
+      "path": "src/GHC/Internal/IO/Handle/FD.hs",
+      "sha256": "3f233b28447b3b12926c86540df07aa75b7fb232eda94b71e57c48d96cf2f0cf"
+    },
+    {
+      "path": "src/GHC/Internal/IO/Handle/FD.hs-boot",
+      "sha256": "9b34e5e818163ef55abbe97e1f8f358a088da3c08b0fe921e6ba075cb320b88c"
+    },
+    {
+      "path": "src/GHC/Internal/IO/Handle/Internals.hs",
+      "sha256": "bc5fd5b2c19acd0e7988183dc93c5f14922a4d4f59f8c0ffe6de92e61be295cd"
+    },
+    {
+      "path": "src/GHC/Internal/IO/Handle/Lock.hs",
+      "sha256": "3ee2f3b462196fec3a9ba02a8c8eb26479191b35b58b1b64a1eb7c9aeaa155be"
+    },
+    {
+      "path": "src/GHC/Internal/IO/Handle/Lock/Common.hs",
+      "sha256": "6a5e6e35d35a7c5eac7c999e22858ef9b1a4373b9057e2337e35607d22d20304"
+    },
+    {
+      "path": "src/GHC/Internal/IO/Handle/Lock/Flock.hsc",
+      "sha256": "6ec9f393beb62cc9ce22c4653f902d6eca1ba4a8611f2ca738efa9cb03a3272a"
+    },
+    {
+      "path": "src/GHC/Internal/IO/Handle/Lock/LinuxOFD.hsc",
+      "sha256": "e231bdc8ad082a38c1b4844ba8f7082ca7b1b29086e299457bc2638da6f92cea"
+    },
+    {
+      "path": "src/GHC/Internal/IO/Handle/Lock/NoOp.hs",
+      "sha256": "4ce42650edfda0b0138b71929827f2fc3b57e88b410d203e68c6e9b31e2d3941"
+    },
+    {
+      "path": "src/GHC/Internal/IO/Handle/Lock/Windows.hsc",
+      "sha256": "22faac7956a29b4f61e272422475becb04d55a24aa12a20b63e91f4fde307c8a"
+    },
+    {
+      "path": "src/GHC/Internal/IO/Handle/Text.hs",
+      "sha256": "4b5263380b09431adbddb9cdbad9dd3447baab6938418798bc5d0d0f866a59d4"
+    },
+    {
+      "path": "src/GHC/Internal/IO/Handle/Text.hs-boot",
+      "sha256": "0bc957d7333b0aef3f125324df09932a6922488164bbd37475a01f8c3611a1e2"
+    },
+    {
+      "path": "src/GHC/Internal/IO/Handle/Types.hs",
+      "sha256": "4c719b6081b5e689219380974f72ed294b231521312f5b9a53bd5202019c9c35"
+    },
+    {
+      "path": "src/GHC/Internal/IO/Handle/Types.hs-boot",
+      "sha256": "8a319eb137cc03c8dbbb9d37b77703f3a962d894092cbd4d4e44c8381eaf3767"
+    },
+    {
+      "path": "src/GHC/Internal/IO/Handle/Windows.hs",
+      "sha256": "d13f2a4d4f09e9fd756e8952bfe646543abbe14961bd22ba8a449de01ce8f4c9"
+    },
+    {
+      "path": "src/GHC/Internal/IO/IOMode.hs",
+      "sha256": "2a725afd4c77f8e0f09a53e139144a704977255fae3e5d4f302c55f5c78681ee"
+    },
+    {
+      "path": "src/GHC/Internal/IO/StdHandles.hs",
+      "sha256": "f9400f4ea31ec3f8d4961eca17790e3365dd535ebc614395445ba9ba73081be1"
+    },
+    {
+      "path": "src/GHC/Internal/IO/StdHandles.hs-boot",
+      "sha256": "667313ab9354b1d54ce3c9a56abce8b3b6c1e6e18f3ce5e29561a0375a89584e"
+    },
+    {
+      "path": "src/GHC/Internal/IO/SubSystem.hs",
+      "sha256": "9b406bf23604617f0081ad4b2877a34f5489b565f78cbc9ce9331254a0aec963"
+    },
+    {
+      "path": "src/GHC/Internal/IO/Unsafe.hs",
+      "sha256": "407dad2a8abda44be6e689f6ac45079c9f6cdf6147e847a4a0f9147ecfb8330f"
+    },
+    {
+      "path": "src/GHC/Internal/IO/Windows/Encoding.hs",
+      "sha256": "1da58dc2e45c65091a9f8e54b2308d640314eb6f5b748e9411c900908ca16cda"
+    },
+    {
+      "path": "src/GHC/Internal/IO/Windows/Handle.hsc",
+      "sha256": "85824178c7683856e81aeb10cf351c63c38242ec091c888940956c1eecabe653"
+    },
+    {
+      "path": "src/GHC/Internal/IO/Windows/Paths.hs",
+      "sha256": "5721d77c187597f020f77e6992fb6bacac7a05ebe24c03b33efb9005c075dded"
+    },
+    {
+      "path": "src/GHC/Internal/IOArray.hs",
+      "sha256": "9e0b1b1470793f06437dbe36c305cc51b79ff0ed1e72dfe871484558d488aa4d"
+    },
+    {
+      "path": "src/GHC/Internal/IORef.hs",
+      "sha256": "4f0800e83e9066ddd1ca47734bf20de477cdf9ecd7a6399e503512c0b0a05df4"
+    },
+    {
+      "path": "src/GHC/Internal/IsList.hs",
+      "sha256": "be647f5faf4034975b9dfa57c6a7426cf36b67519eceaac2ddc11da2b635b85d"
+    },
+    {
+      "path": "src/GHC/Internal/Ix.hs",
+      "sha256": "485f592cb602e532a1a13a603aedb7f59b8d215123e8aa8982cd39320fed8c16"
+    },
+    {
+      "path": "src/GHC/Internal/JS/Foreign/Callback.hs",
+      "sha256": "e89981ac10d359b50c5df20d97804bba8f65f6830eb0b79b390e8621b51fbeff"
+    },
+    {
+      "path": "src/GHC/Internal/JS/Prim.hs",
+      "sha256": "6fedc2a446fab88f954d0e0bac1c3bdaf0efb4662414aaefae89b444a246c702"
+    },
+    {
+      "path": "src/GHC/Internal/JS/Prim/Internal.hs",
+      "sha256": "a38c059e455d6d67e21ab980a17183ef91c12cb0f516648bfb2e3419f1871bbd"
+    },
+    {
+      "path": "src/GHC/Internal/JS/Prim/Internal/Build.hs",
+      "sha256": "2cdbecdfef95014ffcdbf1731065e78b66a3bb39860456c0e7aa65bda756b97e"
+    },
+    {
+      "path": "src/GHC/Internal/LanguageExtensions.hs",
+      "sha256": "7af9a0d1a36e87fead528868218e28778256ece8a491538b6e4d59870c05debf"
+    },
+    {
+      "path": "src/GHC/Internal/Lexeme.hs",
+      "sha256": "29b95af814db9290f9d333e7334eea1fd56998da50e27d4eb07d25f8ee91aff8"
+    },
+    {
+      "path": "src/GHC/Internal/List.hs",
+      "sha256": "ae9f56a758942b6e937e7b430ac1137e3ebea171762120ad9c31ef1f4904ba39"
+    },
+    {
+      "path": "src/GHC/Internal/Magic.hs",
+      "sha256": "1eaafc936f63c2668ea2d2c66c050422ad04eb9e73cff10704f5cd7601e0e987"
+    },
+    {
+      "path": "src/GHC/Internal/Magic/Dict.hs",
+      "sha256": "9a4601f13c8cfc10e16527776d28cbf4335bc5159da1156187b484987cb2224c"
+    },
+    {
+      "path": "src/GHC/Internal/Maybe.hs",
+      "sha256": "64ac7b09b70f9cb7820a376fc688122388065a6efcdc279b48b311a7a6581de3"
+    },
+    {
+      "path": "src/GHC/Internal/MVar.hs",
+      "sha256": "5466497f6d41de00cbe585bde0a01c690e4d1f8d085cb3b95962ff5ffe9d6793"
+    },
+    {
+      "path": "src/GHC/Internal/Natural.hs",
+      "sha256": "6a2640f2492f18c91355e8050d5de489f5d08904cfe0a0ebf9cea841342b580a"
+    },
+    {
+      "path": "src/GHC/Internal/Num.hs",
+      "sha256": "a35a0fac5e44dde385bc98024d85a82924dac33c59de0996c9978e4295e4077a"
+    },
+    {
+      "path": "src/GHC/Internal/Num.hs-boot",
+      "sha256": "b765e848138b1d4a22710c45db2e446d3e2c5c07c6b774a8d5cf83a5c4a9b92f"
+    },
+    {
+      "path": "src/GHC/Internal/Numeric.hs",
+      "sha256": "d4f2fdc9caff154a8c849724736c7acfc2f1e66825409cffd22bbdc54752a8fa"
+    },
+    {
+      "path": "src/GHC/Internal/Numeric/Natural.hs",
+      "sha256": "a9a8fd84bbabc0a8ac6861dd5b1ab081c1d064476e802eb339b123b3525b2d4c"
+    },
+    {
+      "path": "src/GHC/Internal/OverloadedLabels.hs",
+      "sha256": "c78aeb73fb102cf0adaa726bfd4e06f9da78ddd10e2d118f56f195f5690fc8f0"
+    },
+    {
+      "path": "src/GHC/Internal/Pack.hs",
+      "sha256": "5946b83e1f72ea6fe343a1ef3cd0981cc5ac98280e0e4c6178312c4255784d01"
+    },
+    {
+      "path": "src/GHC/Internal/Prim/Exception.hs",
+      "sha256": "5bd6f51144d0f51afee547180d2c7d7934ba2e59607d8e071675819183776986"
+    },
+    {
+      "path": "src/GHC/Internal/Prim/Ext.hs",
+      "sha256": "6d0186681c91cb11459b763731475e97dc4e245646ff1796ba48a0c37271eee0"
+    },
+    {
+      "path": "src/GHC/Internal/Prim/Panic.hs",
+      "sha256": "11c7100bfd2c3378f2c692de16f6a798bbfb41aea1001883d435879a3079ac6c"
+    },
+    {
+      "path": "src/GHC/Internal/Prim/PtrEq.hs",
+      "sha256": "816243c2a3ddcb59c6fa4121c766b6171bc722a5d2b47e58127c3c8fa0b3f2ff"
+    },
+    {
+      "path": "src/GHC/Internal/Profiling.hs",
+      "sha256": "74c0d9e4aa94bd6e38fb7a6412ab80f65605eb5088de57f9147d16f5f2b31646"
+    },
+    {
+      "path": "src/GHC/Internal/Ptr.hs",
+      "sha256": "92ef7f10fc4f23ffa860a729c3b2fe13a269c1288dc3d6a017a358c894ec23c6"
+    },
+    {
+      "path": "src/GHC/Internal/Read.hs",
+      "sha256": "9ce014211a4e4f798132510d65d53e19caafe255113c952a785f354e55ba69d5"
+    },
+    {
+      "path": "src/GHC/Internal/Real.hs",
+      "sha256": "7546f4b80b562ba06feaab6be207e5320258f8734d8be870610c57eae4c8c5e1"
+    },
+    {
+      "path": "src/GHC/Internal/Real.hs-boot",
+      "sha256": "843ed3133589748fbc65e0d7ef7e5a5491dc131b55ff73b67f6e3c3516bb99f4"
+    },
+    {
+      "path": "src/GHC/Internal/Records.hs",
+      "sha256": "e3003254978b94ddee8ed475e30d1d07767298c73b04b97d497e57b12d44d0d1"
+    },
+    {
+      "path": "src/GHC/Internal/ResponseFile.hs",
+      "sha256": "19a078939b83222829ab17be6fb98f502283990da09341de505de960d7b646e8"
+    },
+    {
+      "path": "src/GHC/Internal/RTS/Flags.hsc",
+      "sha256": "8d0a24df1c72d2d2d0183585e124de6a2513aa4a2656278993c4da046e616d05"
+    },
+    {
+      "path": "src/GHC/Internal/RTS/Flags/Test.hsc",
+      "sha256": "67b024dc51a55fe2bd1cb9efa8537314bcbff14d9dbd3b9c4024d97eca2926a5"
+    },
+    {
+      "path": "src/GHC/Internal/Show.hs",
+      "sha256": "b37f6d9d376e837785d207f2cf784daf0a53a04db26723a456c073616512be98"
+    },
+    {
+      "path": "src/GHC/Internal/ST.hs",
+      "sha256": "dbf5d06f4785e1dcc8404d4eb3b9fdb5bf50a5d3ecc42568b3d57ce0ebaec315"
+    },
+    {
+      "path": "src/GHC/Internal/Stable.hs",
+      "sha256": "49a15cdb77975568b21f350e0b24fca987c8e99dd6c06f0d595daeb68e5d8fe9"
+    },
+    {
+      "path": "src/GHC/Internal/StableName.hs",
+      "sha256": "7cb0d0d1088dbc589bfc10821bc0375c92de4616645c3708e4515b33215c5225"
+    },
+    {
+      "path": "src/GHC/Internal/Stack.hs",
+      "sha256": "ab43f19c8fab1732afde9973838dcdfeb625a9af8565fcc493444574a3a8bb5c"
+    },
+    {
+      "path": "src/GHC/Internal/Stack.hs-boot",
+      "sha256": "7d92acf93446e191068370934f911fea3bfc26a0fc3a78b251f7b399c644677f"
+    },
+    {
+      "path": "src/GHC/Internal/Stack/Annotation.hs",
+      "sha256": "96ad02226d0f5a9dd57b4ad873ceb2056e3e27ce788149f1e94ba29d0c83bb15"
+    },
+    {
+      "path": "src/GHC/Internal/Stack/CCS.hsc",
+      "sha256": "f146896b0038ad0a645e6b6dca39099d300157f77e443a0ac28545ae44fee5be"
+    },
+    {
+      "path": "src/GHC/Internal/Stack/CloneStack.hs",
+      "sha256": "1d3bd4ca3252beb53f308bb68abb2a6adfdb21d232849b63bc7009dbc77f4cea"
+    },
+    {
+      "path": "src/GHC/Internal/Stack/Constants.hsc",
+      "sha256": "7b02d3388f0a0c129bb73c10759a30733e641788ade399a8985f1063746fc4e6"
+    },
+    {
+      "path": "src/GHC/Internal/Stack/ConstantsProf.hsc",
+      "sha256": "19b9955471434ae045b946a397dbcffa1afc266d287efb5234a9b5e7f685b0a3"
+    },
+    {
+      "path": "src/GHC/Internal/Stack/Decode.hs",
+      "sha256": "0ea6a82ea41bdf14b28aec5cb36a586ed86eb6f87f373ea21095d2b1b018089f"
+    },
+    {
+      "path": "src/GHC/Internal/Stack/Types.hs",
+      "sha256": "8a035fa9a684c3c3e0ebcc7bc418992503fc322c7ef3d5d6a24023870b29fc25"
+    },
+    {
+      "path": "src/GHC/Internal/StaticPtr.hs",
+      "sha256": "ad58ed53a7bad3b9d6a5c546e6b1bf044565bf1bd07ceb62ebbe754dcb757985"
+    },
+    {
+      "path": "src/GHC/Internal/StaticPtr/Internal.hs",
+      "sha256": "db0ca582d0de317aa38978511cff5ba9cabce3c6e80a2a9d4786c113ede01aef"
+    },
+    {
+      "path": "src/GHC/Internal/Stats.hsc",
+      "sha256": "122e1737e0b6e94c42b85a7e247c7738f48da166371fef55cfd89e9d1f971a07"
+    },
+    {
+      "path": "src/GHC/Internal/Storable.hs",
+      "sha256": "ca32eb3e5c1bd9ccf1fd9c67969a5a2892fee2c2dc3467d2170818b5d23959b8"
+    },
+    {
+      "path": "src/GHC/Internal/STRef.hs",
+      "sha256": "673e6c4137836119f2a40d9e0e5a35e2c3e648a160cde6d6efdfab37fe45fa47"
+    },
+    {
+      "path": "src/GHC/Internal/System/Environment.hs",
+      "sha256": "7d815aa6f55e3b93e057506ebdf45824a331369b3c6630575d6de85a76c72863"
+    },
+    {
+      "path": "src/GHC/Internal/System/Environment/Blank.hsc",
+      "sha256": "386d045c519b0aa6694fdc5494cf4f620ea5a326c6ae0f8dcaaf6db44f50d026"
+    },
+    {
+      "path": "src/GHC/Internal/System/Environment/ExecutablePath.hsc",
+      "sha256": "974295f0193d7059c1b8dd709347842bd5dd77734c8ce558d7c5ed895493dc02"
+    },
+    {
+      "path": "src/GHC/Internal/System/Exit.hs",
+      "sha256": "906096858a39a7f42e11cfebf61b35f6af8e306f1c59e3f323217ea1577591a0"
+    },
+    {
+      "path": "src/GHC/Internal/System/IO.hs",
+      "sha256": "f4487f29d520a7e094ddb412529076c1ec78cd5d809bcf56a60504548c3d1f58"
+    },
+    {
+      "path": "src/GHC/Internal/System/IO/Error.hs",
+      "sha256": "ed5dd242073557e6444477d6333355915fd446942a7276263dfc3e4fd8f15b76"
+    },
+    {
+      "path": "src/GHC/Internal/System/Mem.hs",
+      "sha256": "c8b0f67204db022222a51fdd4bcc61e54dd367b4c266209cb2568770c6639c45"
+    },
+    {
+      "path": "src/GHC/Internal/System/Mem/StableName.hs",
+      "sha256": "7cefd32be80127f0609ff9e28ba6e2a4c95bf661d3ea157fb114b80a6d0e8dbc"
+    },
+    {
+      "path": "src/GHC/Internal/System/Posix/Internals.hs",
+      "sha256": "9c726bd8f394f3af18ea471075a0e0b11cd42b98da42583fb17ea7bae7d4c218"
+    },
+    {
+      "path": "src/GHC/Internal/System/Posix/Types.hs",
+      "sha256": "57940148d870bcfc081f813946937f75527b60832282501a9d9fe7132878cae3"
+    },
+    {
+      "path": "src/GHC/Internal/Text/ParserCombinators/ReadP.hs",
+      "sha256": "252e0cc050d80e52679f73f5bd489d4fccfcc2578b57284245d24b8e8a873e5c"
+    },
+    {
+      "path": "src/GHC/Internal/Text/ParserCombinators/ReadPrec.hs",
+      "sha256": "a7b33643e4565c1cbe33cf2fd34875ec9a5edb324801829a06e6a1eda3840aaf"
+    },
+    {
+      "path": "src/GHC/Internal/Text/Read.hs",
+      "sha256": "7122b27fedff5eccd87ba3796f86295e953ace732e5d1002ef6e1b1361f3535c"
+    },
+    {
+      "path": "src/GHC/Internal/Text/Read/Lex.hs",
+      "sha256": "5674b898ff8ee88eccbe035f669f95cd913d6a0a6f486b481337d2020c4aa05c"
+    },
+    {
+      "path": "src/GHC/Internal/Text/Show.hs",
+      "sha256": "c6fde4599a015da2d1c31601f1382bf76450da6c466caadba21224e6b60a5338"
+    },
+    {
+      "path": "src/GHC/Internal/TH/Lib.hs",
+      "sha256": "daf3758cd48efd1dcc0cd2f97d72dc3bd4c4f61b237e6157550443e940d6ba94"
+    },
+    {
+      "path": "src/GHC/Internal/TH/Lift.hs",
+      "sha256": "df29f6172ee7b10f6c153c0a3d81714b850460b15dcb742ed9bb5e1666f979cc"
+    },
+    {
+      "path": "src/GHC/Internal/TH/Quote.hs",
+      "sha256": "173364101d12ed0bcff5dbd78bc2704b3f717863a3ed7f0e88ba768a6850e988"
+    },
+    {
+      "path": "src/GHC/Internal/TH/Syntax.hs",
+      "sha256": "11834258475cc286e77d16c14a0046969f278ca4d3afa23ff42471e76201a463"
+    },
+    {
+      "path": "src/GHC/Internal/TopHandler.hs",
+      "sha256": "c180135dafc43a96228a8a44b5180d53cbbdbee56f456aade8c113bb5c878712"
+    },
+    {
+      "path": "src/GHC/Internal/Tuple.hs",
+      "sha256": "eb6543d19c1b19edbf095ec457a2b1b975b1b11f694d641e4641409c4ecc2a1b"
+    },
+    {
+      "path": "src/GHC/Internal/Type/Reflection.hs",
+      "sha256": "f2c428829a0e3564e12db3c2ae25b52bf21c8d781b972954009bad59be686984"
+    },
+    {
+      "path": "src/GHC/Internal/Type/Reflection/Unsafe.hs",
+      "sha256": "4ece0290584f1b8d2dc26c3816c12d1c051a6f26a2ede4e1356d34f052ef994e"
+    },
+    {
+      "path": "src/GHC/Internal/TypeError.hs",
+      "sha256": "2a2b6e7880dd3f7ef32c48bd9911cedbf65ae6a3d74977a254934612cf8d9a62"
+    },
+    {
+      "path": "src/GHC/Internal/TypeLits.hs",
+      "sha256": "9ec67d151c011c28cd826c70d536ae295953cee138352f0ce76c8603c8ed536d"
+    },
+    {
+      "path": "src/GHC/Internal/TypeLits/Internal.hs",
+      "sha256": "19df09cbf5126b287b29e37f2ba1229980bc3a3897629700efbf0c89d1c25d62"
+    },
+    {
+      "path": "src/GHC/Internal/TypeNats.hs",
+      "sha256": "b5863bdbf7417af1054fe83829363346df1a315b2578a8e1f2ab9ecca86ab9e3"
+    },
+    {
+      "path": "src/GHC/Internal/TypeNats/Internal.hs",
+      "sha256": "d7943ca0d6b7f0e63bba52d6a141bd49675a8420661758b5559ab7b52f953cd3"
+    },
+    {
+      "path": "src/GHC/Internal/Types.hs",
+      "sha256": "a8fe6ab5c7a84be9b0710078b549aa63e511e7cb12d056cef91403d05ca6d2bb"
+    },
+    {
+      "path": "src/GHC/Internal/Unicode.hs",
+      "sha256": "2b1bc16b9bc6aa290c142135d12da9a7da3a7ae1eeed1b019b656241910e8537"
+    },
+    {
+      "path": "src/GHC/Internal/Unicode/Bits.hs",
+      "sha256": "c02847b2c7a09998e9452c36be3e22871c42f0b7c77a1850d3a6e66c05993180"
+    },
+    {
+      "path": "src/GHC/Internal/Unicode/Char/DerivedCoreProperties.hs",
+      "sha256": "2215d375ee7a451626fcf01aef3ff357da395f192a844dda930517ea3459d885"
+    },
+    {
+      "path": "src/GHC/Internal/Unicode/Char/UnicodeData/GeneralCategory.hs",
+      "sha256": "b5bc77e4f07d4955443c73a2020b70c6c97e79d8e3bb238515224d5da3be9bfd"
+    },
+    {
+      "path": "src/GHC/Internal/Unicode/Char/UnicodeData/SimpleLowerCaseMapping.hs",
+      "sha256": "038f3600ddc92ea0550d2dc908bf99f212804674ced0a91c1de5eb6edeefa2ce"
+    },
+    {
+      "path": "src/GHC/Internal/Unicode/Char/UnicodeData/SimpleTitleCaseMapping.hs",
+      "sha256": "5233dc9e573a8bf01e7f1252c16113f2b8799c56cc1a571fae211c29f280a971"
+    },
+    {
+      "path": "src/GHC/Internal/Unicode/Char/UnicodeData/SimpleUpperCaseMapping.hs",
+      "sha256": "cd0a1148f77cf086abc4facf6806b8f72f2b019bca7c921904c1ffe42ab053d3"
+    },
+    {
+      "path": "src/GHC/Internal/Unicode/Version.hs",
+      "sha256": "43b62b2f090565b1afc4cce622a197a90a09a0e4e995b81b37de3abadf2b7906"
+    },
+    {
+      "path": "src/GHC/Internal/Unsafe/Coerce.hs",
+      "sha256": "2bb6346aa8c25cdb273d2670ae9c9e2bbd0b91c2a29b1bfc7b9c0da1ab3ee2d6"
+    },
+    {
+      "path": "src/GHC/Internal/Wasm/Prim.hs",
+      "sha256": "fcbd602f550e40bc2b0ccae759cdd58f1e208280d242609ae00acbedaf8ef849"
+    },
+    {
+      "path": "src/GHC/Internal/Wasm/Prim/Conc.hs",
+      "sha256": "0333c4c1448f04e67e8ccaec61d71c50a847781d9b3b241bfbaa839b66b91c0e"
+    },
+    {
+      "path": "src/GHC/Internal/Wasm/Prim/Conc/Internal.hs",
+      "sha256": "c20b75615a02f32b175f91e1bbd072bd30653a823f9b7352d2dc8ca3321db08b"
+    },
+    {
+      "path": "src/GHC/Internal/Wasm/Prim/Exports.hs",
+      "sha256": "bc11dc1860046d8a29cb140730d757be2b090cb16cd2fd78f6a3177cd8ad2fab"
+    },
+    {
+      "path": "src/GHC/Internal/Wasm/Prim/Flag.hs",
+      "sha256": "ccf79e99595970429266ff6bca2d9937d87c881fe68b9548201bfda96d33dc3c"
+    },
+    {
+      "path": "src/GHC/Internal/Wasm/Prim/Imports.hs",
+      "sha256": "911221d856d1b394a433ec11235f40af698298804ab426114b5376456d18e187"
+    },
+    {
+      "path": "src/GHC/Internal/Wasm/Prim/Types.hs",
+      "sha256": "8776d6e4d5ccd0f2a74da8dd9b75ad05d0fc403c97c99682df3b37f4357957bd"
+    },
+    {
+      "path": "src/GHC/Internal/Weak.hs",
+      "sha256": "ddf8fda38abdde53f5aab351f30f9366c1c259f958caf00117400e8987f38a17"
+    },
+    {
+      "path": "src/GHC/Internal/Weak/Finalize.hs",
+      "sha256": "2e11a4deb135e0b2babb3ea6610a8951e79a47f73471fb57017c0182027e841b"
+    },
+    {
+      "path": "src/GHC/Internal/Windows.hs",
+      "sha256": "88ae126100688cedad6d368618a97344820c0531139bda7b9868f2affcd88a0b"
+    },
+    {
+      "path": "src/GHC/Internal/Word.hs",
+      "sha256": "9ca67ff65c2cc2a0f28442e4fedd7685b7bfac387d2c24f5333477ba38221fad"
+    }
+  ],
+  "modules": [
+    "GHC.Internal.Arr",
+    "GHC.Internal.ArrayArray",
+    "GHC.Internal.Base",
+    "GHC.Internal.Bignum.Backend",
+    "GHC.Internal.Bignum.Backend.GMP",
+    "GHC.Internal.Bignum.Backend.Selected",
+    "GHC.Internal.Bignum.BigNat",
+    "GHC.Internal.Bignum.Integer",
+    "GHC.Internal.Bignum.Natural",
+    "GHC.Internal.Bignum.Primitives",
+    "GHC.Internal.Bignum.WordArray",
+    "GHC.Internal.Bits",
+    "GHC.Internal.ByteOrder",
+    "GHC.Internal.Char",
+    "GHC.Internal.Classes",
+    "GHC.Internal.Clock",
+    "GHC.Internal.ClosureTypes",
+    "GHC.Internal.Conc.Bound",
+    "GHC.Internal.Conc.IO",
+    "GHC.Internal.Conc.POSIX",
+    "GHC.Internal.Conc.POSIX.Const",
+    "GHC.Internal.Conc.Sync",
+    "GHC.Internal.Conc.Windows",
+    "GHC.Internal.Control.Concurrent.MVar",
+    "GHC.Internal.Control.Exception",
+    "GHC.Internal.Control.Exception.Base",
+    "GHC.Internal.Control.Monad.Fail",
+    "GHC.Internal.Control.Monad.Fix",
+    "GHC.Internal.Control.Monad.ST.Imp",
+    "GHC.Internal.CString",
+    "GHC.Internal.Data.Bits",
+    "GHC.Internal.Data.Bool",
+    "GHC.Internal.Data.Coerce",
+    "GHC.Internal.Data.Data",
+    "GHC.Internal.Data.Either",
+    "GHC.Internal.Data.Eq",
+    "GHC.Internal.Data.Foldable",
+    "GHC.Internal.Data.Function",
+    "GHC.Internal.Data.Functor",
+    "GHC.Internal.Data.Functor.Const",
+    "GHC.Internal.Data.Functor.Identity",
+    "GHC.Internal.Data.Functor.Utils",
+    "GHC.Internal.Data.IORef",
+    "GHC.Internal.Data.List",
+    "GHC.Internal.Data.Maybe",
+    "GHC.Internal.Data.Monoid",
+    "GHC.Internal.Data.NonEmpty",
+    "GHC.Internal.Data.OldList",
+    "GHC.Internal.Data.Ord",
+    "GHC.Internal.Data.Proxy",
+    "GHC.Internal.Data.Semigroup.Internal",
+    "GHC.Internal.Data.String",
+    "GHC.Internal.Data.Traversable",
+    "GHC.Internal.Data.Tuple",
+    "GHC.Internal.Data.Type.Bool",
+    "GHC.Internal.Data.Type.Coercion",
+    "GHC.Internal.Data.Type.Equality",
+    "GHC.Internal.Data.Type.Ord",
+    "GHC.Internal.Data.Typeable",
+    "GHC.Internal.Data.Typeable.Internal",
+    "GHC.Internal.Data.Version",
+    "GHC.Internal.Debug",
+    "GHC.Internal.Debug.Trace",
+    "GHC.Internal.Encoding.UTF8",
+    "GHC.Internal.Enum",
+    "GHC.Internal.Err",
+    "GHC.Internal.Event.Arr",
+    "GHC.Internal.Event.Array",
+    "GHC.Internal.Event.Internal",
+    "GHC.Internal.Event.Internal.Types",
+    "GHC.Internal.Event.IntTable",
+    "GHC.Internal.Event.IntVar",
+    "GHC.Internal.Event.PSQ",
+    "GHC.Internal.Event.TimeOut",
+    "GHC.Internal.Event.Unique",
+    "GHC.Internal.Event.Windows",
+    "GHC.Internal.Event.Windows.Clock",
+    "GHC.Internal.Event.Windows.ConsoleEvent",
+    "GHC.Internal.Event.Windows.FFI",
+    "GHC.Internal.Event.Windows.ManagedThreadPool",
+    "GHC.Internal.Event.Windows.Thread",
+    "GHC.Internal.Exception",
+    "GHC.Internal.Exception.Backtrace",
+    "GHC.Internal.Exception.Context",
+    "GHC.Internal.Exception.Type",
+    "GHC.Internal.ExecutionStack.Internal",
+    "GHC.Internal.Exts",
+    "GHC.Internal.Fingerprint",
+    "GHC.Internal.Fingerprint.Type",
+    "GHC.Internal.Float",
+    "GHC.Internal.Float.ConversionUtils",
+    "GHC.Internal.Float.RealFracMethods",
+    "GHC.Internal.Foreign.C.ConstPtr",
+    "GHC.Internal.Foreign.C.Error",
+    "GHC.Internal.Foreign.C.String",
+    "GHC.Internal.Foreign.C.String.Encoding",
+    "GHC.Internal.Foreign.C.Types",
+    "GHC.Internal.Foreign.ForeignPtr",
+    "GHC.Internal.Foreign.ForeignPtr.Imp",
+    "GHC.Internal.Foreign.Marshal.Alloc",
+    "GHC.Internal.Foreign.Marshal.Array",
+    "GHC.Internal.Foreign.Marshal.Unsafe",
+    "GHC.Internal.Foreign.Marshal.Utils",
+    "GHC.Internal.Foreign.Ptr",
+    "GHC.Internal.Foreign.StablePtr",
+    "GHC.Internal.Foreign.Storable",
+    "GHC.Internal.ForeignPtr",
+    "GHC.Internal.Functor.ZipList",
+    "GHC.Internal.Generics",
+    "GHC.Internal.Heap.Closures",
+    "GHC.Internal.Heap.Constants",
+    "GHC.Internal.Heap.InfoTable",
+    "GHC.Internal.Heap.InfoTable.Types",
+    "GHC.Internal.Heap.InfoTableProf",
+    "GHC.Internal.Heap.ProfInfo.Types",
+    "GHC.Internal.InfoProv.Types",
+    "GHC.Internal.Int",
+    "GHC.Internal.Integer",
+    "GHC.Internal.IO",
+    "GHC.Internal.IO.Buffer",
+    "GHC.Internal.IO.BufferedIO",
+    "GHC.Internal.IO.Device",
+    "GHC.Internal.IO.Encoding",
+    "GHC.Internal.IO.Encoding.CodePage",
+    "GHC.Internal.IO.Encoding.CodePage.API",
+    "GHC.Internal.IO.Encoding.CodePage.Table",
+    "GHC.Internal.IO.Encoding.Failure",
+    "GHC.Internal.IO.Encoding.Latin1",
+    "GHC.Internal.IO.Encoding.Types",
+    "GHC.Internal.IO.Encoding.UTF16",
+    "GHC.Internal.IO.Encoding.UTF32",
+    "GHC.Internal.IO.Encoding.UTF8",
+    "GHC.Internal.IO.Exception",
+    "GHC.Internal.IO.FD",
+    "GHC.Internal.IO.Handle",
+    "GHC.Internal.IO.Handle.FD",
+    "GHC.Internal.IO.Handle.Internals",
+    "GHC.Internal.IO.Handle.Lock",
+    "GHC.Internal.IO.Handle.Lock.Common",
+    "GHC.Internal.IO.Handle.Lock.Windows",
+    "GHC.Internal.IO.Handle.Text",
+    "GHC.Internal.IO.Handle.Types",
+    "GHC.Internal.IO.Handle.Windows",
+    "GHC.Internal.IO.IOMode",
+    "GHC.Internal.IO.StdHandles",
+    "GHC.Internal.IO.SubSystem",
+    "GHC.Internal.IO.Unsafe",
+    "GHC.Internal.IO.Windows.Encoding",
+    "GHC.Internal.IO.Windows.Handle",
+    "GHC.Internal.IO.Windows.Paths",
+    "GHC.Internal.IORef",
+    "GHC.Internal.IsList",
+    "GHC.Internal.Ix",
+    "GHC.Internal.List",
+    "GHC.Internal.Magic",
+    "GHC.Internal.Magic.Dict",
+    "GHC.Internal.Maybe",
+    "GHC.Internal.MVar",
+    "GHC.Internal.Natural",
+    "GHC.Internal.Num",
+    "GHC.Internal.Numeric",
+    "GHC.Internal.Prim.Exception",
+    "GHC.Internal.Prim.Ext",
+    "GHC.Internal.Prim.PtrEq",
+    "GHC.Internal.Ptr",
+    "GHC.Internal.Read",
+    "GHC.Internal.Real",
+    "GHC.Internal.RTS.Flags",
+    "GHC.Internal.RTS.Flags.Test",
+    "GHC.Internal.Show",
+    "GHC.Internal.ST",
+    "GHC.Internal.Stable",
+    "GHC.Internal.Stack",
+    "GHC.Internal.Stack.Annotation",
+    "GHC.Internal.Stack.CCS",
+    "GHC.Internal.Stack.CloneStack",
+    "GHC.Internal.Stack.Constants",
+    "GHC.Internal.Stack.ConstantsProf",
+    "GHC.Internal.Stack.Decode",
+    "GHC.Internal.Stack.Types",
+    "GHC.Internal.Storable",
+    "GHC.Internal.STRef",
+    "GHC.Internal.System.IO",
+    "GHC.Internal.System.IO.Error",
+    "GHC.Internal.System.Posix.Internals",
+    "GHC.Internal.System.Posix.Types",
+    "GHC.Internal.Text.ParserCombinators.ReadP",
+    "GHC.Internal.Text.ParserCombinators.ReadPrec",
+    "GHC.Internal.Text.Read",
+    "GHC.Internal.Text.Read.Lex",
+    "GHC.Internal.Text.Show",
+    "GHC.Internal.Tuple",
+    "GHC.Internal.TypeError",
+    "GHC.Internal.TypeLits",
+    "GHC.Internal.TypeLits.Internal",
+    "GHC.Internal.TypeNats",
+    "GHC.Internal.TypeNats.Internal",
+    "GHC.Internal.Types",
+    "GHC.Internal.Unicode",
+    "GHC.Internal.Unicode.Bits",
+    "GHC.Internal.Unicode.Char.DerivedCoreProperties",
+    "GHC.Internal.Unicode.Char.UnicodeData.GeneralCategory",
+    "GHC.Internal.Unicode.Char.UnicodeData.SimpleLowerCaseMapping",
+    "GHC.Internal.Unicode.Char.UnicodeData.SimpleTitleCaseMapping",
+    "GHC.Internal.Unicode.Char.UnicodeData.SimpleUpperCaseMapping",
+    "GHC.Internal.Unicode.Version",
+    "GHC.Internal.Unsafe.Coerce",
+    "GHC.Internal.Weak",
+    "GHC.Internal.Weak.Finalize",
+    "GHC.Internal.Windows",
+    "GHC.Internal.Word"
+  ]
+}

@@ -48,8 +48,8 @@ import Text.Read (readMaybe)
 
 directory, source, driver :: FilePath
 directory = "build/original-fd-ready"
-source = "compiler/test-fixtures/OriginalFdReadyAudit.hs"
-driver = "compiler/test-fixtures/OriginalFdReadyAuditNative.hs"
+source = "test/fixtures/compiler/OriginalFdReadyAudit.hs"
+driver = "test/fixtures/compiler/OriginalFdReadyAuditNative.hs"
 
 entries :: [String]
 entries = ["originalReadySafe", "originalReadyUnsafe"]
@@ -169,7 +169,7 @@ prepareOriginalFdReady root = do
       installed = oneLine importsResult </> "GHC/Internal/IO/FD.hi"
   compiled <- execute "native-build" [] ghc ["--make", "-O2", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
     "-fwrite-if-simplified-core", "-package", "ghc-internal", "-package", "unix",
-    "-i" ++ root </> "compiler/test-fixtures", "-odir", root </> directory </> "native",
+    "-i" ++ root </> "test/fixtures/compiler", "-odir", root </> directory </> "native",
     "-hidir", root </> directory </> "native", driver, "-o", root </> binary]
   observed <- execute "native-observations" [] (root </> binary) [root </> directory </> "native/private-file"]
   rows <- maybe (die "Malformed native fdReady oracle") pure
@@ -255,7 +255,7 @@ prepareOriginalFdReady root = do
   audits <- forM entries $ \entry -> do
     let output = directory </> entry ++ ".audit.json"
     audited <- execute ("audit-" ++ entry) [] "python3"
-      ["scripts/audit-core.py", adaptedPath, "--entry", entry, "--output", output]
+      ["bin/audit-core.py", adaptedPath, "--entry", entry, "--output", output]
     pure (entry, output, audited)
   adaptedJSON <- either (die . ("Malformed generated readiness Core: " ++)) pure . eitherDecode =<<
     BL.readFile (root </> adaptedPath)
@@ -268,22 +268,22 @@ prepareOriginalFdReady root = do
     forM entries $ \entry -> do
       let output = directory </> "negative" </> label ++ "-" ++ entry ++ ".audit.json"
       audited <- runLoggedExpect 1 180 root (directory </> "logs") ("negative-" ++ label ++ "-" ++ entry) [] "python3"
-        ["scripts/audit-core.py", input, "--entry", entry, "--output", output]
+        ["bin/audit-core.py", input, "--entry", entry, "--output", output]
       report <- either die pure . eitherDecode =<< BL.readFile (root </> output)
       unless (jsonField "accepted" report == Bool False &&
         case jsonField "issues" report of
           Array issues -> any ((== String "foreign-call") . jsonField "code") issues
           _ -> False) (die "Readiness negative control did not reject the original foreign descriptor")
       pure (input, output, audited)
-  compilerFiles <- listDirectory (root </> "compiler/THC")
-  scriptFiles <- listDirectory (root </> "scripts")
+  compilerFiles <- listDirectory (root </> "src/compiler/THC")
+  scriptFiles <- listDirectory (root </> "bin")
   let commands = [version, info, libdirResult, importsResult, compiled, observed] ++
         [command | (_,_,command) <- audits] ++ [command | (_,_,command) <- negatives]
       inputs = sort $ [source, driver, "test/haskell-fixtures/OriginalFdReadyFixtures.hs",
         "test/haskell-fixtures/Main.hs", "test/haskell-fixtures/FixtureSupport.hs", "thc.cabal",
-        "scripts/audit-core.py", "scripts/core-capabilities.json"] ++
-        ["compiler/THC" </> name | name <- compilerFiles, takeExtension name == ".hs"] ++
-        ["scripts" </> name | name <- scriptFiles, "core_" `isPrefixOf` name, takeExtension name == ".py"]
+        "bin/audit-core.py", "bin/core-capabilities.json"] ++
+        ["src/compiler/THC" </> name | name <- compilerFiles, takeExtension name == ".hs"] ++
+        ["bin" </> name | name <- scriptFiles, "core_" `isPrefixOf` name, takeExtension name == ".py"]
       artifacts = [oracle, originalPath, templatePath, adaptedPath, factsPath, binary,
         directory </> "native/private-file"] ++ [path | (_,path,_) <- audits] ++
         concat [[input, output] | (input,output,_) <- negatives] ++ concatMap commandArtifacts commands

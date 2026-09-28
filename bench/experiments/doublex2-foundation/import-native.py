@@ -14,9 +14,9 @@ import tarfile
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT / 'scripts'))
+sys.path.insert(0, str(ROOT / 'bin'))
 import doublex2_model as model
-spec = importlib.util.spec_from_file_location('doublex2_prepare', ROOT / 'scripts/prepare-doublex2-audit.py')
+spec = importlib.util.spec_from_file_location('doublex2_prepare', ROOT / 'bin/prepare-doublex2-audit.py')
 prepare = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(prepare)
 
@@ -62,7 +62,7 @@ def main():
         assert all(command['exitCode'] == 0 for command in native['commands'])
         expected_sources = {str(p.relative_to(ROOT)) for p in (prepare.FIXTURE, prepare.NATIVE,
             *sorted((ROOT/'compiler/Thc').glob('*.hs')),
-            *(ROOT/'compiler'/name for name in ('build.sh', 'export.sh', 'toolchain.sh')))}
+            *(ROOT / 'bin' / name for name in ('build-compiler.sh', 'export-core.sh', 'toolchain.sh')))}
         assert set(native['inputHashes']) == expected_sources, 'Native source inventory drift'
         for relative, sha in native['inputHashes'].items():
             assert digest(origin/'inputs'/relative) == sha == digest(ROOT/relative), 'Native source mismatch: '+relative
@@ -70,10 +70,10 @@ def main():
         actual_rows = model.parse_rows((origin/'oracle.tsv').read_text())
         assert actual_rows == wanted, next(((key, actual_rows.get(key), value) for key, value in wanted.items()
             if actual_rows.get(key) != value), 'Unexpected additional native rows')
-        audit_spec = importlib.util.spec_from_file_location('doublex2_audit', ROOT/'scripts/audit-core.py')
+        audit_spec = importlib.util.spec_from_file_location('doublex2_audit', ROOT/'bin/audit-core.py')
         auditor = importlib.util.module_from_spec(audit_spec)
         audit_spec.loader.exec_module(auditor)
-        capabilities = json.loads((ROOT/'scripts/core-capabilities.json').read_text())
+        capabilities = json.loads((ROOT/'bin/core-capabilities.json').read_text())
         modules, audits, structure = {}, {}, {}
         for stage in ('pre', 'post'):
             path = origin/stage/'core/SimdDoubleX2.json'
@@ -100,9 +100,9 @@ def main():
         shutil.copyfile(imported/'oracle.tsv', out/'oracle.tsv')
         (out/'expected.tsv').write_text(''.join('\t'.join(map(str, (*key, answer)))+'\n' for key, answer in wanted.items()))
         sources = [ROOT/p for p in sorted(expected_sources)] + [Path(__file__).resolve(),
-            ROOT/'scripts/prepare-doublex2-audit.py', ROOT/'scripts/doublex2_model.py', ROOT/'scripts/test-doublex2-model.py',
-            ROOT/'scripts/audit-core.py', ROOT/'scripts/core-capabilities.json',
-            ROOT/'src/main/resources/thc/scalar-primop-signatures.json', *sorted((ROOT/'scripts').glob('core_*.py'))]
+            ROOT/'bin/prepare-doublex2-audit.py', ROOT/'bin/doublex2_model.py', ROOT/'bin/test-doublex2-model.py',
+            ROOT/'bin/audit-core.py', ROOT/'bin/core-capabilities.json',
+            ROOT/'src/main/resources/thc/scalar-primop-signatures.json', *sorted((ROOT/'bin').glob('core_*.py'))]
         artifacts = [p for p in sorted(imported.rglob('*')) if p.is_file()] + [out/'oracle.tsv', out/'expected.tsv']
         artifacts += [out/f'{s}-core/SimdDoubleX2.json' for s in ('pre', 'post')]
         artifacts += [out/f'{s}-audit.json' for s in ('pre', 'post')]

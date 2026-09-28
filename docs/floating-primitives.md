@@ -189,7 +189,7 @@ Current tuple, vector and bounded sum transport is specified by the
 the measurements here establish only the stated floating slice. Floating literal
 case alternatives are invalid GHC Core and fail closed.
 
-`scripts/prepare-floating-audit.py` builds the native oracle, exports current
+`bin/prepare-floating-audit.py` builds the native oracle, exports current
 GHC 9.14.1 Core, checks all 28 primops, verifies concrete worker results/arguments,
 boxed field representations and retained floating captures, and audits all 15
 positive roots strictly. It independently checks 441 native rows, including
@@ -202,14 +202,14 @@ self-tail accumulator loop. Native executable, oracle, source, auditor,
 capabilities and exported Core hashes are retained under
 `build/floating/checks.json`; JVM tests reject stale evidence.
 
-Preparation runs automatically in `scripts/prepare-tests.sh`; Gradle tracks the
+Preparation runs automatically in `bin/prepare-tests.sh`; Gradle tracks the
 generated inputs and CI retains their evidence. The focused checks are:
 
 ```sh
-compiler/build.sh
-python3 scripts/prepare-floating-audit.py
+bin/build-compiler.sh
+python3 bin/prepare-floating-audit.py
 ./gradlew --no-daemon test --tests thc.runtime.FloatingPrimitiveTest
-python3 scripts/test-audit-core.py
+python3 bin/test-audit-core.py
 ```
 
 The JVM tests replay every native row before and after requested compilation,
@@ -275,7 +275,7 @@ and final `FSQRT SINGLE`/`FSQRT DOUBLE` instructions. One host-result Long box
 remains.
 
 For actual compiler evidence, `floatingLoop` has both f32 and f64 accumulators.
-Capture its graph with `scripts/dump-graph.sh`, selecting
+Capture its graph with `bin/dump-graph.sh`, selecting
 `build/floating/core/FloatingAudit.json` through `THC_GRAPH_MODULES` and each
 backend through `THC_BACKEND`. Run `tools/check-floating-loop-graph.py` on the
 parsed `Before phase HighTierLowering` snapshot. The checker follows actual CFG

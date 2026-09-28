@@ -489,11 +489,11 @@ relativeCore family stage =
 
 inputPaths :: FilePath -> Family -> IO [FilePath]
 inputPaths root family = do
-  plugin <- listDirectory (root </> "compiler/THC")
-  let source = "compiler/test-fixtures" </> fixtureModule family ++ ".hs"
+  plugin <- listDirectory (root </> "src/compiler/THC")
+  let source = "test/fixtures/compiler" </> fixtureModule family ++ ".hs"
   pure $ sort $ [source, "thc.cabal", "test/haskell-fixtures/Main.hs", "test/haskell-fixtures/FixtureSupport.hs",
-    "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py"] ++
-    ["compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"]
+    "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py"] ++
+    ["src/compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"]
 
 prepare :: FilePath -> Family -> IO ()
 prepare root family = do
@@ -501,7 +501,7 @@ prepare root family = do
       output = root </> directory
       manifest = output </> "manifest.json"
       es = entries family
-      source = "compiler/test-fixtures" </> fixtureModule family ++ ".hs"
+      source = "test/fixtures/compiler" </> fixtureModule family ++ ".hs"
       stages = if family == Bit then ["pre-core", "post-core"] else ["core"]
   createDirectoryIfMissing True output
   present <- doesFileExist manifest
@@ -517,7 +517,7 @@ prepare root family = do
         options = if stage == "post-core" then ["-fplugin-opt=THC.Plugin:post-tidy"] else []
         exportArgs = options ++ roots ++ [source]
     _ <- run root [("THC_CORE_OUT",root </> core),("THC_GHC_OUT",root </> ghcOut)]
-      "compiler/export.sh" exportArgs ""
+      "bin/export-core.sh" exportArgs ""
     let modules = relativeCore family stage
     forM_ modules $ \path -> do
       exists <- doesFileExist (root </> path)
@@ -532,7 +532,7 @@ prepare root family = do
   writeFile (root </> driver) (oracleDriver family es)
   createDirectoryIfMissing True (root </> nativeDir)
   _ <- run root [] ghc ["--make", "-O2", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
-     "-i" ++ (root </> "compiler/test-fixtures"), "-odir", root </> nativeDir,
+     "-i" ++ (root </> "test/fixtures/compiler"), "-odir", root </> nativeDir,
      "-hidir", root </> nativeDir, root </> driver, "-o", root </> executable] ""
   actual <- runWithTimeout (Just (60 * 1000000)) root [] (root </> executable) [] stdinText
   let expectedKeys = Set.fromList [(entryName e,x,y) | (e,x,y) <- requests]
@@ -611,7 +611,7 @@ arraySpec :: String -> Maybe ArraySpec
 arraySpec "int-arrays" = Just $ basicArray "int-arrays"
   [ArrayGroup "examples/THC/UnboxedArrays.hs" "THC.UnboxedArrays" "U"
     ["unboxedAccum", "unboxedST", "unboxedEmpty"],
-   ArrayGroup "compiler/test-fixtures/IntArrayAudit.hs" "IntArrayAudit" "P"
+   ArrayGroup "test/fixtures/compiler/IntArrayAudit.hs" "IntArrayAudit" "P"
     ["orderedInts", "aliasIntBytes"]]
   "NativeIntArray.hs" "int-array-oracle" (SharedInputs $ arrayBoundaryInputs [-16 .. 16]
     [0x5555555555555555, 0xaaaaaaaaaaaaaaaa, 0x55aa55aa55aa55aa,
@@ -619,7 +619,7 @@ arraySpec "int-arrays" = Just $ basicArray "int-arrays"
 arraySpec "int8-arrays" = Just $ (basicArray "int8-arrays"
   [ArrayGroup "examples/THC/Unboxed8Arrays.hs" "THC.Unboxed8Arrays" "U"
     ["unboxedInt8Accum", "unboxedInt8ST", "unboxedWord8Accum", "unboxedWord8ST"],
-   ArrayGroup "compiler/test-fixtures/Int8ArrayAudit.hs" "Int8ArrayAudit" "P"
+   ArrayGroup "test/fixtures/compiler/Int8ArrayAudit.hs" "Int8ArrayAudit" "P"
     ["aliasBytes", "emptyBytes", "rawSignedRead", "rawUnsignedRead", "rawSignedIndex"]]
   "NativeInt8Array.hs" "int8-array-oracle" (SharedInputs $ arrayBitInputs [-256 .. 255]
     [0x5555555555555555, 0xaaaaaaaaaaaaaaaa, 0x0123456789abcdef, 0xfedcba9876543210]))
@@ -627,7 +627,7 @@ arraySpec "int8-arrays" = Just $ (basicArray "int8-arrays"
 arraySpec "int16-arrays" = Just $ (basicArray "int16-arrays"
   [ArrayGroup "examples/THC/Unboxed16Arrays.hs" "THC.Unboxed16Arrays" "U"
     ["unboxedInt16Accum", "unboxedInt16ST", "unboxedWord16Accum", "unboxedWord16ST"],
-   ArrayGroup "compiler/test-fixtures/Int16ArrayAudit.hs" "Int16ArrayAudit" "P"
+   ArrayGroup "test/fixtures/compiler/Int16ArrayAudit.hs" "Int16ArrayAudit" "P"
     ["aliasInt16Bytes", "aliasWord16Bytes"]]
   "NativeInt16Array.hs" "int16-array-oracle" (SharedInputs $ arrayBoundaryInputs [-16 .. 16]
     [0x5555555555555555, 0xaaaaaaaaaaaaaaaa, 0x55aa55aa55aa55aa,
@@ -642,7 +642,7 @@ arraySpec "int16-arrays" = Just $ (basicArray "int16-arrays"
 arraySpec "int32-arrays" = Just $ (basicArray "int32-arrays"
   [ArrayGroup "examples/THC/Unboxed32Arrays.hs" "THC.Unboxed32Arrays" "U"
     ["unboxedInt32Accum", "unboxedInt32ST", "unboxedWord32Accum", "unboxedWord32ST"],
-   ArrayGroup "compiler/test-fixtures/Int32ArrayAudit.hs" "Int32ArrayAudit" "P"
+   ArrayGroup "test/fixtures/compiler/Int32ArrayAudit.hs" "Int32ArrayAudit" "P"
     ["aliasInt32Bytes", "aliasWord32Bytes"]]
   "NativeInt32Array.hs" "int32-array-oracle" (SharedInputs $ arrayBoundaryInputs [-16 .. 16]
     [0x5555555555555555, 0xaaaaaaaaaaaaaaaa, 0x55aa55aa55aa55aa,
@@ -656,7 +656,7 @@ arraySpec "int32-arrays" = Just $ (basicArray "int32-arrays"
 arraySpec "double-arrays" = Just $ (basicArray "double-arrays"
   [ArrayGroup "examples/THC/UnboxedDoubleArrays.hs" "THC.UnboxedDoubleArrays" "U"
     ["unboxedDoubleAccum", "unboxedDoubleST"],
-   ArrayGroup "compiler/test-fixtures/DoubleArrayAudit.hs" "DoubleArrayAudit" "P"
+   ArrayGroup "test/fixtures/compiler/DoubleArrayAudit.hs" "DoubleArrayAudit" "P"
     ["moveDoubleBits", "indexDoubleBits"]]
   "NativeDoubleArray.hs" "double-array-oracle" (SharedInputs doubleArrayInputs))
   {arrayNaNHelpers = ["moveDoubleBits", "indexDoubleBits"]}
@@ -665,9 +665,9 @@ arraySpec "float-word-arrays" = Just $ (basicArray "float-word-arrays"
     ["unboxedFloatAccum", "unboxedFloatST"],
    ArrayGroup "examples/THC/UnboxedWordArrays.hs" "THC.UnboxedWordArrays" "W"
     ["unboxedWordAccum", "unboxedWordST"],
-   ArrayGroup "compiler/test-fixtures/FloatArrayAudit.hs" "FloatArrayAudit" "P"
+   ArrayGroup "test/fixtures/compiler/FloatArrayAudit.hs" "FloatArrayAudit" "P"
     ["moveFloatBits", "indexFloatBits"],
-   ArrayGroup "compiler/test-fixtures/WordArrayAudit.hs" "WordArrayAudit" "Q"
+   ArrayGroup "test/fixtures/compiler/WordArrayAudit.hs" "WordArrayAudit" "Q"
     ["aliasWordBytes"]]
   "NativeFloatWordArray.hs" "float-word-array-oracle" (PerEntryInputs floatWordInputs))
   {arrayNaNHelpers = ["moveFloatBits", "indexFloatBits"]}
@@ -809,8 +809,8 @@ prepareArray root spec = do
           createDirectoryIfMissing True (root </> folder)
           -- GHC's response format keeps PowerShell from rebinding compiler flags.
           writeFile response (escapeArgs arguments)
-          run root environment powershell ["-NoProfile", "-File", root </> "compiler/export.ps1", "@" ++ response] ""
-        else run root environment "compiler/export.sh" arguments ""
+          run root environment powershell ["-NoProfile", "-File", root </> "bin/export-core.ps1", "@" ++ response] ""
+        else run root environment "bin/export-core.sh" arguments ""
       content <- BS.readFile (root </> modulePath)
       let exportedBoundary = case decodeStrict' content of
             Just (Object value) -> KeyMap.lookup "boundary" value
@@ -835,7 +835,7 @@ prepareArray root spec = do
   writeFile (root </> driver) (arrayDriverSource spec)
   createDirectoryIfMissing True (root </> directory </> "native")
   _ <- run root [] ghc ["--make", "-O2", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
-    "-i" ++ root </> "examples", "-i" ++ root </> "compiler/test-fixtures",
+    "-i" ++ root </> "examples", "-i" ++ root </> "test/fixtures/compiler",
     "-odir", root </> directory </> "native", "-hidir", root </> directory </> "native",
     root </> driver, "-o", root </> binary] ""
   actual <- run root [] (root </> binary) [] arrayRequestText
@@ -856,11 +856,11 @@ prepareArray root spec = do
       (die "Native literal oracle returned missing, duplicate, or unexpected inputs")
     writeFile (root </> literalOracle) literalActual
     pure [literalOracle]
-  plugin <- listDirectory (root </> "compiler/THC")
-  let exporterSources = if windows then ["compiler/export.ps1", "scripts/windows-common.ps1", "compiler/plugin.py"]
-        else ["compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py"]
+  plugin <- listDirectory (root </> "src/compiler/THC")
+  let exporterSources = if windows then ["bin/export-core.ps1", "bin/windows-common.ps1", "bin/plugin.py"]
+        else ["bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py"]
       sources = sort $ ["thc.cabal", "test/haskell-fixtures/Main.hs", "test/haskell-fixtures/FixtureSupport.hs"] ++ exporterSources ++
-        map arraySource groups ++ ["compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"]
+        map arraySource groups ++ ["src/compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"]
       artifacts = concatMap snd stages ++ [driver,binary,oracle] ++ literalArtifacts
   sourceHashes <- hashes root sources
   artifactHashes <- hashes root artifacts
@@ -905,8 +905,8 @@ preparePinnedPointers root = do
       manifest = root </> directory </> "manifest.json"
       native = directory </> "native"
       binary = native </> "oracle"
-      source = "compiler/test-fixtures/PinnedPointerCellsAudit.hs"
-      driver = "compiler/test-fixtures/PinnedPointerCellsNative.hs"
+      source = "test/fixtures/compiler/PinnedPointerCellsAudit.hs"
+      driver = "test/fixtures/compiler/PinnedPointerCellsNative.hs"
   createDirectoryIfMissing True (root </> native)
   present <- doesFileExist manifest
   when present (removeFile manifest)
@@ -914,7 +914,7 @@ preparePinnedPointers root = do
   version <- takeWhile (/= '\n') <$> run root [] ghc ["--numeric-version"] ""
   unless (version == "9.14.1") (die "Pinned pointer fixture requires GHC 9.14.1")
   _ <- run root [] ghc ["--make", "-O2", "-dynamic", "-fforce-recomp", "-dcore-lint",
-    "-i./compiler/test-fixtures", "-odir", native, "-hidir", native, driver, "-o", binary] ""
+    "-i./test/fixtures/compiler", "-odir", native, "-hidir", native, driver, "-o", binary] ""
   oracle <- run root [] (root </> binary) [] (unlines (map show ([0,1,17,127,255,256,
     32767,32768,65535,4294967297,81985529216486895,-1,-32768] :: [Int])))
   writeFile (root </> directory </> "oracle.tsv") oracle
@@ -924,7 +924,7 @@ preparePinnedPointers root = do
         options = if stage == "post" then ["-fplugin-opt=THC.Plugin:post-tidy"] else []
     forM_ [core, ghcOut] (createDirectoryIfMissing True . (root </>))
     _ <- run root [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> ghcOut)]
-      "compiler/export.sh" (options ++ ["-fplugin-opt=THC.Plugin:closure=pointerRoundtrip",
+      "bin/export-core.sh" (options ++ ["-fplugin-opt=THC.Plugin:closure=pointerRoundtrip",
         "-fplugin-opt=THC.Plugin:closure=pointerArrayRoundtrip",
         "-fplugin-opt=THC.Plugin:closure=pointerOrder",
         "-fplugin-opt=THC.Plugin:closure=char8Roundtrip",
@@ -936,7 +936,7 @@ preparePinnedPointers root = do
         "-fplugin-opt=THC.Plugin:closure=touchLazyPayload",
         "-fplugin-opt=THC.Plugin:closure=nonOverlappingCopy",
         "-fplugin-opt=THC.Plugin:closure=wideReadSelector", source]) ""
-    _ <- run root [] "python3" ["scripts/audit-core.py", "--entry", "pointerRoundtrip",
+    _ <- run root [] "python3" ["bin/audit-core.py", "--entry", "pointerRoundtrip",
       "--entry", "pointerArrayRoundtrip", "--entry", "pointerOrder", "--entry", "char8Roundtrip",
       "--entry", "byte8Roundtrip", "--entry", "halfwordReadRoundtrip", "--entry", "halfwordWriteRoundtrip",
       "--entry", "wideStoreByte", "--entry", "mutableContentsRoundtrip", "--entry", "touchLazyPayload",
@@ -945,13 +945,13 @@ preparePinnedPointers root = do
       "--output", directory </> stage </> "audit.json",
       core </> "PinnedPointerCellsAudit.json", core </> "THC.InterfaceClosure.json"] ""
     pure ()
-  plugin <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
-  let inputs = sort $ [source, driver, "test/haskell-fixtures/Main.hs", "test/haskell-fixtures/FixtureSupport.hs", "scripts/audit-core.py",
-        "scripts/core-capabilities.json", "compiler/export.sh", "compiler/build.sh",
-        "compiler/toolchain.sh", "compiler/plugin.py", "thc.cabal", "cabal.project"] ++
-        ["compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"] ++
-        ["scripts" </> file | file <- scripts, "core_" `isPrefixOf` file, takeExtension file == ".py"]
+  plugin <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
+  let inputs = sort $ [source, driver, "test/haskell-fixtures/Main.hs", "test/haskell-fixtures/FixtureSupport.hs", "bin/audit-core.py",
+        "bin/core-capabilities.json", "bin/export-core.sh", "bin/build-compiler.sh",
+        "bin/toolchain.sh", "bin/plugin.py", "thc.cabal", "cabal.project"] ++
+        ["src/compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"] ++
+        ["bin" </> file | file <- scripts, "core_" `isPrefixOf` file, takeExtension file == ".py"]
       artifacts = (directory </> "oracle.tsv") :
         [directory </> stage </> file | stage <- ["pre", "post"],
           file <- ["audit.json", "core/PinnedPointerCellsAudit.json", "core/THC.InterfaceClosure.json"]]

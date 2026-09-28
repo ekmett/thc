@@ -2,7 +2,7 @@
 
 `runtime-services-descriptors.json` retains the three genuine foreign-call
 descriptor objects from GHC 9.14.1's post-Tidy export of
-`runtime/THC/Internal/RuntimeABI.hs`. No convention, safety, target, arity,
+`src/runtime/THC/Internal/RuntimeABI.hs`. No convention, safety, target, arity,
 argument or result representation has been changed. Callers assembled by Java
 tests remain explicitly synthetic; the descriptor objects themselves are GHC
 output, not handwritten ABI approximations.
@@ -19,9 +19,9 @@ Regenerate the complete export using the pinned compiler:
 ```sh
 THC_CORE_OUT="$PWD/build/runtime-services-export-concrete/core" \
 THC_GHC_OUT="$PWD/build/runtime-services-export-concrete/ghc" \
-  compiler/export.sh -XHaskell2010 -iruntime \
+  bin/export-core.sh -XHaskell2010 -isrc/runtime \
     -fplugin-opt=THC.Plugin:post-tidy \
-    examples/THC/RuntimeServices.hs runtime/THC/Internal/JIT.hs
+    examples/THC/RuntimeServices.hs src/runtime/THC/Internal/JIT.hs
 ```
 
 The retained object is indexed by `target.symbol` for each of

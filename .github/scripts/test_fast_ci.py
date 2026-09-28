@@ -40,8 +40,6 @@ class FastRunnerTest(unittest.TestCase):
                          {"haskell": {"suites": ["driver-tests"], "count": 1}}))
         self.assertEqual(["primop-tools"], ci.haskell_suites(self.selection() |
                          {"haskell": {"suites": ["primop-tools"], "count": 1}}))
-        self.assertEqual(["json-index"], ci.haskell_suites(self.selection() |
-                         {"haskell": {"suites": ["json-index"], "count": 1}}))
         self.assertEqual(["compact-core-tests"], ci.haskell_suites(self.selection() |
                          {"haskell": {"suites": ["compact-core-tests"], "count": 1}}))
         with self.assertRaisesRegex(RuntimeError, "Haskell"):
@@ -269,7 +267,7 @@ class FastRunnerTest(unittest.TestCase):
 
     def test_matching_automation_job_reuses_only_its_complete_test_files(self):
         selected = {"python": {"commands": [["python3", path] for path in (
-            ".github/scripts/test_fast_select.py", "scripts/test-audit-core.py",
+            ".github/scripts/test_fast_select.py", "bin/test-audit-core.py",
             ".github/scripts/extra/test_nested.py")]}}
         all_commands = list(ci.python_commands(selected, "/python"))
         reused = list(ci.python_commands(selected, "/python", automation_checked=True))
@@ -515,7 +513,7 @@ class FastRunnerTest(unittest.TestCase):
     def test_non_driver_suites_run_without_building_driver_plugin(self):
         identity_path = self.root / "identity.json"
         identity_path.write_text(json.dumps({"platform": "linux", "toolchain": {}}))
-        for suite in ("primop-tools", "json-index", "compact-core-tests"):
+        for suite in ("primop-tools", "compact-core-tests"):
             selection = self.selection() | {"reasons": [], "python": {"commands": []},
                                             "haskell": {"suites": [suite], "count": 1}}
             for failed in (False, True):
@@ -575,7 +573,7 @@ class FastRunnerTest(unittest.TestCase):
                 patch.object(ci, "run_polyglot", return_value={"classes": ["example.PolyglotTest"]}) as optional:
             ci.execute(recorder, "HEAD", "HEAD", identity_path)
         optional.assert_called_once_with(recorder, selection)
-        self.assertEqual(run.call_args_list[2].args, ("javascript-demo", ["scripts/javascript-demo.sh"]))
+        self.assertEqual(run.call_args_list[2].args, ("javascript-demo", ["bin/javascript-demo.sh"]))
         self.assertTrue(recorder.data["passed"])
 
     def test_native_oracle_stdout_excludes_diagnostics(self):

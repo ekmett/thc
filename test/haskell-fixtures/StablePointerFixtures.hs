@@ -31,9 +31,9 @@ import System.Exit (die)
 import System.FilePath ((</>), takeExtension)
 
 source, nativeSource, certificate, directory :: FilePath
-source = "compiler/test-fixtures/StablePointerAudit.hs"
-nativeSource = "compiler/test-fixtures/SharedCAFNative.hs"
-certificate = "compiler/test-fixtures/SharedCAFOriginalCalls.json"
+source = "test/fixtures/compiler/StablePointerAudit.hs"
+nativeSource = "test/fixtures/compiler/SharedCAFNative.hs"
+certificate = "test/fixtures/compiler/SharedCAFOriginalCalls.json"
 directory = "build/stable-pointers"
 
 baseEntries, sharedEntries, entries :: [String]
@@ -191,7 +191,7 @@ prepareStablePointers root = do
         postTidy = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"]
         roots names = ["-fplugin-opt=THC.Plugin:closure=" ++ name | name <- names]
     _ <- run root [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> stageDir </> "ghc")]
-      "compiler/export.sh" (postTidy ++ roots baseEntries ++ [source]) ""
+      "bin/export-core.sh" (postTidy ++ roots baseEntries ++ [source]) ""
     mapM_ (\path -> do
       present <- doesFileExist (root </> path)
       unless present (die ("Missing genuine StablePtr Core export: " ++ path))) modules
@@ -199,7 +199,7 @@ prepareStablePointers root = do
     unless (exported == ["StablePointerAudit.json", "THC.InterfaceClosure.json"]) $
       die ("Unexpected StablePtr Core module inventory: " ++ show exported)
     _ <- run root [("THC_CORE_OUT", root </> sharedCore), ("THC_GHC_OUT", root </> stageDir </> "shared-ghc")]
-      "compiler/export.sh" (postTidy ++ roots sharedEntries ++ [nativeSource]) ""
+      "bin/export-core.sh" (postTidy ++ roots sharedEntries ++ [nativeSource]) ""
     exportedShared <- sort . filter ((== ".json") . takeExtension) <$> listDirectory (root </> sharedCore)
     unless (exportedShared == ["SharedCAFNative.json", "THC.InterfaceClosure.json"]) $
       die ("Unexpected shared-CAF Core module inventory: " ++ show exportedShared)
@@ -218,7 +218,7 @@ prepareStablePointers root = do
     _ <- forM entries $ \name -> do
       let report = stageDir </> name ++ ".audit.json"
           inputs = if name `elem` sharedEntries then sharedModules else modules
-      _ <- run root [] "python3" (["scripts/audit-core.py", "--entry", name, "--output", report] ++ inputs) ""
+      _ <- run root [] "python3" (["bin/audit-core.py", "--entry", name, "--output", report] ++ inputs) ""
       pure ()
     pure (stage, modules, sharedSource : sharedModules)
   let native = directory </> "native"
@@ -228,7 +228,7 @@ prepareStablePointers root = do
   createDirectoryIfMissing True (root </> native)
   writeFile (root </> driver) nativeDriver
   _ <- run root [] ghc ["--make", "-O2", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
-    "-i" ++ (root </> "compiler/test-fixtures"), "-odir", root </> native,
+    "-i" ++ (root </> "test/fixtures/compiler"), "-odir", root </> native,
     "-hidir", root </> native, root </> driver, "-o", executable] ""
   observations <- runWithTimeout (Just 30000000) root [] executable []
     (concat [name ++ "\t" ++ show x ++ "\n" | name <- entries, x <- values])
@@ -243,8 +243,8 @@ prepareStablePointers root = do
   writeFile (root </> oracle) observations
   let inputs = sort [source, nativeSource, certificate, "test/haskell-fixtures/StablePointerFixtures.hs",
         "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal",
-        "scripts/core-capabilities.json", "scripts/core_original_foreign.py", "scripts/audit-core.py",
-        "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh"]
+        "bin/core-capabilities.json", "bin/core_original_foreign.py", "bin/audit-core.py",
+        "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh"]
       artifacts = [driver, oracle] ++ concat
         [modules ++ sharedModules ++ [directory </> stage </> name ++ ".audit.json" | name <- entries]
           | (stage, modules, sharedModules) <- stages]

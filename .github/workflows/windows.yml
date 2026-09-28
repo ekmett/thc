@@ -21,6 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          submodules: true
           persist-credentials: false
       - uses: actions/setup-python@v6
         with:
@@ -32,9 +33,9 @@ jobs:
           $env:THC_PYTHON = (Get-Command python.exe).Source
           New-Item -ItemType Directory -Force build | Out-Null
           & {
-            . ./scripts/bootstrap-windows.ps1 -Prefix "$env:RUNNER_TEMP/thc-tools"
+            . ./bin/bootstrap-windows.ps1 -Prefix "$env:RUNNER_TEMP/thc-tools"
             Invoke-ThcTool $env:CABAL @('update')
-            & ./scripts/windows.ps1 -Action Test -Jobs 4
+            & ./bin/windows.ps1 -Action Test -Jobs 4
           } *>&1 | Tee-Object build/windows-ci.log
       - name: Preserve native evidence
         if: always()

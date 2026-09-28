@@ -38,7 +38,7 @@ in interpreted and first-installed compiled execution, without post-install
 warmup. Reproduce the check with:
 
 ```sh
-python3 scripts/prepare-simd-capability-smoke.py
+python3 bin/prepare-simd-capability-smoke.py
 ./gradlew --no-daemon test --tests thc.runtime.SimdCapabilitySmokeTest --tests thc.runtime.SimdFamiliesTest --rerun
 JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew --no-daemon test --tests thc.runtime.SimdCapabilitySmokeTest --tests thc.runtime.SimdFamiliesTest --rerun
 ```

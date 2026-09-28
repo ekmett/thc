@@ -43,7 +43,7 @@ For a narrow selection, `.github/scripts/fast-fixtures.json` names each required
 native/Core preparation group. Local stamps include the declared source bytes,
 toolchain identity and every output byte. Missing, changed or linked inputs or
 outputs cause preparation again. Unknown selected classes and full selections
-use `scripts/prepare-tests.sh` on a local receipt miss. A hit verifies the pinned
+use `bin/prepare-tests.sh` on a local receipt miss. A hit verifies the pinned
 source/toolchain identity, vendored source pins, and the exact paths, bytes and
 modes of the reviewed Core/native fixture outputs before reusing them. GHC
 objects/interfaces, JVM-generated sources and classes, and task state are outside this

@@ -21,8 +21,8 @@ exact raw JDK vectors.
 With the pinned environment and checkout's build lease:
 
 ```sh
-python3 scripts/test-int32x4-multiply-model.py
-python3 scripts/prepare-int32x4-multiply-audit.py
+python3 bin/test-int32x4-multiply-model.py
+python3 bin/prepare-int32x4-multiply-audit.py
 ./gradlew --max-workers=2 --continue \
   testDefault --tests 'thc.runtime.SimdInt32MultiplyTest' \
   testDense --tests 'thc.runtime.SimdInt32MultiplyTest'
@@ -43,7 +43,7 @@ proof mismatches; they are not original Core or native oracle inputs.
 `build/simd-int32x4-multiply/provenance.json` records commands, toolchain,
 source/artifact hashes, input domains, actual guest-root counts and mutation
 controls. `--export-only` emits pre-Tidy/model inputs with null native fields,
-not native or post-Tidy evidence. ARM preparation in `scripts/prepare-tests.sh`
+not native or post-Tidy evidence. ARM preparation in `bin/prepare-tests.sh`
 uses that mode.
 
 The JVM suite checks both backends, inlining modes and handoff configurations,

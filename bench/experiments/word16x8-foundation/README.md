@@ -12,7 +12,7 @@ The pinned GHC 9.14.1 surface comprises `packWord16X8#`,
 `negateWord16X8#`. Pack and unpack transport eight `Word16#` components,
 not eight `Int16#` components.
 
-After preparing native inputs with `scripts/prepare-word16x8-audit.py` and building
+After preparing native inputs with `bin/prepare-word16x8-audit.py` and building
 `installDist`, invoke the harness with the pinned Graal JDK and a new directory:
 
 ```sh

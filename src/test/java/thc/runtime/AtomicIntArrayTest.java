@@ -191,19 +191,19 @@ public class AtomicIntArrayTest {
         assertEquals("9.14.1", manifest.get("ghc"));
         assertEquals(new ArrayList<>(named.keySet()), manifest.get("entries"));
         var inputs = new HashSet<>(
-            List.of("compiler/test-fixtures/AtomicIntArrayAudit.hs", "test/haskell-fixtures/AtomicIntArrayFixtures.hs",
+            List.of("test/fixtures/compiler/AtomicIntArrayAudit.hs", "test/haskell-fixtures/AtomicIntArrayFixtures.hs",
                 "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal",
-                "scripts/core-capabilities.json", "scripts/audit-core.py", "compiler/build.sh", "compiler/export.sh",
-                "compiler/toolchain.sh", "compiler/plugin.py", "src/main/resources/thc/scalar-primop-signatures.json"));
-        try (var files = Files.list(root.resolve("compiler/THC"))) {
+                "bin/core-capabilities.json", "bin/audit-core.py", "bin/build-compiler.sh", "bin/export-core.sh",
+                "bin/toolchain.sh", "bin/plugin.py", "src/main/resources/thc/scalar-primop-signatures.json"));
+        try (var files = Files.list(root.resolve("src/compiler/THC"))) {
             files.filter(p -> p.getFileName().toString().endsWith(".hs"))
-                .forEach(p -> inputs.add("compiler/THC/" + p.getFileName()));
+                .forEach(p -> inputs.add("src/compiler/THC/" + p.getFileName()));
         }
-        try (var files = Files.list(root.resolve("scripts"))) {
+        try (var files = Files.list(root.resolve("bin"))) {
             files
                 .filter(
                     p -> p.getFileName().toString().startsWith("core_") && p.getFileName().toString().endsWith(".py"))
-                .forEach(p -> inputs.add("scripts/" + p.getFileName()));
+                .forEach(p -> inputs.add("bin/" + p.getFileName()));
         }assertEquals(inputs,((Map<?,?>)manifest.get("inputHashes")).keySet());
         var artifactNames = new HashSet<>(List.of("NativeAtomicIntArrays.hs", "requests.tsv", "oracle.tsv"));
         var commands = new ArrayList<>(List.of("native-build", "native-oracle"));

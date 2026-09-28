@@ -48,7 +48,7 @@ jobs:
             flags+=(--cpp-define=mingw32_HOST_OS)
           fi
           status=0
-          HLINT="$RUNNER_TEMP/hlint-3.10/hlint" bash scripts/lint-haskell.sh \
+          HLINT="$RUNNER_TEMP/hlint-3.10/hlint" bash bin/lint-haskell.sh \
             "${flags[@]}" > build/hlint/report.json || status=$?
           # Preserve the tool's exit status: 1 denotes findings, while launch or
           # configuration failures must not be folded into Make's exit status.

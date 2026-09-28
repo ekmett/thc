@@ -90,7 +90,7 @@ preparePackageNativeOriginals root = do
   driverHash <- hashFile driver
   libdir <- line . commandStdout <$> execute "ghc-libdir" [] ghc ["--print-libdir"]
   registry <- either fail pure . eitherDecodeStrict' . commandStdout =<< execute "plugin-unit" [] python
-    [root </> "compiler/plugin.py","--root",root,"--ghc-pkg",ghcPkg,"--registry-only"]
+    [root </> "bin/plugin.py","--root",root,"--ghc-pkg",ghcPkg,"--registry-only"]
   plugin <- field registry "unitId"
   pluginDb <- field registry "packageDb"
   sourceFiles <- files source
@@ -141,21 +141,21 @@ preparePackageNativeOriginals root = do
   forM_ primitiveLinked $ \(name,bytes) -> BS.writeFile (primitiveLinkedDirectory </> name) bytes
   compiled <- execute "digest-native-build" [] ghc
     ["-O1","-package-db",native </> "packagedb/ghc-9.14.1","-package-id",unit,
-     "compiler/test-fixtures/OriginalDigestNative.hs","-outputdir",output </> "oracle-objects",
+     "test/fixtures/compiler/OriginalDigestNative.hs","-outputdir",output </> "oracle-objects",
      "-o",output </> "digest-oracle"]
   oracle <- execute "digest-native-run" [] (output </> "digest-oracle") []
   unless (length (BSC.lines (commandStdout oracle)) == 270) (fail "original digest native row inventory differs")
   BS.writeFile (output </> "digest-native.tsv") (commandStdout oracle)
   erfCompiled <- execute "erf-native-build" [] ghc
     ["-O1","-package-db",native </> "packagedb/ghc-9.14.1","-package-id",erfUnit,
-     "compiler/test-fixtures/OriginalErfNative.hs","-outputdir",output </> "erf-oracle-objects",
+     "test/fixtures/compiler/OriginalErfNative.hs","-outputdir",output </> "erf-oracle-objects",
      "-o",output </> "erf-oracle"]
   erfOracle <- execute "erf-native-run" [] (output </> "erf-oracle") []
   unless (length (BSC.lines (commandStdout erfOracle)) == 88) (fail "original erf native row inventory differs")
   BS.writeFile (output </> "erf-native.tsv") (commandStdout erfOracle)
   primitiveCompiled <- execute "primitive-native-build" [] ghc
     ["-O1","-package-db",native </> "packagedb/ghc-9.14.1","-package-id",primitiveUnit,
-     "compiler/test-fixtures/OriginalPrimitiveNative.hs","-outputdir",output </> "primitive-oracle-objects",
+     "test/fixtures/compiler/OriginalPrimitiveNative.hs","-outputdir",output </> "primitive-oracle-objects",
      "-o",output </> "primitive-oracle"]
   primitiveOracle <- execute "primitive-native-run" [] (output </> "primitive-oracle") []
   unless (length (BSC.lines (commandStdout primitiveOracle)) == 720) (fail "original primitive native row inventory differs")
@@ -168,10 +168,10 @@ preparePackageNativeOriginals root = do
      "-package-db",pluginDb,"-plugin-package-id",plugin,"-fplugin=THC.Plugin","-fplugin-trustworthy",
      "-fplugin-opt=THC.Plugin:" ++ primitiveEntryOutput,"-fplugin-opt=THC.Plugin:post-tidy",
      "-fplugin-opt=THC.Plugin:unit-qualified","-fplugin-opt=THC.Plugin:foreign-import-provenance",
-     "-fwrite-if-simplified-core","-dcore-lint","compiler/test-fixtures/OriginalPrimitiveEntry.hs",
+     "-fwrite-if-simplified-core","-dcore-lint","test/fixtures/compiler/OriginalPrimitiveEntry.hs",
      "-outputdir",primitiveEntryOutput]
   primitiveAudited <- execute "primitive-entry-audit" [] "python3"
-    (["scripts/audit-core.py","--output",output </> "primitive-audit.json"] ++
+    (["bin/audit-core.py","--output",output </> "primitive-audit.json"] ++
      concatMap (\name -> ["--entry","original-primitive-entry:OriginalPrimitiveEntry." ++ name])
        ["signed16","unsigned16","signed64"] ++
      [primitiveEntryOutput </> "units/u-original-primitive-entry/OriginalPrimitiveEntry.json"] ++
@@ -184,20 +184,20 @@ preparePackageNativeOriginals root = do
      "-package-db",pluginDb,"-plugin-package-id",plugin,"-fplugin=THC.Plugin","-fplugin-trustworthy",
      "-fplugin-opt=THC.Plugin:" ++ entryOutput,"-fplugin-opt=THC.Plugin:post-tidy",
      "-fplugin-opt=THC.Plugin:unit-qualified","-fplugin-opt=THC.Plugin:foreign-import-provenance",
-     "-fwrite-if-simplified-core","-dcore-lint","compiler/test-fixtures/OriginalErfEntry.hs",
+     "-fwrite-if-simplified-core","-dcore-lint","test/fixtures/compiler/OriginalErfEntry.hs",
      "-outputdir",entryOutput]
   audited <- execute "erf-entry-audit" [] "python3"
-    (["scripts/audit-core.py","--output",output </> "erf-audit.json"] ++
+    (["bin/audit-core.py","--output",output </> "erf-audit.json"] ++
      concatMap (\name -> ["--entry","original-erf-entry:OriginalErfEntry." ++ name])
        ["erfDouble","erfcDouble","erfFloat","erfcFloat"] ++
      [erfLinkedDirectory </> "Data.Number.Erf.json",entryOutput </> "units/u-original-erf-entry/OriginalErfEntry.json"])
-  inputs <- hashes root ["compiler/test-fixtures/OriginalDigestNative.hs","compiler/test-fixtures/OriginalPrimitiveNative.hs",
-    "compiler/test-fixtures/OriginalPrimitiveEntry.hs",
-    "compiler/test-fixtures/OriginalErfNative.hs","compiler/test-fixtures/OriginalErfEntry.hs",
-    "test/haskell-fixtures/PackageNativeOriginalsFixtures.hs","compiler/plugin.py","src/THC/Driver/PackageNative.hs",
-    "src/THC/Driver/NativeArgumentBridge.hs",
-    "src/THC/Driver/NativeLibrarySources.hs","src/THC/Driver/GhcProxy.hs",
-    "scripts/audit-core.py","scripts/core_package_manifest.py","scripts/core-capabilities.json"]
+  inputs <- hashes root ["test/fixtures/compiler/OriginalDigestNative.hs","test/fixtures/compiler/OriginalPrimitiveNative.hs",
+    "test/fixtures/compiler/OriginalPrimitiveEntry.hs",
+    "test/fixtures/compiler/OriginalErfNative.hs","test/fixtures/compiler/OriginalErfEntry.hs",
+    "test/haskell-fixtures/PackageNativeOriginalsFixtures.hs","bin/plugin.py","src/driver/THC/Driver/PackageNative.hs",
+    "src/driver/THC/Driver/NativeArgumentBridge.hs",
+    "src/driver/THC/Driver/NativeLibrarySources.hs","src/driver/THC/Driver/GhcProxy.hs",
+    "bin/audit-core.py","bin/core_package_manifest.py","bin/core-capabilities.json"]
   artifacts <- hashes root ([relative </> "digest-native.tsv",relative </> "erf-native.tsv",relative </> "primitive-native.tsv",
     relative </> "erf-entry/units/u-original-erf-entry/OriginalErfEntry.json",relative </> "erf-audit.json",
     relative </> "primitive-entry/units/u-original-primitive-entry/OriginalPrimitiveEntry.json",relative </> "primitive-audit.json"] ++
@@ -218,13 +218,13 @@ preparePackageNativeOriginals root = do
   unless ("requires the configured zlib 1.2.11 header" `BSC.isInfixOf` commandStderr badHeader)
     (fail "configured zlib version negative control did not reach the provider's rejection")
   let altered = output </> "negative-source"
-      sourceTree = root </> "compiler/pinned-zlib/1.2.11"
+      sourceTree = root </> "third-party/pinned/zlib-1.2.11"
   pinned <- files sourceTree
   forM_ pinned $ \path -> do
     let destination = altered </> makeRelative root path
     createDirectoryIfMissing True (takeDirectory destination)
     copyFile path destination
-  appendFile (altered </> "compiler/pinned-zlib/1.2.11/adler32.c") "\n/* altered negative-control source */\n"
+  appendFile (altered </> "third-party/pinned/zlib-1.2.11/adler32.c") "\n/* altered negative-control source */\n"
   rejected <- tryIOError (zlibChecksumSources altered)
   case rejected of
     Left problem | "pinned zlib checksum source differs" `isInfixOf` show problem -> pure ()

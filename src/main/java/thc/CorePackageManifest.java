@@ -23,24 +23,15 @@ public final class CorePackageManifest {
         public TargetLayout getTargetLayout() { return targetLayout; } public String getManifestSha256() { return manifestSha256; }
         public String getManifestPath() { return manifestPath; } public String getForeignExceptionBridgeUnit() { return foreignExceptionBridgeUnit; }
     }
-    private static Map<?,?> moduleIndex(String id, Map<?,?> module) {
-        if (!module.containsKey("index")) return null;
-        var index = record(module.get("index"), "Invalid JSON index in GHC unit " + id);
-        require(index.keySet().equals(Set.of("path", "sha256")) && index.get("path") instanceof String && hash(index.get("sha256")),
-                "Invalid JSON index reference in " + id);
-        return index;
-    }
     private static List<String> inventory(String id, List<?> modules) {
         var paths = new ArrayList<String>();
         for (Object item : modules) {
             var module = record(item, "Invalid module record in GHC unit " + id);
             String name = text(module.get("path"), "Missing module path in " + id);
             var names = new ArrayList<String>(); names.add(name);
-            var index = moduleIndex(id, module);
-            if (index != null) names.add((String) index.get("path"));
             boolean valid = true;
             for (String path : names) if (!safeRelative(path) || Set.of("manifest.json", "inplace-manifest.json").contains(path)) { valid = false; break; }
-            require(valid, "Invalid module/index path in " + id + ": " + names);
+            require(valid, "Invalid module path in " + id + ": " + names);
             paths.addAll(names);
         }
         return paths;
@@ -132,7 +123,7 @@ public final class CorePackageManifest {
         if (manifest == null) throw new NoSuchElementException("Key manifest.json is missing in the map.");
         return new BundleContents(entries, bundleLayout(id, modules, verified.centralNames, new ArrayList<>(entries.keySet()), manifest, entries.get("inplace-manifest.json"), verifyArtifacts));
     }
-    @FunctionalInterface private interface BundleVisitor { void accept(Object item, byte[] bytes, byte[] indexBytes); }
+    @FunctionalInterface private interface BundleVisitor { void accept(Object item, byte[] bytes); }
     private static byte[] member(ZipInputStream zip, String id, String expected) throws IOException {
         var entry = zip.getNextEntry();
         if (entry == null) throw error("Missing ZIP entry in " + id + ": " + expected);
@@ -155,9 +146,7 @@ public final class CorePackageManifest {
             for (Object item : modules) {
                 var module = (Map<?,?>) item;
                 byte[] bytes = member(zip, id, (String) module.get("path"));
-                var reference = moduleIndex(id, module);
-                byte[] sidecar = reference == null ? null : member(zip, id, (String) reference.get("path"));
-                accept.accept(item, bytes, sidecar);
+                accept.accept(item, bytes);
             }
             require(zip.getNextEntry() == null, "ZIP entries differ from declared modules in " + id);
             return new OrderedVisit(layout);
@@ -176,7 +165,7 @@ public final class CorePackageManifest {
             unitScan: for (Object raw : units) if (raw instanceof Map<?,?> unit) {
                 if (unit.containsKey("json") || unit.containsKey("symbols")) { indexed = true; break; }
                 if (unit.get("modules") instanceof List<?> modules) for (Object item : modules)
-                    if (item instanceof Map<?,?> module && (module.containsKey("index") || module.containsKey("compact"))) { indexed = true; break unitScan; }
+                    if (item instanceof Map<?,?> module && module.containsKey("compact")) { indexed = true; break unitScan; }
             }
             if (!indexed && !forceDescriptor) return null;
             Object bridge = document.get("foreignExceptionBridgeUnit");
@@ -227,12 +216,12 @@ public final class CorePackageManifest {
                     require(validDepends && new HashSet<>(depends).size() == depends.size(),
                             "Invalid dependencies for GHC unit " + id);
                     var modules = list(unit.get("modules"), "Missing module list for GHC unit " + id);
-                    boolean needsInventory = unit.containsKey("bundle");
-                    if (!needsInventory) for (Object item : modules) if (item instanceof Map<?,?> module && module.containsKey("index")) { needsInventory = true; break; }
-                    List<String> paths = needsInventory ? inventory(id, modules) : List.of();
-                    require(new HashSet<>(paths).size() == paths.size(), "Duplicate module/index path in " + id);
+                    for (Object item : modules) require(!record(item, "Invalid module record in GHC unit " + id).containsKey("index"),
+                            "JSON .idx sidecars are no longer supported; regenerate unit " + id);
+                    List<String> paths = unit.containsKey("bundle") ? inventory(id, modules) : List.of();
+                    require(new HashSet<>(paths).size() == paths.size(), "Duplicate module path in " + id);
                     class Consumer {
-                        @SuppressWarnings("unchecked") void consume(Object item, byte[] bytes, byte[] indexBytes, boolean bundled) {
+                        @SuppressWarnings("unchecked") void consume(Object item, byte[] bytes, boolean bundled) {
                             var module = record(item, "Invalid module record in GHC unit " + id);
                             String name = text(module.get("name"), "Missing module name in GHC unit " + id);
                             require(!name.isEmpty() && seenModules.add(new ModuleIdentity(id, name)), "Duplicate GHC module: " + id + ":" + name);
@@ -242,14 +231,8 @@ public final class CorePackageManifest {
                             String expected = text(module.get("sha256"), "Missing SHA-256 for " + id + ":" + name);
                             require(hash(expected), "Invalid SHA-256 for " + id + ":" + name);
                             if (verifyArtifacts) require(digest(bytes).equals(expected), "Core package artifact hash mismatch: " + id + ":" + name + " at " + relative);
-                            var reference = moduleIndex(id, module);
-                            CoreJsonIndex sourceIndex = null;
-                            if (reference != null) {
-                                require(indexBytes != null && (!verifyArtifacts || Objects.equals(digest(indexBytes), reference.get("sha256"))),
-                                        "Core JSON index hash mismatch: " + id + ":" + name + " at " + reference.get("path"));
-                                sourceIndex = CoreJsonIndex.loadSidecar(bytes, new ByteArrayInputStream(indexBytes), verifyArtifacts);
-                                opened.add(sourceIndex);
-                            }
+                            CoreJsonIndex sourceIndex = materializeText ? null : CoreJsonIndex.fromBytes(bytes);
+                            if (sourceIndex != null) opened.add(sourceIndex);
                             String text = sourceIndex == null || materializeText ? new String(bytes, StandardCharsets.UTF_8) : "";
                             Map<String,Object> source = sourceIndex != null && !materializeText ? adapter.module(sourceIndex.getRoot()) :
                                     (Map<String,Object>) record(Json.parse(text), "Invalid Core package artifact: " + relative);
@@ -273,19 +256,16 @@ public final class CorePackageManifest {
                     if (unit.containsKey("bundle")) {
                         var bundleRecord = record(unit.get("bundle"), "Invalid ZIP bundle for " + id);
                         var verified = verifiedBundle(id, bundleRecord, verifyArtifacts);
-                        var ordered = orderedBundle(id, verified, modules, verifyArtifacts, (item, bytes, sidecar) -> consumer.consume(item, bytes, sidecar, true));
+                        var ordered = orderedBundle(id, verified, modules, verifyArtifacts, (item, bytes) -> consumer.consume(item, bytes, true));
                         if (ordered != null) unitLayout = ordered.targetLayout;
                         else {
                             var fallback = bundle(id, verified, modules, verifyArtifacts);
                             for (Object item : modules) {
                                 var module = item instanceof Map<?,?> fields ? fields : null;
                                 String relative = text(module == null ? null : module.get("path"), "Missing module path in " + id);
-                                var reference = moduleIndex(id, module);
-                                byte[] sidecar = reference == null ? null : fallback.entries.get(reference.get("path"));
-                                if (reference != null && sidecar == null) throw error("Missing ZIP JSON index in " + id + ": " + reference.get("path"));
                                 byte[] bytes = fallback.entries.get(relative);
                                 if (bytes == null) throw error("Missing ZIP module in " + id + ": " + relative);
-                                consumer.consume(item, bytes, sidecar, true);
+                                consumer.consume(item, bytes, true);
                             }
                             unitLayout = fallback.targetLayout;
                         }
@@ -293,9 +273,7 @@ public final class CorePackageManifest {
                         for (Object item : modules) {
                             var module = item instanceof Map<?,?> fields ? fields : null;
                             String relative = text(module == null ? null : module.get("path"), "Missing module path in " + id);
-                            var reference = moduleIndex(id, module);
-                            byte[] sidecar = reference == null ? null : artifact(root, (String) reference.get("path"));
-                            consumer.consume(item, artifact(root, relative), sidecar, false);
+                            consumer.consume(item, artifact(root, relative), false);
                         }
                         unitLayout = null;
                     }

@@ -69,7 +69,7 @@ from its generated source locations to the actual tracked Java files and line
 numbers at the full Git revision. Duplicate `src-html` copies are not published;
 unknown source-link shapes or untracked source targets fail assembly.
 Haddock declaration source links use that same full commit ID. The two Haddock
-invocations use their actual `compiler/` and `runtime/` source roots; neither
+invocations use their actual `src/compiler/` and `src/runtime/` source roots; neither
 library's links are redirected into the other. Each of the three partial builds
 records that ID, and assembly refuses references from a different revision.
 Commit edits before producing a publishable site: a local dirty build is useful
@@ -77,7 +77,7 @@ for preview but its GitHub links necessarily describe the committed source.
 
 ## What gets published
 
-`tools/docs/Main.hs` contains the guide allowlist and assembles the site using
+`src/tools/docs/Main.hs` contains the guide allowlist and assembles the site using
 Pandoc and TagSoup. The Markdown files remain their single editable source.
 Links to omitted guides, code, benchmark reports and evidence point to that
 exact revision in the public repository. There is no recursive `docs/` copy;

@@ -41,7 +41,7 @@ def main():
         for path, sha in before.items():
             committed = subprocess.check_output(['git', 'show', revision + ':' + path], cwd=ROOT)
             assert hashlib.sha256(committed).hexdigest() == sha, 'Commit runtime source before capture: ' + path
-        subprocess.run(['python3', ROOT / 'scripts/prepare-empty-tuple-input-audit.py', '--check-only'], cwd=ROOT, check=True)
+        subprocess.run(['python3', ROOT / 'bin/prepare-empty-tuple-input-audit.py', '--check-only'], cwd=ROOT, check=True)
         with (output / 'installDist.log').open('w') as log:
             subprocess.run([ROOT / 'gradlew', '--no-daemon', 'installDist'], cwd=ROOT,
                            stdout=log, stderr=subprocess.STDOUT, check=True)

@@ -30,7 +30,7 @@ prepareOriginalStrerror root = do
   let directory = "build/original-strerror"
       native = directory </> "native"
       binary = native </> "oracle"
-      source = "compiler/test-fixtures/OriginalStrerrorNative.hs"
+      source = "test/fixtures/compiler/OriginalStrerrorNative.hs"
       execute = runLogged 120 root (directory </> "logs")
   createDirectoryIfMissing True (root </> native)
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"

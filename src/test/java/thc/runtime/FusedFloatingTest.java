@@ -142,12 +142,12 @@ class FusedFloatingTest {
     private void provenance() throws Exception { provenance(json(new File(directory, "manifest.json"))); }
     private void provenance(Map<String, Object> manifest) throws Exception {
         require(manifest.keySet().equals(Set.of("schema", "ghc", "ghcInfo", "installedArtifactsHashed", "nativeFlags", "entries", "stages", "nativeRows", "inputHashes", "artifactHashes")));
-        var inputs = new HashSet<>(list("compiler/test-fixtures/FloatingAudit.hs", "compiler/test-fixtures/FloatingAuditNative.hs", "thc.cabal",
+        var inputs = new HashSet<>(list("test/fixtures/compiler/FloatingAudit.hs", "test/fixtures/compiler/FloatingAuditNative.hs", "thc.cabal",
             "test/haskell-fixtures/Main.hs", "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/FusedFloatingFixtures.hs",
-            "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py", "scripts/audit-core.py",
-            "scripts/core-capabilities.json", "src/main/resources/thc/scalar-primop-signatures.json"));
-        for (var file : Objects.requireNonNull(new File(root, "compiler/THC").listFiles())) if (file.getName().endsWith(".hs")) inputs.add("compiler/THC/" + file.getName());
-        for (var file : Objects.requireNonNull(new File(root, "scripts").listFiles())) if (file.getName().startsWith("core_") && file.getName().endsWith(".py")) inputs.add("scripts/" + file.getName());
+            "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py", "bin/audit-core.py",
+            "bin/core-capabilities.json", "src/main/resources/thc/scalar-primop-signatures.json"));
+        for (var file : Objects.requireNonNull(new File(root, "src/compiler/THC").listFiles())) if (file.getName().endsWith(".hs")) inputs.add("src/compiler/THC/" + file.getName());
+        for (var file : Objects.requireNonNull(new File(root, "bin").listFiles())) if (file.getName().startsWith("core_") && file.getName().endsWith(".py")) inputs.add("bin/" + file.getName());
         var artifacts = new HashSet<>(list("build/fused-floating/oracle.tsv"));
         for (var stage : list("pre", "post")) { artifacts.add("build/fused-floating/" + stage + "-core/FloatingAudit.json"); artifacts.add("build/fused-floating/" + stage + "-audit.json"); }
         require(object(manifest.get("inputHashes")).keySet().equals(inputs)); require(object(manifest.get("artifactHashes")).keySet().equals(artifacts));

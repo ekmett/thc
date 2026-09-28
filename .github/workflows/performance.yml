@@ -51,11 +51,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7.0.1
         with:
+          submodules: true
           persist-credentials: false
       - name: Check out original runtime separately
         if: inputs.suite == 'standard'
         uses: actions/checkout@v7.0.1
         with:
+          submodules: true
           ref: 4c116a8493eafad4077a1c5eb9c046bff56fe3c4
           path: work/ci-baseline-checkout
           persist-credentials: false
@@ -100,7 +102,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          scripts/try-map.sh 2>&1 | tee work/ci-performance/logs/current-build.log
+          bin/try-map.sh 2>&1 | tee work/ci-performance/logs/current-build.log
           python3 tools/test-compare-map-runtimes.py
           python3 tools/test-ci-performance.py
       - name: Build original runtime in isolated checkout

@@ -149,8 +149,8 @@ prepareScalarBitCasts :: FilePath -> IO ()
 prepareScalarBitCasts root = do
   let directory = "build/scalar-bitcasts"
       output = root </> directory
-      source = "compiler/test-fixtures/ScalarBitCastAudit.hs"
-      driver = "compiler/test-fixtures/ScalarBitCastNative.hs"
+      source = "test/fixtures/compiler/ScalarBitCastAudit.hs"
+      driver = "test/fixtures/compiler/ScalarBitCastNative.hs"
       manifest = output </> "manifest.json"
       logs = directory </> "commands"
       native = directory </> "native"
@@ -169,7 +169,7 @@ prepareScalarBitCasts root = do
     _ -> die "Scalar bitcasts require native 64-bit GHC"
   -- Aeson preserves the capability document's unsigned 64-bit bounds; the JVM
   -- Core transport reader intentionally accepts only signed Long numbers.
-  capabilities <- readJson (root </> "scripts/core-capabilities.json")
+  capabilities <- readJson (root </> "bin/core-capabilities.json")
   primitiveArities <- field "primitives" capabilities :: IO (Map.Map String Int)
   let bitcastArities = Map.filterWithKey (\name _ -> name `elem` bitcastPrimitives) primitiveArities
   unless (bitcastArities == Map.fromList [(name,1) | name <- bitcastPrimitives])
@@ -177,14 +177,14 @@ prepareScalarBitCasts root = do
   stages <- forM ["pre","post"] $ \stage -> do
     exported <- runLogged 300 root logs (stage ++ "-export")
       [("THC_CORE_OUT",output </> stage ++ "-core"),("THC_GHC_OUT",output </> stage ++ "-ghc")]
-      "compiler/export.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source])
+      "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source])
     let corePath = directory </> stage ++ "-core/ScalarBitCastAudit.json"
     core <- readJson (root </> corePath)
     reports <- forM entries $ \name -> do
       let reportPath = directory </> stage ++ "-" ++ name ++ "-audit.json"
       -- The existing shared Python auditor remains the capability proof.
       command <- runLogged 120 root logs (stage ++ "-" ++ name ++ "-audit") [] "python3"
-        ["scripts/audit-core.py",corePath,"--entry",name,"--output",reportPath]
+        ["bin/audit-core.py",corePath,"--entry",name,"--output",reportPath]
       report <- readJson (root </> reportPath)
       accepted <- field "accepted" report
       issues <- field "issues" report :: IO [Value]
@@ -202,7 +202,7 @@ prepareScalarBitCasts root = do
     (die "Changed scalar bitcast input corpus")
   writeFile (root </> requestPath) (unlines [name ++ "\t" ++ show x | (name,x) <- requests])
   compiled <- runLogged 300 root logs "native-build" [] ghc
-    ["--make","-O2","-fforce-recomp","-dcore-lint","-dstg-lint","-icompiler/test-fixtures",
+    ["--make","-O2","-fforce-recomp","-dcore-lint","-dstg-lint","-itest/fixtures/compiler",
      "-odir",root </> native,"-hidir",root </> native,driver,"-o",root </> binary]
   executed <- runLoggedWithInput requestPath 120 root logs "native-oracle" [] (root </> binary) []
   let parse line = case splitTab line of
@@ -215,15 +215,15 @@ prepareScalarBitCasts root = do
     (result == if "float" `isPrefixOf` name then x .&. 0xffffffff else signed64 x)
     (die ("Scalar bitcast native bits disagree: " ++ show (name,x,result)))
   BS.writeFile (output </> "oracle.tsv") (commandStdout executed)
-  plugins <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
+  plugins <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
   let sources = sort $ [source,driver,"thc.cabal","test/haskell-fixtures/Main.hs",
         "test/haskell-fixtures/FixtureSupport.hs","test/haskell-fixtures/ScalarBitCastFixtures.hs",
-        "scripts/core-capabilities.json","scripts/audit-core.py","tools/primops/PrimopTools.hs",
-        "src/main/resources/thc/scalar-primop-signatures.json","compiler/build.sh","compiler/export.sh",
-        "compiler/toolchain.sh","compiler/plugin.py"] ++
-        ["compiler/THC" </> name | name <- plugins, takeExtension name == ".hs"] ++
-        ["scripts" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"]
+        "bin/core-capabilities.json","bin/audit-core.py","src/tools/primops/PrimopTools.hs",
+        "src/main/resources/thc/scalar-primop-signatures.json","bin/build-compiler.sh","bin/export-core.sh",
+        "bin/toolchain.sh","bin/plugin.py"] ++
+        ["src/compiler/THC" </> name | name <- plugins, takeExtension name == ".hs"] ++
+        ["bin" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"]
       artifacts = [requestPath,binary,directory </> "oracle.tsv"] ++ commandArtifacts compiled ++ commandArtifacts executed ++
         concat [paths ++ concat [more | (_,_,_,_,more) <- reports] | (_,_,reports,paths) <- stages]
   inputHashes <- hashes root sources

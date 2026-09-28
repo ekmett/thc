@@ -32,7 +32,7 @@ entries = ["captureOriginal", "decodeOriginal", "renderOriginal", "peekOriginalI
            "lookupOriginalIPE", "peekOriginalInfoProv"]
 
 proofResource :: FilePath
-proofResource = "compiler/test-fixtures/OriginalStackProof.json"
+proofResource = "test/fixtures/compiler/OriginalStackProof.json"
 
 prepareOriginalStack :: FilePath -> IO ()
 prepareOriginalStack root = do
@@ -53,8 +53,8 @@ prepareOriginalStack root = do
   unless (BS.words (commandStdout version) == ["9.14.1"]) (die "Original stack fixture requires GHC 9.14.1")
   revision <- run "thc-revision" [] "git" ["rev-parse", "HEAD"]
 
-  let source = "compiler/test-fixtures/OriginalStackAudit.hs"
-      driver = "compiler/test-fixtures/OriginalStackAuditNative.hs"
+  let source = "test/fixtures/compiler/OriginalStackAudit.hs"
+      driver = "test/fixtures/compiler/OriginalStackAuditNative.hs"
   stages <- forM ["pre", "post"] $ \stage -> do
     let core = directory </> stage ++ "-core"
         options = ["-package", "ghc-internal"] ++
@@ -62,7 +62,7 @@ prepareOriginalStack root = do
           map ("-fplugin-opt=THC.Plugin:closure=" ++) entries ++ [source]
     result <- run (stage ++ "-export")
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> directory </> stage ++ "-ghc")]
-      "compiler/export.sh" options
+      "bin/export-core.sh" options
     paths <- map (core </>) . sort <$> listDirectory (root </> core)
     let json = filter (\p -> reverse (take 5 (reverse p)) == ".json") paths
     unless (core </> "OriginalStackAudit.json" `elem` json) (die "Missing original stack consumer export")
@@ -73,7 +73,7 @@ prepareOriginalStack root = do
   createDirectoryIfMissing True (root </> native)
   compile <- run "native-compile" [] ghc
     ["--make", "-O2", "-fforce-recomp", "-dcore-lint", "-dstg-lint", "-g", "-finfo-table-map",
-     "-package", "ghc-internal", "-i" ++ root </> "compiler/test-fixtures",
+     "-package", "ghc-internal", "-i" ++ root </> "test/fixtures/compiler",
      "-odir", root </> native, "-hidir", root </> native, root </> driver, "-o", root </> executable]
   nativeRun <- run "native-invariants" [] (root </> executable) []
 
@@ -82,9 +82,9 @@ prepareOriginalStack root = do
         concatMap commandArtifacts commands
       sources = [source, driver, "test/haskell-fixtures/StackFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
         "test/haskell-fixtures/Main.hs", "thc.cabal", proofResource,
-        "compiler/export.sh", "compiler/build.sh", "compiler/toolchain.sh", "compiler/THC/Plugin.hs",
-        "compiler/THC/CBV.hs", "compiler/THC/Demands.hs", "compiler/THC/Sources.hs", "compiler/THC/Wired.hs", "compiler/plugin.py",
-        "compiler/pinned-ghc-internal/LICENSE"] ++ map ("compiler/pinned-ghc-internal/" ++)
+        "bin/export-core.sh", "bin/build-compiler.sh", "bin/toolchain.sh", "src/compiler/THC/Plugin.hs",
+        "src/compiler/THC/CBV.hs", "src/compiler/THC/Demands.hs", "src/compiler/THC/Sources.hs", "src/compiler/THC/Wired.hs", "bin/plugin.py",
+        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE"] ++ map ("third-party/pinned/ghc-9.14.1/libraries/ghc-internal/" ++)
         ["GHC/Internal/Stack/CloneStack.hs", "GHC/Internal/Stack/Decode.hs",
          "GHC/Internal/InfoProv/Types.hsc", "GHC/Internal/Heap/InfoTable.hsc"]
   proofHash <- hashFile (root </> proofResource)
@@ -109,19 +109,19 @@ exportOriginalStackSource :: FilePath -> FilePath -> IO ()
 exportOriginalStackSource root directory = do
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
   ghcPkg <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
-  let sourceRoot = root </> "compiler/pinned-ghc-internal"
+  let sourceRoot = root </> "third-party/pinned/ghc-9.14.1/libraries/ghc-internal"
   mapM_ (\(path, expected) -> do
     observed <- hashFile (sourceRoot </> path)
     unless (observed == expected) (die ("Changed pinned original source: " ++ path))) Wired.sourceHashes
   let field name = do
-        output <- FixtureSupport.run root [] "python3" ["compiler/plugin.py", "--field", name] ""
+        output <- FixtureSupport.run root [] "python3" ["bin/plugin.py", "--field", name] ""
         case lines output of
           [value] | not (null value) -> pure value
           _ -> die ("Invalid plugin field: " ++ name)
   library <- field "sharedLibrary"
   unit <- field "unitId"
   generated <- Wired.exportPinnedCore sourceRoot ghc ghcPkg library unit
-    (root </> "compiler/target-layout.c") (root </> directory)
+    (root </> "src/driver/cbits/target-layout.c") (root </> directory)
   writeJson (root </> directory </> "generated.json") $ object
     ["sources" .= map (\(original, path) -> (original, makeRelative root path)) (Wired.generatedSources generated),
      "targetLayout" .= makeRelative root (Wired.targetLayout generated)]
@@ -143,7 +143,7 @@ prepareOriginalStackFormatter root = do
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
   version <- command "ghc-version" [] ghc ["--numeric-version"]
   unless (BS.words (commandStdout version) == ["9.14.1"]) (die "Original formatter requires GHC 9.14.1")
-  plugin <- command "plugin-build" [] "compiler/build.sh" []
+  plugin <- command "plugin-build" [] "bin/build-compiler.sh" []
   executable <- getExecutablePath
   -- The cold, serial export of all 54 pinned modules can exceed five minutes
   -- on CI; keep the other formatter commands on their shorter limit.
@@ -151,13 +151,13 @@ prepareOriginalStackFormatter root = do
     ["original-stack-source-export", directory </> "originals"]
   let coreRoot = directory </> "originals/core"
   originals <- map (coreRoot </>) . sort . filter ((== ".json") . takeExtension) <$> listDirectory (root </> coreRoot)
-  let source = "compiler/test-fixtures/OriginalStackFormatter.hs"
-      native = "compiler/test-fixtures/OriginalStackFormatterNative.hs"
+  let source = "test/fixtures/compiler/OriginalStackFormatter.hs"
+      native = "test/fixtures/compiler/OriginalStackFormatterNative.hs"
   stages <- forM ["pre", "post"] $ \stage -> do
     let core = directory </> stage ++ "-core"
     exported <- command (stage ++ "-export")
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> directory </> stage ++ "-ghc")]
-      "compiler/export.sh" (["-package", "ghc-internal", "-fignore-interface-pragmas"] ++
+      "bin/export-core.sh" (["-package", "ghc-internal", "-fignore-interface-pragmas"] ++
         ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source])
     pure (stage, core </> "OriginalStackFormatter.json", exported)
   let nativeDirectory = directory </> "native"
@@ -165,28 +165,28 @@ prepareOriginalStackFormatter root = do
   createDirectoryIfMissing True (root </> nativeDirectory)
   compiled <- command "native-compile" [] ghc
     ["--make", "-O2", "-fignore-interface-pragmas", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
-     "-package", "ghc-internal", "-i" ++ root </> "compiler/test-fixtures",
+     "-package", "ghc-internal", "-i" ++ root </> "test/fixtures/compiler",
      "-odir", root </> nativeDirectory, "-hidir", root </> nativeDirectory,
      root </> native, "-o", root </> binary]
   observed <- command "native-observations" [] (root </> binary) []
   audits <- forM stages $ \(stage, consumer, _) -> do
     let output = directory </> stage ++ "-audit.json"
     audited <- command (stage ++ "-audit") [] "python3"
-      (["scripts/audit-core.py", "--entry", "formatOriginal", "--output", output, consumer] ++ originals)
+      (["bin/audit-core.py", "--entry", "formatOriginal", "--output", output, consumer] ++ originals)
     pure (output, audited)
-  scriptNames <- listDirectory (root </> "scripts")
+  scriptNames <- listDirectory (root </> "bin")
   let generatedSources = [directory </> "originals/generated" </> replaceExtension path "hs" |
         (path,_) <- Wired.moduleSources, takeExtension path == ".hsc"]
       layout = directory </> "originals/target-layout.json"
       commands = [version, plugin, sourceExport] ++ [result | (_,_,result) <- stages] ++
         [compiled, observed] ++ map snd audits
       inputs = [source,native,"test/haskell-fixtures/StackFixtures.hs","test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs","thc.cabal","src/THC/Driver/Wired.hs","compiler/target-layout.c",
-        "compiler/export.sh","compiler/build.sh","compiler/toolchain.sh","compiler/plugin.py",
-        "compiler/THC/Plugin.hs","compiler/THC/CBV.hs","compiler/THC/Demands.hs","compiler/THC/Sources.hs","compiler/THC/Wired.hs",
-        "scripts/audit-core.py","scripts/core-capabilities.json","src/main/resources/thc/scalar-primop-signatures.json"] ++
-        map (("compiler/pinned-ghc-internal/" ++) . fst) Wired.sourceHashes ++
-        ["scripts" </> name | name <- sort scriptNames, "core_" `isPrefixOf` name, ".py" `isSuffixOf` name]
+        "test/haskell-fixtures/Main.hs","thc.cabal","src/driver/THC/Driver/Wired.hs","src/driver/cbits/target-layout.c",
+        "bin/export-core.sh","bin/build-compiler.sh","bin/toolchain.sh","bin/plugin.py",
+        "src/compiler/THC/Plugin.hs","src/compiler/THC/CBV.hs","src/compiler/THC/Demands.hs","src/compiler/THC/Sources.hs","src/compiler/THC/Wired.hs",
+        "bin/audit-core.py","bin/core-capabilities.json","src/main/resources/thc/scalar-primop-signatures.json"] ++
+        map (("third-party/pinned/ghc-9.14.1/libraries/ghc-internal/" ++) . fst) Wired.sourceHashes ++
+        ["bin" </> name | name <- sort scriptNames, "core_" `isPrefixOf` name, ".py" `isSuffixOf` name]
       artifacts = originals ++ [path | (_,path,_) <- stages] ++ [binary] ++ map fst audits ++
         concatMap commandArtifacts commands ++ generatedSources ++ [layout, directory </> "originals/generated.json"]
   sourceHashes <- hashes root inputs

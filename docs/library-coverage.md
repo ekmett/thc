@@ -3,7 +3,7 @@
 The library workload sources use ordinary public containers APIs. They are
 compiled from the same unmodified, SHA256-verified containers-0.8 source archive
 as the Map example. No library operation is a JVM builtin. The supported/frontier
-labels below describe the exact bundles prepared by `scripts/prepare-library-tests.py`,
+labels below describe the exact bundles prepared by `bin/prepare-library-tests.py`,
 not every possible complete-Core provider or every API in those packages.
 
 ## Data.Set Int: explicit unsupported frontier
@@ -128,7 +128,7 @@ existing compiler limits and no added settling or recovery phase.
 
 ## Running the checks
 
-Run `scripts/try-libraries.sh` with the pinned GHC and GraalVM environments.
+Run `bin/try-libraries.sh` with the pinned GHC and GraalVM environments.
 Reports are under `build/libraries/`: per-bundle source provenance and strict
 audits, `oracle.tsv`, `oracle-validation.json`, `cases.json`, and explicit AST
 and bytecode check logs. Input and artifact fingerprints reject stale examples,
@@ -148,7 +148,7 @@ Linux/macOS library CI step prepares all groups and runs both explicit backends
 with handoff disabled and enabled; no separate opt-in is needed.
 
 To additionally exercise opt-in dense handoff, run
-`JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true scripts/try-libraries.sh`.
+`JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true bin/try-libraries.sh`.
 The script launches fresh LibraryCheck processes for both backends regardless of
 Gradle task caching. For the JVM unit suite's explicit per-mode forks, use the
 [`testDefault`/`testDense` recipe](contributing.md#build-and-test).
@@ -217,7 +217,7 @@ sentinel, including both split parts, all 256 byte patterns, empty inputs and
 negative/oversized machine-width counts. The AST/bytecode tests cover inlined
 and residual calls, actual compiled entries, original/active target validity
 and released result/argument storage. Preparation is
-`python3 scripts/prepare-short-bytes-slices.py`; its `--check-only` mode verifies hashes,
+`python3 bin/prepare-short-bytes-slices.py`; its `--check-only` mode verifies hashes,
 all native rows and the exact strict audits.
 
 Within this prepared slice bundle, `append`/`concat` remain strict frontiers

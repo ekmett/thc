@@ -38,7 +38,7 @@ promises support for arbitrary Cabal packages. The
 [Cabal guide](cabal.md) and [driver guide](driver.md) describe target selection,
 caching, installed-library providers and platform limits.
 
-The [exporter](../compiler/README.md) serializes executable trees directly from
+The [exporter](../docs/compiler.md) serializes executable trees directly from
 the pinned GHC API, not from pretty-printed Core. Source fixtures can use the
 optimized pre-Tidy boundary; package manifests require post-Tidy Core before
 CorePrep. Both retain representation and evaluation evidence needed by lowering.
@@ -61,7 +61,7 @@ continuation coverage are not interchangeable merely because values are shared.
 See the [bytecode guide](bytecode.md) and
 [JVM implementation reference introduction](site/jvm.md).
 
-An optional [JSON sidecar](core-package-manifest.md#optional-json-indexes-and-lazy-loading)
+[In-memory JSON navigation](core-package-manifest.md#json-navigation-and-lazy-loading)
 lets either backend project fields from retained JSON bytes and prepare eligible
 top-level functions and thunks on demand. File verification is opt-in; source
 snapshotting, header indexing and dependency discovery still do eager work. The selected entry is

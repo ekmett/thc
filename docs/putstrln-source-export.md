@@ -23,12 +23,12 @@ Set `GHC_SOURCE` to the official source checkout. Put the pinned toolchain on
 same installation's bindir. From the THC repository root:
 
 ```sh
-python3 scripts/putstrln_hsc.py --ghc-source "$GHC_SOURCE"
-python3 scripts/putstrln_export.py --ghc-source "$GHC_SOURCE" \
+python3 bin/putstrln_hsc.py --ghc-source "$GHC_SOURCE"
+python3 bin/putstrln_export.py --ghc-source "$GHC_SOURCE" \
   --generated-manifest build/putstrln-generated/provenance.json \
   --rounds 8 --max-modules 30
-python3 scripts/putstrln_inventory.py build/putstrln-source-only
-python3 scripts/test-putstrln-export.py
+python3 bin/putstrln_inventory.py build/putstrln-source-only
+python3 bin/test-putstrln-export.py
 ```
 
 Every output directory must be fresh; `--out` selects a different directory for
@@ -49,7 +49,7 @@ ordinary imported interface bodies were admitted. The full 112-module research
 closure was not rebuilt for this packaging change.
 
 Every export builds its own plugin under `out/plugin` using snapshots of this
-checkout's `compiler/THC/*.hs`, forced fresh objects and the configured GHC.
+checkout's `src/compiler/THC/*.hs`, forced fresh objects and the configured GHC.
 There is no external `--plugin` option and no package registration. The recipe
 records the exact source and binary hashes, command and exit, and checks the
 captured sources/binary before and after use and again during inventory. A stale

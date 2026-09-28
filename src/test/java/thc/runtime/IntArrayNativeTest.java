@@ -269,9 +269,9 @@ public class IntArrayNativeTest {
     @EnabledOnOs(OS.WINDOWS)
     public void nativeWindowsOracleRunsFromAPathContainingSpaces(@TempDir Path temporary) throws Exception {
         var inputs = (Map<String, String>) manifest().get("inputHashes");
-        assertTrue(inputs.containsKey("compiler/export.ps1"));
-        assertTrue(inputs.containsKey("scripts/windows-common.ps1"));
-        assertFalse(inputs.containsKey("compiler/export.sh"));
+        assertTrue(inputs.containsKey("bin/export-core.ps1"));
+        assertTrue(inputs.containsKey("bin/windows-common.ps1"));
+        assertFalse(inputs.containsKey("bin/export-core.sh"));
         var executable = Files.copy(root.resolve("build/int-arrays/native/int-array-oracle.exe"),
             temporary.resolve("native array oracle.exe"));
         var expected = Files.readAllLines(root.resolve("build/int-arrays/oracle.tsv")).getFirst();

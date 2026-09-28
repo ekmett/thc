@@ -58,7 +58,7 @@ preparePackageNativeArchives root = do
       wrapper = output </> ("ghc-proxy-" ++ key) <.> "sh"
   libdir <- line . commandStdout <$> execute "ghc-libdir" [] ghc ["--print-libdir"]
   registry <- either fail pure . eitherDecodeStrict' . commandStdout =<< execute "plugin-unit" [] python
-    [root </> "compiler/plugin.py","--root",root,"--ghc-pkg",ghcPkg,"--registry-only"]
+    [root </> "bin/plugin.py","--root",root,"--ghc-pkg",ghcPkg,"--registry-only"]
   plugin <- field registry "unitId"
   pluginDb <- field registry "packageDb"
   writeFile wrapper ("#!/bin/sh\n" ++ ghcProxyCommand)
@@ -97,7 +97,7 @@ preparePackageNativeArchives root = do
       createDirectoryIfMissing True (takeDirectory (root </> path))
       BS.writeFile (root </> path) bytes
       pure path)
-  let audit entry label = ["scripts/audit-core.py","--entry",entry,"--output",output </> label <.> "json"] ++ map (root </>) linked
+  let audit entry label = ["bin/audit-core.py","--entry",entry,"--output",output </> label <.> "json"] ++ map (root </>) linked
       mixed = mixedUnit ++ ":Mixed."
   accepted <- execute "supported-audit" [] "python3" (audit (mixed ++ "allowed") "supported-audit")
   mixedWidth <- execute "mixed-width-audit" [] "python3"
@@ -121,10 +121,10 @@ preparePackageNativeArchives root = do
       pure rejected
   sources <- files (root </> fixture)
   inputs <- hashes root (map (makeRelative root) sources ++
-    ["test/haskell-fixtures/PackageNativeArchiveFixtures.hs","compiler/plugin.py","src/THC/Driver/PackageNative.hs",
-     "src/THC/Driver/NativeArgumentBridge.hs",
-     "src/THC/Driver/NativeLibrarySources.hs",
-     "scripts/core_package_manifest.py","scripts/audit-core.py"])
+    ["test/haskell-fixtures/PackageNativeArchiveFixtures.hs","bin/plugin.py","src/driver/THC/Driver/PackageNative.hs",
+     "src/driver/THC/Driver/NativeArgumentBridge.hs",
+     "src/driver/THC/Driver/NativeLibrarySources.hs",
+     "bin/core_package_manifest.py","bin/audit-core.py"])
   artifacts <- hashes root (linked ++ [relative </> name <.> "json" | name <-
     ["supported-audit","mixed-width-audit","mixed-header-audit","lifecycle-audit","partial-audit","interruptible","non-static","narrow-conflict","wide-conflict","unresolved","indirect-unresolved","constructor-unresolved","provider-container"]])
   writeJson (output </> "manifest.json") (object ["schema" .= (1::Int),"driverSha256" .= driverHash,

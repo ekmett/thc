@@ -118,12 +118,12 @@ class ScalarBitCastTest {
         assertEquals(arities, manifest.get("bitcastPrimitiveArities"));
         var keys = new HashSet<String>(); for (var stage : list("pre", "post")) for (var name : NAMES) keys.add(stage + "/" + name);
         assertEquals(keys, object(manifest.get("audits")).keySet()); assertEquals(keys, object(manifest.get("structure")).keySet());
-        var requiredSources = new HashSet<>(list("compiler/test-fixtures/ScalarBitCastAudit.hs", "compiler/test-fixtures/ScalarBitCastNative.hs",
+        var requiredSources = new HashSet<>(list("test/fixtures/compiler/ScalarBitCastAudit.hs", "test/fixtures/compiler/ScalarBitCastNative.hs",
             "thc.cabal", "test/haskell-fixtures/Main.hs", "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/ScalarBitCastFixtures.hs",
-            "scripts/core-capabilities.json", "scripts/audit-core.py", "tools/primops/PrimopTools.hs", "src/main/resources/thc/scalar-primop-signatures.json",
-            "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py"));
-        for (var file : Objects.requireNonNull(new File(root, "compiler/THC").listFiles())) if (file.getName().endsWith(".hs")) requiredSources.add(root.toPath().relativize(file.toPath()).toString());
-        for (var file : Objects.requireNonNull(new File(root, "scripts").listFiles())) if (file.getName().startsWith("core_") && file.getName().endsWith(".py")) requiredSources.add(root.toPath().relativize(file.toPath()).toString());
+            "bin/core-capabilities.json", "bin/audit-core.py", "src/tools/primops/PrimopTools.hs", "src/main/resources/thc/scalar-primop-signatures.json",
+            "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py"));
+        for (var file : Objects.requireNonNull(new File(root, "src/compiler/THC").listFiles())) if (file.getName().endsWith(".hs")) requiredSources.add(root.toPath().relativize(file.toPath()).toString());
+        for (var file : Objects.requireNonNull(new File(root, "bin").listFiles())) if (file.getName().startsWith("core_") && file.getName().endsWith(".py")) requiredSources.add(root.toPath().relativize(file.toPath()).toString());
         assertEquals(requiredSources, object(manifest.get("inputHashes")).keySet());
         var commands = new ArrayList<>(list("native-build", "native-oracle"));
         var artifacts = new HashSet<>(list(prefix + "/inputs.tsv", prefix + "/oracle.tsv", prefix + "/native/scalar-bitcast-oracle"));
@@ -271,7 +271,7 @@ class ScalarBitCastTest {
             for (var mutation : list("valid", "argument", "result", "lexical", "partial", "over", "bare")) {
                 var module = synthetic(name); mutate(lambda(module), mutation); var label = name.substring(0, name.length() - 1) + "-" + mutation;
                 var source = directory.resolve(label + ".json"); Files.writeString(source, Json.stringify(module)); var report = directory.resolve(label + "-report.json");
-                var process = new ProcessBuilder("python3", "scripts/audit-core.py", source.toString(), "--entry", "entry", "--output", report.toString()).directory(root)
+                var process = new ProcessBuilder("python3", "bin/audit-core.py", source.toString(), "--entry", "entry", "--output", report.toString()).directory(root)
                     .redirectOutput(directory.resolve(label + ".stdout").toFile()).redirectError(directory.resolve(label + ".stderr").toFile()).start();
                 if (!process.waitFor(60, TimeUnit.SECONDS)) { process.destroyForcibly().waitFor(); fail("Shared bitcast auditor timed out: " + label); }
                 assertEquals(mutation.equals("valid") ? 0 : 1, process.exitValue(), label); var actual = object(Json.parse(Files.readString(report)));

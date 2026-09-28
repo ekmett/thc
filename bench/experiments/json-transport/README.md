@@ -33,7 +33,7 @@ expected strict rejection of `sequenceBuild` for its aggregate formal argument.
 A complete fresh CI job is still required to establish that all later steps pass.
 
 To reproduce, prepare the native library corpus once with
-`scripts/prepare-library-tests.py`, then write the `intmap` group's ordered
+`bin/prepare-library-tests.py`, then write the `intmap` group's ordered
 `modules` paths from `build/libraries/cases.json` to `paths.txt`. Build `installDist`
 for baseline commit `d45e330` and the changed writer in separate checkouts. Compile
 this probe against either distribution and launch a fresh process for each one:
@@ -50,7 +50,7 @@ bundle, use a separate checkout of published branch
 [`codex/sequence-boundary-lifetime`](https://github.com/ekmett/thc/tree/codex/sequence-boundary-lifetime)
 at exact revision
 [`ffdbca6f091b6ee48cd9baed2a8f61e3a6eb5a3d`](https://github.com/ekmett/thc/commit/ffdbca6f091b6ee48cd9baed2a8f61e3a6eb5a3d),
-run `scripts/prepare-library-tests.py`, and extract the `sequence` group's ordered
+run `bin/prepare-library-tests.py`, and extract the `sequence` group's ordered
 `modules` paths from its `build/libraries/cases.json`. That revision's Sequence
 workload, preparation script and independent model are unchanged from the failing
 CI revision `a52df35207318982705cb3ba5efb449e30783367`. The baseline main revision's

@@ -43,7 +43,7 @@ class OriginalSavedTermiosTest {
     }
     @Test void originalNativeRowsMatchInterpretedAndFirstInstalledAstAndBytecode() throws Exception {
         var manifest = json(prefix + "/manifest.json"); assertEquals(true, manifest.get("supported"));
-        hashes(root, manifest.get("inputHashes"), Set.of("compiler/test-fixtures/OriginalSavedTermiosAudit.hs", "compiler/test-fixtures/OriginalSavedTermiosNative.hs", "test/haskell-fixtures/OriginalTermiosFixtures.hs", "scripts/core_original_foreign.py"));
+        hashes(root, manifest.get("inputHashes"), Set.of("test/fixtures/compiler/OriginalSavedTermiosAudit.hs", "test/fixtures/compiler/OriginalSavedTermiosNative.hs", "test/haskell-fixtures/OriginalTermiosFixtures.hs", "bin/core_original_foreign.py"));
         var artifacts = new HashSet<>(Set.of(prefix + "/saved/oracle.json"));
         for (var stage : List.of("pre", "post")) for (var name : names) artifacts.add(prefix + "/saved/" + stage + "/" + name + ".audit.json");
         hashes(root, manifest.get("artifactHashes"), artifacts, prefix + "/");

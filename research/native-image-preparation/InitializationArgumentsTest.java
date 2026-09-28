@@ -23,7 +23,7 @@ public final class InitializationArgumentsTest {
 
     private static Path fixture(String name, boolean classes, String pure, String extra) throws Exception {
         Path root = output.resolve(name);
-        Files.createDirectories(root.resolve("scripts/native-image"));
+        Files.createDirectories(root.resolve("bin/native-image"));
         Files.createDirectories(root.resolve("recipe"));
         Files.createDirectories(root.resolve("build/install/thc/lib"));
         for (String file : List.of("prepared-image.sh", "ClassInitializationInventory.java")) {
@@ -34,7 +34,7 @@ public final class InitializationArgumentsTest {
             Files.createDirectories(root.resolve("recipe/process-identity"));
             Files.copy(foreign, root.resolve("recipe/process-identity/reachability-metadata.json"));
         }
-        Files.writeString(root.resolve("scripts/native-image/pure-initialization.txt"), pure);
+        Files.writeString(root.resolve("bin/native-image/pure-initialization.txt"), pure);
         Files.writeString(root.resolve("recipe/prepared-initialization.txt"), extra);
         Path compiled = root.resolve("classes");
         Files.createDirectories(compiled);

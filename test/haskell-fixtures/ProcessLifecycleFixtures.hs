@@ -77,7 +77,7 @@ sourceFilesUnder root relative = do
 prepareProcessLifecycle :: FilePath -> IO ()
 prepareProcessLifecycle root = do
   let directory = "build/process-lifecycle/core"
-      source = "compiler/test-fixtures/ProcessLifecycleAudit.hs"
+      source = "test/fixtures/compiler/ProcessLifecycleAudit.hs"
       execute = runLogged 120 root (directory </> "logs")
       oneLine result = case BS.lines (commandStdout result) of
         [value] -> BS.unpack value
@@ -178,10 +178,10 @@ prepareProcessLifecycle root = do
       serializePostTidyCore flags ["unit-qualified"] (cg_module tidied) (cg_tycons tidied)
         (cg_binds tidied) emptyIfaceForeign >>= writeFile (root </> directory </> "post.json")
   audits <- forM ["pre", "post"] $ \stage -> execute (stage ++ "-audit") [] "python3"
-    (["scripts/audit-core.py", directory </> stage ++ ".json", "--output", directory </> stage ++ ".audit.json"] ++
+    (["bin/audit-core.py", directory </> stage ++ ".json", "--output", directory </> stage ++ ".audit.json"] ++
       concat [["--entry", entryName] | entryName <- entries])
   inputHashes <- hashes root [source, "test/haskell-fixtures/ProcessLifecycleFixtures.hs",
-    "compiler/THC/Plugin.hs", "compiler/THC/Interface.hs", "scripts/audit-core.py", "scripts/core_original_foreign.py", "scripts/core-capabilities.json"]
+    "src/compiler/THC/Plugin.hs", "src/compiler/THC/Interface.hs", "bin/audit-core.py", "bin/core_original_foreign.py", "bin/core-capabilities.json"]
   interfaceHashes <- hashes root interfaces
   writeJson (root </> directory </> "source.json") $ object
     ["archiveSha256" .= archiveHash, "sourceHashes" .= sourceHashes, "processUnit" .= oneLine owner]

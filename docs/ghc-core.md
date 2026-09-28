@@ -13,7 +13,7 @@ ghc-options: -fwrite-if-simplified-core
 
 Hadrian already accepts this option through its
 [settings file](https://github.com/ghc/ghc/blob/ghc-9.14.1-release/hadrian/doc/user-settings.md).
-Append the supplied [configuration](../compiler/ghc-core.settings) to
+Append the supplied [configuration](../config/ghc/9.14.1/core.settings) to
 `<build root>/hadrian.settings` (normally `_build/hadrian.settings`):
 
 ```text
@@ -28,7 +28,7 @@ or change Haskell definitions or inlining decisions. The aggregate interface-siz
 cost has not been measured.
 
 An upstream release configuration can use the same setting. The optional
-[Hadrian library patch](../compiler/patches/ghc-libraries-simplified-core.patch)
+[Hadrian library patch](../third-party/patches/ghc-9.14.1/ghc-libraries-simplified-core.patch)
 implements a narrower built-in default for library packages after bootstrap.
 It covers `ghc-internal`, `base`, `template-haskell`, and every other library
 without maintaining a package list. The patch is not needed with the settings
@@ -209,7 +209,7 @@ curl -fLO "https://downloads.haskell.org/ghc/$THC_GHC_VERSION/ghc-$THC_GHC_VERSI
 tar -xf "ghc-$THC_GHC_VERSION-src.tar.xz"
 cd "ghc-$THC_GHC_VERSION"
 mkdir -p _build
-cat "$THC_SOURCE/compiler/ghc-core.settings" >> _build/hadrian.settings
+cat "$THC_SOURCE/config/ghc/9.14.1/core.settings" >> _build/hadrian.settings
 
 test -f configure || ./boot
 GHC="$THC_BOOT_GHC" ./configure --prefix="$THC_GHC_PREFIX"

@@ -7,7 +7,7 @@ Each root takes two scalar `Int#` inputs and returns a nonnegative weighted chec
 that observes all sixteen unsigned lanes. No vector argument ABI is added, and
 GHC has no `negateWord8X16#` operation.
 
-After preparing native inputs with `scripts/prepare-word8x16-audit.py` and building
+After preparing native inputs with `bin/prepare-word8x16-audit.py` and building
 `installDist`, invoke the harness with the pinned Graal JDK and a new directory:
 
 ```sh

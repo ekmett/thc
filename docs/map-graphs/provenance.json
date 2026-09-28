@@ -100,28 +100,28 @@
     "sources": [
       {
         "url": "https://raw.githubusercontent.com/ghc/ghc/ghc-9.14.1-release/libraries/ghc-internal/src/GHC/Internal/CString.hs",
-        "path": "vendor/ghc-9.14.1/GHC/Internal/CString.hs",
+        "path": "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/CString.hs",
         "sha256": "3b2e7a0fb2880d8f98cb002adfbaa36a8469667b7494f8f695fe1a6f181de573"
       },
       {
         "url": "https://raw.githubusercontent.com/ghc/ghc/ghc-9.14.1-release/libraries/ghc-internal/src/GHC/Internal/Err.hs",
-        "path": "vendor/ghc-9.14.1/GHC/Internal/Err.hs",
+        "path": "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Err.hs",
         "sha256": "f109ac925928a0e7fed063bcfd03c93e3d8629d8054d984e600aab26c0122478"
       },
       {
         "url": "https://raw.githubusercontent.com/ghc/ghc/ghc-9.14.1-release/libraries/ghc-internal/src/GHC/Internal/Exception.hs-boot",
-        "path": "vendor/ghc-9.14.1/GHC/Internal/Exception.hs-boot",
+        "path": "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Exception.hs-boot",
         "sha256": "7422fa92308439db3c0ca034b02522c96e7961cff00754d0bdca964a4f98bc15"
       },
       {
         "url": "https://raw.githubusercontent.com/ghc/ghc/ghc-9.14.1-release/libraries/ghc-internal/src/GHC/Internal/Exception/Type.hs-boot",
-        "path": "vendor/ghc-9.14.1/GHC/Internal/Exception/Type.hs-boot",
+        "path": "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Exception/Type.hs-boot",
         "sha256": "f2a0440d35e33a8688d692cf50e4d33e74e92f08e84b04ab8aec20fd4861d2e0"
       }
     ],
     "boundary": "Original CString/Err source after Tidy, before CorePrep; explicit dependency boundary",
     "unitPolicy": "Original wired ghc-internal unit, private dynamic-interface overlay, installed packages unmodified",
-    "interfaceRoot": "compiler/package-roots/InterfaceRoots.hs",
+    "interfaceRoot": "test/fixtures/package-roots/InterfaceRoots.hs",
     "interfacePolicy": "Actual installed non-boot Core/DFun unfoldings; unsupported and missing paths remain explicit"
   },
   "status": "Bounded dependency frontier; run the strict reachable audit before claiming complete linkage"

@@ -95,7 +95,7 @@ variables expression = case expression of
 prepareOriginalDirectoryStreams :: FilePath -> IO ()
 prepareOriginalDirectoryStreams root = do
   let directory = "build/original-directory-streams"
-      source = "compiler/test-fixtures/OriginalDirectoryStreamsAudit.hs"
+      source = "test/fixtures/compiler/OriginalDirectoryStreamsAudit.hs"
       sourceReceipt = "build/original-current-directory/unix-source.json"
       execute = runLogged 180 root (directory </> "logs")
       manifest = root </> directory </> "manifest.json"
@@ -207,15 +207,15 @@ prepareOriginalDirectoryStreams root = do
       _ -> die "Expected six original directory-stream native functions"
   writeJson (root </> directory </> "oracle.json") oracle
   audits <- fmap concat $ forM ["pre", "post"] $ \stage -> forM entries $ \name ->
-    execute (stage ++ "-audit-" ++ name) [] "python3" ["scripts/audit-core.py", "--entry", name,
+    execute (stage ++ "-audit-" ++ name) [] "python3" ["bin/audit-core.py", "--entry", name,
       "--output", directory </> stage ++ "-" ++ name ++ ".audit.json", directory </> stage ++ ".json"]
   interfaceHashes <- hashes root interfaces
   registrationHash <- hashFile (packageDb </> unit ++ ".conf")
   let commands = [version, library, imports, owner, ghcImports] ++ audits
   inputHashes <- hashes root [source, "thc.cabal", "test/haskell-fixtures/Main.hs", "test/haskell-fixtures/FixtureSupport.hs",
     "test/haskell-fixtures/OriginalDirectoryStreamsFixtures.hs", "test/haskell-fixtures/OriginalCurrentDirectoryFixtures.hs",
-    sourceReceipt, "compiler/THC/Plugin.hs", "compiler/THC/Interface.hs", "scripts/core_original_foreign.py",
-    "scripts/audit-core.py", "scripts/core-capabilities.json", "src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java"]
+    sourceReceipt, "src/compiler/THC/Plugin.hs", "src/compiler/THC/Interface.hs", "bin/core_original_foreign.py",
+    "bin/audit-core.py", "bin/core-capabilities.json", "src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java"]
   artifactHashes <- hashes root ([directory </> file | file <- ["pre.json", "post.json", "oracle.json", "unix-source.json"]] ++
     [directory </> stage ++ "-" ++ name ++ ".audit.json" | stage <- ["pre","post"], name <- entries] ++
     concatMap commandArtifacts commands)

@@ -148,19 +148,19 @@ public class PinnedAddressTest {
         return rows;
     }
     private Map<String, Set<String>> requiredHashes() throws Exception {
-        var sources = new LinkedHashSet<>(List.of("compiler/test-fixtures/PinnedAddressAudit.hs",
-            "compiler/test-fixtures/PinnedAddressAuditNative.hs", "test/haskell-fixtures/PinnedAddressFixtures.hs",
+        var sources = new LinkedHashSet<>(List.of("test/fixtures/compiler/PinnedAddressAudit.hs",
+            "test/fixtures/compiler/PinnedAddressAuditNative.hs", "test/haskell-fixtures/PinnedAddressFixtures.hs",
             "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal",
-            "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py",
-            "scripts/audit-core.py", "scripts/core-capabilities.json", "tools/primops/PrimopTools.hs",
+            "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py",
+            "bin/audit-core.py", "bin/core-capabilities.json", "src/tools/primops/PrimopTools.hs",
             "src/main/resources/thc/scalar-primop-signatures.json"));
-        try (var files = Files.list(root.resolve("compiler/THC"))) {
+        try (var files = Files.list(root.resolve("src/compiler/THC"))) {
             files.filter(it -> it.toString().endsWith(".hs"))
                 .map(root::relativize)
                 .map(Path::toString)
                 .forEach(sources::add);
         }
-        try (var files = Files.list(root.resolve("scripts"))) {
+        try (var files = Files.list(root.resolve("bin"))) {
             files.filter(it -> it.getFileName().toString().startsWith("core_") && it.toString().endsWith(".py"))
                 .map(root::relativize)
                 .map(Path::toString)

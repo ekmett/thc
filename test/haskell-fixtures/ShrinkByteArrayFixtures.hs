@@ -26,7 +26,7 @@ import System.Exit (die)
 import System.FilePath ((</>), takeExtension)
 
 source, directory :: FilePath
-source = "compiler/test-fixtures/ShrinkMutableByteArrayAudit.hs"
+source = "test/fixtures/compiler/ShrinkMutableByteArrayAudit.hs"
 directory = "build/shrink-bytearrays"
 
 entries :: [String]
@@ -67,7 +67,7 @@ prepareShrinkByteArrays root = do
         postTidy = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"]
         roots = ["-fplugin-opt=THC.Plugin:closure=" ++ name | name <- entries]
     _ <- run root [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> stageDir </> "ghc")]
-      "compiler/export.sh" (postTidy ++ roots ++ [source]) ""
+      "bin/export-core.sh" (postTidy ++ roots ++ [source]) ""
     mapM_ (\path -> do
       present <- doesFileExist (root </> path)
       unless present (die ("Missing genuine shrink Core export: " ++ path))) modules
@@ -76,7 +76,7 @@ prepareShrinkByteArrays root = do
       die ("Unexpected shrink Core module inventory: " ++ show exported)
     _ <- forM entries $ \name -> do
       let report = stageDir </> name ++ ".audit.json"
-      _ <- run root [] "python3" (["scripts/audit-core.py", "--entry", name, "--output", report] ++ modules) ""
+      _ <- run root [] "python3" (["bin/audit-core.py", "--entry", name, "--output", report] ++ modules) ""
       pure ()
     pure (stage, modules)
   let native = directory </> "native"
@@ -86,7 +86,7 @@ prepareShrinkByteArrays root = do
   createDirectoryIfMissing True (root </> native)
   writeFile (root </> driver) nativeDriver
   _ <- run root [] ghc ["--make", "-O2", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
-    "-i" ++ (root </> "compiler/test-fixtures"), "-odir", root </> native,
+    "-i" ++ (root </> "test/fixtures/compiler"), "-odir", root </> native,
     "-hidir", root </> native, root </> driver, "-o", executable] ""
   observations <- runWithTimeout (Just 30000000) root [] executable []
     (concat [name ++ "\t" ++ show seed ++ "\t" ++ show size ++ "\n" | (name, seed, size) <- cases])
@@ -102,8 +102,8 @@ prepareShrinkByteArrays root = do
   writeFile (root </> oracle) observations
   let inputs = sort [source, "test/haskell-fixtures/ShrinkByteArrayFixtures.hs",
         "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal",
-        "scripts/core-capabilities.json", "scripts/audit-core.py",
-        "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh"]
+        "bin/core-capabilities.json", "bin/audit-core.py",
+        "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh"]
       artifacts = [driver, oracle] ++ concat
         [modules ++ [directory </> stage </> name ++ ".audit.json" | name <- entries]
           | (stage, modules) <- stages]

@@ -77,6 +77,7 @@ jobs:
           PY
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          submodules: true
           # The PR merge and its base/head parents are enough for the exact diff.
           fetch-depth: 2
           persist-credentials: false
@@ -170,6 +171,7 @@ jobs:
           PYCODE
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          submodules: true
           fetch-depth: 0
           persist-credentials: false
           clean: ${{ needs.automation.outputs.persistent != 'true' }}

@@ -13,10 +13,10 @@ Malformed decimal and contradictory representation proofs are rejected. GHC Core
 Fixture orchestration and the integer-only corpus model live in Haskell; Java
 defines its own domains and byte/limb model and retains the malformed-value,
 forged-proof, arithmetic-frontier and missing-source controls. The existing
-shared Python `compiler/export-boot.py` and `scripts/audit-core.py` remain
+shared Python `bin/export-boot.py` and `bin/audit-core.py` remain
 explicit dependencies for original-source export and capability auditing.
 The auditor's nine private representation-API assertions remain in its existing
-`scripts/test-audit-core.py` self-test; no BigNat Python entrypoint or model remains.
+`bin/test-audit-core.py` self-test; no BigNat Python entrypoint or model remains.
 The manifest is published last and fingerprints every required source and
 artifact, including auditor inputs and command logs. Check-only re-runs the
 22 audits and rejects changed bytes or missing inventory entries without

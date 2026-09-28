@@ -54,7 +54,7 @@ dependencies and native IO are separate contracts; automatic weak GC is deferred
 
 ## Evidence and reproduction
 
-`compiler/test-fixtures/ManagedMVarAudit.hs` exports genuine pre- and post-Tidy
+`test/fixtures/compiler/ManagedMVarAudit.hs` exports genuine pre- and post-Tidy
 Core for five integer-entry examples: state transitions, lifted bottoms,
 opaque aliases and snapshots, boxed-unlifted products, and closure payloads.
 All eight contracts appear in both stages; all six payload-bearing primitives
@@ -84,10 +84,10 @@ in the same context. Each checks waiter removal and argument/result reference
 cleanup. Context reuse is not resumption of a cancelled guest thunk.
 
 ```sh
-python3 scripts/prepare-managed-mvars.py
-python3 scripts/prepare-managed-mvars.py --check-only
-python3 scripts/test-managed-mvars.py
-python3 scripts/test-managed-mvar-fixtures.py
+python3 bin/prepare-managed-mvars.py
+python3 bin/prepare-managed-mvars.py --check-only
+python3 bin/test-managed-mvars.py
+python3 bin/test-managed-mvar-fixtures.py
 ./gradlew --no-daemon test --tests 'thc.runtime.ManagedMVar*' --rerun
 JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew --no-daemon test --tests 'thc.runtime.ManagedMVar*' --rerun
 ```

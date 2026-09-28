@@ -36,8 +36,8 @@ class SqrtPrimitiveTest {
             var actual = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(new File(root, hash.getKey()).toPath())));
             assertEquals(hash.getValue(), actual, "Stale sqrt evidence: " + hash.getKey());
         }
-        var required = new ArrayList<>(list("scripts/audit-core.py", "scripts/core-capabilities.json", "src/main/resources/thc/scalar-primop-signatures.json", "tools/primops/PrimopTools.hs"));
-        for (var file : Objects.requireNonNull(new File(root, "scripts").listFiles())) if (file.getName().startsWith("core_") && file.getName().endsWith(".py")) required.add(root.toPath().relativize(file.toPath()).toString());
+        var required = new ArrayList<>(list("bin/audit-core.py", "bin/core-capabilities.json", "src/main/resources/thc/scalar-primop-signatures.json", "src/tools/primops/PrimopTools.hs"));
+        for (var file : Objects.requireNonNull(new File(root, "bin").listFiles())) if (file.getName().startsWith("core_") && file.getName().endsWith(".py")) required.add(root.toPath().relativize(file.toPath()).toString());
         assertTrue(object(evidence.get("inputHashes")).keySet().containsAll(required));
         var entries = new ArrayList<>(list("sqrtFloat", "sqrtDouble", "floatCase", "doubleCase")); entries.addAll(MATH_ENTRIES);
         assertEquals(entries, evidence.get("entries")); assertEquals(rows().values().stream().mapToLong(List::size).sum(), evidence.get("nativeRows"));

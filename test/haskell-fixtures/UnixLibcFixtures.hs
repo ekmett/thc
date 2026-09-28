@@ -83,7 +83,7 @@ variables expression = case expression of
 prepareUnixLibc :: FilePath -> IO ()
 prepareUnixLibc root = do
   let directory = "build/unix-libc"
-      source = "compiler/test-fixtures/UnixLibcAudit.hs"
+      source = "test/fixtures/compiler/UnixLibcAudit.hs"
       execute = runLogged 180 root (directory </> "logs")
       manifest = root </> directory </> "manifest.json"
       oneLine result = case BS.lines (commandStdout result) of
@@ -211,13 +211,13 @@ prepareUnixLibc root = do
       _ -> die "Missing compiled original unix consumers"
   writeJson (root </> directory </> "oracle.json") oracle
   audits <- fmap concat $ forM ["pre", "post"] $ \stage -> forM entries $ \name ->
-    execute (stage ++ "-audit-" ++ name) [] "python3" ["scripts/audit-core.py", "--entry", name,
+    execute (stage ++ "-audit-" ++ name) [] "python3" ["bin/audit-core.py", "--entry", name,
       "--output", directory </> stage ++ "-" ++ name ++ ".audit.json", directory </> stage ++ ".json"]
   let commands = [version, library, imports, owner] ++ audits
   inputHashes <- hashes root [source, "thc.cabal", "test/haskell-fixtures/Main.hs", "test/haskell-fixtures/FixtureSupport.hs",
     "src/test/resources/core/original-unix-libc-descriptors.json", "test/haskell-fixtures/UnixLibcFixtures.hs",
-    "compiler/THC/Plugin.hs", "compiler/THC/Interface.hs", "scripts/core_original_foreign.py",
-    "scripts/audit-core.py", "scripts/core-capabilities.json", "src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java", "src/main/java/thc/runtime/CoreEnvironmentForeign.java", "src/main/java/thc/runtime/EnvironmentOp.java", "src/main/java/thc/runtime/EnvironmentExpression.java"]
+    "src/compiler/THC/Plugin.hs", "src/compiler/THC/Interface.hs", "bin/core_original_foreign.py",
+    "bin/audit-core.py", "bin/core-capabilities.json", "src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java", "src/main/java/thc/runtime/CoreEnvironmentForeign.java", "src/main/java/thc/runtime/EnvironmentOp.java", "src/main/java/thc/runtime/EnvironmentExpression.java"]
   artifactHashes <- hashes root ([directory </> file | file <- ["pre.json", "post.json", "oracle.json"]] ++
     [directory </> stage ++ "-" ++ name ++ ".audit.json" | stage <- ["pre","post"], name <- entries] ++
     concatMap commandArtifacts commands)

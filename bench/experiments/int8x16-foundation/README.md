@@ -6,7 +6,7 @@ native GHC rows from `build/simd-int8x16`. It checks `plusCase`, `minusCase`,
 Each root takes two scalar `Int#` inputs and returns a signed weighted checksum
 that observes all sixteen distinct packed lanes. No vector argument ABI is added.
 
-After preparing native inputs with `scripts/prepare-int8x16-audit.py` and building
+After preparing native inputs with `bin/prepare-int8x16-audit.py` and building
 `installDist`, invoke the harness with the pinned Graal JDK and a new directory:
 
 ```sh

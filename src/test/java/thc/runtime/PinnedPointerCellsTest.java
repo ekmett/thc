@@ -125,19 +125,19 @@ public class PinnedPointerCellsTest {
         var manifest = json("build/pinned-pointer-cells/manifest.json");
         assertEquals(1L, manifest.get("schema"));
         assertEquals("9.14.1", manifest.get("ghc"));
-        var inputs = new HashSet<>(Set.of("compiler/test-fixtures/PinnedPointerCellsAudit.hs",
-            "compiler/test-fixtures/PinnedPointerCellsNative.hs", "test/haskell-fixtures/Main.hs",
-            "test/haskell-fixtures/FixtureSupport.hs", "scripts/audit-core.py", "scripts/core-capabilities.json",
-            "compiler/export.sh", "compiler/build.sh", "compiler/toolchain.sh", "compiler/plugin.py", "thc.cabal",
+        var inputs = new HashSet<>(Set.of("test/fixtures/compiler/PinnedPointerCellsAudit.hs",
+            "test/fixtures/compiler/PinnedPointerCellsNative.hs", "test/haskell-fixtures/Main.hs",
+            "test/haskell-fixtures/FixtureSupport.hs", "bin/audit-core.py", "bin/core-capabilities.json",
+            "bin/export-core.sh", "bin/build-compiler.sh", "bin/toolchain.sh", "bin/plugin.py", "thc.cabal",
             "cabal.project"));
-        try (var files = Files.list(root.resolve("compiler/THC"))) {
+        try (var files = Files.list(root.resolve("src/compiler/THC"))) {
             files.filter(it -> it.toString().endsWith(".hs"))
-                .map(it -> "compiler/THC/" + it.getFileName())
+                .map(it -> "src/compiler/THC/" + it.getFileName())
                 .forEach(inputs::add);
         }
-        try (var files = Files.list(root.resolve("scripts"))) {
+        try (var files = Files.list(root.resolve("bin"))) {
             files.filter(it -> it.getFileName().toString().startsWith("core_") && it.toString().endsWith(".py"))
-                .map(it -> "scripts/" + it.getFileName())
+                .map(it -> "bin/" + it.getFileName())
                 .forEach(inputs::add);
         }
         var artifacts = new HashSet<>(Set.of("build/pinned-pointer-cells/oracle.tsv"));

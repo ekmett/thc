@@ -53,7 +53,7 @@ class OriginalStdioReadTest {
         var manifest = (Map<String,Object>) json(new File(directory, "manifest.json"));
         assertEquals(1L, manifest.get("schema")); assertEquals("9.14.1", manifest.get("ghc")); assertEquals(names, manifest.get("entries")); assertEquals(40L, manifest.get("nativeRows"));
         assertEquals(hex(payload), manifest.get("payloadHex"));
-        hashes(root, manifest.get("inputHashes"), Set.of("compiler/test-fixtures/OriginalStdioReadAudit.hs", "compiler/test-fixtures/OriginalStdioReadNative.hs", "test/haskell-fixtures/OriginalStdioFixtures.hs", "test/haskell-fixtures/Main.hs", "scripts/core-capabilities.json", "thc.cabal"));
+        hashes(root, manifest.get("inputHashes"), Set.of("test/fixtures/compiler/OriginalStdioReadAudit.hs", "test/fixtures/compiler/OriginalStdioReadNative.hs", "test/haskell-fixtures/OriginalStdioFixtures.hs", "test/haskell-fixtures/Main.hs", "bin/core-capabilities.json", "thc.cabal"));
         hashes(root, manifest.get("artifactHashes"), Set.of("build/original-stdio-read/input.bin", "build/original-stdio-read/oracle.json"), "build/original-stdio-read/");
         assertArrayEquals(payload, Files.readAllBytes(new File(directory, "input.bin").toPath()));
         var oracle = new LinkedHashMap<String,List<Map<String,Object>>>(); for (var row : rows()) oracle.computeIfAbsent((String) row.get("entry"), ignored -> new ArrayList<>()).add(row);

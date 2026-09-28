@@ -58,8 +58,8 @@ prepareSimdFloatFma :: FilePath -> IO ()
 prepareSimdFloatFma root = do
   let directory = "build/simd-floatx4-fma"
       output = root </> directory
-      source = "compiler/test-fixtures/SimdFloatFma.hs"
-      driver = "compiler/test-fixtures/SimdFloatFmaNative.hs"
+      source = "test/fixtures/compiler/SimdFloatFma.hs"
+      driver = "test/fixtures/compiler/SimdFloatFmaNative.hs"
       manifest = output </> "manifest.json"
       exportOnly = arch == "aarch64"
       stages = if exportOnly then ["pre"] else ["pre","post"]
@@ -79,15 +79,15 @@ prepareSimdFloatFma root = do
   forM_ stages $ \stage -> do
     _ <- run root [("THC_CORE_OUT", output </> stage ++ "-core"),
                   ("THC_GHC_OUT", output </> stage ++ "-ghc")]
-      "compiler/export.sh" ((if exportOnly then ["-fno-code","-fwrite-if-simplified-core"] else nativeFlags) ++
+      "bin/export-core.sh" ((if exportOnly then ["-fno-code","-fwrite-if-simplified-core"] else nativeFlags) ++
         ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source]) ""
     -- Canonical admission: no private capability profile or expected frontier.
     let audit = directory </> stage ++ "-audit.json"
     _ <- runLogged 120 root (directory </> "logs") (stage ++ "-audit") [] "python3"
-      (["scripts/audit-core.py", directory </> stage ++ "-core/SimdFloatFma.json", "--output", audit] ++
+      (["bin/audit-core.py", directory </> stage ++ "-core/SimdFloatFma.json", "--output", audit] ++
        concatMap (\entry -> ["--entry",entry]) (entries ++ wideEntries))
     _ <- runLogged 120 root (directory </> "logs") (stage ++ "-double-audit") [] "python3"
-      (["scripts/audit-core.py", directory </> stage ++ "-core/SimdFloatFma.json",
+      (["bin/audit-core.py", directory </> stage ++ "-core/SimdFloatFma.json",
         "--output", directory </> stage ++ "-double-audit.json"] ++
        concatMap (\entry -> ["--entry",entry]) (doubleEntries ++ doubleWideEntries))
     pure ()
@@ -99,13 +99,13 @@ prepareSimdFloatFma root = do
   rows <- if exportOnly then pure [] else do
     createDirectoryIfMissing True (output </> "native")
     _ <- run root [] ghc (["--make","-O2","-fforce-recomp","-dcore-lint","-dstg-lint",
-      "-icompiler/test-fixtures","-odir",output </> "native","-hidir",output </> "native",driver,"-o",binary] ++ nativeFlags) ""
+      "-itest/fixtures/compiler","-odir",output </> "native","-hidir",output </> "native",driver,"-o",binary] ++ nativeFlags) ""
     lines <$> run root [] binary [] (unlines (map unwords requests))
   unless exportOnly $ do
     unless (map (take 5 . words) rows == requests && all valid rows) (die "Incomplete FloatX4 FMA native oracle")
     writeFile (output </> "oracle.txt") (unlines rows)
   inputHashes <- hashes root [source,driver,"test/haskell-fixtures/SimdFloatFmaFixtures.hs",
-    "scripts/core_vectors.py","scripts/audit-core.py","scripts/core-capabilities.json","compiler/export.sh"]
+    "bin/core_vectors.py","bin/audit-core.py","bin/core-capabilities.json","bin/export-core.sh"]
   artifactHashes <- hashes root ([directory </> "oracle.txt" | not exportOnly] ++
     [directory </> stage ++ suffix | stage <- stages, suffix <- ["-core/SimdFloatFma.json","-audit.json","-double-audit.json"]])
   writeJson manifest $ object ["schema" .= (1 :: Int),"ghc" .= ("9.14.1" :: String),

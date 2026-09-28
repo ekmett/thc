@@ -28,7 +28,7 @@ negations. Floating min/max follows Java's NaN and signed-zero rules.
 ## Original-Core and independent-model checks
 
 ```sh
-python3 scripts/prepare-floatx4-audit.py
+python3 bin/prepare-floatx4-audit.py
 ./gradlew testDefault --tests thc.runtime.SimdFloatVectorTest
 ```
 

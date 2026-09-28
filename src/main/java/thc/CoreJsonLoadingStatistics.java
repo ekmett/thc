@@ -25,9 +25,6 @@ public final class CoreJsonLoadingStatistics implements Supplier<Map<String, Obj
         long jsonIndexPrimitiveBytes = 0;
         for (var item : sourceTotals) jsonIndexPrimitiveBytes += item.indexByteSize();
         totals.put("jsonIndexPrimitiveBytes", jsonIndexPrimitiveBytes);
-        long jsonSidecarBytes = 0;
-        for (var item : sourceTotals) jsonSidecarBytes += item.serializedByteSize() == null ? 0L : item.serializedByteSize();
-        totals.put("jsonSidecarBytes", jsonSidecarBytes);
         long jsonSourceFileBytesRead = 0;
         for (var item : sourceTotals) jsonSourceFileBytesRead += item.sourceFileBytesRead();
         totals.put("jsonSourceFileBytesRead", jsonSourceFileBytesRead);

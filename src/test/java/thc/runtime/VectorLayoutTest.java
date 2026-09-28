@@ -21,7 +21,7 @@ import static thc.runtime.RepresentationTestSupport.*;
 class VectorLayoutTest {
     private final CoreRepresentation integer = new CoreRepresentation(CoreKind.LONG, true, true, list("IntRep"), null, null, null, null, null);
     private List<CoreRepresentation> vectors() throws Exception {
-        var catalog = object(Json.parse(Files.readString(Path.of(System.getProperty("thc.projectRoot"), "scripts/simd-families.json"))));
+        var catalog = object(Json.parse(Files.readString(Path.of(System.getProperty("thc.projectRoot"), "bin/simd-families.json"))));
         var values = new ArrayList<CoreRepresentation>();
         for (var shape : objects(catalog.get("families"))) values.add(CoreRepresentations.parse(map("kind", "vector", "evaluated", true,
             "primReps", list("VecRep " + shape.get("lanes") + " " + shape.get("element")), "vector", map("lanes", shape.get("lanes"), "element", shape.get("element")))));

@@ -101,18 +101,18 @@ final class SimdByteArrayEvidence {
         }
         records(manifest, "artifacts", new HashSet<>(artifacts));
         String retainedBase = "bench/experiments/" + family + "-bytearray/evidence-x86_64" + (family.equals("doublex2") ? "/captures/doublex2" : "");
-        var sources = new ArrayList<>(List.of("compiler/test-fixtures/" + module + ".hs", "compiler/test-fixtures/" + module + "Native.hs",
+        var sources = new ArrayList<>(List.of("test/fixtures/compiler/" + module + ".hs", "test/fixtures/compiler/" + module + "Native.hs",
             "test/haskell-fixtures/SimdByteArrayFixtures.hs", "test/haskell-fixtures/SimdByteArrayModel.hs",
             "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal",
-            "scripts/audit-core.py", "scripts/core-capabilities.json", "src/main/java/thc/runtime/VectorMemoryFamily.java",
+            "bin/audit-core.py", "bin/core-capabilities.json", "src/main/java/thc/runtime/VectorMemoryFamily.java",
             "src/main/java/thc/runtime/VectorMemoryOp.java", "src/main/java/thc/runtime/VectorReadCase.java",
             "src/main/java/thc/runtime/CoreVectorMemory.java", "src/main/java/thc/runtime/VectorByteArrayExpression.java",
-            "src/main/resources/thc/scalar-primop-signatures.json", "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py"));
+            "src/main/resources/thc/scalar-primop-signatures.json", "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py"));
         if (family.equals("doublex2")) sources.add("src/main/java/thc/runtime/VectorMemory.java");
-        for (var file : Objects.requireNonNull(new File(root, "compiler/THC").listFiles()))
-            if (file.getName().endsWith(".hs")) sources.add("compiler/THC/" + file.getName());
-        for (var file : Objects.requireNonNull(new File(root, "scripts").listFiles()))
-            if (file.getName().startsWith("core_") && file.getName().endsWith(".py")) sources.add("scripts/" + file.getName());
+        for (var file : Objects.requireNonNull(new File(root, "src/compiler/THC").listFiles()))
+            if (file.getName().endsWith(".hs")) sources.add("src/compiler/THC/" + file.getName());
+        for (var file : Objects.requireNonNull(new File(root, "bin").listFiles()))
+            if (file.getName().startsWith("core_") && file.getName().endsWith(".py")) sources.add("bin/" + file.getName());
         for (String file : List.of("pre-core.json.gz", "post-core.json.gz", floating(family) ? "input-provenance.json.gz" : "native/provenance.json.gz"))
             sources.add(retainedBase + "/" + file);
         records(manifest, "sources", new HashSet<>(sources));

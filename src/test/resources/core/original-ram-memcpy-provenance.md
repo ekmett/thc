@@ -26,7 +26,7 @@ repository root with pinned GHC 9.14.1:
 mkdir -p build/ram-memcpy/native
 ghc --make -O2 -dynamic -fforce-recomp -dcore-lint -dstg-lint \
   -odir build/ram-memcpy/native -hidir build/ram-memcpy/native \
-  compiler/test-fixtures/OriginalMemcpyNative.hs -o build/ram-memcpy/native/oracle
+  test/fixtures/compiler/OriginalMemcpyNative.hs -o build/ram-memcpy/native/oracle
 build/ram-memcpy/native/oracle > src/test/resources/core/original-memcpy-native.tsv
 ```
 

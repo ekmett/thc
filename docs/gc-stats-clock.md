@@ -102,7 +102,7 @@ requests, and ordered monotonic observations. No test assumes a measurable GC
 effect or equates absolute clock values between runtimes.
 
 ```sh
-compiler/build.sh
+bin/build-compiler.sh
 cabal run exe:thc-primops -- scalars
 cabal run exe:thc-fixtures -- gc-stats
 ./gradlew --continue gcStatsFullCoreTest gcStatsFullCoreDenseTest \

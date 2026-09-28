@@ -44,7 +44,7 @@ No post-compilation settling calls or retries are part of those checks.
 
 ## Genuine Core and independent observations
 
-`compiler/test-fixtures/SimdWord8X16.hs` uses the real pinned primops.
+`test/fixtures/compiler/SimdWord8X16.hs` uses the real pinned primops.
 The graph roots `plusCase`, `minusCase`, and `timesCase` have two machine `Int#`
 seeds and a machine `Int#` checksum result on a required 64-bit host. Each lane
 narrows its affine input through `int2Word#` and `wordToWord8#`:
@@ -124,8 +124,8 @@ Use the pinned environment and the shared resource gate for this checkout's
 `build` directory:
 
 ```sh
-python3 scripts/prepare-word8x16-audit.py
-python3 scripts/test-word8x16-model.py
+python3 bin/prepare-word8x16-audit.py
+python3 bin/test-word8x16-model.py
 ./gradlew --max-workers=2 --continue \
   testDefault --tests thc.runtime.SimdWord8VectorTest \
   testDense --tests thc.runtime.SimdWord8VectorTest

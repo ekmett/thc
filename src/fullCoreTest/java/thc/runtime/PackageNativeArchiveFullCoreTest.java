@@ -57,11 +57,11 @@ public class PackageNativeArchiveFullCoreTest {
             "test/fixtures/run-native-archive/mixed/src/Narrow.hs", "test/fixtures/run-native-archive/mixed/src/Wide.hs",
             "test/fixtures/run-native-archive/mixed/src/CapiMix.hs", "test/fixtures/run-native-archive/mixed/include/mixed-header.h",
             "test/fixtures/run-native-archive/unresolved/native.c", "test/haskell-fixtures/PackageNativeArchiveFixtures.hs",
-            "src/THC/Driver/PackageNative.hs", "src/THC/Driver/NativeArgumentBridge.hs", "src/THC/Driver/NativeLibrarySources.hs",
+            "src/driver/THC/Driver/PackageNative.hs", "src/driver/THC/Driver/NativeArgumentBridge.hs", "src/driver/THC/Driver/NativeLibrarySources.hs",
             "test/fixtures/run-native-archive/mixed/lifecycle.cpp", "test/fixtures/run-native-archive/mixed/src/Lifecycle.hs",
             "test/fixtures/run-native-archive/poisoned/native.c", "test/fixtures/run-native-archive/poisoned/Poisoned.hs",
             "test/fixtures/run-native-archive/provider/native.c", "test/fixtures/run-native-archive/provider/Provider.hs",
-            "scripts/core_package_manifest.py", "scripts/audit-core.py"), null);
+            "bin/core_package_manifest.py", "bin/audit-core.py"), null);
         var paths = (List<String>) manifest.get("modules"); var artifacts = new LinkedHashSet<>(paths);
         artifacts.addAll(List.of("build/native-archive/supported-audit.json", "build/native-archive/interruptible.json",
             "build/native-archive/mixed-width-audit.json", "build/native-archive/narrow-conflict.json", "build/native-archive/wide-conflict.json",

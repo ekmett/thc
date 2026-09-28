@@ -57,12 +57,12 @@ class FloatingRemainderTest {
     private List<Row> evidence() throws Exception {
         var manifest = json(DIR + "/manifest.json");
         assertEquals(1L, manifest.get("schema")); assertEquals("9.14.1", manifest.get("ghc")); assertEquals(NAMES, manifest.get("entries"));
-        var inputs = new HashSet<>(list("compiler/test-fixtures/FloatingRemainderAudit.hs", "compiler/test-fixtures/FloatingRemainderNative.hs",
+        var inputs = new HashSet<>(list("test/fixtures/compiler/FloatingRemainderAudit.hs", "test/fixtures/compiler/FloatingRemainderNative.hs",
             "examples/THC/InverseHyperbolic.hs", "thc.cabal", "test/haskell-fixtures/Main.hs", "test/haskell-fixtures/FixtureSupport.hs",
-            "test/haskell-fixtures/FloatingRemainderFixtures.hs", "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py",
-            "scripts/audit-core.py", "scripts/core-capabilities.json", "src/main/resources/thc/scalar-primop-signatures.json"));
-        for (var file : Objects.requireNonNull(new File(root, "compiler/THC").listFiles())) if (file.getName().endsWith(".hs")) inputs.add(root.toPath().relativize(file.toPath()).toString());
-        for (var file : Objects.requireNonNull(new File(root, "scripts").listFiles())) if (file.getName().startsWith("core_") && file.getName().endsWith(".py")) inputs.add(root.toPath().relativize(file.toPath()).toString());
+            "test/haskell-fixtures/FloatingRemainderFixtures.hs", "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py",
+            "bin/audit-core.py", "bin/core-capabilities.json", "src/main/resources/thc/scalar-primop-signatures.json"));
+        for (var file : Objects.requireNonNull(new File(root, "src/compiler/THC").listFiles())) if (file.getName().endsWith(".hs")) inputs.add(root.toPath().relativize(file.toPath()).toString());
+        for (var file : Objects.requireNonNull(new File(root, "bin").listFiles())) if (file.getName().startsWith("core_") && file.getName().endsWith(".py")) inputs.add(root.toPath().relativize(file.toPath()).toString());
         var commands = new ArrayList<>(list("native-build", "native-oracle"));
         var outputs = new HashSet<>(list(DIR + "/inputs.tsv", DIR + "/oracle.tsv", DIR + "/native/oracle"));
         for (var stage : list("pre", "post")) {
@@ -193,7 +193,7 @@ class FloatingRemainderTest {
                 default -> { }
             }
             var input = temporary.resolve(mutation + ".json"); Files.writeString(input, Json.stringify(linked)); var report = temporary.resolve(mutation + "-report.json");
-            var process = new ProcessBuilder("python3", "scripts/audit-core.py", input.toString(), "--entry", name, "--output", report.toString()).directory(root)
+            var process = new ProcessBuilder("python3", "bin/audit-core.py", input.toString(), "--entry", name, "--output", report.toString()).directory(root)
                 .redirectOutput(temporary.resolve(mutation + ".stdout").toFile()).redirectError(temporary.resolve(mutation + ".stderr").toFile()).start();
             if (!process.waitFor(60, TimeUnit.SECONDS)) { process.destroyForcibly().waitFor(); fail("Shared auditor timeout: " + mutation); }
             assertEquals(mutation.equals("valid") ? 0 : 1, process.exitValue(), mutation);

@@ -5,7 +5,7 @@ oracle through the production AST and BytecodeDSL runtimes. It measures no timin
 It reuses the tuple graph harness and strict allocation/call auditor.
 
 ```sh
-python3 scripts/prepare-floating-tuples.py
+python3 bin/prepare-floating-tuples.py
 python3 bench/experiments/floating-tuple-graphs/run.py /tmp/thc-floating-graphs \
   --capture bench/experiments/floating-tuple-graphs/captured
 ```

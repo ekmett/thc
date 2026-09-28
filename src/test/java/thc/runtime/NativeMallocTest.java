@@ -258,7 +258,7 @@ public class NativeMallocTest {
                     Files.readString(root.toPath().resolve("build/native-malloc/manifest.json")));
                 assertEquals("9.14.1", manifest.get("ghc"));
                 OriginalStdioChecks.hashes(root, manifest.get("inputHashes"),
-                    Set.of("compiler/test-fixtures/NativeMallocNative.hs",
+                    Set.of("test/fixtures/compiler/NativeMallocNative.hs",
                         "test/haskell-fixtures/NativeAddressFixtures.hs",
                         "src/test/resources/core/original-malloc-descriptors.json"),
                     null);

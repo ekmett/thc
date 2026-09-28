@@ -9,10 +9,10 @@ the terms identified below.
 
 ## zlib checksum source provider
 
-`compiler/pinned-zlib/1.2.11` contains unchanged checksum sources and supporting
+`third-party/pinned/zlib-1.2.11` contains unchanged checksum sources and supporting
 headers from zlib 1.2.11. They retain the zlib license and original Mark Adler /
-Jean-loup Gailly notices in `zlib.h` and `README`. The acquisition source and
-archive digest are recorded in `compiler/pinned-zlib/README.md`. THC compiles
+Jean-loup Gailly notices in `zlib.h` and `README`. The upstream repository is recorded in `.gitmodules`; Git pins its exact
+release commit. See `third-party/README.md` for checkout instructions. THC compiles
 these functions as LLVM over managed buffers; it does not replace them with
 handwritten checksum implementations.
 
@@ -53,7 +53,7 @@ normalization paths are intentionally absent.
 Cadenza's license terms and Oracle copyright notices are retained in
 [LICENSE.txt](LICENSE.txt), with Edward Kmett's copyright extended through 2026.
 The original notice is retained without modification in
-[third-party-licenses/cadenza-LICENSE.txt](third-party-licenses/cadenza-LICENSE.txt).
+[third-party/licenses/cadenza-LICENSE.txt](third-party/licenses/cadenza-LICENSE.txt).
 The incorporated portions and THC's original modifications use the same SPDX
 expression, `UPL-1.0 AND BSD-3-Clause`, including the retained Oracle notices.
 
@@ -67,7 +67,7 @@ headers. The Gradle wrapper keeps its own Apache-2.0 identifiers. Captured
 benchmark and compiler evidence, including frozen copies of source files, is
 preserved byte for byte so recorded hashes remain valid.
 
-The retained GHC sources in `compiler/test-fixtures/empty-join-typeable/` also
+The retained GHC sources in `test/fixtures/compiler/empty-join-typeable/` also
 remain byte for byte intact. Their adjacent `LICENSE` and provenance identify
 the upstream terms; SPDX sidecars identify the BSD-3-Clause source license
 without changing the recorded source hashes.
@@ -78,7 +78,7 @@ The shift, GCD and floating-conversion adapters in `src/main/c/gmp-api.c`
 adapt GHC 9.14.1's `libraries/ghc-internal/cbits/gmp_wrappers.c`, copyright
 (c) 2014 Herbert Valerio Riedel <hvr@gnu.org>, under BSD-3-Clause. The original
 terms and University of Glasgow notice are retained in
-[`compiler/pinned-ghc-internal/LICENSE`](compiler/pinned-ghc-internal/LICENSE).
+[`third-party/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE`](third-party/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE).
 Host validation, transport and lifetime management are THC additions.
 
 ## Gradle wrapper
@@ -88,25 +88,23 @@ wrapper artifacts, copied from Cadenza. They remain under **Apache-2.0**.
 The scripts retain their original copyright and license headers; the JAR
 contains its upstream `META-INF/LICENSE`. A full Apache-2.0 text is also
 provided in
-[third-party-licenses/gradle-LICENSE.txt](third-party-licenses/gradle-LICENSE.txt).
+[third-party/licenses/gradle-LICENSE.txt](third-party/licenses/gradle-LICENSE.txt).
 Copying the wrapper through
 Cadenza does not change its upstream license.
 
-## Downloaded Haskell sources
+## Upstream Haskell sources
 
-The export scripts download third-party Haskell sources into the ignored
-`vendor/` cache. These sources are not part of the published THC source tree
-and remain under their own upstream terms.
+The pinned GHC submodule supplies the library source used by the boot exporter.
+It retains the complete upstream license collection and source-file notices.
+The GHC-specific THC patch is stored separately under `third-party/patches/`.
 
-- `compiler/export-map.sh` downloads the upstream containers 0.8 source
+The containers experiment downloads its source into an ignored cache:
+
+- `bin/export-map.sh` downloads the upstream containers 0.8 source
   package, including its BSD-style three-clause `LICENSE` and per-file
   copyright notices, into `vendor/containers-0.8/`.
-- `compiler/export-boot.py` downloads selected GHC 9.14.1 library sources and
-  the complete upstream license collection into `vendor/ghc-9.14.1/`. The
-  collection includes the GHC BSD-style license and Haskell report/FFI
-  notices. Source-file copyright notices remain intact.
 
-When redistributing those downloaded sources or derived artifacts, retain
+When redistributing upstream sources or derived artifacts, retain
 those upstream license files and applicable notices.
 
 Generated Core and compiler graph artifacts can contain representations of

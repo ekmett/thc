@@ -61,7 +61,7 @@ also reject Set on both backends; these rejections are not execution passes.
 ## Reproduction
 
 After preparing the pinned compiler and the library boot bundle using
-`python3 scripts/prepare-library-tests.py`, run from the repository root in Bash:
+`python3 bin/prepare-library-tests.py`, run from the repository root in Bash:
 
 ```sh
 for mode in pre post; do
@@ -71,11 +71,11 @@ for mode in pre post; do
   fi
   THC_CORE_OUT="$PWD/build/set-identity-$mode/core" \
   THC_GHC_OUT="$PWD/build/set-identity-$mode/ghc" \
-    compiler/export.sh -i"$PWD/vendor/containers-0.8/src" \
+    bin/export-core.sh -i"$PWD/vendor/containers-0.8/src" \
       -I"$PWD/vendor/containers-0.8/include" \
       -fplugin-opt=Thc.Plugin:closure=setAggregate "${flags[@]}" \
       examples/THC/SetWorkload.hs || exit
-  python3 scripts/audit-core.py --entry setAggregate \
+  python3 bin/audit-core.py --entry setAggregate \
     --output "build/set-identity-$mode/audit.json" \
     "build/set-identity-$mode/core" build/libraries/boot/core
   result=$?

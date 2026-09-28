@@ -32,8 +32,8 @@ prepareUncaughtSelf root = do
   let directory = "build/uncaught-self"
       output = root </> directory
       manifest = output </> "manifest.json"
-      source = "compiler/test-fixtures/UncaughtSelfAudit.hs"
-      driver = "compiler/test-fixtures/UncaughtSelfNative.hs"
+      source = "test/fixtures/compiler/UncaughtSelfAudit.hs"
+      driver = "test/fixtures/compiler/UncaughtSelfNative.hs"
       stages = ["pre", "post"]
   createDirectoryIfMissing True output
   present <- doesFileExist manifest
@@ -46,11 +46,11 @@ prepareUncaughtSelf root = do
         options = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"]
     _ <- run root [("THC_CORE_OUT", root </> core),
       ("THC_GHC_OUT", output </> stage </> "ghc")]
-      "compiler/export.sh" (options ++ [source]) ""
+      "bin/export-core.sh" (options ++ [source]) ""
     forM_ [("selfUncaught", "audit.json"), ("selfUncaughtIO", "io-audit.json")] $ \(entry, reportName) -> do
       let report = directory </> stage </> reportName
       (status, _, errors) <- readCreateProcessWithExitCode
-        ((proc "python3" (["scripts/audit-core.py", "--entry", entry] ++
+        ((proc "python3" (["bin/audit-core.py", "--entry", entry] ++
           ["--io-main" | entry == "selfUncaughtIO"] ++
           ["--output", report, core </> "UncaughtSelfAudit.json"])) { cwd = Just root }) ""
       unless (status == ExitSuccess) (die ("Uncaught self Core audit failed: " ++ errors))
@@ -70,14 +70,14 @@ prepareUncaughtSelf root = do
   let native = output </> "native"
   createDirectoryIfMissing True native
   _ <- run root [] ghc ["--make", "-O2", "-dynamic", "-threaded", "-dcore-lint", "-dstg-lint",
-    "-i" ++ root </> "compiler/test-fixtures", "-odir", native, "-hidir", native,
+    "-i" ++ root </> "test/fixtures/compiler", "-odir", native, "-hidir", native,
     root </> driver, "-o", native </> "oracle"] ""
-  pluginFiles <- listDirectory (root </> "compiler/THC")
+  pluginFiles <- listDirectory (root </> "src/compiler/THC")
   let sources = sort $ [source, driver, "thc.cabal", "test/haskell-fixtures/Main.hs",
         "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/UncaughtSelfFixtures.hs",
-        "scripts/audit-core.py", "scripts/core-capabilities.json",
-        "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py"] ++
-        ["compiler/THC" </> file | file <- pluginFiles, takeExtension file == ".hs"]
+        "bin/audit-core.py", "bin/core-capabilities.json",
+        "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py"] ++
+        ["src/compiler/THC" </> file | file <- pluginFiles, takeExtension file == ".hs"]
       artifacts = (directory </> "native/oracle") :
         [directory </> stage </> suffix | stage <- stages,
           suffix <- ["core/UncaughtSelfAudit.json", "audit.json", "io-audit.json"]]

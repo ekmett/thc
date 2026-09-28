@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.*;
 public class OriginalStackFormatterTest {
     private final File root = new File(System.getProperty("thc.projectRoot"));
     private final String prefix = "build/original-stack-formatter/";
-    private final String sourceRoot = "compiler/pinned-ghc-internal/";
+    private final String sourceRoot = "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/";
     private Map<String, String> pinned;
     private Set<String> requiredInputs;
     private final List<String> labels = OriginalStackFormatterCommands.labels;
@@ -30,7 +30,7 @@ public class OriginalStackFormatterTest {
     private static void require(boolean condition) { if (!condition) throw new IllegalArgumentException("Failed requirement."); }
     private synchronized Map<String, String> pinned() throws Exception {
         if (pinned == null) {
-            var source = Files.readString(contained("src/THC/Driver/Wired.hs", true).toPath()); int begin = source.indexOf("sourceHashes ="); var text = begin < 0 ? source : source.substring(begin + "sourceHashes =".length()); int end = text.indexOf("\ndata WiredArtifacts"); if (end >= 0) text = text.substring(0, end);
+            var source = Files.readString(contained("src/driver/THC/Driver/Wired.hs", true).toPath()); int begin = source.indexOf("sourceHashes ="); var text = begin < 0 ? source : source.substring(begin + "sourceHashes =".length()); int end = text.indexOf("\ndata WiredArtifacts"); if (end >= 0) text = text.substring(0, end);
             var matcher = Pattern.compile("\\(\"([^\"]+)\", \"([0-9a-f]{64})\"\\)").matcher(text); var entries = new ArrayList<Map.Entry<String, String>>();
             while (matcher.find()) entries.add(Map.entry(matcher.group(1), matcher.group(2))); var names = new HashSet<String>(); for (var entry : entries) names.add(entry.getKey()); require(entries.size() == 70 && names.size() == 70);
             var sorted = new ArrayList<>(entries); sorted.sort(Map.Entry.comparingByKey()); var catalog = new StringBuilder(); for (var entry : sorted) catalog.append(entry.getKey()).append('\0').append(entry.getValue()).append('\n');
@@ -40,7 +40,7 @@ public class OriginalStackFormatterTest {
     }
     private synchronized Set<String> requiredInputs() throws Exception {
         if (requiredInputs == null) {
-            var result = new LinkedHashSet<>(pinned().keySet()); result.addAll(List.of("compiler/test-fixtures/OriginalStackFormatter.hs", "compiler/test-fixtures/OriginalStackFormatterNative.hs", "test/haskell-fixtures/StackFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal", "src/THC/Driver/Wired.hs", "compiler/target-layout.c", "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py", "compiler/THC/Plugin.hs", "compiler/THC/CBV.hs", "compiler/THC/Demands.hs", "compiler/THC/Sources.hs", "compiler/THC/Wired.hs", "scripts/audit-core.py", "scripts/core-capabilities.json", "src/main/resources/thc/scalar-primop-signatures.json", "scripts/core_data_tags.py", "scripts/core_managed_files.py", "scripts/core_md5_foreign.py", "scripts/core_original_foreign.py", "scripts/core_package_manifest.py", "scripts/core_sums.py", "scripts/core_tuple_inputs.py", "scripts/core_vector_memory.py", "scripts/core_vectors.py")); requiredInputs = result;
+            var result = new LinkedHashSet<>(pinned().keySet()); result.addAll(List.of("test/fixtures/compiler/OriginalStackFormatter.hs", "test/fixtures/compiler/OriginalStackFormatterNative.hs", "test/haskell-fixtures/StackFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal", "src/driver/THC/Driver/Wired.hs", "src/driver/cbits/target-layout.c", "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py", "src/compiler/THC/Plugin.hs", "src/compiler/THC/CBV.hs", "src/compiler/THC/Demands.hs", "src/compiler/THC/Sources.hs", "src/compiler/THC/Wired.hs", "bin/audit-core.py", "bin/core-capabilities.json", "src/main/resources/thc/scalar-primop-signatures.json", "bin/core_data_tags.py", "bin/core_managed_files.py", "bin/core_md5_foreign.py", "bin/core_original_foreign.py", "bin/core_package_manifest.py", "bin/core_sums.py", "bin/core_tuple_inputs.py", "bin/core_vector_memory.py", "bin/core_vectors.py")); requiredInputs = result;
         } return requiredInputs;
     }
     private File contained(String path, boolean input) throws Exception {

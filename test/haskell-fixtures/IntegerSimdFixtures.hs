@@ -266,8 +266,8 @@ prepareIntegerSimd root family options = do
   f <- case filter ((== family) . map toLower . shape) families of [value] -> pure value; _ -> die "Unknown integer SIMD family"
   unless (options == [] || options == ["--export-only"]) $ die "Expected optional --export-only"
   let exportOnly = options == ["--export-only"]
-      out = "build/simd-" ++ family; logs = out </> "commands"; fixture = "compiler/test-fixtures/Simd" ++ shape f ++ ".hs"
-      nativeSource = "compiler/test-fixtures/Simd" ++ shape f ++ "Native.hs"
+      out = "build/simd-" ++ family; logs = out </> "commands"; fixture = "test/fixtures/compiler/Simd" ++ shape f ++ ".hs"
+      nativeSource = "test/fixtures/compiler/Simd" ++ shape f ++ "Native.hs"
       stages = if exportOnly then ["pre"] else ["pre","post"]
       entries = [object ["name" .= name,"arity" .= arity name,"cases" .= cases f name] | name <- entryNames f]
       rows = [(name,args,answer f name args) | name <- entryNames f,args <- cases f name]
@@ -283,14 +283,14 @@ prepareIntegerSimd root family options = do
   version <- runStep "ghc-version" [] ghc ["--numeric-version"]
   unless (BSC.unpack (commandStdout version) == "9.14.1\n") $ die "Requires GHC 9.14.1"
   info <- runStep "ghc-info" [] ghc ["--info"]
-  build <- runStep "plugin-build" [] "compiler/build.sh" []
+  build <- runStep "plugin-build" [] "bin/build-compiler.sh" []
   writeFile (root </> out </> "expected.tsv") table
   writeFile (root </> out </> "requests.tsv") requests
   stageResults <- forM stages $ \stage -> do
     let path = out </> stage ++ "-core/Simd" ++ shape f ++ ".json"
         env = [("THC_CORE_OUT",root </> out </> stage ++ "-core"),("THC_GHC_OUT",root </> out </> stage ++ "-ghc"),("THC_SOURCE_NOTES","true")]
     exists <- doesFileExist (root </> path); when exists (removeFile (root </> path))
-    exported <- runStep (stage ++ "-export") env "compiler/export.sh" $
+    exported <- runStep (stage ++ "-export") env "bin/export-core.sh" $
       (if exportOnly then ["-fno-code","-fwrite-if-simplified-core"] else []) ++
       ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [fixture]
     modul <- readJson (root </> path)
@@ -298,7 +298,7 @@ prepareIntegerSimd root family options = do
     audited <- forM (entryNames f ++ ["vectorArgument"]) $ \name -> do
       let reportPath = out </> stage ++ "-" ++ name ++ "-audit.json"
       command <- runLoggedExpect 0 120 root logs (stage ++ "-audit-" ++ name) [] python
-        ["scripts/audit-core.py","--entry",name,"--output",reportPath,path]
+        ["bin/audit-core.py","--entry",name,"--output",reportPath,path]
       report <- readJson (root </> reportPath)
       unless (get "missingGlobals" report == toJSON ([] :: [Value])) $ die (name ++ ": missing globals")
       unless (get "accepted" report == Bool True && null (items (get "issues" report))) $ die "Strict positive audit failed"
@@ -318,7 +318,7 @@ prepareIntegerSimd root family options = do
       unless (changed /= modul) $ die "Signed metadata control did not mutate"
       writeJson (root </> inputPath) changed
       command <- runLoggedExpect 1 120 root logs (stage ++ "-" ++ variant) [] python
-        ["scripts/audit-core.py","--entry","plusCase","--output",reportPath,inputPath]
+        ["bin/audit-core.py","--entry","plusCase","--output",reportPath,inputPath]
       report <- readJson (root </> reportPath)
       let actual = Map.fromListWith (+) [((str (get "code" i),str (get "detail" i)),1 :: Int) | i <- items (get "issues" report)]
       unless (get "accepted" report == Bool False && null (items (get "missingGlobals" report)) && actual == expected) $ die (variant ++ ": exact signedness errors changed: " ++ show actual)
@@ -332,19 +332,19 @@ prepareIntegerSimd root family options = do
   native <- if exportOnly then pure ([],[]) else do
     let directory = out </> "native"; binary = directory </> family ++ "-oracle"
     createDirectoryIfMissing True (root </> directory)
-    built <- runStep "native-build" [] ghc ["--make","-O2","-fforce-recomp","-dcore-lint","-dstg-lint","-icompiler/test-fixtures","-odir",directory,"-hidir",directory,"-o",binary,nativeSource]
+    built <- runStep "native-build" [] ghc ["--make","-O2","-fforce-recomp","-dcore-lint","-dstg-lint","-itest/fixtures/compiler","-odir",directory,"-hidir",directory,"-o",binary,nativeSource]
     observed <- runLoggedWithInput (out </> "requests.tsv") 60 root logs "native-oracle" [] (root </> binary) []
     -- Exact text includes ordered keys, uniqueness, complete coverage and values.
     unless (commandStdout observed == BSC.pack table) $ die "Native/integer model mismatch"
     BS.writeFile (root </> out </> "oracle.tsv") (commandStdout observed)
     pure ([built,observed],[out </> "oracle.tsv",binary])
-  scripts <- sort . filter (\p -> "core_" `isPrefixOf` p && ".py" `isSuffixOf` p) <$> listDirectory (root </> "scripts")
-  compiler <- sort . filter (".hs" `isSuffixOf`) <$> listDirectory (root </> "compiler/THC")
+  scripts <- sort . filter (\p -> "core_" `isPrefixOf` p && ".py" `isSuffixOf` p) <$> listDirectory (root </> "bin")
+  compiler <- sort . filter (".hs" `isSuffixOf`) <$> listDirectory (root </> "src/compiler/THC")
   let commands = [version,info,build] ++ concat [cs | (_,_,_,_,cs,_) <- stageResults] ++ fst native
       sources = [fixture,nativeSource,"test/haskell-fixtures/IntegerSimdFixtures.hs","test/haskell-fixtures/FixtureSupport.hs","test/haskell-fixtures/Main.hs","thc.cabal",
         "src/test/java/thc/runtime/IntegerSimdModelTest.java","src/test/java/thc/runtime/IntegerSimdModel.java",
-        "scripts/audit-core.py","scripts/core-capabilities.json","src/main/resources/thc/scalar-primop-signatures.json"] ++
-        map ("scripts" </>) scripts ++ map ("compiler/THC" </>) compiler ++ map ("compiler" </>) ["build.sh","export.sh","toolchain.sh"]
+        "bin/audit-core.py","bin/core-capabilities.json","src/main/resources/thc/scalar-primop-signatures.json"] ++
+        map ("bin" </>) scripts ++ map ("src/compiler/THC" </>) compiler ++ map ("bin" </>) ["build-compiler.sh","export-core.sh","toolchain.sh"]
       artifacts = [out </> "expected.tsv",out </> "requests.tsv"] ++ concat [ps | (_,_,_,_,_,ps) <- stageResults] ++ snd native ++ concatMap commandArtifacts commands
   sourceRecords <- mapM record sources
   artifactRecords <- mapM record artifacts

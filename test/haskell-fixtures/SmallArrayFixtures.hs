@@ -30,8 +30,8 @@ prepareSmallArrays :: FilePath -> IO ()
 prepareSmallArrays root = do
   let directory = "build/small-arrays"
       native = directory </> "native"
-      source = "compiler/test-fixtures/SmallArrayAudit.hs"
-      driver = "compiler/test-fixtures/SmallArrayAuditNative.hs"
+      source = "test/fixtures/compiler/SmallArrayAudit.hs"
+      driver = "test/fixtures/compiler/SmallArrayAuditNative.hs"
       binary = native </> "oracle"
       inputs = [0,1,2,3,7,16,31,127,1024] :: [Integer]
   createDirectoryIfMissing True (root </> native)
@@ -39,7 +39,7 @@ prepareSmallArrays root = do
   version <- takeWhile (/= '\n') <$> run root [] ghc ["--numeric-version"] ""
   unless (version == "9.14.1") (die "SmallArray fixture requires GHC 9.14.1")
   _ <- run root [] ghc ["--make", "-O2", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
-    "-i./compiler/test-fixtures", "-odir", native, "-hidir", native, driver, "-o", binary] ""
+    "-i./test/fixtures/compiler", "-odir", native, "-hidir", native, driver, "-o", binary] ""
   oracle <- runWithTimeout (Just 30000000) root [] (root </> binary) []
     (unlines (map show inputs))
   let rows = map (splitTab . takeWhile (/= '\r')) (lines oracle)
@@ -57,23 +57,23 @@ prepareSmallArrays root = do
     createDirectoryIfMissing True (root </> core)
     createDirectoryIfMissing True (root </> ghcOut)
     _ <- run root [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> ghcOut)]
-      "compiler/export.sh" (options ++ [source]) ""
-    _ <- run root [] "python3" ["scripts/audit-core.py", modulePath, "--entry",
+      "bin/export-core.sh" (options ++ [source]) ""
+    _ <- run root [] "python3" ["bin/audit-core.py", modulePath, "--entry",
       "smallComposite", "--entry", "safeSliceComposite", "--output", report] ""
     accepted <- BS.readFile (root </> report)
     unless (case decodeStrict' accepted of
       Just (Object fields) -> KeyMap.lookup "accepted" fields == Just (Bool True)
       _ -> False) (die ("SmallArray strict Core audit rejected " ++ stage))
     pure (stage, modulePath, report)
-  plugin <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
+  plugin <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
   let sources = sort $ [source, driver, "test/haskell-fixtures/SmallArrayFixtures.hs",
         "test/haskell-fixtures/Main.hs", "test/haskell-fixtures/FixtureSupport.hs",
-        "scripts/audit-core.py", "scripts/core-capabilities.json",
-        "compiler/export.sh", "compiler/build.sh", "compiler/toolchain.sh",
-        "compiler/plugin.py", "thc.cabal", "cabal.project"] ++
-        ["compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"] ++
-        ["scripts" </> file | file <- scripts, "core_" `isPrefixOf` file, takeExtension file == ".py"]
+        "bin/audit-core.py", "bin/core-capabilities.json",
+        "bin/export-core.sh", "bin/build-compiler.sh", "bin/toolchain.sh",
+        "bin/plugin.py", "thc.cabal", "cabal.project"] ++
+        ["src/compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"] ++
+        ["bin" </> file | file <- scripts, "core_" `isPrefixOf` file, takeExtension file == ".py"]
       artifacts = [binary, directory </> "oracle.tsv"] ++
         [path | (_,modulePath,report) <- stages, path <- [modulePath, report]]
   sourceHashes <- hashes root sources

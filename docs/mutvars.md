@@ -62,7 +62,7 @@ payloads, not an arbitrary unboxed result shape.
 
 ## Fixtures and checks
 
-`compiler/test-fixtures/MutVarAudit.hs` uses public `runST`, `newSTRef`,
+`test/fixtures/compiler/MutVarAudit.hs` uses public `runST`, `newSTRef`,
 `readSTRef`, `writeSTRef`, `modifySTRef`, `modifySTRef'`, and `(==)`. Six STRef entries
 cover aliased and independent references, read snapshots, captured references,
 lazy bottom and closure payloads, an unlifted boxed product with a lazy field,

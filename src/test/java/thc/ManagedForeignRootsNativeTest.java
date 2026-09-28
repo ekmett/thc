@@ -81,7 +81,7 @@ class ManagedForeignRootsNativeTest {
     }
     private Map<String, Object> audit(String entry) throws Exception {
         var output = directory.resolve("registration-runtime-audit.json");
-        var process = new ProcessBuilder("python3", root.resolve("scripts/audit-core.py").toString(), core.toString(), "--entry", entry, "--output", output.toString()).directory(root.toFile()).redirectErrorStream(true).start();
+        var process = new ProcessBuilder("python3", root.resolve("bin/audit-core.py").toString(), core.toString(), "--entry", entry, "--output", output.toString()).directory(root.toFile()).redirectErrorStream(true).start();
         var log = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8); assertEquals(entry.equals("probe") ? 0 : 1, process.waitFor(), log);
         return object(Json.parse(Files.readString(output)));
     }

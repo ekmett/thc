@@ -98,7 +98,7 @@ public class OriginalStackDecoderCallTest {
         } else if (value instanceof List<?> list) for (var child : list) references(child, referenced);
     }
     private void checkProvenance(Map<String, Object> resource) throws Exception {
-        var text = Files.readString(new File(System.getProperty("thc.projectRoot"), "compiler/test-fixtures/OriginalStackProof.json").toPath());
+        var text = Files.readString(new File(System.getProperty("thc.projectRoot"), "test/fixtures/compiler/OriginalStackProof.json").toPath());
         assertEquals("db63661c12a6ecb757697e759fcb95e4d51f3689619bdb7682a041788eb41d4f", digest(text));
         var proof = (Map<String, Object>) Json.parse(text); var source = "GHC.Internal.Stack.Decode/GHC.Internal.Stack.Decode.json";
         var all = new LinkedHashSet<>(hot); all.addAll(cold); var seen = new LinkedHashSet<Object>(); var expected = new ArrayList<Map<String, Object>>();

@@ -58,7 +58,7 @@ Reproduce from this branch with pinned GraalVM 25.3.4.1 / JDK 25 and GHC 9.14.1:
 export JAVA_HOME=/path/to/pinned/graalvm
 export GHC=/path/to/ghc-9.14.1
 export GHC_PKG=/path/to/ghc-pkg-9.14.1
-python3 scripts/prepare-sum-result-audit.py
+python3 bin/prepare-sum-result-audit.py
 python3 bench/experiments/sum-results/run.py /absolute/new/output \
   --capture /absolute/new/compact-evidence
 ```

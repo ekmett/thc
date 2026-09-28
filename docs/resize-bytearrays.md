@@ -47,7 +47,7 @@ in place and are rejected by this primitive.
 
 ## Fixture and runtime checks
 
-`compiler/test-fixtures/ResizeByteArrayAudit.hs` retains an OPAQUE resize worker
+`test/fixtures/compiler/ResizeByteArrayAudit.hs` retains an OPAQUE resize worker
 across actual calls, including repeat resize and later writes through the returned
 reference. It never accesses a retired array. `cabal run exe:thc-fixtures --offline -- resize-bytearrays`
 rebuilds the pinned exporter and generates fresh pre/post Core, native TSV and
@@ -69,7 +69,7 @@ full-width sizes, publication failure, wrong carriers, and malformed proofs.
 Result/input loan depth and retained references must return to zero. Fixture-free
 Java checks cover the input grid and reject malformed, missing, duplicate,
 reordered and incorrect oracle rows. Python-auditor-specific representation
-mutations remain in the shared `scripts/test-core-bytearrays.py` suite.
+mutations remain in the shared `bin/test-core-bytearrays.py` suite.
 
 `ShrinkMutableByteArrayAudit` separately exercises ordinary and pinned shrink.
 The Haskell producer records 45 native rows with genuine pre/post-Tidy Core,
@@ -85,7 +85,7 @@ Using the pinned toolchain and the checkout's build lease:
 ```sh
 cabal run exe:thc-fixtures --offline -- resize-bytearrays
 cabal run exe:thc-fixtures --offline -- shrink-bytearrays
-python3 scripts/test-core-bytearrays.py
+python3 bin/test-core-bytearrays.py
 ./gradlew --max-workers=2 --continue \
   testDefault --tests thc.runtime.ResizeByteArrayTest --tests thc.runtime.ShrinkByteArrayTest \
   testDense --tests thc.runtime.ResizeByteArrayTest --tests thc.runtime.ShrinkByteArrayTest

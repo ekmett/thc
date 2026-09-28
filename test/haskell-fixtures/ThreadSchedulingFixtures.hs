@@ -30,7 +30,7 @@ prepareThreadScheduling root = do
       output = root </> directory
       manifest = output </> "manifest.json"
       source = "examples/ThreadScheduling.hs"
-      driver = "compiler/test-fixtures/ThreadSchedulingNative.hs"
+      driver = "test/fixtures/compiler/ThreadSchedulingNative.hs"
       entries = ["emptySpark", "lazyPar", "lazySpark", "sparkValue", "currentCounter", "negativeCounter", "pinnedFork", "otherCounter", "timedDelay"]
       stages = ["pre", "post"]
   createDirectoryIfMissing True output
@@ -43,10 +43,10 @@ prepareThreadScheduling root = do
     let core = directory </> stage </> "core"
         options = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"]
     _ <- run root [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", output </> stage </> "ghc")]
-      "compiler/export.sh" (options ++ [source]) ""
+      "bin/export-core.sh" (options ++ [source]) ""
     forM_ entries $ \entry -> do
       let report = directory </> stage </> (entry ++ "-audit.json")
-      _ <- run root [] "python3" ["scripts/audit-core.py", "--entry", entry,
+      _ <- run root [] "python3" ["bin/audit-core.py", "--entry", entry,
         "--output", report, core </> "ThreadScheduling.json"] ""
       bytes <- BS.readFile (root </> report)
       case decodeStrict' bytes of
@@ -64,14 +64,14 @@ prepareThreadScheduling root = do
   observations <- runWithTimeout (Just 30000000) root [] (native </> "oracle") [] ""
   unless (observations == "1\n1\n1\n1\n1\n1\n11\n11\n2000\n") (die "Native thread scheduling disagreed")
   writeFile (output </> "oracle.txt") observations
-  pluginFiles <- listDirectory (root </> "compiler/THC")
-  coreScripts <- listDirectory (root </> "scripts")
+  pluginFiles <- listDirectory (root </> "src/compiler/THC")
+  coreScripts <- listDirectory (root </> "bin")
   let sources = sort $ [source, driver, "thc.cabal", "test/haskell-fixtures/Main.hs",
         "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/ThreadSchedulingFixtures.hs",
-        "scripts/audit-core.py", "scripts/core-capabilities.json", "src/main/resources/thc/scalar-primop-signatures.json",
-        "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py"] ++
-        ["compiler/THC" </> file | file <- pluginFiles, takeExtension file == ".hs"] ++
-        ["scripts" </> file | file <- coreScripts, take 5 file == "core_" && takeExtension file == ".py"]
+        "bin/audit-core.py", "bin/core-capabilities.json", "src/main/resources/thc/scalar-primop-signatures.json",
+        "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py"] ++
+        ["src/compiler/THC" </> file | file <- pluginFiles, takeExtension file == ".hs"] ++
+        ["bin" </> file | file <- coreScripts, take 5 file == "core_" && takeExtension file == ".py"]
       artifacts = [directory </> "oracle.txt"] ++
         [directory </> stage </> suffix | stage <- stages,
           suffix <- "core/ThreadScheduling.json" : [entry ++ "-audit.json" | entry <- entries]]

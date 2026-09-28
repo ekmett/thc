@@ -32,8 +32,8 @@ prepareTextCbits :: FilePath -> IO ()
 prepareTextCbits root = do
   let directory = "build/text-cbits"
       output = root </> directory
-      source = "compiler/test-fixtures/TextCbitsAudit.hs"
-      nativeSource = "compiler/test-fixtures/TextCbitsNative.hs"
+      source = "test/fixtures/compiler/TextCbitsAudit.hs"
+      nativeSource = "test/fixtures/compiler/TextCbitsNative.hs"
       execute = runLogged 600 root (directory </> "logs")
       corpus = ["", "a", "abc\NULdef\n", "\x00e9\x03bb\x4e2d\x1f642",
         T.replicate 7 "x", T.replicate 16 "x", T.replicate 32 "x", T.replicate 64 "x",
@@ -75,12 +75,12 @@ prepareTextCbits root = do
   forM_ ["pre","post"] $ \stage -> do
     _ <- execute ("export-" ++ stage)
       [("THC_CORE_OUT",output </> stage ++ "-core"),("THC_GHC_OUT",output </> stage ++ "-ghc")]
-      "compiler/export.sh" (packageOptions ++ ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source])
+      "bin/export-core.sh" (packageOptions ++ ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source])
     pure ()
   let native = output </> "native"
   createDirectoryIfMissing True native
   _ <- execute "native-build" [] ghc (["--make","-O2","-fforce-recomp","-dcore-lint","-dstg-lint",
-    "-i" ++ root </> "compiler/test-fixtures","-odir",native,"-hidir",native,
+    "-i" ++ root </> "test/fixtures/compiler","-odir",native,"-hidir",native,
     root </> nativeSource,"-o",native </> "text-cbits-oracle"] ++ packageOptions)
   writeFile (output </> "inputs.tsv") (unlines cases)
   oracle <- runLoggedWithInput (directory </> "inputs.tsv") 600 root (directory </> "logs")
@@ -95,14 +95,14 @@ prepareTextCbits root = do
     (fail "native text row inventory differs")
   BS.writeFile (output </> "oracle.tsv") (commandStdout oracle)
   forM_ ["pre","post"] $ \stage -> do
-    _ <- execute ("audit-" ++ stage) [] "python3" ["scripts/audit-core.py","--entry","textMemchr","--entry","textMeasure","--entry","textReverse",
+    _ <- execute ("audit-" ++ stage) [] "python3" ["bin/audit-core.py","--entry","textMemchr","--entry","textMeasure","--entry","textReverse",
       "--output",output </> stage ++ "-audit.json",output </> stage ++ "-core/TextCbitsAudit.json"]
     pure ()
   inputs <- hashes root [source,nativeSource,"test/haskell-fixtures/TextCbitsFixtures.hs",
-    "scripts/core_original_foreign.py","scripts/audit-core.py","scripts/core-capabilities.json",
-    "compiler/pinned-text/2.1.3/cbits/utils.c","compiler/pinned-text/2.1.3/cbits/measure_off.c","compiler/pinned-text/2.1.3/cbits/reverse.c",
-    "compiler/pinned-text/2.1.3/LICENSE","compiler/pinned-text/2.1.3/openbsd-memchr.c",
-    "src/main/c/text-api.c","scripts/build-cbits.py"]
+    "bin/core_original_foreign.py","bin/audit-core.py","bin/core-capabilities.json",
+    "third-party/pinned/text-2.1.3/cbits/utils.c","third-party/pinned/text-2.1.3/cbits/measure_off.c","third-party/pinned/text-2.1.3/cbits/reverse.c",
+    "third-party/pinned/text-2.1.3/LICENSE","third-party/pinned/openbsd-memchr-1.8.c",
+    "src/main/c/text-api.c","bin/build-cbits.py"]
   artifacts <- hashes root [directory </> file | file <- ["inputs.tsv","oracle.tsv",
     "pre-core/TextCbitsAudit.json","post-core/TextCbitsAudit.json","pre-audit.json","post-audit.json","exposed-text.conf",
     "logs/original-registration.stdout","logs/native-oracle.command.json","logs/native-build.command.json",

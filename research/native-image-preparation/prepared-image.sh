@@ -36,7 +36,7 @@ while IFS= read -r prepared; do
     [[ -z "$prepared" || "$prepared" == \#* ]] && continue
     [[ "$prepared" =~ ^[a-zA-Z0-9_.$]+$ ]] || exit 2
     initialization="${initialization:+$initialization,}$prepared"
-done < "$repo_dir/scripts/native-image/pure-initialization.txt"
+done < "$repo_dir/bin/native-image/pure-initialization.txt"
 for kind in stateless markers enums; do
     generated=$(<"$inventory_dir/$kind.txt")
     [[ -z "$generated" ]] && continue

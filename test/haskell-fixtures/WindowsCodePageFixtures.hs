@@ -20,14 +20,14 @@ prepareWindowsCodePages :: FilePath -> IO ()
 prepareWindowsCodePages _ = die "windows-codepages requires native Windows GHC 9.14.1"
 #else
 import Control.Exception (finally)
-import Control.Monad (filterM, forM, forM_, unless, void, when)
+import Control.Monad (filterM, forM, forM_, unless, when)
 import Data.Aeson (Value(..), FromJSON, eitherDecodeStrict, fromJSON, Result(..), object, (.=))
 import qualified Data.Aeson.KeyMap as KeyMap
 import Data.Aeson.Key (Key)
 import qualified Data.ByteString as Bytes
 import qualified Data.ByteString.Char8 as BS
 import Data.Char (toUpper)
-import Data.List (nubBy, sort)
+import Data.List (isPrefixOf, nubBy, sort)
 import qualified Data.Map.Strict as Map
 import qualified Distribution.InstalledPackageInfo as Package
 import Data.Time (getCurrentTime, defaultTimeLocale, formatTime)
@@ -103,16 +103,14 @@ prepareWindowsCodePages root = do
       logs = directory </> stamp
       overlay = root </> logs </> "interfaces"
       output = root </> logs </> "consumer"
-      source = "compiler/test-fixtures/WindowsCodePageAudit.hs"
+      source = "test/fixtures/compiler/WindowsCodePageAudit.hs"
       execute = runLogged 180 root logs
       pkg = takeDirectory ghc </> "ghc-pkg.exe"
       oneLine = BS.unpack . BS.takeWhile (/= '\r') . BS.takeWhile (/= '\n') . commandStdout
       modules = ["GHC.Internal.Windows","GHC.Internal.IO.Encoding.CodePage","GHC.Internal.IO.Encoding.CodePage.API"]
       relative name = map (\c -> if c == '.' then '/' else c) name
-      sources = ["src" </> relative name ++ ".hs" | name <- modules]
-      archivePrefix = "ghc-9.14.1/libraries/ghc-internal"
-      extracted = root </> logs </> "source"
-      upstream = extracted </> archivePrefix
+      sources = ["src/" ++ relative name ++ ".hs" | name <- modules]
+      upstream = root </> "third-party/pinned/ghc-9.14.1/libraries/ghc-internal"
   createDirectoryIfMissing True overlay
   createDirectoryIfMissing True output
   stale <- doesFileExist (root </> directory </> "manifest.json")
@@ -120,33 +118,29 @@ prepareWindowsCodePages root = do
   version <- execute "version" [] ghc ["--numeric-version"]
   unless (oneLine version == "9.14.1") (die "Windows code pages require pinned GHC 9.14.1")
   library <- execute "libdir" [] ghc ["--print-libdir"]
-  catalog <- either die pure . eitherDecodeStrict =<< Bytes.readFile (root </> "compiler/windows-ghc-internal.json")
-  archive <- field "archive" catalog
-  archiveHash <- field "sha256" archive
-  archiveUrl <- field "url" archive
-  archivePath <- maybe (root </> "vendor/archives/ghc-9.14.1-src.tar.xz") id <$> lookupEnv "THC_GHC_SOURCE_ARCHIVE"
-  present <- doesFileExist archivePath
-  unless present $ do
-    createDirectoryIfMissing True (takeDirectory archivePath)
-    void $ execute "download" [] "curl.exe" ["--fail","--location",archiveUrl,"-o",archivePath]
-  actualHash <- hashFile archivePath
-  unless (actualHash == archiveHash) (die "Pinned GHC source archive SHA256 differs")
-  createDirectoryIfMissing True extracted
-  extraction <- execute "extract" [] "tar.exe" (["-xJf",archivePath,"-C",extracted] ++
-    [archivePrefix ++ "/" ++ map (\c -> if c == '\\' then '/' else c) path | path <- sources ++ ["include","cbits/Win32Utils.c"]])
+  catalog <- either die pure . eitherDecodeStrict =<< Bytes.readFile (root </> "config/ghc/9.14.1/windows-ghc-internal.json")
+  upstreamIdentity <- field "upstream" catalog :: IO Value
   inventory <- field "files" catalog :: IO [Value]
-  copiedSource <- filesUnder upstream
-  forM_ copiedSource $ \path -> do
-    let normalized = map (\c -> if c == '\\' then '/' else c) path
-    candidates <- filterM (\item -> (== normalized) <$> field "path" item) inventory
-    expected <- if normalized == "cbits/Win32Utils.c"
-      -- The production Core graph catalog covers Haskell and headers. This
-      -- separately pinned C source documents the native oracle's error mapping.
-      then pure "f62b489b53c951d02b769a35801abbd9945632ecb9a1f6ade3ccc4ca20060dac"
-      else case candidates of [item] -> field "sha256" item; _ -> die ("Missing pinned source " ++ path)
-    actual <- hashFile (upstream </> path)
+  moduleInputs <- forM sources $ \path -> do
+    candidates <- filterM (\item -> (== path) <$> field "path" item) inventory
+    case candidates of [item] -> pure item; _ -> die ("Missing pinned source " ++ path)
+  headers <- filterM (\item -> ("include/" `isPrefixOf`) <$> field "path" item) inventory
+  pinnedFiles <- forM (moduleInputs ++ headers) $ \item -> do
+    path <- field "path" item
+    expected <- field "sha256" item
+    original <- case item of
+      Object values | KeyMap.member "source" values -> (root </>) <$> field "source" item
+      _ -> pure (upstream </> path)
+    actual <- hashFile original
     unless (actual == expected) (die ("Changed pinned source " ++ path))
-  sourceHashes <- hashes root [upstream </> path | path <- copiedSource]
+    pure original
+  -- This native oracle source is separate from the Core graph inventory.
+  let nativeSource = upstream </> "cbits/Win32Utils.c"
+  nativeHash <- hashFile nativeSource
+  unless (nativeHash == "f62b489b53c951d02b769a35801abbd9945632ecb9a1f6ade3ccc4ca20060dac")
+    (die "Changed pinned Win32Utils.c")
+  let usedSources = nativeSource : pinnedFiles
+  sourceHashes <- hashes root usedSources
   registration <- execute "ghc-internal-package" [] pkg ["--expand-pkgroot","describe","ghc-internal"]
   rtsRegistration <- execute "rts-package" [] pkg ["--expand-pkgroot","describe","rts"]
   package <- either (die . show) (pure . snd) (Package.parseInstalledPackageInfo (commandStdout registration))
@@ -225,15 +219,15 @@ prepareWindowsCodePages root = do
     liftIO $ observe (Map.fromList natives)
   writeJson (root </> logs </> "oracle.json") oracle
   audits <- fmap concat $ forM ["pre","post"] $ \stage -> forM (map fst operations) $ \name ->
-    execute (stage ++ "-audit-" ++ name) [] python ["scripts/audit-core.py","--entry",name,
+    execute (stage ++ "-audit-" ++ name) [] python ["bin/audit-core.py","--entry",name,
       "--output",logs </> stage ++ "-" ++ name ++ ".audit.json",logs </> stage ++ ".json"]
-  afterHashes <- hashes root [upstream </> path | path <- copiedSource]
+  afterHashes <- hashes root usedSources
   unless (sourceHashes == afterHashes) (die "Compiling declaration interfaces changed upstream sources")
-  let commands = [version,library,extraction,registration,rtsRegistration] ++ compiled ++ audits
-      inputs = [source,"compiler/windows-ghc-internal.json","thc.cabal","test/haskell-fixtures/Main.hs",
+  let commands = [version,library,registration,rtsRegistration] ++ compiled ++ audits
+      inputs = [source,"config/ghc/9.14.1/windows-ghc-internal.json","thc.cabal","test/haskell-fixtures/Main.hs",
         "test/haskell-fixtures/FixtureSupport.hs","test/haskell-fixtures/WindowsCodePageFixtures.hs",
-        "compiler/THC/Plugin.hs","compiler/THC/Interface.hs","scripts/audit-core.py","scripts/core_original_foreign.py",
-        "scripts/core-capabilities.json","src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java","src/main/c/windows-directory-abi.c"]
+        "src/compiler/THC/Plugin.hs","src/compiler/THC/Interface.hs","bin/audit-core.py","bin/core_original_foreign.py",
+        "bin/core-capabilities.json","src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java","src/main/c/windows-directory-abi.c"]
   inputHashes <- hashes root inputs
   rawArtifacts <- hashes root ([logs </> file | file <- ["pre.json","post.json","oracle.json"]] ++
     [makeRelative root (overlay </> relative name ++ ".hi") | name <- modules] ++ concatMap commandArtifacts commands ++
@@ -241,7 +235,7 @@ prepareWindowsCodePages root = do
   let artifactHashes = Map.mapKeys (map (\c -> if c == '\\' then '/' else c)) rawArtifacts
   writeJson (root </> directory </> "manifest.json") $ object
     ["schema" .= (1::Int),"ghc" .= ("9.14.1"::String),"logs" .= logs,"entries" .= map fst operations,
-     "originalFCallIds" .= True,"archiveSha256" .= archiveHash,"sourceHashes" .= sourceHashes,
+     "originalFCallIds" .= True,"upstream" .= upstreamIdentity,"sourceHashes" .= sourceHashes,
      "inheritedInterfaceHashes" .= inheritedHashes,"inputHashes" .= inputHashes,"artifactHashes" .= artifactHashes,
      "commands" .= map commandRecord commands]
   putStrLn "windows-codepages: eleven genuine GHC FCallIds, native encoding/error oracle and 22 strict audits"

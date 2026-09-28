@@ -43,7 +43,7 @@ cabal run exe:thc-fixtures -- aggregate-heap
 ./gradlew test --tests thc.runtime.AggregateHeapStorageTest \
   --tests thc.runtime.ManagedCompactsTest --tests thc.runtime.CompactImagesTest \
   --tests thc.runtime.VectorHeapStorageTest
-python3 scripts/test-audit-core.py
+python3 bin/test-audit-core.py
 ```
 
 The Haskell producer compiles original sources natively with Core/STG lint,

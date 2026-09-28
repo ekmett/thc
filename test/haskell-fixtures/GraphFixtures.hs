@@ -106,7 +106,7 @@ prepareGraph root = do
   unless ([(entry,n) | (entry,n,_) <- rows] == requests && BS.null (commandStderr observed))
     (die "Graph oracle changed its requested input domain")
   BS.writeFile (root </> directory </> "oracle.tsv") (commandStdout observed)
-  _ <- execute "boot-export" [("THC_SOURCE_NOTES","false")] "python3" ["compiler/export-boot.py","--build-dir",directory </> "boot"]
+  _ <- execute "boot-export" [("THC_SOURCE_NOTES","false")] "python3" ["bin/export-boot.py","--build-dir",directory </> "boot"]
   boot <- readJson (root </> directory </> "boot/boot-provenance.json")
   bootSources <- field boot "sources" :: IO [Value]
   bootSourcePaths <- mapM (\value -> field value "path") bootSources
@@ -167,7 +167,7 @@ prepareGraph root = do
         moduleList = directory </> stage ++ "-modules.txt"
     _ <- execute exportLabel [("THC_CORE_OUT",root </> core),("THC_GHC_OUT",root </> runDir </> stage </> "ghc"),
       ("THC_SOURCE_NOTES","false")]
-      "compiler/export.sh" (include ++ ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
+      "bin/export-core.sh" (include ++ ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
         ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries] ++ [source])
     closure <- readJson (root </> closurePath)
     modules <- field closure "sourceModules" :: IO [String]
@@ -183,7 +183,7 @@ prepareGraph root = do
     audits <- forM entries $ \entry -> do
       let label = stage ++ "-" ++ entry ++ "-audit"
           reportPath = directory </> label <.> "json"
-      attempted <- try (execute label [] "python3" ["scripts/audit-core.py","--module-list",moduleList,
+      attempted <- try (execute label [] "python3" ["bin/audit-core.py","--module-list",moduleList,
         "--entry",entry,"--output",reportPath]) :: IO (Either ExitCode CommandResult)
       -- Preserve real strict-rejection reports without converting their exit
       -- status to success. A failed producer still leaves the complete frontier.
@@ -205,17 +205,17 @@ prepareGraph root = do
     pure (object ["stage" .= stage,"modules" .= paths,"moduleList" .= moduleList,"audits" .= reports,
                   "strictAccepted" .= accepted],accepted,
       paths ++ [moduleList,closurePath] ++ commandFiles exportLabel ++ concat [[path] ++ commands | (_,path,_,commands) <- audits])
-  plugin <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
+  plugin <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
   let sources = [source,"examples/LibraryOracle.hs","thc.cabal","test/haskell-fixtures/Main.hs",
         "test/haskell-fixtures/GraphFixtures.hs","test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/InstalledCoreFixtures.hs","compiler/export.sh","compiler/build.sh",
-        "compiler/toolchain.sh","compiler/plugin.py","compiler/export-boot.py","compiler/package-roots/InterfaceRoots.hs",
-        "scripts/audit-core.py","scripts/core-capabilities.json", "src/main/resources/thc/scalar-primop-signatures.json",
-        "src/THC/Driver/Installed.hs","compiler/interface/Main.hs"] ++
+        "test/haskell-fixtures/InstalledCoreFixtures.hs","bin/export-core.sh","bin/build-compiler.sh",
+        "bin/toolchain.sh","bin/plugin.py","bin/export-boot.py","test/fixtures/package-roots/InterfaceRoots.hs",
+        "bin/audit-core.py","bin/core-capabilities.json", "src/main/resources/thc/scalar-primop-signatures.json",
+        "src/driver/THC/Driver/Installed.hs","src/compiler/interface/Main.hs"] ++
         ["examples/THC" </> name <.> "hs" | name <- ["SetWorkload","IntMapWorkload","IntMapPrimops","IntSetWorkload","IntSetPrimops","SequenceWorkload"]] ++
-        ["compiler/THC" </> name | name <- plugin,takeExtension name == ".hs"] ++
-        ["scripts" </> name | name <- scripts,"core_" `isPrefixOf` name,takeExtension name == ".py"] ++ bootSourcePaths
+        ["src/compiler/THC" </> name | name <- plugin,takeExtension name == ".hs"] ++
+        ["bin" </> name | name <- scripts,"core_" `isPrefixOf` name,takeExtension name == ".py"] ++ bootSourcePaths
       labels = ["ghc-version","containers-version","containers-extract","native-build","native-oracle","boot-export",
         "interface-helper-build","interface-helper-location","internal-unit"] ++
         ["containers-download" | not cached]

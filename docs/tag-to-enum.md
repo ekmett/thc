@@ -10,16 +10,16 @@ Only exactly saturated primitive applications are accepted. `tagToEnum#` is deli
 
 The AST evaluates the tag through `executeRequiredLong` and provides a typed `executeDataValue` override. The bytecode operation takes a primitive `long` and returns `DataValue`. Selection returns the same class-owned zero-field values used by ordinary construction, with no per-call wrapper or payload array. A full-width signed range check precedes conversion to an array index. THC reports `RuntimeFault` for negative or out-of-family tags, including large values that would narrow to a valid index. Invalid native GHC tags are not an oracle.
 
-`compiler/test-fixtures/TagToEnumAudit.hs` uses genuine Bool, Ordering, local Colour, and imported External families, plus an ordinary PAP, an unused bottom-containing application and an unused dynamic enum application, and an explicitly threaded State/mutable-variable effect. `WrappedColour` wraps a saturated Colour operation inside a lazy tuple field, preserving the genuine erased result cast; both consumed valid tags and unused invalid tags are compared with native GHC. Fresh native results are checked against independent constructor score tables and signed wrap arithmetic. Pre/post exports and strict audits are retained under `build/tag-to-enum/`, with source/tool/artifact hashes in `provenance.json`. Runtime tests exercise both backends with normal and disabled inlining, strict per-row compiled entry and active-target checks, exact one-entry direct enum roots, invalid full-width tags, malformed metadata, and typed single evaluation/exception behavior. The same tests run under the existing optional handoff mode.
+`test/fixtures/compiler/TagToEnumAudit.hs` uses genuine Bool, Ordering, local Colour, and imported External families, plus an ordinary PAP, an unused bottom-containing application and an unused dynamic enum application, and an explicitly threaded State/mutable-variable effect. `WrappedColour` wraps a saturated Colour operation inside a lazy tuple field, preserving the genuine erased result cast; both consumed valid tags and unused invalid tags are compared with native GHC. Fresh native results are checked against independent constructor score tables and signed wrap arithmetic. Pre/post exports and strict audits are retained under `build/tag-to-enum/`, with source/tool/artifact hashes in `provenance.json`. Runtime tests exercise both backends with normal and disabled inlining, strict per-row compiled entry and active-target checks, exact one-entry direct enum roots, invalid full-width tags, malformed metadata, and typed single evaluation/exception behavior. The same tests run under the existing optional handoff mode.
 
 Pinned GHC 9.14.1 sources used for the contract are `GHC.Tc.Gen.App` (Note `[tagToEnum#]`), `GHC.Core.TyCon` (`isEnumerationTyCon`), `GHC.Core.Opt.ConstantFold` (`tagToEnumRule`, comparing `dataConTagZ`), and `GHC.StgToCmm.Prim` (`TagToEnumOp`). GHC uses zero-based primitive tags, while exported constructor-table tags remain one-based.
 
 Reproduce with the pinned GHC and Graal toolchains:
 
 ```sh
-compiler/build.sh
-python3 scripts/prepare-tag-to-enum-audit.py
-python3 scripts/test-core-enums.py
+bin/build-compiler.sh
+python3 bin/prepare-tag-to-enum-audit.py
+python3 bin/test-core-enums.py
 ./gradlew test --tests thc.runtime.TagToEnumTest
 JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew test --tests thc.runtime.TagToEnumTest --rerun
 ```

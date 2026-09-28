@@ -38,8 +38,8 @@ rowJSON ((entry,bytes,offset,count),result) = object
 prepareByteStringUtf8 :: FilePath -> IO ()
 prepareByteStringUtf8 root = do
   let directory = "build/bytestring-utf8"
-      source = "compiler/test-fixtures/ByteStringUtf8Audit.hs"
-      driver = "compiler/test-fixtures/ByteStringUtf8Native.hs"
+      source = "test/fixtures/compiler/ByteStringUtf8Audit.hs"
+      driver = "test/fixtures/compiler/ByteStringUtf8Native.hs"
       binary = directory </> "native/oracle"
       entries = ["validateUnsafe","validateSafe"] :: [String]
       execute = runLogged 180 root (directory </> "logs")
@@ -71,7 +71,7 @@ prepareByteStringUtf8 root = do
   registered <- execute "package-register" [] ghcPkg ["--package-db",database,"update",root </> registrationPath]
   let packageOptions = ["-package-db",database,"-package","bytestring"]
   compiled <- execute "native-build" [] ghc (packageOptions ++ ["--make","-j2","-O2","-fforce-recomp",
-    "-dcore-lint","-dstg-lint","-icompiler/test-fixtures",
+    "-dcore-lint","-dstg-lint","-itest/fixtures/compiler",
     "-odir",root </> directory </> "native","-hidir",root </> directory </> "native",
     driver,"-o",root </> binary])
   observed <- execute "native-observations" [] (root </> binary) []
@@ -87,27 +87,27 @@ prepareByteStringUtf8 root = do
           ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries]
     exported <- execute (stage ++ "-export")
       [("THC_CORE_OUT",root </> core),("THC_GHC_OUT",root </> directory </> stage </> "ghc")]
-      "compiler/export.sh" (packageOptions ++ options ++ [source])
+      "bin/export-core.sh" (packageOptions ++ options ++ [source])
     audits <- forM entries $ \entry -> do
       let path = directory </> stage </> entry ++ ".audit.json"
       command <- execute (stage ++ "-audit-" ++ entry) [] "python3"
-        (["scripts/audit-core.py","--entry",entry,"--output",path] ++ modules)
+        (["bin/audit-core.py","--entry",entry,"--output",path] ++ modules)
       report <- either die pure . eitherDecodeStrict' =<< BS.readFile (root </> path)
       case report of
         Object fields | KeyMap.lookup "accepted" fields == Just (Bool True) -> pure ()
         _ -> die "Original UTF-8 validation audit rejected"
       pure (path,command)
     pure (stage,modules,exported,audits)
-  compilerFiles <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
+  compilerFiles <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
   let commands = [version,registration,initialized,registered,compiled,observed] ++ concat [exported:map snd audits | (_,_,exported,audits) <- stages]
       inputs = sort $ [source,driver,"thc.cabal","test/haskell-fixtures/Main.hs",
-        "compiler/pinned-bytestring/0.12.2.0/cbits/is-valid-utf8.c","src/main/c/bytestring-utf8-api.c","scripts/build-cbits.py",
+        "third-party/pinned/bytestring-0.12.2.0/cbits/is-valid-utf8.c","src/main/c/bytestring-utf8-api.c","bin/build-cbits.py",
         "test/haskell-fixtures/FixtureSupport.hs","test/haskell-fixtures/ByteStringUtf8Fixtures.hs",
-        "scripts/audit-core.py","scripts/core-capabilities.json","compiler/build.sh","compiler/export.sh",
-        "compiler/toolchain.sh","compiler/plugin.py","src/main/resources/thc/scalar-primop-signatures.json"] ++
-        ["compiler/THC" </> path | path <- compilerFiles, takeExtension path == ".hs"] ++
-        ["scripts" </> path | path <- scripts, "core_" `isPrefixOf` path, takeExtension path == ".py"]
+        "bin/audit-core.py","bin/core-capabilities.json","bin/build-compiler.sh","bin/export-core.sh",
+        "bin/toolchain.sh","bin/plugin.py","src/main/resources/thc/scalar-primop-signatures.json"] ++
+        ["src/compiler/THC" </> path | path <- compilerFiles, takeExtension path == ".hs"] ++
+        ["bin" </> path | path <- scripts, "core_" `isPrefixOf` path, takeExtension path == ".py"]
       artifacts = [binary,oracle,registrationPath] ++ concat [modules ++ map fst audits | (_,modules,_,audits) <- stages] ++ concatMap commandArtifacts commands
   inputHashes <- hashes root inputs
   artifactHashes <- hashes root artifacts

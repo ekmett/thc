@@ -128,8 +128,8 @@ prepareOriginalIconv root = do
   createDirectoryIfMissing True (root </> directory </> "native")
   let execute label program args = runLogged 300 root (directory </> "logs") label [] program args
       oneLine result = case lines (BS.unpack (commandStdout result)) of [line] -> line; _ -> error "Expected one line"
-      source = "compiler/test-fixtures/OriginalIconvAudit.hs"
-      driver = "compiler/test-fixtures/OriginalIconvAuditNative.hs"
+      source = "test/fixtures/compiler/OriginalIconvAudit.hs"
+      driver = "test/fixtures/compiler/OriginalIconvAuditNative.hs"
       binary = directory </> "native/oracle"
       adaptedPath = directory </> "OriginalIconvAudit.json"
       prePath = directory </> "PreIconvAudit.json"
@@ -138,7 +138,7 @@ prepareOriginalIconv root = do
   libdir <- execute "libdir" ghc ["--print-libdir"]
   imports <- execute "imports" ghcPkg ["field", "ghc-internal", "import-dirs", "--simple-output"]
   compiled <- execute "native-build" ghc ["--make", "-O2", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
-    "-fwrite-if-simplified-core", "-package", "ghc-internal", "-i" ++ root </> "compiler/test-fixtures",
+    "-fwrite-if-simplified-core", "-package", "ghc-internal", "-i" ++ root </> "test/fixtures/compiler",
     "-odir", root </> directory </> "native", "-hidir", root </> directory </> "native", driver, "-o", root </> binary]
   observed <- execute "native-oracle" (root </> binary) []
   (locale, missing, missingErrno, rows) <- maybe (die "Malformed native iconv oracle") pure
@@ -206,11 +206,11 @@ prepareOriginalIconv root = do
       serializeOptimizedCore flags ["unit-qualified"] adaptedGuts >>= writeFile (root </> prePath)
   audits <- forM entries $ \entry -> do
     let path = directory </> entry ++ ".audit.json"
-    command <- execute ("audit-" ++ entry) "python3" ["scripts/audit-core.py", adaptedPath, "--entry", entry, "--output", path]
+    command <- execute ("audit-" ++ entry) "python3" ["bin/audit-core.py", adaptedPath, "--entry", entry, "--output", path]
     pure (entry, path, command)
   preAudits <- forM entries $ \entry -> do
     let path = directory </> "pre-" ++ entry ++ ".audit.json"
-    command <- execute ("pre-audit-" ++ entry) "python3" ["scripts/audit-core.py", prePath, "--entry", entry, "--output", path]
+    command <- execute ("pre-audit-" ++ entry) "python3" ["bin/audit-core.py", prePath, "--entry", entry, "--output", path]
     pure ("pre-" ++ entry, path, command)
   adaptedJSON <- either die pure . eitherDecode =<< BL.readFile (root </> adaptedPath)
   createDirectoryIfMissing True (root </> directory </> "negative")
@@ -222,7 +222,7 @@ prepareOriginalIconv root = do
     forM entries $ \entry -> do
       let output = directory </> "negative" </> label ++ "-" ++ entry ++ ".audit.json"
       command <- runLoggedExpect 1 180 root (directory </> "logs") (label ++ "-" ++ entry) [] "python3"
-        ["scripts/audit-core.py", path, "--entry", entry, "--output", output]
+        ["bin/audit-core.py", path, "--entry", entry, "--output", output]
       report <- either die pure . eitherDecode =<< BL.readFile (root </> output)
       case report of
         Object fields | KM.lookup "accepted" fields == Just (Bool False),
@@ -230,8 +230,8 @@ prepareOriginalIconv root = do
           any (\issue -> case issue of Object xs -> KM.lookup "code" xs == Just (String "foreign-call"); _ -> False) issues -> pure ()
         _ -> die "Iconv negative audit did not reject the foreign contract"
       pure (path, output, command)
-  let inputs = [source, driver, "test/haskell-fixtures/OriginalIconvFixtures.hs", "compiler/THC/Interface.hs",
-        "compiler/THC/Plugin.hs", "scripts/core_original_foreign.py", "scripts/audit-core.py", "scripts/core-capabilities.json"]
+  let inputs = [source, driver, "test/haskell-fixtures/OriginalIconvFixtures.hs", "src/compiler/THC/Interface.hs",
+        "src/compiler/THC/Plugin.hs", "bin/core_original_foreign.py", "bin/audit-core.py", "bin/core-capabilities.json"]
       artifacts = [oraclePath, adaptedPath, prePath, directory </> "declarations.json"] ++ [p | (_,p,_) <- audits ++ preAudits] ++
         concat [[input, output] | (input, output, _) <- negatives]
       commands = [version, libdir, imports, compiled, observed] ++ [c | (_,_,c) <- audits ++ preAudits] ++ [c | (_,_,c) <- negatives]

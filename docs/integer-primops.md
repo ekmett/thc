@@ -2,7 +2,7 @@
 
 The scalar audit used GHC's pinned
 [`ghc-9.14.1-release` primop definitions](https://github.com/ghc/ghc/blob/ghc-9.14.1-release/compiler/GHC/Builtin/primops.txt.pp)
-against `scripts/core-capabilities.json`. The existing machine Int operations
+against `bin/core-capabilities.json`. The existing machine Int operations
 already covered ordinary scalar arithmetic, comparisons and bitwise operations.
 The first missing unsigned families now execute in both AST and bytecode:
 
@@ -36,7 +36,7 @@ and a per-bit deposit/extract model,
 then executes every row on both runtimes before and after compilation. It
 requires exactly one installed guest entry for every oracle row and checks wrong
 arities in strict and diagnostic modes. Preparation is part of the normal
-`scripts/prepare-tests.sh` flow; Gradle tracks the generated inputs and CI retains
+`bin/prepare-tests.sh` flow; Gradle tracks the generated inputs and CI retains
 the Core export and oracle. SHA-256 manifests reject stale source or artifacts.
 
 Division by zero and unchecked shifts outside `[0, width)` are outside the
@@ -55,6 +55,6 @@ Aggregate arguments, PAPs, captures and sums remain
 outside this slice; these additions do not establish complete GHC.Prim coverage.
 
 Validation on Linux x86-64 with the pinned GHC/GraalVM toolchain: a fresh
-`scripts/try.sh --offline --max-workers=4` passed all 288 JVM tests and built the
+`bin/try.sh --offline --max-workers=4` passed all 288 JVM tests and built the
 distribution. The exact dependency auditor passed 24 tests. A subsequent focused
 run passed the stronger per-row compiled-entry assertion on both backends.

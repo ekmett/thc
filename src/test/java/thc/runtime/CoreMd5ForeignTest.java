@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 /** Synthetic descriptors, not renamed main-unit exports or Fingerprint execution.
- * Installed-interface unit evidence: compiler/test-fixtures/md5-foreign-unit-evidence.md. */
+ * Installed-interface unit evidence: test/fixtures/compiler/md5-foreign-unit-evidence.md. */
 @SuppressWarnings("unchecked")
 class CoreMd5ForeignTest {
     private Map<String, Object> scalar(String primitive, boolean evaluated) {

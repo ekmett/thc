@@ -81,7 +81,7 @@ prepareForeignAssociation :: FilePath -> FilePath -> FilePath -> FilePath -> Str
 prepareForeignAssociation root directory ghc libdir unitName = do
   let source = directory </> "source/InterfaceForeignAlias.hs"
       variants = [("a", "thc_interface_alias_a"), ("b", "thc_interface_alias_b")]
-  copyFile (root </> "compiler/test-fixtures/InterfaceForeignAlias.hs") (root </> source)
+  copyFile (root </> "test/fixtures/compiler/InterfaceForeignAlias.hs") (root </> source)
   commands <- forM variants $ \(variant, symbol) -> do
     let output = directory </> "foreign-alias" </> variant
     createDirectoryIfMissing True (root </> output)
@@ -157,7 +157,7 @@ prepareTypedForeignAssociation root directory ghc ghcPkg libdir unitName baseUni
                   ("registration", "ForeignExportRegistration", "unused")]
       sourceFor name = directory </> "typed-export-source" </> name ++ ".hs"
   createDirectoryIfMissing True (root </> directory </> "typed-export-source")
-  mapM_ (\name -> copyFile (root </> "compiler/test-fixtures" </> name ++ ".hs") (root </> sourceFor name))
+  mapM_ (\name -> copyFile (root </> "test/fixtures/compiler" </> name ++ ".hs") (root </> sourceFor name))
     ["InterfaceForeignAlias", "ForeignExportSignatures", "InterfaceForeign", "ForeignExportManaged", "ForeignExportRegistration"]
   commands <- forM variants $ \(variant, name, symbol) -> do
     let output = directory </> "typed-foreign-exports" </> variant
@@ -187,13 +187,13 @@ prepareTypedForeignAssociation root directory ghc ghcPkg libdir unitName baseUni
       nativeRun label = runLogged 180 root (directory </> "logs") ("managed-export-" ++ label) []
   nativeBuild <- nativeRun "native-build" ghc
     ["--make", "-O2", "-fforce-recomp", "-i", "-package-db", managed </> "package.conf.d", "-package-id", unitName,
-     "-odir", managed, "-hidir", managed, "compiler/test-fixtures/ManagedExportNative.hs",
+     "-odir", managed, "-hidir", managed, "test/fixtures/compiler/ManagedExportNative.hs",
      managed </> "ForeignExportManaged.o", "-o", managed </> "oracle"]
   nativeResult <- nativeRun "native-oracle" (root </> managed </> "oracle") []
   let registration = directory </> "typed-foreign-exports/registration"
   registrationBuild <- nativeRun "registration-native-build" ghc
     ["--make", "-O2", "-fforce-recomp", "-i", "-package-db", registration </> "package.conf.d", "-package-id", unitName,
-     "-odir", registration, "-hidir", registration, "compiler/test-fixtures/RegistrationNative.hs",
+     "-odir", registration, "-hidir", registration, "test/fixtures/compiler/RegistrationNative.hs",
      registration </> "ForeignExportRegistration.o", "-o", registration </> "oracle"]
   registrationResult <- nativeRun "registration-native-oracle" (root </> registration </> "oracle") []
   check (BSC.words (commandStdout registrationResult) == [BSC.pack "7"])
@@ -356,7 +356,7 @@ prepareImportStubs root directory ghc ghcPkg libdir unitName baseUnit pluginDb p
       source = directory </> "source/ForeignImportStubs.hs"
       output variant = directory </> "import-stubs" </> variant
       run label = runLogged 180 root (directory </> "logs") ("import-stubs-" ++ label) []
-  copyFile (root </> "compiler/test-fixtures/ForeignImportStubs.hs") (root </> source)
+  copyFile (root </> "test/fixtures/compiler/ForeignImportStubs.hs") (root </> source)
   commands <- forM variants $ \(variant, extra) -> do
     let destination = output variant
         database = root </> destination </> "package.conf.d"
@@ -377,7 +377,7 @@ prepareImportStubs root directory ghc ghcPkg libdir unitName baseUnit pluginDb p
     pure ([compiled] ++ initialized ++ [registered])
   built <- run "native-build" ghc ["--make", "-O2", "-fforce-recomp", "-i",
     "-package-db", output "plain" </> "package.conf.d", "-package-id", unitName,
-    "-odir", output "plain", "-hidir", output "plain", "compiler/test-fixtures/ImportStubsNative.hs",
+    "-odir", output "plain", "-hidir", output "plain", "test/fixtures/compiler/ImportStubsNative.hs",
     output "plain" </> "ForeignImportStubs.o", "-o", output "plain" </> "oracle"]
   native <- run "native-oracle" (root </> output "plain" </> "oracle") []
   check (BSC.words (commandStdout native) == ["(12,8,9,0,11)"]) "Original import wrapper oracle changed"
@@ -453,7 +453,7 @@ prepareImportStubs root directory ghc ghcPkg libdir unitName baseUnit pluginDb p
       (entryName, status) <- [("probe", 0), ("unknownData", 1), ("unknownFunction", 1)]] $ \(variant, entryName, status) -> do
     let report = directory </> "import-stubs" </> variant ++ "-" ++ entryName ++ "-audit.json"
     result <- runLoggedExpect status 60 root (directory </> "logs") ("import-" ++ variant ++ "-" ++ entryName) [] "python3"
-      ["scripts/audit-core.py", directory </> "import-stubs" </> variant ++ ".json", "--entry",
+      ["bin/audit-core.py", directory </> "import-stubs" </> variant ++ ".json", "--entry",
        unitName ++ ":ForeignImportStubs." ++ entryName, "--output", report]
     bytes <- BSC.readFile (root </> report)
     value <- either die pure (eitherDecodeStrict' bytes)

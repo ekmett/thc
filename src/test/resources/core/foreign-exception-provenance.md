@@ -2,7 +2,7 @@
 
 `foreign-exception-descriptor.json` is the unchanged `foreignCall` object for
 `thc_exception_v1_text` from the pinned GHC 9.14.1 post-Tidy export of
-`runtime/THC/Internal/Exception.hs`. Every occurrence in that export is
+`src/runtime/THC/Internal/Exception.hs`. Every occurrence in that export is
 structurally identical. The declaration is `ccall safe`, with an opaque StablePtr
 address, Int32 selector, Int64 index and erased state token; its result is the
 state/Int64 tuple. No target, convention, safety, arity or representation was

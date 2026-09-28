@@ -27,7 +27,7 @@ import System.Exit (die)
 import System.FilePath ((</>), takeExtension)
 
 source, directory :: FilePath
-source = "compiler/test-fixtures/AtomicIntArrayAudit.hs"
+source = "test/fixtures/compiler/AtomicIntArrayAudit.hs"
 directory = "build/atomic-int-arrays"
 
 entries :: [String]
@@ -73,14 +73,14 @@ prepareAtomicIntArrays root = do
           ["-fplugin-opt=THC.Plugin:closure=" ++ name | name <- entries]
     exported <- runLogged 300 root logs (stage ++ "-export")
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> stageDir </> "ghc")]
-      "compiler/export.sh" (options ++ [source])
+      "bin/export-core.sh" (options ++ [source])
     inventory <- sort . filter ((== ".json") . takeExtension) <$> listDirectory (root </> core)
     unless (inventory == ["AtomicIntArrayAudit.json", "THC.InterfaceClosure.json"]) $
       die ("Unexpected atomic-array Core inventory: " ++ show inventory)
     audits <- forM entries $ \name -> do
       let report = stageDir </> name ++ ".audit.json"
       audit <- runLogged 60 root logs (stage ++ "-" ++ name ++ "-audit") [] "python3"
-        (["scripts/audit-core.py", "--entry", name, "--output", report] ++ modules)
+        (["bin/audit-core.py", "--entry", name, "--output", report] ++ modules)
       pure (report : commandArtifacts audit)
     pure (stage, modules, commandArtifacts exported ++ concat audits)
   let native = directory </> "native"
@@ -94,7 +94,7 @@ prepareAtomicIntArrays root = do
     [unwords [name, show a, show b, show c] | name <- entries, (a,b,c) <- cases]
   built <- runLogged 180 root logs "native-build" [] ghc
     ["--make", "-O2", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
-     "-i" ++ (root </> "compiler/test-fixtures"), "-odir", root </> native,
+     "-i" ++ (root </> "test/fixtures/compiler"), "-odir", root </> native,
      "-hidir", root </> native, root </> driver, "-o", executable]
   observed <- runLoggedWithInput requests 30 root logs "native-oracle" [] executable []
   let observations = BSC.unpack (commandStdout observed)
@@ -107,15 +107,15 @@ prepareAtomicIntArrays root = do
   unless (map input rows == map Just expected) $
     die "Native atomic-array oracle has missing, malformed, or reordered rows"
   writeFile (root </> oracle) observations
-  pluginFiles <- listDirectory (root </> "compiler/THC")
-  coreScripts <- listDirectory (root </> "scripts")
+  pluginFiles <- listDirectory (root </> "src/compiler/THC")
+  coreScripts <- listDirectory (root </> "bin")
   inputHashes <- hashes root $ sort $
     [source, "test/haskell-fixtures/AtomicIntArrayFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-     "test/haskell-fixtures/Main.hs", "thc.cabal", "scripts/core-capabilities.json",
-     "scripts/audit-core.py", "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh",
-     "compiler/plugin.py", "src/main/resources/thc/scalar-primop-signatures.json"] ++
-    ["compiler/THC" </> file | file <- pluginFiles, takeExtension file == ".hs"] ++
-    ["scripts" </> file | file <- coreScripts, take 5 file == "core_", takeExtension file == ".py"]
+     "test/haskell-fixtures/Main.hs", "thc.cabal", "bin/core-capabilities.json",
+     "bin/audit-core.py", "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh",
+     "bin/plugin.py", "src/main/resources/thc/scalar-primop-signatures.json"] ++
+    ["src/compiler/THC" </> file | file <- pluginFiles, takeExtension file == ".hs"] ++
+    ["bin" </> file | file <- coreScripts, take 5 file == "core_", takeExtension file == ".py"]
   artifactHashes <- hashes root $ [driver, requests, oracle] ++
     commandArtifacts built ++ commandArtifacts observed ++ concat
       [modules ++ artifacts | (_, modules, artifacts) <- stages]

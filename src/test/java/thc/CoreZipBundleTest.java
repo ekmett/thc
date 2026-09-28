@@ -37,10 +37,10 @@ class CoreZipBundleTest {
     private List<Map<String, Object>> generatedReceipts() throws Exception {
         var result = new ArrayList<Map<String, Object>>();
         if (hostPlatform().equals("x86_64-windows")) {
-            var catalog = document(Files.readString(Path.of(System.getProperty("thc.projectRoot"), "compiler/windows-ghc-internal.json")));
+            var catalog = document(Files.readString(Path.of(System.getProperty("thc.projectRoot"), "config/ghc/9.14.1/windows-ghc-internal.json")));
             for (var file : (List<?>) catalog.get("files")) { var path = (String) ((Map<?, ?>) file).get("path"); if (path.endsWith(".hsc")) result.add(map("path", path, "sha256", "a".repeat(64))); } assertEquals(27, result.size());
         } else {
-            var source = Files.readString(Path.of(System.getProperty("thc.projectRoot"), "src/THC/Driver/Wired.hs"));
+            var source = Files.readString(Path.of(System.getProperty("thc.projectRoot"), "src/driver/THC/Driver/Wired.hs"));
             var catalog = source.substring(source.indexOf("moduleSources =") + "moduleSources =".length()); catalog = catalog.substring(0, catalog.indexOf("sourceHashes ::"));
             var matcher = Pattern.compile("\\(\"([^\"]+\\.hsc)\", \"[^\"]+\"\\)").matcher(catalog); while (matcher.find()) result.add(map("path", matcher.group(1), "sha256", "a".repeat(64))); assertEquals(7, result.size());
         }
@@ -77,7 +77,7 @@ class CoreZipBundleTest {
     }
     private Path manifest(List<Map<String, Object>> units) throws Exception { var path = temporary.resolve("packages.json"); Files.writeString(path, Json.stringify(map("format", "thc-core-packages", "schema", 1, "ghc", "9.14.1", "units", units))); return path; }
     private String request(Path path) { return request(path, Main.defaultBackend(), false); }
-    private String request(Path path, String backend, boolean verify) { return CoreModules.request(List.of("@" + path), "pkg-a:Shared.entry", true, false, backend, true, false, null, null, null, verify); }
+    private String request(Path path, String backend, boolean verify) { return CoreModules.request(List.of("@" + path), "pkg-a:Shared.entry", true, false, backend, true, false, null, null, false, verify); }
     private RuntimeException rejected(List<Map<String, Object>> units) { return assertThrows(RuntimeException.class, () -> request(manifest(units))); }
     private byte[] inputs(String buildKey) { return Json.stringify(map("format", "thc-core-build-inputs", "schema", 1, "unit", "pkg-a", "buildKey", buildKey, "exportKey", "1".repeat(64))).getBytes(UTF_8); }
     @Test void nativeBuildInputsAreVerifiedWhenPresent() throws Exception {
@@ -106,11 +106,11 @@ class CoreZipBundleTest {
     }
     private String selectedRequest(String rts, String recipe, String digest, Map<String, Object> receiptLayout) throws Exception { return request(manifest(List.of(unit("pkg-a", map("layout", targetLayout(), "generated", null, "inputs", selectedInputs(rts, recipe, digest, receiptLayout)))))); }
     @Test void selectedInstalledLayoutRequiresItsRtsAndRecipeReceipt() throws Exception {
-        var layout = targetLayout(); var accepted = document(selectedRequest("rts-1.0.3", "compiler/target-layout.c", "a".repeat(64), layout)); assertEquals(8, TargetLayout.fromDocument(accepted.get("targetLayout")).getWordBytes());
-        for (var invalid : List.of(list(null, "compiler/target-layout.c", "a".repeat(64)), list("", "compiler/target-layout.c", "a".repeat(64)), list("rts-1.0.3", null, "a".repeat(64)), list("rts-1.0.3", "other.c", "a".repeat(64)), list("rts-1.0.3", "compiler/target-layout.c", "z".repeat(64)))) {
+        var layout = targetLayout(); var accepted = document(selectedRequest("rts-1.0.3", "src/driver/cbits/target-layout.c", "a".repeat(64), layout)); assertEquals(8, TargetLayout.fromDocument(accepted.get("targetLayout")).getWordBytes());
+        for (var invalid : List.of(list(null, "src/driver/cbits/target-layout.c", "a".repeat(64)), list("", "src/driver/cbits/target-layout.c", "a".repeat(64)), list("rts-1.0.3", null, "a".repeat(64)), list("rts-1.0.3", "other.c", "a".repeat(64)), list("rts-1.0.3", "src/driver/cbits/target-layout.c", "z".repeat(64)))) {
             var error = assertThrows(RuntimeException.class, () -> selectedRequest((String) invalid.get(0), (String) invalid.get(1), (String) invalid.get(2), layout)); assertTrue(error.getMessage().contains("selected-GHC layout provenance"));
         }
-        var mismatch = assertThrows(RuntimeException.class, () -> selectedRequest("rts-1.0.3", "compiler/target-layout.c", "a".repeat(64), with(layout, "tablesNextToCode", false))); assertTrue(mismatch.getMessage().contains("receipts differ"));
+        var mismatch = assertThrows(RuntimeException.class, () -> selectedRequest("rts-1.0.3", "src/driver/cbits/target-layout.c", "a".repeat(64), with(layout, "tablesNextToCode", false))); assertTrue(mismatch.getMessage().contains("receipts differ"));
     }
     @Test void generatedReceiptCatalogRejectsMissingDuplicateStaleMalformedAndMismatchedSources() throws Exception {
         var generated = generatedReceipts(); var layout = targetLayout(); var reordered = manifest(List.of(unit("pkg-a", map("layout", layout, "generated", generated.reversed())))); assertEquals(8, TargetLayout.fromDocument(document(request(reordered)).get("targetLayout")).getWordBytes());
@@ -130,13 +130,13 @@ class CoreZipBundleTest {
             var dependency = document(new String(module("dependency"), UTF_8)); var source = Json.stringify(large ? with(dependency, "sourceFiles", list(map("id", "large-source", "path", "Shared.hs", "content", "x".repeat(2 * 1024 * 1024)))) : dependency).getBytes(UTF_8);
             var path = manifest(List.of(unit("dependency", map("source", source, "layout", targetLayout())))); var consumer = temporary.resolve("loose consumer.json"); Files.write(consumer, module("consumer", "dependency:Shared.entry"));
             for (var backend : List.of("ast", "bytecode")) {
-                var request = CoreFormatTestSupport.request(List.of(consumer.toString(), "@" + path), "consumer:Shared.entry", backend, true, null, null, false); var input = document(request); assertEquals(true, input.get("strictLink")); assertEquals(large, input.containsKey("consumerModules"));
-                try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).build()) { assertEquals(51L, context.eval("thc", request).execute().asLong()); var duplicate = CoreFormatTestSupport.request(List.of(consumer.toString(), consumer.toString(), "@" + path), "consumer:Shared.entry", backend, true, null, null, false); assertTrue(assertThrows(RuntimeException.class, () -> context.eval("thc", duplicate)).getMessage().contains("Duplicate")); }
+                var request = CoreFormatTestSupport.request(List.of(consumer.toString(), "@" + path), "consumer:Shared.entry", backend, true, null, false, false); var input = document(request); assertEquals(true, input.get("strictLink")); assertEquals(large, input.containsKey("consumerModules"));
+                try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).build()) { assertEquals(51L, context.eval("thc", request).execute().asLong()); var duplicate = CoreFormatTestSupport.request(List.of(consumer.toString(), consumer.toString(), "@" + path), "consumer:Shared.entry", backend, true, null, false, false); assertTrue(assertThrows(RuntimeException.class, () -> context.eval("thc", duplicate)).getMessage().contains("Duplicate")); }
             }
-            assertThrows(IllegalArgumentException.class, () -> CoreFormatTestSupport.request(List.of("@" + path, "@" + path), "dependency:Shared.entry", Main.defaultBackend(), true, null, null, false));
+            assertThrows(IllegalArgumentException.class, () -> CoreFormatTestSupport.request(List.of("@" + path, "@" + path), "dependency:Shared.entry", Main.defaultBackend(), true, null, false, false));
             // Metadata transport control only; no fabricated bridge is executed.
             Files.writeString(path, Json.stringify(with(document(Files.readString(path)), "foreignExceptionBridgeUnit", "selected-runtime")));
-            var selected = document(CoreFormatTestSupport.request(List.of(consumer.toString(), "@" + path), "consumer:Shared.entry", Main.defaultBackend(), true, null, null, false)); var visited = new ArrayList<Map<String, Object>>(); visit(selected, visited::add); assertEquals(list("dependency", "consumer"), visited.stream().map(it -> it.get("unit")).toList()); assertTrue(visited.stream().allMatch(it -> "selected-runtime".equals(it.get("foreignExceptionBridgeUnit"))));
+            var selected = document(CoreFormatTestSupport.request(List.of(consumer.toString(), "@" + path), "consumer:Shared.entry", Main.defaultBackend(), true, null, false, false)); var visited = new ArrayList<Map<String, Object>>(); visit(selected, visited::add); assertEquals(list("dependency", "consumer"), visited.stream().map(it -> it.get("unit")).toList()); assertTrue(visited.stream().allMatch(it -> "selected-runtime".equals(it.get("foreignExceptionBridgeUnit"))));
             if (large) assertTrue(assertThrows(IllegalArgumentException.class, () -> visit(with(selected, "foreignExceptionBridgeUnit", "another-runtime"), it -> {})).getMessage().contains("bridge selection changed"));
         }
     }
@@ -148,8 +148,8 @@ class CoreZipBundleTest {
     }
     private Path fixture(String name) throws Exception { var path = temporary.resolve(name); try (var source = Objects.requireNonNull(getClass().getResourceAsStream("/core/" + name))) { Files.copy(source, path); } return path; }
     @Test void explicitIndexedConsumerKeepsCheckedPackageLayoutAndBridgeSelection() throws Exception {
-        var layout = targetLayout(); var path = manifest(List.of(unit("dependency", map("layout", layout)))); var json = fixture("lazy-json-module.json"); var index = fixture("lazy-json-module.idx"); Files.writeString(path, Json.stringify(with(document(Files.readString(path)), "foreignExceptionBridgeUnit", "selected-runtime")));
-        var request = document(CoreFormatTestSupport.request(List.of(json.toString(), "@" + path), "synthetic:LazyJson.entry", Main.defaultBackend(), true, null, Map.of(json.toString(), index.toString()), false)); var visited = new ArrayList<Map<String, Object>>();
+        var layout = targetLayout(); var path = manifest(List.of(unit("dependency", map("layout", layout)))); var json = fixture("lazy-json-module.json"); Files.writeString(path, Json.stringify(with(document(Files.readString(path)), "foreignExceptionBridgeUnit", "selected-runtime")));
+        var request = document(CoreFormatTestSupport.request(List.of(json.toString(), "@" + path), "synthetic:LazyJson.entry", Main.defaultBackend(), true, null, true, false)); var visited = new ArrayList<Map<String, Object>>();
         var actualLayout = CoreModules.visitRequestModules(request, visited::add); assertNotNull(actualLayout); assertEquals(layout, actualLayout.document().get("layout")); assertEquals(list("dependency", "synthetic"), visited.stream().map(it -> it.get("unit")).toList()); assertTrue(visited.stream().allMatch(it -> "selected-runtime".equals(it.get("foreignExceptionBridgeUnit"))));
         assertTrue(assertThrows(IllegalArgumentException.class, () -> visit(with(request, "foreignExceptionBridgeUnit", "another-runtime"), it -> {})).getMessage().contains("bridge selection changed"));
     }

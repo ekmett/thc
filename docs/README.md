@@ -38,8 +38,8 @@ are different claims; each report identifies which it establishes.
 | Boxed arrays | [Public fixed-bounds STArray and lazy elements](core-evidence.md#lifted-boxed-array-storage); [clone, freeze and thaw slices](array-slices.md) |
 | Numeric arrays | [Int](int-arrays.md), [Double](double-arrays.md), [Float and machine Word](float-word-arrays.md), [Int32/Word32](int32-arrays.md), [Int16/Word16](int16-arrays.md), [Int8/Word8](int8-arrays.md) |
 
-`scripts/try.sh` prepares the native-GHC corpus and runs the JVM suite.
-`scripts/try-libraries.sh` checks library workloads on both backends. The Map
+`bin/try.sh` prepares the native-GHC corpus and runs the JVM suite.
+`bin/try-libraries.sh` checks library workloads on both backends. The Map
 example still needs `THC_DIAGNOSTIC_UNSUPPORTED=true`; the Set frontier remains
 explicit. Neither is counted as strict whole-library support.
 
@@ -52,7 +52,7 @@ The generated [primop checklist](primops.md) lists every primop from the pinned
 GHC 9.14.1 API. It distinguishes implemented and missing operations; concrete
 runtime limitations are documented [primop by primop in the behavior reference](primop-behavior.md).
 That page distinguishes concrete restrictions from target choices and performance
-hints. The [capability contract](../scripts/core-capabilities.json)
+hints. The [capability contract](../bin/core-capabilities.json)
 is the machine-readable declaration used by the auditor.
 
 | Area | Contracts and evidence |

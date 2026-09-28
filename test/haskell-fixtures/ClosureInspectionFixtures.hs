@@ -26,8 +26,8 @@ prepareClosureInspection root = do
   let directory = "build/closure-inspection"
       output = root </> directory
       manifest = output </> "manifest.json"
-      source = "compiler/test-fixtures/ClosureInspectionAudit.hs"
-      driver = "compiler/test-fixtures/ClosureInspectionNative.hs"
+      source = "test/fixtures/compiler/ClosureInspectionAudit.hs"
+      driver = "test/fixtures/compiler/ClosureInspectionNative.hs"
       entries = ["payload", "sizeConsistent", "pointerCount", "notStack", "noCCS", "noProvenance", "cleared", "annotated", "annotatedResume"] :: [String]
   createDirectoryIfMissing True output
   old <- doesFileExist manifest
@@ -36,27 +36,27 @@ prepareClosureInspection root = do
   version <- run root [] ghc ["--numeric-version"] ""
   unless (version == "9.14.1\n") (die "Closure inspection fixtures require GHC 9.14.1")
   _ <- run root [("THC_CORE_OUT", output </> "core"), ("THC_GHC_OUT", output </> "ghc")]
-    "compiler/export.sh" [source] ""
+    "bin/export-core.sh" [source] ""
   forM_ entries $ \entry -> do
-    _ <- run root [] "python3" ["scripts/audit-core.py", "--entry", entry,
+    _ <- run root [] "python3" ["bin/audit-core.py", "--entry", entry,
       "--output", directory </> entry ++ ".audit.json", directory </> "core/ClosureInspectionAudit.json"] ""
     pure ()
   let native = output </> "native"
   createDirectoryIfMissing True native
   _ <- run root [] ghc ["--make", "-O2", "-fno-info-table-map", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
-    "-i" ++ (root </> "compiler/test-fixtures"), "-odir", native, "-hidir", native,
+    "-i" ++ (root </> "test/fixtures/compiler"), "-odir", native, "-hidir", native,
     root </> driver, "-o", native </> "oracle"] ""
   observations <- runWithTimeout (Just 30000000) root [] (native </> "oracle") [] ""
   unless (length (lines observations) == 45) (die "Closure inspection native row count")
   writeFile (output </> "oracle.tsv") observations
-  plugin <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
+  plugin <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
   inputHashes <- hashes root (sort $ [source, driver, "thc.cabal", "test/haskell-fixtures/Main.hs",
     "test/haskell-fixtures/ClosureInspectionFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-    "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py",
-    "scripts/audit-core.py", "scripts/core-capabilities.json"] ++
-    ["compiler/THC" </> name | name <- plugin, takeExtension name == ".hs"] ++
-    ["scripts" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"])
+    "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py",
+    "bin/audit-core.py", "bin/core-capabilities.json"] ++
+    ["src/compiler/THC" </> name | name <- plugin, takeExtension name == ".hs"] ++
+    ["bin" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"])
   artifactHashes <- hashes root ([directory </> "oracle.tsv", directory </> "native/oracle",
     directory </> "core/ClosureInspectionAudit.json"] ++ [directory </> entry ++ ".audit.json" | entry <- entries])
   writeJson manifest $ object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),

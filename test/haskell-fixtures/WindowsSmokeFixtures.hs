@@ -46,7 +46,7 @@ prepareWindowsBridge root = do
       logs = directory </> stamp
       native = logs </> "native"
       core = logs </> "core"
-      source = "compiler/test-fixtures/WindowsBridgeAudit.hs"
+      source = "test/fixtures/compiler/WindowsBridgeAudit.hs"
       db = root </> "dist-newstyle/packagedb/ghc-9.14.1"
       entries = ["roundTripScalar","dictionaryRoundTripScalar","inertDisplayScalar","caughtRoundTripScalar"]
       readValue path = either die pure . eitherDecodeStrict =<< BS.readFile path
@@ -81,7 +81,7 @@ prepareWindowsBridge root = do
     ["-fplugin-opt=THC.Plugin:foreign-import-provenance",source]))
   exported <- runLogged 180 root logs "export"
     [("THC_CORE_OUT",root </> core),("THC_GHC_OUT",root </> logs </> "objects")]
-    powershell ["-NoProfile","-File",root </> "compiler/export.ps1","@" ++ response]
+    powershell ["-NoProfile","-File",root </> "bin/export-core.ps1","@" ++ response]
   modules <- map ((root </> core) </>) . filter ((==".json") . takeExtension) <$> listDirectory (root </> core)
   let linked = modules ++ ["@" ++ supportManifest]
   support <- readValue supportManifest
@@ -93,25 +93,25 @@ prepareWindowsBridge root = do
   -- its indexed catalogue to finish and close; scalar fixtures remain bounded
   -- separately. This is acquisition/audit time, not a compiled guest-call retry.
   audits <- forM entries $ \entry -> runLogged 300 root logs ("audit-" ++ entry) [] python
-    (["scripts/audit-core.py","--entry",entry,"--package-manifest",supportManifest,
+    (["bin/audit-core.py","--entry",entry,"--package-manifest",supportManifest,
       "--output",root </> logs </> entry ++ ".audit.json"] ++ modules)
   rejected <- runLoggedExpect 1 60 root logs "audit-missing-support" [] python
-    (["scripts/audit-core.py","--entry","roundTripScalar","--output",root </> logs </> "missing-support.audit.json"] ++ modules)
+    (["bin/audit-core.py","--entry","roundTripScalar","--output",root </> logs </> "missing-support.audit.json"] ++ modules)
   negative <- readValue (root </> logs </> "missing-support.audit.json")
   issues <- field "issues" negative :: IO [Value]
   unless (any (\value -> case value of
     Object fields -> KeyMap.lookup "detail" fields == Just (String "Interface closure lacks its exact complete provided module")
     _ -> False) issues) (die "missing-support control did not fail the provided-module contract")
-  drivers <- listDirectory (root </> "src/THC/Driver")
+  drivers <- listDirectory (root </> "src/driver/THC/Driver")
   let commands = [built,compiled,observed,exported] ++ audits ++ [rejected]
       sources = [source,"test/haskell-fixtures/WindowsSmokeFixtures.hs","test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs","thc.cabal","compiler/export.ps1","compiler/THC/Plugin.hs",
-        "compiler/THC/Interface.hs","compiler/interface/Main.hs","compiler/windows-ghc-internal.json",
-        "compiler/target-layout.c","scripts/windows-common.ps1",
-        "scripts/audit-core.py","scripts/core-capabilities.json","scripts/core_original_foreign.py",
-        "scripts/core_package_manifest.py","scripts/core_md5_foreign.py",
-        "runtime/THC/Internal/Exception.hs","runtime/THC/Exception.hs"] ++
-        ["src/THC/Driver" </> path | path <- drivers,takeExtension path == ".hs"]
+        "test/haskell-fixtures/Main.hs","thc.cabal","bin/export-core.ps1","src/compiler/THC/Plugin.hs",
+        "src/compiler/THC/Interface.hs","src/compiler/interface/Main.hs","config/ghc/9.14.1/windows-ghc-internal.json",
+        "src/driver/cbits/target-layout.c","bin/windows-common.ps1",
+        "bin/audit-core.py","bin/core-capabilities.json","bin/core_original_foreign.py",
+        "bin/core_package_manifest.py","bin/core_md5_foreign.py",
+        "src/runtime/THC/Internal/Exception.hs","src/runtime/THC/Exception.hs"] ++
+        ["src/driver/THC/Driver" </> path | path <- drivers,takeExtension path == ".hs"]
   inputHashes <- hashes root sources
   supportUnits <- field "units" support :: IO [Value]
   supportArtifacts <- mapM (field "path") (concatMap unitArtifactReferences supportUnits)
@@ -141,7 +141,7 @@ prepareWindowsSmoke root = do
   createDirectoryIfMissing True (root </> native)
   powershell <- maybe "powershell.exe" id <$> findExecutable "pwsh"
   exported <- runLogged 300 root logs "export" [] powershell
-    ["-NoProfile", "-File", root </> "compiler/export.ps1", "examples/THC/Fixtures.hs"]
+    ["-NoProfile", "-File", root </> "bin/export-core.ps1", "examples/THC/Fixtures.hs"]
   compiled <- runLogged 180 root logs "native-build" [] ghc
     ["--make", "-O2", "-fforce-recomp", "-dcore-lint", "-dstg-lint", "-iexamples",
      "-odir", root </> native, "-hidir", root </> native, "examples/NativeOracle.hs",
@@ -153,22 +153,22 @@ prepareWindowsSmoke root = do
   let entries = Set.toAscList (Set.fromList [entry | entry:_ <- rows])
   audits <- forM entries $ \entry ->
     runLogged 60 root logs ("audit-" ++ entry) [] python
-      (["scripts/audit-core.py", "--entry", entry, "--output", root </> logs </> entry ++ ".audit.json"] ++ modules)
+      (["bin/audit-core.py", "--entry", entry, "--output", root </> logs </> entry ++ ".audit.json"] ++ modules)
   rejected <- runLoggedExpect 1 60 root logs "audit-missing-entry" [] python
-    (["scripts/audit-core.py", "--entry", "missingWindowsSmokeEntry", "--output",
+    (["bin/audit-core.py", "--entry", "missingWindowsSmokeEntry", "--output",
       root </> logs </> "missing.audit.json"] ++ modules)
   (cstringCommands, cstringArtifacts) <- prepareCString root logs ghc
-  compiler <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
+  compiler <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
   let sources = ["examples/NativeOracle.hs", "examples/THC/Fixtures.hs",
         "examples/THC/Prim.hs", "examples/THC/MapWorkload.hs",
         "test/haskell-fixtures/WindowsSmokeFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
         "test/haskell-fixtures/Main.hs",
-        "compiler/pinned-ghc-internal/GHC/Internal/CString.hs", "compiler/interface/Main.hs", "compiler/export.ps1",
-        "scripts/windows-common.ps1", "scripts/audit-core.py", "scripts/core-capabilities.json",
+        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/CString.hs", "src/compiler/interface/Main.hs", "bin/export-core.ps1",
+        "bin/windows-common.ps1", "bin/audit-core.py", "bin/core-capabilities.json",
         "thc.cabal", "cabal.project"] ++
-        ["compiler/THC" </> path | path <- compiler, takeExtension path == ".hs"] ++
-        ["scripts" </> path | path <- scripts, take 5 path == "core_", takeExtension path == ".py"]
+        ["src/compiler/THC" </> path | path <- compiler, takeExtension path == ".hs"] ++
+        ["bin" </> path | path <- scripts, take 5 path == "core_", takeExtension path == ".py"]
       commands = [exported, compiled, observed] ++ audits ++ [rejected] ++ cstringCommands
       artifacts = cstringArtifacts ++ modules ++ [native </> "oracle.tsv", oracle] ++
         concatMap commandArtifacts commands ++
@@ -188,7 +188,7 @@ prepareWindowsSmoke root = do
 -- No plugin interface is loaded into the ghc-internal unit being rebuilt.
 prepareCString :: FilePath -> FilePath -> FilePath -> IO ([CommandResult], [FilePath])
 prepareCString root logs ghc = do
-  let source = "compiler/pinned-ghc-internal/GHC/Internal/CString.hs"
+  let source = "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/CString.hs"
       overlay = logs </> "cstring-interfaces"
       interface = overlay </> "GHC/Internal/CString.hi"
       output = "build/map/boot-core/GHC.Internal.CString.json"
@@ -282,17 +282,17 @@ prepareWindowsDriver root = do
       unless (any ((== Just (String (Text.pack backend))) . KeyMap.lookup "backend") diagnostics)
         (die ("driver did not report selected backend: " ++ label))
       pure result
-  drivers <- listDirectory (root </> "src/THC/Driver")
+  drivers <- listDirectory (root </> "src/driver/THC/Driver")
   let commands = [compiled, observed] ++ runs
       supportManifests = [logs </> ("dist with spaces " ++ backend ++ "-" ++ dense) </>
         "thc-run/completed/runtime-support/packages.json" | backend <- ["ast","bytecode"], dense <- ["false","true"]]
       auditedManifests = take 1 supportManifests
       sources = ["test/fixtures/run-pure" </> path | path <- originals] ++
-        ["src/THC/Driver" </> path | path <- drivers, takeExtension path == ".hs"] ++
+        ["src/driver/THC/Driver" </> path | path <- drivers, takeExtension path == ".hs"] ++
         ["test/haskell-fixtures/WindowsSmokeFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
         "test/haskell-fixtures/Main.hs",
-         "compiler/export.ps1", "compiler/interface/Main.hs", "compiler/windows-ghc-internal.json", "compiler/WindowsRunMain.hs",
-         "scripts/windows-common.ps1", "scripts/windows.ps1", "thc.cabal"]
+         "bin/export-core.ps1", "src/compiler/interface/Main.hs", "config/ghc/9.14.1/windows-ghc-internal.json", "src/driver/WindowsRunMain.hs",
+         "bin/windows-common.ps1", "bin/windows.ps1", "thc.cabal"]
   sourceHashes <- hashes root sources
   exports <- fmap concat $ forM supportManifests $ \manifest -> do
     let output = takeDirectory (takeDirectory manifest)

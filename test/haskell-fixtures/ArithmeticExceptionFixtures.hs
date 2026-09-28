@@ -38,8 +38,8 @@ refreshArithmeticCore = prepare True
 prepare :: Bool -> FilePath -> IO ()
 prepare coreOnly root = do
   let directory = "build/arithmetic-exceptions"
-      source = "compiler/test-fixtures/ArithmeticExceptionsAudit.hs"
-      driver = "compiler/test-fixtures/ArithmeticExceptionsNative.hs"
+      source = "test/fixtures/compiler/ArithmeticExceptionsAudit.hs"
+      driver = "test/fixtures/compiler/ArithmeticExceptionsNative.hs"
       entries = ["scalarDivZero", "scalarOverflow", "scalarUnderflow", "tupleDivZero", "tupleOverflow", "tupleUnderflow"]
       run label env program args = runLogged 180 root (directory </> "logs") label env program args
   createDirectoryIfMissing True (root </> directory </> "installed/bundles")
@@ -51,7 +51,7 @@ prepare coreOnly root = do
     let path = root </> directory </> name
     exists <- doesFileExist path
     when exists (removeFile path)
-  pluginBuild <- run "plugin-build" [] "compiler/build.sh" []
+  pluginBuild <- run "plugin-build" [] "bin/build-compiler.sh" []
   sourceRoot <- lookupEnv "THC_INSTALLED_CORE_GHC_SOURCE"
   installed <- maybe (prepareInstalledCore root directory)
     (prepareInstalledCoreWithForeign root directory) sourceRoot
@@ -66,28 +66,28 @@ prepare coreOnly root = do
     mapM_ (createDirectoryIfMissing True . (root </>)) [core, ghcOut]
     exported <- run (stage ++ "-export")
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> ghcOut)]
-      "compiler/export.sh" (["-package", "ghc-internal"] ++ options ++ [source])
+      "bin/export-core.sh" (["-package", "ghc-internal"] ++ options ++ [source])
     audits <- forM entries $ \entry -> do
       result <- try (run (stage ++ "-audit-" ++ entry) [] "python3"
-        ["scripts/audit-core.py", "--package-manifest", packagePath, "--entry", entry,
+        ["bin/audit-core.py", "--package-manifest", packagePath, "--entry", entry,
          "--output", directory </> stage </> entry ++ "-audit.json", consumer]) :: IO (Either ExitCode CommandResult)
       pure (entry, result)
     pure (stage, consumer, exported, audits)
   let failed = [stage ++ "/" ++ entry | (stage, _, _, audits) <- stages, (entry, Left _) <- audits]
   unless (null failed) (die ("Arithmetic strict audits failed: " ++ unwords failed ++
     ". Reports and command logs retained in " ++ directory ++ "; no success manifest written."))
-  plugin <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
-  drivers <- listDirectory (root </> "src/THC/Driver")
+  plugin <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
+  drivers <- listDirectory (root </> "src/driver/THC/Driver")
   let inputs = sort $ [source, driver, "test/haskell-fixtures/ArithmeticExceptionFixtures.hs",
         "test/haskell-fixtures/Main.hs", "test/haskell-fixtures/FixtureSupport.hs",
         "test/haskell-fixtures/InstalledCoreFixtures.hs",
-        "thc.cabal", "cabal.project", "compiler/interface/Main.hs", "scripts/audit-core.py", "scripts/core-capabilities.json",
-        "src/main/resources/thc/scalar-primop-signatures.json", "compiler/target-layout.c",
-        "compiler/export.sh", "compiler/build.sh", "compiler/toolchain.sh", "compiler/plugin.py"] ++
-        ["compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"] ++
-        ["src/THC/Driver" </> file | file <- drivers, takeExtension file == ".hs"] ++
-        ["scripts" </> file | file <- scripts, take 5 file == "core_", takeExtension file == ".py"]
+        "thc.cabal", "cabal.project", "src/compiler/interface/Main.hs", "bin/audit-core.py", "bin/core-capabilities.json",
+        "src/main/resources/thc/scalar-primop-signatures.json", "src/driver/cbits/target-layout.c",
+        "bin/export-core.sh", "bin/build-compiler.sh", "bin/toolchain.sh", "bin/plugin.py"] ++
+        ["src/compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"] ++
+        ["src/driver/THC/Driver" </> file | file <- drivers, takeExtension file == ".hs"] ++
+        ["bin" </> file | file <- scripts, take 5 file == "core_", takeExtension file == ".py"]
       commands = [pluginBuild] ++ fixtureCommands installed ++
         concat [exported : [result | (_, Right result) <- audits] | (_,_,exported,audits) <- stages]
       artifacts = fixtureArtifacts installed ++ concatMap commandArtifacts commands ++
@@ -112,7 +112,7 @@ prepare coreOnly root = do
           "libdir" .= Installed.installedLibdir (fixtureContext installed),
           "registration" .= fixtureRegistration installed]
         compileArguments = ["--make", "-O2", "-dynamic", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
-          "-package", "ghc-internal", "-i./compiler/test-fixtures", "-odir", native, "-hidir", native, driver, "-o", binary]
+          "-package", "ghc-internal", "-i./test/fixtures/compiler", "-odir", native, "-hidir", native, driver, "-o", binary]
     nativeInputs <- hashes root [source, driver]
     exists <- doesFileExist (root </> receipt)
     reusable <- if not exists then pure False else do

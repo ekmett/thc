@@ -60,7 +60,7 @@ prepareLibyamlNative root = do
   archives <- concat <$> mapM (registeredArchives store) [identifier,cIdentifier]
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
   let execute = runLogged 300 root (output </> "logs")
-      source = "compiler/test-fixtures/OriginalLibyamlNative.hs"
+      source = "test/fixtures/compiler/OriginalLibyamlNative.hs"
   built <- execute "native-build" [] ghc (["--make","-O0","-Wall","-Werror","-hide-all-packages",
     "-package","base","-package","bytestring","-outputdir",output </> "objects",source] ++
     archives ++ ["-o",output </> "native"])

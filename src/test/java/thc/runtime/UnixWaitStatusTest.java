@@ -72,7 +72,7 @@ class UnixWaitStatusTest {
         var manifest = json("manifest.json"); assertEquals("9.14.1",manifest.get("ghc")); assertTrue(CoreOriginalStdio.isOriginalUnixUnit(manifest.get("unixUnit")));
         assertEquals(280L,manifest.get("nativeRows")); assertEquals(true,manifest.get("strictAccepted")); var owner = (String) manifest.get("unixUnit");
         var entries = new HashSet<String>(); for (var operation : operations) entries.add("wait" + operation.name()); assertEquals(entries,new HashSet<>((List<?>) manifest.get("entries")));
-        assertEquals(Set.of("compiler/test-fixtures/UnixWaitStatusAudit.hs","test/haskell-fixtures/UnixWaitStatusFixtures.hs","compiler/THC/Plugin.hs","test/haskell-fixtures/FixtureSupport.hs","scripts/core_original_foreign.py","scripts/audit-core.py","scripts/core-capabilities.json","src/main/c/wait-status-api.c","scripts/build-cbits.py"),((Map<?,?>) manifest.get("inputHashes")).keySet());
+        assertEquals(Set.of("test/fixtures/compiler/UnixWaitStatusAudit.hs","test/haskell-fixtures/UnixWaitStatusFixtures.hs","src/compiler/THC/Plugin.hs","test/haskell-fixtures/FixtureSupport.hs","bin/core_original_foreign.py","bin/audit-core.py","bin/core-capabilities.json","src/main/c/wait-status-api.c","bin/build-cbits.py"),((Map<?,?>) manifest.get("inputHashes")).keySet());
         for (var key : List.of("inputHashes","artifactHashes","interfaceHashes")) {
             var hashes = (Map<String,String>) manifest.get(key); assertFalse(hashes.isEmpty());
             for (var hash : hashes.entrySet()) { var path = hash.getKey(); var file = new File(path); if (!file.isAbsolute()) file = new File(root,path);

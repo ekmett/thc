@@ -54,13 +54,13 @@ noncanonical arithmetic result. All 48 names reject both too few and too many
 arguments during strict and diagnostic loading. The six casts also reject
 contradictory argument and result register metadata in both loading modes.
 
-Preparation is part of the normal `scripts/prepare-tests.sh` clean-checkout flow.
+Preparation is part of the normal `bin/prepare-tests.sh` clean-checkout flow.
 Gradle tracks the generated artifacts and preparation inputs, and CI retains the
 manifest, Core export, and oracle. For a focused reproduction with the pinned
 GHC/GraalVM environment:
 
 ```sh
-compiler/build.sh
+bin/build-compiler.sh
 cabal run exe:thc-fixtures --offline -- signed-narrow
 ./gradlew test --tests thc.SignedNarrowPrimopsTest
 ```

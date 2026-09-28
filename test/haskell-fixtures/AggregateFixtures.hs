@@ -105,7 +105,7 @@ prepareTupleArithmetic root = do
   let directory = "build/tuple-arithmetic"
       output = root </> directory
       manifest = output </> "manifest.json"
-      source = "compiler/test-fixtures/TupleArithmeticAudit.hs"
+      source = "test/fixtures/compiler/TupleArithmeticAudit.hs"
   createDirectoryIfMissing True output
   present <- doesFileExist manifest
   when present (removeFile manifest)
@@ -121,14 +121,14 @@ prepareTupleArithmetic root = do
         ghcOut = directory </> stage ++ "-ghc"
         options = if stage == "post" then ["-fplugin-opt=THC.Plugin:post-tidy"] else []
     _ <- run root [("THC_CORE_OUT",root </> core),("THC_GHC_OUT",root </> ghcOut)]
-      "compiler/export.sh" (options ++ [source]) ""
+      "bin/export-core.sh" (options ++ [source]) ""
     let modulePath = root </> core </> "TupleArithmeticAudit.json"
     exists <- doesFileExist modulePath
     unless exists (die ("Missing GHC Core export: " ++ modulePath))
     let audit = directory </> stage ++ "-audit.json"
         auditArgs = concatMap (\name -> ["--entry",name]) (directNames ++ callNames) ++
           ["--output",audit,core </> "TupleArithmeticAudit.json"]
-    _ <- run root [] "python3" ("scripts/audit-core.py" : auditArgs) ""
+    _ <- run root [] "python3" ("bin/audit-core.py" : auditArgs) ""
     pure ()
   let driver = directory </> "NativeTupleArithmetic.hs"
       native = directory </> "native"
@@ -136,7 +136,7 @@ prepareTupleArithmetic root = do
   writeFile (root </> driver) oracleDriver
   createDirectoryIfMissing True (root </> native)
   _ <- run root [] ghc ["--make", "-O2", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
-    "-i" ++ root </> "compiler/test-fixtures", "-odir", root </> native,
+    "-i" ++ root </> "test/fixtures/compiler", "-odir", root </> native,
     "-hidir", root </> native, root </> driver, "-o", root </> executable] ""
   counts <- forM [("oracle.tsv",directNames),("call-oracle.tsv",callNames)] $ \(filename,names) -> do
     let wanted = requests names
@@ -145,14 +145,14 @@ prepareTupleArithmetic root = do
     count <- verifyRows wanted actual
     writeFile (output </> filename) actual
     pure (filename,count)
-  pluginFiles <- listDirectory (root </> "compiler/THC")
-  coreScripts <- listDirectory (root </> "scripts")
+  pluginFiles <- listDirectory (root </> "src/compiler/THC")
+  coreScripts <- listDirectory (root </> "bin")
   let inputs = sort $ [source, "thc.cabal", "test/haskell-fixtures/AggregateFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-        "scripts/audit-core.py", "scripts/core-capabilities.json",
-        "src/main/resources/thc/scalar-primop-signatures.json", "compiler/build.sh",
-        "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py"] ++
-        ["compiler/THC" </> file | file <- pluginFiles, takeExtension file == ".hs"] ++
-        ["scripts" </> file | file <- coreScripts, take 5 file == "core_" && takeExtension file == ".py"]
+        "bin/audit-core.py", "bin/core-capabilities.json",
+        "src/main/resources/thc/scalar-primop-signatures.json", "bin/build-compiler.sh",
+        "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py"] ++
+        ["src/compiler/THC" </> file | file <- pluginFiles, takeExtension file == ".hs"] ++
+        ["bin" </> file | file <- coreScripts, take 5 file == "core_" && takeExtension file == ".py"]
       artifacts = [directory </> stage ++ suffix | stage <- ["pre","post"],
         suffix <- ["-core/TupleArithmeticAudit.json","-audit.json"]] ++
         [directory </> file | file <- ["oracle.tsv","call-oracle.tsv","NativeTupleArithmetic.hs",

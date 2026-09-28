@@ -55,8 +55,8 @@ prepareFusedFloating root = do
   let directory = "build/fused-floating"
       output = root </> directory
       manifest = output </> "manifest.json"
-      source = "compiler/test-fixtures/FloatingAudit.hs"
-      driver = "compiler/test-fixtures/FloatingAuditNative.hs"
+      source = "test/fixtures/compiler/FloatingAudit.hs"
+      driver = "test/fixtures/compiler/FloatingAuditNative.hs"
   createDirectoryIfMissing True output
   present <- doesFileExist manifest
   when present (removeFile manifest)
@@ -71,13 +71,13 @@ prepareFusedFloating root = do
     _ -> die "Fused floating requires native 64-bit GHC"
   forM_ ["pre","post"] $ \stage -> do
     _ <- run root [("THC_CORE_OUT",output </> stage ++ "-core"),("THC_GHC_OUT",output </> stage ++ "-ghc")]
-      "compiler/export.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source]) ""
+      "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source]) ""
     pure ()
   let native = output </> "native"
   createDirectoryIfMissing True native
   -- No ISA flags: pinned GHC's standard-library FMA fallback is the oracle.
   _ <- run root [] ghc ["--make","-O2","-fforce-recomp","-dcore-lint","-dstg-lint",
-    "-icompiler/test-fixtures","-odir",native,"-hidir",native,driver,"-o",native </> "floating-oracle"] ""
+    "-itest/fixtures/compiler","-odir",native,"-hidir",native,driver,"-o",native </> "floating-oracle"] ""
   let cases = [(width,x,y,z) | width <- [32,64], (x,y,z) <- inputs width]
       stdinRows = unlines [unwords (map show [toInteger width,x,y,z]) | (width,x,y,z) <- cases]
       expected = [(name,x,y,z,width) | (width,x,y,z) <- cases, name <- entries width]
@@ -93,17 +93,17 @@ prepareFusedFloating root = do
       ((name,x,y,z,r),(want,a,b,c,width)) <- zip rows expected]) (die "Incomplete fused native domain")
   writeFile (output </> "oracle.tsv") actual
   forM_ ["pre","post"] $ \stage -> do
-    _ <- run root [] "python3" (["scripts/audit-core.py",directory </> stage ++ "-core/FloatingAudit.json",
+    _ <- run root [] "python3" (["bin/audit-core.py",directory </> stage ++ "-core/FloatingAudit.json",
       "--output",directory </> stage ++ "-audit.json"] ++ concatMap (\name -> ["--entry",name]) (entries 32 ++ entries 64)) ""
     pure ()
-  plugins <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
+  plugins <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
   let sources = sort $ [source,driver,"thc.cabal","test/haskell-fixtures/Main.hs",
         "test/haskell-fixtures/FixtureSupport.hs","test/haskell-fixtures/FusedFloatingFixtures.hs",
-        "compiler/build.sh","compiler/export.sh","compiler/toolchain.sh","compiler/plugin.py",
-        "scripts/audit-core.py","scripts/core-capabilities.json","src/main/resources/thc/scalar-primop-signatures.json"] ++
-        ["compiler/THC" </> file | file <- plugins, takeExtension file == ".hs"] ++
-        ["scripts" </> file | file <- scripts, take 5 file == "core_" && takeExtension file == ".py"]
+        "bin/build-compiler.sh","bin/export-core.sh","bin/toolchain.sh","bin/plugin.py",
+        "bin/audit-core.py","bin/core-capabilities.json","src/main/resources/thc/scalar-primop-signatures.json"] ++
+        ["src/compiler/THC" </> file | file <- plugins, takeExtension file == ".hs"] ++
+        ["bin" </> file | file <- scripts, take 5 file == "core_" && takeExtension file == ".py"]
       artifacts = [directory </> "oracle.tsv"] ++ [directory </> stage ++ suffix | stage <- ["pre","post"],
         suffix <- ["-core/FloatingAudit.json","-audit.json"]]
   inputHashes <- hashes root sources

@@ -33,8 +33,8 @@ prepareFileWait root = do
   unless (os == "linux" && arch == "x86_64")
     (die "Original descriptor waits require Linux x86_64 and its native GHC I/O manager")
   let directory = "build/file-wait"
-      source = "compiler/test-fixtures/FileWaitAudit.hs"
-      driver = "compiler/test-fixtures/FileWaitNative.hs"
+      source = "test/fixtures/compiler/FileWaitAudit.hs"
+      driver = "test/fixtures/compiler/FileWaitNative.hs"
       entries = ["waitReadRoot", "waitWriteRoot"]
       binary = directory </> "native/oracle"
       oracle = directory </> "oracle.txt"
@@ -50,13 +50,13 @@ prepareFileWait root = do
   -- Linking the threaded RTS instead aborts before testing either primop.
   nativeBuild <- run "native-build" [] ghc
     ["--make", "-O2", "-dynamic", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
-     "-package", "ghc-internal", "-package", "unix", "-i./compiler/test-fixtures",
+     "-package", "ghc-internal", "-package", "unix", "-i./test/fixtures/compiler",
      "-odir", directory </> "native", "-hidir", directory </> "native", driver, "-o", binary]
   nativeRun <- run "native-oracle" [] (root </> binary) []
   unless (commandStdout nativeRun == "read-ready\nwrite-ready\noriginal-bad-fd\n")
     (die "Original descriptor-wait native oracle changed")
   writeFile (root </> oracle) (BS.unpack (commandStdout nativeRun))
-  pluginBuild <- run "plugin-build" [] "compiler/build.sh" []
+  pluginBuild <- run "plugin-build" [] "bin/build-compiler.sh" []
   stages <- forM ["pre", "post"] $ \stage -> do
     let core = directory </> stage </> "core"
         output = core </> "FileWaitAudit.json"
@@ -64,26 +64,26 @@ prepareFileWait root = do
           ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries]
     exported <- run (stage ++ "-export")
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> directory </> stage </> "ghc")]
-      "compiler/export.sh" (options ++ [source])
+      "bin/export-core.sh" (options ++ [source])
     audits <- forM entries $ \entry -> do
       let report = directory </> stage </> entry ++ "-audit.json"
       checked <- try (run (stage ++ "-audit-" ++ entry) [] "python3"
-        ["scripts/audit-core.py", "--package-manifest", packagePath,
+        ["bin/audit-core.py", "--package-manifest", packagePath,
          "--entry", entry, "--output", report, output]) :: IO (Either ExitCode CommandResult)
       pure (entry, report, checked)
     pure (stage, output, exported, audits)
   let failed = [stage ++ "/" ++ entry | (stage, _, _, audits) <- stages,
                 (entry, _, Left _) <- audits]
   unless (null failed) (die ("Original descriptor-wait strict audits failed: " ++ unwords failed))
-  plugin <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
+  plugin <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
   let inputs = sort $ [source, driver, "test/haskell-fixtures/FileWaitFixtures.hs",
         "test/haskell-fixtures/InstalledCoreFixtures.hs", "test/haskell-fixtures/Main.hs",
-        "test/haskell-fixtures/FixtureSupport.hs", "compiler/target-layout.c",
-        "compiler/export.sh", "compiler/build.sh", "thc.cabal", "scripts/audit-core.py",
-        "scripts/core-capabilities.json"] ++
-        ["compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"] ++
-        ["scripts" </> file | file <- scripts, take 5 file == "core_", takeExtension file == ".py"]
+        "test/haskell-fixtures/FixtureSupport.hs", "src/driver/cbits/target-layout.c",
+        "bin/export-core.sh", "bin/build-compiler.sh", "thc.cabal", "bin/audit-core.py",
+        "bin/core-capabilities.json"] ++
+        ["src/compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"] ++
+        ["bin" </> file | file <- scripts, take 5 file == "core_", takeExtension file == ".py"]
       commands = fixtureCommands installed ++ [nativeBuild, nativeRun, pluginBuild] ++
         concat [exported : [result | (_, _, Right result) <- audits] | (_, _, exported, audits) <- stages]
       artifacts = fixtureArtifacts installed ++ [oracle] ++ concatMap commandArtifacts commands ++

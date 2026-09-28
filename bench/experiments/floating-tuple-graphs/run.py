@@ -76,7 +76,7 @@ def main():
         for path, sha in before_build.items():
             committed = subprocess.check_output(['git', 'show', revision + ':' + path], cwd=ROOT)
             check(hashlib.sha256(committed).hexdigest() == sha, 'Commit runtime source before graph capture: ' + path)
-        run(['python3', ROOT / 'scripts/prepare-floating-tuples.py', '--check-only'])
+        run(['python3', ROOT / 'bin/prepare-floating-tuples.py', '--check-only'])
         run([ROOT / 'gradlew', '--no-daemon', 'installDist'], output / 'installDist.log')
         check(source_hashes() == before_build, 'Runtime source changed during installDist')
         launch = dict(schema=1, runtimeSourceCommit=revision, runtimeSourceSha256=before_build,

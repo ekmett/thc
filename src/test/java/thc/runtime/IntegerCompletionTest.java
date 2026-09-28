@@ -88,11 +88,11 @@ class IntegerCompletionTest {
         var manifest = json(DIRECTORY + "/manifest.json");
         assertEquals("9.14.1", manifest.get("ghc")); assertEquals(64L, ((Number) manifest.get("wordBits")).longValue());
         assertEquals(NAMES, manifest.get("entries")); assertEquals(3373L, ((Number) manifest.get("nativeRows")).longValue());
-        var inputs = new HashSet<>(list("compiler/test-fixtures/IntegerCompletionAudit.hs", "thc.cabal", "test/haskell-fixtures/Main.hs",
-            "test/haskell-fixtures/IntegerCompletionFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs", "compiler/build.sh", "compiler/export.sh",
-            "compiler/toolchain.sh", "compiler/plugin.py", "scripts/audit-core.py", "scripts/core-capabilities.json", "src/main/resources/thc/scalar-primop-signatures.json"));
-        for (var file : Objects.requireNonNull(new File(root, "compiler/THC").listFiles())) if (file.getName().endsWith(".hs")) inputs.add("compiler/THC/" + file.getName());
-        for (var file : Objects.requireNonNull(new File(root, "scripts").listFiles())) if (file.getName().startsWith("core_") && file.getName().endsWith(".py")) inputs.add("scripts/" + file.getName());
+        var inputs = new HashSet<>(list("test/fixtures/compiler/IntegerCompletionAudit.hs", "thc.cabal", "test/haskell-fixtures/Main.hs",
+            "test/haskell-fixtures/IntegerCompletionFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs", "bin/build-compiler.sh", "bin/export-core.sh",
+            "bin/toolchain.sh", "bin/plugin.py", "bin/audit-core.py", "bin/core-capabilities.json", "src/main/resources/thc/scalar-primop-signatures.json"));
+        for (var file : Objects.requireNonNull(new File(root, "src/compiler/THC").listFiles())) if (file.getName().endsWith(".hs")) inputs.add("src/compiler/THC/" + file.getName());
+        for (var file : Objects.requireNonNull(new File(root, "bin").listFiles())) if (file.getName().startsWith("core_") && file.getName().endsWith(".py")) inputs.add("bin/" + file.getName());
         var commands = list("ghc-version", "ghc-info", "pre-export", "pre-audit", "post-export", "post-audit", "native-build", "native-oracle");
         var artifacts = new HashSet<>(list("requests.tsv", "NativeIntegerCompletion.hs", "native/integer-completion-oracle", "oracle.tsv"));
         for (var stage : list("pre", "post")) { artifacts.add(stage + "-audit.json"); artifacts.add(stage + "-core/IntegerCompletionAudit.json"); }

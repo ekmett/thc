@@ -33,12 +33,12 @@ class RubbishLiteralTest {
         var manifest = json("manifest.json");
         assertEquals(1L, manifest.get("schema")); assertEquals(names, manifest.get("entries")); assertEquals(147L, manifest.get("nativeRows"));
         var inputs = object(manifest.get("inputHashes"));
-        var expectedInputs = new HashSet<>(list("compiler/test-fixtures/RubbishLiteralAudit.hs", "test/haskell-fixtures/RubbishLiteralFixtures.hs",
-            "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal", "scripts/audit-core.py", "scripts/core-capabilities.json"));
-        try (var files = Files.list(root.resolve("compiler/THC"))) {
+        var expectedInputs = new HashSet<>(list("test/fixtures/compiler/RubbishLiteralAudit.hs", "test/haskell-fixtures/RubbishLiteralFixtures.hs",
+            "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal", "bin/audit-core.py", "bin/core-capabilities.json"));
+        try (var files = Files.list(root.resolve("src/compiler/THC"))) {
             files.filter(path -> path.getFileName().toString().endsWith(".hs")).forEach(path -> expectedInputs.add(root.relativize(path).toString()));
         }
-        try (var files = Files.list(root.resolve("scripts"))) {
+        try (var files = Files.list(root.resolve("bin"))) {
             files.filter(path -> path.getFileName().toString().startsWith("core_") && path.getFileName().toString().endsWith(".py"))
                 .forEach(path -> expectedInputs.add(root.relativize(path).toString()));
         }
@@ -156,7 +156,7 @@ class RubbishLiteralTest {
     private void auditRejected(Map<String, Object> module, Path directory, String label) throws Exception {
         var input = directory.resolve(label + ".json"); Files.writeString(input, Json.stringify(module));
         var output = directory.resolve(label + ".audit.json");
-        var process = new ProcessBuilder("python3", root.resolve("scripts/audit-core.py").toString(), "--entry", "scalarIntRep", "--output", output.toString(), input.toString())
+        var process = new ProcessBuilder("python3", root.resolve("bin/audit-core.py").toString(), "--entry", "scalarIntRep", "--output", output.toString(), input.toString())
             .directory(root.toFile()).redirectErrorStream(true).start();
         var text = new String(process.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
         assertTrue(process.waitFor(30, TimeUnit.SECONDS), text); assertNotEquals(0, process.exitValue(), text);

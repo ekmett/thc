@@ -138,7 +138,7 @@ prepareInstalledCoreProfile foreignSource root directory libraries = do
   createDirectoryIfMissing True (root </> directory </> "installed/bundles")
   bundles <- forM units $ \unit -> do
     acquired <- Project.prepareInstalledBundle cache (root </> directory </> "installed/staging")
-      (root </> "compiler/target-layout.c") driverHash selected unit
+      (root </> "src/driver/cbits/target-layout.c") driverHash selected unit
     original <- case acquired of
       Right value -> pure value
       Left missing -> die ("Fixture requires complete-interface-core from the selected GHC: " ++

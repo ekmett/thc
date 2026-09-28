@@ -82,8 +82,8 @@ public final class SetDiagnosticProbe {
             if(!sha(Path.of(e.getKey())).equals(e.getValue()))throw new AssertionError("Changed exported/native artifact: "+e.getKey());
         List<Map<String,String>>validationToolDrift=new ArrayList<>();
         for(var e:((Map<String,String>)cases.get("inputHashes")).entrySet()) if(!sha(Path.of(e.getKey())).equals(e.getValue())) {
-            if(!e.getKey().endsWith("/scripts/audit-core.py") && !e.getKey().endsWith("/scripts/core-capabilities.json") &&
-               !e.getKey().endsWith("/scripts/prepare-library-tests.py"))
+            if(!e.getKey().endsWith("/bin/audit-core.py") && !e.getKey().endsWith("/bin/core-capabilities.json") &&
+               !e.getKey().endsWith("/bin/prepare-library-tests.py"))
                 throw new AssertionError("Changed exporter/library input: "+e.getKey());
             validationToolDrift.add(Map.of("path",e.getKey(),"manifestSha256",e.getValue(),"currentSha256",sha(Path.of(e.getKey()))));
         }

@@ -85,7 +85,7 @@ done
 
 On ARM64, `simd128-arrays` automatically exports pre-Tidy Core without native
 execution. Pass `--export-only` to each of the other four selectors for the
-same preparation policy used by `scripts/prepare-tests.sh`. Their repeatable
+same preparation policy used by `bin/prepare-tests.sh`. Their repeatable
 `--ghc-option=OPTION` forwards and records explicit code-generation options.
 Export-only provenance has null native fields and makes no native or post-Tidy
 claim; it is not a fallback after native failure.

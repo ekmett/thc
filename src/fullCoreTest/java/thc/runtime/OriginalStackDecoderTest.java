@@ -24,8 +24,8 @@ public class OriginalStackDecoderTest {
     private Map<String, Object> manifest() throws Exception {
         var value = json(directory + "/manifest.json"); assertEquals("thc-original-stack-decoder-fixture", value.get("format"));
         assertEquals(1L, value.get("schema")); assertEquals("9.14.1", value.get("ghc")); assertEquals(entries, value.get("entries"));
-        var inputs = (Map<String, String>) value.get("inputHashes"); assertTrue(inputs.keySet().containsAll(List.of("compiler/test-fixtures/OriginalStackDecoder.hs",
-            "compiler/test-fixtures/OriginalStackDecoderNative.hs", "test/haskell-fixtures/InstalledCoreFixtures.hs", "test/haskell-fixtures/StackDecoderFixtures.hs", "scripts/core-capabilities.json")));
+        var inputs = (Map<String, String>) value.get("inputHashes"); assertTrue(inputs.keySet().containsAll(List.of("test/fixtures/compiler/OriginalStackDecoder.hs",
+            "test/fixtures/compiler/OriginalStackDecoderNative.hs", "test/haskell-fixtures/InstalledCoreFixtures.hs", "test/haskell-fixtures/StackDecoderFixtures.hs", "bin/core-capabilities.json")));
         for (String group : List.of("inputHashes", "artifactHashes")) {
             var records = (Map<String, String>) value.get(group); assertFalse(records.isEmpty());
             for (var hash : records.entrySet()) {

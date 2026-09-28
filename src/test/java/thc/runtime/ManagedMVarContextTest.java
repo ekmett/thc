@@ -44,7 +44,7 @@ public class ManagedMVarContextTest {
     private record Key(String name, long input) {}
     private record Started(Published ready, Future<Completed> future) {}
     private Fixture fixture() throws Exception {
-        var path = new File(root, "build/managed-mvars/manifest.json"); assertTrue(path.isFile(), "Run scripts/prepare-managed-mvars.py for genuine GHC MVar fixtures");
+        var path = new File(root, "build/managed-mvars/manifest.json"); assertTrue(path.isFile(), "Run bin/prepare-managed-mvars.py for genuine GHC MVar fixtures");
         var manifest = (Map<String, Object>) Json.parse(Files.readString(path.toPath())); assertEquals("9.14.1", manifest.get("ghc"));
         assertEquals(new LinkedHashSet<>(names), new LinkedHashSet<>((List<String>) manifest.get("contextEntryNames")));
         for (var kind : List.of("inputHashes", "artifactHashes")) for (var item : ((Map<String, String>) manifest.get(kind)).entrySet()) {

@@ -42,7 +42,7 @@ No post-compilation settling calls or retries are part of those checks.
 
 ## Genuine Core and independently observable lanes
 
-`compiler/test-fixtures/SimdInt8X16.hs` uses the actual pinned primops.
+`test/fixtures/compiler/SimdInt8X16.hs` uses the actual pinned primops.
 `plusCase`, `minusCase`, `timesCase`, and `negateCase` each have two machine
 `Int#` inputs and a machine `Int#` checksum result on a required 64-bit host.
 The sixteen lanes before narrowing are:

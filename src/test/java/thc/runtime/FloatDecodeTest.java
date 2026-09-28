@@ -102,13 +102,13 @@ class FloatDecodeTest {
     private void verifyEvidence(Map<String, Object> manifest) throws Exception {
         assertEquals(1L, manifest.get("schema")); assertEquals("9.14.1", manifest.get("ghc")); assertEquals(NAMES, manifest.get("entries"));
         assertEquals(inputs(32), manifest.get("floatInputs")); assertEquals(inputs(64), manifest.get("doubleInputs")); assertEquals(4L * (inputs(32).size() + inputs(64).size()), manifest.get("nativeRows"));
-        var sources = new HashSet<>(list("compiler/test-fixtures/FloatDecodeAudit.hs", "compiler/test-fixtures/FloatDecodeNative.hs", "examples/THC/FloatDecode.hs", "thc.cabal",
-            "test/haskell-fixtures/Main.hs", "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/FloatDecodeFixtures.hs", "scripts/core-capabilities.json",
-            "scripts/audit-core.py", "src/main/resources/thc/scalar-primop-signatures.json", "compiler/build.sh", "compiler/export.sh", "compiler/export-boot.py", "compiler/toolchain.sh", "compiler/plugin.py",
-            "vendor/ghc-9.14.1/include/WordSize.h", "vendor/ghc-9.14.1/LICENSE"));
-        for (var name : list("BigNat", "Integer", "Natural")) for (var suffix : list(".hs", ".hs-boot")) sources.add("vendor/ghc-9.14.1/GHC/Internal/Bignum/" + name + suffix);
-        for (var file : Objects.requireNonNull(new File(root, "compiler/THC").listFiles())) if (file.getName().endsWith(".hs")) sources.add(root.toPath().relativize(file.toPath()).toString());
-        for (var file : Objects.requireNonNull(new File(root, "scripts").listFiles())) if (file.getName().startsWith("core_") && file.getName().endsWith(".py")) sources.add(root.toPath().relativize(file.toPath()).toString());
+        var sources = new HashSet<>(list("test/fixtures/compiler/FloatDecodeAudit.hs", "test/fixtures/compiler/FloatDecodeNative.hs", "examples/THC/FloatDecode.hs", "thc.cabal",
+            "test/haskell-fixtures/Main.hs", "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/FloatDecodeFixtures.hs", "bin/core-capabilities.json",
+            "bin/audit-core.py", "src/main/resources/thc/scalar-primop-signatures.json", "bin/build-compiler.sh", "bin/export-core.sh", "bin/export-boot.py", "bin/toolchain.sh", "bin/plugin.py",
+            "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/include/WordSize.h", "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE"));
+        for (var name : list("BigNat", "Integer", "Natural")) for (var suffix : list(".hs", ".hs-boot")) sources.add("third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/" + name + suffix);
+        for (var file : Objects.requireNonNull(new File(root, "src/compiler/THC").listFiles())) if (file.getName().endsWith(".hs")) sources.add(root.toPath().relativize(file.toPath()).toString());
+        for (var file : Objects.requireNonNull(new File(root, "bin").listFiles())) if (file.getName().startsWith("core_") && file.getName().endsWith(".py")) sources.add(root.toPath().relativize(file.toPath()).toString());
         var commands = new ArrayList<>(list("native-build", "native-oracle", "boot-export"));
         var artifacts = new HashSet<>(list(DIRECTORY + "/inputs.tsv", DIRECTORY + "/oracle.tsv", DIRECTORY + "/native/oracle", DIRECTORY + "/original/GHC.Internal.Bignum.Integer.json", DIRECTORY + "/original/boot-provenance.json"));
         for (var stage : list("pre", "post")) {
@@ -155,7 +155,7 @@ class FloatDecodeTest {
     @Test void publicDoubleExponentRequiresOriginalIntegerCore(@TempDir Path temporary) throws Exception {
         for (var stage : list("pre", "post")) {
             var report = temporary.resolve(stage + ".json");
-            var process = new ProcessBuilder("python3", "scripts/audit-core.py", DIRECTORY + "/" + stage + "-core/FloatDecodeAudit.json", "--entry", "doubleExponent", "--output", report.toString())
+            var process = new ProcessBuilder("python3", "bin/audit-core.py", DIRECTORY + "/" + stage + "-core/FloatDecodeAudit.json", "--entry", "doubleExponent", "--output", report.toString())
                 .directory(root).redirectOutput(temporary.resolve(stage + ".stdout").toFile()).redirectError(temporary.resolve(stage + ".stderr").toFile()).start();
             if (!process.waitFor(60, TimeUnit.SECONDS)) { process.destroyForcibly().waitFor(); fail("Missing-original audit timed out"); }
             assertEquals(1, process.exitValue()); var audit = object(Json.parse(Files.readString(report)));
@@ -212,7 +212,7 @@ class FloatDecodeTest {
                 default -> { }
             }
             var label = name + "-" + mutation; var input = temporary.resolve(label + ".json"); Files.writeString(input, Json.stringify(linked)); var report = temporary.resolve(label + "-report.json");
-            var process = new ProcessBuilder("python3", "scripts/audit-core.py", input.toString(), "--entry", name, "--output", report.toString()).directory(root)
+            var process = new ProcessBuilder("python3", "bin/audit-core.py", input.toString(), "--entry", name, "--output", report.toString()).directory(root)
                 .redirectOutput(temporary.resolve(label + ".stdout").toFile()).redirectError(temporary.resolve(label + ".stderr").toFile()).start();
             if (!process.waitFor(60, TimeUnit.SECONDS)) { process.destroyForcibly().waitFor(); fail("Shared auditor timeout: " + label); }
             assertEquals(mutation.equals("valid") ? 0 : 1, process.exitValue(), label); assertEquals(mutation.equals("valid"), object(Json.parse(Files.readString(report))).get("accepted"), label);

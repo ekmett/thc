@@ -56,8 +56,8 @@ been run for these wide shapes, and these checks make no hardware SIMD or
 performance claim.
 
 ```sh
-python3 scripts/generate-simd-families.py --check --verify-ghc
-python3 scripts/prepare-simd-capability-smoke.py
+python3 bin/generate-simd-families.py --check --verify-ghc
+python3 bin/prepare-simd-capability-smoke.py
 ./gradlew test --tests thc.runtime.SimdCapabilitySmokeTest --tests thc.runtime.SimdFamiliesTest
 cabal run exe:thc-primops -- coverage --check
 ```

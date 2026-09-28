@@ -28,6 +28,7 @@ and library (for example, `libgmp-dev` on Debian/Ubuntu) for the
 From the repository root:
 
 ```sh
+git submodule update --init --depth 1
 export JAVA_HOME=/path/to/graalvm
 export PATH="$JAVA_HOME/bin:$PATH"
 
@@ -152,7 +153,7 @@ separate in `THC.Internal.JIT`, explicitly `Unsafe`; the public `THC` facade is
 
 The [polyglot example](docs/polyglot.md) calls JavaScript from Haskell with
 `foreign import javascript`. GHC checks the declarations; THC implements them
-with Truffle interop. Run `scripts/javascript-demo.sh` to try it. A lower-level
+with Truffle interop. Run `bin/javascript-demo.sh` to try it. A lower-level
 `THC.Polyglot` module also exposes language evaluation and opaque foreign values.
 
 The tests include ordinary list, `STRef`, array, `ShortByteString`, `IntMap`,
@@ -199,14 +200,14 @@ runner then calls one exported entry; `--compile` requests guest compilation and
 checks that code was installed:
 
 ```sh
-scripts/try.sh
-scripts/run.sh sumLoop 100000 --compile
+bin/try.sh
+bin/run.sh sumLoop 100000 --compile
 ```
 
 The [bytecode backend](docs/bytecode.md) is the default. To use the AST backend:
 
 ```sh
-THC_BACKEND=ast scripts/run.sh sumLoop 100000 --compile
+THC_BACKEND=ast bin/run.sh sumLoop 100000 --compile
 ```
 
 Development checks and benchmarks live in `src/diagnostics/`. Build their separate
@@ -218,8 +219,8 @@ and the embedding/polyglot examples in `src/examples/`.
 For the native-checked library suite and the diagnostic Map example:
 
 ```sh
-scripts/try-libraries.sh
-THC_DIAGNOSTIC_UNSUPPORTED=true scripts/try-map.sh
+bin/try-libraries.sh
+THC_DIAGNOSTIC_UNSUPPORTED=true bin/try-map.sh
 ```
 
 The latter builds, updates, queries and folds a histogram using the actual
@@ -232,9 +233,9 @@ configurations you intend to run. Typed runtime storage and successful guest
 compilation do not by themselves establish allocation removal or a speedup.
 
 ```sh
-scripts/benchmark.sh work/bench-kernels
-THC_DIAGNOSTIC_UNSUPPORTED=true scripts/benchmark-map.sh work/bench-map
-THC_BACKEND=ast THC_DIAGNOSTIC_UNSUPPORTED=true scripts/benchmark-map.sh work/bench-ast
+bin/benchmark.sh work/bench-kernels
+THC_DIAGNOSTIC_UNSUPPORTED=true bin/benchmark-map.sh work/bench-map
+THC_BACKEND=ast THC_DIAGNOSTIC_UNSUPPORTED=true bin/benchmark-map.sh work/bench-ast
 ```
 
 Run the corresponding `try` script first and choose an unused output directory:
@@ -248,14 +249,17 @@ describe implemented protocols and opt-in experiments.
 
 ## Finding your way around
 
-* [`compiler/`](compiler/README.md) exports executable Core from GHC, with
+* [`src/compiler/`](src/compiler/) exports executable Core from GHC, with
   representation and evaluation information.
-* [`thc.cabal`](thc.cabal), [`app/`](app/) and [`src/THC/`](src/THC/) build the
+* [`src/driver/`](src/driver/) builds the
   command-line driver; [`test/`](test/) contains its Cabal fixtures and checks.
+* [`src/cbd/`](src/cbd/) implements compact Core storage and inspection.
+* [`src/runtime/`](src/runtime/) provides the public Haskell runtime API.
+* [`third-party/pinned/`](third-party/pinned/) pins upstream Git submodules; [`third-party/licenses/`](third-party/licenses/) collects notices.
 * [`src/main/`](src/main/) and [`src/test/`](src/test/) contain the Truffle
   runtime and its tests.
 * [`examples/`](examples/) contains Haskell programs and the native oracle.
-* [`scripts/`](scripts/) contains build, audit, benchmark and graph drivers.
+* [`bin/`](bin/) contains build, audit, benchmark and graph drivers.
 * [The architecture guide](docs/architecture.md) describes the current system
   and planned work. [The documentation index](docs/README.md) groups coverage
   and design reports; [open design questions](research/open-questions.md)

@@ -28,7 +28,7 @@ checked 126 additional fresh-native/model boundary cases without findings.
 `evidence.json` retains source, native binary, Core/provenance, runtime JAR and raw
 log hashes, with exact commands and limits. Complete logs remain at the recorded
 build paths; the normal CI artifact collection also retains those logs and the
-per-entry audits. Reproduce with `python3 scripts/prepare-library-tests.py`, an
+per-entry audits. Reproduce with `python3 bin/prepare-library-tests.py`, an
 `installDist` build, then the four commands recorded in the evidence (the same
 backend/handoff loop used by Build CI). The preparation requires the pinned GHC,
 GHC package manager, containers archive and GraalVM described in the repository.

@@ -34,8 +34,8 @@ import Text.Read (readMaybe)
 
 directory, source, driver :: FilePath
 directory = "build/original-stdio-close"
-source = "compiler/test-fixtures/OriginalStdioCloseAudit.hs"
-driver = "compiler/test-fixtures/OriginalStdioCloseAuditNative.hs"
+source = "test/fixtures/compiler/OriginalStdioCloseAudit.hs"
+driver = "test/fixtures/compiler/OriginalStdioCloseAuditNative.hs"
 
 entries :: [String]
 entries = ["originalClose", "originalCloseErrno"]
@@ -65,7 +65,7 @@ prepareOriginalStdioClose root = do
                   lookup "target word size" target == Just "8" -> pure ()
     _ -> die "Original close preparation rejects cross-compiling or non-64-bit GHC"
   compiled <- execute "native-build" [] ghc ["--make", "-O2", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
-    "-package", "ghc-internal", "-package", "unix", "-i" ++ (root </> "compiler/test-fixtures"),
+    "-package", "ghc-internal", "-package", "unix", "-i" ++ (root </> "test/fixtures/compiler"),
     "-odir", root </> native, "-hidir", root </> native, driver, "-o", root </> binary]
   rows <- forM (zip [0 :: Int ..] requests) $ \(index, (entry, scenario)) -> do
     let number = show index
@@ -97,28 +97,28 @@ prepareOriginalStdioClose root = do
     exported <- execute (stage ++ "-export")
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> stageDir </> "ghc"),
        ("THC_SOURCE_NOTES", "true")]
-      "compiler/export.sh" (["-package", "ghc-internal"] ++ postTidy ++ roots ++ [source])
+      "bin/export-core.sh" (["-package", "ghc-internal"] ++ postTidy ++ roots ++ [source])
     mapM_ (\path -> do
       exists <- doesFileExist (root </> path)
       unless exists (die ("Missing genuine GHC close export: " ++ path))) modules
     audits <- forM entries $ \entry -> do
       let path = stageDir </> entry ++ ".audit.json"
       audited <- execute (stage ++ "-audit-" ++ entry) [] "python3"
-        (["scripts/audit-core.py", "--entry", entry, "--output", path] ++ modules)
+        (["bin/audit-core.py", "--entry", entry, "--output", path] ++ modules)
       pure (entry, path, audited)
     pure (stage, object ["modules" .= modules], Map.fromList [(entry, path) | (entry, path, _) <- audits],
           exported : [command | (_, _, command) <- audits], modules ++ [path | (_, path, _) <- audits])
-  plugin <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
+  plugin <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
   let commands = [version, info, compiled] ++ [command | (_, command, _, _) <- rows] ++
         concat [stageCommands | (_, _, _, stageCommands, _) <- exports]
       sources = sort $ [source, driver, "thc.cabal", "test/haskell-fixtures/Main.hs",
         "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/OriginalStdioCloseFixtures.hs",
-        "scripts/audit-core.py", "scripts/core_original_foreign.py", "scripts/core-capabilities.json",
-        "src/main/resources/thc/scalar-primop-signatures.json", "compiler/build.sh", "compiler/export.sh",
-        "compiler/toolchain.sh", "compiler/plugin.py"] ++
-        ["compiler/THC" </> path | path <- plugin, takeExtension path == ".hs"] ++
-        ["scripts" </> path | path <- scripts, "core_" `isPrefixOf` path, takeExtension path == ".py"]
+        "bin/audit-core.py", "bin/core_original_foreign.py", "bin/core-capabilities.json",
+        "src/main/resources/thc/scalar-primop-signatures.json", "bin/build-compiler.sh", "bin/export-core.sh",
+        "bin/toolchain.sh", "bin/plugin.py"] ++
+        ["src/compiler/THC" </> path | path <- plugin, takeExtension path == ".hs"] ++
+        ["bin" </> path | path <- scripts, "core_" `isPrefixOf` path, takeExtension path == ".py"]
       artifacts = binary : oracle : [path | (_, _, path, _) <- rows] ++
         concat [privateFiles | (_, _, _, privateFiles) <- rows] ++
         concat [paths | (_, _, _, _, paths) <- exports] ++ concatMap commandArtifacts commands

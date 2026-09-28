@@ -42,7 +42,7 @@ No post-compilation settling calls or retries are part of those checks.
 
 ## Scalar signatures and independent observations
 
-The fixture `compiler/test-fixtures/SimdInt16X8.hs` keeps vectors local.
+The fixture `test/fixtures/compiler/SimdInt16X8.hs` keeps vectors local.
 All host arguments/results are machine `Int#` on a required 64-bit host.
 The four graph-oriented entries `plusCase`, `minusCase`, `timesCase`,
 and `negateCase` have two scalar arguments, `a` and `b`.

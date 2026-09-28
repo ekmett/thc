@@ -27,8 +27,8 @@ import System.Info (arch)
 prepareExceptionResultLayouts :: FilePath -> IO ()
 prepareExceptionResultLayouts root = do
   let directory = "build/exception-result-layouts"
-      source = "compiler/test-fixtures/ExceptionResultLayoutsAudit.hs"
-      driver = "compiler/test-fixtures/ExceptionResultLayoutsNative.hs"
+      source = "test/fixtures/compiler/ExceptionResultLayoutsAudit.hs"
+      driver = "test/fixtures/compiler/ExceptionResultLayoutsNative.hs"
       entries = [name ++ "Result" | name <- ["int8", "word8", "int16", "word16", "int32", "word32",
         "int64", "word64", "float", "double", "empty", "nested", "sum", "vector", "unlifted", "unliftedPayload"]]
       modes entry = if entry == "unliftedPayloadResult" then [0, 1 :: Int] else [0, 1, 2]
@@ -42,7 +42,7 @@ prepareExceptionResultLayouts root = do
   unless (BS.words (commandStdout version) == ["9.14.1"]) (die "Exception result layouts require GHC 9.14.1")
   compiled <- run "native-compile" [] ghc
     ["--make", "-O2", "-dynamic", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
-     "-i./compiler/test-fixtures", "-odir", native, "-hidir", native, driver, "-o", binary]
+     "-i./test/fixtures/compiler", "-odir", native, "-hidir", native, driver, "-o", binary]
   observed <- fmap concat $ forM entries $ \entry -> forM (modes entry) $ \mode -> do
     result <- run ("native-" ++ entry ++ "-" ++ show mode) [] (root </> binary) [entry, show mode]
     unless (length (BS.lines (commandStdout result)) == 3) (die "Exception layout oracle row count changed")
@@ -59,19 +59,19 @@ prepareExceptionResultLayouts root = do
     mapM_ (createDirectoryIfMissing True . (root </>)) [core, ghcOut]
     exported <- run (stage ++ "-export")
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> ghcOut)]
-      "compiler/export.sh" (options ++ [source])
+      "bin/export-core.sh" (options ++ [source])
     audits <- forM entries $ \entry -> run (stage ++ "-audit-" ++ entry) [] "python3"
-      ["scripts/audit-core.py", "--entry", entry, "--output", directory </> stage </> entry ++ "-audit.json",
+      ["bin/audit-core.py", "--entry", entry, "--output", directory </> stage </> entry ++ "-audit.json",
        core </> "ExceptionResultLayoutsAudit.json"]
     pure (exported : audits)
-  plugin <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
+  plugin <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
   let inputs = sort $ [source, driver, "test/haskell-fixtures/ExceptionResultLayoutsFixtures.hs",
         "test/haskell-fixtures/Main.hs", "test/haskell-fixtures/FixtureSupport.hs",
-        "thc.cabal", "cabal.project", "scripts/audit-core.py", "scripts/core-capabilities.json",
-        "compiler/export.sh", "compiler/build.sh", "compiler/toolchain.sh", "compiler/plugin.py"] ++
-        ["compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"] ++
-        ["scripts" </> file | file <- scripts, take 5 file == "core_", takeExtension file == ".py"]
+        "thc.cabal", "cabal.project", "bin/audit-core.py", "bin/core-capabilities.json",
+        "bin/export-core.sh", "bin/build-compiler.sh", "bin/toolchain.sh", "bin/plugin.py"] ++
+        ["src/compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"] ++
+        ["bin" </> file | file <- scripts, take 5 file == "core_", takeExtension file == ".py"]
       commands = [version, compiled] ++ observed ++ concat stages
       artifacts = [binary, directory </> "oracle.tsv"] ++ concatMap commandArtifacts commands ++
         [directory </> stage </> "core/ExceptionResultLayoutsAudit.json" | stage <- stagesToExport] ++

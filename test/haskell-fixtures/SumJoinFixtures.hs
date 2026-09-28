@@ -35,8 +35,8 @@ prepareSumJoins :: FilePath -> IO ()
 prepareSumJoins root = do
   let directory = "build/sum-join"
       output = root </> directory
-      source = "compiler/test-fixtures/SumJoinAudit.hs"
-      driver = "compiler/test-fixtures/SumJoinAuditNative.hs"
+      source = "test/fixtures/compiler/SumJoinAudit.hs"
+      driver = "test/fixtures/compiler/SumJoinAuditNative.hs"
       entries = ["forwardCase", "recursiveCase", "nestedCase", "stateForwardCase", "stateRecursiveCase",
                  "tupleForwardCase", "sumForwardCase"]
       logs = directory </> "commands"
@@ -46,7 +46,7 @@ prepareSumJoins root = do
   version <- runLogged 30 root logs "ghc-version" [] ghc ["--numeric-version"]
   unless (commandStdout version == "9.14.1\n") (die "Sum joins require GHC 9.14.1")
   compiled <- runLogged 120 root logs "native-build" [] ghc
-    ["--make", "-O2", "-dynamic", "-fforce-recomp", "-dcore-lint", "-dstg-lint", "-icompiler/test-fixtures",
+    ["--make", "-O2", "-dynamic", "-fforce-recomp", "-dcore-lint", "-dstg-lint", "-itest/fixtures/compiler",
      "-odir", native, "-hidir", native, driver, "-o", native </> "oracle"]
   observations <- runLogged 30 root logs "native-run" [] (output </> "native/oracle") []
   unless (length (BSC.lines (commandStdout observations)) == 42) (die "Unexpected sum-join row count")
@@ -56,7 +56,7 @@ prepareSumJoins root = do
         modulePath = core </> "SumJoinAudit.json"
     exported <- runLogged 180 root logs (stage ++ "-export")
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", output </> stage </> "ghc")]
-      "compiler/export.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source])
+      "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source])
     bytes <- BS.readFile (root </> modulePath)
     let nodes = maybe [] walk (decodeStrict' bytes)
         joins = [fields | Object fields <- nodes,
@@ -90,14 +90,14 @@ prepareSumJoins root = do
       unless (length preserved == 1) (die "Sum-case fixture lost its genuine three-slot result boundary")
     let report = directory </> stage </> "audit.json"
     audited <- runLogged 30 root logs (stage ++ "-audit") [] "python3"
-      (["scripts/audit-core.py", "--output", report] ++ concatMap (\entry -> ["--entry", entry]) entries ++ [modulePath])
+      (["bin/audit-core.py", "--output", report] ++ concatMap (\entry -> ["--entry", entry]) entries ++ [modulePath])
     auditBytes <- BS.readFile (root </> report)
     case decodeStrict' auditBytes of
       Just (Object value) | KeyMap.lookup "accepted" value == Just (Bool True) -> pure ()
       _ -> die ("Strict sum-join audit rejected " ++ stage)
     pure (modulePath : report : commandArtifacts exported ++ commandArtifacts audited)
   sourceHashes <- hashes root [source, driver, "test/haskell-fixtures/SumJoinFixtures.hs",
-    "scripts/audit-core.py", "scripts/core-capabilities.json", "compiler/THC/Plugin.hs", "compiler/THC/Wired.hs"]
+    "bin/audit-core.py", "bin/core-capabilities.json", "src/compiler/THC/Plugin.hs", "src/compiler/THC/Wired.hs"]
   artifactHashes <- hashes root ((directory </> "oracle.tsv") : artifacts ++ concatMap commandArtifacts [version, compiled, observations])
   writeJson (output </> "manifest.json") $ object
     ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String), "entries" .= entries,

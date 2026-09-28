@@ -28,7 +28,7 @@ resolve a layout through the global class registry on the tag-reading path.
 
 ## Preparing the corpus
 
-Run `scripts/try.sh` from a fresh checkout. It builds the exporter, prepares the
+Run `bin/try.sh` from a fresh checkout. It builds the exporter, prepares the
 native oracles and runs the JVM tests. The additional corpus is described in
 [`examples/coverage.json`](../examples/coverage.json); it currently has 28 entries
 and 507 distinct entry/input pairs, alongside the original fixtures and Map.
@@ -74,7 +74,7 @@ offset units are covered separately for [128-bit arrays](simd128-array-memory.md
 [wide arrays](simd-wide-array-memory.md) and [128-bit addresses](simd128-address-memory.md).
 
 The separate [library suite](library-coverage.md), run by
-`scripts/try-libraries.sh`, declares 17 supported entries and 2,676 native-oracle
+`bin/try-libraries.sh`, declares 17 supported entries and 2,676 native-oracle
 pairs covering real `Data.IntMap.Strict`, `Data.IntSet`, four `Data.Sequence`
 workloads and word primitives. Set and three additional Sequence entries are
 explicit strict frontiers, not supported execution. The Build workflow runs
@@ -183,7 +183,7 @@ The complete source modules resolve those identities without aliases or
 reconstructed algorithms. Sources, boot
 dependencies and `boot-provenance.json` join the corpus fingerprints.
 
-`python3 compiler/export-boot.py --frontier lists --build-dir build/corpus/groups/lists`
+`python3 bin/export-boot.py --frontier lists --build-dir build/corpus/groups/lists`
 performs this source export using a private dynamic-interface overlay. It
 loads the compiled exporter with GHC's `-fplugin-library` option: normal plugin
 interface loading imports `GHC.Driver.Plugins` and its `Semigroup` instance,

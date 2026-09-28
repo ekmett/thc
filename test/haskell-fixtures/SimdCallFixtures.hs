@@ -36,8 +36,8 @@ prepareSimdCalls :: FilePath -> IO ()
 prepareSimdCalls root = do
   let directory = "build/simd-calls"
       output = root </> directory
-      source = "compiler/test-fixtures/SimdCallAudit.hs"
-      driver = "compiler/test-fixtures/SimdCallNative.hs"
+      source = "test/fixtures/compiler/SimdCallAudit.hs"
+      driver = "test/fixtures/compiler/SimdCallNative.hs"
       manifest = output </> "manifest.json"
   createDirectoryIfMissing True output
   present <- doesFileExist manifest
@@ -52,11 +52,11 @@ prepareSimdCalls root = do
   forM_ stages $ \stage -> do
     _ <- run root [("THC_CORE_OUT", output </> stage ++ "-core"),
                    ("THC_GHC_OUT", output </> stage ++ "-ghc")]
-      "compiler/export.sh" ((if exportOnly then ["-fno-code", "-fwrite-if-simplified-core"] else []) ++
+      "bin/export-core.sh" ((if exportOnly then ["-fno-code", "-fwrite-if-simplified-core"] else []) ++
         ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source]) ""
     let core = directory </> stage ++ "-core/SimdCallAudit.json"
         audit = directory </> stage ++ "-audit.json"
-    _ <- run root [] "python3" (["scripts/audit-core.py", core, "--output", audit] ++
+    _ <- run root [] "python3" (["bin/audit-core.py", core, "--output", audit] ++
       concatMap (\entry -> ["--entry", entry]) entries) ""
     report <- BS.readFile (root </> audit)
     case decodeStrict' report of
@@ -72,7 +72,7 @@ prepareSimdCalls root = do
   rows <- if exportOnly then pure [] else do
     createDirectoryIfMissing True (root </> native)
     _ <- run root [] ghc ["--make", "-O2", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
-      "-icompiler/test-fixtures", "-odir", root </> native, "-hidir", root </> native,
+      "-itest/fixtures/compiler", "-odir", root </> native, "-hidir", root </> native,
       driver, "-o", binary] ""
     lines <$> run root [] binary [] stdinRows
   let parsed = traverse (\row -> case splitTab row of
@@ -87,7 +87,7 @@ prepareSimdCalls root = do
   unless exportOnly $ writeFile (output </> "oracle.tsv") (unlines rows)
   let sources = [source,driver,"test/haskell-fixtures/SimdCallFixtures.hs",
         "test/haskell-fixtures/Main.hs","test/haskell-fixtures/FixtureSupport.hs",
-        "scripts/audit-core.py","scripts/core-capabilities.json","compiler/export.sh","compiler/build.sh"]
+        "bin/audit-core.py","bin/core-capabilities.json","bin/export-core.sh","bin/build-compiler.sh"]
       artifacts = [directory </> "oracle.tsv" | not exportOnly] ++ [directory </> stage ++ suffix |
         stage <- stages, suffix <- ["-core/SimdCallAudit.json","-audit.json"]]
   inputHashes <- hashes root sources

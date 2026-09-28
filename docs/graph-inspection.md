@@ -9,11 +9,11 @@ does not establish what survives compilation.
 With the [pinned toolchain](../README.md) and prepared runtime/fixtures:
 
 ```sh
-scripts/try.sh
-scripts/dump-graph.sh sumLoop 10000 work/graphs/sum-inspection
+bin/try.sh
+bin/dump-graph.sh sumLoop 10000 work/graphs/sum-inspection
 ```
 
-Choose a fresh output directory. [The capture script](../scripts/dump-graph.sh)
+Choose a fresh output directory. [The capture script](../bin/dump-graph.sh)
 runs the diagnostic probe with compilation tracing, scheduled BGV graphs and
 backend CFG output. It compiles [GraphInspect](../tools/GraphInspect.java) against
 the parser bundled with the selected Graal JDK, then exports every BGV phase

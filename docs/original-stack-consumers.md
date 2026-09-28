@@ -3,7 +3,7 @@
 
 # Original stack consumer evidence
 
-`compiler/test-fixtures/OriginalStackAudit.hs` imports the original
+`test/fixtures/compiler/OriginalStackAudit.hs` imports the original
 `cloneMyStack`, `decodeStackWithIpe`, and `prettyStackFrameWithIpe`. It also
 exposes small original `peekItbl`, `lookupIPE`, and `peekInfoProv . ipeProv`
 consumers. It introduces no foreign declarations and does not rewrite a
@@ -52,7 +52,7 @@ separately from declared foreign calls in `build/reports/original-stack/proof.js
 outside the native fixture receipt directory. This is a structural frontier
 report, not a passing runtime decoder audit.
 
-`compiler/test-fixtures/OriginalStackProof.json` is a reviewed, approximately
+`test/fixtures/compiler/OriginalStackProof.json` is a reviewed, approximately
 197 KiB excerpt of the unchanged post-Tidy source exports of
 `GHC.Internal.Stack.CloneStack`, `GHC.Internal.Stack.Decode`,
 `GHC.Internal.InfoProv.Types`, and `GHC.Internal.Heap.InfoTable` from THC
@@ -68,7 +68,7 @@ alter any copied expression value. Both producer and JVM proof pin its file hash
 These are licensed retained excerpts, not a fresh export, executable Core module,
 full dependency closure, or replacement for missing installed unfoldings. The
 original source carries the GHC BSD-3-Clause copyright/license; the notice is
-retained in the resource and `compiler/pinned-ghc-internal/LICENSE`. No full
+retained in the resource and `third-party/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE`. No full
 `peekItbl` binding or decoder body is duplicated. Fresh `peekItbl`/InfoProv
 consumer frontiers are still reported, without a retained substitute graph.
 

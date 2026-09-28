@@ -79,7 +79,7 @@ signed and unsigned observations differ, and the checksum does not wrap at
 
 ## Ordered alias and erased-literal controls
 
-`compiler/test-fixtures/Int16ArrayAudit.hs` includes two ordered alias roots.
+`test/fixtures/compiler/Int16ArrayAudit.hs` includes two ordered alias roots.
 Each allocates four bytes, writes narrow elements `u` and `u xor 0x55aa`, and
 reads the first element before mutation. It then overwrites byte 1 with
 `(raw+101)&255` and byte 2 with `(raw+37)&255`, crossing the element boundary.

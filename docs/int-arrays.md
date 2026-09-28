@@ -52,7 +52,7 @@ Preparation and checks:
 
 ```sh
 cabal run exe:thc-fixtures --offline -- int-arrays
-python3 scripts/test-core-bytearrays.py
+python3 bin/test-core-bytearrays.py
 ./gradlew test --tests thc.runtime.IntArrayNativeTest
 ./gradlew test --tests 'thc.runtime.IntArray*'
 ```

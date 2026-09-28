@@ -26,8 +26,8 @@ import System.FilePath ((</>), takeExtension)
 prepareScalarExceptionResults :: FilePath -> IO ()
 prepareScalarExceptionResults root = do
   let directory = "build/scalar-exception-results"
-      source = "compiler/test-fixtures/ScalarExceptionResultsAudit.hs"
-      driver = "compiler/test-fixtures/ScalarExceptionResultsNative.hs"
+      source = "test/fixtures/compiler/ScalarExceptionResultsAudit.hs"
+      driver = "test/fixtures/compiler/ScalarExceptionResultsNative.hs"
       entries = [prefix ++ suffix | prefix <- ["normal", "throw", "interrupt"], suffix <- ["Int", "Word", "Addr"]]
       run label env program args = runLogged 180 root (directory </> "logs") label env program args
       native = directory </> "native"
@@ -38,7 +38,7 @@ prepareScalarExceptionResults root = do
   unless (BS.words (commandStdout version) == ["9.14.1"]) (die "Scalar exception results require GHC 9.14.1")
   compiled <- run "native-compile" [] ghc
     ["--make", "-O2", "-dynamic", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
-     "-i./compiler/test-fixtures", "-odir", native, "-hidir", native, driver, "-o", binary]
+     "-i./test/fixtures/compiler", "-odir", native, "-hidir", native, driver, "-o", binary]
   observed <- run "native-oracle" [] (root </> binary) []
   unless (length (BS.lines (commandStdout observed)) == 36) (die "Scalar exception oracle row count changed")
   stages <- forM ["pre", "post"] $ \stage -> do
@@ -48,19 +48,19 @@ prepareScalarExceptionResults root = do
     mapM_ (createDirectoryIfMissing True . (root </>)) [core, ghcOut]
     exported <- run (stage ++ "-export")
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> ghcOut)]
-      "compiler/export.sh" (options ++ [source])
+      "bin/export-core.sh" (options ++ [source])
     audits <- forM entries $ \entry -> run (stage ++ "-audit-" ++ entry) [] "python3"
-      ["scripts/audit-core.py", "--entry", entry, "--output", directory </> stage </> entry ++ "-audit.json",
+      ["bin/audit-core.py", "--entry", entry, "--output", directory </> stage </> entry ++ "-audit.json",
        core </> "ScalarExceptionResultsAudit.json"]
     pure (exported : audits)
-  plugin <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
+  plugin <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
   let inputs = sort $ [source, driver, "test/haskell-fixtures/ScalarExceptionResultsFixtures.hs",
         "test/haskell-fixtures/Main.hs", "test/haskell-fixtures/FixtureSupport.hs",
-        "thc.cabal", "cabal.project", "scripts/audit-core.py", "scripts/core-capabilities.json",
-        "compiler/export.sh", "compiler/build.sh", "compiler/toolchain.sh", "compiler/plugin.py"] ++
-        ["compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"] ++
-        ["scripts" </> file | file <- scripts, take 5 file == "core_", takeExtension file == ".py"]
+        "thc.cabal", "cabal.project", "bin/audit-core.py", "bin/core-capabilities.json",
+        "bin/export-core.sh", "bin/build-compiler.sh", "bin/toolchain.sh", "bin/plugin.py"] ++
+        ["src/compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"] ++
+        ["bin" </> file | file <- scripts, take 5 file == "core_", takeExtension file == ".py"]
       commands = [version, compiled, observed] ++ concat stages
       artifacts = [binary] ++ concatMap commandArtifacts commands ++
         [directory </> stage </> "core/ScalarExceptionResultsAudit.json" | stage <- ["pre", "post"]] ++

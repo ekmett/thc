@@ -29,7 +29,7 @@ prepareProcessSignals _ | os /= "linux" || arch /= "x86_64" =
 prepareProcessSignals root = do
   let directory = "build/process-signals"
       native = directory </> "native"
-      source = "compiler/test-fixtures/ProcessSignalsNative.hs"
+      source = "test/fixtures/compiler/ProcessSignalsNative.hs"
       oracle = directory </> "oracle.txt"
       controls = directory </> "native-controls.txt"
       manifest = directory </> "manifest.json"

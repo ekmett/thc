@@ -20,24 +20,24 @@ import subprocess
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ".github/scripts/fast_select.py"
 POLICY = ".github/scripts/fast-tests.json"
-CAPABILITIES = "scripts/core-capabilities.json"
+CAPABILITIES = "bin/core-capabilities.json"
 PROGRAM = "src/main/java/thc/runtime/Program.java"
 BYTECODE_PROGRAM = "src/main/java/thc/runtime/BytecodeProgram.java"
 BYTECODE_ROOT = "src/main/java/thc/runtime/BytecodeRoot.java"
-SIMD_SPEC = "scripts/simd-families.json"
-SIMD_GENERATOR = "scripts/generate-simd-families.py"
+SIMD_SPEC = "bin/simd-families.json"
+SIMD_GENERATOR = "bin/generate-simd-families.py"
 SIMD_ADDITIVE = {CAPABILITIES, BYTECODE_PROGRAM, BYTECODE_ROOT, SIMD_SPEC}
 POLYGLOT_TEST_ROOT = "src/polyglotTest/"
 HASKELL_TESTS = {"driver-tests": "test/haskell-driver/Main.hs", "primop-tools": "test/primop-tools/Main.hs",
-                 "json-index": "test/json-index/Main.hs", "compact-core-tests": "test/compact-core/Main.hs"}
-DOCUMENTATION_PATHS = {"compiler/json-index/README.md", "compiler/json-index/LICENSE.succinctly"}
+                 "compact-core-tests": "test/compact-core/Main.hs"}
+DOCUMENTATION_PATHS = {"third-party/licenses/succinctly-MIT.txt"}
 POLYGLOT_EXACT_INPUTS = {
     "build.gradle", "settings.gradle", "gradle.properties", "gradlew",
     "gradle/wrapper/gradle-wrapper.jar", "gradle/wrapper/gradle-wrapper.properties",
-    "Makefile", "thc.cabal", "cabal.project", "Setup.hs", "compiler/plugin.py",
-    "compiler/toolchain.sh", "scripts/audit-core.py",
-    "scripts/polyglot-demo.sh", "scripts/javascript-demo.sh",
-    "compiler/build.sh", "compiler/export.sh", "compiler/test-javascript-ffi.py",
+    "Makefile", "thc.cabal", "cabal.project", "Setup.hs", "bin/plugin.py",
+    "bin/toolchain.sh", "bin/audit-core.py",
+    "bin/polyglot-demo.sh", "bin/javascript-demo.sh",
+    "bin/build-compiler.sh", "bin/export-core.sh", "bin/test-javascript-ffi.py",
     "src/main/java/thc/Language.java", "src/main/java/thc/Json.java",
     "src/examples/java/thc/PolyglotDemo.java",
     "src/main/java/thc/runtime/Calls.java", "src/main/java/thc/runtime/BytecodeRoot.java",
@@ -45,7 +45,7 @@ POLYGLOT_EXACT_INPUTS = {
     "src/test/resources/thc/polyglot-abi.json",
 }
 POLYGLOT_INPUT_PREFIXES = (
-    POLYGLOT_TEST_ROOT, "buildSrc/", "gradle/", "compiler/THC/", "examples/THC/Polyglot",
+    POLYGLOT_TEST_ROOT, "buildSrc/", "gradle/", "src/compiler/THC/", "examples/THC/Polyglot",
     "examples/THC/JavaScript", "src/main/java/thc/runtime/",
 )
 TEST_ANNOTATION = r"@\s*(?:org\.junit\.(?:jupiter\.api|jupiter\.params)\.)?(?:Test|TestFactory|TestTemplate|ParameterizedTest|RepeatedTest)\b"

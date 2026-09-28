@@ -39,8 +39,8 @@ cabal run exe:thc-fixtures -- tuple-join --local
 cabal run exe:thc-fixtures -- tuple-join
 ./gradlew tupleJoinFullCoreTest tupleJoinFullCoreDenseTest
 ./gradlew test --tests thc.runtime.TupleJoinLoweringTest
-python3 scripts/test-tuple-inputs.py
-python3 scripts/test-audit-core.py
+python3 bin/test-tuple-inputs.py
+python3 bin/test-audit-core.py
 ```
 
 For an existing production acquisition, set `THC_TUPLE_JOIN_PACKAGES` to its

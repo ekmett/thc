@@ -1,7 +1,7 @@
 # Public CPU-affinity declarations
 
 `cpu-affinity-descriptors.json` retains the two foreign-call descriptor objects
-from genuine GHC 9.14.1 post-Tidy export of `runtime/THC/Thread.hs`, without changing
+from genuine GHC 9.14.1 post-Tidy export of `src/runtime/THC/Thread.hs`, without changing
 their target, convention, safety, arguments, or result. The Java tests use
 explicitly synthetic callers; they do not claim those callers are GHC output.
 
@@ -18,9 +18,9 @@ Regenerate with the pinned compiler:
 ```sh
 THC_CORE_OUT="$PWD/build/runtime-services-export-concrete/core" \
 THC_GHC_OUT="$PWD/build/runtime-services-export-concrete/ghc" \
-  compiler/export.sh -XHaskell2010 -iruntime \
+  bin/export-core.sh -XHaskell2010 -isrc/runtime \
     -fplugin-opt=THC.Plugin:post-tidy \
-    examples/THC/RuntimeServices.hs runtime/THC/Internal/JIT.hs
+    examples/THC/RuntimeServices.hs src/runtime/THC/Internal/JIT.hs
 ```
 
 The source is also compiled and linked natively by `cabal test cpu-affinity-api

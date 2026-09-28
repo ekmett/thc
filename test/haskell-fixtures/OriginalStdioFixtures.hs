@@ -42,8 +42,8 @@ requests = [(entry,[fd,offset,count]) | entry <- entries, fd <- [-2147483648,-1,
 
 directory, source, driver :: FilePath
 directory = "build/original-stdio"
-source = "compiler/test-fixtures/OriginalStdioAudit.hs"
-driver = "compiler/test-fixtures/OriginalStdioAuditNative.hs"
+source = "test/fixtures/compiler/OriginalStdioAudit.hs"
+driver = "test/fixtures/compiler/OriginalStdioAuditNative.hs"
 
 prepareOriginalStdio :: FilePath -> [String] -> IO ()
 prepareOriginalStdio root options = do
@@ -87,7 +87,7 @@ prepareOriginalStdio root options = do
     createDirectoryIfMissing True (root </> native)
     createDirectoryIfMissing True (root </> results)
     compiled <- execute "native-build" [] ghc ["--make","-O2","-fforce-recomp","-dcore-lint","-dstg-lint",
-      "-package","ghc-internal","-i" ++ (root </> "compiler/test-fixtures"),
+      "-package","ghc-internal","-i" ++ (root </> "test/fixtures/compiler"),
       "-odir",root </> native,"-hidir",root </> native,driver,"-o",root </> binary]
     rows <- forM (zip [0 :: Int ..] requests) $ \(index,(entry,arguments)) -> do
       let resultPath = results </> show index ++ ".txt"
@@ -116,27 +116,27 @@ prepareOriginalStdio root options = do
         roots = ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries]
     exported <- execute (stage ++ "-export")
       [("THC_CORE_OUT",root </> core),("THC_GHC_OUT",root </> stageDir </> "ghc"),("THC_SOURCE_NOTES","true")]
-      "compiler/export.sh" (["-package","ghc-internal"] ++ postTidy ++ roots ++ [source])
+      "bin/export-core.sh" (["-package","ghc-internal"] ++ postTidy ++ roots ++ [source])
     mapM_ (\path -> do
       exists <- doesFileExist (root </> path)
       unless exists (die ("Missing genuine GHC export: " ++ path))) modules
     audits <- if not requireSupported then pure [] else forM entries $ \entry -> do
       let path = stageDir </> entry ++ ".audit.json"
       command <- execute (stage ++ "-audit-" ++ entry) [] "python3"
-        (["scripts/audit-core.py","--entry",entry,"--output",path] ++ modules)
+        (["bin/audit-core.py","--entry",entry,"--output",path] ++ modules)
       pure (entry,path,command)
     pure (stage,object ["modules" .= modules],Map.fromList [(entry,path) | (entry,path,_) <- audits],
           exported : [command | (_,_,command) <- audits],modules ++ [path | (_,path,_) <- audits])
-  plugin <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
+  plugin <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
   let commands = [version,info] ++ nativeCommands ++ concat [cs | (_,_,_,cs,_) <- exports]
       sources = sort $ [source,driver,"thc.cabal","test/haskell-fixtures/Main.hs",
         "test/haskell-fixtures/FixtureSupport.hs","test/haskell-fixtures/OriginalStdioFixtures.hs",
-        "scripts/prepare-original-stdio.sh","scripts/audit-core.py","scripts/core-capabilities.json",
+        "bin/prepare-original-stdio.sh","bin/audit-core.py","bin/core-capabilities.json",
         "src/main/resources/thc/scalar-primop-signatures.json",
-        "compiler/build.sh","compiler/export.sh","compiler/toolchain.sh","compiler/plugin.py"] ++
-        ["compiler/THC" </> path | path <- plugin, takeExtension path == ".hs"] ++
-        ["scripts" </> path | path <- scripts, "core_" `isPrefixOf` path, takeExtension path == ".py"]
+        "bin/build-compiler.sh","bin/export-core.sh","bin/toolchain.sh","bin/plugin.py"] ++
+        ["src/compiler/THC" </> path | path <- plugin, takeExtension path == ".hs"] ++
+        ["bin" </> path | path <- scripts, "core_" `isPrefixOf` path, takeExtension path == ".py"]
       artifacts = nativeArtifacts ++ concat [paths | (_,_,_,_,paths) <- exports] ++ concatMap commandArtifacts commands
   inputHashes <- hashes root sources
   artifactHashes <- hashes root artifacts
@@ -169,8 +169,8 @@ prepareOriginalStdioRead :: FilePath -> IO ()
 prepareOriginalStdioRead root = do
   let dir = "build/original-stdio-read"
       native = dir </> "native"
-      coreSource = "compiler/test-fixtures/OriginalStdioReadAudit.hs"
-      nativeSource = "compiler/test-fixtures/OriginalStdioReadNative.hs"
+      coreSource = "test/fixtures/compiler/OriginalStdioReadAudit.hs"
+      nativeSource = "test/fixtures/compiler/OriginalStdioReadNative.hs"
       input = dir </> "input.bin"
       oracle = dir </> "oracle.json"
       manifest = dir </> "manifest.json"
@@ -189,7 +189,7 @@ prepareOriginalStdioRead root = do
   let payload = BS.pack [0,1,127,128,255,65,195,169]
   BS.writeFile (root </> input) payload
   compiled <- execute "native-build" [] ghc ["--make","-O2","-fforce-recomp","-dcore-lint","-dstg-lint",
-    "-package","ghc-internal","-package","unix","-i" ++ (root </> "compiler/test-fixtures"),
+    "-package","ghc-internal","-package","unix","-i" ++ (root </> "test/fixtures/compiler"),
     "-odir",root </> native,"-hidir",root </> native,nativeSource,"-o",root </> binary]
   rows <- forM (zip [0 :: Int ..] readRequests) $ \(index,(entry,arguments)) -> do
     let resultPath = dir </> "results" </> show index ++ ".txt"
@@ -217,29 +217,29 @@ prepareOriginalStdioRead root = do
     exported <- execute (stage ++ "-export")
       [("THC_CORE_OUT",root </> core),("THC_GHC_OUT",root </> stageDir </> "ghc"),
        ("THC_SOURCE_NOTES","true")]
-      "compiler/export.sh" (["-package","ghc-internal"] ++ postTidy ++ roots ++ [coreSource])
+      "bin/export-core.sh" (["-package","ghc-internal"] ++ postTidy ++ roots ++ [coreSource])
     mapM_ (\path -> do
       exists <- doesFileExist (root </> path)
       unless exists (die ("Missing genuine original read Core: " ++ path))) modules
     audits <- forM readEntries $ \entry -> do
       let path = stageDir </> entry ++ ".audit.json"
       command <- execute (stage ++ "-audit-" ++ entry) [] "python3"
-        (["scripts/audit-core.py","--entry",entry,"--output",path] ++ modules)
+        (["bin/audit-core.py","--entry",entry,"--output",path] ++ modules)
       pure (entry,path,command)
     pure (stage,modules,Map.fromList [(entry,path) | (entry,path,_) <- audits],
           exported : [command | (_,_,command) <- audits],
           modules ++ [path | (_,path,_) <- audits])
-  plugin <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
+  plugin <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
   let commands = [version,compiled] ++ [command | (_,command,_) <- rows] ++
         concat [items | (_,_,_,items,_) <- exports]
       sources = sort $ [coreSource,nativeSource,"thc.cabal","test/haskell-fixtures/Main.hs",
         "test/haskell-fixtures/FixtureSupport.hs","test/haskell-fixtures/OriginalStdioFixtures.hs",
-        "scripts/audit-core.py","scripts/core-capabilities.json",
+        "bin/audit-core.py","bin/core-capabilities.json",
         "src/main/resources/thc/scalar-primop-signatures.json",
-        "compiler/build.sh","compiler/export.sh","compiler/toolchain.sh","compiler/plugin.py"] ++
-        ["compiler/THC" </> path | path <- plugin, takeExtension path == ".hs"] ++
-        ["scripts" </> path | path <- scripts, "core_" `isPrefixOf` path, takeExtension path == ".py"]
+        "bin/build-compiler.sh","bin/export-core.sh","bin/toolchain.sh","bin/plugin.py"] ++
+        ["src/compiler/THC" </> path | path <- plugin, takeExtension path == ".hs"] ++
+        ["bin" </> path | path <- scripts, "core_" `isPrefixOf` path, takeExtension path == ".py"]
       artifacts = [input,oracle,binary] ++ [path | (_,_,path) <- rows] ++
         concat [paths | (_,_,_,_,paths) <- exports] ++ concatMap commandArtifacts commands
   inputHashes <- hashes root sources
@@ -269,21 +269,21 @@ prepareOriginalFcntl root
 
 fcntlSources :: FilePath -> IO [FilePath]
 fcntlSources root = do
-  plugin <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
-  pure $ sort $ ["compiler/test-fixtures/OriginalFcntlAudit.hs", "compiler/test-fixtures/OriginalFcntlNative.hs",
+  plugin <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
+  pure $ sort $ ["test/fixtures/compiler/OriginalFcntlAudit.hs", "test/fixtures/compiler/OriginalFcntlNative.hs",
     "thc.cabal", "test/haskell-fixtures/Main.hs", "test/haskell-fixtures/FixtureSupport.hs",
-    "test/haskell-fixtures/OriginalStdioFixtures.hs", "scripts/audit-core.py", "scripts/core-capabilities.json",
-    "src/main/resources/thc/scalar-primop-signatures.json", "compiler/build.sh", "compiler/export.sh",
-    "compiler/toolchain.sh", "compiler/plugin.py"] ++
-    ["compiler/THC" </> name | name <- plugin, takeExtension name == ".hs"] ++
-    ["scripts" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"]
+    "test/haskell-fixtures/OriginalStdioFixtures.hs", "bin/audit-core.py", "bin/core-capabilities.json",
+    "src/main/resources/thc/scalar-primop-signatures.json", "bin/build-compiler.sh", "bin/export-core.sh",
+    "bin/toolchain.sh", "bin/plugin.py"] ++
+    ["src/compiler/THC" </> name | name <- plugin, takeExtension name == ".hs"] ++
+    ["bin" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"]
 
 prepareNativeFcntl :: FilePath -> IO ()
 prepareNativeFcntl root = do
   let output = "build/original-fcntl"
-      coreSource = "compiler/test-fixtures/OriginalFcntlAudit.hs"
-      nativeSource = "compiler/test-fixtures/OriginalFcntlNative.hs"
+      coreSource = "test/fixtures/compiler/OriginalFcntlAudit.hs"
+      nativeSource = "test/fixtures/compiler/OriginalFcntlNative.hs"
       names = ["originalAppend", "originalCreat", "originalNoctty", "originalNonblock", "originalRdonly",
                "originalRdwr", "originalWronly", "originalGetfl", "originalSetfl", "originalExcl", "originalBinary", "originalTrunc", "originalGetFlags", "originalSetFlags"]
       execute = runLogged 180 root (output </> "logs")
@@ -303,7 +303,7 @@ prepareNativeFcntl root = do
                   lookup "target word size" target == Just "8" -> pure ()
     _ -> die "Original fcntl requires native Linux x86_64 GHC"
   compiled <- execute "native-build" [] ghc ["--make", "-O2", "-fforce-recomp", "-dcore-lint",
-    "-package", "ghc-internal", "-package", "unix", "-icompiler/test-fixtures",
+    "-package", "ghc-internal", "-package", "unix", "-itest/fixtures/compiler",
     "-odir", root </> output </> "native", "-hidir", root </> output </> "native", nativeSource, "-o", root </> binary]
   observed <- execute "native-run" [] (root </> binary) [root </> output </> "native/private-file"]
   (constants, rows, invalid) <- maybe (die "Malformed original fcntl observations") pure
@@ -318,11 +318,11 @@ prepareNativeFcntl root = do
           ["-fplugin-opt=THC.Plugin:closure=" ++ name | name <- names]
     exported <- execute (stage ++ "-export")
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> output </> stage </> "ghc")]
-      "compiler/export.sh" (["-package", "ghc-internal"] ++ options ++ [coreSource])
+      "bin/export-core.sh" (["-package", "ghc-internal"] ++ options ++ [coreSource])
     audits <- forM names $ \name -> do
       let path = output </> stage </> name ++ ".audit.json"
       audited <- execute (stage ++ "-audit-" ++ name) [] "python3"
-        (["scripts/audit-core.py", "--entry", name, "--output", path] ++ modules)
+        (["bin/audit-core.py", "--entry", name, "--output", path] ++ modules)
       pure (path, audited)
     pure (exported : map snd audits, modules ++ map fst audits)
   let commands = [version, info, compiled, observed] ++ concatMap fst exports
@@ -340,8 +340,8 @@ prepareNativeFcntl root = do
 prepareOriginalErrno :: FilePath -> IO ()
 prepareOriginalErrno root = do
   let output = "build/original-errno"
-      coreSource = "compiler/test-fixtures/OriginalErrnoAudit.hs"
-      nativeSource = "compiler/test-fixtures/OriginalErrnoNative.hs"
+      coreSource = "test/fixtures/compiler/OriginalErrnoAudit.hs"
+      nativeSource = "test/fixtures/compiler/OriginalErrnoNative.hs"
       names = ["originalResetErrno" :: String]
       execute = runLogged 180 root (output </> "logs")
       binary = output </> "native/oracle"
@@ -355,15 +355,15 @@ prepareOriginalErrno root = do
     let previous = root </> output </> "previous-manifests"
     createDirectoryIfMissing True previous
     renameFile manifest (previous </> digest ++ ".json")
-  plugin <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
+  plugin <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
   let sources = sort $ [coreSource, nativeSource, "thc.cabal", "test/haskell-fixtures/Main.hs",
         "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/OriginalStdioFixtures.hs",
-        "scripts/audit-core.py", "scripts/core-capabilities.json",
+        "bin/audit-core.py", "bin/core-capabilities.json",
         "src/main/resources/thc/scalar-primop-signatures.json",
-        "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py"] ++
-        ["compiler/THC" </> name | name <- plugin, takeExtension name == ".hs"] ++
-        ["scripts" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"]
+        "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py"] ++
+        ["src/compiler/THC" </> name | name <- plugin, takeExtension name == ".hs"] ++
+        ["bin" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"]
   inputHashes <- hashes root sources
   if not (Host.os `elem` ["linux", "darwin"] && sizeOf (0 :: CInt) == 4 &&
           sizeOf (0 :: CLong) == 8 && sizeOf (nullPtr :: Ptr ()) == 8)
@@ -383,7 +383,7 @@ prepareOriginalErrno root = do
                       lookup "target word size" target == Just "8" -> pure ()
         _ -> die "Original errno requires a native 64-bit GHC"
       compiled <- execute "native-build" [] ghc ["--make", "-O2", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
-        "-package", "ghc-internal", "-icompiler/test-fixtures", "-odir", root </> output </> "native",
+        "-package", "ghc-internal", "-itest/fixtures/compiler", "-odir", root </> output </> "native",
         "-hidir", root </> output </> "native", nativeSource, "-o", root </> binary]
       old <- doesFileExist (root </> observedPath)
       when old (removeFile (root </> observedPath))
@@ -404,11 +404,11 @@ prepareOriginalErrno root = do
         exported <- execute (stage ++ "-export")
           [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> output </> stage </> "ghc"),
            ("THC_SOURCE_NOTES", "true")]
-          "compiler/export.sh" (["-package", "ghc-internal"] ++ options ++ [coreSource])
+          "bin/export-core.sh" (["-package", "ghc-internal"] ++ options ++ [coreSource])
         audits <- forM names $ \name -> do
           let path = output </> stage </> name ++ ".audit.json"
           audited <- execute (stage ++ "-audit-" ++ name) [] "python3"
-            (["scripts/audit-core.py", "--entry", name, "--output", path] ++ modules)
+            (["bin/audit-core.py", "--entry", name, "--output", path] ++ modules)
           pure (name, path, audited)
         pure (stage, modules, Map.fromList [(name, path) | (name, path, _) <- audits],
               exported : [command | (_, _, command) <- audits], modules ++ [path | (_, path, _) <- audits])
@@ -429,8 +429,8 @@ prepareOriginalErrno root = do
 prepareOriginalProcessIdentity :: FilePath -> IO ()
 prepareOriginalProcessIdentity root = do
   let output = "build/original-process-identity"
-      coreSource = "compiler/test-fixtures/OriginalProcessIdentityAudit.hs"
-      nativeSource = "compiler/test-fixtures/OriginalProcessIdentityNative.hs"
+      coreSource = "test/fixtures/compiler/OriginalProcessIdentityAudit.hs"
+      nativeSource = "test/fixtures/compiler/OriginalProcessIdentityNative.hs"
       names = ["originalGetPid", "originalGetEuid" :: String]
       execute = runLogged 180 root (output </> "logs")
       binary = output </> "native/oracle"
@@ -444,15 +444,15 @@ prepareOriginalProcessIdentity root = do
     let previous = root </> output </> "previous-manifests"
     createDirectoryIfMissing True previous
     renameFile manifest (previous </> digest ++ ".json")
-  plugin <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
+  plugin <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
   let sources = sort $ [coreSource, nativeSource, "thc.cabal", "test/haskell-fixtures/Main.hs",
         "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/OriginalStdioFixtures.hs",
-        "scripts/audit-core.py", "scripts/core-capabilities.json", "src/main/java/thc/runtime/ProcessIdentity.java",
+        "bin/audit-core.py", "bin/core-capabilities.json", "src/main/java/thc/runtime/ProcessIdentity.java",
         "src/main/resources/thc/scalar-primop-signatures.json",
-        "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py"] ++
-        ["compiler/THC" </> name | name <- plugin, takeExtension name == ".hs"] ++
-        ["scripts" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"]
+        "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py"] ++
+        ["src/compiler/THC" </> name | name <- plugin, takeExtension name == ".hs"] ++
+        ["bin" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"]
   inputHashes <- hashes root sources
   if not (Host.os `elem` ["linux", "darwin"] && sizeOf (0 :: CInt) == 4 &&
           sizeOf (0 :: CLong) == 8 && sizeOf (nullPtr :: Ptr ()) == 8)
@@ -479,7 +479,7 @@ prepareOriginalProcessIdentity root = do
                       lookup "target word size" target == Just "8" -> pure ()
         _ -> die "Original process identity requires a native 64-bit GHC"
       compiled <- execute "native-build" [] ghc ["--make", "-O2", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
-        "-package", "ghc-internal", "-package", "unix", "-icompiler/test-fixtures", "-odir", root </> output </> "native",
+        "-package", "ghc-internal", "-package", "unix", "-itest/fixtures/compiler", "-odir", root </> output </> "native",
         "-hidir", root </> output </> "native", nativeSource, "-o", root </> binary]
       old <- doesFileExist (root </> observedPath)
       when old (removeFile (root </> observedPath))
@@ -500,11 +500,11 @@ prepareOriginalProcessIdentity root = do
         exported <- execute (stage ++ "-export")
           [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> output </> stage </> "ghc"),
            ("THC_SOURCE_NOTES", "true")]
-          "compiler/export.sh" (["-package", "ghc-internal", "-package", "unix"] ++ options ++ [coreSource])
+          "bin/export-core.sh" (["-package", "ghc-internal", "-package", "unix"] ++ options ++ [coreSource])
         audits <- forM names $ \name -> do
           let path = output </> stage </> name ++ ".audit.json"
           audited <- execute (stage ++ "-audit-" ++ name) [] "python3"
-            (["scripts/audit-core.py", "--entry", name, "--output", path] ++ modules)
+            (["bin/audit-core.py", "--entry", name, "--output", path] ++ modules)
           pure (name, path, audited)
         pure (stage, modules, Map.fromList [(name, path) | (name, path, _) <- audits],
               exported : [command | (_, _, command) <- audits], modules ++ [path | (_, path, _) <- audits])

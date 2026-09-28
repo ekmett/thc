@@ -90,7 +90,7 @@ sourceFilesUnder root relative = do
 prepareWindowsDirectory :: FilePath -> IO ()
 prepareWindowsDirectory root = do
   let directory = "build/windows-directory"
-      source = "compiler/test-fixtures/WindowsDirectoryAudit.hsc"
+      source = "test/fixtures/compiler/WindowsDirectoryAudit.hsc"
       execute = runLogged 600 root (directory </> "logs")
       manifest = root </> directory </> "manifest.json"
       oneLine = BS.unpack . BS.takeWhile (/= '\r') . BS.takeWhile (/= '\n') . commandStdout
@@ -211,7 +211,7 @@ prepareWindowsDirectory root = do
       _ -> die "Expected four original Win32 native functions"
   writeJson (root </> directory </> "oracle.json") oracle
   audits <- fmap concat $ forM ["pre","post"] $ \stage -> forM entries $ \name ->
-    execute (stage ++ "-audit-" ++ name) [] python ["scripts/audit-core.py","--entry",name,
+    execute (stage ++ "-audit-" ++ name) [] python ["bin/audit-core.py","--entry",name,
       "--output",directory </> stage ++ "-" ++ name ++ ".audit.json",directory </> stage ++ ".json"]
   interfaceHashes <- hashes root interfaces
   registrationHash <- hashFile (packageDb </> unit ++ ".conf")
@@ -222,8 +222,8 @@ prepareWindowsDirectory root = do
   let commands = [version,library,extracted,setupBuilt,configured,built,owner,generated] ++ audits
   inputHashes <- hashes root [source,"thc.cabal","test/haskell-fixtures/Main.hs",
     "test/haskell-fixtures/FixtureSupport.hs","test/haskell-fixtures/WindowsDirectoryFixtures.hs",
-    "compiler/THC/Plugin.hs","compiler/THC/Interface.hs","scripts/core_original_foreign.py",
-    "scripts/audit-core.py","scripts/core-capabilities.json","src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java"]
+    "src/compiler/THC/Plugin.hs","src/compiler/THC/Interface.hs","bin/core_original_foreign.py",
+    "bin/audit-core.py","bin/core-capabilities.json","src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java"]
   rawArtifactHashes <- hashes root ([directory </> file | file <- ["pre.json","post.json","oracle.json","win32-source.json","WindowsDirectoryAudit.hs"]] ++
     [directory </> stage ++ "-" ++ name ++ ".audit.json" | stage <- ["pre","post"],name <- entries] ++ concatMap commandArtifacts commands)
   let artifactHashes = Map.mapKeys (map (\c -> if c == '\\' then '/' else c)) rawArtifactHashes

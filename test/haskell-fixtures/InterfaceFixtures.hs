@@ -65,16 +65,16 @@ prepareInterfaceCore root = do
       entries = ["opaqueEntry", "inlineEntry", "recursiveEntry", "coercionEntry", "wrapperEntry"] :: [String]
   mapM_ (createDirectoryIfMissing True . (root </>))
     [directory </> name | name <- ["source", "full", "thin", "foreign", "native", "no-source"]]
-  copyFile (root </> "compiler/test-fixtures/InterfaceLibrary.hs") (root </> generated)
+  copyFile (root </> "test/fixtures/compiler/InterfaceLibrary.hs") (root </> generated)
   let cbvSource = directory </> "source/CBVCoercionAudit.hs"
-  copyFile (root </> "compiler/test-fixtures/CBVCoercionAudit.hs") (root </> cbvSource)
+  copyFile (root </> "test/fixtures/compiler/CBVCoercionAudit.hs") (root </> cbvSource)
   cabal <- maybe "cabal" id <$> lookupEnv "CABAL"
   helperBuild <- run "helper-build" cabal ["build", "exe:thc-interface", "--offline", "-fdevelopment"]
   helperLocation <- run "helper-location" cabal ["list-bin", "exe:thc-interface", "--offline"]
   helper <- case lines (BS.unpack (commandStdout helperLocation)) of
     [path] -> pure path
     _ -> die "Expected one selected-GHC helper executable"
-  pluginBuild <- run "plugin-build" "compiler/build.sh" []
+  pluginBuild <- run "plugin-build" "bin/build-compiler.sh" []
   pluginInfo <- decodeFile (root </> "build/compiler/plugin.json")
   let field name = case fromJSON (valueAt name pluginInfo) of
         Success value -> pure value
@@ -122,7 +122,7 @@ prepareInterfaceCore root = do
     ["-c", "-O2", "-dynamic-too", "-fforce-recomp", "-this-unit-id", unitName, "-fwrite-if-simplified-core",
      "-odir", directory </> "full", "-hidir", directory </> "full",
      "-stubdir", directory </> "full",
-     "compiler/test-fixtures/InterfaceForeign.hs"]
+     "test/fixtures/compiler/InterfaceForeign.hs"]
   let foreignDb = root </> directory </> "foreign/package.conf.d"
       foreignConf = directory </> "foreign/package.conf"
   foreignExists <- doesDirectoryExist foreignDb
@@ -136,7 +136,7 @@ prepareInterfaceCore root = do
     ["--make", "-O2", "-fforce-recomp", "-dcore-lint", "-dstg-lint", "-i",
      "-package-db", directory </> "full/package.conf.d", "-package-id", unitName,
      "-odir", directory </> "native", "-hidir", directory </> "native",
-     "compiler/test-fixtures/InterfaceNative.hs", directory </> "full/InterfaceLibrary.o",
+     "test/fixtures/compiler/InterfaceNative.hs", directory </> "full/InterfaceLibrary.o",
      directory </> "full/CBVCoercionAudit.o",
      "-o", directory </> "native/oracle"]
   oracle <- run "native-oracle" (root </> directory </> "native/oracle") []
@@ -219,29 +219,29 @@ prepareInterfaceCore root = do
   checkDriver root directory ghc ghcPkg helper baseUnit
   (cacheCommands, cacheArtifacts) <- checkInstalledCache root directory ghc ghcPkg helper libdir baseUnit
   audits <- forM entries $ \entry -> run ("audit-" ++ entry) "python3"
-    ["scripts/audit-core.py", "--entry", unitName ++ ":" ++
+    ["bin/audit-core.py", "--entry", unitName ++ ":" ++
       (if entry == "coercionEntry" then "CBVCoercionAudit." else "InterfaceLibrary.") ++ entry,
      "--output", directory </> entry ++ "-audit.json", "--package-manifest", directory </> "packages.json"]
-  plugin <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
-  let inputs = sort $ ["compiler/test-fixtures/InterfaceLibrary.hs", "compiler/test-fixtures/InterfaceNative.hs",
-        "compiler/test-fixtures/InterfaceForeign.hs", "test/haskell-fixtures/InterfaceFixtures.hs",
-        "compiler/test-fixtures/InterfaceForeignAlias.hs", "test/haskell-fixtures/InterfaceForeignFacts.hs",
-        "compiler/test-fixtures/ForeignExportSignatures.hs",
-        "compiler/test-fixtures/ForeignExportManaged.hs", "compiler/test-fixtures/ManagedExportNative.hs",
-        "compiler/test-fixtures/ForeignExportRegistration.hs",
-        "compiler/test-fixtures/RegistrationNative.hs",
-        "compiler/test-fixtures/ForeignImportStubs.hs", "compiler/test-fixtures/ImportStubsNative.hs",
-        "compiler/test-fixtures/CBVCoercionAudit.hs", "compiler/interface/Main.hs",
-        "compiler/test-fixtures/InterfaceCacheRoot.hs", "compiler/test-fixtures/InterfaceCacheDependency.hs",
+  plugin <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
+  let inputs = sort $ ["test/fixtures/compiler/InterfaceLibrary.hs", "test/fixtures/compiler/InterfaceNative.hs",
+        "test/fixtures/compiler/InterfaceForeign.hs", "test/haskell-fixtures/InterfaceFixtures.hs",
+        "test/fixtures/compiler/InterfaceForeignAlias.hs", "test/haskell-fixtures/InterfaceForeignFacts.hs",
+        "test/fixtures/compiler/ForeignExportSignatures.hs",
+        "test/fixtures/compiler/ForeignExportManaged.hs", "test/fixtures/compiler/ManagedExportNative.hs",
+        "test/fixtures/compiler/ForeignExportRegistration.hs",
+        "test/fixtures/compiler/RegistrationNative.hs",
+        "test/fixtures/compiler/ForeignImportStubs.hs", "test/fixtures/compiler/ImportStubsNative.hs",
+        "test/fixtures/compiler/CBVCoercionAudit.hs", "src/compiler/interface/Main.hs",
+        "test/fixtures/compiler/InterfaceCacheRoot.hs", "test/fixtures/compiler/InterfaceCacheDependency.hs",
         "test/haskell-fixtures/InstalledCacheFixtures.hs",
-        "src/THC/Driver/Installed.hs", "src/THC/Driver/Project.hs", "src/THC/Driver/Wired.hs",
-        "src/THC/Driver/ForeignBitcode.hs", "compiler/target-layout.c",
-        "src/THC/Driver/Zip.hs",
+        "src/driver/THC/Driver/Installed.hs", "src/driver/THC/Driver/Project.hs", "src/driver/THC/Driver/Wired.hs",
+        "src/driver/THC/Driver/ForeignBitcode.hs", "src/driver/cbits/target-layout.c",
+        "src/driver/THC/Driver/Zip.hs",
         "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal", "cabal.project",
-        "scripts/audit-core.py", "scripts/core-capabilities.json"] ++
-        ["compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"] ++
-        ["scripts" </> file | file <- scripts, take 5 file == "core_", takeExtension file == ".py"]
+        "bin/audit-core.py", "bin/core-capabilities.json"] ++
+        ["src/compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"] ++
+        ["bin" </> file | file <- scripts, take 5 file == "core_", takeExtension file == ".py"]
       commands = [helperBuild, helperLocation, pluginBuild, version, libdirResult, baseResult, wiredResult] ++
         concat builds ++ [foreignBuild] ++ foreignInit ++ [foreignRegistered, nativeBuild, oracle] ++
         helperCommands ++ associationCommands ++ typedAssociationCommands ++ importCommands ++ wiredCommands ++ cacheCommands ++ audits
@@ -296,7 +296,7 @@ checkDriver root directory ghc ghcPkg helper baseUnit = do
       context mode = Installed.installedContext ghc ghcPkg helper
         [root </> directory </> mode </> "package.conf.d"] compiler
       acquire selected unit = Project.prepareInstalledBundle cache
-        (root </> directory </> "native/staging") (root </> "compiler/target-layout.c")
+        (root </> directory </> "native/staging") (root </> "src/driver/cbits/target-layout.c")
         "fixture-driver" selected unit
       loaded result = case result of Right value -> pure value; Left missing -> die (show missing)
       rejected label expected action = do
@@ -643,7 +643,7 @@ checkInstalledWrappers environment charPath root directory = do
               moduleNameString (moduleName (interfaceModule core)) ++ "." ++ occurrence
         writeFile exported rendered
         audited <- runLogged 180 root (directory </> "logs") ("audit-" ++ occurrence) [] "python3"
-          ["scripts/audit-core.py", exported, "--entry", entry, "--output", audit]
+          ["bin/audit-core.py", exported, "--entry", entry, "--output", audit]
         pure (object ["wrapper" .= occurrence, "completeCore" .= True,
           "exported" .= exported, "audit" .= audit], [audited])
   writeJson (root </> directory </> "installed-wrapper-facts.json") (toJSON (map fst facts))

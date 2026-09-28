@@ -14,12 +14,12 @@ _Static_assert(CHAR_BIT == 8 && sizeof(size_t) == 8 && sizeof(ssize_t) == 8,
  * host-libc symbol annotation, not part of the implementation. */
 #define memchr thc_text_memchr
 #define DEF_STRONG(name)
-#include "../../../compiler/pinned-text/2.1.3/openbsd-memchr.c"
+#include "../../../third-party/pinned/openbsd-memchr-1.8.c"
 #undef DEF_STRONG
 /* Compile the unchanged text implementations. The build selects their
  * supported non-atomic/SSE configuration, avoiding a host CPUID/AVX dispatcher
  * inside Sulong. The byte buffer remains the caller's original allocation. */
-#include "../../../compiler/pinned-text/2.1.3/cbits/utils.c"
-#include "../../../compiler/pinned-text/2.1.3/cbits/measure_off.c"
-#include "../../../compiler/pinned-text/2.1.3/cbits/reverse.c"
+#include "../../../third-party/pinned/text-2.1.3/cbits/utils.c"
+#include "../../../third-party/pinned/text-2.1.3/cbits/measure_off.c"
+#include "../../../third-party/pinned/text-2.1.3/cbits/reverse.c"
 #undef memchr

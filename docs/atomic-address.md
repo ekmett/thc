@@ -55,7 +55,7 @@ cabal run exe:thc-fixtures --offline -- atomic-address
 fetch-add returns the first reserved ticket. Export it from the repository root:
 
 ```sh
-compiler/export.sh examples/AtomicTickets.hs
+bin/export-core.sh examples/AtomicTickets.hs
 ```
 
 `reserveTickets :: Int# -> Int# -> Int#` needs two arguments. The low-level

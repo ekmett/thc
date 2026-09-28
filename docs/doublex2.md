@@ -27,7 +27,7 @@ have their own memory rules; ordinary scalar Double arrays are independent.
 ## Original-Core and independent-model checks
 
 ```sh
-python3 scripts/prepare-doublex2-audit.py
+python3 bin/prepare-doublex2-audit.py
 ./gradlew testDefault --tests thc.runtime.SimdDoubleVectorTest
 ```
 

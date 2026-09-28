@@ -60,7 +60,7 @@ bounded workload check, not a statistically meaningful performance comparison.
   --with-ghc "$GHC" --with-ghc-pkg "$GHC_PKG" \
   --installed-core required --ghc-source "$GHC_SOURCE"
 
-python3 "$THC_ROOT/scripts/audit-core.py" \
+python3 "$THC_ROOT/bin/audit-core.py" \
   --package-manifest "$CONTAINERS_GUEST/packages.json" \
   --entry main::Main.main \
   --entry ghc-internal:GHC.Internal.TopHandler.flushStdHandles \

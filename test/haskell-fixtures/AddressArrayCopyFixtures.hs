@@ -39,8 +39,8 @@ prepareAddressArrayCopy :: FilePath -> IO ()
 prepareAddressArrayCopy root = do
   let directory = "build/address-array-copy"
       output = root </> directory
-      source = "compiler/test-fixtures/AddressArrayCopyAudit.hs"
-      driver = "compiler/test-fixtures/AddressArrayCopyNative.hs"
+      source = "test/fixtures/compiler/AddressArrayCopyAudit.hs"
+      driver = "test/fixtures/compiler/AddressArrayCopyNative.hs"
       native = directory </> "native"
       binary = native </> "oracle"
       logs = directory </> "commands"
@@ -61,7 +61,7 @@ prepareAddressArrayCopy root = do
   writeFile (root </> requestPath) (unlines [name ++ "\t" ++ show seed ++ "\t" ++ show from ++ "\t" ++ show to ++ "\t" ++ show count |
     (name,seed,from,to,count) <- requests])
   compiled <- runLogged 300 root logs "native-build" [] ghc
-    ["--make","-O2","-fforce-recomp","-dcore-lint","-dstg-lint","-icompiler/test-fixtures",
+    ["--make","-O2","-fforce-recomp","-dcore-lint","-dstg-lint","-itest/fixtures/compiler",
      "-odir",root </> native,"-hidir",root </> native,driver,"-o",root </> binary]
   executed <- runLoggedWithInput requestPath 120 root logs "native-oracle" [] (root </> binary) []
   let parse line = case splitTab line of
@@ -77,12 +77,12 @@ prepareAddressArrayCopy root = do
   stages <- forM ["pre","post"] $ \stage -> do
     exported <- runLogged 300 root logs (stage ++ "-export")
       [("THC_CORE_OUT",output </> stage ++ "-core"),("THC_GHC_OUT",output </> stage ++ "-ghc")]
-      "compiler/export.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source])
+      "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source])
     let core = directory </> stage ++ "-core/AddressArrayCopyAudit.json"
     reports <- forM entries $ \name -> do
       let reportPath = directory </> stage ++ "-" ++ name ++ "-audit.json"
       audited <- runLogged 120 root logs (stage ++ "-" ++ name ++ "-audit") [] "python3"
-        ["scripts/audit-core.py",core,"--entry",name,"--output",reportPath]
+        ["bin/audit-core.py",core,"--entry",name,"--output",reportPath]
       report <- BS.readFile (root </> reportPath) >>= either die pure . eitherDecodeStrict'
       case report of
         Object fields | KeyMap.lookup "accepted" fields == Just (Bool True),
@@ -91,14 +91,14 @@ prepareAddressArrayCopy root = do
         _ -> die ("Strict address/array copy audit rejected " ++ stage ++ "/" ++ name)
       pure (reportPath:commandArtifacts audited)
     pure (core:commandArtifacts exported ++ concat reports)
-  plugins <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
+  plugins <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
   let sources = sort $ [source,driver,"thc.cabal","test/haskell-fixtures/Main.hs",
         "test/haskell-fixtures/FixtureSupport.hs","test/haskell-fixtures/AddressArrayCopyFixtures.hs",
-        "compiler/build.sh","compiler/export.sh","compiler/toolchain.sh","compiler/plugin.py",
-        "scripts/audit-core.py","scripts/core-capabilities.json","src/main/resources/thc/scalar-primop-signatures.json"] ++
-        ["compiler/THC" </> file | file <- plugins, takeExtension file == ".hs"] ++
-        ["scripts" </> file | file <- scripts, take 5 file == "core_" && takeExtension file == ".py"]
+        "bin/build-compiler.sh","bin/export-core.sh","bin/toolchain.sh","bin/plugin.py",
+        "bin/audit-core.py","bin/core-capabilities.json","src/main/resources/thc/scalar-primop-signatures.json"] ++
+        ["src/compiler/THC" </> file | file <- plugins, takeExtension file == ".hs"] ++
+        ["bin" </> file | file <- scripts, take 5 file == "core_" && takeExtension file == ".py"]
       artifacts = [requestPath,directory </> "oracle.tsv",binary] ++ concat stages ++
         commandArtifacts compiled ++ commandArtifacts executed
   inputHashes <- hashes root sources

@@ -30,8 +30,8 @@ prepareBoxedCas :: FilePath -> IO ()
 prepareBoxedCas root = do
   let directory = "build/boxed-cas"
       manifest = root </> directory </> "manifest.json"
-      source = "compiler/test-fixtures/BoxedCasAudit.hs"
-      driver = "compiler/test-fixtures/BoxedCasNative.hs"
+      source = "test/fixtures/compiler/BoxedCasAudit.hs"
+      driver = "test/fixtures/compiler/BoxedCasNative.hs"
       example = "examples/THC/BoxedCasCounter.hs"
       entries = ["arrayCas","arrayCasUnlifted","smallCas","smallCasUnlifted","varCas","varCasUnlifted","modifyValue","modifyLazy","modifyBottom","boxedCasCounter"] :: [String]
   createDirectoryIfMissing True (root </> directory)
@@ -55,14 +55,14 @@ prepareBoxedCas root = do
     let core = attempt </> stage ++ "-core"
     exported <- run (stage ++ "-export")
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> attempt </> stage ++ "-ghc")]
-      "compiler/export.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
+      "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
         map ("-fplugin-opt=THC.Plugin:closure=" ++) entries ++ [source,example])
     modules <- map (core </>) . filter ((== ".json") . takeExtension) . sort <$> listDirectory (root </> core)
     unless (core </> "BoxedCasAudit.json" `elem` modules) (die "Missing boxed CAS Core export")
     audits <- forM entries $ \entry -> do
       let output = attempt </> stage ++ "-" ++ entry ++ ".audit.json"
       audited <- run (stage ++ "-audit-" ++ entry) [] "python3"
-        (["scripts/audit-core.py"] ++ modules ++ ["--entry",entry,"--output",output])
+        (["bin/audit-core.py"] ++ modules ++ ["--entry",entry,"--output",output])
       pure (output,audited)
     pure (stage,modules,exported,audits)
   let native = attempt </> "native"
@@ -70,17 +70,17 @@ prepareBoxedCas root = do
   createDirectoryIfMissing True (root </> native)
   compiled <- run "native-compile" [] ghc
     ["--make","-O2","-fforce-recomp","-dcore-lint","-dstg-lint",
-     "-i" ++ root </> "compiler/test-fixtures","-i" ++ root </> "examples","-odir",root </> native,"-hidir",root </> native,
+     "-i" ++ root </> "test/fixtures/compiler","-i" ++ root </> "examples","-odir",root </> native,"-hidir",root </> native,
      root </> driver,"-o",root </> executable]
   observed <- run "native-oracle" [] (root </> executable) []
-  compilerSources <- map ("compiler/THC" </>) . filter ((== ".hs") . takeExtension) <$> listDirectory (root </> "compiler/THC")
-  auditSources <- map ("scripts" </>) . filter (\name -> take 5 name == "core_" && takeExtension name == ".py") <$> listDirectory (root </> "scripts")
+  compilerSources <- map ("src/compiler/THC" </>) . filter ((== ".hs") . takeExtension) <$> listDirectory (root </> "src/compiler/THC")
+  auditSources <- map ("bin" </>) . filter (\name -> take 5 name == "core_" && takeExtension name == ".py") <$> listDirectory (root </> "bin")
   let commands = [version,info] ++ concat [[exported] ++ map snd audits | (_,_,exported,audits) <- stages] ++ [compiled,observed]
       artifacts = [executable] ++ concatMap commandArtifacts commands ++
         concat [modules ++ map fst audits | (_,modules,_,audits) <- stages]
       sources = [source,driver,example,"test/haskell-fixtures/BoxedCasFixtures.hs","test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs","thc.cabal","compiler/export.sh","compiler/build.sh","compiler/toolchain.sh",
-        "compiler/plugin.py","scripts/audit-core.py","scripts/core-capabilities.json","src/main/resources/thc/scalar-primop-signatures.json"]
+        "test/haskell-fixtures/Main.hs","thc.cabal","bin/export-core.sh","bin/build-compiler.sh","bin/toolchain.sh",
+        "bin/plugin.py","bin/audit-core.py","bin/core-capabilities.json","src/main/resources/thc/scalar-primop-signatures.json"]
         ++ compilerSources ++ auditSources
   inputs <- hashes root sources
   outputs <- hashes root artifacts

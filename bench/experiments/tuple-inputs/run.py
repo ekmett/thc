@@ -82,7 +82,7 @@ def main():
         for path, sha in sources.items():
             require(hashlib.sha256(subprocess.check_output(['git', 'show', revision + ':' + path], cwd=ROOT)).hexdigest() == sha,
                     'Commit runtime source before capture: ' + path)
-        run(['python3', ROOT / 'scripts/prepare-tuple-input-audit.py', '--check-only'])
+        run(['python3', ROOT / 'bin/prepare-tuple-input-audit.py', '--check-only'])
         run([ROOT / 'gradlew', '--offline', '--no-daemon', 'installDist'], out / 'installDist.log')
         require(sources == {p: digest(ROOT / p) for p in paths}, 'Runtime changed during build')
         inputs = tools + [module, manifest, ROOT / 'build/tuple-input/oracle.tsv', ROOT / 'build/tuple-input/oracle-pairs.tsv',

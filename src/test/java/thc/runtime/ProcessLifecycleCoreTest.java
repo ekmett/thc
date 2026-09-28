@@ -160,7 +160,7 @@ public class ProcessLifecycleCoreTest {
     @ParameterizedTest @CsvSource({"pre, ast", "post, ast", "pre, bytecode", "post, bytecode"})
     void originalProcessCoreMatchesNativeBeforeAndAfterInstallation(String stage, String backend) throws Exception {
         var manifest = json("manifest"); assertEquals("9.14.1", manifest.get("ghc")); assertEquals(List.of("processCreate", "processPoll", "processWait", "processTerminate"), manifest.get("entries"));
-        OriginalStdioChecks.hashes(root.toFile(), manifest.get("inputHashes"), Set.of("compiler/test-fixtures/ProcessLifecycleAudit.hs", "test/haskell-fixtures/ProcessLifecycleFixtures.hs"), null);
+        OriginalStdioChecks.hashes(root.toFile(), manifest.get("inputHashes"), Set.of("test/fixtures/compiler/ProcessLifecycleAudit.hs", "test/haskell-fixtures/ProcessLifecycleFixtures.hs"), null);
         OriginalStdioChecks.hashes(root.toFile(), manifest.get("artifactHashes"), Set.of(prefix + "/pre.json", prefix + "/post.json"), prefix + "/");
         var expected = nativeRows("oracle"); var creation = nativeRows("creation-oracle"); assertEquals(10, expected.size()); assertEquals(3, creation.size());
         try (var context = NativeFileProvider.createContext(Set.of(), ContextProfile.SYNCHRONOUS_TEST, FfiMode.NATIVE, true)) {

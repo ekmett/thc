@@ -56,8 +56,8 @@ class OriginalStdioSeekNativeTest {
     @Test void originalSeekMatchesNativeAndCompiledTargets() throws Exception {
         var manifest = json(new File(fixture, "manifest.json")); assertEquals(1L, manifest.get("schema")); assertEquals("9.14.1", manifest.get("ghc"));
         assertEquals(names, manifest.get("entries")); assertEquals(24L, manifest.get("nativeRows"));
-        hashes(root, manifest.get("inputHashes"), Set.of("compiler/test-fixtures/OriginalStdioSeekAudit.hs", "compiler/test-fixtures/OriginalStdioSeekAuditNative.hs",
-            "test/haskell-fixtures/OriginalStdioSeekFixtures.hs", "scripts/core_original_foreign.py"));
+        hashes(root, manifest.get("inputHashes"), Set.of("test/fixtures/compiler/OriginalStdioSeekAudit.hs", "test/fixtures/compiler/OriginalStdioSeekAuditNative.hs",
+            "test/haskell-fixtures/OriginalStdioSeekFixtures.hs", "bin/core_original_foreign.py"));
         hashes(root, manifest.get("artifactHashes"), Set.of("build/original-stdio-seek/oracle.json", "build/original-stdio-seek/pre/core/OriginalStdioSeekAudit.json",
             "build/original-stdio-seek/post/core/OriginalStdioSeekAudit.json"), "build/original-stdio-seek/");
         var oracle = (List<Map<String, Object>>) Json.parse(Files.readString(new File(fixture, "oracle.json").toPath()));

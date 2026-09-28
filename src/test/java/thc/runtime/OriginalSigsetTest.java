@@ -59,7 +59,7 @@ public class OriginalSigsetTest {
     @Test public void nativeImagesErrnoAndExactFirstInstalledTargetsMatchBothBackends() throws Exception {
         var manifest = json(prefix + "/manifest.json"); assertEquals(1L, manifest.get("schema")); assertEquals("linux", manifest.get("platform")); assertEquals(true, manifest.get("supported")); assertEquals(names, manifest.get("entries"));
         assertEquals(true, manifest.get("strictAccepted")); assertEquals(false, manifest.get("runtimeVerified")); assertEquals(false, manifest.get("installedArtifactsHashed")); assertEquals(532L, manifest.get("nativeRows"));
-        OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of("compiler/test-fixtures/OriginalSigsetAudit.hs", "compiler/test-fixtures/OriginalSigsetNative.hs", "test/haskell-fixtures/OriginalSigsetFixtures.hs", "scripts/audit-core.py", "scripts/core_original_foreign.py", "scripts/core-capabilities.json"), null);
+        OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of("test/fixtures/compiler/OriginalSigsetAudit.hs", "test/fixtures/compiler/OriginalSigsetNative.hs", "test/haskell-fixtures/OriginalSigsetFixtures.hs", "bin/audit-core.py", "bin/core_original_foreign.py", "bin/core-capabilities.json"), null);
         var required = new LinkedHashSet<>(List.of(prefix + "/oracle.json", prefix + "/native/oracle"));
         for (var stage : List.of("pre", "post")) { for (var name : names) required.add(prefix + "/" + stage + "/" + name + ".audit.json"); required.add(prefix + "/" + stage + "/core/OriginalSigsetAudit.json"); required.add(prefix + "/" + stage + "/core/THC.InterfaceClosure.json"); }
         OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"), required, prefix + "/");

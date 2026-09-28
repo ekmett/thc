@@ -46,9 +46,9 @@ stages :: [(String, String)]
 stages = [("pre", "optimized-Core-before-Tidy"), ("post", "optimized-Core-after-Tidy-before-CorePrep")]
 
 source, driver, predicateSource :: FilePath
-source = "compiler/test-fixtures/UnsafeEqualityAudit.hs"
-driver = "compiler/test-fixtures/UnsafeEqualityAuditNative.hs"
-predicateSource = "compiler/test-fixtures/UnsafeEqualityPredicate.hs"
+source = "test/fixtures/compiler/UnsafeEqualityAudit.hs"
+driver = "test/fixtures/compiler/UnsafeEqualityAuditNative.hs"
+predicateSource = "test/fixtures/compiler/UnsafeEqualityPredicate.hs"
 
 fixtures :: [FilePath]
 fixtures = [source, driver, predicateSource]
@@ -118,14 +118,14 @@ inventory root (stage, boundary) = do
 
 sourcePaths :: FilePath -> IO [FilePath]
 sourcePaths root = do
-  plugins <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
+  plugins <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
   pure $ sort $ fixtures ++ ["test/haskell-fixtures/UnsafeEqualityFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-    "test/haskell-fixtures/Main.hs", "thc.cabal", "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh",
-    "scripts/audit-core.py", "scripts/core-capabilities.json", "src/main/resources/thc/scalar-primop-signatures.json",
-    "tools/primops/PrimopTools.hs"] ++
-    ["compiler/THC" </> file | file <- plugins, takeExtension file == ".hs"] ++
-    ["scripts" </> file | file <- scripts, "core_" `isPrefixOf` file, takeExtension file == ".py"]
+    "test/haskell-fixtures/Main.hs", "thc.cabal", "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh",
+    "bin/audit-core.py", "bin/core-capabilities.json", "src/main/resources/thc/scalar-primop-signatures.json",
+    "src/tools/primops/PrimopTools.hs"] ++
+    ["src/compiler/THC" </> file | file <- plugins, takeExtension file == ".hs"] ++
+    ["bin" </> file | file <- scripts, "core_" `isPrefixOf` file, takeExtension file == ".py"]
 
 record :: FilePath -> FilePath -> IO Value
 record root path = do
@@ -176,22 +176,22 @@ prepareUnsafeEquality root checkOnly = do
     version <- run root [] ghc ["--numeric-version"] ""
     check (lines version == ["9.14.1"]) "Requires pinned GHC9.14.1"
     forM_ ["native", "api"] (createDirectoryIfMissing True . (output </>))
-    (_, build) <- execute [] "compiler/build.sh" []
-    (_, predicateBuild) <- execute [] ghc ["--make", "-v0", "-O0", "-dynamic", "-package", "ghc", "-icompiler",
+    (_, build) <- execute [] "bin/build-compiler.sh" []
+    (_, predicateBuild) <- execute [] ghc ["--make", "-v0", "-O0", "-dynamic", "-package", "ghc", "-isrc/compiler",
       "-odir", output </> "api", "-hidir", output </> "api", predicateSource, "-o", output </> "api/predicate"]
     libdirs <- lines <$> run root [] ghc ["--print-libdir"] ""
     libdir <- case libdirs of [path] -> pure path; _ -> die "Expected one selected GHC libdir"
     (predicateOutput, predicateRun) <- execute [] (output </> "api/predicate") [libdir]
     putStr predicateOutput
-    (_, nativeBuild) <- execute [] ghc ["--make", "-O2", "-fforce-recomp", "-dcore-lint", "-icompiler/test-fixtures",
+    (_, nativeBuild) <- execute [] ghc ["--make", "-O2", "-fforce-recomp", "-dcore-lint", "-itest/fixtures/compiler",
       "-odir", output </> "native", "-hidir", output </> "native", "-o", output </> "native/oracle", driver]
     (oracle, nativeRun) <- execute [] (output </> "native/oracle") []
     writeFile (output </> "oracle.tsv") oracle
     stageCommands <- forM stages $ \(stage, _) -> do
       let core = directory </> stage ++ "-core"
           exportEnvironment = [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", output </> stage ++ "-ghc"), ("THC_SOURCE_NOTES", "true")]
-          auditArguments names path = ["scripts/audit-core.py", core, "--output", directory </> path] ++ concatMap (\name -> ["--entry",name]) names
-      (_, exported) <- execute exportEnvironment "compiler/export.sh" ("-fplugin-opt=THC.Plugin:pretty-diagnostics" : ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
+          auditArguments names path = ["bin/audit-core.py", core, "--output", directory </> path] ++ concatMap (\name -> ["--entry",name]) names
+      (_, exported) <- execute exportEnvironment "bin/export-core.sh" ("-fplugin-opt=THC.Plugin:pretty-diagnostics" : ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
         map ("-fplugin-opt=THC.Plugin:closure=" ++) (entries ++ frontiers ++ effects) ++ [source])
       (_, audited) <- execute [] "python3" (auditArguments (entries ++ effects) (stage ++ "-audit.json"))
       negative <- forM frontiers $ \name -> do

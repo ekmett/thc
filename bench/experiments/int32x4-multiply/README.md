@@ -13,7 +13,7 @@ vector result. Existing pack/unpack uses one logical four-`Int32#` tuple, not
 wrapping low-32-bit multiplication. Signed and unsigned multiplication share
 those low bits; their observed widening is different.
 
-After preparing native inputs with `scripts/prepare-int32x4-multiply-audit.py`
+After preparing native inputs with `bin/prepare-int32x4-multiply-audit.py`
 and building `installDist`, use the pinned Graal JDK and a fresh output directory:
 
 ```sh

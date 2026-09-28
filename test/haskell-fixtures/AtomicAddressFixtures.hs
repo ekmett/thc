@@ -41,8 +41,8 @@ prepareAtomicAddress root = do
       output = root </> directory
       logs = directory </> "logs"
       manifest = output </> "manifest.json"
-      source = "compiler/test-fixtures/AtomicAddressAudit.hs"
-      driver = "compiler/test-fixtures/AtomicAddressNative.hs"
+      source = "test/fixtures/compiler/AtomicAddressAudit.hs"
+      driver = "test/fixtures/compiler/AtomicAddressNative.hs"
       entries = ["atomicAddressNumeric","atomicAddressPointer","atomicAddressNumericAt","atomicAddressPointerAt"] :: [String]
   createDirectoryIfMissing True output
   present <- doesFileExist manifest
@@ -55,16 +55,16 @@ prepareAtomicAddress root = do
         options = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"]
     exported <- runLogged 300 root logs ("export-" ++ stage)
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", output </> stage </> "ghc")]
-      "compiler/export.sh" (options ++ [source])
+      "bin/export-core.sh" (options ++ [source])
     audited <- runLogged 120 root logs ("audit-" ++ stage) [] "python3"
-      (["scripts/audit-core.py"] ++ concatMap (\entry -> ["--entry",entry]) entries ++
+      (["bin/audit-core.py"] ++ concatMap (\entry -> ["--entry",entry]) entries ++
        ["--output",directory </> stage </> "audit.json",core </> "AtomicAddressAudit.json"])
     pure (commandArtifacts exported ++ commandArtifacts audited ++
       [core </> "AtomicAddressAudit.json", directory </> stage </> "audit.json"])
   let native = output </> "native"
   createDirectoryIfMissing True native
   built <- runLogged 180 root logs "native-build" [] ghc
-    ["--make","-O2","-dynamic","-dcore-lint","-dstg-lint","-i" ++ root </> "compiler/test-fixtures",
+    ["--make","-O2","-dynamic","-dcore-lint","-dstg-lint","-i" ++ root </> "test/fixtures/compiler",
      "-odir",native,"-hidir",native,root </> driver,"-o",native </> "oracle"]
   writeFile (output </> "inputs.txt") (unlines inputs)
   oracle <- runLoggedWithInput (directory </> "inputs.txt") 60 root logs "native-oracle" []
@@ -75,15 +75,15 @@ prepareAtomicAddress root = do
       [] -> False)
       inputs rows)) (die "Incomplete or malformed native atomic Addr corpus")
   BS.writeFile (output </> "oracle.tsv") (commandStdout oracle)
-  plugin <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
+  plugin <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
   sourceHashes <- hashes root $ sort $
     [source,driver,"thc.cabal","test/haskell-fixtures/Main.hs",
      "test/haskell-fixtures/FixtureSupport.hs","test/haskell-fixtures/AtomicAddressFixtures.hs",
-     "scripts/audit-core.py","scripts/core-capabilities.json","src/main/resources/thc/scalar-primop-signatures.json","compiler/build.sh",
-     "compiler/export.sh","compiler/toolchain.sh","compiler/plugin.py"] ++
-    ["compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"] ++
-    ["scripts" </> file | file <- scripts, take 5 file == "core_", takeExtension file == ".py"]
+     "bin/audit-core.py","bin/core-capabilities.json","src/main/resources/thc/scalar-primop-signatures.json","bin/build-compiler.sh",
+     "bin/export-core.sh","bin/toolchain.sh","bin/plugin.py"] ++
+    ["src/compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"] ++
+    ["bin" </> file | file <- scripts, take 5 file == "core_", takeExtension file == ".py"]
   artifactHashes <- hashes root (stageArtifacts ++ commandArtifacts version ++
     commandArtifacts built ++ commandArtifacts oracle ++ [directory </> "inputs.txt",directory </> "oracle.tsv"])
   writeJson manifest $ object ["schema" .= (1 :: Int),"ghc" .= ("9.14.1" :: String),

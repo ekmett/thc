@@ -32,7 +32,7 @@ lowering. Guest execution uses primitive `long` operands and results, with
 fixed masks/shifts and Java's population-count, zero-count, byte-reversal, and
 bit-reversal operations. No generic boxed arithmetic is added.
 
-`compiler/test-fixtures/BitPrimopsAudit.hs` uses opaque wrappers with dynamic
+`test/fixtures/compiler/BitPrimopsAudit.hs` uses opaque wrappers with dynamic
 inputs. The Haskell fixture producer exports both pre-Tidy and post-Tidy Core.
 JVM tests load both exports and check retained
 primitive names and the pinned input/result representations. The manifest hashes source inputs,
@@ -53,12 +53,12 @@ diagnostic mode.
 From a clean checkout with the pinned GHC and Graal toolchains:
 
 ```sh
-compiler/build.sh
+bin/build-compiler.sh
 cabal run exe:thc-fixtures --offline -- bit
 ./gradlew test --tests thc.runtime.BitPrimopsTest
 JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew test --tests thc.runtime.BitPrimopsTest --rerun
 ```
 
-`scripts/prepare-tests.sh` includes preparation, so the ordinary clean-build CI
+`bin/prepare-tests.sh` includes preparation, so the ordinary clean-build CI
 and opt-in handoff test runs exercise this suite. This slice does not add
 deposit/extract operations, arithmetic, shifts, or SIMD.

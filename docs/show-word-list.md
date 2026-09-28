@@ -32,9 +32,9 @@ dense-handoff executions are separate gates; audit acceptance alone is not a
 compiled-execution claim.
 
 ```sh
-python3 scripts/prepare-show-word-list.py
-python3 scripts/prepare-show-word-list.py --check-only
-python3 scripts/test-show-word-list-model.py
+python3 bin/prepare-show-word-list.py
+python3 bin/prepare-show-word-list.py --check-only
+python3 bin/test-show-word-list-model.py
 ./gradlew test --tests thc.runtime.ShowWordListTest
 JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew test --rerun --tests thc.runtime.ShowWordListTest
 ```

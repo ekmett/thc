@@ -249,7 +249,7 @@ public class NativeAddressTest {
         var root = new File(System.getProperty("thc.projectRoot")); var prefix = "build/native-addresses";
         var manifest = (Map<String, Object>) Json.parse(Files.readString(new File(root, prefix + "/manifest.json").toPath()));
         assertEquals("9.14.1", manifest.get("ghc"));
-        OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of("compiler/test-fixtures/NativeAddressNative.hs", "test/haskell-fixtures/NativeAddressFixtures.hs"), null);
+        OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of("test/fixtures/compiler/NativeAddressNative.hs", "test/haskell-fixtures/NativeAddressFixtures.hs"), null);
         OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"), Set.of(prefix + "/oracle.json"), prefix + "/");
         var oracle = (Map<String, Object>) Json.parse(Files.readString(new File(root, prefix + "/oracle.json").toPath()));
         assertEquals(Collections.nCopies(9, true), oracle.get("observations"));

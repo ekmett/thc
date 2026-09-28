@@ -29,7 +29,7 @@ prepareNativeAddress root = do
   let directory = "build/native-addresses"
       native = directory </> "native"
       binary = native </> ("oracle" ++ if os == "mingw32" then ".exe" else "")
-      source = "compiler/test-fixtures/NativeAddressNative.hs"
+      source = "test/fixtures/compiler/NativeAddressNative.hs"
       oracle = "build/native-addresses/oracle.json"
       manifest = directory </> "manifest.json"
       execute = runLogged 120 root (directory </> "logs")
@@ -59,7 +59,7 @@ prepareNativeAddress root = do
   -- Keep explicit malloc/free ownership in this existing address composite.
   let mallocDirectory = "build/native-malloc"
       mallocNative = mallocDirectory </> "native"
-      mallocSource = "compiler/test-fixtures/NativeMallocNative.hs"
+      mallocSource = "test/fixtures/compiler/NativeMallocNative.hs"
       mallocBinary = mallocNative </> ("oracle" ++ if os == "mingw32" then ".exe" else "")
       mallocOracle = "build/native-malloc/oracle.txt"
       mallocManifest = mallocDirectory </> "manifest.json"

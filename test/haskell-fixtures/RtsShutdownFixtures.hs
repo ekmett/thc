@@ -27,7 +27,7 @@ import Text.Read (readMaybe)
 prepareRtsShutdown :: FilePath -> IO ()
 prepareRtsShutdown root = do
   let directory = "build/rts-shutdown"
-      source = "compiler/test-fixtures/RtsShutdownNative.hs"
+      source = "test/fixtures/compiler/RtsShutdownNative.hs"
       native = directory </> "native"
       binary = root </> native </> "oracle"
       manifest = directory </> "manifest.json"

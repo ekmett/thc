@@ -501,17 +501,17 @@ public class BoxedArrayExtensionsTest {
         for (var name : labels)
             for (var suffix : List.of("stdout", "stderr", "command.json"))
                 requiredArtifacts.add(attempt + "/logs/" + name + "." + suffix);
-        var requiredSources = new HashSet<>(List.of("compiler/test-fixtures/BoxedArrayExtensionsAudit.hs",
-            "compiler/test-fixtures/BoxedArrayExtensionsNative.hs",
+        var requiredSources = new HashSet<>(List.of("test/fixtures/compiler/BoxedArrayExtensionsAudit.hs",
+            "test/fixtures/compiler/BoxedArrayExtensionsNative.hs",
             "test/haskell-fixtures/BoxedArrayExtensionsFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-            "test/haskell-fixtures/Main.hs", "thc.cabal", "compiler/export.sh", "compiler/build.sh",
-            "compiler/toolchain.sh", "compiler/plugin.py", "scripts/audit-core.py", "scripts/core-capabilities.json",
+            "test/haskell-fixtures/Main.hs", "thc.cabal", "bin/export-core.sh", "bin/build-compiler.sh",
+            "bin/toolchain.sh", "bin/plugin.py", "bin/audit-core.py", "bin/core-capabilities.json",
             "src/main/resources/thc/scalar-primop-signatures.json"));
-        try (var files = Files.list(root.resolve("compiler/THC"))) {
+        try (var files = Files.list(root.resolve("src/compiler/THC"))) {
             files.filter(p -> p.getFileName().toString().endsWith(".hs"))
                 .forEach(p -> requiredSources.add(root.relativize(p).toString()));
         }
-        try (var files = Files.list(root.resolve("scripts"))) {
+        try (var files = Files.list(root.resolve("bin"))) {
             files
                 .filter(
                     p -> p.getFileName().toString().startsWith("core_") && p.getFileName().toString().endsWith(".py"))

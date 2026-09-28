@@ -130,7 +130,7 @@ signature. `backend` selects `bytecode` or `ast`
 when loading; the default comes from `thc.backend`, then `THC_BACKEND`, then
 `bytecode`.
 
-The separate `scripts/audit-core.py` command still rejects vector, tuple and
+The separate `bin/audit-core.py` command still rejects vector, tuple and
 sum entry signatures. Its scalar-entry fixture frontiers do not describe the
 logical polyglot ABI above; `loadEntry` does not invoke that auditor. The
 command-line scalar runner still parses integer arguments. Native C exports,
@@ -146,16 +146,13 @@ does not establish package support.
 
 ### Indexed packages and loose inputs
 
-The Cabal driver's `run` and `acquire` paths automatically write navigation
-sidecars for the final package JSON. Package records with a declared `index` select
-[indexed JSON loading](../core-package-manifest.md#optional-json-indexes-and-lazy-loading)
-through the same `loadEntry` call. Existing records without an index remain
-supported; a malformed declared index is rejected. For an explicit loose
-JSON/sidecar pair with a support manifest, use the request builder:
+The Cabal driver writes JSON and symbol directories. Serialized `.idx` sidecars
+have been retired. [JSON navigation](../core-package-manifest.md#json-navigation-and-lazy-loading)
+can build an in-memory index while leaving eligible binding bodies unmaterialized.
+Use the request builder's `indexed` flag for explicit loose JSON inputs:
 
 ```java
 import java.util.List;
-import java.util.Map;
 import thc.CoreModules;
 import static thc.Main.executionContext;
 
@@ -164,42 +161,32 @@ void main() {
         String json = "/absolute/path/to/Module.json";
         var request = CoreModules.request(
             List.of(json, "@/absolute/path/to/support.json"), "sumLoop",
-            true, false, "bytecode", true, false, null, null,
-            Map.of(json, json + ".idx"));
+            true, false, "bytecode", true, false, null, null, true);
         var function = context.eval("thc", request);
         System.out.println(function.execute(100_000L).asLong());
     }
 }
 ```
 
-When explicit sidecars are supplied, their keys must cover exactly the listed
-loose JSON paths, with no duplicates or extra pairs. The request accepts at most
-one `@` package manifest; its module indexes come from its own checked records.
-The manifest supplies dependencies without also supplying the same consumer
-module. Omit that input when no support package is needed.
+The request accepts distinct loose JSON paths and at most one `@` package
+manifest. The manifest supplies dependencies without also supplying the same
+consumer module. Omit that input when no support package is needed. Deferred
+file reads remain authorized by the host request builder; guest requests cannot
+forge file paths or change artifact-verification policy.
 
-The JVM launcher exposes the same association as repeatable
-`--json-sidecar JSON_PATH INDEX_PATH` options. For an accepted standalone
-`IO ()` entry, the mixed form is:
+For an accepted standalone `IO ()` entry, the JVM launcher accepts:
 
 ```sh
 build/install/thc/bin/thc \
-  --json-sidecar /absolute/path/to/Main.json /absolute/path/to/Main.json.idx \
   --run-io /absolute/path/to/Main.json,@/absolute/path/to/support.json \
   app-unit:Main.main -- app --help
 ```
 
-Use the actual qualified entry from the exported module. Every pair must appear
-before the literal `--`. The suffix is `PROGRAM_NAME ARG...`; even an argument
-spelled `--json-sidecar` there belongs to the guest. The launcher does not
-discover sibling sidecars automatically.
-
-The sidecar must already exist and match the exact JSON bytes. Ordinary loading
-trusts the supplied artifact identity and prepares eligible body fields and
-executable roots on demand. Whole-source hashing and full source/index agreement
-checks require explicit artifact verification. Header indexing and dependency
-discovery still do work during loading. Loading an entry does not establish
-support for every cold binding; the separate execution audit checks that scope.
+The literal `--` introduces `PROGRAM_NAME ARG...`; all following arguments
+belong to the guest. Whole-source hashing requires explicit artifact verification.
+Source scanning, header indexing and dependency discovery still do work during
+loading. Loading an entry does not establish support for every cold binding;
+the separate execution audit checks that scope.
 
 ## Execute `IO ()`
 

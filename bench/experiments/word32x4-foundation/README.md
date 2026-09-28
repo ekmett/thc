@@ -12,7 +12,7 @@ The pinned GHC 9.14.1 surface comprises `packWord32X4#`,
 `negateWord32X4#`. Pack and unpack transport four `Word32#` components,
 not four `Int32#` components.
 
-After preparing native inputs with `scripts/prepare-word32x4-audit.py` and building
+After preparing native inputs with `bin/prepare-word32x4-audit.py` and building
 `installDist`, invoke the harness with the pinned Graal JDK and a new directory:
 
 ```sh

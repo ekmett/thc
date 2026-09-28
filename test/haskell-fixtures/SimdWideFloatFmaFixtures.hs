@@ -28,8 +28,8 @@ prepareSimdWideFloatFma :: FilePath -> IO ()
 prepareSimdWideFloatFma root = do
   let directory = "build/simd-wide-floating-fma"
       output = root </> directory
-      source = "compiler/test-fixtures/SimdWideFloatFma.hs"
-      driver = "compiler/test-fixtures/SimdWideFloatFmaNative.hs"
+      source = "test/fixtures/compiler/SimdWideFloatFma.hs"
+      driver = "test/fixtures/compiler/SimdWideFloatFmaNative.hs"
       manifest = output </> "manifest.json"
       floatEntries = entries "huge"
       doubleEntries = entries "doubleHuge"
@@ -48,9 +48,9 @@ prepareSimdWideFloatFma root = do
   -- GHC exports real 512-bit primops without executing native wide code.
   -- The pre-Tidy boundary is explicit on every host, never a silent fallback.
   _ <- run root [("THC_CORE_OUT",output </> "pre-core"),("THC_GHC_OUT",output </> "pre-ghc")]
-    "compiler/export.sh" ["-fno-code","-fwrite-if-simplified-core",source] ""
+    "bin/export-core.sh" ["-fno-code","-fwrite-if-simplified-core",source] ""
   let audit suffix roots = runLogged 120 root (directory </> "logs") suffix [] "python3"
-        (["scripts/audit-core.py",directory </> "pre-core/SimdWideFloatFma.json",
+        (["bin/audit-core.py",directory </> "pre-core/SimdWideFloatFma.json",
           "--output",directory </> ("pre-" ++ suffix ++ ".json")] ++
           concatMap (\entry -> ["--entry",entry]) roots)
   _ <- audit "audit" floatEntries
@@ -69,8 +69,8 @@ prepareSimdWideFloatFma root = do
     (die "Incomplete wide FMA native scalar-lane oracle")
   writeFile (output </> "oracle.txt") (unlines rows)
   inputHashes <- hashes root [source,driver,"test/haskell-fixtures/SimdWideFloatFmaFixtures.hs",
-    "test/haskell-fixtures/SimdFloatFmaFixtures.hs","scripts/core_vectors.py",
-    "scripts/audit-core.py","scripts/core-capabilities.json","compiler/export.sh"]
+    "test/haskell-fixtures/SimdFloatFmaFixtures.hs","bin/core_vectors.py",
+    "bin/audit-core.py","bin/core-capabilities.json","bin/export-core.sh"]
   artifactHashes <- hashes root [directory </> file | file <-
     ["oracle.txt","pre-core/SimdWideFloatFma.json","pre-audit.json","pre-double-audit.json"]]
   writeJson manifest $ object ["schema" .= (1::Int),"ghc" .= ("9.14.1"::String),

@@ -25,7 +25,7 @@ FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
 # The metadata export requests pretty diagnostics in the same required Core files.
-FULL_PREPARATION_PLAN = "87d63835b91271c880598769a76488d4dd0119f62c9ccf21ca80dc26a4f70a6f"
+FULL_PREPARATION_PLAN = "144b8f0fd37f4938fd1e0e2c0943589330451d2f832492d894f36e8b46d53bcd"
 PROCESS_CORE_OUTPUTS = frozenset("build/process-lifecycle/core/" + name for name in (
     "manifest.json", "source.json", "pre.json", "post.json", "pre.audit.json", "post.audit.json",
     *[f"logs/{command}.{suffix}" for command in
@@ -288,19 +288,17 @@ COMMON_SOURCES = (
     "cabal.project",
     "Setup.hs",
     "Makefile",
-    "compiler/THC/**/*.hs",
-    "json-index/**/*.hs",
-    "compiler/json-index/json_index.c",
-    "compiler/json-index/json_index.h",
-    "compiler/build.sh",
-    "compiler/export.sh",
-    "compiler/toolchain.sh",
-    "compiler/plugin.py",
+    "src/compiler/THC/**/*.hs",
+    "src/core-symbols/**/*.hs",
+    "bin/build-compiler.sh",
+    "bin/export-core.sh",
+    "bin/toolchain.sh",
+    "bin/plugin.py",
     "test/haskell-fixtures/**/*.hs",
-    "scripts/audit-core.py",
-    "scripts/core_*.py",
-    "scripts/core-capabilities.json",
-    "tools/primops/PrimopTools.hs",
+    "bin/audit-core.py",
+    "bin/core_*.py",
+    "bin/core-capabilities.json",
+    "src/tools/primops/PrimopTools.hs",
     # The shared runtime ABI probe is also consumed by native fixture producers.
     "src/main/c/stdio-abi-probe.c",
     "src/main/resources/thc/scalar-primop-signatures.json",
@@ -366,7 +364,7 @@ def _source_hashes(root, group):
         # This explicit producer dependency brings its complete pinned source
         # catalog, including HSC, boot files, header and license, into the key.
         _, hashes = fast_inputs.wired_catalog(root)
-        pinned = ["compiler/pinned-ghc-internal/" + path for path in hashes]
+        pinned = [fast_inputs.wired_source_path(path) for path in hashes]
     for pattern in (*COMMON_SOURCES, *group["sources"], *pinned):
         _relative(pattern)
         matches = list(root.glob(pattern))
@@ -477,9 +475,6 @@ def _output_hashes(root, group):
         name = f"build/{family}/manifest.json"
         manifest = json.loads(fast_inputs.file_path(root, name).read_text())
         expected = dict(fast_inputs.bytearray_artifact_hashes(family, manifest))
-        if family in ("bytearray", "compare-byte-arrays"):
-            pins = fast_inputs.vendor_pins(root)
-            expected.update({path: pins[path] for path in fast_inputs.BYTEARRAY_VENDOR})
         return _manifest_output_hashes(root, name, expected)
     if group["outputs"][0] == "build/float-decode":
         name = "build/float-decode/manifest.json"
@@ -488,9 +483,6 @@ def _output_hashes(root, group):
         fast_inputs.require(isinstance(expected, dict) and
                             set(expected) == fast_inputs.FLOAT_DECODE_OUTPUTS - {name},
                             "Incomplete floating decode fixture inventory")
-        expected = dict(expected)
-        pins = fast_inputs.vendor_pins(root)
-        expected.update({path: pins[path] for path in fast_inputs.BIGNAT_VENDOR})
         return _manifest_output_hashes(root, name, expected)
     if group["outputs"] == ["build/pinned-addresses"]:
         name = "build/pinned-addresses/manifest.json"
@@ -500,8 +492,6 @@ def _output_hashes(root, group):
         name = "build/bignat-literals/manifest.json"
         manifest = json.loads(fast_inputs.file_path(root, name).read_text())
         expected = fast_inputs.bignat_artifact_hashes(manifest)
-        pins = fast_inputs.vendor_pins(root)
-        expected.update({path: pins[path] for path in fast_inputs.BIGNAT_VENDOR})
         return _manifest_output_hashes(root, name, expected)
     if group["outputs"] == ["build/original-stack-formatter"]:
         return _formatter_output_hashes(root)
@@ -640,7 +630,7 @@ def _write_stamp(path, stamp):
 
 def _preparation_plan(root):
     lines = [line.rstrip() for index, line in enumerate(
-        (root / "scripts/prepare-tests.sh").read_text().splitlines())
+        (root / "bin/prepare-tests.sh").read_text().splitlines())
         if line.strip() and (index == 0 or not line.lstrip().startswith("#"))]
     return hashlib.sha256(("\n".join(lines) + "\n").encode()).hexdigest()
 
@@ -648,21 +638,6 @@ def _preparation_plan(root):
 def _full_key(root):
     if _preparation_plan(root) != FULL_PREPARATION_PLAN:
         raise RuntimeError("Full preparation commands have not been reviewed for receipt reuse")
-    pins = fast_inputs.vendor_pins(root)
-    vendor_root = root / "vendor/ghc-9.14.1"
-    present = {}
-    if vendor_root.exists():
-        for path in vendor_root.rglob("*"):
-            if path.is_symlink() or not (path.is_file() or path.is_dir()):
-                raise RuntimeError("Unexpected vendored GHC source")
-            if path.is_file():
-                name = path.relative_to(root).as_posix()
-                if name not in pins:
-                    raise RuntimeError("Unpinned vendored GHC source")
-                present[name] = _digest(path)
-    for name, actual in present.items():
-        if actual != pins[name]:
-            raise RuntimeError("Vendored GHC source differs from its pinned hash")
     extra = ("build.gradle", "thc.cabal", "cabal.project", "Setup.hs",
              ".github/scripts/fast-fixtures.json",
              ".github/scripts/fast_fixtures.py")
@@ -670,8 +645,7 @@ def _full_key(root):
              "declaration": {"plan": FULL_PREPARATION_PLAN,
                              "roots": sorted(FULL_OUTPUT_ROOTS),
                              "required": sorted(FULL_REQUIRED)},
-             "extraSources": {name: _digest(root / name) for name in extra},
-             "vendor": present}
+             "extraSources": {name: _digest(root / name) for name in extra}}
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
@@ -742,7 +716,7 @@ def _prepare_full(root, run):
     except (OSError, ValueError, RuntimeError):
         pass
     stamp_path.unlink(missing_ok=True)
-    run("fixtures-full", ["scripts/prepare-tests.sh"])
+    run("fixtures-full", ["bin/prepare-tests.sh"])
     # Preparation may update a generated source. Bind the receipt to the final
     # source identity and publish it only after every declared output is hashed.
     try:
@@ -793,7 +767,7 @@ def prepare(root, selection, run, toolchain):
     state = classify()
     if any(not reusable for _, _, _, _, reusable in state):
         run("fixture-scalar-signatures", ["cabal", "run", "exe:thc-primops", "--", "scalars"])
-        run("fixture-compiler", ["compiler/build.sh"])
+        run("fixture-compiler", ["bin/build-compiler.sh"])
         # A preparatory command may have updated a declared source. Never skip
         # a previously reusable group on an identity calculated before it ran.
         state = classify()

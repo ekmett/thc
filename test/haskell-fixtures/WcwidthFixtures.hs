@@ -61,7 +61,7 @@ prepareWcwidth root = do
       wrapper = output </> ("ghc-proxy-" ++ key) <.> "sh"
   libdir <- line . commandStdout <$> execute "ghc-libdir" [] ghc ["--print-libdir"]
   registry <- either fail pure . eitherDecodeStrict' . commandStdout =<< execute "plugin-unit" [] python
-    [root </> "compiler/plugin.py","--root",root,"--ghc-pkg",ghcPkg,"--registry-only"]
+    [root </> "bin/plugin.py","--root",root,"--ghc-pkg",ghcPkg,"--registry-only"]
   plugin <- field registry "unitId"
   pluginDb <- field registry "packageDb"
   writeFile wrapper ("#!/bin/sh\n" ++ ghcProxyCommand)
@@ -91,12 +91,12 @@ prepareWcwidth root = do
   linked <- finishPackageNative pieces (capture </> unit) unit Nothing modules
   forM_ linked $ \(name,bytes) -> BS.writeFile (output </> name) bytes
   audits <- forM ["rawWidth","displayWidth"] $ \entry -> execute ("audit-" ++ entry) [] "python3"
-    ["scripts/audit-core.py","--entry",unit ++ ":Width." ++ entry,
+    ["bin/audit-core.py","--entry",unit ++ ":Width." ++ entry,
      "--output",output </> entry <.> "json",output </> "Width.json"]
   inputs <- hashes root ([fixture </> name | name <- ["cabal.project","wcwidth-ffi.cabal","src/Width.hs","app/Main.hs"]] ++
-    ["test/haskell-fixtures/WcwidthFixtures.hs","compiler/plugin.py","src/THC/Driver/PackageNative.hs",
-     "src/THC/Driver/NativeArgumentBridge.hs","src/THC/Driver/NativeLibrarySources.hs",
-     "compiler/THC/ForeignImportProvenance.hs","scripts/audit-core.py","scripts/core_package_manifest.py"])
+    ["test/haskell-fixtures/WcwidthFixtures.hs","bin/plugin.py","src/driver/THC/Driver/PackageNative.hs",
+     "src/driver/THC/Driver/NativeArgumentBridge.hs","src/driver/THC/Driver/NativeLibrarySources.hs",
+     "src/compiler/THC/ForeignImportProvenance.hs","bin/audit-core.py","bin/core_package_manifest.py"])
   artifacts <- hashes root ([relative </> name | name <-
     ["Width.json","rawWidth.json","displayWidth.json","C.tsv","C.UTF-8.tsv","ConsoleReporter.hs","TASTY-LICENSE"]] ++
     concatMap commandArtifacts ([built,acquired] ++ oracles ++ audits))

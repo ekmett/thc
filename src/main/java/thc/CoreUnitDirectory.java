@@ -248,6 +248,7 @@ public final class CoreUnitDirectory {
                     require(!jsonExtent, "Compact module contains JSON storage extents");
                     storage = new CompactStorage(artifact(module.get("compact"), false, true, artifactPaths));
                 } else {
+                    require(!module.containsKey("index"), "JSON .idx sidecars are no longer supported; regenerate unit " + id);
                     var span = new CoreJsonSymbols.ModuleSpan(offset(module, "start"), offset(module, "end"), offset(module, "bindingsStart"), offset(module, "bindingsEnd"));
                     require(span.start() >= previousEnd && span.start() < span.bindingsStart() && span.bindingsStart() < span.bindingsEnd() && span.bindingsEnd() < span.end(),
                             "Invalid module extents");

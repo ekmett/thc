@@ -42,7 +42,7 @@ public final class PolyglotDemo {
             List<Map<String, Object>> modules = new ArrayList<>();
             for (String name : moduleNames) {
                 File file = new File(new File(directory, stage), name);
-                if (!file.isFile()) throw new IllegalArgumentException("Missing " + file + "; export the demo first: scripts/polyglot-demo.sh");
+                if (!file.isFile()) throw new IllegalArgumentException("Missing " + file + "; export the demo first: bin/polyglot-demo.sh");
                 modules.add((Map<String, Object>) Json.INSTANCE.parse(Files.readString(file.toPath())));
             }
             var output = new ByteArrayOutputStream();

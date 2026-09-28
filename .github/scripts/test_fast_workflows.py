@@ -31,7 +31,7 @@ class FastWorkflowGuardsTest(unittest.TestCase):
     def test_full_build_collects_both_handoff_modes_without_fail_fast(self):
         workflow = (WORKFLOW.parent / "build.yml").read_text()
         block = workflow.split("name: Build and test both handoff modes from source", 1)[1].split("      - name:", 1)[0]
-        self.assertIn("run: scripts/try.sh --handoff-modes\n", block)
+        self.assertIn("run: bin/try.sh --handoff-modes\n", block)
         self.assertNotIn("--fail-fast", block)
         self.assertNotIn("continue-on-error", block)
         self.assertNotIn("|| true", block)
@@ -54,7 +54,7 @@ class FastWorkflowGuardsTest(unittest.TestCase):
         self.assertIn("persist-credentials: false", workflow)
         self.assertIn("group: native-windows-${{ github.event.pull_request.number || github.ref }}", workflow)
         self.assertIn("cancel-in-progress: false", workflow)
-        self.assertIn("scripts/windows.ps1 -Action Test -Jobs 4", workflow)
+        self.assertIn("bin/windows.ps1 -Action Test -Jobs 4", workflow)
         self.assertIn("} *>&1 | Tee-Object build/windows-ci.log", workflow)
         self.assertIn("if: always()", workflow)
         self.assertIn("build/test-results/windows*SmokeTest/", workflow)
@@ -65,8 +65,8 @@ class FastWorkflowGuardsTest(unittest.TestCase):
         workflow = (WORKFLOW.parent / "build.yml").read_text()
         block = workflow.split("name: Check merged fixture and runtime recipes with and without assertions", 1)[1].split("      - name:", 1)[0]
         for name in ("test-core-original-stdio.py", "test-original-stdio-fixtures.py", "test-generate-stdio-abi.py"):
-            self.assertNotIn("scripts/" + name, block)
-            self.assertFalse((WORKFLOW.parents[2] / "scripts" / name).exists(), name)
+            self.assertNotIn("bin/" + name, block)
+            self.assertFalse((WORKFLOW.parents[2] / "bin" / name).exists(), name)
         self.assertIn('python3 "$test"', block)
         self.assertIn('python3 -O "$test"', block)
 

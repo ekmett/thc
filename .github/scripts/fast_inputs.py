@@ -33,7 +33,14 @@ ORIGINAL_UNIX_UNIT = re.compile(r"unix-2\.8\.8\.0-(?:inplace|[0-9a-f]+)\Z")
 ORIGINAL_DIRECTORY_UNIT = re.compile(r"directory-1\.3\.10\.0-(?:inplace|[0-9a-f]+)\Z")
 SELF = ".github/scripts/fast_inputs.py"
 COMPILER_BUILD_INPUTS = ("thc.cabal", "cabal.project", "Setup.hs", "Makefile")
-WIRED_SOURCE = "src/THC/Driver/Wired.hs"
+WIRED_SOURCE = "src/driver/THC/Driver/Wired.hs"
+
+
+def wired_source_path(name):
+    return "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/" + (
+        "src/" if name.startswith("GHC/") else "") + name
+
+
 # These are the runtime files actually fingerprinted by prepare-tests.sh's
 # preparers. An additional recorded runtime source fails closed until reviewed.
 RUNTIME_INPUTS = ("src/main/c/stdio-abi-probe.c",
@@ -340,7 +347,7 @@ BIGNAT_OUTPUTS = frozenset("build/bignat-literals/" + path for path in (
     *(f"{stage}-core/{name}.json" for stage in ("pre", "post") for name in ("BigNatLiteralAudit", "THC.InterfaceClosure")),
     *(f"{stage}-{name}.audit.json" for stage in ("pre", "post") for name in BIGNAT_AUDITS),
     *(f"commands/{name}.{suffix}" for name in BIGNAT_COMMANDS for suffix in ("stdout", "stderr", "command.json"))))
-BIGNAT_VENDOR = frozenset("vendor/ghc-9.14.1/" + path for path in (
+BIGNAT_SOURCES = frozenset(wired_source_path(path) for path in (
     "include/WordSize.h", "LICENSE", *(f"GHC/Internal/Bignum/{name}{suffix}"
       for name in ("BigNat", "Integer", "Natural") for suffix in (".hs", ".hs-boot"))))
 BYTEARRAY_FAMILIES = {
@@ -369,7 +376,7 @@ for _family, (_module, _entries, _driver) in BYTEARRAY_FAMILIES.items():
         *(f"commands/{name}.{suffix}" for name in _commands for suffix in ("stdout", "stderr", "command.json"))))
 del _family, _module, _entries, _driver, _original, _commands, _stage_outputs
 BYTEARRAY_NATIVES = frozenset(f"build/{family}/native/{family}-oracle" for family in BYTEARRAY_FAMILIES)
-BYTEARRAY_VENDOR = frozenset("vendor/ghc-9.14.1/" + name for name in (
+BYTEARRAY_SOURCES = frozenset(wired_source_path(name) for name in (
     "LICENSE", "GHC/Internal/Base.hs", "GHC/Internal/List.hs", "GHC/Internal/Exception/Type.hs-boot",
     "GHC/Internal/IO.hs-boot", "GHC/Internal/Num.hs-boot", "GHC/Internal/Enum.hs-boot", "GHC/Internal/Real.hs-boot"))
 SIMD_BYTEARRAY_FAMILIES = {
@@ -1547,7 +1554,26 @@ def command(argv, root):
 
 
 def tracked_files(root):
-    return set(command(["git", "ls-files", "-z"], root).split("\0")) - {""}
+    files, submodules = set(), []
+    for entry in command(["git", "ls-files", "--stage", "-z"], root).split("\0"):
+        if not entry:
+            continue
+        info, name = entry.split("\t", 1)
+        if info.split()[0] == "160000":
+            submodules.append(name)
+        else:
+            files.add(name)
+    if submodules:
+        # Cabal already declares the upstream files this project distributes.
+        # Expand only those paths, not the full GHC tree or its nested modules.
+        declared = re.findall(r"^  (third-party/pinned/\S+)\s*$", (root / "thc.cabal").read_text(), re.M)
+        for module in submodules:
+            prefix = module + "/"
+            patterns = [path[len(prefix):] for path in declared if path.startswith(prefix)]
+            if patterns:
+                selected = command(["git", "ls-files", "-z", "--", *patterns], root / module)
+                files.update(prefix + name for name in selected.split("\0") if name)
+    return files
 
 
 def check_package_scope(root, pkg):
@@ -1594,18 +1620,23 @@ def toolchain(root):
 
 def identity(root):
     tracked = tracked_files(root)
-    sources = {name for name in tracked if name.startswith(("compiler/", "json-index/", "scripts/", "examples/", "src/main/resources/", "test/haskell-fixtures/", "src/THC/Driver/", "tools/primops/"))}
+    sources = {name for name in tracked if name.startswith(("src/compiler/", "src/cbd/", "test/fixtures/compiler/", "test/fixtures/package-roots/", "test/fixtures/putstrln/", "third-party/pinned/", "config/", "src/core-symbols/", "bin/", "examples/", "src/main/resources/", "test/haskell-fixtures/", "src/driver/THC/Driver/", "src/tools/primops/"))}
     sources.update((SELF, WIRED_SOURCE, *RUNTIME_INPUTS, *COMPILER_BUILD_INPUTS, *SIMD_BYTEARRAY_RETAINED,
                     "src/test/resources/core/original-unix-libc-descriptors.json",
                     "src/test/resources/core/original-bytestring-sort-descriptor.json",
                     "src/test/resources/core/original-bytestring-decimal-descriptors.json"))
+    if ".gitmodules" in tracked:
+        sources.add(".gitmodules")
     require(all(name in tracked for name in sources), "Cache helper/runtime inputs must be tracked")
-    require("scripts/prepare-tests.sh" in sources and "compiler/export-boot.py" in sources
+    require("bin/prepare-tests.sh" in sources and "bin/export-boot.py" in sources
             and "examples/coverage.json" in sources, "Incomplete authoritative source set")
+    hashes = {name: digest(file_path(root, name)) for name in sorted(sources)}
+    for name, expected in ghc_source_pins(root).items():
+        require(hashes.get(name) == expected, "Pinned GHC source missing or changed: " + name)
     return {"schema": SCHEMA, "workspace": str(root),
         "platform": {"system": platform.system(), "machine": platform.machine(),
                      "byteOrder": sys.byteorder, "libc": list(platform.libc_ver())},
-        "sources": {name: digest(file_path(root, name)) for name in sorted(sources)},
+        "sources": hashes,
         "toolchain": toolchain(root)}
 
 
@@ -1613,10 +1644,10 @@ def cache_key(value):
     return "thc-fast-inputs-v" + str(SCHEMA) + "-" + sha(canonical(value))
 
 
-def vendor_pins(root):
+def ghc_source_pins(root):
     """Read the original exporter's literal pin tables without executing it."""
     tables, result = {}, {}
-    tree = ast.parse(file_path(root, "compiler/export-boot.py").read_text())
+    tree = ast.parse(file_path(root, "bin/export-boot.py").read_text())
     for statement in tree.body:
         if not (isinstance(statement, ast.Assign) and len(statement.targets) == 1
                 and isinstance(statement.targets[0], ast.Name)
@@ -1629,9 +1660,9 @@ def vendor_pins(root):
                 value = tables[node.value.id][ast.literal_eval(node.slice)]
             else:
                 value = ast.literal_eval(node)
-            require(isinstance(value, str) and HEX.fullmatch(value), "Invalid authoritative vendor pin")
-            full = "vendor/ghc-9.14.1/" + relative(name)
-            require(full not in result or result[full] == value, "Conflicting authoritative vendor pin")
+            require(isinstance(value, str) and HEX.fullmatch(value), "Invalid authoritative GHC source pin")
+            full = wired_source_path(relative(name))
+            require(full not in result or result[full] == value, "Conflicting authoritative GHC source pin")
             table[name] = value
             result[full] = value
         tables[statement.targets[0].id] = table
@@ -1781,10 +1812,8 @@ def thread_scheduling_artifact_hashes(manifest):
     return artifacts
 
 
-def allowed_payload(name, pins):
+def allowed_payload(name):
     parts = PurePosixPath(relative(name)).parts
-    if name in pins:
-        return True
     if name in ("build/primop-coverage.json", "build/aggregate-frontier.json"):
         return True
     if native_executable(name):
@@ -2016,7 +2045,7 @@ def external_allowed(name, current):
 
 def inventory(root, current, read, core_files, verified=None):
     """Derive inventory independently from preserved original manifests."""
-    tracked, pins = tracked_files(root), vendor_pins(root)
+    tracked = tracked_files(root)
     for name in core_files:
         p = PurePosixPath(relative(name))
         require(str(p.parent) in CORE_DIRS and p.suffix == ".json", "Unknown extra Core file: " + name)
@@ -2027,7 +2056,7 @@ def inventory(root, current, read, core_files, verified=None):
         if name in visited:
             continue
         visited.add(name)
-        require(name not in tracked and allowed_payload(name, pins), "Unknown/tracked payload: " + name)
+        require(name not in tracked and allowed_payload(name), "Unknown/tracked payload: " + name)
         require(verified is None or name in verified, "Missing original dependency: " + name)
         # Restore has already hashed all bytes in one sequential archive pass.
         # Reuse those hashes and cached JSON rather than randomly seeking gzip
@@ -2037,7 +2066,6 @@ def inventory(root, current, read, core_files, verified=None):
             require(len(data) <= MAX_FILE_BYTES, "Oversized payload: " + name)
         actual = sha(data) if verified is None else verified[name]
         require(name not in expected or expected[name] == actual, "Stale original artifact: " + name)
-        require(name not in pins or pins[name] == actual, "Vendor source differs from authoritative pin: " + name)
         payload[name] = actual
         if not name.endswith(".json"):
             continue
@@ -2235,12 +2263,12 @@ def restore(root, current, source):
                 "Noncanonical archive order")
         require(all(not any(str(p) in payload for p in PurePosixPath(n).parents) for n in payload),
                 "Conflicting file/directory payload paths")
-        tracked, pins = tracked_files(root), vendor_pins(root)
+        tracked = tracked_files(root)
         documents, json_bytes = {}, 0
         # Every path, destination and byte digest is checked before any writes.
         for name in sorted(payload):
             expected = payload[name]
-            require(name not in tracked and allowed_payload(name, pins), "Unknown/tracked archive payload: " + name)
+            require(name not in tracked and allowed_payload(name), "Unknown/tracked archive payload: " + name)
             require(isinstance(expected, str) and HEX.fullmatch(expected), "Invalid payload fingerprint")
             path = file_path(root, name)
             mode = safe_mode(modes[name], name)

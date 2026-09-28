@@ -75,7 +75,7 @@ Set `JAVA_HOME` to the pinned GraalVM installation and `GHC`/`GHC_PKG` to GHC
 9.14.1. From the repository root:
 
 ```sh
-python3 scripts/prepare-empty-tuple-input-audit.py
+python3 bin/prepare-empty-tuple-input-audit.py
 python3 bench/experiments/empty-tuple-inputs/run.py \
   /private/tmp/thc-empty-input-graphs-new \
   --capture bench/experiments/empty-tuple-inputs/captured

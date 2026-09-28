@@ -16,7 +16,7 @@ DOCS_CABAL_FLAGS = $(CABAL_FLAGS) --with-compiler='$(GHC)' --builddir=build/docs
 export GRADLE_USER_HOME ?= $(CURDIR)/.gradle-user-home
 export JAVA_HOME
 
-CORE_PREFLIGHT = GHC='$(GHC)' GHC_PKG='$(GHC_PKG)' $(RUN_GHC) -f "$$(command -v '$(GHC)')" --ghc-arg=-package --ghc-arg=ghc --ghc-arg=-package --ghc-arg=Cabal scripts/check-ghc-core.hs
+CORE_PREFLIGHT = GHC='$(GHC)' GHC_PKG='$(GHC_PKG)' $(RUN_GHC) -f "$$(command -v '$(GHC)')" --ghc-arg=-package --ghc-arg=ghc --ghc-arg=-package --ghc-arg=Cabal bin/check-ghc-core.hs
 
 .PHONY: all runtime haskell run jar fixtures test test-modes jit-test probe clean distclean check-java check-ghc-core
 .PHONY: docs docs-haskell docs-jvm docs-check check-pandoc
@@ -42,7 +42,7 @@ check-ghc-core:
 # HLint reads .hlint.yaml; the runner selects tracked Haskell sources.
 # Hints retain HLint's nonzero exit status. No compiler or JVM build is needed.
 lint-haskell:
-	HLINT='$(HLINT)' bash scripts/lint-haskell.sh $(HLINT_FLAGS)
+	HLINT='$(HLINT)' bash bin/lint-haskell.sh $(HLINT_FLAGS)
 
 # These deliberately have no fixture, test, native library, or installDist dependency.
 # Run sequentially even when the caller uses make -j; both compilers are bounded.
@@ -57,18 +57,18 @@ docs-haskell:
 	  --haddock-html-location='https://hackage.haskell.org/package/$$pkg-$$version/docs' \
 	  --haddock-option=--built-in-themes \
 	  --haddock-option='--theme=$(CURDIR)/docs/site/haddock.css' \
-	  --haddock-option='--source-base=https://github.com/ekmett/thc/tree/$(DOCS_REVISION)/compiler' \
-	  --haddock-option='--source-module=https://github.com/ekmett/thc/blob/$(DOCS_REVISION)/compiler/%{MODULE/.//}.hs' \
-	  --haddock-option='--source-entity=https://github.com/ekmett/thc/blob/$(DOCS_REVISION)/compiler/%{MODULE/.//}.hs#L%L'
+	  --haddock-option='--source-base=https://github.com/ekmett/thc/tree/$(DOCS_REVISION)/src/compiler' \
+	  --haddock-option='--source-module=https://github.com/ekmett/thc/blob/$(DOCS_REVISION)/src/compiler/%{MODULE/.//}.hs' \
+	  --haddock-option='--source-entity=https://github.com/ekmett/thc/blob/$(DOCS_REVISION)/src/compiler/%{MODULE/.//}.hs#L%L'
 	@printf '%s\n' '$(DOCS_REVISION)' > build/docs/haskell.revision
 	$(CABAL) haddock lib:runtime $(DOCS_CABAL_FLAGS) --haddock-html --haddock-quickjump \
 	  --haddock-output-dir='$(CURDIR)/build/docs/runtime' \
 	  --haddock-html-location='https://hackage.haskell.org/package/$$pkg-$$version/docs' \
 	  --haddock-option=--built-in-themes \
 	  --haddock-option='--theme=$(CURDIR)/docs/site/haddock.css' \
-	  --haddock-option='--source-base=https://github.com/ekmett/thc/tree/$(DOCS_REVISION)/runtime' \
-	  --haddock-option='--source-module=https://github.com/ekmett/thc/blob/$(DOCS_REVISION)/runtime/%{MODULE/.//}.hs' \
-	  --haddock-option='--source-entity=https://github.com/ekmett/thc/blob/$(DOCS_REVISION)/runtime/%{MODULE/.//}.hs#L%L'
+	  --haddock-option='--source-base=https://github.com/ekmett/thc/tree/$(DOCS_REVISION)/src/runtime' \
+	  --haddock-option='--source-module=https://github.com/ekmett/thc/blob/$(DOCS_REVISION)/src/runtime/%{MODULE/.//}.hs' \
+	  --haddock-option='--source-entity=https://github.com/ekmett/thc/blob/$(DOCS_REVISION)/src/runtime/%{MODULE/.//}.hs#L%L'
 	@printf '%s\n' '$(DOCS_REVISION)' > build/docs/runtime.revision
 
 docs-jvm: check-java
@@ -85,7 +85,7 @@ jar: check-java
 	./gradlew jar $(GRADLE_FLAGS)
 
 fixtures: check-java
-	scripts/prepare-tests.sh
+	bin/prepare-tests.sh
 
 test: fixtures
 	./gradlew test $(GRADLE_FLAGS) $(if $(TESTS),--tests '$(TESTS)')
