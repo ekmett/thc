@@ -124,9 +124,11 @@ remains limited. Complete boot-library loading and general file IO and FFI
 remain unfinished; arbitrary executables are not yet accepted. The exporter
 currently targets GHC 9.14.1.
 
-[Async-enabled AST evaluation](../async-exceptions.md) bounds nested calls and
-thunk forcing with saved continuations. Deep evaluation inside an active STM
-transaction remains unsupported; other modes keep their existing stack behavior.
+[Async-enabled AST and bytecode evaluation](../async-exceptions.md) bounds nested
+calls and thunk forcing with saved continuations. Private autonomous stack cuts
+retain the same active STM attempt without replaying prefixes or publishing
+buffered writes; explicit checkpoint/delimited capture across STM transactions
+remains unsupported.
 
 Unsupported reachable paths are reported before a normal run. Development
 benchmarks can explicitly use diagnostic traps, but success on one path does

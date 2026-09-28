@@ -178,11 +178,12 @@ still separate work.
 
 This is still an experiment, not a replacement for GHC. General `Main`/IO, the
 complete boot-library closure and full FFI coverage remain unfinished.
-[Async-enabled AST evaluation](docs/async-exceptions.md) bounds nested calls
-and thunk forcing with saved continuations. Deep evaluation inside an active
-STM transaction remains unsupported; other modes keep their existing stack
-behavior. The command-line scalar runner accepts integer arguments;
-`thc run` uses the `IO ()` path described above. The
+[Async-enabled AST and bytecode evaluation](docs/async-exceptions.md) bounds
+nested calls and thunk forcing with saved continuations. Private autonomous
+stack cuts retain the same active STM attempt without replaying prefixes or
+publishing buffered writes; explicit checkpoint/delimited capture across STM
+transactions remains unsupported. The command-line scalar runner accepts integer
+arguments; `thc run` uses the `IO ()` path described above. The
 [Core embedding API](docs/site/embedding.md#load-a-core-entry) transports exact
 numeric, vector, tuple and sum values, plus context-owned references and
 functions. The declared C-export path separately exposes supported scalar
