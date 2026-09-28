@@ -35,7 +35,7 @@ class Int32ArrayTest {
         for (int index = 0; index < values.length; index++) {
             long value = values[index];
             assertEquals(signed(value), (long) ManagedByteArray.readInt32(bytes, index));
-            assertEquals(unsigned(value), (long) ManagedByteArray.readWord16(bytes, index));
+            assertEquals(unsigned(value), Integer.toUnsignedLong(ManagedByteArray.readWord32(bytes, index)));
             for (int b = 0; b <= 3; b++) {
                 int shift = (ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN ? b : 3 - b) * 8;
                 assertEquals((value >>> shift) & 255, (long) ManagedByteArray.read(bytes, index * 4L + b));
@@ -45,7 +45,7 @@ class Int32ArrayTest {
         assertSame(bytes, ManagedByteArray.freeze(bytes));
         var other = new byte[4];
         ManagedByteArray.writeInt32(other, 0, 73);
-        assertEquals(0L, (long) ManagedByteArray.readWord16(bytes, 0));
+        assertEquals(0L, Integer.toUnsignedLong(ManagedByteArray.readWord32(bytes, 0)));
         assertEquals(73L, (long) ManagedByteArray.readInt32(other, 0));
     }
     private long expected(byte[] bytes, int offset, int count) {
@@ -65,14 +65,14 @@ class Int32ArrayTest {
         ManagedByteArray.write(bytes, 4, 0xa2);
         for (int element = 0; element <= 1; element++) {
             long bits = expected(bytes, element * 4, 4);
-            assertEquals(bits, (long) ManagedByteArray.readWord16(bytes, element));
+            assertEquals(bits, Integer.toUnsignedLong(ManagedByteArray.readWord32(bytes, element)));
             assertEquals(signed(bits), (long) ManagedByteArray.readInt32(bytes, element));
         }
         assertEquals(expected(bytes, 0, 8), ManagedByteArray.readInt(bytes, 0));
         ManagedByteArray.writeDouble(bytes, 0, -0.0);
         assertEquals(Long.MIN_VALUE, ManagedByteArray.readInt(bytes, 0));
         assertEquals(ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN ? 0L : 0x8000_0000L,
-            (long) ManagedByteArray.readWord16(bytes, 0));
+            Integer.toUnsignedLong(ManagedByteArray.readWord32(bytes, 0)));
         var copied = new byte[8];
         ManagedByteArray.copy(ManagedByteArray.freeze(bytes), 0, copied, 0, 8);
         assertArrayEquals(bytes, copied);
@@ -88,7 +88,8 @@ class Int32ArrayTest {
                 new long[] {Long.MIN_VALUE, -1L, size / 4, Integer.MAX_VALUE, 1L << 32, 1L << 62, Long.MAX_VALUE}) {
                 var before = bytes.clone();
                 assertThrows(RuntimeFault.class, () -> ManagedByteArray.readInt32(bytes, index));
-                assertThrows(RuntimeFault.class, () -> ManagedByteArray.readWord16(bytes, index));
+                assertThrows(
+                    RuntimeFault.class, () -> Integer.toUnsignedLong(ManagedByteArray.readWord32(bytes, index)));
                 assertThrows(RuntimeFault.class, () -> ManagedByteArray.writeInt32(bytes, index, (int) Long.MIN_VALUE));
                 assertArrayEquals(before, bytes, "size=" + size + "/index=" + index);
             }
@@ -96,7 +97,7 @@ class Int32ArrayTest {
                 long last = size / 4 - 1;
                 ManagedByteArray.writeInt32(bytes, last, (int) 0x8000_0000L);
                 assertEquals(-0x8000_0000L, (long) ManagedByteArray.readInt32(bytes, last));
-                assertEquals(0x8000_0000L, (long) ManagedByteArray.readWord16(bytes, last));
+                assertEquals(0x8000_0000L, Integer.toUnsignedLong(ManagedByteArray.readWord32(bytes, last)));
             }
         }
     }
@@ -134,12 +135,12 @@ class Int32ArrayTest {
             var write = expression(writeOp, CoreRepresentation.UNKNOWN,
                 new Expr[] {operand(events, "array", () -> bytes), operand(events, "index", () -> 0L),
                     operand(events, "value", () -> - 1), operand(events, "state", () -> {
-                        assertEquals(0x8000_0000L, (long) ManagedByteArray.readWord16(bytes, 0));
+                        assertEquals(0x8000_0000L, Integer.toUnsignedLong(ManagedByteArray.readWord32(bytes, 0)));
                         return Unit.INSTANCE;
                     })});
             assertSame(Unit.INSTANCE, write.execute(frame));
             assertEquals(List.of("array", "index", "value", "state"), events);
-            assertEquals(0xffff_ffffL, (long) ManagedByteArray.readWord16(bytes, 0));
+            assertEquals(0xffff_ffffL, Integer.toUnsignedLong(ManagedByteArray.readWord32(bytes, 0)));
             for (var badState :
                 List.<Supplier<Object>>of(() -> { throw new RuntimeFault("state failed"); }, () -> 0L)) {
                 frame.setInt(slot, 73);
@@ -152,7 +153,7 @@ class Int32ArrayTest {
                     new Expr[] {operand(events, "array", () -> bytes), operand(events, "index", () -> 0L),
                         operand(events, "value", () -> 99), operand(events, "state", badState)});
                 assertThrows(RuntimeFault.class, () -> failedWrite.execute(frame));
-                assertEquals(0xffff_ffffL, (long) ManagedByteArray.readWord16(bytes, 0));
+                assertEquals(0xffff_ffffL, Integer.toUnsignedLong(ManagedByteArray.readWord32(bytes, 0)));
             }
             frame.setInt(slot, 73);
             var badIndexRead = expression(readOp, CoreRepresentation.UNKNOWN,
@@ -162,7 +163,7 @@ class Int32ArrayTest {
             assertEquals(73, frame.getInt(slot));
             // Bytecode specializations likewise validate State before any access.
             assertThrows(RuntimeFault.class, () -> BytecodeRoot.WriteInt32Array.write(false, bytes, 0, 99, 0L));
-            assertEquals(0xffff_ffffL, (long) ManagedByteArray.readWord16(bytes, 0));
+            assertEquals(0xffff_ffffL, Integer.toUnsignedLong(ManagedByteArray.readWord32(bytes, 0)));
         }
     }
 }
