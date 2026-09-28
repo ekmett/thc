@@ -12,12 +12,13 @@ current behavior and concrete next steps; remove obsolete implementation history
   and compact binary distribution format. `src/runtime` contains the public
   Haskell runtime API.
 - `src/build`: included Gradle build with Java build helpers; `src/gradle`:
-  Gradle script fragments and wrapper. The root `gradlew` scripts point there.
+  project Gradle script fragments.
 - `src/tools`, `src/diagnostics`, `src/examples`: tool implementations,
   runtime diagnostics and examples. `bin` contains command entry points and
   supporting scripts; `etc` contains configuration.
 - `nih/pinned`: version-pinned upstream submodules and generated support files;
-  `nih/licenses`: third-party licenses. Preserve pinned revisions and attribution.
+  `nih/licenses`: third-party licenses; Gradle bootstrap files live in
+  `nih/gradle/wrapper`. Preserve pinned revisions and attribution.
 - `src/test`, `src/fullCoreTest`, `src/polyglotTest`, `test`: runtime tests,
   Haskell tests and native/Core fixture producers. Follow the nearest existing
   suite rather than introducing another harness.

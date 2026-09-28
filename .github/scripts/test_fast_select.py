@@ -318,7 +318,7 @@ class FastSelectionTest(unittest.TestCase):
                      "bin/audit-core.py", "build.gradle", "Makefile",
                      "src/build/build.gradle", "src/build/settings.gradle",
                      "src/build/java/thc/buildlogic/BytecodeNormalizers.java", "src/gradle/bytecode-metadata.gradle",
-                     "bin/plugin.py", "gradlew", "src/gradle/wrapper/gradle-wrapper.properties"):
+                     "bin/plugin.py", "gradlew", "nih/gradle/wrapper/gradle-wrapper.properties"):
             with self.subTest(path=path):
                 self.write(path, "changed\n")
                 self.commit()

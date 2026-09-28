@@ -83,7 +83,7 @@ Host validation, transport and lifetime management are THC additions.
 
 ## Gradle wrapper
 
-`gradlew`, `gradlew.bat`, and `src/gradle/wrapper/gradle-wrapper.jar` are Gradle
+`gradlew`, `gradlew.bat`, and `nih/gradle/wrapper/gradle-wrapper.jar` are Gradle
 wrapper artifacts, copied from Cadenza. They remain under **Apache-2.0**.
 The scripts retain their original copyright and license headers; the JAR
 contains its upstream `META-INF/LICENSE`. A full Apache-2.0 text is also

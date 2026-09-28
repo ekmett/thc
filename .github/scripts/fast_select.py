@@ -33,7 +33,7 @@ HASKELL_TESTS = {"driver-tests": "test/haskell-driver/Main.hs", "primop-tools": 
 DOCUMENTATION_PATHS = {"nih/licenses/succinctly-MIT.txt"}
 POLYGLOT_EXACT_INPUTS = {
     "build.gradle", "settings.gradle", "gradle.properties", "gradlew",
-    "src/gradle/wrapper/gradle-wrapper.jar", "src/gradle/wrapper/gradle-wrapper.properties",
+    "nih/gradle/wrapper/gradle-wrapper.jar", "nih/gradle/wrapper/gradle-wrapper.properties",
     "Makefile", "thc.cabal", "cabal.project", "Setup.hs", "bin/plugin.py",
     "bin/toolchain.sh", "bin/audit-core.py",
     "bin/polyglot-demo.sh", "bin/javascript-demo.sh",

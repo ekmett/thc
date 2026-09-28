@@ -17,7 +17,7 @@ plugins {
 }
 
 tasks.named('wrapper') {
-    jarFile = file('src/gradle/wrapper/gradle-wrapper.jar')
+    jarFile = file('nih/gradle/wrapper/gradle-wrapper.jar')
 }
 repositories { mavenCentral() }
 
