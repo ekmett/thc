@@ -1148,7 +1148,7 @@ internal class EntryValue(private val program: ExecutableProgram, private val en
 /** Direct IO dispatch and a bounded polyglot-to-guest entry boundary. */
 class HostDispatch : Node() {
     @Child private var foreignExceptions = thc.runtime.ForeignExceptionAccess()
-    internal fun escaping(failure: thc.runtime.GuestException): Nothing = foreignExceptions.escaping(failure)
+    internal fun escaping(failure: thc.runtime.GuestException): Nothing = throw foreignExceptions.escaping(failure)
     @Child private var calls = TargetCache(Metrics(false))
     // The polyglot Value.execute root is shared across unrelated guest entries.
     // Keep its compiled graph bounded while leaving direct guest-to-guest calls

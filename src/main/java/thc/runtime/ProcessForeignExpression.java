@@ -35,7 +35,7 @@ final class ProcessForeignExpression extends Expr {
         long result = ManagedProcessForeign.current(this).invoke(operation, values, this);
         long errno = Language.currentState(this).getStdio$org_intelligence_thc().errno();
         FrameAccess.INSTANCE.writeInt(frame, slots[offset], (int) result);
-        if (operation == ProcessOp.WAIT) AstForeignCompleted.INSTANCE.poll(this, errno, result == -1L && errno == 4L);
+        if (operation == ProcessOp.WAIT) AstForeignCompleted.poll(this, errno, result == -1L && errno == 4L);
         return null;
     }
 }

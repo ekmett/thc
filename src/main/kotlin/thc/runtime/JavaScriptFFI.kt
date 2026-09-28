@@ -132,7 +132,7 @@ internal class JavaScriptAccess(private val declaration: JavaScriptImport) : Nod
         try {
             try { return action() }
             finally { threads.leaveForeign(previous) }
-        } catch (error: AbstractTruffleException) { foreignExceptions.raise(error) }
+        } catch (error: AbstractTruffleException) { throw foreignExceptions.raise(error) }
     }
 
     private fun function(): Any {

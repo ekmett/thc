@@ -89,7 +89,7 @@ internal class PolyglotAccess : Node() {
         try {
             try { return action() }
             finally { threads.leaveForeign(previous) }
-        } catch (error: AbstractTruffleException) { foreignExceptions.raise(error) }
+        } catch (error: AbstractTruffleException) { throw foreignExceptions.raise(error) }
     }
 
     @TruffleBoundary
