@@ -4,6 +4,8 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
+import thc.runtime.CoreCallDemands.CALL_DEMANDS_PROPERTY
+
 import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.frame.VirtualFrame
@@ -172,7 +174,7 @@ class BytecodeTypedTupleInputTest {
             val x = frame.arguments[1] as Long
             events += if (shape == null) x + 100L else x
             if (x < 0L) throw GuestException(x, this)
-            return shape?.finish(frame, EMPTY_TUPLE_SLOTS) ?: (x + 100L)
+            return shape?.finish(frame, ArgumentLayout.EMPTY_TUPLE_SLOTS) ?: (x + 100L)
         }
     }
     @Test fun zeroWidthStateTupleOperandsExecuteBeforeLaterArgumentsAndLoanAcquisition() = withLanguage { _, language ->
@@ -182,8 +184,8 @@ class BytecodeTypedTupleInputTest {
             bind("entry", lam(listOf(arg("effect", closure), arg("later", closure), arg("x")), call("worker", listOf(
                 call("effect", listOf(v("x")), zero), call("later", listOf(v("x")))))))))
         val events = arrayListOf<Long>()
-        val effect = Closure(null, arity = 1, target = OperandEffect(language, events, TupleShape(CoreRepresentations.parse(zero), language)).callTarget)
-        val later = Closure(null, arity = 1, target = OperandEffect(language, events, null).callTarget)
+        val effect = Closure(null, 1, OperandEffect(language, events, TupleShape(CoreRepresentations.parse(zero), language)).callTarget)
+        val later = Closure(null, 1, OperandEffect(language, events, null).callTarget)
         assertEquals(107L, run(p, "entry", effect, later, 7L)); assertEquals(listOf(7L, 107L), events); released(language)
         val entry = (p.entryTarget("worker").rootNode as GuestRoot).typedInput!!
         assertEquals(2, entry.logical.logicalArity); assertEquals(1, entry.logical.physicalArity)
@@ -210,7 +212,7 @@ class BytecodeTypedTupleInputTest {
         loan.inputMode = 1
         entry.packet.setLong(loan, 0, 0L); entry.packet.setObject(loan, entry.header, "not a constructor")
         assertThrows(RuntimeFault::class.java) {
-            invokeTypedInput(target, loan) { packet -> Calls.target(target, packet) }
+            TypedInputsKt.invokeTypedInput(target, loan) { packet -> Calls.target(target, packet) }
         }
         assertNull(state.pending); assertEquals(0, state.arguments.depth); assertEquals(0, state.arguments.retainedReferences())
         assertEquals(1, state.results.depth); assertSame(sentinel, resultShape.layout.getObject(result, 0))

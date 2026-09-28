@@ -98,7 +98,7 @@ class FrameAccessThreadTest {
                         1 -> FrameAccess.writeFloat(frame, slot, 3.5f)
                         2 -> FrameAccess.writeDouble(frame, slot, -2.25)
                         3 -> FrameAccess.write(frame, slot, true)
-                        else -> writeInputReference(frame, slot, marker)
+                        else -> TypedInputsKt.writeInputReference(frame, slot, marker)
                     }
                     FrameAccess.read(frame, slot)
                 }) }

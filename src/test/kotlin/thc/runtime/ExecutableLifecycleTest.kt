@@ -34,10 +34,9 @@ class ExecutableLifecycleTest {
     }
 
     private class Actions(private val main: RootCallTarget, private val shutdown: RootCallTarget) : ExecutableProgram {
-        override val asynchronousExceptions = true
+        override fun getAsynchronousExceptions() = true
         override fun hostEntryTarget(arity: Int) = main
-        override fun entryValue(name: String): Any = Closure(null, arity = 1,
-            target = when (name) { "main" -> main; "shutdown" -> shutdown; else -> error(name) })
+        override fun entryValue(name: String): Any = Closure(null, 1, when (name) { "main" -> main; "shutdown" -> shutdown; else -> error(name) })
         override fun entryTarget(name: String) = when (name) {
             "main" -> main; "shutdown" -> shutdown; else -> error(name)
         }

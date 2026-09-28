@@ -32,7 +32,7 @@ class TupleJoinLoweringTest {
                 FrameAccess.writeLong(frame, 2, Long.MAX_VALUE); FrameAccess.write(frame, 3, right)
                 val shape = tuple(long, reference)
                 val target = LocalJoinTarget(Any(), 1, intArrayOf(-1, -1), arrayOf(shape, shape),
-                    typedSlots = arrayOf(intArrayOf(0, 1), intArrayOf(2, 3)))
+                    booleanArrayOf(false, false), CoreRepresentation.UNKNOWN, arrayOf(intArrayOf(0, 1), intArrayOf(2, 3)))
                 fun operand(index: Int, source: Int) = object : Expr() {
                     override fun execute(frame: VirtualFrame): Any? = error("No aggregate Object carrier")
                     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
@@ -86,7 +86,7 @@ class TupleJoinLoweringTest {
                 FrameAccess.writeLong(frame, 0, 1); FrameAccess.write(frame, 1, marker); FrameAccess.writeLong(frame, 2, 0)
                 FrameAccess.writeLong(frame, 3, 2); FrameAccess.write(frame, 4, null); FrameAccess.writeLong(frame, 5, Long.MIN_VALUE)
                 val target = LocalJoinTarget(Any(), 1, intArrayOf(-1, -1), arrayOf(shape, shape),
-                    typedSlots = arrayOf(intArrayOf(0, 1, 2), intArrayOf(3, 4, 5)))
+                    booleanArrayOf(false, false), CoreRepresentation.UNKNOWN, arrayOf(intArrayOf(0, 1, 2), intArrayOf(3, 4, 5)))
                 fun operand(source: Int) = object : Expr() {
                     override fun execute(frame: VirtualFrame): Any? = error("No sum Object carrier")
                     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {

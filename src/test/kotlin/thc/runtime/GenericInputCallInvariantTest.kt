@@ -117,7 +117,7 @@ class GenericInputCallInvariantTest {
     private fun dispatch(target: RootCallTarget, values: Array<Any?>): Any? {
         val call = GenericInputCall(ScalarArrayInputSource(null), 1, false, Metrics(false), null, 0)
         val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), FrameLayout().build())
-        return call.execute(frame, Closure(null, arity = 1, target = target), values)
+        return call.execute(frame, Closure(null, 1, target), values)
     }
 
     @Test fun missingRootRetainsItsNullCastFailureBeforeInputPreparation() {
@@ -159,11 +159,11 @@ class GenericInputCallInvariantTest {
                 val slots = intArrayOf(layout.bind("number"), layout.bind("reference"))
                 val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), layout.build())
                 FrameAccess.writeLong(frame, slots[0], 23L)
-                writeInputReference(frame, slots[1], marker)
+                TypedInputsKt.writeInputReference(frame, slots[1], marker)
                 val source = AstInputSource(input.logical, slots)
                 val node = object : Node() {}
                 val failure = assertThrows(type) {
-                    prepareGenericInput(frame, node, Closure(null, arity = 1, target = target), input,
+                    GenericTypedInputsKt.prepareGenericInput(frame, node, Closure(null, 1, target), input,
                         source, null, 1, 0, 1, Force(Metrics(false)))
                 }
                 assertEquals(1, reads)
@@ -221,7 +221,7 @@ class GenericInputCallInvariantTest {
                     layout.packet.setObject(input, layout.header, marker)
                     layout.packet.setObject(output, layout.header, outputMarker)
                     val failure = assertThrows(type) {
-                        invokeTypedInput(target, input) { error("Invalid target reached the action") }
+                        TypedInputsKt.invokeTypedInput(target, input) { error("Invalid target reached the action") }
                     }
                     if (root == null)
                         assertEquals("null cannot be cast to non-null type thc.runtime.GuestRoot", failure.message)

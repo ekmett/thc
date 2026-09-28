@@ -177,7 +177,7 @@ class PackageSafeForeignTest {
                             ready.countDown()
                             check(begin.await(30, TimeUnit.SECONDS))
                             val result = Calls.target(target, arrayOf(0L, argument, Unit))
-                            val continuation = checkNotNull(savedGuestContinuation(result))
+                            val continuation = checkNotNull(SavedGuestContinuationKt.savedGuestContinuation(result))
                             val request = continuation.asyncRequest()
                             assertSame(pending.get(), request, "delivery occurs at the completed foreign-call cut")
                             if (mode.endsWith("compiled")) {

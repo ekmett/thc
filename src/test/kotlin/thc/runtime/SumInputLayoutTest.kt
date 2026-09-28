@@ -154,17 +154,17 @@ class SumInputLayoutTest {
 
         val target = object : RootNode(language) { override fun execute(frame: VirtualFrame): Any = Unit }.callTarget
         val captureLayout = CaptureLayout(language, booleanArrayOf(true, false, true),
-            exactLong = booleanArrayOf(true, false, true))
+            booleanArrayOf(true, false, true))
         val environment = captureLayout.captureValues(arrayOf(2L, null, 37L))
-        val closure = Closure(environment, arity = 1, target = target)
+        val closure = Closure(environment, 1, target)
         val image = ClosureInspection.image(closure)
         assertEquals(32, image.bytes.size); assertTrue(image.pointers.isEmpty())
         assertNull(environment.getObject(1)); assertEquals(37L, environment.getLong(2))
         val liveEnvironment = captureLayout.captureValues(arrayOf(1L, marker, 0L))
-        assertArrayEquals(arrayOf(marker), ClosureInspection.image(Closure(liveEnvironment, arity = 1, target = target)).pointers)
+        assertArrayEquals(arrayOf(marker), ClosureInspection.image(Closure(liveEnvironment, 1, target)).pointers)
         val emptyPrefix = prefix.create()
         prefix.setLong(emptyPrefix, 0, 2); prefix.setObject(emptyPrefix, 1, null); prefix.setLong(emptyPrefix, 2, 41)
-        val pap = Closure(null, arity = 1, target = target, typedSupplied = emptyPrefix, suppliedCount = 1)
+        val pap = Closure(null, Closure.NO_PAP_ARGUMENTS, 1, target, 1, emptyPrefix)
         assertTrue(ClosureInspection.image(pap).pointers.isEmpty())
     }
 }

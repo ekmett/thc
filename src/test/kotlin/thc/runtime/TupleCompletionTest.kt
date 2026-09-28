@@ -231,7 +231,7 @@ class TupleCompletionTest {
         val producers = List(5) { index -> Producer(language, shape, environment = if (index % 2 == 0) null else captured).callTarget }
         val closures = producers.mapIndexed { index, target ->
             val environment = if (index % 2 == 0) null else captured.captureValues(arrayOf(31L * index))
-            Closure(environment, arity = 2, target = target).pap(arrayOf(100L * index))
+            Closure(environment, 2, target).pap(arrayOf(100L * index))
         }
         val consumer = DispatchConsumer(language, shape).callTarget
         val pointer = Any()

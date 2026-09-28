@@ -68,7 +68,7 @@ private fun stmRequest(marker: Any?): AsyncRequest = when (marker) {
 private class STMAsyncDestination(private val destination: TupleDestination) : TupleDestination(destination.shape) {
     override fun delimitedResult(frame: VirtualFrame, node: Node): Any? = destination.delimitedResult(frame, node)
     override fun consume(frame: VirtualFrame, node: Node, result: Any?) {
-        val saved = savedGuestContinuation(if (result is TailYield) result.continuation else result)
+        val saved = SavedGuestContinuationKt.savedGuestContinuation(if (result is TailYield) result.continuation else result)
         if (saved != null) throw STMActionSuspended(stmRequest(saved.yielded))
         destination.consume(frame, node, result)
     }
@@ -89,17 +89,17 @@ internal class STMCall @JvmOverloads constructor(private val operation: STMOp, d
             when (operation) {
                 STMOp.ATOMICALLY ->
                     stm.atomically(this, { throw GuestException(nested, this) }, async) {
-                        actionCall.execute(frame, requireClosure(force.execute(frame, action)), arrayOf(Unit))
+                        actionCall.execute(frame, ApplicationKt.requireClosure(force.execute(frame, action)), arrayOf(Unit))
                     }
                 STMOp.OR_ELSE -> stm.orElse({
-                    actionCall.execute(frame, requireClosure(force.execute(frame, action)), arrayOf(Unit))
+                    actionCall.execute(frame, ApplicationKt.requireClosure(force.execute(frame, action)), arrayOf(Unit))
                 }, {
-                    otherCall.execute(frame, requireClosure(force.execute(frame, alternative)), arrayOf(Unit))
+                    otherCall.execute(frame, ApplicationKt.requireClosure(force.execute(frame, alternative)), arrayOf(Unit))
                 })
                 STMOp.CATCH -> stm.catchSTM({
-                    actionCall.execute(frame, requireClosure(force.execute(frame, action)), arrayOf(Unit))
+                    actionCall.execute(frame, ApplicationKt.requireClosure(force.execute(frame, action)), arrayOf(Unit))
                 }, { payload ->
-                    otherCall.execute(frame, requireClosure(force.execute(frame, alternative)), arrayOf(payload, Unit))
+                    otherCall.execute(frame, ApplicationKt.requireClosure(force.execute(frame, alternative)), arrayOf(payload, Unit))
                 })
                 else -> error("Not an STM callback: $operation")
             }

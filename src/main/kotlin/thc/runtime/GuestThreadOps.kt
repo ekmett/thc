@@ -239,7 +239,7 @@ private class ForkActionRoot(private val language: Language, initialShape: Tuple
     override fun execute(frame: VirtualFrame): Any {
         frame.setLong(FrameLayout.BLOOM_FILTER, 0L)
         val input = frame.arguments[0]
-        val action = try { requireClosure(force.execute(frame, input)) }
+        val action = try { ApplicationKt.requireClosure(force.execute(frame, input)) }
         catch (suspended: ThunkSuspended) {
             // The fork child has no enclosing continuation consumer. The
             // shared thunk retains its captured body for a later evaluator.

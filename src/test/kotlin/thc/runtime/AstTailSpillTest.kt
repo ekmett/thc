@@ -84,7 +84,7 @@ class AstTailSpillTest {
                             init { representation = proof }
                             override fun execute(frame: VirtualFrame): Any? = AstControl.complete(this,
                                 Calls.direct(call, arrayOf((rootNode as GuestRoot).bloom(frame))), child,
-                                identityTail = true)
+                                null, true)
                         }, true).callTarget
                     }
                     return target
@@ -103,7 +103,7 @@ class AstTailSpillTest {
                     init { representation = proof }
                     override fun execute(frame: VirtualFrame): Any? = AstControl.complete(this,
                         Calls.direct(call, arrayOf((rootNode as GuestRoot).bloom(frame))), innerTarget,
-                        identityTail = true)
+                        null, true)
                 })
                 val outerTarget = sides("outer", object : Expr() {
                     @field:Child private var caller = DirectCallerNode(inner.callTarget, metrics)
@@ -125,14 +125,14 @@ class AstTailSpillTest {
                         check(++entries <= 2) { "A non-tail call's saved prefix replayed" }
                         if (entries == 2) return 73L
                         return AstControl.complete(this, Calls.direct(call, arrayOf((rootNode as GuestRoot).bloom(frame))),
-                            outerTarget, identityTail = true)
+                            outerTarget, null, true)
                     }
                 })
                 assertEquals(77L, Calls.target(outer.callTarget, arrayOf(0L)))
                 assertEquals(2, entries); assertEquals(1, suffixes)
-                assertEquals(2L, astStackScope(outer).tailAnchors)
-                assertNull(astStackScope(outer).tailAnchor)
-                assertEquals(0, astStackScope(outer).depth)
+                assertEquals(2L, AstStackKt.astStackScope(outer).tailAnchors)
+                assertNull(AstStackKt.astStackScope(outer).tailAnchor)
+                assertEquals(0, AstStackKt.astStackScope(outer).depth)
             } finally { context.leave() }
         }
     }
@@ -168,7 +168,7 @@ class AstTailSpillTest {
                 val expected: Any = when (kind) {
                     CoreKind.DATA, CoreKind.OBJECT -> DataLayout(language, "TailBox", "TailBox", arrayOf("LiftedRep"))
                         .create(arrayOf(payload))
-                    CoreKind.CLOSURE -> Closure(null, arity = 1, target = object : RootNode(language) {
+                    CoreKind.CLOSURE -> Closure(null, 1, object : RootNode(language) {
                         override fun execute(frame: VirtualFrame): Nothing = error("Returned closure was entered")
                     }.callTarget)
                     CoreKind.ADDRESS -> ManagedAddress.fromByteArray(bytes).plus(1)
@@ -208,18 +208,18 @@ class AstTailSpillTest {
                                 fail<Any>("The exact retained owner must catch the next transfer")
                             }
                             if (index != cleanup) return if (arm != null) arm!!.execute(frame) else AstControl.complete(this,
-                                Calls.direct(call!!, arrayOf(bloom)), following, identityTail = true)
+                                Calls.direct(call!!, arrayOf(bloom)), following, null, true)
                             var captured = false
                             SynchronousMasking.set(this, MaskingState.MASKED_INTERRUPTIBLE)
                             try {
                                 return if (arm != null) arm!!.execute(frame) else AstControl.complete(this,
-                                    Calls.direct(call!!, arrayOf(bloom)), following, identityTail = true)
+                                    Calls.direct(call!!, arrayOf(bloom)), following, null, true)
                             } catch (cut: AstCapture) {
                                 captured = true
                                 throw cut.enclose { steps -> object : AstResumeStep {
                                     override fun resume(frame: VirtualFrame, input: Any?): Any? {
                                         SynchronousMasking.set(owner, MaskingState.MASKED_INTERRUPTIBLE)
-                                        try { return resumeAstSteps(frame, steps, input) }
+                                        try { return AstContinuationKt.resumeAstSteps(frame, steps, input) }
                                         catch (guest: GuestException) {
                                             if (!caught) throw guest
                                             assertSame(payload, guest.payload); catches++; return expected
@@ -247,12 +247,12 @@ class AstTailSpillTest {
                     override fun execute(frame: VirtualFrame): Any? {
                         iterations++
                         return AstControl.complete(this, Calls.direct(call, arrayOf(owner.bloom(frame))), first,
-                            identityTail = true)
+                            null, true)
                     }
                 }
                 owner = FunctionRoot(language, FrameLayout().build(), "retained owner", null, intArrayOf(),
                     intArrayOf(), intArrayOf(), body, metrics, resultProof = proof, stackCapture = true)
-                val scope = astStackScope(owner)
+                val scope = AstStackKt.astStackScope(owner)
                 val target = if (!nonTail) owner.callTarget else {
                     val outer = object : Expr() {
                         @field:Child private var caller = DirectCallerNode(owner.callTarget, metrics)

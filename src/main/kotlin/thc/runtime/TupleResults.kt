@@ -184,7 +184,7 @@ internal abstract class TupleDestination(val shape: TupleShape) {
 internal class AstTupleDestination(shape: TupleShape,
     @field:CompilationFinal(dimensions = 1) private val slots: IntArray, private val offset: Int) : TupleDestination(shape) {
     override fun consume(frame: VirtualFrame, node: Node, result: Any?) {
-        val answer = try { AstControl.complete(node, result, tupleShape = shape) }
+        val answer = try { AstControl.complete(node, result, null, shape) }
         catch (cut: AstCapture) {
             throw cut.append(object : AstResumeStep {
                 override fun resume(frame: VirtualFrame, input: Any?): Any? {
@@ -260,11 +260,11 @@ private class DirectTupleCaller(private val destination: TupleDestination, metri
     private val prefixCount = function.suppliedCount
     private val formalLayout = (target.rootNode as? GuestRoot)?.inputLayout
     private val hasEnvironment = function.environment != null
-    @Child private var entry = EntryArguments(target, metrics, prefixSize = prefixCount)
+    @Child private var entry = EntryArguments(target, metrics, booleanArrayOf(), prefixCount)
     @Child private var call = DirectCallNode.create(target)
     @Child private var tailCheck = TailCheck(metrics)
     @Child private var bounce = TupleBounce(destination, metrics)
-    @Child private var scalar: DirectCallerNode? = if (arity < argsSize) DirectCallerNode(target, metrics, prefixSize = prefixCount) else null
+    @Child private var scalar: DirectCallerNode? = if (arity < argsSize) DirectCallerNode(target, metrics, booleanArrayOf(), prefixCount) else null
     @Child private var rest: TupleDispatch? = if (arity < argsSize) TupleDispatch(destination, metrics, argsSize - arity, tail, inputLayout?.suffix(arity)) else null
     @Child private var force = Force(metrics)
     init {
@@ -306,16 +306,16 @@ private class DirectTupleCaller(private val destination: TupleDestination, metri
                 } catch (cut: DelimitedCut) {
                     val remaining = arguments.copyOfRange(physicalCount, arguments.size)
                     throw cut.append(frame, object : DelimitedPendingApplication {
-                        override val destination = this@DirectTupleCaller.destination
+                        override fun getDestination() = this@DirectTupleCaller.destination
                         override fun resume(frame: MaterializedFrame, input: DelimitedResume,
                                             ambient: MaskingState, outerMask: DelimitedStep?): Any? {
                             val remainingCall = rest ?: fault("Missing tuple overapplication remainder")
-                            remainingCall.execute(frame, requireClosure(force.execute(frame, input.get())), remaining.copyOf())
+                            remainingCall.execute(frame, ApplicationKt.requireClosure(force.execute(frame, input.get())), remaining.copyOf())
                             return destination.delimitedResult(frame, this@DirectTupleCaller)
                         }
                     })
                 }
-            val closure = requireClosure(result)
+            val closure = ApplicationKt.requireClosure(result)
             val remainingCall = rest ?: fault("Missing tuple overapplication remainder")
             remainingCall.execute(frame, closure, arguments.copyOfRange(physicalCount, arguments.size))
             return
@@ -332,12 +332,12 @@ private class DirectTupleCaller(private val destination: TupleDestination, metri
     }
 
     private fun resumeOverapplication(frame: VirtualFrame, value: Any?, remaining: Array<Any?>): Any? {
-        val closure = try { requireClosure(AstControl.force(frame, this, force, value)) }
+        val closure = try { ApplicationKt.requireClosure(AstControl.force(frame, this, force, value)) }
         catch (cut: AstCapture) {
             throw cut.append(object : AstResumeStep {
                 override fun resume(frame: VirtualFrame, input: Any?): Any? {
                     val remainingCall = rest ?: fault("Missing tuple overapplication remainder")
-                    remainingCall.execute(frame, requireClosure(input), remaining)
+                    remainingCall.execute(frame, ApplicationKt.requireClosure(input), remaining)
                     return null
                 }
             })
@@ -357,12 +357,12 @@ internal class TupleBounce(private val destination: TupleDestination, private va
         while (true) {
             try { TruffleSafepoint.poll(this) }
             catch (failure: Throwable) {
-                next.input?.let { discardTypedInput(destination.shape.language, it) }
+                next.input?.let { TypedInputsKt.discardTypedInput(destination.shape.language, it) }
                 throw failure
             }
             val root = next.target.rootNode as? GuestRoot
             if (root == null || root.tupleResult?.matches(destination.shape) != true) {
-                next.input?.let { discardTypedInput(destination.shape.language, it) }
+                next.input?.let { TypedInputsKt.discardTypedInput(destination.shape.language, it) }
                 fault("Tuple tail target result shape mismatch")
             }
             try {
@@ -370,7 +370,12 @@ internal class TupleBounce(private val destination: TupleDestination, private va
                 val input = next.input
                 val result = if (input != null) {
                     input.layout.setLong(input, 0, 0L)
-                    invokeTypedInput(next.target, input) { packet -> Calls.indirect(call, next.target, packet) }
+                    val targetRoot = next.target.rootNode
+                    if (targetRoot == null) CompilerDirectives.transferToInterpreter()
+                    val inputLayout = (targetRoot as GuestRoot).typedInput ?: fault("Target has no typed input entry")
+                    val generation = input.generation
+                    try { Calls.indirect(call, next.target, arrayOf(input)) }
+                    finally { GenericTypedInputsKt.releaseGenericInput(inputLayout, input, generation) }
                 } else {
                     next.args[0] = 0L
                     Calls.indirect(call, next.target, next.args)
@@ -428,13 +433,13 @@ private class GenericTupleCaller(private val destination: TupleDestination, priv
                                 resumeOverapplication(frame, input, savedArguments, next)
                         })
                     }
-                    val closure = try { requireClosure(AstControl.force(frame, this, force, result)) }
+                    val closure = try { ApplicationKt.requireClosure(AstControl.force(frame, this, force, result)) }
                     catch (cut: AstCapture) {
                         CompilerDirectives.transferToInterpreter()
                         val savedArguments = arguments.copyOf()
                         throw cut.append(object : AstResumeStep {
                             override fun resume(frame: VirtualFrame, input: Any?): Any? {
-                                execute(frame, requireClosure(input), savedArguments, next)
+                                execute(frame, ApplicationKt.requireClosure(input), savedArguments, next)
                                 return null
                             }
                         })
@@ -453,10 +458,10 @@ private class GenericTupleCaller(private val destination: TupleDestination, priv
                         val remaining = arguments.copyOf()
                         val next = offset + count
                         throw cut.append(frame, object : DelimitedPendingApplication {
-                            override val destination = this@GenericTupleCaller.destination
+                            override fun getDestination() = this@GenericTupleCaller.destination
                             override fun resume(frame: MaterializedFrame, input: DelimitedResume,
                                                 ambient: MaskingState, outerMask: DelimitedStep?): Any? {
-                                try { execute(frame, requireClosure(force.execute(frame, input.get())), remaining.copyOf(), next) }
+                                try { execute(frame, ApplicationKt.requireClosure(force.execute(frame, input.get())), remaining.copyOf(), next) }
                                 catch (cut: DelimitedCut) {
                                     if (destination is AstTupleDestination &&
                                         (cut.frames.lastOrNull()?.step as? DelimitedPendingApplication)?.destination !== destination)
@@ -467,7 +472,7 @@ private class GenericTupleCaller(private val destination: TupleDestination, priv
                             }
                         })
                     }
-                function = requireClosure(result)
+                function = ApplicationKt.requireClosure(result)
                 offset += count
                 continue
             }
@@ -486,11 +491,11 @@ private class GenericTupleCaller(private val destination: TupleDestination, priv
     }
 
     private fun resumeOverapplication(frame: VirtualFrame, value: Any?, arguments: Array<Any?>, next: Int): Any? {
-        val closure = try { requireClosure(AstControl.force(frame, this, force, value)) }
+        val closure = try { ApplicationKt.requireClosure(AstControl.force(frame, this, force, value)) }
         catch (cut: AstCapture) {
             throw cut.append(object : AstResumeStep {
                 override fun resume(frame: VirtualFrame, input: Any?): Any? {
-                    execute(frame, requireClosure(input), arguments, next)
+                    execute(frame, ApplicationKt.requireClosure(input), arguments, next)
                     return null
                 }
             })
@@ -578,7 +583,7 @@ internal class TupleApplication(private val language: Language, private val shap
         catch (cut: AstCapture) {
             throw cut.append(object : AstResumeStep {
                 override fun resume(frame: VirtualFrame, input: Any?): Any? =
-                    executeArguments(frame, slots, offset, requireClosure(input),
+                    executeArguments(frame, slots, offset, ApplicationKt.requireClosure(input),
                         arrayOfNulls(ArgumentLayout.width(inputLayout, arguments.size)), 0)
             })
         }
@@ -589,7 +594,7 @@ internal class TupleApplication(private val language: Language, private val shap
                                              function: Closure, values: Array<Any?>, start: Int): Any? {
         for (index in start until arguments.size) {
             try {
-                if (inputLayout?.isEmpty(index) == true) arguments[index].executeTuple(frame, EMPTY_TUPLE_SLOTS, 0)
+                if (inputLayout?.isEmpty(index) == true) arguments[index].executeTuple(frame, ArgumentLayout.EMPTY_TUPLE_SLOTS, 0)
                 else values[ArgumentLayout.offset(inputLayout, index)] = arguments[index].execute(frame)
             } catch (cut: AstCapture) {
                 throw cut.append(object : AstResumeStep {

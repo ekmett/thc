@@ -174,7 +174,7 @@ class PassThroughRootTest {
         val root = FunctionRoot(language, layout.build(), "scalar self side", null, intArrayOf(),
             intArrayOf(slot), intArrayOf(0), body, Metrics(false), arrayOf(long), long,
             role = FunctionRootRole.PASS_THROUGH)
-        function.value = Closure(null, arity = 1, target = root.callTarget)
+        function.value = Closure(null, 1, root.callTarget)
         val transfer = assertThrows(TailCall::class.java) { Calls.target(root.callTarget, arrayOf(0L, 11L)) }
         assertSame(root.callTarget, transfer.target); assertEquals(22L, transfer.args[1])
         assertEquals(11L, originalArgument)
@@ -184,7 +184,7 @@ class PassThroughRootTest {
         val layout = FrameLayout(); val slot = layout.bind("argument")
         val function = Function()
         val input = ArgumentLayout.fromProofs(listOf(int))!!
-        val app = AstTypedApplication(function, arrayOf(Value(22, int)), layout, true, Metrics(false), selfTransfer = true)
+        val app = AstTypedApplication(function, arrayOf(Value(22, int)), layout, true, Metrics(false), null, true)
         var originalArgument: Any? = null
         val body = object : Expr() {
             @Child var child = app
@@ -196,7 +196,7 @@ class PassThroughRootTest {
             role = FunctionRootRole.PASS_THROUGH)
         val typed = TypedInputLayout.create(language, input, false)!!
         root.configureTypedInput(typed)
-        function.value = Closure(null, arity = 1, target = root.callTarget)
+        function.value = Closure(null, 1, root.callTarget)
         val incoming = typed.packet.create().also {
             it.inputMode = 2; typed.packet.setLong(it, 0, 0); typed.packet.setInt(it, 1, 11)
         }
@@ -205,7 +205,7 @@ class PassThroughRootTest {
         assertEquals(0, incoming.inputMode)
         val outgoing = transfer.input!!
         try { assertEquals(22, typed.packet.getInt(outgoing, 1)); assertTrue(outgoing.inputMode in 1..3) }
-        finally { discardTypedInput(language, outgoing) }
+        finally { TypedInputsKt.discardTypedInput(language, outgoing) }
         val state = language.handoffState.get()
         assertEquals(0, state.arguments.depth); assertEquals(0, state.arguments.retainedReferences())
     }

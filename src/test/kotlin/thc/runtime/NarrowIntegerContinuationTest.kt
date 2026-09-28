@@ -145,7 +145,7 @@ class NarrowIntegerContinuationTest {
                 val worker = Thread {
                     context.enter(); owner.threads.enterCurrent()
                     try {
-                        val captured = checkNotNull(savedGuestContinuation(callScalarTestTarget(target, arguments(prefix, blocked))))
+                        val captured = checkNotNull(SavedGuestContinuationKt.savedGuestContinuation(callScalarTestTarget(target, arguments(prefix, blocked))))
                         checkNotNull(captured.asyncRequest()).acknowledge()
                         answer.complete(captured)
                     } catch (failure: Throwable) { answer.completeExceptionally(failure) }

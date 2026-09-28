@@ -11,7 +11,11 @@
     ]
   },
   "leafSources": {
-    "src/main/kotlin/thc/runtime/AstStack.kt": {"junit": ["thc.runtime.AstStackTest", "thc.runtime.AstStackNativeTest", "thc.runtime.AstContinuationTest"], "python": []},
+    "src/main/java/thc/runtime/AstStackScope.java": {"junit": ["thc.runtime.AstStackTest", "thc.runtime.AstStackNativeTest", "thc.runtime.AstContinuationTest"], "python": []},
+    "src/main/java/thc/runtime/AstStackSpill.java": {"junit": ["thc.runtime.AstStackTest", "thc.runtime.AstStackNativeTest", "thc.runtime.AstContinuationTest"], "python": []},
+    "src/main/java/thc/runtime/AstStackContinuation.java": {"junit": ["thc.runtime.AstStackTest", "thc.runtime.AstStackNativeTest", "thc.runtime.AstContinuationTest"], "python": []},
+    "src/main/java/thc/runtime/AstChildSuspension.java": {"junit": ["thc.runtime.AstStackTest", "thc.runtime.AstStackNativeTest", "thc.runtime.AstContinuationTest"], "python": []},
+    "src/main/java/thc/runtime/AstStackKt.java": {"junit": ["thc.runtime.AstStackTest", "thc.runtime.AstStackNativeTest", "thc.runtime.AstContinuationTest"], "python": []},
     "src/main/kotlin/thc/runtime/NativeEpoll.kt": {
       "junit": ["thc.runtime.NativeEpollTest"], "python": []
     },
@@ -40,9 +44,11 @@
     },
     "src/main/java/thc/runtime/MemcpyExpression.java": {"junit": ["thc.runtime.OriginalMemcpyTest"], "python": ["scripts/test-audit-core.py"]},
     "src/main/java/thc/runtime/MemmoveExpression.java": {"junit": ["thc.runtime.OriginalMemmoveTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/main/kotlin/thc/runtime/CoreStringRtsForeign.kt": {
+    "src/main/java/thc/runtime/CoreStringRtsForeign.java": {
       "junit": ["thc.runtime.OriginalStringRtsTest"], "python": ["scripts/test-audit-core.py"]
     },
+    "src/main/java/thc/runtime/StringRtsOp.java": {"junit": ["thc.runtime.OriginalStringRtsTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/main/java/thc/runtime/StringRtsExpression.java": {"junit": ["thc.runtime.OriginalStringRtsTest"], "python": ["scripts/test-audit-core.py"]},
     "src/main/java/thc/runtime/GuestArguments.java": {
       "junit": ["thc.runtime.GuestArgumentsTest", "thc.runtime.GuestArgumentsEncodingTest"], "python": []
     },
