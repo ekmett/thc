@@ -115,7 +115,7 @@ public final class MutVarModifySite {
         }
         private Object select(VirtualFrame frame, Object record) {
             if (!(record instanceof DataValue data)) throw fault("atomicModifyMutVar2# modifier did not return a data record");
-            Object field = data.getLayout().readFirstLifted$org_intelligence_thc(data);
+            Object field = data.getLayout().readFirstLifted(data);
             try { return force.execute(frame, field); }
             catch (ThunkSuspended signal) { return suspended(frame, signal, new ResumeField()); }
         }

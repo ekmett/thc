@@ -26,7 +26,7 @@ internal class ThreadObservation(private val listing: Boolean, @field:Child priv
     init { representation = proof.copy(evaluated = true) }
     override fun execute(frame: VirtualFrame): Nothing = fault("Thread observation requires a tuple destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         val threads = GuestThreads.current(this)
         if (listing) FrameAccess.write(frame, slots[offset], threads.snapshot())
         else FrameAccess.writeLong(frame, slots[offset], if (threads.isCurrentBound()) 1L else 0L)

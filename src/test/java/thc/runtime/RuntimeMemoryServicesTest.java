@@ -140,8 +140,8 @@ class RuntimeMemoryServicesTest {
             assertEquals(37L, query(state, 208));
             return state.getNativeAllocations$org_intelligence_thc();
         });
-        assertEquals(0L, registry.liveBytes$org_intelligence_thc());
-        assertEquals(0, registry.liveCount$org_intelligence_thc());
+        assertEquals(0L, registry.liveBytes());
+        assertEquals(0, registry.liveCount());
     }
 
     private static long query(Language.State state, int selector) {

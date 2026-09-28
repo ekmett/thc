@@ -70,7 +70,7 @@ internal class NativeEventWait private constructor(private val descriptors: IntA
         interrupted.set(false)
     }
 
-    fun await(node: Node?, timeout: Int, beforeBlock: (() -> Unit)? = null): ShortArray {
+    fun await(node: Node?, timeout: Int, beforeBlock: Runnable? = null): ShortArray {
         val started = System.nanoTime()
         fun remaining(): Int = if (timeout < 0) -1 else
             (timeout.toLong() - (System.nanoTime() - started).coerceAtLeast(0) / 1_000_000)
@@ -88,7 +88,7 @@ internal class NativeEventWait private constructor(private val descriptors: IntA
                 if (immediate.any { it.toInt() != 0 } || timeout == 0) return@InterruptibleFunction immediate
                 // Re-run the observation after a Truffle wake, before entering
                 // the next blocking syscall. Never claim guest delivery here.
-                beforeBlock?.invoke()
+                beforeBlock?.run()
                 NativePollApi.poll(polls, remaining(), descriptors.size.toLong() + 1)
                 if (interrupted.get()) throw InterruptedException()
                 val ready = results()

@@ -2366,7 +2366,11 @@ class FixturePreparationTest(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertIn(name, owners)
                 self.assertIsNone(owners[name])
-                source = (project / "src/test/kotlin" / (name.replace(".", "/") + ".kt")).read_text()
+                sources = [project / "src/test" / language / (name.replace(".", "/") + suffix)
+                           for language, suffix in (("java", ".java"), ("kotlin", ".kt"))]
+                sources = [path for path in sources if path.is_file()]
+                self.assertEqual(1, len(sources), name)
+                source = sources[0].read_text()
                 self.assertNotIn('"build/', source)
 
     def test_floating_simd_commands_preserve_full_preparation_platform_modes(self):

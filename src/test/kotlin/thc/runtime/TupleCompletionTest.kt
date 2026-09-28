@@ -168,7 +168,7 @@ class TupleCompletionTest {
                     if (CompilerDirectives.inCompiledCode()) compiledCaptures++
                     // Interpreter tuple completion owns a pool loan; a compiled
                     // inline carrier can become the captured value directly.
-                    return if (result === TupleComplete) ownedTupleResult(result, shape) else result
+                    return if (result === TupleComplete.INSTANCE) TupleResultsKt.ownedTupleResult(result, shape) else result
                 }
                 shape.consume(frame, result, slots.fields, 0)
                 return frame.getObject(slots.fields[1])

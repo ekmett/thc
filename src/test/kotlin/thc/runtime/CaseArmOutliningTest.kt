@@ -49,7 +49,7 @@ class CaseArmOutliningTest {
     private fun program(language: Language, async: Boolean, body: ArmCore,
         parameters: List<Map<String, Any>> = listOf(parameter("x")), extra: Map<String, Any?> = emptyMap()) =
         Program(language, extra + mapOf("bindings" to listOf(binding("entry", lambda(parameters, body)))),
-            async, outlineCaseArms = true)
+            async, true)
     private fun count(p: Program, key: String) = (p.diagnostics().getValue(key) as Number).toLong()
     private fun compile(target: RootCallTarget) {
         target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
@@ -152,7 +152,7 @@ class CaseArmOutliningTest {
             override fun execute(frame: VirtualFrame): Any = error("Captured reference must not be forced")
         }.callTarget)
         for (async in listOf(false, true)) {
-            val p = Program(language, module, async, outlineCaseArms = true)
+            val p = Program(language, module, async, true)
             val target = p.entryTarget("entry")
             val shape = (target.rootNode as GuestRoot).tupleResult!!
             val layout = FrameLayout(); val slots = IntArray(3) { layout.bind("result $it") }
@@ -199,7 +199,7 @@ class CaseArmOutliningTest {
             try {
                 language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                 owner = Language.currentState()
-                p = Program(language, module, true, outlineCaseArms = true)
+                p = Program(language, module, true, true)
                 target = p.entryTarget("entry")
                 assertEquals(3L, count(p, "loweredRootCount"))
             } finally { context.leave() }
@@ -235,7 +235,7 @@ class CaseArmOutliningTest {
                         @Child var force = Force(Metrics(false), true)
                         override fun execute(frame: VirtualFrame): Any? = force.execute(frame, parked)
                     }.callTarget
-                    val completed = ownedTupleResult(Calls.target(driver, emptyArray()), shape)
+                    val completed = TupleResultsKt.ownedTupleResult(Calls.target(driver, emptyArray()), shape)
                     assertEquals(918273645L, shape.layout.getLong(completed, 0))
                     assertTrue(prefix.isEmpty()); assertTrue(blocked.isEmpty())
                     assertThrows(RuntimeFault::class.java) { saved.continueWith(Unit) }
@@ -261,7 +261,7 @@ class CaseArmOutliningTest {
             @Suppress("UNCHECKED_CAST")
             val source = Json.parse(File(root, "build/delimited-continuations/$stage/core/DelimitedContinuations.json").readText()) as Map<String, Any?>
             for (entry in listOf("resumeTwice", "resumedTail", "resumedJoin", "resumedScalar", "capturedCatch", "capturedMask")) {
-                val p = Program(language, CoreModules.reachable(source, entry), async, outlineCaseArms = true)
+                val p = Program(language, CoreModules.reachable(source, entry), async, true)
                 val function = org.graalvm.polyglot.Context.getCurrent().asValue(EntryValue(p, entry, 1))
                 for ((index, input) in inputs.withIndex()) {
                     assertEquals(native[index * entries.size + entries.indexOf(entry)], function.execute(input).asLong(), "$stage/$async/$entry")

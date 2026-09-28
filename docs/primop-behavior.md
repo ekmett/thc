@@ -244,7 +244,7 @@ No additional deficiency is recorded here for `newPromptTag#`, `touch#` or
 
 Details: [delimited continuations](delimited-continuations.md),
 [closure inspection and recorded JIT issue](closure-inspection.md),
-[liveness implementation](../src/main/kotlin/thc/runtime/KeepAlive.kt).
+[liveness implementation](../src/main/java/thc/runtime/KeepAliveExpression.java).
 
 ## Enumeration constructors
 

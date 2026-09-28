@@ -94,7 +94,7 @@ internal class SharedCAFStoreExpression(
     override fun execute(frame: VirtualFrame): Nothing = fault("RTS shared-CAF tuple requires a destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val candidate = pointer.executeRequiredAddress(frame)
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         FrameAccess.write(frame, slots[offset], StablePointers.current(this).getOrSetSharedCAF(store, candidate))
         return null
     }
