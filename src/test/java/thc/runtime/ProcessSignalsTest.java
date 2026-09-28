@@ -245,8 +245,8 @@ public class ProcessSignalsTest {
                 var pointerFailure = assertThrows(RuntimeFault.class, () -> target.call("not an address", null)); assertEquals("Expected a managed literal Addr# constructor field", pointerFailure.getMessage());
                 var nullFailure = assertThrows(NullPointerException.class, () -> target.call(address, null)); assertEquals("null cannot be cast to non-null type kotlin.Long", nullFailure.getMessage());
                 for (var number : List.of(2, "signal")) assertThrows(ClassCastException.class, () -> target.call(address, number));
-                assertEquals(77L, address.readWord8(0), "invalid arguments cannot enter the writing guest dispatcher"); ThreadInventoryCoreEvidence.INSTANCE.released(language);
-                target.call(address, 12L); assertEquals(12L, address.readWord8(0)); ThreadInventoryCoreEvidence.INSTANCE.released(language);
+                assertEquals(77L, address.readWord8(0), "invalid arguments cannot enter the writing guest dispatcher"); ThreadInventoryCoreEvidence.Companion.released(language);
+                target.call(address, 12L); assertEquals(12L, address.readWord8(0)); ThreadInventoryCoreEvidence.Companion.released(language);
             } finally { owner.getThreads().leaveCurrent(GuestThreadStatus.FINISHED); }
         });
     }
@@ -255,12 +255,12 @@ public class ProcessSignalsTest {
             var owner = Language.currentState(); var program = program(language, backend, true, true, descriptor); var target = new SignalDispatchRoot(language, program).getCallTarget();
             var address = owner.getNativeAllocations().malloc(128L); owner.getThreads().enterCurrent();
             try {
-                target.call(address, 2L); assertEquals(2L, address.readWord8(0)); ThreadInventoryCoreEvidence.INSTANCE.install(List.of(target));
-                var calls = ThreadInventoryCoreEvidence.INSTANCE.interpretedCalls(List.of(target)); long compiled = ((Number) program.diagnostics().get("compiledEntries")).longValue();
+                target.call(address, 2L); assertEquals(2L, address.readWord8(0)); ThreadInventoryCoreEvidence.Companion.install(List.of(target));
+                var calls = ThreadInventoryCoreEvidence.Companion.interpretedCalls(List.of(target)); long compiled = ((Number) program.diagnostics().get("compiledEntries")).longValue();
                 target.call(address, 25L); // First call after installation; no settling call.
-                assertEquals(25L, address.readWord8(0)); assertTrue(ThreadInventoryCoreEvidence.INSTANCE.valid(target), backend + " dispatcher remains installed");
-                assertEquals(calls, ThreadInventoryCoreEvidence.INSTANCE.interpretedCalls(List.of(target))); assertEquals(compiled + 1, ((Number) program.diagnostics().get("compiledEntries")).longValue());
-                ThreadInventoryCoreEvidence.INSTANCE.released(language);
+                assertEquals(25L, address.readWord8(0)); assertTrue(ThreadInventoryCoreEvidence.Companion.valid(target), backend + " dispatcher remains installed");
+                assertEquals(calls, ThreadInventoryCoreEvidence.Companion.interpretedCalls(List.of(target))); assertEquals(compiled + 1, ((Number) program.diagnostics().get("compiledEntries")).longValue());
+                ThreadInventoryCoreEvidence.Companion.released(language);
             } finally { owner.getThreads().leaveCurrent(GuestThreadStatus.FINISHED); }
         });
     }
@@ -279,7 +279,7 @@ public class ProcessSignalsTest {
             address.writeWord8(0, 77); owner.getThreads().enterCurrent();
             try {
                 var failure = assertThrows(RuntimeFault.class, () -> target.call(address, 12L)); assertEquals("Signal dispatcher did not return boxed unit", failure.getMessage());
-                assertEquals(12L, address.readWord8(0), "result validation remains after the guest action"); ThreadInventoryCoreEvidence.INSTANCE.released(language);
+                assertEquals(12L, address.readWord8(0), "result validation remains after the guest action"); ThreadInventoryCoreEvidence.Companion.released(language);
             } finally { owner.getThreads().leaveCurrent(GuestThreadStatus.FINISHED); }
         });
     }

@@ -29,8 +29,8 @@ public final class ManagedStrerror {
     private long copyMessage(long error, ManagedAddress output, long length) {
         output.requireByteRegion(length, true);
         var nativeCode = cbits.get();
-        var library = nativeCode.strerrorLibrary$org_intelligence_thc();
-        var localeLibrary = nativeCode.strerrorLocaleLibrary$org_intelligence_thc();
+        var library = nativeCode.strerrorLibrary();
+        var localeLibrary = nativeCode.strerrorLocaleLibrary();
         try {
             var original = interop.readMember(library, "base_strerror_r");
             var enterLocale = interop.readMember(localeLibrary, "thc_strerror_locale_enter");

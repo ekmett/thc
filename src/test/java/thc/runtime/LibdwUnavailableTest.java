@@ -184,8 +184,8 @@ class LibdwUnavailableTest {
                 var program = load(language, backend, module);
                 var target = program.entryTarget("attach");
                 var state = Language.currentState();
-                var function = CFinalizerLabels.INSTANCE.fromCore("free", proof);
-                assertTrue(function.sameLocation(CFinalizerLabels.INSTANCE.fromCore("free", proof)));
+                var function = CFinalizerLabels.fromCore("free", proof);
+                assertTrue(function.sameLocation(CFinalizerLabels.fromCore("free", proof)));
                 assertThrows(RuntimeFault.class, function::toNativeBits);
                 java.util.function.LongSupplier call = () -> {
                     var base = state.getNativeAllocations().malloc(16);
@@ -226,27 +226,27 @@ class LibdwUnavailableTest {
             context.initialize("thc"); context.enter();
             try {
                 var state = Language.currentState();
-                var first = CFinalizerLabels.INSTANCE.fromCore("libdwPoolRelease", proof);
-                var second = CFinalizerLabels.INSTANCE.fromCore("backtraceFree", proof);
-                assertTrue(first.sameLocation(CFinalizerLabels.INSTANCE.fromCore("libdwPoolRelease", proof)));
+                var first = CFinalizerLabels.fromCore("libdwPoolRelease", proof);
+                var second = CFinalizerLabels.fromCore("backtraceFree", proof);
+                assertTrue(first.sameLocation(CFinalizerLabels.fromCore("libdwPoolRelease", proof)));
                 assertFalse(first.sameLocation(second));
                 assertFalse(first.sameLocation(ManagedAddress.nullAddress()));
                 assertThrows(RuntimeFault.class, first::toNativeBits);
                 assertThrows(RuntimeFault.class, () -> first.plus(0));
                 assertThrows(RuntimeFault.class, () -> first.readWord8(0));
-                assertThrows(RuntimeFault.class, () -> CFinalizerLabels.INSTANCE.fromCore("enabled_capabilities", proof));
-                assertThrows(RuntimeFault.class, () -> CFinalizerLabels.INSTANCE.fromCore("libdwPoolRelease",
+                assertThrows(RuntimeFault.class, () -> CFinalizerLabels.fromCore("enabled_capabilities", proof));
+                assertThrows(RuntimeFault.class, () -> CFinalizerLabels.fromCore("libdwPoolRelease",
                     proof.copy(proof.getKind(), proof.getEvaluated(), proof.getPresent(), List.of("WordRep"),
                         proof.getComponents(), proof.getVector(), proof.getAlternatives(), proof.getTagSlot(), proof.getAlternativeSlots())));
                 var bytes = ManagedAllocation.mutable(16, 8);
                 for (long index = 0; index < 16; index++) bytes.writeByte(index, index + 17);
                 var pointer = ManagedAddress.fromAllocation(bytes);
                 var interop = InteropLibrary.getUncached();
-                var shifted = state.cbits().pointerTransport$org_intelligence_thc(pointer.plus(5), true);
+                var shifted = state.cbits().pointerTransport(pointer.plus(5), true);
                 assertEquals((byte) 22, interop.readBufferByte(shifted, 0));
                 assertEquals(11L, interop.getBufferSize(shifted));
                 var immutable = ManagedAddress.fromHex("0112233445").plus(2);
-                var projected = state.cbits().pointerTransport$org_intelligence_thc(immutable, true);
+                var projected = state.cbits().pointerTransport(immutable, true);
                 assertEquals((byte) 0x23, interop.readBufferByte(projected, 0));
                 interop.toNative(projected);
                 assertEquals(immutable.toNativeBits(), interop.asPointer(projected));
@@ -270,7 +270,7 @@ class LibdwUnavailableTest {
             first.initialize("thc"); first.enter();
             try {
                 var state = Language.currentState();
-                label = state.cbits().finalizerLabel$org_intelligence_thc("backtraceFree");
+                label = state.cbits().finalizerLabel("backtraceFree");
                 var buffers = new ArrayList<ManagedAddress>();
                 for (boolean pinned : new boolean[]{false, true}) {
                     var pointer = ManagedAddress.fromAllocation(ManagedAllocation.mutable(16, 8, pinned));
@@ -281,7 +281,7 @@ class LibdwUnavailableTest {
                     var before = LongStream.range(0, pointer.availableBytes()).map(pointer::readWord8).boxed().toList();
                     for (String symbol : List.of("libdwPoolRelease", "backtraceFree")) {
                         var weak = state.getWeaks().make(new Object(), new Object(), null);
-                        assertEquals(1L, state.getWeaks().addCFinalizer(state.cbits().finalizerLabel$org_intelligence_thc(symbol), pointer.plus(2), 0, weak, state.cbits()));
+                        assertEquals(1L, state.getWeaks().addCFinalizer(state.cbits().finalizerLabel(symbol), pointer.plus(2), 0, weak, state.cbits()));
                         assertEquals(0L, state.getWeaks().finalize(weak).getFlag());
                         assertEquals(before, LongStream.range(0, pointer.availableBytes()).map(pointer::readWord8).boxed().toList());
                     }
@@ -315,7 +315,7 @@ class LibdwUnavailableTest {
         } finally { first.close(); }
         try (var denied = Context.newBuilder("thc").allowIO(IOAccess.NONE).build()) {
             denied.initialize("thc"); denied.enter();
-            try { assertThrows(RuntimeFault.class, () -> Language.currentState().cbits().finalizerLabel$org_intelligence_thc("backtraceFree")); }
+            try { assertThrows(RuntimeFault.class, () -> Language.currentState().cbits().finalizerLabel("backtraceFree")); }
             finally { denied.leave(); }
         }
     }

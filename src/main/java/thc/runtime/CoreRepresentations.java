@@ -45,7 +45,7 @@ public final class CoreRepresentations {
         } else if (value instanceof List<?> list) {
             // Exempt structural sites, not equal/shared metadata maps elsewhere.
             var local = exemptions;
-            if (CoreVectorMemory.INSTANCE.readCase((List<Object>) list, constructors) != null) {
+            if (CoreVectorMemory.readCase((List<Object>) list, constructors) != null) {
                 local = new HashSet<>(exemptions);
                 var resultPath = new ArrayList<>(path); resultPath.addAll(List.of(1, 6, "rep")); local.add(resultPath);
                 var binderPath = new ArrayList<>(path); binderPath.addAll(List.of(4, "binder", "rep")); local.add(binderPath);

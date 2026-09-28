@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime
 
+import thc.runtime.PackageScalarAccess.*
+
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.PackageScalarLink

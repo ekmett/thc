@@ -128,7 +128,7 @@ public final class CompactImages {
             Object root;
             if (index >= 0) root = values.get(index);
             else {
-                root = handle.getValue$org_intelligence_thc().get();
+                root = handle.getValue().get();
                 if (!(root instanceof DataValue data) || data.getLayout().getArity() != 0) return failed(region);
             }
             var owned = new ArrayList<ManagedCompact.Allocation>();

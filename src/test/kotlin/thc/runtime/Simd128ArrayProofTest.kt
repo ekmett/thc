@@ -26,7 +26,7 @@ class Simd128ArrayProofTest {
 internal class VectorArrayProofCases(private val wide: Boolean) {
     private val families = setOf(VectorMemoryFamily.INT8, VectorMemoryFamily.WORD8,
         VectorMemoryFamily.INT16, VectorMemoryFamily.WORD16, VectorMemoryFamily.INT64, VectorMemoryFamily.WORD64)
-    private val operations = VectorMemoryOp.entries.filter { !it.isAddress && (if (wide) it.vectorBytes > 16 else it.family in families && it.vectorBytes == 16) }
+    private val operations = VectorMemoryOp.values().filter { !it.isAddress && (if (wide) it.vectorBytes > 16 else it.family in families && it.vectorBytes == 16) }
     private fun scalar(kind: String, rep: String?) = mapOf("kind" to kind,
         "primReps" to listOfNotNull(rep), "evaluated" to true)
     private val state = scalar("void", null)

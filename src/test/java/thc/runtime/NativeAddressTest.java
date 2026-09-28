@@ -133,11 +133,11 @@ public class NativeAddressTest {
             context.initialize("thc"); context.enter();
             try {
                 var registry = NativeAddresses.current(null); var original = ManagedAddress.fromHex("616263");
-                var olderBuffer = Language.currentState(null).cbits().buffer$org_intelligence_thc(original.plus(1), true);
+                var olderBuffer = Language.currentState(null).cbits().buffer(original.plus(1), true);
                 long bits = original.toNativeBits(); var view = Objects.requireNonNull(registry.transport(original.plus(1))); var interop = InteropLibrary.getUncached();
                 assertTrue(interop.isPointer(view)); assertEquals(bits, interop.asPointer(view)); // C ABI adds the original byte offset
                 interop.toNative(olderBuffer); assertTrue(interop.isPointer(olderBuffer)); assertEquals(bits, interop.asPointer(olderBuffer));
-                var mutableBuffer = Language.currentState(null).cbits().buffer$org_intelligence_thc(ManagedAddress.fromByteArray(new byte[8]), true);
+                var mutableBuffer = Language.currentState(null).cbits().buffer(ManagedAddress.fromByteArray(new byte[8]), true);
                 interop.toNative(mutableBuffer); assertFalse(interop.isPointer(mutableBuffer));
                 // Only a currently live owned transport supplies this test address.
                 // Never reinterpret an arbitrary input integer in the runtime.
@@ -191,7 +191,7 @@ public class NativeAddressTest {
                     var expected = original.rawBacking(); var escaped = new ArrayList<byte[]>(); escaped.add(original.rawBacking()); escaped.add(original.cbitsBacking());
                     if (original == allocation) escaped.add(owner.wholeBytesForPrimitive());
                     // Writable snapshots cannot mutate the original readonly storage.
-                    var oldBuffer = cbits.buffer$org_intelligence_thc(original, true);
+                    var oldBuffer = cbits.buffer(original, true);
                     for (var bytes : escaped) Arrays.fill(bytes, (byte) 0); Arrays.fill(original.rawBacking(), (byte) 0); Arrays.fill(original.cbitsBacking(), (byte) 0);
                     assertArrayEquals(expected, original.rawBacking()); assertFalse(interop.isBufferWritable(oldBuffer));
                     assertThrows(UnsupportedMessageException.class, () -> interop.writeBufferByte(oldBuffer, 0, (byte) 0));
@@ -204,7 +204,7 @@ public class NativeAddressTest {
                         var nativeMemory = MemorySegment.ofAddress(interop.asPointer(view)).reinterpret(expected.length); assertArrayEquals(expected, nativeMemory.toArray(ValueLayout.JAVA_BYTE));
                         assertTrue(registry.recover(bits).sameLocation(original)); interop.toNative(oldBuffer); assertEquals(bits, interop.asPointer(oldBuffer)); Reference.reachabilityFence(view);
                     }
-                    assertSame(oldBuffer, cbits.buffer$org_intelligence_thc(original.plus(1), true));
+                    assertSame(oldBuffer, cbits.buffer(original.plus(1), true));
                 }
                 assertEquals(7L, allocation.readWord8(0)); assertThrows(RuntimeFault.class, () -> allocation.writeAddressElementIndex(0, literal));
                 var pointerOwner = ManagedAllocation.mutable(8, 8); pointerOwner.writeAddressByteOffset(0, literal);
