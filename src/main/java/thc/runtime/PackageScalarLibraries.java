@@ -9,6 +9,8 @@ import com.oracle.truffle.api.TruffleSafepoint;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.exception.AbstractTruffleException;
 import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.llvm.runtime.LLVMContext;
+import com.oracle.truffle.llvm.runtime.NativeContextExtension;
 import org.graalvm.polyglot.io.ByteSequence;
 import thc.Language;
 import thc.PackageScalarLink;
@@ -70,13 +72,17 @@ public final class PackageScalarLibraries {
                         var file = Files.createTempFile("thc-package-native-", link.getFormat().equals("llvm-embedded-mach-o") ? ".dylib" : ".so");
                         try {
                             Files.write(file, link.getNativeLibrary());
-                            // File-backed Sulong loading uses its existing native
-                            // context and retains the library handle. The component
-                            // itself is never loaded as native machine code.
-                            env.parseInternal(Source.newBuilder("llvm", env.getInternalTruffleFile(file.toUri()))
-                                .content(ByteSequence.create(link.getNativeLibrary())).canonicalizePath(false)
-                                .mimeType(link.getFormat().equals("llvm-embedded-mach-o") ? "application/x-mach-binary" : "application/x-sharedlib")
-                                .build()).call();
+                            // Keep ordinary unresolved native functions lazy: an
+                            // archive member can also contain unused RTS wrappers.
+                            // Register LOCAL handles in Sulong's existing context
+                            // registry, never in the process-global namespace.
+                            env.initializeLanguage(env.getInternalLanguages().get("llvm"));
+                            var nativeContext = LLVMContext.get(null).getContextExtensionOrNull(NativeContextExtension.class);
+                            if (nativeContext == null) throw fault("Sulong native library loading is unavailable");
+                            String path = file.toString().replace("\\", "\\\\").replace("\"", "\\\"");
+                            Object handle = env.parseInternal(Source.newBuilder("nfi",
+                                "load(RTLD_LAZY|RTLD_LOCAL) \"" + path + "\"", "package-native").build()).call();
+                            nativeContext.addLibraryHandles(handle);
                         } finally { Files.deleteIfExists(file); }
                     }
                     Object library = env.parseInternal(Source.newBuilder("llvm", ByteSequence.create(link.getBytes()),

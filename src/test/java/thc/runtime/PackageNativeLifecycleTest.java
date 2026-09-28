@@ -12,7 +12,9 @@ import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Set;
 import org.graalvm.polyglot.Context;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -34,6 +36,71 @@ public class PackageNativeLifecycleTest {
         var process = new ProcessBuilder(arguments).redirectErrorStream(true).start();
         var output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
         assertEquals(0, process.waitFor(), output); return output;
+    }
+    private PackageScalarLink companion(byte[] nativeBytes, String body) throws Exception {
+        var source = directory.resolve("companion.c"); var output = directory.resolve("companion.bc");
+        Files.writeString(source, body);
+        command(List.of(System.getenv().getOrDefault("THC_CLANG", "clang"),
+            "--target=x86_64-unknown-linux-gnu", "-O1", "-emit-llvm", "-c", source.toString(), "-o", output.toString()));
+        var bytes = Files.readAllBytes(output);
+        var hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
+        var signature = new PackageScalarSignature("entry", "entry", List.of(), "IntRep");
+        return new PackageScalarLink("native-companion", "x86_64-unknown-linux-gnu", hash, hash,
+            bytes, List.of(signature), "llvm-bitcode", Set.of(), nativeBytes);
+    }
+    private long invoke(PackageScalarLink link) {
+        var registry = Language.currentState().getPackageCbits(); registry.link(link); registry.link(link);
+        var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+        return (long) new Entry(language, new PackageScalarCall(link, link.getAbi().getFirst())).getCallTarget().call();
+    }
+    @Test public void nativeCompanionsDeferUnusedReferencesWithoutSharingProvidersBetweenContexts() throws Exception {
+        assumeTrue(System.getProperty("os.name").equals("Linux") && System.getProperty("os.arch").equals("amd64"));
+        var source = directory.resolve("dependency.c"); var output = directory.resolve("dependency.so");
+        Files.writeString(source, """
+            extern long missing_native_service(void);
+            long unused_wrapper(void) { return missing_native_service(); }
+            static long state;
+            __attribute__((constructor)) static void initialize(void) { state = 30; }
+            long next_value(void) { return ++state; }
+            """);
+        command(List.of(System.getenv().getOrDefault("THC_CLANG", "clang"),
+            "-O1", "-shared", "-fPIC", source.toString(), "-o", output.toString()));
+        var bytes = Files.readAllBytes(output);
+        var link = companion(bytes, "extern long next_value(void); static long calls; long entry(void) { return next_value() + 100 * ++calls; }");
+        try (var first = Context.newBuilder("thc").allowNativeAccess(true).build();
+             var second = Context.newBuilder("thc").allowNativeAccess(true).build()) {
+            first.initialize("thc"); second.initialize("thc");
+            first.enter(); try { assertEquals(131L, invoke(link)); } finally { first.leave(); }
+            second.enter(); try { assertEquals(131L, invoke(link)); } finally { second.leave(); }
+            first.enter(); try { assertEquals(232L, invoke(link)); } finally { first.leave(); }
+            second.enter(); try { assertEquals(232L, invoke(link)); } finally { second.leave(); }
+        }
+        try (var forbidden = Context.newBuilder("thc").build()) {
+            forbidden.initialize("thc"); forbidden.enter();
+            try { assertThrows(RuntimeFault.class, () -> Language.currentState().getPackageCbits().link(link)); }
+            finally { forbidden.leave(); }
+        }
+        var missing = companion(bytes, "extern long absent_companion_target(void); long entry(void) { return absent_companion_target(); }");
+        try (var context = Context.newBuilder("thc").allowNativeAccess(true).build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var registry = Language.currentState().getPackageCbits(); registry.link(missing);
+                var function = registry.resolve(missing, missing.getAbi().getFirst()).getReceiver();
+                var failure = assertThrows(Exception.class, () -> com.oracle.truffle.api.interop.InteropLibrary.getUncached().execute(function));
+                assertTrue(failure.getMessage().contains("absent_companion_target"), failure.toString());
+            } finally { context.leave(); }
+        }
+    }
+    /** Optional replay of an already acquired real native companion, not reacquisition. */
+    @Test public void installedCompanionLoadsAndCallsOrdinaryCDespiteUnusedRuntimeReferences() throws Exception {
+        var path = System.getenv("THC_TEST_NATIVE_COMPANION"); assumeTrue(path != null);
+        // Original PrelIOUtils.c declares const char *localeEncoding(void).
+        var link = companion(Files.readAllBytes(Path.of(path)),
+            "extern const char *localeEncoding(void); long entry(void) { const char *s = localeEncoding(); return s && *s; }");
+        try (var context = Context.newBuilder("thc").allowNativeAccess(true).build()) {
+            context.initialize("thc"); context.enter();
+            try { assertEquals(1L, invoke(link)); } finally { context.leave(); }
+        }
     }
     @ParameterizedTest @ValueSource(booleans = {false, true})
     public void constructorsRunOncePerContextAndNormalCloseRunsDestructors(boolean cxx) throws Exception {

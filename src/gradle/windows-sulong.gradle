@@ -94,6 +94,7 @@ configurations.configureEach {
     }
 }
 dependencies {
+    add("compileOnly", files(windowsSulongJar.flatMap { it.archiveFile }))
     add("runtimeOnly", files(windowsSulongJar.flatMap { it.archiveFile }))
     // Preserve the replaced binary's POM dependencies; truffle-api is already
     // supplied by the project's pinned materializable-API artifact.
