@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.bytecode.ContinuationResult;
 import com.oracle.truffle.api.frame.FrameDescriptor;
@@ -26,18 +25,8 @@ public final class TailCallRepeatingNode extends Node implements RepeatingNode {
     @Override public boolean executeRepeating(VirtualFrame frame) {
         try {
             if (metrics.getEnabled()) metrics.incrementTrampolineIterations();
-            Object targetValue = frame.getObject(FrameLayout.TAIL_FUNCTION);
-            if (targetValue == null) {
-                CompilerDirectives.transferToInterpreter();
-                throw new NullPointerException("null cannot be cast to non-null type com.oracle.truffle.api.RootCallTarget");
-            }
-            RootCallTarget target = (RootCallTarget) targetValue;
-            Object transferValue = frame.getObject(FrameLayout.TAIL_ARGUMENTS);
-            if (transferValue == null) {
-                CompilerDirectives.transferToInterpreter();
-                throw new NullPointerException("null cannot be cast to non-null type thc.runtime.TailCall");
-            }
-            TailCall transfer = (TailCall) transferValue;
+            RootCallTarget target = ColdCallChecks.target(frame.getObject(FrameLayout.TAIL_FUNCTION));
+            TailCall transfer = ColdCallChecks.transfer(frame.getObject(FrameLayout.TAIL_ARGUMENTS));
             Object[] arguments = transfer.getArgs();
             frame.setObject(FrameLayout.TAIL_FUNCTION, null);
             frame.setObject(FrameLayout.TAIL_ARGUMENTS, null);
@@ -45,12 +34,7 @@ public final class TailCallRepeatingNode extends Node implements RepeatingNode {
             Object result;
             if (input != null) {
                 input.getLayout().setLong(input, 0, 0L);
-                var root = target.getRootNode();
-                if (root == null) {
-                    CompilerDirectives.transferToInterpreter();
-                    throw new NullPointerException("null cannot be cast to non-null type thc.runtime.GuestRoot");
-                }
-                TypedInputLayout layout = ((GuestRoot) root).getTypedInput();
+                TypedInputLayout layout = ColdCallChecks.guestRoot(target.getRootNode()).getTypedInput();
                 if (layout == null) throw fault("Target has no typed input entry");
                 long generation = input.getGeneration();
                 try { result = dispatch.call(target, new Object[] {input}); }

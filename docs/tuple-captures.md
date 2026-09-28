@@ -24,9 +24,10 @@ tag/payload fields, including lazy references and inactive null padding. The
 [four-way native fixture](aggregate-heap-fields.md#four-way-and-nested-aggregate-fixture)
 checks nested producer/consumer captures and heap storage.
 
-Ordinary aggregate let/global storage, sums inside sum payloads, unresolved
-layouts and public host aggregate parameters/results remain unsupported. Sum
-captures are described [separately](sum-inputs.md); local tuple joins keep using
+Recursive or lifted aggregate lets, global aggregate storage and unresolved
+layouts remain unsupported. The [Core host ABI](site/embedding.md#load-a-core-entry)
+transports supported aggregates as logical arrays. Sum captures are described
+[separately](sum-inputs.md); local tuple joins keep using
 their [same-frame capture path](tuple-joins.md).
 
 ## Reproduce

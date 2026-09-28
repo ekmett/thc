@@ -37,14 +37,16 @@ public final class MutVarModifySite {
 
     private static final class ModifyApplicationRoot extends GuestRoot {
         private final CaptureLayout layout;
+        private final boolean async;
         @Child private Dispatch dispatch;
         @Child private Force force;
         ModifyApplicationRoot(TruffleLanguage<?> language, CaptureLayout layout, Metrics metrics, boolean async) {
             super(language, new FrameLayout().build());
-            this.layout = layout;
+            this.layout = layout; this.async = async;
             dispatch = Dispatch.create(1, false, metrics);
             force = new Force(metrics, async);
         }
+        @Override public boolean getAsynchronousExceptions() { return async; }
         @Override public long bloom(VirtualFrame frame) { return (Long) frame.getArguments()[0] | mask; }
         private final class ResumeDispatch implements AstResumeStep {
             private final Object old;
@@ -90,10 +92,12 @@ public final class MutVarModifySite {
     }
     private static final class ModifySelectorRoot extends GuestRoot {
         private final CaptureLayout layout;
+        private final boolean async;
         @Child private Force force;
         ModifySelectorRoot(TruffleLanguage<?> language, CaptureLayout layout, Metrics metrics, boolean async) {
-            super(language, new FrameLayout().build()); this.layout = layout; force = new Force(metrics, async);
+            super(language, new FrameLayout().build()); this.layout = layout; this.async = async; force = new Force(metrics, async);
         }
+        @Override public boolean getAsynchronousExceptions() { return async; }
         @Override public long bloom(VirtualFrame frame) { return (Long) frame.getArguments()[0] | mask; }
         private AstContinuation suspended(VirtualFrame frame, ThunkSuspended signal, AstResumeStep next) {
             CompilerDirectives.transferToInterpreterAndInvalidate();

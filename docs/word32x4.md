@@ -21,10 +21,12 @@ A high unsigned lane must not become a negative scalar.
 
 Guest vector arguments/results, PAP prefixes, joins, tuple fields, nonrecursive
 unlifted lets, owned captures and boxed constructor fields are supported.
-Public host vector arguments/results, recursive or lifted vector lets, and
-sum fields remain unsupported; see the [SIMD transport contract](simd.md).
-The scalar-observation fixtures below keep vectors local. Their
-`vectorArgument` negative tests the public host boundary, not guest calls.
+Exact vector fields in supported sums and raw JDK vectors at the
+[Core host boundary](site/embedding.md#load-a-core-entry) are also supported.
+Recursive or lifted vector lets remain unsupported; see the
+[SIMD transport contract](simd.md). The scalar-observation fixtures below
+keep vectors local. Their `vectorArgument` negative checks the separate
+auditor's scalar-entry restriction.
 
 Canonical `word32` literals use 0..4,294,967,295. After lowering, integral
 narrow annotations share an `Int` carrier and the literal tag supplies narrowing.

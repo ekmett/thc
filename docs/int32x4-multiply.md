@@ -12,8 +12,9 @@ each arithmetic operation. Wrong signedness, width, arity or liftedness is
 rejected at lowering.
 
 The [SIMD transport contract](simd.md) covers guest arguments/results, tuple
-leaves, joins, PAP prefixes and owned captures/heap fields. Public host vector
-arguments/results remain unsupported.
+leaves, joins, PAP prefixes and owned captures/heap fields. The
+[Core host ABI](site/embedding.md#load-a-core-entry) also accepts and returns
+exact raw JDK vectors.
 
 ## Reproducible checks
 
@@ -35,8 +36,8 @@ Scalar-host roots observe each lane and weighted checksums through direct,
 scalar-helper and tuple-helper paths. Boundary controls include overflow,
 negative products and independent signed narrowing.
 
-The genuine `vectorArgument` negative tests public host admission, not guest
-vector formals. Separately labeled metadata mutations test signed/unsigned
+The genuine `vectorArgument` negative tests the separate auditor's
+scalar-entry restriction, not runtime Core host vector admission. Separately labeled metadata mutations test signed/unsigned
 proof mismatches; they are not original Core or native oracle inputs.
 
 `build/simd-int32x4-multiply/provenance.json` records commands, toolchain,

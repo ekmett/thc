@@ -237,13 +237,14 @@ public final class Program implements ExecutableProgram {
             if (proof.isTypedTransport()) {
                 TupleShape shape = new TupleShape(proof, (thc.Language) language);
                 int[] slots = new int[shape.getWidth()];
-                for (int i = 0; i < slots.length; i++) { slots[i] = layout.bind("<async operand field " + i + ">"); temporaries.add(slots[i]); }
+                for (int i = 0; i < slots.length; i++) {
+                    slots[i] = layout.bind("<async operand field " + i + ">", FrameLayout.carrierKind(shape.getLeaves()[i]));
+                    temporaries.add(slots[i]);
+                }
                 bindings.add(new LocalBinding(-1, value, false, slots));
                 return proof.isVector() ? new VectorLocalRead(shape, slots) : new TupleLocalRead(shape, slots);
             }
-            FrameSlotKind kind = proof.isInt() ? FrameSlotKind.Int : proof.isLong() ? FrameSlotKind.Long :
-                proof.isFloat() ? FrameSlotKind.Float : proof.isDouble() ? FrameSlotKind.Double :
-                proof.isEvaluatedReference() ? FrameSlotKind.Object : FrameSlotKind.Illegal;
+            FrameSlotKind kind = FrameLayout.carrierKind(proof);
             int slot = layout.bind("<async operand " + bindings.size() + ">", kind);
             temporaries.add(slot);
             bindings.add(new LocalBinding(slot, value, proof.isLong()));
@@ -530,6 +531,7 @@ public final class Program implements ExecutableProgram {
             rootSource(body), entryStrict, handoff, tuple, tupleSlots, inputLayout, enableAsync, environmentVectorSlots,
             delimited, role, outlineCaseArms || deferDefaultArm,
             scope.deferredArms != null && !scope.deferredArms.isEmpty(), false);
+        root.configureInputProofs(inputProofs);
         if (scope.deferredArms != null) for (DeferredArm candidate : scope.deferredArms) {
             AstDeferredArm.PreparedBody prepared = new AstDeferredArm.PreparedBody(
                 candidate.node.getRepresentation(), candidate.node.getCoreSourceLocation());
@@ -845,7 +847,8 @@ public final class Program implements ExecutableProgram {
     private Expr compileTupleCase(List<Object> expr, Expr scrutinee, CoreRepresentation proof, Scope local, boolean tail) {
         TupleShape shape = new TupleShape(proof, (thc.Language) language);
         int[] slots = new int[shape.getWidth()];
-        for (int i = 0; i < slots.length; i++) slots[i] = local.layout.bind("<tuple case " + i + ">");
+        for (int i = 0; i < slots.length; i++) slots[i] = local.layout.bind("<tuple case " + i + ">",
+            FrameLayout.carrierKind(shape.getLeaves()[i]));
         local.bindTuple((String) expr.get(2), proof, slots);
         List<List<Object>> alternatives = (List<List<Object>>) expr.get(3);
         if (alternatives.isEmpty()) return new TupleCase(scrutinee, slots, new EmptyCaseResult(CoreRepresentations.expression(expr)));
@@ -1195,7 +1198,7 @@ public final class Program implements ExecutableProgram {
         if (binderProof.isTuple()) return compileTupleCase(expr, scrutinee, binderProof, local, tail);
         if (binderProof.isVector()) return compileVectorCase(expr, scrutinee, binderProof, local, tail);
         int binder = local.bind((String) expr.get(2), !binderProof.getPresent() || binderProof.isLong(), binderProof,
-            false, null, null, outlinedSlotKind(binderProof, false)).slot;
+            false, null, null, FrameLayout.carrierKind(binderProof)).slot;
         List<List<Object>> rawAlternatives = (List<List<Object>>) expr.get(3);
         Alternative[] alternatives = new Alternative[rawAlternatives.size()];
         List<CoreRepresentation> results = new ArrayList<>();

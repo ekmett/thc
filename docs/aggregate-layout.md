@@ -13,12 +13,13 @@ supported leaves, shapes and ownership rules.
 | Local join inputs and lexical captures | [Parallel same-frame moves](tuple-joins.md) | [Parallel tag/payload moves](sum-inputs.md) |
 | Local join results | [Local typed destinations](tuple-results.md) | [Local tag/payload destinations](sum-results.md) |
 | Saturated boxed-constructor fields | [Owned aggregate fields](aggregate-heap-fields.md) | [Owned aggregate fields](aggregate-heap-fields.md) |
+| Polyglot Core entries | [Logical field arrays](site/embedding.md#load-a-core-entry) | [Tag/payload arrays](site/embedding.md#load-a-core-entry) |
 
-Ordinary aggregate let/global storage and public host aggregate parameters/results
-remain unsupported. Exact sums with two or more alternatives can occur inside
-recursive tuple components. Sums inside sum payloads, unresolved layouts and
-unsupported physical leaves remain rejected; sum payloads have narrower leaf
-support than tuples.
+Nonrecursive unlifted aggregate lets use typed frame locals. Recursive or lifted
+aggregate lets and global aggregate storage remain unsupported. Exact sums with
+two or more alternatives can occur inside recursive tuples and supported sum
+payloads. Unresolved layouts and unsupported physical leaves remain rejected;
+sum payloads have narrower leaf support than tuples.
 Aggregate-field constructor workers require direct saturated applications.
 Boxed-constructor support includes the original compiler's unpacked `BoxedRep`
 payload, not arbitrary aggregate heap storage. The metadata fixtures below test

@@ -18,9 +18,10 @@ occur inside recursive tuples: their physical tag/payload slots expand at that
 logical component without changing neighbouring offsets. An exact evaluated
 `AddrRep` leaf carries only a checked `ManagedAddress`, never a native pointer.
 Nonrecursive unlifted tuple/sum lets evaluate their right-hand side once into
-typed frame locals, even when unused. Recursive or lifted aggregate lets, global
-aggregate storage and aggregate parameters/results at the public host entry remain
-rejected. [Tuple closure/thunk captures](tuple-captures.md) preserve owned
+typed frame locals, even when unused. Recursive or lifted aggregate lets and
+global aggregate storage remain rejected. The [Core host ABI](site/embedding.md#load-a-core-entry)
+uses recursive logical arrays for supported aggregate arguments and results.
+[Tuple closure/thunk captures](tuple-captures.md) preserve owned
 physical fields and exact logical nesting. [Local tuple-join arguments](tuple-joins.md)
 use the same logical layouts but parallel moves within the current frame.
 Saturated boxed constructors support [owned tuple/sum fields](aggregate-heap-fields.md).

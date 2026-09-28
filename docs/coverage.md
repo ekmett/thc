@@ -62,8 +62,9 @@ generic scalar call boundaries still use Truffle's Object ABI.
 
 [SIMD transport](simd.md) supports 30 exact `VecRep` shapes through guest
 arguments/results, PAPs, joins, tuple fields and owned heap fields. Activation
-transport uses raw fixed-species JDK vectors. Public host vector arguments and
-results remain unsupported. The [family inventory](simd-families.md) distinguishes
+transport uses raw fixed-species JDK vectors, also accepted as arguments and
+results by the [Core host ABI](site/embedding.md#load-a-core-entry).
+The [family inventory](simd-families.md) distinguishes
 the complete operation coverage from focused foundation fixtures:
 [FloatX4](floatx4.md), [DoubleX2](doublex2.md), [Int16X8](int16x8.md),
 [Int8X16](int8x16.md), [Word8X16](word8x16.md), [Word16X8](word16x8.md),
