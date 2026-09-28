@@ -20,6 +20,12 @@ final class CoreCapiProvenance {
             BiFunction<String, String, ForeignBitcode> resolve) {
         var calls = new LinkedHashMap<Owner, List<Object>>();
         for (Map<?, ?> call : PackageNativeArchive.calls(binding)) {
+            // Newly acquired packages use the ordinary component linker. Old
+            // captured clock artifacts still retain their original CAPI route.
+            if (call.get("target") instanceof Map<?, ?> target && input.get("packageScalarLinks") instanceof List<?> nativeLinks
+                    && nativeLinks.stream().anyMatch(value -> value instanceof PackageScalarLink link
+                        && link.getUnit().equals(target.get("unit")) && link.getAbi().stream().anyMatch(signature ->
+                            signature.symbol().equals(target.get("symbol")) && signature.convention().equals(call.get("convention"))))) continue;
             Owner owner = owner(call);
             if (owner != null) {
                 calls.computeIfAbsent(owner, ignored -> new ArrayList<>())

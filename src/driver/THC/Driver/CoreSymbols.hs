@@ -266,7 +266,7 @@ project keys (Object fields) = Object (KM.filterWithKey (\key _ -> key `elem` ke
 project _ _ = Object KM.empty
 
 hasDeclarations :: Value -> Bool
-hasDeclarations value = any nonempty ["imports","addresses"]
+hasDeclarations value = member value "packageNativeLink" /= Nothing || any nonempty ["imports","addresses"]
   where nonempty key = case member value "staticForeignImports" >>= (`member` key) of
           Just (Array entries) -> not (null entries)
           _ -> False

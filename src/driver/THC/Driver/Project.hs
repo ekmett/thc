@@ -58,14 +58,13 @@ import THC.Driver.Cabal (PlanOptions(..))
 import THC.Driver.Cache (coreCacheDirectory)
 import THC.Driver.CoreIndex (packageModules, modulePaths, moduleEntries)
 import THC.Driver.CoreSymbols (publishCoreUnit)
-import THC.Driver.ForeignBitcode (linkClockGetTime, timeClockHeaders)
 import THC.Driver.GhcProxy (ghcProxyCommand, ghcProxyWindowsCommand)
 import THC.Driver.NativeRecipe (NativeRecipe(..), componentRoots, componentNativeObjects,
   readNativeRecipe, ensureNativeRecipes, componentRuntimeShim, componentDeclaredModules, componentHomeInterfaces)
 import THC.Driver.ScalarBitcode (ScalarBitcode, scalarBuildInputs, linkScalarBitcode)
 import THC.Driver.RuntimeShim (RuntimeShim, withRuntimeShim, runtimeShimInputs, validateRuntimeShimModules, foreignExceptionBridgeUnit)
 import THC.Driver.PackageNative (captureNativeObject, capturePackageNative, finishPackageNative,
-  finishPackageNativeWithDependencies)
+  finishPackageNativeWithDependencies, linkInstalledNative)
 import THC.Driver.NativeDependencies (readCOnlyProduct)
 import THC.Driver.NativeCache (nativeToolIdentity, nativePieceIdentity)
 import THC.Driver.Installed
@@ -862,67 +861,64 @@ acquireInstalledBundle verify cache staging recipe driverHash context registrati
   case acquired of
     Left missing -> pure (Left missing)
     Right core -> do
-      helperHash <- digestFile (installedHelper context)
-      requireFile recipe
-      recipeHash <- digestFile recipe
-      (rtsRegistration, includes) <- installedLayoutHeaders context registrationUnit
-      compilerId <- field (installedCompiler context) "id" :: IO String
-      compilerAbi <- field (installedCompiler context) "abi" :: IO String
-      compilerPlatform <- field (installedCompiler context) "platform" :: IO String
-      clockHeaders <- if "-linux" `isSuffixOf` compilerPlatform &&
-        any ((== "Data.Time.Clock.Internal.CTimespec") . fst) (coreModules core)
-        then timeClockHeaders (installedLibdir context) includes else pure []
-      let cacheName value = not (null value) &&
-            all (\c -> isAlphaNum c || c `elem` ("-._" :: String)) value
-          registered = registeredId registrationUnit
-      require (all cacheName [compilerId, compilerAbi, compilerPlatform, registered])
-        "installed Core compiler or registered package-cache identity is invalid"
-      let unit = coreOwner core
-          modules = sortOn fst (coreModules core)
-          inputFields = ["format" .= ("thc-core-build-inputs" :: String), "schema" .= (1 :: Int),
-            "unit" .= unit, "compiler" .= installedCompiler context,
-            "component" .= object ["kind" .= ("installed-interface" :: String),
-                                   "registration" .= installedProvenance context registrationUnit],
-            "rtsRegistration" .= rtsRegistration,
-            "recipeArtifacts" .= [object ["path" .= ("src/driver/cbits/target-layout.c" :: String),
-                                           "sha256" .= recipeHash]],
-            "nativeArtifacts" .= [object ["path" .= path, "sha256" .= digest] | (path, digest) <- clockHeaders],
-            "generatedCore" .= [object ["module" .= name, "sha256" .= shaHex bytes] | (name, bytes) <- modules],
-            "dependencies" .= installedDepends registrationUnit]
-          buildKey = shaHex (BL.toStrict (encode (object inputFields)))
-          exporter = object (["helperHash" .= helperHash, "driverHash" .= driverHash,
-                             "options" .= (["post-tidy", "unit-qualified", "source-notes", "dynamic"] :: [String])] ++
-                             ["foreignLinkRecipe" .= ("original-capi-llvm-v5" :: String)
-                             | any ((`elem` ["System.CPUTime.Posix.ClockGetTime", "Data.Time.Clock.Internal.CTimespec"]) . fst) modules])
-          exportKey = shaHex (BL.toStrict (encode ("thc-installed-interface-v2" :: String, buildKey, exporter)))
-          inputs = object (inputFields ++ ["buildKey" .= buildKey, "exportKey" .= exportKey, "exporter" .= exporter])
-          directory = cache </> "core-bundles/v1" </>
-            (compilerId ++ "-" ++ compilerAbi ++ "-" ++ compilerPlatform) </> exportKey
-          destination = directory </> (registered ++ ".zip")
-      createDirectoryIfMissing True directory
-      bundle <- withLock (destination ++ ".lock") $ do
-        present <- doesFileExist destination
-        cached <- if present then readBundle verify TargetLayoutBundle destination unit buildKey exportKey inputs (map fst modules)
-                  else pure Nothing
-        case cached of
-          Just hit -> pure hit
-          Nothing -> do
-            createDirectoryIfMissing True staging
-            (temporary, handle) <- openTempFile staging "installed-layout-"
-            hClose handle
-            removeFile temporary
-            createDirectory temporary
-            (do
+      createDirectoryIfMissing True staging
+      (temporary, handle) <- openTempFile staging "installed-native-"
+      hClose handle
+      removeFile temporary
+      createDirectory temporary
+      (do
+        helperHash <- digestFile (installedHelper context)
+        requireFile recipe
+        recipeHash <- digestFile recipe
+        (rtsRegistration, includes) <- installedLayoutHeaders context registrationUnit
+        compilerId <- field (installedCompiler context) "id" :: IO String
+        compilerAbi <- field (installedCompiler context) "abi" :: IO String
+        compilerPlatform <- field (installedCompiler context) "platform" :: IO String
+        let cacheName value = not (null value) &&
+              all (\c -> isAlphaNum c || c `elem` ("-._" :: String)) value
+            registered = registeredId registrationUnit
+            unit = coreOwner core
+            modules = sortOn fst (coreModules core)
+            nativeDirectory = temporary </> "native-link"
+            arguments = ["-no-user-package-db"] ++
+              concatMap (\path -> ["-package-db", path]) (installedDatabases context) ++
+              ["-package-id", registered] ++ map ("-I" ++) includes
+        require (all cacheName [compilerId, compilerAbi, compilerPlatform, registered])
+          "installed Core compiler or registered package-cache identity is invalid"
+        linked <- linkInstalledNative (installedGhc context) (installedLibdir context)
+          arguments nativeDirectory unit modules
+        nativeArtifacts <- installedNativeArtifacts nativeDirectory
+        let inputFields = ["format" .= ("thc-core-build-inputs" :: String), "schema" .= (1 :: Int),
+              "unit" .= unit, "compiler" .= installedCompiler context,
+              "component" .= object ["kind" .= ("installed-interface" :: String),
+                                     "registration" .= installedProvenance context registrationUnit],
+              "rtsRegistration" .= rtsRegistration,
+              "recipeArtifacts" .= [object ["path" .= ("src/driver/cbits/target-layout.c" :: String),
+                                             "sha256" .= recipeHash]],
+              "nativeArtifacts" .= nativeArtifacts,
+              "generatedCore" .= [object ["module" .= name, "sha256" .= shaHex bytes] | (name, bytes) <- modules],
+              "dependencies" .= installedDepends registrationUnit]
+            buildKey = shaHex (BL.toStrict (encode (object inputFields)))
+            exporter = object ["helperHash" .= helperHash, "driverHash" .= driverHash,
+              "options" .= (["post-tidy", "unit-qualified", "source-notes", "dynamic"] :: [String]),
+              "foreignLinkRecipe" .= ("installed-native-fcall-v1" :: String)]
+            exportKey = shaHex (BL.toStrict (encode ("thc-installed-interface-v2" :: String, buildKey, exporter)))
+            inputs = object (inputFields ++ ["buildKey" .= buildKey, "exportKey" .= exportKey, "exporter" .= exporter])
+            directory = cache </> "core-bundles/v1" </>
+              (compilerId ++ "-" ++ compilerAbi ++ "-" ++ compilerPlatform) </> exportKey
+            destination = directory </> (registered ++ ".zip")
+        createDirectoryIfMissing True directory
+        bundle <- withLock (destination ++ ".lock") $ do
+          present <- doesFileExist destination
+          cached <- if present then readBundle verify TargetLayoutBundle destination unit buildKey exportKey inputs (map fst modules)
+                    else pure Nothing
+          case cached of
+            Just hit -> pure hit
+            Nothing -> do
               layout <- readJson =<< probeTargetLayout includes recipe temporary
               require (validTargetLayout layout &&
                        jsonField layout "targetPlatform" == Just compilerPlatform)
                 "installed GHC target layout differs from selected compiler"
-              linked <- forM modules $ \(name, bytes) -> do
-                result <- linkClockGetTime (installedLibdir context) includes staging
-                  compilerPlatform unit name bytes
-                pure (name, result)
-              currentClockHeaders <- if null clockHeaders then pure [] else timeClockHeaders (installedLibdir context) includes
-              require (currentClockHeaders == clockHeaders) "Selected time headers changed during installed acquisition"
               (refs, members) <- packageModules
                 [(name, "core/" ++ show index ++ ".json", bytes)
                 | (index, (name, bytes)) <- zip [0 :: Int ..] linked]
@@ -940,11 +936,31 @@ acquireInstalledBundle verify cache staging recipe driverHash context registrati
               -- Keep an existing file intact until the complete replacement is ready.
               atomicBytes destination (BL.toStrict archive)
               rememberFreshBundle TargetLayoutBundle unit exportKey inputs (map fst modules)
-                (Bundle destination (shaHex (BL.toStrict archive)) refs buildKey []))
-              `finally` removePathForcibly temporary
-      let result = InstalledBundle unit bundle
-      remember result inputs modules
-      pure (Right result)
+                (Bundle destination (shaHex (BL.toStrict archive)) refs buildKey [])
+        let result = InstalledBundle unit bundle
+        remember result inputs modules
+        pure (Right result)) `finally` removePathForcibly temporary
+
+-- Reuse the compiler's actual dependency inventory. Generated translation units
+-- are embedded in the component receipt; only external files survive staging
+-- and belong in the existing installed-probe invalidation path.
+installedNativeArtifacts :: FilePath -> IO [Value]
+installedNativeArtifacts directory = do
+  let path = directory </> "native/inputs.json"
+  exists <- doesFileExist path
+  if not exists then pure [] else do
+    root <- canonicalizePath directory
+    inputs <- readJson path
+    sources <- field inputs "sources" :: IO [Value]
+    files <- concat <$> mapM (\source -> field source "files") sources :: IO [Value]
+    external <- filterM (\file -> not . within root <$> (field file "path" :: IO FilePath)) files
+    let unique = nub external
+    forM_ unique $ \file -> do
+      filePath <- field file "path"
+      expected <- field file "sha256"
+      actual <- digestFile filePath
+      require (actual == expected) "native header changed during installed acquisition"
+    pure unique
 
 installedRecords :: InstalledUnit -> InstalledBundle -> [Value]
 installedRecords registrationUnit artifact =

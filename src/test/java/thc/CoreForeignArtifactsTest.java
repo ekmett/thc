@@ -62,6 +62,17 @@ class CoreForeignArtifactsTest {
                 map("foreignCall", with(capiCall(), "target", map("unit", CAPI_UNIT, "symbol", "unknown")))))
             assertEquals(original, CoreCapiProvenance.supplement(original, binding, (unit, module) -> { throw new AssertionError("Cold header opened"); }));
     }
+    @Test void genericComponentDoesNotReopenLegacyClockLink() {
+        var signature = new PackageScalarSignature(CAPI_SYMBOL, "compiled_adapter", List.of(), "Int32Rep", "capi", "unsafe");
+        // Routing control only: no LLVM is executed by this test.
+        var link = new PackageScalarLink(CAPI_UNIT, "model", "model", "model", new byte[]{0x42, 0x43}, List.of(signature));
+        var input = map("foreignLinks", List.of(), "packageScalarLinks", List.of(link));
+        assertEquals(input, CoreCapiProvenance.supplement(input, map("foreignCall", capiCall()),
+            (unit, module) -> { throw new AssertionError("Generic CAPI reopened its retired clock profile"); }));
+        var missing = with(input, "packageScalarLinks", List.of());
+        assertThrows(IllegalArgumentException.class, () -> CoreCapiProvenance.supplement(missing,
+            map("foreignCall", capiCall()), (unit, module) -> null));
+    }
     private String sha(byte[] bytes) throws Exception { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes)); }
     private Map<String, Object> scalar(String primitive, boolean evaluated) {
         return map("kind", primitive == null ? "void" : primitive.equals("AddrRep") ? "address" : "long",
