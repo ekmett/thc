@@ -297,36 +297,47 @@ def bytecode_nodes(fs):
     return '\n'.join(lines)+'\n'
 
 
-def bytecode_emitter(fs):
-    lines=['    private fun generatedVectorPrimitive(name: String, operands: List<Expression>, shuffleIndices: IntArray?): Expression = when (name) {']
+
+
+def java_bytecode_emitter(fs):
+    lines = ['    private Expression generatedVectorPrimitive(String name, List<Expression> operands, int[] shuffleIndices) {',
+             '        return switch (name) {']
     for f in fs:
-        n=f['name'];count=f['lanes']
+        n, count = f['name'], f['lanes']
         for op in f['operations']:
-            node=f'Generated{n}{op.capitalize()}'
-            if op=='shuffle':
-                lines += [f'        "{op}{n}#" -> run {{',
-                          f'            val shuffle = jdk.incubator.vector.VectorShuffle.fromArray(jdk.incubator.vector.{species(f)}, shuffleIndices ?: fault("Missing shuffle indices"), 0)',
-                          '            ProvenExpression(Expression { e ->',
-                          f'                e.builder.begin{node}(shuffle)',
-                          '                operands[0].emit(e); operands[1].emit(e)',
-                          f'                e.builder.end{node}()',
-                          f'            }}, GeneratedVectors.proof{n})', '        }']
-            elif op=='unpack':
-                lines += [f'        "{op}{n}#" -> tupleExpression(GeneratedVectors.unpacked{n}) {{ e, destination ->',
-                          f'            e.builder.begin{node}(' +
-                          ('BytecodeVectorLanes(destination.map(LocalAccessor::constantOf).toTypedArray())' if count > 8 else ', '.join(f'destination[{i}]' for i in range(count))) + ')',
-                          '            operands[0].emit(e)',f'            e.builder.end{node}()','        }']
+            node = f'Generated{n}{op.capitalize()}'
+            if op == 'shuffle':
+                lines += [f'            case "{op}{n}#" -> {{',
+                          '                if (shuffleIndices == null) throw RuntimeFault.fault("Missing shuffle indices");',
+                          f'                var shuffle = jdk.incubator.vector.VectorShuffle.fromArray(jdk.incubator.vector.{species(f)}, shuffleIndices, 0);',
+                          '                yield new ProvenExpression(e -> {',
+                          f'                    e.builder.begin{node}(shuffle);',
+                          '                    operands.get(0).emit(e); operands.get(1).emit(e);',
+                          f'                    e.builder.end{node}();',
+                          f'                }}, GeneratedVectors.proof{n});', '            }']
+            elif op == 'unpack':
+                lanes = ('new BytecodeVectorLanes(accessors(destination))' if count > 8
+                         else ', '.join(f'destination.get({i})' for i in range(count)))
+                lines += [f'            case "{op}{n}#" -> tupleExpression(GeneratedVectors.unpacked{n}, (e, destination) -> {{',
+                          f'                e.builder.begin{node}({lanes});',
+                          '                operands.get(0).emit(e);',
+                          f'                e.builder.end{node}();', '            });']
             else:
-                lines += [f'        "{op}{n}#" -> ProvenExpression(Expression {{ e ->','            val b = e.builder']
-                if op=='pack':
-                    emit = (f'            b.emit{node}(BytecodeVectorLanes(lanes.map(LocalAccessor::constantOf).toTypedArray()))' if count > 8 else
-                            f'            b.begin{node}(); lanes.forEach(b::emitLoadLocal); b.end{node}()')
-                    lines += ['            b.beginBlock()',f'            val lanes = List({count}) {{ b.createLocal() }}','            operands[0].emitTuple(e, lanes)',emit,'            b.endBlock()']
+                lines += [f'            case "{op}{n}#" -> new ProvenExpression(e -> {{',
+                          '                var b = e.builder;']
+                if op == 'pack':
+                    emit = (f'                b.emit{node}(new BytecodeVectorLanes(accessors(lanes)));' if count > 8
+                            else f'                b.begin{node}(); for (var lane : lanes) b.emitLoadLocal(lane); b.end{node}();')
+                    lines += ['                b.beginBlock();',
+                              '                var lanes = new ArrayList<BytecodeLocal>();',
+                              f'                for (int i = 0; i < {count}; ++i) lanes.add(b.createLocal());',
+                              '                operands.get(0).emitTuple(e, lanes);', emit, '                b.endBlock();']
                 else:
-                    lines += [f'            b.begin{node}(); operands.forEach {{ it.emit(e) }}; b.end{node}()']
-                lines += [f'        }}, GeneratedVectors.proof{n})']
-    lines += ['        else -> throw UnsupportedCore("Unsupported generated vector primitive $name")','    }']
-    return '\n'.join(lines)+'\n'
+                    lines += [f'                b.begin{node}(); for (var operand : operands) operand.emit(e); b.end{node}();']
+                lines += [f'            }}, GeneratedVectors.proof{n});']
+    lines += ['            default -> throw new UnsupportedCore("Unsupported generated vector primitive " + name);',
+              '        };', '    }']
+    return '\n'.join(lines) + '\n'
 
 
 def fixture_sources(fs):
@@ -578,7 +589,7 @@ def main():
     args=parser.parse_args();fs=families()
     if args.verify_ghc:verify_ghc(fs)
     region(ROOT/'src/main/java/thc/runtime/BytecodeRoot.java',bytecode_nodes(fs),args.write)
-    region(ROOT/'src/main/kotlin/thc/runtime/BytecodeProgram.kt',bytecode_emitter(fs),args.write)
+    region(ROOT/'src/main/java/thc/runtime/BytecodeProgram.java', java_bytecode_emitter(fs), args.write)
     outputs={'java/thc/runtime/GeneratedVectors.java':proof_code(fs),'java/thc/runtime/GeneratedVectorExpressions.java':ast_code(fs)}
     outputs.update(fixture_sources(fs))
     outputs.update(smoke_sources(fs))
