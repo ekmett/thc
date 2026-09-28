@@ -171,7 +171,8 @@ class AddressFieldTest {
             var transport = SumShape.transport(sumProof);
             assertEquals(list(list("WordRep"), list("WordRep"), list("AddrRep")),
                 transport.getFields().stream().map(CoreRepresentation::getPrimReps).toList());
-            assertEquals(list(0, 1, 1), transport.getNativeSlots());
+            assertEquals(list("WordRep", "WordRep"), sumProof.getPrimReps());
+            assertEquals(list(list(1), list(1)), sumProof.getAlternativeSlots());
             assertEquals(list(list(2), list(1)), transport.getProjections());
             assertEquals(ManagedAddress.class, transport.getFields().get(2).referenceCarrier());
             assertThrows(RuntimeFault.class, () -> CoreRepresentations.parse(with(sum,

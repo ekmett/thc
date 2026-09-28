@@ -20,4 +20,6 @@ emit n f x@(I# a) = putStrLn (n ++ "\t" ++ show x ++ "\t" ++ show (I# (f a)))
 main = sequence_ [emit n f x | (n,f) <- [("sumCase",sumCase),("directCase",directCase),
   ("nestedCase",nestedCase),("lazyCase",lazyCase),("zeroCase",zeroCase),("unitCase",unitCase),
   ("boxedKindsCase",boxedKindsCase),("floatDoubleCase",floatDoubleCase),
-  ("narrowWideCase",narrowWideCase),("threeWayCase",threeWayCase)], x <- [minBound,-2147483649,-2147483648,-5,-1,0,1,7,2147483647,2147483648,4294967295,4294967296,maxBound]]
+  ("narrowWideCase",narrowWideCase),("threeWayCase",threeWayCase),
+  ("boxedSumLiftedUse",boxedSumLiftedUse),("boxedSumUnliftedUse",boxedSumUnliftedUse),
+  ("boxedNestedUse",boxedNestedUse)], x <- [minBound,-2147483649,-2147483648,-5,-1,0,1,7,2147483647,2147483648,4294967295,4294967296,maxBound]]

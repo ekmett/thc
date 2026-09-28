@@ -95,6 +95,19 @@ def run(module,entry='root',cap=ENABLED):
 
 
 class SumProofTest(unittest.TestCase):
+    def test_unknown_boxed_payload_retains_absent_native_layout_but_exact_logical_shape(self):
+        pointer=dict(kind='object',primReps=['BoxedRep Nothing'],evaluated=False)
+        proof=dict(kind='unknown',aggregate='unboxed-sum',alternatives=[pointer,INT],
+                   primReps=None,tagSlot=0,alternativeSlots=None,evaluated=True)
+        self.assertIsNone(sums.proof_error(proof))
+        nested=dict(kind='unknown',aggregate='unboxed-tuple',components=[proof,INT],primReps=None,evaluated=True)
+        self.assertIsNone(tuple_proof_error(nested,allow_sums=True))
+        self.assertIsNotNone(tuple_proof_error(nested))
+        for wrong in (dict(proof,primReps=['WordRep',sums.LIFTED,'WordRep'],alternativeSlots=[[1],[2]]),
+                      dict(proof,alternatives=[dict(kind='unknown',primReps=None,evaluated=False),INT]),
+                      dict(proof,alternatives=[BOX,INT])):
+            self.assertIsNotNone(sums.proof_error(wrong))
+
     @unittest.skipUnless((ROOT/'build/fourway-aggregate/pre/core/FourWayAggregateFields.json').exists(),
                          'Prepare genuine original and nested four-way fixtures')
     def test_genuine_fourway_word64_and_nested_tuple_proofs(self):
@@ -160,6 +173,23 @@ class SumProofTest(unittest.TestCase):
 
 
 class SumAuditTest(unittest.TestCase):
+    def test_unknown_boxed_sum_argument_result_constructor_and_case_are_not_forced(self):
+        pointer=dict(kind='object',primReps=['BoxedRep Nothing'],evaluated=False)
+        proof=dict(kind='unknown',aggregate='unboxed-sum',alternatives=[pointer,INT],
+                   primReps=None,tagSlot=0,alternativeSlots=None,evaluated=True)
+        source=dict(id='source',lifted=None,rep=pointer)
+        value=['app',['con','Sum1',1,dict(rep=CLOSURE)],[var('source',pointer)],[None],False,False,dict(rep=proof)]
+        arm=['data','Sum1',['payload'],lit(),dict(binders=[dict(id='payload',lifted=None,rep=pointer)])]
+        body=['case',value,'sum',[arm],dict(rep=INT,binder=binder('sum',proof))]
+        module=dict(schema=1,ghc='9.14.1',constructors=[dict(id='Sum1',kind='unboxed-sum',arity=1,sumArity=2,tag=1)],
+                    bindings=[binding('root',lam([source],body,INT)),
+                              binding('identity',lam([binder('sum',proof)],var('sum',proof),proof))])
+        self.accepted(module)
+        self.accepted(module,'identity')
+        bad=copy.deepcopy(module)
+        bad['bindings'][0]['expr'][2][3][0][4]['binders'][0]['rep']=BOX
+        self.rejected(bad)  # null levity must not erase a concrete lifted proof.
+
     def accepted(self,module,entry='root'):
         report=run(module,entry);self.assertTrue(report['accepted'],report['issues'])
 
@@ -382,8 +412,8 @@ class SumAuditTest(unittest.TestCase):
     def test_genuine_pre_and_post_core_accept_retained_host_signatures(self):
         positive=['sumCase','directCase','nestedCase','lazyCase','zeroCase','unitCase','boxedKindsCase','floatDoubleCase',
                   'narrowWideCase','threeWayCase','returnedSum','lazySum','zeroSum','unitSum','boxedKindsSum',
-                  'floatDoubleSum','aliasIdentity','addressResult','vectorResult']
-        negative=['runtimePolymorphic','levityPolymorphic','abstractSumIdentity','abstractRuntimeSum','abstractAlternative']
+                  'floatDoubleSum','aliasIdentity','addressResult','vectorResult','levityPolymorphic']
+        negative=['runtimePolymorphic','abstractSumIdentity','abstractRuntimeSum','abstractAlternative']
         for stage in ('pre','post'):
             module=json.loads((ROOT/f'build/sum-layout/{stage}-core/SumLayoutAudit.json').read_text())
             for entry in positive:

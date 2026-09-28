@@ -772,8 +772,9 @@ public final class Program implements ExecutableProgram {
                 if (metadata.size() != 1 || !Objects.equals(metadata.getFirst().get("id"), ids.getFirst()))
                     throw new RuntimeFault("Missing sum payload binder proof");
                 CoreRepresentation actual = CoreRepresentations.binder(metadata.getFirst());
-                if (!(metadata.getFirst().get("lifted") instanceof Boolean lifted)) throw new RuntimeFault("Unknown sum payload binder levity");
-                SumShape.payload(component, actual, lifted);
+                Object lifted = metadata.getFirst().get("lifted");
+                CoreRepresentations.mayBeLazy(lifted, actual);
+                SumShape.payload(component, actual, (Boolean) lifted);
                 CoreRepresentation field = evaluated(component.refine(actual), component.getEvaluated());
                 List<CoreRepresentation> leaves = TupleShape.flatten(field);
                 List<Integer> physical = SumShape.projection(proof, tag - 1);
@@ -2139,9 +2140,9 @@ public final class Program implements ExecutableProgram {
             int tag = SumShape.constructor(tupleProof, constructor, fn.get(2));
             if (args.size() != 1) throw new RuntimeFault("Sum constructor must be saturated");
             CoreRepresentation selected = Objects.requireNonNull(tupleProof.getAlternatives()).get(tag - 1);
-            if (!(single(flags) instanceof Boolean lifted)) throw new UnsupportedCore("Unknown sum payload levity");
+            boolean lifted = CoreRepresentations.argumentMayBeLazy(single(flags), single(args));
             Expr payload = selected.isTypedTransport() ? compile(single(args), scope, false) : argument(single(args), scope, lifted);
-            SumShape.payload(selected, payload.getRepresentation(), lifted);
+            SumShape.payload(selected, payload.getRepresentation(), (Boolean) single(flags));
             int[] intSlots = new int[0];
             if (selected.isTypedTransport()) {
                 var fields = TupleShape.flatten(selected);

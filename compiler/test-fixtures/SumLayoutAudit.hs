@@ -145,6 +145,42 @@ runtimePolymorphic x = raise# x
 levityPolymorphic :: forall (l :: Levity) (a :: TYPE ('BoxedRep l)). Int -> (# a | Int# #)
 levityPolymorphic x = raise# x
 
+-- The callback retains its concrete native layout; the forwarding boundary
+-- knows a traced pointer but cannot invent either native pointer levity.
+{-# OPAQUE boxedSumThrough #-}
+boxedSumThrough :: forall (l :: Levity) (a :: TYPE ('BoxedRep l)).
+                   (Int# -> (# a | Int# #)) -> Int# -> (# a | Int# #)
+boxedSumThrough f x = f x
+
+boxedSumLiftedUse :: Int# -> Int#
+boxedSumLiftedUse x = case boxedSumThrough (\n -> case n <# 0# of
+  1# -> (# I# n | #)
+  _ -> (# | n #)) x of
+    (# I# n | #) -> n
+    (# | n #) -> n
+
+boxedSumUnliftedUse :: Int# -> Int#
+boxedSumUnliftedUse x = case boxedSumThrough (\n -> case n <# 0# of
+  1# -> runRW# (\s -> case newByteArray# 0# s of
+    (# s1,a #) -> case unsafeFreezeByteArray# a s1 of
+      (# _,b #) -> (# b | #))
+  _ -> (# | n #)) x of
+    (# b | #) -> sizeofByteArray# b
+    (# | n #) -> n
+
+{-# OPAQUE boxedNestedThrough #-}
+boxedNestedThrough :: forall (l :: Levity) (a :: TYPE ('BoxedRep l)).
+                      (Int# -> (# (# a | Int# #), Int# #)) -> Int# -> (# (# a | Int# #), Int# #)
+boxedNestedThrough f x = f x
+
+boxedNestedUse :: Int# -> Int#
+boxedNestedUse x = case boxedNestedThrough (\n -> case n <# 0# of
+  1# -> (# (# I# n | #), 257# #)
+  _ -> (# (# | n #), 257# #)) x of
+    (# s, k #) -> case s of
+      (# I# n | #) -> n +# k
+      (# | n #) -> n +# k
+
 {-# OPAQUE abstractSumIdentity #-}
 abstractSumIdentity :: forall (a :: TYPE ('SumRep '[ 'IntRep, 'WordRep])). a -> a
 abstractSumIdentity x = x
