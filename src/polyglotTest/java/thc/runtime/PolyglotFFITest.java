@@ -27,6 +27,7 @@ public class PolyglotFFITest {
         var arguments = new ArrayList<List<Object>>(); var reps = new ArrayList<Map<String, Object>>(); var flags = new ArrayList<Boolean>();
         for (int i = 0; i < op.getArguments().size(); i++) { String rep = op.getArguments().get(i); arguments.add(List.of("var", "argument" + i, map("rep", proof(rep)))); reps.add(proof(rep)); flags.add(rep.equals("BoxedRep (Just Lifted)")); }
         var descriptor = map("schema", 1, "target", map("kind", "static", "symbol", op.getSymbol(), "isFunction", true), "convention", "prim", "safety", "safe", "arity", arguments.size(), "suppliedArity", arguments.size(), "argumentReps", reps, "resultRep", tuple(op.getResult()));
+        if (op.getArgumentTypes() != null) { descriptor.put("schema", 2); descriptor.put("argumentTypes", op.getArgumentTypes()); }
         return List.of("app", List.of("var", "foreign-id"), arguments, flags, false, false, map("rep", tuple(op.getResult()), "foreignCall", descriptor));
     }
     private List<Object> changed(List<Object> call, Consumer<Map<String, Object>> transform) { var result = new ArrayList<>(call); var metadata = new LinkedHashMap<>((Map<String, Object>) result.get(6)); var descriptor = new LinkedHashMap<>((Map<String, Object>) metadata.get("foreignCall")); transform.accept(descriptor); metadata.put("foreignCall", descriptor); result.set(6, metadata); return result; }
@@ -51,7 +52,7 @@ public class PolyglotFFITest {
     }
     private String message(Throwable failure) { return failure.getMessage() == null ? "" : failure.getMessage(); }
     @Test public void exactVersionedForeignDeclarationIsRequired() {
-        for (var op : PolyglotOp.values()) { var valid = call(op); assertEquals(op, CorePolyglot.validate(valid, false), op.getSymbol()); var bad = List.of(changed(valid, d -> d.put("schema", 2)), changed(valid, d -> d.put("convention", "ccall")), changed(valid, d -> d.put("safety", "unsafe")), changed(valid, d -> d.put("arity", op.getArguments().size() - 1)), changed(valid, d -> d.put("suppliedArity", op.getArguments().size() - 1)), changed(valid, d -> d.put("target", map("kind", "dynamic", "symbol", op.getSymbol(), "isFunction", true))), changed(valid, d -> d.put("target", map("kind", "static", "symbol", op.getSymbol(), "isFunction", false))));
+        for (var op : PolyglotOp.values()) { var valid = call(op); assertEquals(op, CorePolyglot.validate(valid, false), op.getSymbol()); var bad = List.of(changed(valid, d -> d.put("schema", op.getArgumentTypes() == null ? 2 : 1)), changed(valid, d -> d.put("convention", "ccall")), changed(valid, d -> d.put("safety", "unsafe")), changed(valid, d -> d.put("arity", op.getArguments().size() - 1)), changed(valid, d -> d.put("suppliedArity", op.getArguments().size() - 1)), changed(valid, d -> d.put("target", map("kind", "dynamic", "symbol", op.getSymbol(), "isFunction", true))), changed(valid, d -> d.put("target", map("kind", "static", "symbol", op.getSymbol(), "isFunction", false))));
             for (int i = 0; i < bad.size(); i++) { var candidate = bad.get(i); var error = assertThrows(RuntimeFault.class, () -> CorePolyglot.validate(candidate, false)); assertTrue(message(error).contains("Invalid polyglot foreign call"), op + " declaration variant " + i + ": " + error.getMessage()); } assertThrows(RuntimeFault.class, () -> CorePolyglot.validate(valid, true)); var spoofed = new ArrayList<>(valid); spoofed.set(1, List.of("prim", "foreign-id")); assertThrows(RuntimeFault.class, () -> CorePolyglot.validate(spoofed, false));
         }
     }
@@ -62,6 +63,16 @@ public class PolyglotFFITest {
             int boxed = op.getArguments().indexOf("BoxedRep (Just Lifted)"); if (boxed >= 0) { var wrong = new ArrayList<>(valid); var arguments = new ArrayList<>((List<List<Object>>) wrong.get(2)); arguments.set(boxed, List.of("var", "argument" + boxed, map("rep", proof("BoxedRep (Just Unlifted)")))); wrong.set(2, arguments); assertThrows(RuntimeFault.class, () -> CorePolyglot.validate(wrong, false)); }
             var missing = new ArrayList<>(valid); var originalArgs = (List<?>) missing.get(2); missing.set(2, originalArgs.subList(0, originalArgs.size() - 1)); assertThrows(RuntimeFault.class, () -> CorePolyglot.validate(missing, false)); var badFlags = new ArrayList<>(valid); var flags = new ArrayList<>((List<Boolean>) badFlags.get(3)); flags.set(0, !flags.getFirst()); badFlags.set(3, flags); assertThrows(RuntimeFault.class, () -> CorePolyglot.validate(badFlags, false));
             var badTuple = changed(valid, d -> d.put("resultRep", proof(op.getResult()))); assertThrows(RuntimeFault.class, () -> CorePolyglot.validate(badTuple, false)); var actualTuple = new ArrayList<>(valid); var metadata = new LinkedHashMap<>((Map<String, Object>) actualTuple.get(6)); metadata.put("rep", tuple("WordRep")); actualTuple.set(6, metadata); assertThrows(RuntimeFault.class, () -> CorePolyglot.validate(actualTuple, false)); var badState = changed(valid, d -> d.put("resultRep", map("kind", "unknown", "primReps", List.of("IntRep", op.getResult()), "evaluated", false, "aggregate", "unboxed-tuple", "components", List.of(proof("IntRep"), proof(op.getResult()))))); assertThrows(RuntimeFault.class, () -> CorePolyglot.validate(badState, false));
+        }
+    }
+    @Test public void byteArrayMutabilityRequiresItsExactNominalDeclaration() {
+        for (var op : List.of(PolyglotOp.BUFFER_VIEW, PolyglotOp.BUFFER_MUTABLE_VIEW, PolyglotOp.BUFFER_COPY_INTO)) {
+            var valid = call(op);
+            assertThrows(RuntimeFault.class, () -> CorePolyglot.validate(changed(valid, d -> d.remove("argumentTypes")), false));
+            var swapped = new ArrayList<>(op.getArgumentTypes());
+            for (int i = 0; i < swapped.size(); i++) if (swapped.get(i) != null)
+                swapped.set(i, swapped.get(i).equals("ByteArray#") ? "MutableByteArray#" : "ByteArray#");
+            assertThrows(RuntimeFault.class, () -> CorePolyglot.validate(changed(valid, d -> d.put("argumentTypes", swapped)), false));
         }
     }
     @Test public void unversionedOrSpoofedHeadsCannotEnterTheAbi() { var valid = call(PolyglotOp.EVAL); assertNull(CorePolyglot.validate(List.of("var", "ordinary"), false)); var wrong = changed(valid, d -> d.put("target", map("kind", "static", "symbol", "thc_polyglot_eval", "isFunction", true))); assertThrows(UnsupportedCore.class, () -> CorePolyglot.validate(wrong, false)); var spoofed = List.of("prim", "fake", valid.get(6)); assertThrows(RuntimeFault.class, () -> CorePolyglot.validate(spoofed, false)); }

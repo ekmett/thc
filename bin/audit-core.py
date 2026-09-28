@@ -1517,7 +1517,7 @@ class Audit:
                 self.issue('foreign-call', owner, path, str(error))
             return True
 
-        if isinstance(call, dict) and call.get('schema') == 2:
+        if isinstance(call, dict) and call.get('schema') == 2 and symbol not in POLYGLOT_ABI['operations']:
             # Typed array FCalls carry their C ABI directly. An exported closure
             # may precede its owner bundle; this checks the call, not symbol
             # availability, and leaves ordinary linkage explicitly outstanding.
@@ -1664,8 +1664,8 @@ class Audit:
 
         if function[0] != 'var' or function[1] in bound or function[1] in self.bindings:
             return reject('Foreign descriptor requires a direct external FCallId head')
-        if not isinstance(call, dict) or call.get('schema') != 1:
-            return reject('Missing GHC foreign-call schema 1 evidence')
+        if not isinstance(call, dict) or type(call.get('schema')) is not int or call['schema'] not in (1, 2):
+            return reject('Missing GHC foreign-call schema evidence')
         target = call.get('target')
         if not isinstance(target, dict) or target.get('kind') != 'static' or target.get('isFunction') is not True:
             return reject('Requires a static function target')
@@ -1673,6 +1673,8 @@ class Audit:
         javascript_prefix = 'thc_javascript_v1_'
         if ('intrinsic' in call or 'javascriptSource' in call or
                 isinstance(symbol, str) and symbol.startswith(javascript_prefix)):
+            if call['schema'] != 1:
+                return reject('JavaScript import requires schema 1 evidence')
             if call.get('intrinsic') != 'javascript-v1' or not isinstance(call.get('javascriptSource'), str):
                 return reject('Missing exact javascript-v1 source evidence')
             source = call['javascriptSource']
@@ -1730,6 +1732,10 @@ class Audit:
         spec = POLYGLOT_ABI['operations'].get(symbol)
         if spec is None:
             return reject('Unsupported foreign target ' + repr(symbol))
+        types = spec.get('argumentTypes')
+        if (call['schema'] != (1 if types is None else 2) or
+                (('argumentTypes' in call) if types is None else call.get('argumentTypes') != types)):
+            return reject('GHC nominal array types differ from polyglot ABI')
         if call.get('convention') != POLYGLOT_ABI['convention'] or call.get('safety') != POLYGLOT_ABI['safety']:
             return reject('GHC calling convention or safety differs from polyglot ABI')
         declared = spec['arguments']
@@ -1741,7 +1747,7 @@ class Audit:
             if not isinstance(rep, dict) or 'aggregate' in rep or is_vector(rep):
                 return False
             kinds = {'AddrRep': 'address', 'IntRep': 'long',
-                     'BoxedRep (Just Lifted)': 'object', 'State# RealWorld': 'void'}
+                     'BoxedRep (Just Lifted)': 'object', 'BoxedRep (Just Unlifted)': 'object', 'State# RealWorld': 'void'}
             return (rep.get('kind') == kinds[register] and
                     rep.get('primReps') == ([] if register == 'State# RealWorld' else [register]))
         declared_reps = call.get('argumentReps')

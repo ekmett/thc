@@ -33,9 +33,8 @@ primitive THC slots; the argument array at the Truffle interop boundary is
 still required by that API.
 
 Safety remains attached to each call site, independently of the source/arity
-cache. The safe transitions and reverse callbacks described here require platform
-hosting; Loom rejects them. Unsafe imports remain subject to the other language's
-virtual-thread access rules. In platform mode, a `safe` call may re-enter an exposed
+cache. Calls remain subject to the other language's thread-access rules,
+including virtual-thread access in Loom mode. A `safe` call may re-enter an exposed
 managed Haskell entry; an `unsafe` call rejects that entry before creating a guest thread or changing its mask.
 The lower-level `THC.Polyglot` operations are safe. Both backends save the exact
 typed result before polling for a queued async exception, so continuation resume
@@ -94,9 +93,10 @@ callback safety and first-compiled completed-result delivery without replay.
 The host must permit the requested language through `PolyglotAccess`; the demo
 does so explicitly. THC uses `Env.parsePublic`, so the bridge obeys that policy.
 
-This lower-level module uses three versioned `foreign import prim` symbols:
-`thc_polyglot_v1_eval`, `thc_polyglot_v1_read_member`, and
-`thc_polyglot_v1_execute_int`. GHC retains their `State# RealWorld` input and
+The lower-level module and storage APIs use versioned `foreign import prim`
+symbols, beginning with `thc_polyglot_v1_eval`,
+`thc_polyglot_v1_read_member`, and `thc_polyglot_v1_execute_int`.
+GHC retains their `State# RealWorld` input and
 unboxed state/result tuple output, so optimized Core still represents the
 effects in order. The exporter records GHC's actual foreign-call declaration,
 including its target, convention, safety, saturation, and machine
@@ -126,14 +126,38 @@ accepts an input within JavaScript Number's exact integer range,
 integer. Calls can fail if a language is unavailable, a member is missing,
 or an interop operation rejects the value.
 
-The next useful API steps are ordinary `Text` or byte-buffer inputs, more
-typed conversions, multiple arguments and member invocation, and richer
-value-lifetime controls. The module would
-then move from `src/examples/THC` into a Cabal package. Loading another language
+`THC.Polyglot`, `THC.Interop.Buffer` and `THC.Interop.Array` are exposed by
+the `thc:interop` library. Add `thc:interop` to the application's Cabal
+`build-depends` for THC execution. This component has no native implementation
+of its prim symbols and cannot be linked into an ordinary native GHC executable;
+the separate `thc:runtime` library remains native-linkable. Raw prim declarations
+live in the explicitly Unsafe `THC.Internal.Polyglot` module. Loading another language
 in one Polyglot Context also brings that language's thread-access rules:
 JavaScript may require serialized or isolated access even when Haskell code
 runs concurrently. An admitted callback stays on its carrier and obeys the
 other language's access rules; safety is not permission for concurrent entry.
+
+For an installed `thc:interop` component, export Core with GHC's direct plugin
+library option. Ordinary `-fplugin=THC.Plugin` eagerly links packages named by
+`-package-id` when loading the plugin, including THC-only prim symbols. Direct
+loading uses the same Cabal-built plugin without linking the guest component:
+
+```sh
+cabal build lib:interop
+bin/build-compiler.sh
+plugin_library=$(python3 bin/plugin.py --field sharedLibrary)
+plugin_unit=$(python3 bin/plugin.py --field unitId)
+plugin_db=$(python3 bin/plugin.py --field packageDb)
+package_db=dist-newstyle/packagedb/ghc-9.14.1
+interop_unit=$(ghc-pkg --package-db "$package_db" field z-thc-z-interop id --simple-output)
+ghc --make -no-link -O2 -dynamic -i -package-db "$plugin_db" \
+  -package-db "$package_db" -package-id "$interop_unit" \
+  "-fplugin-library=$plugin_library;$plugin_unit;THC.Plugin;[\"build/core\",\"post-tidy\"]" \
+  Application.hs
+```
+
+Use the pinned compiler that built the plugin. This exports Core; it does not
+enable native execution or Template Haskell evaluation of these intrinsics.
 
 With the genuine runtime bridge linked, admitted foreign runtime and parse
 failures are automatically catchable as `THC.Exception.ForeignException`, including
@@ -146,6 +170,49 @@ and stored-rethrow provenance. This is not exception unwinding across a plain C 
 
 [Managed exports](site/embedding.md#call-a-declared-haskell-export) expose declared
 scalar Haskell functions through Truffle interop, subject to the call-safety and
-context rules above. Arbitrary closures, records and collections still need
-deliberate argument/result and lazy/strict conversion rules; blindly forcing
-their contents would change Haskell evaluation and space behavior.
+context rules above. The Core host boundary also exposes signature-checked
+closures and partial applications as executable values. Records remain opaque;
+blindly forcing their contents would change Haskell evaluation and space behavior.
+
+## Buffers and fixed arrays
+
+`THC.Interop.Buffer.view` aliases a `ByteArray#` as a read-only buffer;
+`mutableView` explicitly grants writes to a `MutableByteArray# RealWorld`.
+Both retain the allocation. They support byte access and explicit little/big-endian
+64-bit access, without requiring native addresses or native byte order.
+`THC.Polyglot.execute` passes one opaque value to a foreign function, so views
+can be shared with a language that understands the corresponding interop protocol.
+
+```haskell
+{-# LANGUAGE MagicHash #-}
+import qualified THC.Polyglot as P
+import qualified THC.Interop.Buffer as B
+
+snapshot = do
+  buffer <- P.evalJS "new Uint8Array([10,20,30,40]).buffer"# "bytes.js"#
+  B.copySlice buffer 1 2  -- fresh ByteArray# containing 20,30
+```
+
+`copy` and `copySlice` use the bulk foreign-buffer read protocol and return a
+lifted `ByteArray` owner. `copyInto` copies a checked source region into existing
+mutable guest storage; it snapshots the source first, so overlapping aliases
+are safe. Negative, overflowing and out-of-bounds ranges are rejected.
+Zero-length transfers at the end are valid. A read-only foreign buffer can
+still change through another alias: only an explicit copy creates a snapshot.
+Foreign views stay managed foreign handles; ordinary byte-array primops continue
+to use ordinary guest allocations.
+
+`THC.Interop.Array` exposes fixed `Array#` and `SmallArray#` views, queries
+foreign collection sizes, reads individual opaque values, and copies a foreign
+collection into an `Array# Value`. It does not force Haskell elements or claim
+that arbitrary foreign values have a Haskell element type. The separate
+`THC.Interop.Array.Unsafe` module provides `unsafeMutableView` and `unsafeMutableSmallView`, which
+grant foreign code replacement authority over polymorphic Haskell storage.
+The caller must preserve the element type. Replacements must at least be lifted
+guest references from the same context; insertion and removal are unavailable.
+
+Do not unsafe-freeze or repurpose storage while a foreign writer retains a view.
+Views cannot cross THC contexts or outlive context closure. Unknown-length
+`Addr#` values are not buffers, and managed heap storage never acquires a native
+address merely by being exported. Original pointer-cell exclusion and native
+allocation lifetime checks still apply.

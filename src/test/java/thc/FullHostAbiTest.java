@@ -12,6 +12,130 @@ import static thc.CoreBackendTestSupport.*;
 
 /** Independent public transport models; native GHC arithmetic is checked separately. */
 class FullHostAbiTest {
+    @org.junit.jupiter.api.Test void arrayCallableCanReturnAndForceAFunctionThunkWithoutAProgram() {
+        for (boolean hosted : new boolean[]{false, true}) try (var context = context(hosted)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = com.oracle.truffle.api.TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var integer = thc.runtime.CoreRepresentations.parse(scalar("long", "IntRep"));
+                var closure = thc.runtime.CoreRepresentations.parse(CLOSURE);
+                var identity = new thc.runtime.GuestRoot(language, new thc.runtime.FrameLayout().build()) {
+                    @Override public long bloom(com.oracle.truffle.api.frame.VirtualFrame frame) { return 0; }
+                    @Override public Object execute(com.oracle.truffle.api.frame.VirtualFrame frame) { return frame.getArguments()[1]; }
+                };
+                identity.configureInputProofs(List.of(integer)); identity.configureScalarResult(integer);
+                var function = new thc.runtime.Closure(null, 1, identity.getCallTarget());
+                var forces = new java.util.concurrent.atomic.AtomicInteger();
+                var delayed = new thc.runtime.Thunk(new thc.runtime.GuestRoot(language, new thc.runtime.FrameLayout().build()) {
+                    @Override public long bloom(com.oracle.truffle.api.frame.VirtualFrame frame) { return 0; }
+                    @Override public Object execute(com.oracle.truffle.api.frame.VirtualFrame frame) { forces.incrementAndGet(); return function; }
+                }.getCallTarget(), null);
+                var factory = new thc.runtime.GuestRoot(language, new thc.runtime.FrameLayout().build()) {
+                    @Override public long bloom(com.oracle.truffle.api.frame.VirtualFrame frame) { return 0; }
+                    @Override public Object execute(com.oracle.truffle.api.frame.VirtualFrame frame) { return delayed; }
+                };
+                factory.configureInputProofs(List.of(integer)); factory.configureScalarResult(closure);
+                var view = context.asValue(HostReference.storage(Language.currentState(),
+                    new Object[]{new thc.runtime.Closure(null, 1, factory.getCallTarget())}, false));
+                var lazy = view.getArrayElement(0).execute(0L);
+                assertEquals(0, forces.get()); assertTrue(lazy.canExecute());
+                assertEquals(73L, lazy.execute(73L).asLong());
+                assertEquals(91L, lazy.execute(91L).asLong()); assertEquals(1, forces.get());
+            } finally { context.leave(); }
+        }
+    }
+    @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
+    void opaqueByteArrayRoundtripDoesNotExposePointerStorage(String backend) {
+        var rep = scalar("object", "BoxedRep (Just Unlifted)");
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                for (boolean initiallyPointerBearing : new boolean[]{false, true}) {
+                    var storage = thc.runtime.ManagedAllocation.mutable(16, 8);
+                    var pointer = thc.runtime.ManagedAddress.fromByteArray(new byte[1]);
+                    if (initiallyPointerBearing) storage.writeAddressByteOffset(0, pointer);
+                    var handle = context.asValue(new HostReference(Language.currentState(), storage,
+                        thc.runtime.CoreRepresentations.parse(rep), null));
+                    var view = context.eval("thc", identity(backend, rep)).execute(handle);
+                    assertEquals(handle, view);
+                    storage.writeAddressByteOffset(8, pointer);
+                    assertSame(pointer, storage.readAddressByteOffset(8));
+                    assertThrows(thc.runtime.RuntimeFault.class,
+                        () -> HostReference.storage(Language.currentState(), storage, false));
+                }
+            } finally { context.leave(); }
+        }
+    }
+    @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
+    void byteStorageExportsAReadOnlyAliasingBuffer(String backend) {
+        var rep = scalar("object", "BoxedRep (Just Unlifted)");
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                for (Object storage : new Object[]{new byte[16], thc.runtime.ManagedAllocation.mutable(16, 8),
+                        thc.runtime.ManagedAllocation.mutable(16, 8, true)}) {
+                    var handle = context.asValue(new HostReference(Language.currentState(), storage,
+                        thc.runtime.CoreRepresentations.parse(rep), null));
+                    var view = context.eval("thc", identity(backend, rep)).execute(handle);
+                    assertTrue(view.hasBufferElements()); assertEquals(16, view.getBufferSize());
+                    assertFalse(view.isBufferWritable()); assertFalse(view.isNativePointer());
+                    thc.runtime.ManagedByteArray.writeGuest(storage, 1, 0xab);
+                    assertEquals((byte) 0xab, view.readBufferByte(1));
+                    assertEquals(0xab00, view.readBufferShort(java.nio.ByteOrder.LITTLE_ENDIAN, 0) & 0xffff);
+                    assertEquals(0x00ab, view.readBufferShort(java.nio.ByteOrder.BIG_ENDIAN, 0) & 0xffff);
+                    assertThrows(UnsupportedOperationException.class, () -> view.writeBufferByte(0, (byte) 1));
+                    assertThrows(IndexOutOfBoundsException.class, () -> view.readBufferByte(-1));
+                    assertThrows(IndexOutOfBoundsException.class, () -> view.readBufferLong(java.nio.ByteOrder.nativeOrder(), Long.MAX_VALUE));
+                    if (storage instanceof thc.runtime.ManagedAllocation allocation) {
+                        allocation.shrink(2); assertEquals(2, view.getBufferSize());
+                        assertThrows(IndexOutOfBoundsException.class, () -> view.readBufferByte(2));
+                    }
+                }
+            } finally { context.leave(); }
+        }
+    }
+    @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
+    void fixedArraysExportOnlyTheRequestedLazyReference(String backend) {
+        var rep = scalar("object", "BoxedRep (Just Unlifted)");
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = com.oracle.truffle.api.TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var poison = new thc.runtime.Thunk(new com.oracle.truffle.api.nodes.RootNode(language) {
+                    @Override public Object execute(com.oracle.truffle.api.frame.VirtualFrame frame) {
+                        throw new AssertionError("Array export forced a lazy element");
+                    }
+                }.getCallTarget(), null);
+                for (Object storage : new Object[]{thc.runtime.ManagedArray.allocate(2, poison),
+                        thc.runtime.ManagedSmallArray.allocate(2, poison)}) {
+                    var handle = context.asValue(new HostReference(Language.currentState(), storage,
+                        thc.runtime.CoreRepresentations.parse(rep), null));
+                    var view = context.eval("thc", identity(backend, rep)).execute(handle);
+                    assertTrue(view.hasArrayElements()); assertEquals(2, view.getArraySize());
+                    assertEquals(view.getArrayElement(0), view.getArrayElement(1));
+                    assertEquals(0, poison.getState());
+                    assertThrows(UnsupportedOperationException.class, () -> view.setArrayElement(0, view.getArrayElement(1)));
+                    assertThrows(UnsupportedOperationException.class, () -> view.removeArrayElement(0));
+                    assertThrows(IndexOutOfBoundsException.class, () -> view.getArrayElement(2));
+                }
+            } finally { context.leave(); }
+        }
+    }
+    @org.junit.jupiter.api.Test void storageViewsStopAtContextLifetimeAndDoNotPromoteAddresses() {
+        var context = context();
+        context.initialize("thc"); context.enter();
+        final Value view;
+        try {
+            view = context.asValue(HostReference.storage(Language.currentState(), new byte[8], true));
+            var address = context.asValue(new HostReference(Language.currentState(),
+                thc.runtime.ManagedAddress.nullAddress(),
+                thc.runtime.CoreRepresentations.parse(scalar("address", "AddrRep")), null));
+            assertFalse(address.hasBufferElements());
+            assertTrue(view.isBufferWritable());
+        } finally { context.leave(); }
+        context.close();
+        assertThrows(IllegalStateException.class, view::getBufferSize);
+    }
     private static final Map<String,Object> CLOSURE = scalar("closure", "BoxedRep (Just Lifted)");
     private static Map<String,Object> scalar(String kind, String rep) {
         return map("kind", kind, "primReps", list(rep), "evaluated", true);
