@@ -234,7 +234,7 @@ public final class Program implements ExecutableProgram {
             "instrument", builder.metrics.getEnabled()), Map.copyOf(values), List.copyOf(builder.codeTargets),
             builder.dataLayouts.values().stream().map(DataLayout::reusableStorage).toList(), builder.codeIdentity, language);
     }
-    private static boolean absentOrEmpty(Object value) { return value == null || value instanceof List<?> list && list.isEmpty(); }
+    private static boolean absentOrEmpty(Object value) { return value == null || value instanceof List<?> list && list.isEmpty() || value instanceof Map<?,?> map && map.isEmpty(); }
     public static final class PreparedCode {
         private final Map<String, Object> module;
         private final Map<String, CodeValue> values;
