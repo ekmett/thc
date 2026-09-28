@@ -13,18 +13,18 @@
 -- One-pass typed executable encoding. Shapes are interned independently of
 -- occurrence states; strings append directly to their private auxiliary stream.
 module THC.Compact.Encode
-  ( Encoder, newEncoder, setRecordObserver, encodeBinding, encodeExpr, encodeRep, encodeFacts, internString, containsDelimitedControl ) where
+  ( Encoder, newEncoder, setRecordObserver, encodeBinding, encodeExpr, encodeRep, encodeFacts, internString, containsDelimitedControl, containsHostSignatures ) where
 
 import Control.Monad (unless, void, when)
 import Data.Binary.Put
-import Data.Bits ((.&.), shiftR)
+import Data.Bits ((.&.), (.|.), shiftR)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Builder as Builder
 import qualified Data.ByteString.Lazy as BL
 import Data.IORef
 import qualified Data.Map.Strict as Map
 import qualified Data.Text.Encoding as Text
-import Data.Word (Word8, Word64)
+import Data.Word (Word8, Word32, Word64)
 import THC.Compact.Core
 import THC.Compact.Annotations
 import THC.Compact.Facts
@@ -32,10 +32,10 @@ import THC.Compact.Wire
 import THC.Compact.Writer
 
 data Encoder = Encoder !Streams !(IORef (Map.Map BS.ByteString Span)) !(IORef (Map.Map Shape Word64))
-  !(Maybe (IORef Builder.Builder)) !(IORef Bool) !(IORef (Maybe RecordObserver))
+  !(Maybe (IORef Builder.Builder)) !(IORef Word32) !(IORef (Maybe RecordObserver))
 
 newEncoder :: Streams -> IO Encoder
-newEncoder streams = Encoder streams <$> newIORef Map.empty <*> newIORef Map.empty <*> pure Nothing <*> newIORef False <*> newIORef Nothing
+newEncoder streams = Encoder streams <$> newIORef Map.empty <*> newIORef Map.empty <*> pure Nothing <*> newIORef 0 <*> newIORef Nothing
 
 -- | Attach optional display-only origin recording for subsequent DATA records.
 setRecordObserver :: Encoder -> Maybe RecordObserver -> IO ()
@@ -54,7 +54,10 @@ observe (Encoder streams _ _ _ _ observer) kind action = do
 
 -- | Derived during expression emission, without a separate Core-body walk.
 containsDelimitedControl :: Encoder -> IO Bool
-containsDelimitedControl (Encoder _ _ _ _ found _) = readIORef found
+containsDelimitedControl (Encoder _ _ _ _ found _) = (/= 0) . (.&. 1) <$> readIORef found
+
+containsHostSignatures :: Encoder -> IO Bool
+containsHostSignatures (Encoder _ _ _ _ found _) = (/= 0) . (.&. 16) <$> readIORef found
 
 -- | Encode only the bounded known-start record in memory, while appending its
 -- strings to the auxiliary stream. Constructor shapes are inline: admitting
@@ -440,8 +443,14 @@ identity encoder value = case value of
   Local ordinal -> tag encoder 1 >> number encoder ordinal
 
 encodeBinding :: Encoder -> Binding -> IO Word64
-encodeBinding encoder@(Encoder streams _ _ _ _ _) binding = observe encoder (BindingRecord (bindingIdentity binding)) $ do
+encodeBinding encoder@(Encoder streams _ _ _ found _) binding = observe encoder (BindingRecord (bindingIdentity binding)) $ do
   start <- streamOffset streams ExecutableData
+  case bindingHostSignature binding of
+    Missing -> pure ()
+    signature -> do
+      modifyIORef' found (.|. 16)
+      tag encoder 2 -- extended binding; old identity tags remain 0 and 1
+      present encoder (hostSignature encoder) signature
   identity encoder (bindingIdentity binding)
   enumeration encoder (bindingEntryType binding)
   present encoder (boolean encoder) (bindingLifted binding)
@@ -454,6 +463,11 @@ encodeBinding encoder@(Encoder streams _ _ _ _ _) binding = observe encoder (Bin
   present encoder (encodeRep encoder) (bindingJoinResultRep binding)
   encodeExpr encoder (bindingExpr binding)
   pure start
+
+hostSignature :: Encoder -> HostSignature -> IO ()
+hostSignature encoder (HostSignature inputs result) = list encoder hostType inputs >> hostType result
+  where
+    hostType (HostType proof carriers) = encodeRep encoder proof >> list encoder (enumeration encoder) carriers
 
 binder :: Encoder -> Binder -> IO ()
 binder encoder value = observe encoder (BinderRecord (binderOrdinal value)) $ do
@@ -475,7 +489,7 @@ encodeExpr encoder@(Encoder _ _ _ _ found _) expression = observe encoder Expres
   Var metadata key -> prefix 0 metadata >> identity encoder key
   Prim metadata name -> do
     when (name == "prompt#" || name == "control0#")
-      (writeIORef found True)
+      (modifyIORef' found (.|. 1))
     prefix 1 metadata >> string encoder name
   Lit metadata value -> prefix 2 metadata >> literal encoder value
   Lam metadata parameters body -> prefix 3 metadata >> list encoder (binder encoder) parameters >> child body

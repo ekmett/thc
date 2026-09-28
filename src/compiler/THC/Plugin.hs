@@ -40,7 +40,7 @@ import GHC.Types.Name.Reader (RdrName(..))
 import GHC.Types.Name.Occurrence (occNameMangledFS)
 import GHC.Utils.Encoding.UTF8 (utf8DecodeByteString)
 import GHC.Builtin.Names (ioTyConName)
-import GHC.Builtin.Types (intTy, doubleTy, unitTy)
+import GHC.Builtin.Types (intTy, doubleTy, unitTy, anyTyCon)
 import GHC.Builtin.Types.Prim (byteArrayPrimTyCon, mutableByteArrayPrimTyCon)
 import GHC.Tc.Types (TcGblEnv(..))
 import qualified THC.Sources as Sources
@@ -500,7 +500,7 @@ binding d (v,e) = O $
   , ("arity",num (idArity v)), ("expr",annotated), ("rep",exprRep d e)
   , ("info",idMetadata d v)
   , ("entryStrict",A (map B aligned)), ("entryStrictSource",S origin)
-  ] ++ joinMetadata d v e ++ binderSource d v
+  ] ++ hostSignatureFields d v ++ joinMetadata d v e ++ binderSource d v
   where
     (marks,origin) = if canCertify d then CBV.entryContract (deriveCBVContracts d) v e else ([],"none")
     exported = expr d e
@@ -513,6 +513,43 @@ binding d (v,e) = O $
       A [S "lam",parameters,body,O metadata] ->
         A [S "lam",parameters,body,O (metadata ++ [("entryStrict",A (map B aligned)),("entryStrictSource",S origin)])]
       _ -> exported
+
+-- A newtype's nominal host contract survives even when a cast/alias exposes
+-- an Any worker. This is boundary metadata only, not a new execution carrier.
+hostSignatureFields :: Ctx -> Id -> [(String,J)]
+hostSignatureFields d v
+  | canCertify d, isExternalName (varName v), any relevant types =
+      [("hostSignature",O [("inputs",A (map hostType parameters)),("result",hostType result)])]
+  | otherwise = []
+  where
+    (_,rho) = splitForAllTyVars (expandTypeSynonyms (varType v))
+    (arguments,result) = splitFunTys rho
+    parameters = map scaledThing arguments
+    types = result : parameters
+    relevant = any nominal . hostCarriers
+    nominal (S _) = True
+    nominal _ = False
+    hostType ty = O [("rep",typeRep ty (typeLevity_maybe ty == Just Unlifted)),
+                     ("carriers",A (hostCarriers ty))]
+
+-- Preorder logical scalar leaves, including zero-width tokens. Aggregate
+-- structure stays in the ordinary representation proof and is cross-checked.
+hostCarriers :: Type -> [J]
+hostCarriers ty = case splitTyConApp_maybe (expandTypeSynonyms ty) of
+  Just (tc,_) | isNewTyCon tc
+    , Just owner <- nameModule_maybe (tyConName tc)
+    , moduleNameString (moduleName owner) == "THC.Prim"
+    , Just (underlying,_) <- splitTyConApp_maybe (unwrapType ty)
+    , underlying == anyTyCon
+    , typePrimReps ty == Just [BoxedRep (Just Unlifted)] ->
+        case occNameString (nameOccName (tyConName tc)) of
+          "Object#" -> [S "object"]
+          "InteropLibrary#" -> [S "interop-library"]
+          _ -> [Z]
+  _ -> case splitTyConApp_maybe (unwrapType ty) of
+    Just (tc,args) | isUnboxedTupleTyCon tc || isUnboxedSumTyCon tc ->
+      concatMap hostCarriers (dropRuntimeRepArgs args)
+    _ -> [Z]
 
 joinMetadata :: Ctx -> Id -> CoreExpr -> [(String,J)]
 joinMetadata d v e
@@ -708,7 +745,12 @@ polyglotForeign v = case isFCallId_maybe v of
         , "thc_polyglot_v1_array_size"
         , "thc_polyglot_v1_array_read"
         , "thc_polyglot_v1_array_write"
-        , "thc_polyglot_v1_array_copy"]
+        , "thc_polyglot_v1_array_copy"
+        , "thc_interop_v1_get_library", "thc_interop_v1_import_value"
+        , "thc_interop_v1_has_buffer_elements", "thc_interop_v1_is_buffer_writable"
+        , "thc_interop_v1_get_buffer_size", "thc_interop_v1_read_buffer_byte", "thc_interop_v1_write_buffer_byte"
+        , "thc_interop_v1_has_array_elements", "thc_interop_v1_get_array_size"
+        , "thc_interop_v1_read_array_element", "thc_interop_v1_write_array_element", "thc_interop_v1_as_long"]
   Just (Foreign.CCall (Foreign.CCallSpec
     (Foreign.StaticTarget _ symbol _ True) Foreign.CCallConv safety)) ->
       (safety == Foreign.PlayRisky && unpackFS symbol `elem`

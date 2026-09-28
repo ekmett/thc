@@ -51,8 +51,13 @@ public final class HostReference implements TruffleObject {
     private void requireOwner() {
         if (Language.currentState() != owner) throw new IllegalArgumentException("Storage view belongs to another context");
     }
+    // Retained by Truffle's cross-context proxy, unlike Java instanceof.
+    @ExportMessage public boolean hasLanguageId() { return true; }
+    @ExportMessage public String getLanguageId() { return "thc"; }
+    @ExportMessage public Object toDisplayString(boolean allowSideEffects) { return "Haskell reference"; }
     @TruffleBoundary private synchronized CbitsBuffer buffer() throws UnsupportedMessageException {
         requireOwner();
+        if (proof.getHostCarrier() != null) throw UnsupportedMessageException.create();
         if (buffer == null) {
             if (value instanceof ManagedAllocation allocation) {
                 if (writable && !allocation.isWritable()) throw new IllegalArgumentException("Read-only guest byte storage");
@@ -63,14 +68,15 @@ public final class HostReference implements TruffleObject {
         }
         return buffer;
     }
-    @ExportMessage public boolean hasBufferElements() { requireOwner(); return value instanceof byte[] || value instanceof ManagedAllocation; }
+    // Raw host references carry no guest storage or callable authority.
+    @ExportMessage public boolean hasBufferElements() { requireOwner(); return proof.getHostCarrier() == null && (value instanceof byte[] || value instanceof ManagedAllocation); }
     @ExportMessage public boolean isBufferWritable() throws UnsupportedMessageException { return buffer().isBufferWritable(); }
     @ExportMessage public long getBufferSize() throws UnsupportedMessageException { return buffer().getBufferSize(); }
     @ExportMessage public void readBuffer(long offset, byte[] destination, int destinationOffset, int length)
             throws UnsupportedMessageException, InvalidBufferOffsetException { buffer().readBuffer(offset, destination, destinationOffset, length); }
-    @ExportMessage public boolean hasArrayElements() { requireOwner(); return value instanceof Object[] || value instanceof SmallArrayStorage; }
+    @ExportMessage public boolean hasArrayElements() { requireOwner(); return proof.getHostCarrier() == null && (value instanceof Object[] || value instanceof SmallArrayStorage); }
     @ExportMessage public long getArraySize() throws UnsupportedMessageException {
-        requireOwner();
+        if (!hasArrayElements()) throw UnsupportedMessageException.create();
         if (value instanceof Object[] array) return array.length;
         if (value instanceof SmallArrayStorage array) return array.getLogicalSize();
         throw UnsupportedMessageException.create();
@@ -116,7 +122,7 @@ public final class HostReference implements TruffleObject {
     @ExportMessage public double readBufferDouble(ByteOrder order, long offset) throws UnsupportedMessageException, InvalidBufferOffsetException { return buffer().readBufferDouble(order, offset); }
     @ExportMessage public void writeBufferDouble(ByteOrder order, long offset, double value) throws UnsupportedMessageException, InvalidBufferOffsetException { buffer().writeBufferDouble(order, offset, value); }
     @ExportMessage public boolean isNull() { return value == null || value == ManagedAddress.nullAddress(); }
-    @ExportMessage public boolean isExecutable() { return value instanceof Closure || proof.getKind() == CoreKind.CLOSURE; }
+    @ExportMessage public boolean isExecutable() { return proof.getHostCarrier() == null && (value instanceof Closure || proof.getKind() == CoreKind.CLOSURE); }
     @ExportMessage public int identityHashCode() { return System.identityHashCode(value); }
     @ExportMessage public TriState isIdenticalOrUndefined(Object other) {
         return other instanceof HostReference reference ? TriState.valueOf(owner == reference.owner && value == reference.value) : TriState.UNDEFINED;

@@ -41,11 +41,11 @@ original Integer module is required by the real `Double` implementation; omittin
 it is a strict loading error, not a request to replace the library method.
 
 These are real Haskell modules compiled by GHC 9.14.1 at `-O2`. The THC
-prototype exports `THC.Prim` and `THC.Fixtures`; `NativeOracle.hs` is only the
+prototype exports `THC.ExamplePrim` and `THC.Fixtures`; `NativeOracle.hs` is only the
 native GHC oracle and benchmark driver. The prototype does not need to execute
 that driver's `base` IO code to execute the exported fixtures.
 
-`THC.Prim` supplies ordinary Haskell functions and constructors from a separate
+`THC.ExamplePrim` supplies ordinary Haskell functions and constructors from a separate
 module. Its `Box`, `Pair`, `List`, `Function`, and `Unary` types are deliberately small.
 Only `Int#` arithmetic and comparisons are primitive runtime services; addition
 of two `Box` values, list construction/traversal, application helpers, and

@@ -4,7 +4,7 @@
 {-# LANGUAGE MagicHash, NoImplicitPrelude #-}
 
 -- |
--- Module      : THC.Prim
+-- Module      : THC.ExamplePrim
 -- Copyright   : (C) 2026 Edward Kmett
 -- License     : UPL-1.0 AND BSD-3-Clause
 -- Maintainer  : Edward Kmett <ekmett@gmail.com>
@@ -12,7 +12,7 @@
 -- Portability : GHC-specific primitive types and operations
 --
 -- Small separately compiled module: no custom JVM builtins for these functions.
-module THC.Prim (Box(..), Pair(..), List(..), addBox, mulBox, applyBox, ignoreBox, firstBox, chooseFunction, moduleAdd, Unary(..), pickUnary) where
+module THC.ExamplePrim (Box(..), Pair(..), List(..), addBox, mulBox, applyBox, ignoreBox, firstBox, chooseFunction, moduleAdd, Unary(..), pickUnary) where
 
 import GHC.Exts (Int#, (+#), (*#), (<=#))
 

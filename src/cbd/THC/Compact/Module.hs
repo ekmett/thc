@@ -68,9 +68,10 @@ writeModuleRecords policy destination facts bindings catalog = do
         directory <- either fail pure (encodeMd5Symbols rows)
         void (appendBytes streams Fingerprints directory)
         control <- containsDelimitedControl encoder
+        hostSignatures <- containsHostSignatures encoder
         let summaries = (if control then 1 else 0) .|.
               (if registration then 2 else 0) .|. (if alias then 4 else 0) .|.
-              (if declarations then 8 else 0)
+              (if declarations then 8 else 0) .|. (if hostSignatures then 16 else 0)
         pure (count,summaries)
       binding encoder debug (!count,!alias,rows) (value,annotations) = do
         key <- case bindingIdentity value of

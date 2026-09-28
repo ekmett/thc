@@ -105,6 +105,35 @@ final class HostAbi {
     }
     private static Object scalar(Language.State owner, CoreRepresentation proof, Object input) {
         Object value = unwrap(owner, input);
+        if (proof.getHostCarrier() != null) {
+            if (value instanceof HostReference reference) {
+                if (reference.owner != owner) throw mismatch("a reference owned by this context");
+                if (proof.getHostCarrier() == CoreRepresentation.HostCarrier.INTEROP_LIBRARY) {
+                    if (reference.proof.getHostCarrier() != CoreRepresentation.HostCarrier.INTEROP_LIBRARY ||
+                            !(reference.value instanceof InteropLibrary)) throw mismatch("an acquired interop dispatcher");
+                    return reference.value;
+                }
+                // A storage view is itself the receiver: unwrapping its allocation
+                // here would lose its read-only/mutable permission and lifetime checks.
+                return reference.proof.getHostCarrier() == null ? reference : reference.value;
+            }
+            if (proof.getHostCarrier() == CoreRepresentation.HostCarrier.INTEROP_LIBRARY)
+                throw mismatch("a context-owned acquired interop dispatcher");
+            // A migrated THC value is a Truffle proxy, not a HostReference. Do
+            // not turn it into a raw object and thereby bypass the owner check.
+            if (InteropLibrary.isValidValue(value)) {
+                var library = InteropLibrary.getUncached();
+                try {
+                    if (library.hasLanguageId(value) && "thc".equals(library.getLanguageId(value)))
+                        throw mismatch("a reference owned by this context");
+                } catch (UnsupportedMessageException failure) { throw mismatch("an identifiable foreign reference"); }
+            }
+            if (value instanceof ForeignValue foreign) {
+                if (foreign.getOwner() != owner) throw mismatch("a reference owned by this context");
+                return foreign.getReceiver();
+            }
+            return value;
+        }
         if (proof.isVector()) return new VectorLayout(proof).require(value);
         var narrow = proof.getNarrowInteger();
         if (narrow != null) return narrow.fromHost(signed(value));
@@ -126,8 +155,9 @@ final class HostAbi {
                 return interop.asDouble(value);
             }
         } catch (UnsupportedMessageException failure) { throw mismatch("the declared numeric representation"); }
-        if (input instanceof HostReference reference) {
+        if (value instanceof HostReference reference) {
             if (reference.owner != owner) throw mismatch("a reference owned by this context");
+            if (reference.proof.getHostCarrier() != null) throw mismatch("a guest carrier, not a raw foreign reference");
             proof.refine(reference.proof);
             if (proof.getKind() == CoreKind.ADDRESS && !(reference.value instanceof ManagedAddress)) throw mismatch("a managed address");
             if (proof.getKind() == CoreKind.CLOSURE && !(reference.value instanceof Closure || reference.value instanceof Thunk)) throw mismatch("a guest function");

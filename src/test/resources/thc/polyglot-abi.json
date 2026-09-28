@@ -3,6 +3,54 @@
   "convention": "prim",
   "safety": "safe",
   "operations": {
+    "thc_interop_v1_get_library": {
+      "arguments": ["BoxedRep (Just Unlifted)"],
+      "scalar": true, "result": ["BoxedRep (Just Unlifted)"]
+    },
+    "thc_interop_v1_import_value": {
+      "arguments": ["BoxedRep (Just Lifted)", "State# RealWorld"],
+      "result": ["State# RealWorld", "BoxedRep (Just Unlifted)"]
+    },
+    "thc_interop_v1_has_buffer_elements": {
+      "arguments": ["BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "State# RealWorld"],
+      "result": ["State# RealWorld", "IntRep"]
+    },
+    "thc_interop_v1_is_buffer_writable": {
+      "arguments": ["BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "State# RealWorld"],
+      "result": ["State# RealWorld", "IntRep"]
+    },
+    "thc_interop_v1_get_buffer_size": {
+      "arguments": ["BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "State# RealWorld"],
+      "result": ["State# RealWorld", "IntRep"]
+    },
+    "thc_interop_v1_read_buffer_byte": {
+      "arguments": ["BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "State# RealWorld"],
+      "result": ["State# RealWorld", "Int8Rep"]
+    },
+    "thc_interop_v1_write_buffer_byte": {
+      "arguments": ["BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "Int8Rep", "State# RealWorld"],
+      "scalar": true, "result": ["State# RealWorld"]
+    },
+    "thc_interop_v1_has_array_elements": {
+      "arguments": ["BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "State# RealWorld"],
+      "result": ["State# RealWorld", "IntRep"]
+    },
+    "thc_interop_v1_get_array_size": {
+      "arguments": ["BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "State# RealWorld"],
+      "result": ["State# RealWorld", "IntRep"]
+    },
+    "thc_interop_v1_read_array_element": {
+      "arguments": ["BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "State# RealWorld"],
+      "result": ["State# RealWorld", "BoxedRep (Just Unlifted)"]
+    },
+    "thc_interop_v1_write_array_element": {
+      "arguments": ["BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "State# RealWorld"],
+      "scalar": true, "result": ["State# RealWorld"]
+    },
+    "thc_interop_v1_as_long": {
+      "arguments": ["BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "State# RealWorld"],
+      "result": ["State# RealWorld", "Int64Rep"]
+    },
     "thc_polyglot_v1_execute_value": {
       "arguments": ["BoxedRep (Just Lifted)","BoxedRep (Just Lifted)","State# RealWorld"],
       "result": ["State# RealWorld","BoxedRep (Just Lifted)"]

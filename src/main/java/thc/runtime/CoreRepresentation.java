@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Objects;
 
 public final class CoreRepresentation {
+    public enum HostCarrier { OBJECT, INTEROP_LIBRARY }
     private final CoreKind kind;
     private final boolean evaluated;
     private final boolean present;
@@ -20,6 +21,7 @@ public final class CoreRepresentation {
     private final boolean evaluatedUnliftedObject;
     private final boolean emptyTuple;
     private final int boxedLevity;
+    private final HostCarrier hostCarrier;
 
     public static final CoreRepresentation UNKNOWN = new CoreRepresentation(CoreKind.UNKNOWN);
 
@@ -40,6 +42,12 @@ public final class CoreRepresentation {
     public CoreRepresentation(CoreKind kind, boolean evaluated, boolean present, List<String> primReps,
                               List<CoreRepresentation> components, CoreVector vector,
                               List<CoreRepresentation> alternatives, Integer tagSlot, List<List<Integer>> alternativeSlots) {
+        this(kind, evaluated, present, primReps, components, vector, alternatives, tagSlot, alternativeSlots, null);
+    }
+    private CoreRepresentation(CoreKind kind, boolean evaluated, boolean present, List<String> primReps,
+                              List<CoreRepresentation> components, CoreVector vector,
+                              List<CoreRepresentation> alternatives, Integer tagSlot, List<List<Integer>> alternativeSlots,
+                              HostCarrier hostCarrier) {
         this.kind = Objects.requireNonNull(kind);
         this.evaluated = evaluated;
         this.present = present;
@@ -49,6 +57,10 @@ public final class CoreRepresentation {
         this.alternatives = alternatives;
         this.tagSlot = tagSlot;
         this.alternativeSlots = alternativeSlots;
+        this.hostCarrier = hostCarrier;
+        if (hostCarrier != null && !(present && kind == CoreKind.OBJECT && components == null && alternatives == null && vector == null &&
+                Objects.equals(primReps, List.of("BoxedRep (Just Unlifted)"))))
+            throw new RuntimeFault("Nominal host carrier requires an exact unlifted boxed reference");
         boxedLevity = boxedKind(kind) && primReps != null && primReps.size() == 1 ? switch (primReps.getFirst()) {
             case "BoxedRep Nothing" -> 0;
             case "BoxedRep (Just Lifted)" -> 1;
@@ -77,6 +89,10 @@ public final class CoreRepresentation {
     public List<List<Integer>> getAlternativeSlots() { return alternativeSlots; }
     public NarrowInteger getNarrowInteger() { return narrowInteger; }
     public boolean isInt() { return narrowInteger != null; }
+    public HostCarrier getHostCarrier() { return hostCarrier; }
+    public CoreRepresentation withHostCarrier(HostCarrier value) {
+        return new CoreRepresentation(kind, evaluated, present, primReps, components, vector, alternatives, tagSlot, alternativeSlots, value);
+    }
     public boolean isEvaluatedUnliftedObject() { return evaluatedUnliftedObject; }
     public boolean hasUnknownBoxedLevity() { return boxedLevity == 0; }
     public boolean hasBoxedPointer() { return boxedLevity >= 0; }
@@ -110,7 +126,7 @@ public final class CoreRepresentation {
     public CoreRepresentation copy(CoreKind kind, boolean evaluated, boolean present, List<String> primReps,
                                    List<CoreRepresentation> components, CoreVector vector,
                                    List<CoreRepresentation> alternatives, Integer tagSlot, List<List<Integer>> alternativeSlots) {
-        return new CoreRepresentation(kind, evaluated, present, primReps, components, vector, alternatives, tagSlot, alternativeSlots);
+        return new CoreRepresentation(kind, evaluated, present, primReps, components, vector, alternatives, tagSlot, alternativeSlots, hostCarrier);
     }
     public CoreRepresentation withEvaluated(boolean value) {
         return copy(kind, value, present, primReps, components, vector, alternatives, tagSlot, alternativeSlots);
@@ -120,6 +136,8 @@ public final class CoreRepresentation {
     }
 
     public CoreRepresentation refine(CoreRepresentation other) {
+        if (hostCarrier != null && other.hostCarrier != null && hostCarrier != other.hostCarrier)
+            throw new RuntimeFault("Conflicting nominal host carriers");
         // GHC checks scalar types; only the lowered Int/Long carrier differs here.
         if (kind == CoreKind.LONG && other.kind == CoreKind.LONG && primReps != null && other.primReps != null && isInt() != other.isInt())
             throw new RuntimeFault("Conflicting Core integral carriers");
@@ -153,7 +171,8 @@ public final class CoreRepresentation {
         var result = new CoreRepresentation(merged, evaluated || other.evaluated, present || other.present, mergedReps,
             mergedComponents, other.vector != null ? other.vector : vector,
             refineChildren(alternatives, other.alternatives), other.tagSlot != null ? other.tagSlot : tagSlot,
-            other.alternativeSlots != null ? other.alternativeSlots : alternativeSlots);
+            other.alternativeSlots != null ? other.alternativeSlots : alternativeSlots,
+            hostCarrier != null ? hostCarrier : other.hostCarrier);
         return result.isSum() ? SumShape.relayout(result) : result;
     }
     private static List<CoreRepresentation> refineChildren(List<CoreRepresentation> left, List<CoreRepresentation> right) {
@@ -176,7 +195,7 @@ public final class CoreRepresentation {
             evaluated == other.evaluated && present == other.present && Objects.equals(primReps, other.primReps) &&
             Objects.equals(components, other.components) && Objects.equals(vector, other.vector) &&
             Objects.equals(alternatives, other.alternatives) && Objects.equals(tagSlot, other.tagSlot) &&
-            Objects.equals(alternativeSlots, other.alternativeSlots);
+            Objects.equals(alternativeSlots, other.alternativeSlots) && hostCarrier == other.hostCarrier;
     }
     @Override public int hashCode() {
         int result = kind.hashCode();
@@ -187,7 +206,8 @@ public final class CoreRepresentation {
         result = 31 * result + Objects.hashCode(vector);
         result = 31 * result + Objects.hashCode(alternatives);
         result = 31 * result + Objects.hashCode(tagSlot);
-        return 31 * result + Objects.hashCode(alternativeSlots);
+        result = 31 * result + Objects.hashCode(alternativeSlots);
+        return 31 * result + Objects.hashCode(hostCarrier);
     }
     @Override public String toString() {
         return "CoreRepresentation(kind=" + kind + ", evaluated=" + evaluated + ", present=" + present +

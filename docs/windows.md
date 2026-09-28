@@ -47,7 +47,7 @@ manifest or request an unavailable dynamic library way.
 
 ~~~powershell
 ./bin/export-core.ps1 src/examples/THC/Fixtures.hs
-$modules = 'build/core/THC.Prim.json,build/core/THC.Fixtures.json'
+$modules = 'build/core/THC.ExamplePrim.json,build/core/THC.Fixtures.json'
 $env:THC_BACKEND = 'ast'
 ./build/install/thc/bin/thc.bat $modules sumLoop 100
 $env:THC_BACKEND = 'bytecode'

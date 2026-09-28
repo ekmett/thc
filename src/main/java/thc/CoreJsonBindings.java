@@ -66,7 +66,7 @@ public final class CoreJsonBindings {
             "staticForeignImportStubs", "staticForeignImports", "staticForeignExports", "staticForeignExportRegistration",
             "packageScalarLink", "packageNativeLink", "packageNativeArchive", "foreignExceptionBridge", "foreignExceptionBridgeUnit");
     private static final Set<String> BINDING_FIELDS = ordered("id", "name", "type", "lifted", "coercion", "arity", "expr",
-            "rep", "entryStrict", "joinValueArity", "joinResultRep", "source", "sourceNotes");
+            "rep", "hostSignature", "entryStrict", "joinValueArity", "joinResultRep", "source", "sourceNotes");
     private static final Set<String> FORMAL_FIELDS = ordered("id", "name", "type", "lifted", "coercion", "rep", "source", "sourceNotes");
     private static final Set<String> METADATA_FIELDS = ordered("rep", "resultRep", "entryStrict", "callDemand", "foreignCall",
             "exceptionPayload", "enumFamily", "dataToTagFamily", "binder", "binders", "source", "sourceNotes");

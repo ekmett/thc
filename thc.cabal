@@ -750,6 +750,8 @@ library interop
   visibility: public
   hs-source-dirs: src/runtime
   exposed-modules:
+    THC.Prim
+    THC.Interop
     THC.Polyglot
     THC.Interop.Buffer
     THC.Interop.Array
@@ -1389,6 +1391,7 @@ executable thc-fixtures
     ManagedAddressReadFixtures
   hs-source-dirs: t/haskell-fixtures, src/driver
   build-depends:
+    thc:compact-core,
     thc:core-symbols,
     base >= 4.22 && < 4.23,
     Cabal == 3.16.*, Cabal-syntax == 3.16.*,

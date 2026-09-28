@@ -249,7 +249,7 @@ binding :: Locals -> Maybe Locals -> Value -> Convert Binding
 binding rhsScope declared value = do
   fields <- lift (object value)
   lift (checked fields ["id","name","type","lifted","arity","expr","rep","info","entryStrict",
-    "entryStrictSource","joinValueArity","joinResultRep","source"])
+    "entryStrictSource","joinValueArity","joinResultRep","hostSignature","source"])
   key <- lift (fields .: "id")
   identity <- case declared of
     Nothing -> pure (Global (Text.encodeUtf8 key))
@@ -259,7 +259,19 @@ binding rhsScope declared value = do
     <*> lift (fields .: "arity") <*> lift (optional fields "rep" rep) <*> lift (optional fields "info" idInfo)
     <*> lift (optional fields "entryStrict" (array parseJSON)) <*> lift (optional fields "entryStrictSource" bytes)
     <*> lift (optional fields "joinValueArity" parseJSON) <*> lift (optional fields "joinResultRep" rep)
+    <*> lift (optional fields "hostSignature" hostSignature)
     <*> (lift (fields .: "expr") >>= expr rhsScope)
+
+hostSignature :: Value -> Parser HostSignature
+hostSignature = withObject "declared host signature" $ \fields -> do
+  checked fields ["inputs","result"]
+  HostSignature <$> (fields .: "inputs" >>= array hostType) <*> (fields .: "result" >>= hostType)
+  where
+    hostType = withObject "declared host type" $ \fields -> do
+      checked fields ["rep","carriers"]
+      HostType <$> (fields .: "rep" >>= rep) <*> (fields .: "carriers" >>= array carrier)
+    carrier Null = pure HostPlain
+    carrier value = choice [("object",HostObject),("interop-library",HostInteropLibrary)] value
 
 expr :: Locals -> Value -> Convert Expr
 expr scope value = do

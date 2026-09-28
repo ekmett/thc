@@ -137,7 +137,7 @@ prepareWindowsSmoke root = do
       logs = directory </> stamp
       native = "build/native"
       oracle = native </> "native-oracle.exe"
-      modules = ["build/core/THC.Prim.json", "build/core/THC.Fixtures.json"]
+      modules = ["build/core/THC.ExamplePrim.json", "build/core/THC.Fixtures.json"]
   createDirectoryIfMissing True (root </> native)
   powershell <- maybe "powershell.exe" id <$> findExecutable "pwsh"
   exported <- runLogged 300 root logs "export" [] powershell
@@ -161,7 +161,7 @@ prepareWindowsSmoke root = do
   compiler <- listDirectory (root </> "src/compiler/THC")
   scripts <- listDirectory (root </> "bin")
   let sources = ["src/examples/NativeOracle.hs", "src/examples/THC/Fixtures.hs",
-        "src/examples/THC/Prim.hs", "src/examples/THC/MapWorkload.hs",
+        "src/examples/THC/ExamplePrim.hs", "src/examples/THC/MapWorkload.hs",
         "t/haskell-fixtures/WindowsSmokeFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
         "t/haskell-fixtures/Main.hs",
         "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/CString.hs", "src/compiler/interface/Main.hs", "bin/export-core.ps1",

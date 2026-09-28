@@ -1894,7 +1894,9 @@ public final class Program implements ExecutableProgram {
             OperandBuilder operands = capturesContinuations ? new OperandBuilder(scope.layout) : null;
             operandBuilder = operands;
             try {
-                Expr body = new PolyglotExpression(polyglot, argumentOperands(args, scope, false)).proven(evaluated(tupleProof, true));
+                var lowered = argumentOperands(args, scope, false);
+                Expr body = (polyglot.explicitLibrary() ? new InteropExpression(polyglot, lowered) :
+                    new PolyglotExpression(polyglot, lowered)).proven(evaluated(tupleProof, true));
                 return operands == null ? body : operands.finish(body);
             } finally { operandBuilder = outer; }
         }

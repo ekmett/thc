@@ -76,6 +76,21 @@ semanticTests = TestList
       withEncoded (\_ encoder -> encodeBinding encoder completeBinding) $ \bytes strings offset ->
         assertEqual "all fields" (Right (completeBinding,fromIntegral (BS.length bytes)))
           (decodeBindingAt bytes strings offset)
+  , TestLabel "optional declared host signature preserves old binding records" $ TestCase $ do
+      let raw = HostType (Rep (scalar ObjectKind [BoxedUnlifted]) (Evaluation (Known True) [])) [HostObject]
+          library = case raw of HostType proof _ -> HostType proof [HostInteropLibrary]
+          signature = HostSignature [raw] library
+      forM_ [Missing,Unknown,Known signature] $ \proof -> do
+        let binding = completeBinding {bindingHostSignature=proof}
+            original = moduleJSON completeFacts [binding]
+        assertEqual "JSON preserves optional nominal declaration" (Right (completeFacts,[binding])) (parseModuleWithoutDebug original)
+        withEncoded (\_ encoder -> encodeBinding encoder binding) $ \bytes strings offset -> do
+          assertEqual "selected record retains declaration" (Right binding) (fst <$> decodeBindingAt bytes strings offset)
+          if proof == Missing
+            then assertEqual "old record needs no feature bit" (Right binding)
+              (fst <$> decodeBindingAtWithHostSignatures False bytes strings offset)
+            else assertBool "extension requires feature bit"
+              (isLeft (decodeBindingAtWithHostSignatures False bytes strings offset))
   , TestLabel "foreign byte-array argument identity survives selected wire records" $ TestCase $
       forM_ ["ByteArray#", "MutableByteArray#"] $ \arrayType -> do
         let amend (Object fields)
@@ -398,10 +413,10 @@ parameter ordinal = Binder ordinal OtherEntry (Known False) (Known False) (Known
 completeBinding :: Binding
 completeBinding = Binding (Global "main:Typed.all") IOUnit (Known True) 1 (Known tupleCold)
   (Known (IdInfo (Known 0) (Known True) (Known [True]))) (Known [True]) (Known "ghc-cbv")
-  (Known 0) (Known longRep) body
+  (Known 0) (Known longRep) Missing body
   where
     local = Binding (Local 1) OtherEntry (Known True) 0 Unknown Missing (Known []) Missing
-      Missing Missing (Lit emptyMeta (LitInt 41))
+      Missing Missing Missing (Lit emptyMeta (LitInt 41))
     info = emptyMeta
       { metaRep = Known longRep, metaResultRep = Known tupleHot
       , metaEntryStrict = Known [True], metaEntryStrictSource = Known "ghc-cbv"

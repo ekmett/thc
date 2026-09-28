@@ -360,7 +360,7 @@ public final class Language extends TruffleLanguage<Language.State> {
         String hostResultFault = null;
         if (ioResult == null) {
             try {
-                var signature = CoreRepresentations.knownFunctionSignature(expression, bindings);
+                var signature = CoreHostSignature.select(selected, bindings);
                 if (signature != null) { hostInputs = signature.getInputs(); hostResult = signature.getResult(); }
                 else if (((Number) selected.get("arity")).intValue() == 0) {
                     hostResult = CoreRepresentations.binder(selected).refine(CoreRepresentations.expression(expression));
@@ -478,7 +478,7 @@ public final class Language extends TruffleLanguage<Language.State> {
                     List<CoreRepresentation> hostInputs = null;
                     CoreRepresentation hostResult = null;
                     if (io == null) {
-                        var signature = CoreRepresentations.knownFunctionSignature(expression, bindings);
+                        var signature = CoreHostSignature.select(selected, bindings);
                         if (signature != null) { hostInputs = signature.getInputs(); hostResult = signature.getResult(); }
                         else if (((Number) selected.get("arity")).intValue() == 0) {
                             hostResult = CoreRepresentations.binder(selected).refine(CoreRepresentations.expression(expression));

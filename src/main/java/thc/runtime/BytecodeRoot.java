@@ -317,6 +317,25 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation
+    public static final class InteropLibraryGet {
+        @Specialization public static Object apply(Object receiver,
+                @Cached(value = "createAccess()", neverDefault = true) InteropLibraryAcquisition acquisition) {
+            return acquisition.execute(receiver);
+        }
+        public static InteropLibraryAcquisition createAccess() { return new InteropLibraryAcquisition(); }
+    }
+
+    @Operation
+    @ConstantOperand(type = PolyglotOp.class, name = "operation")
+    public static final class InteropMessage {
+        @Specialization public static Object apply(PolyglotOp operation, @Variadic Object[] arguments,
+                @Cached(value = "createAccess()", neverDefault = true) InteropAccess access) {
+            return access.execute(operation, arguments);
+        }
+        public static InteropAccess createAccess() { return new InteropAccess(); }
+    }
+
+    @Operation
     @ConstantOperand(type = BytecodeJavaScriptArguments.class, name = "arguments")
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class JavaScriptInt {

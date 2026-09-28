@@ -16,7 +16,7 @@ ABI = json.loads((ROOT / 'src/test/resources/thc/polyglot-abi.json').read_text()
 
 
 def rep(register):
-    return dict(kind={'AddrRep': 'address', 'IntRep': 'long', 'DoubleRep': 'double',
+    return dict(kind={'AddrRep': 'address', 'IntRep': 'long', 'Int8Rep': 'long', 'Int64Rep': 'long', 'DoubleRep': 'double',
                       'BoxedRep (Just Lifted)': 'object', 'BoxedRep (Just Unlifted)': 'object', 'State# RealWorld': 'void'}[register],
                 primReps=[] if register == 'State# RealWorld' else [register], evaluated=True)
 
@@ -27,6 +27,8 @@ def call(symbol):
     fields = [rep(register) for register in signature['result']]
     result = dict(kind='unknown', aggregate='unboxed-tuple', components=fields,
                   primReps=[register for field in fields for register in field['primReps']], evaluated=False)
+    if signature.get('scalar') is True:
+        result = fields[0]
     descriptor = dict(schema=1, target=dict(kind='static', symbol=symbol, unit='main', isFunction=True),
                       convention=ABI['convention'], safety=ABI['safety'], arity=len(arguments),
                       suppliedArity=len(arguments), argumentReps=deepcopy(arguments), resultRep=deepcopy(result))

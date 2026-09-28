@@ -30,9 +30,12 @@ class CoreCompactRecordsTest {
         module(data, strings, new byte[0], action);
     }
     private void module(byte[] data, byte[] strings, byte[] facts, Action action) throws Exception {
+        module(data, strings, facts, 0, action);
+    }
+    private void module(byte[] data, byte[] strings, byte[] facts, int flags, Action action) throws Exception {
         var symbols = ByteBuffer.allocate(24).order(ByteOrder.LITTLE_ENDIAN)
             .put(MessageDigest.getInstance("MD5").digest(id)).putLong(0).array();
-        var encoded = CoreCbdTestSupport.archive(CoreCbdTestSupport.header(facts, 1, 0, 0),
+        var encoded = CoreCbdTestSupport.archive(CoreCbdTestSupport.header(facts, 1, flags, 0),
             List.of(data, strings, new byte[0], new byte[0], new byte[0], symbols), Set.of(), false);
         var path = directory.resolve("module.cbd");
         Files.write(path, encoded);
@@ -49,6 +52,28 @@ class CoreCompactRecordsTest {
     private byte[] literal(int kind, byte[] payload) { return concat(bytes(2), new byte[10], bytes(kind), payload); }
     private byte[] binding(byte[] expression) { return concat(bytes(0, 0, id.length, 0, 2, 1, 0, 0, 0, 0, 0, 0, 0), expression); }
     private record LiteralCase(int kind, byte[] payload, String tag, Object expected) {}
+    @Test void nominalHostSignatureExtensionNeedsItsFeatureBitAndKeepsOldRecords() throws Exception {
+        // Independent shape encoding: object, exact unlifted boxed reference, evaluated.
+        byte[] rep = bytes(0, 7, 2, 1, 15, 0, 0, 0, 0, 0, 0, 2, 1);
+        byte[] plain = binding(literal(0, bytes(84)));
+        byte[] extended = concat(bytes(2, 2, 1), rep, bytes(1, 1), rep, bytes(1, 2), plain);
+        module(plain, (records, file) -> assertFalse(records.binding(0).containsKey("hostSignature")));
+        module(extended, id, new byte[0], 16, (records, file) -> {
+            assertTrue(file.header().getContainsHostSignatures());
+            var signature = (Map<?, ?>) records.binding(0).get("hostSignature");
+            var input = (Map<?, ?>) ((List<?>) signature.get("inputs")).getFirst();
+            assertEquals(List.of("object"), input.get("carriers"));
+            assertEquals(List.of("BoxedRep (Just Unlifted)"), ((Map<?, ?>) input.get("rep")).get("primReps"));
+            assertEquals(List.of("interop-library"), ((Map<?, ?>) signature.get("result")).get("carriers"));
+        });
+        module(extended, (records, file) -> assertThrows(IllegalArgumentException.class, () -> records.binding(0)));
+        module(concat(bytes(2, 0), plain), id, new byte[0], 16, (records, file) ->
+            assertEquals("Missing compact host signature extension",
+                assertThrows(IllegalArgumentException.class, () -> records.binding(0)).getMessage()));
+        module(concat(bytes(2, 2, 0), rep, bytes(1, 3), plain), id, new byte[0], 16, (records, file) ->
+            assertEquals("Invalid compact host carrier",
+                assertThrows(IllegalStateException.class, () -> records.binding(0)).getMessage()));
+    }
     @Test void nativeCompanionAndDataEntriesDecodeWithoutReadingBodies() throws Exception {
         byte[] text = bytes(0, id.length);
         byte[] extendedInputs = concat(bytes(3, 0, 0, 0, 1), text, bytes(1), text, text, text, bytes(1), text,
