@@ -52,10 +52,11 @@ class ConstructorLayoutInterningTest {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                for (var id : list(BOX, "test:Shared.:."))
                 for (var source : list("ast", "bytecode")) for (var target : list("ast", "bytecode")) {
-                    var producer = program(language, source, module(BOX, true));
-                    var consumer = program(language, target, module(BOX, false));
-                    assertSame(producer.constructorLayout(BOX), consumer.constructorLayout(BOX));
+                    var producer = program(language, source, module(id, true));
+                    var consumer = program(language, target, module(id, false));
+                    assertSame(producer.constructorLayout(id), consumer.constructorLayout(id));
                     assertEquals(42L, call(consumer, call(producer, 42L)), source + " -> " + target);
                     consumer.entryTarget("entry").getClass().getMethod("compile", boolean.class).invoke(consumer.entryTarget("entry"), true);
                     assertEquals(Long.MIN_VALUE, call(consumer, call(producer, Long.MIN_VALUE)));

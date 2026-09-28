@@ -143,7 +143,8 @@ public final class Language extends TruffleLanguage<Language.State> {
         /** Only parsed shape metadata enters this cache; demand loading happens before taking its lock. */
         public synchronized DataLayout constructorLayout(TruffleLanguage<?> language, String id, String name, CoreFields fields) {
             int unitEnd = id.indexOf(':');
-            int moduleEnd = id.lastIndexOf('.');
+            // Symbolic constructor occurrences can contain or end in a dot.
+            int moduleEnd = id.indexOf('.', unitEnd + 1);
             if (unitEnd <= 0 || moduleEnd <= unitEnd + 1 || moduleEnd == id.length() - 1)
                 return DataLayout.fromFields(language, id, name, fields);
             return constructorLayouts.computeIfAbsent(new ConstructorLayoutKey(id, fields),
