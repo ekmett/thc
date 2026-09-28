@@ -16,8 +16,8 @@ import java.io.File
 class BoxedValueCacheTest {
     private data class Builtin(val id: String, val name: String, val rep: String, val minimum: Long, val maximum: Long)
     private val builtins = listOf(
-        Builtin(BOXED_INT_CONSTRUCTOR_ID, "I#", "IntRep", -16, 255),
-        Builtin(BOXED_CHAR_CONSTRUCTOR_ID, "C#", "WordRep", 0, 255))
+        Builtin(DataValuesKt.BOXED_INT_CONSTRUCTOR_ID, "I#", "IntRep", -16, 255),
+        Builtin(DataValuesKt.BOXED_CHAR_CONSTRUCTOR_ID, "C#", "WordRep", 0, 255))
 
     private fun property(name: String, value: String?, action: () -> Unit) {
         val before = System.getProperty(name)
@@ -29,7 +29,7 @@ class BoxedValueCacheTest {
         }
     }
     private fun cache(enabled: Boolean, action: () -> Unit) =
-        property(BOXED_VALUE_CACHE_PROPERTY, if (enabled) "true" else null, action)
+        property(DataValuesKt.BOXED_VALUE_CACHE_PROPERTY, if (enabled) "true" else null, action)
 
     private fun context(strategy: String, action: (Language) -> Unit) {
         Context.newBuilder("thc").allowExperimentalOptions(true)
