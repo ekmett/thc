@@ -7,10 +7,11 @@ import java.util.List;
 
 public class CompactRegionsNativeTest {
     @Test public void originalCompactLibraryMatchesNativeForGraphsCyclesArraysAndExceptionsOnBothBackends() throws Exception {
-        new CompactLibraryFixture("build/compact-regions", List.of("ordinary", "sharing", "cycleCase", "rejectedObjects", "frozenArray"),
+        new CompactLibraryFixture("build/compact-regions", List.of("ordinary", "sharing", "cycleCase", "rejectedObjects", "frozenArray", "interruptedPlain", "interruptedSharing"),
             (entry, input) -> switch (entry) {
                 case "ordinary", "sharing" -> 4 * input + 106; case "cycleCase" -> input + 100;
-                case "rejectedObjects" -> input + 1111; case "frozenArray" -> 2 * input; default -> throw new IllegalStateException(entry);
+                case "rejectedObjects" -> input + 1111; case "frozenArray" -> 2 * input;
+                case "interruptedPlain", "interruptedSharing" -> input + 43; default -> throw new IllegalStateException(entry);
             }, "ordinary").run();
     }
 }

@@ -30,7 +30,7 @@ import System.FilePath
 prepareCompactRegions :: FilePath -> IO ()
 prepareCompactRegions root = prepareCompactFixture root "build/compact-regions"
   "t/fixtures/compiler/CompactRegionsAudit.hs" "t/fixtures/compiler/CompactRegionsNative.hs"
-  ["ordinary", "sharing", "cycleCase", "rejectedObjects", "frozenArray"]
+  ["ordinary", "sharing", "cycleCase", "rejectedObjects", "frozenArray", "interruptedPlain", "interruptedSharing"]
 
 prepareCompactSerialization :: FilePath -> IO ()
 prepareCompactSerialization root = prepareCompactFixture root "build/compact-serialization"

@@ -7422,7 +7422,6 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
         if (CompactOp.named(name) != null) {
             var operation = CompactOp.named(name);
-            if (enableAsync && operation.getAdds()) throw new UnsupportedCore("Compact graph traversal does not yet support resumable asynchronous forcing");
             operation.validate(argumentProofs(args), flags, tupleProof);
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, CoreRepresentations.argumentMayBeLazy(flags.get(index), args.get(index))));
@@ -7438,14 +7437,44 @@ public final class BytecodeProgram implements ExecutableProgram {
             }, evaluatedProof(tupleProof, true));
             return tupleExpression(tupleProof, (e, destination) -> {
                 var b = e.builder;
+                if (operation.getAdds()) {
+                    if (enableAsync) emitBlockingRequest(e, operands, false, values -> {
+                        var suspended = b.createLocal("compact addition suspension", FrameSlotKind.Object);
+                        var callerMask = b.createLocal("compact addition mask", FrameSlotKind.Object);
+                        b.beginStaticStoreObject(callerMask); b.emitCurrentMask(); b.endStaticStoreObject();
+                        b.beginTryCatch();
+                        b.beginStaticStoreObject(destination.getFirst());
+                        b.beginAddCompact(operation == CompactOp.ADD_SHARING, metrics, payloads, true);
+                        for (var value : values) b.emitStaticLoadObject(value);
+                        b.endAddCompact(); b.endStaticStoreObject();
+                        b.beginBlock();
+                        b.beginStaticStoreObject(suspended);
+                        b.beginCallSuspensionOnly(); b.emitLoadException(); b.endCallSuspensionOnly();
+                        b.endStaticStoreObject();
+                        b.beginStaticStoreObject(destination.getFirst());
+                        b.beginResumeApplication(); b.emitStaticLoadObject(suspended);
+                        b.beginReenterCallMask(); beginAnnotationYield(e);
+                        b.beginParkCallMask(); b.emitStaticLoadObject(suspended);
+                        b.emitStaticLoadObject(Objects.requireNonNull(e.checkpointRootEntry));
+                        b.emitStaticLoadObject(callerMask); b.endParkCallMask();
+                        endAnnotationYield(e); b.emitStaticLoadObject(callerMask); b.endReenterCallMask();
+                        b.endResumeApplication(); b.endStaticStoreObject(); b.endBlock(); b.endTryCatch();
+                    });
+                    else {
+                        b.beginStaticStoreObject(destination.getFirst());
+                        b.beginAddCompact(operation == CompactOp.ADD_SHARING, metrics, payloads, false);
+                        for (var operand : operands) operand.emit(e);
+                        b.endAddCompact(); b.endStaticStoreObject();
+                    }
+                    return;
+                }
                 switch (operation) {
-                    case ADD, ADD_SHARING -> b.beginAddCompact(destination.get(0), operation == CompactOp.ADD_SHARING, metrics, payloads);
                     case CONTAINS -> b.beginContainsCompact(destination.get(0));
                     default -> b.beginInspectCompact(destination.get(0), operation);
                 }
                 for (var operand : operands) operand.emit(e);
                 switch (operation) {
-                    case ADD, ADD_SHARING -> b.endAddCompact(); case CONTAINS -> b.endContainsCompact(); default -> b.endInspectCompact();
+                    case CONTAINS -> b.endContainsCompact(); default -> b.endInspectCompact();
                 }
             });
         }

@@ -209,8 +209,8 @@ Details: [native address projection](native-addresses.md), [managed pinning](pin
 | `compactNew#` | Creates a managed copied-graph region, not a contiguous GHC heap region. Does not provide GHC's avoidance of tracing every interior object during GC. |
 | `compactResize#` | Changes target region-capacity accounting, not a contiguous native reservation. |
 | `compactSize#` | Reports target capacity accounting in 4-KiB units, not exact GHC heap bytes or JVM object size. |
-| `compactAdd#` | Copies/forces immutable graphs; resumable asynchronous forcing during addition is not implemented. Plain addition on cycles rejects with a diagnostic directing callers to the sharing variant. |
-| `compactAddWithSharing#` | Preserves sharing and cycles, but has the same asynchronous-forcing restriction. |
+| `compactAdd#` | Copies/forces immutable graphs. Asynchronous child forcing retains a one-shot traversal without replaying completed children; private shells are published only on success. Plain addition on cycles rejects with a diagnostic directing callers to the sharing variant. |
+| `compactAddWithSharing#` | Same resumable traversal, preserving sharing and cycles. A parked or abandoned copy does not keep the region's active-writer guard; resumed segments reacquire it. |
 | `compactGetFirstBlock#` | Exports a versioned THC graph image, **not GHC's wire format**. Images are limited to 256 MiB and currently usable only in their originating context; opaque external addresses cannot be serialized as native bits. |
 | `compactGetNextBlock#` | Continues that same context-local image in checked 64-KiB blocks, with the same format/size restrictions. |
 | `compactAllocateBlock#` | Allocates blocks for that THC image, not arbitrary GHC heap images or cross-context/process import. Abandoned raw imports are retained until context disposal. |

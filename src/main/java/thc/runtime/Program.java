@@ -2102,8 +2102,6 @@ public final class Program implements ExecutableProgram {
         }
         if (primitive && CompactOp.named((String) fn.get(1)) != null) {
             var operation = Objects.requireNonNull(CompactOp.named((String) fn.get(1)));
-            if (capturesContinuations && operation.getAdds())
-                throw new UnsupportedCore("Compact graph traversal does not yet support resumable asynchronous forcing");
             operation.validate(argumentProofs(args), flags, tupleProof);
             List<GlobalBinding> failures = new ArrayList<>();
             if (operation.getAdds()) for (String id : CompactOp.getFailures()) {

@@ -23,8 +23,16 @@ The target uses managed JVM objects, not a contiguous GHC heap image. `compactSi
 reports target region-capacity accounting in 4-KiB units; it is not a measurement
 of JVM object size. There is no promise of GHC's GC traversal avoidance or its
 exact byte counts. Plain addition on a cyclic graph is rejected with a diagnostic
-directing the caller to the sharing variant. Resumable asynchronous forcing
-during addition is not implemented yet; synchronous guest exceptions are retained.
+directing the caller to the sharing variant.
+
+Both backends support asynchronous suspension while forcing a child during
+addition. The one-shot continuation retains the remaining traversal and private
+shells, so resumption does not replay completed children. Shells become region
+members only after the entire copy succeeds. Suspension releases the region's
+active-writer guard; each resumed segment reacquires it, and abandoning a copy
+does not prevent a later addition. Synchronous failures retain the original
+exception payload and discard the unpublished copy. This does not make opaque
+foreign execution or new delimited capture through the copier resumable.
 
 ## Serialized blocks and object addresses
 
@@ -67,7 +75,11 @@ This requires the pinned GHC 9.14.1 installation with complete Core; a stock thi
 interface installation is an explicit missing prerequisite, not a reason to
 rewrite the library or skip its native result comparison. The native examples
 exercise creation, addition, membership, growth, sharing, cycles, frozen arrays,
-and the public exception handler in both pre- and post-Tidy exports. Serialization
+and the public exception handler in both pre- and post-Tidy exports. Handshaked
+interruption controls resume a shared compaction with a once-only source prefix
+and an unforced delivery payload. JVM controls separately retain the original
+installed caller through its first real compiled child capture, completion and
+failure cleanup without target warmup, on both backends. Serialization
 examples perform real block copies and imports of shared trees, cycles, an empty
 root, and multiple blocks; ordinary JVM tests also cover corrupt images, exact
 scalar/vector bits, one-shot fixup and weak-address preconditions.

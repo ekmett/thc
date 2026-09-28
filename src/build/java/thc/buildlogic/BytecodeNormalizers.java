@@ -40,6 +40,7 @@ public final class BytecodeNormalizers {
         String result = unprofiledBranch(handlers(staticPreparation(sourceMode(metadata(source, version), version), version), version), version);
         result = BytecodeColdApplyPreparation.transform(result, version);
         result = BytecodeColdDelimitedPreparation.transform(result, version);
+        result = BytecodeColdCompactPreparation.transform(result, version);
         result = BytecodeColdForcePreparation.transform(result, version);
         return BytecodeStackPreparation.transform(BytecodeBudgetChoice.transform(result, version), version);
     }

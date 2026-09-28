@@ -46,7 +46,11 @@ final class CompactExpression extends Expr {
                 var value = operands[1].execute(frame);
                 TupleResults.requireVoidCarrier(operands[2].execute(frame));
                 if (operation == CompactOp.CONTAINS) FrameAccess.writeLong(frame, slots[offset], registry.contains(region, value) ? 1L : 0L);
-                else FrameAccess.write(frame, slots[offset], copier.execute(frame, region, value, operation == CompactOp.ADD_SHARING));
+                else try { FrameAccess.write(frame, slots[offset], copier.execute(frame, region, value, operation == CompactOp.ADD_SHARING)); }
+                catch (AstCapture cut) {
+                    int destination = slots[offset];
+                    throw cut.append((resumed, copied) -> { FrameAccess.write(resumed, destination, copied); return null; });
+                }
             }
             default -> throw fault("Not a tuple compact operation");
         }

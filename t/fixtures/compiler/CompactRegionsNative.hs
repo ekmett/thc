@@ -18,7 +18,8 @@ import GHC.Exts
 main :: IO ()
 main = mapM_ observe [(name, function, input) |
   (name, function) <- [("ordinary", ordinary), ("sharing", sharing), ("cycleCase", cycleCase),
-    ("rejectedObjects", rejectedObjects), ("frozenArray", frozenArray)],
+    ("rejectedObjects", rejectedObjects), ("frozenArray", frozenArray),
+    ("interruptedPlain", interruptedPlain), ("interruptedSharing", interruptedSharing)],
   input <- [-31, 0, 17, 4097]]
   where
     observe (name, function, input@(I# n)) =

@@ -47,7 +47,7 @@ final class CompactLibraryFixture {
             var module = new LinkedHashMap<>(CoreModules.merge(modules)); module.put("targetLayout", targetLayout);
             boolean retained = false; for (var binding : (List<Map<String, Object>>) module.get("bindings")) if (((String) binding.get("id")).contains(":GHC.Compact.")) retained = true;
             assertTrue(retained, "Original library retained");
-            try (Context context = Context.newBuilder("thc", "llvm").allowNativeAccess(true).allowIO(IOAccess.ALL).allowExperimentalOptions(true)
+            try (Context context = Context.newBuilder("thc", "llvm").allowCreateThread(true).allowNativeAccess(true).allowIO(IOAccess.ALL).allowExperimentalOptions(true)
                 .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.SingleTierCompilationThreshold", "10000000")
                 .option("engine.CompilationFailureAction", "Throw").build()) {
                 context.initialize("thc"); context.enter();
@@ -55,7 +55,8 @@ final class CompactLibraryFixture {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                     for (String entry : entries) {
                         var linked = new LinkedHashMap<>(CoreModules.reachable(module, entry, true)); linked.put("instrument", true);
-                        ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
+                        boolean async = entry.equals("interruptedPlain") || entry.equals("interruptedSharing");
+                        ExecutableProgram program = backend.equals("ast") ? new Program(language, linked, async) : new BytecodeProgram(language, linked, async);
                         var function = context.asValue(new EntryValue(program, entry, 1));
                         for (long input : new long[] {-31L, 0L, 17L, 4097L}) assertEquals(expected.applyAsLong(entry, input), function.execute(input).asLong(), stage.getKey() + "/" + backend + "/" + entry + "/" + input);
                         if (entry.equals(compiledEntry)) {

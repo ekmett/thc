@@ -24,6 +24,74 @@ data Cycle = Cycle Int Cycle
 data BoxedArray = BoxedArray (Array# Int)
 data MutableArray = MutableArray (MutableArray# RealWorld Int)
 data Bytes = Bytes ByteArray#
+data AsyncBox = AsyncBox Int#
+data AsyncThread = AsyncThread ThreadId#
+data AsyncCells = AsyncCells (MVar# RealWorld AsyncBox) (MVar# RealWorld AsyncBox)
+  (MVar# RealWorld AsyncBox) (MVar# RealWorld AsyncThread) (MutVar# RealWorld AsyncBox)
+data SharedCompact = SharedCompact Tree
+
+{-# OPAQUE blockedTree #-}
+blockedTree :: AsyncCells -> Tree
+blockedTree (AsyncCells ready gate _ _ counter) =
+  case readMutVar# counter realWorld# of { (# s1, AsyncBox before #) ->
+  case writeMutVar# counter (AsyncBox (before +# 1#)) s1 of { s2 ->
+  case putMVar# ready (AsyncBox 1#) s2 of { s3 ->
+  case takeMVar# gate s3 of { (# _, _ #) -> Leaf 37 } } } }
+
+{-# OPAQUE makeSharedCompact #-}
+makeSharedCompact :: Int# -> Compact# -> AsyncCells -> SharedCompact
+makeSharedCompact mode region cells = SharedCompact $
+  let source = Branch (Leaf 5) (blockedTree cells)
+  in case mode of
+    0# -> case compactAdd# region source realWorld# of (# _, value #) -> value
+    _ -> case compactAddWithSharing# region source realWorld# of (# _, value #) -> value
+
+{-# OPAQUE compactChild #-}
+compactChild :: SharedCompact -> AsyncCells -> State# RealWorld -> (# State# RealWorld, () #)
+compactChild shared (AsyncCells _ _ done identity _) s0 =
+  case myThreadId# s0 of { (# s1, tid #) ->
+  case putMVar# identity (AsyncThread tid) s1 of { s2 ->
+  case catch# (\s -> case shared of { SharedCompact value ->
+                      case total value of I# n -> (# s, AsyncBox n #) })
+              (\_ s -> (# s, AsyncBox (-1#) #)) s2 of { (# s3, result #) ->
+  case putMVar# done result s3 of { s4 -> (# s4, () #) } } } }
+
+-- The compaction itself is shared, not just its source child. Delivery must
+-- retain the copier's unfinished work; the handler never forces its payload.
+{-# OPAQUE interruptedCompact #-}
+interruptedCompact :: Int# -> Int# -> Int#
+interruptedCompact mode token = runRW# $ \s0 ->
+  case compactNew# 4096## s0 of { (# s1, region #) ->
+  case newMVar# s1 of { (# s2, ready #) ->
+  case newMVar# s2 of { (# s3, gate #) ->
+  case newMVar# s3 of { (# s4, done #) ->
+  case newMVar# s4 of { (# s5, identity #) ->
+  case newMutVar# (AsyncBox 0#) s5 of { (# s6, counter #) ->
+  let cells = AsyncCells ready gate done identity counter
+      shared = makeSharedCompact mode region cells
+  in case fork# (compactChild shared cells) s6 of { (# s7, _ #) ->
+  case takeMVar# identity s7 of { (# s8, AsyncThread tid #) ->
+  case takeMVar# ready s8 of { (# s9, AsyncBox signalled #) ->
+  case killThread# tid (raise# (AsyncBox 99#) :: AsyncBox) s9 of { s10 ->
+  case takeMVar# done s10 of { (# s11, AsyncBox caught #) ->
+  case putMVar# gate (AsyncBox 1#) s11 of { s12 ->
+  case shared of { SharedCompact value ->
+  case value of { evaluated@(Branch _ _) ->
+  case total evaluated of { I# answer ->
+  case compactContains# region evaluated s12 of { (# s13, inside #) ->
+  case readMutVar# counter s13 of { (# _, AsyncBox prefixes #) ->
+    case (signalled ==# 1#) `andI#` (caught ==# -1#) `andI#`
+         (answer ==# 42#) `andI#` (inside ==# 1#) `andI#` (prefixes ==# 1#) of
+      1# -> token +# 43#
+      _ -> -999#
+  } } } } } } } } } } } } } } } } }
+
+{-# OPAQUE interruptedPlain #-}
+interruptedPlain :: Int# -> Int#
+interruptedPlain = interruptedCompact 0#
+{-# OPAQUE interruptedSharing #-}
+interruptedSharing :: Int# -> Int#
+interruptedSharing = interruptedCompact 1#
 
 {-# OPAQUE tree #-}
 tree :: Int -> Tree

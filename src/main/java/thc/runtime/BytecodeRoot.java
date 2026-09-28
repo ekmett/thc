@@ -3787,22 +3787,28 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
     @Operation
-    @ConstantOperand(type = LocalAccessor.class, name = "destination")
     @ConstantOperand(type = boolean.class, name = "sharing")
     @ConstantOperand(type = Metrics.class, name = "metrics")
     @ConstantOperand(type = GlobalBinding[].class, name = "failures")
+    @ConstantOperand(type = boolean.class, name = "async")
     public static final class AddCompact {
-        protected static CompactCopyNode create(Metrics metrics, GlobalBinding[] failures) {
-            return new CompactCopyNode(metrics, failures);
+        protected static CompactCopyNode create(Metrics metrics, GlobalBinding[] failures, boolean async) {
+            return new CompactCopyNode(metrics, failures, async);
         }
-        @Specialization public static void execute(VirtualFrame frame, LocalAccessor destination,
-                boolean sharing, Metrics metrics, GlobalBinding[] failures,
+        @Specialization public static Object execute(VirtualFrame frame,
+                boolean sharing, Metrics metrics, GlobalBinding[] failures, boolean async,
                 Object reference, Object value, Object state, @Bind("$node") Node node,
-                @Cached(value = "create(metrics, failures)", neverDefault = true) CompactCopyNode copier) {
+                @Cached(value = "create(metrics, failures, async)", neverDefault = true) CompactCopyNode copier) {
             TupleResults.requireVoidCarrier(state);
             ManagedCompact region = Language.currentState(node).compactRegions.require(reference);
-            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
-                    copier.execute(frame, region, value, sharing));
+            try { return copier.execute(frame, region, value, sharing); }
+            catch (AstCapture cut) { throw captured(frame.materialize(), cut, node); }
+        }
+        @TruffleBoundary(transferToInterpreterOnException = false)
+        private static CapturedCallSuspension captured(com.oracle.truffle.api.frame.MaterializedFrame frame,
+                AstCapture cut, Node node) {
+            MaskingState mask = SynchronousMasking.current(node);
+            return new CapturedCallSuspension(new CallSegment(cut.freeze((GuestRoot) node.getRootNode(), frame), mask, mask, null));
         }
     }
     @Operation
