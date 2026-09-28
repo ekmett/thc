@@ -41,7 +41,7 @@ public final class Int64ConversionTest {
             assertEquals("long", resultProof.get("kind"));
             assertEquals(List.of(argumentRep), parameterProof.get("primReps"));
             assertEquals(List.of(resultRep), resultProof.get("primReps"));
-            for (String backend : List.of("ast", "bytecode")) try (Context context = MainKt.executionContext(false)) {
+            for (String backend : List.of("ast", "bytecode")) try (Context context = Main.executionContext(false)) {
                 var function = context.eval("thc", Json.INSTANCE.stringify(Map.of("modules", List.of(module), "entry", name, "backend", backend)));
                 List<Long> values = List.of(0L, 1L, -1L, (long) Integer.MIN_VALUE - 1, (long) Integer.MAX_VALUE + 1,
                     Long.MIN_VALUE, Long.MIN_VALUE + 1, Long.MAX_VALUE - 1, Long.MAX_VALUE);
@@ -67,7 +67,7 @@ public final class Int64ConversionTest {
     }
     @Test void int64LiteralsAndAlternativesRejectNoncanonicalOrOutOfRangeValues() {
         for (String backend : List.of("ast", "bytecode")) for (boolean diagnostic : new boolean[] {false, true}) {
-            try (Context context = MainKt.executionContext(false)) {
+            try (Context context = Main.executionContext(false)) {
                 for (boolean alternative : new boolean[] {false, true}) {
                     for (long value : new long[] {Long.MIN_VALUE, -1, 0, Long.MAX_VALUE}) {
                         var function = context.eval("thc", request(backend, diagnostic, body(Long.toString(value), alternative)));

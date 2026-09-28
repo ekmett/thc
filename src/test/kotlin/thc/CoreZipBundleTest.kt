@@ -3,6 +3,8 @@
 
 package thc
 
+import thc.Main.defaultBackend
+
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -177,7 +179,7 @@ class CoreZipBundleTest {
         val layout = targetLayout()
         val path = manifest(listOf(unit("pkg-a", layout = layout)))
         for (backend in listOf("ast", "bytecode")) {
-            val request = CoreModules.request(listOf("@$path"), "pkg-a:Shared.entry", backend = backend)
+            val request = CoreModules.request(listOf("@$path"), "pkg-a:Shared.entry", true, false, backend)
             val input = Json.parse(request) as Map<*, *>
             val record = TargetLayout.fromDocument(input["targetLayout"])
             assertEquals(8, record.wordBytes)
@@ -307,7 +309,7 @@ class CoreZipBundleTest {
         val other = "pkg-b:Shared.entry"
         val path = manifest(listOf(unit("pkg-b"), unit("pkg-a", module("pkg-a", other))))
         for (backend in listOf("ast", "bytecode")) {
-            val request = CoreModules.request(listOf("@$path"), "pkg-a:Shared.entry", backend = backend)
+            val request = CoreModules.request(listOf("@$path"), "pkg-a:Shared.entry", true, false, backend)
             val input = Json.parse(request) as Map<*, *>
             assertEquals(true, input["strictLink"])
             assertEquals(2, (input["modules"] as List<*>).size)
@@ -328,14 +330,13 @@ class CoreZipBundleTest {
                 Files.write(it, module("consumer", "dependency:Shared.entry"))
             }
             for (backend in listOf("ast", "bytecode")) {
-                val request = CoreModules.request(listOf(consumer.toString(), "@$path"), "consumer:Shared.entry", backend = backend)
+                val request = CoreModules.request(listOf(consumer.toString(), "@$path"), "consumer:Shared.entry", true, false, backend)
                 val input = Json.parse(request) as Map<*, *>
                 assertEquals(true, input["strictLink"])
                 assertEquals(large, input.containsKey("consumerModules"))
                 Context.newBuilder("thc").allowExperimentalOptions(true).build().use { context ->
                     assertEquals(51L, context.eval("thc", request).execute().asLong())
-                    val duplicate = CoreModules.request(listOf(consumer.toString(), consumer.toString(), "@$path"),
-                        "consumer:Shared.entry", backend = backend)
+                    val duplicate = CoreModules.request(listOf(consumer.toString(), consumer.toString(), "@$path"), "consumer:Shared.entry", true, false, backend)
                     assertTrue(assertThrows(RuntimeException::class.java) { context.eval("thc", duplicate) }
                         .message!!.contains("Duplicate"))
                 }
@@ -398,8 +399,7 @@ class CoreZipBundleTest {
         val document = Json.parse(Files.readString(path)) as Map<String, Any?>
         Files.writeString(path, Json.stringify(document + ("foreignExceptionBridgeUnit" to "selected-runtime")))
         @Suppress("UNCHECKED_CAST")
-        val request = Json.parse(CoreModules.request(listOf(json.toString(), "@$path"),
-            "synthetic:LazyJson.entry", jsonSidecars = mapOf(json.toString() to index.toString()))) as Map<String, Any?>
+        val request = Json.parse(CoreModules.request(listOf(json.toString(), "@$path"), "synthetic:LazyJson.entry", true, false, thc.Main.defaultBackend(), true, false, null, null, mapOf(json.toString() to index.toString()))) as Map<String, Any?>
         val visited = mutableListOf<Map<String, Any?>>()
         val actualLayout = CoreModules.visitRequestModules(request, visited::add)
         assertTrue(actualLayout != null)
@@ -418,7 +418,7 @@ class CoreZipBundleTest {
         val source = Json.stringify(first + ("sourceFiles" to listOf(mapOf("id" to "pkg-a-source",
             "path" to "Shared.hs", "content" to "x".repeat(2 * 1024 * 1024))))).toByteArray()
         val path = manifest(listOf(unit("pkg-b", layout = targetLayout()), unit("pkg-a", source)))
-        val request = CoreModules.request(listOf("@$path"), "pkg-a:Shared.entry", verifyArtifacts = true)
+        val request = CoreModules.request(listOf("@$path"), "pkg-a:Shared.entry", true, false, thc.Main.defaultBackend(), true, false, null, null, null, true)
         val input = Json.parse(request) as Map<*, *>
         assertEquals(true, input["strictLink"])
         assertFalse(input.containsKey("modules"))
@@ -443,7 +443,7 @@ class CoreZipBundleTest {
         val files = linked["sourceFiles"] as List<Map<String, Any?>>
         assertEquals(2 * 1024 * 1024, (files.single()["content"] as String).length)
         for (backend in listOf("ast", "bytecode")) {
-            val selected = CoreModules.request(listOf("@$path"), "pkg-a:Shared.entry", backend = backend)
+            val selected = CoreModules.request(listOf("@$path"), "pkg-a:Shared.entry", true, false, backend)
             Context.newBuilder("thc").allowExperimentalOptions(true).build().use { context ->
                 assertEquals(51L, context.eval("thc", selected).execute().asLong(), backend)
             }
@@ -469,7 +469,7 @@ class CoreZipBundleTest {
         val original = unit("pkg-a")
         val path = manifest(listOf(original))
         fun rejected() = assertThrows(RuntimeException::class.java) {
-            CoreModules.request(listOf("@$path"), "pkg-a:Shared.entry", verifyArtifacts = true)
+            CoreModules.request(listOf("@$path"), "pkg-a:Shared.entry", true, false, thc.Main.defaultBackend(), true, false, null, null, null, true)
         }
         val archive = temporary.resolve("pkg-a.zip")
         val valid = Files.readAllBytes(archive)

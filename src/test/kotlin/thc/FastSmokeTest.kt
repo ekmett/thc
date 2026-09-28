@@ -3,6 +3,9 @@
 
 package thc
 
+import thc.Main.loadEntry
+import thc.Main.executionContext
+
 import org.graalvm.polyglot.Value
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -39,7 +42,7 @@ class FastSmokeTest {
                 rows.getValue(entry).map { it.input }.toSet(), "$entry native oracle inputs")
         for (backend in listOf("ast", "bytecode")) executionContext().use { context ->
             for (entry in listOf("under", "sumLoop")) {
-                val function = loadEntry(context, modules, entry, backend = backend)
+                val function = loadEntry(context, modules, entry, true, backend)
                 assertEquals(backend, diagnostics(function)["backend"])
                 for (row in rows.getValue(entry))
                     assertEquals(row.expected, function.execute(row.input).asLong(),

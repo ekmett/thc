@@ -52,7 +52,7 @@ class SignalDispatchFullCoreTest {
         for ((stage, paths) in manifest["stages"] as Map<String, List<String>>) {
             val combined = CoreModules.merge(originals + paths.map { Json.parse(File(root, it).readText()) as Map<String, Any?> }) +
                 ("targetLayout" to layout)
-            val linked = CoreModules.reachable(combined, manifest["entries"] as List<String>, strictLink = true) +
+            val linked = CoreModules.reachable(combined, manifest["entries"] as List<String>, true) +
                 ("instrument" to true)
             Context.newBuilder("thc", "llvm").allowNativeAccess(true).allowIO(IOAccess.ALL).allowCreateThread(true)
                 .allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false")

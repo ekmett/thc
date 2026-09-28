@@ -9,7 +9,7 @@ import com.oracle.truffle.api.nodes.RootNode
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.Language
-import thc.executionContext
+import thc.Main.executionContext
 
 private typealias KeepCore = List<Any?>
 private typealias KeepProof = Map<String, Any?>

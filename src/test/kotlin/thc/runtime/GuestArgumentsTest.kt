@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import thc.Language
-import thc.launcherArguments
+import thc.Main.launcherArguments
 import java.lang.foreign.ValueLayout
 
 class GuestArgumentsTest {
@@ -130,10 +130,10 @@ class GuestArgumentsTest {
     }
 
     @Test fun launcherSuffixKeepsOpaqueArgumentsAndLegacyNoArgumentCalls() {
-        assertEquals("thc", launcherArguments(arrayOf("--run-io", "modules", "entry"), 3).first)
+        assertEquals("thc", launcherArguments(arrayOf("--run-io", "modules", "entry"), 3).programName)
         val parsed = launcherArguments(arrayOf("--run-io", "modules", "entry", "--", "program", "", "--", "--help"), 3)
-        assertEquals("program", parsed.first)
-        assertArrayEquals(arrayOf("", "--", "--help"), parsed.second)
+        assertEquals("program", parsed.programName)
+        assertArrayEquals(arrayOf("", "--", "--help"), parsed.arguments)
         assertThrows(IllegalArgumentException::class.java) { launcherArguments(arrayOf("a", "b", "c", "--"), 3) }
         assertThrows(IllegalArgumentException::class.java) { launcherArguments(arrayOf("a", "b", "c", "bad", "name"), 3) }
     }

@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import thc.ContextProfile
 import thc.Language
-import thc.withContextProfile
+import thc.Main.withContextProfile
 import java.io.ByteArrayOutputStream
 
 class RtsFlagsTest {
@@ -35,7 +35,7 @@ class RtsFlagsTest {
     }
 
     private fun context(output: ByteArrayOutputStream = ByteArrayOutputStream()) =
-        Context.newBuilder("thc").withContextProfile(ContextProfile.SYNCHRONOUS_TEST).err(output).build()
+        Context.newBuilder("thc").let { withContextProfile(it, ContextProfile.SYNCHRONOUS_TEST) }.err(output).build()
 
     private fun valid(target: RootCallTarget) = assertEquals(true,
         target.javaClass.getMethod("isValidLastTier").invoke(target))

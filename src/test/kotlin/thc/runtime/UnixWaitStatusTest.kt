@@ -3,6 +3,8 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
+import thc.Main.withContextProfile
+
 import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.TruffleLanguage
 import org.graalvm.polyglot.Context
@@ -34,7 +36,7 @@ class UnixWaitStatusTest {
         for (corpus in it.groupBy { row -> row.name }.values) assertEquals(40, corpus.size)
     }
     private fun context(inlining: Boolean = true, native: Boolean = true) = Context.newBuilder("thc")
-        .allowNativeAccess(native).withContextProfile(ContextProfile.SYNCHRONOUS_TEST)
+        .allowNativeAccess(native).let { withContextProfile(it, ContextProfile.SYNCHRONOUS_TEST) }
         .option("compiler.Inlining", inlining.toString()).build()
     private fun program(language: Language, source: Map<String, Any?>, backend: String): ExecutableProgram =
         if (backend == "ast") Program(language, source) else BytecodeProgram(language, source)

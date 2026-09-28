@@ -26,7 +26,7 @@ import thc.ContextProfile;
 import thc.CoreModules;
 import thc.Json;
 import thc.Language;
-import thc.MainKt;
+import thc.Main;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -41,7 +41,7 @@ class WindowsCodePagesTest {
     private Map<String, Object> source(String stage) throws Exception { return json(receipt().get("logs") + "/" + stage + ".json"); }
     private Map<String, Object> source() throws Exception { return source("post"); }
     private Context context(boolean nativeAccess) {
-        return MainKt.withContextProfile(Context.newBuilder("thc").allowNativeAccess(nativeAccess)
+        return Main.withContextProfile(Context.newBuilder("thc").allowNativeAccess(nativeAccess)
             .allowIO(IOAccess.NONE), ContextProfile.SYNCHRONOUS_TEST).build();
     }
     private Context context() { return context(true); }
@@ -153,7 +153,7 @@ class WindowsCodePagesTest {
                                 assertEquals(before + 1, ((Number) executable.diagnostics().get("compiledEntries")).longValue(), stage + "/" + backend + "/" + name + " first compiled entry");
                                 valid(target);
                             }
-                            var handoff = language.getHandoffState$org_intelligence_thc().get();
+                            var handoff = language.getHandoffState().get();
                             assertEquals(0, handoff.getArguments().getDepth());
                             assertEquals(0, handoff.getResults().getDepth());
                             assertEquals(0, handoff.getArguments().retainedReferences$org_intelligence_thc());
@@ -182,7 +182,7 @@ class WindowsCodePagesTest {
                             assertEquals(0L, invoke("pageInfo", 999999L, buffer()));
                             assertEquals(mapped.get("error"), invoke("windowsError", 0L));
                             assertEquals(0L, invoke("mapCurrentError", 0L));
-                            assertEquals(mapped.get("errno"), Language.currentState(null).getStdio$org_intelligence_thc().errno());
+                            assertEquals(mapped.get("errno"), Language.currentState(null).getStdio().errno());
                             for (var row : (List<Map<String, Object>>) oracle.get("multi")) {
                                 var input = buffer();
                                 var output = Boolean.TRUE.equals(row.get("alias")) ? input : buffer();
@@ -225,7 +225,7 @@ class WindowsCodePagesTest {
                                 }
                                 assertSame(ManagedAddress.Companion.nullAddress(), invoke("localFree", address));
                             }
-                            assertEquals(0, Language.currentState(null).getNativeAllocations$org_intelligence_thc().liveCount$org_intelligence_thc());
+                            assertEquals(0, Language.currentState(null).getNativeAllocations().liveCount$org_intelligence_thc());
                         }
                     }
                     var exercise = new Exercise();
@@ -252,8 +252,8 @@ class WindowsCodePagesTest {
         try (var first = context()) {
             enter(first);
             try {
-                service = Language.currentState(null).getWindowsCodePages$org_intelligence_thc();
-                allocations = Language.currentState(null).getNativeAllocations$org_intelligence_thc();
+                service = Language.currentState(null).getWindowsCodePages();
+                allocations = Language.currentState(null).getNativeAllocations();
                 var output = buffer(18);
                 assertNotEquals(0L, service.info(932, output));
                 for (var invalid : List.of(buffer(17), ManagedAddress.Companion.nullAddress(), ManagedAddress.Companion.fromHex("0000"), ManagedAddress.Companion.unownedNumeric$org_intelligence_thc(1)))
@@ -285,15 +285,15 @@ class WindowsCodePagesTest {
                 try {
                     assertThrows(RuntimeFault.class, () -> service.codePage(false));
                     assertThrows(RuntimeFault.class, () -> retained.readWord8(0));
-                    assertThrows(RuntimeFault.class, () -> Language.currentState(null).getWindowsCodePages$org_intelligence_thc().localFree(retained));
-                    assertEquals(0L, Language.currentState(null).getWindowsCodePages$org_intelligence_thc().error());
+                    assertThrows(RuntimeFault.class, () -> Language.currentState(null).getWindowsCodePages().localFree(retained));
+                    assertEquals(0L, Language.currentState(null).getWindowsCodePages().error());
                 } finally { second.leave(); }
             }
         }
         assertEquals(0, allocations.liveCount$org_intelligence_thc());
         try (var denied = context(false)) {
             enter(denied);
-            try { assertThrows(SecurityException.class, () -> Language.currentState(null).getWindowsCodePages$org_intelligence_thc().codePage(false)); }
+            try { assertThrows(SecurityException.class, () -> Language.currentState(null).getWindowsCodePages().codePage(false)); }
             finally { denied.leave(); }
         }
     }
@@ -302,7 +302,7 @@ class WindowsCodePagesTest {
         try (var context = context()) {
             enter(context);
             try {
-                var service = Language.currentState(null).getWindowsCodePages$org_intelligence_thc();
+                var service = Language.currentState(null).getWindowsCodePages();
                 var address = service.message(2);
                 var borrow = address.nativeAllocation$org_intelligence_thc().borrow();
                 var executor = Executors.newSingleThreadExecutor();
@@ -319,7 +319,7 @@ class WindowsCodePagesTest {
                     borrow.close();
                     freeing.get(5, TimeUnit.SECONDS);
                     assertThrows(RuntimeFault.class, () -> address.readWord8(0));
-                    assertEquals(0, Language.currentState(null).getNativeAllocations$org_intelligence_thc().liveCount$org_intelligence_thc());
+                    assertEquals(0, Language.currentState(null).getNativeAllocations().liveCount$org_intelligence_thc());
                 } finally { borrow.close(); executor.shutdownNow(); }
             } finally { context.leave(); }
         }

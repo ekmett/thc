@@ -18,7 +18,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import thc.Json
 import thc.Language
-import thc.loadEntry
+import thc.Main.loadEntry
 
 class ProcessSignalsTest {
     private val descriptor = Json.parse(javaClass.getResource("/core/original-signal-install-descriptor.json")!!.readText()) as Map<String, Any?>
@@ -234,11 +234,11 @@ class ProcessSignalsTest {
                 if (setting == null) System.clearProperty("thc.asyncExceptions")
                 else System.setProperty("thc.asyncExceptions", setting)
                 for (backend in listOf("ast", "bytecode")) Context.newBuilder("thc").build().use { context ->
-                    val action = loadEntry(context, listOf(core.path), "identity", backend = backend)
+                    val action = loadEntry(context, listOf(core.path), "identity", true, backend)
                     assertEquals(setting?.toBooleanStrict() ?: (backend == "bytecode"),
                         (Json.parse(action.getMember("diagnostics").asString()) as Map<*, *>)["asyncExceptions"])
                     assertEquals(17L, action.execute(17L).asLong())
-                    val explicit = loadEntry(context, listOf(core.path), "identity", backend = backend, asyncExceptions = true)
+                    val explicit = loadEntry(context, listOf(core.path), "identity", true, backend, false, null, true)
                     assertEquals(true, (Json.parse(explicit.getMember("diagnostics").asString()) as Map<*, *>)["asyncExceptions"])
                 }
             }

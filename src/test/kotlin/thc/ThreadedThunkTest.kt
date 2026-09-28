@@ -3,6 +3,8 @@
 
 package thc
 
+import thc.Main.executionContext
+
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.ThreadLocalAction
 import com.oracle.truffle.api.TruffleSafepoint

@@ -149,7 +149,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     private val stackTargetLayout = moduleData["targetLayout"]
     private val callDemandsEnabled = java.lang.Boolean.getBoolean(CALL_DEMANDS_PROPERTY)
     private val metrics = demand?.metrics ?: Metrics(moduleData["instrument"] != false)
-    private val loadingStatistics = moduleData["coreLoadingStatistics"] as? (() -> Map<String, Any>)
+    private val loadingStatistics = moduleData["coreLoadingStatistics"] as? java.util.function.Supplier<Map<String, Any>>
     private val containsDelimited = (moduleData["bindings"] as? List<*>)?.any { binding ->
         val body = (binding as? Map<*, *>)?.get("expr")
         if (body is thc.CoreBindingBody) body.header.containsDelimitedControl else DelimitedControl.contains(binding)
@@ -325,7 +325,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         "stackPolicy" to (if (capturesContinuations) "tail-safe; bounded AST activation chains; active STM spilling unsupported"
             else "tail-safe; non-tail calls and nested thunk forcing use host stack"), "threadPolicy" to
             if (enableAsync) "context-owned Java threads; captured asynchronous delivery"
-            else "context-owned Java threads; external asynchronous delivery disabled") + (loadingStatistics?.invoke() ?: emptyMap())
+            else "context-owned Java threads; external asynchronous delivery disabled") + (loadingStatistics?.get() ?: emptyMap())
     private fun representation(binding: Map<String, Any?>): Boolean = binding["lifted"] as? Boolean
         ?: throw UnsupportedCore("Unknown levity for ${binding["id"]}")
     private fun function(label: String, args: List<Map<String, Any?>>, expression: List<Any?>, outer: Scope,

@@ -4,6 +4,8 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc
 
+import thc.Main.executionContext
+
 import java.io.ByteArrayOutputStream
 import java.nio.file.Files
 import java.nio.file.Path
@@ -48,8 +50,7 @@ class CoreJsonPackageTest {
         return directory.resolve("packages.json").also { Files.writeString(it, Json.stringify(mapOf(
             "format" to "thc-core-packages", "schema" to 1, "ghc" to "9.14.1", "units" to listOf(unit)))) }
     }
-    private fun request(path: Path, backend: String = "bytecode", verifyArtifacts: Boolean = false) = CoreModules.request(listOf("@$path"),
-        "synthetic:LazyJson.entry", backend = backend, sourceNotesEnabled = false, verifyArtifacts = verifyArtifacts)
+    private fun request(path: Path, backend: String = "bytecode", verifyArtifacts: Boolean = false) = CoreModules.request(listOf("@$path"), "synthetic:LazyJson.entry", true, false, backend, false, false, null, null, null, verifyArtifacts)
     private fun count(value: Value, name: String) = ((Json.parse(value.getMember("diagnostics").asString())
         as Map<*, *>)[name] as Number).toLong()
     private fun visit(request: String) = CoreModules.visitRequestModules(Json.parse(request) as Map<String, Any?>) { }

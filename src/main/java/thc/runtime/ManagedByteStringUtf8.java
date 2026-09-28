@@ -15,7 +15,7 @@ final class ManagedByteStringUtf8 {
     @TruffleBoundary
     public static long validate(ManagedAddress address, long length) {
         var state = Language.currentState(null);
-        var cbits = state.cbits$org_intelligence_thc();
+        var cbits = state.cbits();
         // Language loading may block; do it before taking storage locks.
         Object function = cbits.utf8Function$org_intelligence_thc();
         // The original function returns true before inspecting the pointer.
@@ -52,7 +52,7 @@ final class ManagedByteStringUtf8 {
 
     private static long call(Language.State state, SulongCbits cbits, Object function, ManagedAddress address,
             Object bytes, long length) {
-        var threads = state.getThreads$org_intelligence_thc();
+        var threads = state.getThreads();
         var previous = threads.enterForeign(ForeignSafety.UNSAFE);
         try { return cbits.utf8Validate$org_intelligence_thc(function, bytes, length); }
         finally {

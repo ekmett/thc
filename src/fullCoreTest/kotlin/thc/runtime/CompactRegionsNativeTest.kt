@@ -59,7 +59,7 @@ private class CompactLibraryFixture(private val directory: String, private val e
                     try {
                         val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                         for (entry in entries) {
-                            val linked = CoreModules.reachable(module, entry, strictLink = true) + ("instrument" to true)
+                            val linked = CoreModules.reachable(module, entry, true) + ("instrument" to true)
                             val program: ExecutableProgram = if (backend == "ast") Program(language, linked) else BytecodeProgram(language, linked)
                             val function = context.asValue(EntryValue(program, entry, 1))
                             for (input in listOf(-31L, 0L, 17L, 4097L))

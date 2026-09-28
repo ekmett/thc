@@ -93,7 +93,7 @@ class CoreUnitColdControlTest {
             "format" to "thc-core-packages", "schema" to 1, "ghc" to "9.14.1", "units" to units))) }
     }
     private fun request(source: String, entry: String, backend: String, async: Boolean) =
-        CoreModules.request(listOf(source), entry, backend = backend, sourceNotesEnabled = false, asyncExceptions = async)
+        CoreModules.request(listOf(source), entry, true, false, backend, false, false, null, async)
     private fun count(entry: Value, name: String) =
         ((Json.parse(entry.getMember("diagnostics").asString()) as Map<*, *>)[name] as Number).toLong()
     @Test fun exhaustiveLoaderModelPreservesTheExistingPromptPolicy() {

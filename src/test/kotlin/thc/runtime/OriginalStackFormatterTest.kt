@@ -125,7 +125,7 @@ class OriginalStackFormatterTest {
             full + ("bindings" to (full["bindings"] as List<Map<String, Any?>>).filter { it["id"] in ids })
         }
         val module = CoreModules.merge(originals)
-        val linked = CoreModules.reachable(module, "formatOriginal", strictLink = true)
+        val linked = CoreModules.reachable(module, "formatOriginal", true)
         val bindings = linked["bindings"] as List<Map<String, Any?>>
         val original = bindings.single { it["id"] == "ghc-internal:GHC.Internal.Stack.Decode.prettyStackEntry" }
         val full = originals.single { it["module"] == "GHC.Internal.Stack.Decode" }
@@ -457,9 +457,9 @@ class OriginalStackFormatterTest {
             val entry = consumer(force)
             val module = full + ("bindings" to listOf(original, entry))
             assertThrows(IllegalArgumentException::class.java) {
-                CoreModules.reachable(module + ("bindings" to listOf(entry)), entry["id"] as String, strictLink = true)
+                CoreModules.reachable(module + ("bindings" to listOf(entry)), entry["id"] as String, true)
             }
-            val linked = CoreModules.reachable(module, entry["id"] as String, strictLink = true) + ("instrument" to true)
+            val linked = CoreModules.reachable(module, entry["id"] as String, true) + ("instrument" to true)
             assertEquals(original, (linked["bindings"] as List<Map<String, Any?>>).single { it["id"] == id })
             for (backend in listOf("ast", "bytecode")) for (inlining in listOf(false, true)) context(inlining).use { context ->
                 context.initialize("thc"); context.enter()

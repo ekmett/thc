@@ -80,10 +80,10 @@ class PackageNativeForeignTest {
             PackageScalarSignature("read_before", "read_before", listOf("AddrRep"), "Word32Rep"),
             PackageScalarSignature("native_bits", "native_bits", listOf("AddrRep"), "Word64Rep"),
             PackageScalarSignature("mixed_alias", "mixed_alias", listOf("MutableByteArray#", "ByteArray#"), "Word32Rep"))
-        val selected = if (pointerVariants) listOf(abi.first(), abi.first().copy(entry = "sum_bytes_address",
-            arguments = listOf("AddrRep", "Word64Rep"))) else abi
+        val selected = if (pointerVariants) listOf(abi.first(), PackageScalarSignature(abi.first().symbol, "sum_bytes_address",
+            listOf("AddrRep", "Word64Rep"), abi.first().result, abi.first().convention, abi.first().safety)) else abi
         return PackageScalarLink("native-ffi-control", "test-host", sha, sha, bytes,
-            selected.map { it.copy(safety = safety) })
+            selected.map { PackageScalarSignature(it.symbol, it.entry, it.arguments, it.result, it.convention, safety) })
     }
 
     private class Entry(language: Language, private val operation: PackageScalarCall,

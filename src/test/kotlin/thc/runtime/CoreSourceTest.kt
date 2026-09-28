@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test
 import thc.CoreModules
 import thc.Language
 import thc.Json
-import thc.executionContext
+import thc.Main.executionContext
 import java.io.File
 
 class CoreSourceTest {

@@ -46,7 +46,7 @@ class ManagedImportTypeTest {
         assertSame(original, admission.module)
         assertNotNull(ManagedImportAdmission.read(Json.parse(Json.stringify(original)) as Map<*, *>))
         assertNotNull(ManagedImportAdmission.read(module(pointerFunction(tycon("Unit")))))
-        assertNotNull(ManagedImportAdmission.read(original - "bindings", completeBindings = false))
+        assertNotNull(ManagedImportAdmission.read(original - "bindings", false))
     }
 
     @Test fun nestedBindersScopeTheirBodyButNotTheirOwnKind() {

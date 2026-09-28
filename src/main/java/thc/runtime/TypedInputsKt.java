@@ -17,7 +17,7 @@ public final class TypedInputsKt {
     private static final ScalarArrayInputSource scalarPrefixSource = new ScalarArrayInputSource(null);
     @CompilerDirectives.TruffleBoundary public static void discardTypedInput(Language language, HandoffStorage input) {
         switch (input.getInputMode()) {
-            case 1 -> language.getHandoffState$org_intelligence_thc().get().getArguments().release(input);
+            case 1 -> language.getHandoffState().get().getArguments().release(input);
             case 2, 3 -> input.getLayout().clearReferences(input);
         }
         input.setInputMode(0);

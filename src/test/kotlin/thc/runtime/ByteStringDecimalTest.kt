@@ -3,6 +3,8 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
+import thc.Main.withContextProfile
+
 import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
@@ -23,7 +25,7 @@ class ByteStringDecimalTest {
     private fun program(language: Language, backend: String, module: Map<String, Any?>): ExecutableProgram =
         if (backend == "ast") Program(language, module) else BytecodeProgram(language, module)
     private fun <T> inside(action: (Language) -> T): T = Context.newBuilder("thc").allowNativeAccess(true)
-        .withContextProfile(ContextProfile.SYNCHRONOUS_TEST).build().use { context ->
+        .let { withContextProfile(it, ContextProfile.SYNCHRONOUS_TEST) }.build().use { context ->
             context.initialize("thc"); context.enter()
             try { action(TruffleLanguage.LanguageReference.create(Language::class.java).get(null)) }
             finally { context.leave() }

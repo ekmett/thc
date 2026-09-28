@@ -17,8 +17,7 @@ class CoreRequestTest {
             """ {"schema":1,"bindings":[{"id":"cold","expr":["unsupported","kept"]}],"sourceCore":"λ\n\uD83D\uDE00","extra":null} """,
             """{"nested":{"escaped":"\u0078","values":[true,false,null,-9223372036854775808,9223372036854775807,1.25,1e100]},"constructors":[]}""")
         val paths = documents.mapIndexed { index, text -> directory.resolve("module$index.json").also { it.writeText(text) }.toString() }
-        val request = CoreModules.request(paths, "entry\"\\\nλ", instrument = false,
-            diagnosticUnsupported = true, backend = "bytecode", sourceNotesEnabled = false)
+        val request = CoreModules.request(paths, "entry\"\\\nλ", false, true, "bytecode", false)
         assertEquals(mapOf("modules" to documents.map(Json::parse), "entry" to "entry\"\\\nλ",
             "instrument" to false, "diagnosticUnsupported" to true, "backend" to "bytecode",
             "sourceNotesEnabled" to false), Json.parse(request))

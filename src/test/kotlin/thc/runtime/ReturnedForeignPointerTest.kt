@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime
 
+import thc.Main.withContextProfile
+
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.RootNode
@@ -22,7 +24,7 @@ class ReturnedForeignPointerTest {
         override fun execute(frame: VirtualFrame): Any = call.executeAddress(frame.arguments, Unit)
     }
     private fun context(native: Boolean = true) = Context.newBuilder("thc").allowNativeAccess(native)
-        .withContextProfile(ContextProfile.SYNCHRONOUS_TEST).build()
+        .let { withContextProfile(it, ContextProfile.SYNCHRONOUS_TEST) }.build()
     private fun <T> entered(context: Context, body: (Language.State) -> T): T {
         context.initialize("thc"); context.enter()
         try { return body(Language.currentState()) } finally { context.leave() }
@@ -205,7 +207,7 @@ class ReturnedForeignPointerTest {
     @Test fun returnedBuffersUseDescriptorTransfersWithoutArrayExposure() {
         val output = ByteArrayOutputStream()
         Context.newBuilder("thc").allowNativeAccess(true).`in`(ByteArrayInputStream(byteArrayOf(4, 5)))
-            .out(output).withContextProfile(ContextProfile.SYNCHRONOUS_TEST).build().use { context -> entered(context) { owner ->
+            .out(output).let { withContextProfile(it, ContextProfile.SYNCHRONOUS_TEST) }.build().use { context -> entered(context) { owner ->
             val bytes = ByteArray(8) { 90 }
             val pointer = offset(owner)(ManagedAddress.fromByteArray(bytes), 2)
             assertEquals(-1L, owner.stdio.close(-1))
@@ -225,7 +227,7 @@ class ReturnedForeignPointerTest {
             }
         }
         Context.newBuilder("thc").allowNativeAccess(true).`in`(failure)
-            .withContextProfile(ContextProfile.SYNCHRONOUS_TEST).build().use { context -> entered(context) { owner ->
+            .let { withContextProfile(it, ContextProfile.SYNCHRONOUS_TEST) }.build().use { context -> entered(context) { owner ->
             val bytes = ByteArray(8) { 90 }
             val pointer = offset(owner)(ManagedAddress.fromByteArray(bytes), 2)
             assertEquals(-1L, owner.stdio.read(0, pointer, 4))

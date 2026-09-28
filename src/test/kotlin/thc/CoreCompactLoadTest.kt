@@ -3,6 +3,8 @@
 
 package thc
 
+import thc.Main.executionContext
+
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -111,8 +113,7 @@ class CoreCompactLoadTest {
                 "modules" to listOf(a, b, c))))))
         return path
     }
-    private fun request(path: Path, backend: String, verify: Boolean = false) = CoreModules.request(listOf("@$path"),
-        "unit:A.entry", backend = backend, sourceNotesEnabled = false, asyncExceptions = false, verifyArtifacts = verify)
+    private fun request(path: Path, backend: String, verify: Boolean = false) = CoreModules.request(listOf("@$path"), "unit:A.entry", true, false, backend, false, false, null, false, null, verify)
     private fun count(entry: Value, key: String) = ((Json.parse(entry.getMember("diagnostics").asString()) as Map<*, *>)[key] as Number).toLong()
 
     @Test fun selectedBindingAndCrossModuleDemandLeaveColdBodiesFilesAndDebugUnread() {
@@ -148,8 +149,7 @@ class CoreCompactLoadTest {
     @Test fun sourceEnabledOrdinaryLoadAndExecutionDoNotReadOptionalDebugTables() {
         val path = fixture()
         for (backend in listOf("ast", "bytecode")) executionContext().use { context ->
-            val entry = context.eval("thc", CoreModules.request(listOf("@$path"), "unit:A.entry",
-                backend = backend, sourceNotesEnabled = true, asyncExceptions = false))
+            val entry = context.eval("thc", CoreModules.request(listOf("@$path"), "unit:A.entry", true, false, backend, true, false, null, false))
             assertEquals(0L, count(entry, "coreCompactDebugBytesRead"))
             assertEquals(7L, entry.execute(0).asLong())
             assertEquals(6L, entry.execute(5).asLong())

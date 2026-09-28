@@ -295,7 +295,7 @@ class InterfaceCoreNativeTest {
                     context.initialize("thc"); context.enter()
                     try {
                         val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                        val linked = CoreModules.reachable(source(entry), entry, strictLink = true) + ("instrument" to true)
+                        val linked = CoreModules.reachable(source(entry), entry, true) + ("instrument" to true)
                         val program: ExecutableProgram = if (backend == "ast") Program(language, linked)
                             else BytecodeProgram(language, linked)
                         val target = program.entryTarget(entry)

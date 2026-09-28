@@ -53,8 +53,7 @@ class UncaughtSelfNativeTest {
                 .option("engine.MultiTier", "false")
                 .option("engine.CompilationFailureAction", "Throw").build().use { context ->
                 val source = File(root, "build/uncaught-self/$stage/core/UncaughtSelfAudit.json")
-                val entry = context.eval("thc", CoreModules.request(listOf(source.path), "selfUncaught",
-                    backend = backend, asyncExceptions = true))
+                val entry = context.eval("thc", CoreModules.request(listOf(source.path), "selfUncaught", true, false, backend, true, false, null, true))
                 val failure = assertThrows(PolyglotException::class.java) { entry.execute(0L) }
                 assertGuestFailure(failure, "$backend $stage")
                 assertTrue(entry.invokeMember("compile").asBoolean())
@@ -64,8 +63,7 @@ class UncaughtSelfNativeTest {
                 val after = Json.parse(entry.getMember("diagnostics").asString()) as Map<*, *>
                 assertTrue((after["compiledEntries"] as Number).toLong() >
                     (before["compiledEntries"] as Number).toLong(), "$backend $stage installed guest code")
-                val io = context.eval("thc", CoreModules.request(listOf(source.path), "selfUncaughtIO",
-                    backend = backend, ioMain = true, asyncExceptions = true))
+                val io = context.eval("thc", CoreModules.request(listOf(source.path), "selfUncaughtIO", true, false, backend, true, true, null, true))
                 assertFalse(io.canExecute(), "$stage IO action must use runIO")
                 assertTrue(io.canInvokeMember("runIO"))
                 val ioFailure = assertThrows(PolyglotException::class.java) { io.invokeMember("runIO") }

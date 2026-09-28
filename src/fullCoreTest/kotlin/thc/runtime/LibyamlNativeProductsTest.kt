@@ -40,7 +40,7 @@ class LibyamlNativeProductsTest {
         val unit = originals.map { it.first["unit"] }.distinct().single()
         val selected = directory.modules.filter { it.unit == unit }
         assertEquals(originals.map { it.first["module"] }.toSet(), selected.map { it.name }.toSet())
-        directory.open(verifyArtifacts = false, sourceNotes = false).use { sources ->
+        directory.open(false, false).use { sources ->
             val decoded = originals.map { (original, hash) ->
                 val record = selected.single { it.name == original["module"] }
                 assertEquals(hash, record.sha256, "selected module must be the exact native fixture capture")

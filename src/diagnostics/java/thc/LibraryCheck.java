@@ -127,7 +127,7 @@ public final class LibraryCheck {
                 require(new HashSet<>(all.stream().map(Row::input).toList()).size() == all.size());
                 var control = new EntryCheck(modules, name, backend, diagnostic);
                 if (execution.equals("frontier")) {
-                    try (Context context = MainKt.executionContext(false)) {
+                    try (Context context = Main.executionContext(false)) {
                         PolyglotException failure;
                         try {
                             context.eval(control.request(false));
@@ -157,7 +157,7 @@ public final class LibraryCheck {
                     check(count(function, "compiledEntries") == 0);
                 }
                 // Fresh state makes cold inputs genuinely unseen by this compilation.
-                try (Context context = MainKt.executionContext(false)) {
+                try (Context context = Main.executionContext(false)) {
                     var function = context.eval(control.request(diagnostic));
                     for (int index = 0; index < 40; index++) {
                         var row = warm.get(index % warm.size());

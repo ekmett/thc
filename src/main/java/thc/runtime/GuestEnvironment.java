@@ -24,9 +24,9 @@ public final class GuestEnvironment {
 
     private ManagedNativeAllocations current() {
         var state = Language.currentState(null);
-        if (state.getEnvironment$org_intelligence_thc() != this)
+        if (state.getEnvironment() != this)
             throw fault("Environment belongs to another context");
-        return state.getNativeAllocations$org_intelligence_thc();
+        return state.getNativeAllocations();
     }
 
     private static byte[] snapshot(ManagedAddress address) {
@@ -113,7 +113,7 @@ public final class GuestEnvironment {
 
     private long remove(byte[] name) {
         if (name.length == 0 || equalsIndex(name) >= 0) {
-            Language.currentState(null).getStdio$org_intelligence_thc().nativeError$org_intelligence_thc(22); // Linux EINVAL.
+            Language.currentState(null).getStdio().nativeError$org_intelligence_thc(22); // Linux EINVAL.
             return -1;
         }
         var values = contents();
@@ -188,6 +188,6 @@ public final class GuestEnvironment {
     }
 
     public static GuestEnvironment current(Node node) {
-        return Language.currentState(node).getEnvironment$org_intelligence_thc();
+        return Language.currentState(node).getEnvironment();
     }
 }

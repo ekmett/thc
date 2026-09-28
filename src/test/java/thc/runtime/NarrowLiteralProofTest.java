@@ -138,7 +138,7 @@ public final class NarrowLiteralProofTest {
         long input = Long.parseLong(row[1]), expected = values[(int) (input & 3)];
         assertEquals(expected, Long.parseLong(row[2]), label + " independent sign/index model");
         assertEquals(expected, function.execute(input).asLong(), label + "/" + input);
-        var state = language.getHandoffState$org_intelligence_thc().get();
+        var state = language.getHandoffState().get();
         assertEquals(0, state.getArguments().getDepth());
         assertEquals(0, state.getResults().getDepth());
         assertEquals(0, state.getArguments().retainedReferences$org_intelligence_thc());
@@ -163,7 +163,7 @@ public final class NarrowLiteralProofTest {
                     Map<String, Object> module = new LinkedHashMap<>(CoreModules.INSTANCE.reachable(projected, name, false));
                     module.put("instrument", true);
                     var program = program(language, module, backend);
-                    Value function = context.asValue(new EntryValue(program, name, 1, null, null, null, null, null, false, null));
+                    Value function = context.asValue(new EntryValue(program, name, 1));
                     RootCallTarget host = program.hostEntryTarget(1), original = program.entryTarget(name);
                     var selected = rows.stream().filter(r -> r[0].equals(name)).toList();
                     int bits = Integer.parseInt(kind.replaceAll("\\D", ""));
