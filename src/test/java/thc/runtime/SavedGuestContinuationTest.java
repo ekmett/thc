@@ -5,8 +5,15 @@ package thc.runtime;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.bytecode.BytecodeConfig;
+import com.oracle.truffle.api.bytecode.ContinuationResult;
+import com.oracle.truffle.api.bytecode.LocalAccessor;
+import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.runtime.OptimizedCallTarget;
+import com.oracle.truffle.runtime.OptimizedTruffleRuntime;
 import java.util.Arrays;
 import java.util.List;
 import java.util.function.Function;
@@ -16,6 +23,53 @@ import thc.Main;
 import static org.junit.jupiter.api.Assertions.*;
 
 class SavedGuestContinuationTest {
+    @Test void compiledBytecodeResumeRestoresTransactionFromSavedLocals() {
+        try (var context = Main.executionContext()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var stm = Language.currentState().stm;
+                for (boolean transactional : new boolean[]{false, true}) {
+                    var savedTransaction = transactional ? stm.begin() : null;
+                    var slot = new LocalAccessor[1];
+                    var metrics = new Metrics(true);
+                    var marker = new Object();
+                    var root = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT, b -> {
+                        b.beginRoot();
+                        var transaction = b.createLocal("saved transaction", FrameSlotKind.Object);
+                        slot[0] = LocalAccessor.constantOf(transaction);
+                        b.beginStaticStoreObject(transaction); b.emitCurrentTransaction(); b.endStaticStoreObject();
+                        b.beginYield(); b.emitLoadConstant(marker); b.endYield();
+                        b.emitEnterRoot(metrics);
+                        b.beginReturn(); b.emitCurrentTransaction(); b.endReturn();
+                        b.endRoot();
+                    }).getNode(0);
+                    root.configureAsync(true); root.configureStackDriver(metrics);
+                    root.configureStackTransaction(slot[0]);
+                    var saved = assertInstanceOf(ContinuationResult.class, Calls.target(root.getCallTarget(), new Object[]{0L}));
+                    assertSame(marker, saved.getResult());
+                    var target = (OptimizedCallTarget) saved.getContinuationRootNode().getCallTarget();
+                    assertTrue(target.compile(true)); assertTrue(target.isValidLastTier());
+                    ((OptimizedTruffleRuntime) Truffle.getRuntime()).bypassedInstalledCode(target);
+                    var ambient = stm.begin();
+                    try {
+                        assertSame(savedTransaction, saved.continueWith(Unit.INSTANCE));
+                        // Later cold operations may deoptimize; the installed entry must
+                        // still read its transaction from the saved frame, not operand locals.
+                        assertSame(root, saved.getContinuationRootNode().getSourceRootNode());
+                        assertSame(ambient, stm.currentTransaction());
+                        assertEquals(0, AstStacks.astStackScope(root).getDepth());
+                        assertFalse(AstStacks.astStackScope(root).getDriving());
+                    } finally {
+                        stm.retire(ambient);
+                        if (savedTransaction != null) stm.retire(savedTransaction);
+                        stm.restore(null);
+                    }
+                }
+            } finally { context.leave(); }
+        }
+    }
+
     private static final class Driver extends RootNode {
         @Child private Force force = new Force(new Metrics(false));
         Driver() { super(null); }
