@@ -103,7 +103,7 @@ public final class PackageScalarAccess extends Node {
         try {
             try {
                 return pointers ? invokePointers(entry, arguments)
-                    : normalizeResult(entry, Calls.interop(calls, entry.getReceiver(), arguments), noPointerArguments, null, null, null);
+                    : normalizeResult(entry, invokeNative(entry, arguments), noPointerArguments, null, null, null);
             } finally {
                 threads.leaveForeign(previous);
                 Reference.reachabilityFence(arguments);
@@ -111,6 +111,12 @@ public final class PackageScalarAccess extends Node {
         } catch (AbstractTruffleException error) {
             throw foreignExceptions.raise(error);
         } catch (Exception failure) { throw rethrow(failure); }
+    }
+    private Object invokeNative(PackageScalarFunction entry, Object[] arguments) throws com.oracle.truffle.api.interop.InteropException {
+        var libraries = entry.getOwner().getPackageCbits();
+        libraries.seedErrno();
+        try { return Calls.interop(calls, entry.getReceiver(), arguments); }
+        finally { libraries.captureErrno(); }
     }
     private static final class PointerBuffer {
         ManagedAddress address;
@@ -195,7 +201,7 @@ public final class PackageScalarAccess extends Node {
                     converted[indices[i]] = convertedAddress;
                 }
                 return () -> {
-                    try { return Calls.interop(calls, entry.getReceiver(), converted); }
+                    try { return invokeNative(entry, converted); }
                     catch (Exception failure) { throw rethrow(failure); }
                 };
               } catch (Exception failure) { throw rethrow(failure); }

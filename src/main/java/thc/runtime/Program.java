@@ -419,26 +419,7 @@ public final class Program implements ExecutableProgram {
         if (requested.isEmpty()) return;
         if (capturesContinuations) AstAsyncAdmission.validate(requested);
         ArrayOp.validateApplications(requested);
-        CoreStackForeign.validateHeads(requested);
-        CoreStackInfoForeign.validateHeads(requested);
-        CoreOriginalStdio.validateHeads(requested);
-        CoreProcessForeign.validateHeads(requested);
-        CoreStablePointers.validateHeads(requested);
-        CoreRtsShutdown.validateHeads(requested);
-        CoreMainThreadForeign.validateHeads(requested);
-        CoreBoundThreadForeign.validateHeads(requested);
-        CoreStringRtsForeign.validateHeads(requested);
-        CoreEnvironmentForeign.validateHeads(requested);
-        CoreRtsDiagnosticForeign.validateHeads(requested);
-        CoreRtsArgumentsForeign.validateHeads(requested);
-        CoreManagedFiles.validateHeads(requested);
-        CoreMd5Foreign.validateHeads(requested);
-        CoreGmpForeign.validateHeads(requested);
-        CoreLibdwForeign.validateHeads(requested);
-        CoreNativeAllocationForeign.validateHeads(requested);
-        CoreMemoryCopyForeign.MEMMOVE.validateHeads(requested);
-        CoreMemoryCopyForeign.MEMCPY.validateHeads(requested);
-        CoreSignalForeign.validateHeads(requested);
+        CoreForeignOverride.validateHeads(requested);
         if (!diagnosticUnsupported) {
             CoreRepresentations.validateAggregates(requested, constructors);
             Objects.requireNonNull(validateInputs).accept(requested);
@@ -1568,54 +1549,38 @@ public final class Program implements ExecutableProgram {
                     demand.isDefined((String) fn.get(1)) : globals.containsKey(fn.get(1))));
         var cpuAffinity = CoreCpuAffinity.validate(expr, defined || scope.joins.containsKey(at(fn, 1)));
         var runtimeService = CoreRuntimeServices.validate(expr, defined || scope.joins.containsKey(at(fn, 1)));
-        var packageScalar = cpuAffinity == null && runtimeService == null ?
+        var override = CoreForeignOverride.select(metadata);
+        var packageScalar = override == null && cpuAffinity == null && runtimeService == null ?
             CorePackageScalarForeign.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr), packageScalarLinks) : null;
-        var foreignMetadata = packageScalar == null ? metadata : null;
-        var stackClone = CoreStackForeign.validate(foreignMetadata, argumentMetadata(args), flags);
-        var stackInfo = CoreStackInfoForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
-        var originalStdio = CoreOriginalStdio.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
-        var originalProcess = CoreProcessForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
-        var capi = CoreCapiForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr), foreignLinks);
-        var stableFree = CoreStablePointers.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
-        var sharedCAF = CoreSharedCAFStores.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
-        var shutdown = CoreRtsShutdown.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
-        var mainThreadForeign = CoreMainThreadForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
-        var boundThreadForeign = CoreBoundThreadForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr), false);
-        var gcForeign = CoreGcForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
-        var rtsEventForeign = CoreRtsEventForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
-        var allocationCounterForeign = CoreBoundThreadForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr), true);
-        var stringRts = CoreStringRtsForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
-        var floatingForeign = CoreFloatForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
-        var textForeign = CoreTextForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
-        var environment = CoreEnvironmentForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
-        var rtsDiagnostic = CoreRtsDiagnosticForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
-        var rtsArguments = CoreRtsArgumentsForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
-        var managedFile = CoreManagedFiles.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
+        var stackClone = override == CoreForeignOverride.STACK && CoreStackForeign.validate(metadata, argumentMetadata(args), flags);
+        var stackInfo = override == CoreForeignOverride.STACK_INFO ? CoreStackInfoForeign.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr)) : null;
+        var originalStdio = override == CoreForeignOverride.STDIO ? CoreOriginalStdio.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr)) : null;
+        var originalProcess = override == CoreForeignOverride.PROCESS ? CoreProcessForeign.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr)) : null;
+        var stableFree = override == CoreForeignOverride.STABLE_FREE && CoreStablePointers.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr));
+        var sharedCAF = override == CoreForeignOverride.SHARED_CAF ? CoreSharedCAFStores.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr)) : null;
+        var shutdown = override == CoreForeignOverride.SHUTDOWN ? CoreRtsShutdown.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr)) : null;
+        var mainThreadForeign = override == CoreForeignOverride.MAIN_THREAD && CoreMainThreadForeign.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr));
+        var boundThreadForeign = override == CoreForeignOverride.BOUND_THREAD && CoreBoundThreadForeign.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr), false);
+        var gcForeign = override == CoreForeignOverride.GC ? CoreGcForeign.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr)) : null;
+        var rtsEventForeign = override == CoreForeignOverride.RTS_EVENT ? CoreRtsEventForeign.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr)) : null;
+        var allocationCounterForeign = override == CoreForeignOverride.ALLOCATION_COUNTER && CoreBoundThreadForeign.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr), true);
+        var stringRts = override == CoreForeignOverride.STRING_RTS ? CoreStringRtsForeign.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr)) : null;
+        var environment = override == CoreForeignOverride.ENVIRONMENT ? CoreEnvironmentForeign.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr)) : null;
+        var rtsDiagnostic = override == CoreForeignOverride.RTS_DIAGNOSTIC ? CoreRtsDiagnosticForeign.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr)) : null;
+        var rtsArguments = override == CoreForeignOverride.RTS_ARGUMENTS ? CoreRtsArgumentsForeign.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr)) : null;
+        var managedFile = override == CoreForeignOverride.MANAGED_FILE ? CoreManagedFiles.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr)) : null;
 
         var javascript = packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && managedFile == null
             ? CoreJavaScript.validate(expr, defined) : null;
-        var md5 = javascript == null ? CoreMd5Foreign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr)) : null;
-        var gmp = CoreGmpForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
-        var processSignal = CoreSignalForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
-        var nativeAllocation = CoreNativeAllocationForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
-        var memmove = CoreMemoryCopyForeign.MEMMOVE.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
-        var memcpy = CoreMemoryCopyForeign.MEMCPY.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
-        var byteStringSort = CoreByteStringSort.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
-        var byteStringDecimal = CoreByteStringDecimal.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
-        var byteStringUtf8 = CoreByteStringUtf8Foreign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
-        var memset = CoreMemsetForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
-        var memorySearch = CoreMemorySearchForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
-        var libdw = CoreLibdwForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
+        var processSignal = override == CoreForeignOverride.SIGNAL ? CoreSignalForeign.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr)) : null;
+        var nativeAllocation = override == CoreForeignOverride.ALLOCATION ? CoreNativeAllocationForeign.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr)) : null;
+        var memmove = override == CoreForeignOverride.MEMMOVE && CoreMemoryCopyForeign.MEMMOVE.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr));
+        var memcpy = override == CoreForeignOverride.MEMCPY && CoreMemoryCopyForeign.MEMCPY.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr));
 
         PolyglotOp polyglot;
         try {
-            polyglot = originalProcess == null && rtsEventForeign == null && gcForeign == null && textForeign == null && !byteStringSort &&
-            byteStringDecimal == null && byteStringUtf8 == null && memorySearch == null && floatingForeign == null && cpuAffinity == null &&
-            runtimeService == null && !allocationCounterForeign && environment == null && packageScalar == null && !stackClone &&
-            stackInfo == null && originalStdio == null && capi == null && !stableFree && shutdown == null && !mainThreadForeign &&
-            !boundThreadForeign && stringRts == null && rtsDiagnostic == null && rtsArguments == null && sharedCAF == null &&
-            managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null &&
-            !memmove && !memcpy && !memset && processSignal == null ? CorePolyglot.validate(expr, defined) : null;
+            polyglot = override == null && cpuAffinity == null && runtimeService == null &&
+                packageScalar == null && javascript == null ? CorePolyglot.validate(expr, defined) : null;
         } catch (UnsupportedCore unavailable) {
             // Only the final unknown-symbol fallback is deferred. Known ABI validation above stays eager.
             deferredUnsupported.add(unavailable.getMessage());
@@ -1679,15 +1644,6 @@ public final class Program implements ExecutableProgram {
                     CoreOriginalStdio.validateScalarOperand(originalStdio, i, operands[i].getRepresentation(), bindingProof(args.get(i), scope));
             }
             return new OriginalStdioExpression(originalStdio, operands, tupleProof);
-        }
-        if (capi != null) {
-            CoreCapiForeign.validateHead(fn, defined);
-            Expr[] operands = new Expr[args.size()];
-            for (int i = 0; i < operands.length; i++) {
-                operands[i] = compile(args.get(i), scope, false);
-                CoreCapiForeign.validateOperand(capi, i, operands[i].getRepresentation(), bindingProof(args.get(i), scope));
-            }
-            return new CapiExpression(capi, operands, tupleProof);
         }
         if (packageScalar != null) {
             CoreCapiForeign.validateHead(fn, defined);
@@ -1763,24 +1719,6 @@ public final class Program implements ExecutableProgram {
             }
             return new EnvironmentExpression(environment, operands, tupleProof);
         }
-        if (textForeign != null) {
-            CoreTextForeign.validateHead(fn, defined || scope.joins.containsKey(at(fn, 1)));
-            Expr[] operands = new Expr[args.size()];
-            for (int i = 0; i < operands.length; i++) {
-                operands[i] = compile(args.get(i), scope, false);
-                CoreTextForeign.validateOperand(textForeign, i, operands[i].getRepresentation(), bindingProof(args.get(i), scope));
-            }
-            return new TextForeignExpression(textForeign, operands, tupleProof);
-        }
-        if (floatingForeign != null) {
-            CoreFloatForeign.validateHead(fn, defined || scope.joins.containsKey(at(fn, 1)));
-            Expr[] operands = new Expr[args.size()];
-            for (int i = 0; i < operands.length; i++) {
-                operands[i] = compile(args.get(i), scope, false);
-                CoreFloatForeign.validateOperand(floatingForeign, i, operands[i].getRepresentation(), bindingProof(args.get(i), scope));
-            }
-            return new FloatForeignExpression(floatingForeign, operands[0], operands[1], tupleProof);
-        }
         if (stringRts != null) {
             CoreStringRtsForeign.validateHead(fn, defined);
             Expr[] operands = new Expr[args.size()];
@@ -1830,51 +1768,6 @@ public final class Program implements ExecutableProgram {
             }
             return new NativeAllocationExpression(nativeAllocation, operands, tupleProof);
         }
-        if (byteStringSort) {
-            CoreByteStringSort.validateHead(fn, defined || scope.joins.containsKey(at(fn, 1)));
-            Expr[] operands = new Expr[args.size()];
-            for (int i = 0; i < operands.length; i++) {
-                operands[i] = compile(args.get(i), scope, false);
-                CoreByteStringSort.validateOperand(i, operands[i].getRepresentation(), bindingProof(args.get(i), scope));
-            }
-            return new ByteStringSortExpression(operands, tupleProof);
-        }
-        if (byteStringDecimal != null) {
-            CoreByteStringDecimal.validateHead(fn, defined || scope.joins.containsKey(at(fn, 1)));
-            Expr[] operands = new Expr[args.size()];
-            for (int i = 0; i < operands.length; i++) {
-                operands[i] = compile(args.get(i), scope, false);
-                CoreByteStringDecimal.validateOperand(byteStringDecimal, i, operands[i].getRepresentation(), bindingProof(args.get(i), scope));
-            }
-            return new ByteStringDecimalExpression(byteStringDecimal, operands, tupleProof);
-        }
-        if (byteStringUtf8 != null) {
-            CoreByteStringUtf8Foreign.validateHead(fn, defined || scope.joins.containsKey(at(fn, 1)));
-            Expr[] operands = new Expr[args.size()];
-            for (int i = 0; i < operands.length; i++) {
-                operands[i] = compile(args.get(i), scope, false);
-                CoreByteStringUtf8Foreign.validateOperand(i, operands[i].getRepresentation(), bindingProof(args.get(i), scope));
-            }
-            return new ByteStringUtf8Expression(byteStringUtf8, operands, tupleProof);
-        }
-        if (memorySearch != null) {
-            CoreMemorySearchForeign.validateHead(fn, defined);
-            Expr[] operands = new Expr[args.size()];
-            for (int i = 0; i < operands.length; i++) {
-                operands[i] = compile(args.get(i), scope, false);
-                CoreMemorySearchForeign.validateOperand(memorySearch, i, operands[i].getRepresentation(), bindingProof(args.get(i), scope));
-            }
-            return new MemorySearchExpression(memorySearch, operands, tupleProof);
-        }
-        if (memset) {
-            CoreMemsetForeign.validateHead(fn, defined);
-            Expr[] operands = new Expr[args.size()];
-            for (int i = 0; i < operands.length; i++) {
-                operands[i] = compile(args.get(i), scope, false);
-                CoreMemsetForeign.validateOperand(i, operands[i].getRepresentation(), bindingProof(args.get(i), scope));
-            }
-            return new MemsetExpression(operands, tupleProof);
-        }
         if (memmove) {
             CoreMemoryCopyForeign.MEMMOVE.validateHead(fn, defined);
             Expr[] operands = new Expr[args.size()];
@@ -1886,35 +1779,13 @@ public final class Program implements ExecutableProgram {
         }
         if (memcpy) {
             CoreMemoryCopyForeign.MEMCPY.validateHead(fn, defined);
-            boolean byteArrays = CoreMemoryCopyForeign.MEMCPY.byteArrays(foreignMetadata);
+            boolean byteArrays = CoreMemoryCopyForeign.MEMCPY.byteArrays(metadata);
             Expr[] operands = new Expr[args.size()];
             for (int i = 0; i < operands.length; i++) {
                 operands[i] = compile(args.get(i), scope, false);
                 CoreMemoryCopyForeign.MEMCPY.validateOperand(i, operands[i].getRepresentation(), bindingProof(args.get(i), scope), byteArrays);
             }
             return new MemcpyExpression(operands, tupleProof, byteArrays);
-        }
-        if (libdw != null) {
-            CoreLibdwForeign.validateHead(fn, defined);
-            Expr[] operands = new Expr[args.size()];
-            for (int i = 0; i < operands.length; i++) {
-                operands[i] = compile(args.get(i), scope, false);
-                CoreLibdwForeign.validateOperand(libdw, i, operands[i].getRepresentation(), bindingProof(args.get(i), scope));
-            }
-            return new OriginalLibdwExpression(libdw, operands, tupleProof);
-        }
-        if (gmp != null) {
-            CoreGmpForeign.validateHead(fn, defined);
-            Expr[] operands = new Expr[args.size()];
-            for (int i = 0; i < operands.length; i++) {
-                operands[i] = compile(args.get(i), scope, false);
-                CoreGmpForeign.validateOperand(gmp, i, operands[i].getRepresentation(), bindingProof(args.get(i), scope));
-            }
-            return new GmpForeignExpression(gmp, operands, tupleProof);
-        }
-        if (md5 != null) {
-            CoreMd5Foreign.validateHead(fn, defined);
-            return new Md5ForeignExpression(md5, compileOperands(args, scope), tupleProof);
         }
         if (javascript != null) return new JavaScriptExpression(javascript, argumentOperands(args, scope, false)).proven(evaluated(tupleProof, true));
         if (polyglot != null) return new PolyglotExpression(polyglot, argumentOperands(args, scope, flags)).proven(evaluated(tupleProof, true));

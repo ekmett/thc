@@ -50,6 +50,28 @@ only on execution. None of this implements native object linking.
 
 ## Package-owned C, C++ and CAPI calls
 
+Both backends select semantic overrides by declaration owner and symbol (including
+the encoded owner of CAPI wrappers), before validating a generic package call.
+Only the selected override's strict ABI validator runs. These overrides retain
+THC heap/scheduler/stable-pointer state, context environment and working directory,
+managed descriptors/handles, owned allocations and pointer-cell copy semantics.
+An unrelated package's `malloc` or `getenv` declaration is an ordinary native
+import, not an original-library override. Native-only arithmetic, text, checksums,
+constants and memory operations require normal linkage; an old adapter's existence
+does not grant an otherwise unlinked import an implementation.
+
+Generic calls seed the context's current-thread errno into the LLVM/native call
+and capture it immediately afterward, including zero. Capture occurs before
+pointer reconciliation, result adaptation and foreign-call readmission. The
+retained original `__hscore_get_errno` observes that same slot. No return-value
+heuristic or symbol list determines whether errno is transported.
+
+Generic Windows package linkage is not qualified by this path. Existing
+last-error-writing Windows adapters remain semantic overrides because their
+captured state is read by the retained `GetLastError`/`maperrno` operations.
+Native-only `GetACP`, unlike those writers, now requires generic linkage; its
+Windows acquisition path remains a platform gap rather than a managed fallback.
+
 The `thc-package-c-ffi-v1` profile acquires ordinary local and Cabal-store
 packages without a package-name whitelist. It compiles the configured C/C++ sources
 and GHC's genuine retained CAPI wrappers with Clang, then links their LLVM into

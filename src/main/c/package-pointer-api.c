@@ -11,9 +11,15 @@
 #define memcpy __builtin_memcpy
 #define memmove __builtin_memmove
 #define memset __builtin_memset
+extern int *_errno(void);
+#define errno (*_errno())
 #else
 #include <string.h>
+#include <errno.h>
 #endif
+
+int thc_package_pointer_errno(void) { return errno; }
+void thc_package_pointer_set_errno(int value) { errno = value; }
 
 void *thc_package_pointer_offset(void *base, long long offset) {
     return (unsigned char *) base + offset;
