@@ -34,6 +34,65 @@ public final class BytecodeStackPreparation {
     """;
     private static final String RESERVED_SLOT = "    private static final int CONTINUATION_FRAME_INDEX = 0;\n";
     private static final String USER_SLOTS = "    private static final int USER_LOCALS_START_INDEX = 1;\n";
+    // Keep the pinned repair intact, but outside the compiled matching-tag path.
+    // A captured frame can outlive a local-tag change in a different activation.
+    private static final String RECONCILE = """
+        @ExplodeLoop
+        private void reconcileContinuationLocals(int bci, FrameWithoutBoxing frame) {
+            CompilerAsserts.partialEvaluationConstant(bci);
+            int localCount = getLocalCount(bci);
+            CompilerAsserts.partialEvaluationConstant(localCount);
+            for (int localOffset = 0; localOffset < localCount; localOffset++) {
+                int frameIndex = USER_LOCALS_START_INDEX + localOffset;
+                byte frameTag = FRAMES.getTag(frame, frameIndex);
+                if (frameTag == FrameTags.ILLEGAL) {
+                    continue;
+                }
+                int localIndex = localOffsetToLocalIndex(bci, localOffset);
+                byte cachedTag = getCachedLocalTagInternal(this.localTags_, localIndex);
+                if (frameTag == cachedTag) {
+                    continue;
+                }
+                if (cachedTag == FrameTags.ILLEGAL) {
+                    // Deopt eagerly to reduce compiled code size (setLocalValue will deopt when initializing the cached tag).
+                    CompilerDirectives.transferToInterpreterAndInvalidate();
+                }
+                Object value;
+                switch (frameTag) {
+                    case FrameTags.INT :
+                        value = frame.getInt(frameIndex);
+                        break;
+                    case FrameTags.LONG :
+                        value = frame.getLong(frameIndex);
+                        break;
+                    case FrameTags.FLOAT :
+                        value = frame.getFloat(frameIndex);
+                        break;
+                    case FrameTags.DOUBLE :
+                        value = frame.getDouble(frameIndex);
+                        break;
+                    case FrameTags.BOOLEAN :
+                        value = frame.getBoolean(frameIndex);
+                        break;
+                    case FrameTags.OBJECT :
+                        value = frame.getObject(frameIndex);
+                        break;
+                    default :
+                        throw CompilerDirectives.shouldNotReachHere("Unexpected frame tag.");
+                }
+                setLocalValueImpl(frame, localOffset, value, bci);
+            }
+        }
+""";
+    private static final String COLD_RECONCILE = RECONCILE.replace("""
+                if (cachedTag == FrameTags.ILLEGAL) {
+                    // Deopt eagerly to reduce compiled code size (setLocalValue will deopt when initializing the cached tag).
+                    CompilerDirectives.transferToInterpreterAndInvalidate();
+                }
+""", """
+                // THC stale continuation repair v1: mismatch is an interpreter slow path.
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+""");
     // SAVED_OPERANDS removes the sole producer of the split-frame pointer. Remove its
     // consumers in the same pinned transform, not the actual stores/clears or slot 0.
     // Reversible markers allow the whole generated-source pipeline to run again.
@@ -142,6 +201,9 @@ public final class BytecodeStackPreparation {
     public static String transform(String source, String version) {
         require(VERSION.equals(version), "Review bytecode stack entry for Truffle " + version);
         String result = unix(source, "Mixed generated source newlines");
+        if (result.contains("THC stale continuation repair")) {
+            result = replaceOnce(result, COLD_RECONCILE, RECONCILE, "Changed stale continuation repair");
+        }
         for (String[] pair : FORWARDING) result = result.replace(pair[1], pair[0]);
         require(!result.contains("THC unified frame"), "Changed unified frame preparation");
         if (result.contains("THC saved continuation operands")) {
@@ -164,6 +226,7 @@ public final class BytecodeStackPreparation {
         String consumers = replaceOnce(result, RESERVED_SLOT, "", "Changed reserved continuation slot");
         consumers = replaceOnce(consumers, USER_SLOTS, "", "Changed user local offset");
         require(!consumers.contains("CONTINUATION_FRAME_INDEX"), "Unknown split-frame producer or consumer");
+        result = replaceOnce(result, RECONCILE, COLD_RECONCILE, "Changed continuation local reconciliation");
         return newline(source, result);
     }
 
@@ -180,6 +243,7 @@ public final class BytecodeStackPreparation {
             + "    Object resume() { return root.continueAt(bytecodeNode, index, sp, frame, this); }\n"
             + "    void savedLocals() {\n" + VIRTUAL_OPERANDS + "    }\n"
             + SIGNATURE + "        return existingBody();\n    }\n"
+            + RECONCILE
             + java.util.Arrays.stream(FORWARDING).filter(p -> !p[0].contains("? (FrameWithoutBoxing)"))
                 .map(p -> p[0]).collect(java.util.stream.Collectors.joining()) + "}\n";
         String after = transform(before, VERSION);
@@ -206,5 +270,15 @@ public final class BytecodeStackPreparation {
         }
         require(after.contains("FRAMES.clear(frame, USER_LOCALS_START_INDEX + localOffset)"), "Lost local cleanup");
         require(after.contains("frame.materialize()"), "Lost yield materialization");
+        require(!RECONCILE.equals(COLD_RECONCILE), "Missing stale-frame slow path");
+        reject(before.replace("if (frameTag == cachedTag)", "if (frameTag != cachedTag)"), VERSION);
+        reject(before.replace("if (frameTag == FrameTags.ILLEGAL)", "if (false)"), VERSION);
+        reject(before.replace("setLocalValueImpl(frame, localOffset, value, bci)", "setLocalValueImpl(frame, 0, value, bci)"), VERSION);
+        for (String kind : new String[]{"Int", "Long", "Float", "Double", "Boolean", "Object"}) {
+            reject(before.replace("frame.get" + kind + "(frameIndex)", "frame.get" + kind + "(0)"), VERSION);
+        }
+        reject(after.replace("THC stale continuation repair v1", "THC stale continuation repair changed"), VERSION);
+        reject(after.replace(COLD_RECONCILE, COLD_RECONCILE.replace(
+            "CompilerDirectives.transferToInterpreterAndInvalidate();", "")), VERSION);
     }
 }

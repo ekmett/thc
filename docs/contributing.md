@@ -214,6 +214,17 @@ exception cleanup across a first compiled entry and saved resumption.
 compiles the first saved suffix before any resume and checks resuspension with a
 live operand, frame identity and the final result.
 
+The same pinned normalization leaves matching and Illegal saved-local tags on
+the compiled path, but deoptimizes before repairing a mismatched tag. It keeps
+the original six-carrier conversion and cached-tag generalization in the
+interpreter, before the saved guest suffix starts. This avoids expanding every
+repair switch into continuation-entry graphs; it does not change the live-local
+set, frame, bytecode location or repair order. `BytecodeStaleFrameTest` covers
+first compiled matching-tag entry, stale primitive captures after a distinct
+activation generalizes the cache, and a host-edited Object slot. Tag mismatch is
+allowed to invalidate code; raw values and no-prefix-replay semantics remain
+required.
+
 Run `./gradlew testBytecodeMetadataSplit` for compiled before/after opcode checks
 and malformed-input controls. Add
 `-Pthc.metadataFixture=/absolute/path/to/BytecodeRootGen.java` to compare every
