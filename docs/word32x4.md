@@ -130,7 +130,7 @@ controls, commands, toolchain identity, and complete source/artifact hashes.
 Artifacts include expected rows, original Core, strict reports, separate negative
 copies, native rows/executable, and command outputs/status. The shared
 [integer SIMD fixture guide](integer-simd-fixtures.md) includes the independent
-Kotlin model tests and both-handoff runtime recipe.
+Java model tests and both-handoff runtime recipe.
 
 `--export-only` exports only pre-Tidy Core and model rows for environments such
 as AArch64 where the pinned native backend is not the validation path. It removes

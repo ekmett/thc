@@ -10,7 +10,7 @@ public final class ContinuationTupleDestination extends TupleDestination {
     @Override public Object delimitedResult(VirtualFrame frame, Node node) {
         var root = node.getRootNode();
         if (root == null) throw new NullPointerException("null cannot be cast to non-null type thc.runtime.BytecodeRoot");
-        return TupleResultsKt.ownedTupleResult(destination.finish(frame, ((BytecodeRoot) root).getBytecodeNode()), getShape());
+        return TupleResults.ownedTupleResult(destination.finish(frame, ((BytecodeRoot) root).getBytecodeNode()), getShape());
     }
     @Override public void consume(VirtualFrame frame, Node node, Object result) {
         DelimitedControl.captureBytecode(result, getShape());

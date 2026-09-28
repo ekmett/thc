@@ -19,7 +19,7 @@ final class BoundThreadSupport extends Expr {
     }
 
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
-        TupleResultsKt.requireVoidCarrier(state.execute(frame));
+        TupleResults.requireVoidCarrier(state.execute(frame));
         // Bound-thread support stays false; the distinct counter query samples this guest thread.
         FrameAccess.INSTANCE.writeLong(frame, slots[offset], allocationCounter ? GuestThreads.current(this).allocationCounter() : 0L);
         return null;

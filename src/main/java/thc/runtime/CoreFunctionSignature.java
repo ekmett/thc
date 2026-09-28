@@ -8,7 +8,6 @@ import java.util.List;
 public record CoreFunctionSignature(List<CoreRepresentation> inputs, CoreRepresentation result) {
     public List<CoreRepresentation> getInputs() { return inputs; }
     public CoreRepresentation getResult() { return result; }
-    // Remaining Kotlin callers destructure the existing two-field signature.
     public List<CoreRepresentation> component1() { return inputs; }
     public CoreRepresentation component2() { return result; }
 }

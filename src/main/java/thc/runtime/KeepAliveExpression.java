@@ -21,7 +21,7 @@ public final class KeepAliveExpression extends Expr {
     }
     private record KeptScope(Object value, List<AstResumeStep> steps) implements AstResumeStep {
         @Override public Object resume(VirtualFrame frame, Object input) {
-            try { return AstContinuationKt.resumeAstSteps(frame, steps, input); }
+            try { return AstContinuations.resumeAstSteps(frame, steps, input); }
             catch (AstCapture cut) { throw enclose(cut, value); }
             finally { Reference.reachabilityFence(value); }
         }

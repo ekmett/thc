@@ -4,7 +4,7 @@
 # This is not the public pure-interpreter initialization inventory.
 # The unique fieldless guest state/void value; no guest context is captured.
 thc.runtime.Unit
-thc.runtime.ApplicationKt
+thc.runtime.Applications
 # Payload-free internal self-transfer token. ControlFlowException's final
 # fillInStackTrace returns the token itself; no guest frame or thread is captured.
 thc.runtime.AstSelfCall
@@ -20,7 +20,7 @@ thc.runtime.CoreRepresentation
 thc.runtime.DataLayout$Field
 thc.runtime.GmpForeignOp
 thc.runtime.GuestThreadOps
-thc.runtime.HandoffKt
+thc.runtime.Handoff
 thc.runtime.ManagedAddressRead
 thc.runtime.ManagedArray
 thc.runtime.ManagedMVar
@@ -47,7 +47,7 @@ thc.runtime.FunctionRoot
 # scalar input descriptor with a null layout; no guest context or frame captured.
 thc.runtime.HandoffLayout
 thc.runtime.StackAnnotationState
-thc.runtime.TypedInputsKt
+thc.runtime.TypedInputs
 # Fieldless singleton plus byte-array VarHandles in the build target's native
 # byte order. This recipe remains tied to its build platform, not cross-target.
 thc.runtime.ManagedByteArray

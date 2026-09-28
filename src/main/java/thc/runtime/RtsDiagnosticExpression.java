@@ -24,7 +24,7 @@ final class RtsDiagnosticExpression extends Expr {
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
         var first = operands.length > 1 ? operands[0].execute(frame) : null;
         var second = operands.length > 2 ? operands[1].executeRequiredAddress(frame) : null;
-        TupleResultsKt.requireVoidCarrier(operands[operands.length - 1].execute(frame));
+        TupleResults.requireVoidCarrier(operands[operands.length - 1].execute(frame));
         RtsDiagnostics.report(this, operation, first, second);
         return null;
     }

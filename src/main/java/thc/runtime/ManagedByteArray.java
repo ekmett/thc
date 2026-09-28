@@ -615,5 +615,5 @@ public final class ManagedByteArray {
         if (value instanceof ManagedAllocation owner) return owner.wholeBytesForPrimitive();
         throw fault("Expected a managed ByteArray#");
     }
-    public static void requireState(Object value) { TupleResultsKt.requireVoidCarrier(value); }
+    public static void requireState(Object value) { TupleResults.requireVoidCarrier(value); }
 }

@@ -25,13 +25,13 @@ final class CapiExpression extends Expr {
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
         long result;
         if (call.zeroArgument()) {
-            TupleResultsKt.requireVoidCarrier(operands[0].execute(frame));
+            TupleResults.requireVoidCarrier(operands[0].execute(frame));
             result = CoreCapiForeign.zero(this, call);
         } else {
             long clock = call.timeClock() ? operands[0].executeRequiredInt(frame)
                 : operands[0].executeRequiredLong(frame);
             var output = operands[1].executeRequiredAddress(frame);
-            TupleResultsKt.requireVoidCarrier(operands[2].execute(frame));
+            TupleResults.requireVoidCarrier(operands[2].execute(frame));
             result = CoreCapiForeign.wordAddress(this, call, clock, output);
         }
         if (call.zeroArgument() && !call.timeClock()) FrameAccess.INSTANCE.writeLong(frame, slots[offset], result);

@@ -15,7 +15,7 @@ The selected full-Core Linux GHC and local macOS GHC both have `USE_LIBDW=0` in
   without reading the session or writing the location.
 
 `LibdwUnavailableNative.hs` checks this selected RTS configuration, pointer and
-buffer behavior, and the original `collectStackTrace` result. Kotlin checks both
+buffer behavior, and the original `collectStackTrace` result. Java checks both
 backends and the first installed compiled entries using these declarations.
 This does not certify the complete execution-stack closure: original function
 address literals and weak finalizers remain separate unsupported dependencies.

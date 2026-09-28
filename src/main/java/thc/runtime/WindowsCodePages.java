@@ -269,7 +269,7 @@ public final class WindowsCodePages {
             if (result != null) return result;
             synchronized (this) {
                 if (fields == null) {
-                    // A failed receipt load must remain retryable, as Kotlin lazy was.
+                    // A failed receipt load must remain retryable.
                     try { fields = load(); } catch (IOException failure) { throw propagate(failure); }
                 }
                 return fields;

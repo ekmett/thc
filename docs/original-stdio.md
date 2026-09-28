@@ -94,7 +94,7 @@ The existing `original-stdio-seek` Haskell fixture imports the genuine installed
 sEEK_SET/CUR/END declarations and c_lseek directly. Its private mode selectors
 exercise those original wrappers with 24 native observations, including tell,
 EOF, closed/bad descriptors, wide/negative offsets and a nonseekable pipe.
-Kotlin compares both Core stages/backends, inlining modes and first installed
+Java compares both Core stages/backends, inlining modes and first installed
 compiled entries; synthetic ABI negatives remain separate from source proof.
 This does not establish original Handle execution, general native FFI, or
 foreign-stub linkage.
@@ -144,7 +144,7 @@ A fresh native C probe supplies the actual `struct stat` size, field offsets,
 widths and type masks. Accessors read checked managed bytes, retain mutable
 reads and reject pointer-cell reinterpretation; these are not native pointers.
 Haskell preparation captures real native stat images and type observations,
-while Kotlin verifies original pre/post Core and both first-installed backends.
+while Java verifies original pre/post Core and both first-installed backends.
 Darwin is explicitly excluded pending authentic matching declaration proofs.
 
 The exact original `__hscore_fstat` declaration is supported only through the

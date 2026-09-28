@@ -243,7 +243,7 @@ public class ProcessSignalsTest {
             var address = owner.getNativeAllocations().malloc(128L); address.writeWord8(0, 77); owner.getThreads().enterCurrent();
             try {
                 var pointerFailure = assertThrows(RuntimeFault.class, () -> target.call("not an address", null)); assertEquals("Expected a managed literal Addr# constructor field", pointerFailure.getMessage());
-                var nullFailure = assertThrows(NullPointerException.class, () -> target.call(address, null)); assertEquals("null cannot be cast to non-null type kotlin.Long", nullFailure.getMessage());
+                var nullFailure = assertThrows(NullPointerException.class, () -> target.call(address, null)); assertEquals("Signal number must not be null", nullFailure.getMessage());
                 for (var number : List.of(2, "signal")) assertThrows(ClassCastException.class, () -> target.call(address, number));
                 assertEquals(77L, address.readWord8(0), "invalid arguments cannot enter the writing guest dispatcher"); ThreadInventoryCoreEvidence.released(language);
                 target.call(address, 12L); assertEquals(12L, address.readWord8(0)); ThreadInventoryCoreEvidence.released(language);

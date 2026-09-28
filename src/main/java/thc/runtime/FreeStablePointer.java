@@ -12,7 +12,7 @@ final class FreeStablePointer extends Expr {
     @Override public Object execute(VirtualFrame frame) { throw fault("StablePtr# free requires a tuple destination"); }
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
         var handle = address.executeRequiredAddress(frame);
-        TupleResultsKt.requireVoidCarrier(state.execute(frame));
+        TupleResults.requireVoidCarrier(state.execute(frame));
         StablePointers.current(this).free(handle);
         return null;
     }

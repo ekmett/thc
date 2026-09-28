@@ -32,7 +32,7 @@ The installed interface path is recorded but installed artifacts are not hashed.
 
 The 14 native observations cover duplicate reader keys, distinct reader keys,
 writer conflicts, negative nonzero flags, full-width identities, missing unlocks
-and errno immediately before/after each call. Kotlin independently checks their
+and errno immediately before/after each call. Java independently checks their
 meaning, malformed descriptors and stored operands, State-before-effect, context
 isolation, descriptor independence and disposal. Both interpreters and every
 first-installed compiled target retain exact entry counts and validity.

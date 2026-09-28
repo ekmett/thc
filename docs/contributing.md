@@ -12,11 +12,10 @@ without redundant integral `RuntimeRep` identity checks. Preserve meaningful
 carrier, aggregate, ABI, ownership and memory-safety distinctions.
 
 Runtime code, generated nodes, fixtures, tests and tools use Java; Gradle uses
-Groovy and Java build logic. Do not reintroduce a Kotlin compiler or runtime
-dependency. The shared state/void carrier is the unique `thc.runtime.Unit.INSTANCE`.
+Groovy and Java build logic. The shared state/void carrier is the unique
+`thc.runtime.Unit.INSTANCE`.
 Preserve Truffle child annotations, typed execution paths, cold error boundaries
-and first-compiled-call checks during conversion. Source translation alone does
-not establish a performance improvement.
+and first-compiled-call checks.
 
 Use Haskell for GHC-facing fixture generation and native-oracle tooling, and
 Java for JVM checks and independent runtime models. Introduce Python only for
@@ -64,7 +63,7 @@ and dense JVMs from one compilation; `TESTS` selects the same class in each.
 `make jit-test` runs the separate advisory JIT retention suite.
 `make jar` rebuilds only the runtime JAR, and `make probe ARGS='...'` invokes
 the diagnostic runner. `make clean` removes the Gradle and Cabal build products;
-`make distclean` also removes `.gradle`, `.kotlin`, and `.gradle-user-home` in the
+`make distclean` also removes `.gradle` and `.gradle-user-home` in the
 checkout. Neither cleanup target requires a JDK or removes an external cache.
 Use `GRADLE_FLAGS=--offline` or `CABAL_FLAGS=--offline` for an offline build.
 
@@ -164,8 +163,7 @@ Build configuration uses Groovy, with Java build logic in `buildSrc`.
 then all five pinned normalizers transform its generated sources in order.
 `compileJava` consumes original and normalized sources with `-proc:none`;
 generated language-service resources are packaged separately. Test annotation
-processing remains enabled on its own pinned processor path. The build has no
-Kotlin plugin, compiler, KAPT stage or Kotlin runtime dependency.
+processing remains enabled on its own pinned processor path.
 `./gradlew testJavaBuildPipeline` checks the realized task and toolchain contract.
 
 The same pinned normalization adds a read-only `Builder.isParsingSources()`

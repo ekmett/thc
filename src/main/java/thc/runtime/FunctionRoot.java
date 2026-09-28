@@ -20,9 +20,9 @@ import com.oracle.truffle.api.source.SourceSection;
 import java.util.Arrays;
 import java.util.List;
 import static thc.runtime.RuntimeFault.fault;
-import static thc.runtime.AstSelfCallsKt.requireReferenceCarrier;
-import static thc.runtime.AstStackKt.astStackScope;
-import static thc.runtime.SavedGuestContinuationKt.savedGuestContinuation;
+import static thc.runtime.AstSelfCalls.requireReferenceCarrier;
+import static thc.runtime.AstStacks.astStackScope;
+import static thc.runtime.SavedGuestContinuations.savedGuestContinuation;
 
 /* Indexed frames, selective captures, rooted application and self-tail frame
  * restoration follow Cadenza. See NOTICE.md and LICENSE.txt. */
@@ -261,7 +261,7 @@ public final class FunctionRoot extends GuestRoot {
             else {
                 Object value = source.reference(frame, node, null, from);
                 Class<?> expected = i < argumentReferences.length ? argumentReferences[i] : null;
-                TypedInputsKt.writeInputReference(frame, to, expected == null ? value : requireReferenceCarrier(value, expected));
+                TypedInputs.writeInputReference(frame, to, expected == null ? value : requireReferenceCarrier(value, expected));
             }
         }
         if (captureLayout != null) {
@@ -284,7 +284,7 @@ public final class FunctionRoot extends GuestRoot {
                 else {
                     Object value = entry.getPacket().getObject(input, from);
                     Class<?> expected = i < argumentReferences.length ? argumentReferences[i] : null;
-                    TypedInputsKt.writeInputReference(frame, to, expected == null || strictArguments[i] ? value : requireReferenceCarrier(value, expected));
+                    TypedInputs.writeInputReference(frame, to, expected == null || strictArguments[i] ? value : requireReferenceCarrier(value, expected));
                 }
             }
             if (captureLayout != null) {

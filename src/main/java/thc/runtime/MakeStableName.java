@@ -10,7 +10,7 @@ public final class MakeStableName extends Expr {
     @Override public Object execute(VirtualFrame frame) { throw new RuntimeFault("StableName# tuple requires a destination"); }
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
         Object referent = value.execute(frame);
-        TupleResultsKt.requireVoidCarrier(state.execute(frame));
+        TupleResults.requireVoidCarrier(state.execute(frame));
         FrameAccess.INSTANCE.write(frame, slots[offset], StableNames.current(this).make(referent));
         return null;
     }

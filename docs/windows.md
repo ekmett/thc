@@ -147,7 +147,7 @@ the installed GHC libraries are never modified.
 
 The existing MD5 oracle compiles pinned original GHC C and compares 558 cases
 (2232 context rows), five defined alias cases, and an independent digest model.
-The Windows DLL uses the same original algorithm and C ABI wrapper. Its Kotlin
+The Windows DLL uses the same original algorithm and C ABI wrapper. Its Java
 FFM transport keeps one native image per backing array, copies back only the
 touched ranges, retains owners through calls, and confines temporary native
 memory to the invocation. Existing range, alignment, memcpy-overlap, native

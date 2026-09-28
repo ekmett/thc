@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
 
-public final class FramesKt {
-    private FramesKt() {}
+public final class Frames {
+    private Frames() {}
     public static final String STATIC_SHAPE_UNCHECKED_PROPERTY = "thc.staticShapeUnchecked";
 }

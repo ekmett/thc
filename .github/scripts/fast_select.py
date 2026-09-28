@@ -10,7 +10,6 @@ Commands are argv arrays, never shell source. No budget can remove changed tests
 """
 import argparse
 import ast
-import difflib
 import hashlib
 import json
 import os
@@ -22,8 +21,8 @@ ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ".github/scripts/fast_select.py"
 POLICY = ".github/scripts/fast-tests.json"
 CAPABILITIES = "scripts/core-capabilities.json"
-PROGRAM = "src/main/kotlin/thc/runtime/Program.kt"
-BYTECODE_PROGRAM = "src/main/kotlin/thc/runtime/BytecodeProgram.kt"
+PROGRAM = "src/main/java/thc/runtime/Program.java"
+BYTECODE_PROGRAM = "src/main/java/thc/runtime/BytecodeProgram.java"
 BYTECODE_ROOT = "src/main/java/thc/runtime/BytecodeRoot.java"
 SIMD_SPEC = "scripts/simd-families.json"
 SIMD_GENERATOR = "scripts/generate-simd-families.py"
@@ -47,12 +46,10 @@ POLYGLOT_EXACT_INPUTS = {
 }
 POLYGLOT_INPUT_PREFIXES = (
     POLYGLOT_TEST_ROOT, "buildSrc/", "gradle/", "compiler/THC/", "examples/THC/Polyglot",
-    "examples/THC/JavaScript", "src/main/kotlin/thc/runtime/", "src/main/java/thc/runtime/",
+    "examples/THC/JavaScript", "src/main/java/thc/runtime/",
 )
 TEST_ANNOTATION = r"@\s*(?:org\.junit\.(?:jupiter\.api|jupiter\.params)\.)?(?:Test|TestFactory|TestTemplate|ParameterizedTest|RepeatedTest)\b"
 LIFECYCLE = r"@\s*(?:org\.junit\.jupiter\.api\.)?(?:BeforeEach|AfterEach|BeforeAll|AfterAll)\b"
-DECLARATION = re.compile(r"\b(class|object|interface|fun|val|var|typealias)\s+"
-                         r"(?:<[A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*>\s+)?([A-Za-z_]\w*)")
 JAVA_DECLARATION = re.compile(r"\b(class|interface|enum|record)\s+([A-Za-z_$][\w$]*)")
 SOURCE_SPECIAL = re.compile(r'''//|/\*|"""|["']''')
 
@@ -154,11 +151,11 @@ def python_test(path):
 
 
 def junit_source(path):
-    return path.startswith("src/test/") and path.endswith((".kt", ".java"))
+    return path.startswith("src/test/") and path.endswith(".java")
 
 
 def polyglot_junit_source(path):
-    return path.startswith(POLYGLOT_TEST_ROOT) and path.endswith((".kt", ".java"))
+    return path.startswith(POLYGLOT_TEST_ROOT) and path.endswith(".java")
 
 
 def polyglot_input(path, leaf_sources):
@@ -168,104 +165,38 @@ def polyglot_input(path, leaf_sources):
         path not in leaf_sources and path.startswith(POLYGLOT_INPUT_PREFIXES))
 
 
-def lexical_source(source, comments_only=False):
-    """Mask Kotlin/Java lexical regions without mistaking strings for comments.
-
-    Structural discovery masks strings and preserves offsets. The comment-only
-    comparison retains string bytes and replaces each comment with a stable
-    delimiter, so a changed literal or non-comment token cannot pass as prose.
-    """
-    if comments_only and any(separator in source for separator in ("\r", "\u0085", "\u2028", "\u2029")):
-        raise SelectionError("non-LF source line separator")
+def code_only(source):
+    """Mask Java comments and literals, preserving offsets for class discovery."""
     result = []
-    index = 0
-    previous = 0
-    while index < len(source):
-        token = SOURCE_SPECIAL.search(source, index)
-        if token is None:
-            break
-        index = token.start()
-        start = index
-        kind = None
-        if source.startswith("//", index):
-            kind = "line"
-            end = source.find("\n", index)
+    index = previous = 0
+    while token := SOURCE_SPECIAL.search(source, index):
+        start = token.start()
+        if source.startswith("//", start):
+            end = source.find("\n", start)
             index = len(source) if end < 0 else end
-        elif source.startswith("/*", index):
-            kind = "block"
-            depth = 1
-            index += 2
-            while index < len(source) and depth:
-                if source.startswith("/*", index):
-                    depth += 1; index += 2
-                elif source.startswith("*/", index):
-                    depth -= 1; index += 2
-                else:
-                    index += 1
-            if depth:
-                raise SelectionError("unclosed block comment")
-        elif source.startswith('"""', index):
-            end = source.find('"""', index + 3)
+        elif source.startswith("/*", start):
+            end = source.find("*/", start + 2)
             if end < 0:
-                raise SelectionError("unclosed raw string")
-            index = end + 3
-        elif source[index] in "\"'":
-            quote = source[index]
-            index += 1
+                raise SelectionError("unclosed block comment")
+            index = end + 2
+        else:
+            delimiter = '"""' if source.startswith('"""', start) else source[start]
+            index = start + len(delimiter)
             while index < len(source):
                 if source[index] == "\\":
                     index += 2
-                elif source[index] == quote:
-                    index += 1
+                elif source.startswith(delimiter, index):
+                    index += len(delimiter)
                     break
                 else:
                     index += 1
             else:
-                raise SelectionError("unclosed string")
-        else:
-            raise SelectionError("unexpected source token")
+                raise SelectionError("unclosed string or text block")
         result.append(source[previous:start])
-        span = source[start:index]
-        if comments_only and kind is None and source[start] == '"':
-            # A quoted token inside ${...} would terminate this lightweight
-            # scan before the outer string actually ends. Admit only simple
-            # interpolation paths/calls; otherwise the change stays full.
-            for interpolation in re.finditer(r"\$\{", span):
-                if not re.match(r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*(?:\(\))?)*\}",
-                                span[interpolation.end():]):
-                    raise SelectionError("complex string interpolation")
-        if comments_only and kind == "line":
-            result.append("//")
-        elif comments_only and kind == "block":
-            result.append("/*" + "\n" * span.count("\n") + "*/")
-        elif comments_only:
-            result.append(span)
-        else:
-            result.append("".join("\n" if c == "\n" else " " for c in span))
+        result.append("".join("\n" if char == "\n" else " " for char in source[start:index]))
         previous = index
     result.append(source[previous:])
     return "".join(result)
-
-
-def code_only(source):
-    """Mask comments and strings for structural discovery, preserving offsets."""
-    return lexical_source(source)
-
-
-def mask_escaped_members(code):
-    """Mask only simple, dot-qualified escaped references, preserving offsets."""
-    def reference(match):
-        prefix = code[:match.start()].rstrip()
-        # Require a receiver expression, not a bare dot or unfamiliar operator.
-        if not re.search(r"[A-Za-z_0-9)\]}](?:!!|\?)?$", prefix):
-            return match[0]
-        # A receiver can also introduce an extension declaration. Leave its
-        # backticks (and unknown declaration/import syntax) to the widening rule.
-        statement = re.split(r"[{};=]", prefix)[-1]
-        if re.search(r"\b(?:class|object|interface|fun|val|var|typealias|package|import)\b", statement):
-            return match[0]
-        return "".join("\n" if char == "\n" else " " for char in match[0])
-    return re.sub(r"\.[ \t\n]*`[A-Za-z_][A-Za-z_0-9]*`", reference, code)
 
 
 def java_test_members(code, depths, start, end):
@@ -330,10 +261,9 @@ def java_test_members(code, depths, start, end):
     return unsafe
 
 
-def junit_info(source, java=False):
-    source_code = code_only(source)
-    code = mask_escaped_members(source_code)
-    packages = re.findall(r"^\s*package\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s*;?\s*$", code, re.M)
+def junit_info(source):
+    code = code_only(source)
+    packages = re.findall(r"^\s*package\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s*;\s*$", code, re.M)
     depths = []
     depth = 0
     for char in code:
@@ -343,7 +273,7 @@ def junit_info(source, java=False):
             raise SelectionError("unbalanced test source")
     if depth:
         raise SelectionError("unbalanced test source")
-    declarations = list((JAVA_DECLARATION if java else DECLARATION).finditer(code))
+    declarations = list(JAVA_DECLARATION.finditer(code))
     classes = []
     ranges = []
     unsafe = []
@@ -361,75 +291,25 @@ def junit_info(source, java=False):
                 raise SelectionError("JUnit source needs an exact package")
             classes.append(packages[0] + "." + item[2])
             ranges.append((item, start, end))
-            if ":" in code[item.end():start] or re.search(r"\b(?:extends|implements)\b", code[item.end():start]):
+            if re.search(r"\b(?:extends|implements)\b", code[item.end():start]):
                 unsafe.append("inherited-test-class")
     if re.search(TEST_ANNOTATION, code) and not classes:
         raise SelectionError("unresolved JUnit declaration")
     if re.search(r"@\s*(?:org\.junit\.jupiter\.api\.)?Nested\b", code):
         unsafe.append("nested-test-class")
-    if re.search(r"\bcompanion\s+object\b", code):
-        unsafe.append("shared-test-companion")
-    if "`" in code:
-        unsafe.append("backtick-test-declaration")
-    # Public top-level helpers (including extension/context helpers) and public
-    # non-test members may be consumed by other tests. Never silently omit them.
-    def private_at(index):
-        # Anchor to the declaration, not its physical line: a preceding private
-        # declaration on that same line must not hide a public shared helper.
-        return re.search(r"\bprivate(?:\s+(?:inline|tailrec|suspend|operator|infix|const|lateinit|data|sealed|open|abstract|inner|enum|actual|expect|external|override|final))*\s*$",
-                         code[max(0, index - 256):index]) is not None
+    # Top-level helpers and non-private non-test members may be consumed by
+    # other tests. Never silently omit them.
     test_starts = {item.start() for item, _, _ in ranges}
     declaration_starts = {item.start() for item in declarations}
-    declaration_words = "class|interface|enum|record" if java else "class|object|interface|fun|val|var|typealias"
-    for item in re.finditer(r"(?<![.:])\b(?:" + declaration_words + r")\b", code):
-        # Anonymous objects are expressions inside a helper or initializer.
-        # The enclosing declaration still decides whether that helper is shared.
-        if item[0] == "object" and re.match(r"\s*[:{]", code[item.end():]):
-            continue
+    for item in re.finditer(r"(?<![.])\b(?:class|interface|enum|record)\b", code):
         if depths[item.start()] in (0, 1) and item.start() not in declaration_starts:
             unsafe.append("unresolved-test-declaration")
     for item in declarations:
         if depths[item.start()] == 0 and item.start() not in test_starts:
-            if not private_at(item.start()):
-                unsafe.append("shared-test-helper")
-    if java:
-        for _, start, end in ranges:
-            unsafe.extend(java_test_members(code, depths, start, end))
-        return sorted(set(classes)), sorted(set(unsafe)), source_code
+            unsafe.append("shared-test-helper")
     for _, start, end in ranges:
-        private_constructors = []
-        for item in declarations:
-            if not start < item.start() < end or depths[item.start()] != 1 or item[1] != "class" or not private_at(item.start()):
-                continue
-            opener = re.match(r"\s*\(", code[item.end():])
-            if opener is None:
-                continue
-            first = item.end() + opener.end() - 1
-            parens = 0
-            for position in range(first, end):
-                char = code[position]
-                if char in "{}":
-                    break  # Complex constructor: retain conservative widening.
-                parens += (char == "(") - (char == ")")
-                if parens == 0:
-                    private_constructors.append((first, position))
-                    break
-        previous = start + 1
-        for item in declarations:
-            if not start < item.start() < end or depths[item.start()] != 1:
-                continue
-            if item[1] in ("val", "var") and any(first < item.start() < last for first, last in private_constructors):
-                previous = item.end()
-                continue
-            prefix = "".join(code[i] if depths[i] == 1 else " " for i in range(previous, item.start()))
-            injected_directory = (item[1] == "var" and re.search(
-                r"@\s*(?:org\.junit\.jupiter\.api\.io\.)?TempDir\s+lateinit\s*$", prefix))
-            if not private_at(item.start()) and not injected_directory and not (
-                    item[1] == "fun" and re.search(TEST_ANNOTATION + "|" + LIFECYCLE, prefix)):
-                unsafe.append("shared-test-member")
-            previous = item.end()
-    # Keep escaped identifiers visible to cross-file test-class reuse checks.
-    return sorted(set(classes)), sorted(set(unsafe)), source_code
+        unsafe.extend(java_test_members(code, depths, start, end))
+    return sorted(set(classes)), sorted(set(unsafe)), code
 
 
 def standalone_python_test(source):
@@ -481,88 +361,6 @@ def additive_capability_families(before, after):
     if reduced != old:
         return None
     return {primop_family(name) for name in additions}
-
-
-def additive_program_families(before, after):
-    """Allow only whole new primitive arms; existing dispatch must stay byte-identical."""
-    old_lines, new_lines = before.splitlines(keepends=True), after.splitlines(keepends=True)
-    added = []
-    for tag, first, last, start, end in difflib.SequenceMatcher(None, old_lines, new_lines, autojunk=False).get_opcodes():
-        if tag == "equal":
-            continue
-        if tag != "insert":
-            return None
-        added.extend(range(start, end))
-    if not added:
-        return None
-    families = set()
-    for index in added:
-        prefix = "".join(new_lines[:index])
-        word = prefix.rfind("internal fun narrowWordPrimitiveMask(")
-        signed = prefix.rfind("internal fun narrowIntPrimitiveShift(")
-        primitive = prefix.rfind("private class Primitive(")
-        arity = prefix.rfind("val arity = when (operation)")
-        execute = prefix.rfind("return when (operation)")
-        start = max(word, signed, arity, execute)
-        if start < 0 or "else ->" in prefix[start:]:
-            return None
-        line = new_lines[index].strip()
-        match = re.fullmatch(r'("[A-Za-z0-9]+#"(?:,\s*"[A-Za-z0-9]+#")*)\s*->\s*(.+)', line)
-        if not match:
-            return None
-        names = re.findall(r'"([A-Za-z0-9]+#)"', match[1])
-        for name in names:
-            family = primop_family(name)
-            if start in (word, signed):
-                width = re.search(r'(?:Word|Int)(8|16|32)#$', name)
-                expected = ({"8": "0xffL", "16": "0xffffL", "32": "0xffff_ffffL"} if start == word
-                            else {"8": "56", "16": "48", "32": "32"}).get(width[1] if width else "")
-                if match[2] != expected or family != ("integer-primops" if start == word else "signed-narrow-primops"):
-                    return None
-            elif primitive < 0 or start <= primitive or family is None:
-                return None
-            elif start == arity and match[2] not in ("1", "2"):
-                return None
-            elif start == execute and any(token in match[2] for token in ("{", "}", ";")):
-                return None
-            families.add(family)
-    return families
-
-
-def additive_bytecode_families(before, after):
-    """Only new name-to-existing-operation arms in the scalar bytecode dispatch."""
-    old_lines, new_lines = before.splitlines(keepends=True), after.splitlines(keepends=True)
-    added = []
-    for tag, first, last, start, end in difflib.SequenceMatcher(None, old_lines, new_lines, autojunk=False).get_opcodes():
-        if tag == "equal":
-            continue
-        if tag != "insert":
-            return None
-        added.extend(range(start, end))
-    if not added:
-        return None
-    marker = "val operation = when (scalar64PrimitiveOperation(name))"
-    old_start = before.find(marker)
-    old_end = before.find("else -> throw UnsupportedCore", old_start)
-    if old_start < 0 or old_end < 0:
-        return None
-    operations = set(re.findall(r'->\s*"([A-Za-z][A-Za-z0-9]*)"', before[old_start:old_end]))
-    families = set()
-    for index in added:
-        prefix = "".join(new_lines[:index])
-        start = prefix.rfind(marker)
-        if start < 0 or "else ->" in prefix[start:]:
-            return None
-        line = new_lines[index].strip()
-        match = re.fullmatch(r'("[A-Za-z0-9]+#"(?:,\s*"[A-Za-z0-9]+#")*)\s*->\s*"([A-Za-z][A-Za-z0-9]*)"', line)
-        if not match or match[2] not in operations:
-            return None
-        for name in re.findall(r'"([A-Za-z0-9]+#)"', match[1]):
-            family = primop_family(name)
-            if family is None:
-                return None
-            families.add(family)
-    return families
 
 
 def generated_simd_region(before, after, blocks):
@@ -635,15 +433,14 @@ def additive_simd_primops(old_spec, new_spec, old_cap, new_cap,
             f"        @Specialization public static {name} apply({name} left, {name} right) {{ return {name}.{op}(left, right); }}\n"
             "    }\n")
         program_blocks.append(
-            f'        "{op}{name}#" -> ProvenExpression(Expression {{ e ->\n'
-            "            val b = e.builder\n"
-            f"            b.begin{node}(); operands.forEach {{ it.emit(e) }}; b.end{node}()\n"
-            f"        }}, GeneratedVectors.proof{name})\n")
+            f'            case "{op}{name}#" -> new ProvenExpression(e -> {{\n'
+            "                var b = e.builder;\n"
+            f"                b.begin{node}(); for (var operand : operands) operand.emit(e); b.end{node}();\n"
+            f"            }}, GeneratedVectors.proof{name});\n")
     if (not generated_simd_region(old_root, new_root, root_blocks)
             or not generated_simd_region(old_program, new_program, program_blocks)):
         return None
     return names
-
 
 
 # This deliberately recognizes one closed Cabal addition profile, not arbitrary
@@ -791,7 +588,7 @@ def select(repo, base_ref, head_ref):
     for path in sorted(files):
         if junit_source(path):
             try:
-                infos[path] = junit_info(text(path), java=path.endswith(".java"))
+                infos[path] = junit_info(text(path))
                 for name in infos[path][0]:
                     if name in classes or name in polyglot_classes:
                         raise SelectionError("duplicate JUnit class")
@@ -801,7 +598,7 @@ def select(repo, base_ref, head_ref):
                 inventory_complete = False
         elif polyglot_junit_source(path):
             try:
-                names, unsafe, _ = junit_info(text(path), java=path.endswith(".java"))
+                names, unsafe, _ = junit_info(text(path))
                 if unsafe or not names:
                     raise SelectionError("unresolved optional JUnit source")
                 for name in names:
@@ -879,7 +676,6 @@ def select(repo, base_ref, head_ref):
     selected_haskell = set(policy["smoke"].get("haskell", []) if policy else [])
     affected_junit, affected_python, affected_haskell = set(), set(), set()
     additive_primop_paths = set()
-    comment_only_paths = set()
     changed = {path for record in records for path in record["paths"]}
     full_core_paths, compile_targets = set(), []
     if policy and base and head and "thc.cabal" in changed:
@@ -945,7 +741,7 @@ def select(repo, base_ref, head_ref):
                     if base and record["status"] == "M":
                         try:
                             previous = git(repo, "show", base + ":" + path).decode("utf-8")
-                            if set(junit_info(previous, java=path.endswith(".java"))[0]) - set(info[0]):
+                            if set(junit_info(previous)[0]) - set(info[0]):
                                 widen("removed-junit-class", path)
                         except (SelectionError, UnicodeError):
                             widen("unresolved-prior-test", path)
@@ -974,9 +770,7 @@ def select(repo, base_ref, head_ref):
             elif policy and base and record["status"] == "M" and path in (CAPABILITIES, PROGRAM, BYTECODE_PROGRAM):
                 try:
                     before = git(repo, "show", base + ":" + path).decode("utf-8")
-                    families = (additive_capability_families(before, text(path)) if path == CAPABILITIES
-                                else additive_program_families(before, text(path)) if path == PROGRAM
-                                else additive_bytecode_families(before, text(path)))
+                    families = additive_capability_families(before, text(path)) if path == CAPABILITIES else None
                     if not families:
                         widen("shared-primop-registry-change", path)
                     else:
@@ -990,15 +784,6 @@ def select(repo, base_ref, head_ref):
                     widen("shared-primop-registry-change", path)
             elif path in DOCUMENTATION_PATHS or (path.endswith(".md") and (path.startswith("docs/") or "/" not in path)):
                 pass  # Explicit documentation-only lane still executes all smoke.
-            elif base and record["status"] == "M" and path.startswith("src/main/") and path.endswith(".kt"):
-                try:
-                    previous = git(repo, "show", base + ":" + path).decode("utf-8")
-                    if lexical_source(previous, comments_only=True) == lexical_source(text(path), comments_only=True):
-                        comment_only_paths.add(path)
-                    else:
-                        widen("unmapped-source-or-configuration", path)
-                except (SelectionError, UnicodeError):
-                    widen("unmapped-source-or-configuration", path)
             else:
                 widen("unmapped-source-or-configuration", path)
     selected_junit.update(affected_junit)
@@ -1007,7 +792,7 @@ def select(repo, base_ref, head_ref):
     changed_paths = {path for record in records for path in record["paths"]}
     uncertain_diff = (base is None or head is None or head != checkout
                       or any(reason["code"] == "base-not-ancestor" for reason in reasons))
-    polyglot_required = any(path not in full_core_paths and path not in additive_primop_paths and path not in comment_only_paths
+    polyglot_required = any(path not in full_core_paths and path not in additive_primop_paths
                             and polyglot_input(path, policy["leafSources"] if policy else {})
                             for path in changed_paths) or (bool(polyglot_classes) and uncertain_diff)
     if polyglot_required and not polyglot_classes:

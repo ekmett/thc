@@ -37,7 +37,7 @@ final class ByteStringUtf8Expression extends Expr {
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
         ManagedAddress address = operands[0].executeRequiredAddress(frame);
         long length = operands[1].executeRequiredLong(frame);
-        TupleResultsKt.requireVoidCarrier(operands[2].execute(frame));
+        TupleResults.requireVoidCarrier(operands[2].execute(frame));
         // Poll only after C has returned and the result is saved; resumption must
         // never invoke the completed foreign call again.
         FrameAccess.INSTANCE.writeInt(frame, slots[offset], (int) ManagedByteStringUtf8.validate(address, length));

@@ -26,7 +26,7 @@ not an atomic-memory API or a claim of hardware SIMD acceleration.
 kept alive with `keepAlive#`. Its interior pointer deliberately exercises valid
 negative offsets. The Haskell fixture command retains native LLVM output,
 original pre/post-Tidy Core, strict entry audits and source/artifact hashes.
-Kotlin checks the 2,304 native rows with an independent scalar-byte model and
+Java checks the 2,304 native rows with an independent scalar-byte model and
 tests both lowerings, installed-code execution and memory boundaries.
 
 Run `cabal run exe:thc-fixtures --offline -- simd128-addresses`, then

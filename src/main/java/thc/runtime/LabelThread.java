@@ -13,7 +13,7 @@ public final class LabelThread extends Expr {
     @Override public Object execute(VirtualFrame frame) {
         Object target = identity.execute(frame);
         Object label = bytes.execute(frame);
-        TupleResultsKt.requireVoidCarrier(state.execute(frame));
+        TupleResults.requireVoidCarrier(state.execute(frame));
         GuestThreadOps.labelThread(this, target, label);
         return thc.runtime.Unit.INSTANCE;
     }

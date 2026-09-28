@@ -4,8 +4,8 @@ package thc.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives;
 
-public final class ApplicationKt {
-    private ApplicationKt() {}
+public final class Applications {
+    private Applications() {}
     public static Object[] getNO_PAP_ARGUMENTS() { return Closure.NO_PAP_ARGUMENTS; }
     public static Closure requireClosure(Object value) {
         if (value instanceof Closure closure) return closure;

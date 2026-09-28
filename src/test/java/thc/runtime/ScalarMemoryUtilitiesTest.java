@@ -189,7 +189,7 @@ class ScalarMemoryUtilitiesTest {
                             var configured = System.getenv("THC_EXPECT_HANDOFF_MODE");
                             boolean requestedMode;
                             if (configured == null)
-                                requestedMode = Boolean.getBoolean(HandoffKt.HANDOFF_PROPERTY);
+                                requestedMode = Boolean.getBoolean(Handoff.HANDOFF_PROPERTY);
                             else if (configured.equals("true"))
                                 requestedMode = true;
                             else if (configured.equals("false"))
@@ -197,7 +197,7 @@ class ScalarMemoryUtilitiesTest {
                             else
                                 throw new IllegalArgumentException(
                                     "The string doesn't represent a boolean value: " + configured);
-                            assertEquals(requestedMode, Boolean.getBoolean(HandoffKt.HANDOFF_PROPERTY));
+                            assertEquals(requestedMode, Boolean.getBoolean(Handoff.HANDOFF_PROPERTY));
                             assertEquals(requestedMode, language.getHandoffLayouts().getEnabled());
                             var linked = new LinkedHashMap<>(CoreModules.reachable(module, name));
                             linked.put("instrument", true);

@@ -38,7 +38,7 @@ remain non-dereferenceable. Managed mutable pointers cannot be stored in native
 cells because they have no real native address. Freed owners, foreign contexts,
 unowned numeric locations and opaque labels reject before memory access.
 
-The native oracle and independent Kotlin byte-buffer model cover all operations,
+The native oracle and independent Java byte-buffer model cover all operations,
 successful and failed CAS, narrowing, wraparound, aliasing, null pointers and
 neighboring sentinels. Pre/post-tidy Core is audited. Both backends exercise the
 first installed call with exact compiled-entry increments and no settling calls;
@@ -62,17 +62,17 @@ compiler/export.sh examples/AtomicTickets.hs
 command-line kernel launcher accepts only one integer, so call this entry from
 the existing [JVM embedding API](site/embedding.md#load-an-integer-kernel):
 
-```kotlin
-import thc.executionContext
-import thc.loadEntry
+```java
+import java.util.List;
+import static thc.Main.executionContext;
+import static thc.Main.loadEntry;
 
-fun main() {
-    for (backend in listOf("bytecode", "ast")) {
-        executionContext().use { context ->
-            val reserve = loadEntry(context,
-                listOf("build/core/AtomicTickets.json"),
-                "reserveTickets", backend = backend)
-            check(reserve.execute(40L, 3L).asLong() == 40L)
+void main() {
+    for (String backend : List.of("bytecode", "ast")) {
+        try (var context = executionContext()) {
+            var reserve = loadEntry(context,
+                List.of("build/core/AtomicTickets.json"), "reserveTickets", true, backend);
+            if (reserve.execute(40L, 3L).asLong() != 40L) throw new AssertionError();
         }
     }
 }

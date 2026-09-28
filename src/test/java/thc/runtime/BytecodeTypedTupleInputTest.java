@@ -175,7 +175,7 @@ class BytecodeTypedTupleInputTest {
             var resultShape = new TupleShape(CoreRepresentations.parse(tuple(reference, integer)), language); var result = handoff.getResults().acquire(resultShape.getLayout()); var sentinel = new Object();
             resultShape.getLayout().setObject(result, 0, sentinel); resultShape.getLayout().setLong(result, 1, 123L);
             var loan = handoff.getArguments().acquire(entry.getPacket()); loan.setInputMode(1); entry.getPacket().setLong(loan, 0, 0L); entry.getPacket().setObject(loan, entry.getHeader(), "not a constructor");
-            assertThrows(RuntimeFault.class, () -> TypedInputsKt.invokeTypedInput(target, loan, packet -> Calls.target(target, packet)));
+            assertThrows(RuntimeFault.class, () -> TypedInputs.invokeTypedInput(target, loan, packet -> Calls.target(target, packet)));
             assertNull(handoff.getPending()); assertEquals(0, handoff.getArguments().getDepth()); assertEquals(0, handoff.getArguments().retainedReferences());
             assertEquals(1, handoff.getResults().getDepth()); assertSame(sentinel, resultShape.getLayout().getObject(result, 0)); assertEquals(123L, resultShape.getLayout().getLong(result, 1));
             handoff.getResults().release(result, resultShape.getLayout()); released(language);

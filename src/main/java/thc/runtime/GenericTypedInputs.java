@@ -7,11 +7,11 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
 import static thc.runtime.RuntimeServiceStatus.fault;
-import static thc.runtime.TypedInputsKt.*;
+import static thc.runtime.TypedInputs.*;
 
 /** Dynamic metadata stays outside the fixed caller-local copy loops. */
-public final class GenericTypedInputsKt {
-    private GenericTypedInputsKt() {}
+public final class GenericTypedInputs {
+    private GenericTypedInputs() {}
     @CompilerDirectives.TruffleBoundary
     public static void validateGenericInput(GuestRoot root, int prefix, ArgumentLayout source, int offset, int count,
             TupleDestination destination, boolean exact, boolean under) {

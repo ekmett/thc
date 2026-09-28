@@ -15,7 +15,7 @@ final class AstAnnotationScope implements AstResumeStep {
         this.node = node; this.prior = prior; this.steps = steps;
     }
     @Override public Object resume(VirtualFrame frame, Object input) {
-        try { return AstContinuationKt.resumeAstSteps(frame, steps, input); }
+        try { return AstContinuations.resumeAstSteps(frame, steps, input); }
         catch (AstCapture cut) { throw cut.enclose(next -> new AstAnnotationScope(node, prior, next)); }
         finally { StackAnnotations.set(node, prior); }
     }

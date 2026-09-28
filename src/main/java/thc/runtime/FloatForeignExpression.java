@@ -27,12 +27,12 @@ final class FloatForeignExpression extends Expr {
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
         if (operation.getSingle()) {
             float argument = value.executeRequiredFloat(frame);
-            TupleResultsKt.requireVoidCarrier(state.execute(frame));
+            TupleResults.requireVoidCarrier(state.execute(frame));
             if (operation.getRounding()) FrameAccess.INSTANCE.writeFloat(frame, slots[offset], FloatForeignOp.round(argument));
             else FrameAccess.INSTANCE.writeLong(frame, slots[offset], operation.classify(argument));
         } else {
             double argument = value.executeRequiredDouble(frame);
-            TupleResultsKt.requireVoidCarrier(state.execute(frame));
+            TupleResults.requireVoidCarrier(state.execute(frame));
             if (operation.getRounding()) FrameAccess.INSTANCE.writeDouble(frame, slots[offset], FloatForeignOp.round(argument));
             else FrameAccess.INSTANCE.writeLong(frame, slots[offset], operation.classify(argument));
         }

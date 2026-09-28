@@ -12,6 +12,6 @@ public final class GetCurrentCCS extends Expr {
     @Override public Object execute(VirtualFrame frame) { throw fault("getCurrentCCS# requires a tuple destination"); }
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
         // The provenance child is deliberately never entered.
-        TupleResultsKt.requireVoidCarrier(state.execute(frame)); FrameAccess.write(frame, slots[offset], ManagedAddress.nullAddress()); return null;
+        TupleResults.requireVoidCarrier(state.execute(frame)); FrameAccess.write(frame, slots[offset], ManagedAddress.nullAddress()); return null;
     }
 }

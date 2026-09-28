@@ -23,7 +23,7 @@ final class InstallProcessSignal extends Expr {
         long signal = operands[0].executeRequiredInt(frame);
         long action = operands[1].executeRequiredInt(frame);
         var mask = operands[2].executeRequiredAddress(frame);
-        TupleResultsKt.requireVoidCarrier(operands[3].execute(frame));
+        TupleResults.requireVoidCarrier(operands[3].execute(frame));
         FrameAccess.INSTANCE.writeInt(frame, slots[offset], (int) ManagedSignals.install(this, signal, action, mask));
         return null;
     }

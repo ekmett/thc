@@ -70,7 +70,7 @@ public final class SumConstruct extends Expr {
         }
         int[] fields = selected.fields;
         if (proof.isTypedTransport()) payload.executeTuple(frame, fields, 0);
-        else if (proof.getKind() == CoreKind.VOID) TupleResultsKt.requireVoidCarrier(payload.execute(frame));
+        else if (proof.getKind() == CoreKind.VOID) TupleResults.requireVoidCarrier(payload.execute(frame));
         else if (proof.isInt()) FrameAccess.writeLong(frame, fields[0], proof.getNarrowInteger().widen(payload.executeRequiredInt(frame)));
         else if (proof.isLong()) FrameAccess.writeLong(frame, fields[0], payload.executeRequiredLong(frame));
         else if (proof.isFloat()) FrameAccess.writeFloat(frame, fields[0], payload.executeRequiredFloat(frame));

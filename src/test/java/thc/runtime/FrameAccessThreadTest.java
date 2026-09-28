@@ -87,7 +87,7 @@ class FrameAccessThreadTest {
                         switch (worker) {
                             case 0 -> FrameAccess.writeLong(frame, slot, 41L); case 1 -> FrameAccess.writeFloat(frame, slot, 3.5f);
                             case 2 -> FrameAccess.writeDouble(frame, slot, -2.25); case 3 -> FrameAccess.write(frame, slot, true);
-                            default -> TypedInputsKt.writeInputReference(frame, slot, marker);
+                            default -> TypedInputs.writeInputReference(frame, slot, marker);
                         }
                         return FrameAccess.read(frame, slot);
                     }));

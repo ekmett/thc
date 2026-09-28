@@ -74,7 +74,7 @@ class BytecodeColdHandlerTest {
                 }
                 void valid() throws ReflectiveOperationException { assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target)); }
                 void checkResult(Object result) {
-                    var tuple = TupleResultsKt.ownedTupleResult(result, shape); assertEquals(6, shape.getWidth());
+                    var tuple = TupleResults.ownedTupleResult(result, shape); assertEquals(6, shape.getWidth());
                     for (int i = 0; i < values.length; i++) { assertTrue(shape.getLayout().isLong(i)); assertEquals(values[i], shape.getLayout().getLong(tuple, i)); assertEquals(List.of("IntRep"), shape.getLeaves()[i].getPrimReps()); }
                 }
             }
@@ -93,7 +93,7 @@ class BytecodeColdHandlerTest {
             var worker = new Thread(() -> {
                 context.enter(); f.owner.getThreads().enterCurrent(null, false, true, null);
                 try {
-                    var captured = Objects.requireNonNull(SavedGuestContinuationKt.savedGuestContinuation(Calls.target(f.target, f.arguments(prefix, blocked)))); Objects.requireNonNull(captured.asyncRequest()).acknowledge(); answer.complete(captured);
+                    var captured = Objects.requireNonNull(SavedGuestContinuations.savedGuestContinuation(Calls.target(f.target, f.arguments(prefix, blocked)))); Objects.requireNonNull(captured.asyncRequest()).acknowledge(); answer.complete(captured);
                 } catch (Throwable failure) { answer.completeExceptionally(failure); } finally { f.owner.getThreads().leaveCurrent(GuestThreadStatus.FINISHED); context.leave(); }
             });
             worker.start();

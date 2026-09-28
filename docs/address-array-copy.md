@@ -1,7 +1,7 @@
 # Address and byte-array copies
 
 The three GHC 9.14.1 copy primops return scalar `State# s`. Counts and array
-offsets are byte counts, carried as full-width Kotlin `Long` values.
+offsets are byte counts, carried as full-width Java `long` values.
 
 | Primitive | Operands before `State# s` |
 |---|---|
@@ -35,7 +35,7 @@ arbitrary-pointer FFI, `copyAddrToAddr#`, or additional native platforms.
 destination bytes. The rows cover seven seeds, all contained ranges in a small
 window, whole-array and interior copies, and empty end positions. Pre/post Core
 exports retain one saturated copy primop per consumer and strict audits check
-their original GHC signatures. The Kotlin tests compare every byte with an
+their original GHC signatures. The Java tests compare every byte with an
 independent snapshot model on AST and bytecode, with and without inlining.
 They require unchanged target identities and last-tier validity, and exactly
 two compiled guest entries per installed observation: the public entry and its

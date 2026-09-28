@@ -137,7 +137,7 @@ public enum ArrayOp {
                     var array = ManagedArray.require(operands[0].execute(frame));
                     long index = operands[1].executeRequiredLong(frame);
                     var value = operands[2].execute(frame);
-                    var state = operands[3].execute(frame); TupleResultsKt.requireVoidCarrier(state);
+                    var state = operands[3].execute(frame); TupleResults.requireVoidCarrier(state);
                     ManagedArray.write(array, index, value); return state;
                 }
                 case COPY, COPY_MUTABLE: {
@@ -145,7 +145,7 @@ public enum ArrayOp {
                     long from = operands[1].executeRequiredLong(frame);
                     var destination = ManagedArray.require(operands[2].execute(frame));
                     long to = operands[3].executeRequiredLong(frame), count = operands[4].executeRequiredLong(frame);
-                    var state = operands[5].execute(frame); TupleResultsKt.requireVoidCarrier(state);
+                    var state = operands[5].execute(frame); TupleResults.requireVoidCarrier(state);
                     ManagedArray.copy(source, from, destination, to, count, operation == COPY_MUTABLE); return state;
                 }
                 default: throw fault("Tuple primitive requires a destination");
@@ -156,20 +156,20 @@ public enum ArrayOp {
                 case NEW: {
                     long count = operands[0].executeRequiredLong(frame);
                     var initial = operands[1].execute(frame);
-                    TupleResultsKt.requireVoidCarrier(operands[2].execute(frame));
+                    TupleResults.requireVoidCarrier(operands[2].execute(frame));
                     FrameAccess.INSTANCE.write(frame, slots[offset], ManagedArray.allocate(count, initial)); break;
                 }
                 case READ, INDEX: {
                     var array = ManagedArray.require(operands[0].execute(frame));
                     long index = operands[1].executeRequiredLong(frame);
-                    if (operation == READ) TupleResultsKt.requireVoidCarrier(operands[2].execute(frame));
+                    if (operation == READ) TupleResults.requireVoidCarrier(operands[2].execute(frame));
                     FrameAccess.INSTANCE.write(frame, slots[offset], ManagedArray.read(array, index)); break;
                 }
                 case CAS: {
                     var array = ManagedArray.require(operands[0].execute(frame));
                     long index = operands[1].executeRequiredLong(frame);
                     var expected = operands[2].execute(frame); var replacement = operands[3].execute(frame);
-                    TupleResultsKt.requireVoidCarrier(operands[4].execute(frame));
+                    TupleResults.requireVoidCarrier(operands[4].execute(frame));
                     var witness = ManagedArray.compareExchange(array, index, expected, replacement);
                     boolean success = witness == expected;
                     FrameAccess.INSTANCE.writeLong(frame, slots[offset], success ? 0L : 1L);
@@ -177,13 +177,13 @@ public enum ArrayOp {
                 }
                 case FREEZE, UNSAFE_THAW: {
                     var array = ManagedArray.require(operands[0].execute(frame));
-                    TupleResultsKt.requireVoidCarrier(operands[1].execute(frame));
+                    TupleResults.requireVoidCarrier(operands[1].execute(frame));
                     FrameAccess.INSTANCE.write(frame, slots[offset], operation == FREEZE ? ManagedArray.freeze(array) : ManagedArray.thaw(array)); break;
                 }
                 case FREEZE_COPY, THAW, CLONE_MUTABLE: {
                     var array = ManagedArray.require(operands[0].execute(frame));
                     long start = operands[1].executeRequiredLong(frame), count = operands[2].executeRequiredLong(frame);
-                    TupleResultsKt.requireVoidCarrier(operands[3].execute(frame));
+                    TupleResults.requireVoidCarrier(operands[3].execute(frame));
                     var copy = ManagedArray.slice(array, start, count);
                     FrameAccess.INSTANCE.write(frame, slots[offset], operation == FREEZE_COPY ? ManagedArray.freeze(copy) : copy); break;
                 }

@@ -27,7 +27,7 @@ final class MemcpyExpression extends Expr {
         var source = byteArrays ? ManagedAddress.fromGuestByteArray(operands[1].execute(frame))
             : operands[1].executeRequiredAddress(frame);
         long count = operands[2].executeRequiredLong(frame);
-        TupleResultsKt.requireVoidCarrier(operands[3].execute(frame));
+        TupleResults.requireVoidCarrier(operands[3].execute(frame));
         source.copyNonOverlappingTo(destination, count);
         FrameAccess.INSTANCE.writeObject(frame, slots[offset], destination);
         return null;

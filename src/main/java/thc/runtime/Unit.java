@@ -11,7 +11,6 @@ public final class Unit {
 
     @Override
     public String toString() {
-        // Preserve the existing observable diagnostic spelling across the port.
-        return "kotlin.Unit";
+        return "Unit";
     }
 }

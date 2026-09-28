@@ -166,7 +166,7 @@ class SimdFloatFmaTest {
         for (int argument = 0; argument < 3; argument++) arguments.add(argumentVector(doubles, laneCount, laneInputs, argument));
         var loan = language.getHandoffState().get().getArguments().acquire(inputLayout.getPacket()); loan.setInputMode(1); inputLayout.getPacket().setLong(loan, 0, 0L);
         for (int argument = 0; argument < arguments.size(); argument++) inputLayout.getPacket().setObject(loan, inputLayout.getHeader() + inputLayout.getLogical().offset(argument), arguments.get(argument));
-        var result = TupleResultsKt.ownedTupleResult(TypedInputsKt.invokeTypedInput(worker, loan, args -> Calls.target(worker, args)), resultShape);
+        var result = TupleResults.ownedTupleResult(TypedInputs.invokeTypedInput(worker, loan, args -> Calls.target(worker, args)), resultShape);
         var raw = resultShape.getLayout().getObject(result, 0);
         if (doubles) {
             var vector = assertInstanceOf(DoubleVector.class, raw);

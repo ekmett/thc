@@ -46,7 +46,7 @@ public final class LocalJoinRegion extends Expr {
         ResumeAsyncRegion(LocalJoinRegion region, List<AstResumeStep> steps, int[] slots, int offset) { this.region = region; this.steps = steps; this.slots = slots; this.offset = offset; }
         @Override public Object resume(VirtualFrame frame, Object input) {
             try {
-                try { AstContinuationKt.resumeAstSteps(frame, steps, input); }
+                try { AstContinuations.resumeAstSteps(frame, steps, input); }
                 catch (LocalJoinJump jump) {
                     if (jump.getTarget().getGroup() != region.group) throw jump;
                     LocalJoinRepeater once = region.single;

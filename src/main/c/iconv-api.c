@@ -23,7 +23,7 @@ _Static_assert(CHAR_BIT == 8 && sizeof(void *) == 8 && sizeof(long) == 8 &&
                sizeof(size_t) == 8 && sizeof(int) == 4 && sizeof(iconv_t) == 8,
                "Original iconv requires the native LP64 ABI");
 
-/* locale_t and iconv_t stay native. Only Kotlin's context registry exposes a
+/* locale_t and iconv_t stay native. Only the context registry exposes a
  * guest CLong token. Initialization uses the environment's LC_CTYPE, as GHC
  * startup does, without mutating the embedding process's global locale. */
 void *thc_iconv_locale_new(void) {

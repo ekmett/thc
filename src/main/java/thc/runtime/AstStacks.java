@@ -5,8 +5,8 @@ package thc.runtime;
 import com.oracle.truffle.api.nodes.Node;
 import thc.Language;
 
-public final class AstStackKt {
-    private AstStackKt() {}
+public final class AstStacks {
+    private AstStacks() {}
     public static AstStackScope astStackScope(Node node) {
         return Language.currentState(node).getThreadPollState().get().getAstStack();
     }

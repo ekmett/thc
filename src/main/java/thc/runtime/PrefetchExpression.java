@@ -29,7 +29,7 @@ public final class PrefetchExpression extends Expr {
         value.execute(frame);
         try { if (offset != null) offset.executeLong(frame); }
         catch (com.oracle.truffle.api.nodes.UnexpectedResultException failure) { throw propagate(failure); }
-        TupleResultsKt.requireVoidCarrier(state.execute(frame));
+        TupleResults.requireVoidCarrier(state.execute(frame));
         return thc.runtime.Unit.INSTANCE;
     }
     @SuppressWarnings("unchecked")

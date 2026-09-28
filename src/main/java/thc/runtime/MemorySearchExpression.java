@@ -26,12 +26,12 @@ final class MemorySearchExpression extends Expr {
         if (operation == MemorySearchOp.COMPARE) {
             var second = operands[1].executeRequiredAddress(frame);
             long count = operands[2].executeRequiredLong(frame);
-            TupleResultsKt.requireVoidCarrier(operands[3].execute(frame));
+            TupleResults.requireVoidCarrier(operands[3].execute(frame));
             FrameAccess.INSTANCE.writeInt(frame, slots[offset], (int) first.compareBytes(second, count));
         } else {
             long needle = operands[1].executeRequiredInt(frame);
             long count = operands[2].executeRequiredLong(frame);
-            TupleResultsKt.requireVoidCarrier(operands[3].execute(frame));
+            TupleResults.requireVoidCarrier(operands[3].execute(frame));
             FrameAccess.INSTANCE.writeObject(frame, slots[offset], first.findByte(needle, count));
         }
         return null;

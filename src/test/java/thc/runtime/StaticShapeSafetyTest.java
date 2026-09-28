@@ -19,12 +19,12 @@ class StaticShapeSafetyTest {
         void accept(Language language) throws Exception;
     }
     private void configuration(String strategy, boolean unchecked, boolean force, Action action) throws Exception {
-        var previous = System.getProperty(FramesKt.STATIC_SHAPE_UNCHECKED_PROPERTY);
+        var previous = System.getProperty(Frames.STATIC_SHAPE_UNCHECKED_PROPERTY);
         try {
             if (unchecked)
-                System.setProperty(FramesKt.STATIC_SHAPE_UNCHECKED_PROPERTY, "true");
+                System.setProperty(Frames.STATIC_SHAPE_UNCHECKED_PROPERTY, "true");
             else
-                System.clearProperty(FramesKt.STATIC_SHAPE_UNCHECKED_PROPERTY);
+                System.clearProperty(Frames.STATIC_SHAPE_UNCHECKED_PROPERTY);
             try (var context = Context.newBuilder("thc")
                      .allowExperimentalOptions(true)
                      .option("engine.StaticObjectStorageStrategy", strategy)
@@ -41,9 +41,9 @@ class StaticShapeSafetyTest {
             }
         } finally {
             if (previous == null)
-                System.clearProperty(FramesKt.STATIC_SHAPE_UNCHECKED_PROPERTY);
+                System.clearProperty(Frames.STATIC_SHAPE_UNCHECKED_PROPERTY);
             else
-                System.setProperty(FramesKt.STATIC_SHAPE_UNCHECKED_PROPERTY, previous);
+                System.setProperty(Frames.STATIC_SHAPE_UNCHECKED_PROPERTY, previous);
         }
     }
     private boolean safetyChecks(Object layout) throws Exception {

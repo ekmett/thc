@@ -8,7 +8,7 @@ import com.oracle.truffle.api.bytecode.ContinuationResult;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import static thc.runtime.RuntimeServiceStatus.fault;
-import static thc.runtime.SavedGuestContinuationKt.savedGuestContinuation;
+import static thc.runtime.SavedGuestContinuations.savedGuestContinuation;
 
 /** Cold capture at an AST edge whose callee already saved its body. */
 public final class AstControl {
@@ -27,7 +27,7 @@ public final class AstControl {
         @Override public Object resume(VirtualFrame frame, Object input) { return resumeChild(child, node, input, this); }
     }
     public static Object resumeChild(Object child, Node node, Object input, AstResumeStep step) {
-        if (input instanceof TailCall tail && AstTailAnchor.accepts(AstStackKt.astStackScope(node).getTailAnchor(), tail)) throw tail;
+        if (input instanceof TailCall tail && AstTailAnchor.accepts(AstStacks.astStackScope(node).getTailAnchor(), tail)) throw tail;
         if (input instanceof AstChildSuspension suspended) {
             if (suspended.getChild() != child) throw fault("AST caller received an unrelated child cut");
             Object marker;

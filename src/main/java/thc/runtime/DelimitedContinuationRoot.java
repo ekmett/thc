@@ -7,7 +7,7 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.ControlFlowException;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import thc.Language;
-import static thc.runtime.TupleResultsKt.requireVoidCarrier;
+import static thc.runtime.TupleResults.requireVoidCarrier;
 final class DelimitedContinuationRoot extends GuestRoot {
     private final DelimitedStack stack;
     @Child private DelimitedActionSite site;

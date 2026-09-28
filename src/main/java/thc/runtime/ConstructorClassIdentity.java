@@ -8,6 +8,7 @@ import com.oracle.truffle.api.Truffle;
 
 /** Per-layout proof that Java class equality implies constructor identity. */
 public final class ConstructorClassIdentity {
+    public static final String CONSTRUCTOR_CLASS_IDENTITY_PROPERTY = "thc.constructorClassIdentity";
     private static final class Owners {
         private Object owner;
         private final Assumption exclusive = Truffle.getRuntime().createAssumption("exclusive constructor carrier");

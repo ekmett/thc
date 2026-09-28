@@ -10,7 +10,7 @@ The Haskell `thc-fixtures bignat-literals` command builds fresh native oracles, 
 
 Malformed decimal and contradictory representation proofs are rejected. GHC Core lint forbids BigNat literal alternatives (`litIsLifted LitNumBigNat`), so both loaders and the auditor reject those explicitly; reference identity is never substituted for a BigNat pattern.
 
-Fixture orchestration and the integer-only corpus model live in Haskell; Kotlin
+Fixture orchestration and the integer-only corpus model live in Haskell; Java
 defines its own domains and byte/limb model and retains the malformed-value,
 forged-proof, arithmetic-frontier and missing-source controls. The existing
 shared Python `compiler/export-boot.py` and `scripts/audit-core.py` remain

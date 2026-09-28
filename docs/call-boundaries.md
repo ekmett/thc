@@ -18,8 +18,8 @@ Object RootNode.execute(VirtualFrame frame);
 Inlining can merge a callee into the compilation region so allocations disappear.
 Argument and result profiles refine types without changing those method
 signatures. THC's [Java call bridge](../src/main/java/thc/runtime/Calls.java)
-passes the already-constructed packet directly, avoiding Kotlin's defensive
-spread-argument copy; it does not introduce a primitive call ABI.
+passes the already-constructed packet directly without copying it; it does not
+introduce a primitive call ABI.
 
 ## Typed transport and packet lifetime
 

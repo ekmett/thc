@@ -585,7 +585,7 @@ class PackageManifestTest(unittest.TestCase):
     @staticmethod
     def index_envelope(source, events=0):
         # Transport-only controls. The audit never uses these placeholder
-        # navigation sections; the Kotlin reader independently checks them.
+        # navigation sections; the Java reader independently checks them.
         header = b'THCJSIX1' + struct.pack('<IIQQ', 2, 0, len(source), events) + hashlib.sha256(source).digest()
         size = sum(((count + per - 1) // per) * 8 for count, per in
                    ((len(source), 1 << 32), (len(source), 2048), (len(source), 16384), (events, 32)))

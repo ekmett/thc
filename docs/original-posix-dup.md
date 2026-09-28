@@ -31,7 +31,7 @@ monotonic, non-reusing fd>=3 allocation; it skips occupied dup2 targets.
 
 The native oracle observes shared offsets, independent close, append status,
 lowest-free stdio slots, replacement, self/alias replacement and invalid calls.
-Kotlin compares roles and bytes, never equating native and context fd numbers.
+Java compares roles and bytes, never equating native and context fd numbers.
 It also checks malformed proofs/State and explicitly installs both active entry
 targets before checking every first and subsequent compiled invocation.
 

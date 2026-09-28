@@ -3475,7 +3475,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             if (resumable && !loop) checkpointedApplication(e, function, arguments, evaluatedArguments, inputLayout, tail);
             else if (inputLayout != null && inputLayout.getRequiresTyped())
                 typedArguments(e, function, arguments, inputLayout, tail, null, tail && !resumable
-                    && TypedInputsKt.supportsTypedSelf(context.inputLayout, context.entryStrict, inputLayout));
+                    && TypedInputs.supportsTypedSelf(context.inputLayout, context.entryStrict, inputLayout));
             else if (inputLayout != null) compactArguments(e, function, arguments, inputLayout, (fn, values) -> {
                 b.beginApplyCompact(inputLayout, tail, metrics, evaluatedArguments);
                 b.emitLoadLocal(fn); for (var value : values) b.emitLoadLocal(value);
@@ -4372,7 +4372,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 if (resumable) checkpointedTupleApplication(e, shape, function, arguments, inputLayout, destination, true);
                 else if (inputLayout != null && inputLayout.getRequiresTyped())
                     typedArguments(e, function, arguments, inputLayout, true, tupleSlots(shape, destination),
-                        TypedInputsKt.supportsTypedSelf(context.inputLayout, context.entryStrict, inputLayout));
+                        TypedInputs.supportsTypedSelf(context.inputLayout, context.entryStrict, inputLayout));
                 else if (inputLayout == null) {
                     b.beginTailApplyTuple(tupleSlots(shape, destination), arguments.size(), metrics);
                     requireClosure(function).emit(e); for (var argument : arguments) argument.emit(e);
@@ -5216,7 +5216,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             if ("lit".equals(alt.kind) && !(alt.value instanceof Long)) longLiterals = false;
         }
         var fallback = defaultArm;
-        var category = CaseCategoriesKt.caseCategory(binderProof, categories, longLiterals);
+        var category = CaseCategories.caseCategory(binderProof, categories, longLiterals);
         // Preserve original order for small cases and duplicate labels; signed comparison retains all Word# bits.
         boolean orderLiterals = binderProof.isLong() && explicit.size() > 8;
         if (orderLiterals) {

@@ -77,7 +77,7 @@ public final class ManagedFileFixtures {
         return map("instrument", true, "constructors", list(map("id", "T2", "kind", "unboxed-tuple", "arity", 2, "tag", 1)),
             "bindings", bindings);
     }
-    /** Explicit equivalents of Kotlin delegation used by provider fault-injection tests. */
+    /** Provider delegation for fault-injection tests. */
     static class FileSystemDelegate implements org.graalvm.polyglot.io.FileSystem {
         protected final org.graalvm.polyglot.io.FileSystem delegate;
         FileSystemDelegate(org.graalvm.polyglot.io.FileSystem delegate) { this.delegate = delegate; }

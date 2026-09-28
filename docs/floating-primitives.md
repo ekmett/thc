@@ -65,7 +65,7 @@ encodings. The compiler/plugin and original library bodies are not replaced.
 `decodeFloat_Int#` returns `(# Int#, Int# #)` and `decodeDouble_Int64#`
 returns `(# Int64#, Int# #)`: a signed integer significand and a binary
 exponent. Both backends use raw IEEE bits and write the two primitive Long
-results directly into tuple destination slots. Shared Kotlin decomposition
+results directly into tuple destination slots. Shared Java decomposition
 handles subnormal normalization, with no intermediate floating calculation or
 temporary pair. This is not a claim about the generic floating call ABI.
 
@@ -94,7 +94,7 @@ binary64 encodings across direct, opaque-worker, genuine public `exponent`
 and [command-line example](../examples/THC/FloatDecode.hs) entries.
 Inputs cover both signs, every exponent code, every leading subnormal
 bit and neighbors, boundary fractions and deterministic integer-generated cases.
-Kotlin independently derives fields with unbounded integer arithmetic and checks
+Java independently derives fields with unbounded integer arithmetic and checks
 both Core stages/backends, with guest inlining enabled and disabled. Every
 measured call checks the exact compiled-entry count, target identities/validity
 and released handoff storage; setup does not execute a settling guest call.
@@ -104,14 +104,14 @@ Preparation exports and retains the complete unchanged original Integer module,
 alongside its pinned sources, license and provenance; the reachable worker is
 not fabricated. Missing that module fails the strict closure audit. The existing
 shared original-library exporter and Core auditor remain explicit Python
-dependencies; the new producer and independent models are Haskell and Kotlin.
+dependencies; the new producer and independent models are Haskell and Java.
 Malformed scalar carriers, tuple shape, arity and levity fail closed. Bare
 primops are rejected by strict loading and trap when demanded in diagnostic mode.
 Missing/corrupt native rows or source/artifact provenance are rejected as well.
 
 ## Scalar arithmetic and conversions
 
-The inverse-hyperbolic operations share a Kotlin implementation between
+The inverse-hyperbolic operations share a Java implementation between
 backends. Cancellation-resistant `log1p` formulas handle finite middle ranges;
 small `asinh`/`atanh` inputs retain their signed input, and large
 `asinh`/`acosh` inputs use `log(abs(x)) + log(2)` to avoid overflow.
@@ -315,7 +315,7 @@ added.
 `cabal run exe:thc-fixtures --offline -- scalar-bitcasts` retains 13,555 native/model
 rows across ten pre/post-Tidy roots. The Haskell producer retains the existing
 shared Core auditor dependency; bitcast-specific Python producers and models are
-removed. Integer-only Kotlin models cover signed zeros, infinities,
+removed. Integer-only Java models cover signed zeros, infinities,
 subnormals and signed quiet/signalling NaNs. The fixtures retain opaque calls,
 floating constructor fields with an unused recursive bottom, and primitive
 closure captures. Separate encode and decode roots compare through native-order

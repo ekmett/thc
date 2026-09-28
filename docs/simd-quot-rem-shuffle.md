@@ -24,7 +24,7 @@ For example, `shuffleInt32X4# left right (# 3#, 4#, 1#, 6# #)` selects
 
 `cabal run exe:thc-fixtures -- simd-arithmetic` generates real vector Haskell Core,
 an independent scalar-lane native GHC oracle, and strict provenance/audits.
-`SimdArithmeticTest` checks its results against a Kotlin BigInteger/bit-lane model,
+`SimdArithmeticTest` checks its results against a Java BigInteger/bit-lane model,
 then executes the unchanged Core on both backends, including each first installed
 call and target validity. Three shuffle patterns cover both inputs, reversal,
 rotation, and repeated first-left/last-right lanes, including the highest valid

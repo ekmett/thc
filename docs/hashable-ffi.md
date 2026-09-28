@@ -46,7 +46,7 @@ dependency does not suppress the other instances. The full original boot-Core
 manifest needs an 8 GiB test heap; 4 GiB exhausted the heap during loading.
 
 These tests require the general `thc-package-c-ffi-v1` acquisition/runtime
-implementation. A native-only oracle run or a successful Kotlin compilation
+implementation. A native-only oracle run or a successful Java compilation
 is not an end-to-end success; missing fixture preparation is a hard failure,
 not a skipped test.
 

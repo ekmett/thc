@@ -89,7 +89,7 @@ mutableInputs = Set.toAscList . Set.fromList $
   [(x,code) | x <- [-2^(63 :: Int),-257,-1,0,255,256,2^(63 :: Int)-1], code <- [-2^(63 :: Int),-1,0,2^(63 :: Int)-1]]
 
 -- Integer/list models are independent of GHC and the JVM implementation. The
--- already-independent Kotlin resize/size models remain the semantic authority
+-- already-independent Java resize/size models remain the semantic authority
 -- for those two families; their native driver owns its original input inventory.
 model :: Family -> String -> [Integer] -> Integer
 model Bytes name [x]
@@ -305,7 +305,7 @@ prepareByteArrayFamily root command = do
       "Original List/ShortByteString identities are preserved; public comparison results are sign-only.",
       "Existing Python audit-core.py and export-boot.py, and Haskell thc-primops remain explicit shared dependencies."] :: [String])] ++
     ["inputs" .= [[raw,code] | (raw,code) <- pairs] | family `elem` [Mutable,Resize,Size]] ++
-    ["modelValidation" .= ("Independent Kotlin model and complete ordered corpus" :: String)] ++
+    ["modelValidation" .= ("Independent Java model and complete ordered corpus" :: String)] ++
     ["reachableBindings" .= Map.fromList [(stage ++ "/" ++ name,reachable) | (stage,_,audited,_,_,_) <- stages,(name,reachable,_,_,_) <- audited] | family == Bytes] ++
     (if family == Compare then ["resultContract" .= ("sign only" :: String),"inputsByEntry" .= Map.fromList [(name,unaryInputs family name) | name <- names]] else []) ++
     (case family of

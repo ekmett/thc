@@ -63,7 +63,7 @@ Run the Haskell producer once, then reuse those artifacts in both handoff modes:
 
 The producer verifies the complete inventory against installed GHC 9.14.1,
 exports unmodified pre/post-tidy Core, retains strict audits, and records native
-commands, exit status and source/artifact hashes. Kotlin checks all native rows
+commands, exit status and source/artifact hashes. Java checks all native rows
 with a separate native-endian model, then exercises both interpreters and the
 first installed calls with exact compiled-entry increments and target identity
 checks. Storage tests cover boundary and overflowing offsets, empty inputs,

@@ -30,7 +30,7 @@ The images preserve all scheduled block edges and display selected real nodes. O
 
 ## The AST barrier
 
-The original graph contains constant ordinal zero (node5), an `int[]` constant (254), `LoadIndexed 253`, and `IntegerSwitch 255` with four keys plus a default. Their source is `FunctionBody.execute`, `Program.kt:514`. The [frozen JVM bytecode](FunctionBody.javap.txt) identifies the array as Kotlin's `FunctionBody$WhenMappings.$EnumSwitchMapping$0` and shows `getstatic → ordinal → iaload → tableswitch`.
+The original graph contains constant ordinal zero (node5), an `int[]` constant (254), `LoadIndexed 253`, and `IntegerSwitch 255` with four keys plus a default. Their source is `FunctionBody.execute`, `Program.kt:514`. The [frozen JVM bytecode](FunctionBody.javap.txt) identifies the array as `FunctionBody$WhenMappings.$EnumSwitchMapping$0` and shows `getstatic → ordinal → iaload → tableswitch`.
 
 Although the result kind is known, the synthetic mutable array prevents the switch from folding here. Long, data, closure, address and fallback body paths remain, followed by additional loop transformations. The original graph is allocation-clean but unnecessarily large. The [barrier evidence](ast-enum-barrier.json) retains the exact nodes and typed entry paths. The v2 graph has no enum mapping load or `IntegerSwitch`; its before-high graph has one loop instead of nine. The [separate Map benchmark](../debug-locations.md) measures the performance change; it is not inferred from that node reduction.
 

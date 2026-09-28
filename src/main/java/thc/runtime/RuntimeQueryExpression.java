@@ -33,7 +33,7 @@ final class RuntimeQueryExpression extends Expr {
         } catch (com.oracle.truffle.api.nodes.UnexpectedResultException failure) {
             throw propagate(failure);
         }
-        TupleResultsKt.requireVoidCarrier(state.execute(frame));
+        TupleResults.requireVoidCarrier(state.execute(frame));
         FrameAccess.INSTANCE.writeLong(frame, slots[offset], RuntimeServices.query(this, backend, key, item, field));
         return null;
     }

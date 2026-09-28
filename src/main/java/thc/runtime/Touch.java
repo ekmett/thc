@@ -7,7 +7,7 @@ import java.lang.ref.Reference;
 public final class Touch {
     private Touch() {}
     public static Object preserve(Object kept, Object state) {
-        TupleResultsKt.requireVoidCarrier(state);
+        TupleResults.requireVoidCarrier(state);
         Reference.reachabilityFence(kept);
         return thc.runtime.Unit.INSTANCE;
     }

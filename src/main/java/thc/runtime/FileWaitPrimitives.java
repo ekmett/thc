@@ -13,7 +13,7 @@ public final class FileWaitPrimitives {
     @TruffleBoundary(transferToInterpreterOnException = false)
     static void badFileDescriptor(GlobalBinding payload, Node node) { throw new GuestException(payload.read(), node); }
     public static Object prepareFileWait(long fd, Object state, boolean writing, Node node) {
-        TupleResultsKt.requireVoidCarrier(state);
+        TupleResults.requireVoidCarrier(state);
         return Language.currentState(node).getFiles().waitToken(fd, writing);
     }
     public static Object awaitFileWait(Object token, GlobalBinding payload, boolean async, boolean compiledAtCut, Node node) {

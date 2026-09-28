@@ -43,7 +43,7 @@ JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew --max-workers=2 \
 ```
 
 The Haskell producer records 271 genuine native results, pre/post Core exports,
-strict audits and source/artifact hashes. Kotlin independently models the corpus
+strict audits and source/artifact hashes. Java independently models the corpus
 and checks both backends, including the first installed guest call, exact entry
 counts and handoff cleanup. Boundary tests cover overlap, pointer-cell handling,
 truncated references and native lifetime/context restrictions.

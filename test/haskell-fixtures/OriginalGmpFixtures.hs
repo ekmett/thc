@@ -48,7 +48,7 @@ entries = [("originalAdd","__gmpn_add"),("originalAddWord","__gmpn_add_1"),
   ("originalOr","integer_gmp_mpn_ior_n"),("originalXor","integer_gmp_mpn_xor_n"),
   ("originalPopCount","__gmpn_popcount")]
 
--- Native observations only. Kotlin owns arithmetic and raw-ABI expectations.
+-- Native observations only. Java owns arithmetic and raw-ABI expectations.
 type Row = ((String,String,[Int],[Int],Int,Int,Int,Int,Int,Int,[Int],[Int]),
             (Int,[Int],[Int],[Int],[Int]))
 

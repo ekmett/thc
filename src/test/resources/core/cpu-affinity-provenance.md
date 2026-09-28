@@ -2,7 +2,7 @@
 
 `cpu-affinity-descriptors.json` retains the two foreign-call descriptor objects
 from genuine GHC 9.14.1 post-Tidy export of `runtime/THC/Thread.hs`, without changing
-their target, convention, safety, arguments, or result. The Kotlin tests use
+their target, convention, safety, arguments, or result. The Java tests use
 explicitly synthetic callers; they do not claim those callers are GHC output.
 
 The declarations moved from `THC` to `THC.Thread` with the wider runtime API.

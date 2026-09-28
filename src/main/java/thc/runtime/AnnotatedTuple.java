@@ -13,7 +13,7 @@ public final class AnnotatedTuple extends Expr {
     @Override public Object execute(VirtualFrame frame) { throw RuntimeFault.fault("annotateStack# requires a tuple destination"); }
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
         Object value = annotation.execute(frame);
-        TupleResultsKt.requireVoidCarrier(state.execute(frame));
+        TupleResults.requireVoidCarrier(state.execute(frame));
         StackAnnotationState prior = StackAnnotations.enter(this, value);
         try { return body.executeTuple(frame, slots, offset); }
         catch (DelimitedCut cut) {

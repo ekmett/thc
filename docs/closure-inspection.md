@@ -32,7 +32,7 @@ managed stack-source compatibility service is not a closure heap IPE table.
 
 The Haskell fixture producer compares nine original-Core examples with native
 GHC, including a raising pointer payload, absent provenance with a sentinel
-buffer, non-`AP_STACK` input, and non-profiling cost-centre behavior. Kotlin
+buffer, non-`AP_STACK` input, and non-profiling cost-centre behavior. Java
 also checks detached images, raw primitive bits, pointer identities, independent
 storage and thunk states. Native heap headers and JVM headers are deliberately
 not compared byte-for-byte.

@@ -107,9 +107,9 @@ class GenericInputCallInvariantTest {
                     @Override public Object call(Object... arguments) { throw new IllegalStateException("Invalid target reached dispatch"); }
                 };
                 var marker = new Object(); var layout = new FrameLayout(); int[] slots = {layout.bind("number"), layout.bind("reference")};
-                var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], layout.build()); FrameAccess.writeLong(frame, slots[0], 23L); TypedInputsKt.writeInputReference(frame, slots[1], marker);
+                var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], layout.build()); FrameAccess.writeLong(frame, slots[0], 23L); TypedInputs.writeInputReference(frame, slots[1], marker);
                 var source = new AstInputSource(input.getLogical(), slots); var node = new Node() {};
-                var failure = assertThrows(type, () -> GenericTypedInputsKt.prepareGenericInput(frame, node, new Closure(null, 1, target), input, source, null, 1, 0, 1, new Force(new Metrics(false))));
+                var failure = assertThrows(type, () -> GenericTypedInputs.prepareGenericInput(frame, node, new Closure(null, 1, target), input, source, null, 1, 0, 1, new Force(new Metrics(false))));
                 assertEquals(1, reads[0]); assertEquals(23L, FrameAccess.read(frame, slots[0])); assertSame(marker, FrameAccess.read(frame, slots[1]));
                 var state = language.getHandoffState().get(); assertNull(state.getPending());
                 assertEquals(0, state.getArguments().getDepth()); assertEquals(0, state.getArguments().retainedReferences()); assertEquals(0, state.getResults().getDepth()); assertEquals(0, state.getResults().retainedReferences());
@@ -146,7 +146,7 @@ class GenericInputCallInvariantTest {
                     };
                     var input = state.getArguments().acquire(layout.getPacket()); input.setInputMode(1); var output = state.getResults().acquire(layout.getPacket()); long generation = input.getGeneration();
                     var marker = new Object(); var outputMarker = new Object(); layout.getPacket().setObject(input, layout.getHeader(), marker); layout.getPacket().setObject(output, layout.getHeader(), outputMarker);
-                    var failure = assertThrows(type, () -> TypedInputsKt.invokeTypedInput(target, input, packet -> { throw new IllegalStateException("Invalid target reached the action"); }));
+                    var failure = assertThrows(type, () -> TypedInputs.invokeTypedInput(target, input, packet -> { throw new IllegalStateException("Invalid target reached the action"); }));
                     if (root == null) assertEquals("null cannot be cast to non-null type thc.runtime.GuestRoot", failure.getMessage());
                     if (root == untyped) assertEquals("Target has no typed input entry", failure.getMessage());
                     assertEquals(1, reads[0]); assertTrue(input.getLive()); assertEquals(1, input.getInputMode()); assertEquals(generation, input.getGeneration()); assertSame(marker, layout.getPacket().getObject(input, layout.getHeader()));

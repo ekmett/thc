@@ -42,7 +42,7 @@ class CompactHeaderDefaultsTest(unittest.TestCase):
         self.check_frozen_commands([], 'thc.Probe', 'thc.Probe')
 
     def test_historical_probe_entrypoint_is_explicit_not_inferred(self):
-        self.check_frozen_commands(['--baseline-probe-class', 'thc.ProbeKt'], 'thc.ProbeKt', 'thc.Probe')
+        self.check_frozen_commands(['--baseline-probe-class', 'example.BaselineProbe'], 'example.BaselineProbe', 'thc.Probe')
         self.check_frozen_commands(['--candidate-probe-class', 'thc.CustomProbe'], 'thc.Probe', 'thc.CustomProbe')
 
     def check_frozen_commands(self, probe_options, baseline_class, candidate_class):
@@ -55,7 +55,7 @@ class CompactHeaderDefaultsTest(unittest.TestCase):
                 'java/release': 'JAVA_VERSION="25"\nGRAALVM_VERSION="25.3.4.1"\n',
                 'baseline/thc.jar': 'historical runtime with Probe',
                 'candidate/thc.jar': 'runtime only', 'tools/thc-tools.jar': 'Probe',
-                'core.json': '{}', 'modules.txt': 'core.json\n', 'source/Runtime.kt': 'source',
+                'core.json': '{}', 'modules.txt': 'core.json\n', 'source/Runtime.java': 'source',
             }
             for name, content in files.items():
                 path = root / name

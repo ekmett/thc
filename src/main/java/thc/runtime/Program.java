@@ -1275,7 +1275,7 @@ public final class Program implements ExecutableProgram {
         CoreRepresentations.validateDeclaredCaseResult(declared, results);
         CoreRepresentations.validateAggregateCaseResult(declared, results);
         CoreRepresentations.validateFloatingCaseResult(declared, results);
-        return switch (CaseCategoriesKt.caseCategory(binderProof, kinds, allLong)) {
+        return switch (CaseCategories.caseCategory(binderProof, kinds, allLong)) {
             case DATA -> new DataCase(scrutinee, binder, alternatives, metrics, binderProof, delimited);
             case LONG -> new LongCase(scrutinee, binder, alternatives, metrics, binderProof, delimited);
             case DEFAULT_ONLY -> new DefaultCase(scrutinee, binder, alternatives, metrics, binderProof, delimited);
@@ -2195,7 +2195,7 @@ public final class Program implements ExecutableProgram {
         if (input != null && input.getRequiresTyped()) return new AstTypedApplication(function, nodes, scope.layout, tail, metrics,
             tupleProof.isTypedTransport() ? new TupleShape(tupleProof, (thc.Language) language) : null,
             tail && !capturesContinuations && scope.self != null &&
-                TypedInputsKt.supportsTypedSelf(scope.self.getInputLayout(), scope.self.getEntryStrict(), input));
+                TypedInputs.supportsTypedSelf(scope.self.getInputLayout(), scope.self.getEntryStrict(), input));
         if (tupleProof.isTypedTransport()) {
             TupleShape shape = new TupleShape(tupleProof, (thc.Language) language);
             int[] vectorSlots = tupleProof.isVector() ? vectorSlots(scope, shape.getWidth(), "<vector call result ") : null;

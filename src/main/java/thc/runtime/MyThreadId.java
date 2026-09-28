@@ -12,7 +12,7 @@ public final class MyThreadId extends Expr {
     }
     @Override public Object execute(VirtualFrame frame) { throw RuntimeFault.fault("myThreadId# requires a tuple destination"); }
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
-        TupleResultsKt.requireVoidCarrier(state.execute(frame));
+        TupleResults.requireVoidCarrier(state.execute(frame));
         FrameAccess.write(frame, slots[offset], GuestThreadOps.myThreadId(this));
         return null;
     }

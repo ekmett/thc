@@ -8,8 +8,8 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.Node;
 import static thc.runtime.RuntimeServiceStatus.fault;
-import static thc.runtime.TypedInputsKt.*;
-import static thc.runtime.ApplicationKt.requireClosure;
+import static thc.runtime.TypedInputs.*;
+import static thc.runtime.Applications.requireClosure;
 
 final class InputCallArm extends Node {
     private final InputSource source;

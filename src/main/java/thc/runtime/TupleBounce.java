@@ -19,11 +19,11 @@ public final class TupleBounce extends Node {
         while (true) {
             try { TruffleSafepoint.poll(this); }
             catch (Throwable failure) {
-                if (next.getInput() != null) TypedInputsKt.discardTypedInput(destination.getShape().getLanguage(), next.getInput());
+                if (next.getInput() != null) TypedInputs.discardTypedInput(destination.getShape().getLanguage(), next.getInput());
                 throw failure;
             }
             if (!(next.getTarget().getRootNode() instanceof GuestRoot root) || !root.hasTupleResult(destination.getShape())) {
-                if (next.getInput() != null) TypedInputsKt.discardTypedInput(destination.getShape().getLanguage(), next.getInput());
+                if (next.getInput() != null) TypedInputs.discardTypedInput(destination.getShape().getLanguage(), next.getInput());
                 throw fault("Tuple tail target result shape mismatch");
             }
             try {
@@ -41,7 +41,7 @@ public final class TupleBounce extends Node {
                     if (inputLayout == null) throw fault("Target has no typed input entry");
                     long generation = input.getGeneration();
                     try { result = Calls.indirect(call, next.getTarget(), new Object[]{input}); }
-                    finally { GenericTypedInputsKt.releaseGenericInput(inputLayout, input, generation); }
+                    finally { GenericTypedInputs.releaseGenericInput(inputLayout, input, generation); }
                 } else {
                     next.getArgs()[0] = 0L;
                     result = Calls.indirect(call, next.getTarget(), next.getArgs());

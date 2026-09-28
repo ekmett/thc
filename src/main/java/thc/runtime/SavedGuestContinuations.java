@@ -4,8 +4,8 @@ package thc.runtime;
 
 import com.oracle.truffle.api.bytecode.ContinuationResult;
 
-public final class SavedGuestContinuationKt {
-    private SavedGuestContinuationKt() {}
+public final class SavedGuestContinuations {
+    private SavedGuestContinuations() {}
     public static SavedGuestContinuation savedGuestContinuation(Object value) {
         if (value instanceof SavedGuestContinuation saved) return saved;
         if (value instanceof ContinuationResult saved) return BytecodeContinuations.view(saved);

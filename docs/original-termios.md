@@ -27,7 +27,7 @@ operands are checked before access; the setter preserves the exact singleton
 pre/post Core and native observations using the existing Haskell framework.
 The native oracle touches allocated images only: six full-width patterns,
 offset canaries, member reads/writes, and two writes through the returned
-`c_cc` pointer. Kotlin checks the raw descriptors, strict closures, observed
+`c_cc` pointer. Java checks the raw descriptors, strict closures, observed
 images and constants, both runtime backends, and first installed compiled
 entries. CAF constants separately exercise each unchanged original-call body before
 its shared thunk is forced: one compiled entry per call, followed by the warmed

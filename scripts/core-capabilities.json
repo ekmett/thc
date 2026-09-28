@@ -1,9 +1,9 @@
 {
   "name": "THC schema1 runtime capability contract",
   "reviewedAgainst": [
-    "src/main/kotlin/thc/runtime/Program.kt",
-    "src/main/kotlin/thc/runtime/DataValues.kt",
-    "src/main/kotlin/thc/runtime/CoreVectors.kt",
+    "src/main/java/thc/runtime/Program.java",
+    "src/main/java/thc/runtime/DataValues.java",
+    "src/main/java/thc/runtime/CoreVectors.java",
     "src/main/java/thc/runtime/BytecodeProgram.java",
     "src/main/java/thc/runtime/BytecodeRoot.java"
   ],

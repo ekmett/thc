@@ -28,7 +28,7 @@ the supported StablePtr storage contract.
 The Haskell producer generates 128 native rows (120 WideChar and eight StablePtr),
 six observations per row, with all eight element positions, replacement stores,
 both memory views and untouched sentinel bytes. It exports and strictly audits
-original pre/post-tidy Core. The Kotlin model independently checks numerical
+original pre/post-tidy Core. The Java model independently checks numerical
 results, storage bytes, boundaries, ownership and lifetimes. Compiled proofs
 require exactly two original-Core guest roots and exactly two compiled entries
 on the first and every subsequent measured call; compilation restores the

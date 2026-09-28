@@ -23,7 +23,7 @@ final class MemsetExpression extends Expr {
         var destination = operands[0].executeRequiredAddress(frame);
         long value = operands[1].executeRequiredInt(frame);
         long count = operands[2].executeRequiredLong(frame);
-        TupleResultsKt.requireVoidCarrier(operands[3].execute(frame));
+        TupleResults.requireVoidCarrier(operands[3].execute(frame));
         destination.fill(count, value);
         FrameAccess.INSTANCE.writeObject(frame, slots[offset], destination);
         return null;

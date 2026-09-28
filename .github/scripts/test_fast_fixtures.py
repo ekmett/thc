@@ -757,7 +757,6 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertNotIn('build/original-stack-decoder/manifest.json', fast_fixtures.FULL_REQUIRED)
         self.assertNotIn('"$fixture_bin" original-stack-decoder', (project / 'scripts/prepare-tests.sh').read_text())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
-        self.assertFalse((project / 'src/test/kotlin/thc/runtime/OriginalStackDecoderTest.kt').exists())
         self.assertFalse((project / 'src/test/java/thc/runtime/OriginalStackDecoderTest.java').exists())
         self.assertTrue((project / 'src/fullCoreTest/java/thc/runtime/OriginalStackDecoderTest.java').is_file())
 
@@ -2326,11 +2325,9 @@ class FixturePreparationTest(unittest.TestCase):
             with self.subTest(junit=junit):
                 self.assertEqual(group_id, owners[junit])
                 group = manifest["groups"][group_id]
-                sources = [project / "src/test" / language / (junit.replace(".", "/") + suffix)
-                           for language, suffix in (("java", ".java"), ("kotlin", ".kt"))]
-                sources = [path for path in sources if path.is_file()]
-                self.assertEqual(1, len(sources), junit)
-                source = sources[0].read_text()
+                path = project / "src/test/java" / (junit.replace(".", "/") + ".java")
+                self.assertTrue(path.is_file(), junit)
+                source = path.read_text()
                 for root in roots:
                     self.assertTrue('"build/' + root in source or '"' + root + '"' in source, root)
                     self.assertIn("build/" + root, group["outputs"])
@@ -2359,11 +2356,9 @@ class FixturePreparationTest(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertIn("thc.runtime." + name, owners)
                 self.assertIsNone(owners["thc.runtime." + name])
-                sources = [project / "src/test" / language / "thc/runtime" / (name + suffix)
-                           for language, suffix in (("java", ".java"), ("kotlin", ".kt"))]
-                sources = [path for path in sources if path.is_file()]
-                self.assertEqual(1, len(sources), name)
-                source = sources[0].read_text()
+                path = project / "src/test/java/thc/runtime" / (name + ".java")
+                self.assertTrue(path.is_file(), name)
+                source = path.read_text()
                 self.assertNotIn('"build/', source)
 
     def test_managed_file_and_stdio_controls_do_not_force_full_fixture_preparation(self):
@@ -2376,11 +2371,9 @@ class FixturePreparationTest(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertIn(name, owners)
                 self.assertIsNone(owners[name])
-                sources = [project / "src/test" / language / (name.replace(".", "/") + suffix)
-                           for language, suffix in (("java", ".java"), ("kotlin", ".kt"))]
-                sources = [path for path in sources if path.is_file()]
-                self.assertEqual(1, len(sources), name)
-                source = sources[0].read_text()
+                path = project / "src/test/java" / (name.replace(".", "/") + ".java")
+                self.assertTrue(path.is_file(), name)
+                source = path.read_text()
                 self.assertNotIn('"build/', source)
 
     def test_floating_simd_commands_preserve_full_preparation_platform_modes(self):
@@ -2997,7 +2990,7 @@ class FullFixtureReceiptTest(unittest.TestCase):
 
     def test_jvm_generated_sources_do_not_invalidate_full_fixture_receipt(self):
         self.prepare("thc.UnknownTest")
-        generated = self.root / "build/generated/kapt/main/Generated.java"
+        generated = self.root / "build/generated/main/java/Generated.java"
         generated.parent.mkdir(parents=True)
         generated.write_text("class Generated {}\n")
         self.assertEqual(self.prepare("thc.UnknownTest")["reused"], ["full"])

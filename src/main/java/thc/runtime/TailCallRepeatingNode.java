@@ -54,7 +54,7 @@ public final class TailCallRepeatingNode extends Node implements RepeatingNode {
                 if (layout == null) throw fault("Target has no typed input entry");
                 long generation = input.getGeneration();
                 try { result = dispatch.call(target, new Object[] {input}); }
-                finally { GenericTypedInputsKt.releaseGenericInput(layout, input, generation); }
+                finally { GenericTypedInputs.releaseGenericInput(layout, input, generation); }
             } else {
                 arguments[0] = 0L;
                 result = dispatch.call(target, arguments);

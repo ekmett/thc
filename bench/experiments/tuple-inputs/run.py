@@ -76,15 +76,14 @@ def main():
         out.mkdir(parents=True, exist_ok=False)
         classes.mkdir()
         revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
-        paths = subprocess.check_output(['git', 'ls-files', 'src/main', 'build.gradle', 'build.gradle.kts', 'buildSrc', 'settings.gradle', 'settings.gradle.kts',
+        paths = subprocess.check_output(['git', 'ls-files', 'src/main', 'build.gradle', 'buildSrc', 'settings.gradle',
                                          'gradle.properties', 'gradle', 'gradlew', 'gradlew.bat'], cwd=ROOT, text=True).splitlines()
         sources = {p: digest(ROOT / p) for p in paths}
         for path, sha in sources.items():
             require(hashlib.sha256(subprocess.check_output(['git', 'show', revision + ':' + path], cwd=ROOT)).hexdigest() == sha,
                     'Commit runtime source before capture: ' + path)
         run(['python3', ROOT / 'scripts/prepare-tuple-input-audit.py', '--check-only'])
-        run([ROOT / 'gradlew', '--offline', '--no-daemon', '-Pkotlin.incremental=false',
-             '-Pkapt.incremental.apt=false', 'installDist'], out / 'installDist.log')
+        run([ROOT / 'gradlew', '--offline', '--no-daemon', 'installDist'], out / 'installDist.log')
         require(sources == {p: digest(ROOT / p) for p in paths}, 'Runtime changed during build')
         inputs = tools + [module, manifest, ROOT / 'build/tuple-input/oracle.tsv', ROOT / 'build/tuple-input/oracle-pairs.tsv',
                           java / 'release', *sorted((ROOT / 'build/install/thc/lib').glob('*.jar'))]

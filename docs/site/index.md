@@ -56,7 +56,7 @@ below, with setup, expected output and current backend limits spelled out.
 Running on Truffle also gives Haskell a route into other languages. The
 [JavaScript example](../polyglot.md) supports `foreign import javascript`.
 The [embedding guide](embedding.md) describes the current JVM entrypoints for
-loading and calling accepted Haskell code from Java or Kotlin.
+loading and calling accepted Haskell code from Java.
 The public [`thc:runtime` library](../runtime-services.md) gives Haskell programs
 typed access to runtime identity, thread and CPU-affinity information, memory
 and GC statistics, structured tracing, and optional JIT diagnostics. Unavailable
@@ -94,7 +94,7 @@ It checks a mutable reference and returns `()` without printing. The
 [driver guide](../driver.md) covers runnable target selection and the tested
 multi-package `cabal.project` path. Use `cabal run thc -- --help` for current
 options, `make test` for the test suite, and `make clean` to remove build products.
-`make distclean` also removes this checkout's Gradle and Kotlin caches.
+`make distclean` also removes this checkout's Gradle caches.
 
 For installed libraries, THC needs more Core than a stock GHC installation
 usually retains. `make check-ghc-core` checks the selected compiler; the
@@ -145,7 +145,7 @@ and [development](../contributing.md).
 The Haskell runtime API documents the public `THC` namespace; the separate
 compiler API covers `THC.Plugin` and `THC.Interface`. `THC.Internal.JIT` is
 intentionally unstable and `Unsafe` for Safe Haskell: `.Internal` names are not
-stable interfaces. The JVM-internals reference combines Kotlin KDoc and Java
+stable interfaces. The JVM-internals reference is generated from Java
 Javadoc. Runtime nodes and storage classes are implementation details, not a
 stable embedding API.
 

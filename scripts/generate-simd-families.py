@@ -534,7 +534,7 @@ def smoke_sources(fs):
         elif op in ('min', 'max'):
             # The native oracle compares scalar lanes. Floating extrema requests
             # are finite and exclude ambiguous zero ties; Java-only edges are
-            # tested separately by the Kotlin consumer of genuine vector Core.
+            # tested separately by the Java consumer of genuine vector Core.
             first, second = (left, right) if op == 'min' else (right, left)
             comparison = '(<##)' if rep == 'DoubleRep' else f'lt{stem}#'
             scalar.append(f'  {index}# -> case {comparison} ({left}) ({right}) of {{ 1# -> ({observe(rep, first)}); _ -> ({observe(rep, second)}) }}')
@@ -593,15 +593,6 @@ def main():
     outputs={'java/thc/runtime/GeneratedVectors.java':proof_code(fs),'java/thc/runtime/GeneratedVectorExpressions.java':ast_code(fs)}
     outputs.update(fixture_sources(fs))
     outputs.update(smoke_sources(fs))
-    # Remove only former generated carriers/helpers when switching an existing build.
-    (args.output / 'kotlin/thc/runtime/GeneratedVectorProofs.kt').unlink(missing_ok=True)
-    (args.output / 'kotlin/thc/runtime/GeneratedVectorExpressions.kt').unlink(missing_ok=True)
-    (args.output / 'kotlin/thc/runtime/GeneratedVectorInsert.kt').unlink(missing_ok=True)
-    (args.output / 'kotlin/thc/runtime/GeneratedVectorTransport.kt').unlink(missing_ok=True)
-    (args.output / 'kotlin/thc/runtime/RawVectors.kt').unlink(missing_ok=True)
-    for f in fs:
-        (args.output / f'kotlin/thc/runtime/{f["name"]}.kt').unlink(missing_ok=True)
-        (args.output / f'java/thc/runtime/{f["name"]}.java').unlink(missing_ok=True)
     for name,body in outputs.items():
         p=args.output/name;p.parent.mkdir(parents=True,exist_ok=True)
         if not p.exists() or p.read_text()!=body:p.write_text(body)

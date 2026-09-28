@@ -35,7 +35,7 @@ public final class STMCall extends Node {
         AsyncDestination(TupleDestination destination) { super(destination.getShape()); this.destination = destination; }
         @Override public Object delimitedResult(VirtualFrame frame, Node node) { return destination.delimitedResult(frame, node); }
         @Override public void consume(VirtualFrame frame, Node node, Object result) {
-            var saved = SavedGuestContinuationKt.savedGuestContinuation(result instanceof TailYield tail ? tail.getContinuation() : result);
+            var saved = SavedGuestContinuations.savedGuestContinuation(result instanceof TailYield tail ? tail.getContinuation() : result);
             if (saved != null) throw new ActionSuspended(request(saved.getYielded()));
             destination.consume(frame, node, result);
         }
@@ -58,7 +58,7 @@ public final class STMCall extends Node {
                     while (true) {
                         var tx = stm.begin();
                         try {
-                            actionCall.execute(frame, ApplicationKt.requireClosure(force.execute(frame, action)), new Object[]{thc.runtime.Unit.INSTANCE});
+                            actionCall.execute(frame, Applications.requireClosure(force.execute(frame, action)), new Object[]{thc.runtime.Unit.INSTANCE});
                             stm.commit(tx);
                             break;
                         } catch (STMConflict ignored) {
@@ -79,7 +79,7 @@ public final class STMCall extends Node {
                     var parent = stm.parent();
                     try { nested(stm, parent, frame, action, actionCall); }
                     catch (GuestException failure) {
-                        otherCall.execute(frame, ApplicationKt.requireClosure(force.execute(frame, alternative)),
+                        otherCall.execute(frame, Applications.requireClosure(force.execute(frame, alternative)),
                             new Object[]{failure.getPayload(), thc.runtime.Unit.INSTANCE});
                     }
                 }
@@ -106,7 +106,7 @@ public final class STMCall extends Node {
     private void nested(ManagedSTM stm, ManagedSTM.Transaction parent, VirtualFrame frame, Object action, TupleDispatch call) {
         var child = stm.beginNested(parent);
         try {
-            call.execute(frame, ApplicationKt.requireClosure(force.execute(frame, action)), new Object[]{thc.runtime.Unit.INSTANCE});
+            call.execute(frame, Applications.requireClosure(force.execute(frame, action)), new Object[]{thc.runtime.Unit.INSTANCE});
             stm.commitNested(parent, child);
         } catch (Throwable failure) { stm.abort(parent, child); throw failure; }
         finally { stm.restore(parent); }

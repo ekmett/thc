@@ -53,7 +53,7 @@ public final class GhcBCORoot extends GuestRoot {
                 for (int i = 0; i < arguments.length; i++) arguments[i] = pop(stack);
                 if (!(force.execute(frame, answer) instanceof Closure function)) throw fault("BCO application requires a function");
                 answer = calls[apply.count - 1].execute(frame, function, arguments);
-                if (answer instanceof TailYield || SavedGuestContinuationKt.savedGuestContinuation(answer) != null)
+                if (answer instanceof TailYield || SavedGuestContinuations.savedGuestContinuation(answer) != null)
                     throw fault("GHC BCO asynchronous continuation is not supported");
                 answer = force.execute(frame, answer);
             }

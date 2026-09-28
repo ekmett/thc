@@ -45,12 +45,12 @@ public final class AstContinuation implements SavedGuestContinuation {
         if (!claimed.compareAndSet(false, true)) throw fault("AST continuation was already resumed");
         MaskingState ambient = SynchronousMasking.current(sourceRoot);
         StackAnnotationState ambientAnnotations = StackAnnotations.current(sourceRoot);
-        AstStackScope stack = AstStackKt.astStackScope(sourceRoot);
+        AstStackScope stack = AstStacks.astStackScope(sourceRoot);
         stack.setDepth(stack.getDepth() + 1);
         try {
             SynchronousMasking.set(sourceRoot, logicalMask);
             StackAnnotations.set(sourceRoot, annotations);
-            try { return AstContinuationKt.resumeAstSteps(frame, steps, input); }
+            try { return AstContinuations.resumeAstSteps(frame, steps, input); }
             catch (AstCapture cut) {
                 return sourceRoot instanceof FunctionRoot root ? root.finishCapture(cut, frame) : cut.freeze(sourceRoot, frame);
             }

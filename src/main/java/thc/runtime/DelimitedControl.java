@@ -22,9 +22,9 @@ public final class DelimitedControl {
     }
     public static void asyncResult(Object result, Node node) {
         SavedGuestContinuation saved = switch (result) {
-            case TailYield tail -> SavedGuestContinuationKt.savedGuestContinuation(tail.getContinuation());
+            case TailYield tail -> SavedGuestContinuations.savedGuestContinuation(tail.getContinuation());
             case AstTailYield tail -> tail.getContinuation();
-            case null, default -> SavedGuestContinuationKt.savedGuestContinuation(result);
+            case null, default -> SavedGuestContinuations.savedGuestContinuation(result);
         };
         if (saved == null) return;
         AsyncRequest request = saved.asyncRequest();

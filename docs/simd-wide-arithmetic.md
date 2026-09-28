@@ -14,9 +14,9 @@ Word16X32 plus [integer quotient/remainder and shuffle](simd-quot-rem-shuffle.md
 bring the table to 315 operations, including 30 `insert` names.
 These tested operations are implemented entries in the primop checklist.
 
-The shared generator emits exact Core proofs and typed AST families, not JVM
-vector wrapper classes. Java declarations are limited to the Bytecode DSL's
-nested operations. Each operation uses a raw fixed-species JDK Vector API value;
+The shared generator emits Java declarations for exact Core proofs, typed AST
+families and the Bytecode DSL's nested operations. Each operation uses a raw
+fixed-species JDK Vector API value;
 Int16X16 and Word16X16 both use `ShortVector.SPECIES_256`, with signedness retained
 in `VecRep` metadata. Signed unpack sign-extends; unsigned Word16 and Word32 unpack
 zero-extends. Word64 preserves the full 64-bit pattern, and integer arithmetic
@@ -26,7 +26,7 @@ claimed. Vector arguments/results, captures, heap fields and joins have a separa
 [transport contract](simd.md); this operation corpus alone does not certify it.
 
 Insertion takes the exact vector, an exact scalar lane, and an `Int#` index.
-The generated Kotlin operations use the raw vector's `withLane` operation and
+The generated Java operations use the raw vector's `withLane` operation and
 preserve the other lanes, including floating-point bit patterns. Indices outside
 the shape's lane range raise a runtime fault before any narrowing. Insertion covers
 all currently represented vector shapes.

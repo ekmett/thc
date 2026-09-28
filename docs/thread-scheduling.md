@@ -84,6 +84,6 @@ Core entries and compares native hint, fork, counter and timed-delay observation
 The native oracle uses GHC's non-threaded RTS because the pinned threaded POSIX
 I/O manager rejects direct `delay#`; the guest checks still exercise real managed
 threads. Counter expectations use allocation bounds, including GHC's documented
-approximately 4 KiB other-thread accounting granularity. Kotlin checks add first
+approximately 4 KiB other-thread accounting granularity. Java checks add first
 installed straight-line calls, actual JVM byte accounting, context ownership,
 cleanup with accounting disabled, delay capture/deadline retention and masking.

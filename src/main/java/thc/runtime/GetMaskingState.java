@@ -5,7 +5,7 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import static thc.runtime.RuntimeServiceStatus.fault;
-import static thc.runtime.TupleResultsKt.requireVoidCarrier;
+import static thc.runtime.TupleResults.requireVoidCarrier;
 public final class GetMaskingState extends Expr {
     @Child private Expr state;
     public GetMaskingState(Expr state, CoreRepresentation proof) { this.state = state; setRepresentation(proof.copy(proof.getKind(), true, proof.getPresent(), proof.getPrimReps(), proof.getComponents(), proof.getVector(), proof.getAlternatives(), proof.getTagSlot(), proof.getAlternativeSlots())); }

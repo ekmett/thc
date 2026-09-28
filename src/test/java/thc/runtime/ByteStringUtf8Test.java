@@ -206,7 +206,7 @@ class ByteStringUtf8Test {
                         null, true, new int[0][], false, FunctionRootRole.FUNCTION, false);
                     var result = Calls.target(root.getCallTarget(), new Object[]{0L}); final Object completed;
                     if (safe) {
-                        var saved = Objects.requireNonNull(SavedGuestContinuationKt.savedGuestContinuation(result)); assertSame(effect.pending, saved.asyncRequest());
+                        var saved = Objects.requireNonNull(SavedGuestContinuations.savedGuestContinuation(result)); assertSame(effect.pending, saved.asyncRequest());
                         Objects.requireNonNull(effect.pending).acknowledge();
                         // A replay or a poll before native completion would now
                         // return zero. The saved completed result must remain one.
@@ -215,7 +215,7 @@ class ByteStringUtf8Test {
                         assertEquals(AsyncRequestState.PENDING, Objects.requireNonNull(effect.pending).getState()); assertSame(effect.pending, state.getThreads().poll(root, false));
                         effect.pending.acknowledge(); completed = result;
                     }
-                    assertEquals(1, shape.getLayout().getInt(TupleResultsKt.ownedTupleResult(completed, shape), 0)); assertEquals(1, effect.evaluated);
+                    assertEquals(1, shape.getLayout().getInt(TupleResults.ownedTupleResult(completed, shape), 0)); assertEquals(1, effect.evaluated);
                     assertEquals(0, language.getHandoffState().get().getResults().getDepth()); assertEquals(0, language.getHandoffState().get().getResults().retainedReferences());
                 }
             } finally { state.getThreads().leaveCurrent(GuestThreadStatus.FINISHED); }

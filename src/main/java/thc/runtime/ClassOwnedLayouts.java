@@ -6,6 +6,7 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 
 /** Permanent ownership without a separate strong collection of class keys. */
 public final class ClassOwnedLayouts {
+    public static final String CLASS_OWNED_LAYOUTS_PROPERTY = "thc.classOwnedLayouts";
     public static final ClassOwnedLayouts INSTANCE = new ClassOwnedLayouts();
     private ClassOwnedLayouts() {}
     private static final class Owner {

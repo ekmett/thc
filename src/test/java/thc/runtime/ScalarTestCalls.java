@@ -35,7 +35,7 @@ public final class ScalarTestCalls {
                     shape.setDouble(storage, index, number);
                 } else shape.setObject(storage, index, value);
             }
-            return TypedInputsKt.invokeTypedInput(entry, storage, input -> Calls.target(target, input));
+            return TypedInputs.invokeTypedInput(entry, storage, input -> Calls.target(target, input));
         } finally { entry.releaseChecked(storage); }
     }
 }

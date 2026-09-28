@@ -19,8 +19,8 @@ public final class AnnotatedAction extends Expr {
     @Override public Object execute(VirtualFrame frame) { throw RuntimeFault.fault("annotateStack# requires a tuple destination"); }
     private Object invoke(VirtualFrame frame, Object action) {
         Closure closure;
-        try { closure = ApplicationKt.requireClosure(AstControl.force(frame, this, force, action)); }
-        catch (AstCapture cut) { throw cut.append((resumed, input) -> call(resumed, ApplicationKt.requireClosure(input))); }
+        try { closure = Applications.requireClosure(AstControl.force(frame, this, force, action)); }
+        catch (AstCapture cut) { throw cut.append((resumed, input) -> call(resumed, Applications.requireClosure(input))); }
         return call(frame, closure);
     }
     private Object call(VirtualFrame frame, Closure closure) {
@@ -29,8 +29,8 @@ public final class AnnotatedAction extends Expr {
             Object returned = dispatch.execute(frame, closure, new Object[] {thc.runtime.Unit.INSTANCE});
             DelimitedControl.captureBytecode(returned, shape);
             result = AstControl.complete(this, returned, closure.target, shape);
-        } catch (AstCapture cut) { throw cut.append((resumed, input) -> TupleResultsKt.ownedTupleResult(input, shape)); }
-        return TupleResultsKt.ownedTupleResult(result, shape);
+        } catch (AstCapture cut) { throw cut.append((resumed, input) -> TupleResults.ownedTupleResult(input, shape)); }
+        return TupleResults.ownedTupleResult(result, shape);
     }
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
         Object value;
@@ -48,9 +48,9 @@ public final class AnnotatedAction extends Expr {
         Object token;
         try { token = state.execute(frame); }
         catch (AstCapture cut) { throw cut.append((resumed, input) -> {
-            TupleResultsKt.requireVoidCarrier(input); return runAction(resumed, value, function, slots, offset);
+            TupleResults.requireVoidCarrier(input); return runAction(resumed, value, function, slots, offset);
         }); }
-        TupleResultsKt.requireVoidCarrier(token);
+        TupleResults.requireVoidCarrier(token);
         return runAction(frame, value, function, slots, offset);
     }
     private Object runAction(VirtualFrame frame, Object value, Object function, int[] slots, int offset) {

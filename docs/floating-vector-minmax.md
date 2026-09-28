@@ -23,7 +23,7 @@ values, signs and subnormals. Native floating extrema comparisons exclude NaNs,
 infinities and mixed-zero ties. The optional broad native vector corpus uses
 the same restriction for these twelve new operations.
 
-The Kotlin consumer adds 1,848 Java-model edge requests to those same genuine
+The Java consumer adds 1,848 independent model edge requests to those same genuine
 Core entries. They observe every one of the 42 floating lanes, both operations
 and both operand orders, including NaNs, infinities and signed-zero ties.
 The fixture canonicalizes NaNs for observation; all other results use raw bits.

@@ -45,7 +45,7 @@ eventlog serialization are not claimed.
 
 `compiler/test-fixtures/HintTraceAudit.hs` is a runnable example. Its Haskell
 producer checks native return values and actual native user-event payloads;
-Kotlin checks the JVM record format, lazy bottom hints, unchanged memory, byte
+Java checks the JVM record format, lazy bottom hints, unchanged memory, byte
 bounds, native lifetime/context checks, concurrent records, and first compiled
 calls on both backends.
 

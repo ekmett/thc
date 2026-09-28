@@ -623,7 +623,7 @@ fail explicitly. Runtime capability admission remains a separate audit.
 The Haskell producer compares every serialized field against the actual binary
 interface, using a real foreign export and a TH-added C file. A separate private
 registration exercises production helper acquisition and checked ZIP transport.
-Kotlin verifies exact metadata preservation, unreachable archive admission and
+Java verifies exact metadata preservation, unreachable archive admission and
 reachable foreign-call rejection in AST and bytecode, with diagnostic mode both
 enabled and disabled. Malformed/downgraded archives, finalizer-only records and
 foreign-file contents have separate controls.

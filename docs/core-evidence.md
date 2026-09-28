@@ -231,7 +231,7 @@ These are bounded contracts for the supported Core subset. They do not add arbit
 
 The [compiled graph check](source-note-graphs/README.md) also guards the intended
 result specialization. The AST uses direct comparisons for the constant result
-kind: Kotlin's enum-switch mapping array survived partial evaluation and kept
+kind: a synthetic enum-switch mapping array survived partial evaluation and kept
 irrelevant typed body paths alive in the first implementation. The final direct
 comparisons collapse those paths; the separate [measurement](debug-locations.md#graph-check-and-typed-dispatch-repair)
 records the effect with source notes enabled throughout.

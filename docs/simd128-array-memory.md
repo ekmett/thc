@@ -56,7 +56,7 @@ and [wider byte-array vectors](simd-wide-array-memory.md) have separate contract
 ## Reproducible checks
 
 The Haskell producers preserve genuine Core, strict audits, native inputs and
-source/artifact hashes. Independent Kotlin models decode bytes and model writes;
+source/artifact hashes. Independent Java models decode bytes and model writes;
 the four family-specific producers also compare native results with their
 Haskell integer/byte model.
 

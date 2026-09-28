@@ -101,11 +101,11 @@ class TypedSelfCallTest {
             left = nextLeft; right = nextRight;
         }
         long reentries = count(program, "selfTailReentries"), bounces = count(program, "tailBounces");
-        var value = TypedInputsKt.invokeTypedInput(entry, input, arguments -> Calls.target(target, arguments));
+        var value = TypedInputs.invokeTypedInput(entry, input, arguments -> Calls.target(target, arguments));
         var label = backend + "/depth=" + depth + "/vectorResult=" + vectorResult;
         if (vectorResult) {
             var shape = Objects.requireNonNull(root.getTupleResult());
-            var result = TupleResultsKt.ownedTupleResult(value, shape);
+            var result = TupleResults.ownedTupleResult(value, shape);
             var actual = (ShortVector) shape.getLayout().getObject(result, 0);
             assertArrayEquals(left, actual.toArray(), label);
         } else {
@@ -137,10 +137,10 @@ class TypedSelfCallTest {
         var vectorProof = CoreRepresentations.parse(vector);
         var cold = CoreRepresentations.parse(Map.of("kind", "object", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", false));
         var formal = Objects.requireNonNull(ArgumentLayout.fromProofs(List.of(vectorProof, cold)));
-        assertFalse(TypedInputsKt.supportsTypedSelf(formal, new boolean[]{false, true}, formal));
+        assertFalse(TypedInputs.supportsTypedSelf(formal, new boolean[]{false, true}, formal));
         var evaluated = cold.copy(cold.getKind(), true, cold.getPresent(), cold.getPrimReps(), cold.getComponents(),
             cold.getVector(), cold.getAlternatives(), cold.getTagSlot(), cold.getAlternativeSlots());
-        assertTrue(TypedInputsKt.supportsTypedSelf(formal, new boolean[]{false, true}, Objects.requireNonNull(ArgumentLayout.fromProofs(List.of(vectorProof, evaluated)))));
-        assertFalse(TypedInputsKt.supportsTypedSelf(formal, new boolean[]{false, false}, Objects.requireNonNull(ArgumentLayout.fromProofs(List.of(vectorProof)))));
+        assertTrue(TypedInputs.supportsTypedSelf(formal, new boolean[]{false, true}, Objects.requireNonNull(ArgumentLayout.fromProofs(List.of(vectorProof, evaluated)))));
+        assertFalse(TypedInputs.supportsTypedSelf(formal, new boolean[]{false, false}, Objects.requireNonNull(ArgumentLayout.fromProofs(List.of(vectorProof)))));
     }
 }

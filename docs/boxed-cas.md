@@ -10,7 +10,7 @@ It can be used as the next retry ticket.
 Both runtime backends use JVM full-memory-order compare-and-exchange. Array
 bounds use the full-width index before narrowing; ordinary arrays, small arrays
 and mutable variables remain distinct storage families. These operations do not
-compare Haskell values or call Kotlin `equals`, and do not remove the usual ABA
+compare Haskell values or call Java `equals`, and do not remove the usual ABA
 property of pointer CAS. Callers must use the identity protocol rather than
 assuming structural equality implies a successful exchange.
 
@@ -48,7 +48,7 @@ JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew test --tests thc.runtime.Box
 The producer records genuine GHC 9.14.1 pre-/post-Tidy Core, twenty strict entry
 audits, 90 native observations and source/artifact hashes. The ten entries cover
 both boxed levities, failed-ticket retry, unforced bottom replacements, lazy
-modifiers and the example. Kotlin checks independent arithmetic expectations on
+modifiers and the example. Java checks independent arithmetic expectations on
 AST and bytecode, with and without inlining. Focused runtime controls cover
 reference identity, state/bounds failures before mutation, full-memory-order
 publication races and shared lazy modifier results/failures. Direct primitive

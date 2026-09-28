@@ -13,7 +13,7 @@ public final class ThreadObservation extends Expr {
     }
     @Override public Object execute(VirtualFrame frame) { throw RuntimeFault.fault("Thread observation requires a tuple destination"); }
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
-        TupleResultsKt.requireVoidCarrier(state.execute(frame));
+        TupleResults.requireVoidCarrier(state.execute(frame));
         GuestThreads threads = GuestThreads.current(this);
         if (listing) FrameAccess.write(frame, slots[offset], threads.snapshot());
         else FrameAccess.writeLong(frame, slots[offset], threads.isCurrentBound() ? 1L : 0L);

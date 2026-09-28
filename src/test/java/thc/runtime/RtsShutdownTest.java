@@ -151,7 +151,7 @@ public class RtsShutdownTest {
     @Test public void completedWakeRaceNeverSwallowsThreadDeathInSendOrResume() throws Exception {
         for (boolean resume : new boolean[]{false, true}) {
             var ready = new CountDownLatch(1); var finish = new CountDownLatch(1); var death = new ThreadDeath(); var armed = new boolean[]{!resume};
-            // Normal Java Wake API supplied by the separately frozen Foreign13 runtime port.
+            // Complete the target while its wake callback propagates the exact control failure.
             var threads = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), target -> {
                 if (armed[0]) { finish.countDown(); target.join(5000); assertFalse(target.isAlive()); throw death; }
             });

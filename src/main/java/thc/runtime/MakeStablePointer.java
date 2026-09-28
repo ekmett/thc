@@ -12,7 +12,7 @@ final class MakeStablePointer extends Expr {
     @Override public Object execute(VirtualFrame frame) { throw fault("StablePtr# tuple requires a destination"); }
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
         var stored = value.execute(frame);
-        TupleResultsKt.requireVoidCarrier(state.execute(frame));
+        TupleResults.requireVoidCarrier(state.execute(frame));
         FrameAccess.INSTANCE.write(frame, slots[offset], StablePointers.current(this).make(stored));
         return null;
     }

@@ -24,7 +24,7 @@ final class ManagedFileExpression extends Expr {
     }
 
     private ManagedFiles files(VirtualFrame frame) {
-        TupleResultsKt.requireVoidCarrier(operands[operands.length - 1].execute(frame));
+        TupleResults.requireVoidCarrier(operands[operands.length - 1].execute(frame));
         return Language.currentState(this).getFiles();
     }
 

@@ -74,7 +74,7 @@ class StackAnnotationsTest {
         @Override public long bloom(VirtualFrame frame) { return 0L; }
     }
     private ManagedStackSnapshot snapshot(Object result, TupleShape shape) {
-        return (ManagedStackSnapshot) shape.getLayout().getObject(TupleResultsKt.ownedTupleResult(result, shape), 0);
+        return (ManagedStackSnapshot) shape.getLayout().getObject(TupleResults.ownedTupleResult(result, shape), 0);
     }
     private void install(com.oracle.truffle.api.RootCallTarget target) throws Exception {
         target.getClass().getMethod("compile", boolean.class).invoke(target, true);
@@ -136,7 +136,7 @@ class StackAnnotationsTest {
             };
             StackAnnotations.set(null, resumer);
             var astResult = Calls.target(astDriver.getCallTarget(), new Object[]{0L});
-            assertEquals(List.of("inside", "original"), shape.getLayout().getObject(TupleResultsKt.ownedTupleResult(astResult, shape), 0));
+            assertEquals(List.of("inside", "original"), shape.getLayout().getObject(TupleResults.ownedTupleResult(astResult, shape), 0));
             assertEquals(2, astSuspended.getSegment().getState()); assertEquals(2, astThunk.getState());
             assertSame(resumer, StackAnnotations.current(null)); probe.suspend = false;
 

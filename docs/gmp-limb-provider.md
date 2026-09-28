@@ -171,7 +171,7 @@ CI includes the stock-compatible Linux fixture and a closed receipt allowlist,
 never a package DB or arbitrary native intermediates.
 
 Initial compiled tests exposed two partial-evaluation issues: a representation
-list comparison inside `LocalRead`, and Kotlin's synthetic enum-switch table
+list comparison inside `LocalRead`, and a synthetic enum-switch table
 inside the new AST node. The exact predicate is now computed at load time,
 and direct enum comparisons preserve constant operand selection. Failures and
 Graal diagnostics were retained. A harness-only correction invokes genuine

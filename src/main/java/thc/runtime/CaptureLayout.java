@@ -80,7 +80,7 @@ public final class CaptureLayout {
             offsets[i + 1] = offsets[i] + 1;
         }
         StaticShape.Builder builder = StaticShape.newBuilder(language);
-        builder.safetyChecks(!Boolean.getBoolean(FramesKt.STATIC_SHAPE_UNCHECKED_PROPERTY));
+        builder.safetyChecks(!Boolean.getBoolean(Frames.STATIC_SHAPE_UNCHECKED_PROPERTY));
         for (CaptureField field : fields) field.register(builder);
         shape = builder.build(CapturedFrame.class, CapturedFrameFactory.class);
     }

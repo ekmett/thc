@@ -5,8 +5,8 @@ package thc.runtime;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import java.util.List;
 
-public final class AstContinuationKt {
-    private AstContinuationKt() {}
+public final class AstContinuations {
+    private AstContinuations() {}
     /** A consumed prefix is never retained after a second interruption. */
     public static Object resumeAstSteps(VirtualFrame frame, List<AstResumeStep> steps, Object input) {
         Object answer = input;

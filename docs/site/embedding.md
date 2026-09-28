@@ -1,21 +1,21 @@
 # Embed THC on the JVM
 
 THC's current host boundary is a GraalVM polyglot `Context` and its returned
-`Value`s. `thc.loadManagedExports` exposes declared Haskell functions as polyglot
-members. `thc.executionContext` creates a launcher context, while `thc.loadEntry`
-provides the lower-level kernel and executable entrypoints. Their signatures and Kotlin/Java source
+`Value`s. `thc.Main.loadManagedExports` exposes declared Haskell functions as polyglot
+members. `thc.Main.executionContext` creates a launcher context, while `thc.Main.loadEntry`
+provides the lower-level kernel and executable entrypoints. Their signatures and Java source
 links are in the **Runtime** reference navigation.
 
 Use the repository's pinned GraalVM and JVM dependencies. There is no published,
 version-stable embedding SDK yet. Public classes in `thc.runtime` exist for
-Truffle specialization, Java/Kotlin interoperability, and generated nodes;
+Truffle specialization and generated nodes;
 their visibility does not make them supported host APIs.
 
 ## Call a declared Haskell export
 
 A `foreign export ccall` declaration supplies the external name and scalar
-signature. THC can expose that declaration through Truffle interop, so a Java or
-Kotlin caller gets ordinary polyglot values:
+signature. THC can expose that declaration through Truffle interop, so a Java
+caller gets ordinary polyglot values:
 
 ```haskell
 foreign export ccall "thc_add_one" addOne :: Int32 -> Int32
@@ -26,20 +26,23 @@ The repository's `ForeignExportManaged` fixture includes these declarations.
 After preparing the `interface-core` fixtures, its retained Core can be loaded
 as follows:
 
-```kotlin
-import thc.executionContext
-import thc.loadManagedExports
+```java
+import java.util.List;
+import static thc.Main.executionContext;
+import static thc.Main.loadManagedExports;
 
-executionContext().use { context ->
-    val units = loadManagedExports(context,
-        listOf("build/interface-core/typed-foreign-exports/managed.json"))
-    val exports = units.getMember("thc-interface-fixture-0.1")
-        .getMember("ForeignExportManaged")
+void main() {
+    try (var context = executionContext()) {
+        var units = loadManagedExports(context,
+            List.of("build/interface-core/typed-foreign-exports/managed.json"));
+        var exports = units.getMember("thc-interface-fixture-0.1")
+            .getMember("ForeignExportManaged");
 
-    check(exports.getMember("thc_add_one").execute(41).asInt() == 42)
-    check(exports.getMember("thc_float").execute(1.25f).asFloat() == 2.25f)
-    check(exports.getMember("thc_next").execute(3).asInt() == 3)
-    check(exports.getMember("thc_next_alias").execute(4).asInt() == 7)
+        if (exports.getMember("thc_add_one").execute(41).asInt() != 42) throw new AssertionError();
+        if (exports.getMember("thc_float").execute(1.25f).asFloat() != 2.25f) throw new AssertionError();
+        if (exports.getMember("thc_next").execute(3).asInt() != 3) throw new AssertionError();
+        if (exports.getMember("thc_next_alias").execute(4).asInt() != 7) throw new AssertionError();
+    }
 }
 ```
 
@@ -48,7 +51,7 @@ through `context.getBindings("thc")`. Aliases share their Haskell function and
 CAF state. Calling an `IO` export runs the action and returns its scalar result;
 argument validation finishes before the action starts.
 
-The same API accepts `listOf("@/absolute/path/to/packages.json")` for direct
+The same API accepts `List.of("@/absolute/path/to/packages.json")` for direct
 unit artifacts. Registration-bearing modules supply the exported roots and
 their checked signatures; unrelated units remain unopened. The parsed load
 request can be shared by an Engine, but registrations, decoded code and CAFs
@@ -57,7 +60,7 @@ belong to each executing context. A failed load publishes no namespace.
 Accepted signatures use boxed `Int`, `Word`, their fixed-width variants,
 `Float`, `Double`, `Bool` and `Char`, with `()` additionally allowed as a result.
 Integral arguments are range-checked. Use `BigInteger` and `Value.asBigInteger()`
-for the upper half of `Word64`; a unit result has `Value.isNull == true`.
+for the upper half of `Word64`; a unit result has `Value.isNull() == true`.
 Arbitrary algebraic data, functions and SIMD values are not host arguments yet.
 
 This is an experimental managed entrypoint, not a native C callback address.
@@ -71,19 +74,18 @@ its members are read-only and live only as long as that context.
 
 ## Load an integer kernel
 
-```kotlin
-import thc.executionContext
-import thc.loadEntry
+```java
+import java.util.List;
+import static thc.Main.executionContext;
+import static thc.Main.loadEntry;
 
-executionContext().use { context ->
-    val function = loadEntry(
-        context,
-        listOf("/absolute/path/to/Module.json"),
-        "sumLoop",
-        backend = "bytecode"
-    )
-    val result: Long = function.execute(100_000L).asLong()
-    println(result)
+void main() {
+    try (var context = executionContext()) {
+        var function = loadEntry(context,
+            List.of("/absolute/path/to/Module.json"), "sumLoop", true, "bytecode");
+        long result = function.execute(100_000L).asLong();
+        System.out.println(result);
+    }
 }
 ```
 
@@ -109,17 +111,22 @@ through the same `loadEntry` call. Existing records without an index remain
 supported; a malformed declared index is rejected. For an explicit loose
 JSON/sidecar pair with a support manifest, use the request builder:
 
-```kotlin
-import thc.CoreModules
-import thc.executionContext
+```java
+import java.util.List;
+import java.util.Map;
+import thc.CoreModules;
+import static thc.Main.executionContext;
 
-executionContext().use { context ->
-    val json = "/absolute/path/to/Module.json"
-    val request = CoreModules.request(
-        listOf(json, "@/absolute/path/to/support.json"), "sumLoop",
-        backend = "bytecode", jsonSidecars = mapOf(json to "$json.idx"))
-    val function = context.eval("thc", request)
-    println(function.execute(100_000L).asLong())
+void main() {
+    try (var context = executionContext()) {
+        String json = "/absolute/path/to/Module.json";
+        var request = CoreModules.request(
+            List.of(json, "@/absolute/path/to/support.json"), "sumLoop",
+            true, false, "bytecode", true, false, null, null,
+            Map.of(json, json + ".idx"));
+        var function = context.eval("thc", request);
+        System.out.println(function.execute(100_000L).asLong());
+    }
 }
 ```
 
@@ -161,7 +168,7 @@ that action through the scalar `execute(Long)` convention. Full executable
 launches also supply their distinct shutdown entry; a standalone IO action
 does not imply Handle flushing or general executable lifecycle support.
 
-`executionContext(fileIO = true)` requests host file IO. On supported native
+`executionContext(true)` requests host file IO. On supported native
 hosts it selects the command-line native IO provider; otherwise the context
 still receives full polyglot file IO authority. The factory also permits native
 access and guest threads. It is a launcher convenience, not an isolation policy

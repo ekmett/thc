@@ -101,7 +101,7 @@ evidence.
 ## Preparation
 
 See the shared [integer SIMD fixture guide](integer-simd-fixtures.md) for the
-independent Kotlin model controls and both-handoff recipe.
+independent Java model controls and both-handoff recipe.
 
 With the pinned environment and the shared resource gate:
 

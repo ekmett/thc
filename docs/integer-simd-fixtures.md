@@ -8,7 +8,7 @@ checks. The unsigned families also audit separate signed-metadata corruptions;
 these never replace the original Core or native inputs.
 
 Haskell computes the original ordered input domains and unbounded integer
-model. Kotlin independently computes machine arithmetic and lane narrowing,
+model. Java independently computes machine arithmetic and lane narrowing,
 checks native/model rows, and exercises the retained encoding, product, lane
 grid, permutation and malformed-row controls. Producer predicates reject
 corrupted copies of genuine tuple and helper-call metadata on every preparation.

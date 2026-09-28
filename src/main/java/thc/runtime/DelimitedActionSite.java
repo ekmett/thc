@@ -11,8 +11,8 @@ import com.oracle.truffle.api.exception.AbstractTruffleException;
 import java.util.function.Supplier;
 import thc.Language;
 import static thc.runtime.RuntimeServiceStatus.fault;
-import static thc.runtime.ApplicationKt.requireClosure;
-import static thc.runtime.TupleResultsKt.*;
+import static thc.runtime.Applications.requireClosure;
+import static thc.runtime.TupleResults.*;
 
 public final class DelimitedActionSite extends Node {
     private final Language language;
@@ -30,9 +30,9 @@ public final class DelimitedActionSite extends Node {
     public Object finish(Object result, TupleShape shape, RootCallTarget expectedTarget) {
         DelimitedControl.captureBytecode(result, shape);
         SavedGuestContinuation saved = switch (result) {
-            case TailYield tail -> SavedGuestContinuationKt.savedGuestContinuation(tail.getContinuation());
+            case TailYield tail -> SavedGuestContinuations.savedGuestContinuation(tail.getContinuation());
             case AstTailYield tail -> tail.getContinuation();
-            case null, default -> SavedGuestContinuationKt.savedGuestContinuation(result);
+            case null, default -> SavedGuestContinuations.savedGuestContinuation(result);
         };
         Object answer;
         if (saved == null) answer = result;

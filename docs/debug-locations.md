@@ -96,7 +96,7 @@ difference, recorded explicitly in the comparison. This is a structural check,
 not a claim of byte-for-byte identical machine code.
 
 The initial AST graph exposes an unrelated defect in `FunctionBody.execute`:
-Kotlin's enum `when` compiles to a lookup in a synthetic mutable `int[]` followed
+The original enum dispatch compiled to a lookup in a synthetic mutable `int[]` followed
 by a switch. Although the node's result kind is constant, the pinned Graal build
 does not fold that lookup. Long, data, closure, address and fallback paths survive,
 with nine copies of the join loop before high-tier lowering.

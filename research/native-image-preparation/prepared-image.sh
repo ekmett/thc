@@ -26,7 +26,7 @@ probe_dir="$repo_dir/build/native-image/reproduction-probe"
 inventory_dir="$repo_dir/build/native-image/reproduction-inventory"
 mkdir -p "$probe_dir" "$inventory_dir"
 "$JAVA_HOME/bin/javac" -d "$probe_dir" "$recipe_dir/ClassInitializationInventory.java"
-for kind in stateless companions markers enums; do
+for kind in stateless markers enums; do
     "$JAVA_HOME/bin/java" -Xmx512m -XX:-UseJVMCICompiler -cp "$probe_dir:$classpath" \
         ClassInitializationInventory build/install/thc/lib/thc-0.1-experiment.jar "$kind" \
         > "$inventory_dir/$kind.txt"
@@ -37,7 +37,7 @@ while IFS= read -r prepared; do
     [[ "$prepared" =~ ^[a-zA-Z0-9_.$]+$ ]] || exit 2
     initialization="${initialization:+$initialization,}$prepared"
 done < "$repo_dir/scripts/native-image/pure-initialization.txt"
-for kind in stateless companions markers enums; do
+for kind in stateless markers enums; do
     initialization="$initialization,$(<"$inventory_dir/$kind.txt")"
 done
 while IFS= read -r prepared; do

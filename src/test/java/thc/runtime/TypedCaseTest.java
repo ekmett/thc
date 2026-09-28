@@ -42,10 +42,10 @@ class TypedCaseTest {
     private Object call(ExecutableProgram p, String id, Object... args) { return Calls.target(p.hostEntryTarget(args.length), new Object[]{p.entryValue(id), args}); }
     @FunctionalInterface private interface CaseAction { void accept(boolean enabled, String backend, ExecutableProgram program) throws Exception; }
     private void each(CaseAction action) throws Exception {
-        var previous = System.getProperty(CaseCategoriesKt.TYPED_CASES_PROPERTY);
+        var previous = System.getProperty(CaseCategories.TYPED_CASES_PROPERTY);
         try {
             for (boolean enabled : new boolean[]{false, true}) {
-                System.setProperty(CaseCategoriesKt.TYPED_CASES_PROPERTY, Boolean.toString(enabled));
+                System.setProperty(CaseCategories.TYPED_CASES_PROPERTY, Boolean.toString(enabled));
                 try (var context = Main.executionContext(false)) {
                     context.initialize("thc"); context.enter();
                     try {
@@ -60,7 +60,7 @@ class TypedCaseTest {
                     } finally { context.leave(); }
                 }
             }
-        } finally { if (previous == null) System.clearProperty(CaseCategoriesKt.TYPED_CASES_PROPERTY); else System.setProperty(CaseCategoriesKt.TYPED_CASES_PROPERTY, previous); }
+        } finally { if (previous == null) System.clearProperty(CaseCategories.TYPED_CASES_PROPERTY); else System.setProperty(CaseCategories.TYPED_CASES_PROPERTY, previous); }
     }
     private Map<String, Object> identity(String id, Map<String, Object> rep) { return binding(id, lambda(list(param("input")), caseOf(variable("input"), "whole", rep, list(otherwise(variable("whole"))), rep), rep)); }
     private List<Map<String, Object>> fixtures() {

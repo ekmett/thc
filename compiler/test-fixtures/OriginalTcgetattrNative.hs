@@ -44,7 +44,7 @@ main :: IO ()
 main = bracket openPseudoTerminal (\(master, slave) -> closeFd slave `finally` closeFd master) $ \(_, slave@(Fd terminal)) -> do
   args <- getArgs
   if args == ["--serve"] then do
-    -- Keep the private PTY alive while Kotlin compares the same terminal through
+    -- Keep the private PTY alive while Java compares the same terminal through
     -- its separately owned guest descriptor. Neither process changes its state.
     hSetBuffering stdout LineBuffering
     getTerminalName slave >>= print

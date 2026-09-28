@@ -179,7 +179,7 @@ path memory before effects. Native mode observations use umask022; JVM creation
 checks account for its read-only observed process umask without changing it.
 Directory type is compared, not filesystem-dependent directory size/permissions.
 
-`NativeFileProviderTest` includes fixture-free Kotlin tests for authority denial,
+`NativeFileProviderTest` includes fixture-free Java tests for authority denial,
 same-resource metadata, nontruncating acquisition, byte-buffer preflights, all
 three explicit standard grants, context isolation, rollback, reentrant disposal,
 duplicate/late completion, shared native descriptor ownership, claim-before-

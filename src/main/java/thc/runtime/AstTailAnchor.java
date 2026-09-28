@@ -41,7 +41,7 @@ final class AstTailAnchor implements SavedGuestContinuation {
     @Override @TruffleBoundary public Object continueWith(Object input) {
         if (input != Unit.INSTANCE || !claimed.compareAndSet(false, true))
             throw new IllegalStateException("Tail anchor requires one Unit resume");
-        AstStackScope scope = AstStackKt.astStackScope(root);
+        AstStackScope scope = AstStacks.astStackScope(root);
         MaskingState ambient = SynchronousMasking.INSTANCE.current(root);
         StackAnnotationState ambientAnnotations = StackAnnotations.current(root);
         previous = scope.getTailAnchor();
@@ -67,7 +67,7 @@ final class AstTailAnchor implements SavedGuestContinuation {
                         result = root.restartTailAnchor(frame, transfer);
                     }
                     // This first tranche never hides a scheduling request behind an internal spill.
-                    SavedGuestContinuation next = SavedGuestContinuationKt.savedGuestContinuation(result);
+                    SavedGuestContinuation next = SavedGuestContinuations.savedGuestContinuation(result);
                     if (next != null)
                         throw new IllegalStateException("Synchronous tail anchor returned a non-internal suspension");
                     return result;

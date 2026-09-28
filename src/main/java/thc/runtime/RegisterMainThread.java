@@ -20,7 +20,7 @@ final class RegisterMainThread extends Expr {
 
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
         var handle = weak.execute(frame);
-        TupleResultsKt.requireVoidCarrier(state.execute(frame));
+        TupleResults.requireVoidCarrier(state.execute(frame));
         CoreMainThreadForeign.register(this, handle);
         return null;
     }

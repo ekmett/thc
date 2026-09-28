@@ -12,7 +12,7 @@
 -- Portability : Native GHC; host filesystem/process services
 --
 -- Production of native observations only. Independent semantics, host ABI and
--- exact original FCall proofs are checked by the Kotlin fixture consumers.
+-- exact original FCall proofs are checked by the Java fixture consumers.
 module OriginalStdioFixtures (prepareOriginalStdio, prepareOriginalStdioRead, prepareOriginalFcntl, prepareOriginalErrno, prepareOriginalProcessIdentity) where
 
 import Control.Monad (forM, unless, when)
@@ -148,7 +148,7 @@ prepareOriginalStdio root options = do
      "audits" .= Map.fromList [(stage,audits) | (stage,_,audits,_,_) <- exports],
      "strictAccepted" .= requireSupported,"runtimeVerified" .= False,"installedArtifactsHashed" .= False,
      "commands" .= map commandRecord commands,"inputHashes" .= inputHashes,"artifactHashes" .= artifactHashes,
-     "claim" .= ("Native observations and genuine pre/post Core; Kotlin owns semantic, ABI and raw-proof validation" :: String)]
+     "claim" .= ("Native observations and genuine pre/post Core; Java owns semantic, ABI and raw-proof validation" :: String)]
   putStrLn ("original-stdio: " ++ show (length observations) ++ " native observations, " ++
             show (length exports) ++ " Core stages; no runtime claim")
 
@@ -336,7 +336,7 @@ prepareNativeFcntl root = do
   putStrLn "original-fcntl: twelve genuine constants, four native shared-status rows and fourteen pre/post Core roots"
 
 -- Genuine resetErrno/getErrno Core plus an independent native header oracle
--- for all signed CInt boundaries. The Kotlin consumer checks the observations.
+-- for all signed CInt boundaries. The Java consumer checks the observations.
 prepareOriginalErrno :: FilePath -> IO ()
 prepareOriginalErrno root = do
   let output = "build/original-errno"

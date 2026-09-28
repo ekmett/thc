@@ -1,7 +1,7 @@
 # Native Image
 
 THC has an experimental native launcher for interpreting accepted pure Core.
-It packages the Java/Kotlin interpreter with the pinned GraalVM Native Image
+It packages the Java interpreter with the pinned GraalVM Native Image
 toolchain and loads Core files at run time. It is not a shipping distribution
 or a guest ahead-of-time compiler.
 

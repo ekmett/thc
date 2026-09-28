@@ -22,7 +22,7 @@ public final class TupleConstruct extends Expr {
             else if (component.isLong()) FrameAccess.writeLong(frame, slots[target], fields[i].executeRequiredLong(frame));
             else if (component.isFloat()) FrameAccess.writeFloat(frame, slots[target], fields[i].executeRequiredFloat(frame));
             else if (component.isDouble()) FrameAccess.writeDouble(frame, slots[target], fields[i].executeRequiredDouble(frame));
-            else if (component.getKind() == CoreKind.VOID) TupleResultsKt.requireVoidCarrier(fields[i].execute(frame));
+            else if (component.getKind() == CoreKind.VOID) TupleResults.requireVoidCarrier(fields[i].execute(frame));
             else if (component.getKind() == CoreKind.ADDRESS) FrameAccess.write(frame, slots[target], fields[i].executeRequiredAddress(frame));
             else FrameAccess.write(frame, slots[target], fields[i].execute(frame));
         }

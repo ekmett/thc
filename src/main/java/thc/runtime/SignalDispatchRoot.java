@@ -31,7 +31,7 @@ public final class SignalDispatchRoot extends RootNode {
     }
     @Override public Object execute(VirtualFrame frame) {
         frame.setLong(FrameLayout.BLOOM_FILTER, 0L);
-        var closure = ApplicationKt.requireClosure(force.execute(frame, action));
+        var closure = Applications.requireClosure(force.execute(frame, action));
         var target = closure.target.getRootNode();
         boolean async = switch (target) { case FunctionRoot function -> function.getEnableAsync();
             case BytecodeRoot bytecode -> bytecode.isAsyncEnabled(); default -> false; };
@@ -41,7 +41,7 @@ public final class SignalDispatchRoot extends RootNode {
         var number = frame.getArguments()[1];
         if (number == null) {
             CompilerDirectives.transferToInterpreter();
-            throw new NullPointerException("null cannot be cast to non-null type kotlin.Long");
+            throw new NullPointerException("Signal number must not be null");
         }
         var boxedSignal = signal.createInt(((Long) number).intValue());
         dispatch.execute(frame, closure, new Object[]{boxedPointer, boxedSignal, thc.runtime.Unit.INSTANCE});

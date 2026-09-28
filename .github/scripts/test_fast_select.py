@@ -17,8 +17,8 @@ select = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(select)
 
 
-def kotlin(name, body="@Test fun works() {}"):
-    return "package example\nimport org.junit.jupiter.api.Test\nclass " + name + " {\n" + body + "\n}\n"
+def java_fixture(name, body="@Test void works() {}"):
+    return "package example;\nimport org.junit.jupiter.api.Test;\nclass " + name + " {\n" + body + "\n}\n"
 
 
 PYTHON_TEST = '''import unittest
@@ -40,10 +40,10 @@ class FastSelectionTest(unittest.TestCase):
         smoke = dict(junit=["example.SmokeTest"], python=["scripts/test-smoke.py"])
         affected = dict(junit=["example.OtherTest"], python=["scripts/test-other.py"])
         self.policy = dict(schema=2, smoke=smoke,
-                           leafSources={"src/main/kotlin/Leaf.kt": dict(junit=["example.LeafTest"], python=[])},
+                           leafSources={"src/main/java/Leaf.java": dict(junit=["example.LeafTest"], python=[])},
                            owners={"compiler/test-fixtures/Family.hs": affected,
                                    "scripts/prepare-family.py": affected,
-                                   "src/test/kotlin/example/SharedContext.kt": affected},
+                                   "src/test/java/example/SharedContext.java": affected},
                            primopFamilies={name: affected for name in
                                            ("bit-primops", "integer-primops", "signed-narrow-primops", "explicit64-primops",
                                             "simd-generated-primops")},
@@ -53,12 +53,12 @@ class FastSelectionTest(unittest.TestCase):
         files = {
             select.SCRIPT: Path(select.__file__).read_text(),
             select.POLICY: json.dumps(self.policy),
-            "src/test/kotlin/example/SmokeTest.kt": kotlin("SmokeTest"),
-            "src/test/kotlin/example/LeafTest.kt": kotlin("LeafTest"),
-            "src/test/kotlin/example/OtherTest.kt": kotlin("OtherTest"),
-            "src/polyglotTest/kotlin/example/PolyglotTest.kt": kotlin("PolyglotTest"),
-            "src/main/kotlin/Leaf.kt": "package example\nfun leaf() = 1\n",
-            "src/main/kotlin/Critical.kt": "package example\nclass Critical\n",
+            "src/test/java/example/SmokeTest.java": java_fixture("SmokeTest"),
+            "src/test/java/example/LeafTest.java": java_fixture("LeafTest"),
+            "src/test/java/example/OtherTest.java": java_fixture("OtherTest"),
+            "src/polyglotTest/java/example/PolyglotTest.java": java_fixture("PolyglotTest"),
+            "src/main/java/Leaf.java": "package example;\nclass Leaf { static int leaf() { return 1; } }\n",
+            "src/main/java/Critical.java": "package example;\nclass Critical {}\n",
             "scripts/test-smoke.py": PYTHON_TEST,
             "scripts/test-other.py": PYTHON_TEST,
             "test/haskell-driver/Main.hs": "module Main where\nmain = pure ()\n",
@@ -256,8 +256,8 @@ class FastSelectionTest(unittest.TestCase):
                 self.assertEqual(["example.SmokeTest"], selected["junit"]["classes"])
 
     def test_compact_core_sources_and_goldens_select_all_consumers(self):
-        self.write("src/test/kotlin/thc/CoreCompactGoldenTest.kt",
-                   kotlin("CoreCompactGoldenTest").replace("package example", "package thc"))
+        self.write("src/test/java/thc/CoreCompactGoldenTest.java",
+                   java_fixture("CoreCompactGoldenTest").replace("package example", "package thc"))
         policy = json.loads(Path(__file__).with_name("fast-tests.json").read_text())
         for path in ("compact-core/THC/Compact/Wire.hs", "compact-core/THC/Compact/Writer.hs",
                      "compact-core/THC/Compact/Compression.hs", "compact-core/THC/Compact/Zip.hs",
@@ -304,8 +304,8 @@ class FastSelectionTest(unittest.TestCase):
         self.assertEqual(["compact-core-tests", "driver-tests", "json-index", "primop-tools"], selected["haskell"]["suites"])
 
     def test_polyglot_changes_select_actual_optional_class_without_all_regular_tests(self):
-        path = "src/polyglotTest/kotlin/example/PolyglotTest.kt"
-        self.write(path, kotlin("PolyglotTest", "@Test fun changed() {}"))
+        path = "src/polyglotTest/java/example/PolyglotTest.java"
+        self.write(path, java_fixture("PolyglotTest", "@Test void changed() {}"))
         self.commit()
         result = self.plan()
         self.assertEqual("narrow", result["mode"], result)
@@ -325,21 +325,21 @@ class FastSelectionTest(unittest.TestCase):
                 self.commit()
                 self.assertTrue(self.plan()["polyglot"]["required"])
                 self.base = self.git("rev-parse", "HEAD")
-        self.write("src/main/kotlin/Leaf.kt", "package example\nfun leaf() = 2\n")
+        self.write("src/main/java/Leaf.java", "package example;\nclass Leaf { static int leaf() { return 2; } }\n")
         self.commit()
         self.assertFalse(self.plan()["polyglot"]["required"])
 
     def test_full_core_source_set_is_not_an_optional_language_test_inventory(self):
         # Protocol helpers cannot safely enter the portable optional inventory.
         # The dedicated source set must neither block Fast checks nor claim they ran.
-        optional = "src/polyglotTest/kotlin/example/ForeignExceptionTest.kt"
-        source = kotlin("ForeignExceptionTest") + "\nclass ForeignProtocolHelper {}\n"
+        optional = "src/polyglotTest/java/example/ForeignExceptionTest.java"
+        source = java_fixture("ForeignExceptionTest") + "\nclass ForeignProtocolHelper {}\n"
         self.write(optional, source)
         self.commit()
         self.assertFalse(self.plan()["runnable"])
         self.git("rm", optional)
-        self.write("src/fullCoreTest/kotlin/example/ForeignExceptionTest.kt", source)
-        self.write("src/polyglotTest/kotlin/example/PolyglotTest.kt", kotlin("PolyglotTest", "@Test fun stillRuns() {}"))
+        self.write("src/fullCoreTest/java/example/ForeignExceptionTest.java", source)
+        self.write("src/polyglotTest/java/example/PolyglotTest.java", java_fixture("PolyglotTest", "@Test void stillRuns() {}"))
         self.commit()
         result = self.plan()
         self.assertTrue(result["runnable"])
@@ -347,7 +347,7 @@ class FastSelectionTest(unittest.TestCase):
         self.assertEqual(["example.PolyglotTest"], result["polyglot"]["classes"])
 
     def test_missing_optional_class_cannot_pass_a_required_lane(self):
-        path = "src/polyglotTest/kotlin/example/PolyglotTest.kt"
+        path = "src/polyglotTest/java/example/PolyglotTest.java"
         self.git("rm", path)
         self.commit()
         result = self.plan()
@@ -356,30 +356,38 @@ class FastSelectionTest(unittest.TestCase):
         self.assertIn("empty-polyglot-inventory", {reason["code"] for reason in result["reasons"]})
 
     def test_changed_test_is_never_removed_for_smoke_budget(self):
-        self.write("src/test/kotlin/example/OtherTest.kt", kotlin("OtherTest", "@Test fun expensiveNativeCampaign() {}"))
+        self.write("src/test/java/example/OtherTest.java", java_fixture("OtherTest", "@Test void expensiveNativeCampaign() {}"))
         self.commit()
         result = self.plan()
         self.assertEqual("narrow", result["mode"], result)
         self.assertEqual(["example.OtherTest", "example.SmokeTest"], result["junit"]["classes"])
 
     def test_multiple_top_level_classes_use_actual_packages_not_filename(self):
-        self.write("src/test/kotlin/example/misleading.kt", kotlin("AddedTest") + "\nclass SecondTest { @Test fun other() {} }\n")
+        self.write("src/test/java/example/misleading.java", java_fixture("AddedTest") + "\nclass SecondTest { @Test void other() {} }\n")
         self.commit()
         result = self.plan()
         self.assertEqual("narrow", result["mode"], result)
         self.assertEqual(["example.AddedTest", "example.SecondTest"], result["affected"]["junit"])
 
-    def test_comments_nested_comments_strings_and_raw_strings_do_not_create_tests(self):
-        body = '''/* class Fake { @Test fun fake() {} /* nested */ } */
-private val raw = """class FakeRaw { @Test fun fake() {} }"""
-private val text = "class FakeString { @Test }"
-@Test fun real() { val char = '\\''; val slash = "\\\\" }
+    def test_comments_strings_and_text_blocks_do_not_create_tests(self):
+        body = r'''/* class Fake { @Test void fake() {} } /* not a nested comment */
+private String raw = """
+\""" is an escaped delimiter
+class FakeRaw { @Test void fake() {} }
+""";
+private String text = "class FakeString { @Test }";
+@Test void real() { char quote = '\''; String slash = "\\"; }
 '''
-        self.write("src/test/kotlin/example/OtherTest.kt", kotlin("OtherTest", body))
+        self.write("src/test/java/example/OtherTest.java", java_fixture("OtherTest", body))
         self.commit()
         result = self.plan()
         self.assertEqual("narrow", result["mode"], result)
         self.assertEqual(["example.OtherTest"], result["affected"]["junit"])
+        masked = select.code_only(java_fixture("OtherTest", body))
+        self.assertEqual(len(java_fixture("OtherTest", body)), len(masked))
+        self.assertNotIn("FakeRaw", masked)
+        self.assertEqual([i for i, char in enumerate(java_fixture("OtherTest", body)) if char == '\n'],
+                         [i for i, char in enumerate(masked) if char == '\n'])
 
     def test_batched_blob_reads_preserve_bytes_and_reject_truncation(self):
         path = "binary-payload.bin"
@@ -404,7 +412,7 @@ private val text = "class FakeString { @Test }"
         self.assertFalse((self.repo / "nope").exists())
 
     def test_declared_leaf_adds_its_test_and_smoke(self):
-        self.write("src/main/kotlin/Leaf.kt", "package example\nfun leaf() = 2\n")
+        self.write("src/main/java/Leaf.java", "package example;\nclass Leaf { static int leaf() { return 2; } }\n")
         self.commit()
         result = self.plan()
         self.assertEqual("narrow", result["mode"], result)
@@ -414,15 +422,15 @@ private val text = "class FakeString { @Test }"
         path = "src/main/java/thc/runtime/ManagedFiles.java"
         self.policy["owners"][path] = dict(junit=["example.OtherTest"], python=[])
         self.write(select.POLICY, json.dumps(self.policy))
-        self.write(path, "package thc.runtime\nclass ManagedFiles\n")
+        self.write(path, "package thc.runtime;\nclass ManagedFiles {}\n")
         before = self.commit()
-        self.write(path, "package thc.runtime\nclass ManagedFiles { val changed = true }\n")
+        self.write(path, "package thc.runtime;\nclass ManagedFiles { boolean changed = true; }\n")
         self.commit()
         selected = self.plan(base=before)
         self.assertEqual("narrow", selected["mode"], selected)
         self.assertIn("example.OtherTest", selected["affected"]["junit"])
         self.assertTrue(selected["polyglot"]["required"])
-        self.write("src/main/kotlin/thc/runtime/Program.kt", "package thc.runtime\nclass Program\n")
+        self.write("src/main/java/thc/runtime/Program.java", "package thc.runtime;\nclass Program {}\n")
         self.commit()
         self.full("unmapped-source-or-configuration", base=before)
 
@@ -470,53 +478,25 @@ private val text = "class FakeString { @Test }"
         self.commit()
         self.full("shared-primop-registry-change")
 
-    def test_mask_registry_only_accepts_new_exact_width_arms(self):
-        path = select.PROGRAM
-        before = ('internal fun narrowWordPrimitiveMask(name: String): Long = when (name) {\n'
-                  '    "plusWord8#" -> 0xffL\n    else -> 0L\n}\n')
-        self.write(path, before)
-        self.base = self.commit()
-        self.write(path, before.replace('    else ->', '    "quotWord8#" -> 0xffL\n    else ->'))
-        self.commit()
-        self.assertEqual("narrow", self.plan()["mode"])
-        self.assertFalse(self.plan()["polyglot"]["required"])
-        self.write(path, before.replace('    else ->', '    "quotWord8#" -> 0xffffL\n    else ->'))
-        self.commit()
-        self.full("shared-primop-registry-change")
-        self.assertTrue(self.plan()["polyglot"]["required"])
+    def test_shared_java_program_dispatch_stays_full(self):
+        self.assertEqual("src/main/java/thc/runtime/Program.java", select.PROGRAM)
+        self.assertEqual("src/main/java/thc/runtime/BytecodeProgram.java", select.BYTECODE_PROGRAM)
+        for path in (select.PROGRAM, select.BYTECODE_PROGRAM):
+            with self.subTest(path=path):
+                before = ('package thc.runtime;\nclass Dispatch {\n'
+                          '  static int arity(String operation) { return switch (operation) {\n'
+                          '    case "plusInt#" -> 2;\n    default -> 0;\n  }; }\n}\n')
+                self.write(path, before)
+                base = self.commit()
+                after = before.replace('    default ->', '    case "popCnt8#" -> 1;\n    default ->')
+                self.write(path, after)
+                self.commit()
+                self.full("shared-primop-registry-change", base=base)
+                self.assertTrue(self.plan(base=base)["polyglot"]["required"])
+                self.write(path, after.replace('case "plusInt#" -> 2', 'case "plusInt#" -> 1'))
+                self.commit()
+                self.full("shared-primop-registry-change", base=base)
 
-    def test_new_primitive_dispatch_arms_are_scoped_but_existing_arm_edits_widen(self):
-        path = select.PROGRAM
-        before = ('private class Primitive(private val name: String) {\n'
-                  '  val arity = when (operation) {\n    "plusInt#" -> 2\n    else -> 0\n  }\n'
-                  '  fun run() = return when (operation) {\n    "plusInt#" -> x + y\n    else -> 0\n  }\n}\n')
-        self.write(path, before)
-        self.base = self.commit()
-        after = before.replace('    "plusInt#" -> 2', '    "popCnt8#" -> 1\n    "plusInt#" -> 2')
-        after = after.replace('    "plusInt#" -> x + y', '    "popCnt8#" -> java.lang.Long.bitCount(x).toLong()\n    "plusInt#" -> x + y')
-        self.write(path, after)
-        self.commit()
-        self.assertEqual("narrow", self.plan()["mode"])
-        self.assertFalse(self.plan()["polyglot"]["required"])
-        self.write(path, after.replace('"plusInt#" -> x + y', '"plusInt#" -> x - y'))
-        self.commit()
-        self.full("shared-primop-registry-change")
-
-    def test_bytecode_new_name_to_existing_operation_is_scoped(self):
-        path = select.BYTECODE_PROGRAM
-        before = ('val operation = when (scalar64PrimitiveOperation(name)) {\n'
-                  '    "popCnt8#" -> "PopulationCountWidth"\n'
-                  '    else -> throw UnsupportedCore("unknown")\n}\n')
-        self.write(path, before)
-        self.base = self.commit()
-        after = before.replace('    else ->', '    "popCnt16#" -> "PopulationCountWidth"\n    else ->')
-        self.write(path, after)
-        self.commit()
-        self.assertEqual("narrow", self.plan()["mode"])
-        self.assertFalse(self.plan()["polyglot"]["required"])
-        self.write(path, after.replace('"PopulationCountWidth"\n    else', '"NewUnreviewedOperation"\n    else'))
-        self.commit()
-        self.full("shared-primop-registry-change")
 
     def test_exact_generated_simd_extrema_addition_selects_family_checks(self):
         group = json.loads(Path(__file__).with_name("fast-tests.json").read_text())["primopFamilies"]["simd-generated-primops"]
@@ -524,8 +504,8 @@ private val text = "class FakeString { @Test }"
         self.write(select.POLICY, json.dumps(self.policy))
         for name in group["junit"]:
             package, short = name.rsplit(".", 1)
-            self.write("src/test/kotlin/" + name.replace(".", "/") + ".kt",
-                       kotlin(short).replace("package example", "package " + package))
+            self.write("src/test/java/" + name.replace(".", "/") + ".java",
+                       java_fixture(short).replace("package example", "package " + package))
         for path in group["python"]:
             self.write(path, PYTHON_TEST)
         fixtures = json.loads(Path(__file__).with_name("fast-fixtures.json").read_text())
@@ -538,8 +518,11 @@ private val text = "class FakeString { @Test }"
         capabilities = dict(primitives={"insertWord32X8#": 3})
         root = ("class BytecodeRoot {\n    // BEGIN GENERATED SIMD FAMILIES\n"
                 "    // existing operation\n    // END GENERATED SIMD FAMILIES\n}\n")
-        program = ("class BytecodeProgram {\n    // BEGIN GENERATED SIMD FAMILIES\n"
-                   "    // existing operation\n    // END GENERATED SIMD FAMILIES\n}\n")
+        program = ("class BytecodeProgram {\n"
+                   "  Expression generatedVectorPrimitive(String name, java.util.List<Expression> operands) {\n"
+                   "    return switch (name) {\n    // BEGIN GENERATED SIMD FAMILIES\n"
+                   "    // existing operation\n    // END GENERATED SIMD FAMILIES\n"
+                   "    default -> throw new IllegalArgumentException(name);\n    };\n  }\n}\n")
         original = {select.SIMD_SPEC: json.dumps(spec), select.CAPABILITIES: json.dumps(capabilities),
                     select.BYTECODE_ROOT: root, select.BYTECODE_PROGRAM: program}
         for path, body in original.items():
@@ -554,10 +537,10 @@ private val text = "class FakeString { @Test }"
                 f"    @Operation public static final class {node} {{\n"
                 f"        @Specialization public static Word32X8 apply(Word32X8 left, Word32X8 right) {{ return Word32X8.{op}(left, right); }}\n"
                 "    }\n",
-                f'        "{op}Word32X8#" -> ProvenExpression(Expression {{ e ->\n'
-                "            val b = e.builder\n"
-                f"            b.begin{node}(); operands.forEach {{ it.emit(e) }}; b.end{node}()\n"
-                "        }, GeneratedVectors.proofWord32X8)\n")
+                f'            case "{op}Word32X8#" -> new ProvenExpression(e -> {{\n'
+                "                var b = e.builder;\n"
+                f"                b.begin{node}(); for (var operand : operands) operand.emit(e); b.end{node}();\n"
+                "            }, GeneratedVectors.proofWord32X8);\n")
         updated = {select.SIMD_SPEC: json.dumps(spec), select.CAPABILITIES: json.dumps(capabilities),
                    select.BYTECODE_ROOT: root.replace("    // END GENERATED", "".join(pair[0] for pair in blocks.values()) + "    // END GENERATED"),
                    select.BYTECODE_PROGRAM: program.replace("    // END GENERATED", "".join(pair[1] for pair in blocks.values()) + "    // END GENERATED")}
@@ -588,152 +571,77 @@ private val text = "class FakeString { @Test }"
         self.full("unverified-simd-generation-change")
 
     def test_unknown_production_configuration_resources_and_compiler_widen(self):
-        for path in ("src/main/kotlin/Critical.kt", "src/main/kotlin/ArgumentLayout.kt", "compiler/THC/Plugin.hs",
+        for path in ("src/main/java/Critical.java", "src/main/java/ArgumentLayout.java", "compiler/THC/Plugin.hs",
                      "build.gradle", "src/main/resources/proof.json", "scripts/helper.py"):
             with self.subTest(path=path):
                 self.write(path, "changed")
                 self.commit()
                 self.full("unmapped-source-or-configuration")
 
-    def test_comment_only_unmapped_production_source_uses_lexical_boundaries(self):
-        path = "src/main/kotlin/thc/Language.kt"
-        before = ('package thc\nclass Language {\n'
-                  '  val address = "https://example.invalid/a//b"\n'
-                  '  val raw = """literal /* not a comment */"""\n'
-                  '  val label = "${link.unit}"\n'
-                  '  /* outer /* inner */ original */ val value = 1 // original\n}\n')
+    def test_unmapped_java_comments_and_code_remain_conservative(self):
+        path = "src/main/java/thc/Language.java"
+        before = ('package thc;\nclass Language {\n'
+                  '  String address = "https://example.invalid/a//b";\n'
+                  '  /* original */ int value = 1; // original\n}\n')
         self.write(path, before)
         self.base = self.commit()
-        after = before.replace('/* inner */ original', '/* nested */ revised').replace('// original', '// revised')
-        self.write(path, after)
+        for after in (before.replace("/* original */", "/* revised */"),
+                      before.replace("https://", "http://"),
+                      before.replace("int value = 1", "int value = 2"),
+                      before.replace("/* original */", "/* unclosed")):
+            with self.subTest(after=after):
+                self.write(path, after)
+                self.commit()
+                self.full("unmapped-source-or-configuration")
+                self.assertTrue(self.plan()["polyglot"]["required"])
+
+    def test_unclosed_java_lexical_regions_reject_inventory(self):
+        for source in ('/* unclosed', '"unclosed', '"""\nunclosed', "'x"):
+            with self.subTest(source=source), self.assertRaises(select.SelectionError):
+                select.code_only(source)
+
+    def test_class_literals_private_generic_helpers_and_tempdir_are_local_test_syntax(self):
+        path = "src/test/java/example/OtherTest.java"
+        source = java_fixture("OtherTest", '''
+  @TempDir java.nio.file.Path directory;
+  private <T> T entered(java.util.function.Supplier<T> body) { return body.get(); }
+  @Test void catches() { org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class, () -> entered(() -> 1)); }
+''')
+        self.write(path, source)
+        self.base = self.commit()
+        self.write(path, source.replace("() -> 1", "() -> 2"))
         self.commit()
         result = self.plan()
         self.assertEqual("narrow", result["mode"], result)
-        self.assertEqual([], result["affected"]["junit"])
-        self.assertFalse(result["polyglot"]["required"])
-        self.assertEqual([], result["haskell"]["suites"])
-        self.write(path, after.replace('https://example.invalid', 'http://example.invalid'))
-        self.commit()
-        self.full("unmapped-source-or-configuration")
-        self.write(path, after.replace('val value = 1', 'val value = 2'))
-        self.commit()
-        self.full("unmapped-source-or-configuration")
-        self.write(path, after.replace('/* nested */', '/* unclosed'))
-        self.commit()
-        self.full("unmapped-source-or-configuration")
+        self.assertEqual(["example.OtherTest"], result["affected"]["junit"])
+        for changed in (source.replace("private <T>", "<T>"),
+                        source.replace("@TempDir ", "")):
+            self.write(path, changed)
+            self.commit()
+            self.full("shared-test-member")
 
-    def test_comment_only_proof_rejects_java_and_nested_kotlin_interpolation(self):
-        java = "src/main/java/example/Foreign.java"
-        self.write(java, "class Foreign { String text = \"// literal\"; /* old */ }\n")
-        self.base = self.commit()
-        self.write(java, "class Foreign { String text = \"// literal\"; /* new */ }\n")
-        self.commit()
-        self.full("unmapped-source-or-configuration")
-        # Kotlin permits a quoted argument inside a template expression. The
-        # outer-string scanner must reject it, not reinterpret // as a comment.
-        for source in ('val x = "${foo("// old")}" // changed\n',
-                       r'val x = "\\${foo("// old")}" // changed' + '\n',
-                       'val x = """${foo("// old")}""" // changed\n'):
-            with self.subTest(source=source), self.assertRaises(select.SelectionError):
-                select.lexical_source(source, comments_only=True)
-        for separator in ('\r', '\u0085', '\u2028', '\u2029'):
-            with self.subTest(separator=repr(separator)), self.assertRaises(select.SelectionError):
-                select.lexical_source('val x = 1 // comment' + separator + 'val y = 2\n', comments_only=True)
-
-    def test_class_literals_private_generic_helpers_and_tempdir_are_local_test_syntax(self):
-        path = "src/test/kotlin/example/OtherTest.kt"
-        source = ('package example\nimport org.junit.jupiter.api.Test\n'
-                  'class OtherTest {\n'
-                  '  @TempDir lateinit var directory: Path\n'
-                  '  private fun <T> entered(body: () -> T): T = body()\n'
-                  '  @Test fun catches() = assertThrows(RuntimeFault::class.java) { entered { 1 } }\n'
-                  '}\n')
+    def test_anonymous_classes_keep_private_helpers_local_without_hiding_shared_ones(self):
+        path = "src/test/java/example/OtherTest.java"
+        source = java_fixture("OtherTest", '''
+  private java.util.function.IntSupplier thunk() {
+    return new java.util.function.IntSupplier() { public int getAsInt() { return 1; } };
+  }
+  @Test void works() { org.junit.jupiter.api.Assertions.assertEquals(1, thunk().getAsInt()); }
+''')
         self.write(path, source)
         self.base = self.commit()
-        self.write(path, source.replace('entered { 1 }', 'entered { 2 }'))
+        self.write(path, source.replace("return 1;", "return 2;"))
         self.commit()
         result = self.plan()
         self.assertEqual("narrow", result["mode"], result)
         self.assertEqual(["example.OtherTest"], result["affected"]["junit"])
         for changed, reason in (
-                (source.replace('private fun <T>', 'fun <T>'), "shared-test-member"),
-                (source.replace('@TempDir lateinit var', 'lateinit var'), "shared-test-member"),
-                (source.replace('fun <T> entered', 'fun <T : Any> entered'), "unresolved-test-declaration")):
+                (source.replace("private java.util.function.IntSupplier", "java.util.function.IntSupplier"), "shared-test-member"),
+                (source + "class Shared {}\n", "shared-test-helper")):
             self.write(path, changed)
             self.commit()
             self.full(reason)
 
-    def test_anonymous_objects_keep_private_helpers_local_without_hiding_shared_ones(self):
-        path = "src/test/kotlin/example/OtherTest.kt"
-        source = ('package example\nimport org.junit.jupiter.api.Test\n'
-                  'private val local = object { val value = 1 }\n'
-                  'class OtherTest {\n'
-                  '  private fun thunk() = Holder(object : RootNode(null) {\n'
-                  '    override fun execute() = local.value\n'
-                  '  })\n'
-                  '  @Test fun works() { assertEquals(1, thunk().execute()) }\n'
-                  '}\n')
-        self.write(path, source)
-        self.base = self.commit()
-        self.write(path, source.replace('val value = 1', 'val value = 2'))
-        self.commit()
-        result = self.plan()
-        self.assertEqual("narrow", result["mode"], result)
-        self.assertEqual(["example.OtherTest"], result["affected"]["junit"])
-        for changed, reason in (
-                (source.replace('private fun thunk', 'fun thunk'), "shared-test-member"),
-                (source.replace('private val local', 'val local'), "shared-test-helper"),
-                (source + 'object Shared { val value = 1 }\n', "shared-test-helper")):
-            with self.subTest(reason=reason):
-                self.write(path, changed)
-                self.commit()
-                self.full(reason)
-
-    def test_dot_qualified_escaped_members_keep_exact_test_selection(self):
-        path = "src/test/kotlin/example/OtherTest.kt"
-        source = kotlin("OtherTest", '@Test fun works() {\n'
-                        '  Context.newBuilder("thc").`in`(input).build()\n'
-                        '  builder?.`class`(); builder!!.\n    `value_1`\n'
-                        '}')
-        self.write(path, source)
-        self.commit()
-        result = self.plan()
-        self.assertEqual("narrow", result["mode"], result)
-        self.assertEqual(["example.OtherTest"], result["affected"]["junit"])
-        code = select.code_only(source)
-        masked = select.mask_escaped_members(code)
-        self.assertNotIn('`', masked)
-        self.assertEqual(len(code), len(masked))
-        self.assertEqual([i for i, char in enumerate(code) if char == '\n'],
-                         [i for i, char in enumerate(masked) if char == '\n'])
-        self.assertEqual(source.index('class OtherTest'), masked.index('class OtherTest'))
-
-    def test_escaped_declarations_unknown_syntax_and_shared_helpers_still_widen(self):
-        path = "src/test/kotlin/example/OtherTest.kt"
-        body = '@Test fun works() { builder.`in`(input) }'
-        for source, reason in (
-                (kotlin("OtherTest", '@Test fun `works`() {}'), "backtick-test-declaration"),
-                (kotlin("OtherTest", body + '\nprivate fun Receiver.`local`() {}'), "backtick-test-declaration"),
-                (kotlin("OtherTest", body + '\nprivate fun Receiver.\n`local`() {}'), "backtick-test-declaration"),
-                (kotlin("OtherTest", body + '\nprivate val Receiver.`local` get() = 1'), "backtick-test-declaration"),
-                (kotlin("OtherTest", body.replace('`in`', '`odd name`')), "backtick-test-declaration"),
-                (kotlin("OtherTest", body.replace('builder.', '')), "backtick-test-declaration"),
-                (kotlin("OtherTest", body.replace('builder.', 'builder..')), "backtick-test-declaration"),
-                (kotlin("OtherTest", body.replace('builder.', '.')), "backtick-test-declaration"),
-                (kotlin("OtherTest", body.replace('`in`', '`unterminated')), "backtick-test-declaration"),
-                (kotlin("OtherTest", body + '\nfun shared() = builder.`in`(input)'), "shared-test-member"),
-                (kotlin("OtherTest", body) + '\nfun shared() = builder.`in`(input)\n', "shared-test-helper")):
-            with self.subTest(source=source):
-                self.write(path, source)
-                self.commit()
-                self.full(reason)
-        self.write(path, kotlin("OtherTest"))
-        self.write("src/test/kotlin/example/ConsumerTest.kt",
-                   kotlin("ConsumerTest", '@Test fun reads() { example.`OtherTest`() }'))
-        self.base = self.commit()
-        self.write(path, kotlin("OtherTest", '@Test fun changed() {}'))
-        self.commit()
-        self.full("test-class-used-as-helper")
 
     def test_native_file_buffers_inventory_remains_exact(self):
         path = "src/test/java/thc/runtime/NativeFileBuffersTest.java"
@@ -759,8 +667,8 @@ private val text = "class FakeString { @Test }"
                 self.base = result["head"]
 
     def test_deleted_and_renamed_tests_widen_and_retain_both_paths(self):
-        old = "src/test/kotlin/example/OtherTest.kt"
-        new = "src/test/kotlin/example/RenamedTest.kt"
+        old = "src/test/java/example/OtherTest.java"
+        new = "src/test/java/example/RenamedTest.java"
         self.git("mv", old, new)
         self.commit()
         result = self.full("deleted-renamed-or-typechanged")
@@ -773,7 +681,7 @@ private val text = "class FakeString { @Test }"
         self.assertNotIn("example.OtherTest", result["junit"]["classes"])
 
     def test_removed_class_inside_existing_file_widens(self):
-        self.write("src/test/kotlin/example/OtherTest.kt", kotlin("ReplacementTest"))
+        self.write("src/test/java/example/OtherTest.java", java_fixture("ReplacementTest"))
         self.commit()
         self.full("removed-junit-class")
 
@@ -794,41 +702,37 @@ private val text = "class FakeString { @Test }"
         self.full("base-not-ancestor", base=later, head=self.base)
 
     def test_dirty_and_untracked_source_widen(self):
-        self.write("untracked-helper.kt", "fun shared() = 1")
+        self.write("untracked-helper.java", "class Shared {}")
         self.full("dirty-checkout")
         self.commit()
-        self.write("src/main/kotlin/Leaf.kt", "not committed")
+        self.write("src/main/java/Leaf.java", "not committed")
         self.full("dirty-checkout")
 
-    def test_test_helpers_top_level_extensions_and_shared_members_widen(self):
-        path = "src/test/kotlin/example/OtherTest.kt"
-        for code in ("package example\ninternal fun helper() = 1\n",
-                     kotlin("OtherTest") + "\nfun String.extensionHelper() = this\n",
-                     kotlin("OtherTest", "@Test fun test() {}\nfun helper() = 1"),
-                     kotlin("OtherTest", "@Test fun test() = 1\nfun helper() = 1"),
-                     kotlin("OtherTest", "@Test fun test() {}\nprivate fun local() {}; fun shared() = 1"),
-                     kotlin("OtherTest", "private fun local() { @Test fun inner() {} }; fun shared() = 1\n@Test fun test() {}"),
-                     kotlin("OtherTest") + "\nfun <T> shared(value: T) = value\n",
-                     kotlin("OtherTest") + "\nfun `shared helper`() = 1\n",
-                     kotlin("OtherTest") + "\nprivate val local = 1; fun shared() = 1\n",
-                     kotlin("OtherTest", "companion object { fun helper() = 1 }\n@Test fun test() {}")):
+    def test_test_helpers_and_shared_members_widen(self):
+        path = "src/test/java/example/OtherTest.java"
+        for code in ("package example;\nclass Shared { static int helper() { return 1; } }\n",
+                     java_fixture("OtherTest") + "\nclass Shared {}\n",
+                     java_fixture("OtherTest", "@Test void test() {}\nint helper() { return 1; }"),
+                     java_fixture("OtherTest", "@Test void test() {}\nprivate void local() {} int shared() { return 1; }"),
+                     java_fixture("OtherTest", "private void local() { class Inner { @Test void nested() {} } } int shared() { return 1; }\n@Test void test() {}"),
+                     java_fixture("OtherTest", "static class Shared {}\n@Test void test() {}")):
             with self.subTest(code=code):
                 self.write(path, code)
                 self.commit()
                 self.full()
 
-    def test_private_nested_constructor_properties_are_not_shared_members(self):
-        path = "src/test/kotlin/example/OtherTest.kt"
-        body = "@Test fun test() {}\nprivate data class Row(val entry: String, val input: Long, val expected: Long)"
-        self.write(path, kotlin("OtherTest", body))
+    def test_private_nested_records_are_not_shared_members(self):
+        path = "src/test/java/example/OtherTest.java"
+        body = "@Test void test() {}\nprivate record Row(String entry, long input, long expected) {}"
+        self.write(path, java_fixture("OtherTest", body))
         self.commit()
         result = self.plan()
         self.assertEqual("narrow", result["mode"], result)
         self.assertEqual(["example.OtherTest"], result["affected"]["junit"])
-        self.write(path, kotlin("OtherTest", body.replace("private data class", "data class")))
+        self.write(path, java_fixture("OtherTest", body.replace("private record", "record")))
         self.commit()
         self.full("shared-test-member")
-        self.write(path, kotlin("OtherTest", body + "\nval shared = 1"))
+        self.write(path, java_fixture("OtherTest", body + "\nint shared = 1;"))
         self.commit()
         self.full("shared-test-member")
 
@@ -890,7 +794,7 @@ private val text = "class FakeString { @Test }"
         self.commit()
         self.full("inherited-test-class")
         self.write(path, "package example;\nclass JavaTest { @Test void works() {} }\n")
-        self.write("src/test/kotlin/example/OtherTest.kt", kotlin("OtherTest", "@Test fun usesJava() { JavaTest() }"))
+        self.write("src/test/java/example/OtherTest.java", java_fixture("OtherTest", "@Test void usesJava() { new JavaTest(); }"))
         self.commit()
         self.full("test-class-used-as-helper")
 
@@ -912,9 +816,9 @@ private val text = "class FakeString { @Test }"
         self.full("nested-test-class")
 
     def test_class_reused_as_helper_widens(self):
-        self.write("src/test/kotlin/example/ConsumerTest.kt", kotlin("ConsumerTest", "@Test fun reads() { OtherTest() }"))
+        self.write("src/test/java/example/ConsumerTest.java", java_fixture("ConsumerTest", "@Test void reads() { new OtherTest(); }"))
         self.base = self.commit()
-        self.write("src/test/kotlin/example/OtherTest.kt", kotlin("OtherTest", "@Test fun changed() {}"))
+        self.write("src/test/java/example/OtherTest.java", java_fixture("OtherTest", "@Test void changed() {}"))
         self.commit()
         self.full("test-class-used-as-helper")
 
@@ -942,14 +846,14 @@ private val text = "class FakeString { @Test }"
         self.full("python-test-helper-or-unknown-runner")
 
     def test_test_factory_is_selected_but_nested_and_inherited_classes_widen(self):
-        path = "src/test/kotlin/example/OtherTest.kt"
-        self.write(path, kotlin("OtherTest", "@TestFactory fun dynamicCases() = listOf(1)"))
+        path = "src/test/java/example/OtherTest.java"
+        self.write(path, java_fixture("OtherTest", "@TestFactory java.util.List<?> dynamicCases() { return java.util.List.of(); }"))
         self.commit()
         self.assertEqual("narrow", self.plan()["mode"])
-        self.write(path, "package example\nclass OtherTest : SharedBase() { @Test fun test() {} }\n")
+        self.write(path, "package example;\nclass OtherTest extends SharedBase { @Test void test() {} }\n")
         self.commit()
         self.full("inherited-test-class")
-        self.write(path, kotlin("OtherTest", "@Nested class Inner { @Test fun test() {} }"))
+        self.write(path, java_fixture("OtherTest", "@Nested class Inner { @Test void test() {} }"))
         self.commit()
         self.full("nested-test-class")
 
@@ -960,7 +864,7 @@ private val text = "class FakeString { @Test }"
         self.assertEqual("narrow", self.plan()["mode"])
         for mutation in (dict(schema=True), dict(smoke=dict(junit=[], python=[])),
                          dict(smoke=dict(junit=["example.NoSuchTest"], python=["scripts/test-smoke.py"])),
-                         dict(leafSources={"missing.kt": dict(junit=["example.LeafTest"], python=[])})):
+                         dict(leafSources={"missing.java": dict(junit=["example.LeafTest"], python=[])})):
             policy = copy.deepcopy(self.policy); policy.update(mutation)
             self.write(select.POLICY, json.dumps(policy))
             self.commit()
@@ -977,16 +881,16 @@ private val text = "class FakeString { @Test }"
         self.assertNotEqual(before, result["policySha256"])
 
     def test_deleted_selected_file_and_symlink_never_return_runnable_narrow(self):
-        path = self.repo / "src/test/kotlin/example/SmokeTest.kt"
+        path = self.repo / "src/test/java/example/SmokeTest.java"
         path.unlink()
         result = self.full("selected-test-file-missing-or-symlinked")
         self.assertFalse(result["runnable"])
-        path.symlink_to("OtherTest.kt")
+        path.symlink_to("OtherTest.java")
         self.commit()
         self.full("nonregular-changed-path")
 
     def test_empty_and_corrupt_inventory_cannot_be_an_empty_success(self):
-        for path in (self.repo / "src/test").rglob("*.kt"):
+        for path in (self.repo / "src/test").rglob("*.java"):
             path.unlink()
         self.commit()
         result = self.full("empty-junit-inventory")
@@ -1014,8 +918,8 @@ private val text = "class FakeString { @Test }"
                   *policy["primopFamilies"].values(), *policy["automation"].values()]
         for name in {name for group in groups for name in group["junit"]}:
             package, short = name.rsplit(".", 1)
-            self.write("src/test/kotlin/" + name.replace(".", "/") + ".kt",
-                       kotlin(short).replace("package example", "package " + package))
+            self.write("src/test/java/" + name.replace(".", "/") + ".java",
+                       java_fixture(short).replace("package example", "package " + package))
         for path in {path for group in groups for path in group["python"]}:
             self.write(path, PYTHON_TEST)
         for path in policy["leafSources"]:
@@ -1043,8 +947,8 @@ private val text = "class FakeString { @Test }"
                   *policy["primopFamilies"].values(), *policy["automation"].values()]
         for name in {name for group in groups for name in group["junit"]}:
             package, short = name.rsplit(".", 1)
-            self.write("src/test/kotlin/" + name.replace(".", "/") + ".kt",
-                       kotlin(short).replace("package example", "package " + package))
+            self.write("src/test/java/" + name.replace(".", "/") + ".java",
+                       java_fixture(short).replace("package example", "package " + package))
         for path in {path for group in groups for path in group["python"]}:
             self.write(path, PYTHON_TEST)
         for path in policy["leafSources"]:
@@ -1119,8 +1023,8 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         cls.policy = json.loads(Path(__file__).with_name("fast-tests.json").read_text())
         cls.families = cls.policy["leafSources"]
         cls.classes = {name for path in (cls.root / "src/test").rglob("*")
-                       if path.suffix in (".kt", ".java")
-                       for name in select.junit_info(path.read_text(), java=path.suffix == ".java")[0]}
+                       if path.suffix == ".java"
+                       for name in select.junit_info(path.read_text())[0]}
 
     def family(self, name):
         matches = [group for path, group in self.families.items() if Path(path).stem == name]
@@ -1133,12 +1037,12 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
             path = "src/test/java/thc/" + helper + ".java"
             self.assertTrue((self.root / path).is_file())
             self.assertTrue(self.policy["owners"][path]["junit"])
-            self.assertNotIn("src/test/kotlin/thc/" + helper + ".kt", self.policy["owners"])
+
 
     def test_every_mapping_target_is_a_real_test_and_each_path_is_explicit(self):
         self.assertEqual({"RubbishLiterals", "CoreMemoryCopyForeign", "MemcpyExpression", "MemmoveExpression", "CoreFileWait", "WaitFileDescriptor",
                            "CoreStringRtsForeign", "StringRtsOp", "StringRtsExpression", "GuestEnvironment", "CoreEnvironmentForeign", "GuestArguments", "CoreRtsArgumentsForeign", "EnvironmentOp", "EnvironmentExpression", "RtsArgumentsOp", "RtsArgumentsExpression", "CoreCurrentCCS", "ManagedAddressOrder", "CompareManagedAddress", "CompareOrderedManagedAddress", "GetCurrentCCS", "AddressToInt", "IntToAddress", "SubtractManagedAddress", "RemainderManagedAddress", "AtomicAddressOp", "AtomicAddressExpression", "NativeNarrowAtomic", "BitPrimitives", "RawBitCasts", "FloatingPrimitives", "FloatingAddresses", "FloatingAddressOp", "FloatingAddressExpression", "ManagedSmallArray", "SmallArrayStorage", "SmallArrayOp", "ManagedMutVar", "ModifiedMutVar", "MutVarModifySite", "MutVarOp", "ManagedNativeAllocations", "StablePointers", "StablePointerToken", "CoreStablePointers", "StablePointerOp", "MakeStablePointer", "DereferenceStablePointer", "EqualStablePointers", "FreeStablePointer", "CoreSharedCAFStores", "SharedCAFStore", "SharedCAFStoreExpression", "ManagedWeaks", "CoreMainThreadForeign", "CoreBoundThreadForeign",
-                         "VectorAddressExpression", "VectorIntegerDivision", "FloatDecodeExpression", "CoreDataLabels", "FileWaitPrimitives", "CoreRtsShutdown", "AddressArrayCopyOp", "AddressToByteArrayExpression", "ByteArrayToAddressExpression", "AtomicIntArrayOp", "AtomicIntArrayExpression", "ThreadObservation", "ManagedSTM", "ManagedTVar", "STMRetry", "STMConflict", "ManagedCompacts", "CompactImages", "HeapAddresses", "CompactImageOp", "CompactImageExpression", "BoundThreadSupport", "RegisterMainThread", "CpuAffinityQuery", "STMCall", "STMExpression", "STMOp", "STMRestart", "PrefetchExpression", "TraceExpression", "TraceOp", "GhcBCO", "GhcInstruction", "GhcBCORoot", "GhcBCOExpression", "CoreCpuAffinity", "NativeEpoll", "NativeEventWait", "AstStackScope", "AstStackSpill", "AstStackContinuation", "AstChildSuspension", "AstStackKt"} |
+                         "VectorAddressExpression", "VectorIntegerDivision", "FloatDecodeExpression", "CoreDataLabels", "FileWaitPrimitives", "CoreRtsShutdown", "AddressArrayCopyOp", "AddressToByteArrayExpression", "ByteArrayToAddressExpression", "AtomicIntArrayOp", "AtomicIntArrayExpression", "ThreadObservation", "ManagedSTM", "ManagedTVar", "STMRetry", "STMConflict", "ManagedCompacts", "CompactImages", "HeapAddresses", "CompactImageOp", "CompactImageExpression", "BoundThreadSupport", "RegisterMainThread", "CpuAffinityQuery", "STMCall", "STMExpression", "STMOp", "STMRestart", "PrefetchExpression", "TraceExpression", "TraceOp", "GhcBCO", "GhcInstruction", "GhcBCORoot", "GhcBCOExpression", "CoreCpuAffinity", "NativeEpoll", "NativeEventWait", "AstStackScope", "AstStackSpill", "AstStackContinuation", "AstChildSuspension", "AstStacks"} |
                          {"WeakResult", "WeakExpression", "WeakOp", "MainThreadWeakKey", "ManagedCompact", "CompactCopyNode", "CompactOp", "CompactExpression",
                           "ShutdownRuntime", "RtsShutdownOp", "GuestShutdown", "CoreThreadObservation"} |
                          set(self.integer_vector_nodes + self.floating_vector_nodes),
@@ -1312,11 +1216,11 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         group = self.policy["owners"]["src/test/java/thc/runtime/ArrayCoreEvidence.java"]
         consumers = set()
         for path in (self.root / "src/test").glob("*/thc/runtime/*"):
-            if path.suffix not in (".kt", ".java"):
+            if path.suffix != ".java":
                 continue
             source = path.read_text()
             if path.stem != "ArrayCoreEvidence" and "ArrayCoreEvidence(" in source:
-                consumers.update(select.junit_info(source, java=path.suffix == ".java")[0])
+                consumers.update(select.junit_info(source)[0])
         self.assertEqual(45, len(consumers))
         self.assertIn("thc.runtime.SumResultTest", consumers)
         self.assertIn("thc.runtime.TupleInputNativeTest", consumers)
@@ -1355,11 +1259,11 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         group = self.policy["owners"]["src/test/java/thc/runtime/ManagedStackInfoImageTest.java"]
         consumers = set()
         for path in (self.root / "src/test").glob("*/thc/runtime/*"):
-            if path.suffix not in (".kt", ".java"):
+            if path.suffix != ".java":
                 continue
             source = path.read_text()
             if "StackInfoTestLayout" in source:
-                consumers.update(select.junit_info(source, java=path.suffix == ".java")[0])
+                consumers.update(select.junit_info(source)[0])
         self.assertEqual({"thc.runtime.ManagedStackInfoImageTest", "thc.runtime.OriginalStackInfoCallTest",
                           "thc.runtime.OriginalStackDecoderCallTest", "thc.runtime.RtsFlagsTest",
                           "thc.runtime.ReturnedForeignPointerTest"}, consumers)
@@ -1370,11 +1274,11 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         group = self.policy["owners"]["src/test/java/thc/runtime/ThreadInventoryCoreEvidence.java"]
         consumers = set()
         for path in (self.root / "src/test").glob("*/thc/runtime/*"):
-            if path.suffix not in (".kt", ".java"):
+            if path.suffix != ".java":
                 continue
             source = path.read_text()
             if "ThreadInventoryCoreEvidence" in source:
-                consumers.update(select.junit_info(source, java=path.suffix == ".java")[0])
+                consumers.update(select.junit_info(source)[0])
         self.assertIn("thc.runtime.ProcessSignalsTest", consumers)
         self.assertEqual(consumers, set(group["junit"]))
         self.assertEqual([], group["python"])
@@ -1533,7 +1437,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                            "MakeStablePointer", "DereferenceStablePointer", "EqualStablePointers", "FreeStablePointer",
                            "ManagedWeaks", "WeakResult", "WeakExpression", "WeakOp", "MainThreadWeakKey",
                            "ManagedCompacts", "ManagedCompact", "CompactCopyNode", "CompactOp", "CompactExpression", "CompactImages",
-                           "AstStackScope", "AstStackSpill", "AstStackContinuation", "AstChildSuspension", "AstStackKt", "ManagedSmallArray", "SmallArrayStorage", "SmallArrayOp", "ManagedMutVar", "ModifiedMutVar", "MutVarModifySite", "MutVarOp", "ManagedNativeAllocations", "NativeEventWait", "NativeEpoll", "AtomicIntArrayOp", "AtomicIntArrayExpression", "AddressArrayCopyOp", "AddressToByteArrayExpression", "ByteArrayToAddressExpression", "AtomicAddressOp", "AtomicAddressExpression", "NativeNarrowAtomic", "FloatingAddresses", "FloatingAddressOp", "FloatingAddressExpression", "CoreCurrentCCS", "ManagedAddressOrder", "CompareManagedAddress", "CompareOrderedManagedAddress", "GetCurrentCCS", "AddressToInt", "IntToAddress", "SubtractManagedAddress", "RemainderManagedAddress", "GhcBCO", "GhcInstruction", "GhcBCORoot", "GhcBCOExpression", "ManagedSTM", "ManagedTVar", "STMRetry", "STMConflict", "STMCall", "STMExpression", "STMOp", "STMRestart", "CoreSharedCAFStores", "SharedCAFStore", "SharedCAFStoreExpression")},
+                           "AstStackScope", "AstStackSpill", "AstStackContinuation", "AstChildSuspension", "AstStacks", "ManagedSmallArray", "SmallArrayStorage", "SmallArrayOp", "ManagedMutVar", "ModifiedMutVar", "MutVarModifySite", "MutVarOp", "ManagedNativeAllocations", "NativeEventWait", "NativeEpoll", "AtomicIntArrayOp", "AtomicIntArrayExpression", "AddressArrayCopyOp", "AddressToByteArrayExpression", "ByteArrayToAddressExpression", "AtomicAddressOp", "AtomicAddressExpression", "NativeNarrowAtomic", "FloatingAddresses", "FloatingAddressOp", "FloatingAddressExpression", "CoreCurrentCCS", "ManagedAddressOrder", "CompareManagedAddress", "CompareOrderedManagedAddress", "GetCurrentCCS", "AddressToInt", "IntToAddress", "SubtractManagedAddress", "RemainderManagedAddress", "GhcBCO", "GhcInstruction", "GhcBCORoot", "GhcBCOExpression", "ManagedSTM", "ManagedTVar", "STMRetry", "STMConflict", "STMCall", "STMExpression", "STMOp", "STMRestart", "CoreSharedCAFStores", "SharedCAFStore", "SharedCAFStoreExpression")},
                          {path for path in self.families if path.startswith("src/main/java/")})
 
     def test_file_and_stdio_owners_keep_native_and_lifecycle_controls(self):
@@ -1555,7 +1459,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                              set(owners["src/main/java/thc/runtime/CoreManagedFiles.java"]["junit"]))
         self.assertLessEqual({"thc.runtime.StdioHostAbiTest", *native},
                              set(owners["src/main/c/stdio-abi-probe.c"]["junit"]))
-        for path in ("src/main/kotlin/thc/runtime/Program.kt", "src/main/kotlin/thc/runtime/BytecodeProgram.kt",
+        for path in ("src/main/java/thc/runtime/Program.java", "src/main/java/thc/runtime/BytecodeProgram.java",
                      "src/main/java/thc/runtime/CoreRepresentations.java", "src/main/java/thc/runtime/BytecodeRoot.java"):
             self.assertNotIn(path, owners)
 

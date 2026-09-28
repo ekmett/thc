@@ -39,7 +39,7 @@ final class GcForeignExpression extends Expr {
                 throw propagate(failure);
             }
         }
-        TupleResultsKt.requireVoidCarrier(operands[operands.length - 1].execute(frame));
+        TupleResults.requireVoidCarrier(operands[operands.length - 1].execute(frame));
         long value = op.invoke();
         if (op.getResult() != null) FrameAccess.INSTANCE.writeLong(frame, slots[offset], value);
         if ("safe".equals(op.getSafety()) && AstControl.INSTANCE.enabled(this)) {
