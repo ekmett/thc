@@ -12,14 +12,20 @@ final class MakeClosure extends Expr {
     private final CaptureLayout captureLayout;
     @CompilationFinal(dimensions = 1) private final int[] captures;
     private final Closure constantClosure;
+    private final int programSlot;
     MakeClosure(RootCallTarget target, int arity, CaptureLayout captureLayout, int[] captures) {
+        this(target, arity, captureLayout, captures, -1);
+    }
+    MakeClosure(RootCallTarget target, int arity, CaptureLayout captureLayout, int[] captures, int programSlot) {
         this.target = target; this.arity = arity; this.captureLayout = captureLayout; this.captures = captures;
+        this.programSlot = programSlot;
         setRepresentation(new CoreRepresentation(CoreKind.CLOSURE, true, false, null, null, null, null, null, null));
         // Closed immutable code needs no per-entry allocation.
         constantClosure = captureLayout == null ? new Closure(null, arity, target) : null;
     }
     @Override public Closure execute(VirtualFrame frame) {
-        return constantClosure != null ? constantClosure : new Closure(captureLayout.capture(frame, captures), arity, target);
+        return constantClosure != null ? constantClosure : new Closure(captureLayout.capture(frame, captures,
+            programSlot < 0 ? null : Program.instance(frame, programSlot)), arity, target);
     }
     @Override public Closure executeClosure(VirtualFrame frame) { return execute(frame); }
 }

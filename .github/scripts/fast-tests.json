@@ -2778,7 +2778,7 @@
     },
     "src/test/java/thc/CoreExecutionTestSupport.java": {
       "junit": [
-        "thc.AggregateFrontierTest", "thc.AggregateLayoutTest", "thc.LazyBindingTest",
+        "thc.AggregateFrontierTest", "thc.AggregateLayoutTest", "thc.LazyBindingTest", "thc.ReusableProgramTest",
         "thc.RealCoreJoinTest", "thc.RuntimeTest", "thc.StrictFieldsTest",
         "thc.SumLayoutMetadataTest", "thc.TailCycleTest", "thc.ThreadedThunkTest",
         "thc.ThunkRetentionTest", "thc.TypedApplicationTest"

@@ -35,6 +35,8 @@ public final class FunctionRoot extends GuestRoot {
     @CompilationFinal(dimensions = 1) private final CoreRepresentation[] argumentProofs;
     @CompilationFinal(dimensions = 2) private final int[][] environmentVectorSlots;
     private final Metrics metrics;
+    @CompilationFinal private int programSlot = -1;
+    @CompilationFinal private Object programCodeIdentity;
     private final CoreSourceLocation coreSourceLocation;
     private final HandoffEntry handoff;
     private final boolean enableAsync;
@@ -145,6 +147,14 @@ public final class FunctionRoot extends GuestRoot {
             layout.isDouble(field) ? FrameSlotKind.Double : FrameSlotKind.Object);
     }
     public HandoffEntry getHandoff() { return handoff; }
+    void configureProgramSlot(int slot, Object codeIdentity) {
+        if (slot < 0 || programSlot >= 0 || metrics != null) throw new IllegalStateException("Invalid reusable root configuration");
+        programSlot = slot;
+        programCodeIdentity = java.util.Objects.requireNonNull(codeIdentity);
+    }
+    Metrics invocationMetrics(VirtualFrame frame) {
+        return metrics != null ? metrics : Program.instance(frame, programSlot).instanceMetrics();
+    }
     public boolean getEnableAsync() { return enableAsync; }
     @Override public boolean getAsynchronousExceptions() { return enableAsync; }
     public boolean getEnableDelimited() { return enableDelimited; }
@@ -208,6 +218,12 @@ public final class FunctionRoot extends GuestRoot {
     @ExplodeLoop private void restoreCaptured(VirtualFrame frame, CapturedFrame environment) {
         CaptureLayout layout = captureLayout;
         if (layout == null) throw fault("Missing capture layout");
+        if (programSlot >= 0) {
+            if (environment.getLayout() != layout || !(environment.getProgram() instanceof Program program) ||
+                    !program.usesCode(programCodeIdentity))
+                throw fault("Invalid explicit program environment");
+            frame.setObject(programSlot, program);
+        }
         for (int i = 0; i < environmentSlots.length; i++) {
             int[] lanes = i < environmentVectorSlots.length ? environmentVectorSlots[i] : null;
             if (lanes == null) layout.restore(environment, i, frame, environmentSlots[i]);
@@ -349,7 +365,7 @@ public final class FunctionRoot extends GuestRoot {
         } finally { if (driver) stack.setDriving(false); }
     }
     private Object executeInitial(VirtualFrame frame, boolean spill) {
-        if (metrics.getEnabled() && CompilerDirectives.inCompiledCode()) metrics.incrementCompiledEntries();
+        if (metrics != null && metrics.getEnabled() && CompilerDirectives.inCompiledCode()) metrics.incrementCompiledEntries();
         HandoffEntry entry = handoff;
         TypedInputLayout typed = getTypedInput();
         if (typed != null) restoreTypedInput(frame, typed.take(frame.getArguments()), true);
@@ -364,6 +380,10 @@ public final class FunctionRoot extends GuestRoot {
             if (!(frame.getArguments()[0] instanceof Long inherited)) throw fault("Invalid bloom argument");
             frame.setLong(FrameLayout.BLOOM_FILTER, entryBloom(inherited));
             buildFrame(frame.getArguments(), frame);
+        }
+        if (metrics == null) {
+            Metrics invocation = invocationMetrics(frame);
+            if (invocation.getEnabled() && CompilerDirectives.inCompiledCode()) invocation.incrementCompiledEntries();
         }
         if (spill) return captureStack(frame.materialize());
         if (!capturesContinuations) return executeCapturableBody(frame);
