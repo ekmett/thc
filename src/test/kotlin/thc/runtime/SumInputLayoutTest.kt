@@ -12,11 +12,9 @@ import thc.Language
 
 class SumInputLayoutTest {
     private val integer = CoreRepresentation(CoreKind.LONG, true, true, listOf("IntRep"))
-    private val word = integer.copy(primReps = listOf("WordRep"))
+    private val word = integer.withPrimReps(listOf("WordRep"))
     private val reference = CoreRepresentation(CoreKind.OBJECT, false, true, listOf("BoxedRep (Just Lifted)"))
-    private val sum = CoreRepresentation(CoreKind.UNKNOWN, true, true,
-        listOf("WordRep", "BoxedRep (Just Lifted)", "WordRep"),
-        alternatives = listOf(reference, integer), tagSlot = 0, alternativeSlots = listOf(listOf(1), listOf(2)))
+    private val sum = CoreRepresentation(CoreKind.UNKNOWN, true, true, listOf("WordRep", "BoxedRep (Just Lifted)", "WordRep"), null, null, listOf(reference, integer), 0, listOf(listOf(1), listOf(2)))
     private fun withLanguage(action: (Language) -> Unit) = Context.newBuilder("thc").build().use { context ->
         context.initialize("thc"); context.enter()
         try { action(TruffleLanguage.LanguageReference.create(Language::class.java).get(null)) }
@@ -122,7 +120,7 @@ class SumInputLayoutTest {
         assertEquals(listOf(0, 1, 4, 5), (0..3).map(formal::offset))
         assertEquals(listOf(CoreKind.LONG, CoreKind.LONG, CoreKind.OBJECT, CoreKind.LONG, CoreKind.LONG),
             formal.physicalProofs.map { it.kind })
-        val changed = ArgumentLayout.fromProofs(listOf(integer, sum.copy(alternatives = listOf(reference, word)), integer))!!
+        val changed = ArgumentLayout.fromProofs(listOf(integer, sum.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, originalProof.primReps, originalProof.components, originalProof.vector, listOf(reference, word), originalProof.tagSlot, originalProof.alternativeSlots) }, integer))!!
         val input = TypedInputLayout.create(language, formal, false)!!
         val other = TypedInputLayout.create(language, changed, false)!!
         assertSame(input.packet, other.packet)
@@ -130,12 +128,12 @@ class SumInputLayoutTest {
         assertThrows(RuntimeFault::class.java) { ArgumentLayout.validate(formal, 1, null, 0, 1) }
         CoreRepresentations.requireInput(sum)
         CoreRepresentations.requireJoinArgument(sum, sum)
-        assertThrows(RuntimeFault::class.java) { CoreRepresentations.requireJoinArgument(sum, sum.copy(alternatives = listOf(reference, word))) }
+        assertThrows(RuntimeFault::class.java) { CoreRepresentations.requireJoinArgument(sum, sum.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, originalProof.primReps, originalProof.components, originalProof.vector, listOf(reference, word), originalProof.tagSlot, originalProof.alternativeSlots) }) }
         assertThrows(RuntimeFault::class.java) { CoreRepresentations.requireJoinArgument(sum, integer) }
         assertThrows(RuntimeFault::class.java) { CoreRepresentations.requireJoinArgument(integer, sum) }
         ArgumentLayout.validate(formal, 1, formal.suffix(1), 0, 2)
         assertEquals(4, input.prefix(2).reps.size)
-        assertThrows(RuntimeFault::class.java) { CoreRepresentations.requireInput(sum.copy(tagSlot = 1)) }
+        assertThrows(RuntimeFault::class.java) { CoreRepresentations.requireInput(sum.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, originalProof.primReps, originalProof.components, originalProof.vector, originalProof.alternatives, 1, originalProof.alternativeSlots) }) }
     }
 
     @Test fun durablePrefixesAndOwnedCapturesDoNotBorrowInputsOrRetainNullRoots() = withLanguage { language ->

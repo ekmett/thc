@@ -149,7 +149,7 @@ internal object CoreProfileAction {
 }
 
 internal class InspectionState(@field:Child private var state: Expr) : Expr() {
-    init { representation = state.representation.copy(evaluated = true) }
+    init { representation = state.representation.withEvaluated(true) }
     override fun execute(frame: VirtualFrame): Any {
         TupleResultsKt.requireVoidCarrier(state.execute(frame))
         return Unit
@@ -158,7 +158,7 @@ internal class InspectionState(@field:Child private var state: Expr) : Expr() {
 
 internal class ClosureInspectExpression(private val operation: ClosureInspectOp,
     @field:Children private val operands: Array<Expr>, proof: CoreRepresentation) : Expr() {
-    init { representation = proof.copy(evaluated = true) }
+    init { representation = proof.withEvaluated(true) }
     override fun execute(frame: VirtualFrame): Any = executeLong(frame)
     override fun executeLong(frame: VirtualFrame): Long {
         if (operation != ClosureInspectOp.SIZE) {

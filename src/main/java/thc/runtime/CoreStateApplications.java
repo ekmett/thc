@@ -22,11 +22,11 @@ public final class CoreStateApplications {
         var state = (List<?>) arguments.getFirst();
         if (!Boolean.FALSE.equals(parameter.get("lifted")) || Boolean.TRUE.equals(parameter.get("coercion")) ||
                 state.isEmpty() || !"void".equals(state.getFirst())) return null;
-        var formal = CoreRepresentations.INSTANCE.binder(parameter);
-        var actual = CoreRepresentations.INSTANCE.expression(state);
+        var formal = CoreRepresentations.binder(parameter);
+        var actual = CoreRepresentations.expression(state);
         if (formal.getKind() != CoreKind.VOID || formal.isAggregate() || actual.getKind() != CoreKind.VOID || actual.isAggregate()) return null;
         Map<String, Object> metadata = new LinkedHashMap<>();
-        var original = CoreRepresentations.INSTANCE.metadata(expression);
+        var original = CoreRepresentations.metadata(expression);
         if (original != null) metadata.putAll(original);
         metadata.put("binder", parameter);
         return Arrays.asList("case", state, parameter.get("id"),

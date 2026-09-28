@@ -181,7 +181,7 @@ public final class CoreModules {
                     }
                     case "app" -> {
                         var function = (List<Object>) expression.get(1); CoreExceptionPayload.validate(expression);
-                        var metadata = CoreRepresentations.INSTANCE.metadata(expression); boolean foreignDescriptor = metadata != null && metadata.get("foreignCall") instanceof Map<?,?>;
+                        var metadata = CoreRepresentations.metadata(expression); boolean foreignDescriptor = metadata != null && metadata.get("foreignCall") instanceof Map<?,?>;
                         Object head = function.size() > 1 ? function.get(1) : null;
                         boolean defined = !function.isEmpty() && Objects.equals(function.getFirst(), "var") && (head != null && bound.contains(head) || byId.containsKey(head) || head instanceof String id && demand != null && (foreignDescriptor ? demand.isDefined(id) : demand.contains(id)));
                         var packageLinks = module.get("packageScalarLinks") instanceof List<?> links ? (List<PackageScalarLink>) links : List.<PackageScalarLink>of();

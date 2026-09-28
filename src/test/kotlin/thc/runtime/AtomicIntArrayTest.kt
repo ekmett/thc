@@ -110,19 +110,19 @@ class AtomicIntArrayTest {
     @Test fun nativeFamilyWithInlining() = native(true)
     @Test fun nativeFamilyAcrossResidualCalls() = native(false)
     @Test fun loweredIntegralCarriersKeepArityStateAndTupleOrderChecks() {
-        val owner = CoreRepresentation(CoreKind.OBJECT, primReps = listOf("BoxedRep (Just Unlifted)"))
-        val state = CoreRepresentation(CoreKind.VOID, primReps = emptyList())
-        val integer = CoreRepresentation(CoreKind.LONG, primReps = listOf("IntRep"))
+        val owner = CoreRepresentation(CoreKind.OBJECT, false, false, listOf("BoxedRep (Just Unlifted)"))
+        val state = CoreRepresentation(CoreKind.VOID, false, false, emptyList())
+        val integer = CoreRepresentation(CoreKind.LONG, false, false, listOf("IntRep"))
         for (operation in AtomicIntArrayOp.values()) {
-            val payload = integer.copy(primReps = listOf(when (operation.width) {
+            val payload = integer.withPrimReps(listOf(when (operation.width) {
                 1 -> "Int8Rep"; 2 -> "Int16Rep"; 4 -> "Int32Rep"; else -> "IntRep"
             }))
             val arguments = listOf(owner, integer) + List(operation.operands) { payload } + state
-            val tuple = CoreRepresentation(CoreKind.UNKNOWN, primReps = payload.primReps, components = listOf(state, payload))
+            val tuple = CoreRepresentation(CoreKind.UNKNOWN, false, false, payload.primReps, listOf(state, payload))
             val result = if (operation.tuple) tuple else state
             val flags = List(arguments.size) { false }
             for (rep in listOf("IntRep", "WordRep", "Int8Rep", "Word16Rep", "Int32Rep", "Word64Rep")) {
-                val relabelled = arguments.map { if (it.kind == CoreKind.LONG) it.copy(primReps = listOf(rep)) else it }
+                val relabelled = arguments.map { if (it.kind == CoreKind.LONG) it.withPrimReps(listOf(rep)) else it }
                 // Offsets are always machine Long; only payloads of narrow CAS use Int.
                 if (relabelled[1].isLong && (operation.width == 8 || operation.operands == 0))
                     operation.validate(relabelled, flags, result)
@@ -131,19 +131,19 @@ class AtomicIntArrayTest {
             for (rep in if (operation.width < 8) listOf("Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep", "Int32Rep", "Word32Rep")
                 else listOf("IntRep", "WordRep", "Int64Rep", "Word64Rep")) {
                 val relabelled = arguments.mapIndexed { index, proof ->
-                    if (index in 2 until arguments.lastIndex) proof.copy(primReps = listOf(rep)) else proof
+                    if (index in 2 until arguments.lastIndex) proof.withPrimReps(listOf(rep)) else proof
                 }
                 operation.validate(relabelled, flags, result)
             }
             for (index in arguments.indices) {
                 val broken = arguments.toMutableList()
-                broken[index] = CoreRepresentation(CoreKind.DOUBLE, primReps = listOf("DoubleRep"))
+                broken[index] = CoreRepresentation(CoreKind.DOUBLE, false, false, listOf("DoubleRep"))
                 assertThrows(RuntimeFault::class.java) { operation.validate(broken, flags, result) }
             }
             assertThrows(RuntimeFault::class.java) { operation.validate(arguments.dropLast(1), flags, result) }
             assertThrows(RuntimeFault::class.java) { operation.validate(arguments, List(arguments.size) { true }, result) }
-            for (bad in listOf(integer, tuple.copy(components = listOf(integer, state)),
-                tuple.copy(components = listOf(integer)), tuple.copy(components = emptyList())))
+            for (bad in listOf(integer, tuple.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, originalProof.primReps, listOf(integer, state), originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) },
+                tuple.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, originalProof.primReps, listOf(integer), originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) }, tuple.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, originalProof.primReps, emptyList(), originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) }))
                 assertThrows(RuntimeFault::class.java) { operation.validate(arguments, flags, bad) }
         }
     }

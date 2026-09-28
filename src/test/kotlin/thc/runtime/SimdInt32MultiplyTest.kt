@@ -64,8 +64,8 @@ class SimdInt32MultiplyTest {
             CoreVectors.validate("timesWord32X4#", listOf(CoreVectors.proofWord32, proof), CoreVectors.proofWord32)
         }
         for (lane in 0 until 4) for (wrong in listOf("Word32Rep", "IntRep", "Int16Rep")) {
-            val bad = CoreVectors.unpacked32.copy(components = CoreVectors.unpacked32.components!!.mapIndexed { i, p ->
-                if (i == lane) p.copy(primReps = listOf(wrong)) else p })
+            val bad = CoreVectors.unpacked32.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, originalProof.primReps, CoreVectors.unpacked32.components!!.mapIndexed { i, p ->
+                if (i == lane) p.withPrimReps(listOf(wrong)) else p }, originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) }
             assertThrows(RuntimeFault::class.java) { CoreVectors.validate("packInt32X4#", listOf(bad), proof) }
         }
     }

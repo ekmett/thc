@@ -74,7 +74,7 @@ internal data class GuestThreadSnapshot(val status: Long, val capability: Long, 
 
 internal class ForkThread(@field:Child private var action: Expr, @field:Child private var state: Expr,
                           proof: CoreRepresentation, @field:Child private var capability: Expr? = null) : Expr() {
-    init { representation = proof.copy(evaluated = true) }
+    init { representation = proof.withEvaluated(true) }
     override fun execute(frame: VirtualFrame): Nothing = fault("fork# requires a tuple destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val requested = capability?.executeRequiredLong(frame)
@@ -86,7 +86,7 @@ internal class ForkThread(@field:Child private var action: Expr, @field:Child pr
 }
 
 internal class MyThreadId(@field:Child private var state: Expr, proof: CoreRepresentation) : Expr() {
-    init { representation = proof.copy(evaluated = true) }
+    init { representation = proof.withEvaluated(true) }
     override fun execute(frame: VirtualFrame): Nothing = fault("myThreadId# requires a tuple destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         TupleResultsKt.requireVoidCarrier(state.execute(frame))
@@ -97,7 +97,7 @@ internal class MyThreadId(@field:Child private var state: Expr, proof: CoreRepre
 
 internal class ThreadStatus(@field:Child private var identity: Expr, @field:Child private var state: Expr,
                             proof: CoreRepresentation) : Expr() {
-    init { representation = proof.copy(evaluated = true) }
+    init { representation = proof.withEvaluated(true) }
     override fun execute(frame: VirtualFrame): Nothing = fault("threadStatus# requires a tuple destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val target = identity.execute(frame)
@@ -115,7 +115,7 @@ internal class ThreadStatus(@field:Child private var identity: Expr, @field:Chil
 internal class KillThread(@field:Child private var identity: Expr, @field:Child private var payload: Expr,
     @field:Child private var state: Expr, private val captureWait: Boolean,
     proof: CoreRepresentation) : Expr() {
-    init { representation = proof.copy(evaluated = true) }
+    init { representation = proof.withEvaluated(true) }
 
     private class ResumeWait(private val node: KillThread, private val sent: AsyncRequest) : AstResumeStep {
         override fun resume(frame: VirtualFrame, input: Any?): Any {
@@ -169,7 +169,7 @@ internal class KillThread(@field:Child private var identity: Expr, @field:Child 
 
 internal class LabelThread(@field:Child private var identity: Expr, @field:Child private var bytes: Expr,
                            @field:Child private var state: Expr, proof: CoreRepresentation) : Expr() {
-    init { representation = proof.copy(evaluated = true) }
+    init { representation = proof.withEvaluated(true) }
     override fun execute(frame: VirtualFrame): Any {
         val target = identity.execute(frame)
         val label = bytes.execute(frame)
@@ -181,7 +181,7 @@ internal class LabelThread(@field:Child private var identity: Expr, @field:Child
 
 internal class ThreadLabel(@field:Child private var identity: Expr, @field:Child private var state: Expr,
                            proof: CoreRepresentation) : Expr() {
-    init { representation = proof.copy(evaluated = true) }
+    init { representation = proof.withEvaluated(true) }
     override fun execute(frame: VirtualFrame): Nothing = fault("threadLabel# requires a tuple destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val target = identity.execute(frame)

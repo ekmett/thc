@@ -39,7 +39,16 @@
     },
     "src/main/java/thc/runtime/EnvironmentOp.java": {"junit": ["thc.runtime.UnixLibcTest", "thc.runtime.GuestEnvironmentTest"], "python": ["scripts/test-audit-core.py"]},
     "src/main/java/thc/runtime/EnvironmentExpression.java": {"junit": ["thc.runtime.UnixLibcTest", "thc.runtime.GuestEnvironmentTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/main/kotlin/thc/runtime/GhcBCO.kt": {
+    "src/main/java/thc/runtime/GhcBCO.java": {
+      "junit": ["thc.runtime.GhcBCOTest"], "python": []
+    },
+    "src/main/java/thc/runtime/GhcInstruction.java": {
+      "junit": ["thc.runtime.GhcBCOTest"], "python": []
+    },
+    "src/main/java/thc/runtime/GhcBCORoot.java": {
+      "junit": ["thc.runtime.GhcBCOTest"], "python": []
+    },
+    "src/main/java/thc/runtime/GhcBCOExpression.java": {
       "junit": ["thc.runtime.GhcBCOTest"], "python": []
     },
     "src/main/java/thc/runtime/CoreMemoryCopyForeign.java": {
@@ -96,10 +105,28 @@
     "src/main/java/thc/runtime/TraceOp.java": {
       "junit": ["thc.runtime.HintTraceTest"], "python": []
     },
-    "src/main/kotlin/thc/runtime/ManagedSTM.kt": {
+    "src/main/java/thc/runtime/ManagedSTM.java": {
       "junit": ["thc.runtime.ManagedSTMTest"], "python": []
     },
-    "src/main/kotlin/thc/runtime/STMPrimops.kt": {
+    "src/main/java/thc/runtime/ManagedTVar.java": {
+      "junit": ["thc.runtime.ManagedSTMTest"], "python": []
+    },
+    "src/main/java/thc/runtime/STMRetry.java": {
+      "junit": ["thc.runtime.ManagedSTMTest"], "python": []
+    },
+    "src/main/java/thc/runtime/STMConflict.java": {
+      "junit": ["thc.runtime.ManagedSTMTest"], "python": []
+    },
+    "src/main/java/thc/runtime/STMCall.java": {
+      "junit": ["thc.runtime.ManagedSTMTest"], "python": ["scripts/test-audit-core.py"]
+    },
+    "src/main/java/thc/runtime/STMExpression.java": {
+      "junit": ["thc.runtime.ManagedSTMTest"], "python": ["scripts/test-audit-core.py"]
+    },
+    "src/main/java/thc/runtime/STMOp.java": {
+      "junit": ["thc.runtime.ManagedSTMTest"], "python": ["scripts/test-audit-core.py"]
+    },
+    "src/main/java/thc/runtime/STMRestart.java": {
       "junit": ["thc.runtime.ManagedSTMTest"], "python": ["scripts/test-audit-core.py"]
     },
     "src/main/kotlin/thc/runtime/ThreadObservation.kt": {
@@ -245,7 +272,15 @@
       "junit": ["thc.runtime.StablePointerTest"],
       "python": []
     },
-    "src/main/kotlin/thc/runtime/CoreSharedCAFStores.kt": {
+    "src/main/java/thc/runtime/CoreSharedCAFStores.java": {
+      "junit": ["thc.runtime.StablePointerTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/SharedCAFStore.java": {
+      "junit": ["thc.runtime.StablePointerTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/SharedCAFStoreExpression.java": {
       "junit": ["thc.runtime.StablePointerTest"],
       "python": []
     },

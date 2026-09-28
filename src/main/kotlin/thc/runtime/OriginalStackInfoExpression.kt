@@ -9,7 +9,7 @@ import com.oracle.truffle.api.frame.VirtualFrame
 internal class OriginalStackInfoExpression(private val operation: OriginalStackInfoOp,
     private val layout: TargetLayout, @field:Children private var operands: Array<Expr>,
     proof: CoreRepresentation) : Expr() {
-    init { representation = proof.copy(evaluated = true) }
+    init { representation = proof.withEvaluated(true) }
 
     override fun execute(frame: VirtualFrame): Any {
         if (operation == OriginalStackInfoOp.STACK_INFO) return executeAddress(frame)

@@ -44,7 +44,7 @@ internal object CoreThreadScheduling {
 /** THC discards speculative hints; it never evaluates or queues their payloads. */
 internal class SparkResult(private val name: String, @field:Child private var state: Expr,
     @field:Child private var payload: Expr?, private val empty: DataValue?, proof: CoreRepresentation) : Expr() {
-    init { representation = proof.copy(evaluated = true) }
+    init { representation = proof.withEvaluated(true) }
     override fun execute(frame: VirtualFrame): Nothing = fault("Spark result requires a tuple destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val value = payload?.execute(frame) // Retain a thunk, never enter it.
@@ -61,7 +61,7 @@ internal class SparkResult(private val name: String, @field:Child private var st
 internal class SetThreadAllocationCounter(@field:Child private var value: Expr,
     @field:Child private var target: Expr?, @field:Child private var state: Expr,
     proof: CoreRepresentation) : Expr() {
-    init { representation = proof.copy(evaluated = true) }
+    init { representation = proof.withEvaluated(true) }
     override fun execute(frame: VirtualFrame): Any {
         val counter = value.executeRequiredLong(frame)
         val threads = GuestThreads.current(this)

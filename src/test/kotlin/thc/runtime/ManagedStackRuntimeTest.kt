@@ -296,7 +296,7 @@ class ManagedStackRuntimeTest {
             override fun execute(frame: VirtualFrame): Any { evaluations++; return snapshot }
         }
         val info = OriginalStackInfoExpression(OriginalStackInfoOp.STACK_INFO, layout, arrayOf(operand()),
-            CoreRepresentation(CoreKind.ADDRESS, evaluated = true))
+            CoreRepresentation(CoreKind.ADDRESS, true))
         val expectedAddress = ManagedStackRuntime.stackInfo(snapshot, layout)
         val addressMiss = assertThrows(com.oracle.truffle.api.nodes.UnexpectedResultException::class.java) {
             info.executeLong(frame)
@@ -304,7 +304,7 @@ class ManagedStackRuntimeTest {
         assertSame(expectedAddress, addressMiss.result)
         assertEquals(1, evaluations)
         val fields = OriginalStackInfoExpression(OriginalStackInfoOp.STACK_FIELDS, layout, arrayOf(operand()),
-            CoreRepresentation(CoreKind.LONG, evaluated = true))
+            CoreRepresentation(CoreKind.LONG, true))
         val longMiss = assertThrows(com.oracle.truffle.api.nodes.UnexpectedResultException::class.java) {
             fields.executeAddress(frame)
         }
@@ -317,13 +317,13 @@ class ManagedStackRuntimeTest {
         val slot = layout.bind("nullable-snapshot")
         val frame = com.oracle.truffle.api.Truffle.getRuntime().createVirtualFrame(emptyArray(), layout.build())
         FrameAccess.writeObject(frame, slot, null)
-        val unlifted = CoreRepresentation(CoreKind.OBJECT, evaluated = true, primReps = listOf("BoxedRep (Just Unlifted)"))
+        val unlifted = CoreRepresentation(CoreKind.OBJECT, true, false, listOf("BoxedRep (Just Unlifted)"))
         assertNull(LocalRead(slot, false).proven(unlifted).execute(frame))
         assertThrows(RuntimeFault::class.java) { LocalRead(slot, false).execute(frame) }
-        assertThrows(RuntimeFault::class.java) { LocalRead(slot, false).proven(unlifted.copy(evaluated = false)).execute(frame) }
+        assertThrows(RuntimeFault::class.java) { LocalRead(slot, false).proven(unlifted.withEvaluated(false)).execute(frame) }
         assertThrows(RuntimeFault::class.java) { LocalRead(slot).proven(unlifted).execute(frame) }
         assertThrows(RuntimeFault::class.java) {
-            LocalRead(slot, false).proven(unlifted.copy(primReps = listOf("BoxedRep (Just Lifted)"))).execute(frame)
+            LocalRead(slot, false).proven(unlifted.withPrimReps(listOf("BoxedRep (Just Lifted)"))).execute(frame)
         }
         val recursive = RecCell()
         FrameAccess.writeObject(frame, slot, recursive)

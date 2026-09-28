@@ -43,7 +43,7 @@ class CoreCompactDebugInteropTest {
         reference.open(false).use { originals -> CoreCompactFile(artifact.path, artifact.sha256).use { file ->
             val source = CoreSources(originals.metadata(reference.modules.single { it.name == "SourceNotes" }))
             val records = CoreCompactRecords(file, artifact.sha256)
-            val decodedSource = CoreSources(emptyMap())
+            val decodedSource = CoreSources(emptyMap<String, Any?>())
             fun compareBinding(old: Map<String, Any?>, value: Map<String, Any?>, inherited: CoreSourceLocation?) =
                 source.binding(old, inherited).also { location(it, decodedSource.binding(value)) }
             lateinit var expression: (List<Any?>, List<Any?>, CoreSourceLocation?) -> Unit

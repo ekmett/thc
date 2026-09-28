@@ -15,7 +15,7 @@ public final class Vector32Operation extends Expr {
     public Vector32Operation(String name, Expr[] arguments) {
         this.operation = name;
         this.arguments = arguments;
-        setRepresentation(CoreVectors.INSTANCE.getProof32());
+        setRepresentation(CoreVectors.proof32);
     }
 
     @Override public IntVector execute(VirtualFrame frame) {

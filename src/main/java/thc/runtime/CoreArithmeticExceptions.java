@@ -17,7 +17,7 @@ public final class CoreArithmeticExceptions {
     public static void validate(String name, List<CoreRepresentation> arguments, List<?> flags, CoreRepresentation result) {
         if (payload(name) == null || arguments.size() != 1 || !arguments.getFirst().isEmptyTuple() || !flags.equals(List.of(false)))
             throw new RuntimeFault(name + ": expected one exact unlifted empty tuple argument");
-        CoreRepresentations.INSTANCE.requireNoVector(result, name + " result");
-        CoreRepresentations.INSTANCE.requireNoSum(result, name + " result");
+        CoreRepresentations.requireNoVector(result, name + " result");
+        CoreRepresentations.requireNoSum(result, name + " result");
     }
 }

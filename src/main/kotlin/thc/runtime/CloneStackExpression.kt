@@ -7,7 +7,7 @@ import com.oracle.truffle.api.frame.VirtualFrame
 
 /** Erase the logical State field, retaining a detached diagnostic snapshot. */
 internal class CloneStackExpression(@field:Child private var state: Expr, proof: CoreRepresentation) : Expr() {
-    init { representation = proof.copy(evaluated = true) }
+    init { representation = proof.withEvaluated(true) }
     override fun execute(frame: VirtualFrame): Nothing = fault("Stack clone requires a State/snapshot tuple destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         TupleResultsKt.requireVoidCarrier(state.execute(frame))

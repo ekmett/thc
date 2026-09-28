@@ -43,7 +43,7 @@ public final class CoreMainThreadForeign {
     }
 
     public static void validateHead(List<?> function, boolean defined) {
-        var metadata = CoreRepresentations.INSTANCE.metadata(function);
+        var metadata = CoreRepresentations.metadata(function);
         var proof = metadata == null ? null : metadata.get("rep");
         requireProof(function.size() == 3 && "var".equals(function.get(0)) &&
             function.get(1) instanceof String name && !name.isEmpty() && !defined &&

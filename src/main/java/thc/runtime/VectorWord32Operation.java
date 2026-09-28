@@ -21,7 +21,7 @@ public final class VectorWord32Operation extends Expr {
             default -> throw new RuntimeFault("Invalid Word32X4 operation");
         };
         this.arguments = arguments;
-        setRepresentation(CoreVectors.INSTANCE.getProofWord32());
+        setRepresentation(CoreVectors.proofWord32);
     }
 
     @Override public IntVector execute(VirtualFrame frame) {

@@ -83,7 +83,7 @@ class CoreMainThreadForeignTest {
                     var target = program.entryTarget("register"); var key = threads.currentIdentity(); var wrongValue = new Object();
                     var first = runtime.getWeaks().make(key, wrongValue, null);
                     var second = runtime.getWeaks().make(key, new Object(), null);
-                    var resultShape = new TupleShape(CoreRepresentations.INSTANCE.parse(tuple(false)), language);
+                    var resultShape = new TupleShape(CoreRepresentations.parse(tuple(false)), language);
                     var destination = Truffle.getRuntime().createVirtualFrame(new Object[0], FrameDescriptor.newBuilder().build());
                     class Caller {
                         void call(Object handle) { call(handle, Unit.INSTANCE); }

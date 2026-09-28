@@ -29,7 +29,7 @@ class RtsFlagsTest {
     private final Map<String, Object> integer = Map.of("kind", "long", "primReps", List.of("IntRep"), "evaluated", true);
     private final Map<String, Object> byteRep = Map.of("kind", "long", "primReps", List.of("Word8Rep"), "evaluated", true);
     private final Map<String, Object> closure = Map.of("kind", "closure", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", true);
-    private CoreRepresentation proof() { return CoreRepresentations.INSTANCE.parse(address); }
+    private CoreRepresentation proof() { return CoreRepresentations.parse(address); }
 
     private static TargetLayout layout() { return layout("inplace"); }
     @SuppressWarnings("unchecked")
@@ -121,7 +121,7 @@ class RtsFlagsTest {
                     CoreDataLabels.fromCore("RtsFlags", proof.copy(proof.getKind(), false, proof.getPresent(), proof.getPrimReps(),
                         proof.getComponents(), proof.getVector(), proof.getAlternatives(), proof.getTagSlot(), proof.getAlternativeSlots()), valid);
                 });
-                assertThrows(RuntimeFault.class, () -> CoreDataLabels.fromCore("RtsFlags", CoreRepresentations.INSTANCE.parse(integer), valid));
+                assertThrows(RuntimeFault.class, () -> CoreDataLabels.fromCore("RtsFlags", CoreRepresentations.parse(integer), valid));
                 assertThrows(RuntimeFault.class, () -> CoreDataLabels.fromCore("RtsFlags_extra", proof(), valid));
             } finally { context.leave(); }
         }

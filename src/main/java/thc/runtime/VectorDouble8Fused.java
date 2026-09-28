@@ -13,7 +13,7 @@ public final class VectorDouble8Fused extends Expr {
     @Children private Expr[] arguments;
 
     public VectorDouble8Fused(String name, Expr[] arguments) {
-        this.operation = CoreVectors.INSTANCE.getFusedDouble8().indexOf(name);
+        this.operation = CoreVectors.fusedDouble8.indexOf(name);
         this.arguments = arguments;
         setRepresentation(GeneratedVectors.proofDoubleX8);
     }

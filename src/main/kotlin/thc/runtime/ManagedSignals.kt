@@ -309,8 +309,7 @@ internal class SignalDispatchRoot(language: Language, program: ExecutableProgram
     private val action = program.entryValue(CoreSignalForeign.dispatcher)
     private val pointer = program.constructorLayout("ghc-internal:GHC.Internal.Ptr.Ptr")
     private val signal = program.constructorLayout("ghc-internal:GHC.Internal.Int.I32#")
-    private val result = CoreRepresentation(CoreKind.UNKNOWN, present = true,
-        primReps = listOf("BoxedRep (Just Lifted)"), components = listOf(
+    private val result = CoreRepresentation(CoreKind.UNKNOWN, false, true, listOf("BoxedRep (Just Lifted)"), listOf(
             CoreRepresentation(CoreKind.VOID, true, true, emptyList()),
             CoreRepresentation(CoreKind.DATA, false, true, listOf("BoxedRep (Just Lifted)"))))
     private val shape = TupleShape(result, language)

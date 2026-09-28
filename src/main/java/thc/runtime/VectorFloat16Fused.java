@@ -13,7 +13,7 @@ public final class VectorFloat16Fused extends Expr {
     @Children private Expr[] arguments;
 
     public VectorFloat16Fused(String name, Expr[] arguments) {
-        this.operation = CoreVectors.INSTANCE.getFusedFloat16().indexOf(name);
+        this.operation = CoreVectors.fusedFloat16.indexOf(name);
         this.arguments = arguments;
         setRepresentation(GeneratedVectors.proofFloatX16);
     }

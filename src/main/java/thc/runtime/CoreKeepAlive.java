@@ -24,11 +24,11 @@ public final class CoreKeepAlive {
             !flags.equals(List.of(LIFTED.equals(arguments.get(0).getPrimReps()), false, true)))
             throw new RuntimeFault("keepAlive#: exact reference, State and continuation operands required");
         if (!result.getPresent()) throw new RuntimeFault("keepAlive#: exact continuation result required");
-        CoreRepresentations.INSTANCE.requireNoVector(result, "keepAlive result");
+        CoreRepresentations.requireNoVector(result, "keepAlive result");
         if (result.isSum()) SumShape.INSTANCE.validate(result);
         else if (result.isTuple()) TupleShape.Companion.validate(result);
         else {
-            CoreRepresentations.INSTANCE.requireScalar(result, "keepAlive result");
+            CoreRepresentations.requireScalar(result, "keepAlive result");
             if (result.getPrimReps() == null || result.getKind() == CoreKind.UNKNOWN)
                 throw new RuntimeFault("keepAlive#: exact scalar result required");
         }
