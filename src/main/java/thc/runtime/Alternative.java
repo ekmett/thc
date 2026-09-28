@@ -23,8 +23,9 @@ final class Alternative extends Node {
     }
     Alternative(int kind, Object value, int[] fields, Expr body, int[][] vectorFields, boolean profileChoice) {
         this.kind = kind; this.value = value; this.fields = fields; this.body = body; this.vectorFields = vectorFields;
-        // A singleton still checks its match, but has no competing arm to profile.
-        matchProfile = profileChoice ? CountingConditionProfile.create() : CountingConditionProfile.getUncached();
+        // A singleton still checks its match. Do not store the uncached sentinel:
+        // NodeUtil clones it, losing the identity guard around its disabled counters.
+        matchProfile = profileChoice ? CountingConditionProfile.create() : null;
     }
     public int getKind() { return kind; }
     public Object getValue() { return value; }
@@ -32,14 +33,21 @@ final class Alternative extends Node {
     public Expr getBody() { return body; }
     public void setBody(Expr body) { this.body = body; }
     public int[][] getVectorFields() { return vectorFields; }
-    boolean matchesData(DataValue value) { return matchProfile.profile(((DataLayout) this.value).matches(value)); }
-    boolean matchesLong(long value) { return matchProfile.profile(value == (long) (Long) this.value); }
+    boolean matchesData(DataValue value) {
+        boolean matches = ((DataLayout) this.value).matches(value);
+        return matchProfile == null ? matches : matchProfile.profile(matches);
+    }
+    boolean matchesLong(long value) {
+        boolean matches = value == (long) (Long) this.value;
+        return matchProfile == null ? matches : matchProfile.profile(matches);
+    }
     boolean matches(VirtualFrame frame, int slot) {
-        return matchProfile.profile(switch (kind) {
+        boolean matches = switch (kind) {
             case DATA_ALTERNATIVE -> frame.isObject(slot) && ((DataLayout) value).matches(frame.getObject(slot));
             case LITERAL_ALTERNATIVE -> matchesLiteral(frame, slot);
             default -> false;
-        });
+        };
+        return matchProfile == null ? matches : matchProfile.profile(matches);
     }
     private boolean matchesLiteral(VirtualFrame frame, int slot) {
         if (value instanceof Integer literal) {
