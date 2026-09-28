@@ -6,3 +6,6 @@ thc.runtime.Program
 thc.Language
 # Immutable descriptor sets and ASCII name Pattern; native access remains lazy.
 thc.runtime.CoreOriginalStdio
+# Immutable narrow-operation descriptors: primitive flags, enums, strings and
+# representation lists in Map.copyOf; no guest/context/native-resource state.
+thc.runtime.NarrowScalarOp
