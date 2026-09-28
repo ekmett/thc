@@ -3,6 +3,8 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
+import thc.Main.withContextProfile
+
 import com.oracle.truffle.api.TruffleLanguage
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
@@ -78,7 +80,7 @@ class PackageNativeArchiveFullCoreTest {
             "native-archive-poisoned-0.1.0.0-inplace:Poisoned.poisoned",
             "native-archive-provider-0.1.0.0-inplace:Provider.nativeMath")
         for (backend in listOf("ast", "bytecode")) Context.newBuilder("thc").allowNativeAccess(true)
-            .withContextProfile(ContextProfile.SYNCHRONOUS_TEST).build().use { context ->
+            .let { withContextProfile(it, ContextProfile.SYNCHRONOUS_TEST) }.build().use { context ->
                 context.initialize("thc"); context.enter()
                 try {
                     val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
@@ -86,8 +88,8 @@ class PackageNativeArchiveFullCoreTest {
                     links.forEach(state.packageCbits::link)
                     val source = CoreModules.reachable(merged,
                         listOf(mixed + "allowed", mixed + "count", narrow + "allowed", mixedHeader, staticPointer, wideHeader, word16Header, lifecycle, partial), true) + ("instrument" to true)
-                    val program: ExecutableProgram = if (backend == "ast") Program(language, source, enableAsync = true)
-                        else BytecodeProgram(language, source, enableAsync = true)
+                    val program: ExecutableProgram = if (backend == "ast") Program(language, source, true)
+                        else BytecodeProgram(language, source, true)
                     state.threads.enterCurrent()
                     try {
                         val allowed = program.entryTarget(mixed + "allowed")

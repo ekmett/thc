@@ -15,7 +15,7 @@ internal class ArrayCoreEvidence(module: Map<String, Any?>, private val name: St
         require(it.size == supplied.size) { "$name: duplicate binding" }
     }
     // Reuse the production lexical linker, including missing-global/constructor checks.
-    val bindings = CoreModules.reachable(module, name, strictLink = true)["bindings"] as List<Map<String, Any?>>
+    val bindings = CoreModules.reachable(module, name, true)["bindings"] as List<Map<String, Any?>>
     val root = allBindings[name] ?: bindings.single { it["name"] == name }
     val primitiveCounts: Map<String, Int> = bindings.flatMap { nodes(it["expr"]) }
         .filter { it.firstOrNull() == "prim" }.map { it[1] as String }.groupingBy { it }.eachCount()

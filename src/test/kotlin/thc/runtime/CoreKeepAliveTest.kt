@@ -9,7 +9,7 @@ import com.oracle.truffle.api.nodes.RootNode
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.Language
-import thc.executionContext
+import thc.Main.executionContext
 
 private typealias KeepCore = List<Any?>
 private typealias KeepProof = Map<String, Any?>
@@ -72,23 +72,22 @@ class CoreKeepAliveTest {
 
     @Test fun exactScalarTupleAndExistingSumResultsKeepTheirLogicalIdentity() {
         val inputs = listOf(owner, state, closure).map(CoreRepresentations::parse)
-        for (result in listOf(int, word8, data, tuple(state, data), tuple(state, word8), sum())) {
+        for (result in listOf(int, word8, data, tuple(state, data), tuple(state, word8), sum(), tuple(sum(), int))) {
             val actual = CoreRepresentations.parse(result)
             assertDoesNotThrow { CoreKeepAlive.validate(inputs, listOf(true, false, true), actual,
-                listOf(CoreRepresentations.parse(state)) to actual) }
+                listOf(CoreRepresentations.parse(state)), actual) }
         }
         for ((declared, actual) in listOf(int to state, word to word8, tuple(state, word) to tuple(state, word8),
                 int to sum(), tuple(int, int) to sum())) {
             assertThrows(RuntimeFault::class.java) {
                 CoreKeepAlive.validate(inputs, listOf(true, false, true), CoreRepresentations.parse(declared),
-                    listOf(CoreRepresentations.parse(state)) to CoreRepresentations.parse(actual))
+                    listOf(CoreRepresentations.parse(state)), CoreRepresentations.parse(actual))
             }
         }
         assertThrows(RuntimeFault::class.java) {
             CoreKeepAlive.validate(inputs, listOf(true, false, true),
-                CoreRepresentations.parse(mapOf("kind" to "unknown", "primReps" to null, "evaluated" to false)), null)
+                CoreRepresentations.parse(mapOf("kind" to "unknown", "primReps" to null, "evaluated" to false)), null, null)
         }
-        assertThrows(UnsupportedCore::class.java) { CoreRepresentations.parse(tuple(sum(), int)) }
     }
 
     @Test fun bothLoadersRejectWrongKnownContinuationInputsResultsAndPartialApplicationResults() = eachBackend { language, backend ->

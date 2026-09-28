@@ -72,13 +72,13 @@ class OriginalProcessIdentityTest {
         val manifest = json("$prefix/manifest.json") as Map<String, Any?>
         assertEquals(1L, manifest["schema"]); assertEquals("9.14.1", manifest["ghc"])
         assertEquals(true, manifest["strictAccepted"]); assertEquals(entries.keys.toList(), manifest["entries"])
-        assertTrue(isOriginalUnixUnit(manifest["unixUnit"]))
+        assertTrue(CoreOriginalStdio.isOriginalUnixUnit(manifest["unixUnit"]))
         for (stage in listOf("pre", "post"))
             assertEquals(manifest["unixUnit"], (((original(source(stage), "geteuid")[6] as Map<*, *>)["foreignCall"] as Map<*, *>)["target"] as Map<*, *>)["unit"])
         OriginalStdioChecks.hashes(root, manifest["inputHashes"], setOf(
             "compiler/test-fixtures/OriginalProcessIdentityAudit.hs", "compiler/test-fixtures/OriginalProcessIdentityNative.hs",
             "test/haskell-fixtures/OriginalStdioFixtures.hs", "scripts/core_original_foreign.py",
-            "src/main/kotlin/thc/runtime/ProcessIdentity.kt"))
+            "src/main/java/thc/runtime/ProcessIdentity.java"))
         OriginalStdioChecks.hashes(root, manifest["artifactHashes"], setOf("$prefix/oracle.json") +
             listOf("pre", "post").flatMap { stage -> listOf("$prefix/$stage/core/OriginalProcessIdentityAudit.json",
                 "$prefix/$stage/core/THC.InterfaceClosure.json") + entries.keys.map { "$prefix/$stage/$it.audit.json" } }, "$prefix/")

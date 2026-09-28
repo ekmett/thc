@@ -4,6 +4,8 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
+import thc.Main.executionContext
+
 import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
@@ -27,7 +29,7 @@ class LargeLiteralCaseNativeTest {
             assertEquals(expected, actual, "Stale original literal-case fixture: $path")
         }
         val module = Json.parse(File(directory, "core/LargeLiteralCaseAudit.json").readText()) as Map<String, Any?>
-        return CoreModules.reachable(module, listOf("largeInt", "largeWordCheck", "largeLazy", "boxInt"), strictLink = true) +
+        return CoreModules.reachable(module, listOf("largeInt", "largeWordCheck", "largeLazy", "boxInt"), true) +
             ("instrument" to true)
     }
 

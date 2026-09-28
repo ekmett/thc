@@ -217,7 +217,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertTrue(fast_fixtures.fast_inputs.BYTESTRING_UTF8_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
         self.assertIn('build/bytestring-utf8', fast_fixtures.FULL_OUTPUT_ROOTS)
-        self.assertIn('"bytestring-utf8/**/*.json"', (project / 'build.gradle.kts').read_text())
+        self.assertIn('"bytestring-utf8/**/*.json"', (project / 'build.gradle').read_text())
 
     def test_original_memset_registration_and_closed_cache(self):
         project = Path(__file__).resolve().parents[2]
@@ -231,7 +231,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertTrue(fast_fixtures.fast_inputs.MEMSET_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
         self.assertIn('build/original-memset', fast_fixtures.FULL_OUTPUT_ROOTS)
-        self.assertIn('"original-memset/**/*.json"', (project / 'build.gradle.kts').read_text())
+        self.assertIn('"original-memset/**/*.json"', (project / 'build.gradle').read_text())
 
     def test_original_memory_search_registration_and_closed_cache(self):
         project = Path(__file__).resolve().parents[2]
@@ -245,7 +245,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertTrue(fast_fixtures.fast_inputs.MEMORY_SEARCH_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
         self.assertIn('build/original-memory-search', fast_fixtures.FULL_OUTPUT_ROOTS)
-        self.assertIn('"original-memory-search/**/*.json"', (project / 'build.gradle.kts').read_text())
+        self.assertIn('"original-memory-search/**/*.json"', (project / 'build.gradle').read_text())
 
     def test_rubbish_native_fixture_owns_complete_bounded_outputs(self):
         project = Path(__file__).resolve().parents[2]
@@ -353,11 +353,11 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertNotIn('"$fixture_bin" stm', (project / 'scripts/prepare-tests.sh').read_text())
         self.assertNotIn('build/stm/manifest.json', fast_fixtures.FULL_REQUIRED)
         self.assertTrue((project / 'src/fullCoreTest/kotlin/thc/runtime/STMFullCoreTest.kt').is_file())
-        build = (project / 'build.gradle.kts').read_text()
-        self.assertIn('for ((taskName, dense) in listOf("stmFullCoreTest" to false, "stmDenseFullCoreTest" to true)) tasks.register<Test>(taskName)', build)
+        build = (project / 'build.gradle').read_text()
+        self.assertIn('[["stmFullCoreTest", false],[ "stmDenseFullCoreTest", true]].each { taskName, dense -> tasks.register(taskName, Test)', build)
         self.assertIn('systemProperty("thc.handoffSlabs", dense.toString())', build)
         self.assertIn('includeTestsMatching("thc.runtime.STMFullCoreTest")', build)
-        self.assertIn('check(file("build/stm/manifest.json").isFile)', build)
+        self.assertIn('checkBuild(file("build/stm/manifest.json").isFile())', build)
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
 
     def test_boxed_cas_owns_native_inputs_and_only_declared_artifacts(self):
@@ -772,7 +772,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertIn('build/weak-explicit', fast_fixtures.FULL_OUTPUT_ROOTS)
         self.assertIn('build/weak-explicit/manifest.json', fast_fixtures.FULL_REQUIRED)
-        gradle = (project / 'build.gradle.kts').read_text()
+        gradle = (project / 'build.gradle').read_text()
         for pattern in ('**/*.json', 'oracle.tsv', 'NativeWeak.hs'):
             self.assertIn('"weak-explicit/' + pattern + '"', gradle)
         for suffix in ('manifest.json', 'oracle.tsv', 'NativeWeak.hs',
@@ -797,7 +797,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertIn('build/libdw-unavailable/manifest.json', fast_fixtures.FULL_REQUIRED)
         for suffix in ('manifest.json', 'oracle.json', 'foreign-labels.json'):
             self.assertTrue(fast_fixtures.fast_inputs.allowed_payload('build/libdw-unavailable/' + suffix, {}))
-            self.assertIn('"libdw-unavailable/' + suffix + '"', (project / 'build.gradle.kts').read_text())
+            self.assertIn('"libdw-unavailable/' + suffix + '"', (project / 'build.gradle').read_text())
         self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/libdw-unavailable/native/oracle', {}))
         self.assertIn('build/libdw-unavailable/logs/', (project / '.github/workflows/build.yml').read_text())
 
@@ -821,12 +821,12 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertIn('build/native-malloc/oracle.txt', fast_fixtures.FULL_REQUIRED)
         for suffix in ('manifest.json', 'oracle.json'):
             self.assertTrue(fast_fixtures.fast_inputs.allowed_payload('build/native-addresses/' + suffix, {}))
-            self.assertIn('"native-addresses/' + suffix + '"', (project / 'build.gradle.kts').read_text())
+            self.assertIn('"native-addresses/' + suffix + '"', (project / 'build.gradle').read_text())
         self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/native-addresses/native/oracle', {}))
         for suffix in ('manifest.json', 'oracle.txt'):
             path = 'build/native-malloc/' + suffix
             self.assertTrue(fast_fixtures.fast_inputs.allowed_payload(path, {}))
-            self.assertIn('"native-malloc/' + suffix + '"', (project / 'build.gradle.kts').read_text())
+            self.assertIn('"native-malloc/' + suffix + '"', (project / 'build.gradle').read_text())
             self.assertIn(path, (project / '.github/workflows/build.yml').read_text())
         self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/native-malloc/native/oracle', {}))
 
@@ -847,7 +847,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertIn('build/original-gmp', fast_fixtures.FULL_OUTPUT_ROOTS)
         self.assertEqual(fast_fixtures.fast_inputs.GMP_NATIVE_HOST,
                          'build/original-gmp/manifest.json' in fast_fixtures.FULL_REQUIRED)
-        gradle = (project / 'build.gradle.kts').read_text()
+        gradle = (project / 'build.gradle').read_text()
         for name in ('**/*.json', 'native/oracle', 'exposed-ghc-internal.conf', 'logs/*.stdout', 'logs/*.stderr'):
             self.assertIn('"original-gmp/' + name + '"', gradle)
         self.assertIn('build/original-gmp/', (project / '.github/workflows/build.yml').read_text())
@@ -1650,7 +1650,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertIn('build/original-fd-ready', fast_fixtures.FULL_OUTPUT_ROOTS)
         self.assertTrue(fast_fixtures.fast_inputs.ORIGINAL_FD_READY_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
-        self.assertIn('"original-fd-ready/**/*.json"', (project / 'build.gradle.kts').read_text())
+        self.assertIn('"original-fd-ready/**/*.json"', (project / 'build.gradle').read_text())
         for path in fast_fixtures.fast_inputs.ORIGINAL_FD_READY_OUTPUTS:
             self.assertTrue(fast_fixtures.fast_inputs.allowed_payload(path, {}), path)
         for name in ('OriginalFD.json', 'native/unreviewed', 'logs/extra.stdout',
@@ -1761,7 +1761,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertIn('build/original-rts-locks', fast_fixtures.FULL_OUTPUT_ROOTS)
         self.assertTrue(fast_fixtures.fast_inputs.ORIGINAL_RTS_LOCK_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
-        self.assertIn('"original-rts-locks/**/*.json"', (project / 'build.gradle.kts').read_text())
+        self.assertIn('"original-rts-locks/**/*.json"', (project / 'build.gradle').read_text())
 
     def test_original_open_exact_registration_and_closed_manifest(self):
         project = Path(__file__).resolve().parents[2]
@@ -1774,7 +1774,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertIn('"$fixture_bin" original-open', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertIn('build/original-open', fast_fixtures.FULL_OUTPUT_ROOTS)
-        self.assertIn('"original-open/**/*.json"', (project / 'build.gradle.kts').read_text())
+        self.assertIn('"original-open/**/*.json"', (project / 'build.gradle').read_text())
         name = 'build/original-open/manifest.json'
         artifacts = {}
         for artifact in fast_fixtures.fast_inputs.ORIGINAL_OPEN_OUTPUTS - {name}:
@@ -1873,7 +1873,7 @@ class FixturePreparationTest(unittest.TestCase):
                      'source/ForeignImportStubs.hs.saved', 'import-stubs/plain/ForeignImportStubs.hi',
                      'logs/import-stubs-native-oracle.stdout'):
             self.assertIn('build/interface-core/' + name, fast_fixtures.FULL_REQUIRED)
-        self.assertIn('"interface-core/**/*.json"', (project / 'build.gradle.kts').read_text())
+        self.assertIn('"interface-core/**/*.json"', (project / 'build.gradle').read_text())
 
     def test_formatter_focused_full_gradle_and_upload_registration(self):
         project = Path(__file__).resolve().parents[2]
@@ -1889,7 +1889,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertIn('build/original-stack-formatter', fast_fixtures.FULL_OUTPUT_ROOTS)
         self.assertIn('build/original-stack-formatter/manifest.json', fast_fixtures.FULL_REQUIRED)
-        gradle = (project / 'build.gradle.kts').read_text()
+        gradle = (project / 'build.gradle').read_text()
         for pattern in ('original-stack-formatter/manifest.json',
                         'original-stack-formatter/run-*/originals/core/*.json',
                         'original-stack-formatter/run-*/originals/generated/**/*.hs',
@@ -2032,7 +2032,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertTrue(all((project / name).is_file() for name in group['sources']))
         self.assertIn('"$fixture_bin" boxed-array-extensions', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
         self.assertIn('build/boxed-array-extensions/manifest.json', fast_fixtures.FULL_REQUIRED)
-        gradle = (project / 'build.gradle.kts').read_text()
+        gradle = (project / 'build.gradle').read_text()
         for pattern in ('"boxed-array-extensions/manifest.json"', '"boxed-array-extensions/run-*/**"', 'inputs.file("thc.cabal")'):
             self.assertIn(pattern, gradle)
 
@@ -2211,7 +2211,7 @@ class FixturePreparationTest(unittest.TestCase):
                 self.assertIn("build/" + name, fast_fixtures.FULL_OUTPUT_ROOTS)
                 self.assertIn("build/" + name + "/manifest.json", fast_fixtures.FULL_REQUIRED)
                 self.assertIn("build/" + name + "/", (project / ".github/workflows/build.yml").read_text())
-                self.assertIn(name + "/**/*.json", (project / "build.gradle.kts").read_text())
+                self.assertIn(name + "/**/*.json", (project / "build.gradle").read_text())
                 self.assertIn(junit, policy["leafSources"]["src/main/java/thc/runtime/FloatingPrimitives.java"]["junit"])
 
     def test_explicit64_array_fixture_is_selected_and_receipted(self):
@@ -2228,7 +2228,7 @@ class FixturePreparationTest(unittest.TestCase):
         for name in ("manifest.json", "oracle.tsv", "pre/audit.json", "post/audit.json",
                      "pre/core/Explicit64ArrayAudit.json", "post/core/Explicit64ArrayAudit.json"):
             self.assertIn("build/explicit64-arrays/" + name, fast_fixtures.FULL_REQUIRED)
-        self.assertIn('"explicit64-arrays/*.tsv"', (project / "build.gradle.kts").read_text())
+        self.assertIn('"explicit64-arrays/*.tsv"', (project / "build.gradle").read_text())
 
     def test_floatx4_fma_has_focused_full_and_closed_native_inputs(self):
         project = Path(__file__).resolve().parents[2]
@@ -2247,7 +2247,7 @@ class FixturePreparationTest(unittest.TestCase):
         native = fast_fixtures.platform.machine().lower() not in ('arm64', 'aarch64')
         for suffix in ('oracle.txt', 'post-audit.json', 'post-double-audit.json', 'post-core/SimdFloatFma.json'):
             self.assertEqual(native, 'build/simd-floatx4-fma/' + suffix in fast_fixtures.FULL_REQUIRED)
-        gradle = (project / 'build.gradle.kts').read_text()
+        gradle = (project / 'build.gradle').read_text()
         for suffix in ('**/*.json', 'oracle.txt'):
             self.assertIn('"simd-floatx4-fma/' + suffix + '"', gradle)
         self.assertIn('build/simd-floatx4-fma/', (project / '.github/workflows/build.yml').read_text())
@@ -2282,7 +2282,7 @@ class FixturePreparationTest(unittest.TestCase):
         for name in ("manifest.json", "oracle.tsv", "pre/audit.json", "post/audit.json",
                      "pre/core/FloatingAddressAudit.json", "post/core/FloatingAddressAudit.json"):
             self.assertIn("build/floating-address/" + name, fast_fixtures.FULL_REQUIRED)
-        self.assertIn('"floating-address/*.tsv"', (project / "build.gradle.kts").read_text())
+        self.assertIn('"floating-address/*.tsv"', (project / "build.gradle").read_text())
 
     def test_atomic_address_family_has_one_native_receipt_and_complete_ownership(self):
         project = Path(__file__).resolve().parents[2]
@@ -2297,7 +2297,7 @@ class FixturePreparationTest(unittest.TestCase):
         for suffix in ("manifest.json", "oracle.tsv", "pre/audit.json", "post/audit.json",
                        "pre/core/AtomicAddressAudit.json", "post/core/AtomicAddressAudit.json"):
             self.assertIn("build/atomic-address/" + suffix, fast_fixtures.FULL_REQUIRED)
-        self.assertIn('"atomic-address/*.tsv"', (project / "build.gradle.kts").read_text())
+        self.assertIn('"atomic-address/*.tsv"', (project / "build.gradle").read_text())
         self.assertIn("build/atomic-address/", (project / ".github/workflows/build.yml").read_text())
 
     def test_floating_native_consumers_use_existing_complete_preparation_groups(self):
@@ -2366,7 +2366,11 @@ class FixturePreparationTest(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertIn(name, owners)
                 self.assertIsNone(owners[name])
-                source = (project / "src/test/kotlin" / (name.replace(".", "/") + ".kt")).read_text()
+                sources = [project / "src/test" / language / (name.replace(".", "/") + suffix)
+                           for language, suffix in (("java", ".java"), ("kotlin", ".kt"))]
+                sources = [path for path in sources if path.is_file()]
+                self.assertEqual(1, len(sources), name)
+                source = sources[0].read_text()
                 self.assertNotIn('"build/', source)
 
     def test_floating_simd_commands_preserve_full_preparation_platform_modes(self):
@@ -2550,7 +2554,7 @@ class FixturePreparationTest(unittest.TestCase):
                           "compiler/test-fixtures/FloatingRemainderNative.hs", "examples/THC/InverseHyperbolic.hs"}, set(group["sources"]))
         self.assertTrue(all((project / path).is_file() for path in group["sources"]))
         self.assertIn('"$fixture_bin" floating-remainder', (project / "scripts/prepare-tests.sh").read_text().splitlines())
-        self.assertIn('"floating-remainder/commands/**"', (project / "build.gradle.kts").read_text())
+        self.assertIn('"floating-remainder/commands/**"', (project / "build.gradle").read_text())
         policy = json.loads((project / ".github/scripts/fast-tests.json").read_text())
         for path in ("examples/THC/InverseHyperbolic.hs", "test/haskell-fixtures/FloatingRemainderFixtures.hs"):
             self.assertEqual(["thc.runtime.FloatingRemainderTest"], policy["owners"][path]["junit"])
@@ -2570,7 +2574,7 @@ class FixturePreparationTest(unittest.TestCase):
                           "compiler/test-fixtures/FloatDecodeNative.hs", "compiler/export-boot.py", "examples/THC/FloatDecode.hs"}, set(group["sources"]))
         self.assertTrue(all((project / path).is_file() for path in group["sources"]))
         self.assertIn('"$fixture_bin" float-decode', (project / "scripts/prepare-tests.sh").read_text().splitlines())
-        self.assertIn('"float-decode/commands/**"', (project / "build.gradle.kts").read_text())
+        self.assertIn('"float-decode/commands/**"', (project / "build.gradle").read_text())
         policy = json.loads((project / ".github/scripts/fast-tests.json").read_text())
         self.assertEqual(["thc.runtime.FloatDecodeTest"], policy["owners"]["examples/THC/FloatDecode.hs"]["junit"])
 
@@ -2632,7 +2636,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertIn("build/address-array-copy", fast_fixtures.FULL_OUTPUT_ROOTS)
         self.assertIn("address-array-copy", fast_fixtures.fast_inputs.MANIFEST_DIRS)
-        self.assertIn('"address-array-copy/**/*.json"', (project / "build.gradle.kts").read_text())
+        self.assertIn('"address-array-copy/**/*.json"', (project / "build.gradle").read_text())
         self.assertIn("build/address-array-copy/", (project / ".github/workflows/build.yml").read_text())
 
     def test_original_stack_has_portable_focused_and_full_preparation(self):
@@ -2646,7 +2650,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertIn('"$fixture_bin" original-stack', (project / "scripts/prepare-tests.sh").read_text().splitlines())
         self.assertIn("build/original-stack", fast_fixtures.FULL_OUTPUT_ROOTS)
         self.assertIn("build/original-stack/manifest.json", fast_fixtures.FULL_REQUIRED)
-        gradle = (project / "build.gradle.kts").read_text()
+        gradle = (project / "build.gradle").read_text()
         self.assertIn('"original-stack/manifest.json"', gradle)
         self.assertIn('"original-stack/run-*/**"', gradle)
         self.assertNotIn('"original-stack/proof.json"', gradle)
@@ -2679,7 +2683,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertLessEqual(set(group["outputs"]), fast_fixtures.FULL_OUTPUT_ROOTS)
         self.assertLessEqual({"build/boxed-arrays/manifest.json", "build/floating/checks.json"},
                              fast_fixtures.FULL_REQUIRED)
-        gradle = (project / "build.gradle.kts").read_text()
+        gradle = (project / "build.gradle").read_text()
         for pattern in ("boxed-arrays/**/*.json", "boxed-arrays/*.tsv", "floating/core/**/*.json",
                         "floating/checks.json", "floating/oracle.tsv"):
             self.assertIn('"' + pattern + '"', gradle)
@@ -2870,7 +2874,7 @@ class FullFixtureReceiptTest(unittest.TestCase):
 
     def setUp(self):
         FixturePreparationTest.setUp(self)
-        for name in ("build.gradle.kts", "thc.cabal", "cabal.project", "Setup.hs",
+        for name in ("build.gradle", "thc.cabal", "cabal.project", "Setup.hs",
                      ".github/scripts/fast_fixtures.py",
                      "scripts/prepare-tests.sh"):
             path = self.root / name

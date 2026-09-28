@@ -128,7 +128,7 @@ class STMFullCoreTest {
                 context.initialize("thc"); context.enter()
                 try {
                     val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                    val linked = CoreModules.reachable(module, name, strictLink = true) + ("instrument" to true)
+                    val linked = CoreModules.reachable(module, name, true) + ("instrument" to true)
                     val program = program(language, linked, backend)
                     val entry = program.entryTarget(name)
                     val host = program.hostEntryTarget(1)
@@ -189,7 +189,7 @@ class STMFullCoreTest {
                 try {
                     val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                     val names = listOf("newCell", "readCell", "bumpCell", "awaitCell", "awaitEither")
-                    val program = program(language, CoreModules.reachable(module(paths), names, strictLink = true), backend)
+                    val program = program(language, CoreModules.reachable(module(paths), names, true), backend)
                     val stm = Language.currentState().stm
                     val cell = call(program, "newCell", 0L)
                     val start = CountDownLatch(1)
@@ -300,8 +300,7 @@ class STMFullCoreTest {
             .associate { it[0] to it[2].toLong() }
         for ((stage, paths) in manifest["stages"] as Map<String, List<String>>) {
             for (backend in listOf("ast", "bytecode")) context().use { context ->
-                val request = Json.parse(CoreModules.request(paths.map { File(root, it).path },
-                    "asyncEntry", backend = backend)) as Map<String, Any?>
+                val request = Json.parse(CoreModules.request(paths.map { File(root, it).path }, "asyncEntry", true, false, backend)) as Map<String, Any?>
                 val entry = context.eval("thc", Json.stringify(request + mapOf("asyncExceptions" to true,
                     "strictLink" to true, "targetLayout" to targetLayout.document())))
                 fun call(operation: Long, token: Long = 0) = entry.execute(operation, token).asLong()
@@ -387,8 +386,7 @@ class STMFullCoreTest {
         val manifest = fixture()
         for ((_, paths) in manifest["stages"] as Map<String, List<String>>) {
             for (backend in listOf("ast", "bytecode")) for (async in listOf(false, true)) context().use { context ->
-                val request = Json.parse(CoreModules.request(paths.map { File(root, it).path },
-                    "basic", backend = backend)) as Map<String, Any?>
+                val request = Json.parse(CoreModules.request(paths.map { File(root, it).path }, "basic", true, false, backend)) as Map<String, Any?>
                 val entry = context.eval("thc", Json.stringify(request + mapOf("asyncExceptions" to async,
                     "strictLink" to true, "targetLayout" to targetLayout.document())))
                 assertEquals(model("basic", 17), entry.execute(17).asLong())

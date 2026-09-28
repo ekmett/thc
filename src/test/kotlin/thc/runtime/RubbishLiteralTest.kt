@@ -115,7 +115,7 @@ class RubbishLiteralTest {
             val value = decoder.decode(proof)
             assertFalse(value is Thunk)
             when (proof.kind) {
-                CoreKind.LONG -> assertEquals(0L, value)
+                CoreKind.LONG -> if (proof.isInt) assertEquals(0, value) else assertEquals(0L, value)
                 CoreKind.FLOAT -> assertEquals(0, (value as Float).toRawBits())
                 CoreKind.DOUBLE -> assertEquals(0L, (value as Double).toRawBits())
                 CoreKind.ADDRESS -> assertEquals(0L, (value as ManagedAddress).toNativeBits())

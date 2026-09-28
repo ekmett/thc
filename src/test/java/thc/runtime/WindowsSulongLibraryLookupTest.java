@@ -17,7 +17,7 @@ import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 import thc.ContextProfile;
 import thc.Language;
-import thc.MainKt;
+import thc.Main;
 import thc.PackageScalarLink;
 import thc.PackageScalarSignature;
 
@@ -30,7 +30,7 @@ class WindowsSulongLibraryLookupTest {
     @TempDir Path scratch;
 
     private Context context(boolean nativeAccess) {
-        return MainKt.withContextProfile(Context.newBuilder("thc").allowIO(IOAccess.NONE)
+        return Main.withContextProfile(Context.newBuilder("thc").allowIO(IOAccess.NONE)
             .allowNativeAccess(nativeAccess), ContextProfile.SYNCHRONOUS_TEST).build();
     }
     private Language.State enter(Context context) {
@@ -38,12 +38,12 @@ class WindowsSulongLibraryLookupTest {
         context.enter();
         try {
             var owner = Language.currentState(null);
-            owner.getThreads$org_intelligence_thc().enterCurrent(null, false, true, null);
+            owner.getThreads().enterCurrent(null, false, true, null);
             return owner;
         } catch (RuntimeException | Error failure) { context.leave(); throw failure; }
     }
     private void leave(Context context) {
-        try { Language.currentState(null).getThreads$org_intelligence_thc().leaveCurrent(GuestThreadStatus.FINISHED); }
+        try { Language.currentState(null).getThreads().leaveCurrent(GuestThreadStatus.FINISHED); }
         finally { context.leave(); }
     }
 
@@ -64,7 +64,7 @@ class WindowsSulongLibraryLookupTest {
         }
         var link = new PackageScalarLink("windows-loader-control", "unused", "windows-loader-control", "", bytes,
             List.of(signature), "llvm-bitcode");
-        owner.getPackageCbits$org_intelligence_thc().link(link);
+        owner.getPackageCbits().link(link);
         var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
         return (ManagedAddress) new Buffer(language, new PackageScalarCall(link, signature)).getCallTarget().call();
     }

@@ -30,9 +30,12 @@ class NarrowIntegerContinuationTest {
             val body = object : Expr() {
                 override fun execute(frame: VirtualFrame): Any? = error("Policy preparation must not execute guest code")
             }
-            val root = FunctionRoot(null, layout.build(), "capture policy", null, intArrayOf(),
-                intArrayOf(slot), intArrayOf(0), body, Metrics(true), arrayOf(proof),
-                enableAsync = async, enableDelimited = delimited)
+            val root = FunctionRoot(null, layout.build(), "capture policy", null,
+                intArrayOf(), intArrayOf(slot), intArrayOf(0), body,
+                Metrics(true), arrayOf(proof), body.representation, body.coreSourceLocation,
+                booleanArrayOf(), null, null, intArrayOf(),
+                null, async, emptyArray(), delimited,
+                FunctionRootRole.FUNCTION, false)
             assertEquals(async || delimited, declaration.invoke(root))
             assertEquals(FrameSlotKind.Int, root.frameDescriptor.getSlotKind(slot))
             assertSame(root, root.callTarget.rootNode)
@@ -108,7 +111,7 @@ class NarrowIntegerContinuationTest {
                 fun arguments(prefix: ManagedMVar, blocked: ManagedMVar) = arrayOf<Any?>(0L, prefix, blocked, *actualValues)
                 fun valid() = assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
                 fun checkResult(result: Any?) {
-                    val tuple = ownedTupleResult(result, shape)
+                    val tuple = TupleResultsKt.ownedTupleResult(result, shape)
                     assertEquals(6, shape.width)
                     for (i in actualValues.indices) {
                         assertEquals(narrow, shape.layout.isInt(i)); assertEquals(!narrow, shape.layout.isLong(i))

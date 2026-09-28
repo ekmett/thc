@@ -21,7 +21,6 @@ import java.util.Objects;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
-import kotlin.Unit;
 import thc.Json;
 import thc.Language;
 
@@ -42,10 +41,10 @@ public final class WindowsCodePages {
     }
     @FunctionalInterface private interface ForeignAction<T> { T run() throws Throwable; }
     private <T> T foreign(ForeignAction<T> action) {
-        var previous = context.getThreads$org_intelligence_thc().enterForeign(ForeignSafety.UNSAFE);
+        var previous = context.getThreads().enterForeign(ForeignSafety.UNSAFE);
         try { return action.run(); }
         catch (Throwable failure) { throw propagate(failure); }
-        finally { context.getThreads$org_intelligence_thc().leaveForeign(previous); }
+        finally { context.getThreads().leaveForeign(previous); }
     }
     // Preserve the original checked FFM/resource exception across Java callbacks.
     @SuppressWarnings("unchecked")
@@ -145,7 +144,7 @@ public final class WindowsCodePages {
     }
     private static void bytes(ManagedAddress address, long count, Consumer<MemorySegment> action) {
         if (address.hasNativeStorage()) {
-            address.withNativeSegment(segment -> { action.accept(segment.asSlice(0, count)); return Unit.INSTANCE; });
+            address.withNativeSegment(segment -> { action.accept(segment.asSlice(0, count)); return null; });
         } else action.accept(address.cbitsSegment().asSlice(address.cbitsOffset(), count));
     }
     private long inputBytes(ManagedAddress address, int count, int width) {
@@ -240,7 +239,7 @@ public final class WindowsCodePages {
     }
     @TruffleBoundary public void setErrno() {
         current();
-        context.getStdio$org_intelligence_thc().captureForeignErrno$org_intelligence_thc(mapErrno(lastError.get()));
+        context.getStdio().captureForeignErrno(mapErrno(lastError.get()));
     }
     @TruffleBoundary public ManagedAddress message(long errorCode) {
         current();
@@ -253,13 +252,13 @@ public final class WindowsCodePages {
             if (count == 0) return ManagedAddress.nullAddress();
             var pointer = resultPointer.get(ADDRESS, 0);
             // Adoption consumes the allocation, including cleanup on publication failure.
-            return context.getNativeAllocations$org_intelligence_thc().adoptWindowsLocal$org_intelligence_thc(pointer,
+            return context.getNativeAllocations().adoptWindowsLocal(pointer,
                 (Integer.toUnsignedLong(count) + 1) * 2);
         }
     }
     @TruffleBoundary public ManagedAddress localFree(ManagedAddress address) {
         current();
-        context.getNativeAllocations$org_intelligence_thc().free(address, ManagedNativeAllocations.Allocator.WINDOWS_LOCAL);
+        context.getNativeAllocations().free(address, ManagedNativeAllocations.Allocator.WINDOWS_LOCAL);
         return ManagedAddress.nullAddress();
     }
 
@@ -326,7 +325,7 @@ public final class WindowsCodePages {
         static final MethodHandle localFree = call("LocalFree", ADDRESS, ADDRESS);
         static long error(MemorySegment storage) { return Integer.toUnsignedLong(storage.get(JAVA_INT, offset)); }
     }
-    public static WindowsCodePages current(Node node) { return Language.currentState(node).getWindowsCodePages$org_intelligence_thc(); }
+    public static WindowsCodePages current(Node node) { return Language.currentState(node).getWindowsCodePages(); }
     public static void releaseLocal(MemorySegment pointer) {
         try (var arena = Arena.ofConfined()) {
             var error = arena.allocate(Api.capture);

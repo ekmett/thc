@@ -61,7 +61,7 @@ internal class OriginalStackInfoExpression(private val operation: OriginalStackI
         } else if (operation == OriginalStackInfoOp.LOOKUP_IPE) {
             val key = operands[0].executeRequiredAddress(frame)
             val destination = operands[1].executeRequiredAddress(frame)
-            requireVoidCarrier(operands[2].execute(frame))
+            TupleResultsKt.requireVoidCarrier(operands[2].execute(frame))
             FrameAccess.writeInt(frame, slots[offset], ManagedStackRuntime.lookupIpe(key, destination, layout).toInt())
         } else if (operation.tupleResult) incompatible(frame)
         else fault("Original stack info scalar cannot write a tuple")

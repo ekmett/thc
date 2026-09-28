@@ -3,6 +3,8 @@
 
 package thc
 
+import thc.Main.executionContext
+
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.bytecode.BytecodeConfig
 import com.oracle.truffle.api.source.Source

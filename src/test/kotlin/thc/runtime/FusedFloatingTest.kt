@@ -192,7 +192,7 @@ class FusedFloatingTest {
     @Test fun genuineCoreRetainsEveryFusedTernaryProofAndRejectsCorruption() {
         provenance()
         for (stage in listOf("pre","post")) for (f in formats) for ((operation,name) in f.names().withIndex()) {
-            val source = CoreModules.reachable(module(stage),name,strictLink=true)
+            val source = CoreModules.reachable(module(stage), name, true)
             val bindings = source["bindings"] as List<Map<String,Any?>>
             assertEquals(2,bindings.size)
             val worker = bindings.single { it["name"] == name+"Worker" }
@@ -239,7 +239,7 @@ class FusedFloatingTest {
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                 for (f in formats) for (name in f.names()) {
-                    val source = CoreModules.reachable(module(stage),name,strictLink=true) + ("instrument" to true)
+                    val source = CoreModules.reachable(module(stage), name, true) + ("instrument" to true)
                     val p = program(language,source,backend)
                     val target = p.entryTarget(name)
                     val targets = (source["bindings"] as List<Map<String,Any?>>).map { p.entryTarget(it["id"] as String) }

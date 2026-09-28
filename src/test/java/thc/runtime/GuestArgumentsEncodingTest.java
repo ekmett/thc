@@ -17,7 +17,7 @@ final class GuestArgumentsEncodingTest {
             context.initialize("thc");
             context.enter();
             try {
-                var arguments = Language.currentState(null).getArguments$org_intelligence_thc();
+                var arguments = Language.currentState(null).getArguments();
                 var nil = ManagedAddress.nullAddress();
                 arguments.initialize("bad\uD800", new String[0]);
                 var failure = assertThrows(MalformedInputException.class, () -> arguments.get(nil, nil));

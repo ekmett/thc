@@ -16,7 +16,7 @@ import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.Language
-import thc.executionContext
+import thc.Main.executionContext
 
 /** The object boundary remains real; every transport assertion also runs interpreted. */
 class HandoffTest {
@@ -68,8 +68,12 @@ class HandoffTest {
                 override fun execute(frame: VirtualFrame): Any? = caller.call(frame, frame.arguments, dispatch, true)
             }
             val descriptor = layout.build()
-            val root = FunctionRoot(language, descriptor, "invalid tail destination", null, intArrayOf(),
-                intArrayOf(), intArrayOf(), body, Metrics(false), resultProof = proof, handoff = entry)
+            val root = FunctionRoot(language, descriptor, "invalid tail destination", null,
+                intArrayOf(), intArrayOf(), intArrayOf(), body,
+                Metrics(false), emptyArray(), proof, body.coreSourceLocation,
+                booleanArrayOf(), entry, null, intArrayOf(),
+                null, false, emptyArray(), false,
+                FunctionRootRole.FUNCTION, false)
             root.adoptChildren()
             val frame = Truffle.getRuntime().createVirtualFrame(packet, descriptor)
             frame.setLong(entry.destinationSlot, 0L)
@@ -346,8 +350,12 @@ class HandoffTest {
         val entry = HandoffEntry.create(language, layout, listOf(proof), proof, false)!!
         val saved = ArrayList<MaterializedFrame>()
         val body = RememberFrame(argument, saved)
-        val root = FunctionRoot(language, layout.build(), "retained slab frame", null, intArrayOf(), intArrayOf(argument), intArrayOf(0),
-            body, Metrics(false), arrayOf(proof), proof, null, booleanArrayOf(false), entry)
+        val root = FunctionRoot(language, layout.build(), "retained slab frame", null,
+            intArrayOf(), intArrayOf(argument), intArrayOf(0), body,
+            Metrics(false), arrayOf(proof), proof, null,
+            booleanArrayOf(false), entry, null, intArrayOf(),
+            null, false, emptyArray(), false,
+            FunctionRootRole.FUNCTION, false)
         val caller = InvokeWorker(root.callTarget)
         assertEquals(3_000_000_018L, Calls.target(caller.callTarget, arrayOf(0L, 3_000_000_017L)))
         assertThrows(RuntimeFault::class.java) { Calls.target(caller.callTarget, arrayOf(0L, 999L)) }

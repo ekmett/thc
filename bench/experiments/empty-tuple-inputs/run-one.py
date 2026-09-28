@@ -41,7 +41,9 @@ for stage in ('pre','post'):
 
 def snapshot():
  sources=[p for p in sorted((ROOT/'src/main').rglob('*')) if p.is_file()]
- sources += [ROOT/'build.gradle.kts',ROOT/'tools/GraphInspect.java',HERE/'EmptyInputGraphProbe.java',Path(__file__).resolve()]
+ sources += [ROOT/'tools/GraphInspect.java',HERE/'EmptyInputGraphProbe.java',Path(__file__).resolve()]
+ sources += [ROOT / name for name in ('build.gradle', 'build.gradle.kts', 'settings.gradle', 'settings.gradle.kts', 'buildSrc/build.gradle') if (ROOT / name).is_file()]
+ sources += sorted((ROOT / 'gradle').glob('*.gradle*')) + sorted((ROOT / 'buildSrc/src').rglob('*.java'))
  jars=sorted((ROOT/'build/install/thc/lib').glob('*.jar'))
  assert jars,'Build installDist from the reviewed immutable runtime before capture'
  return {'sources':[record(p) for p in sources], 'runtimeJars':[record(p) for p in jars],

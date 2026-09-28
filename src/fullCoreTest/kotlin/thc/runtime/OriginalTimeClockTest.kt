@@ -53,7 +53,7 @@ class OriginalTimeClockTest {
     private fun allocation(kind: Int): ManagedAddress = when (kind) {
         0 -> ManagedAddress.fromByteArray(ByteArray(32))
         3 -> Language.currentState().nativeAllocations.malloc(32)
-        else -> ManagedAddress.fromAllocation(ManagedAllocation.mutable(32, 8, pinned = kind == 2))
+        else -> ManagedAddress.fromAllocation(ManagedAllocation.mutable(32, 8, kind == 2))
     }.also { for (offset in 0L..31L) it.writeWord8(offset, 0x5a) }
     private fun release(address: ManagedAddress, kind: Int) {
         if (kind == 3) Language.currentState().nativeAllocations.free(address)
@@ -232,7 +232,7 @@ class OriginalTimeClockTest {
             val missing = audit["missingGlobals"] as List<*>
             assertEquals(1, missing.size)
             assertTrue(missing.single().toString().contains("HSzuCLOCKzuREALTIME"))
-            assertThrows(IllegalArgumentException::class.java) { CoreModules.reachable(source(stage), "originalId", strictLink = true) }
+            assertThrows(IllegalArgumentException::class.java) { CoreModules.reachable(source(stage), "originalId", true) }
         }
     }
 }

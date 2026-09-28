@@ -260,8 +260,8 @@ class ManagedWeakTest {
     private fun flags(args: List<CoreRepresentation>) = args.map { it.primReps == listOf("BoxedRep (Just Lifted)") }
 
     @Test fun exactWeakContractsRejectForgedStateRepresentationOrBinding() {
-        assertEquals(5, WeakOp.entries.size)
-        for (op in WeakOp.entries) for (value in listOf(lifted, action, weak)) {
+        assertEquals(5, WeakOp.values().size)
+        for (op in WeakOp.values()) for (value in listOf(lifted, action, weak)) {
             val args = inputs(op, value)
             val result = output(op, value)
             op.validate(args, flags(args), result)
@@ -320,8 +320,7 @@ class ManagedWeakTest {
     @Test fun genuineCoreCannotBypassEitherLoaderWithForgedWeakContracts() {
         val manifest = json(File(directory, "manifest.json"))
         for ((stage, paths) in manifest["stages"] as Map<String, List<String>>) {
-            val original = CoreModules.reachable(CoreModules.merge(paths.map { json(File(root, it)) }),
-                "weakComposite", strictLink = true)
+            val original = CoreModules.reachable(CoreModules.merge(paths.map { json(File(root, it)) }), "weakComposite", true)
             for (backend in listOf("ast", "bytecode")) context().use { context ->
                 context.initialize("thc"); context.enter()
                 try {
@@ -356,8 +355,7 @@ class ManagedWeakTest {
         val integer = mapOf("kind" to "long", "primReps" to listOf("IntRep"), "evaluated" to true)
         val zero = listOf("lit", "int", "0", mapOf("rep" to integer))
         for ((stage, paths) in manifest["stages"] as Map<String, List<String>>) {
-            val original = CoreModules.reachable(CoreModules.merge(paths.map { json(File(root, it)) }),
-                "weakComposite", strictLink = true)
+            val original = CoreModules.reachable(CoreModules.merge(paths.map { json(File(root, it)) }), "weakComposite", true)
             for (backend in listOf("ast", "bytecode")) context().use { context ->
                 context.initialize("thc"); context.enter()
                 try {
@@ -433,7 +431,7 @@ class ManagedWeakTest {
                 context.initialize("thc"); context.enter()
                 try {
                     val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                    val module = CoreModules.reachable(merged, "weakComposite", strictLink = true) + ("instrument" to true)
+                    val module = CoreModules.reachable(merged, "weakComposite", true) + ("instrument" to true)
                     val program = if (backend == "ast") Program(language, module) else BytecodeProgram(language, module)
                     val host = program.hostEntryTarget(1)
                     val original = program.entryTarget("weakComposite")

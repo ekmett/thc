@@ -3,6 +3,8 @@
 
 package thc
 
+import thc.Main.executionContext
+
 import org.graalvm.polyglot.PolyglotException
 import org.graalvm.polyglot.Value
 import org.junit.jupiter.api.Assertions.*

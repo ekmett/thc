@@ -15,7 +15,7 @@ root = Path(__file__).resolve().parent.parent
 capture = Path(sys.argv[1]).resolve()
 destination = Path(sys.argv[2]).resolve()
 runtime_revision = sys.argv[3]
-subprocess.run(['git', 'diff', '--exit-code', runtime_revision, '--', 'src/main', 'build.gradle.kts'], cwd=root, check=True)
+subprocess.run(['git', 'diff', '--exit-code', runtime_revision, '--', 'src/main', 'build.gradle', 'build.gradle.kts', 'buildSrc', 'settings.gradle', 'settings.gradle.kts', 'gradle'], cwd=root, check=True)
 subprocess.run([sys.executable, str(root/'bench/experiments/floatx4-foundation/runtime-audit.py'),
                 'check', str(root), str(capture)], check=True)
 evidence = json.loads((capture/'evidence.json').read_text())

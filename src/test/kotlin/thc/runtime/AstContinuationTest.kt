@@ -110,7 +110,7 @@ class AstContinuationTest {
                     val ready = ManagedMVar()
                     assertTrue(ready.tryPut("one"))
                     val result = Calls.target(target, arrayOf(0L, ready, Unit))
-                    val owned = ownedTupleResult(result, shape)
+                    val owned = TupleResultsKt.ownedTupleResult(result, shape)
                     assertEquals("one", shape.layout.getObject(owned, 0))
                     if (nested) assertEquals(7L, shape.layout.getLong(owned, 1))
                 }
@@ -150,7 +150,7 @@ class AstContinuationTest {
                 try {
                     assertTrue(cell.tryPut("forty-one"))
                     val completed = continuation.continueWith(Unit)
-                    val owned = ownedTupleResult(completed, shape)
+                    val owned = TupleResultsKt.ownedTupleResult(completed, shape)
                     assertEquals("forty-one", shape.layout.getObject(owned, 0))
                     if (nested) assertEquals(7L, shape.layout.getLong(owned, 1))
                     assertThrows(RuntimeFault::class.java) { continuation.continueWith(Unit) }

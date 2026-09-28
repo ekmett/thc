@@ -14,14 +14,14 @@ import thc.Language
 
 class ConstructorClassIdentityTest {
     private fun matching(enabled: Boolean, action: () -> Unit) {
-        val previous = System.getProperty(CONSTRUCTOR_CLASS_IDENTITY_PROPERTY)
+        val previous = System.getProperty(ConstructorClassIdentityKt.CONSTRUCTOR_CLASS_IDENTITY_PROPERTY)
         try {
-            if (enabled) System.setProperty(CONSTRUCTOR_CLASS_IDENTITY_PROPERTY, "true")
-            else System.clearProperty(CONSTRUCTOR_CLASS_IDENTITY_PROPERTY)
+            if (enabled) System.setProperty(ConstructorClassIdentityKt.CONSTRUCTOR_CLASS_IDENTITY_PROPERTY, "true")
+            else System.clearProperty(ConstructorClassIdentityKt.CONSTRUCTOR_CLASS_IDENTITY_PROPERTY)
             action()
         } finally {
-            if (previous == null) System.clearProperty(CONSTRUCTOR_CLASS_IDENTITY_PROPERTY)
-            else System.setProperty(CONSTRUCTOR_CLASS_IDENTITY_PROPERTY, previous)
+            if (previous == null) System.clearProperty(ConstructorClassIdentityKt.CONSTRUCTOR_CLASS_IDENTITY_PROPERTY)
+            else System.setProperty(ConstructorClassIdentityKt.CONSTRUCTOR_CLASS_IDENTITY_PROPERTY, previous)
         }
     }
     private fun context(strategy: String, action: (Language) -> Unit) {

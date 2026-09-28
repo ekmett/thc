@@ -37,7 +37,7 @@ class AstStackNativeTest {
         val modules = listOf("DeepEvaluation", "THC.InterfaceClosure").map {
             Json.parse(File(directory, "$stage/core/$it.json").readText()) as Map<String, Any?>
         }
-        return CoreModules.reachable(CoreModules.merge(modules), "probe", strictLink = true) + ("instrument" to true)
+        return CoreModules.reachable(CoreModules.merge(modules), "probe", true) + ("instrument" to true)
     }
 
     @Test fun genuineDeepLazyEvaluationMatchesNativeWithoutGuestCompilation() {

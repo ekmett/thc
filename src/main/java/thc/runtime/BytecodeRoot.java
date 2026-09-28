@@ -419,7 +419,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 Object original, Object result, Node node) {
             if (!(original instanceof Thunk thunk)) return;
             if (cell) {
-                ProgramKt.updateForcedCell((RecCell) binding, thunk, result);
+                ((RecCell) binding).updateForced(thunk, result);
             } else {
                 BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
                 if (local.getObject(bytecode, frame) == thunk) {
@@ -1393,7 +1393,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 CapiCall call, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
             long result = CoreCapiForeign.zero(node, call);
-            if (call.getTimeClock()) destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, (int) result);
+            if (call.timeClock()) destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, (int) result);
             else destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
     }
@@ -1619,14 +1619,14 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     @ConstantOperand(type = CapiCall.class, name = "call")
     public static final class LinkedCapiWordAddress {
-        @Specialization(guards = "!call.getTimeClock()") public static void apply(VirtualFrame frame, LocalAccessor destination,
+        @Specialization(guards = "!call.timeClock()") public static void apply(VirtualFrame frame, LocalAccessor destination,
                 CapiCall call, long word, ManagedAddress address, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
             long result = CoreCapiForeign.wordAddress(node, call, word, address);
             destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, (int) result);
         }
 
-        @Specialization(guards = "call.getTimeClock()") public static void narrow(VirtualFrame frame, LocalAccessor destination,
+        @Specialization(guards = "call.timeClock()") public static void narrow(VirtualFrame frame, LocalAccessor destination,
                 CapiCall call, int word, ManagedAddress address, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
             int result = (int) CoreCapiForeign.wordAddress(node, call, word, address);
@@ -1873,7 +1873,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class Md5Init {
         @Specialization public static void apply(ManagedAddress context, Object state) {
             ManagedByteArray.requireState(state);
-            ManagedMd5.INSTANCE.init(context);
+            ManagedMd5.init(context);
         }
     }
 
@@ -2184,7 +2184,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class Md5Update {
         @Specialization public static void apply(ManagedAddress context, ManagedAddress input, int length, Object state) {
             ManagedByteArray.requireState(state);
-            ManagedMd5.INSTANCE.update(context, input, length);
+            ManagedMd5.update(context, input, length);
         }
     }
 
@@ -2192,7 +2192,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class Md5Final {
         @Specialization public static void apply(ManagedAddress output, ManagedAddress context, Object state) {
             ManagedByteArray.requireState(state);
-            ManagedMd5.INSTANCE.finish(output, context);
+            ManagedMd5.finish(output, context);
         }
     }
 
@@ -2284,7 +2284,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 if (metrics.getEnabled()) metrics.incrementSelfTailReentries();
                 return transfer;
             } finally {
-                BytecodeTypedInputSlotsKt.clearBytecodeInputSource(source, frame, (BytecodeRoot) node.getRootNode());
+                BytecodeTypedInputSlots.clearSource(source, frame, (BytecodeRoot) node.getRootNode());
             }
         }
         public static InputDispatch create(BytecodeInputSource source, boolean tail, Metrics metrics) {
@@ -2322,7 +2322,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 throw captureTupleCall(function, source.getLayout().getLogicalArity(),
                         destination, yielded, node, callerMask);
             } finally {
-                BytecodeTypedInputSlotsKt.clearBytecodeInputSource(source, frame, (BytecodeRoot) node.getRootNode());
+                BytecodeTypedInputSlots.clearSource(source, frame, (BytecodeRoot) node.getRootNode());
             }
         }
         public static InputDispatch create(BytecodeInputSource source, BytecodeTupleSlots destination,

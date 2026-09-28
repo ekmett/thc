@@ -11,7 +11,7 @@ import com.oracle.truffle.api.nodes.RootNode
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.Language
-import thc.executionContext
+import thc.Main.executionContext
 
 /** Boxing caches must preserve all mask bits and never change tail-call decisions. */
 class BloomValueTest {

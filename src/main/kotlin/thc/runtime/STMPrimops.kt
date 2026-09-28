@@ -135,14 +135,14 @@ internal class STMExpression(private val operation: STMOp, proof: CoreRepresenta
         if (operation != STMOp.WRITE) fault("STM tuple primitive requires a destination")
         val cell = operands[0].execute(frame)
         val value = operands[1].execute(frame)
-        requireVoidCarrier(operands[2].execute(frame))
+        TupleResultsKt.requireVoidCarrier(operands[2].execute(frame))
         Language.currentState(this).stm.write(cell, value)
         return Unit
     }
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val first = if (operation == STMOp.RETRY) null else operands[0].execute(frame)
         val second = if (operation == STMOp.OR_ELSE || operation == STMOp.CATCH) operands[1].execute(frame) else null
-        requireVoidCarrier(operands.last().execute(frame))
+        TupleResultsKt.requireVoidCarrier(operands.last().execute(frame))
         if (operation.callback) {
             if (call == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate()

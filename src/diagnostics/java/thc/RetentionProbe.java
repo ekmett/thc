@@ -86,7 +86,7 @@ public final class RetentionProbe {
         var bean = ManagementFactory.getThreadMXBean();
         var allocations = bean instanceof ThreadMXBean threads ? threads : null;
         var collectors = ManagementFactory.getGarbageCollectorMXBeans();
-        var launcher = Class.forName("thc.MainKt");
+        var launcher = Class.forName("thc.Main");
         // Select the stable public signature, not internal launcher overloads.
         var factories = Arrays.stream(launcher.getMethods()).filter(method -> method.getName().equals("executionContext")
             && method.getParameterCount() == 1 && method.getParameterTypes()[0] == boolean.class).toList();

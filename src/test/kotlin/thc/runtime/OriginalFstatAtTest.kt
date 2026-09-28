@@ -367,13 +367,16 @@ class OriginalFstatAtTest {
                 val body = OriginalStdioExpression(OriginalStdioOp.FSTATAT,
                     arrayOf(value(StdioHostAbi.load().atFdcwd), value(cstring(file.toString())), value(destination), value(0L), enqueue), proof)
                 val ast = FunctionRoot(language, layout.build(), "fstatat completion", null,
-                    intArrayOf(), intArrayOf(), intArrayOf(), body, Metrics(false),
-                    tuple = shape, tupleSlots = slots, enableAsync = true)
+                    intArrayOf(), intArrayOf(), intArrayOf(), body,
+                    Metrics(false), emptyArray(), body.representation, body.coreSourceLocation,
+                    booleanArrayOf(), null, shape, slots,
+                    null, true, emptyArray(), false,
+                    FunctionRootRole.FUNCTION, false)
                 val saved = checkNotNull(SavedGuestContinuationKt.savedGuestContinuation(Calls.target(ast.callTarget, arrayOf(0L))))
                 assertSame(pending, saved.asyncRequest()); assertEquals(6L, field(destination, OriginalStdioOp.ST_SIZE))
                 pending!!.acknowledge(); Files.writeString(file, "changed after native stat")
                 val completed = saved.continueWith(Unit)
-                assertEquals(0L, shape.layout.getLong(ownedTupleResult(completed, shape), 0))
+                assertEquals(0L, shape.layout.getLong(TupleResultsKt.ownedTupleResult(completed, shape), 0))
                 assertEquals(6L, field(destination, OriginalStdioOp.ST_SIZE)); assertEquals(1, evaluated)
                 released(language)
 

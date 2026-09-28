@@ -14,8 +14,8 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.Json
 import thc.Language
-import thc.executionContext
-import thc.loadEntry
+import thc.Main.executionContext
+import thc.Main.loadEntry
 import java.io.File
 import java.lang.reflect.Modifier
 import java.security.MessageDigest
@@ -41,7 +41,7 @@ class FloatingPrimitiveTest {
         assertEquals(441, entries.values.sumOf { it.size })
         for (backend in listOf("ast", "bytecode")) executionContext().use { context ->
             for ((entry, rows) in entries) {
-                val fn = loadEntry(context, listOf(module.path), entry, backend = backend)
+                val fn = loadEntry(context, listOf(module.path), entry, true, backend)
                 fun count(name: String) = ((Json.parse(fn.getMember("diagnostics").asString()) as Map<*, *>)[name] as Number).toLong()
                 fun checkRows(phase: String) {
                     rows.forEach {
@@ -66,7 +66,7 @@ class FloatingPrimitiveTest {
     @Test fun previouslyColdNaNsInfinitiesSubnormalsAndSignedZerosRemainCorrectAfterCompilation() {
         for (backend in listOf("ast", "bytecode")) executionContext().use { context ->
             for (entry in listOf("floatComparisons", "doubleComparisons", "floatSignedZero", "doubleSignedZero")) {
-                val fn = loadEntry(context, listOf(module.path), entry, backend = backend)
+                val fn = loadEntry(context, listOf(module.path), entry, true, backend)
                 val selected = rows().filter { it.entry == entry }
                 val warm = selected.single { it.input == 7L }
                 repeat(40) { assertEquals(warm.expected, fn.execute(warm.input).asLong()) }
@@ -97,7 +97,7 @@ class FloatingPrimitiveTest {
                     val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), descriptor)
                     FrameAccess.writeFloat(frame, slots[0], f); FrameAccess.writeDouble(frame, slots[1], d)
                     assertTrue(frame.isFloat(slots[0])); assertTrue(frame.isDouble(slots[1]))
-                    val box = data.create(arrayOf(f, d))
+                    val box = data.create(arrayOf<Any>(f, d))
                     assertEquals(f.toRawBits(), data.readFloat(box, 0).toRawBits())
                     assertEquals(d.toRawBits(), data.readDouble(box, 1).toRawBits())
                     val payloadTypes = box.javaClass.declaredFields.filterNot { Modifier.isStatic(it.modifiers) }.map { it.type }

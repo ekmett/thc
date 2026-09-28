@@ -7,7 +7,7 @@ import com.oracle.truffle.api.TruffleLanguage
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.Language
-import thc.executionContext
+import thc.Main.executionContext
 
 class StateLambdaJoinTest {
     private val long = mapOf("kind" to "long", "primReps" to listOf("IntRep"), "evaluated" to true)

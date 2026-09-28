@@ -3,6 +3,8 @@
 
 package thc
 
+import thc.Main.executionContext
+
 import com.oracle.truffle.api.TruffleLanguage
 import org.graalvm.polyglot.PolyglotException
 import org.junit.jupiter.api.Assertions.*

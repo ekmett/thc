@@ -3,6 +3,8 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
+import thc.Main.withContextProfile
+
 import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
@@ -64,7 +66,7 @@ class UnixLibcTest {
         val manifest = json("manifest.json")
         assertEquals("9.14.1", manifest["ghc"])
         val installedUnit = manifest["unixUnit"]
-        assertTrue(isOriginalUnixUnit(installedUnit))
+        assertTrue(CoreOriginalStdio.isOriginalUnixUnit(installedUnit))
         assertEquals(entries.keys, (manifest["entries"] as List<String>).toSet())
         for (key in listOf("inputHashes", "artifactHashes")) {
             val hashes = manifest[key] as Map<String, String>
@@ -165,7 +167,7 @@ class UnixLibcTest {
         for (stage in listOf("pre", "post")) for (backend in listOf("ast", "bytecode"))
             Context.newBuilder("thc").allowNativeAccess(true).allowEnvironmentAccess(EnvironmentAccess.NONE)
                 .environment("THC_UNIX_FFI_VALUE", "present-value").environment("THC_UNIX_FFI_EMPTY", "")
-                .withContextProfile(ContextProfile.SYNCHRONOUS_TEST).build().use { context -> inside(context) { language ->
+                .let { withContextProfile(it, ContextProfile.SYNCHRONOUS_TEST) }.build().use { context -> inside(context) { language ->
                     val module = CoreModules.reachable(json("$stage.json"), "unixGetenv", true) + ("instrument" to true)
                     val p = program(language, module, backend)
                     val target = p.entryTarget("unixGetenv")

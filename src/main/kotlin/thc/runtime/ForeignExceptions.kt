@@ -16,25 +16,6 @@ import java.lang.ref.WeakReference
 /** Private control transfers must never become ordinary Haskell exceptions. */
 internal interface InternalGuestControl
 
-/** One program retains the exact genuine GHC boxer/projector selected when linked. */
-internal class ForeignExceptionBridge(val unit: String, private val boxId: String,
-    private val projectId: String, private val binding: (String) -> Any?,
-    private val layout: (String) -> DataLayout) {
-    @Volatile private var resolvedProjector: ForeignExceptionRegistry.Projector? = null
-    @Synchronized fun projector(closure: Closure): ForeignExceptionRegistry.Projector =
-        resolvedProjector ?: ForeignExceptionRegistry.Projector(this, closure, layout(CoreExceptionPayload.TYPE)).also { resolvedProjector = it }
-    fun box(): Any? = binding(boxId)
-    fun project(): Any? = binding(projectId)
-
-    companion object {
-        fun bind(data: Map<String, Any?>, binding: (String) -> Any?,
-            layout: (String) -> DataLayout): ForeignExceptionBridge? {
-            val proof = data["selectedForeignExceptionBridge"] as? Map<*, *> ?: return null
-            return ForeignExceptionBridge(proof["unit"] as String, proof["box"] as String,
-                proof["project"] as String, binding, layout)
-        }
-    }
-}
 
 /** Projectors remain paired with program/unit identity after caught exceptions escape. */
 internal class ForeignExceptionRegistry {
@@ -150,7 +131,7 @@ internal class ForeignExceptionAccess : Node() {
 
     @TruffleBoundary
     fun text(handle: ManagedAddress, selector: Long, index: Long, state: Any?): Long {
-        requireVoidCarrier(state)
+        TupleResultsKt.requireVoidCarrier(state)
         val owner = Language.currentState(this)
         val frame = Truffle.getRuntime().createVirtualFrame(emptyArray<Any?>(), descriptor)
         val value = force.execute(frame, owner.stablePointers.dereference(handle)) as? ForeignFailure

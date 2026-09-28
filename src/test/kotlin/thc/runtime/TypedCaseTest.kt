@@ -10,7 +10,7 @@ import com.oracle.truffle.api.nodes.RootNode
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.Language
-import thc.executionContext
+import thc.Main.executionContext
 
 private typealias CaseCore = List<Any?>
 
@@ -48,10 +48,10 @@ class TypedCaseTest {
         Calls.target(p.hostEntryTarget(args.size), arrayOf(p.entryValue(id), arrayOf(*args)))
 
     private fun each(action: (Boolean, String, ExecutableProgram) -> Unit) {
-        val previous = System.getProperty(TYPED_CASES_PROPERTY)
+        val previous = System.getProperty(CaseCategoriesKt.TYPED_CASES_PROPERTY)
         try {
             for (enabled in listOf(false, true)) {
-                System.setProperty(TYPED_CASES_PROPERTY, enabled.toString())
+                System.setProperty(CaseCategoriesKt.TYPED_CASES_PROPERTY, enabled.toString())
                 executionContext().use { context ->
                     context.initialize("thc"); context.enter()
                     try {
@@ -70,7 +70,7 @@ class TypedCaseTest {
                 }
             }
         } finally {
-            if (previous == null) System.clearProperty(TYPED_CASES_PROPERTY) else System.setProperty(TYPED_CASES_PROPERTY, previous)
+            if (previous == null) System.clearProperty(CaseCategoriesKt.TYPED_CASES_PROPERTY) else System.setProperty(CaseCategoriesKt.TYPED_CASES_PROPERTY, previous)
         }
     }
 

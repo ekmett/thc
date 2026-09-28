@@ -61,7 +61,7 @@ public final class ManagedAddress {
     /** An RTS data label is never a projection of a JVM or native pointer. */
     public Long readCapabilitiesWord32(long elementOffset, int width) {
         if (capabilities == null) return null;
-        if (Language.currentState(null).getThreads$org_intelligence_thc() != capabilities)
+        if (Language.currentState(null).getThreads() != capabilities)
             throw fault("RTS data label belongs to another THC context");
         if (width != 4 || elementOffset != 0)
             throw fault("enabled_capabilities permits only an aligned Word32 read at offset zero");
@@ -230,14 +230,14 @@ public final class ManagedAddress {
             return heap != null && heap == other.heap;
         }
         if (capabilities != null || other.capabilities != null) {
-            var current = Language.currentState(null).getThreads$org_intelligence_thc();
+            var current = Language.currentState(null).getThreads();
             if (capabilities != null && capabilities != current || other.capabilities != null && other.capabilities != current)
                 throw fault("RTS data label belongs to another THC context");
             return capabilities != null && capabilities == other.capabilities;
         }
         if (nativeOwner != null) nativeOwner.requireLive(); if (other.nativeOwner != null) other.nativeOwner.requireLive();
         if (finalizer != null || other.finalizer != null) {
-            var provider = Language.currentState(null).cbits$org_intelligence_thc();
+            var provider = Language.currentState(null).cbits();
             if (finalizer != null) finalizer.requireOwner(provider); if (other.finalizer != null) other.finalizer.requireOwner(provider);
             return finalizer != null && finalizer == other.finalizer;
         }
@@ -760,7 +760,7 @@ public final class ManagedAddress {
             var pointer = externalPointer(); var targetPointer = destination.externalPointer();
             if (pointer != null || targetPointer != null) {
                 if ((pointer != null || hasNativeStorage()) && (targetPointer != null || destination.hasNativeStorage())) {
-                    var library = (pointer != null ? pointer : targetPointer).getOwner().getPackageCbits$org_intelligence_thc();
+                    var library = (pointer != null ? pointer : targetPointer).getOwner().getPackageCbits();
                     library.memory("copy", library.transport(destination), library.transport(this), count);
                 } else if (pointer != null) {
                     Object storage = destination.owner != null ? destination.owner : destination.mutableBytes;
@@ -828,7 +828,7 @@ public final class ManagedAddress {
             long displacement = elementOffset * stride, bits = readOwnedNativePointer(displacement);
             var address = StablePointers.current(null).recoverToken(bits);
             if (address != null) return address;
-            address = Language.currentState(null).getNativeAllocations$org_intelligence_thc().recoverAddress$org_intelligence_thc(bits);
+            address = Language.currentState(null).getNativeAllocations().recoverAddress(bits);
             return address != null ? address : NativeAddresses.current(null).recover(bits);
         }
         if (owner == null) throw fault("Addr# has no allocation-owned pointer cells");

@@ -107,7 +107,7 @@ public enum AtomicAddressOp {
         if (location.nativeAllocation() == null) return location.atomicPointer(cas ? operand : null, cas ? java.util.Objects.requireNonNull(replacement) : operand);
         long expected = operand.toNativeBits(), desired = cas ? java.util.Objects.requireNonNull(replacement).toNativeBits() : expected;
         long old = location.nativeAtomicPointer(this, expected, desired);
-        var recovered = ManagedNativeAllocations.current(null).recoverAddress$org_intelligence_thc(old);
+        var recovered = ManagedNativeAllocations.current(null).recoverAddress(old);
         return recovered != null ? recovered : NativeAddresses.current(null).recover(old);
     }
     long nativePointer(ManagedAddress location, MemorySegment segment, long expected, long desired) {

@@ -19,7 +19,7 @@ class CompactImagesTest {
     }
     private fun newRegion(state: Language.State, vararg values: Any): ManagedCompact {
         val region = ManagedCompact(state.compactRegions, 4096)
-        val owned = values.map { it to 64L }
+        val owned = values.map { ManagedCompact.Allocation(it, 64L) }
         region.begin()
         try { region.finish(owned); state.compactRegions.record(region, owned) } finally { region.end() }
         return region

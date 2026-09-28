@@ -18,7 +18,7 @@ import org.graalvm.polyglot.Context
 import thc.Language
 import thc.CoreModules
 import thc.Json
-import thc.executionContext
+import thc.Main.executionContext
 import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.Executors
@@ -68,7 +68,7 @@ class CoreContinuationNativeTest {
             entered(context) {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                 val checkpoint = BytecodeCheckpoint()
-                val program = BytecodeProgram(language, CoreModules.reachable(module, "catchActionAnswer", strictLink = true), checkpoint)
+                val program = BytecodeProgram(language, CoreModules.reachable(module, "catchActionAnswer", true), checkpoint)
                 val parent = program.entryValue("catchActionAnswer") as Thunk
                 val target = parent.target!!
                 val warm = Calls.target(target, arrayOf(0L)) as DataValue
@@ -240,7 +240,7 @@ class CoreContinuationNativeTest {
             context.initialize("thc")
             entered(context) {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                val linked = CoreModules.reachable(module, "overapplicationThunk", strictLink = true)
+                val linked = CoreModules.reachable(module, "overapplicationThunk", true)
                 val driver = Driver()
                 for (ordinary in listOf(Program(language, linked), BytecodeProgram(language, linked))) {
                     val answer = driver.force(ordinary.entryValue("overapplicationThunk") as Thunk) as DataValue
@@ -283,7 +283,7 @@ class CoreContinuationNativeTest {
             context.initialize("thc")
             entered(context) {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                val linked = CoreModules.reachable(module, "overapplicationTail", strictLink = true)
+                val linked = CoreModules.reachable(module, "overapplicationTail", true)
                 val driver = Driver()
                 val checkpoint = BytecodeCheckpoint()
                 val program = BytecodeProgram(language, linked, checkpoint)
@@ -314,7 +314,7 @@ class CoreContinuationNativeTest {
             context.initialize("thc")
             entered(context) {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                val linked = CoreModules.reachable(module, "directOverapplicationTailThunk", strictLink = true)
+                val linked = CoreModules.reachable(module, "directOverapplicationTailThunk", true)
                 val checkpoint = BytecodeCheckpoint()
                 val program = BytecodeProgram(language, linked, checkpoint)
                 val parent = program.entryValue("directOverapplicationTailThunk") as Thunk
@@ -344,7 +344,7 @@ class CoreContinuationNativeTest {
                 context.initialize("thc")
                 entered(context) {
                     val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                    val linked = CoreModules.reachable(module, entry, strictLink = true)
+                    val linked = CoreModules.reachable(module, entry, true)
                     val driver = Driver()
                     for (ordinary in listOf(Program(language, linked), BytecodeProgram(language, linked))) {
                         val answer = driver.force(ordinary.entryValue(entry) as Thunk) as DataValue
@@ -635,7 +635,7 @@ class CoreContinuationNativeTest {
                     b.endRoot()
                 }.getNode(0).callTarget
                 val segment = CallSegment(Calls.target(target, arrayOf(0L)) as ContinuationResult,
-                    tupleShape = tuple)
+                    MaskingState.UNMASKED, MaskingState.UNMASKED, tuple)
                 segment to Thunk(callSegmentCaller(language, segment), null)
             }
             val driver = entered(context) { Driver() }
@@ -701,7 +701,7 @@ class CoreContinuationNativeTest {
                 assertSame(child, cell.value)
                 assertThrows(ThunkSuspended::class.java) { driver.force(child) }
                 val answer = driver.force(child)
-                updateForcedCell(cell, child, answer) // A second force publishes through the shared RecCell.
+                cell.updateForced(child, answer) // A second force publishes through the shared RecCell.
                 assertSame(answer, cell.value)
                 assertSame(answer, driver.force(caller))
                 assertEquals(2, caller.state)
@@ -778,7 +778,7 @@ class CoreContinuationNativeTest {
             val language = entered(context) { TruffleLanguage.LanguageReference.create(Language::class.java).get(null) }
             val driver = entered(context) { Driver() }
             for ((name, expected) in entries) {
-                val linked = CoreModules.reachable(module, name, strictLink = true)
+                val linked = CoreModules.reachable(module, name, true)
                 val checkpoint = BytecodeCheckpoint()
                 val program = entered(context) { BytecodeProgram(language, linked, checkpoint) }
                 val parent = entered(context) { program.entryValue(name) as Thunk }
@@ -875,7 +875,7 @@ class CoreContinuationNativeTest {
                 entered(context) {
                     if (name == "catchActionAnswer") {
                         assertTrue(segment.value is HandoffStorage, "Published tuple must own its fields, not a thread-local completion token")
-                        assertNotSame(TupleComplete, segment.value)
+                        assertNotSame(TupleComplete.INSTANCE, segment.value)
                     }
                     SynchronousMasking.set(driver, MaskingState.MASKED_INTERRUPTIBLE)
                     try {
@@ -901,7 +901,7 @@ class CoreContinuationNativeTest {
             context.initialize("thc")
             val language = entered(context) { TruffleLanguage.LanguageReference.create(Language::class.java).get(null) }
             val driver = entered(context) { Driver() }
-            val linked = CoreModules.reachable(module, "catchHandlerAnswer", strictLink = true)
+            val linked = CoreModules.reachable(module, "catchHandlerAnswer", true)
             fun number(value: Any?): Long = (value as DataValue).layout.readLong(value, 0)
             entered(context) {
                 for (program in listOf(Program(language, linked), BytecodeProgram(language, linked)))
@@ -979,7 +979,7 @@ class CoreContinuationNativeTest {
                 Triple("maskedCheckpointAnswer", 2L, MaskingState.MASKED_INTERRUPTIBLE),
                 Triple("unmaskedCheckpointAnswer", 0L, MaskingState.UNMASKED),
                 Triple("uninterruptibleCheckpointAnswer", 1L, MaskingState.MASKED_UNINTERRUPTIBLE))) {
-                val linked = CoreModules.reachable(module, entry, strictLink = true)
+                val linked = CoreModules.reachable(module, entry, true)
                 entered(context) {
                     for (ordinary in listOf(Program(language, linked), BytecodeProgram(language, linked)))
                         assertEquals(expected, number(driver.force(ordinary.entryValue(entry) as Thunk)), entry)
@@ -1048,7 +1048,7 @@ class CoreContinuationNativeTest {
             context.initialize("thc")
             val language = entered(context) { TruffleLanguage.LanguageReference.create(Language::class.java).get(null) }
             val driver = entered(context) { Driver() }
-            val linked = CoreModules.reachable(module, "forceNonlocalAnswer", strictLink = true)
+            val linked = CoreModules.reachable(module, "forceNonlocalAnswer", true)
             fun number(value: Any?): Long = (value as DataValue).layout.readLong(value, 0)
             entered(context) {
                 for (ordinary in listOf(Program(language, linked), BytecodeProgram(language, linked)))
@@ -1440,7 +1440,7 @@ class CoreContinuationNativeTest {
             context.initialize("thc")
             val language = entered(context) { TruffleLanguage.LanguageReference.create(Language::class.java).get(null) }
             val driver = entered(context) { Driver() }
-            val linked = CoreModules.reachable(module, "tupleApplicationAnswer", strictLink = true)
+            val linked = CoreModules.reachable(module, "tupleApplicationAnswer", true)
             entered(context) {
                 for (program in listOf(Program(language, linked), BytecodeProgram(language, linked))) {
                     val answer = driver.force(program.entryValue("tupleApplicationAnswer") as Thunk) as DataValue
@@ -1512,7 +1512,7 @@ class CoreContinuationNativeTest {
             context.initialize("thc")
             val language = entered(context) { TruffleLanguage.LanguageReference.create(Language::class.java).get(null) }
             val driver = entered(context) { Driver() }
-            val linked = CoreModules.reachable(module, "tupleOverapplicationThunk", strictLink = true)
+            val linked = CoreModules.reachable(module, "tupleOverapplicationThunk", true)
             entered(context) {
                 for (program in listOf(Program(language, linked), BytecodeProgram(language, linked))) {
                     val result = driver.force(program.entryValue("tupleOverapplicationThunk") as Thunk) as DataValue
@@ -1571,7 +1571,7 @@ class CoreContinuationNativeTest {
             context.initialize("thc")
             val language = entered(context) { TruffleLanguage.LanguageReference.create(Language::class.java).get(null) }
             val driver = entered(context) { Driver() }
-            val linked = CoreModules.reachable(module, "tupleTailOverapplicationThunk", strictLink = true)
+            val linked = CoreModules.reachable(module, "tupleTailOverapplicationThunk", true)
             entered(context) {
                 for (ordinary in listOf(Program(language, linked), BytecodeProgram(language, linked))) {
                     val answer = driver.force(ordinary.entryValue("tupleTailOverapplicationThunk") as Thunk) as DataValue
@@ -1615,7 +1615,7 @@ class CoreContinuationNativeTest {
             context.initialize("thc")
             val language = entered(context) { TruffleLanguage.LanguageReference.create(Language::class.java).get(null) }
             val driver = entered(context) { Driver() }
-            val linked = CoreModules.reachable(module, "tupleApplicationFailure", strictLink = true)
+            val linked = CoreModules.reachable(module, "tupleApplicationFailure", true)
             val checkpoint = BytecodeCheckpoint().also { it.armed = true }
             val program = entered(context) { BytecodeProgram(language, linked, checkpoint) }
             val parent = entered(context) { program.entryValue("tupleApplicationFailure") as Thunk }
@@ -1653,7 +1653,7 @@ class CoreContinuationNativeTest {
             context.initialize("thc")
             val language = entered(context) { TruffleLanguage.LanguageReference.create(Language::class.java).get(null) }
             val driver = entered(context) { Driver() }
-            val linked = CoreModules.reachable(module, "tupleCompactAnswer", strictLink = true)
+            val linked = CoreModules.reachable(module, "tupleCompactAnswer", true)
             entered(context) {
                 for (program in listOf(Program(language, linked), BytecodeProgram(language, linked))) {
                     val answer = driver.force(program.entryValue("tupleCompactAnswer") as Thunk) as DataValue
@@ -1687,7 +1687,7 @@ class CoreContinuationNativeTest {
             context.initialize("thc")
             val language = entered(context) { TruffleLanguage.LanguageReference.create(Language::class.java).get(null) }
             val driver = entered(context) { Driver() }
-            val linked = CoreModules.reachable(module, "tupleRaiseAnswer", strictLink = true)
+            val linked = CoreModules.reachable(module, "tupleRaiseAnswer", true)
             val checkpoint = BytecodeCheckpoint().also { it.armed = true }
             val program = entered(context) { BytecodeProgram(language, linked, checkpoint) }
             val parent = entered(context) { program.entryValue("tupleRaiseAnswer") as Thunk }
@@ -1820,7 +1820,7 @@ class CoreContinuationNativeTest {
                 val target = ThunkYieldProofRoot.target(language, effects, AtomicInteger(),
                     ThunkYieldProofRoot.Gate(), marker)
                 val segment = CallSegment(Calls.target(target, arrayOf(0L)) as ContinuationResult,
-                    tupleShape = tuple)
+                    MaskingState.UNMASKED, MaskingState.UNMASKED, tuple)
                 segment to Thunk(callSegmentCaller(language, segment), null)
             }
             entered(context) {
@@ -1928,7 +1928,7 @@ class CoreContinuationNativeTest {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                 for ((entry, oracleLine, expected) in cases) {
                     assertEquals(expected.toString(), oracle[oracleLine], "$entry native result")
-                    val linked = CoreModules.reachable(module, entry, strictLink = true)
+                    val linked = CoreModules.reachable(module, entry, true)
                     val ordinary = BytecodeProgram(language, linked)
                     val async = BytecodeProgram(language, linked, true)
                     fun result(program: BytecodeProgram): Long {

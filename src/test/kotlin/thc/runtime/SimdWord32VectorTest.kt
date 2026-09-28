@@ -209,8 +209,8 @@ class SimdWord32VectorTest {
         val malformed = listOf("-1", "-2147483648", "4294967296", "", "+1", "01", "-0", " 1", "1.0", "18446744073709551616")
         val values = (listOf(0L, 1L, 0x7fff_ffffL, 0x8000_0000L, 0xffff_ffffL) +
             (0 until 32).flatMap { bit -> listOf((1L shl bit) - 1, 1L shl bit, (1L shl bit) + 1) }).distinct()
-        for (value in values) assertEquals(value.toInt(), narrowWordLiteral("word32", value.toString()))
-        for (text in malformed) assertThrows(RuntimeFault::class.java) { narrowWordLiteral("word32", text) }
+        for (value in values) assertEquals(value.toInt(), ScalarLiterals.narrowWordLiteral("word32", value.toString()))
+        for (text in malformed) assertThrows(RuntimeFault::class.java) { ScalarLiterals.narrowWordLiteral("word32", text) }
         for (backend in listOf("ast", "bytecode")) for (diagnostic in listOf(false, true)) {
             for (text in malformed) for (input in listOf(broadcastModule(listOf("lit", "word32", text, mapOf("rep" to lane))), alternative(text)))
                 assertThrows(RuntimeFault::class.java) { program(language, backend, input, "root", diagnostic) }

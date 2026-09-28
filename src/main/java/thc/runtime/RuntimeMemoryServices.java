@@ -20,10 +20,10 @@ public final class RuntimeMemoryServices {
         if (index != 0L || detail != 0L) throw fault("Memory queries require zero index and detail");
         return switch (selector) {
             case 208 -> {
-                try { yield state.getNativeAllocations$org_intelligence_thc().liveBytes$org_intelligence_thc(); }
+                try { yield state.getNativeAllocations().liveBytes(); }
                 catch (ArithmeticException ignored) { yield RuntimeServiceStatus.UNAVAILABLE; }
             }
-            case 209 -> state.getNativeAllocations$org_intelligence_thc().liveCount$org_intelligence_thc();
+            case 209 -> state.getNativeAllocations().liveCount();
             default -> throw fault("Unknown memory query selector: " + selector);
         };
     }

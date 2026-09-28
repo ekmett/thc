@@ -153,7 +153,7 @@ public final class SignedNarrowPrimopsTest {
                         pairs.add(new long[] {x, y});
                 }
             }
-            for (String backend : List.of("ast", "bytecode")) try (Context context = MainKt.executionContext(false)) {
+            for (String backend : List.of("ast", "bytecode")) try (Context context = Main.executionContext(false)) {
                 Value function = context.eval("thc", Json.INSTANCE.stringify(Map.of("modules", List.of(rawModule((String) entry.get("primitive"), width, arity)),
                     "entry", "entry", "backend", backend, "instrument", true)));
                 for (int pass = 0; pass < 2; pass++) {
@@ -174,7 +174,7 @@ public final class SignedNarrowPrimopsTest {
 
     @Test void everyAddedPrimitiveRejectsWrongAritiesEvenInDiagnosticMode() throws Exception {
         for (String backend : List.of("ast", "bytecode")) for (boolean diagnostic : new boolean[] {false, true}) {
-            try (Context context = MainKt.executionContext(false)) {
+            try (Context context = Main.executionContext(false)) {
                 for (var entry : entries()) {
                     String name = (String) entry.get("primitive");
                     int arity = ((Number) entry.get("arity")).intValue(), width = ((Number) entry.get("width")).intValue();

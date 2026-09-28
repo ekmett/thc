@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime
 
+import thc.Main.withContextProfile
+
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.interop.ArityException
@@ -66,15 +68,15 @@ class PackageSafeForeignTest {
         val bytes = Files.readAllBytes(output)
         val hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes))
         val abi = listOf(
-            PackageScalarSignature("started", "started", emptyList(), "Int32Rep", safety = "safe"),
-            PackageScalarSignature("call_count", "call_count", emptyList(), "Int32Rep", safety = "safe"),
-            PackageScalarSignature("reset", "reset", emptyList(), "void", safety = "safe"),
-            PackageScalarSignature("release", "release", emptyList(), "void", safety = "safe"),
-            PackageScalarSignature("wait_value", "wait_value", listOf("DoubleRep"), "DoubleRep", safety = "safe"),
-            PackageScalarSignature("wait_pointer", "wait_pointer", listOf("AddrRep"), "AddrRep", safety = "safe"),
+            PackageScalarSignature("started", "started", emptyList(), "Int32Rep", "ccall", "safe"),
+            PackageScalarSignature("call_count", "call_count", emptyList(), "Int32Rep", "ccall", "safe"),
+            PackageScalarSignature("reset", "reset", emptyList(), "void", "ccall", "safe"),
+            PackageScalarSignature("release", "release", emptyList(), "void", "ccall", "safe"),
+            PackageScalarSignature("wait_value", "wait_value", listOf("DoubleRep"), "DoubleRep", "ccall", "safe"),
+            PackageScalarSignature("wait_pointer", "wait_pointer", listOf("AddrRep"), "AddrRep", "ccall", "safe"),
             // Deliberately inconsistent control: no forged typed Core is admitted.
             // The runtime interop call throws inside the foreign extent.
-            PackageScalarSignature("requires_argument", "requires_argument", emptyList(), "DoubleRep", safety = "safe"))
+            PackageScalarSignature("requires_argument", "requires_argument", emptyList(), "DoubleRep", "ccall", "safe"))
         return PackageScalarLink("safe-boundary-control", target, hash, hash, bytes, abi)
     }
 
@@ -127,7 +129,7 @@ class PackageSafeForeignTest {
 
     private fun exerciseSafeReturn(mode: String, pointer: Boolean) {
         val link = library()
-        Context.newBuilder("thc").allowNativeAccess(true).withContextProfile(ContextProfile.SYNCHRONOUS_TEST)
+        Context.newBuilder("thc").allowNativeAccess(true).let { withContextProfile(it, ContextProfile.SYNCHRONOUS_TEST) }
             .build().use { context ->
                 context.initialize("thc"); context.enter()
                 try {
@@ -143,7 +145,7 @@ class PackageSafeForeignTest {
                     val argument: Any = storage?.let { ManagedAddress.fromAllocation(it).plus(3) } ?: 0.5
                     val originalBits = storage?.nativeSegment()?.address()
                     fun checkResult(result: Any?) {
-                        val tuple = ownedTupleResult(result, shape)
+                        val tuple = TupleResultsKt.ownedTupleResult(result, shape)
                         if (pointer) {
                             val address = shape.layout.getObject(tuple, 0) as ManagedAddress
                             assertEquals(originalBits!! + 3, address.toNativeBits())
@@ -238,7 +240,7 @@ class PackageSafeForeignTest {
 
     @Test fun failingInteropRestoresGuestAndNestedForeignPermissions() {
         val link = library()
-        Context.newBuilder("thc").allowNativeAccess(true).withContextProfile(ContextProfile.SYNCHRONOUS_TEST)
+        Context.newBuilder("thc").allowNativeAccess(true).let { withContextProfile(it, ContextProfile.SYNCHRONOUS_TEST) }
             .build().use { context ->
                 context.initialize("thc"); context.enter()
                 try {

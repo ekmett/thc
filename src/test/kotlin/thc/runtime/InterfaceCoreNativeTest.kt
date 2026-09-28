@@ -176,7 +176,7 @@ class InterfaceCoreNativeTest {
                         val bytes = ByteArray(32) { 0x5a }
                         val address = ManagedAddress.fromByteArray(bytes).plus(5)
                         val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
-                        assertEquals(0L, Calls.target(target, arrayOf<Any?>(0L, clock, address, Unit)))
+                        assertEquals(0, Calls.target(target, arrayOf<Any?>(0L, clock, address, Unit)))
                         if (compiled) {
                             assertEquals(before + 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
                             valid(target)
@@ -295,7 +295,7 @@ class InterfaceCoreNativeTest {
                     context.initialize("thc"); context.enter()
                     try {
                         val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                        val linked = CoreModules.reachable(source(entry), entry, strictLink = true) + ("instrument" to true)
+                        val linked = CoreModules.reachable(source(entry), entry, true) + ("instrument" to true)
                         val program: ExecutableProgram = if (backend == "ast") Program(language, linked)
                             else BytecodeProgram(language, linked)
                         val target = program.entryTarget(entry)

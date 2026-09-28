@@ -107,7 +107,8 @@ distinguish THC's typed-result semantics from GHC's narrower native continuation
 ABI and list remaining generic sum/vector transport limits.
 
 Details: [asynchronous exceptions](async-exceptions.md), [MVars](managed-mvars.md),
-[STM](stm.md), [arithmetic exception implementation](../src/main/kotlin/thc/runtime/GuestExceptions.kt).
+[STM](stm.md), [arithmetic exception validation](../src/main/java/thc/runtime/CoreArithmeticExceptions.java)
+and [raising](../src/main/java/thc/runtime/RaiseArithmeticException.java).
 
 ## Weak pointers and finalization
 
@@ -243,7 +244,7 @@ No additional deficiency is recorded here for `newPromptTag#`, `touch#` or
 
 Details: [delimited continuations](delimited-continuations.md),
 [closure inspection and recorded JIT issue](closure-inspection.md),
-[liveness implementation](../src/main/kotlin/thc/runtime/KeepAlive.kt).
+[liveness implementation](../src/main/java/thc/runtime/KeepAliveExpression.java).
 
 ## Enumeration constructors
 

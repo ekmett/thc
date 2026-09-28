@@ -9,7 +9,7 @@ import jdk.incubator.vector.ShortVector
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.Language
-import thc.executionContext
+import thc.Main.executionContext
 
 private typealias TypedSelfCore = List<Any?>
 private typealias TypedSelfRep = Map<String, Any?>
@@ -102,7 +102,7 @@ class TypedSelfCallTest {
         val label = "$backend/depth=$depth/vectorResult=$vectorResult"
         if (vectorResult) {
             val shape = requireNotNull(root.tupleResult)
-            val result = ownedTupleResult(value, shape)
+            val result = TupleResultsKt.ownedTupleResult(value, shape)
             val actual = shape.layout.getObject(result, 0) as ShortVector
             assertArrayEquals(left, actual.toArray(), label)
         } else {

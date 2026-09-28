@@ -76,8 +76,8 @@
       "sources": ["compiler/test-fixtures/ProcessLifecycleAudit.hs", "test/haskell-fixtures/ProcessLifecycleFixtures.hs",
         "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal",
         "test/fixtures/process-lifecycle/Main.hs", "test/fixtures/process-lifecycle/sigchld-policy.c",
-        "src/main/c/native-process-api.c", "src/main/kotlin/thc/runtime/CoreProcessForeign.kt",
-        "src/main/kotlin/thc/runtime/ManagedProcessForeign.kt", "src/main/kotlin/thc/runtime/ManagedProcesses.kt"]
+        "src/main/c/native-process-api.c", "src/main/java/thc/runtime/CoreProcessForeign.java", "src/main/java/thc/runtime/ProcessOp.java",
+        "src/main/java/thc/runtime/ManagedProcessForeign.java", "src/main/java/thc/runtime/ManagedProcesses.java"]
     },
     "integer-simd": {
       "junit": ["thc.runtime.IntegerSimdModelTest", "thc.runtime.SimdInt8VectorTest", "thc.runtime.SimdInt16VectorTest", "thc.runtime.SimdWord16VectorTest", "thc.runtime.SimdWord32VectorTest"],
@@ -338,7 +338,7 @@
       "outputs": ["build/original-process-identity"],
       "sources": ["compiler/test-fixtures/OriginalProcessIdentityAudit.hs", "compiler/test-fixtures/OriginalProcessIdentityNative.hs",
         "test/haskell-fixtures/OriginalStdioFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs", "thc.cabal", "src/main/kotlin/thc/runtime/ProcessIdentity.kt"]
+        "test/haskell-fixtures/Main.hs", "thc.cabal", "src/main/java/thc/runtime/ProcessIdentity.java"]
     },
     "original-termios": {
       "junit": ["thc.runtime.OriginalTermiosTest", "thc.runtime.OriginalSavedTermiosTest"],
