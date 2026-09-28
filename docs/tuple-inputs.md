@@ -26,7 +26,12 @@ physical fields and exact logical nesting. [Local tuple-join arguments](tuple-jo
 use the same logical layouts but parallel moves within the current frame.
 Saturated boxed constructors support [owned tuple/sum fields](aggregate-heap-fields.md).
 Ordinary sum parameters and captures use [the existing typed input protocol](sum-inputs.md).
-Scalar-only and exact-empty-only calls retain their existing conventions.
+Scalar Float#, Double# and Addr# parameters also select this typed input protocol,
+without needing an aggregate argument. Floating values occupy primitive fields;
+addresses retain their checked ManagedAddress reference and owner. Narrow integer
+inputs retain their exact-width fields. Other scalar-only and exact-empty-only
+calls retain their existing conventions; this selection is independent of the
+optional dense scalar handoff mode.
 
 A typed call passes a single precise generated storage object in the outer Truffle
 argument array. Tuple primitive leaves never become Object[] payload elements.

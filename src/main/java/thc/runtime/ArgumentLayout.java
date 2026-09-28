@@ -24,7 +24,7 @@ public final class ArgumentLayout {
         ArrayList<String> reps = new ArrayList<>();
         for (int i = 0; i < proofs.length; i++) {
             CoreRepresentation proof = proofs[i];
-            typed |= proof.isInt() || proof.isTypedTransport() && !proof.isEmptyTuple();
+            typed |= typedScalar(proof) || proof.isTypedTransport() && !proof.isEmptyTuple();
             if (proof.isTypedTransport()) {
                 reps.addAll(VectorLayout.storageReps(proof));
                 tupleKeys[i] = TupleShape.Companion.compatibilityKey(proof);
@@ -52,7 +52,7 @@ public final class ArgumentLayout {
     }
     public static ArgumentLayout fromProofs(List<CoreRepresentation> proofs) {
         boolean needed = false;
-        for (CoreRepresentation proof : proofs) needed |= proof.isTypedTransport() || proof.isInt();
+        for (CoreRepresentation proof : proofs) needed |= proof.isTypedTransport() || typedScalar(proof);
         if (!needed) return null;
         for (CoreRepresentation proof : proofs) CoreRepresentations.requireInput(proof);
         int[] offsets = new int[proofs.size() + 1];
@@ -62,6 +62,9 @@ public final class ArgumentLayout {
             offsets[i + 1] = physical.size();
         }
         return new ArgumentLayout(proofs.toArray(CoreRepresentation[]::new), offsets, physical.toArray(CoreRepresentation[]::new));
+    }
+    private static boolean typedScalar(CoreRepresentation proof) {
+        return proof.isInt() || proof.isFloat() || proof.isDouble() || proof.getKind() == CoreKind.ADDRESS;
     }
     /** A scalar State# retains its token; State# nested in a tuple is erased. */
     public static List<CoreRepresentation> leaves(CoreRepresentation proof) {

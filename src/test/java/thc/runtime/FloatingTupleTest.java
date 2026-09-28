@@ -184,16 +184,8 @@ class FloatingTupleTest {
             assertThrows(IllegalStateException.class, () -> wrong.consume(frame, result, to, 0)); released(language);
         });
     }
-    @Test void floatingTupleInputsKeepScalarHandoffAndHostAggregateFrontiersDistinct() throws Exception {
+    @Test void floatingTupleInputsKeepTheirExactHostAggregateShape() throws Exception {
         withLanguage(true, language -> {
-            var integer = new CoreRepresentation(CoreKind.LONG, true, true, list("IntRep"), null, null, null, null, null);
-            for (var kind : list(CoreKind.FLOAT, CoreKind.DOUBLE)) {
-                var rep = kind == CoreKind.FLOAT ? "FloatRep" : "DoubleRep";
-                assertFalse(HandoffLayout.supports(rep)); assertTrue(HandoffLayout.supportsResult(rep));
-                var proof = new CoreRepresentation(kind, true, true, list(rep), null, null, null, null, null);
-                assertNull(HandoffEntry.create(language, new FrameLayout(), list(proof), integer, false));
-            }
-            if (language.getHandoffLayouts().getEnabled()) assertNotNull(HandoffEntry.create(language, new FrameLayout(), list(integer), integer, false));
             for (var backend : list("ast", "bytecode")) {
                 var p = program(language, backend, CoreModules.reachable(module(), "floatingTupleArgument"));
                 var input = ((GuestRoot) p.entryTarget("floatingTupleArgument").getRootNode()).getInputLayout();
