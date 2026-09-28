@@ -83,6 +83,16 @@ public final class ManagedNativeAllocations {
                 if (thread != Thread.currentThread()) throw fault("Native allocation borrow belongs to another thread");
                 if (!released) { released = true; lifetime.readLock().unlock(); }
             }
+
+            /** Preserve try-with-resources cleanup without expanding suppression into guest graphs. */
+            @TruffleBoundary void closeAfter(Throwable failure) {
+                if (failure == null) {
+                    close();
+                } else {
+                    try { close(); }
+                    catch (Throwable closing) { failure.addSuppressed(closing); }
+                }
+            }
         }
 
         void requireFreeable() {

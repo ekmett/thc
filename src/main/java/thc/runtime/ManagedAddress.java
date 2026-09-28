@@ -683,7 +683,9 @@ public final class ManagedAddress {
         if (same) throw fault("Array/address copy requires distinct backing allocations");
     }
     public void copyToByteArray(Object destination, long destinationOffset, long count) {
-        try (var loan = borrow()) {
+        var loan = borrow();
+        Throwable failure = null;
+        try {
             // A zero-byte copy from null still checks the destination and identity.
             if (this != NULL || count != 0) requireRange(0, count);
             requireDistinctArray(destination);
@@ -707,10 +709,17 @@ public final class ManagedAddress {
             if (nativeOwner != null) copyOwnedNativeToArray(destination, destinationOffset, count);
             else ManagedByteArray.copyGuest(owner != null ? owner : literalBytes != null ? literalBytes : mutableBytes,
                 offset, destination, destinationOffset, count, false);
+        } catch (Throwable error) {
+            failure = error;
+            throw error;
+        } finally {
+            if (loan != null) loan.closeAfter(failure);
         }
     }
     public void copyFromByteArray(Object source, long sourceOffset, long count) {
-        try (var loan = borrow()) {
+        var loan = borrow();
+        Throwable failure = null;
+        try {
             requireRange(0, count, true); requireDistinctArray(source);
             long sourceSize = ManagedByteArray.sizeGuest(source);
             if (sourceOffset < 0 || sourceOffset > sourceSize || count > sourceSize - sourceOffset)
@@ -730,6 +739,11 @@ public final class ManagedAddress {
             }
             if (nativeOwner != null) copyArrayToOwnedNative(source, sourceOffset, count);
             else ManagedByteArray.copyGuest(source, sourceOffset, owner != null ? owner : mutableBytes, offset, count, false);
+        } catch (Throwable error) {
+            failure = error;
+            throw error;
+        } finally {
+            if (loan != null) loan.closeAfter(failure);
         }
     }
     @TruffleBoundary private void copyOwnedNativeToArray(Object destination, long destinationOffset, long count) {
@@ -747,13 +761,20 @@ public final class ManagedAddress {
         }
     }
     public void fill(long count, long value) {
-        try (var loan = borrow()) {
+        var loan = borrow();
+        Throwable failure = null;
+        try {
             requireRange(0, count, true);
             var pointer = externalPointer();
             if (pointer != null) pointer.fill(count, value);
             else if (nativeOwner != null) fillOwnedNative(count, value);
             else if (owner != null) owner.fill(offset, count, value);
             else java.util.Arrays.fill(java.util.Objects.requireNonNull(mutableBytes), (int) offset, (int) (offset + count), (byte) value);
+        } catch (Throwable error) {
+            failure = error;
+            throw error;
+        } finally {
+            if (loan != null) loan.closeAfter(failure);
         }
     }
     @TruffleBoundary private void fillOwnedNative(long count, long value) {

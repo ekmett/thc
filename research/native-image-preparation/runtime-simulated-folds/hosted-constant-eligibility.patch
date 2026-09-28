@@ -28,3 +28,22 @@ diff --git a/com/oracle/svm/hosted/phases/InlineBeforeAnalysisGraphDecoderImpl.j
          }
          var intrinsified = fieldValueInterceptionSupport.tryIntrinsifyFieldLoad(providers, node);
          if (intrinsified != null) {
+diff --git a/com/oracle/svm/graal/hosted/runtimecompilation/RuntimeCompiledMethodSupport.java b/com/oracle/svm/graal/hosted/runtimecompilation/RuntimeCompiledMethodSupport.java
+--- a/com/oracle/svm/graal/hosted/runtimecompilation/RuntimeCompiledMethodSupport.java
++++ b/com/oracle/svm/graal/hosted/runtimecompilation/RuntimeCompiledMethodSupport.java
+@@ -429,5 +429,14 @@ public class RuntimeCompiledMethodSupport {
+              * We cannot fold simulated values during initial before-analysis graph creation;
+              * however, this runs after analysis has completed.
+              */
+-            return readValue((AnalysisField) field, receiver, true, false);
++            JavaConstant value = readValue((AnalysisField) field, receiver, true, false);
++            /*
++             * The runtime graph encoder needs an actual hosted object. Simulation
++             * can produce object references without one even after analysis; leave
++             * their field loads intact instead of introducing unencodable constants.
++             */
++            if (value instanceof ImageHeapConstant heapConstant && heapConstant.getHostedObject() == null) {
++                return null;
++            }
++            return value;
+         }
