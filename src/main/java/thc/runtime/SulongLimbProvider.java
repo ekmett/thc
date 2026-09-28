@@ -78,14 +78,14 @@ public final class SulongLimbProvider implements LimbProvider {
         var owner = address.cbitsOwner();
         synchronized (owner != null ? owner : address.cbitsStorageKey()) {
             address.requireRange(0, region.getByteSize(), false);
-            return owner != null && owner.isPinned() ? scope.borrow(address, region.getByteSize())
+            return owner != null && owner.hasNativeStorage() ? scope.borrow(address, region.getByteSize())
                 : scope.snapshot(address.cbitsBacking(), (int) address.cbitsOffset(), (int) region.getByteSize());
         }
     }
     private static NativeLimbScope.Pointer destination(LimbRegion region, NativeLimbScope scope) {
         var address = region.getAddress();
         var owner = address.cbitsOwner();
-        return owner != null && owner.isPinned() ? scope.borrow(address, region.getByteSize()) : scope.allocate(region.getByteSize());
+        return owner != null && owner.hasNativeStorage() ? scope.borrow(address, region.getByteSize()) : scope.allocate(region.getByteSize());
     }
     private static void copyFrom(LimbRegion region, NativeLimbScope.Pointer pointer) { copyFrom(region, pointer, region.getLimbs()); }
     private static void copyFrom(LimbRegion region, NativeLimbScope.Pointer pointer, long written) {

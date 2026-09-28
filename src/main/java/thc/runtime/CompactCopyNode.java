@@ -84,10 +84,12 @@ public final class CompactCopyNode extends Node {
                     }
                 } else if (value instanceof ManagedAllocation allocation) {
                     if (allocation.isPinned()) throw failure(1);
-                    var copy = ManagedAllocation.immutable(allocation.copyBytesOut(0, allocation.getSize()), allocation.getAddressWidth());
+                    var copy = ManagedAllocation.immutableGuest(allocation.copyBytesOut(0, allocation.getSize()), allocation.getAddressWidth());
                     publish(current, value, copy, 16L + copy.getSize(), sharing, known, path, allocated, pending);
                 } else if (value instanceof byte[] bytes) {
-                    publish(current, value, bytes.clone(), 16L + bytes.length, sharing, known, path, allocated, pending);
+                    Object copy = thc.Language.currentState(this).getNativeByteArrays()
+                        ? ManagedAllocation.immutableGuest(bytes, (int) java.lang.foreign.ValueLayout.ADDRESS.byteSize()) : bytes.clone();
+                    publish(current, value, copy, 16L + bytes.length, sharing, known, path, allocated, pending);
                 } else if (value instanceof Object[] array) {
                     if (!ManagedArray.isFrozen(array)) throw failure(2);
                     var copy = ManagedArray.freeze(new Object[array.length]);

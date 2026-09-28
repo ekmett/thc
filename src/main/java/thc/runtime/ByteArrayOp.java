@@ -312,7 +312,9 @@ public enum ByteArrayOp {
             switch (operation) {
                 case SIZE, SIZE_MUTABLE: return ManagedByteArray.sizeGuest(bytes);
                 case IS_PINNED, IS_MUTABLE_PINNED, IS_WEAKLY_PINNED, IS_MUTABLE_WEAKLY_PINNED:
-                    if (bytes instanceof ManagedAllocation owner) return owner.isPinned() ? 1L : 0L;
+                    if (bytes instanceof ManagedAllocation owner) return
+                        (operation == IS_WEAKLY_PINNED || operation == IS_MUTABLE_WEAKLY_PINNED
+                            ? owner.hasNativeStorage() : owner.isPinned()) ? 1L : 0L;
                     if (bytes instanceof byte[]) return 0L;
                     throw fault("Expected a managed ByteArray#");
                 case COMPARE: {
@@ -368,7 +370,7 @@ public enum ByteArrayOp {
             if (operation == NEW) {
                 long count = operands[0].executeRequiredLong(frame);
                 state(frame, 1);
-                FrameAccess.INSTANCE.write(frame, slots[offset], ManagedByteArray.allocateGuest(count));
+                FrameAccess.INSTANCE.write(frame, slots[offset], ManagedByteArray.allocateGuest(count, thc.Language.currentState(this).getNativeByteArrays()));
                 return null;
             }
             Object bytes = operands[0].execute(frame);
@@ -382,7 +384,7 @@ public enum ByteArrayOp {
                 case RESIZE: {
                     long count = operands[1].executeRequiredLong(frame);
                     state(frame, 2);
-                    FrameAccess.INSTANCE.write(frame, slots[offset], ManagedByteArray.resizeGuest(bytes, count)); break;
+                    FrameAccess.INSTANCE.write(frame, slots[offset], ManagedByteArray.resizeGuest(bytes, count, thc.Language.currentState(this).getNativeByteArrays())); break;
                 }
                 default: {
                     long index = operands[1].executeRequiredLong(frame);

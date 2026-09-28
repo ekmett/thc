@@ -16,7 +16,7 @@ import static thc.runtime.RuntimeServiceStatus.fault;
 public final class ManagedAllocation {
     private final byte[] bytes;
     private final MemorySegment segment;
-    private final boolean writable, staticImage;
+    private final boolean writable, staticImage, pinned;
     private final int pointerBytes;
     private Map<Integer, ManagedAddress> pointers;
     private PackageScalarFunction nativePointerProvenance;
@@ -29,20 +29,22 @@ public final class ManagedAllocation {
     private static final VarHandle BYTE_ACCESS = ValueLayout.JAVA_BYTE.varHandle();
     static { MemorySegment.ofArray(new byte[0]); }
 
-    private ManagedAllocation(byte[] bytes, MemorySegment segment, boolean writable, int pointerBytes, boolean staticImage) {
+    private ManagedAllocation(byte[] bytes, MemorySegment segment, boolean writable, int pointerBytes, boolean staticImage, boolean pinned) {
         if (pointerBytes != 4 && pointerBytes != 8) throw fault("Unsupported target pointer width");
         this.bytes = bytes; this.segment = segment; this.writable = writable;
-        this.pointerBytes = pointerBytes; this.staticImage = staticImage;
+        this.pointerBytes = pointerBytes; this.staticImage = staticImage; this.pinned = pinned;
         logicalSize = (int) segment.byteSize();
     }
-    public boolean isPinned() { return segment.isNative(); }
+    /** GHC's strong pinned contract excludes compact copying, unlike stable physical backing. */
+    public boolean isPinned() { return pinned; }
+    public boolean hasNativeStorage() { return segment.isNative(); }
     public long getSize() { return logicalSize; }
     public int getAddressWidth() { return pointerBytes; }
     public boolean isWritable() { return writable; }
     public boolean isStaticImage() { return staticImage; }
     public boolean ownsStorage(byte[] candidate) { return bytes == candidate; }
     public Object storageKey() { return bytes == null ? this : bytes; }
-    public MemorySegment nativeSegment() { return isPinned() ? segment : null; }
+    public MemorySegment nativeSegment() { return hasNativeStorage() ? segment : null; }
 
     public synchronized MemorySegment exposeSegment() {
         if (pointerCapable) throw fault("Pointer-bearing pinned array cannot be passed to native bitcode");
@@ -100,7 +102,7 @@ public final class ManagedAllocation {
         if (--pointerPublicationDepth == 0) { pointerPublisher = null; notifyAll(); }
     }
     synchronized void requirePointerSnapshot(Map<Integer, ManagedAddress> expected, long size, PackageScalarFunction entry) {
-        if (!isPinned() || pointerBytes != ValueLayout.ADDRESS.byteSize())
+        if (!hasNativeStorage() || pointerBytes != ValueLayout.ADDRESS.byteSize())
             throw fault("Package pointer cells require native pinned storage and host pointer width");
         if (nativePointerProvenance != null) {
             PackageFinalizerRegistry.requireCurrent(nativePointerProvenance);
@@ -307,7 +309,7 @@ public final class ManagedAllocation {
         if (index < 0 || index > Long.MAX_VALUE / width) throw fault("Managed allocation element outside its backing storage");
         int start = range(index * width, width);
         if (intersectsPointer(start, width)) throw fault("Atomic Int access overlaps a managed pointer cell");
-        if (isPinned()) {
+        if (hasNativeStorage()) {
             var addressOperation = width == 1 ? AtomicAddressOp.CAS8 : width == 2 ? AtomicAddressOp.CAS16 : AtomicAddressOp.CAS32;
             int old = addressOperation.numericInt(ManagedAddress.fromGuestByteArray(this).plus(start), operand, replacement);
             return width == 1 ? (byte) old : width == 2 ? (short) old : old;
@@ -328,7 +330,7 @@ public final class ManagedAllocation {
         if (index < 0 || index > Long.MAX_VALUE / width) throw fault("Managed allocation element outside its backing storage");
         int start = range(index * width, width);
         if (intersectsPointer(start, width)) throw fault("Atomic Int access overlaps a managed pointer cell");
-        if (isPinned()) {
+        if (hasNativeStorage()) {
             var addressOperation = switch (operation) {
                 case READ -> AtomicAddressOp.READ; case WRITE -> AtomicAddressOp.WRITE;
                 case ADD -> AtomicAddressOp.ADD; case SUB -> AtomicAddressOp.SUB;
@@ -448,12 +450,15 @@ public final class ManagedAllocation {
         synchronized (COPY_TIE_LOCK) { synchronized (other) { synchronized (this) { return action.get(); } } }
     }
     public synchronized ManagedAllocation resized(long newSize) {
+        return resized(newSize, hasNativeStorage() && !pinned);
+    }
+    public synchronized ManagedAllocation resized(long newSize, boolean nativeBacking) {
         awaitPointerPublication();
         mutable();
         if (newSize < 0 || newSize > Integer.MAX_VALUE) throw fault("Managed allocation size outside JVM domain");
         if (newSize == getSize()) return this;
         if (newSize < getSize()) { shrink(newSize); return this; }
-        return pointerCapable ? resizeWithPointerCells(newSize) : resizedStorage(newSize);
+        return pointerCapable ? resizeWithPointerCells(newSize, nativeBacking) : resizedStorage(newSize, nativeBacking);
     }
     @TruffleBoundary public synchronized void shrink(long newSize) {
         mutable();
@@ -468,17 +473,17 @@ public final class ManagedAllocation {
         }
         logicalSize = (int) newSize;
     }
-    @TruffleBoundary private ManagedAllocation resizeWithPointerCells(long newSize) {
+    @TruffleBoundary private ManagedAllocation resizeWithPointerCells(long newSize, boolean nativeBacking) {
         if (newSize < getSize() && pointers != null) for (int start : pointers.keySet())
             if (start < newSize && (long) start + pointerBytes > newSize) throw fault("Cannot truncate a managed pointer cell");
-        var replacement = resizedStorage(newSize);
+        var replacement = resizedStorage(newSize, nativeBacking);
         if (pointers != null) for (var cell : pointers.entrySet()) if ((long) cell.getKey() + pointerBytes <= newSize) {
             replacement.cells().put(cell.getKey(), cell.getValue()); replacement.pointerCapable = true;
         }
         return replacement;
     }
-    private ManagedAllocation resizedStorage(long newSize) {
-        var replacement = mutable(newSize, pointerBytes);
+    private ManagedAllocation resizedStorage(long newSize, boolean nativeBacking) {
+        var replacement = nativeBacking ? nativeMutable(newSize, pointerBytes) : mutable(newSize, pointerBytes);
         MemorySegment.copy(segment, 0, replacement.segment, 0, Math.min(getSize(), newSize));
         return replacement;
     }
@@ -492,18 +497,31 @@ public final class ManagedAllocation {
     public static ManagedAllocation mutable(long size, int pointerBytes) { return mutable(size, pointerBytes, false, 8); }
     public static ManagedAllocation mutable(long size, int pointerBytes, boolean pinned) { return mutable(size, pointerBytes, pinned, 8); }
     public static ManagedAllocation mutable(long size, int pointerBytes, boolean pinned, long alignment) {
+        return allocate(size, pointerBytes, pinned, pinned, alignment);
+    }
+    public static ManagedAllocation nativeMutable(long size, int pointerBytes) {
+        return allocate(size, pointerBytes, true, false, 8);
+    }
+    private static ManagedAllocation allocate(long size, int pointerBytes, boolean nativeBacking, boolean pinned, long alignment) {
         if (size < 0 || size > Integer.MAX_VALUE) throw fault("Managed allocation size outside JVM domain");
-        if (pinned) {
+        if (nativeBacking) {
             if (alignment <= 0 || (alignment & (alignment - 1)) != 0) throw fault("Pinned ByteArray# alignment must be a positive power of two");
             var storage = Arena.ofAuto().allocate(size + 1, alignment).asSlice(0, size);
-            return new ManagedAllocation(null, storage, true, pointerBytes, false);
+            return new ManagedAllocation(null, storage, true, pointerBytes, false, pinned);
         }
         var bytes = new byte[(int) size];
-        return new ManagedAllocation(bytes, MemorySegment.ofArray(bytes), true, pointerBytes, false);
+        return new ManagedAllocation(bytes, MemorySegment.ofArray(bytes), true, pointerBytes, false, false);
     }
     public static ManagedAllocation immutable(byte[] bytes, int pointerBytes) { return immutable(bytes, pointerBytes, false); }
     public static ManagedAllocation immutable(byte[] bytes, int pointerBytes, boolean staticImage) {
         var copy = bytes.clone();
-        return new ManagedAllocation(copy, MemorySegment.ofArray(copy), false, pointerBytes, staticImage);
+        return new ManagedAllocation(copy, MemorySegment.ofArray(copy), false, pointerBytes, staticImage, false);
+    }
+    /** A real guest copy, not promotion of an existing alias at a foreign boundary. */
+    public static ManagedAllocation immutableGuest(byte[] bytes, int pointerBytes) {
+        if (!thc.Language.currentState().getNativeByteArrays()) return immutable(bytes, pointerBytes);
+        var storage = Arena.ofAuto().allocate(bytes.length + 1L, 8).asSlice(0, bytes.length);
+        MemorySegment.copy(MemorySegment.ofArray(bytes), 0, storage, 0, bytes.length);
+        return new ManagedAllocation(null, storage, false, pointerBytes, false, false);
     }
 }

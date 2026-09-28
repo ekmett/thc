@@ -47,11 +47,11 @@ final class PackagePointerCells {
             var cells = owner.pointerSnapshot();
             if (!cells.isEmpty()) {
                 active = true;
-                if (!owner.isPinned() || owner.getAddressWidth() != ValueLayout.ADDRESS.byteSize())
+                if (!owner.hasNativeStorage() || owner.getAddressWidth() != ValueLayout.ADDRESS.byteSize())
                     throw fault("Package pointer cells require native pinned storage and host pointer width");
                 pending.addAll(cells.values());
             }
-            if (owner.isPinned()) allocations.put(owner, new Allocation(owner, cells));
+            if (owner.hasNativeStorage()) allocations.put(owner, new Allocation(owner, cells));
         }
         if (!active) return;
         PackageFinalizerRegistry.requireCurrent(entry);
@@ -70,7 +70,7 @@ final class PackagePointerCells {
             return;
         }
         if (value.stableHandle() != null) { entry.getOwner().getStablePointers().validate(value); return; }
-        if (value.nativeAllocation() != null || value.cbitsOwner() != null && value.cbitsOwner().isPinned()) {
+        if (value.nativeAllocation() != null || value.cbitsOwner() != null && value.cbitsOwner().hasNativeStorage()) {
             value.requireRange(0, 0); return;
         }
         if (value.nativeImageKey() != null) { value.requireRange(0, 0); return; }

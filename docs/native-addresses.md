@@ -11,6 +11,11 @@ Buffer-only interop and native pointer views share this same storage. Ordinary
 mutable and immutable heap allocations remain moving JVM arrays and reject
 numeric projection; unsafe freeze does not promote storage.
 
+The opt-in [native byte-array creation policy](bytearrays.md) also gives ordinary
+guest arrays stable physical backing. They project and recover through the same
+owner/range registry while remaining strong-unpinned and compactable. No array is
+promoted at a foreign call; host-supplied raw arrays remain unprojectable.
+
 Static literals and explicitly constructed runtime info-table images can acquire
 their read-only native materialization. Static info tables retain their allocation
 identity for weak stack-provenance lookup; ordinary immutable guest arrays remain

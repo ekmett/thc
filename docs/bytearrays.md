@@ -29,6 +29,30 @@ Lowering checks State, unlifted references, physical carriers, saturation and
 logical result shape. Integral scalar annotations share `Long`; strict exporter
 audits independently check exact source-level representations.
 
+Heap storage remains the default. Embedders may opt in to native backing at
+creation with `allowExperimentalOptions(true)`, `allowNativeAccess(true)` and
+`option("thc.ByteArrayStorage", "native")`; `heap` explicitly selects the default.
+Launcher contexts accept `-Dthc.byteArrayStorage=native` through JVM options.
+The option is context-local and requires native authority before the context
+initializes. It does not change `--ffi` selection or enable any additional C ABI.
+
+Under this policy ordinary guest allocations and resize replacements use the
+existing automatic FFM arena ownership. Unsafe freeze/thaw keep the same owner;
+compact copies and imported compact byte storage use the same creation policy.
+Physical native backing is distinct from GHC's strong-pinned contract: ordinary
+native-backed arrays report weak-pinned true, strong-pinned false, and remain
+compactable. Explicit pinned allocations retain their strong guarantee and
+cannot be compacted. Shrink retains the allocation; growth returns a new,
+strong-unpinned prefix copy as required by GHC.
+
+No foreign call copies, promotes, or pins an existing array. Raw host `byte[]`
+ingress remains heap-backed, including its existing resize path, and still cannot
+be passed to C implementations requiring a native pointer. Static literal images
+retain their existing separate transport. Native arrays follow the lifetime of
+their owners and views, not context closure; numeric pointer bits do not root
+them. Each allocation incurs native-memory/FFM cleanup bookkeeping instead of a
+JVM byte array. This opt-in policy is not a default-performance recommendation.
+
 Writes and copies evaluate all their operands, including the state expression, before the
 effect. Core case evaluation preserves ordering. Freeze returns the same object
 without a copy, matching GHC's shared mutable/immutable heap representation.

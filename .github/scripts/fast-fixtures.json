@@ -15,6 +15,7 @@
     "thc.runtime.PackagePointerCellsTest",
     "thc.runtime.CpuAffinityApiTest",
     "thc.runtime.ManagedCompactsTest",
+    "thc.runtime.NativeByteArrayPolicyTest",
     "thc.runtime.CompactImagesTest",
     "thc.runtime.ManagedSTMTest",
     "thc.runtime.SimdWideArrayProofTest",

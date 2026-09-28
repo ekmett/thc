@@ -64,7 +64,7 @@ final class WindowsMd5 {
         }
         private MemorySegment image(ManagedAddress address) {
             var owner = address.cbitsOwner();
-            if (owner != null && owner.isPinned()) return address.cbitsSegment();
+            if (owner != null && owner.hasNativeStorage()) return address.cbitsSegment();
             var bytes = address.cbitsBacking();
             var image = images.get(bytes);
             if (image == null) {
@@ -76,7 +76,7 @@ final class WindowsMd5 {
         }
         private void copyBack(ManagedAddress address, MemorySegment image, long size) {
             var owner = address.cbitsOwner();
-            if (owner != null && owner.isPinned()) { Reference.reachabilityFence(address); return; }
+            if (owner != null && owner.hasNativeStorage()) { Reference.reachabilityFence(address); return; }
             long offset = address.cbitsOffset();
             MemorySegment.copy(image, offset, MemorySegment.ofArray(address.cbitsBacking()), offset, size);
             Reference.reachabilityFence(address);
