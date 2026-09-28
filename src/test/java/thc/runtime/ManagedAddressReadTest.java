@@ -93,11 +93,11 @@ class ManagedAddressReadTest {
     private long read(ManagedAddressRead operation,ManagedAddress address,long offset){if(operation.isInt())return observed(operation,operation.readInt(address,offset));return observed(operation,operation.read(address,offset));}
     @Test void fullWidthBoundsNegativeDerivedOffsetsAndOverflow() {
         var bytes=new byte[32];for(int i=0;i<bytes.length;i++)bytes[i]=(byte)(i*37+129);
-        for(var operation:ManagedAddressRead.values()){int width=operation.getWidth();for(int base=0;base<=bytes.length;base++){var address=ManagedAddress.Companion.fromByteArray(bytes).plus(base);
+        for(var operation:ManagedAddressRead.values()){int width=operation.getWidth();for(int base=0;base<=bytes.length;base++){var address=ManagedAddress.fromByteArray(bytes).plus(base);
             for(long o=-9;o<=9;o++){final long offset=o;long start=base+offset*width;if(start>=0&&start+width<=bytes.length)assertEquals(expected(operation,bytes,(int)start),read(operation,address,offset),operation+"/"+base+"/"+offset);else assertThrows(RuntimeFault.class,()->read(operation,address,offset));}
             for(long offset:new long[]{Long.MIN_VALUE,Long.MAX_VALUE,Long.MIN_VALUE/width-1,Long.MAX_VALUE/width+1,1L<<32,-(1L<<32)})assertThrows(RuntimeFault.class,()->read(operation,address,offset));}
-            assertThrows(RuntimeFault.class,()->read(operation,ManagedAddress.Companion.fromByteArray(new byte[width-1]),0));assertThrows(RuntimeFault.class,()->read(operation,ManagedAddress.Companion.fromByteArray(new byte[0]),0));}
-        var allOnes=ManagedAddress.Companion.fromHex("ffffffffffffffff");assertEquals(65535L,read(ManagedAddressRead.WORD16,allOnes,0));assertEquals(-1L,read(ManagedAddressRead.INT16,allOnes,0));
+            assertThrows(RuntimeFault.class,()->read(operation,ManagedAddress.fromByteArray(new byte[width-1]),0));assertThrows(RuntimeFault.class,()->read(operation,ManagedAddress.fromByteArray(new byte[0]),0));}
+        var allOnes=ManagedAddress.fromHex("ffffffffffffffff");assertEquals(65535L,read(ManagedAddressRead.WORD16,allOnes,0));assertEquals(-1L,read(ManagedAddressRead.INT16,allOnes,0));
         assertEquals(4294967295L,read(ManagedAddressRead.WORD32,allOnes,0));assertEquals(4294967295L,ManagedAddressRead.WIDE_CHAR.read(allOnes,0));assertEquals(-1L,read(ManagedAddressRead.INT32,allOnes,0));assertEquals(-1L,ManagedAddressRead.WORD.read(allOnes,0));assertEquals(-1L,ManagedAddressRead.INT.read(allOnes,0));
     }
     private static <E extends Throwable> RuntimeException rethrow(Throwable failure) throws E { throw (E) failure; }
@@ -109,7 +109,7 @@ class ManagedAddressReadTest {
             var frame=Truffle.getRuntime().createVirtualFrame(new Object[0],builder.build());var bytes=new byte[16];Arrays.fill(bytes,(byte)127);var events=new ArrayList<String>();FrameAccess.writeLong(frame,0,17L);
             if(read.isInt())FrameAccess.writeInt(frame,1,91);else FrameAccess.writeLong(frame,1,91L);
             var token=new Expr(){@Override public Object execute(VirtualFrame current){events.add("state");try{assertEquals(91L,payload(read,frame));}catch(com.oracle.truffle.api.frame.FrameSlotTypeException failure){throw rethrow(failure);}if(mode.equals("state-throws"))throw new RuntimeFault("failed state");bytes[0]=0;return mode.equals("bad-state")?1L:Unit.INSTANCE;}};
-            var expression=new PinnedMemoryExpression(operation,CoreRepresentation.Companion.getUNKNOWN(),new Expr[]{operand("address",ManagedAddress.Companion.fromByteArray(bytes),events),operand("offset",mode.equals("bounds")?17L:0L,events),token},false);
+            var expression=new PinnedMemoryExpression(operation,CoreRepresentation.UNKNOWN,new Expr[]{operand("address",ManagedAddress.fromByteArray(bytes),events),operand("offset",mode.equals("bounds")?17L:0L,events),token},false);
             if(mode.equals("ok")){expression.executeTuple(frame,new int[]{0,1},1);assertEquals(expected(read,bytes,0),payload(read,frame));}else{assertThrows(RuntimeFault.class,()->expression.executeTuple(frame,new int[]{0,1},1));assertEquals(91L,payload(read,frame));}
             assertEquals(17L,frame.getLong(0));assertEquals(List.of("address","offset","state"),events);
         }
@@ -129,7 +129,7 @@ class ManagedAddressReadTest {
     @Test void compiledReadsObserveMutationsAndRejectWrongCarriersInBothBackends() throws Exception {
         for(var backend:List.of("ast","bytecode"))for(var operation:operations)try(var context=context()) {context.initialize("thc");context.enter();
             try{var language=TruffleLanguage.LanguageReference.create(Language.class).get(null);var runtime=program(language,synthetic(operation),backend);var target=runtime.entryTarget("read");var read=Objects.requireNonNull(operation.getAddressRead());
-                var bytes=new byte[16];var derived=ManagedAddress.Companion.fromByteArray(bytes).plus(8);for(int v=0;v<=255;v++){bytes[0]=(byte)v;call(operation,target,derived,-8L/read.getWidth(),Unit.INSTANCE);}compile(target);
+                var bytes=new byte[16];var derived=ManagedAddress.fromByteArray(bytes).plus(8);for(int v=0;v<=255;v++){bytes[0]=(byte)v;call(operation,target,derived,-8L/read.getWidth(),Unit.INSTANCE);}compile(target);
                 for(int v=255;v>=0;v--){Arrays.fill(bytes,(byte)v);assertEquals(expected(read,bytes,0),call(operation,target,derived,-8L/read.getWidth(),Unit.INSTANCE));valid(target);released(language);}
                 for(var bad:Arrays.asList(null,0L,new Object(),bytes))assertThrows(RuntimeFault.class,()->call(operation,target,bad,0L,Unit.INSTANCE));
                 for(var bad:Arrays.asList(null,0L,new Object()))assertThrows(RuntimeFault.class,()->call(operation,target,derived,0L,bad));

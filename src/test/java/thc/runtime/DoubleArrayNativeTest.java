@@ -519,7 +519,7 @@ public class DoubleArrayNativeTest {
             .orElseThrow();
     }
     private Map<String, Object> metadata(Object node) {
-        return CoreRepresentations.INSTANCE.metadata((List<Object>) node);
+        return CoreRepresentations.metadata((List<Object>) node);
     }
     private Map<String, Object> rep(Object node) {
         return (Map<String, Object>) metadata(node).get("rep");

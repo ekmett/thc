@@ -82,15 +82,15 @@ class Md5ForeignCallTest {
                             var bytes = new byte[88]; Arrays.fill(bytes, (byte) 0xa5);
                             var input = new byte[size]; for (int i = 0; i < size; i++) input[i] = (byte) (i * 73 + 127);
                             var output = new byte[16]; Arrays.fill(output, (byte) 0xd3);
-                            var address = ManagedAddress.Companion.fromByteArray(bytes); var source = ManagedAddress.Companion.fromByteArray(input);
-                            var result = ManagedAddress.Companion.fromByteArray(output);
+                            var address = ManagedAddress.fromByteArray(bytes); var source = ManagedAddress.fromByteArray(input);
+                            var result = ManagedAddress.fromByteArray(output);
                             if (operation != Md5ForeignOp.INIT) ManagedMd5.init(address);
                             if (operation == Md5ForeignOp.FINAL) ManagedMd5.update(address, source, size);
                             var expected = bytes.clone(); var expectedOutput = output.clone();
                             switch (operation) {
-                                case INIT -> ManagedMd5.init(ManagedAddress.Companion.fromByteArray(expected));
-                                case UPDATE -> ManagedMd5.update(ManagedAddress.Companion.fromByteArray(expected), source, size);
-                                case FINAL -> ManagedMd5.finish(ManagedAddress.Companion.fromByteArray(expectedOutput), ManagedAddress.Companion.fromByteArray(expected));
+                                case INIT -> ManagedMd5.init(ManagedAddress.fromByteArray(expected));
+                                case UPDATE -> ManagedMd5.update(ManagedAddress.fromByteArray(expected), source, size);
+                                case FINAL -> ManagedMd5.finish(ManagedAddress.fromByteArray(expectedOutput), ManagedAddress.fromByteArray(expected));
                             }
                             long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
                             assertEquals(17L, call(operation == Md5ForeignOp.FINAL ? result : address, operation == Md5ForeignOp.FINAL ? address : source, size));
@@ -104,12 +104,12 @@ class Md5ForeignCallTest {
                 entry.getClass().getMethod("compile", boolean.class).invoke(entry, true); valid(entry); caller.positive(true);
                 var bytes = new byte[88]; Arrays.fill(bytes, (byte) 0xa5); var output = new byte[16]; Arrays.fill(output, (byte) 0xd3);
                 var beforeBytes = bytes.clone(); var beforeOutput = output.clone();
-                var badState = assertThrows(RuntimeFault.class, () -> caller.call(ManagedAddress.Companion.fromByteArray(operation == Md5ForeignOp.FINAL ? output : bytes),
-                    ManagedAddress.Companion.fromByteArray(bytes), Integer.MAX_VALUE, 7L));
+                var badState = assertThrows(RuntimeFault.class, () -> caller.call(ManagedAddress.fromByteArray(operation == Md5ForeignOp.FINAL ? output : bytes),
+                    ManagedAddress.fromByteArray(bytes), Integer.MAX_VALUE, 7L));
                 assertTrue(badState.getMessage().contains("zero-width scalar carrier"), badState.getMessage());
                 assertArrayEquals(beforeBytes, bytes); assertArrayEquals(beforeOutput, output); released(language);
                 if (operation == Md5ForeignOp.UPDATE) for (long length : new long[]{-1,1L << 32,Long.MAX_VALUE}) {
-                    assertThrows(RuntimeFault.class, () -> caller.call(ManagedAddress.Companion.fromByteArray(bytes), ManagedAddress.Companion.fromByteArray(output), length));
+                    assertThrows(RuntimeFault.class, () -> caller.call(ManagedAddress.fromByteArray(bytes), ManagedAddress.fromByteArray(output), length));
                     assertArrayEquals(beforeBytes, bytes); assertArrayEquals(beforeOutput, output); released(language);
                 }
             } finally { context.leave(); }

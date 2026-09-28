@@ -327,7 +327,7 @@ public class BoxedArrayExtensionsTest {
         var events = new ArrayList<String>();
         for (var operation : List.of(ArrayOp.COPY, ArrayOp.COPY_MUTABLE)) {
             events.clear();
-            var expr = ArrayOp.expression(operation, CoreRepresentation.Companion.getUNKNOWN(),
+            var expr = ArrayOp.expression(operation, CoreRepresentation.UNKNOWN,
                 new Expr[] {operand(events, "source", source), operand(events, "from", Long.MAX_VALUE),
                     operand(events, "destination", destination), operand(events, "to", Long.MAX_VALUE),
                     operand(events, "count", Long.MAX_VALUE), operand(events, "state", 9L)});
@@ -344,7 +344,7 @@ public class BoxedArrayExtensionsTest {
                 : new Expr[] {operand(events, "array", source), operand(events, "state", 9L)};
             assertThrows(RuntimeFault.class,
                 ()
-                    -> ArrayOp.expression(operation, CoreRepresentation.Companion.getUNKNOWN(), args)
+                    -> ArrayOp.expression(operation, CoreRepresentation.UNKNOWN, args)
                         .executeTuple(frame, new int[] {slot}, 0));
             assertSame(sentinel, frame.getObject(slot));
         }
@@ -387,7 +387,7 @@ public class BoxedArrayExtensionsTest {
                                 var args = (List<List<Object>>) app.get(2);
                                 var flags = (List<Object>) app.get(3);var proof=(Map<String,Object>)((Map<?,?>)app.get(6)).get("rep");
                                 var first =
-                                    (Map<String, Object>) CoreRepresentations.INSTANCE.metadata(args.get(0)).get("rep");
+                                    (Map<String, Object>) CoreRepresentations.metadata(args.get(0)).get("rep");
                                 switch (mutation) {
                                     case 0 -> flags.set(0, true);
                                     case 1 -> flags.set(0, 0L);
@@ -415,7 +415,7 @@ public class BoxedArrayExtensionsTest {
                                         var integral =
                                             args.stream()
                                                 .map(a
-                                                    -> (Map<String, Object>) CoreRepresentations.INSTANCE.metadata(a)
+                                                    -> (Map<String, Object>) CoreRepresentations.metadata(a)
                                                         .get("rep"))
                                                 .filter(p -> "long".equals(p.get("kind")))
                                                 .findFirst()

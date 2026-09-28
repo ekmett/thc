@@ -29,7 +29,7 @@ public final class CoreOriginalStdio {
         finally { state.getThreads().leaveForeign(previous); }
     }
     public static ManagedStdio current(Node node) { return Language.currentState(node).getStdio(); }
-    public static NativeDirectoryStreams directories(Node node) { return NativeFileProvider.Companion.current$org_intelligence_thc().getDirectoryStreams$org_intelligence_thc(); }
+    public static NativeDirectoryStreams directories(Node node) { return NativeFileProvider.current().getDirectoryStreams(); }
     public static RtsFileLocks locks(Node node) { return Language.currentState(node).getRtsFileLocks(); }
     public static ManagedIconv iconv(Node node) { return Language.currentState(node).getIconv(); }
     public static ManagedStrerror strerror(Node node) { return Language.currentState(node).getStrerror(); }
@@ -56,7 +56,7 @@ public final class CoreOriginalStdio {
     }
 
     public static void validateHead(List<?> function, boolean defined) {
-        var metadata = CoreRepresentations.INSTANCE.metadata(function);
+        var metadata = CoreRepresentations.metadata(function);
         var proof = metadata != null && metadata.get("rep") instanceof Map<?, ?> map ? map : null;
         requireProof(function.size() == 3 && "var".equals(function.get(0)) && function.get(1) instanceof String name &&
             !name.isEmpty() && !defined && proof != null && proof.keySet().equals(SCALAR_KEYS) &&

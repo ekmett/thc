@@ -60,7 +60,7 @@ class AggregateHeapStorageTest {
         @Override public Object execute(VirtualFrame frame) { return copy.execute(frame, (ManagedCompact) frame.getArguments()[0], frame.getArguments()[1], true); }
     }
     private CompactImages.Fixed restore(Language.State state, DataValue value, byte[] bytes) {
-        var block = state.compactImages.allocate(bytes.length, ManagedAddress.Companion.nullAddress());
+        var block = state.compactImages.allocate(bytes.length, ManagedAddress.nullAddress());
         block.copyFromByteArray(bytes, 0, bytes.length); return state.compactImages.fixup(block, state.heapAddresses.address(value));
     }
     @Test void inactiveSumReferencesAreNotRootsWhileActivePayloadsRemainLazy() {
@@ -89,7 +89,7 @@ class AggregateHeapStorageTest {
                     // Header28, node identity8/tag1/layout8, then the sum tag at45.
                     var malformed = bytes.clone(); var buffer = ByteBuffer.wrap(malformed); buffer.putLong(45, 7L);
                     var crc = new CRC32(); crc.update(malformed, 0, malformed.length - 8); buffer.putLong(malformed.length - 8, crc.getValue());
-                    assertSame(ManagedAddress.Companion.nullAddress(), restore(state, value, malformed).getRoot());
+                    assertSame(ManagedAddress.nullAddress(), restore(state, value, malformed).getRoot());
                 } else { var result = (DataValue) layout.read(decoded, 1); assertEquals(91L, result.getLayout().readLong(result, 0)); }
             }
         });

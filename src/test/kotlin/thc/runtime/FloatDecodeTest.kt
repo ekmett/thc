@@ -343,8 +343,7 @@ class FloatDecodeTest {
         val slots = IntArray(4) { descriptor.addSlot(FrameSlotKind.Long, null, null) }
         val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), descriptor.build())
         for (operation in FloatDecodeOp.values()) {
-            val proof = CoreRepresentation(CoreKind.UNKNOWN, evaluated = true, present = true,
-                components = List(operation.fields) { CoreRepresentation(CoreKind.LONG, evaluated = true, present = true) })
+            val proof = CoreRepresentation(CoreKind.UNKNOWN, true, true, null, List(operation.fields) { CoreRepresentation(CoreKind.LONG, true, true) })
             var calls = 0
             val operand = object : Expr() {
                 override fun execute(frame: VirtualFrame): Any? = error("Boxed operand execution")

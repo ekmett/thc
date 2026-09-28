@@ -165,7 +165,7 @@ Each layout owns a private allocation key and a private generated factory. Alloc
 
 Operations on existing storage retain explicit owning-layout and field-index checks. This identity test is essential for array-based storage, where different layouts can share a generated Java class. Fresh initialization uses only the owning factory's storage. Precise reference writes still perform `StaticProperty`'s assignability check independently of the storage-check flag; primitive and zero-width field validation also remain. Captured aliases and recursive cells keep their existing identities and representations.
 
-[StaticShapeSafetyTest](../src/test/kotlin/thc/runtime/StaticShapeSafetyTest.kt) covers checked and unchecked field-based and array-based storage, shared carrier classes, forged constructor/subclass/factory keys, wrong layouts and indices, invalid field values, and the engine override. This establishes the ownership and access invariants; the experimental flag itself makes no performance guarantee.
+[StaticShapeSafetyTest](../src/test/java/thc/runtime/StaticShapeSafetyTest.java) covers checked and unchecked field-based and array-based storage, shared carrier classes, forged constructor/subclass/factory keys, wrong layouts and indices, invalid field values, and the engine override. This establishes the ownership and access invariants; the experimental flag itself makes no performance guarantee.
 
 `-Dthc.constructorClassIdentity=true` separately experiments with constructor
 matching through the generated Java class. It defaults to false. A class can

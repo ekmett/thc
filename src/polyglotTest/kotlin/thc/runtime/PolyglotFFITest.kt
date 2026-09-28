@@ -281,7 +281,7 @@ class PolyglotFFITest {
             override fun execute(frame: VirtualFrame): Any? = action(frame)
         }.callTarget
         val program = object : ExecutableProgram {
-            override val asynchronousExceptions: Boolean = true
+            override fun getAsynchronousExceptions(): Boolean = true
             override fun hostEntryTarget(arity: Int): RootCallTarget = target
             override fun entryValue(name: String): Any = Unit
             override fun entryTarget(name: String): RootCallTarget = target
@@ -530,7 +530,7 @@ class PolyglotFFITest {
                                 assertEquals(AsyncRequestState.PENDING, pending.get().state)
                                 assertSame(pending.get(), owner.threads.poll(target.rootNode)); pending.get().acknowledge()
                             } else {
-                                val saved = checkNotNull(savedGuestContinuation(answer))
+                                val saved = checkNotNull(SavedGuestContinuationKt.savedGuestContinuation(answer))
                                 assertSame(pending.get(), saved.asyncRequest())
                                 assertTrue(pending.get().compiledCapture)
                                 pending.get().acknowledge()

@@ -33,7 +33,7 @@ public final class AsyncContinuations {
     @TruffleBoundary public static RuntimeException uncaught(AsyncRequest request, Node node) {
         if (request.getTarget() != Thread.currentThread() || request.getState() != AsyncRequestState.CLAIMED)
             throw new IllegalStateException("Uncaught async request left its target or was already settled");
-        boolean foreignCallback = request.inForeignCallback$org_intelligence_thc();
+        boolean foreignCallback = request.inForeignCallback();
         request.acknowledge();
         GuestException guest = new GuestException(request.getPayload(), node);
         if (foreignCallback) throw new ForeignCallbackAsyncFailure(request.getPayload(), guest, node);

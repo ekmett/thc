@@ -45,7 +45,7 @@ class ManagedByteArrayCompareTest {
             var allocation = ManagedAllocation.mutable(40, 8, pinned); allocation.copyBytesIn(bytes, 0, 0, 40); var backing = allocation.nativeSegment();
             assertEquals(0L, ManagedByteArray.compareGuest(allocation, 0, bytes, 0, 40)); allocation.writeByte(0, 255);
             assertTrue(ManagedByteArray.compareGuest(allocation, 0, bytes, 0, 40) > 0); assertSame(backing, allocation.nativeSegment()); assertEquals(pinned, allocation.isPinned());
-            var address = ManagedAddress.Companion.fromByteArray(new byte[]{73});
+            var address = ManagedAddress.fromByteArray(new byte[]{73});
             // Comparison has not exposed storage: subsequent pointer installation
             // is still permitted, unlike native projection or a raw array escape.
             allocation.writeAddressByteOffset(8, address); assertSame(address, allocation.readAddressByteOffset(8));
@@ -69,7 +69,7 @@ class ManagedByteArrayCompareTest {
                 assertEquals(0L, ManagedByteArray.compareGuest(owner, 17, other, 17, 0)); assertTrue(ManagedByteArray.compareGuest(owner, 16, other, 16, 1) > 0);
             }
             assertEquals(0L, ManagedByteArray.compareGuest(owner, 17, owner, 17, 0));
-            for (var bad : Arrays.asList(null, 1L, ManagedAddress.Companion.nullAddress(), new Integer[]{1})) {
+            for (var bad : Arrays.asList(null, 1L, ManagedAddress.nullAddress(), new Integer[]{1})) {
                 assertThrows(RuntimeFault.class, () -> ManagedByteArray.compareGuest(owner, 0, bad, 0, 0));
                 assertThrows(RuntimeFault.class, () -> ManagedByteArray.compareGuest(bad, 0, owner, 0, 0));
             }
@@ -78,7 +78,7 @@ class ManagedByteArrayCompareTest {
     @Test void completePointerOverlapChecksPrecedeAnyEarlyMismatchOrAliasShortcut() {
         for (boolean pinned : new boolean[]{false, true}) {
             var owner = ManagedAllocation.mutable(40, 8, pinned); owner.fill(0, 40, 255);
-            var address = ManagedAddress.Companion.fromByteArray(new byte[]{73}); owner.writeAddressByteOffset(24, address);
+            var address = ManagedAddress.fromByteArray(new byte[]{73}); owner.writeAddressByteOffset(24, address);
             for (var other : storage(new byte[40])) {
                 for (var range : new long[][]{{0L, 40L}, {0L, 25L}, {23L, 2L}, {24L, 1L}, {31L, 1L}, {24L, 8L}}) {
                     long from = range[0], count = range[1];

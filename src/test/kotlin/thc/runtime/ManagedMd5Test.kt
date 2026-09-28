@@ -138,7 +138,7 @@ class ManagedMd5Test {
             "md5.h" to "a87296687a2f3dc6748264ff2a8a0c919518db55"), manifest["referenceGitBlobs"])
         val sources = manifest["sources"] as List<Map<String, String>>
         assertTrue(sources.any { it["path"] == "src/main/java/thc/runtime/ManagedMd5.java" })
-        assertTrue(sources.any { it["path"] == "src/main/kotlin/thc/runtime/LiteralAddresses.kt" })
+        assertTrue(sources.any { it["path"] == "src/main/java/thc/runtime/ManagedAddress.java" })
         assertEquals("9.14.1", manifest["ghc"])
         for (record in sources + (manifest["artifacts"] as List<Map<String, String>>)) {
             val path = File(record.getValue("path"))

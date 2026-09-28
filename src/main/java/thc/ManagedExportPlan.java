@@ -59,10 +59,10 @@ public final class ManagedExportPlan {
             if (matching.isEmpty()) throw new NoSuchElementException("Collection contains no element matching the predicate.");
             if (matching.size() != 1) throw new IllegalArgumentException("Collection contains more than one matching element.");
             var expression = (List<Object>) matching.getFirst().get("expr");
-            var signature = CoreRepresentations.INSTANCE.knownFunctionSignature(expression, bindings);
+            var signature = CoreRepresentations.knownFunctionSignature(expression, bindings);
             List<CoreRepresentation> inputs; CoreRepresentation result;
-            if (signature != null) { inputs = signature.getFirst(); result = signature.getSecond(); }
-            else if (export.arguments().isEmpty() && !export.io()) { inputs = List.of(); result = CoreRepresentations.INSTANCE.expression(expression); }
+            if (signature != null) { inputs = signature.getInputs(); result = signature.getResult(); }
+            else if (export.arguments().isEmpty() && !export.io()) { inputs = List.of(); result = CoreRepresentations.expression(expression); }
             else throw new IllegalStateException("Managed export lacks a known Core function signature: " + export.binder());
             require(inputs.size() == export.arguments().size() + (export.io() ? 1 : 0), "Managed export Core input count differs");
             boolean boxedArguments = true;

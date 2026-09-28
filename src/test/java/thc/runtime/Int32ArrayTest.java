@@ -90,28 +90,28 @@ class Int32ArrayTest {
             var writeOp = unsigned ? ByteArrayOp.WRITE_WORD32 : ByteArrayOp.WRITE_INT32;
             var bytes = new byte[4]; ManagedByteArray.writeInt32(bytes, 0, 7);
             var events = new ArrayList<String>();
-            var read = expression(readOp, CoreRepresentation.Companion.getUNKNOWN(), new Expr[]{
+            var read = expression(readOp, CoreRepresentation.UNKNOWN, new Expr[]{
                 operand(events, "array", () -> bytes), operand(events, "index", () -> 0L),
                 operand(events, "state", () -> { ManagedByteArray.writeInt32(bytes, 0, (int) 0x8000_0000L); return Unit.INSTANCE; })});
             read.executeTuple(frame, new int[]{slot}, 0);
             assertEquals(List.of("array", "index", "state"), events); assertTrue(frame.isInt(slot));
             assertEquals(Integer.MIN_VALUE, frame.getInt(slot), "Word32 retains its raw high bit"); events.clear();
-            var write = expression(writeOp, CoreRepresentation.Companion.getUNKNOWN(), new Expr[]{
+            var write = expression(writeOp, CoreRepresentation.UNKNOWN, new Expr[]{
                 operand(events, "array", () -> bytes), operand(events, "index", () -> 0L), operand(events, "value", () -> -1),
                 operand(events, "state", () -> { assertEquals(0x8000_0000L, (long) ManagedByteArray.readWord16(bytes, 0)); return Unit.INSTANCE; })});
             assertSame(Unit.INSTANCE, write.execute(frame)); assertEquals(List.of("array", "index", "value", "state"), events);
             assertEquals(0xffff_ffffL, (long) ManagedByteArray.readWord16(bytes, 0));
             for (var badState : List.<Supplier<Object>>of(() -> { throw new RuntimeFault("state failed"); }, () -> 0L)) {
                 frame.setInt(slot, 73);
-                var failedRead = expression(readOp, CoreRepresentation.Companion.getUNKNOWN(), new Expr[]{
+                var failedRead = expression(readOp, CoreRepresentation.UNKNOWN, new Expr[]{
                     operand(events, "array", () -> bytes), operand(events, "index", () -> 0L), operand(events, "state", badState)});
                 assertThrows(RuntimeFault.class, () -> failedRead.executeTuple(frame, new int[]{slot}, 0)); assertEquals(73, frame.getInt(slot));
-                var failedWrite = expression(writeOp, CoreRepresentation.Companion.getUNKNOWN(), new Expr[]{
+                var failedWrite = expression(writeOp, CoreRepresentation.UNKNOWN, new Expr[]{
                     operand(events, "array", () -> bytes), operand(events, "index", () -> 0L), operand(events, "value", () -> 99), operand(events, "state", badState)});
                 assertThrows(RuntimeFault.class, () -> failedWrite.execute(frame)); assertEquals(0xffff_ffffL, (long) ManagedByteArray.readWord16(bytes, 0));
             }
             frame.setInt(slot, 73);
-            var badIndexRead = expression(readOp, CoreRepresentation.Companion.getUNKNOWN(), new Expr[]{
+            var badIndexRead = expression(readOp, CoreRepresentation.UNKNOWN, new Expr[]{
                 operand(events, "array", () -> bytes), operand(events, "index", () -> 1L), operand(events, "state", () -> Unit.INSTANCE)});
             assertThrows(RuntimeFault.class, () -> badIndexRead.executeTuple(frame, new int[]{slot}, 0)); assertEquals(73, frame.getInt(slot));
             // Bytecode specializations likewise validate State before any access.

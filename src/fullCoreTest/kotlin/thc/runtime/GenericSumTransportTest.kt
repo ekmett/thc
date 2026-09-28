@@ -116,9 +116,9 @@ class GenericSumTransportTest {
         assertEquals(CoreKind.VOID, around.components!![1].components!![0].kind)
         assertEquals(emptyList<CoreRepresentation>(), around.components[1].components!![1].components)
         // A physical-width edit cannot erase the authenticated logical tree.
-        assertThrows(RuntimeFault::class.java) { SumShape.validate(address.copy(primReps = listOf("WordRep", "AddrRep"))) }
-        assertThrows(RuntimeFault::class.java) { SumShape.validate(nested.copy(alternativeSlots = SumShape.transport(nested).projections)) }
-        assertThrows(RuntimeFault::class.java) { SumShape.validate(nested.copy(tagSlot = 1)) }
+        assertThrows(RuntimeFault::class.java) { SumShape.validate(address.withPrimReps(listOf("WordRep", "AddrRep"))) }
+        assertThrows(RuntimeFault::class.java) { SumShape.validate(nested.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, originalProof.primReps, originalProof.components, originalProof.vector, originalProof.alternatives, originalProof.tagSlot, SumShape.transport(nested).projections) }) }
+        assertThrows(RuntimeFault::class.java) { SumShape.validate(nested.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, originalProof.primReps, originalProof.components, originalProof.vector, originalProof.alternatives, 1, originalProof.alternativeSlots) }) }
         for (tag in listOf(Long.MIN_VALUE, 0, 5, 0x100000001, Long.MAX_VALUE))
             assertThrows(RuntimeFault::class.java) { SumShape.checkedTag(tag, 4) }
     }
@@ -166,9 +166,9 @@ class GenericSumTransportTest {
         assertThrows(RuntimeFault::class.java) { shape.checkedReference(1, floatVector) }
         assertThrows(RuntimeFault::class.java) { shape.checkedReference(2, longVector) }
         assertThrows(RuntimeFault::class.java) { shape.checkedReference(1, null) }
-        val wrong = vectors.alternatives[0].copy(vector = CoreVector.INT32X4)
+        val wrong = vectors.alternatives[0].let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, originalProof.primReps, originalProof.components, CoreVector.INT32X4, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) }
         assertThrows(RuntimeFault::class.java) {
-            SumShape.validate(vectors.copy(alternatives = listOf(wrong) + vectors.alternatives.drop(1)))
+            SumShape.validate(vectors.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, originalProof.primReps, originalProof.components, originalProof.vector, listOf(wrong) + vectors.alternatives.drop(1), originalProof.tagSlot, originalProof.alternativeSlots) })
         }
         val address = TupleShape(result("addressMake"), language)
         assertThrows(RuntimeFault::class.java) { address.checkedReference(2, 7L) }

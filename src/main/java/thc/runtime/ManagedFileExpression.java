@@ -31,7 +31,7 @@ final class ManagedFileExpression extends Expr {
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
         if (operation == ManagedFileOp.ERROR_MESSAGE) {
             FrameAccess.INSTANCE.write(frame, slots[offset], files(frame).errorMessage());
-            AstForeignCompleted.INSTANCE.poll(this);
+            AstForeignCompleted.poll(this);
             return null;
         }
         // Direct enum comparisons keep incompatible frame paths separate during partial evaluation.
@@ -74,7 +74,7 @@ final class ManagedFileExpression extends Expr {
             throw new IllegalStateException("Address result handled above");
         }
         FrameAccess.INSTANCE.writeLong(frame, slots[offset], result);
-        AstForeignCompleted.INSTANCE.poll(this);
+        AstForeignCompleted.poll(this);
         return null;
     }
 }

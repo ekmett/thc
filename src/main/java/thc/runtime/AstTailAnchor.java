@@ -43,7 +43,7 @@ final class AstTailAnchor implements SavedGuestContinuation {
             throw new IllegalStateException("Tail anchor requires one Unit resume");
         AstStackScope scope = AstStackKt.astStackScope(root);
         MaskingState ambient = SynchronousMasking.INSTANCE.current(root);
-        StackAnnotationState ambientAnnotations = StackAnnotations.INSTANCE.current(root);
+        StackAnnotationState ambientAnnotations = StackAnnotations.current(root);
         previous = scope.getTailAnchor();
         // This anchor owns one tail segment. An outer anchor across a non-tail
         // call is a return boundary, not another eligible catcher in this segment.
@@ -54,7 +54,7 @@ final class AstTailAnchor implements SavedGuestContinuation {
         scope.setDepth(scope.getDepth() + 1);
         scope.setTailAnchors(scope.getTailAnchors() + 1);
         SynchronousMasking.INSTANCE.set(root, mask);
-        StackAnnotations.INSTANCE.set(root, annotations);
+        StackAnnotations.set(root, annotations);
         SavedGuestContinuation pending = child;
         TailCall transfer = null;
         try {
@@ -87,7 +87,7 @@ final class AstTailAnchor implements SavedGuestContinuation {
             scope.setTailAnchor(previous);
             previous = null;
             SynchronousMasking.INSTANCE.set(root, ambient);
-            StackAnnotations.INSTANCE.set(root, ambientAnnotations);
+            StackAnnotations.set(root, ambientAnnotations);
         }
     }
 }

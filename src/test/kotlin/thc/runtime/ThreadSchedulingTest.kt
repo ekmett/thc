@@ -154,7 +154,7 @@ class ThreadSchedulingTest {
         val failure = AtomicReference<Throwable>()
         threads.enterCurrent()
         val child = Thread {
-            threads.enterCurrent(forked = true, capability = 7L)
+            threads.enterCurrent(null, true, true, 7L)
             try {
                 target.set(threads.currentIdentity()); ready.countDown()
                 assertTrue(release.await(5, TimeUnit.SECONDS))

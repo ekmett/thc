@@ -81,7 +81,7 @@ class ProcessLifecycleCoreTest {
     @ParameterizedTest
     @CsvSource("pre, ast", "post, ast", "pre, bytecode", "post, bytecode")
     fun originalInterruptibleWaitSavesErrnoAndNeverReplays(stage: String, backend: String) {
-        NativeFileProvider.createContext(emptySet(), ContextProfile.SYNCHRONOUS_TEST, allowProcesses = true).use { context ->
+        NativeFileProvider.createContext(emptySet(), ContextProfile.SYNCHRONOUS_TEST, thc.FfiMode.NATIVE, true).use { context ->
             context.enter()
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
@@ -220,7 +220,7 @@ class ProcessLifecycleCoreTest {
         val expected = nativeRows("oracle")
         val creation = nativeRows("creation-oracle")
         assertEquals(10, expected.size); assertEquals(3, creation.size)
-            NativeFileProvider.createContext(emptySet(), ContextProfile.SYNCHRONOUS_TEST, allowProcesses = true).use { context ->
+            NativeFileProvider.createContext(emptySet(), ContextProfile.SYNCHRONOUS_TEST, thc.FfiMode.NATIVE, true).use { context ->
                 context.enter()
                 try {
                     val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)

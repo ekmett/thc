@@ -238,7 +238,7 @@ class ArraySliceTest {
         var operands = new Operands();
         for (var operation : List.of(ArrayOp.FREEZE_COPY, ArrayOp.THAW)) {
             frame.setObject(slot, sentinel);
-            events.clear(); var expression = ArrayOp.expression(operation, CoreRepresentation.Companion.getUNKNOWN(), new Expr[]{operands.operand("array", source), operands.operand("offset", Long.MAX_VALUE), operands.operand("count", Long.MAX_VALUE), new Expr() { @Override public Object execute(VirtualFrame frame) { events.add("state"); throw new RuntimeFault("state first");
+            events.clear(); var expression = ArrayOp.expression(operation, CoreRepresentation.UNKNOWN, new Expr[]{operands.operand("array", source), operands.operand("offset", Long.MAX_VALUE), operands.operand("count", Long.MAX_VALUE), new Expr() { @Override public Object execute(VirtualFrame frame) { events.add("state"); throw new RuntimeFault("state first");
         }
     }
 });
@@ -376,7 +376,7 @@ void exactSliceSignaturesAndColdPublicFrontierRemainEnforced() throws Exception 
                             var app = application(module, operation);
                             var args = (List<Object>) app.get(2);
                             var flags = (List<Object>) app.get(3);
-                            var meta = CoreRepresentations.INSTANCE.metadata(app);
+                            var meta = CoreRepresentations.metadata(app);
                             switch (mutation) {
                                 case 0 -> {
                                     args.removeLast();

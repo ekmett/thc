@@ -36,7 +36,7 @@ class CompactImagesTest {
     }
     private List<byte[]> snapshot(CompactImages images, ManagedCompact region) {
         var blocks = new ArrayList<byte[]>(); var block = images.first(region);
-        while (block != ManagedAddress.Companion.nullAddress()) {
+        while (block != ManagedAddress.nullAddress()) {
             var bytes = new byte[(int) block.availableBytes()]; block.copyToByteArray(bytes, 0, bytes.length); blocks.add(bytes); block = images.next(region, block);
         }
         return blocks;
@@ -47,10 +47,10 @@ class CompactImagesTest {
         return values.getFirst();
     }
     private ManagedAddress copyBlocks(CompactImages images, List<byte[]> bytes) {
-        var first = ManagedAddress.Companion.nullAddress(); var previous = first;
+        var first = ManagedAddress.nullAddress(); var previous = first;
         for (var block : bytes) {
             var next = images.allocate(block.length, previous); next.copyFromByteArray(block, 0, block.length);
-            if (first == ManagedAddress.Companion.nullAddress()) first = next; previous = next;
+            if (first == ManagedAddress.nullAddress()) first = next; previous = next;
         }
         return first;
     }
@@ -60,7 +60,7 @@ class CompactImagesTest {
             var address = state.heapAddresses.address(value);
             assertTrue(address.sameLocation(state.heapAddresses.address(value))); assertSame(value, state.heapAddresses.dereference(address));
             assertFalse(address.sameLocation(state.heapAddresses.address(layout.create(new Object[]{19L}))));
-            assertFalse(address.sameLocation(ManagedAddress.Companion.nullAddress())); assertSame(address, address.plus(0));
+            assertFalse(address.sameLocation(ManagedAddress.nullAddress())); assertSame(address, address.plus(0));
             assertThrows(RuntimeFault.class, () -> address.plus(1)); assertThrows(RuntimeFault.class, () -> address.readWord8(0));
             assertThrows(RuntimeFault.class, address::toNativeBits); assertThrows(RuntimeFault.class, () -> new HeapAddresses().dereference(address));
             boolean[] entered = {false};
@@ -69,7 +69,7 @@ class CompactImagesTest {
             thunk.setValue(value); thunk.setState(2); assertTrue(address.sameLocation(state.heapAddresses.address(thunk)));
             // Deterministically exercise the weak-reference-cleared state, without
             // relying on a collector schedule or retaining the object through Addr#.
-            state.heapAddresses.require(address).getValue$org_intelligence_thc().clear();
+            state.heapAddresses.require(address).getValue().clear();
             assertThrows(RuntimeFault.class, () -> state.heapAddresses.dereference(address));
         });
     }
@@ -82,7 +82,7 @@ class CompactImagesTest {
             var small = ManagedSmallArray.freeze(new SmallArrayStorage(new Object[]{original, storage}));
             var array = ManagedArray.freeze(new Object[]{original, original, small}); layout.initialize(original, 3, array);
             var region = newRegion(state, original, array, small, storage); var pointer = state.heapAddresses.address(original); var bytes = snapshot(state.compactImages, region);
-            state.heapAddresses.require(pointer).getValue$org_intelligence_thc().clear(); // Import must not recover the source graph from the handle.
+            state.heapAddresses.require(pointer).getValue().clear(); // Import must not recover the source graph from the handle.
             var fixed = state.compactImages.fixup(copyBlocks(state.compactImages, bytes), pointer);
             var result = (DataValue) state.heapAddresses.dereference(fixed.getRoot()); assertNotSame(original, result);
             assertEquals(Long.MIN_VALUE, layout.readLong(result, 0)); assertEquals(0x7fc01234, Float.floatToRawIntBits(layout.readFloat(result, 1)));
@@ -103,7 +103,7 @@ class CompactImagesTest {
                 var layout = DataLayout.fromFields(language, "test:" + rep, "Vector", new CoreFields(Map.of("id", "test:" + rep, "arity", 1,
                     "fieldReps", List.of(List.of(rep)), "fieldTypes", List.of(proof), "strictFields", List.of(true), "fieldLifted", List.of(false))));
                 var slots = new FrameLayout(); int slot = slots.bind("vector"); var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], slots.build());
-                var input = rawVectorTestValue(CoreRepresentations.INSTANCE.parse(proof)); FrameAccess.write(frame, slot, input);
+                var input = rawVectorTestValue(CoreRepresentations.parse(proof)); FrameAccess.write(frame, slot, input);
                 var original = layout.allocate(); layout.initializeVector(original, 0, frame, new int[]{slot}, 0); var region = newRegion(state, original);
                 var fixed = state.compactImages.fixup(copyBlocks(state.compactImages, snapshot(state.compactImages, region)), state.heapAddresses.address(original));
                 var result = (DataValue) state.heapAddresses.dereference(fixed.getRoot()); layout.restoreVector(result, 0, frame, new int[]{slot}, 0);
@@ -119,10 +119,10 @@ class CompactImagesTest {
             assertTrue(exported.size() > 1); var first = copyBlocks(state.compactImages, exported); var fixed = state.compactImages.fixup(first, pointer);
             var imported = (byte[]) state.heapAddresses.dereference(fixed.getRoot()); assertNotSame(bytes, imported); assertArrayEquals(bytes, imported);
             assertThrows(RuntimeFault.class, () -> state.compactImages.fixup(first, pointer));
-            var pending = state.compactImages.allocate(8, ManagedAddress.Companion.nullAddress()); var next = state.compactImages.allocate(8, pending);
+            var pending = state.compactImages.allocate(8, ManagedAddress.nullAddress()); var next = state.compactImages.allocate(8, pending);
             assertThrows(RuntimeFault.class, () -> state.compactImages.allocate(8, pending)); assertThrows(RuntimeFault.class, () -> state.compactImages.fixup(next, pointer));
             assertThrows(RuntimeFault.class, () -> state.compactImages.fixup(pending.plus(1), pointer));
-            for (long size : new long[]{-1L, 0L, Long.MAX_VALUE}) assertThrows(RuntimeFault.class, () -> state.compactImages.allocate(size, ManagedAddress.Companion.nullAddress()));
+            for (long size : new long[]{-1L, 0L, Long.MAX_VALUE}) assertThrows(RuntimeFault.class, () -> state.compactImages.allocate(size, ManagedAddress.nullAddress()));
         });
     }
     private byte[] malformed(byte[] bytes, Consumer<ByteBuffer> edit) {
@@ -137,11 +137,11 @@ class CompactImagesTest {
             for (var bad : List.of(corrupt, Arrays.copyOf(bytes, bytes.length - 1), malformed(bytes, it -> it.putInt(24, Integer.MAX_VALUE)),
                 malformed(bytes, it -> it.put(36, (byte) 99)), malformed(bytes, it -> it.putLong(37, -1L)))) {
                 var first = copyBlocks(state.compactImages, List.of(bad)); var failed = state.compactImages.fixup(first, pointer);
-                assertSame(ManagedAddress.Companion.nullAddress(), failed.getRoot()); assertTrue(failed.getRegion().getObjects().isEmpty());
+                assertSame(ManagedAddress.nullAddress(), failed.getRoot()); assertTrue(failed.getRegion().getObjects().isEmpty());
                 assertThrows(RuntimeFault.class, () -> state.compactImages.fixup(first, pointer));
             }
             var foreign = new CompactImages(state.compactRegions, state.heapAddresses);
-            try { assertSame(ManagedAddress.Companion.nullAddress(), foreign.fixup(copyBlocks(foreign, List.of(bytes)), pointer).getRoot()); }
+            try { assertSame(ManagedAddress.nullAddress(), foreign.fixup(copyBlocks(foreign, List.of(bytes)), pointer).getRoot()); }
             finally { foreign.close(); }
             assertThrows(RuntimeFault.class, () -> state.compactImages.next(newRegion(state, value), state.compactImages.first(region)));
             var first = state.compactImages.first(region); region.resize(8192); assertThrows(RuntimeFault.class, () -> state.compactImages.next(region, first));
@@ -152,7 +152,7 @@ class CompactImagesTest {
             var payload = ByteBuffer.wrap(wrongCarrier); payload.putInt(45, 2); var crc = new CRC32(); crc.update(wrongCarrier, 0, wrongCarrier.length - 8);
             payload.putLong(wrongCarrier.length - 8, crc.getValue());
             var mismatch = state.compactImages.fixup(copyBlocks(state.compactImages, List.of(wrongCarrier)), state.heapAddresses.address(holder));
-            assertSame(ManagedAddress.Companion.nullAddress(), mismatch.getRoot());
+            assertSame(ManagedAddress.nullAddress(), mismatch.getRoot());
         });
     }
 }

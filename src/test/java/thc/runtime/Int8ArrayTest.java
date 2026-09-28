@@ -53,23 +53,23 @@ class Int8ArrayTest {
         for (boolean unsigned : new boolean[]{false, true}) {
             var bytes = new byte[]{7}; var events = new ArrayList<String>();
             var readOp = unsigned ? ByteArrayOp.READ_WORD8 : ByteArrayOp.READ_INT8;
-            var read = expression(readOp, CoreRepresentation.Companion.getUNKNOWN(), new Expr[]{
+            var read = expression(readOp, CoreRepresentation.UNKNOWN, new Expr[]{
                 operand(events, "array", () -> bytes), operand(events, "index", () -> 0L),
                 operand(events, "state", () -> { ManagedByteArray.write(bytes, 0, 128); return Unit.INSTANCE; })});
             read.executeTuple(frame, new int[]{slot}, 0);
             assertEquals(List.of("array", "index", "state"), events); assertTrue(frame.isInt(slot));
             assertEquals(unsigned ? 128 : -128, frame.getInt(slot)); events.clear();
-            var write = expression(ByteArrayOp.WRITE_INT8, CoreRepresentation.Companion.getUNKNOWN(), new Expr[]{
+            var write = expression(ByteArrayOp.WRITE_INT8, CoreRepresentation.UNKNOWN, new Expr[]{
                 operand(events, "array", () -> bytes), operand(events, "index", () -> 0L), operand(events, "value", () -> 511),
                 operand(events, "state", () -> { assertEquals(128L, (long) ManagedByteArray.read(bytes, 0)); return Unit.INSTANCE; })});
             assertSame(Unit.INSTANCE, write.execute(frame)); assertEquals(List.of("array", "index", "value", "state"), events);
             assertEquals(-1L, (long) ManagedByteArray.readSigned(bytes, 0));
             for (var badState : List.<Supplier<Object>>of(() -> { throw new RuntimeFault("state failed"); }, () -> 0L)) {
                 frame.setInt(slot, 73);
-                var badRead = expression(readOp, CoreRepresentation.Companion.getUNKNOWN(), new Expr[]{
+                var badRead = expression(readOp, CoreRepresentation.UNKNOWN, new Expr[]{
                     operand(events, "array", () -> bytes), operand(events, "index", () -> 0L), operand(events, "state", badState)});
                 assertThrows(RuntimeFault.class, () -> badRead.executeTuple(frame, new int[]{slot}, 0)); assertEquals(73, frame.getInt(slot));
-                var badWrite = expression(ByteArrayOp.WRITE_INT8, CoreRepresentation.Companion.getUNKNOWN(), new Expr[]{
+                var badWrite = expression(ByteArrayOp.WRITE_INT8, CoreRepresentation.UNKNOWN, new Expr[]{
                     operand(events, "array", () -> bytes), operand(events, "index", () -> 0L), operand(events, "value", () -> 99), operand(events, "state", badState)});
                 assertThrows(RuntimeFault.class, () -> badWrite.execute(frame)); assertEquals(255L, (long) ManagedByteArray.read(bytes, 0));
             }

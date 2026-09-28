@@ -78,7 +78,7 @@ class AstKillThreadTest {
                     try {
                         // This target accepts external delivery. Rejection must
                         // come from the uncaptured sender before any enqueue.
-                        threads.enterCurrent(MaskingState.MASKED_UNINTERRUPTIBLE, externalAsync = true)
+                        threads.enterCurrent(MaskingState.MASKED_UNINTERRUPTIBLE, false, true)
                         try {
                             ready.complete(threads.currentIdentity())
                             assertTrue(release.await(60, TimeUnit.SECONDS))
@@ -93,7 +93,7 @@ class AstKillThreadTest {
                     val external = ready.get(10, TimeUnit.SECONDS)
                     context.enter()
                     try {
-                        threads.enterCurrent(externalAsync = false)
+                        threads.enterCurrent(null, false, false)
                         try {
                             val self = threads.currentIdentity()
                             for (compiled in listOf(false, true)) {

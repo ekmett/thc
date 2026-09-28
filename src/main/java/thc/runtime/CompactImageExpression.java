@@ -28,7 +28,7 @@ final class CompactImageExpression extends Expr {
                 TupleResultsKt.requireVoidCarrier(operands[operands.length - 1].execute(frame));
                 var address = previous == null ? state.compactImages.first(region) : state.compactImages.next(region, previous);
                 FrameAccess.INSTANCE.write(frame, slots[offset], address);
-                FrameAccess.INSTANCE.writeLong(frame, slots[offset + 1], address == ManagedAddress.Companion.nullAddress() ? 0 : address.availableBytes());
+                FrameAccess.INSTANCE.writeLong(frame, slots[offset + 1], address == ManagedAddress.nullAddress() ? 0 : address.availableBytes());
             }
             case ALLOCATE -> {
                 var size = operands[0].executeRequiredLong(frame);

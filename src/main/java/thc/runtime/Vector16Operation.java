@@ -22,7 +22,7 @@ public final class Vector16Operation extends Expr {
             default -> throw new RuntimeFault("Invalid Int16X8 operation");
         };
         this.arguments = arguments;
-        setRepresentation(CoreVectors.INSTANCE.getProof16());
+        setRepresentation(CoreVectors.proof16);
     }
 
     @Override public ShortVector execute(VirtualFrame frame) {

@@ -204,7 +204,7 @@ class BoxedArrayTest {
                 };
             }
             Expr write(Supplier<Object> state) {
-                return ArrayOp.expression(ArrayOp.WRITE, CoreRepresentation.Companion.getUNKNOWN(),
+                return ArrayOp.expression(ArrayOp.WRITE, CoreRepresentation.UNKNOWN,
                     new Expr[] {operand("array", () -> storage), operand("index", () -> 0L),
                         operand("value", () -> replacement), operand("state", state)});
             }
@@ -247,7 +247,7 @@ class BoxedArrayTest {
             args.add(operands.operand("state", () -> { throw new RuntimeFault("state failure"); }));
             assertThrows(RuntimeFault.class,
                 ()
-                    -> ArrayOp.expression(op, CoreRepresentation.Companion.getUNKNOWN(), args.toArray(Expr[] ::new))
+                    -> ArrayOp.expression(op, CoreRepresentation.UNKNOWN, args.toArray(Expr[] ::new))
                         .executeTuple(frame, new int[] {slot}, 0));
             assertSame(old, frame.getObject(slot), op + " must not publish before State");
         }
@@ -347,7 +347,7 @@ class BoxedArrayTest {
                                 var app = application(module, operation);
                                 var args = (List<Object>) app.get(2);
                                 var flags = (List<Object>) app.get(3);
-                                var metadata = CoreRepresentations.INSTANCE.metadata(app);
+                                var metadata = CoreRepresentations.metadata(app);
                                 switch (mutation) {
                                     case 0 -> {
                                         args.removeLast();

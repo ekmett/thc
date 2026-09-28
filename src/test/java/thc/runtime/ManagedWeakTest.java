@@ -22,7 +22,7 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import kotlin.Unit;
-import kotlin.Pair;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 @SuppressWarnings("unchecked")
@@ -68,12 +68,12 @@ class ManagedWeakTest {
         var first=context();first.initialize("thc");first.enter();MainThreadWeakKey capability;MainThreadWeakKey closing;
         try {var state=Language.currentState();var owner=state.getWeaks();var threads=state.getThreads();threads.enterCurrent(null,false,true,null);var key=threads.currentIdentity();var weak=owner.make(key,new Object(),null);
             try{capability=owner.mainThreadKey(weak,threads);assertEquals(Thread.currentThread().threadId(),capability.liveJavaId(),"Native main-thread projection reads KEY, not value");
-                var impostor=new GuestThreadId(key.getLogicalId(),threads,key.getCapability(),Thread.currentThread(),false,false,false);assertEquals(key,impostor,"Numeric equality alone must not establish canonical identity");assertNull(threads.liveJavaId$org_intelligence_thc(impostor));assertNull(owner.mainThreadKey(owner.make(impostor,new Object(),null),threads).liveJavaId());
+                var impostor=new GuestThreadId(key.getLogicalId(),threads,key.getCapability(),Thread.currentThread(),false,false,false);assertEquals(key,impostor,"Numeric equality alone must not establish canonical identity");assertNull(threads.liveJavaId(impostor));assertNull(owner.mainThreadKey(owner.make(impostor,new Object(),null),threads).liveJavaId());
                 closing=owner.mainThreadKey(owner.make(key,new Object(),null),threads);var wrongKey=owner.make(new Object(),key,null);assertThrows(RuntimeFault.class,()->owner.mainThreadKey(wrongKey,threads));
             }finally{threads.leaveCurrent(GuestThreadStatus.FINISHED);}
             assertEquals(key.getJavaId(),capability.liveJavaId(),"A live FOREIGN host carrier is not terminated");
             try(var second=context()){second.initialize("thc");second.enter();try{var foreign=Language.currentState();foreign.getThreads().enterCurrent(null,false,true,null);try{
-                assertThrows(RuntimeFault.class,()->foreign.getWeaks().mainThreadKey(weak,foreign.getThreads()));assertThrows(RuntimeFault.class,()->owner.mainThreadKey(weak,foreign.getThreads()));assertThrows(RuntimeFault.class,()->foreign.getThreads().liveJavaId$org_intelligence_thc(key));
+                assertThrows(RuntimeFault.class,()->foreign.getWeaks().mainThreadKey(weak,foreign.getThreads()));assertThrows(RuntimeFault.class,()->owner.mainThreadKey(weak,foreign.getThreads()));assertThrows(RuntimeFault.class,()->foreign.getThreads().liveJavaId(key));
                 var foreignKey=owner.make(foreign.getThreads().currentIdentity(),new Object(),null);assertThrows(RuntimeFault.class,()->owner.mainThreadKey(foreignKey,threads));
             }finally{foreign.getThreads().leaveCurrent(GuestThreadStatus.FINISHED);}}finally{second.leave();}}
             assertEquals(0L,owner.finalize(weak).getFlag());assertNull(capability.liveJavaId());assertThrows(RuntimeFault.class,()->owner.mainThreadKey(weak,threads));assertEquals(key.getJavaId(),closing.liveJavaId());threads.close();assertNull(closing.liveJavaId(),"Thread service close invalidates even a still-live weak registration");
@@ -83,7 +83,7 @@ class ManagedWeakTest {
     private record ThreadOutcome(boolean forked,GuestThreadStatus outcome){}
     @Test void mainThreadCapabilityDoesNotResurrectTerminalIdentitiesOrDeadOriginalCarriers()throws Exception{
         for(var test:List.of(new ThreadOutcome(true,GuestThreadStatus.FINISHED),new ThreadOutcome(true,GuestThreadStatus.DIED),new ThreadOutcome(true,GuestThreadStatus.RUNTIME_FAILURE),new ThreadOutcome(false,GuestThreadStatus.FINISHED))){
-            boolean forked=test.forked();var outcome=test.outcome();var threads=new GuestThreads(ThreadLocal.withInitial(()->MaskingState.UNMASKED),CpuAffinity.Companion.discover(false),ignored->Unit.INSTANCE);var owner=new ManagedWeaks();
+            boolean forked=test.forked();var outcome=test.outcome();var threads=new GuestThreads(ThreadLocal.withInitial(()->MaskingState.UNMASKED),CpuAffinity.discover(false),ignored->{});var owner=new ManagedWeaks();
             var capability=new AtomicReference<MainThreadWeakKey>();var weak=new AtomicReference<Object>();var failure=new AtomicReference<Throwable>();var ready=new CountDownLatch(1);var leave=new CountDownLatch(1);var left=new CountDownLatch(1);var stop=new CountDownLatch(1);
             var worker=new Thread(()->{boolean entered=false;try{threads.enterCurrent(null,forked,true,null);entered=true;weak.set(owner.make(threads.currentIdentity(),new Object(),null));capability.set(owner.mainThreadKey(weak.get(),threads));ready.countDown();if(!leave.await(3,TimeUnit.SECONDS))throw new IllegalStateException("Check failed.");threads.leaveCurrent(outcome);entered=false;left.countDown();if(!stop.await(3,TimeUnit.SECONDS))throw new IllegalStateException("Check failed.");}catch(Throwable error){failure.set(error);ready.countDown();left.countDown();}finally{if(entered)threads.leaveCurrent(outcome);}});worker.setDaemon(true);worker.start();
             try{assertTrue(ready.await(3,TimeUnit.SECONDS));if(failure.get()!=null)throw new AssertionError("thread registration failed",failure.get());assertEquals(worker.threadId(),capability.get().liveJavaId());leave.countDown();assertTrue(left.await(3,TimeUnit.SECONDS));if(failure.get()!=null)throw new AssertionError("thread completion failed",failure.get());
@@ -104,7 +104,7 @@ class ManagedWeakTest {
             for(int index=0;index<args.size();index++){var bad=new ArrayList<>(args);bad.set(index,withReps(flag,List.of("WordRep")));assertThrows(RuntimeFault.class,()->op.validate(bad,flags(bad),result));var wrongFlags=new ArrayList<>(flags(args));wrongFlags.set(index,!wrongFlags.get(index));assertThrows(RuntimeFault.class,()->op.validate(args,wrongFlags,result));var stored=new ArrayList<>(args);stored.set(index,withReps(flag,List.of("WordRep")));assertThrows(RuntimeFault.class,()->op.validateBindings(args,stored));}
             assertThrows(RuntimeFault.class,()->op.validate(args,flags(args),withReps(result,List.of())));assertThrows(RuntimeFault.class,()->op.validate(args,flags(args),tuple(Objects.requireNonNull(result.getComponents()).subList(1,result.getComponents().size()).toArray(CoreRepresentation[]::new))));
         }
-        WeakOp.MAKE.validateAction(new Pair<>(List.of(state),tuple(state,lifted)));assertThrows(RuntimeFault.class,()->WeakOp.MAKE.validateAction(new Pair<>(List.of(flag),tuple(state,lifted))));assertThrows(RuntimeFault.class,()->WeakOp.MAKE.validateAction(new Pair<>(List.of(state),tuple(state,weak))));assertThrows(RuntimeFault.class,()->WeakOp.MAKE.validateAction(new Pair<>(List.of(state),state)));
+        WeakOp.MAKE.validateAction(new CoreFunctionSignature(List.of(state),tuple(state,lifted)));assertThrows(RuntimeFault.class,()->WeakOp.MAKE.validateAction(new CoreFunctionSignature(List.of(flag),tuple(state,lifted))));assertThrows(RuntimeFault.class,()->WeakOp.MAKE.validateAction(new CoreFunctionSignature(List.of(state),tuple(state,weak))));assertThrows(RuntimeFault.class,()->WeakOp.MAKE.validateAction(new CoreFunctionSignature(List.of(state),state)));
     }
     private final File root=new File(System.getProperty("thc.projectRoot")),directory=new File(root,"build/weak-explicit");
     private Map<String,Object> json(File file)throws Exception{return (Map<String,Object>)Json.parse(Files.readString(file.toPath()));}
@@ -122,7 +122,7 @@ class ManagedWeakTest {
         var manifest=json(new File(directory,"manifest.json"));for(var stageEntry:((Map<String,List<String>>)manifest.get("stages")).entrySet()){var stage=stageEntry.getKey();var original=CoreModules.reachable(merge(stageEntry.getValue()),"weakComposite",true);
             for(var backend:List.of("ast","bytecode"))try(var context=context()){context.initialize("thc");context.enter();try{var language=TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 for(var op:originalOps)for(int mutation=0;mutation<=2;mutation++){var module=(Map<String,Object>)Json.parse(Json.stringify(original));var app=firstPrimitive(module,op.getPrimitive());var args=(List<Object>)app.get(2);
-                    switch(mutation){case 0->{var flags=(List<Object>)app.get(3);flags.set(0,!(Boolean)flags.get(0));}case 1->((Map<String,Object>)CoreRepresentations.INSTANCE.metadata((List<Object>)args.getLast())).put("rep",Map.of("kind","long","primReps",List.of("IntRep")));case 2->{var result=(Map<String,Object>)Objects.requireNonNull(CoreRepresentations.INSTANCE.metadata(app)).get("rep");((List<Object>)result.get("components")).remove(0);}}
+                    switch(mutation){case 0->{var flags=(List<Object>)app.get(3);flags.set(0,!(Boolean)flags.get(0));}case 1->((Map<String,Object>)CoreRepresentations.metadata((List<Object>)args.getLast())).put("rep",Map.of("kind","long","primReps",List.of("IntRep")));case 2->{var result=(Map<String,Object>)Objects.requireNonNull(CoreRepresentations.metadata(app)).get("rep");((List<Object>)result.get("components")).remove(0);}}
                     assertThrows(RuntimeFault.class,()->load(language,module,backend),stage+"/"+backend+"/"+op.getPrimitive()+"/mutation="+mutation);
                 }
             }finally{context.leave();}}
@@ -134,7 +134,7 @@ class ManagedWeakTest {
         var manifest=json(new File(directory,"manifest.json"));var rows=rows();var integer=Map.of("kind","long","primReps",List.of("IntRep"),"evaluated",true);var zero=List.of("lit","int","0",Map.of("rep",integer));
         for(var stageEntry:((Map<String,List<String>>)manifest.get("stages")).entrySet()){var stage=stageEntry.getKey();var original=CoreModules.reachable(merge(stageEntry.getValue()),"weakComposite",true);
             for(var backend:List.of("ast","bytecode"))try(var context=context()){context.initialize("thc");context.enter();try{var language=TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                for(boolean contradictory:new boolean[]{false,true}){var module=(Map<String,Object>)Json.parse(Json.stringify(original));var app=firstPrimitive(module,"mkWeak#");var args=(List<Object>)app.get(2);var value=(List<Object>)args.get(1);var proof=(Map<String,Object>)Objects.requireNonNull(CoreRepresentations.INSTANCE.metadata(value)).get("rep");
+                for(boolean contradictory:new boolean[]{false,true}){var module=(Map<String,Object>)Json.parse(Json.stringify(original));var app=firstPrimitive(module,"mkWeak#");var args=(List<Object>)app.get(2);var value=(List<Object>)args.get(1);var proof=(Map<String,Object>)Objects.requireNonNull(CoreRepresentations.metadata(value)).get("rep");
                     // The original ForeignPtr finalizer uses this lifted CASE shape: delaying it must retain its value proof, not claim WHNF.
                     var delayed=new LinkedHashMap<>(proof);delayed.put("evaluated",false);args.set(1,List.of("case",zero,"delayedWeakCase",List.of(Arrays.asList("default",null,List.of(),contradictory?zero:value)),Map.of("rep",delayed,"binder",Map.of("id","delayedWeakCase","lifted",false,"rep",integer))));
                     if(contradictory)assertThrows(RuntimeFault.class,()->load(language,module,backend),stage+"/"+backend+" contradictory delayed result");else{var function=context.asValue(new EntryValue(load(language,module,backend),"weakComposite",1));for(var row:rows)assertEquals(row.expected(),function.execute(row.input()).asLong(),stage+"/"+backend+"/"+row.input());assertEquals(0,Language.currentState().getWeaks().retainedCount());assertEquals(0,language.getHandoffState().get().getArguments().retainedReferences());assertEquals(0,language.getHandoffState().get().getResults().retainedReferences());}

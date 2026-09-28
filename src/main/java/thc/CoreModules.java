@@ -71,7 +71,7 @@ public final class CoreModules {
         private void append(Map<String,Object> module, ManagedExportAdmission admission, CoreModuleAdmission prepared) {
             require(admission == null || admission.getModule() == (prepared == null ? module : prepared.getModule()), "Managed export admission belongs to a different Core module");
             count++;
-            var proof = prepared == null ? CoreForeignExceptionBridge.INSTANCE.read(module) : prepared.getBridge();
+            var proof = prepared == null ? CoreForeignExceptionBridge.read(module) : prepared.getBridge();
             if (proof != null) require(exceptionBridges.putIfAbsent((String) proof.get("unit"), proof) == null, "Duplicate foreign exception bridge unit");
             if (module.get("foreignExceptionBridgeUnit") instanceof String unit) {
                 require(exceptionBridgeUnit == null || exceptionBridgeUnit.equals(unit), "Conflicting foreign exception bridge selection"); exceptionBridgeUnit = unit;
@@ -168,7 +168,7 @@ public final class CoreModules {
                     case "var" -> reference((String) expression.get(1), bound);
                     case "prim" -> {
                         String name = (String) expression.get(1);
-                        if (CoreFileWait.INSTANCE.named(name)) reference(CoreFileWait.badFd, Set.of());
+                        if (CoreFileWait.named(name)) reference(CoreFileWait.badFd, Set.of());
                         String payload = CoreArithmeticExceptions.INSTANCE.payload(name); if (payload != null) reference(payload, Set.of());
                         var compact = CompactOp.named(name); if (compact != null && compact.getAdds()) for (String failure : CompactOp.getFailures()) reference(failure, Set.of());
                         if (name.equals("atomically#")) reference(STMOp.NESTED, Set.of());
@@ -181,12 +181,12 @@ public final class CoreModules {
                     }
                     case "app" -> {
                         var function = (List<Object>) expression.get(1); CoreExceptionPayload.validate(expression);
-                        var metadata = CoreRepresentations.INSTANCE.metadata(expression); boolean foreignDescriptor = metadata != null && metadata.get("foreignCall") instanceof Map<?,?>;
+                        var metadata = CoreRepresentations.metadata(expression); boolean foreignDescriptor = metadata != null && metadata.get("foreignCall") instanceof Map<?,?>;
                         Object head = function.size() > 1 ? function.get(1) : null;
                         boolean defined = !function.isEmpty() && Objects.equals(function.getFirst(), "var") && (head != null && bound.contains(head) || byId.containsKey(head) || head instanceof String id && demand != null && (foreignDescriptor ? demand.isDefined(id) : demand.contains(id)));
                         var packageLinks = module.get("packageScalarLinks") instanceof List<?> links ? (List<PackageScalarLink>) links : List.<PackageScalarLink>of();
-                        if (CoreForeignExceptionBridge.INSTANCE.executes(expression, defined, packageLinks)) {
-                            if (exceptionBridge == null) exceptionBridge = bridge != null ? bridge.get() : CoreForeignExceptionBridge.INSTANCE.select(module);
+                        if (CoreForeignExceptionBridge.executes(expression, defined, packageLinks)) {
+                            if (exceptionBridge == null) exceptionBridge = bridge != null ? bridge.get() : CoreForeignExceptionBridge.select(module);
                             reference((String) exceptionBridge.get("box"), Set.of()); reference((String) exceptionBridge.get("project"), Set.of());
                         }
                         if (CoreSignalForeign.named(metadata)) reference(CoreSignalForeign.dispatcher, Set.of());
@@ -323,7 +323,7 @@ public final class CoreModules {
         require(input.get("packageManifestSha256") == null && input.get("packageCapability") == null && input.get("consumerModules") == null, "Orphan package manifest identity");
         if (!(input.get("modules") instanceof List<?> modules)) throw new IllegalStateException("Expected modules array");
         for (Object module : modules) accept.accept(with((Map<String,Object>) module, "foreignExceptionBridgeUnit", input.get("foreignExceptionBridgeUnit")));
-        return input.get("targetLayout") == null ? null : TargetLayout.Companion.fromDocument(input.get("targetLayout"));
+        return input.get("targetLayout") == null ? null : TargetLayout.fromDocument(input.get("targetLayout"));
     }
     private static boolean sameCapability(String supplied, String expected) { return MessageDigest.isEqual(supplied.getBytes(StandardCharsets.US_ASCII), expected.getBytes(StandardCharsets.US_ASCII)); }
     private static MessageDigest digest() { try { return MessageDigest.getInstance("SHA-256"); } catch (NoSuchAlgorithmException failure) { throw new IllegalStateException(failure); } }

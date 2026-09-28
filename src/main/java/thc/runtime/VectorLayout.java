@@ -82,7 +82,7 @@ public final class VectorLayout {
         if (vector == null || !proof.getPresent() || proof.getKind() != CoreKind.VECTOR || proof.isAggregate() ||
             !List.of("VecRep " + vector.getLanes() + " " + vector.getElement()).equals(proof.getPrimReps()))
             { com.oracle.truffle.api.CompilerDirectives.transferToInterpreterAndInvalidate(); throw new RuntimeFault("Vector transport requires an exact VecRep"); }
-        CoreVector.Companion.parse(Map.of("lanes", vector.getLanes(), "element", vector.getElement()), proof.getKind(), proof.getPrimReps(), false);
+        CoreVector.parse(Map.of("lanes", vector.getLanes(), "element", vector.getElement()), proof.getKind(), proof.getPrimReps(), false);
     }
     private static String laneRep(CoreVector vector) {
         return switch (vector.getElement()) {

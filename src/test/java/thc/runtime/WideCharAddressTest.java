@@ -75,9 +75,9 @@ class WideCharAddressTest {
             for (var app : calls(CoreModules.reachable(module, "wideCharRoundtrip"))) { var head = (List<?>) app.get(1); if (head.size() > 1 && names.contains(head.get(1))) { uses.add(app); actualNames.add(head.get(1)); } }
             assertEquals(names, actualNames); assertEquals(3, uses.size());
             for (var app : uses) {
-                var op = Objects.requireNonNull(PinnedMemoryOp.Companion.named((String) ((List<?>) app.get(1)).get(1)));
-                var arguments = new ArrayList<CoreRepresentation>(); for (var argument : (List<List<Object>>) app.get(2)) arguments.add(CoreRepresentations.INSTANCE.expression(argument));
-                var result = CoreRepresentations.INSTANCE.expression(app); op.validate(arguments, (List<?>) app.get(3), result);
+                var op = Objects.requireNonNull(PinnedMemoryOp.named((String) ((List<?>) app.get(1)).get(1)));
+                var arguments = new ArrayList<CoreRepresentation>(); for (var argument : (List<List<Object>>) app.get(2)) arguments.add(CoreRepresentations.expression(argument));
+                var result = CoreRepresentations.expression(app); op.validate(arguments, (List<?>) app.get(3), result);
                 assertThrows(RuntimeFault.class, () -> { var changed = new ArrayList<>(arguments); changed.set(0, copy(changed.getFirst(), changed.getFirst().getKind(), List.of("IntRep"))); op.validate(changed, (List<?>) app.get(3), result); });
                 assertThrows(RuntimeFault.class, () -> op.validate(arguments, Collections.nCopies(arguments.size(), true), result));
                 assertThrows(RuntimeFault.class, () -> op.validate(arguments, (List<?>) app.get(3), copy(result, CoreKind.DOUBLE, List.of("DoubleRep"))));
@@ -113,7 +113,7 @@ class WideCharAddressTest {
             }
     }
     @Test void wideCharUsesFourBytesAndRejectsInvalidStorageWithoutMutation() {
-        var base = ManagedAddress.Companion.fromAllocation(PinnedMemory.INSTANCE.allocate(32, 1)); var interior = base.plus(12);
+        var base = ManagedAddress.fromAllocation(PinnedMemory.allocate(32, 1)); var interior = base.plus(12);
         for (long value : inputs) {
             interior.writeNativeScalar(-1, 4, value); assertEquals(value, ManagedAddressRead.WIDE_CHAR.read(interior, -1)); assertEquals(value, ManagedAddressRead.WIDE_CHAR.read(base, 2));
             for (int b = 0; b < 4; b++) { int shift = ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN ? b * 8 : (3 - b) * 8; assertEquals((value >>> shift) & 255L, base.readWord8(8L + b)); }

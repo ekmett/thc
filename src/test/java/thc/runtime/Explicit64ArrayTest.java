@@ -49,7 +49,7 @@ class Explicit64ArrayTest {
             assertArrayEquals(expected, raw);
         }
         var owner = PinnedMemory.allocate(32, 1);
-        var base = ManagedAddress.Companion.fromAllocation(owner);
+        var base = ManagedAddress.fromAllocation(owner);
         var retained = base.plus(24);
         base.writeAddressElementIndex(0, retained);
         ManagedByteArray.writeIntGuest(owner, 2, Long.MAX_VALUE);

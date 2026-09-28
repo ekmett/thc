@@ -28,10 +28,10 @@ public final class ManagedProcessForeign {
     public ManagedProcessForeign() {
         for (var stage : ProcessFailureStage.values()) {
             ManagedAddress address;
-            if (stage == ProcessFailureStage.NONE) address = ManagedAddress.Companion.nullAddress();
+            if (stage == ProcessFailureStage.NONE) address = ManagedAddress.nullAddress();
             else {
                 byte[] bytes = stage.getOperation().getBytes(StandardCharsets.US_ASCII);
-                address = ManagedAddress.Companion.fromHex(HexFormat.of().formatHex(Arrays.copyOf(bytes, bytes.length + 1)));
+                address = ManagedAddress.fromHex(HexFormat.of().formatHex(Arrays.copyOf(bytes, bytes.length + 1)));
                 address.toNativeBits(); // Stage immutable native images before any launch effect.
             }
             failures.put(stage, address);
@@ -39,7 +39,7 @@ public final class ManagedProcessForeign {
     }
 
     public static ManagedProcessForeign current(Node node) {
-        return Language.currentState(node).getFiles().getProcessForeign$org_intelligence_thc();
+        return Language.currentState(node).getFiles().getProcessForeign();
     }
 
     /** Cancellation observes pending work; the interpreter claims it after saving the scalar/errno. */
@@ -50,7 +50,7 @@ public final class ManagedProcessForeign {
         try {
             try {
                 return execute(operation, arguments, node, operation == ProcessOp.WAIT ? () -> {
-                    if (threads.interruptibleForeignPending$org_intelligence_thc()) throw new InterruptedWait();
+                    if (threads.interruptibleForeignPending()) throw new InterruptedWait();
                 } : null);
             } catch (InterruptedWait ignored) {
                 // No waitpid/reap occurred and the caller's output is untouched.
@@ -72,7 +72,7 @@ public final class ManagedProcessForeign {
     }
 
     private static byte[] string(ManagedAddress address) {
-        var owner = address.nativeAllocation$org_intelligence_thc();
+        var owner = address.nativeAllocation();
         try (var ignored = owner == null ? null : owner.borrow()) {
             long length = address.cStringLength();
             if (length >= Integer.MAX_VALUE) throw fault("Process string exceeds managed byte capacity");
@@ -83,13 +83,13 @@ public final class ManagedProcessForeign {
     }
 
     private static List<byte[]> vector(ManagedAddress address) {
-        var owner = address.nativeAllocation$org_intelligence_thc();
+        var owner = address.nativeAllocation();
         try (var ignored = owner == null ? null : owner.borrow()) {
             var values = new ArrayList<byte[]>();
             long index = 0;
             while (true) {
                 var entry = address.readAddressElementIndex(index++);
-                if (entry == ManagedAddress.Companion.nullAddress()) break;
+                if (entry == ManagedAddress.nullAddress()) break;
                 values.add(string(entry));
             }
             return values;
@@ -98,9 +98,9 @@ public final class ManagedProcessForeign {
 
     private static void pointerCell(ManagedAddress address) {
         address.requireRange(0, 8, true);
-        if (address.nativeAllocation$org_intelligence_thc() == null) {
-            var owner = address.cbitsOwner$org_intelligence_thc();
-            if (owner == null || owner.getAddressWidth() != 8 || address.cbitsOffset$org_intelligence_thc() % 8 != 0)
+        if (address.nativeAllocation() == null) {
+            var owner = address.cbitsOwner();
+            if (owner == null || owner.getAddressWidth() != 8 || address.cbitsOffset() % 8 != 0)
                 throw fault("Process failure pointer requires aligned LP64 pointer storage");
         }
     }
@@ -110,7 +110,7 @@ public final class ManagedProcessForeign {
     private static long outputs(List<Region> regions, LongSupplier action) {
         var addresses = new ArrayList<ManagedAddress>(regions.size());
         for (var region : regions) addresses.add(region.address());
-        return ManagedAddress.Companion.withNativeBorrows$org_intelligence_thc(addresses, () -> {
+        return ManagedAddress.withNativeBorrows(addresses, () -> {
             for (int i = 0; i < regions.size(); i++) for (int j = 0; j < i; j++) {
                 var first = regions.get(i);
                 var second = regions.get(j);
@@ -120,7 +120,7 @@ public final class ManagedProcessForeign {
             // Managed allocations cannot resize during publication; native owners are already borrowed.
             var owners = new ArrayList<ManagedAllocation>();
             for (var region : regions) {
-                var owner = region.address().cbitsOwner$org_intelligence_thc();
+                var owner = region.address().cbitsOwner();
                 if (owner != null && !owners.contains(owner)) owners.add(owner);
             }
             owners.sort((a, b) -> Integer.compareUnsigned(System.identityHashCode(a), System.identityHashCode(b)));
@@ -148,14 +148,14 @@ public final class ManagedProcessForeign {
         if (operation == ProcessOp.CREATE) return create(arguments);
         int pid = cint(arguments[0]);
         if (operation == ProcessOp.TERMINATE) {
-            var result = context.getFiles().processOperation$org_intelligence_thc(operation, pid, node, beforeBlock);
+            var result = context.getFiles().processOperation(operation, pid, node, beforeBlock);
             context.getStdio().nativeError(result.getErrno());
             return result.getStatus();
         }
         var destination = pointer(arguments[1]);
         return outputs(List.of(new Region(destination, 4)), () -> {
-            destination.requireByteRegion$org_intelligence_thc(4, true);
-            var result = context.getFiles().processOperation$org_intelligence_thc(operation, pid, node, beforeBlock);
+            destination.requireByteRegion(4, true);
+            var result = context.getFiles().processOperation(operation, pid, node, beforeBlock);
             if (result.getExitCode() != null) destination.writeNativeScalar(0, 4, result.getExitCode().longValue());
             context.getStdio().nativeError(result.getErrno());
             return result.getStatus();
@@ -164,10 +164,10 @@ public final class ManagedProcessForeign {
 
     private static Long credential(Object value) {
         var address = pointer(value);
-        if (address == ManagedAddress.Companion.nullAddress()) return null;
-        var owner = address.nativeAllocation$org_intelligence_thc();
+        if (address == ManagedAddress.nullAddress()) return null;
+        var owner = address.nativeAllocation();
         try (var ignored = owner == null ? null : owner.borrow()) {
-            address.requireByteRegion$org_intelligence_thc(4, false);
+            address.requireByteRegion(4, false);
             return Integer.toUnsignedLong(ManagedAddressRead.WORD32.readInt(address, 0));
         }
     }
@@ -181,10 +181,10 @@ public final class ManagedProcessForeign {
     private long create(Object[] values) {
         var arguments = vector(pointer(values[0]));
         var cwdPointer = pointer(values[1]);
-        byte[] cwd = cwdPointer == ManagedAddress.Companion.nullAddress() ? null : string(cwdPointer);
+        byte[] cwd = cwdPointer == ManagedAddress.nullAddress() ? null : string(cwdPointer);
         var parentEnvironment = context.getEnvironment().snapshotForProcess();
         var environmentPointer = pointer(values[2]);
-        var environment = environmentPointer == ManagedAddress.Companion.nullAddress() ? parentEnvironment.getEntries() : vector(environmentPointer);
+        var environment = environmentPointer == ManagedAddress.nullAddress() ? parentEnvironment.getEntries() : vector(environmentPointer);
         int[] streams = new int[3];
         for (int index = 0; index < streams.length; index++) streams[index] = cint(values[index + 3]);
         ManagedAddress[] destinations = new ManagedAddress[3];
@@ -200,10 +200,10 @@ public final class ManagedProcessForeign {
         return outputs(regions, () -> {
             pointerCell(failure);
             for (int index = 0; index < streams.length; index++)
-                if (streams[index] == -1) destinations[index].requireByteRegion$org_intelligence_thc(4, true);
-            failure.writeAddressElementIndex(0, ManagedAddress.Companion.nullAddress());
+                if (streams[index] == -1) destinations[index].requireByteRegion(4, true);
+            failure.writeAddressElementIndex(0, ManagedAddress.nullAddress());
             try {
-                return context.getFiles().launchProcess$org_intelligence_thc(
+                return context.getFiles().launchProcess(
                     arguments, environment, cwd, streams, flags, group, user, parentEnvironment.getSearchPath(), (pid, returned) -> {
                         for (int index = 0; index < streams.length; index++)
                             if (streams[index] == -1) destinations[index].writeNativeScalar(0, 4, returned[index]);

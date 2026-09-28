@@ -54,7 +54,7 @@ public final class ArgumentLayout {
         boolean needed = false;
         for (CoreRepresentation proof : proofs) needed |= proof.isTypedTransport() || proof.isInt();
         if (!needed) return null;
-        for (CoreRepresentation proof : proofs) CoreRepresentations.INSTANCE.requireInput(proof);
+        for (CoreRepresentation proof : proofs) CoreRepresentations.requireInput(proof);
         int[] offsets = new int[proofs.size() + 1];
         ArrayList<CoreRepresentation> physical = new ArrayList<>();
         for (int i = 0; i < proofs.size(); i++) {

@@ -27,11 +27,11 @@ class FloatingAddressTest {
         .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
         .option("engine.CompilationFailureAction", "Throw").build(); }
     private Expr operand(Object value) { return new Expr() { @Override public Object execute(VirtualFrame frame) { return value; } }; }
-    private FloatingAddressExpression node(FloatingAddressOp op, Expr... operands) { return new FloatingAddressExpression(op, CoreRepresentation.Companion.getUNKNOWN(), operands, false); }
+    private FloatingAddressExpression node(FloatingAddressOp op, Expr... operands) { return new FloatingAddressExpression(op, CoreRepresentation.UNKNOWN, operands, false); }
 
     @Test void wrongTypedSpecializationPreservesActualWidthAndTupleEffects() {
         var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], FrameDescriptor.newBuilder().build());
-        var base = ManagedAddress.Companion.fromAllocation(PinnedMemory.INSTANCE.allocate(32, 1));
+        var base = ManagedAddress.fromAllocation(PinnedMemory.allocate(32, 1));
         FloatingAddresses.writeFloat(base, 2, -0.0f); FloatingAddresses.writeDouble(base, 2, -0.0);
         var floatIndex = node(FloatingAddressOp.INDEX_FLOAT, operand(base), operand(2L));
         var floatMiss = assertThrows(UnexpectedResultException.class, () -> floatIndex.executeDouble(frame));
@@ -52,7 +52,7 @@ class FloatingAddressTest {
     }
 
     @Test void nativeEndianFloatingStoragePreservesBitsAndChecksWholeElement() {
-        var base = ManagedAddress.Companion.fromAllocation(PinnedMemory.INSTANCE.allocate(64, 1)); var target = base.plus(56);
+        var base = ManagedAddress.fromAllocation(PinnedMemory.allocate(64, 1)); var target = base.plus(56);
         base.writeAddressElementIndex(1, target);
         long floatBits = 0x7fc01234L, doubleBits = 0x7ff8000000001234L;
         FloatingAddresses.writeFloat(base, 4, Float.intBitsToFloat((int) floatBits)); FloatingAddresses.writeDouble(base, 3, Double.longBitsToDouble(doubleBits));

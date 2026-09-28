@@ -13,7 +13,7 @@ public final class VectorWord8Unpack extends Expr {
 
     public VectorWord8Unpack(Expr argument) {
         this.argument = argument;
-        setRepresentation(CoreVectors.INSTANCE.getUnpackedWord8());
+        setRepresentation(CoreVectors.unpackedWord8);
     }
 
     @Override public Object execute(VirtualFrame frame) {

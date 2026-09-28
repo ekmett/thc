@@ -186,10 +186,9 @@ class GhcBCOTest {
             context.initialize("thc"); context.enter()
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                val state = CoreRepresentation(CoreKind.VOID, primReps = emptyList())
-                val boxed = CoreRepresentation(CoreKind.OBJECT, primReps = listOf("BoxedRep (Just Lifted)"))
-                val shape = TupleShape(CoreRepresentation(CoreKind.UNKNOWN, primReps = boxed.primReps,
-                    components = listOf(state, boxed)), language)
+                val state = CoreRepresentation(CoreKind.VOID, false, false, emptyList())
+                val boxed = CoreRepresentation(CoreKind.OBJECT, false, false, listOf("BoxedRep (Just Lifted)"))
+                val shape = TupleShape(CoreRepresentation(CoreKind.UNKNOWN, false, false, boxed.primReps, listOf(state, boxed)), language)
                 var resumed = 0
                 for (capture in listOf(false, true)) {
                     val worker = object : GuestRoot(language, FrameDescriptor.newBuilder().build()) {
@@ -224,8 +223,8 @@ class GhcBCOTest {
             context.initialize("thc"); context.enter()
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                val bco = CoreRepresentation(CoreKind.OBJECT, primReps = listOf("BoxedRep (Just Lifted)"))
-                val proof = CoreRepresentation(CoreKind.UNKNOWN, primReps = bco.primReps, components = listOf(bco))
+                val bco = CoreRepresentation(CoreKind.OBJECT, false, false, listOf("BoxedRep (Just Lifted)"))
+                val proof = CoreRepresentation(CoreKind.UNKNOWN, false, false, bco.primReps, listOf(bco))
                 val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), FrameDescriptor.newBuilder().build())
                 for (name in listOf("newBCO#", "mkApUpd0#")) {
                     val operands = Array<Expr>(if (name == "newBCO#") 6 else 1) {
@@ -242,12 +241,11 @@ class GhcBCOTest {
     }
 
     @Test fun loweringRejectsWrongPhysicalCarriersAndTupleOrder() {
-        val state = CoreRepresentation(CoreKind.VOID, primReps = emptyList())
-        val pointer = CoreRepresentation(CoreKind.OBJECT, primReps = listOf("BoxedRep (Just Unlifted)"))
-        val bco = CoreRepresentation(CoreKind.OBJECT, primReps = listOf("BoxedRep (Just Lifted)"))
-        val number = CoreRepresentation(CoreKind.LONG, primReps = listOf("IntRep"))
-        fun tuple(vararg fields: CoreRepresentation) = CoreRepresentation(CoreKind.UNKNOWN,
-            primReps = fields.flatMap { it.primReps!! }, components = fields.toList())
+        val state = CoreRepresentation(CoreKind.VOID, false, false, emptyList())
+        val pointer = CoreRepresentation(CoreKind.OBJECT, false, false, listOf("BoxedRep (Just Unlifted)"))
+        val bco = CoreRepresentation(CoreKind.OBJECT, false, false, listOf("BoxedRep (Just Lifted)"))
+        val number = CoreRepresentation(CoreKind.LONG, false, false, listOf("IntRep"))
+        fun tuple(vararg fields: CoreRepresentation) = CoreRepresentation(CoreKind.UNKNOWN, false, false, fields.flatMap { it.primReps!! }, fields.toList())
         val args = listOf(pointer, pointer, pointer, number, pointer, state)
         GhcBCO.validate("newBCO#", args, List(6) { false }, tuple(state, bco))
         GhcBCO.validate("mkApUpd0#", listOf(bco), listOf(true), tuple(bco))

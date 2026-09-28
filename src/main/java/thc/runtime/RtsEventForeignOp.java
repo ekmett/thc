@@ -32,7 +32,7 @@ public enum RtsEventForeignOp {
     public long invoke(Node node, long count) {
         return switch (this) {
             case PROCESSORS -> GuestThreads.current(node).getCpuAffinity().getCount();
-            case CAPABILITIES -> { GuestThreads.current(node).setCapabilityCount$org_intelligence_thc(count); yield 0L; }
+            case CAPABILITIES -> { GuestThreads.current(node).setCapabilityCount(count); yield 0L; }
             case SIGINFO_SIZE -> CoreOriginalStdio.current(node).siginfoSize();
         };
     }

@@ -58,13 +58,13 @@ class Int32ByteOffsetTest {
             assertThrows(RuntimeFault.class, () -> ManagedByteArray.readInt32ByteOffsetGuest(bytes, offset, false));
             assertThrows(RuntimeFault.class, () -> ManagedByteArray.writeInt32ByteOffsetGuest(bytes, offset, 1));
         }
-        var owner = ManagedAllocation.mutable(24, 8); var target = ManagedAddress.Companion.fromAllocation(ManagedAllocation.mutable(8, 8));
+        var owner = ManagedAllocation.mutable(24, 8); var target = ManagedAddress.fromAllocation(ManagedAllocation.mutable(8, 8));
         owner.writeAddressByteOffset(8, target); ManagedByteArray.writeInt32ByteOffsetGuest(owner, 1, -1);
         assertEquals(-1L, (long) ManagedByteArray.readInt32ByteOffsetGuest(owner, 1, false));
         assertThrows(RuntimeFault.class, () -> Integer.toUnsignedLong(ManagedByteArray.readInt32ByteOffsetGuest(owner, 9, true)));
         assertThrows(RuntimeFault.class, () -> ManagedByteArray.writeInt32ByteOffsetGuest(owner, 9, 1)); assertSame(target, owner.readAddressByteOffset(8));
         var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], FrameDescriptor.newBuilder().build());
-        var write = expression(ByteArrayOp.WRITE_WORD8_AS_INT32, CoreRepresentation.Companion.getUNKNOWN(), new Expr[]{operand(bytes), operand(1L), operand(7L), operand("invalid state")});
+        var write = expression(ByteArrayOp.WRITE_WORD8_AS_INT32, CoreRepresentation.UNKNOWN, new Expr[]{operand(bytes), operand(1L), operand(7L), operand("invalid state")});
         assertThrows(RuntimeFault.class, () -> write.execute(frame));
         assertThrows(RuntimeFault.class, () -> BytecodeRoot.WriteInt32Array.write(true, bytes, 9L, 7, "invalid state"));
         assertEquals(-2147483648L, (long) ManagedByteArray.readInt32ByteOffsetGuest(bytes, 1, false)); assertEquals(0x80000001L, Integer.toUnsignedLong(ManagedByteArray.readInt32ByteOffsetGuest(bytes, 9, true)));

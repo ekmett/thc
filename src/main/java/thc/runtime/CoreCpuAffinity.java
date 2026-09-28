@@ -34,7 +34,7 @@ public final class CoreCpuAffinity {
     }
 
     public static Boolean validate(List<?> expr, boolean defined) {
-        var metadata = CoreRepresentations.INSTANCE.metadata(expr);
+        var metadata = CoreRepresentations.metadata(expr);
         if (metadata == null || !(metadata.get("foreignCall") instanceof Map<?, ?> call) ||
             !(call.get("target") instanceof Map<?, ?> target)) return null;
         var symbol = target.get("symbol");
@@ -54,11 +54,11 @@ public final class CoreCpuAffinity {
         var declared = call.get("argumentReps") instanceof List<?> list ? list : null;
         requireProof(arguments != null && arguments.size() == 1 && declared != null && declared.size() == 1 &&
             expr.size() > 3 && List.of(false).equals(expr.get(3)) &&
-            scalar(CoreRepresentations.INSTANCE.parse(declared.get(0)), null) &&
-            scalar(CoreRepresentations.INSTANCE.expression(arguments.get(0) instanceof List<?> list ? list : List.of()), null),
+            scalar(CoreRepresentations.parse(declared.get(0)), null) &&
+            scalar(CoreRepresentations.expression(arguments.get(0) instanceof List<?> list ? list : List.of()), null),
             "State# argument");
-        requireProof(tuple(CoreRepresentations.INSTANCE.parse(call.get("resultRep"))) &&
-            tuple(CoreRepresentations.INSTANCE.expression(expr)), "State#/CInt result");
+        requireProof(tuple(CoreRepresentations.parse(call.get("resultRep"))) &&
+            tuple(CoreRepresentations.expression(expr)), "State#/CInt result");
         return APPLIED.equals(symbol);
     }
 }

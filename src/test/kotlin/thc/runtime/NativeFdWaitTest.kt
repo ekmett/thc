@@ -242,7 +242,7 @@ class NativeFdWaitTest {
                 assertTrue(created.waitFor(5, TimeUnit.SECONDS)); assertEquals(0, created.exitValue())
                 val service = entered(context) {
                     val state = Language.currentState()
-                    ManagedFiles(state.env, state.threads, signalReadinessClose = {
+                    ManagedFiles(state.env, state.threads, Int.MAX_VALUE.toLong() + 1, {
                         it.descriptorClosed() // Always wake the real native poll.
                         throw IOException("injected post-wake failure")
                     }).also { it.installNative(state.nativeFiles!!, emptySet()) }

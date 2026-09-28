@@ -89,8 +89,8 @@ class RuntimeMemoryServicesTest {
             var registry = first.getNativeAllocations();
             var a = registry.malloc(19);
             var b = registry.malloc(31);
-            assertNotSame(ManagedAddress.Companion.nullAddress(), a);
-            assertNotSame(ManagedAddress.Companion.nullAddress(), b);
+            assertNotSame(ManagedAddress.nullAddress(), a);
+            assertNotSame(ManagedAddress.nullAddress(), b);
             assertEquals(50L, query(first, 208));
             assertEquals(2L, query(first, 209));
             context(true, second -> {
@@ -103,13 +103,13 @@ class RuntimeMemoryServicesTest {
             });
             assertEquals(50L, query(first, 208));
             var resized = registry.realloc(a, 67);
-            assertNotSame(ManagedAddress.Companion.nullAddress(), resized);
+            assertNotSame(ManagedAddress.nullAddress(), resized);
             assertEquals(98L, query(first, 208));
             assertEquals(2L, query(first, 209));
             registry.free(b);
             assertEquals(67L, query(first, 208));
             assertEquals(1L, query(first, 209));
-            assertSame(ManagedAddress.Companion.nullAddress(), registry.realloc(resized, 0));
+            assertSame(ManagedAddress.nullAddress(), registry.realloc(resized, 0));
             assertEquals(0L, query(first, 208));
             assertEquals(0L, query(first, 209));
             return null;
@@ -121,10 +121,10 @@ class RuntimeMemoryServicesTest {
         context(true, state -> {
             var registry = state.getNativeAllocations();
             var zero = registry.malloc(0);
-            long expectedCount = zero == ManagedAddress.Companion.nullAddress() ? 0L : 1L;
+            long expectedCount = zero == ManagedAddress.nullAddress() ? 0L : 1L;
             assertEquals(0L, query(state, 208));
             assertEquals(expectedCount, query(state, 209));
-            assertSame(ManagedAddress.Companion.nullAddress(), registry.malloc(Long.MAX_VALUE));
+            assertSame(ManagedAddress.nullAddress(), registry.malloc(Long.MAX_VALUE));
             assertEquals(0L, query(state, 208));
             assertEquals(expectedCount, query(state, 209));
             registry.free(zero);

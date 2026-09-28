@@ -350,12 +350,12 @@ public class BoxedCasTest {
     }
     @Test
     public void admissionKeepsCarriersArityStateAndLogicalTupleOrder() {
-        var zero = CoreRepresentations.INSTANCE.parse(state);
-        var ref = CoreRepresentations.INSTANCE.parse(reference);
-        var flag = CoreRepresentations.INSTANCE.parse(integer);
-        var function = CoreRepresentations.INSTANCE.parse(closure);
+        var zero = CoreRepresentations.parse(state);
+        var ref = CoreRepresentations.parse(reference);
+        var flag = CoreRepresentations.parse(integer);
+        var function = CoreRepresentations.parse(closure);
         for (boolean unlifted : List.of(false, true)) {
-            var element = unlifted ? ref : CoreRepresentations.INSTANCE.parse(data);
+            var element = unlifted ? ref : CoreRepresentations.parse(data);
             var tuple = tuple(List.of(zero, flag, element), concat(flag.getPrimReps(), element.getPrimReps()));
             for (var primitive : cases) {
                 var arguments = primitive.equals("casMutVar#") ? List.of(ref, element, element, zero)
@@ -375,7 +375,7 @@ public class BoxedCasTest {
                     () -> validate(primitive, arguments, flags, components(tuple, List.of(zero, element, flag))));
             }
         }
-        var lifted = CoreRepresentations.INSTANCE.parse(data);
+        var lifted = CoreRepresentations.parse(data);
         var tuple = tuple(List.of(zero, lifted, lifted), concat(lifted.getPrimReps(), lifted.getPrimReps()));
         MutVarOp.MODIFY.validate(List.of(ref, function, zero), List.of(false, true, false), tuple);
         assertThrows(RuntimeFault.class,

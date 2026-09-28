@@ -15,7 +15,7 @@ public final class VectorPack extends Expr {
     public VectorPack(Expr argument, int[] slots) {
         this.argument = argument;
         this.slots = slots;
-        setRepresentation(CoreVectors.INSTANCE.getProof());
+        setRepresentation(CoreVectors.proof);
     }
 
     @Override public LongVector execute(VirtualFrame frame) {

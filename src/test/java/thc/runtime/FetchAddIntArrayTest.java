@@ -144,7 +144,7 @@ class FetchAddIntArrayTest {
         assertEquals(313L, ManagedByteArray.readIntGuest(owner, 0));
         assertThrows(RuntimeFault.class, () -> AtomicIntArrayOp.ADD.execute(new byte[8], 0, 1, 0));
         var pointerOwner = ManagedByteArray.allocateGuest(8);
-        var address = ManagedAddress.Companion.fromAllocation(pointerOwner);
+        var address = ManagedAddress.fromAllocation(pointerOwner);
         pointerOwner.writeAddressByteOffset(0, address);
         assertThrows(RuntimeFault.class, () -> AtomicIntArrayOp.ADD.execute(pointerOwner, 0, 1, 0));
         assertSame(address, pointerOwner.readAddressByteOffset(0));

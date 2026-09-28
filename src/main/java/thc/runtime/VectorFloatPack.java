@@ -15,7 +15,7 @@ public final class VectorFloatPack extends Expr {
     public VectorFloatPack(Expr argument, int[] slots) {
         this.argument = argument;
         this.slots = slots;
-        setRepresentation(CoreVectors.INSTANCE.getProofFloat());
+        setRepresentation(CoreVectors.proofFloat);
     }
 
     @Override public FloatVector execute(VirtualFrame frame) {

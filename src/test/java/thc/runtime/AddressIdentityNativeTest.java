@@ -83,7 +83,7 @@ class AddressIdentityNativeTest {
             var dummyArgument = ((List<List<Object>>) current.get(2)).getFirst();
             assertEquals(List.of("var", dummy.get("id")), dummyArgument.subList(0, Math.min(2, dummyArgument.size())),
                 stage + " getCurrentCCS# keeps the original dummy");
-            assertFalse(CoreRepresentations.INSTANCE.expression(dummyArgument).getEvaluated(),
+            assertFalse(CoreRepresentations.expression(dummyArgument).getEvaluated(),
                 stage + " getCurrentCCS# dummy remains lazy");
             var result = (Map<String, Object>) ((Map<?, ?>) current.getLast()).get("rep");
             assertEquals(List.of("AddrRep"), result.get("primReps"));
@@ -159,20 +159,20 @@ class AddressIdentityNativeTest {
 
     @Test
     void nullAndAllocationIdentityNeverBecomeHostPointers() {
-        var nullAddress = ManagedAddress.Companion.nullAddress();
+        var nullAddress = ManagedAddress.nullAddress();
         assertSame(nullAddress, nullAddress.plus(0));
-        assertTrue(nullAddress.sameLocation(ManagedAddress.Companion.nullAddress()));
+        assertTrue(nullAddress.sameLocation(ManagedAddress.nullAddress()));
         assertThrows(RuntimeFault.class, () -> nullAddress.plus(1));
         assertThrows(RuntimeFault.class, () -> nullAddress.indexChar(0));
         assertThrows(RuntimeFault.class, nullAddress::utf8);
         byte[] bytes = {1, 2};
-        var first = ManagedAddress.Companion.fromByteArray(bytes);
-        var alias = ManagedAddress.Companion.fromByteArray(bytes);
+        var first = ManagedAddress.fromByteArray(bytes);
+        var alias = ManagedAddress.fromByteArray(bytes);
         assertTrue(first.sameLocation(alias));
         assertTrue(first.plus(1).sameLocation(alias.plus(1)));
         assertFalse(first.sameLocation(alias.plus(1)));
-        assertFalse(first.sameLocation(ManagedAddress.Companion.fromByteArray(bytes.clone())));
+        assertFalse(first.sameLocation(ManagedAddress.fromByteArray(bytes.clone())));
         assertFalse(first.sameLocation(nullAddress));
-        assertFalse(ManagedAddress.Companion.fromHex("41").sameLocation(ManagedAddress.Companion.fromHex("41")));
+        assertFalse(ManagedAddress.fromHex("41").sameLocation(ManagedAddress.fromHex("41")));
     }
 }

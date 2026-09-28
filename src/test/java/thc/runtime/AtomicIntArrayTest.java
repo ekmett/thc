@@ -338,7 +338,7 @@ public class AtomicIntArrayTest {
             }
             assertThrows(RuntimeFault.class, () -> operation.execute(ManagedAllocation.immutable(bytes, 8), 1, -1, 1));
             var pointerOwner = ManagedByteArray.allocateGuest(16);
-            var pointer = ManagedAddress.Companion.fromAllocation(pointerOwner);
+            var pointer = ManagedAddress.fromAllocation(pointerOwner);
             pointerOwner.writeAddressByteOffset(0, pointer);
             for (long index : List.of(0L, 8L / operation.getWidth() - 1)) {
                 assertThrows(RuntimeFault.class, () -> operation.execute(pointerOwner, index, 0, 1));
@@ -592,8 +592,8 @@ public class AtomicIntArrayTest {
         });
         assertEquals(500L * 256 + (500L & 255), AtomicIntArrayOp.READ.execute(owner, 1, 0, 0));
         AtomicIntArrayOp.WRITE.execute(owner, 1, 0, 0);
-        var raw = ManagedAddress.Companion.fromByteArray(owner.rawBytesIfPointerFree()).plus(8);
-        var ownedAddress = ManagedAddress.Companion.fromAllocation(owner).plus(8);
+        var raw = ManagedAddress.fromByteArray(owner.rawBytesIfPointerFree()).plus(8);
+        var ownedAddress = ManagedAddress.fromAllocation(owner).plus(8);
         var observations = Collections.synchronizedList(new ArrayList<Long>());
         parallel(thread -> {
             for (int i = 0; i < 250; i++) {

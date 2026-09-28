@@ -33,7 +33,7 @@ public final class CoreRuntimeServices {
     }
 
     public static RuntimeServiceCall validate(List<?> expr, boolean defined) {
-        var metadata = CoreRepresentations.INSTANCE.metadata(expr);
+        var metadata = CoreRepresentations.metadata(expr);
         if (metadata == null || !(metadata.get("foreignCall") instanceof Map<?, ?> call) ||
             !(call.get("target") instanceof Map<?, ?> target)) return null;
         RuntimeServiceCall operation = null;
@@ -61,11 +61,11 @@ public final class CoreRuntimeServices {
         for (int index = 0; index < arity; index++) {
             String primitive = operation.getArguments().get(index);
             List<?> expression = arguments.get(index) instanceof List<?> value ? value : List.of();
-            require(scalar(CoreRepresentations.INSTANCE.parse(declared.get(index)), primitive) &&
-                scalar(CoreRepresentations.INSTANCE.expression(expression), primitive), "argument " + index);
+            require(scalar(CoreRepresentations.parse(declared.get(index)), primitive) &&
+                scalar(CoreRepresentations.expression(expression), primitive), "argument " + index);
         }
-        require(result(CoreRepresentations.INSTANCE.parse(call.get("resultRep"))) &&
-            result(CoreRepresentations.INSTANCE.expression(expr)), "State#/CLLong result");
+        require(result(CoreRepresentations.parse(call.get("resultRep"))) &&
+            result(CoreRepresentations.expression(expr)), "State#/CLLong result");
         return operation;
     }
 

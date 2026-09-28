@@ -60,14 +60,14 @@ class FloatingByteOffsetTest {
         var edge = new byte[12]; ManagedByteArray.writeFloatByteOffsetGuest(edge, 8, -0.0f);
         assertEquals(0x80000000L, Integer.toUnsignedLong(Float.floatToRawIntBits(ManagedByteArray.readFloatByteOffsetGuest(edge, 8))));
         ManagedByteArray.writeDoubleByteOffsetGuest(edge, 4, -0.0); assertEquals(Long.MIN_VALUE, Double.doubleToRawLongBits(ManagedByteArray.readDoubleByteOffsetGuest(edge, 4)));
-        var owner = ManagedAllocation.mutable(32, 8); var target = ManagedAddress.Companion.fromAllocation(ManagedAllocation.mutable(8, 8));
+        var owner = ManagedAllocation.mutable(32, 8); var target = ManagedAddress.fromAllocation(ManagedAllocation.mutable(8, 8));
         owner.writeAddressByteOffset(16, target);
         assertThrows(RuntimeFault.class, () -> ManagedByteArray.readDoubleByteOffsetGuest(owner, 12));
         assertThrows(RuntimeFault.class, () -> ManagedByteArray.writeFloatByteOffsetGuest(owner, 19, 1.0f)); assertSame(target, owner.readAddressByteOffset(16));
         ManagedByteArray.writeDoubleByteOffsetGuest(owner, 16, -0.0);
         assertEquals(Long.MIN_VALUE, Double.doubleToRawLongBits(ManagedByteArray.readDoubleByteOffsetGuest(owner, 16))); assertThrows(RuntimeFault.class, () -> owner.readAddressByteOffset(16));
         var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], FrameDescriptor.newBuilder().build());
-        var write = expression(ByteArrayOp.WRITE_WORD8_AS_FLOAT, CoreRepresentation.Companion.getUNKNOWN(), new Expr[]{operand(bytes), operand(1L), operand(2.0f), operand("invalid state")});
+        var write = expression(ByteArrayOp.WRITE_WORD8_AS_FLOAT, CoreRepresentation.UNKNOWN, new Expr[]{operand(bytes), operand(1L), operand(2.0f), operand("invalid state")});
         assertThrows(RuntimeFault.class, () -> write.execute(frame));
         assertThrows(RuntimeFault.class, () -> BytecodeRoot.WriteDoubleArray.write(true, bytes, 9L, 2.0, "invalid state")); assertArrayEquals(model, bytes);
     }

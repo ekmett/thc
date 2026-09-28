@@ -23,11 +23,11 @@ public final class SavedTermios {
     }
     @TruffleBoundary public synchronized ManagedAddress get(long fd) {
         check(fd);
-        return fd >= 0 && fd <= 2 && slots[(int) fd] != null ? slots[(int) fd] : ManagedAddress.Companion.nullAddress();
+        return fd >= 0 && fd <= 2 && slots[(int) fd] != null ? slots[(int) fd] : ManagedAddress.nullAddress();
     }
     @TruffleBoundary public synchronized void set(long fd, ManagedAddress address) {
         check(fd);
-        if (fd >= 0 && fd <= 2) slots[(int) fd] = address == ManagedAddress.Companion.nullAddress() ? null : address;
+        if (fd >= 0 && fd <= 2) slots[(int) fd] = address == ManagedAddress.nullAddress() ? null : address;
     }
     public synchronized int retainedCount() {
         int count = 0;
@@ -40,7 +40,7 @@ public final class SavedTermios {
         var saved = Language.currentState(node).getSavedTermios();
         return switch (operation) {
             case GET_SAVED_TERMIOS -> saved.get(fd);
-            case SET_SAVED_TERMIOS -> { saved.set(fd, address); yield ManagedAddress.Companion.nullAddress(); }
+            case SET_SAVED_TERMIOS -> { saved.set(fd, address); yield ManagedAddress.nullAddress(); }
             default -> throw fault("Invalid saved termios operation");
         };
     }

@@ -119,10 +119,10 @@ class SmallArrayTest {
                 var operation = Objects.requireNonNull(SmallArrayOp.named(name));
                 var args = (List<Object>) app.get(2);
                 operation.validate(
-                    args.stream().map(arg -> CoreRepresentations.INSTANCE.expression((List<Object>) arg)).toList(),
-                    (List<?>) app.get(3), CoreRepresentations.INSTANCE.expression(app));
+                    args.stream().map(arg -> CoreRepresentations.expression((List<Object>) arg)).toList(),
+                    (List<?>) app.get(3), CoreRepresentations.expression(app));
                 if (name.equals("indexSmallArray#")) {
-                    var result = CoreRepresentations.INSTANCE.expression(app);
+                    var result = CoreRepresentations.expression(app);
                     assertEquals(
                         1, Objects.requireNonNull(result.getComponents()).size(), stage + " indexed element tuple");
                     assertEquals(List.of("BoxedRep (Just Lifted)"), result.getComponents().getFirst().getPrimReps());
@@ -233,7 +233,7 @@ class SmallArrayTest {
         var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], FrameDescriptor.newBuilder().build());
         for (var operation : List.of(SmallArrayOp.COPY, SmallArrayOp.COPY_MUTABLE)) {
             events.clear();
-            var expr = SmallArrayOp.expression(operation, CoreRepresentation.Companion.getUNKNOWN(),
+            var expr = SmallArrayOp.expression(operation, CoreRepresentation.UNKNOWN,
                 new Expr[] {op.operand("source", source), op.operand("from", 0L),
                     op.operand("destination", destination), op.operand("to", 0L), op.operand("count", 1L),
                     op.operand("state", 9L)});

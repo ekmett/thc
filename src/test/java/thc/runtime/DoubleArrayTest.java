@@ -70,23 +70,23 @@ class DoubleArrayTest {
         var descriptor = FrameDescriptor.newBuilder(); int slot = descriptor.addSlot(FrameSlotKind.Double, "result", null);
         var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], descriptor.build());
         var bytes = new byte[8]; ManagedByteArray.writeDouble(bytes, 0, 7.5); var events = new ArrayList<String>();
-        var read = expression(ByteArrayOp.READ_DOUBLE, CoreRepresentation.Companion.getUNKNOWN(), new Expr[]{
+        var read = expression(ByteArrayOp.READ_DOUBLE, CoreRepresentation.UNKNOWN, new Expr[]{
             operand(events, "array", () -> bytes), operand(events, "index", () -> 0L),
             operand(events, "state", () -> { ManagedByteArray.writeDouble(bytes, 0, -0.0); return Unit.INSTANCE; })});
         read.executeTuple(frame, new int[]{slot}, 0); assertEquals(List.of("array", "index", "state"), events);
         assertTrue(frame.isDouble(slot)); assertEquals(Long.MIN_VALUE, Double.doubleToRawLongBits(frame.getDouble(slot))); events.clear();
         double quiet = Double.longBitsToDouble(0x7ff8000000001234L);
-        var write = expression(ByteArrayOp.WRITE_DOUBLE, CoreRepresentation.Companion.getUNKNOWN(), new Expr[]{
+        var write = expression(ByteArrayOp.WRITE_DOUBLE, CoreRepresentation.UNKNOWN, new Expr[]{
             operand(events, "array", () -> bytes), operand(events, "index", () -> 0L), operand(events, "value", () -> quiet),
             operand(events, "state", () -> { assertEquals(Long.MIN_VALUE, ManagedByteArray.readInt(bytes, 0)); return Unit.INSTANCE; })});
         assertSame(Unit.INSTANCE, write.execute(frame)); assertEquals(List.of("array", "index", "value", "state"), events);
         assertEquals(Double.doubleToRawLongBits(quiet), ManagedByteArray.readInt(bytes, 0));
         for (var badState : List.<Supplier<Object>>of(() -> { throw new RuntimeFault("state failed"); }, () -> 0L)) {
             frame.setDouble(slot, -0.0);
-            var failedRead = expression(ByteArrayOp.READ_DOUBLE, CoreRepresentation.Companion.getUNKNOWN(), new Expr[]{
+            var failedRead = expression(ByteArrayOp.READ_DOUBLE, CoreRepresentation.UNKNOWN, new Expr[]{
                 operand(events, "array", () -> bytes), operand(events, "index", () -> 0L), operand(events, "state", badState)});
             assertThrows(RuntimeFault.class, () -> failedRead.executeTuple(frame, new int[]{slot}, 0)); assertEquals(Long.MIN_VALUE, Double.doubleToRawLongBits(frame.getDouble(slot)));
-            var failedWrite = expression(ByteArrayOp.WRITE_DOUBLE, CoreRepresentation.Companion.getUNKNOWN(), new Expr[]{
+            var failedWrite = expression(ByteArrayOp.WRITE_DOUBLE, CoreRepresentation.UNKNOWN, new Expr[]{
                 operand(events, "array", () -> bytes), operand(events, "index", () -> 0L), operand(events, "value", () -> 99.0), operand(events, "state", badState)});
             assertThrows(RuntimeFault.class, () -> failedWrite.execute(frame)); assertEquals(Double.doubleToRawLongBits(quiet), ManagedByteArray.readInt(bytes, 0));
         }

@@ -200,7 +200,7 @@ public final class ManagedAllocation {
         if (intersectsPointer(start, width)) throw fault("Atomic Int access overlaps a managed pointer cell");
         if (isPinned()) {
             var addressOperation = width == 1 ? AtomicAddressOp.CAS8 : width == 2 ? AtomicAddressOp.CAS16 : AtomicAddressOp.CAS32;
-            int old = addressOperation.numericInt(ManagedAddress.Companion.fromGuestByteArray(this).plus(start), operand, replacement);
+            int old = addressOperation.numericInt(ManagedAddress.fromGuestByteArray(this).plus(start), operand, replacement);
             return width == 1 ? (byte) old : width == 2 ? (short) old : old;
         }
         synchronized (bytes) {
@@ -227,7 +227,7 @@ public final class ManagedAllocation {
                 case OR -> AtomicAddressOp.OR; case XOR -> AtomicAddressOp.XOR;
                 default -> switch (width) { case 1 -> AtomicAddressOp.CAS8; case 2 -> AtomicAddressOp.CAS16; case 4 -> AtomicAddressOp.CAS32; default -> AtomicAddressOp.CAS64; };
             };
-            long old = addressOperation.numeric(ManagedAddress.Companion.fromGuestByteArray(this).plus(start), operand, replacement);
+            long old = addressOperation.numeric(ManagedAddress.fromGuestByteArray(this).plus(start), operand, replacement);
             return switch (width) { case 1 -> (byte) old; case 2 -> (short) old; case 4 -> (int) old; default -> old; };
         }
         synchronized (bytes) {

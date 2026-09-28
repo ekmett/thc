@@ -234,8 +234,7 @@ class RtsEventNativeTest {
                         assertEquals(expected, callable.execute(input).asLong(), "$stage/$backend/$entry")
                         if (entry == "capabilities") {
                             assertEquals(input, threads.capabilityCount())
-                            val address = CoreDataLabels.fromCore("enabled_capabilities", CoreRepresentation(
-                                CoreKind.ADDRESS, evaluated = true, present = true, primReps = listOf("AddrRep")))
+                            val address = CoreDataLabels.fromCore("enabled_capabilities", CoreRepresentation(CoreKind.ADDRESS, true, true, listOf("AddrRep")))
                             assertEquals(input, Integer.toUnsignedLong(ManagedAddressRead.WORD32.readInt(address, 0)))
                             assertEquals(physicalCount, threads.cpuAffinity.count.toLong())
                         }

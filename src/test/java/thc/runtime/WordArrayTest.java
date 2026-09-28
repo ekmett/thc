@@ -57,20 +57,20 @@ class WordArrayTest {
         var descriptor = FrameDescriptor.newBuilder(); int slot = descriptor.addSlot(FrameSlotKind.Long, "result", null);
         var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], descriptor.build());
         var bytes = new byte[8]; ManagedByteArray.writeInt(bytes, 0, 7); var events = new ArrayList<String>();
-        var read = expression(ByteArrayOp.READ_WORD, CoreRepresentation.Companion.getUNKNOWN(), new Expr[]{
+        var read = expression(ByteArrayOp.READ_WORD, CoreRepresentation.UNKNOWN, new Expr[]{
             operand(events, "array", () -> bytes), operand(events, "index", () -> 0L), operand(events, "state", () -> { ManagedByteArray.writeInt(bytes, 0, Long.MIN_VALUE); return Unit.INSTANCE; })});
         read.executeTuple(frame, new int[]{slot}, 0); assertEquals(List.of("array", "index", "state"), events);
         assertTrue(frame.isLong(slot)); assertEquals(Long.MIN_VALUE, frame.getLong(slot)); events.clear();
-        var write = expression(ByteArrayOp.WRITE_WORD, CoreRepresentation.Companion.getUNKNOWN(), new Expr[]{
+        var write = expression(ByteArrayOp.WRITE_WORD, CoreRepresentation.UNKNOWN, new Expr[]{
             operand(events, "array", () -> bytes), operand(events, "index", () -> 0L), operand(events, "value", () -> Long.MAX_VALUE),
             operand(events, "state", () -> { assertEquals(Long.MIN_VALUE, ManagedByteArray.readInt(bytes, 0)); return Unit.INSTANCE; })});
         assertSame(Unit.INSTANCE, write.execute(frame)); assertEquals(List.of("array", "index", "value", "state"), events); assertEquals(Long.MAX_VALUE, ManagedByteArray.readInt(bytes, 0));
         for (var badState : List.<Supplier<Object>>of(() -> { throw new RuntimeFault("state failed"); }, () -> 0L)) {
             frame.setLong(slot, 73);
-            var failedRead = expression(ByteArrayOp.READ_WORD, CoreRepresentation.Companion.getUNKNOWN(), new Expr[]{
+            var failedRead = expression(ByteArrayOp.READ_WORD, CoreRepresentation.UNKNOWN, new Expr[]{
                 operand(events, "array", () -> bytes), operand(events, "index", () -> 0L), operand(events, "state", badState)});
             assertThrows(RuntimeFault.class, () -> failedRead.executeTuple(frame, new int[]{slot}, 0)); assertEquals(73L, frame.getLong(slot));
-            var failedWrite = expression(ByteArrayOp.WRITE_WORD, CoreRepresentation.Companion.getUNKNOWN(), new Expr[]{
+            var failedWrite = expression(ByteArrayOp.WRITE_WORD, CoreRepresentation.UNKNOWN, new Expr[]{
                 operand(events, "array", () -> bytes), operand(events, "index", () -> 0L), operand(events, "value", () -> 99L), operand(events, "state", badState)});
             assertThrows(RuntimeFault.class, () -> failedWrite.execute(frame)); assertEquals(Long.MAX_VALUE, ManagedByteArray.readInt(bytes, 0));
         }

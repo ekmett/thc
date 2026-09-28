@@ -56,9 +56,9 @@ Use the public [THC affinity API](cpu-affinity-api.md) to observe native request
 acceptance; `threadStatus#` cannot supply that information.
 
 **Virtual-thread safety:** guest forks explicitly use
-[`newTruffleThreadBuilder(...).virtual(false)`](../src/main/kotlin/thc/runtime/GuestThreadOps.kt).
+[`newTruffleThreadBuilder(...).virtual(false)`](../src/main/java/thc/runtime/GuestThreadOps.java).
 They do not migrate between Java virtual-thread carriers. Both the
-[Linux](../src/main/kotlin/thc/runtime/CpuAffinity.kt) and
+[Linux](../src/main/java/thc/runtime/LinuxCpuAffinity.java) and
 [Windows](../src/main/java/thc/runtime/WindowsCpuAffinity.java) affinity paths
 refuse native affinity changes on virtual threads, including when an embedding
 enters from one. Do not remove those guards or switch guest forks to virtual

@@ -47,7 +47,7 @@ public final class ManagedStdio {
 
     private long fileError(StdioHostAbi abi) { return fileError(abi, false); }
     private long fileError(StdioHostAbi abi, boolean seek) {
-        long nativeError = files.nativeErrno$org_intelligence_thc();
+        long nativeError = files.nativeErrno();
         return nativeError != 0 ? nativeError : seek && files.errorKind() == 7L ? abi.notSeekable() : abi.error(files.errorKind());
     }
 
@@ -77,15 +77,15 @@ public final class ManagedStdio {
     }
     @TruffleBoundary public ManagedAddress openDirectory(ManagedAddress path) {
         var abi = hostAbi();
-        var result = files.openDirectoryOriginal$org_intelligence_thc(path);
-        if (result == ManagedAddress.Companion.nullAddress()) lastError.set(fileError(abi));
+        var result = files.openDirectoryOriginal(path);
+        if (result == ManagedAddress.nullAddress()) lastError.set(fileError(abi));
         return result;
     }
     @TruffleBoundary public ManagedAddress openDirectoryFd(long fd) {
         var abi = hostAbi();
         if (fd != (long) (int) fd) throw fault("Original fdopendir requires a canonical signed CInt");
-        var result = files.openDirectoryDescriptor$org_intelligence_thc(fd);
-        if (result == ManagedAddress.Companion.nullAddress()) lastError.set(fileError(abi));
+        var result = files.openDirectoryDescriptor(fd);
+        if (result == ManagedAddress.nullAddress()) lastError.set(fileError(abi));
         return result;
     }
     /** Zero explicitly clears the slot; every signed CInt is otherwise preserved. */
@@ -101,27 +101,27 @@ public final class ManagedStdio {
     @TruffleBoundary public long eventfd(long initial, long flags) {
         var abi = hostAbi();
         if (initial != (long) (int) initial || flags != (long) (int) flags) throw fault("Original eventfd requires canonical CInt operands");
-        long result = files.eventfd$org_intelligence_thc((int) initial, (int) flags);
+        long result = files.eventfd((int) initial, (int) flags);
         if (result < 0) lastError.set(fileError(abi));
         return result;
     }
     @TruffleBoundary public long pipe(ManagedAddress destination) {
         var abi = hostAbi();
-        long result = files.pipe$org_intelligence_thc(destination);
+        long result = files.pipe(destination);
         if (result < 0) lastError.set(fileError(abi));
         return result;
     }
     @TruffleBoundary public long eventfdWrite(long fd, long value) {
         var abi = hostAbi();
         if (fd != (long) (int) fd) throw fault("Original eventfd_write requires a canonical CInt descriptor");
-        long result = files.eventfdWrite$org_intelligence_thc(fd, value);
+        long result = files.eventfdWrite(fd, value);
         if (result < 0) lastError.set(fileError(abi));
         return result;
     }
     @TruffleBoundary public long poll(ManagedAddress address, long count, long timeout, Node node) {
         var abi = hostAbi();
         if (timeout != (long) (int) timeout) throw fault("Original poll requires a canonical CInt timeout");
-        long result = files.poll$org_intelligence_thc(address, count, (int) timeout, node);
+        long result = files.poll(address, count, (int) timeout, node);
         if (result < 0) lastError.set(fileError(abi));
         return result;
     }
@@ -136,12 +136,12 @@ public final class ManagedStdio {
         } else if (operation == OriginalStdioOp.IO_WAKEUP_FD) slot = -1L;
         else if (operation == OriginalStdioOp.TIMER_CONTROL_FD) slot = -2L;
         else throw fault("Invalid event-manager control operation");
-        files.controlFd$org_intelligence_thc(slot, fd);
+        files.controlFd(slot, fd);
     }
     @TruffleBoundary public long epollCreate(long size) {
         var abi = hostAbi();
         if (size != (long) (int) size) throw fault("Original epoll_create requires a canonical CInt size");
-        long result = files.epollCreate$org_intelligence_thc((int) size);
+        long result = files.epollCreate((int) size);
         if (result < 0) lastError.set(fileError(abi));
         return result;
     }
@@ -149,7 +149,7 @@ public final class ManagedStdio {
         var abi = hostAbi();
         if (fd != (long) (int) fd || operation != (long) (int) operation || target != (long) (int) target)
             throw fault("Original epoll_ctl requires canonical CInt operands");
-        long result = files.epollControl$org_intelligence_thc(fd, (int) operation, target, event);
+        long result = files.epollControl(fd, (int) operation, target, event);
         if (result < 0) lastError.set(fileError(abi));
         return result;
     }
@@ -157,7 +157,7 @@ public final class ManagedStdio {
         var abi = hostAbi();
         if (fd != (long) (int) fd || maximum != (long) (int) maximum || timeout != (long) (int) timeout)
             throw fault("Original epoll_wait requires canonical CInt operands");
-        long result = files.epollWait$org_intelligence_thc(fd, events, (int) maximum, (int) timeout, node);
+        long result = files.epollWait(fd, events, (int) maximum, (int) timeout, node);
         if (result < 0) lastError.set(fileError(abi));
         return result;
     }
@@ -167,7 +167,7 @@ public final class ManagedStdio {
         long expected = abi.flagConstant(write ? OriginalStdioOp.F_SETFL : OriginalStdioOp.F_GETFL);
         boolean descriptorFlags = write && command == abi.flagConstant(OriginalStdioOp.F_SETFD);
         if (command != expected && !descriptorFlags) throw fault("Original fcntl supports F_GETFL/F_SETFL/F_SETFD with the matching arity");
-        long result = files.fcntl$org_intelligence_thc(fd, argument, write, descriptorFlags);
+        long result = files.fcntl(fd, argument, write, descriptorFlags);
         if (result < 0) lastError.set(fileError(abi));
         return result;
     }
@@ -190,30 +190,30 @@ public final class ManagedStdio {
     }
     @TruffleBoundary public long changeDirectory(ManagedAddress path) {
         var abi = hostAbi();
-        long result = files.changeDirectoryOriginal$org_intelligence_thc(path);
+        long result = files.changeDirectoryOriginal(path);
         if (result < 0) lastError.set(fileError(abi));
         return result;
     }
     @TruffleBoundary public ManagedAddress currentDirectory(ManagedAddress output, long capacity) {
         var abi = hostAbi();
-        long result = files.currentDirectoryOriginal$org_intelligence_thc(output, capacity);
-        if (result < 0) { lastError.set(fileError(abi)); return ManagedAddress.Companion.nullAddress(); }
+        long result = files.currentDirectoryOriginal(output, capacity);
+        if (result < 0) { lastError.set(fileError(abi)); return ManagedAddress.nullAddress(); }
         return output;
     }
     @TruffleBoundary public long symlink(ManagedAddress target, ManagedAddress path) {
-        long result = files.symlinkOriginal$org_intelligence_thc(target, path);
+        long result = files.symlinkOriginal(target, path);
         if (result < 0) lastError.set(fileError(hostAbi()));
         return result;
     }
     @TruffleBoundary public long readlink(ManagedAddress path, ManagedAddress output, long capacity) {
-        long result = files.readlinkOriginal$org_intelligence_thc(path, output, capacity);
+        long result = files.readlinkOriginal(path, output, capacity);
         if (result < 0) lastError.set(fileError(hostAbi()));
         return result;
     }
     @TruffleBoundary public long statAt(long fd, ManagedAddress path, ManagedAddress destination, long flags) {
         var abi = hostAbi();
         if (fd != (long) (int) fd || flags != (long) (int) flags) throw fault("Original fstatat requires canonical signed CInt descriptor and flags");
-        long result = files.statAtOriginal$org_intelligence_thc(fd, path, destination, (int) flags, abi.getAtFdcwd());
+        long result = files.statAtOriginal(fd, path, destination, (int) flags, abi.getAtFdcwd());
         if (result < 0) lastError.set(fileError(abi));
         return result;
     }
@@ -221,26 +221,26 @@ public final class ManagedStdio {
     @TruffleBoundary public long unlinkAt(long fd, ManagedAddress path, long flags) {
         var abi = hostAbi();
         if (fd != (long) (int) fd || flags != (long) (int) flags) throw fault("Original unlinkat requires canonical signed CInt descriptor and flags");
-        long result = files.unlinkAtOriginal$org_intelligence_thc(fd, path, (int) flags, abi.getAtFdcwd(), abi.getAtRemoveDir());
+        long result = files.unlinkAtOriginal(fd, path, (int) flags, abi.getAtFdcwd(), abi.getAtRemoveDir());
         if (result < 0) lastError.set(fileError(abi));
         return result;
     }
     @TruffleBoundary public long access(ManagedAddress path, long mode) {
         if (mode != (long) (int) mode) throw fault("Original access requires a canonical signed CInt mode");
-        long result = files.accessOriginal$org_intelligence_thc(path, (int) mode);
+        long result = files.accessOriginal(path, (int) mode);
         if (result < 0) lastError.set(fileError(hostAbi()));
         return result;
     }
     @TruffleBoundary public long pathMode(OriginalStdioOp operation, ManagedAddress path, long mode) {
         if (!operation.getPathMode()) throw new IllegalStateException("Check failed.");
         if (mode < 0 || mode > 0xffff_ffffL) throw fault("Original pathname mode requires a canonical CMode");
-        long result = files.pathModeOriginal$org_intelligence_thc(path, mode, operation == OriginalStdioOp.MKDIR);
+        long result = files.pathModeOriginal(path, mode, operation == OriginalStdioOp.MKDIR);
         if (result < 0) lastError.set(fileError(hostAbi()));
         return result;
     }
     @TruffleBoundary public long unlink(ManagedAddress path) {
         var abi = hostAbi();
-        long result = files.unlinkOriginal$org_intelligence_thc(path);
+        long result = files.unlinkOriginal(path);
         if (result < 0) lastError.set(fileError(abi));
         return result;
     }
@@ -252,7 +252,7 @@ public final class ManagedStdio {
     }
     @TruffleBoundary public long open(ManagedAddress path, long flags, long mode, OriginalStdioOp operation, Node node) {
         var abi = hostAbi();
-        long result = files.openOriginal$org_intelligence_thc(path, flags, mode, operation, node);
+        long result = files.openOriginal(path, flags, mode, operation, node);
         if (result < 0) lastError.set(fileError(abi));
         return result;
     }
@@ -287,28 +287,28 @@ public final class ManagedStdio {
     }
     @TruffleBoundary public long pathStat(OriginalStdioOp operation, ManagedAddress path, ManagedAddress destination) {
         if (!operation.getPathStat()) throw new IllegalStateException("Check failed.");
-        long result = files.pathStatOriginal$org_intelligence_thc(path, destination, operation == OriginalStdioOp.STAT);
+        long result = files.pathStatOriginal(path, destination, operation == OriginalStdioOp.STAT);
         if (result < 0) lastError.set(fileError(hostAbi()));
         return result;
     }
     @TruffleBoundary public long fstat(long fd, ManagedAddress destination) {
         var abi = hostAbi();
         if (fd != (long) (int) fd) throw fault("Original fstat requires a canonical signed CInt descriptor");
-        long result = files.fstat$org_intelligence_thc(fd, destination);
+        long result = files.fstat(fd, destination);
         if (result < 0) lastError.set(fileError(abi));
         return result;
     }
     @TruffleBoundary public long tcsetattr(long fd, long action, ManagedAddress source) {
         var abi = hostAbi();
         if (fd != (long) (int) fd || action != (long) (int) action) throw fault("Original tcsetattr requires canonical signed CInt descriptor and action");
-        long result = files.tcsetattr$org_intelligence_thc(fd, (int) action, source);
+        long result = files.tcsetattr(fd, (int) action, source);
         if (result < 0) lastError.set(fileError(abi));
         return result;
     }
     @TruffleBoundary public long tcgetattr(long fd, ManagedAddress destination) {
         var abi = hostAbi();
         if (fd != (long) (int) fd) throw fault("Original tcgetattr requires a canonical signed CInt descriptor");
-        long result = files.tcgetattr$org_intelligence_thc(fd, destination);
+        long result = files.tcgetattr(fd, destination);
         if (result < 0) lastError.set(fileError(abi));
         return result;
     }

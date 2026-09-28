@@ -42,7 +42,7 @@ class Case extends Expr {
         CoreRepresentation selected = null;
         if (aggregate) selected = first;
         else {
-            CoreRepresentation vector = CoreVectors.INSTANCE.caseResult(proofs);
+            CoreRepresentation vector = CoreVectors.caseResult(proofs);
             if (vector != null) setRepresentation(vector);
             else if (narrow) selected = first;
             else setRepresentation(new CoreRepresentation(kind, evaluated, present, null, null, null, null, null, null));
