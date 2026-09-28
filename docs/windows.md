@@ -15,7 +15,11 @@ and installations, and sets environment variables only in the current shell.
 It does not install services, change execution policy, or modify the machine PATH.
 Install a real Python interpreter first; the Microsoft Store alias does not work.
 
+Pinned source hashes require unmodified upstream bytes. Initialize submodules
+with line-ending conversion disabled; the root attributes do not apply inside them.
+
 ~~~powershell
+git -c core.autocrlf=false submodule update --init --depth 1
 $env:THC_PYTHON = 'C:\path\to\python.exe'
 . ./bin/bootstrap-windows.ps1 -Prefix 'C:\path\to\thc-tools'
 Invoke-ThcTool $env:CABAL @('update')

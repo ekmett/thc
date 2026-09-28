@@ -28,7 +28,7 @@ and library (for example, `libgmp-dev` on Debian/Ubuntu) for the
 From the repository root:
 
 ```sh
-git submodule update --init --depth 1
+git -c core.autocrlf=false submodule update --init --depth 1
 export JAVA_HOME=/path/to/graalvm
 export PATH="$JAVA_HOME/bin:$PATH"
 
