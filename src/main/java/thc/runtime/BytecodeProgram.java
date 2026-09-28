@@ -5214,10 +5214,13 @@ public final class BytecodeProgram implements ExecutableProgram {
                 && alternatives.stream().allMatch(a -> "data".equals(a.getFirst()) || "default".equals(a.getFirst()))
                 && CoreRepresentations.caseBinder(expr).getKind() == CoreKind.DATA;
         long literalCount = alternatives.stream().filter(a -> "lit".equals(a.getFirst())).count();
+        // A default-only continuation can be large even though it has no choice.
+        // Preparation is inert; only a real graph bailout moves its suffix out of the caller.
+        boolean scalarSuffix = alternatives.size() == 1 && "default".equals(alternatives.getFirst().getFirst());
         boolean scalarPartition = staticWideLong(CoreRepresentations.caseBinder(expr).withEvaluated(true))
-                && literalCount >= 2 && literalCount <= 8
+                && (scalarSuffix || literalCount >= 2 && literalCount <= 8)
                 && alternatives.stream().allMatch(a -> "lit".equals(a.getFirst()) || "default".equals(a.getFirst()))
-                && caseRegionWork(expr, 64) >= 64;
+                && caseRegionWork(scalarSuffix ? alternatives.getFirst().get(3) : expr, 64) >= 64;
         if (!context.preparingCaseRegion && context.caseRegions.isEmpty() && (constructorPartition || scalarPartition)
                 && CoreFreeVariables.coreFreeVariables(expr).stream().noneMatch(scope.joins::containsKey)) {
             context.preparingCaseRegion = true;

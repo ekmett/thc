@@ -172,6 +172,10 @@ preparation filter does not predict graph size or identify a cold default: only
 an actual budget bailout activates the side targets. Literal order, duplicate
 labels and the original default are retained. An ambient join does not exclude
 a region unless that region references the join's activation.
+A singleton-default exact-wide-integral case can also prepare its substantial
+continuation body as one side target. Its scrutinee stays in the caller and is
+evaluated exactly once; a large scrutinee alone does not qualify a tiny body.
+This is a suffix cut, not an assertion that a default arm is cold.
 
 These are bounded extraction policies, not demand-only candidate allocation or a
 complete application graph-budget solution. A callee inlining veto alone cannot
