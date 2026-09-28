@@ -23,84 +23,522 @@ import static thc.runtime.ByteArrayOp.expression;
 
 @SuppressWarnings("unchecked")
 class CompareByteArraysTest {
-    private final File root=new File(System.getProperty("thc.projectRoot"));
-    private final List<String> names=List.of("shortCompare","shortPrefix","shortSuffix","rangeCompare","aliasCompare");
-    private Context context(boolean inlining){return Context.newBuilder("thc").allowExperimentalOptions(true).option("compiler.Inlining",Boolean.toString(inlining)).option("engine.BackgroundCompilation","false").option("engine.MultiTier","false").option("engine.CompilationFailureAction","Throw").option("engine.SingleTierCompilationThreshold","10000000").build();}
-    private ExecutableProgram program(Language language,Map<String,Object> module,String backend){return backend.equals("ast")?new Program(language,module):new BytecodeProgram(language,module);}
-    private void valid(RootCallTarget target,String label)throws Exception{assertEquals(true,target.getClass().getMethod("isValidLastTier").invoke(target),label);}
-    private void compile(RootCallTarget target)throws Exception{target.getClass().getMethod("compile",boolean.class).invoke(target,true);valid(target,"installed");}
-    private List<RootCallTarget> activeTargets(RootCallTarget entry){var seen=Collections.newSetFromMap(new IdentityHashMap<RootCallTarget,Boolean>());var result=new ArrayList<RootCallTarget>();visit(entry,seen,result);return result;}
-    private void visit(RootCallTarget target,Set<RootCallTarget> seen,List<RootCallTarget> result){if(!seen.add(target))return;var body=target.getRootNode();var nodes=new ArrayList<Node>();nodes.add(body);if(body instanceof BytecodeRoot bytecode)for(var instruction:bytecode.getBytecodeNode().getInstructions())for(var argument:instruction.getArguments())if(argument.getKind()==Instruction.Argument.Kind.NODE_PROFILE){var node=argument.asCachedNode();if(node!=null)nodes.add(node);}for(var node:nodes)for(var call:NodeUtil.findAllNodeInstances(node,DirectCallNode.class))if(call.getCurrentCallTarget()instanceof RootCallTarget active&&active.getRootNode()instanceof GuestRoot)visit(active,seen,result);result.add(target);}
-    private long count(ExecutableProgram p){return ((Number)p.diagnostics().get("compiledEntries")).longValue();}
-    private void released(Language language){var state=language.getHandoffState().get();assertEquals(0,state.getArguments().getDepth());assertEquals(0,state.getArguments().retainedReferences());assertEquals(0,state.getResults().getDepth());assertEquals(0,state.getResults().retainedReferences());}
-    private long compare(List<Integer> a,List<Integer> b){for(int i=0;i<Math.min(a.size(),b.size());i++)if(!a.get(i).equals(b.get(i)))return a.get(i)<b.get(i)?-1:1;return Integer.compare(a.size(),b.size());}
-    private long model(String name,long raw){if(!names.contains(name))throw new IllegalArgumentException("Unknown byte-array comparison entry");int k=(int)(raw&4095),x=(int)(raw&255);if(name.equals("shortCompare"))return compare(List.of(x,0,128,255),List.of(List.of(x,0,128,255),List.of(x,0,128),List.of(x,0,128,254),List.of(x,0,129,0),List.<Integer>of()).get(k%5));if(name.equals("shortPrefix")||name.equals("shortSuffix"))return k%3==1?1:0;var a=List.of(x,0,127,128,255,17,0,255);var b=name.equals("aliasCompare")?a:List.of(255,0,127,128,x,17,255,0);int from=k%9,to=k/9%9,length=Math.min(k/81%9,Math.min(8-from,8-to));return compare(a.subList(from,from+length),b.subList(to,to+length));}
-    @Test void publicShortByteStringAndRangesWithInlining()throws Exception{verifyNative(true);}
-    @Test void publicShortByteStringAndRangesAcrossResidualCalls()throws Exception{verifyNative(false);}
-    private void check(List<String> row,Value function,String name,String label){long input=Long.parseLong(row.get(1)),expected=Long.parseLong(row.get(2));assertEquals(model(name,input),expected,"native "+label+"/"+input);assertEquals(expected,function.execute(input).asLong(),label+"/"+input);}
-    private void verifyNative(boolean inlining)throws Exception{
-        var manifest=(Map<String,Object>)Json.parse(Files.readString(new File(root,"build/compare-byte-arrays/manifest.json").toPath()));assertEquals(names,manifest.get("entries"));assertEquals("sign only",manifest.get("resultContract"));ByteArrayFixtureEvidence.verify(root,"compare-byte-arrays",manifest);var rows=new LinkedHashMap<String,List<List<String>>>();for(var row:checkedRows(Files.readString(new File(root,"build/compare-byte-arrays/oracle.tsv").toPath())))rows.computeIfAbsent(row.get(0),key->new ArrayList<>()).add(row);assertEquals(new HashSet<>(names),rows.keySet());int rowCount=0;for(var list:rows.values())rowCount+=list.size();assertEquals(((Number)manifest.get("nativeRows")).intValue(),rowCount);
-        for(var stageEntry:((Map<String,List<String>>)manifest.get("stages")).entrySet()){var stage=stageEntry.getKey();var modules=new ArrayList<Map<String,Object>>();for(var path:stageEntry.getValue())modules.add((Map<String,Object>)Json.parse(Files.readString(new File(root,path).toPath())));var module=CoreModules.merge(modules);
-            for(var name:names)for(var backend:List.of("ast","bytecode"))try(var context=context(inlining)){context.initialize("thc");context.enter();try{var language=TruffleLanguage.LanguageReference.create(Language.class).get(null);var linked=new LinkedHashMap<>(CoreModules.reachable(module,name));linked.put("instrument",true);var p=program(language,linked,backend);var entry=p.entryTarget(name);var host=p.hostEntryTarget(1);var function=context.asValue(new EntryValue(p,name,1));var label=stage+"/"+backend+"/"+name+"/inline="+inlining;var cases=Objects.requireNonNull(rows.get(name));var wanted=new ArrayList<Long>();for(var n:((Map<String,List<Number>>)manifest.get("inputsByEntry")).get(name))wanted.add(n.longValue());var actual=new ArrayList<Long>();for(var row:cases)actual.add(Long.parseLong(row.get(1)));assertEquals(wanted,actual);
-                for(var row:cases)check(row,function,name,label);var active=activeTargets(host);assertTrue(active.size()>1,label+" actual guest call target");for(var target:active)if(target!=host)compile(target);assertTrue(function.invokeMember("compile").asBoolean(),label+" host installation");
-                for(var row:cases.reversed()){long before=count(p);check(row,function,name,label);assertTrue(count(p)>before,label+"/"+row.get(1)+" must enter compiled guest code");assertEquals(active,activeTargets(host),label+" active target identities");valid(entry,label+" original");for(var target:active)valid(target,label+" active");released(language);}assertEquals(0L,((Number)p.diagnostics().get("blackholes")).longValue());assertEquals(0L,((Number)p.diagnostics().get("unsupportedTraps")).longValue());
-            }finally{context.leave();}}
+    private final File root = new File(System.getProperty("thc.projectRoot"));
+    private final List<String> names =
+        List.of("shortCompare", "shortPrefix", "shortSuffix", "rangeCompare", "aliasCompare");
+    private Context context(boolean inlining) {
+        return Context.newBuilder("thc")
+            .allowExperimentalOptions(true)
+            .option("compiler.Inlining", Boolean.toString(inlining))
+            .option("engine.BackgroundCompilation", "false")
+            .option("engine.MultiTier", "false")
+            .option("engine.CompilationFailureAction", "Throw")
+            .option("engine.SingleTierCompilationThreshold", "10000000")
+            .build();
+    }
+    private ExecutableProgram program(Language language, Map<String, Object> module, String backend) {
+        return backend.equals("ast") ? new Program(language, module) : new BytecodeProgram(language, module);
+    }
+    private void valid(RootCallTarget target, String label) throws Exception {
+        assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), label);
+    }
+    private void compile(RootCallTarget target) throws Exception {
+        target.getClass().getMethod("compile", boolean.class).invoke(target, true);
+        valid(target, "installed");
+    }
+    private List<RootCallTarget> activeTargets(RootCallTarget entry) {
+        var seen = Collections.newSetFromMap(new IdentityHashMap<RootCallTarget, Boolean>());
+        var result = new ArrayList<RootCallTarget>();
+        visit(entry, seen, result);
+        return result;
+    }
+    private void visit(RootCallTarget target, Set<RootCallTarget> seen, List<RootCallTarget> result) {
+        if (!seen.add(target))
+            return;
+        var body = target.getRootNode();
+        var nodes = new ArrayList<Node>();
+        nodes.add(body);
+        if (body instanceof BytecodeRoot bytecode)
+            for (var instruction : bytecode.getBytecodeNode().getInstructions())
+                for (var argument : instruction.getArguments())
+                    if (argument.getKind() == Instruction.Argument.Kind.NODE_PROFILE) {
+                        var node = argument.asCachedNode();
+                        if (node != null)
+                            nodes.add(node);
+                    }
+        for (var node : nodes)
+            for (var call : NodeUtil.findAllNodeInstances(node, DirectCallNode.class))
+                if (call.getCurrentCallTarget() instanceof RootCallTarget active
+                    && active.getRootNode() instanceof GuestRoot)
+                    visit(active, seen, result);
+        result.add(target);
+    }
+    private long count(ExecutableProgram p) {
+        return ((Number) p.diagnostics().get("compiledEntries")).longValue();
+    }
+    private void released(Language language) {
+        var state = language.getHandoffState().get();
+        assertEquals(0, state.getArguments().getDepth());
+        assertEquals(0, state.getArguments().retainedReferences());
+        assertEquals(0, state.getResults().getDepth());
+        assertEquals(0, state.getResults().retainedReferences());
+    }
+    private long compare(List<Integer> a, List<Integer> b) {
+        for (int i = 0; i < Math.min(a.size(), b.size()); i++)
+            if (!a.get(i).equals(b.get(i)))
+                return a.get(i) < b.get(i) ? -1 : 1;
+        return Integer.compare(a.size(), b.size());
+    }
+    private long model(String name, long raw) {
+        if (!names.contains(name))
+            throw new IllegalArgumentException("Unknown byte-array comparison entry");
+        int k = (int) (raw & 4095), x = (int) (raw & 255);
+        if (name.equals("shortCompare"))
+            return compare(List.of(x, 0, 128, 255),
+                List.of(List.of(x, 0, 128, 255), List.of(x, 0, 128), List.of(x, 0, 128, 254), List.of(x, 0, 129, 0),
+                        List.<Integer>of())
+                    .get(k % 5));
+        if (name.equals("shortPrefix") || name.equals("shortSuffix"))
+            return k % 3 == 1 ? 1 : 0;
+        var a = List.of(x, 0, 127, 128, 255, 17, 0, 255);
+        var b = name.equals("aliasCompare") ? a : List.of(255, 0, 127, 128, x, 17, 255, 0);
+        int from = k % 9, to = k / 9 % 9, length = Math.min(k / 81 % 9, Math.min(8 - from, 8 - to));
+        return compare(a.subList(from, from + length), b.subList(to, to + length));
+    }
+    @Test
+    void publicShortByteStringAndRangesWithInlining() throws Exception {
+        verifyNative(true);
+    }
+    @Test
+    void publicShortByteStringAndRangesAcrossResidualCalls() throws Exception {
+        verifyNative(false);
+    }
+    private void check(List<String> row, Value function, String name, String label) {
+        long input = Long.parseLong(row.get(1)), expected = Long.parseLong(row.get(2));
+        assertEquals(model(name, input), expected, "native " + label + "/" + input);
+        assertEquals(expected, function.execute(input).asLong(), label + "/" + input);
+    }
+    private void verifyNative(boolean inlining) throws Exception {
+        var manifest = (Map<String, Object>) Json.parse(
+            Files.readString(new File(root, "build/compare-byte-arrays/manifest.json").toPath()));
+        assertEquals(names, manifest.get("entries"));
+        assertEquals("sign only", manifest.get("resultContract"));
+        ByteArrayFixtureEvidence.verify(root, "compare-byte-arrays", manifest);
+        var rows = new LinkedHashMap<String, List<List<String>>>();
+        for (var row : checkedRows(Files.readString(new File(root, "build/compare-byte-arrays/oracle.tsv").toPath())))
+            rows.computeIfAbsent(row.get(0), key -> new ArrayList<>()).add(row);
+        assertEquals(new HashSet<>(names), rows.keySet());
+        int rowCount = 0;
+        for (var list : rows.values()) rowCount += list.size();
+        assertEquals(((Number) manifest.get("nativeRows")).intValue(), rowCount);
+        for (var stageEntry : ((Map<String, List<String>>) manifest.get("stages")).entrySet()) {
+            var stage = stageEntry.getKey();
+            var modules = new ArrayList<Map<String, Object>>();
+            for (var path : stageEntry.getValue())
+                modules.add((Map<String, Object>) Json.parse(Files.readString(new File(root, path).toPath())));
+            var module = CoreModules.merge(modules);
+            for (var name : names)
+                for (var backend : List.of("ast", "bytecode")) try (var context = context(inlining)) {
+                        context.initialize("thc");
+                        context.enter();
+                        try {
+                            var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                            var linked = new LinkedHashMap<>(CoreModules.reachable(module, name));
+                            linked.put("instrument", true);
+                            var p = program(language, linked, backend);
+                            var entry = p.entryTarget(name);
+                            var host = p.hostEntryTarget(1);
+                            var function = context.asValue(new EntryValue(p, name, 1));
+                            var label = stage + "/" + backend + "/" + name + "/inline=" + inlining;
+                            var cases = Objects.requireNonNull(rows.get(name));
+                            var wanted = new ArrayList<Long>();
+                            for (var n : ((Map<String, List<Number>>) manifest.get("inputsByEntry")).get(name))
+                                wanted.add(n.longValue());
+                            var actual = new ArrayList<Long>();
+                            for (var row : cases) actual.add(Long.parseLong(row.get(1)));
+                            assertEquals(wanted, actual);
+                            for (var row : cases) check(row, function, name, label);
+                            var active = activeTargets(host);
+                            assertTrue(active.size() > 1, label + " actual guest call target");
+                            for (var target : active)
+                                if (target != host)
+                                    compile(target);
+                            assertTrue(function.invokeMember("compile").asBoolean(), label + " host installation");
+                            for (var row : cases.reversed()) {
+                                long before = count(p);
+                                check(row, function, name, label);
+                                assertTrue(
+                                    count(p) > before, label + "/" + row.get(1) + " must enter compiled guest code");
+                                assertEquals(active, activeTargets(host), label + " active target identities");
+                                valid(entry, label + " original");
+                                for (var target : active) valid(target, label + " active");
+                                released(language);
+                            }
+                            assertEquals(0L, ((Number) p.diagnostics().get("blackholes")).longValue());
+                            assertEquals(0L, ((Number) p.diagnostics().get("unsupportedTraps")).longValue());
+                        } finally {
+                            context.leave();
+                        }
+                    }
         }
     }
-    private List<Long> inputs(String name){var result=new TreeSet<Long>();for(long i=List.of("rangeCompare","aliasCompare").contains(name)?0:-256;i<=(List.of("rangeCompare","aliasCompare").contains(name)?728:256);i++)result.add(i);result.addAll(List.of(Long.MIN_VALUE,Long.MIN_VALUE+1,Long.MAX_VALUE-1,Long.MAX_VALUE,-4097L,4097L));return new ArrayList<>(result);}
-    private record Input(String name,long raw){}
-    private Long longOrNull(String value){try{return Long.valueOf(value);}catch(NumberFormatException failure){return null;}}
-    private void require(boolean condition){if(!condition)throw new IllegalArgumentException("Failed requirement.");}
-    private List<List<String>> checkedRows(String text){var domain=new ArrayList<Input>();for(var name:names)for(long input:inputs(name))domain.add(new Input(name,input));var lines=new ArrayList<>(Arrays.asList(text.split("\\r\\n|\\n|\\r",-1)));if(!lines.isEmpty()&&lines.getLast().isEmpty())lines.removeLast();require(domain.size()==3027&&lines.size()==domain.size());var result=new ArrayList<List<String>>();for(int i=0;i<lines.size();i++){var fields=Arrays.asList(lines.get(i).split("\t",-1));require(fields.size()==3);var input=domain.get(i);if(!fields.get(0).equals(input.name())||!Objects.equals(longOrNull(fields.get(1)),input.raw())||!Objects.equals(longOrNull(fields.get(2)),model(input.name(),input.raw())))throw new IllegalArgumentException("Incomplete, reordered or mismatched sign-only native comparison row "+i);result.add(fields);}return result;}
-    private List<String> replaced(List<String> lines,String first){var result=new ArrayList<>(lines);result.set(0,first);return result;}
-    @Test void comparisonProvenanceAndExactCorpusFailClosed()throws Exception{
-        ByteArrayFixtureEvidence.rejectionControls(root,"compare-byte-arrays");var text=Files.readString(new File(root,"build/compare-byte-arrays/oracle.tsv").toPath());checkedRows(text);var lines=new ArrayList<String>();for(var line:text.split("\\r\\n|\\n|\\r",-1))if(!line.isEmpty())lines.add(line);var duplicate=new ArrayList<>(lines);duplicate.add(lines.getFirst());var blank=new ArrayList<>(lines);blank.add("");
-        var badCases=List.of(lines.subList(1,lines.size()),duplicate,new ArrayList<>(lines.reversed()),replaced(lines,lines.get(1)),replaced(lines,"unknown\t0\t0"),replaced(lines,lines.getFirst().substring(0,lines.getFirst().lastIndexOf('\t'))+"\t999"),blank);for(var bad:badCases)assertThrows(IllegalArgumentException.class,()->checkedRows(String.join("\n",bad)+"\n"));
+    private List<Long> inputs(String name) {
+        var result = new TreeSet<Long>();
+        for (long i = List.of("rangeCompare", "aliasCompare").contains(name) ? 0 : -256;
+            i <= (List.of("rangeCompare", "aliasCompare").contains(name) ? 728 : 256); i++)
+            result.add(i);
+        result.addAll(List.of(Long.MIN_VALUE, Long.MIN_VALUE + 1, Long.MAX_VALUE - 1, Long.MAX_VALUE, -4097L, 4097L));
+        return new ArrayList<>(result);
     }
-    private final Map<String,Object> longRep=Map.of("kind","long","primReps",List.of("IntRep"),"evaluated",true),bytes=Map.of("kind","object","primReps",List.of("BoxedRep (Just Unlifted)"),"evaluated",true),closure=Map.of("kind","closure","primReps",List.of("BoxedRep (Just Lifted)"),"evaluated",true);
-    private Map<String,Object> withReps(Map<String,Object> rep,String value){var result=new LinkedHashMap<>(rep);result.put("primReps",List.of(value));return result;}
-    private Map<String,Object> synthetic(){var proofs=List.of(bytes,longRep,bytes,longRep,longRep);var args=new ArrayList<Map<String,Object>>();for(int i=0;i<proofs.size();i++)args.add(Map.of("id","x"+i,"lifted",false,"rep",proofs.get(i)));var operands=new ArrayList<List<Object>>();for(int i=0;i<args.size();i++)operands.add(List.of("var","x"+i,Map.of("rep",args.get(i).get("rep"))));var app=List.of("app",List.of("prim","compareByteArrays#"),operands,Collections.nCopies(5,false),false,false,Map.of("rep",longRep));return (Map<String,Object>)Json.parse(Json.stringify(Map.of("schema",1,"ghc","9.14.1","instrument",true,"bindings",List.of(Map.of("id","entry","name","entry","lifted",true,"rep",closure,"expr",List.of("lam",args,app,Map.of("rep",closure,"resultRep",longRep)))),"constructors",List.of())));}
-    private List<Object> lambda(Map<String,Object> m){var bindings=(List<Map<String,Object>>)m.get("bindings");if(bindings.size()!=1)throw new IllegalArgumentException("Expected one binding");return (List<Object>)bindings.getFirst().get("expr");}
-    private List<Object> app(Map<String,Object> m){return (List<Object>)lambda(m).get(2);}
-    private List<Integer> slice(byte[] bytes,int from,int length){var result=new ArrayList<Integer>();for(int i=from;i<from+length;i++)result.add(bytes[i]&255);return result;}
-    @Test void unsignedRangeModelAliasesAndCompleteDomainGuards(){
-        for(int a=0;a<=255;a++)for(int b=0;b<=255;b++)assertEquals(Integer.compare(a,b),Long.compare(ManagedByteArray.compare(new byte[]{(byte)a},0,new byte[]{(byte)b},0,1),0));
-        for(int size=0;size<=7;size++){var a=new byte[size];for(int i=0;i<size;i++)a[i]=(byte)(i*61+128);var b=new byte[size];for(int i=0;i<size;i++)b[i]=a[size-i-1];for(var right:List.of(a,b))for(int from=0;from<=size;from++)for(int to=0;to<=size;to++)for(int length=0;length<=Math.min(size-from,size-to);length++){long expected=compare(slice(a,from,length),slice(right,to,length));assertEquals(expected,(long)Long.compare(ManagedByteArray.compare(a,from,right,to,length),0));}}
-        for(var range:invalidRanges)assertThrows(RuntimeFault.class,()->ManagedByteArray.compare(new byte[]{0,-1},range[0],new byte[]{0,-1},range[1],range[2]),Arrays.toString(range));
+    private record Input(String name, long raw) {}
+    private Long longOrNull(String value) {
+        try {
+            return Long.valueOf(value);
+        } catch (NumberFormatException failure) {
+            return null;
+        }
     }
-    private final long[][] invalidRanges={{-1L,0L,0L},{0L,-1L,0L},{3L,0L,0L},{0L,3L,0L},{1L,0L,2L},{0L,1L,2L},{0L,0L,-1L},{1L,1L,Long.MAX_VALUE},{Long.MAX_VALUE,0L,1L},{0L,Long.MAX_VALUE,1L},{Long.MIN_VALUE,0L,0L},{0L,Long.MIN_VALUE,0L},{0L,0L,Long.MIN_VALUE},{1L<<32,0L,0L},{0L,1L<<32,0L}};
-    private long run(RootCallTarget target,byte[] a,long from,long to,long size,Object right){return (Long)Calls.target(target,new Object[]{0L,a,from,right,to,size});}
-    @Test void bothBackendsUsePrimitiveReturnAndRejectInvalidRangesAndCarriers()throws Exception{
-        for(var backend:List.of("ast","bytecode"))try(var context=context(true)){context.initialize("thc");context.enter();try{var language=TruffleLanguage.LanguageReference.create(Language.class).get(null);var p=program(language,synthetic(),backend);var target=p.entryTarget("entry");var a=new byte[]{0,-1};var b=new byte[]{0,127};var cases=new long[][]{{0,0,0},{2,2,0},{0,0,1},{0,0,2},{1,0,1}};
-            for(var row:cases)run(target,a,row[0],row[1],row[2],b);compile(target);for(var row:cases){long before=count(p),value=run(target,a,row[0],row[1],row[2],b);assertEquals(Long.compare(ManagedByteArray.compare(a,row[0],b,row[1],row[2]),0),Long.compare(value,0));assertEquals(before+1,count(p),backend+" one compiled entry");valid(target,backend);}assertEquals(0L,run(target,a,0,0,2,a));for(var row:invalidRanges)assertThrows(RuntimeFault.class,()->run(target,a,row[0],row[1],row[2],b));for(var wrong:List.of(17L,new Object(),new Object[]{1L},ManagedAddress.fromHex("00")))assertThrows(RuntimeFault.class,()->run(target,a,0,0,0,wrong));released(language);assertEquals(1,Long.compare(run(target,a,0,0,2,b),0));
-        }finally{context.leave();}}
+    private void require(boolean condition) {
+        if (!condition)
+            throw new IllegalArgumentException("Failed requirement.");
     }
-    @Test void lexicalLongAliasesPreserveComparisonSemanticsInBothBackends(){
-        var aliases=List.of("IntRep","WordRep","Int8Rep","Word8Rep","Int16Rep","Word16Rep","Int32Rep","Word32Rep","Int64Rep","Word64Rep");var a=new byte[]{0,-1,127,1};var b=new byte[]{0,127,-1,1};var ranges=new int[][]{{0,0,0},{4,4,0},{0,0,1},{0,0,4},{1,2,1},{2,1,1},{2,2,1}};
-        for(var backend:List.of("ast","bytecode"))try(var context=context(true)){context.initialize("thc");context.enter();try{var language=TruffleLanguage.LanguageReference.create(Language.class).get(null);
-            // Lexical scalar aliases share Long storage. The audited primop occurrence remains exact IntRep; its operation, not the binder alias, supplies semantics.
-            for(var alias:aliases)for(int position:new int[]{1,3,4}){var m=synthetic();((List<Map<String,Object>>)lambda(m).get(1)).get(position).put("rep",withReps(longRep,alias));var target=program(language,m,backend).entryTarget("entry");for(var range:ranges){int from=range[0],to=range[1],length=range[2];long expected=compare(slice(a,from,length),slice(b,to,length));long actual=(Long)Calls.target(target,new Object[]{0L,a,(long)from,b,(long)to,(long)length});assertEquals(expected,(long)Long.compare(actual,0),backend+"/"+alias+"/"+position+"/"+from+"/"+to+"/"+length);}released(language);}
-        }finally{context.leave();}}
+    private List<List<String>> checkedRows(String text) {
+        var domain = new ArrayList<Input>();
+        for (var name : names)
+            for (long input : inputs(name)) domain.add(new Input(name, input));
+        var lines = new ArrayList<>(Arrays.asList(text.split("\\r\\n|\\n|\\r", -1)));
+        if (!lines.isEmpty() && lines.getLast().isEmpty())
+            lines.removeLast();
+        require(domain.size() == 3027 && lines.size() == domain.size());
+        var result = new ArrayList<List<String>>();
+        for (int i = 0; i < lines.size(); i++) {
+            var fields = Arrays.asList(lines.get(i).split("\t", -1));
+            require(fields.size() == 3);
+            var input = domain.get(i);
+            if (!fields.get(0).equals(input.name()) || !Objects.equals(longOrNull(fields.get(1)), input.raw())
+                || !Objects.equals(longOrNull(fields.get(2)), model(input.name(), input.raw())))
+                throw new IllegalArgumentException(
+                    "Incomplete, reordered or mismatched sign-only native comparison row " + i);
+            result.add(fields);
+        }
+        return result;
     }
-    private List<Object> variants(byte[] bytes){var mutable=ManagedAllocation.mutable(bytes.length,8);mutable.copyBytesIn(bytes,0,0,bytes.length);var pinned=ManagedAllocation.mutable(bytes.length,8,true);pinned.copyBytesIn(bytes,0,0,bytes.length);return List.of(bytes,mutable,pinned,ManagedAllocation.immutable(bytes,8));}
-    private void exercise(boolean compiled,List<Object> left,List<Object> right,long[][] ranges,byte[] a,byte[] b,ExecutableProgram p,RootCallTarget target,Language language,String backend,boolean inlining)throws Exception{
-        for(var first:left)for(var second:right)for(var range:ranges){long from=range[0],to=range[1],size=range[2];int expected=Long.compare(ManagedByteArray.compare(a,from,b,to,size),0);long before=count(p);long result=(Long)Calls.target(target,new Object[]{0L,first,from,second,to,size});assertEquals(expected,Long.compare(result,0));if(compiled){assertEquals(before+1,count(p),backend+"/inlining="+inlining+" first installed mixed-storage call");valid(target,backend);}released(language);}
+    private List<String> replaced(List<String> lines, String first) {
+        var result = new ArrayList<>(lines);
+        result.set(0, first);
+        return result;
     }
-    @Test void mixedHeapPinnedAndImmutableInputsUseFirstInstalledComparisons()throws Exception{
-        var a=new byte[65];for(int i=0;i<a.length;i++)a[i]=(byte)(i*61+128);var b=a.clone();b[64]=(byte)(b[64]^128);var left=variants(a);var right=variants(b);var ranges=new long[][]{{0,0,0},{65,65,0},{0,0,65},{1,1,64},{3,4,31},{64,64,1}};
-        for(boolean inlining:new boolean[]{false,true})for(var backend:List.of("ast","bytecode"))try(var context=context(inlining)){context.initialize("thc");context.enter();try{var language=TruffleLanguage.LanguageReference.create(Language.class).get(null);var p=program(language,synthetic(),backend);var target=p.entryTarget("entry");exercise(false,left,right,ranges,a,b,p,target,language,backend,inlining);compile(target);exercise(true,left,right,ranges,a,b,p,target,language,backend,inlining);}finally{context.leave();}}
+    @Test
+    void comparisonProvenanceAndExactCorpusFailClosed() throws Exception {
+        ByteArrayFixtureEvidence.rejectionControls(root, "compare-byte-arrays");
+        var text = Files.readString(new File(root, "build/compare-byte-arrays/oracle.tsv").toPath());
+        checkedRows(text);
+        var lines = new ArrayList<String>();
+        for (var line : text.split("\\r\\n|\\n|\\r", -1))
+            if (!line.isEmpty())
+                lines.add(line);
+        var duplicate = new ArrayList<>(lines);
+        duplicate.add(lines.getFirst());
+        var blank = new ArrayList<>(lines);
+        blank.add("");
+        var badCases = List.of(lines.subList(1, lines.size()), duplicate, new ArrayList<>(lines.reversed()),
+            replaced(lines, lines.get(1)), replaced(lines, "unknown\t0\t0"),
+            replaced(lines, lines.getFirst().substring(0, lines.getFirst().lastIndexOf('\t')) + "\t999"), blank);
+        for (var bad : badCases)
+            assertThrows(IllegalArgumentException.class, () -> checkedRows(String.join("\n", bad) + "\n"));
     }
-    @Test void exactSaturationLevityAndPrimitiveOccurrenceAndCarrierProofsAreMandatory(){
-        var mutations=new ArrayList<>(List.of("bare","partial","over","result","missing-result"));for(int i=0;i<=4;i++)mutations.addAll(List.of("missing-"+i,"wrong-"+i,"lifted-"+i,"lexical-"+i));
-        for(var backend:List.of("ast","bytecode"))try(var context=context(true)){context.initialize("thc");context.enter();try{var language=TruffleLanguage.LanguageReference.create(Language.class).get(null);
-            for(var mutation:mutations){var m=synthetic();var a=app(m);switch(mutation){case "bare"->lambda(m).set(2,List.of("prim","compareByteArrays#"));case "partial"->{((List<Object>)a.get(2)).removeLast();((List<Object>)a.get(3)).removeLast();}case "over"->{((List<Object>)a.get(2)).add(((List<?>)a.get(2)).get(4));((List<Object>)a.get(3)).add(false);}case "result"->((Map<String,Object>)a.get(6)).put("rep",withReps(longRep,"WordRep"));case "missing-result"->((Map<?,?>)a.get(6)).remove("rep");default->{int i=Integer.parseInt(mutation.substring(mutation.indexOf('-')+1));var occurrence=(Map<String,Object>)((List<List<Object>>)a.get(2)).get(i).get(2);switch(mutation.substring(0,mutation.indexOf('-'))){case "missing"->occurrence.remove("rep");case "wrong"->occurrence.put("rep",i==0||i==2?withReps(bytes,"BoxedRep (Just Lifted)"):withReps(longRep,"WordRep"));case "lifted"->((List<Object>)a.get(3)).set(i,true);case "lexical"->((List<Map<String,Object>>)lambda(m).get(1)).get(i).put("rep",i==0||i==2?withReps(bytes,"BoxedRep (Just Lifted)"):Map.of("kind","double","primReps",List.of("DoubleRep"),"evaluated",true));}}}
-                // Integral spellings share the lowered Long carrier; levity, missing metadata and actual Double carriers still reject.
-                boolean sameCarrier=mutation.equals("result")||List.of("wrong-1","wrong-3","wrong-4").contains(mutation);if(sameCarrier)assertDoesNotThrow(()->program(language,m,backend),backend+"/"+mutation);else assertThrows(RuntimeException.class,()->program(language,m,backend),backend+"/"+mutation);
+    private final Map<String, Object> longRep =
+                                          Map.of("kind", "long", "primReps", List.of("IntRep"), "evaluated", true),
+                                      bytes = Map.of("kind", "object", "primReps", List.of("BoxedRep (Just Unlifted)"),
+                                          "evaluated", true),
+                                      closure = Map.of("kind", "closure", "primReps", List.of("BoxedRep (Just Lifted)"),
+                                          "evaluated", true);
+    private Map<String, Object> withReps(Map<String, Object> rep, String value) {
+        var result = new LinkedHashMap<>(rep);
+        result.put("primReps", List.of(value));
+        return result;
+    }
+    private Map<String, Object> synthetic() {
+        var proofs = List.of(bytes, longRep, bytes, longRep, longRep);
+        var args = new ArrayList<Map<String, Object>>();
+        for (int i = 0; i < proofs.size(); i++) args.add(Map.of("id", "x" + i, "lifted", false, "rep", proofs.get(i)));
+        var operands = new ArrayList<List<Object>>();
+        for (int i = 0; i < args.size(); i++)
+            operands.add(List.of("var", "x" + i, Map.of("rep", args.get(i).get("rep"))));
+        var app = List.of("app", List.of("prim", "compareByteArrays#"), operands, Collections.nCopies(5, false), false,
+            false, Map.of("rep", longRep));
+        return (Map<String, Object>) Json.parse(
+            Json.stringify(Map.of("schema", 1, "ghc", "9.14.1", "instrument", true, "bindings",
+                List.of(Map.of("id", "entry", "name", "entry", "lifted", true, "rep", closure, "expr",
+                    List.of("lam", args, app, Map.of("rep", closure, "resultRep", longRep)))),
+                "constructors", List.of())));
+    }
+    private List<Object> lambda(Map<String, Object> m) {
+        var bindings = (List<Map<String, Object>>) m.get("bindings");
+        if (bindings.size() != 1)
+            throw new IllegalArgumentException("Expected one binding");
+        return (List<Object>) bindings.getFirst().get("expr");
+    }
+    private List<Object> app(Map<String, Object> m) {
+        return (List<Object>) lambda(m).get(2);
+    }
+    private List<Integer> slice(byte[] bytes, int from, int length) {
+        var result = new ArrayList<Integer>();
+        for (int i = from; i < from + length; i++) result.add(bytes[i] & 255);
+        return result;
+    }
+    @Test
+    void unsignedRangeModelAliasesAndCompleteDomainGuards() {
+        for (int a = 0; a <= 255; a++)
+            for (int b = 0; b <= 255; b++)
+                assertEquals(Integer.compare(a, b),
+                    Long.compare(ManagedByteArray.compare(new byte[] {(byte) a}, 0, new byte[] {(byte) b}, 0, 1), 0));
+        for (int size = 0; size <= 7; size++) {
+            var a = new byte[size];
+            for (int i = 0; i < size; i++) a[i] = (byte) (i * 61 + 128);
+            var b = new byte[size];
+            for (int i = 0; i < size; i++) b[i] = a[size - i - 1];
+            for (var right : List.of(a, b))
+                for (int from = 0; from <= size; from++)
+                    for (int to = 0; to <= size; to++)
+                        for (int length = 0; length <= Math.min(size - from, size - to); length++) {
+                            long expected = compare(slice(a, from, length), slice(right, to, length));
+                            assertEquals(
+                                expected, (long) Long.compare(ManagedByteArray.compare(a, from, right, to, length), 0));
+                        }
+        }
+        for (var range : invalidRanges)
+            assertThrows(RuntimeFault.class,
+                ()
+                    -> ManagedByteArray.compare(new byte[] {0, -1}, range[0], new byte[] {0, -1}, range[1], range[2]),
+                Arrays.toString(range));
+    }
+    private final long[][] invalidRanges = {{-1L, 0L, 0L}, {0L, -1L, 0L}, {3L, 0L, 0L}, {0L, 3L, 0L}, {1L, 0L, 2L},
+        {0L, 1L, 2L}, {0L, 0L, -1L}, {1L, 1L, Long.MAX_VALUE}, {Long.MAX_VALUE, 0L, 1L}, {0L, Long.MAX_VALUE, 1L},
+        {Long.MIN_VALUE, 0L, 0L}, {0L, Long.MIN_VALUE, 0L}, {0L, 0L, Long.MIN_VALUE}, {1L << 32, 0L, 0L},
+        {0L, 1L << 32, 0L}};
+    private long run(RootCallTarget target, byte[] a, long from, long to, long size, Object right) {
+        return (Long) Calls.target(target, new Object[] {0L, a, from, right, to, size});
+    }
+    @Test
+    void bothBackendsUsePrimitiveReturnAndRejectInvalidRangesAndCarriers() throws Exception {
+        for (var backend : List.of("ast", "bytecode")) try (var context = context(true)) {
+                context.initialize("thc");
+                context.enter();
+                try {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    var p = program(language, synthetic(), backend);
+                    var target = p.entryTarget("entry");
+                    var a = new byte[] {0, -1};
+                    var b = new byte[] {0, 127};
+                    var cases = new long[][] {{0, 0, 0}, {2, 2, 0}, {0, 0, 1}, {0, 0, 2}, {1, 0, 1}};
+                    for (var row : cases) run(target, a, row[0], row[1], row[2], b);
+                    compile(target);
+                    for (var row : cases) {
+                        long before = count(p), value = run(target, a, row[0], row[1], row[2], b);
+                        assertEquals(Long.compare(ManagedByteArray.compare(a, row[0], b, row[1], row[2]), 0),
+                            Long.compare(value, 0));
+                        assertEquals(before + 1, count(p), backend + " one compiled entry");
+                        valid(target, backend);
+                    }
+                    assertEquals(0L, run(target, a, 0, 0, 2, a));
+                    for (var row : invalidRanges)
+                        assertThrows(RuntimeFault.class, () -> run(target, a, row[0], row[1], row[2], b));
+                    for (var wrong : List.of(17L, new Object(), new Object[] {1L}, ManagedAddress.fromHex("00")))
+                        assertThrows(RuntimeFault.class, () -> run(target, a, 0, 0, 0, wrong));
+                    released(language);
+                    assertEquals(1, Long.compare(run(target, a, 0, 0, 2, b), 0));
+                } finally {
+                    context.leave();
+                }
             }
-        }finally{context.leave();}}
     }
-    private Expr reference(int i,byte[] storage,List<Integer> events){return new Expr(){@Override public Object execute(VirtualFrame frame){events.add(i);return storage;}};}
-    private Expr number(int i,boolean failure,List<Integer> events){return new Expr(){@Override public Object execute(VirtualFrame frame){throw new IllegalStateException("primitive child was boxed");}@Override public long executeLong(VirtualFrame frame){events.add(i);if(failure)throw new RuntimeFault("operand failed");return 0;}};}
-    private Expr expression(boolean failure,byte[] storage,List<Integer> events){return ByteArrayOp.expression(ByteArrayOp.COMPARE,new CoreRepresentation(CoreKind.LONG,false,false,null,null,null,null,null,null),new Expr[]{reference(0,storage,events),number(1,false,events),reference(2,storage,events),number(3,false,events),number(4,failure,events)});}
-    @Test void typedAstEvaluationVisitsAllOperandsInOrderIncludingZeroLength()throws Exception{var frame=Truffle.getRuntime().createVirtualFrame(new Object[0],FrameDescriptor.newBuilder().build());var events=new ArrayList<Integer>();var storage=new byte[]{1,2};assertEquals(0L,expression(false,storage,events).executeLong(frame));assertEquals(List.of(0,1,2,3,4),events);events.clear();assertThrows(RuntimeFault.class,()->expression(true,storage,events).executeLong(frame));assertEquals(List.of(0,1,2,3,4),events);}
+    @Test
+    void lexicalLongAliasesPreserveComparisonSemanticsInBothBackends() {
+        var aliases = List.of("IntRep", "WordRep", "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep", "Int32Rep",
+            "Word32Rep", "Int64Rep", "Word64Rep");
+        var a = new byte[] {0, -1, 127, 1};
+        var b = new byte[] {0, 127, -1, 1};
+        var ranges = new int[][] {{0, 0, 0}, {4, 4, 0}, {0, 0, 1}, {0, 0, 4}, {1, 2, 1}, {2, 1, 1}, {2, 2, 1}};
+        for (var backend : List.of("ast", "bytecode")) try (var context = context(true)) {
+                context.initialize("thc");
+                context.enter();
+                try {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    // Lexical scalar aliases share Long storage. The audited primop occurrence remains exact IntRep;
+                    // its operation, not the binder alias, supplies semantics.
+                    for (var alias : aliases)
+                        for (int position : new int[] {1, 3, 4}) {
+                            var m = synthetic();
+                            ((List<Map<String, Object>>) lambda(m).get(1))
+                                .get(position)
+                                .put("rep", withReps(longRep, alias));
+                            var target = program(language, m, backend).entryTarget("entry");
+                            for (var range : ranges) {
+                                int from = range[0], to = range[1], length = range[2];
+                                long expected = compare(slice(a, from, length), slice(b, to, length));
+                                long actual = (Long) Calls.target(
+                                    target, new Object[] {0L, a, (long) from, b, (long) to, (long) length});
+                                assertEquals(expected, (long) Long.compare(actual, 0),
+                                    backend + "/" + alias + "/" + position + "/" + from + "/" + to + "/" + length);
+                            }
+                            released(language);
+                        }
+                } finally {
+                    context.leave();
+                }
+            }
+    }
+    private List<Object> variants(byte[] bytes) {
+        var mutable = ManagedAllocation.mutable(bytes.length, 8);
+        mutable.copyBytesIn(bytes, 0, 0, bytes.length);
+        var pinned = ManagedAllocation.mutable(bytes.length, 8, true);
+        pinned.copyBytesIn(bytes, 0, 0, bytes.length);
+        return List.of(bytes, mutable, pinned, ManagedAllocation.immutable(bytes, 8));
+    }
+    private void exercise(boolean compiled, List<Object> left, List<Object> right, long[][] ranges, byte[] a, byte[] b,
+        ExecutableProgram p, RootCallTarget target, Language language, String backend, boolean inlining)
+        throws Exception {
+        for (var first : left)
+            for (var second : right)
+                for (var range : ranges) {
+                    long from = range[0], to = range[1], size = range[2];
+                    int expected = Long.compare(ManagedByteArray.compare(a, from, b, to, size), 0);
+                    long before = count(p);
+                    long result = (Long) Calls.target(target, new Object[] {0L, first, from, second, to, size});
+                    assertEquals(expected, Long.compare(result, 0));
+                    if (compiled) {
+                        assertEquals(before + 1, count(p),
+                            backend + "/inlining=" + inlining + " first installed mixed-storage call");
+                        valid(target, backend);
+                    }
+                    released(language);
+                }
+    }
+    @Test
+    void mixedHeapPinnedAndImmutableInputsUseFirstInstalledComparisons() throws Exception {
+        var a = new byte[65];
+        for (int i = 0; i < a.length; i++) a[i] = (byte) (i * 61 + 128);
+        var b = a.clone();
+        b[64] = (byte) (b[64] ^ 128);
+        var left = variants(a);
+        var right = variants(b);
+        var ranges = new long[][] {{0, 0, 0}, {65, 65, 0}, {0, 0, 65}, {1, 1, 64}, {3, 4, 31}, {64, 64, 1}};
+        for (boolean inlining : new boolean[] {false, true})
+            for (var backend : List.of("ast", "bytecode")) try (var context = context(inlining)) {
+                    context.initialize("thc");
+                    context.enter();
+                    try {
+                        var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                        var p = program(language, synthetic(), backend);
+                        var target = p.entryTarget("entry");
+                        exercise(false, left, right, ranges, a, b, p, target, language, backend, inlining);
+                        compile(target);
+                        exercise(true, left, right, ranges, a, b, p, target, language, backend, inlining);
+                    } finally {
+                        context.leave();
+                    }
+                }
+    }
+    @Test
+    void exactSaturationLevityAndPrimitiveOccurrenceAndCarrierProofsAreMandatory() {
+        var mutations = new ArrayList<>(List.of("bare", "partial", "over", "result", "missing-result"));
+        for (int i = 0; i <= 4; i++)
+            mutations.addAll(List.of("missing-" + i, "wrong-" + i, "lifted-" + i, "lexical-" + i));
+        for (var backend : List.of("ast", "bytecode")) try (var context = context(true)) {
+                context.initialize("thc");
+                context.enter();
+                try {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    for (var mutation : mutations) {
+                        var m = synthetic();
+                        var a = app(m);
+                        switch (mutation) {
+                            case "bare" -> lambda(m).set(2, List.of("prim", "compareByteArrays#"));
+                            case "partial" -> {
+                                ((List<Object>) a.get(2)).removeLast();
+                                ((List<Object>) a.get(3)).removeLast();
+                            }
+                            case "over" -> {
+                                ((List<Object>) a.get(2)).add(((List<?>) a.get(2)).get(4));
+                                ((List<Object>) a.get(3)).add(false);
+                            }
+                            case "result" -> ((Map<String, Object>) a.get(6)).put("rep", withReps(longRep, "WordRep"));
+                            case "missing-result" ->((Map<?,?>)a.get(6)).remove("rep");
+                            default -> {
+                                int i = Integer.parseInt(mutation.substring(mutation.indexOf('-') + 1));
+                                var occurrence = (Map<String, Object>) ((List<List<Object>>) a.get(2)).get(i).get(2);
+                                switch (mutation.substring(0, mutation.indexOf('-'))) {
+                                    case "missing" -> occurrence.remove("rep");
+                                    case "wrong" ->
+                                        occurrence.put("rep",
+                                            i == 0 || i == 2 ? withReps(bytes, "BoxedRep (Just Lifted)")
+                                                             : withReps(longRep, "WordRep"));
+                                    case "lifted" -> ((List<Object>) a.get(3)).set(i, true);
+                                    case "lexical" ->
+                                        ((List<Map<String, Object>>) lambda(m).get(1))
+                                            .get(i)
+                                            .put("rep",
+                                                i == 0 || i == 2 ? withReps(bytes, "BoxedRep (Just Lifted)")
+                                                                 : Map.of("kind", "double", "primReps",
+                                                                       List.of("DoubleRep"), "evaluated", true));
+                                }
+                            }
+                        }
+                        // Integral spellings share the lowered Long carrier; levity, missing metadata and actual Double
+                        // carriers still reject.
+                        boolean sameCarrier =
+                            mutation.equals("result") || List.of("wrong-1", "wrong-3", "wrong-4").contains(mutation);
+                        if (sameCarrier)
+                            assertDoesNotThrow(() -> program(language, m, backend), backend + "/" + mutation);
+                        else
+                            assertThrows(
+                                RuntimeException.class, () -> program(language, m, backend), backend + "/" + mutation);
+                    }
+                } finally {
+                    context.leave();
+                }
+            }
+    }
+    private Expr reference(int i, byte[] storage, List<Integer> events) {
+        return new Expr() {
+            @Override
+            public Object execute(VirtualFrame frame) {
+                events.add(i);
+                return storage;
+            }
+        };
+    }
+    private Expr number(int i, boolean failure, List<Integer> events) {
+        return new Expr() {
+            @Override
+            public Object execute(VirtualFrame frame) {
+                throw new IllegalStateException("primitive child was boxed");
+            }
+            @Override
+            public long executeLong(VirtualFrame frame) {
+                events.add(i);
+                if (failure)
+                    throw new RuntimeFault("operand failed");
+                return 0;
+            }
+        };
+    }
+    private Expr expression(boolean failure, byte[] storage, List<Integer> events) {
+        return ByteArrayOp.expression(ByteArrayOp.COMPARE,
+            new CoreRepresentation(CoreKind.LONG, false, false, null, null, null, null, null, null),
+            new Expr[] {reference(0, storage, events), number(1, false, events), reference(2, storage, events),
+                number(3, false, events), number(4, failure, events)});
+    }
+    @Test
+    void typedAstEvaluationVisitsAllOperandsInOrderIncludingZeroLength() throws Exception {
+        var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], FrameDescriptor.newBuilder().build());
+        var events = new ArrayList<Integer>();
+        var storage = new byte[] {1, 2};
+        assertEquals(0L, expression(false, storage, events).executeLong(frame));
+        assertEquals(List.of(0, 1, 2, 3, 4), events);
+        events.clear();
+        assertThrows(RuntimeFault.class, () -> expression(true, storage, events).executeLong(frame));
+        assertEquals(List.of(0, 1, 2, 3, 4), events);
+    }
 }
