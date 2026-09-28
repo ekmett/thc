@@ -21,12 +21,16 @@ final class HostAbi {
         for (int i = 0; i < inputs.length; i++) {
             var proof = proofs.get(i);
             if (proof.getKind() == CoreKind.VOID && !proof.isTypedTransport()) {
-                requireNull(inputs[i]); physical.add(Unit.INSTANCE);
+                requireNull(guestValue(owner, inputs[i])); physical.add(Unit.INSTANCE);
             } else pack(owner, proof, inputs[i], physical);
         }
         return physical.toArray();
     }
 
+    private static Object guestValue(Language.State owner, Object value) {
+        // Raw host arrays do not perform the conversion applied to direct execute arguments.
+        return value instanceof org.graalvm.polyglot.Value ? owner.getEnv().asGuestValue(value) : value;
+    }
     private static Object unwrap(Language.State owner, Object value) {
         return value != null && owner.getEnv().isHostObject(value) ? owner.getEnv().asHostObject(value) : value;
     }
@@ -50,13 +54,14 @@ final class HostAbi {
         if (input != null && !InteropLibrary.getUncached().isNull(input)) throw mismatch("null for State#/Void#");
     }
     private static void pack(Language.State owner, CoreRepresentation proof, Object input, ArrayList<Object> output) {
+        input = guestValue(owner, input);
         if (proof.isTuple()) {
             var parts = proof.getComponents();
             var values = array(owner, input, parts.size());
             for (int i = 0; i < parts.size(); i++) pack(owner, parts.get(i), values[i], output);
         } else if (proof.isSum()) {
             var values = array(owner, input, 2);
-            long tag = signed(unwrap(owner, values[0]));
+            long tag = signed(unwrap(owner, guestValue(owner, values[0])));
             if (tag < 1 || tag > proof.getAlternatives().size()) throw mismatch("a 1-based sum alternative tag");
             var payloadProof = proof.getAlternatives().get((int) tag - 1);
             var payload = new ArrayList<Object>();
