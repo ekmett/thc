@@ -1976,7 +1976,7 @@ class RenamedInputContractTests(unittest.TestCase):
                           "src/main/java/thc/runtime/ByteStringDecimalOp.java",
                           "src/main/java/thc/runtime/ByteStringDecimalExpression.java",
                           "src/main/kotlin/thc/runtime/CoreOriginalStdio.kt",
-                          "src/main/kotlin/thc/runtime/ProcessIdentity.kt",
+                          "src/main/java/thc/runtime/ProcessIdentity.java",
                           "src/main/c/bytestring-utf8-api.c",
                           "src/main/java/thc/runtime/CoreEnvironmentForeign.java", "src/main/java/thc/runtime/EnvironmentOp.java", "src/main/java/thc/runtime/EnvironmentExpression.java",
                           "src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt",

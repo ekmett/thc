@@ -607,7 +607,7 @@ class NativeMallocTest {
                         } finally { context.leave() }
                     }
                     val failure = NativeFileException("tcgetattr test", 5)
-                    fun invoke() = TermiosImage.transfer(base, copyBack = true) { bytes ->
+                    fun invoke() = TermiosImage.transfer(base, true) { bytes ->
                         // Queue release while the same staging callback used by
                         // ManagedFiles.tcgetattr owns the complete native extent.
                         startFree.countDown()
