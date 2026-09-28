@@ -23,15 +23,15 @@ public final class VectorDouble8Fused extends Expr {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             throw new RuntimeFault("Invalid DoubleX8 fused operation");
         }
-        DoubleVector a = vector(frame, 0);
-        DoubleVector b = vector(frame, 1);
-        DoubleVector c = vector(frame, 2);
+        DoubleVector a = vector(arguments[0].execute(frame));
+        DoubleVector b = vector(arguments[1].execute(frame));
+        DoubleVector c = vector(arguments[2].execute(frame));
         DoubleVector left = operation >= 2 ? a.neg() : a;
         DoubleVector addend = (operation & 1) != 0 ? c.neg() : c;
         return left.fma(b, addend);
     }
 
-    private DoubleVector vector(VirtualFrame frame, int index) {
-        return CoreVectors.requireDouble(arguments[index].execute(frame), DoubleVector.SPECIES_512);
+    private static DoubleVector vector(Object value) {
+        return CoreVectors.requireDouble(value, DoubleVector.SPECIES_512);
     }
 }

@@ -31,10 +31,10 @@ public final class VectorDoubleOperation extends Expr {
     @Override public DoubleVector execute(VirtualFrame frame) {
         return switch (operation) {
             case 0 -> DoubleVector.broadcast(DoubleVector.SPECIES_128, arguments[0].executeRequiredDouble(frame));
-            case 1 -> vector(frame, 0).add(vector(frame, 1));
-            case 2 -> vector(frame, 0).sub(vector(frame, 1));
-            case 3 -> vector(frame, 0).mul(vector(frame, 1));
-            case 4, 5, 6, 7 -> fused(operation - 4, vector(frame, 0), vector(frame, 1), vector(frame, 2));
+            case 1 -> vector(arguments[0].execute(frame)).add(vector(arguments[1].execute(frame)));
+            case 2 -> vector(arguments[0].execute(frame)).sub(vector(arguments[1].execute(frame)));
+            case 3 -> vector(arguments[0].execute(frame)).mul(vector(arguments[1].execute(frame)));
+            case 4, 5, 6, 7 -> fused(operation - 4, vector(arguments[0].execute(frame)), vector(arguments[1].execute(frame)), vector(arguments[2].execute(frame)));
             default -> {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 throw new RuntimeFault("Invalid DoubleX2 operation");
@@ -48,7 +48,7 @@ public final class VectorDoubleOperation extends Expr {
         return left.fma(b, addend);
     }
 
-    private DoubleVector vector(VirtualFrame frame, int index) {
-        return CoreVectors.requireDouble(arguments[index].execute(frame), DoubleVector.SPECIES_128);
+    private static DoubleVector vector(Object value) {
+        return CoreVectors.requireDouble(value, DoubleVector.SPECIES_128);
     }
 }

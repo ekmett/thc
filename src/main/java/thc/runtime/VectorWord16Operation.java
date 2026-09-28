@@ -27,9 +27,9 @@ public final class VectorWord16Operation extends Expr {
     @Override public ShortVector execute(VirtualFrame frame) {
         return switch (operation) {
             case 0 -> ShortVector.broadcast(ShortVector.SPECIES_128, (short) arguments[0].executeRequiredInt(frame));
-            case 1 -> vector(frame, 0).add(vector(frame, 1));
-            case 2 -> vector(frame, 0).sub(vector(frame, 1));
-            case 3 -> vector(frame, 0).mul(vector(frame, 1));
+            case 1 -> vector(arguments[0].execute(frame)).add(vector(arguments[1].execute(frame)));
+            case 2 -> vector(arguments[0].execute(frame)).sub(vector(arguments[1].execute(frame)));
+            case 3 -> vector(arguments[0].execute(frame)).mul(vector(arguments[1].execute(frame)));
             default -> {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 throw new RuntimeFault("Invalid Word16X8 operation");
@@ -37,7 +37,7 @@ public final class VectorWord16Operation extends Expr {
         };
     }
 
-    private ShortVector vector(VirtualFrame frame, int index) {
-        return CoreVectors.requireShort(arguments[index].execute(frame), ShortVector.SPECIES_128);
+    private static ShortVector vector(Object value) {
+        return CoreVectors.requireShort(value, ShortVector.SPECIES_128);
     }
 }
