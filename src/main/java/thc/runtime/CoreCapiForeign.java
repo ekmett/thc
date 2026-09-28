@@ -27,7 +27,7 @@ public final class CoreCapiForeign {
         var previous = state.getThreads().enterForeign(ForeignSafety.UNSAFE);
         try {
             var result = state.cbits().capiWordAddress(call, word, address);
-            if (result.getValue() < 0) state.getStdio().captureForeignErrno$org_intelligence_thc(result.getErrno());
+            if (result.getValue() < 0) state.getStdio().captureForeignErrno(result.getErrno());
             return result.getValue();
         } finally { state.getThreads().leaveForeign(previous); }
     }

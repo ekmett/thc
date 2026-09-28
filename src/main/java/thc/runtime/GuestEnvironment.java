@@ -113,7 +113,7 @@ public final class GuestEnvironment {
 
     private long remove(byte[] name) {
         if (name.length == 0 || equalsIndex(name) >= 0) {
-            Language.currentState(null).getStdio().nativeError$org_intelligence_thc(22); // Linux EINVAL.
+            Language.currentState(null).getStdio().nativeError(22); // Linux EINVAL.
             return -1;
         }
         var values = contents();

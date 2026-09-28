@@ -479,7 +479,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         ArrayOp.validateApplications(requested);
         CoreStackForeign.validateHeads(requested);
         CoreStackInfoForeign.validateHeads(requested);
-        CoreOriginalStdio.INSTANCE.validateHeads(requested);
+        CoreOriginalStdio.validateHeads(requested);
         CoreProcessForeign.validateHeads(requested);
         CoreStablePointers.validateHeads(requested);
         CoreRtsShutdown.INSTANCE.validateHeads(requested);
@@ -5509,7 +5509,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         var foreignMetadata = packageScalar == null ? metadata : null;
         boolean stackClone = CoreStackForeign.validate(foreignMetadata, representations, flags);
         var stackInfo = CoreStackInfoForeign.validate(foreignMetadata, representations, flags, resultRepresentation);
-        var originalStdio = CoreOriginalStdio.INSTANCE.validate(foreignMetadata, representations, flags, resultRepresentation);
+        var originalStdio = CoreOriginalStdio.validate(foreignMetadata, representations, flags, resultRepresentation);
         var originalProcess = CoreProcessForeign.validate(foreignMetadata, representations, flags, resultRepresentation);
         var capi = CoreCapiForeign.validate(foreignMetadata, representations, flags, resultRepresentation, foreignLinks);
         boolean stableFree = CoreStablePointers.validate(foreignMetadata, representations, flags, resultRepresentation);
@@ -6329,7 +6329,7 @@ public final class BytecodeProgram implements ExecutableProgram {
 
     private Expression compileOriginalStdio(OriginalStdioOp originalStdio, List<Object> fn, boolean defined,
             List<List<Object>> args, Scope scope, CoreRepresentation tupleProof) {
-        CoreOriginalStdio.INSTANCE.validateHead(fn, defined);
+        CoreOriginalStdio.validateHead(fn, defined);
         var operands = new ArrayList<Expression>();
         for (int index = 0; index < args.size(); ++index) {
             var argument = args.get(index);
@@ -6343,7 +6343,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                     || originalStdio.getCurrentDirectory() || originalStdio.getDirectoryStream() || originalStdio == OriginalStdioOp.TCSETATTR
                     || originalStdio.getOpening() || originalStdio.getIconv() || originalStdio.getStrerror() || originalStdio.getDuplication()
                     || originalStdio.getLocking())
-                CoreOriginalStdio.INSTANCE.validateScalarOperand(originalStdio, index, operand.proof(), lexicalProof(argument, scope));
+                CoreOriginalStdio.validateScalarOperand(originalStdio, index, operand.proof(), lexicalProof(argument, scope));
             var integer = NarrowInteger.fromRep(originalStdio.getArguments().get(index));
             operands.add(integer == null ? operand : e -> {
                 e.builder.beginForeignIntegerToHost(integer); operand.emit(e); e.builder.endForeignIntegerToHost();

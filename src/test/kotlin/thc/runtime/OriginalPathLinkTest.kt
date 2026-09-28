@@ -77,7 +77,7 @@ class OriginalPathLinkTest {
     @Test fun genuineNativeLinksMatchBothBackendsAndFirstInstalledCalls() {
         val manifest = json("$prefix/manifest.json")
         assertEquals(operations.keys.toList(), manifest["entries"])
-        assertTrue(isOriginalUnixUnit(manifest["unixUnit"]))
+        assertTrue(CoreOriginalStdio.isOriginalUnixUnit(manifest["unixUnit"]))
         OriginalStdioChecks.hashes(root, manifest["inputHashes"], setOf("compiler/test-fixtures/OriginalPathLinkAudit.hs",
             "test/haskell-fixtures/OriginalPathLinkFixtures.hs", "scripts/core_original_foreign.py", "scripts/core-capabilities.json"))
         OriginalStdioChecks.hashes(root, manifest["artifactHashes"], setOf("$prefix/oracle.json") +

@@ -72,7 +72,7 @@ class OriginalDirectoryPathsTest {
     @Test fun genuineInstalledOwnersMatchNativeAndEveryFirstInstalledEntry() {
         val manifest = json("$prefix/manifest.json")
         assertEquals(operations.keys.toList(), manifest["entries"])
-        assertTrue(isOriginalUnixUnit(manifest["unixUnit"])); assertEquals("ghc-internal", manifest["readlinkUnit"])
+        assertTrue(CoreOriginalStdio.isOriginalUnixUnit(manifest["unixUnit"])); assertEquals("ghc-internal", manifest["readlinkUnit"])
         OriginalStdioChecks.hashes(root, manifest["inputHashes"], setOf("compiler/test-fixtures/OriginalDirectoryPathsAudit.hs",
             "test/haskell-fixtures/OriginalDirectoryPathsFixtures.hs", "scripts/core_original_foreign.py", "scripts/core-capabilities.json"))
         OriginalStdioChecks.hashes(root, manifest["artifactHashes"], setOf("$prefix/oracle.json") + listOf("pre", "post").flatMap { stage ->
