@@ -11,6 +11,7 @@
     ]
   },
   "leafSources": {
+    "src/main/java/thc/runtime/AstSameFrameArm.java": {"junit": ["thc.runtime.SameFrameCaseTest", "thc.runtime.LocalJoinGraphBudgetTest"], "python": []},
     "src/main/java/thc/runtime/AstStackScope.java": {"junit": ["thc.runtime.AstStackTest", "thc.runtime.AstStackNativeTest", "thc.runtime.AstContinuationTest"], "python": []},
     "src/main/java/thc/runtime/AstStackSpill.java": {"junit": ["thc.runtime.AstStackTest", "thc.runtime.AstStackNativeTest", "thc.runtime.AstContinuationTest"], "python": []},
     "src/main/java/thc/runtime/AstStackContinuation.java": {"junit": ["thc.runtime.AstStackTest", "thc.runtime.AstStackNativeTest", "thc.runtime.AstContinuationTest"], "python": []},

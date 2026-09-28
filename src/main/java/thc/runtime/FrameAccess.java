@@ -12,7 +12,7 @@ import static thc.runtime.RuntimeServiceStatus.fault;
 public final class FrameAccess {
     public static final FrameAccess INSTANCE = new FrameAccess();
     private FrameAccess() {}
-    private static boolean primitiveKind(FrameDescriptor descriptor, int slot, FrameSlotKind wanted) {
+    static boolean primitiveKind(FrameDescriptor descriptor, int slot, FrameSlotKind wanted) {
         FrameSlotKind kind = descriptor.getSlotKind(slot);
         if (kind == wanted) return true;
         if (kind != FrameSlotKind.Illegal) return false;
@@ -24,13 +24,16 @@ public final class FrameAccess {
     }
     public static void writeObject(Frame frame, int slot, Object value) {
         FrameDescriptor descriptor = frame.getFrameDescriptor();
+        objectKind(descriptor, slot);
+        frame.setObject(slot, value);
+    }
+    static void objectKind(FrameDescriptor descriptor, int slot) {
         if (descriptor.getSlotKind(slot) != FrameSlotKind.Object) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             synchronized (descriptor) {
                 if (descriptor.getSlotKind(slot) != FrameSlotKind.Object) descriptor.setSlotKind(slot, FrameSlotKind.Object);
             }
         }
-        frame.setObject(slot, value);
     }
     /** Consult activation tags: another activation may have widened its descriptor. */
     public static Object read(Frame frame, int slot) {

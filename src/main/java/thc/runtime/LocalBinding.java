@@ -3,7 +3,10 @@
 package thc.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.frame.FrameDescriptor;
+import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 
@@ -31,19 +34,28 @@ public final class LocalBinding extends Node {
     }
     public void write(VirtualFrame frame) {
         try { writeValue(frame); }
-        catch (AstCapture cut) {
-            throw cut.append(new AstResumeStep() {
+        catch (AstCapture cut) { throw appendWrite(cut); }
+    }
+    @TruffleBoundary private AstCapture appendWrite(AstCapture cut) {
+        return cut.append(new AstResumeStep() {
                 @Override public Object resume(VirtualFrame frame, Object input) {
                     if (typedSlots == null) FrameAccess.INSTANCE.write(frame, slot, input);
                     return thc.runtime.Unit.INSTANCE;
                 }
-            });
-        }
+        });
     }
     private void writeValue(VirtualFrame frame) {
         if (typedSlots != null) { value.executeTuple(frame, typedSlots, 0); return; }
         if (value.getRepresentation().isInt()) { FrameAccess.INSTANCE.writeInt(frame, slot, value.executeRequiredInt(frame)); return; }
-        if (exactLong) { FrameAccess.INSTANCE.writeLong(frame, slot, value.executeRequiredLong(frame)); return; }
+        if (exactLong) {
+            long result = value.executeRequiredLong(frame);
+            // Compiler-owned scalar operands normally have their declared kind.
+            // Keep the live check: a sibling activation or resumed RHS can widen it.
+            FrameDescriptor descriptor = frame.getFrameDescriptor();
+            if (descriptor.getSlotKind(slot) == FrameSlotKind.Long || prepareLongFallback(descriptor)) frame.setLong(slot, result);
+            else frame.setObject(slot, result);
+            return;
+        }
         if (value.getRepresentation().isFloat()) { FrameAccess.INSTANCE.writeFloat(frame, slot, value.executeRequiredFloat(frame)); return; }
         if (value.getRepresentation().isDouble()) { FrameAccess.INSTANCE.writeDouble(frame, slot, value.executeRequiredDouble(frame)); return; }
         if (referenceKind == CoreKind.DATA) { FrameAccess.INSTANCE.write(frame, slot, value.executeRequiredDataValue(frame)); return; }
@@ -55,5 +67,10 @@ public final class LocalBinding extends Node {
             generic = true;
             FrameAccess.INSTANCE.write(frame, slot, unexpected.getResult());
         }
+    }
+    @TruffleBoundary private boolean prepareLongFallback(FrameDescriptor descriptor) {
+        if (FrameAccess.primitiveKind(descriptor, slot, FrameSlotKind.Long)) return true;
+        FrameAccess.objectKind(descriptor, slot);
+        return false;
     }
 }

@@ -115,6 +115,29 @@ once-only effects. Default nodes still invalidate on their first exception.
 
 ## Graph-budget recovery lifecycle
 
+### Returning regions inside async local joins
+
+The AST can separate a returning case arm or local-join argument after an actual
+graph-budget failure. Eligibility excludes expressions referring to an active
+local join, so the backedge and its consumer stay together. Each finite retry
+separates one remaining region; an oversized leaf with no unused boundary still
+reports its real compilation failure at the unchanged budget.
+
+`AstSameFrameArm` keeps its body adopted by the original function. Its typed side
+roots pass the exact materialized activation and tuple destination, preserving
+the original owner, Bloom, mask and capture scopes. There is no new trampoline
+or exception catcher. Nested extraction and node replacement invalidate affected
+targets; clones start with independent boundary state. Side calls use ordinary
+exception profiling: a first async capture may deopt, and correctness does not
+depend on retaining installed code across it.
+
+The exact-Long binding fast path reads the live descriptor only after evaluating
+the RHS. Its cold kind-transition helper receives the descriptor, not the frame;
+actual writes remain inline and retain monotonic widening across activations.
+`SameFrameCaseTest` covers typed entries, captures and once-only resume, descriptor
+changes and ownership. `LocalJoinGraphBudgetTest` exercises real OSR recovery and
+finite exhaustion without a training call or increased graph limit.
+
 The runtime's `BaseOSRRootNode.getSourceRootNode()` accessor exposes the existing
 original-root relationship without retaining a context. It covers both loop OSR
 and the copied/parent-frame bytecode OSR implementations. `testOsrSourceOwnership`

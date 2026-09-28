@@ -1,6 +1,8 @@
 {
   "schema": 1,
   "fixtureFreeJunit": [
+    "thc.runtime.SameFrameCaseTest",
+    "thc.runtime.LocalJoinGraphBudgetTest",
     "thc.ReusableProgramTest",
     "thc.runtime.CapturedProgramInstanceTest",
     "thc.PackageFinalizersTest",

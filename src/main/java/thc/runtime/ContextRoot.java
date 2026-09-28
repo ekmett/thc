@@ -16,6 +16,12 @@ public abstract class ContextRoot extends RootNode {
         compilationOwner = language instanceof Language ? Language.currentState().getCompilationOwner() : null;
     }
 
+    /** Compiler-created code inherits ownership without consulting an entered context. */
+    protected ContextRoot(ContextRoot source, FrameDescriptor descriptor) {
+        super(source.getLanguageInfo() == null ? null : source.getLanguage(Language.class), descriptor);
+        compilationOwner = source.compilationOwner;
+    }
+
     final Object compilationOwner() { return compilationOwner; }
 
     /** Reusable code has no single context owner. Configure only before target publication. */
