@@ -60,10 +60,22 @@
     },
     "src/main/java/thc/runtime/RtsArgumentsOp.java": {"junit": ["thc.runtime.GuestArgumentsTest"], "python": ["scripts/test-audit-core.py"]},
     "src/main/java/thc/runtime/RtsArgumentsExpression.java": {"junit": ["thc.runtime.GuestArgumentsTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/main/kotlin/thc/runtime/ManagedCompacts.kt": {
+    "src/main/java/thc/runtime/ManagedCompacts.java": {
       "junit": ["thc.runtime.ManagedCompactsTest", "thc.runtime.CompactImagesTest"], "python": ["scripts/test-audit-core.py"]
     },
-    "src/main/kotlin/thc/runtime/CompactImages.kt": {
+    "src/main/java/thc/runtime/ManagedCompact.java": {
+      "junit": ["thc.runtime.ManagedCompactsTest", "thc.runtime.CompactImagesTest"], "python": ["scripts/test-audit-core.py"]
+    },
+    "src/main/java/thc/runtime/CompactCopyNode.java": {
+      "junit": ["thc.runtime.ManagedCompactsTest", "thc.runtime.CompactImagesTest"], "python": ["scripts/test-audit-core.py"]
+    },
+    "src/main/java/thc/runtime/CompactOp.java": {
+      "junit": ["thc.runtime.ManagedCompactsTest", "thc.runtime.CompactImagesTest"], "python": ["scripts/test-audit-core.py"]
+    },
+    "src/main/java/thc/runtime/CompactExpression.java": {
+      "junit": ["thc.runtime.ManagedCompactsTest", "thc.runtime.CompactImagesTest"], "python": ["scripts/test-audit-core.py"]
+    },
+    "src/main/java/thc/runtime/CompactImages.java": {
       "junit": ["thc.runtime.CompactImagesTest"], "python": ["scripts/test-audit-core.py"]
     },
     "src/main/kotlin/thc/runtime/HeapAddresses.kt": {

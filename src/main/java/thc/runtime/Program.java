@@ -1860,13 +1860,13 @@ public final class Program implements ExecutableProgram {
             operation.validate(argumentProofs(args), flags, tupleProof);
             return new CompactImageExpression(operation, argumentOperands(args, scope, flags)).proven(evaluated(tupleProof, true));
         }
-        if (primitive && CompactOp.Companion.named((String) fn.get(1)) != null) {
-            var operation = Objects.requireNonNull(CompactOp.Companion.named((String) fn.get(1)));
+        if (primitive && CompactOp.named((String) fn.get(1)) != null) {
+            var operation = Objects.requireNonNull(CompactOp.named((String) fn.get(1)));
             if (capturesContinuations && operation.getAdds())
                 throw new UnsupportedCore("Compact graph traversal does not yet support resumable asynchronous forcing");
             operation.validate(argumentProofs(args), flags, tupleProof);
             List<GlobalBinding> failures = new ArrayList<>();
-            if (operation.getAdds()) for (String id : CompactOp.Companion.getFailures()) {
+            if (operation.getAdds()) for (String id : CompactOp.getFailures()) {
                 GlobalBinding failure = globals.get(id);
                 if (failure == null) throw new UnsupportedCore("Compact addition requires original exception payload: " + id);
                 failures.add(failure);
