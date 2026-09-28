@@ -10,7 +10,7 @@ import thc.Json
 
 /** Every baseline is a retained original FCall application, not a fresh FFI fixture. */
 class CoreStackInfoForeignTest {
-    private val symbols = OriginalStackInfoOp.entries.associateBy { it.symbol }
+    private val symbols = OriginalStackInfoOp.values().associateBy { it.symbol }
     private fun original() = Json.parse(javaClass.getResource("/core/original-stack-info-calls.json")!!.readText()) as Map<String, Any?>
     private val getterProof by lazy {
         val file = java.io.File(System.getProperty("thc.projectRoot"), "compiler/test-fixtures/OriginalStackProof.json")
@@ -68,7 +68,7 @@ class CoreStackInfoForeignTest {
         assertEquals(setOf("ghc-internal:GHC.Internal.Stack.Decode.\$wdecodeStackWithFrameUnpack",
             "ghc-internal:GHC.Internal.Stack.Decode.\$wunpackStackFrameTo", "ghc-internal:GHC.Internal.InfoProv.Types.lookupIPE"), calls.map { it["owner"] }.toSet())
         calls.forEach { assertTrue((it["path"] as String).startsWith("/expr/")); assertTrue((it["source"] as String) in expectedHashes) }
-        assertEquals(symbols.values.toSet(), OriginalStackInfoOp.entries.toSet())
+        assertEquals(symbols.values.toSet(), OriginalStackInfoOp.values().toSet())
         assertEquals(symbols.keys + "stg_cloneMyStackzh", applications.keys)
         for ((symbol, operation) in symbols) {
             val input = Input(symbol)

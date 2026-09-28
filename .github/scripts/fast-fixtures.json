@@ -76,7 +76,7 @@
       "sources": ["compiler/test-fixtures/ProcessLifecycleAudit.hs", "test/haskell-fixtures/ProcessLifecycleFixtures.hs",
         "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal",
         "test/fixtures/process-lifecycle/Main.hs", "test/fixtures/process-lifecycle/sigchld-policy.c",
-        "src/main/c/native-process-api.c", "src/main/kotlin/thc/runtime/CoreProcessForeign.kt",
+        "src/main/c/native-process-api.c", "src/main/java/thc/runtime/CoreProcessForeign.java", "src/main/java/thc/runtime/ProcessOp.java",
         "src/main/kotlin/thc/runtime/ManagedProcessForeign.kt", "src/main/kotlin/thc/runtime/ManagedProcesses.kt"]
     },
     "integer-simd": {

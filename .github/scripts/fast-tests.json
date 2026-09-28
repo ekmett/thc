@@ -25,7 +25,10 @@
     "src/main/kotlin/thc/runtime/RubbishLiterals.kt": {
       "junit": ["thc.runtime.RubbishLiteralTest"], "python": ["scripts/test-audit-core.py"]
     },
-    "src/main/kotlin/thc/runtime/CoreCpuAffinity.kt": {
+    "src/main/java/thc/runtime/CoreCpuAffinity.java": {
+      "junit": ["thc.runtime.CpuAffinityApiTest"], "python": ["scripts/test-audit-core.py"]
+    },
+    "src/main/java/thc/runtime/CpuAffinityQuery.java": {
       "junit": ["thc.runtime.CpuAffinityApiTest"], "python": ["scripts/test-audit-core.py"]
     },
     "src/main/java/thc/runtime/GuestEnvironment.java": {
@@ -66,7 +69,10 @@
     "src/main/kotlin/thc/runtime/HeapAddresses.kt": {
       "junit": ["thc.runtime.CompactImagesTest"], "python": []
     },
-    "src/main/kotlin/thc/runtime/CoreCompactImages.kt": {
+    "src/main/java/thc/runtime/CompactImageOp.java": {
+      "junit": ["thc.runtime.CompactImagesTest"], "python": ["scripts/test-audit-core.py"]
+    },
+    "src/main/java/thc/runtime/CompactImageExpression.java": {
       "junit": ["thc.runtime.CompactImagesTest"], "python": ["scripts/test-audit-core.py"]
     },
     "src/main/kotlin/thc/runtime/HintTracePrimops.kt": {
@@ -114,7 +120,7 @@
       "junit": ["thc.runtime.NativeFileBuffersTest", "thc.runtime.NativeMallocTest", "thc.runtime.AtomicAddressTest"],
       "python": []
     },
-    "src/main/kotlin/thc/runtime/CoreDataLabels.kt": {
+    "src/main/java/thc/runtime/CoreDataLabels.java": {
       "junit": ["thc.runtime.EnabledCapabilitiesTest", "thc.runtime.RtsFlagsTest"],
       "python": ["scripts/test-audit-core.py"]
     },
@@ -122,12 +128,20 @@
       "junit": ["thc.runtime.ManagedWeakTest"],
       "python": []
     },
-    "src/main/kotlin/thc/runtime/CoreMainThreadForeign.kt": {
+    "src/main/java/thc/runtime/CoreMainThreadForeign.java": {
+      "junit": ["thc.runtime.CoreMainThreadForeignTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/RegisterMainThread.java": {
       "junit": ["thc.runtime.CoreMainThreadForeignTest"],
       "python": []
     },
     "src/main/kotlin/thc/runtime/CoreRtsShutdown.kt": {"junit": ["thc.runtime.RtsShutdownTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/main/kotlin/thc/runtime/CoreBoundThreadForeign.kt": {
+    "src/main/java/thc/runtime/CoreBoundThreadForeign.java": {
+      "junit": ["thc.runtime.CoreBoundThreadForeignTest", "thc.runtime.ThreadSchedulingTest"],
+      "python": ["scripts/test-audit-core.py"]
+    },
+    "src/main/java/thc/runtime/BoundThreadSupport.java": {
       "junit": ["thc.runtime.CoreBoundThreadForeignTest", "thc.runtime.ThreadSchedulingTest"],
       "python": ["scripts/test-audit-core.py"]
     },
@@ -155,7 +169,27 @@
       "junit": ["thc.runtime.StablePointerTest", "thc.runtime.AlignedScalarMemoryTest"],
       "python": []
     },
-    "src/main/kotlin/thc/runtime/CoreStablePointers.kt": {
+    "src/main/java/thc/runtime/CoreStablePointers.java": {
+      "junit": ["thc.runtime.StablePointerTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/StablePointerOp.java": {
+      "junit": ["thc.runtime.StablePointerTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/MakeStablePointer.java": {
+      "junit": ["thc.runtime.StablePointerTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/DereferenceStablePointer.java": {
+      "junit": ["thc.runtime.StablePointerTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/EqualStablePointers.java": {
+      "junit": ["thc.runtime.StablePointerTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/FreeStablePointer.java": {
       "junit": ["thc.runtime.StablePointerTest"],
       "python": []
     },
@@ -1269,9 +1303,11 @@
     "src/test/resources/core/original-unix-libc-descriptors.json": {"junit": ["thc.runtime.UnixLibcTest"], "python": ["scripts/test-audit-core.py"]},
     "test/haskell-fixtures/UnixLibcFixtures.hs": {"junit": ["thc.runtime.UnixLibcTest"], "python": ["scripts/test-audit-core.py"]},
     "compiler/test-fixtures/UnixLibcAudit.hs": {"junit": ["thc.runtime.UnixLibcTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/main/kotlin/thc/runtime/CoreTextForeign.kt": {
+    "src/main/java/thc/runtime/CoreTextForeign.java": {
       "junit": ["thc.runtime.TextCbitsTest"], "python": ["scripts/test-audit-core.py"]
     },
+    "src/main/java/thc/runtime/TextForeignOp.java": {"junit": ["thc.runtime.TextCbitsTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/main/java/thc/runtime/TextForeignExpression.java": {"junit": ["thc.runtime.TextCbitsTest"], "python": ["scripts/test-audit-core.py"]},
     "src/main/kotlin/thc/runtime/ManagedText.kt": {
       "junit": ["thc.runtime.TextCbitsTest"], "python": []
     },
@@ -1600,7 +1636,7 @@
     "src/main/kotlin/thc/runtime/RtsDiagnostics.kt": {
       "junit": ["thc.runtime.RtsDiagnosticsTest", "thc.runtime.HintTraceTest"], "python": []
     },
-    "src/main/kotlin/thc/runtime/CoreRtsDiagnosticForeign.kt": {
+    "src/main/java/thc/runtime/RtsDiagnosticExpression.java": {
       "junit": ["thc.runtime.RtsDiagnosticsTest"], "python": []
     },
     "compiler/test-fixtures/RtsDiagnosticsNative.hs": {
@@ -1718,11 +1754,15 @@
       "junit": ["thc.runtime.OriginalFcntlTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.StdioHostAbiTest", "thc.runtime.ManagedStdioTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"],
       "python": []
     },
-    "src/main/kotlin/thc/runtime/CoreManagedFiles.kt": {
+    "src/main/java/thc/runtime/CoreManagedFiles.java": {
       "junit": ["thc.runtime.CoreManagedFilesTest", "thc.runtime.ManagedFileCallTest", "thc.runtime.ManagedFilesTest"],
       "python": []
     },
-    "src/main/kotlin/thc/runtime/ManagedFileExpression.kt": {
+    "src/main/java/thc/runtime/ManagedFileOp.java": {
+      "junit": ["thc.runtime.CoreManagedFilesTest", "thc.runtime.ManagedFileCallTest", "thc.runtime.ManagedFilesTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/ManagedFileExpression.java": {
       "junit": ["thc.runtime.ManagedFileCallTest", "thc.runtime.ManagedFilesTest", "thc.runtime.GuestThreadsTest"],
       "python": []
     },
@@ -2615,8 +2655,9 @@
     },
     "test/haskell-fixtures/LibdwUnavailableFixtures.hs": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": []},
     "compiler/test-fixtures/LibdwUnavailableNative.hs": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": []},
-    "src/main/kotlin/thc/runtime/CoreLibdwForeign.kt": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/main/kotlin/thc/runtime/OriginalLibdwExpression.kt": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": []},
+    "src/main/java/thc/runtime/CoreLibdwForeign.java": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/main/java/thc/runtime/LibdwForeignOp.java": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/main/java/thc/runtime/OriginalLibdwExpression.java": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": []},
     "src/test/resources/core/original-libdw-descriptors.json": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": ["scripts/test-audit-core.py"]},
     "test/haskell-fixtures/NativeAddressFixtures.hs": {"junit": ["thc.runtime.NativeAddressTest", "thc.runtime.NativeMallocTest"], "python": []},
     "compiler/test-fixtures/NativeAddressNative.hs": {"junit": ["thc.runtime.NativeAddressTest"], "python": []},
@@ -2652,13 +2693,19 @@
     "compiler/test-fixtures/OriginalGmpNative.hs": {
       "junit": ["thc.runtime.OriginalGmpTest"], "python": []
     },
-    "src/main/kotlin/thc/runtime/CoreGmpForeign.kt": {
+    "src/main/java/thc/runtime/CoreGmpForeign.java": {
+      "junit": ["thc.runtime.CoreGmpForeignTest", "thc.runtime.OriginalGmpTest"], "python": ["scripts/test-audit-core.py"]
+    },
+    "src/main/java/thc/runtime/GmpForeignOp.java": {
+      "junit": ["thc.runtime.CoreGmpForeignTest", "thc.runtime.OriginalGmpTest"], "python": ["scripts/test-audit-core.py"]
+    },
+    "src/main/java/thc/runtime/GmpForm.java": {
       "junit": ["thc.runtime.CoreGmpForeignTest", "thc.runtime.OriginalGmpTest"], "python": ["scripts/test-audit-core.py"]
     },
     "src/main/kotlin/thc/runtime/ManagedGmp.kt": {
       "junit": ["thc.runtime.SulongLimbProviderTest", "thc.runtime.OriginalGmpTest"], "python": []
     },
-    "src/main/kotlin/thc/runtime/GmpForeignExpression.kt": {
+    "src/main/java/thc/runtime/GmpForeignExpression.java": {
       "junit": ["thc.runtime.CoreGmpForeignTest", "thc.runtime.OriginalGmpTest"], "python": []
     },
     "test/haskell-fixtures/ContinuationFixtures.hs": {

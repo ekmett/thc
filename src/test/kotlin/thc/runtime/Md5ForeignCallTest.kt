@@ -53,7 +53,7 @@ class Md5ForeignCallTest {
         assertEquals(0, handoff.arguments.retainedReferences()); assertEquals(0, handoff.results.retainedReferences())
     }
     @Test fun compiledClosedCallsUseVisibleStorageAndEraseOnlyTheStateResult() {
-        for (backend in listOf("ast", "bytecode")) for (operation in Md5ForeignOp.entries) context().use { context ->
+        for (backend in listOf("ast", "bytecode")) for (operation in Md5ForeignOp.values()) context().use { context ->
             context.initialize("thc"); context.enter()
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
@@ -114,7 +114,7 @@ class Md5ForeignCallTest {
             context.initialize("thc"); context.enter()
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                for (operation in Md5ForeignOp.entries) {
+                for (operation in Md5ForeignOp.values()) {
                     fun load(module: Map<String, Any?>): ExecutableProgram =
                         if (backend == "ast") Program(language, module) else BytecodeProgram(language, module)
                     assertThrows(RuntimeFault::class.java) { load(module(operation, unit = "main")) }
