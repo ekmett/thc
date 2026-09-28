@@ -12,7 +12,7 @@ import jdk.incubator.vector.IntVector
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.Language
-import thc.primopTestContext
+import thc.PrimopTestContext.primopTestContext
 
 class ManagedAllocationTest {
     @Test fun copyingBytesAndPointerCellsKeepsTheFirstInstalledCall() {

@@ -115,7 +115,7 @@ public final class IntegerPrimopsTest {
                 assertEquals(ScalarPrimopModel.scalar(operation(name), width, true, row[0], row[1]), row[2],
                     "Native " + name + "(" + row[0] + ", " + row[1] + ")");
         }
-        for (String backend : List.of("ast", "bytecode")) try (Context context = PrimopTestContextKt.primopTestContext()) {
+        for (String backend : List.of("ast", "bytecode")) try (Context context = PrimopTestContext.primopTestContext()) {
             NumericPrimopCoreEvidence.assertLoadableWrappers(context, merged,
                 entries.stream().map(e -> (String) e.get("name")).toList(), backend);
             Value function = context.eval("thc", Json.INSTANCE.stringify(Map.of("modules", modules,

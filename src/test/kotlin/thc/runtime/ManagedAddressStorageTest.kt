@@ -14,7 +14,7 @@ import java.math.BigInteger
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.Language
-import thc.primopTestContext
+import thc.PrimopTestContext.primopTestContext
 
 class ManagedAddressStorageTest {
     @Test fun firstInstalledByteReadsKeepLiteralAndMutableStorageDistinct() {

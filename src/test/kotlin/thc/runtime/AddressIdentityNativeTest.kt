@@ -8,6 +8,7 @@ import com.oracle.truffle.api.TruffleLanguage
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.*
+import thc.PrimopTestContext.primopTestContext
 import java.io.File
 
 class AddressIdentityNativeTest {

@@ -2679,12 +2679,19 @@
       "junit": ["thc.runtime.Simd128ArrayProofTest", "thc.runtime.SimdWideArrayProofTest"],
       "python": []
     },
-    "src/test/kotlin/thc/PrimopTestContext.kt": {
+    "src/test/java/thc/PrimopTestContext.java": {
       "junit": [
         "thc.runtime.BitPrimopsTest",
         "thc.IntegerPrimopsTest",
-        "thc.SignedNarrowPrimopsTest"
+        "thc.SignedNarrowPrimopsTest",
+        "thc.runtime.AddressIdentityNativeTest",
+        "thc.runtime.ManagedAddressStorageTest",
+        "thc.runtime.ManagedAllocationTest"
       ],
+      "python": []
+    },
+    "src/test/java/thc/runtime/ProcessSignalJvmProbe.java": {
+      "junit": ["thc.runtime.ProcessSignalsTest"],
       "python": []
     },
     "src/test/java/thc/CoreFormatTestSupport.java": {
