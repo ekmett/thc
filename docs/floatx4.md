@@ -35,9 +35,9 @@ python3 scripts/prepare-floatx4-audit.py
 The existing Python producer exports genuine pre/post-Tidy Core and compares
 fresh native GHC rows with an independent binary32 model. All six foundation
 primops must survive with exact logical pack/unpack signatures, and positive
-entries require strict reachable audits. The genuine `vectorArgument` control
-is rejected as a public host entry, not as a guest function formal: both backend
-loaders accept well-proven guest vector formals and reject forged shapes.
+entries require strict reachable audits. Both backend loaders accept well-proven
+guest vector formals and reject forged shapes. Signature-driven public entries
+also accept exact raw JDK vectors; see the [host transport contract](site/embedding.md).
 
 Finite arithmetic entries expose lane-sensitive scalar checksums and rounding
 boundaries. Exceptional entries distinguish NaNs, signed zeros, infinities,

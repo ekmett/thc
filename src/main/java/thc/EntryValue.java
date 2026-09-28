@@ -17,7 +17,7 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import thc.runtime.*;
 
-/** Context-owned scalar entry or one-shot executable IO lifecycle. */
+/** Signature-driven host entry or one-shot executable IO lifecycle. */
 @ExportLibrary(InteropLibrary.class)
 public final class EntryValue implements TruffleObject {
     private final ExecutableProgram program;
@@ -41,9 +41,21 @@ public final class EntryValue implements TruffleObject {
             List<CoreRepresentation> hostInputs, CoreRepresentation hostResult) {
         this.program = program; this.entry = entry; this.argumentCount = argumentCount;
         this.hostResultFault = hostResultFault; this.processSignals = processSignals;
-        this.hostInputs = hostInputs; this.hostResult = hostResult;
-        guestTarget = program.hostEntryTarget(argumentCount);
+        var untypedTarget = program.hostEntryTarget(argumentCount);
         guestEntry = program.entryValue(entry);
+        boolean admittedSignature = hostInputs != null;
+        if (hostInputs == null && guestEntry instanceof Closure closure && closure.target.getRootNode() instanceof GuestRoot root) {
+            var complete = root.getInputProofs();
+            if (complete != null && complete.size() - closure.suppliedCount == argumentCount) {
+                hostInputs = complete.subList(closure.suppliedCount, complete.size());
+                hostResult = root.getTupleResult() == null ? root.getScalarResultProof() : root.getTupleResult().getProof();
+            }
+        }
+        this.hostInputs = hostInputs; this.hostResult = hostResult;
+        boolean typed = hostResult != null && hostResult.isTypedTransport();
+        if (hostInputs != null) for (var proof : hostInputs) typed |= proof.isTypedTransport();
+        guestTarget = hostInputs != null && hostResult != null && argumentCount != 0 && (admittedSignature || typed)
+            ? ((EntryRoot) untypedTarget.getRootNode()).withSignature(language != null ? language : untypedTarget.getRootNode().getLanguage(Language.class), hostInputs, hostResult).getCallTarget() : untypedTarget;
         if (ioResult != null && language == null) throw new IllegalStateException("Missing IO language");
         ioTarget = ioResult == null ? null : new IoMainRoot(language, ioResult).getCallTarget();
         shutdownValue = shutdownEntry == null ? null : program.entryValue(shutdownEntry);
@@ -64,27 +76,31 @@ public final class EntryValue implements TruffleObject {
         }
         Closure closure = guestEntry instanceof Closure value ? value : null;
         GuestRoot signature = closure != null && closure.target.getRootNode() instanceof GuestRoot root ? root : null;
-        Object[] normalized = new Object[arguments.length];
-        for (int index = 0; index < arguments.length; index++) {
-            Object input = arguments[index];
-            if (!(input instanceof Long || input instanceof Integer || input instanceof Short || input instanceof Byte)) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                throw new IllegalStateException("The prototype host ABI accepts signed 64-bit integer arguments only");
+        var owner = Language.currentState(dispatch);
+        Object[] normalized;
+        if (hostInputs != null) normalized = HostAbi.arguments(owner, hostInputs, arguments);
+        else {
+            normalized = new Object[arguments.length];
+            for (int index = 0; index < arguments.length; index++) {
+                Object input = arguments[index];
+                if (!(input instanceof Long || input instanceof Integer || input instanceof Short || input instanceof Byte)) {
+                    CompilerDirectives.transferToInterpreterAndInvalidate();
+                    throw new IllegalStateException("Host arguments without retained signatures must be signed 64-bit integers");
+                }
+                long value = ((Number) input).longValue();
+                CoreRepresentation proof = signature == null || signature.getInputLayout() == null ? null : signature.getInputLayout().proof(index + closure.suppliedCount);
+                NarrowInteger narrow = proof == null ? null : proof.getNarrowInteger();
+                if (narrow == null) normalized[index] = value;
+                else normalized[index] = narrow.fromHost(value);
             }
-            long value = ((Number) input).longValue();
-            // Admission follows aliases/PAPs without forcing them; inputs describe the remaining ABI.
-            CoreRepresentation proof = hostInputs != null ? (index < hostInputs.size() ? hostInputs.get(index) : null)
-                : signature == null || signature.getInputLayout() == null ? null : signature.getInputLayout().proof(index + closure.suppliedCount);
-            NarrowInteger narrow = proof == null ? null : proof.getNarrowInteger();
-            if (narrow == null) normalized[index] = value;
-            else normalized[index] = narrow.fromHost(value);
         }
-        var threads = Language.currentState(dispatch).getThreads();
+        var threads = owner.getThreads();
         threads.enterCurrent(null, false, program.getAsynchronousExceptions(), null);
         var outcome = GuestThreadStatus.FINISHED;
         try {
             try {
                 Object result = AsyncContinuations.publicResult(dispatch.executePublic(guestTarget, new Object[]{guestEntry, normalized}), dispatch);
+                if (hostResult != null) return HostAbi.result(owner, hostResult, result, program);
                 var proof = hostResult != null ? hostResult : signature == null ? null : signature.getScalarResultProof();
                 NarrowInteger narrow = proof == null ? null : proof.getNarrowInteger();
                 if (narrow == null) return result;

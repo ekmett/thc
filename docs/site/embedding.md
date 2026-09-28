@@ -61,7 +61,9 @@ Accepted signatures use boxed `Int`, `Word`, their fixed-width variants,
 `Float`, `Double`, `Bool` and `Char`, with `()` additionally allowed as a result.
 Integral arguments are range-checked. Use `BigInteger` and `Value.asBigInteger()`
 for the upper half of `Word64`; a unit result has `Value.isNull() == true`.
-Arbitrary algebraic data, functions and SIMD values are not host arguments yet.
+These are the signatures admitted by the declared C-export path. The lower-level
+Core entry path below also transports guest references, functions and raw SIMD
+values; that does not expand the native C calling convention of an export.
 
 This is an experimental managed entrypoint, not a native C callback address.
 The loader requires the typed declarations and verified retained registration
@@ -72,7 +74,7 @@ does not supply that evidence. Other foreign products and unclassified
 registration remain unsupported. One managed bundle can be loaded per context;
 its members are read-only and live only as long as that context.
 
-## Load an integer kernel
+## Load a Core entry
 
 ```java
 import java.util.List;
@@ -89,9 +91,42 @@ void main() {
 }
 ```
 
-The older `loadEntry` scalar path is integer-only. It does not marshal arbitrary Haskell
-types, aggregate arguments, or closures. Use an exported entry whose accepted
-contract matches the supplied argument. `backend` selects `bytecode` or `ast`
+`loadEntry` uses the entry's retained Core signature. Host values follow its
+logical argument and result shapes, not the runtime's flattened transport slots:
+
+| Core representation | Host value |
+| --- | --- |
+| Signed and unsigned integer primitives | Exact, range-checked numbers; use `BigInteger` / `asBigInteger()` for the upper half of `Word64#` |
+| `Float#`, `Double#` | Exactly representable numbers; negative zero and non-finite values are retained |
+| Unboxed tuple | An array of logical fields, recursively; an empty tuple is an empty array |
+| Unboxed sum | A two-element array `[tag, payload]`, with a 1-based alternative tag |
+| SIMD vector | The exact raw JDK Vector API value with the declared species; not a lane array |
+| Guest reference or managed address | An opaque, context-owned value returned by THC; null is accepted for a null address |
+| Guest function | An executable, context-owned value, including closures and partial applications |
+| `State#` / `Void#` | Null; nested void fields occupy a logical field but no physical register |
+
+Tuple and sum results expose read-only array elements. They do not retain a view
+of temporary guest argument or result pools. Raw vector inputs require host-object
+access, for example `Context.newBuilder("thc").allowHostAccess(HostAccess.ALL)`;
+`result.asHostObject()` returns the raw JDK vector without lane boxing or species
+conversion. A same-width vector of another lane type is not interchangeable.
+
+References cannot be fabricated from arbitrary Java objects. Managed addresses
+do not expose pointer bits, and integer arguments are not implicitly treated as
+addresses. Guest references and functions cannot be passed to another context
+or used after their context closes. Host marshalling does not force references
+or inspect their fields; the guest's own evaluation rules still apply. Calling a returned function checks its remaining logical
+signature, including any already supplied partial-application prefix.
+
+Constructor identities belong to a linked program. Independently loading the
+same nominal data declaration twice does not make their constructor layouts
+interchangeable. Return data together with its consumer functions from one
+linked program when building a host-facing bundle; the host transport does not
+copy or rebox data into another program's layouts.
+
+Use an entry whose retained signature matches the supplied arguments. Missing
+legacy scalar evidence does not authorize guessing an aggregate or function
+signature. `backend` selects `bytecode` or `ast`
 when loading; the default comes from `thc.backend`, then `THC_BACKEND`, then
 `bytecode`.
 

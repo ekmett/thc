@@ -327,13 +327,13 @@ public final class Language extends TruffleLanguage<Language.State> {
                     hostInputs = List.of();
                 }
                 if (hostInputs != null) {
-                    for (var proof : hostInputs) CoreRepresentations.requireScalar(proof, "host argument");
-                    CoreRepresentations.requireScalar(hostResult, "host result");
+                    for (var proof : hostInputs) HostAbi.require(proof);
+                    HostAbi.require(hostResult);
                 }
                 if (!expression.isEmpty() && "lam".equals(expression.getFirst())) {
                     for (var parameter : (List<Map<String, Object>>) expression.get(1))
-                        CoreRepresentations.requireScalar(CoreRepresentations.binder(parameter), "host argument");
-                    CoreRepresentations.requireScalar(CoreRepresentations.lambdaResult(expression), "host result");
+                        HostAbi.require(CoreRepresentations.binder(parameter));
+                    HostAbi.require(CoreRepresentations.lambdaResult(expression));
                 }
             } catch (UnsupportedCore gap) {
                 if (!Boolean.TRUE.equals(input.get("diagnosticUnsupported"))) throw gap;
@@ -409,8 +409,8 @@ public final class Language extends TruffleLanguage<Language.State> {
                         }
                     }
                     if (hostInputs != null) {
-                        for (var proof : hostInputs) CoreRepresentations.requireScalar(proof, "host argument");
-                        CoreRepresentations.requireScalar(hostResult, "host result");
+                        for (var proof : hostInputs) HostAbi.require(proof);
+                        HostAbi.require(hostResult);
                     }
                     var registrations = program.registerStartup();
                     var value = new EntryValue(program, entry, ((Number) selected.get("arity")).intValue(), null,
