@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 import static thc.CoreExecutionTestSupport.*;
 
-/** Exact metadata retains unsupported families alongside bounded result consumers. */
+/** Exact metadata admits retained host signatures and rejects unresolved representations. */
 class SumLayoutMetadataTest {
     private final Path root = Path.of(System.getProperty("thc.projectRoot"));
     private String hash(Path path) throws Exception { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(path))); }
@@ -25,7 +25,7 @@ class SumLayoutMetadataTest {
         var stages = objects(checks.get("coverage"));
         assertEquals(list("pre", "post"), stages.stream().map(stage -> stage.get("stage")).toList());
         assertEquals(130, ((Number) checks.get("nativeRows")).intValue());
-        assertEquals(9, ((Number) checks.get("supportedSumEntries")).intValue());
+        assertEquals(21, ((Number) checks.get("supportedSumEntries")).intValue());
         var manifestProof = object(checks.get("provenance"));
         assertEquals("build/sum-layout/provenance.json", manifestProof.get("path"));
         assertEquals(manifestProof.get("sha256"), hash(root.resolve((String) manifestProof.get("path"))));

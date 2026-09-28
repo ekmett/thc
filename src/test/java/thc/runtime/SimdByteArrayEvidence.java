@@ -23,8 +23,9 @@ final class SimdByteArrayEvidence {
         "int32x4", List.of("Word32ElemRep"), "word32x4", List.of("Int32ElemRep"),
         "floatx4", List.of("Int32ElemRep", "Word32ElemRep", "DoubleElemRep"),
         "doublex2", List.of("Int64ElemRep", "Int32ElemRep", "Word32ElemRep", "FloatElemRep"));
-    private static final List<String> frontiers = List.of("vectorArgument", "readVectorEscape", "readTupleEscape",
+    private static final List<String> hostEntries = List.of("vectorArgument", "readVectorEscape",
         "vectorReadWorker", "vectorWriteWorker", "scalarReadWorker", "scalarWriteWorker");
+    private static final List<String> frontiers = List.of("readTupleEscape");
     private static final List<String> local = List.of("vectorIndex", "vectorRead", "vectorWrite", "scalarIndex", "scalarRead", "scalarWrite");
     private static boolean floating(String family) { return family.equals("floatx4") || family.equals("doublex2"); }
     private static void records(Map<String, Object> manifest, String field, Set<String> required) {
@@ -60,10 +61,11 @@ final class SimdByteArrayEvidence {
             graphs.add(offset + "Index" + (floating(family) ? "Graph" : "Worker"));
             graphs.add(offset + "StoreGraph");
         }
+        assertEquals(hostEntries, manifest.get("hostEntries"));
         assertEquals(frontiers, manifest.get("frontiers"));
         var fresh = new ArrayList<String>();
         var names = new ArrayList<>(entries);
-        names.addAll(graphs); names.addAll(frontiers);
+        names.addAll(graphs); names.addAll(hostEntries); names.addAll(frontiers);
         for (String stage : stages) for (String name : names) fresh.add(stage + "-" + name);
         var mutations = new ArrayList<String>();
         var allStages = new ArrayList<>(stages);

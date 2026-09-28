@@ -1724,9 +1724,9 @@ class EmptyTupleInputTests(unittest.TestCase):
                        dict(self.empty, primReps=['IntRep'])]:
             self.assertFalse(self.audit(self.fixture([formal]))['accepted'], formal)
 
-    def test_empty_input_is_unlifted_and_unavailable_at_host_boundary(self):
+    def test_empty_input_is_unlifted_and_available_at_host_boundary(self):
         module = self.fixture()
-        self.assertFalse(self.audit(module, 'worker')['accepted'])
+        self.assertTrue(self.audit(module, 'worker')['accepted'])
         module['bindings'][0]['expr'][3][0] = True
         self.assertIn('application-levity', {i['code'] for i in self.audit(module)['issues']})
         module = self.fixture()
@@ -1853,8 +1853,7 @@ class EmptyTupleInputTests(unittest.TestCase):
             module['bindings'][0]['expr'] = ['app', ['prim', 'newByteArray#'], [[*lit(1), dict(rep=LONG)], state],
                     [False, False], False, False, dict(rep=tuple_rep(self.state, reference))]
             report = self.audit(module)
-            # Tuple host result remains unsupported in either case; only the
-            # malformed empty-as-State operand violates the primitive contract.
+            # Host tuple transport does not make an empty tuple a State token.
             primitive_errors = [i for i in report['issues'] if i['code'] == 'primitive-representation']
             self.assertEqual(bool(primitive_errors), state is empty)
 
