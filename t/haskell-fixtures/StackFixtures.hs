@@ -84,7 +84,7 @@ prepareOriginalStack root = do
         "t/haskell-fixtures/Main.hs", "thc.cabal", proofResource,
         "bin/export-core.sh", "bin/build-compiler.sh", "bin/toolchain.sh", "src/compiler/THC/Plugin.hs",
         "src/compiler/THC/CBV.hs", "src/compiler/THC/Demands.hs", "src/compiler/THC/Sources.hs", "src/compiler/THC/Wired.hs", "bin/plugin.py",
-        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE"] ++ map ("nih/pinned/ghc-9.14.1/libraries/ghc-internal/" ++)
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE"] ++ map (("nih/pinned/ghc-9.14.1/libraries/ghc-internal/" ++) . Wired.pinnedSourcePath)
         ["GHC/Internal/Stack/CloneStack.hs", "GHC/Internal/Stack/Decode.hs",
          "GHC/Internal/InfoProv/Types.hsc", "GHC/Internal/Heap/InfoTable.hsc"]
   proofHash <- hashFile (root </> proofResource)
@@ -111,7 +111,7 @@ exportOriginalStackSource root directory = do
   ghcPkg <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
   let sourceRoot = root </> "nih/pinned/ghc-9.14.1/libraries/ghc-internal"
   mapM_ (\(path, expected) -> do
-    observed <- hashFile (sourceRoot </> path)
+    observed <- hashFile (sourceRoot </> Wired.pinnedSourcePath path)
     unless (observed == expected) (die ("Changed pinned original source: " ++ path))) Wired.sourceHashes
   let field name = do
         output <- FixtureSupport.run root [] "python3" ["bin/plugin.py", "--field", name] ""

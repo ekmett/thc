@@ -34,7 +34,7 @@ public class OriginalStackConsumerProofTest {
     private Set<String> requiredInputs() {
         var result = new LinkedHashSet<>(List.of("t/fixtures/compiler/OriginalStackAudit.hs", "t/fixtures/compiler/OriginalStackAuditNative.hs", "t/haskell-fixtures/StackFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", proofPath,
             "bin/export-core.sh", "bin/build-compiler.sh", "bin/toolchain.sh", "src/compiler/THC/Plugin.hs", "src/compiler/THC/CBV.hs", "src/compiler/THC/Demands.hs", "src/compiler/THC/Sources.hs", "src/compiler/THC/Wired.hs", "bin/plugin.py", "nih/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE"));
-        for (var source : pinnedSources) result.add("nih/pinned/ghc-9.14.1/libraries/ghc-internal/" + source); return result;
+        for (var source : pinnedSources) result.add("nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/" + source); return result;
     }
     private static void require(boolean condition) { require(condition, "Failed requirement."); }
     private static void require(boolean condition, String message) { if (!condition) throw new IllegalArgumentException(message); }
@@ -111,11 +111,11 @@ public class OriginalStackConsumerProofTest {
     private List<Call> inventory(Map<String, Object> proof) throws Exception {
         require("thc-original-stack-core-excerpts".equals(proof.get("format")) && Long.valueOf(1).equals(proof.get("schema")) && Boolean.FALSE.equals(proof.get("fresh")));
         require("62e3400c5b889d3971cb4047709c408fd270255f".equals(proof.get("exporterRevision")) && "902339d332fb4ce2b3c87dcac1ee6495d41ad886".equals(proof.get("ghcSourceRevision")) && "9.14.1".equals(proof.get("ghc")) && "optimized-Core-after-Tidy-before-CorePrep".equals(proof.get("boundary")));
-        require("BSD-3-Clause".equals(proof.get("license")) && "nih/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE".equals(proof.get("licenseFile")));
+        require("BSD-3-Clause".equals(proof.get("license")) && "compiler/pinned-ghc-internal/LICENSE".equals(proof.get("licenseFile")));
         var originals = (List<Map<String, Object>>) proof.get("originals"); var modules = new LinkedHashSet<>(); for (var record : originals) modules.add(record.get("module")); require(originals.size() == retainedHashes.size() && modules.equals(retainedHashes.keySet()));
         for (int i = 0; i < Math.min(originals.size(), pinnedSources.size()); i++) {
             var record = originals.get(i); var source = pinnedSources.get(i); require("ghc-internal".equals(record.get("unit")) && Objects.equals(record.get("sha256"), retainedHashes.get(record.get("module"))));
-            require((record.get("module") + "/" + record.get("module") + ".json").equals(record.get("exportPath")) && ("libraries/ghc-internal/src/" + source).equals(record.get("sourcePath")) && hash(contained("nih/pinned/ghc-9.14.1/libraries/ghc-internal/" + source, true)).equals(record.get("sourceSha256")));
+            require((record.get("module") + "/" + record.get("module") + ".json").equals(record.get("exportPath")) && ("libraries/ghc-internal/src/" + source).equals(record.get("sourcePath")) && hash(contained("nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/" + source, true)).equals(record.get("sourceSha256")));
         }
         var ownerList = (List<Map<String, Object>>) proof.get("owners"); var owners = new LinkedHashMap<String, Map<String, Object>>(); for (var owner : ownerList) owners.put((String) owner.get("id"), owner); require(owners.size() == ownerList.size());
         for (var entry : owners.entrySet()) {
