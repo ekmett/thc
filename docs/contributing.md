@@ -11,10 +11,9 @@ Trust GHC's type checking: use lowered scalar carrier types where they suffice,
 without redundant integral `RuntimeRep` identity checks. Preserve meaningful
 carrier, aggregate, ABI, ownership and memory-safety distinctions.
 
-Production runtime code uses Java. Migrate remaining Kotlin implementation in
-coherent tested groups, including generated code and production library
-dependencies. Migrate Kotlin fixtures, tests and Gradle build scripts gradually
-as well, until the project no longer requires Kotlin.
+Runtime code, generated nodes, fixtures, tests and tools use Java; Gradle uses
+Groovy and Java build logic. Do not reintroduce a Kotlin compiler or runtime
+dependency. The shared state/void carrier is the unique `thc.runtime.Unit.INSTANCE`.
 Preserve Truffle child annotations, typed execution paths, cold error boundaries
 and first-compiled-call checks during conversion. Source translation alone does
 not establish a performance improvement.
@@ -97,7 +96,7 @@ checks actually performed. The retained merge-bot implementation and its
 `auto-merge` label are not the current integration workflow.
 
 After preparing the affected native/Core fixtures, combine installation and
-both mode tasks in one invocation. Gradle shares Kotlin/KAPT/Java compilation,
+both mode tasks in one invocation. Gradle shares Java source processing and compilation,
 native compilation and ABI probes across these tasks:
 
 ```sh
@@ -145,7 +144,7 @@ not one giant primop executor. The processor offers no option to split it.
 [`gradle/bytecode-metadata.gradle`](../gradle/bytecode-metadata.gradle) runs the
 [Java normalizers](../buildSrc/src/main/java/thc/buildlogic/BytecodeNormalizers.java).
 The metadata pass splits complete case/return groups into bounded private helpers at the end of
-`kaptKotlin`, before Gradle snapshots that task's output. Every argument
+`processMainJava`, before Gradle snapshots that task's output. Every argument
 description is retained verbatim; the interpreter and primop implementations are
 untouched. This normalization removes no metadata and requires no GHC. It is
 idempotent and rejects unrecognized generator shapes or processor versions;
@@ -160,11 +159,14 @@ and malformed-input controls. Add
 argument description in an existing generated source without modifying it.
 The check is also part of Gradle's `check` task.
 
-Build configuration uses Groovy, with Java build logic in `buildSrc`. While
-runtime and test consumers are still migrating, Kotlin and KAPT remain enabled;
-the build-language port does not change annotation-processing order or remove
-their runtime dependencies. All five pinned normalizers run before generated
-bytecode sources compile.
+Build configuration uses Groovy, with Java build logic in `buildSrc`.
+`processMainJava` runs the pinned annotation processor with `-proc:only`,
+then all five pinned normalizers transform its generated sources in order.
+`compileJava` consumes original and normalized sources with `-proc:none`;
+generated language-service resources are packaged separately. Test annotation
+processing remains enabled on its own pinned processor path. The build has no
+Kotlin plugin, compiler, KAPT stage or Kotlin runtime dependency.
+`./gradlew testJavaBuildPipeline` checks the realized task and toolchain contract.
 
 The same pinned normalization adds a read-only `Builder.isParsingSources()`
 accessor. Callers can test the builder's existing mode before resolving lazy

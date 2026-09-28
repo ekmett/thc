@@ -83,8 +83,8 @@ public class FourWayAggregateProtocolTest {
                 @Override public Object execute(VirtualFrame frame) { throw new IllegalStateException("Typed scrutinee expected"); }
                 @Override public Object executeTuple(VirtualFrame frame, int[] destination, int offset) {
                     scrutineeVisits++; long tag = (Long) frame.getArguments()[0];
-                    throw new AstCapture(kotlin.Unit.INSTANCE, SynchronousMasking.current(this)).append((saved, input) -> {
-                        assertSame(kotlin.Unit.INSTANCE, input); FrameAccess.writeLong(saved, destination[offset], tag); FrameAccess.writeLong(saved, destination[offset + 1], Long.MIN_VALUE); return null;
+                    throw new AstCapture(thc.runtime.Unit.INSTANCE, SynchronousMasking.current(this)).append((saved, input) -> {
+                        assertSame(thc.runtime.Unit.INSTANCE, input); FrameAccess.writeLong(saved, destination[offset], tag); FrameAccess.writeLong(saved, destination[offset + 1], Long.MIN_VALUE); return null;
                     });
                 }
             };
@@ -95,7 +95,7 @@ public class FourWayAggregateProtocolTest {
                     @Override public Object execute(VirtualFrame frame) { return executeLong(frame); }
                     @Override public long executeLong(VirtualFrame frame) {
                         branchVisits++;
-                        if (Boolean.TRUE.equals(frame.getArguments()[1])) throw new AstCapture(kotlin.Unit.INSTANCE, SynchronousMasking.current(this)).append((saved, input) -> { assertSame(kotlin.Unit.INSTANCE, input); return answer; });
+                        if (Boolean.TRUE.equals(frame.getArguments()[1])) throw new AstCapture(thc.runtime.Unit.INSTANCE, SynchronousMasking.current(this)).append((saved, input) -> { assertSame(thc.runtime.Unit.INSTANCE, input); return answer; });
                         return answer;
                     }
                 };
@@ -112,16 +112,16 @@ public class FourWayAggregateProtocolTest {
         var proof = originalProof();
         for (long tag : new long[] {3L, 4L}) for (boolean branchCut : new boolean[] {false, true}) {
             var probe = new ResumeProbe(language, proof, new int[] {0, 1, 1, 1}); var cut = (AstContinuation) probe.getCallTarget().call(tag, branchCut);
-            var result = cut.continueWith(kotlin.Unit.INSTANCE); if (branchCut) assertEquals(77L, ((AstContinuation) result).continueWith(kotlin.Unit.INSTANCE)); else assertEquals(77L, result);
-            assertEquals(1, probe.scrutineeVisits); assertEquals(1, probe.branchVisits); assertThrows(RuntimeFault.class, () -> cut.continueWith(kotlin.Unit.INSTANCE)); released(language);
+            var result = cut.continueWith(thc.runtime.Unit.INSTANCE); if (branchCut) assertEquals(77L, ((AstContinuation) result).continueWith(thc.runtime.Unit.INSTANCE)); else assertEquals(77L, result);
+            assertEquals(1, probe.scrutineeVisits); assertEquals(1, probe.branchVisits); assertThrows(RuntimeFault.class, () -> cut.continueWith(thc.runtime.Unit.INSTANCE)); released(language);
         }
         for (long tag : new long[] {0L, 5L, 0x100000001L, Long.MIN_VALUE}) {
             var probe = new ResumeProbe(language, proof, new int[] {0, 1, 1, 1}); var cut = (AstContinuation) probe.getCallTarget().call(tag, false);
-            assertThrows(RuntimeFault.class, () -> cut.continueWith(kotlin.Unit.INSTANCE)); assertEquals(1, probe.scrutineeVisits); assertEquals(0, probe.branchVisits);
+            assertThrows(RuntimeFault.class, () -> cut.continueWith(thc.runtime.Unit.INSTANCE)); assertEquals(1, probe.scrutineeVisits); assertEquals(0, probe.branchVisits);
         }
         for (long tag : new long[] {3L, 4L}) {
             var probe = new ResumeProbe(language, proof, new int[] {0, -1, -1, -1}); var cut = (AstContinuation) probe.getCallTarget().call(tag, false);
-            var failure = assertThrows(RuntimeFault.class, () -> cut.continueWith(kotlin.Unit.INSTANCE));
+            var failure = assertThrows(RuntimeFault.class, () -> cut.continueWith(thc.runtime.Unit.INSTANCE));
             assertTrue(Objects.toString(failure.getMessage(), "").contains("Non-exhaustive"), failure.getMessage()); assertEquals(1, probe.scrutineeVisits); assertEquals(0, probe.branchVisits);
         }
     }); }

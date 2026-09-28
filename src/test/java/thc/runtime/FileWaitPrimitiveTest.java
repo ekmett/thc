@@ -21,7 +21,7 @@ import java.util.concurrent.atomic.*;
 import java.util.function.LongFunction;
 import static org.junit.jupiter.api.Assertions.*;
 import static thc.runtime.OriginalStdioChecks.*;
-import static kotlin.Unit.INSTANCE;
+import static thc.runtime.Unit.INSTANCE;
 
 /** Original payload identity at the primitive boundary; installed-Core proof is separate. */
 @EnabledOnOs(OS.LINUX)

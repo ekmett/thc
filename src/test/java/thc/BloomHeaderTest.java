@@ -29,7 +29,7 @@ class BloomHeaderTest {
     private FunctionRoot nonCollidingTarget(FunctionRoot source, Metrics metrics) {
         // Select identity-derived masks without changing production or assuming an identity hash.
         for (int i = 0; i < 128; i++) {
-            var target = root(new Expr() { @Override public Object execute(VirtualFrame frame) { return kotlin.Unit.INSTANCE; } }, metrics);
+            var target = root(new Expr() { @Override public Object execute(VirtualFrame frame) { return thc.runtime.Unit.INSTANCE; } }, metrics);
             if ((source.mask & target.mask) != target.mask) return target;
         }
         throw new IllegalStateException("Could not construct a non-colliding test target");

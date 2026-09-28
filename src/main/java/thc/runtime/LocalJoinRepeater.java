@@ -77,7 +77,7 @@ final class LocalJoinRepeater extends Node implements RepeatingNode {
                 if (request != null) {
                     request.compiledCapture = enteredCompiled;
                     throw new AstCapture(request, SynchronousMasking.current(this)).append((saved, input) -> {
-                        if (input != kotlin.Unit.INSTANCE) throw fault("Local join loop continuation requires Unit");
+                        if (input != thc.runtime.Unit.INSTANCE) throw fault("Local join loop continuation requires Unit");
                         executeSelected(saved, selected); return null;
                     });
                 }

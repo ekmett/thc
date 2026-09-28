@@ -40,18 +40,18 @@ public final class WindowsDirectoryStreams implements Closeable {
     private WindowsDirectoryStreams(Language.State context) { this.context = context; }
     private CarrierLocal<Long> lastError() { return context.getWindowsCodePages().lastError; }
     private void current() {
-        if (Language.currentState(null) != context) ProgramKt.fault("Windows directory handle belongs to another context");
-        if (disposed) ProgramKt.fault("Windows directory registry is closed");
+        if (Language.currentState(null) != context) throw RuntimeFault.fault("Windows directory handle belongs to another context");
+        if (disposed) throw RuntimeFault.fault("Windows directory registry is closed");
     }
     private ManagedAllocation key(ManagedAddress address) {
-        if (address.cbitsOffset() != 0) ProgramKt.fault("Windows search handle requires its exact opaque base");
+        if (address.cbitsOffset() != 0) throw RuntimeFault.fault("Windows search handle requires its exact opaque base");
         var owner = address.cbitsOwner();
-        if (owner == null) ProgramKt.fault("Windows search handle has no managed identity");
+        if (owner == null) throw RuntimeFault.fault("Windows search handle has no managed identity");
         return owner;
     }
     private MemorySegment handle(ManagedAddress address) {
         var result = handles.get(key(address));
-        if (result == null) ProgramKt.fault("Unknown, closed or cross-context Windows search handle");
+        if (result == null) throw RuntimeFault.fault("Unknown, closed or cross-context Windows search handle");
         return result;
     }
     @FunctionalInterface private interface ForeignAction<T> { T run() throws Throwable; }
@@ -91,7 +91,7 @@ public final class WindowsDirectoryStreams implements Closeable {
                     result.append((char) unit);
                     index += 2;
                 }
-                if (!terminated) ProgramKt.fault("Unterminated UTF-16 Windows directory query");
+                if (!terminated) throw RuntimeFault.fault("Unterminated UTF-16 Windows directory query");
                 String supplied = result.toString();
                 // Extended namespace paths disable Win32 normalization. A slash
                 // here must reach the original API unchanged, including errors.
@@ -106,7 +106,7 @@ public final class WindowsDirectoryStreams implements Closeable {
                 ((value.charAt(0) >= 'A' && value.charAt(0) <= 'Z') || (value.charAt(0) >= 'a' && value.charAt(0) <= 'z'));
             if (value.isEmpty() || value.startsWith("\\\\") || (drive && value.length() >= 3 && value.charAt(2) == '\\')) return value;
             if (drive)
-                ProgramKt.fault("Drive-relative Windows queries require directory's absolute furnishPath");
+                throw RuntimeFault.fault("Drive-relative Windows queries require directory's absolute furnishPath");
             String cwd = context.getEnv().getCurrentWorkingDirectory().getPath();
             if (value.startsWith("\\")) return Path.of(cwd).getRoot().toString() + value.substring(1);
             int end = cwd.length();
@@ -205,10 +205,10 @@ public final class WindowsDirectoryStreams implements Closeable {
             if (!supportedHost()) throw new IllegalStateException("Windows directory ABI requires Windows x86_64");
             Map<?, ?> document;
             try (var stream = WindowsDirectoryStreams.class.getResourceAsStream("/thc/native/windows-directory-abi.json")) {
-                if (stream == null) ProgramKt.fault("Missing native Windows directory ABI");
+                if (stream == null) throw RuntimeFault.fault("Missing native Windows directory ABI");
                 document = (Map<?, ?>) Json.INSTANCE.parse(new String(stream.readAllBytes(), StandardCharsets.UTF_8));
             }
-            if (!(document.get("layout") instanceof Map<?, ?>)) ProgramKt.fault("Malformed Windows directory ABI");
+            if (!(document.get("layout") instanceof Map<?, ?>)) throw RuntimeFault.fault("Malformed Windows directory ABI");
             var layout = (Map<?, ?>) document.get("layout");
             if (!(Long.valueOf(1).equals(document.get("schema")) && "x86_64".equals(document.get("architecture")) &&
                     Long.valueOf(8).equals(layout.get("pointerBytes")) && Long.valueOf(2).equals(layout.get("wcharBytes")) &&

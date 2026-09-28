@@ -41,9 +41,9 @@ checks.each { name, runCheck ->
 }
 tasks.named('check') { dependsOn(checks.keySet()) }
 
-// Mixed-stage compilation still owns generated output in KAPT. The later pure-Java
-// cutover moves this exact operation between proc:only and proc:none compilation.
-tasks.matching { it.name == 'kaptKotlin' }.configureEach {
+// Normalize proc:only output before the separate proc:none compilation. Keep
+// all five passes in their pinned order; none may be deferred until javac.
+tasks.matching { it.name == 'processMainJava' }.configureEach {
     inputs.files('gradle/bytecode-metadata.gradle', fileTree('buildSrc/src/main/java/thc/buildlogic'))
     doLast {
         def dependencies = configurations.getByName('protocolProcessorSources').dependencies.findAll {
@@ -52,7 +52,7 @@ tasks.matching { it.name == 'kaptKotlin' }.configureEach {
         if (dependencies.size() != 1 || dependencies[0].version == null) {
             throw new IllegalStateException('Expected exactly one pinned Truffle processor version')
         }
-        def source = layout.buildDirectory.file('generated/source/kapt/main/thc/runtime/BytecodeRootGen.java').get().asFile
+        def source = options.generatedSourceOutputDirectory.file('thc/runtime/BytecodeRootGen.java').get().asFile
         def before = source.getText('UTF-8')
         def after = BytecodeNormalizers.all(before, dependencies[0].version)
         if (before != after) source.setText(after, 'UTF-8')

@@ -6,7 +6,7 @@ import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.bytecode.ContinuationResult;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import kotlin.Unit;
+import thc.runtime.Unit;
 import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.Test;
 import thc.Language;

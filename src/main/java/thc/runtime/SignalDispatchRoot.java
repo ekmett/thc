@@ -44,10 +44,10 @@ public final class SignalDispatchRoot extends RootNode {
             throw new NullPointerException("null cannot be cast to non-null type kotlin.Long");
         }
         var boxedSignal = signal.createInt(((Long) number).intValue());
-        dispatch.execute(frame, closure, new Object[]{boxedPointer, boxedSignal, kotlin.Unit.INSTANCE});
+        dispatch.execute(frame, closure, new Object[]{boxedPointer, boxedSignal, thc.runtime.Unit.INSTANCE});
         if (!(unitForce.execute(frame, frame.getObject(FrameLayout.TAIL_RESULT)) instanceof DataValue unit))
             throw RuntimeFault.fault("Signal dispatcher did not return boxed unit");
-        validateUnit(unit); return kotlin.Unit.INSTANCE;
+        validateUnit(unit); return thc.runtime.Unit.INSTANCE;
     }
     @TruffleBoundary private void validateUnit(DataValue unit) {
         if (!"ghc-internal:GHC.Internal.Tuple.()".equals(unit.getLayout().getId()) || unit.getLayout().getArity() != 0)

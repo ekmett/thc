@@ -16,14 +16,14 @@ public final class AstForeignCompleted implements AstResumeStep {
         private final long errno;
         RestoreErrno(long errno) { this.errno = errno; }
         @Override public Object resume(VirtualFrame frame, Object input) {
-            if (input != kotlin.Unit.INSTANCE) throw RuntimeFault.fault("Invalid completed foreign-call continuation");
+            if (input != thc.runtime.Unit.INSTANCE) throw RuntimeFault.fault("Invalid completed foreign-call continuation");
             Language.currentState(null).getStdio().captureForeignErrno(errno);
             return null;
         }
     }
 
     @Override public Object resume(VirtualFrame frame, Object input) {
-        if (input != kotlin.Unit.INSTANCE) throw RuntimeFault.fault("Invalid completed foreign-call continuation");
+        if (input != thc.runtime.Unit.INSTANCE) throw RuntimeFault.fault("Invalid completed foreign-call continuation");
         return null;
     }
 

@@ -21,7 +21,7 @@ public final class AstOperands extends Expr {
             try { operands[index].write(frame); }
             catch (AstCapture cut) {
                 int next = index + 1;
-                throw cut.append((saved, input) -> { prepare(saved, next); return kotlin.Unit.INSTANCE; });
+                throw cut.append((saved, input) -> { prepare(saved, next); return thc.runtime.Unit.INSTANCE; });
             }
         }
     }

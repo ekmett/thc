@@ -38,7 +38,7 @@ final class OriginalStdioExpression extends Expr {
     private static final class ResumeCompleted implements AstResumeStep {
         private static final ResumeCompleted INSTANCE = new ResumeCompleted();
         @Override public Object resume(VirtualFrame frame, Object input) {
-            if (input != kotlin.Unit.INSTANCE) throw fault("Original pathname call continuation expected a completed async poll");
+            if (input != thc.runtime.Unit.INSTANCE) throw fault("Original pathname call continuation expected a completed async poll");
             return null;
         }
     }

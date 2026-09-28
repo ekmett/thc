@@ -5,25 +5,17 @@ import static thc.buildlogic.BuildChecks.*
 import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
 import java.security.MessageDigest
-import java.net.URI
 import org.gradle.process.JavaForkOptions
 import org.gradle.process.CommandLineArgumentProvider
 
 plugins {
     id "application"
-    id "org.jetbrains.kotlin.jvm" version "2.4.20"
-    id "org.jetbrains.kotlin.kapt" version "2.4.20"
-    id("org.jetbrains.dokka") version "2.2.0"
 }
 repositories { mavenCentral() }
 
 def windowsHost = System.getProperty("os.name").startsWith("Windows")
-// Existing Python generators remain until their Haskell/Kotlin migrations land.
+// Existing Python generators remain until their Haskell/Java migrations land.
 def python = providers.environmentVariable("THC_PYTHON").orElse(windowsHost ? "python" : "python3")
-
-kapt {
-    javacOptions { option("--add-modules", "jdk.incubator.vector") }
-}
 
 // The pinned GHC signature table belongs to fixture/audit tooling, not runtime loading.
 tasks.processResources { exclude("thc/scalar-primop-signatures.json") }
@@ -36,47 +28,14 @@ tasks.processResources {
     }
 }
 
-// Documentation reads handwritten sources; it does not compile the runtime,
-// generate Truffle DSL classes, or prepare native/Core fixtures.
+// Documentation uses handwritten declarations plus generated source resolution;
+// it does not build native libraries or prepare Core/test fixtures.
 def docsRevision = providers.gradleProperty("thc.docsRevision").orElse(
     providers.exec { commandLine("git", "rev-parse", "HEAD") }.standardOutput.asText.map { it.trim() })
-dokka {
-    moduleName.set("THC")
-    moduleVersion.set(docsRevision.map { it.take(12) })
-    dokkaPublications.html {
-        outputDirectory.set(layout.buildDirectory.dir("docs/jvm"))
-        includes.from("docs/site/jvm.md")
-        failOnWarning.set(false)
-        suppressInheritedMembers.set(true)
-    }
-    dokkaSourceSets.named("main") {
-        includes.from("docs/site/jvm.md")
-        sourceRoots.setFrom("src/main/kotlin", "src/main/java")
-        classpath.setFrom(configurations.compileClasspath)
-        jdkVersion.set(25)
-        reportUndocumented.set(false)
-        suppressGeneratedFiles.set(true)
-        sourceLink {
-            localDirectory.set(file("src/main"))
-            remoteUrl.set(docsRevision.map { URI.create("https://github.com/ekmett/thc/blob/$it/src/main") })
-            remoteLineSuffix.set("#L")
-        }
-    }
-    dokkaSourceSets.configureEach {
-        if (name in ["diagnostics", "examples"].toSet()) suppress.set(true)
-    }
-}
 // The checked family table generates typed nodes with fixed Vector API species.
 // BytecodeRoot's DSL requires nested declarations; its marked regions are checked,
 // never rewritten by a build. Refresh them explicitly with the generator --write.
-def bytecodeCompilerSource = providers.provider {
-    def javaSource = file("src/main/java/thc/runtime/BytecodeProgram.java")
-    def kotlinSource = file("src/main/kotlin/thc/runtime/BytecodeProgram.kt")
-    checkBuild(javaSource.isFile() != kotlinSource.isFile()) {
-        "Expected exactly one Java or transitional Kotlin BytecodeProgram source"
-    }
-    javaSource.isFile() ? javaSource : kotlinSource
-}
+def bytecodeCompilerSource = file("src/main/java/thc/runtime/BytecodeProgram.java")
 def generateSimdFamilies = tasks.register("generateSimdFamilies", Exec) {
     inputs.files("scripts/generate-simd-families.py", "scripts/simd-families.json",
         "src/main/java/thc/runtime/BytecodeRoot.java", bytecodeCompilerSource)
@@ -84,9 +43,6 @@ def generateSimdFamilies = tasks.register("generateSimdFamilies", Exec) {
     commandLine(python.get(), "scripts/generate-simd-families.py", "--check")
 }
 sourceSets.main { java.srcDir(layout.buildDirectory.dir("generated/simd/java")) }
-tasks.matching { it.name in ["compileKotlin", "compileJava", "kaptGenerateStubsKotlin"].toSet() }.configureEach {
-    dependsOn(generateSimdFamilies)
-}
 def graalVersion = "25.3.4.1"
 apply(from: "gradle/protocol-processor.gradle")
 apply(from: "gradle/materializable-api.gradle")
@@ -95,14 +51,13 @@ def protocolProcessor = tasks.named("protocolProcessorJar", Jar)
 // Additional languages are opt-in; the ordinary runtime stays language-neutral.
 def polyglotDemoRuntime = configurations.create("polyglotDemoRuntime")
 dependencies {
-    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.4.20")
     implementation("org.graalvm.polyglot:polyglot:$graalVersion")
     implementation("org.graalvm.truffle:truffle-api:$graalVersion")
     // Affinity reset deliberately targets the pinned compiler-listener API.
     compileOnly("org.graalvm.truffle:truffle-runtime:$graalVersion")
     runtimeOnly("org.graalvm.truffle:truffle-runtime:$graalVersion")
     runtimeOnly("org.graalvm.polyglot:llvm-community:$graalVersion")
-    kapt(files(protocolProcessor.flatMap { it.archiveFile }))
+    annotationProcessor(files(protocolProcessor.flatMap { it.archiveFile }))
     testAnnotationProcessor(files(protocolProcessor.flatMap { it.archiveFile }))
     testImplementation("org.junit.jupiter:junit-jupiter:5.13.4")
     testImplementation("org.graalvm.truffle:truffle-runtime:$graalVersion")
@@ -111,12 +66,51 @@ dependencies {
 }
 if (windowsHost) apply(from: "gradle/windows-sulong.gradle")
 apply(from: "gradle/bytecode-metadata.gradle")
-kotlin {
-    jvmToolchain(25)
-    // Kotlin's generated null-check failures inline stack-trace sanitization into
-    // Truffle partial evaluation. Guest/host validation remains explicit.
-    compilerOptions {
-        freeCompilerArgs.addAll("-Xno-param-assertions", "-Xno-call-assertions", "-Xno-receiver-assertions")
+apply(from: "gradle/java-build-tests.gradle")
+java { toolchain { languageVersion = JavaLanguageVersion.of(25) } }
+
+// Process original sources once. The five pinned generated-source transforms
+// run in this task's doLast before final javac sees their output.
+def processedMainSources = layout.buildDirectory.dir("generated/main/java")
+def processedMainResources = layout.buildDirectory.dir("generated/main/processor-resources")
+def processMainJava = tasks.register("processMainJava", JavaCompile) {
+    dependsOn(generateSimdFamilies)
+    source(fileTree("src/main/java") { include("**/*.java") })
+    source(fileTree(layout.buildDirectory.dir("generated/simd/java")) { include("**/*.java") })
+    classpath = sourceSets.main.compileClasspath
+    options.annotationProcessorPath = configurations.annotationProcessor
+    options.compilerArgs.add("-proc:only")
+    options.generatedSourceOutputDirectory.set(processedMainSources)
+    destinationDirectory.set(processedMainResources)
+}
+tasks.named("compileJava", JavaCompile) {
+    dependsOn(processMainJava)
+    source(processedMainSources)
+    options.annotationProcessorPath = files()
+    options.compilerArgs.add("-proc:none")
+}
+tasks.named("processResources") {
+    dependsOn(processMainJava)
+    from(processedMainResources) { exclude("**/*.class") }
+}
+tasks.named("javadoc", Javadoc) {
+    dependsOn(processMainJava)
+    source = fileTree("src/main/java") { include("**/*.java") }
+    classpath = sourceSets.main.compileClasspath
+    destinationDir = layout.buildDirectory.dir("docs/jvm").get().asFile
+    options.encoding = "UTF-8"
+    options.charSet = "UTF-8"
+    options.docEncoding = "UTF-8"
+    options.addStringOption("-add-modules", "jdk.incubator.vector")
+    options.addStringOption("sourcepath", [file("src/main/java"), processedMainSources.get().asFile,
+        layout.buildDirectory.dir("generated/simd/java").get().asFile].collect { it.path }.join(File.pathSeparator))
+    options.addBooleanOption("notimestamp", true)
+    options.linkSource = true
+    inputs.property("docsRevision", docsRevision)
+    doFirst {
+        options.windowTitle = "THC JVM reference " + docsRevision.get().take(12)
+        options.docTitle = "THC JVM reference"
+        options.header = '<a href="https://github.com/ekmett/thc/tree/' + docsRevision.get() + '">Source ' + docsRevision.get().take(12) + '</a>'
     }
 }
 // Tests and benchmark controls can opt out explicitly; ordinary launches use compact headers.
@@ -480,8 +474,9 @@ tasks.register("testHandoffModes") {
 def fullCoreTests = sourceSets.create("fullCoreTest")
 configurations[fullCoreTests.implementationConfigurationName].extendsFrom(configurations.testImplementation)
 configurations[fullCoreTests.runtimeOnlyConfigurationName].extendsFrom(configurations.testRuntimeOnly)
-fullCoreTests.compileClasspath += sourceSets.test.output
-fullCoreTests.runtimeClasspath += sourceSets.test.output
+configurations[fullCoreTests.annotationProcessorConfigurationName].extendsFrom(configurations.testAnnotationProcessor)
+fullCoreTests.compileClasspath += sourceSets.main.output + sourceSets.test.output
+fullCoreTests.runtimeClasspath += sourceSets.main.output + sourceSets.test.output
 
 // Explicitly prepared converter/native controls, separate from ordinary models.
 def compactInteropTests = [["compactCoreInteropTest", false],[ "compactCoreInteropDenseTest", true]].collect { taskName, dense ->
@@ -643,7 +638,6 @@ compactInteropTests[1].configure { mustRunAfter(compactInteropTests[0]) }
         doFirst { checkBuild(file("build/narrow-integer-transport/manifest.json").isFile()) { "Run thc-fixtures narrow-integer-transport" } }
     }
 }
-kotlin.target.compilations.getByName("fullCoreTest").associateWith(kotlin.target.compilations.getByName("main"))
 [["genericSumTransportFullCoreTest", false],[ "genericSumTransportFullCoreDenseTest", true]].each { taskName, dense ->
     tasks.register(taskName, Test) {
         group = "verification"
@@ -675,7 +669,6 @@ kotlin.target.compilations.getByName("fullCoreTest").associateWith(kotlin.target
         doFirst { checkBuild(file("build/tuple-join-input/manifest.json").isFile()) { "Run thc-fixtures tuple-join" } }
     }
 }
-kotlin.target.compilations.getByName("fullCoreTest").associateWith(kotlin.target.compilations.getByName("test"))
 [["sumInputFullCoreTest", false],[ "sumInputFullCoreDenseTest", true]].each { taskName, dense ->
     tasks.register(taskName, Test) {
         group = "verification"
@@ -1045,9 +1038,9 @@ tasks.register("simdFamiliesExperimentTest", Test) {
 def polyglotTests = sourceSets.create("polyglotTest")
 configurations[polyglotTests.implementationConfigurationName].extendsFrom(configurations.testImplementation)
 configurations[polyglotTests.runtimeOnlyConfigurationName].extendsFrom(configurations.testRuntimeOnly)
-polyglotTests.compileClasspath += sourceSets.test.output
-polyglotTests.runtimeClasspath += sourceSets.test.output
-kotlin.target.compilations.getByName("polyglotTest").associateWith(kotlin.target.compilations.getByName("main"))
+configurations[polyglotTests.annotationProcessorConfigurationName].extendsFrom(configurations.testAnnotationProcessor)
+polyglotTests.compileClasspath += sourceSets.main.output + sourceSets.test.output
+polyglotTests.runtimeClasspath += sourceSets.main.output + sourceSets.test.output
 tasks.register("polyglotTest", Test) {
     group = "verification"
     description = "Tests THC's optional interop boundary against GraalJS."
@@ -1111,7 +1104,6 @@ configurations[diagnostics.implementationConfigurationName].extendsFrom(configur
 configurations[diagnostics.runtimeOnlyConfigurationName].extendsFrom(configurations.runtimeOnly)
 diagnostics.compileClasspath += sourceSets.main.output
 diagnostics.runtimeClasspath += sourceSets.main.output
-kotlin.target.compilations.getByName("diagnostics").associateWith(kotlin.target.compilations.getByName("main"))
 tasks.register("toolsJar", Jar) {
     group = "build"
     description = "Packages development checks and benchmark entrypoints separately from the runtime."
@@ -1125,7 +1117,6 @@ configurations[examples.implementationConfigurationName].extendsFrom(configurati
 configurations[examples.runtimeOnlyConfigurationName].extendsFrom(configurations.runtimeOnly)
 examples.compileClasspath += sourceSets.main.output
 examples.runtimeClasspath += sourceSets.main.output
-kotlin.target.compilations.getByName("examples").associateWith(kotlin.target.compilations.getByName("main"))
 
 tasks.register("probe", JavaExec) {
     group = "verification"
@@ -1417,7 +1408,7 @@ def generateStdioAbi = tasks.register("generateStdioAbi") {
         run(command + ["-std=c11", source.path, "-o", executable.path])
         def probe = new JsonSlurper().parseText(run([executable.path])) as Map
         requireBuild(probe.keySet() == (windowsHost ? ["widths", "errno", "seek"].toSet() : ["widths", "errno", "seek", "open", "at", "siginfoBytes"].toSet())) { "Malformed native stdio ABI probe" }
-        // The C probe asserts widths; runtime Kotlin validates all exact fields and errno values.
+        // The C probe asserts widths; runtime Java validates all exact fields and errno values.
         def manifest = ["schema": (windowsHost ? 2 : 1), "system": system,
             "architecture": arch, "target": target, "compilerDefaultTarget": defaultTarget,
             "compilerVersion": run([compiler, "--version"]),

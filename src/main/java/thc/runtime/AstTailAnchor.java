@@ -5,7 +5,7 @@ package thc.runtime;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import java.util.concurrent.atomic.AtomicBoolean;
-import kotlin.Unit;
+import thc.runtime.Unit;
 
 /** One retained function catcher around an already consumed prefix's saved suffix.
  * It does not create a new function invocation or restart the body to find its PC. */

@@ -72,11 +72,11 @@ class NativeFdWaitTest {
                     // have been claimed just because native poll was woken.
                     assertNull(state.getThreads().poll(this, true)); state.getMaskingState().set(MaskingState.UNMASKED);
                     var request = state.getThreads().poll(this, false);
-                    if (request != null) { request.acknowledge(); return request.getPayload() != null ? request.getPayload() : kotlin.Unit.INSTANCE; }
-                    return kotlin.Unit.INSTANCE;
+                    if (request != null) { request.acknowledge(); return request.getPayload() != null ? request.getPayload() : thc.runtime.Unit.INSTANCE; }
+                    return thc.runtime.Unit.INSTANCE;
                 } catch (AsyncBlocked blocked) {
                     assertNotEquals(MaskingState.MASKED_UNINTERRUPTIBLE, mask); blocked.getRequest().acknowledge();
-                    return blocked.getRequest().getPayload() != null ? blocked.getRequest().getPayload() : kotlin.Unit.INSTANCE;
+                    return blocked.getRequest().getPayload() != null ? blocked.getRequest().getPayload() : thc.runtime.Unit.INSTANCE;
                 }
             } finally { state.getThreads().leaveCurrent(GuestThreadStatus.FINISHED); }
         }

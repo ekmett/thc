@@ -258,7 +258,7 @@ public final class DataLayout {
         else {
             Object raw;
             switch (exactFieldReps[index]) {
-                case "VoidRep" -> raw = kotlin.Unit.INSTANCE;
+                case "VoidRep" -> raw = thc.runtime.Unit.INSTANCE;
                 case "AddrRep" -> raw = NativeAddresses.current(null).recover(input.readLong());
                 case "FloatRep" -> raw = Float.intBitsToFloat(input.readInt());
                 case "DoubleRep" -> raw = Double.longBitsToDouble(input.readLong());
@@ -354,7 +354,7 @@ public final class DataLayout {
                 case FLOAT -> { if (!(field instanceof Float number)) throw fault("Expected primitive Float constructor field"); property.setFloat(value, number); }
                 case DOUBLE -> { if (!(field instanceof Double number)) throw fault("Expected primitive Double constructor field"); property.setDouble(value, number); }
                 case OBJECT -> { if (address && !(field instanceof ManagedAddress)) throw fault("Expected a managed literal Addr# constructor field"); property.setObject(value, field); }
-                case VOID -> { if (field != kotlin.Unit.INSTANCE) throw fault("Expected zero-width constructor field"); }
+                case VOID -> { if (field != thc.runtime.Unit.INSTANCE) throw fault("Expected zero-width constructor field"); }
                 case VECTOR -> throw fault("Vector constructor field requires vector-aware initialization");
             }
         }
@@ -368,7 +368,7 @@ public final class DataLayout {
                 case LONG -> property.getLong(value); case FLOAT -> property.getFloat(value); case DOUBLE -> property.getDouble(value);
                 case OBJECT -> property.getObject(value);
                 case VECTOR -> throw fault("Vector constructor field requires a typed destination");
-                default -> kotlin.Unit.INSTANCE;
+                default -> thc.runtime.Unit.INSTANCE;
             };
         }
         boolean isInt() { return kind == INT; }
@@ -388,7 +388,7 @@ public final class DataLayout {
                 case FLOAT -> FrameAccess.writeFloat(frame, slot, property.getFloat(value));
                 case DOUBLE -> FrameAccess.writeDouble(frame, slot, property.getDouble(value));
                 case OBJECT -> FrameAccess.write(frame, slot, property.getObject(value));
-                case VOID -> FrameAccess.write(frame, slot, kotlin.Unit.INSTANCE);
+                case VOID -> FrameAccess.write(frame, slot, thc.runtime.Unit.INSTANCE);
                 case VECTOR -> throw fault("Vector constructor field requires a typed destination");
             }
         }

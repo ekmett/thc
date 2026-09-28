@@ -15,6 +15,6 @@ public final class LabelThread extends Expr {
         Object label = bytes.execute(frame);
         TupleResultsKt.requireVoidCarrier(state.execute(frame));
         GuestThreadOps.labelThread(this, target, label);
-        return kotlin.Unit.INSTANCE;
+        return thc.runtime.Unit.INSTANCE;
     }
 }

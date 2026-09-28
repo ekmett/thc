@@ -64,9 +64,9 @@ public final class CatchException extends Expr {
             Object closure;
             try { closure = AstControl.force(frame, this, force, actionValue); }
             catch (AstCapture cut) {
-                throw cut.append((saved, input) -> { actionCall.execute(saved, requireClosure(input), new Object[] {kotlin.Unit.INSTANCE}); return null; });
+                throw cut.append((saved, input) -> { actionCall.execute(saved, requireClosure(input), new Object[] {thc.runtime.Unit.INSTANCE}); return null; });
             }
-            actionCall.execute(frame, requireClosure(closure), new Object[] {kotlin.Unit.INSTANCE});
+            actionCall.execute(frame, requireClosure(closure), new Object[] {thc.runtime.Unit.INSTANCE});
             return null;
         } catch (GuestException guest) { return runHandler(frame, handlerValue, guest.getPayload()); }
         catch (AsyncDelivery delivered) {
@@ -103,9 +103,9 @@ public final class CatchException extends Expr {
             Object closure;
             try { closure = AstControl.force(frame, this, force, handlerValue); }
             catch (AstCapture cut) {
-                throw cut.append((saved, input) -> { handlerCall.execute(saved, requireClosure(input), new Object[] {payload, kotlin.Unit.INSTANCE}); return null; });
+                throw cut.append((saved, input) -> { handlerCall.execute(saved, requireClosure(input), new Object[] {payload, thc.runtime.Unit.INSTANCE}); return null; });
             }
-            handlerCall.execute(frame, requireClosure(closure), new Object[] {payload, kotlin.Unit.INSTANCE});
+            handlerCall.execute(frame, requireClosure(closure), new Object[] {payload, thc.runtime.Unit.INSTANCE});
             return null;
         } catch (AstCapture cut) { throw cut.enclose(steps -> new AstMaskScope(this, prior, steps)); }
         finally { SynchronousMasking.set(this, prior); }

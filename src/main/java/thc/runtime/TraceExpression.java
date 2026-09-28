@@ -18,7 +18,7 @@ public final class TraceExpression extends Expr {
         long count = length == null ? 0L : length.executeLong(frame);
         TupleResultsKt.requireVoidCarrier(state.execute(frame));
         RtsDiagnostics.trace(this, operation, location, count);
-        return kotlin.Unit.INSTANCE;
+        return thc.runtime.Unit.INSTANCE;
         } catch (com.oracle.truffle.api.nodes.UnexpectedResultException failure) { throw propagate(failure); }
     }
     @SuppressWarnings("unchecked")

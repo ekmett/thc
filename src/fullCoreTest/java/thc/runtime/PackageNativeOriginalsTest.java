@@ -38,17 +38,17 @@ public class PackageNativeOriginalsTest {
         }
         @Override public Object execute(VirtualFrame frame) {
             if (result != null) {
-                int value = access.executeInt(frame.getArguments(), kotlin.Unit.INSTANCE);
+                int value = access.executeInt(frame.getArguments(), thc.runtime.Unit.INSTANCE);
                 return result == NarrowInteger.WORD32 ? Integer.toUnsignedLong(value) : (long) value;
             }
-            return access.executeLong(frame.getArguments(), kotlin.Unit.INSTANCE);
+            return access.executeLong(frame.getArguments(), thc.runtime.Unit.INSTANCE);
         }
     }
     private static final class Setter extends RootNode {
         @Child private PackageScalarAccess access;
         Setter(Language language, PackageScalarCall call) { super(language); access = new PackageScalarAccess(call); }
         @Override public Object execute(VirtualFrame frame) {
-            access.executeVoid(frame.getArguments(), kotlin.Unit.INSTANCE); return kotlin.Unit.INSTANCE;
+            access.executeVoid(frame.getArguments(), thc.runtime.Unit.INSTANCE); return thc.runtime.Unit.INSTANCE;
         }
     }
     private Map<String, Object> json(File file) throws Exception {

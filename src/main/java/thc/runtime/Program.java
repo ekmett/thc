@@ -1011,7 +1011,7 @@ public final class Program implements ExecutableProgram {
                         TupleShape shape = new TupleShape(local.proof, (thc.Language) language);
                         yield local.proof.isVector() ? new VectorLocalRead(shape, local.tupleSlots) : new TupleLocalRead(shape, local.tupleSlots);
                     }
-                    if (local.slot < 0 && local.proof.getKind() == CoreKind.VOID) yield new Literal(kotlin.Unit.INSTANCE).proven(local.proof);
+                    if (local.slot < 0 && local.proof.getKind() == CoreKind.VOID) yield new Literal(thc.runtime.Unit.INSTANCE).proven(local.proof);
                     yield new LocalRead(local.slot, local.cell).proven(local.proof);
                 }
                 GlobalBinding global = globals.get(id);
@@ -1027,7 +1027,7 @@ public final class Program implements ExecutableProgram {
                 if (tag.equals("rubbish")) yield value.proven(RubbishLiterals.proof(expr));
                 yield value;
             }
-            case "void" -> new Literal(kotlin.Unit.INSTANCE);
+            case "void" -> new Literal(thc.runtime.Unit.INSTANCE);
             case "lam" -> {
                 List<Map<String, Object>> args = (List<Map<String, Object>>) expr.get(1);
                 StringJoiner names = new StringJoiner(", ");
@@ -1810,7 +1810,7 @@ public final class Program implements ExecutableProgram {
                 argument(args.get(0), scope, true), argument(args.get(1), scope, true), argument(args.get(2), scope, false), metrics, enableAsync);
             return new AnnotatedTuple(argument(args.get(0), scope, true), argument(args.get(2), scope, false),
                 new TupleApplication((thc.Language) language, new TupleShape(tupleProof, (thc.Language) language),
-                    argument(args.get(1), scope, true), new Expr[]{new Literal(kotlin.Unit.INSTANCE).proven(CoreRepresentations.expression(args.get(2)))},
+                    argument(args.get(1), scope, true), new Expr[]{new Literal(thc.runtime.Unit.INSTANCE).proven(CoreRepresentations.expression(args.get(2)))},
                     false, metrics, null));
         }
         if (primitive && "clearCCS#".equals(fn.get(1))) {
@@ -1953,7 +1953,7 @@ public final class Program implements ExecutableProgram {
             Expr kept = argument(args.get(0), scope, (Boolean) flags.get(0));
             Expr state = compile(args.get(1), scope, false);
             Expr function = compile(args.get(2), scope, false);
-            Expr[] stateArgument = {new Literal(kotlin.Unit.INSTANCE)};
+            Expr[] stateArgument = {new Literal(thc.runtime.Unit.INSTANCE)};
             Expr action = tupleProof.isAggregate() ? new TupleApplication((thc.Language) language,
                 new TupleShape(tupleProof, (thc.Language) language), function, stateArgument, false, metrics, null) :
                 new Application(function, stateArgument, false, metrics);

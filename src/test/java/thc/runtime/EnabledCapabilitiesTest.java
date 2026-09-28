@@ -4,7 +4,7 @@ package thc.runtime;
 
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.TruffleLanguage;
-import kotlin.Unit;
+import thc.runtime.Unit;
 import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.Test;
 import thc.ContextProfile;

@@ -39,7 +39,7 @@ class OriginalUnlinkTest {
                         boolean compiled;
                         long remove(ManagedAddress name) throws Exception {
                             long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
-                            int result = (Integer) Calls.target(target, new Object[]{0L, name, kotlin.Unit.INSTANCE});
+                            int result = (Integer) Calls.target(target, new Object[]{0L, name, thc.runtime.Unit.INSTANCE});
                             assertEquals(before + (compiled ? 1 : 0), ((Number) program.diagnostics().get("compiledEntries")).longValue());
                             if (compiled) assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
                             var handoff = language.getHandoffState().get();

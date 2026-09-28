@@ -12,6 +12,6 @@ public final class InspectionState extends Expr {
     }
     @Override public Object execute(VirtualFrame frame) {
         TupleResultsKt.requireVoidCarrier(state.execute(frame));
-        return kotlin.Unit.INSTANCE;
+        return thc.runtime.Unit.INSTANCE;
     }
 }

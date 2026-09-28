@@ -9,7 +9,7 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import kotlin.Unit;
+import thc.runtime.Unit;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 

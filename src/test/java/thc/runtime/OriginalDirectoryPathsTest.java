@@ -122,8 +122,8 @@ class OriginalDirectoryPathsTest {
                     byte[] image = new byte[32]; Arrays.fill(image,(byte) 90); var output = ManagedAddress.fromByteArray(image).plus(8); stdio.setErrno(9);
                     assertThrows(RuntimeFault.class,() -> Calls.target(remove,new Object[]{0L,address("empty"),7L})); assertThrows(RuntimeFault.class,() -> Calls.target(read,new Object[]{0L,address("link"),output,16L,7L}));
                     assertTrue(Files.isDirectory(base.resolve("empty"))); for (byte value : image) assertEquals((byte) 90,value); assertEquals(9L,stdio.errno());
-                    Files.move(base,moved); Files.createDirectory(base); Files.createDirectory(base.resolve("empty")); assertEquals(0,Calls.target(remove,new Object[]{0L,address("empty"),kotlin.Unit.INSTANCE}));
-                    assertFalse(Files.exists(moved.resolve("empty"))); assertTrue(Files.isDirectory(base.resolve("empty"))); assertEquals(5,Calls.target(read,new Object[]{0L,address("link"),output,16L,kotlin.Unit.INSTANCE}));
+                    Files.move(base,moved); Files.createDirectory(base); Files.createDirectory(base.resolve("empty")); assertEquals(0,Calls.target(remove,new Object[]{0L,address("empty"),thc.runtime.Unit.INSTANCE}));
+                    assertFalse(Files.exists(moved.resolve("empty"))); assertTrue(Files.isDirectory(base.resolve("empty"))); assertEquals(5,Calls.target(read,new Object[]{0L,address("link"),output,16L,thc.runtime.Unit.INSTANCE}));
                     assertArrayEquals("empty".getBytes(StandardCharsets.UTF_8),Arrays.copyOfRange(image,8,13)); assertEquals((byte) 90,image[13]);
                 } finally { restorePermissions(Files.exists(moved) ? moved : base); }
             } finally { context.leave(); }

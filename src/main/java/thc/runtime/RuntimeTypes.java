@@ -6,7 +6,7 @@ package thc.runtime;
 import com.oracle.truffle.api.dsl.TypeCast;
 import com.oracle.truffle.api.dsl.TypeCheck;
 import com.oracle.truffle.api.dsl.TypeSystem;
-import kotlin.Unit;
+import thc.runtime.Unit;
 
 /**
  * Runtime categories used by typed AST execution. Guest Int#/Word#/Char# retain

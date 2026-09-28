@@ -4,7 +4,7 @@ package thc.runtime;
 
 import static thc.runtime.RuntimeFault.fault;
 
-/** A context-owned C label; &free delegates to checked native ownership. */
+/** A context-owned C label; {@code &free} delegates to checked native ownership. */
 public final class CFinalizerFunction {
     private final SulongCbits owner;
     private final String symbol;

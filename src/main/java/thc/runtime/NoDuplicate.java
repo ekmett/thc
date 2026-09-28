@@ -9,5 +9,5 @@ import static thc.runtime.TupleResultsKt.requireVoidCarrier;
 public final class NoDuplicate extends Expr {
     @Child private Expr state;
     public NoDuplicate(Expr state, CoreRepresentation proof) { this.state = state; setRepresentation(proof.copy(proof.getKind(), true, proof.getPresent(), proof.getPrimReps(), proof.getComponents(), proof.getVector(), proof.getAlternatives(), proof.getTagSlot(), proof.getAlternativeSlots())); }
-    @Override public Object execute(VirtualFrame frame) { requireVoidCarrier(state.execute(frame)); return kotlin.Unit.INSTANCE; }
+    @Override public Object execute(VirtualFrame frame) { requireVoidCarrier(state.execute(frame)); return thc.runtime.Unit.INSTANCE; }
 }

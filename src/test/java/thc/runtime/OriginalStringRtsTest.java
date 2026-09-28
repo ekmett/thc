@@ -44,7 +44,7 @@ class OriginalStringRtsTest {
         .option("engine.SingleTierCompilationThreshold", "10000000").build(); }
     private static void valid(RootCallTarget target) throws Exception { assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target)); }
     private ExecutableProgram program(Language language, String backend, Map<String,Object> source) { return backend.equals("ast") ? new Program(language, source) : new BytecodeProgram(language, source); }
-    private static long length(RootCallTarget target, ManagedAddress address) { return (Long) Calls.target(target, new Object[]{0L, address, kotlin.Unit.INSTANCE}); }
+    private static long length(RootCallTarget target, ManagedAddress address) { return (Long) Calls.target(target, new Object[]{0L, address, thc.runtime.Unit.INSTANCE}); }
     @Test void originalByteStringSizeTDeclarationUsesTheSameCheckedCStringStorage() throws Exception {
         // Original unix System.Posix.PosixPath.FilePath module SHA-256
         // e341553bb7289341df45e43917d9dc17a3f7e67074c9afbd315326480175a26b.
@@ -114,10 +114,10 @@ class OriginalStringRtsTest {
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 var guest = program(language, backend, module("rts_isThreaded")); var target = guest.entryTarget("rts_isThreaded");
-                assertEquals(0L, Calls.target(target, new Object[]{0L, kotlin.Unit.INSTANCE}));
+                assertEquals(0L, Calls.target(target, new Object[]{0L, thc.runtime.Unit.INSTANCE}));
                 target.getClass().getMethod("compile", boolean.class).invoke(target, true); valid(target);
                 long before = ((Number) guest.diagnostics().get("compiledEntries")).longValue();
-                assertEquals(0L, Calls.target(target, new Object[]{0L, kotlin.Unit.INSTANCE}));
+                assertEquals(0L, Calls.target(target, new Object[]{0L, thc.runtime.Unit.INSTANCE}));
                 assertEquals(before + 1, ((Number) guest.diagnostics().get("compiledEntries")).longValue()); valid(target);
             } finally { context.leave(); }
         }

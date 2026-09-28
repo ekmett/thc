@@ -36,6 +36,7 @@ guides =
   [ Guide "docs/driver.md" "driver" "Build and run"
   , Guide "docs/cabal.md" "cabal" "Cabal integration"
   , Guide "docs/site/embedding.md" "embedding" "Embed on the JVM"
+  , Guide "docs/site/jvm.md" "jvm" "JVM implementation"
   , Guide "docs/ghc-core.md" "ghc-core" "GHC library Core"
   , Guide "docs/core-package-manifest.md" "core-packages" "Core packages"
   , Guide "docs/interface-foreign.md" "interface-foreign" "Foreign artifacts"
@@ -55,11 +56,6 @@ mascotAssets =
   [ "turbo-haskell-bot-flipped-light.png", "turbo-haskell-bot-flipped-dark.png"
   , "turbo-haskell-bot-blocks.webm", "mascot.js"
   ]
-
--- Dokka fetches this fragment into its sidebar. Adding document chrome here
--- would duplicate navigation inside every API page.
-isFragment :: FilePath -> Bool
-isFragment = (== "api/jvm/navigation.html")
 
 isHaddock :: FilePath -> Bool
 isHaddock path = any (`isPrefixOf` path) ["api/haskell/", "api/runtime/"]
@@ -136,22 +132,54 @@ buildSite revision pandoc = do
       [root] -> pure root
       _ -> die ("Expected exactly one " ++ component ++ " Haddock output; run make docs-haskell")
     copyTree haskellRoot (site </> "api" </> kind)
-  copyTree "build/docs/jvm" (site </> "api/jvm")
+  -- Javadoc -linksource repeats a complete source file for each nested type.
+  -- Keep declaration links, but resolve them to the checked revision's actual
+  -- Java files rather than publishing and parsing duplicate source documents.
+  javaSources <- Set.fromList . lines <$> readProcess "git"
+    ["ls-files", "--", "src/main/java/*.java", "src/main/java/**/*.java"] ""
+  jvmFiles <- filesBelow "build/docs/jvm"
+  forM_ jvmFiles $ \path -> do
+    let relative = makeRelative "build/docs/jvm" path
+    unless ("src-html/" `isPrefixOf` relative) $ do
+      let target = site </> "api/jvm" </> relative
+      createDirectoryIfMissing True (takeDirectory target)
+      copyFile path target
   apiFiles <- filesBelow (site </> "api")
   forM_ (filter ((== ".html") . takeExtension) apiFiles) $ \path -> do
     let relative = makeRelative site path
-    unless (isFragment relative) $ do
-      html <- Text.readFile path
-      let repaired = if isHaddock relative then repairHaddock revision relative html else html
-      enhanced <- stylePage revision relative repaired
-      Text.writeFile path enhanced
+    html <- Text.readFile path
+    repaired <- if isHaddock relative then pure (repairHaddock revision relative html)
+      else repairJavadoc revision javaSources relative html
+    enhanced <- stylePage revision relative repaired
+    Text.writeFile path enhanced
   forM_ guides $ \guide@(Guide source _ title) -> renderGuide revision pandoc source (guidePath guide) title
   renderGuide revision pandoc "docs/site/index.md" "home.html" "Haskell on Truffle/Graal"
   renderShell revision ("home.html" : map guidePath guides ++
-    [makeRelative site path | path <- apiFiles, takeExtension path == ".html",
-      not (isFragment (makeRelative site path))])
+    [makeRelative site path | path <- apiFiles, takeExtension path == ".html"])
   Text.writeFile (site </> "revision.txt") (Text.pack (revision ++ "\n"))
   Text.writeFile (site </> ".nojekyll") ""
+
+repairJavadoc :: String -> Set.Set FilePath -> FilePath -> Text.Text -> IO Text.Text
+repairJavadoc revision javaSources page html =
+  Text.pack . renderTags <$> mapM rewrite (parseTags (Text.unpack html))
+  where
+    rewrite (TagOpen tag attrs) = TagOpen tag <$> mapM attribute attrs
+    rewrite tag = pure tag
+    attribute ("href", url)
+      | let (path, suffix) = break (== '#') url
+      , let resolved = collapse (takeDirectory page </> decodeURL path)
+      , let prefix = "api/jvm/src-html/"
+      , prefix `isPrefixOf` resolved = do
+          let relative = drop (length prefix) resolved
+              outer = takeWhile (/= '.') (takeFileName relative)
+              source = "src/main/java" </> takeDirectory relative </> outer <.> "java"
+              line = drop (length "#line-") suffix
+          unless (takeExtension relative == ".html" && Set.member source javaSources &&
+                  "#line-" `isPrefixOf` suffix && not (null line) &&
+                  all (`elem` ("0123456789" :: String)) line) $
+            die ("Unrecognized Javadoc source link in " ++ page ++ ": " ++ url)
+          pure ("href", repo ++ "/blob/" ++ revision ++ "/" ++ source ++ "#L" ++ line)
+    attribute attr = pure attr
 
 -- Haddock 2.33 emits instance-method self links without target IDs, even with
 -- dependency interfaces installed. Anchor the actual method declarations; do
@@ -211,7 +239,7 @@ link :: String -> String -> String
 link url title = "<a href=\"" ++ escape url ++ "\">" ++ escape title ++ "</a>"
 
 -- Keep generator documents independently usable. The shell owns site navigation;
--- Haddock and Dokka keep their own symbol search, index, anchors and source links.
+-- Haddock and Javadoc keep their own symbol search, index, anchors and source links.
 stylePage :: String -> FilePath -> Text.Text -> IO Text.Text
 stylePage revision page html = do
   let stylesheet = "<link rel=\"stylesheet\" href=\"" ++ fromPage page "assets/site.css" ++ "\">"
@@ -344,14 +372,15 @@ checkSite revision = do
           key == "id" || (tag == "a" && key == "name")]
         urls = [value | TagOpen _ attrs <- tags, (key,value) <- attrs, key `elem` ["href", "src"]]
         path = makeRelative site file
-    unless (isFragment path || ("name=\"thc-revision\"" `Text.isInfixOf` html &&
+    unless ("name=\"thc-revision\"" `Text.isInfixOf` html &&
             "assets/site.css" `Text.isInfixOf` html &&
-            "assets/theme.js" `Text.isInfixOf` html && Text.pack revision `Text.isInfixOf` html)) $
+            "assets/theme.js" `Text.isInfixOf` html && Text.pack revision `Text.isInfixOf` html) $
       die ("Missing shared theme/revision in " ++ path)
     pure (path, (anchors, urls))
   let failures = concat [checkURL inventory pages page url | (page, (_,urls)) <- Map.toList pages, url <- urls]
       required = ["index.html", "home.html", "assets/site.js", "assets/theme.js",
-        "api/jvm/index.html", "api/haskell/index.html", "api/runtime/index.html",
+        "api/jvm/index.html", "api/jvm/thc/runtime/Calls.html", "api/jvm/thc/Main.html",
+        "api/haskell/index.html", "api/runtime/index.html",
         "api/haskell/THC-Plugin.html", "api/haskell/THC-Interface.html"] ++
         map ("api/runtime" </>) ["THC.html", "THC-Runtime.html", "THC-Thread.html",
           "THC-Memory.html", "THC-GC.html", "THC-Trace.html", "THC-Internal-JIT.html"] ++
@@ -365,10 +394,10 @@ checkSite revision = do
           "id=\"thc-content\"" `Text.isInfixOf` shell &&
           "id=\"thc-appearance\"" `Text.isInfixOf` shell) $
     die "Missing site route inventory, content frame, or appearance control"
-  -- Check that source analysis documented both languages, not just an empty index.
-  unless (any ("/-calls/" `Text.isInfixOf`) (map Text.pack (Set.toList inventory)) &&
-          any ("execution-context.html" `isSuffixOf`) (Set.toList inventory)) $
-    die "Missing expected Java Calls or Kotlin executionContext documentation"
+  -- Require the actual authored Java declarations, not just an empty API index.
+  unless (maybe False (Set.member "executionContext()" . fst)
+          (Map.lookup "api/jvm/thc/Main.html" pages)) $
+    die "Missing expected Java Main.executionContext() documentation"
   putStrLn ("Documentation checked: " ++ show (length guides) ++ " guides, " ++ show (Map.size pages) ++
     " HTML pages, " ++ show (sum [length urls | (_,urls) <- Map.elems pages]) ++
     " links/assets; relative paths also work below /thc/. Revision " ++ revision)

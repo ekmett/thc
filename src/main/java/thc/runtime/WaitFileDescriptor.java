@@ -25,9 +25,9 @@ public final class WaitFileDescriptor extends Expr {
     }
     private record Resume(WaitFileDescriptor node, ManagedFiles.WaitToken token) implements AstResumeStep {
         @Override public Object resume(VirtualFrame frame, Object input) {
-            if (input != kotlin.Unit.INSTANCE) throw RuntimeFault.fault("Invalid descriptor-wait resume value");
+            if (input != thc.runtime.Unit.INSTANCE) throw RuntimeFault.fault("Invalid descriptor-wait resume value");
             node.await(token);
-            return kotlin.Unit.INSTANCE;
+            return thc.runtime.Unit.INSTANCE;
         }
     }
     private void await(ManagedFiles.WaitToken token) {
@@ -43,6 +43,6 @@ public final class WaitFileDescriptor extends Expr {
         long descriptor = fd.executeRequiredLong(frame);
         TupleResultsKt.requireVoidCarrier(state.execute(frame));
         await(Language.currentState(this).getFiles().waitToken(descriptor, writing));
-        return kotlin.Unit.INSTANCE;
+        return thc.runtime.Unit.INSTANCE;
     }
 }

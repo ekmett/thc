@@ -30,7 +30,7 @@ public final class PrefetchExpression extends Expr {
         try { if (offset != null) offset.executeLong(frame); }
         catch (com.oracle.truffle.api.nodes.UnexpectedResultException failure) { throw propagate(failure); }
         TupleResultsKt.requireVoidCarrier(state.execute(frame));
-        return kotlin.Unit.INSTANCE;
+        return thc.runtime.Unit.INSTANCE;
     }
     @SuppressWarnings("unchecked")
     private static <E extends Throwable> RuntimeException propagate(Throwable failure) throws E { throw (E) failure; }

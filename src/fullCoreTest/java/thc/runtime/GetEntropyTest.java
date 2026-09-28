@@ -58,7 +58,7 @@ public class GetEntropyTest {
         Entry(Language language, PackageScalarCall call) { super(language); access = new PackageScalarAccess(call); }
         @Override public Object execute(VirtualFrame frame) {
             // All three declared C control results are Int32Rep; widen only for the native-row comparison.
-            return (long) access.executeInt(frame.getArguments(), kotlin.Unit.INSTANCE);
+            return (long) access.executeInt(frame.getArguments(), thc.runtime.Unit.INSTANCE);
         }
     }
     private void released(Language language) {
@@ -142,12 +142,12 @@ public class GetEntropyTest {
                 var target = program.entryTarget(entry); owner.getThreads().enterCurrent(null, false, true, null);
                 try {
                     var observations = new LinkedHashSet<Long>();
-                    for (int i = 0; i < 4; i++) { observations.add((Long) Calls.target(target, new Object[] {0L, kotlin.Unit.INSTANCE})); released(language); }
+                    for (int i = 0; i < 4; i++) { observations.add((Long) Calls.target(target, new Object[] {0L, thc.runtime.Unit.INSTANCE})); released(language); }
                     target.getClass().getMethod("compile", boolean.class).invoke(target, true);
                     assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
                     for (int i = 0; i < 4; i++) {
                         long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
-                        observations.add((Long) Calls.target(target, new Object[] {0L, kotlin.Unit.INSTANCE})); released(language);
+                        observations.add((Long) Calls.target(target, new Object[] {0L, thc.runtime.Unit.INSTANCE})); released(language);
                         assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > before, backend);
                         assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), backend);
                     }

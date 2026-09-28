@@ -42,7 +42,7 @@ class OriginalPosixStatTest {
             var failure = assertThrows(RuntimeFault.class,() -> expression.executeTuple(frame,new int[]{slot},0)); assertTrue(Objects.toString(failure.getMessage(),"").contains("zero-width scalar carrier"),failure.getMessage());
             assertEquals(switch (operation) { case SIZEOF_STAT -> List.of("state"); case IS_DIR -> List.of("mode","state"); default -> List.of("address","state"); },events); assertEquals(91L,FrameAccess.read(frame,slot));
         }
-        events.clear(); var expression = new OriginalStdioExpression(OriginalStdioOp.SIZEOF_STAT,new Expr[]{operand(events,"state",kotlin.Unit.INSTANCE)},proof);
+        events.clear(); var expression = new OriginalStdioExpression(OriginalStdioOp.SIZEOF_STAT,new Expr[]{operand(events,"state",thc.runtime.Unit.INSTANCE)},proof);
         var operands = OriginalStdioExpression.class.getDeclaredField("operands"); operands.setAccessible(true); operands.set(expression,null);
         assertThrows(NullPointerException.class,() -> expression.executeTuple(frame,new int[]{slot},0)); assertTrue(events.isEmpty()); assertEquals(91L,FrameAccess.read(frame,slot));
     }
@@ -110,7 +110,7 @@ class OriginalPosixStatTest {
                     for (int i = 0; i < operation.getArguments().size(); i++) { int index = i; assertThrows(RuntimeFault.class,() -> load.call(rawModule(call,index))); }
                     var malformed = (Map<String,Object>) copy(rawModule(call)); var badCall = single(foreignCalls(malformed),ignored -> true); ((List<Object>) badCall.get(1)).set(1,17L);
                     var badHead = assertThrows(RuntimeFault.class,() -> load.call(malformed)); assertTrue(Objects.toString(badHead.getMessage(),"").startsWith("Invalid original stdio call:"));
-                    if (operation.getStatField()) assertThrows(RuntimeFault.class,() -> callScalarTestTarget(target,new Object[]{0L,ManagedAddress.nullAddress(),kotlin.Unit.INSTANCE}));
+                    if (operation.getStatField()) assertThrows(RuntimeFault.class,() -> callScalarTestTarget(target,new Object[]{0L,ManagedAddress.nullAddress(),thc.runtime.Unit.INSTANCE}));
                     var handoff = language.getHandoffState().get(); assertEquals(0,handoff.getArguments().getDepth()); assertEquals(0,handoff.getResults().getDepth());
                 }
             } finally { context.leave(); }

@@ -1,8 +1,8 @@
-# Module THC
+# JVM implementation
 
 THC executes exported GHC Core on Truffle and Graal. This reference covers the
-Kotlin and Java implementation. Host applications should start with
-`thc.executionContext` and `thc.loadManagedExports`, and read the site's embedding guide
+Java implementation. Host applications should start with
+`thc.Main.executionContext` and `thc.Main.loadManagedExports`, and read the site's embedding guide
 for authority and lifetimes.
 
 There are two namespaces. `thc` loads and checks programs and provides the host
@@ -12,11 +12,11 @@ closure, the node that calls it, and the description of its captured fields have
 different jobs and lifetimes.
 
 This is an implementation reference, not a stable SDK. Java public visibility
-and Kotlin public declarations do not promise stable runtime carriers, node
+does not promise stable runtime carriers, node
 layouts, frame slots, calling conventions, or generated Truffle APIs. Generated
 DSL and SIMD sources and test fixtures are intentionally excluded.
 
-# Package thc
+## Package thc
 
 This namespace is the boundary between an exported program, its host, and the
 runtime. Start with `executionContext` and `loadManagedExports` when embedding THC;
@@ -25,7 +25,7 @@ runtime. Start with `executionContext` and `loadManagedExports` when embedding T
 - **Loading and admission.** `CoreModules`, package manifests and foreign-artifact
   validation assemble exported Core and check the reachable program. Reading a
   module successfully does not establish that all its operations can execute.
-- **Language and context.** [Language][thc.Language] supplies the Truffle language
+- **Language and context.** [Language](../../src/main/java/thc/Language.java) supplies the Truffle language
   entrypoint. Its context owns guest threads, files, native resources, layout
   interning and other mutable services. These are context state, not executable
   nodes or Haskell data constructors.
@@ -33,7 +33,7 @@ runtime. Start with `executionContext` and `loadManagedExports` when embedding T
   scalar signatures through polyglot members. Kernel calls and executable `IO ()` have distinct contracts;
   public runtime classes are not a substitute for the checked host boundary.
 
-# Package thc.runtime
+## Package thc.runtime
 
 This namespace contains both the objects a Haskell program computes with and
 the interpreter that computes them. They are deliberately different kinds of
@@ -43,11 +43,11 @@ object, even where their names sound similar.
 
 | Role | Examples | What an instance represents |
 | --- | --- | --- |
-| Guest values | [DataValue][thc.runtime.DataValue], internal `Closure` and `Thunk`, primitive scalars, fixed-species JDK Vector API values | A constructor, function, delayed computation or computed result. A value can be shared by several calls. |
-| Value storage | [CapturedFrame][thc.runtime.CapturedFrame], [HandoffStorage][thc.runtime.HandoffStorage], managed arrays and addresses | Fields holding values, with a specific ownership and lifetime. Storage is not executable code. |
-| Executable Truffle nodes | [GuestRoot][thc.runtime.GuestRoot], [BytecodeRoot][thc.runtime.BytecodeRoot], internal `Expr`, `Force` and call nodes | Instructions and control flow, with children, specialization state and call-site caches. Nodes execute against invocation frames and runtime values. |
-| Layout and lowering metadata | [DataLayout][thc.runtime.DataLayout], [CaptureLayout][thc.runtime.CaptureLayout], [HandoffLayout][thc.runtime.HandoffLayout], internal `CoreRepresentation` | How to interpret or allocate fields and which execution path is justified. A layout describes storage; it does not contain a particular value's fields. |
-| Program construction and linkage | [Program][thc.runtime.Program], [BytecodeProgram][thc.runtime.BytecodeProgram], [ExecutableProgram][thc.runtime.ExecutableProgram] | Lowering, linked bindings, root call targets and host entrypoints. These are not themselves expression nodes or guest closures. |
+| Guest values | [DataValue](../../src/main/java/thc/runtime/DataValue.java), internal `Closure` and `Thunk`, primitive scalars, fixed-species JDK Vector API values | A constructor, function, delayed computation or computed result. A value can be shared by several calls. |
+| Value storage | [CapturedFrame](../../src/main/java/thc/runtime/CapturedFrame.java), [HandoffStorage](../../src/main/java/thc/runtime/HandoffStorage.java), managed arrays and addresses | Fields holding values, with a specific ownership and lifetime. Storage is not executable code. |
+| Executable Truffle nodes | [GuestRoot](../../src/main/java/thc/runtime/GuestRoot.java), [BytecodeRoot](../../src/main/java/thc/runtime/BytecodeRoot.java), internal `Expr`, `Force` and call nodes | Instructions and control flow, with children, specialization state and call-site caches. Nodes execute against invocation frames and runtime values. |
+| Layout and lowering metadata | [DataLayout](../../src/main/java/thc/runtime/DataLayout.java), [CaptureLayout](../../src/main/java/thc/runtime/CaptureLayout.java), [HandoffLayout](../../src/main/java/thc/runtime/HandoffLayout.java), internal `CoreRepresentation` | How to interpret or allocate fields and which execution path is justified. A layout describes storage; it does not contain a particular value's fields. |
+| Program construction and linkage | [Program](../../src/main/java/thc/runtime/Program.java), [BytecodeProgram](../../src/main/java/thc/runtime/BytecodeProgram.java), [ExecutableProgram](../../src/main/java/thc/runtime/ExecutableProgram.java) | Lowering, linked bindings, root call targets and host entrypoints. These are not themselves expression nodes or guest closures. |
 | Context services | `Language.State` and its thread, file and native-resource registries | Resources and mutable state belonging to one polyglot context. |
 
 SIMD values use JDK `ByteVector`, `ShortVector`, `IntVector`, `LongVector`,
@@ -101,7 +101,7 @@ thunk's shared evaluation state.
 Unboxed tuples are different from lifted tuple constructors. Their components
 can occupy several physical slots; a `State#` component occupies none. Supported
 aggregate fields in boxed constructors likewise flatten into typed properties:
-[DataLayout.arity][thc.runtime.DataLayout.arity] counts physical fields, not logical
+[DataLayout.arity](../../src/main/java/thc/runtime/DataLayout.java) counts physical fields, not logical
 constructor arguments. Representation
 proofs determine which primitive lanes can be used, rather than a Haskell type
 name alone. Unsupported representations are rejected at admission.
@@ -138,14 +138,14 @@ as its field types.
 
 ## Exceptions, continuations and stack inspection
 
-[GuestException][thc.runtime.GuestException] transports a Haskell exception
-payload through Truffle. [RuntimeFault][thc.runtime.RuntimeFault] reports a
+[GuestException](../../src/main/java/thc/runtime/GuestException.java) transports a Haskell exception
+payload through Truffle. [RuntimeFault](../../src/main/java/thc/runtime/RuntimeFault.java) reports a
 runtime or contract failure. Neither should be confused with the internal
 control transfers used for tail calls and suspension.
 
 A suspended computation needs executable resumption state as well as retained
 values. Internal continuation segments serve that purpose on supported paths.
-[ManagedStackSnapshot][thc.runtime.ManagedStackSnapshot] instead stores detached
+[ManagedStackSnapshot](../../src/main/java/thc/runtime/ManagedStackSnapshot.java) instead stores detached
 binding names and source coordinates for inspection. It retains no live frames,
 nodes or call targets and cannot resume execution. A printable stack is not an
 `AP_STACK` equivalent.

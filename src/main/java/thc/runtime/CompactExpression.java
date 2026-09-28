@@ -3,7 +3,7 @@
 package thc.runtime;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
-import kotlin.Unit;
+import thc.runtime.Unit;
 import thc.Language;
 import static thc.runtime.RuntimeServiceStatus.fault;
 

@@ -2,22 +2,9 @@
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 # Individually inspected additions to the generated research inventory.
 # This is not the public pure-interpreter initialization inventory.
-kotlin.Function
-kotlin.SynchronizedLazyImpl
-kotlin.UNINITIALIZED_VALUE
-kotlin.Unit
-kotlin.collections.AbstractList
-kotlin.collections.AbstractList$Companion
-kotlin.collections.EmptyIterator
-kotlin.collections.EmptyList
-kotlin.collections.EmptyMap
-# EmptyMap entry/key views return this fieldless immutable singleton.
-kotlin.collections.EmptySet
-kotlin.enums.EnumEntriesList
-kotlin.jvm.functions.Function0
-kotlin.jvm.internal.CollectionToArray
+# The unique fieldless guest state/void value; no guest context is captured.
+thc.runtime.Unit
 thc.runtime.ApplicationKt
-thc.runtime.ArgumentLayoutKt
 # Payload-free internal self-transfer token. ControlFlowException's final
 # fillInStackTrace returns the token itself; no guest frame or thread is captured.
 thc.runtime.AstSelfCall
@@ -28,7 +15,7 @@ thc.runtime.BytecodeRootGen$InstructionDescriptorImpl
 thc.runtime.BytecodeRootGen$InstructionDescriptorList
 thc.runtime.BytecodeRootGen$Instructions$ArgumentDescriptorImpl
 thc.runtime.CoreRepresentation
-# Only primitive tag constants and construction of the fieldless companion.
+# Only primitive tag constants.
 # No instance Field, property, shape, frame, guest context or thread is created.
 thc.runtime.DataLayout$Field
 thc.runtime.GmpForeignOp
@@ -45,15 +32,14 @@ thc.runtime.SigsetImage
 thc.runtime.StdioHostAbi
 thc.runtime.SumShape
 thc.runtime.TermiosImage
-# Only a fieldless companion and a private Object lock are initialized here.
+# Only a private Object lock is initialized here.
 # WindowsCodePages$Abi/$Api native resources and context instances stay runtime.
 thc.runtime.WindowsCodePages
-# Fieldless singleton and an uninitialized, capture-free lazy lookup. Native
+# An uninitialized, capture-free lazy lookup. Native
 # library extraction/loading and finalizer handles remain deferred until runtime.
 thc.runtime.WindowsLibdwFinalizers
 # Runtime/deoptimization graph validation requires initialized declaring types.
 # These exception classes and FunctionRoot have no own class initializer.
-kotlin.NoWhenBranchMatchedException
 thc.runtime.RuntimeFault
 thc.runtime.UnsupportedCore
 thc.runtime.FunctionRoot
@@ -65,8 +51,8 @@ thc.runtime.TypedInputsKt
 # Fieldless singleton plus byte-array VarHandles in the build target's native
 # byte order. This recipe remains tied to its build platform, not cross-target.
 thc.runtime.ManagedByteArray
-# Only the fieldless companion is created; depth/driver state stays per instance.
+# No static initialization; depth/driver state stays per instance.
 thc.runtime.AstStackScope
-# Fieldless companion and two empty ThreadLocal keys; no thread-local values,
+# Two empty ThreadLocal keys; no thread-local values,
 # threads, guest contexts, or foreign activations are created by initialization.
 thc.runtime.GuestThreads

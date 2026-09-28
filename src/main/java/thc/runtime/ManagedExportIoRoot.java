@@ -44,7 +44,7 @@ public final class ManagedExportIoRoot extends RootNode {
         frame.setLong(FrameLayout.BLOOM_FILTER, 0L);
         if (!(force.execute(frame, frame.getArguments()[0]) instanceof Closure action))
             throw RuntimeFault.fault("Managed IO export is not a state transformer");
-        dispatch.execute(frame, action, new Object[]{kotlin.Unit.INSTANCE});
+        dispatch.execute(frame, action, new Object[]{thc.runtime.Unit.INSTANCE});
         return resultForce.execute(frame, frame.getObject(FrameLayout.TAIL_RESULT));
     }
     @Override public String getName() { return "THC managed export IO"; }

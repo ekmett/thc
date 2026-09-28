@@ -128,7 +128,7 @@ class CoreUnitAsyncPolicyTest {
                     assertEquals(2L, count(program, "coreUnitDecodedBindings")); assertEquals(0, output.size());
                     var saved = Objects.requireNonNull(SavedGuestContinuationKt.savedGuestContinuation(Calls.target(closure.target, new Object[]{0L, 1L})));
                     assertSame(pending, SavedGuestContinuationKt.asyncRequest(saved)); assertEquals(AsyncRequestState.CLAIMED, pending.getState()); assertEquals(0, output.size(), "pending delivery precedes the function effect");
-                    pending.acknowledge(); assertEquals(19L, saved.continueWith(kotlin.Unit.INSTANCE)); assertSame(closure, program.entryValue("uB:B.function"));
+                    pending.acknowledge(); assertEquals(19L, saved.continueWith(thc.runtime.Unit.INSTANCE)); assertSame(closure, program.entryValue("uB:B.function"));
                     assertEquals(2L, count(program, "coreUnitDecodedBindings")); assertEquals("[thc trace event] demand\n", output.toString(StandardCharsets.UTF_8));
                 } finally { threads.leaveCurrent(thc.runtime.GuestThreadStatus.FINISHED); context.leave(); }
             }

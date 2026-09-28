@@ -21,12 +21,12 @@ public final class IoMainRoot extends RootNode {
     @Override public Object execute(VirtualFrame frame) {
         frame.setLong(FrameLayout.BLOOM_FILTER, 0L);
         if (!(force.execute(frame, frame.getArguments()[0]) instanceof Closure action)) throw fault("IO main is not a state transformer");
-        dispatch.execute(frame, action, new Object[] { kotlin.Unit.INSTANCE });
+        dispatch.execute(frame, action, new Object[] { thc.runtime.Unit.INSTANCE });
         if (!(unitForce.execute(frame, frame.getObject(FrameLayout.TAIL_RESULT)) instanceof DataValue value))
             throw fault("IO main did not return boxed unit");
         if (!UNIT_CONSTRUCTOR_ID.equals(value.getLayout().getId()) || value.getLayout().getArity() != 0)
             throw fault("IO main did not return boxed unit");
-        return kotlin.Unit.INSTANCE;
+        return thc.runtime.Unit.INSTANCE;
     }
     @Override public String getName() { return "THC IO main"; }
 }

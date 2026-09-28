@@ -107,7 +107,7 @@ class CoreUnitColdControlTest {
                 var stm = Language.currentState(null).stm; boolean[] completed = {false};
                 var failure = assertThrows(PolyglotException.class, () -> stm.atomically(null,
                     () -> { throw new IllegalStateException("unexpected nested transaction"); }, false,
-                    () -> { entry.execute(2); completed[0] = true; return kotlin.Unit.INSTANCE; }));
+                    () -> { entry.execute(2); completed[0] = true; return thc.runtime.Unit.INSTANCE; }));
                 assertTrue(Objects.toString(failure.getMessage(), "").contains("STM transaction frames do not support explicit delimited capture"), failure.getMessage());
                 assertFalse(completed[0]); assertFalse(stm.hasTransaction());
             } finally { context.leave(); }

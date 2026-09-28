@@ -90,14 +90,14 @@ class OriginalErrnoTest {
                     }
                     void run(boolean compiled) throws Exception {
                         for (var row : rows) {
-                            assertEquals(0L, invoke(set, setTarget, new Object[]{0L, ((Number) row.get("value")).intValue(), kotlin.Unit.INSTANCE}, compiled));
-                            assertEquals(((Number) row.get("roundTrip")).intValue(), invoke(get, getTarget, new Object[]{0L, kotlin.Unit.INSTANCE}, compiled));
+                            assertEquals(0L, invoke(set, setTarget, new Object[]{0L, ((Number) row.get("value")).intValue(), thc.runtime.Unit.INSTANCE}, compiled));
+                            assertEquals(((Number) row.get("roundTrip")).intValue(), invoke(get, getTarget, new Object[]{0L, thc.runtime.Unit.INSTANCE}, compiled));
                             assertEquals(row.get("successResult"), stdio.write(1L, ManagedAddress.fromByteArray(new byte[0]), 0L));
-                            assertEquals(((Number) row.get("successErrno")).intValue(), invoke(get, getTarget, new Object[]{0L, kotlin.Unit.INSTANCE}, compiled));
+                            assertEquals(((Number) row.get("successErrno")).intValue(), invoke(get, getTarget, new Object[]{0L, thc.runtime.Unit.INSTANCE}, compiled));
                             assertEquals(row.get("failureResult"), stdio.write(-1L, ManagedAddress.fromByteArray(new byte[0]), 0L));
-                            assertEquals(((Number) row.get("failureErrno")).intValue(), invoke(get, getTarget, new Object[]{0L, kotlin.Unit.INSTANCE}, compiled));
+                            assertEquals(((Number) row.get("failureErrno")).intValue(), invoke(get, getTarget, new Object[]{0L, thc.runtime.Unit.INSTANCE}, compiled));
                             assertEquals(row.get("resetErrno"), invoke(reset, resetTarget, new Object[]{0L, 0L}, compiled));
-                            assertEquals(0, invoke(get, getTarget, new Object[]{0L, kotlin.Unit.INSTANCE}, compiled));
+                            assertEquals(0, invoke(get, getTarget, new Object[]{0L, thc.runtime.Unit.INSTANCE}, compiled));
                         }
                     }
                 }
@@ -111,9 +111,9 @@ class OriginalErrnoTest {
         for (var backend : List.of("ast", "bytecode")) try (var context = context()) { entered(context, () -> {
             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var stdio = Language.currentState().getStdio();
             var target = program(language, backend, rawModule(setter, source)).entryTarget("entry");
-            for (Object[] args : new Object[][]{{0L,1L,9L}, {0L,1L,null}, {0L,null,kotlin.Unit.INSTANCE}, {0L,true,kotlin.Unit.INSTANCE},
-                    {0L,ManagedAddress.nullAddress(),kotlin.Unit.INSTANCE}, {0L,(long) Integer.MAX_VALUE + 1,kotlin.Unit.INSTANCE},
-                    {0L,(long) Integer.MIN_VALUE - 1,kotlin.Unit.INSTANCE}, {0L,Long.MIN_VALUE,kotlin.Unit.INSTANCE}, {0L,Long.MAX_VALUE,kotlin.Unit.INSTANCE}}) {
+            for (Object[] args : new Object[][]{{0L,1L,9L}, {0L,1L,null}, {0L,null,thc.runtime.Unit.INSTANCE}, {0L,true,thc.runtime.Unit.INSTANCE},
+                    {0L,ManagedAddress.nullAddress(),thc.runtime.Unit.INSTANCE}, {0L,(long) Integer.MAX_VALUE + 1,thc.runtime.Unit.INSTANCE},
+                    {0L,(long) Integer.MIN_VALUE - 1,thc.runtime.Unit.INSTANCE}, {0L,Long.MIN_VALUE,thc.runtime.Unit.INSTANCE}, {0L,Long.MAX_VALUE,thc.runtime.Unit.INSTANCE}}) {
                 stdio.setErrno(-17L); assertThrows(Throwable.class, () -> Calls.target(target, args)); assertEquals(-17L, stdio.errno()); released(language);
             }
             for (int i = 0; i <= 1; i++) { int index = i; assertThrows(RuntimeFault.class, () -> program(language, backend, rawModule(setter, source, index))); }

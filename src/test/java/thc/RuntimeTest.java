@@ -162,8 +162,8 @@ class RuntimeTest {
                 int numberSlot = builder.addSlot(FrameSlotKind.Illegal, "number", null), objectSlot = builder.addSlot(FrameSlotKind.Illegal, "object", null);
                 var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], builder.build());
                 for (long number : new long[]{3_000_000_000L, -3_000_000_000L, Long.MIN_VALUE, Long.MAX_VALUE}) {
-                    var value = mixed.create(new Object[]{kotlin.Unit.INSTANCE, number, marker});
-                    assertSame(kotlin.Unit.INSTANCE, mixed.read(value, 0), "Zero-width Core slots retain their logical index");
+                    var value = mixed.create(new Object[]{thc.runtime.Unit.INSTANCE, number, marker});
+                    assertSame(thc.runtime.Unit.INSTANCE, mixed.read(value, 0), "Zero-width Core slots retain their logical index");
                     assertEquals(number, mixed.readLong(value, 1)); assertSame(marker, mixed.read(value, 2), "Lifted fields retain lazy payload identity");
                     mixed.restore(value, 1, frame, numberSlot); mixed.restore(value, 2, frame, objectSlot);
                     assertTrue(frame.isLong(numberSlot), "Case restoration must preserve primitive Long slots");
@@ -172,7 +172,7 @@ class RuntimeTest {
                 var reference = new DataLayout(language, "Synthetic.Reference", "Reference", new String[]{"LiftedRep"}, new Class<?>[1]);
                 var objectValue = reference.create(new Object[]{marker}); assertSame(marker, reference.read(objectValue, 0));
                 assertThrows(RuntimeFault.class, () -> reference.readLong(objectValue, 0));
-                assertThrows(RuntimeFault.class, () -> mixed.create(new Object[]{kotlin.Unit.INSTANCE, 3, marker}));
+                assertThrows(RuntimeFault.class, () -> mixed.create(new Object[]{thc.runtime.Unit.INSTANCE, 3, marker}));
             } finally { context.leave(); }
         }
     }

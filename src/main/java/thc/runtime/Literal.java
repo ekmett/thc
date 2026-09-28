@@ -14,7 +14,7 @@ final class Literal extends Expr {
             case Float ignored -> CoreKind.FLOAT;
             case Double ignored -> CoreKind.DOUBLE;
             case ManagedAddress ignored -> CoreKind.ADDRESS;
-            case null, default -> value == kotlin.Unit.INSTANCE ? CoreKind.VOID : CoreKind.OBJECT;
+            case null, default -> value == thc.runtime.Unit.INSTANCE ? CoreKind.VOID : CoreKind.OBJECT;
         };
         setRepresentation(new CoreRepresentation(kind, true, false, null, null, null, null, null, null));
     }

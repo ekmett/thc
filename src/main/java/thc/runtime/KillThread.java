@@ -16,14 +16,14 @@ public final class KillThread extends Expr {
     }
     private record ResumeWait(KillThread node, AsyncRequest sent) implements AstResumeStep {
         @Override public Object resume(VirtualFrame frame, Object input) {
-            if (input != kotlin.Unit.INSTANCE) throw RuntimeFault.fault("Invalid killThread# continuation");
+            if (input != thc.runtime.Unit.INSTANCE) throw RuntimeFault.fault("Invalid killThread# continuation");
             return node.finish(sent);
         }
     }
     private static final class ResumeCompleted implements AstResumeStep {
         @Override public Object resume(VirtualFrame frame, Object input) {
-            if (input != kotlin.Unit.INSTANCE) throw RuntimeFault.fault("Invalid completed killThread# continuation");
-            return kotlin.Unit.INSTANCE;
+            if (input != thc.runtime.Unit.INSTANCE) throw RuntimeFault.fault("Invalid completed killThread# continuation");
+            return thc.runtime.Unit.INSTANCE;
         }
     }
     public Object finish(AsyncRequest sent) {
@@ -49,7 +49,7 @@ public final class KillThread extends Expr {
             throw new AstCapture(incoming, SynchronousMasking.current(this)).append(new ResumeCompleted());
         }
         if (sent.getForceSelf()) throw RuntimeFault.fault("Self-directed killThread# was not delivered at its guest poll");
-        return kotlin.Unit.INSTANCE;
+        return thc.runtime.Unit.INSTANCE;
     }
     @Override public Object execute(VirtualFrame frame) {
         Object target = identity.execute(frame);

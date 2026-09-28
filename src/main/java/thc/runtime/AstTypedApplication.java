@@ -108,7 +108,7 @@ public final class AstTypedApplication extends Expr {
             try { operands.evaluate(frame); }
             catch (AstCapture cut) {
                 throw cut.append((saved, input) -> {
-                    if (input != kotlin.Unit.INSTANCE) throw fault("Invalid typed operands continuation");
+                    if (input != thc.runtime.Unit.INSTANCE) throw fault("Invalid typed operands continuation");
                     return dispatchAsync(saved, closure, slots, offset);
                 });
             }

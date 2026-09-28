@@ -30,7 +30,7 @@ public final class STMExpression extends Expr {
         Object cell = operands[0].execute(frame), value = operands[1].execute(frame);
         TupleResultsKt.requireVoidCarrier(operands[2].execute(frame));
         Language.currentState(this).stm.write(cell, value);
-        return kotlin.Unit.INSTANCE;
+        return thc.runtime.Unit.INSTANCE;
     }
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
         Object first = operation == STMOp.RETRY ? null : operands[0].execute(frame);

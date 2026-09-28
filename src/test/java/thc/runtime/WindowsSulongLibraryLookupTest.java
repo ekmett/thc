@@ -51,7 +51,7 @@ class WindowsSulongLibraryLookupTest {
         @Child private PackageScalarAccess access;
         Buffer(Language language, PackageScalarCall call) { super(language); access = new PackageScalarAccess(call); }
         @Override public Object execute(VirtualFrame frame) {
-            return access.executeAddress(new Object[0], kotlin.Unit.INSTANCE);
+            return access.executeAddress(new Object[0], thc.runtime.Unit.INSTANCE);
         }
     }
     private ManagedAddress buffer(Language.State owner) throws Exception {

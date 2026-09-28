@@ -46,7 +46,7 @@ public final class AstInputOperands extends Node {
                         else FrameAccess.write(saved, source.getSlots()[offset], input);
                     } else if (input != null) throw fault("Invalid typed operand continuation");
                     evaluate(saved, next);
-                    return kotlin.Unit.INSTANCE; // Shared legacy guest token; replaced only by the coordinated runtime cutover.
+                    return thc.runtime.Unit.INSTANCE; // Shared legacy guest token; replaced only by the coordinated runtime cutover.
                 });
             }
         }

@@ -10,8 +10,8 @@ public final class YieldThread extends Expr {
     @Child private Expr state;
     private final boolean async;
     private static final AstResumeStep RESUME = (frame, input) -> {
-        if (input != kotlin.Unit.INSTANCE) throw fault("Invalid yield# continuation");
-        return kotlin.Unit.INSTANCE;
+        if (input != thc.runtime.Unit.INSTANCE) throw fault("Invalid yield# continuation");
+        return thc.runtime.Unit.INSTANCE;
     };
     public YieldThread(Expr state, boolean async, CoreRepresentation proof) { this.state = state; this.async = async; setRepresentation(proof.copy(proof.getKind(), true, proof.getPresent(), proof.getPrimReps(), proof.getComponents(), proof.getVector(), proof.getAlternatives(), proof.getTagSlot(), proof.getAlternativeSlots())); }
     @Override public Object execute(VirtualFrame frame) {
@@ -20,6 +20,6 @@ public final class YieldThread extends Expr {
             AsyncRequest request = GuestThreads.pollCurrent(this, false);
             if (request != null) throw new AstCapture(request, SynchronousMasking.current(this)).append(RESUME);
         }
-        return kotlin.Unit.INSTANCE;
+        return thc.runtime.Unit.INSTANCE;
     }
 }

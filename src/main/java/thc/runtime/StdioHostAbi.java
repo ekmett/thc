@@ -32,7 +32,7 @@ final class StdioHostAbi {
     }
 
     private static long posix(Long value) {
-        if (value == null) ProgramKt.fault("Original POSIX ABI is unavailable on Windows");
+        if (value == null) throw RuntimeFault.fault("Original POSIX ABI is unavailable on Windows");
         return value;
     }
     public long getAtFdcwd() { return posix(atFdcwdValue); }
@@ -41,7 +41,7 @@ final class StdioHostAbi {
     public long getAtEmptyPath() { return posix(atEmptyPathValue); }
     public long getSiginfoBytes() { return posix(siginfoBytesValue); }
     public void requireOpenAbi() {
-        if (posix(open.get("modeBytes")) != 4) ProgramKt.fault("Original open requires the Linux Word32 mode_t ABI");
+        if (posix(open.get("modeBytes")) != 4) throw RuntimeFault.fault("Original open requires the Linux Word32 mode_t ABI");
     }
     public boolean openReadable(long flags) {
         long access = flags & posix(open.get("O_ACCMODE"));
@@ -53,7 +53,7 @@ final class StdioHostAbi {
     }
     public boolean openAppend(long flags) { return (flags & posix(open.get("O_APPEND"))) != 0; }
     public long flagConstant(OriginalStdioOp operation) {
-        if (!operation.getFlagConstant()) ProgramKt.fault("Invalid original file flag constant operation");
+        if (!operation.getFlagConstant()) throw RuntimeFault.fault("Invalid original file flag constant operation");
         return posix(open.get(operation.name()));
     }
     public long notTerminal() { return errors.get("ENOTTY"); }

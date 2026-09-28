@@ -35,7 +35,7 @@ public final class LocalBinding extends Node {
             throw cut.append(new AstResumeStep() {
                 @Override public Object resume(VirtualFrame frame, Object input) {
                     if (vectorSlots == null) FrameAccess.INSTANCE.write(frame, slot, input);
-                    return kotlin.Unit.INSTANCE;
+                    return thc.runtime.Unit.INSTANCE;
                 }
             });
         }
