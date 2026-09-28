@@ -82,7 +82,7 @@ class GuestEnvironmentTest {
 
     private static Map<String, Object> declaration(EnvironmentOp operation) {
         return Map.of("schema", 1, "target", Map.of("kind", "static", "symbol", operation.getSymbol(),
-            "unit", "ghc-internal", "isFunction", true), "convention", "ccall", "safety", "unsafe",
+            "unit", operation == EnvironmentOp.SET || operation == EnvironmentOp.CLEAR ? "unix-2.8.8.0-inplace" : "ghc-internal", "isFunction", true), "convention", "ccall", "safety", "unsafe",
             "arity", operation.getArguments().size(), "suppliedArity", operation.getArguments().size(),
             "argumentReps", operation.getArguments().stream().map(rep -> scalar(rep, false)).toList(), "resultRep", tuple(operation));
     }
@@ -135,7 +135,7 @@ class GuestEnvironmentTest {
                     inputs[0] = 0L;
                     System.arraycopy(arguments, 0, inputs, 1, arguments.length);
                     inputs[inputs.length - 1] = Unit.INSTANCE;
-                    var result = Calls.target(target, inputs);
+                    var result = ScalarTestCalls.callScalarTestTarget(target, inputs);
                     assertEquals(before + (compiled ? 1 : 0),
                         ((Number) program.diagnostics().get("compiledEntries")).longValue(), backend);
                     if (compiled) assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
@@ -152,6 +152,15 @@ class GuestEnvironmentTest {
                         new HashSet<>(entries((ManagedAddress) call(EnvironmentOp.ENUMERATE))));
                     assertEquals(0, call(EnvironmentOp.UNSET, name));
                     assertSame(ManagedAddress.nullAddress(), call(EnvironmentOp.GET, name));
+                    var value = string("copied");
+                    assertEquals(0, call(EnvironmentOp.SET, name, value, 1));
+                    value.writeWord8(0, 'X');
+                    assertEquals("copied", text((ManagedAddress) call(EnvironmentOp.GET, name)));
+                    assertEquals(0, call(EnvironmentOp.SET, name, string("ignored"), 0));
+                    assertEquals("copied", text((ManagedAddress) call(EnvironmentOp.GET, name)));
+                    assertEquals(0L, call(EnvironmentOp.CLEAR));
+                    assertEquals(List.of(), entries((ManagedAddress) call(EnvironmentOp.ENUMERATE)));
+                    environment.set(string("THC_INITIAL"), string("lambda-\u03bb"), 1);
                 }
             }
             var caller = new Caller();

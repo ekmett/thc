@@ -10,6 +10,8 @@ public enum EnvironmentOp {
     GET("getenv", "AddrRep", "AddrRep", null),
     PUT("putenv", "Int32Rep", "AddrRep", null),
     UNSET("__hsbase_unsetenv", "Int32Rep", "AddrRep", null),
+    SET("setenv", "Int32Rep", "AddrRep", "AddrRep", "Int32Rep", null),
+    CLEAR("clearenv", "IntRep", (String) null),
     ENUMERATE("__hscore_environ", "AddrRep", (String) null);
 
     private final String symbol;
@@ -25,4 +27,10 @@ public enum EnvironmentOp {
     public String getSymbol() { return symbol; }
     public String getResult() { return result; }
     public List<String> getArguments() { return arguments; }
+    public boolean matchesSymbol(Object value) {
+        if (symbol.equals(value)) return true;
+        if (this == ENUMERATE) return "__hsunix_get_environ".equals(value);
+        return this == UNSET && value instanceof String name && name.matches(
+            "ghczuwrapperZC0ZCunixzm2zi8zi8zi0zm(?:inplace|[0-9a-f]+)ZCSystemziPosixziEnv(?:ziByteString|ziPosixString)?ZCunsetenv");
+    }
 }

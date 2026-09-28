@@ -287,6 +287,23 @@ public final class ManagedFiles {
     }
     @FunctionalInterface private interface FileAction { long run() throws Throwable; }
     private long result(FileAction action) { return result(ForeignSafety.UNSAFE, action); }
+    SulongCbits.CapiResult unixDescriptor(OriginalStdioOp operation, Object[] arguments) {
+        var answer = new SulongCbits.CapiResult[1];
+        long status = result(ForeignSafety.synchronous(operation.getSafety()), () -> withDescriptor(((Number) arguments[0]).longValue(), owner -> {
+            if (owner.nativeResource == null) throw fail(4, "Unix call requires an owned native descriptor");
+            var duplicate = new NativeFileLease();
+            try {
+                int fd = owner.nativeResource.duplicateDescriptor();
+                duplicate.openSlot().set(java.lang.foreign.ValueLayout.JAVA_INT, 0, fd);
+                var nativeArguments = arguments.clone();
+                nativeArguments[0] = fd;
+                answer[0] = NativeUnix.invoke(operation, nativeArguments, null);
+                return 0L;
+            } finally { duplicate.closeDirectory(); }
+        }));
+        return status == 0 ? answer[0] : new SulongCbits.CapiResult(-1,
+            nativeErrno() != 0 ? nativeErrno() : nativeAbi().error(errorKind()));
+    }
     private long result(ForeignSafety safety, FileAction action) {
         if (disposed) { failure.set(new Failure(4, "THC file context is closed")); return -1; }
         var previous = threads.enterForeign(safety);

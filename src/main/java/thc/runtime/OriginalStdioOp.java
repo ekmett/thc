@@ -9,6 +9,48 @@ import java.util.regex.Pattern;
 
 /** Exact pinned GHC/library declarations, not aliases for arbitrary POSIX imports. */
 public enum OriginalStdioOp {
+    // Installed Unix declarations with ordinary scalar or caller-owned image ABIs.
+    // NativeUnix supplies transport; libc supplies the operation semantics.
+    UNIX_CHOWN("chown", "Int32Rep", "AddrRep", "Word32Rep", "Word32Rep"),
+    UNIX_LCHOWN("lchown", "Int32Rep", "AddrRep", "Word32Rep", "Word32Rep"),
+    UNIX_PATHCONF("pathconf", "Int64Rep", "AddrRep", "Int32Rep"),
+    UNIX_TRUNCATE("0:FilesziPosixString:truncate", "Int32Rep", "AddrRep", "Int64Rep"),
+    UNIX_MKNOD("1:FilesziPosixString:mknod", "Int32Rep", "AddrRep", "Word32Rep", "Word64Rep"),
+    UNIX_UTIMES("4:FilesziCommon:utimes", "Int32Rep", "AddrRep", "AddrRep"),
+    UNIX_LUTIMES("3:FilesziCommon:lutimes", "Int32Rep", "AddrRep", "AddrRep"),
+    UNIX_FCHMOD("fchmod", "Int32Rep", "Int32Rep", "Word32Rep"),
+    UNIX_FCHOWN("fchown", "Int32Rep", "Int32Rep", "Word32Rep", "Word32Rep"),
+    UNIX_FPATHCONF("fpathconf", "Int64Rep", "Int32Rep", "Int32Rep"),
+    UNIX_FUTIMES("2:FilesziCommon:futimes", "Int32Rep", "Int32Rep", "AddrRep"),
+    UNIX_FUTIMENS("5:FilesziCommon:futimens", "Int32Rep", "Int32Rep", "AddrRep"),
+    UNIX_FSYNC("1:Unistd:fsync:safe", "Int32Rep", "Int32Rep"),
+    UNIX_FDATASYNC("0:Unistd:fdatasync:safe", "Int32Rep", "Int32Rep"),
+    UNIX_FALLOCATE("0:Fcntl:posixzufallocate:safe", "Int32Rep", "Int32Rep", "Int64Rep", "Int64Rep"),
+    UNIX_FADVISE("1:Fcntl:posixzufadvise:safe", "Int32Rep", "Int32Rep", "Int64Rep", "Int64Rep", "Int32Rep"),
+    UNIX_TCFLOW("0:TerminalziCommon:tcflow", "Int32Rep", "Int32Rep", "Int32Rep"),
+    UNIX_TCFLUSH("1:TerminalziCommon:tcflush", "Int32Rep", "Int32Rep", "Int32Rep"),
+    UNIX_TCDRAIN("2:TerminalziCommon:tcdrain:safe", "Int32Rep", "Int32Rep"),
+    UNIX_TCSENDBREAK("3:TerminalziCommon:tcsendbreak", "Int32Rep", "Int32Rep", "Int32Rep"),
+    UNIX_TCGETPGRP("tcgetpgrp", "Int32Rep", "Int32Rep"),
+    UNIX_GETUID("getuid", "Word32Rep"),
+    UNIX_GETGID("getgid", "Word32Rep"),
+    UNIX_GETEGID("getegid", "Word32Rep"),
+    UNIX_GETPPID("getppid", "Int32Rep"),
+    UNIX_GETPGRP("getpgrp", "Int32Rep"),
+    UNIX_GETPGID("getpgid", "Int32Rep", "Int32Rep"),
+    UNIX_SYSCONF("sysconf", "Int64Rep", "Int32Rep"),
+    UNIX_MAKEDEV("0:FilesziCommon:makedev", "Word64Rep", "Word32Rep", "Word32Rep"),
+    UNIX_TIME("0:Time:time", "Int64Rep", "AddrRep"),
+    UNIX_TIMES("1:ProcessziCommon:times", "Int64Rep", "AddrRep"),
+    UNIX_UNAME("uname", "Int32Rep", "AddrRep"),
+    UNIX_GETRLIMIT("1:Resource:getrlimit", "Int32Rep", "Int32Rep", "AddrRep"),
+    UNIX_SIGFILLSET("1:Signals:sigfillset", "Int32Rep", "AddrRep"),
+    UNIX_SIGDELSET("2:Signals:sigdelset", "Int32Rep", "AddrRep", "Int32Rep"),
+    UNIX_SIGISMEMBER("0:Signals:sigismember", "Int32Rep", "AddrRep", "Int32Rep"),
+    UNIX_CFGETISPEED("9:TerminalziCommon:cfgetispeed", "Word32Rep", "AddrRep"),
+    UNIX_CFGETOSPEED("7:TerminalziCommon:cfgetospeed", "Word32Rep", "AddrRep"),
+    UNIX_CFSETISPEED("8:TerminalziCommon:cfsetispeed", "Int32Rep", "AddrRep", "Word32Rep"),
+    UNIX_CFSETOSPEED("6:TerminalziCommon:cfsetospeed", "Int32Rep", "AddrRep", "Word32Rep"),
     // GHC marshals source BOOL through Int#, while the native Windows ABI uses
     // a 32-bit BOOL. GetLastError's DWORD retains its Word32# declaration.
     FIND_FIRST("FindFirstFileW", "ccall", "unsafe", Arrays.asList("AddrRep", "AddrRep", null), "AddrRep", "Win32-2.14.2.1-inplace"),
@@ -61,6 +103,8 @@ public enum OriginalStdioOp {
         Arrays.asList("Int32Rep", "AddrRep", "Word64Rep", null), "Int64Rep"),
     READ_UNSAFE("ghczuwrapperZC23ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCread", "capi", "unsafe",
         Arrays.asList("Int32Rep", "AddrRep", "Word64Rep", null), "Int64Rep"),
+    UNIX_READ("read", "ccall", "safe", Arrays.asList("Int32Rep", "AddrRep", "Word64Rep", null), "Int64Rep", "unix-2.8.8.0-inplace"),
+    UNIX_WRITE("write", "ccall", "safe", Arrays.asList("Int32Rep", "AddrRep", "Word64Rep", null), "Int64Rep", "unix-2.8.8.0-inplace"),
     WRITE_SAFE("ghczuwrapperZC20ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite", "capi", "safe",
         Arrays.asList("Int32Rep", "AddrRep", "Word64Rep", null), "Int64Rep"),
     WRITE_UNSAFE("ghczuwrapperZC21ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite", "capi", "unsafe",
@@ -167,6 +211,18 @@ public enum OriginalStdioOp {
     private static final Pattern DIRECTORY_WRAPPER_UNIT = Pattern.compile("directoryzm1zi3zi10zi0zm(?:inplace|[0-9a-f]+)ZC");
     private static final Pattern UNIX_WRAPPER_UNIT = Pattern.compile("unixzm2zi8zi8zi0zm(?:inplace|[0-9a-f]+)ZC");
 
+    OriginalStdioOp(String declaration, String result, String... arguments) {
+        var wrapper = declaration.split(":");
+        symbol = wrapper.length == 1 ? declaration : "ghczuwrapperZC" + wrapper[0] +
+            "ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixzi" + wrapper[1] + "ZC" + wrapper[2];
+        convention = wrapper.length == 1 ? "ccall" : "capi";
+        safety = wrapper.length == 4 ? wrapper[3] : "unsafe";
+        this.arguments = Collections.unmodifiableList(Arrays.asList(Arrays.copyOf(arguments, arguments.length + 1)));
+        this.result = result;
+        unit = "unix-2.8.8.0-inplace";
+        narrowResult = NarrowInteger.fromRep(result);
+    }
+
     OriginalStdioOp(String symbol, String convention, String safety, List<String> arguments, String result) {
         this(symbol, convention, safety, arguments, result, "ghc-internal");
     }
@@ -195,14 +251,28 @@ public enum OriginalStdioOp {
             this == READLINK && "ghc-internal".equals(value) ||
             (this == UNLINKAT || this == FSTATAT) && value instanceof String text && DIRECTORY_UNIT.matcher(text).matches() ||
             CoreOriginalStdio.isOriginalUnixUnit(value) && !getWindowsDirectory() && (this == CLOSE || this == DUP || this == DUP2 || this == PIPE || this == ISATTY ||
-                this == UNIX_LSTAT || getCurrentDirectory() || getDirectoryStream() || getWaitStatus() || this == MKDIR || this == RMDIR || getPathLink() || this == GET_EUID);
+                getUnixNative() || this == UNIX_READ || this == UNIX_WRITE || this == TCGETATTR || this == TCSETATTR || this == GET_PID || this == UNIX_LSTAT || getCurrentDirectory() || getDirectoryStream() || getWaitStatus() || this == MKDIR || this == RMDIR || getPathLink() || this == GET_EUID);
     }
     public boolean matchesSymbol(Object value) {
+        if (value instanceof String text && text.contains("ZCunixzm")) {
+            String canonical = UNIX_WRAPPER_UNIT.matcher(text).replaceAll("unixzm2zi8zi8zi0zminplaceZC");
+            canonical = canonical.replace("ZCSystemziPosixziFilesziByteStringZC", "ZCSystemziPosixziFilesziPosixStringZC")
+                .replace("ZCSystemziPosixziFilesZC", "ZCSystemziPosixziFilesziPosixStringZC")
+                .replace("ZCSystemziPosixziDirectoryziByteStringZC", "ZCSystemziPosixziDirectoryziPosixPathZC")
+                .replace("ZCSystemziPosixziDirectoryZC", "ZCSystemziPosixziDirectoryziPosixPathZC");
+            if (symbol.equals(canonical)) return true;
+            if (this == TCGETATTR && canonical.equals("ghczuwrapperZC5ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziTerminalziCommonZCtcgetattr")) return true;
+            if (this == TCSETATTR && canonical.equals("ghczuwrapperZC4ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziTerminalziCommonZCtcsetattr")) return true;
+        }
         return symbol.equals(value) ||
             this == FSTATAT && value instanceof String text && DIRECTORY_WRAPPER_UNIT.matcher(text).replaceAll("directoryzm1zi3zi10zi0zminplaceZC").equals(symbol) ||
-            (this == UNIX_LSTAT || getWaitStatus() || this == OPENDIR || this == FDOPENDIR) && value instanceof String text &&
+            (getUnixNative() || this == UNIX_LSTAT || getWaitStatus() || this == OPENDIR || this == FDOPENDIR) && value instanceof String text &&
                 UNIX_WRAPPER_UNIT.matcher(text).replaceAll("unixzm2zi8zi8zi0zminplaceZC").equals(symbol);
     }
+
+    public boolean getUnixNative() { return ordinal() <= UNIX_CFSETOSPEED.ordinal(); }
+    public boolean getReading() { return this == READ_SAFE || this == READ_UNSAFE || this == UNIX_READ; }
+    public boolean getTransfer() { return getReading() || this == WRITE_SAFE || this == WRITE_UNSAFE || this == UNIX_WRITE; }
 
     // Direct comparisons keep the operation constant during partial evaluation.
     public boolean getProcessIdentity() { return this == GET_PID || this == GET_EUID; }

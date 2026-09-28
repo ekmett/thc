@@ -3593,7 +3593,7 @@ class OriginalPathStatDeclarationTest(unittest.TestCase):
                 wrong = copy.deepcopy(declaration); wrong['target']['unit'] = owner
                 self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'], owner)
             for wrong_symbol in (symbol.replace('ZC2ZC', 'ZC3ZC'), symbol.replace('ZClstat', 'ZCstat'),
-                                 symbol.replace('FilesziPosixString', 'Files'),
+                                 symbol.replace('FilesziPosixString', 'FilesziUnknown'),
                                  symbol.replace('unixzm2zi8zi8zi0', 'unixzm2zi8zi7zi0')):
                 wrong = copy.deepcopy(declaration); wrong['target']['symbol'] = wrong_symbol
                 self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'], wrong_symbol)
@@ -3804,6 +3804,32 @@ class OriginalPathAccessDeclarationTest(unittest.TestCase):
 
 class OriginalPathnameDeclarationTest(unittest.TestCase):
     """Synthetic negatives; genuine unchanged Id positives are Haskell fixtures."""
+
+    def test_unix_native_family_uses_shared_declaration_contract(self):
+        fixture = LibdwUnavailableAuditTest()
+        declarations = {**core_original_foreign.UNIX_NATIVE_OPERATIONS,
+                        **core_original_foreign.UNIX_ENVIRONMENT_OPERATIONS}
+        for symbol, (convention, safety, arguments, result) in declarations.items():
+            rep = lambda value, evaluated: dict(kind='void' if value is None else 'address' if value == 'AddrRep' else 'long',
+                primReps=[] if value is None else [value], evaluated=evaluated)
+            declaration = dict(schema=1, target=dict(kind='static', symbol=symbol, unit='unix-2.8.8.0-inplace', isFunction=True),
+                convention=convention, safety=safety, arity=len(arguments), suppliedArity=len(arguments),
+                argumentReps=[rep(value, False) for value in arguments],
+                resultRep=dict(tuple_rep(*(rep(value, True) for value in result)), evaluated=False))
+            self.assertTrue(fixture.audit(fixture.fixture(declaration))['accepted'], symbol)
+        # One representative owner, width and wrapper-alias check exercises the
+        # shared admission boundary; libc behavior is tested by libc itself.
+        symbol = 'ghczuwrapperZC0ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziFilesziPosixStringZCtruncate'
+        signature = declarations[symbol]
+        declaration = dict(schema=1, target=dict(kind='static', symbol=symbol.replace('ziPosixString', 'ziByteString'),
+            unit='unix-2.8.8.0-inplace', isFunction=True), convention='capi', safety='unsafe', arity=3, suppliedArity=3,
+            argumentReps=[rep(value, False) for value in signature[2]],
+            resultRep=dict(tuple_rep(*(rep(value, True) for value in signature[3])), evaluated=False))
+        self.assertTrue(fixture.audit(fixture.fixture(declaration))['accepted'])
+        wrong = copy.deepcopy(declaration); wrong['target']['unit'] = 'unix-2.8.8.0-460b'
+        self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
+        wrong = copy.deepcopy(declaration); wrong['argumentReps'][1] = rep('Int32Rep', False)
+        self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
 
     def declaration(self, symbol):
         address = dict(kind='address', primReps=['AddrRep'], evaluated=False)

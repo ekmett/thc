@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
-"""Closed original GHC 9.14.1 foreign declarations, never wrapper-pattern aliases.
+"""Closed original GHC 9.14.1 foreign declarations and pinned library aliases.
 
 Recognition is separate from capability admission and runtime frame-kind checks.
 These declarations alone do not enable complete decoding or remote capture.
@@ -128,7 +128,65 @@ STACK_INFO = frozenset(('getStackInfoTableAddrzh', 'getInfoTableAddrszh', 'looku
 TCSETATTR_SYMBOL = 'ghczuwrapperZC9ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCtcsetattr'
 TCGETATTR_SYMBOL = 'ghczuwrapperZC10ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCtcgetattr'
 
+def unix_declaration(declaration, result, *arguments):
+    wrapper = declaration.split(':')
+    symbol = declaration if len(wrapper) == 1 else (
+        'ghczuwrapperZC' + wrapper[0] + 'ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixzi' + wrapper[1] + 'ZC' + wrapper[2])
+    return symbol, ('ccall' if len(wrapper) == 1 else 'capi',
+                    wrapper[3] if len(wrapper) == 4 else 'unsafe', (*arguments, None), (None, result))
+
+
+# Original installed declarations; wrapper names retain their owner and C ABI.
+UNIX_NATIVE_OPERATIONS = dict(unix_declaration(*row) for row in (
+    ('chown', 'Int32Rep', 'AddrRep', 'Word32Rep', 'Word32Rep'),
+    ('lchown', 'Int32Rep', 'AddrRep', 'Word32Rep', 'Word32Rep'),
+    ('pathconf', 'Int64Rep', 'AddrRep', 'Int32Rep'),
+    ('0:FilesziPosixString:truncate', 'Int32Rep', 'AddrRep', 'Int64Rep'),
+    ('1:FilesziPosixString:mknod', 'Int32Rep', 'AddrRep', 'Word32Rep', 'Word64Rep'),
+    ('4:FilesziCommon:utimes', 'Int32Rep', 'AddrRep', 'AddrRep'),
+    ('3:FilesziCommon:lutimes', 'Int32Rep', 'AddrRep', 'AddrRep'),
+    ('fchmod', 'Int32Rep', 'Int32Rep', 'Word32Rep'),
+    ('fchown', 'Int32Rep', 'Int32Rep', 'Word32Rep', 'Word32Rep'),
+    ('fpathconf', 'Int64Rep', 'Int32Rep', 'Int32Rep'),
+    ('2:FilesziCommon:futimes', 'Int32Rep', 'Int32Rep', 'AddrRep'),
+    ('5:FilesziCommon:futimens', 'Int32Rep', 'Int32Rep', 'AddrRep'),
+    ('1:Unistd:fsync:safe', 'Int32Rep', 'Int32Rep'),
+    ('0:Unistd:fdatasync:safe', 'Int32Rep', 'Int32Rep'),
+    ('0:Fcntl:posixzufallocate:safe', 'Int32Rep', 'Int32Rep', 'Int64Rep', 'Int64Rep'),
+    ('1:Fcntl:posixzufadvise:safe', 'Int32Rep', 'Int32Rep', 'Int64Rep', 'Int64Rep', 'Int32Rep'),
+    ('0:TerminalziCommon:tcflow', 'Int32Rep', 'Int32Rep', 'Int32Rep'),
+    ('1:TerminalziCommon:tcflush', 'Int32Rep', 'Int32Rep', 'Int32Rep'),
+    ('2:TerminalziCommon:tcdrain:safe', 'Int32Rep', 'Int32Rep'),
+    ('3:TerminalziCommon:tcsendbreak', 'Int32Rep', 'Int32Rep', 'Int32Rep'),
+    ('tcgetpgrp', 'Int32Rep', 'Int32Rep'),
+    ('getuid', 'Word32Rep'), ('getgid', 'Word32Rep'), ('getegid', 'Word32Rep'),
+    ('getppid', 'Int32Rep'), ('getpgrp', 'Int32Rep'), ('getpgid', 'Int32Rep', 'Int32Rep'),
+    ('sysconf', 'Int64Rep', 'Int32Rep'),
+    ('0:FilesziCommon:makedev', 'Word64Rep', 'Word32Rep', 'Word32Rep'),
+    ('0:Time:time', 'Int64Rep', 'AddrRep'), ('1:ProcessziCommon:times', 'Int64Rep', 'AddrRep'),
+    ('uname', 'Int32Rep', 'AddrRep'), ('1:Resource:getrlimit', 'Int32Rep', 'Int32Rep', 'AddrRep'),
+    ('1:Signals:sigfillset', 'Int32Rep', 'AddrRep'),
+    ('2:Signals:sigdelset', 'Int32Rep', 'AddrRep', 'Int32Rep'),
+    ('0:Signals:sigismember', 'Int32Rep', 'AddrRep', 'Int32Rep'),
+    ('9:TerminalziCommon:cfgetispeed', 'Word32Rep', 'AddrRep'),
+    ('7:TerminalziCommon:cfgetospeed', 'Word32Rep', 'AddrRep'),
+    ('8:TerminalziCommon:cfsetispeed', 'Int32Rep', 'AddrRep', 'Word32Rep'),
+    ('6:TerminalziCommon:cfsetospeed', 'Int32Rep', 'AddrRep', 'Word32Rep'),
+))
+
+UNIX_ENVIRONMENT_OPERATIONS = {
+    'setenv': ('ccall', 'unsafe', ('AddrRep', 'AddrRep', 'Int32Rep', None), (None, 'Int32Rep')),
+    'clearenv': ('ccall', 'unsafe', (None,), (None, 'IntRep')),
+    '__hsunix_get_environ': ('ccall', 'unsafe', (None,), (None, 'AddrRep')),
+    **dict(unix_declaration('0:' + module + ':unsetenv', 'Int32Rep', 'AddrRep')
+           for module in ('Env', 'EnvziByteString', 'EnvziPosixString')),
+}
+
 OPERATIONS = {
+    **UNIX_NATIVE_OPERATIONS,
+    **UNIX_ENVIRONMENT_OPERATIONS,
+    **{name: ('ccall', 'safe', ('Int32Rep', 'AddrRep', 'Word64Rep', None), (None, 'Int64Rep'))
+       for name in ('read', 'write')},
     **PROCESS_OPERATIONS,
     **DIRECTORY_STREAM_OPERATIONS,
     **WINDOWS_DIRECTORY_OPERATIONS,
@@ -314,6 +372,9 @@ DESCRIPTOR_KEYS = {'schema', 'target', 'convention', 'safety', 'arity', 'supplie
 # Same libc symbols, but different physical operands or result ABI from the
 # ghc-internal declarations above. Do not infer these from caller binding names.
 LIBRARY_OPERATIONS = {
+    **{('unix-2.8.8.0-inplace', symbol): signature for symbol, signature in UNIX_NATIVE_OPERATIONS.items()},
+    **{('unix-2.8.8.0-inplace', symbol): signature for symbol, signature in UNIX_ENVIRONMENT_OPERATIONS.items()},
+    **{('unix-2.8.8.0-inplace', symbol): OPERATIONS[symbol] for symbol in ('read', 'write', 'getpid', 'putenv', 'getProgArgv')},
     **{('unix-2.8.8.0-inplace', symbol): signature for symbol, signature in DIRECTORY_STREAM_OPERATIONS.items()},
     **{('unix-2.8.8.0-inplace', symbol): OPERATIONS[symbol] for symbol in ('symlink', 'rename', 'readlink', 'chdir', 'getcwd', 'rmdir')},
     ('unix-2.8.8.0-inplace', 'geteuid'): OPERATIONS['geteuid'],
@@ -363,8 +424,14 @@ def operation_symbol(target):
     if isinstance(symbol, str):
         canonical = re.sub(r'unixzm2zi8zi8zi0zm(?:inplace|[0-9a-f]+)ZC',
                            'unixzm2zi8zi8zi0zminplaceZC', symbol)
-        if canonical == UNIX_LSTAT or canonical in WAIT_STATUS_OPERATIONS or canonical in DIRECTORY_STREAM_OPERATIONS:
+        canonical = re.sub(r'ZCSystemziPosixziFiles(?:ziByteString)?ZC', 'ZCSystemziPosixziFilesziPosixStringZC', canonical)
+        canonical = re.sub(r'ZCSystemziPosixziDirectory(?:ziByteString)?ZC', 'ZCSystemziPosixziDirectoryziPosixPathZC', canonical)
+        if canonical in UNIX_NATIVE_OPERATIONS or canonical in UNIX_ENVIRONMENT_OPERATIONS or canonical == UNIX_LSTAT or canonical in WAIT_STATUS_OPERATIONS or canonical in DIRECTORY_STREAM_OPERATIONS:
             return canonical
+        if canonical == 'ghczuwrapperZC5ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziTerminalziCommonZCtcgetattr':
+            return TCGETATTR_SYMBOL
+        if canonical == 'ghczuwrapperZC4ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziTerminalziCommonZCtcsetattr':
+            return TCSETATTR_SYMBOL
         canonical_directory = re.sub(r'directoryzm1zi3zi10zi0zm(?:inplace|[0-9a-f]+)ZC',
                                      'directoryzm1zi3zi10zi0zminplaceZC', symbol)
         if canonical_directory == DIRECTORY_FSTATAT:
@@ -478,6 +545,13 @@ def validate(metadata, argument_reps, flags, result_rep):
     if symbol not in OPERATIONS:
         return None
     convention, safety, expected, output = operation(target)
+    if 'ZCunixzm' in target['symbol']:
+        unit = target.get('unit')
+        require(unix_libc_unit(unit) and 'ZC' + unit.replace('-', 'zm').replace('.', 'zi') + 'ZC' in target['symbol'],
+                'matching installed Unix wrapper owner')
+    if symbol in UNIX_NATIVE_OPERATIONS or symbol in UNIX_ENVIRONMENT_OPERATIONS or symbol in ('read', 'write'):
+        unit = target.get('unit')
+        require(unix_libc_unit(unit), 'matching installed Unix native declaration owner')
     if symbol in PROCESS_OPERATIONS:
         require(process_unit(target.get('unit')), 'supported installed process unit')
     if symbol in BYTESTRING_DECIMAL_OPERATIONS:
@@ -488,9 +562,7 @@ def validate(metadata, argument_reps, flags, result_rep):
         require(text_unit(target.get('unit')), 'supported installed text unit')
     if symbol == UNIX_LSTAT:
         unit = target.get('unit')
-        require(unix_libc_unit(unit) and target['symbol'] ==
-                'ghczuwrapperZC2ZC' + unit.replace('-', 'zm').replace('.', 'zi') +
-                'ZCSystemziPosixziFilesziPosixStringZClstat', 'matching installed unix path-stat unit and symbol')
+        require(unix_libc_unit(unit), 'matching installed unix path-stat unit and symbol')
     if symbol == DIRECTORY_FSTATAT:
         unit = target.get('unit')
         require(directory_unit(unit) and target['symbol'] == symbol.replace(
@@ -514,9 +586,7 @@ def validate(metadata, argument_reps, flags, result_rep):
                 'matching installed unix wait-status unit and symbol')
     if symbol in DIRECTORY_STREAM_OPERATIONS:
         unit = target.get('unit')
-        require(unix_libc_unit(unit) and target['symbol'] == symbol.replace(
-                'unixzm2zi8zi8zi0zminplace', unit.replace('-', 'zm').replace('.', 'zi')),
-                'matching installed unix directory-stream unit and symbol')
+        require(unix_libc_unit(unit), 'matching installed unix directory-stream unit and symbol')
     if symbol in WINDOWS_DIRECTORY_OPERATIONS:
         require(win32_unit(target.get('unit')) or symbol == 'GetLastError' and target.get('unit') == 'ghc-internal',
                 'pinned original Win32 or ghc-internal GetLastError unit')
@@ -530,6 +600,9 @@ def validate(metadata, argument_reps, flags, result_rep):
     require(target.keys() == {'kind', 'symbol', 'unit', 'isFunction'} and target.get('kind') == 'static'
             and target.get('isFunction') is True
             and (target.get('unit') == 'ghc-internal' or
+                 symbol in UNIX_NATIVE_OPERATIONS and unix_libc_unit(target.get('unit')) or
+                 symbol in UNIX_ENVIRONMENT_OPERATIONS and unix_libc_unit(target.get('unit')) or
+                 symbol in ('read', 'write', 'getpid', 'putenv', 'getProgArgv', TCGETATTR_SYMBOL, TCSETATTR_SYMBOL) and unix_libc_unit(target.get('unit')) or
                  symbol in PROCESS_OPERATIONS and process_unit(target.get('unit')) or
                  symbol in TEXT_OPERATIONS and text_unit(target.get('unit')) or
                  symbol in WINDOWS_DIRECTORY_OPERATIONS and win32_unit(target.get('unit')) or

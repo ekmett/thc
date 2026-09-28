@@ -43,7 +43,7 @@ public final class CoreOriginalStdio {
 
     /** An occurrence certificate cannot relabel a stored foreign operand. */
     public static void validateScalarOperand(OriginalStdioOp operation, int index, CoreRepresentation lowered, CoreRepresentation stored) {
-        requireProof(operation.getProcessIdentity() || operation == OriginalStdioOp.SET_ERRNO || operation.getEventDescriptor() || operation.getWaitStatus() || operation.getPathRemoval() || operation.getFlagConstant() || operation.getFcntl() || operation == OriginalStdioOp.SIGPROCMASK || operation.getReadiness() || operation.getSeekConstant() || operation.getStat() || operation.getTermios() || operation.getSigset() || operation.getSavedTermios() || operation.getReadImage() || operation.getPathStat() || operation.getPathMode() || operation == OriginalStdioOp.ACCESS || operation == OriginalStdioOp.UNLINKAT || operation == OriginalStdioOp.FSTATAT || operation.getPathLink() || operation.getCurrentDirectory() || operation.getDirectoryStream() || operation == OriginalStdioOp.TCSETATTR || operation.getOpening() || operation.getIconv() || operation.getStrerror() || operation.getDuplication() || operation.getLocking(),
+        requireProof(operation.getUnixNative() || operation.getProcessIdentity() || operation == OriginalStdioOp.SET_ERRNO || operation.getEventDescriptor() || operation.getWaitStatus() || operation.getPathRemoval() || operation.getFlagConstant() || operation.getFcntl() || operation == OriginalStdioOp.SIGPROCMASK || operation.getReadiness() || operation.getSeekConstant() || operation.getStat() || operation.getTermios() || operation.getSigset() || operation.getSavedTermios() || operation.getReadImage() || operation.getPathStat() || operation.getPathMode() || operation == OriginalStdioOp.ACCESS || operation == OriginalStdioOp.UNLINKAT || operation == OriginalStdioOp.FSTATAT || operation.getPathLink() || operation.getCurrentDirectory() || operation.getDirectoryStream() || operation == OriginalStdioOp.TCSETATTR || operation.getOpening() || operation.getIconv() || operation.getStrerror() || operation.getDuplication() || operation.getLocking(),
             "strict operand operation");
         var primitive = operation.getArguments().get(index);
         var kind = switch (primitive) { case null -> CoreKind.VOID; case "AddrRep" -> CoreKind.ADDRESS; default -> CoreKind.LONG; };
@@ -127,8 +127,8 @@ public final class CoreOriginalStdio {
         requireProof(target.keySet().equals(Set.of("kind", "symbol", "unit", "isFunction")) && "static".equals(target.get("kind")) &&
             operation.acceptsUnit(target.get("unit")) && Boolean.TRUE.equals(target.get("isFunction")), "static original installed-library function target");
         // The strict unit grammar needs only these two z-encoding substitutions.
-        requireProof(!(operation == OriginalStdioOp.UNIX_LSTAT || operation.getWaitStatus() || operation == OriginalStdioOp.OPENDIR || operation == OriginalStdioOp.FDOPENDIR) ||
-            symbol.equals(operation.getSymbol().replace("unixzm2zi8zi8zi0zminplace", ((String) target.get("unit")).replace("-", "zm").replace(".", "zi"))), "Unix wrapper owner");
+        requireProof(!symbol.contains("ZCunixzm") || CoreOriginalStdio.isOriginalUnixUnit(target.get("unit")) &&
+            symbol.contains("ZC" + ((String) target.get("unit")).replace("-", "zm").replace(".", "zi") + "ZC"), "Unix wrapper owner");
         requireProof(operation != OriginalStdioOp.FSTATAT || symbol.equals(operation.getSymbol().replace("directoryzm1zi3zi10zi0zminplace",
             ((String) target.get("unit")).replace("-", "zm").replace(".", "zi"))), "Directory wrapper owner");
         requireProof(operation.getConvention().equals(descriptor.get("convention")) && operation.getSafety().equals(descriptor.get("safety")), "calling convention/safety");

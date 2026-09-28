@@ -119,6 +119,19 @@ public final class NativeFileProvider implements Closeable {
         } catch (Throwable failure) { throw propagate(failure); }
     }
     public NativeDirectoryStreams getDirectoryStreams() { return directoryStreams; }
+    synchronized SulongCbits.CapiResult unixPath(OriginalStdioOp operation, Object[] arguments) {
+        requireCurrent();
+        if (disposed) throw propagate(new ClosedChannelException());
+        var path = (ManagedAddress) arguments[0];
+        try (var anchor = directory.borrow()) {
+            byte[] name = path.withNativeBorrow(() -> {
+                var owner = path.cbitsOwner();
+                if (owner == null) return NativeUnix.anchoredPath(anchor.getDescriptor(), path);
+                synchronized (owner) { return NativeUnix.anchoredPath(anchor.getDescriptor(), path); }
+            });
+            return NativeUnix.invoke(operation, arguments, name);
+        }
+    }
     public synchronized ManagedProcesses getProcesses() {
         requireCurrent();
         if (disposed) throw propagate(new ClosedChannelException());

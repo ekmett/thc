@@ -66,7 +66,7 @@ public final class CoreEnvironmentForeign {
                 var descriptor = raw instanceof Map<?, ?> meta && meta.get("foreignCall") instanceof Map<?, ?> call ? call : null;
                 var target = descriptor != null && descriptor.get("target") instanceof Map<?, ?> map ? map : null;
                 for (var operation : EnvironmentOp.values()) {
-                    if (operation.getSymbol().equals(target == null ? null : target.get("symbol"))) {
+                    if (operation.matchesSymbol(target == null ? null : target.get("symbol"))) {
                         if (list.size() <= 1 || !(list.get(1) instanceof List<?> head))
                             throw fault("Invalid original environment call: missing head");
                         validateHead(head, false);
@@ -93,15 +93,20 @@ public final class CoreEnvironmentForeign {
             !(descriptor.get("target") instanceof Map<?, ?> target)) return null;
         EnvironmentOp operation = null;
         for (var candidate : EnvironmentOp.values()) {
-            if (candidate.getSymbol().equals(target.get("symbol"))) { operation = candidate; break; }
+            if (candidate.matchesSymbol(target.get("symbol"))) { operation = candidate; break; }
         }
         if (operation == null) return null;
         requireProof(descriptor.keySet().equals(DESCRIPTOR_KEYS) && exact(descriptor.get("schema"), 1), "descriptor schema");
         requireProof(target.keySet().equals(Set.of("kind", "symbol", "unit", "isFunction")) &&
             "static".equals(target.get("kind")) && ("ghc-internal".equals(target.get("unit")) ||
-                operation == EnvironmentOp.GET && CoreOriginalStdio.isOriginalUnixUnit(target.get("unit"))) &&
+                CoreOriginalStdio.isOriginalUnixUnit(target.get("unit"))) &&
             Boolean.TRUE.equals(target.get("isFunction")), "static supported installed-library function target");
-        requireProof("ccall".equals(descriptor.get("convention")) && "unsafe".equals(descriptor.get("safety")), "convention/safety");
+        String symbol = (String) target.get("symbol");
+        boolean wrapper = symbol.startsWith("ghczuwrapper");
+        requireProof((wrapper ? "capi" : "ccall").equals(descriptor.get("convention")) && "unsafe".equals(descriptor.get("safety")), "convention/safety");
+        if (wrapper || operation == EnvironmentOp.SET || operation == EnvironmentOp.CLEAR || symbol.equals("__hsunix_get_environ"))
+            requireProof(CoreOriginalStdio.isOriginalUnixUnit(target.get("unit")) && (!wrapper || symbol.contains(
+                "ZC" + ((String) target.get("unit")).replace("-", "zm").replace(".", "zi") + "ZC")), "Unix declaration owner");
         int count = operation.getArguments().size();
         requireProof(exact(descriptor.get("arity"), count) && exact(descriptor.get("suppliedArity"), count), "saturated arity");
         var declared = descriptor.get("argumentReps") instanceof List<?> values ? values : null;

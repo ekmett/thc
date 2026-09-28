@@ -111,6 +111,35 @@ public final class GuestEnvironment {
         return remove(snapshot(name));
     }
 
+    @TruffleBoundary
+    public synchronized long set(ManagedAddress name, ManagedAddress value, int overwrite) {
+        var allocations = current();
+        var key = snapshot(name);
+        if (key.length == 0 || equalsIndex(key) >= 0) {
+            Language.currentState().getStdio().nativeError(22);
+            return -1;
+        }
+        if (overwrite == 0) for (var entry : contents()) if (matches(entry, key)) return 0;
+        var bytes = snapshot(value);
+        var entry = allocations.malloc(Math.addExact((long) key.length + bytes.length, 2));
+        if (entry.sameLocation(ManagedAddress.nullAddress())) {
+            Language.currentState().getStdio().nativeError(12);
+            return -1;
+        }
+        for (int i = 0; i < key.length; i++) entry.writeWord8(i, key[i]);
+        entry.writeWord8(key.length, '=');
+        for (int i = 0; i < bytes.length; i++) entry.writeWord8((long) key.length + 1 + i, bytes[i]);
+        entry.writeWord8((long) key.length + 1 + bytes.length, 0);
+        return put(entry);
+    }
+
+    @TruffleBoundary
+    public synchronized long clear() {
+        contents().clear();
+        retireVector();
+        return 0;
+    }
+
     private long remove(byte[] name) {
         if (name.length == 0 || equalsIndex(name) >= 0) {
             Language.currentState(null).getStdio().nativeError(22); // Linux EINVAL.

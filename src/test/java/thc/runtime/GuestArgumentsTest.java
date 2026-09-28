@@ -190,6 +190,13 @@ class GuestArgumentsTest {
             var arguments = operation.getArguments().stream().map(rep -> scalar(rep, true)).toList();
             assertEquals(operation, CoreRtsArgumentsForeign.validate(
                 Map.of("foreignCall", descriptor, "rep", result), arguments, List.of(false, false, false), result));
+            var unix = new LinkedHashMap<>(descriptor);
+            unix.put("target", Map.of("kind", "static", "symbol", operation.getSymbol(),
+                "unit", "unix-2.8.8.0-inplace", "isFunction", true));
+            if (operation == RtsArgumentsOp.GET) assertEquals(operation, CoreRtsArgumentsForeign.validate(
+                Map.of("foreignCall", unix, "rep", result), arguments, List.of(false, false, false), result));
+            else assertThrows(RuntimeFault.class, () -> CoreRtsArgumentsForeign.validate(
+                Map.of("foreignCall", unix, "rep", result), arguments, List.of(false, false, false), result));
             for (var change : List.of(Map.entry("safety", (Object) "safe"), Map.entry("arity", (Object) 2),
                     Map.entry("resultRep", (Object) scalar(null, true)), Map.entry("argumentReps", (Object)
                         List.of(scalar("IntRep", false), scalar("AddrRep", false), scalar(null, false))))) {

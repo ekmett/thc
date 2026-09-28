@@ -83,7 +83,18 @@ class OriginalStdioCallTest {
     }
     @Test void normalAndFirstInstalledCompiledCallsPreserveBytesErrnoAndState() throws Exception {
         for (var backend : List.of("ast","bytecode")) {
-            var out = new ByteArrayOutputStream(); var err = new ByteArrayOutputStream();
+            boolean[] safeTransfer = {false};
+            var out = new ByteArrayOutputStream() {
+                @Override public synchronized void write(byte[] bytes, int offset, int count) {
+                    var threads = Language.currentState().getThreads();
+                    if (safeTransfer[0]) {
+                        threads.enterCurrent(null, false, true, null);
+                        threads.leaveCurrent(GuestThreadStatus.FINISHED);
+                    } else assertThrows(RuntimeFault.class, () -> threads.enterCurrent(null, false, true, null));
+                    super.write(bytes, offset, count);
+                }
+            };
+            var err = new ByteArrayOutputStream();
             try (var context = context(out,err)) {
                 context.initialize("thc"); context.enter();
                 try {
@@ -95,6 +106,7 @@ class OriginalStdioCallTest {
                     class Exercise {
                         boolean compiled;
                         Object call(String name,Object... args) throws Exception {
+                            safeTransfer[0] = name.equals("safe_write");
                             long before = ((Number) program.diagnostics().get("compiledEntries")).longValue(); var target = targets.get(name); Object[] guest = new Object[args.length + 2]; guest[0] = 0L;
                             for (int i = 0; i < args.length; i++) { var value = args[i]; guest[i + 1] = Objects.equals(OriginalStdioFixtures.signatures.get(name).get(i),"Int32Rep") && value instanceof Long word && word >= Integer.MIN_VALUE && word <= Integer.MAX_VALUE ? Integer.valueOf(((Long) value).intValue()) : value; }
                             guest[guest.length - 1] = thc.runtime.Unit.INSTANCE; var raw = callScalarTestTarget(target,guest); Object result = Objects.equals(OriginalStdioFixtures.output(name),"Int32Rep") ? Long.valueOf(((Integer) raw).longValue()) : raw;
@@ -166,7 +178,7 @@ class OriginalStdioCallTest {
                     assertThrows(UnsupportedCore.class,() -> load.call(name,it -> ((Map<?,?>) it.get(6)).remove("foreignCall")));
                 }
                 assertThrows(RuntimeFault.class,() -> load.call("safe_write",it -> ((List<List<Object>>) it.get(2)).get(1).set(1,"p0")));
-                for (var symbol : List.of("write","__hscore_set_errno64",OriginalStdioFixtures.symbols.get("safe_write").replace("ZC20ZC","ZC22ZC"))) load.unknown("safe_write", symbol);
+                for (var symbol : List.of("writev","__hscore_set_errno64",OriginalStdioFixtures.symbols.get("safe_write").replace("ZC20ZC","ZC22ZC"))) load.unknown("safe_write", symbol);
                 for (var name : List.of("dup","dup2")) {
                     assertThrows(RuntimeFault.class,() -> load.call(name,it -> ((List<List<Object>>) it.get(2)).get(0).set(1,"p" + (OriginalStdioFixtures.signatures.get(name).size() - 1))));
                     load.unknown(name, "dup3");

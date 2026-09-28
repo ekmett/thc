@@ -99,7 +99,8 @@ public final class CoreRtsArgumentsForeign {
         if (operation == null) return null;
         requireProof(descriptor.keySet().equals(DESCRIPTOR_KEYS) && exact(descriptor.get("schema"), 1), "descriptor schema");
         requireProof(target.keySet().equals(Set.of("kind", "symbol", "unit", "isFunction")) &&
-            "static".equals(target.get("kind")) && "ghc-internal".equals(target.get("unit")) &&
+            "static".equals(target.get("kind")) && ("ghc-internal".equals(target.get("unit")) ||
+                operation == RtsArgumentsOp.GET && CoreOriginalStdio.isOriginalUnixUnit(target.get("unit"))) &&
             Boolean.TRUE.equals(target.get("isFunction")), "static ghc-internal function target");
         requireProof("ccall".equals(descriptor.get("convention")) && "unsafe".equals(descriptor.get("safety")), "convention/safety");
         int count = 3;

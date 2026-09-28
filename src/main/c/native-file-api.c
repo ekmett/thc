@@ -14,6 +14,17 @@
 #include <poll.h>
 #include <termios.h>
 #include <unistd.h>
+#include <signal.h>
+#include <sys/resource.h>
+#include <sys/time.h>
+#include <sys/times.h>
+#include <sys/utsname.h>
+
+/* NativeUnix's bounded caller-owned image transport uses this selected ABI. */
+_Static_assert(sizeof(time_t) == 8 && sizeof(struct tms) == 32, "Unix time image ABI");
+_Static_assert(sizeof(struct timeval) == 16 && sizeof(struct timespec) == 16, "Unix timestamp image ABI");
+_Static_assert(sizeof(struct utsname) == 390 && sizeof(struct rlimit) == 16, "Unix query image ABI");
+_Static_assert(sizeof(sigset_t) == 128 && sizeof(struct termios) == 60, "Unix signal/terminal image ABI");
 
 // Private Linux provider transport. These are not original GHC FCall symbols.
 // The fd slot belongs to a host lease allocated before acquisition. Once stored,

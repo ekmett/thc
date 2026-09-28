@@ -43,7 +43,25 @@ final class OriginalStdioExpression extends Expr {
         }
     }
 
+    @com.oracle.truffle.api.nodes.ExplodeLoop
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
+        if (operation.getUnixNative()) {
+            var arguments = new Object[operands.length - 1];
+            for (int i = 0; i < arguments.length; i++)
+                arguments[i] = "AddrRep".equals(operation.getArguments().get(i))
+                    ? operands[i].executeRequiredAddress(frame) : readInteger(frame, i);
+            TupleResults.requireVoidCarrier(operands[operands.length - 1].execute(frame));
+            writeInteger(frame, slots[offset], NativeUnix.execute(operation, arguments));
+            if ("safe".equals(operation.getSafety()) && AstControl.enabled(this)) {
+                boolean compiled = CompilerDirectives.inCompiledCode();
+                var request = GuestThreads.pollCurrent(this, false);
+                if (request != null) {
+                    request.compiledCapture = compiled;
+                    throw new AstCapture(request, SynchronousMasking.current(this)).append(ResumeCompleted.INSTANCE);
+                }
+            }
+            return null;
+        }
         if (operation.getWindowsEncoding()) {
             var windows = WindowsCodePages.current(this);
             if (operation == OriginalStdioOp.MULTI_BYTE_TO_WIDE || operation == OriginalStdioOp.WIDE_TO_MULTI_BYTE) {
@@ -379,9 +397,18 @@ final class OriginalStdioExpression extends Expr {
             long count = readInteger(frame, 2);
             TupleResults.requireVoidCarrier(operands[3].execute(frame));
             var stdio = CoreOriginalStdio.current(this);
-            result = operation == OriginalStdioOp.READ_SAFE || operation == OriginalStdioOp.READ_UNSAFE ? stdio.read(fd, address, count) : stdio.write(fd, address, count);
+            var safety = ForeignSafety.synchronous(operation.getSafety());
+            result = operation.getReading() ? stdio.read(fd, address, count, safety) : stdio.write(fd, address, count, safety);
         }
         writeInteger(frame, slots[offset], result);
+        if (operation.getTransfer() && "safe".equals(operation.getSafety()) && AstControl.enabled(this)) {
+            boolean compiled = CompilerDirectives.inCompiledCode();
+            var request = GuestThreads.pollCurrent(this, false);
+            if (request != null) {
+                request.compiledCapture = compiled;
+                throw new AstCapture(request, SynchronousMasking.current(this)).append(ResumeCompleted.INSTANCE);
+            }
+        }
         return null;
     }
 }

@@ -6275,13 +6275,13 @@ public final class BytecodeProgram implements ExecutableProgram {
                 var b = e.builder;
                 switch (environment) {
                     case GET -> b.beginEnvironmentGet(destination.getFirst());
-                    case PUT, UNSET -> b.beginEnvironmentChange(environment, destination.getFirst());
+                    case PUT, UNSET, SET, CLEAR -> b.beginEnvironmentChange(environment, destination.getFirst());
                     case ENUMERATE -> b.beginEnvironmentEnumerate(destination.getFirst());
                 }
                 for (var operand : operands) operand.emit(e);
                 switch (environment) {
                     case GET -> b.endEnvironmentGet();
-                    case PUT, UNSET -> b.endEnvironmentChange();
+                    case PUT, UNSET, SET, CLEAR -> b.endEnvironmentChange();
                     case ENUMERATE -> b.endEnvironmentEnumerate();
                 }
             });
@@ -6767,7 +6767,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                     || originalStdio == OriginalStdioOp.UNLINKAT || originalStdio == OriginalStdioOp.FSTATAT || originalStdio.getPathLink()
                     || originalStdio.getCurrentDirectory() || originalStdio.getDirectoryStream() || originalStdio == OriginalStdioOp.TCSETATTR
                     || originalStdio.getOpening() || originalStdio.getIconv() || originalStdio.getStrerror() || originalStdio.getDuplication()
-                    || originalStdio.getLocking())
+                    || originalStdio.getLocking() || originalStdio.getUnixNative())
                 CoreOriginalStdio.validateScalarOperand(originalStdio, index, operand.proof(), lexicalProof(argument, scope));
             var integer = NarrowInteger.fromRep(originalStdio.getArguments().get(index));
             operands.add(integer == null ? operand : e -> {
@@ -6777,6 +6777,13 @@ public final class BytecodeProgram implements ExecutableProgram {
         return tupleExpression(tupleProof, (e, destination) -> {
             var b = e.builder;
             var result = originalStdio.getResult() != null ? destination.getFirst() : b.createLocal("unused original State destination", "primitive");
+            if (originalStdio.getUnixNative()) {
+                b.beginOriginalUnix(result, originalStdio);
+                for (var operand : operands) operand.emit(e);
+                b.endOriginalUnix();
+                if (enableAsync && "safe".equals(originalStdio.getSafety())) emitAsyncPoll(e);
+                return;
+            }
             if (originalStdio.getWindowsEncoding()) {
                 if (originalStdio == OriginalStdioOp.MULTI_BYTE_TO_WIDE) {
                     b.beginOriginalWindowsMultiByte(result); for (var operand : operands) operand.emit(e); b.endOriginalWindowsMultiByte();
@@ -6937,7 +6944,8 @@ public final class BytecodeProgram implements ExecutableProgram {
             else if (originalStdio == OriginalStdioOp.SEEK) b.endFileSeek();
             else if (originalStdio == OriginalStdioOp.TRUNCATE || originalStdio == OriginalStdioOp.DUP2) b.endFileSetSize();
             else if (status) b.endOriginalStdioStatus(); else b.endOriginalStdioTransfer();
-            if (enableAsync && (originalStdio == OriginalStdioOp.UNLINKAT || originalStdio == OriginalStdioOp.FSTATAT)) emitAsyncPoll(e);
+            if (enableAsync && (originalStdio == OriginalStdioOp.UNLINKAT || originalStdio == OriginalStdioOp.FSTATAT ||
+                    originalStdio.getTransfer() && "safe".equals(originalStdio.getSafety()))) emitAsyncPoll(e);
         });
     }
 

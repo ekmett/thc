@@ -58,6 +58,42 @@ guest async delivery is deferred across that foreign extent. Forced host
 cancellation or LLVM context termination can prevent native restoration because
 the cleanup must re-enter LLVM; this path is not host-cancellation safe.
 
+## Original Unix native declarations
+
+The installed Unix 2.8.8.0 declarations also use ordinary native libc linking
+for pathname ownership, truncation, node creation and timestamps; descriptor
+ownership, permissions, timestamps, synchronization, allocation and advice;
+terminal operations; host identity/configuration/time/resource queries; and
+caller-owned signal-set and termios images. `OriginalStdioOp` and the auditor
+record the exact original declaration widths, safety and package owner.
+String, ByteString and PosixString wrapper variants share the same transport.
+
+On Linux x86_64, `NativeUnix` uses the existing FFM downcall pattern to call the
+native symbol directly. It copies bounded caller-owned images and captures errno
+at the call. Native header assertions check the transported image sizes.
+Pathname calls hold the context's directory lease; relative names use its
+`/proc/self/fd` anchor without decoding pathname bytes or changing process cwd.
+Descriptor calls borrow an owned duplicate under the context descriptor's lock.
+The native library supplies POSIX behavior; Java handles the THC boundary only.
+Safe calls keep the declared foreign extent, save the result, and then poll for
+guest delivery. They are synchronous, not interruptible native calls.
+
+The Unix `read`/`write` declarations reuse the existing managed descriptor
+transfers, with declared safety passed through to callback/scheduling authority
+and a completion poll after safe calls. `setenv`, `clearenv`, `unsetenv` wrappers and `__hsunix_get_environ`
+use the existing context environment: `setenv` copies bytes, `putenv` retains
+them, and neither changes the JVM process environment. Representative transport
+checks cover both backends, first compiled effects, bounded images, errno,
+descriptor retirement, and context cwd/environment isolation.
+
+Process replacement/fork, credential and global process changes, native signal
+delivery, dynamic loading, passwd/group pointer graphs, named semaphores/shared
+memory, and temporary-file/PTY acquisition need their own ownership or lifetime
+integration. These families remain unsupported. General `openat`, `statx`,
+`utimensat`, directory cursor manipulation and group-list queries also remain
+outside this batch; existing support for directory streams and basic file IO is
+unchanged. This batch does not establish complete Unix package execution.
+
 ## Original process identity
 
 The exact `ghc-internal` `getpid` declaration returns signed Int32. The separate

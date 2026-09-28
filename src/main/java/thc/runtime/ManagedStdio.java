@@ -51,18 +51,20 @@ public final class ManagedStdio {
         return nativeError != 0 ? nativeError : seek && files.errorKind() == 7L ? abi.notSeekable() : abi.error(files.errorKind());
     }
 
-    @TruffleBoundary public long read(long fd, ManagedAddress address, long count) {
+    public long read(long fd, ManagedAddress address, long count) { return read(fd, address, count, ForeignSafety.UNSAFE); }
+    @TruffleBoundary public long read(long fd, ManagedAddress address, long count, ForeignSafety safety) {
         var abi = hostAbi();
         if (fd != (long) (int) fd) throw new RuntimeFault("Original read requires a canonical signed CInt descriptor");
-        long received = files.read(fd, address, count, ForeignSafety.UNSAFE);
+        long received = files.read(fd, address, count, safety);
         if (received < 0) lastError.set(fileError(abi));
         return received;
     }
-    @TruffleBoundary public long write(long fd, ManagedAddress address, long count) {
+    public long write(long fd, ManagedAddress address, long count) { return write(fd, address, count, ForeignSafety.UNSAFE); }
+    @TruffleBoundary public long write(long fd, ManagedAddress address, long count, ForeignSafety safety) {
         var abi = hostAbi(); // Validate the host C ABI before any external effect.
         if (fd != (long) (int) fd) throw new RuntimeFault("Original write requires a canonical signed CInt descriptor");
         // Negative size_t values exceed every managed allocation. Validate the entire range before IO.
-        long written = files.write(fd, address, count, ForeignSafety.UNSAFE);
+        long written = files.write(fd, address, count, safety);
         if (written < 0) lastError.set(fileError(abi));
         else if (count != 0 && written == 0) {
             // GHC's original write loop would otherwise spin without progress.

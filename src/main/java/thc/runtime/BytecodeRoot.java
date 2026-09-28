@@ -1469,9 +1469,9 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             long result;
             if (operation.getOpening()) result = stdio.open(address, fd, count, operation, node);
             else if (operation == OriginalStdioOp.TCSETATTR) result = stdio.tcsetattr(fd, count, address);
-            else if (operation == OriginalStdioOp.READ_SAFE || operation == OriginalStdioOp.READ_UNSAFE)
-                result = stdio.read(fd, address, count);
-            else result = stdio.write(fd, address, count);
+            else if (operation.getReading())
+                result = stdio.read(fd, address, count, ForeignSafety.synchronous(operation.getSafety()));
+            else result = stdio.write(fd, address, count, ForeignSafety.synchronous(operation.getSafety()));
             if (operation.getNarrowResult() != null)
                 destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, (int) result);
             else destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
@@ -2015,6 +2015,20 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 if (operation.getNarrowResult() != null) destination.setInt(bytecode, frame, (int) result);
                 else destination.setLong(bytecode, frame, result);
             }
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    @ConstantOperand(type = OriginalStdioOp.class, name = "operation")
+    public static final class OriginalUnix {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                OriginalStdioOp operation, @Variadic Object[] arguments, @Bind Node node) {
+            TupleResults.requireVoidCarrier(arguments[arguments.length - 1]);
+            long result = NativeUnix.execute(operation, java.util.Arrays.copyOf(arguments, arguments.length - 1));
+            var bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            if (operation.getNarrowResult() == null) destination.setLong(bytecode, frame, result);
+            else destination.setInt(bytecode, frame, (int) result);
         }
     }
 
@@ -4189,11 +4203,19 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class EnvironmentChange {
         @Specialization public static void change(VirtualFrame frame, EnvironmentOp operation,
-                LocalAccessor destination, ManagedAddress name, Object state, @Bind("$node") Node node) {
-            TupleResults.requireVoidCarrier(state);
+                LocalAccessor destination, @Variadic Object[] arguments, @Bind("$node") Node node) {
+            TupleResults.requireVoidCarrier(arguments[arguments.length - 1]);
             GuestEnvironment environment = GuestEnvironment.current(node);
-            destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
-                    (int) (operation == EnvironmentOp.PUT ? environment.put(name) : environment.unset(name)));
+            long result = switch (operation) {
+                case PUT -> environment.put((ManagedAddress) arguments[0]);
+                case UNSET -> environment.unset((ManagedAddress) arguments[0]);
+                case SET -> environment.set((ManagedAddress) arguments[0], (ManagedAddress) arguments[1], (int) arguments[2]);
+                case CLEAR -> environment.clear();
+                default -> throw fail("Expected environment mutation");
+            };
+            var bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            if (operation == EnvironmentOp.CLEAR) destination.setLong(bytecode, frame, result);
+            else destination.setInt(bytecode, frame, (int) result);
         }
     }
     @Operation
