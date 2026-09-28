@@ -22,7 +22,8 @@ def requireRuntimeArchive = { File file, String hash ->
 def prepareProtocolRuntime = tasks.register("prepareProtocolRuntime", Sync) {
     from(provider { zipTree(protocolRuntimeSource.singleFile) })
     include("com/oracle/truffle/runtime/OptimizedCallTarget.java", "com/oracle/truffle/runtime/OptimizedIndirectCallNode.java",
-        "com/oracle/truffle/runtime/BaseOSRRootNode.java")
+        "com/oracle/truffle/runtime/BaseOSRRootNode.java", "com/oracle/truffle/runtime/OptimizedOSRLoopNode.java",
+        "com/oracle/truffle/runtime/BytecodeOSRMetadata.java")
     into(layout.buildDirectory.dir("protocol-runtime/source"))
     inputs.files("tools/truffle-protocol/declared-return-runtime.patch", "tools/truffle-protocol/graph-budget-runtime.patch",
         "tools/truffle-protocol/unprofiled-indirect-exceptions.patch")
@@ -74,6 +75,7 @@ def protocolRuntimeJar = tasks.register("protocolRuntimeJar", Jar) {
         exclude("com/oracle/truffle/runtime/OptimizedCallTarget.class", "com/oracle/truffle/runtime/OptimizedCallTarget\$*.class",
             "com/oracle/truffle/runtime/OptimizedIndirectCallNode.class",
             "com/oracle/truffle/runtime/BaseOSRRootNode.class",
+            "com/oracle/truffle/runtime/OptimizedOSRLoopNode*.class", "com/oracle/truffle/runtime/BytecodeOSRMetadata*.class",
             "META-INF/MANIFEST.MF")
     }
     from("tools/truffle-protocol/LICENSE-UPL.txt") { into("META-INF") }
@@ -111,6 +113,10 @@ tasks.register("verifyProtocolRuntimeSelection") {
             name == "com/oracle/truffle/runtime/OptimizedCallTarget.class" ||
             name == "com/oracle/truffle/runtime/OptimizedIndirectCallNode.class" ||
             name == "com/oracle/truffle/runtime/BaseOSRRootNode.class" ||
+            name == "com/oracle/truffle/runtime/OptimizedOSRLoopNode.class" ||
+            name.startsWith("com/oracle/truffle/runtime/OptimizedOSRLoopNode\$") ||
+            name == "com/oracle/truffle/runtime/BytecodeOSRMetadata.class" ||
+            name.startsWith("com/oracle/truffle/runtime/BytecodeOSRMetadata\$") ||
             name.startsWith("com/oracle/truffle/runtime/OptimizedCallTarget\$") }
         new JarFile(protocolRuntimeBinary.singleFile).withCloseable { stock ->
             new JarFile(overlay).withCloseable { declared ->
@@ -207,7 +213,7 @@ tasks.register("testOsrSourceOwnership", JavaExec) {
 tasks.named("check") { dependsOn("testOsrSourceOwnership") }
 
 def compileGraphBudgetControl = tasks.register("compileGraphBudgetControl", JavaCompile) {
-    source("tools/truffle-protocol/tests/GraphBudgetProbe.java")
+    source("tools/truffle-protocol/tests/GraphBudgetProbe.java", "tools/truffle-protocol/tests/OsrSchedulingProbe.java")
     classpath = returnPolicyRuntime
     options.release.set(17)
     options.compilerArgs.add("-proc:none")
@@ -224,6 +230,38 @@ tasks.register("testGraphBudgetRecovery", JavaExec) {
     maxHeapSize = "1g"
 }
 tasks.named("check") { dependsOn("testGraphBudgetRecovery") }
+
+def osrBudgetControls = [Loop: "osr", Bytecode: "bytecode-osr", Exhausted: "osr-exhausted", Background: "osr-background",
+                        FastFailure: "osr-fast-failure", RetryPublication: "osr-retry-publication"].collect { label, mode ->
+    tasks.register("testOsrGraphBudget" + label, JavaExec) {
+        group = "verification"
+        description = "Check actual OSR graph-budget lifecycle: $mode."
+        dependsOn("verifyProtocolRuntimeSelection")
+        classpath = files(compileGraphBudgetControl.flatMap { it.destinationDirectory }) + returnPolicyRuntime
+        mainClass.set("protocolprobe.GraphBudgetProbe")
+        args(mode)
+        enableAssertions = true
+        jvmArgs("--enable-native-access=ALL-UNNAMED", "--add-modules=jdk.incubator.vector")
+        maxHeapSize = "1g"
+        timeout.set(java.time.Duration.ofSeconds(60))
+    }
+}
+def testOsrScheduling = tasks.register("testOsrScheduling", JavaExec) {
+    group = "verification"
+    description = "Check real OSR first-winner publication, replacement and cancellation without holding the AST lock while waiting."
+    dependsOn("verifyProtocolRuntimeSelection")
+    classpath = files(compileGraphBudgetControl.flatMap { it.destinationDirectory }) + returnPolicyRuntime
+    mainClass.set("protocolprobe.OsrSchedulingProbe")
+    enableAssertions = true
+    jvmArgs("--enable-native-access=ALL-UNNAMED", "--add-modules=jdk.incubator.vector")
+    maxHeapSize = "1g"
+    timeout.set(java.time.Duration.ofSeconds(60))
+}
+tasks.register("testOsrGraphBudgetRecovery") {
+    group = "verification"
+    dependsOn(osrBudgetControls, testOsrScheduling)
+}
+tasks.named("check") { dependsOn("testOsrGraphBudgetRecovery") }
 
 def compileRuntimeLinkageControl = tasks.register("compileRuntimeLinkageControl", JavaCompile) {
     source("tools/truffle-protocol/tests/RuntimeLinkageProbe.java")
