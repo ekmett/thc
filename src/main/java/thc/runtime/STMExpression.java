@@ -28,14 +28,14 @@ public final class STMExpression extends Expr {
     @Override public Object execute(VirtualFrame frame) {
         if (operation != STMOp.WRITE) throw fault("STM tuple primitive requires a destination");
         Object cell = operands[0].execute(frame), value = operands[1].execute(frame);
-        TupleResultsKt.requireVoidCarrier(operands[2].execute(frame));
+        TupleResults.requireVoidCarrier(operands[2].execute(frame));
         Language.currentState(this).stm.write(cell, value);
         return thc.runtime.Unit.INSTANCE;
     }
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
         Object first = operation == STMOp.RETRY ? null : operands[0].execute(frame);
         Object second = operation == STMOp.OR_ELSE || operation == STMOp.CATCH ? operands[1].execute(frame) : null;
-        TupleResultsKt.requireVoidCarrier(operands[operands.length - 1].execute(frame));
+        TupleResults.requireVoidCarrier(operands[operands.length - 1].execute(frame));
         if (operation.getCallback()) {
             if (call == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();

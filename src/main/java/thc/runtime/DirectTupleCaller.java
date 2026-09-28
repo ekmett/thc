@@ -81,12 +81,12 @@ final class DirectTupleCaller extends Node {
                     @Override public Object resume(MaterializedFrame resumed, DelimitedResume input, MaskingState ambient, DelimitedStep outerMask) {
                         TupleDispatch remainingCall = rest;
                         if (remainingCall == null) throw fault("Missing tuple overapplication remainder");
-                        remainingCall.execute(resumed, ApplicationKt.requireClosure(force.execute(resumed, input.get())), remaining.clone());
+                        remainingCall.execute(resumed, Applications.requireClosure(force.execute(resumed, input.get())), remaining.clone());
                         return destination.delimitedResult(resumed, DirectTupleCaller.this);
                     }
                 });
             }
-            Closure closure = ApplicationKt.requireClosure(result);
+            Closure closure = Applications.requireClosure(result);
             TupleDispatch remainingCall = rest;
             if (remainingCall == null) throw fault("Missing tuple overapplication remainder");
             remainingCall.execute(frame, closure, Arrays.copyOfRange(arguments, physicalCount, arguments.length));
@@ -104,13 +104,13 @@ final class DirectTupleCaller extends Node {
     }
     private Object resumeOverapplication(VirtualFrame frame, Object value, Object[] remaining) {
         Closure closure;
-        try { closure = ApplicationKt.requireClosure(AstControl.force(frame, this, force, value)); }
+        try { closure = Applications.requireClosure(AstControl.force(frame, this, force, value)); }
         catch (AstCapture cut) {
             throw cut.append(new AstResumeStep() {
                 @Override public Object resume(VirtualFrame resumed, Object input) {
                     TupleDispatch remainingCall = rest;
                     if (remainingCall == null) throw fault("Missing tuple overapplication remainder");
-                    remainingCall.execute(resumed, ApplicationKt.requireClosure(input), remaining);
+                    remainingCall.execute(resumed, Applications.requireClosure(input), remaining);
                     return null;
                 }
             });

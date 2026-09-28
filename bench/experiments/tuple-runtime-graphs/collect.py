@@ -30,9 +30,9 @@ for mode,prefix in (('inline','runtime'),('residual','residual')):
                 excerpts.extend(line for line in (out/'final-lir.txt').read_text().splitlines()
                     if any(token in line for token in (' = ADD ',' = SUB ',' = MUL ',' = MADD ',' = LSL ','RETURN','CALL_DIRECT')))
 files=[p for p in sorted(here.iterdir()) if p.is_file() and p.suffix in ('.java','.hs','.sh','.py')]
-runtime_files=[runtime/'src/main/kotlin/thc/runtime'/name for name in
-               ('TupleResults.kt','Program.kt','BytecodeProgram.kt','Handoff.kt','GuestRoot.kt','CoreRepresentations.kt')]
-runtime_files.extend([runtime/'src/main/java/thc/runtime/BytecodeRoot.java',runtime/'src/main/kotlin/thc/Language.kt'])
+runtime_files=[runtime/'src/main/java/thc/runtime'/name for name in
+               ('TupleResults.java','Program.java','BytecodeProgram.java','Handoff.java','GuestRoot.java','CoreRepresentations.java','BytecodeRoot.java')]
+runtime_files.append(runtime/'src/main/java/thc/Language.java')
 java_home=pathlib.Path(os.environ['JAVA_HOME'])
 evidence={'javaVersion':subprocess.check_output([str(java_home/'bin/java'),'-version'],stderr=subprocess.STDOUT,text=True).splitlines(),
           'jdkReleaseSha256':hashlib.sha256((java_home/'release').read_bytes()).hexdigest(),

@@ -19,7 +19,7 @@ Run `cabal run exe:thc-fixtures --offline -- boxed-array-extensions` to export
 pre/post Core, run strict closure audits, and collect native results. Preparation
 uses the shared Haskell framework, preserves every attempted run's logs, and
 hashes source and native/Core artifacts without hashing installed GHC files.
-The producer records observations only; Kotlin independently generates the
+The producer records observations only; Java independently generates the
 1,830-request corpus, models results and verifies hashes/proofs. The JVM suite
 checks both backends before and after explicit compilation installation,
 including the first compiled invocation, plus lazy payloads, alias identity,

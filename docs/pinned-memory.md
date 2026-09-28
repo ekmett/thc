@@ -90,7 +90,7 @@ tuple keeps Word32, Word, Int32 and Int representation proofs distinct.
 `cabal run exe:thc-fixtures --offline -- managed-address-reads` prepares
 1,800 native observations, eight strict pre/post-Tidy closure audits, and source
 and artifact hashes. `ManagedAddressReadTest` verifies those manifests and the
-ordered input corpus against an independent Kotlin byte-buffer model, then
+ordered input corpus against an independent Java byte-buffer model, then
 checks the exports on AST and bytecode. Its runtime controls cover compiled
 mutable reads, bounds/overflow, State-before-read order and failure-before-publication.
 Malformed loader-proof controls use explicitly synthetic modules; they are
@@ -205,7 +205,7 @@ guest targets plus the host boundary, then check reversed native inputs with
 exact guest-entry counts, target identity/validity and released handoff pools.
 Twelve malformed-proof controls per stage start from accepted genuine Core.
 The producer also exercises its actual structural checker with seven malformed
-call shapes and a rejected-baseline guard. Kotlin independently models the
+call shapes and a rejected-baseline guard. Java independently models the
 ordered corpus, checks all required source/artifact hashes and rejects missing,
 duplicate, reordered and altered rows. The existing shared `audit-core.py`
 proof checker remains an explicit Python dependency; the pinned-address

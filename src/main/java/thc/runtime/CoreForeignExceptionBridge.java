@@ -73,7 +73,7 @@ public final class CoreForeignExceptionBridge {
             : "Missing or ambiguous foreign exception bridge unit; select the application's exact runtime unit");
     }
 
-    // Kotlin's isBlank includes Unicode space characters that String.isBlank excludes.
+    // Blank names include Unicode whitespace and space characters.
     private static boolean blank(String text) {
         for (int i = 0; i < text.length(); i++) {
             char c = text.charAt(i);

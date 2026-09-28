@@ -4,7 +4,7 @@ package thc;
 
 import java.util.*;
 
-/** Nullable data builders for this original-control migration cohort. */
+/** Nullable data builders for original-Core controls. */
 final class CoreBackendTestSupport {
     private CoreBackendTestSupport() {}
     @SafeVarargs static <T> List<T> list(T... values) { return Arrays.asList(values); }

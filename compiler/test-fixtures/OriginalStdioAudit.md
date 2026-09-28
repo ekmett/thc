@@ -14,7 +14,7 @@ build-directory gate with pinned GHC and Cabal:
 scripts/prepare-original-stdio.sh --require-supported
 ```
 
-The fixture supports native Linux/macOS LP64 only. Kotlin checks the exact original
+The fixture supports native Linux/macOS LP64 only. Java checks the exact original
 static targets, units, capi/ccall conventions, safety, and declared/actual
 representations. A different platform wrapper numbering or ABI fails closed;
 there is no wildcard target recognition. Pre- and post-Tidy exports each retain
@@ -27,19 +27,19 @@ JVM support. No stdio-specific Python preparer or semantic model is involved.
 `build/original-stdio/manifest.json` records commands, source/artifact hashes,
 toolchain metadata and paths to requested strict audits. Installed GHC
 artifacts are not hashed. `pre/core` and `post/core` contain genuine exporter
-outputs. Kotlin derives all six applications' actual and declared raw proofs from
+outputs. Java derives all six applications' actual and declared raw proofs from
 that Core and checks that each root has one reachable top-level binding and two
 guest lambda calls, including the immediate State lambda. The producer does not
-serialize a second proof inventory or repeat the Kotlin expectations.
+serialize a second proof inventory or repeat the Java expectations.
 
 `oracle.json` records 144 native observations, compared with an independently
-derived Kotlin model. Payload bytes cover all values 0 through 255;
+derived Java model. Payload bytes cover all values 0 through 255;
 stdout/stderr remain binary and are captured independently. Each process writes
 its numeric result to a separate file under `results`, never into either tested
 stream. Per-invocation bytes, commands and exit statuses are retained in `logs`.
 
 The two write roots report the original signed count or -1. The two errno roots
-immediately observe original `getErrno` on failure; Kotlin compares it with the
+immediately observe original `getErrno` on failure; Java compares it with the
 host ABI's `EBADF`, not a private error category. On success they return `-(count+2)`
 without asserting the unspecified successful-write errno. Both streams, invalid
 signed-32-bit descriptors, offsets, one-past-end zero-length buffers, NUL/newline

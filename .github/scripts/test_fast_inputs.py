@@ -1179,7 +1179,7 @@ class FastInputTests(unittest.TestCase):
                     changed = self.rewrite(lambda entries: [(member, data) for member, data in entries
                         if member.name != 'files/' + missing])
                     self.rejected_without_writes(changed)
-        for unexpected in ('build/generated/simd/kotlin/Generated.kt',
+        for unexpected in ('build/generated/simd/java/Unexpected.java',
                            'build/generated/simd/fixtures/Unexpected.hs',
                            'build/simd-capability-smoke/native/unreviewed'):
             self.assertFalse(cache.allowed_payload(unexpected, {}))
@@ -1475,7 +1475,7 @@ class FastInputTests(unittest.TestCase):
                      "src/test/resources/core/original-bytestring-decimal-descriptors.json",
                      "src/main/resources/thc/scalar-primop-signatures.json", "tools/primops/PrimopTools.hs"):
             self.put(name, "source: " + name)
-        self.put("src/main/kotlin/thc/runtime/Program.kt", "unrelated runtime\n")
+        self.put("src/main/java/thc/runtime/Program.java", "unrelated runtime\n")
         subprocess.run(["git", "-C", str(self.root), "add", "."], check=True)
         self.tc = {"ghcLibdir": str(self.temp_root / "toolchain/lib"),
                    "version": "9.14.1", "target": "x86_64-unknown-linux",
@@ -1567,7 +1567,7 @@ class FastInputTests(unittest.TestCase):
             cache.restore(self.root, current, self.bundle)
 
     def test_unrelated_runtime_change_reuses_key_but_recorded_runtime_change_misses(self):
-        self.put("src/main/kotlin/thc/runtime/Program.kt", "new lowering")
+        self.put("src/main/java/thc/runtime/Program.java", "new lowering")
         self.assertEqual(self.current, cache.identity(self.root))
         for name in cache.RUNTIME_INPUTS:
             before = cache.identity(self.root)
@@ -1605,8 +1605,8 @@ class FastInputTests(unittest.TestCase):
                 self.manifest[section][name] = old
 
     def test_unkeyed_runtime_source_fails_closed(self):
-        self.manifest["inputHashes"]["src/main/kotlin/thc/runtime/Program.kt"] = cache.digest(
-            self.root / "src/main/kotlin/thc/runtime/Program.kt")
+        self.manifest["inputHashes"]["src/main/java/thc/runtime/Program.java"] = cache.digest(
+            self.root / "src/main/java/thc/runtime/Program.java")
         self.write_manifest()
         with self.assertRaises(cache.CacheMiss): self.pack()
 
@@ -1616,7 +1616,7 @@ class FastInputTests(unittest.TestCase):
         self.write_manifest()
         manifest = self.pack(); self.remove_payload(manifest)
         cache.restore(self.root, self.current, self.bundle)
-        self.manifest["inputHashes"]["src/main/kotlin/thc/runtime/CoreVectorMemory.kt"] = "a" * 64
+        self.manifest["inputHashes"]["src/main/java/thc/runtime/RetiredVectorMemory.java"] = "a" * 64
         self.write_manifest()
         with self.assertRaises(cache.CacheMiss):
             cache.inventory(self.root, self.current, lambda name: (self.root / name).read_bytes(), [])
@@ -1995,7 +1995,7 @@ class RenamedInputContractTests(unittest.TestCase):
                                              ("CBV", "Demands", "Plugin", "Sources", "Wired"))):
             self.assertIn(name, sources)
             self.assertEqual(cache.digest(root / name), sources[name])
-        self.assertNotIn("src/main/kotlin/thc/runtime/CoreVectorMemory.kt", sources)
+        self.assertNotIn("src/main/java/thc/runtime/RetiredVectorMemory.java", sources)
         self.assertFalse(any(name.startswith("compiler/Thc/") for name in sources))
         self.assertIn("test/haskell-fixtures/PinnedAddressFixtures.hs", sources)
         self.assertIn("tools/primops/PrimopTools.hs", sources)

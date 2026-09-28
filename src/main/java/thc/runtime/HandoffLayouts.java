@@ -10,7 +10,7 @@ import thc.Language;
 /** Context-owned layout interning. */
 public final class HandoffLayouts {
     private final Language language;
-    private final boolean enabled = Boolean.getBoolean(HandoffKt.HANDOFF_PROPERTY);
+    private final boolean enabled = Boolean.getBoolean(Handoff.HANDOFF_PROPERTY);
     private final HashMap<List<String>, HandoffLayout> layouts = new HashMap<>();
     public HandoffLayouts(Language language) { this.language = language; }
     public boolean getEnabled() { return enabled; }

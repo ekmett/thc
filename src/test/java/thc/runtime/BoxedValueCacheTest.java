@@ -15,13 +15,13 @@ import static thc.runtime.RepresentationTestSupport.*;
 
 class BoxedValueCacheTest {
     private record Builtin(String id, String name, String rep, long minimum, long maximum) {}
-    private final List<Builtin> builtins = list(new Builtin(DataValuesKt.BOXED_INT_CONSTRUCTOR_ID, "I#", "IntRep", -16, 255), new Builtin(DataValuesKt.BOXED_CHAR_CONSTRUCTOR_ID, "C#", "WordRep", 0, 255));
+    private final List<Builtin> builtins = list(new Builtin(DataValues.BOXED_INT_CONSTRUCTOR_ID, "I#", "IntRep", -16, 255), new Builtin(DataValues.BOXED_CHAR_CONSTRUCTOR_ID, "C#", "WordRep", 0, 255));
     private void property(String name, String value, CheckedRunnable action) throws Exception {
         var before = System.getProperty(name);
         try { if (value == null) System.clearProperty(name); else System.setProperty(name, value); action.run(); }
         finally { if (before == null) System.clearProperty(name); else System.setProperty(name, before); }
     }
-    private void cache(boolean enabled, CheckedRunnable action) throws Exception { property(DataValuesKt.BOXED_VALUE_CACHE_PROPERTY, enabled ? "true" : null, action); }
+    private void cache(boolean enabled, CheckedRunnable action) throws Exception { property(DataValues.BOXED_VALUE_CACHE_PROPERTY, enabled ? "true" : null, action); }
     private void context(String strategy, CheckedConsumer<Language> action) throws Exception {
         try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.StaticObjectStorageStrategy", strategy)
                 .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build()) {
@@ -90,7 +90,7 @@ class BoxedValueCacheTest {
     }
     private record Retained(DataLayout layout, DataValue value) {}
     @Test void cachesRemainOwnedByTheirLayoutAcrossSharedArrayCarriersAndContexts() throws Exception {
-        cache(true, () -> property(ConstructorClassIdentityKt.CONSTRUCTOR_CLASS_IDENTITY_PROPERTY, "true", () -> {
+        cache(true, () -> property(ConstructorClassIdentity.CONSTRUCTOR_CLASS_IDENTITY_PROPERTY, "true", () -> {
             for (var strategy : list("field-based", "array-based")) {
                 var saved = new Retained[1];
                 context(strategy, language -> {

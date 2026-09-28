@@ -79,7 +79,7 @@ public final class BytecodeTypedInputSlots {
                     Object value = source.reference(frame, root, null, from);
                     Class<?> expected = references[i];
                     arguments[i].setObject(bytecode, frame,
-                        expected == null ? value : AstSelfCallsKt.requireReferenceCarrier(value, expected));
+                        expected == null ? value : AstSelfCalls.requireReferenceCarrier(value, expected));
                 }
             }
             if (captureLayout != null) {
@@ -107,7 +107,7 @@ public final class BytecodeTypedInputSlots {
                 Object value = layout.read(environment, i);
                 Class<?> expected = captureReferences[i];
                 captures[i].setObject(bytecode, frame,
-                    expected == null ? value : AstSelfCallsKt.requireReferenceCarrier(value, expected));
+                    expected == null ? value : AstSelfCalls.requireReferenceCarrier(value, expected));
             }
         }
         for (var vector : vectorCaptures) vector.restore(frame, bytecode, environment);
@@ -130,7 +130,7 @@ public final class BytecodeTypedInputSlots {
                     Object value = packet.getObject(input, from);
                     Class<?> expected = references[i];
                     arguments[i].setObject(bytecode, frame,
-                        expected == null ? value : AstSelfCallsKt.requireReferenceCarrier(value, expected));
+                        expected == null ? value : AstSelfCalls.requireReferenceCarrier(value, expected));
                 }
             }
             if (captureLayout != null) {

@@ -147,7 +147,7 @@ the installed GHC libraries are never modified.
 
 The existing MD5 oracle compiles pinned original GHC C and compares 558 cases
 (2232 context rows), five defined alias cases, and an independent digest model.
-The Windows DLL uses the same original algorithm and C ABI wrapper. Its Kotlin
+The Windows DLL uses the same original algorithm and C ABI wrapper. Its Java
 FFM transport keeps one native image per backing array, copies back only the
 touched ranges, retains owners through calls, and confines temporary native
 memory to the invocation. Existing range, alignment, memcpy-overlap, native
@@ -175,6 +175,21 @@ Runs use GitHub-hosted `windows-2025` machines with the pinned toolchain; no
 Windows runner service or secrets are required on a development PC. An active
 run finishes while newer commits wait, avoiding cancellation starvation during
 frequent integrations. The CI result is informative, not a manual-merge gate.
+
+## Native array fixtures
+
+~~~powershell
+./scripts/windows.ps1 -Action ArrayTest -Jobs 4
+~~~
+
+This runs the existing Int, Int8, Int16, Int32, Double and Float/Word array
+producers with native GHC, then their AST/bytecode tests in both handoff layouts.
+The full Test action includes them too. Windows exports use `export.ps1` and
+GHC response files; Unix exports retain `export.sh`. Manifests fingerprint the
+selected exporter and the actual native executable, including Windows `.exe`
+names. Native expectations, independent models and first-installed-call checks
+remain unchanged. Evidence lives in the six `build/*-arrays` directories and
+the default/dense test reports.
 
 ## Original Win32 directory scans
 

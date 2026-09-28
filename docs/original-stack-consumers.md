@@ -33,7 +33,7 @@ The manifest's `inputHashes` and `artifactHashes` use the shared native-cache
 schema. Required inputs include the producer/shared helpers, Main/Cabal
 registration, compiler workflow, original pinned sources/license and portable
 resource—not an audit result or expected guest values. GHC is version-gated at
-9.14.1; its executable/installation is not hashed. Kotlin verifies the exact
+9.14.1; its executable/installation is not hashed. Java verifies the exact
 input set and canonical path containment, including symlink resolution.
 Run preparation and tests through the host resource gate, with the JVM lease
 for Gradle, as for other fixtures.

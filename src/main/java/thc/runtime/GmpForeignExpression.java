@@ -27,14 +27,14 @@ final class GmpForeignExpression extends Expr {
             int start = operation.getForm() == GmpForm.GET_DOUBLE ? 1 : 0;
             long a = operands[start].executeRequiredLong(frame);
             long b = operands[start + 1].executeRequiredLong(frame);
-            TupleResultsKt.requireVoidCarrier(operands[start + 2].execute(frame));
+            TupleResults.requireVoidCarrier(operands[start + 2].execute(frame));
             FrameAccess.INSTANCE.writeDouble(frame, slots[offset], ManagedGmp.invokeDouble(this, operation, input, a, b));
             return null;
         }
         if (operation.getForm() == GmpForm.WORD_PAIR) {
             long left = operands[0].executeRequiredLong(frame);
             long right = operands[1].executeRequiredLong(frame);
-            TupleResultsKt.requireVoidCarrier(operands[2].execute(frame));
+            TupleResults.requireVoidCarrier(operands[2].execute(frame));
             FrameAccess.INSTANCE.writeLong(frame, slots[offset], ManagedGmp.invoke(this, operation,
                 null, null, null, null, left, right, 0));
             return null;
@@ -49,40 +49,40 @@ final class GmpForeignExpression extends Expr {
             long a = operands[2].executeRequiredLong(frame);
             Object third = operands[3].execute(frame);
             long b = operands[4].executeRequiredLong(frame);
-            TupleResultsKt.requireVoidCarrier(operands[5].execute(frame));
+            TupleResults.requireVoidCarrier(operands[5].execute(frame));
             result = ManagedGmp.invoke(this, operation, first, second, third, null, a, b, 0);
         } else if (operation.getForm() == GmpForm.WORD) {
             Object second = operands[1].execute(frame);
             long a = operands[2].executeRequiredLong(frame);
             long b = operands[3].executeRequiredLong(frame);
-            TupleResultsKt.requireVoidCarrier(operands[4].execute(frame));
+            TupleResults.requireVoidCarrier(operands[4].execute(frame));
             result = ManagedGmp.invoke(this, operation, first, second, null, null, a, b, 0);
         } else if (operation.getForm() == GmpForm.COMPARE) {
             Object second = operands[1].execute(frame);
             long a = operands[2].executeRequiredLong(frame);
-            TupleResultsKt.requireVoidCarrier(operands[3].execute(frame));
+            TupleResults.requireVoidCarrier(operands[3].execute(frame));
             result = ManagedGmp.invoke(this, operation, first, second, null, null, a, 0, 0);
         } else if (operation.getForm() == GmpForm.DIVIDE_WORD) {
             long a = operands[1].executeRequiredLong(frame);
             Object second = operands[2].execute(frame);
             long b = operands[3].executeRequiredLong(frame);
             long c = operands[4].executeRequiredLong(frame);
-            TupleResultsKt.requireVoidCarrier(operands[5].execute(frame));
+            TupleResults.requireVoidCarrier(operands[5].execute(frame));
             result = ManagedGmp.invoke(this, operation, first, second, null, null, a, b, c);
         } else if (operation.getForm() == GmpForm.MODULO_WORD) {
             long a = operands[1].executeRequiredLong(frame);
             long b = operands[2].executeRequiredLong(frame);
-            TupleResultsKt.requireVoidCarrier(operands[3].execute(frame));
+            TupleResults.requireVoidCarrier(operands[3].execute(frame));
             result = ManagedGmp.invoke(this, operation, first, null, null, null, a, b, 0);
         } else if (operation.getForm() == GmpForm.LOGICAL) {
             Object second = operands[1].execute(frame);
             Object third = operands[2].execute(frame);
             long count = operands[3].executeRequiredLong(frame);
-            TupleResultsKt.requireVoidCarrier(operands[4].execute(frame));
+            TupleResults.requireVoidCarrier(operands[4].execute(frame));
             result = ManagedGmp.invoke(this, operation, first, second, third, null, count, 0, 0);
         } else if (operation.getForm() == GmpForm.COUNT) {
             long count = operands[1].executeRequiredLong(frame);
-            TupleResultsKt.requireVoidCarrier(operands[2].execute(frame));
+            TupleResults.requireVoidCarrier(operands[2].execute(frame));
             result = ManagedGmp.invoke(this, operation, first, null, null, null, count, 0, 0);
         } else { // GmpForm.DIVIDE
             Object second = operands[1].execute(frame);
@@ -91,7 +91,7 @@ final class GmpForeignExpression extends Expr {
             long b = operands[4].executeRequiredLong(frame);
             Object fourth = operands[5].execute(frame);
             long c = operands[6].executeRequiredLong(frame);
-            TupleResultsKt.requireVoidCarrier(operands[7].execute(frame));
+            TupleResults.requireVoidCarrier(operands[7].execute(frame));
             result = ManagedGmp.invoke(this, operation, first, second, third, fourth, a, b, c);
         }
         if (operation.getResult() != null) FrameAccess.INSTANCE.writeLong(frame, slots[offset], result);

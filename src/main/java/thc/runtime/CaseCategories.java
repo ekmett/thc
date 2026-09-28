@@ -4,8 +4,8 @@ package thc.runtime;
 import java.util.List;
 
 /** A category is not a constructor-family or exhaustiveness proof. */
-public final class CaseCategoriesKt {
-    private CaseCategoriesKt() {}
+public final class CaseCategories {
+    private CaseCategories() {}
     public static final String TYPED_CASES_PROPERTY = "thc.typedCases";
     public static CaseCategory caseCategory(CoreRepresentation proof, List<Integer> kinds, boolean literalsAreLong) {
         if (!Boolean.getBoolean(TYPED_CASES_PROPERTY)) return CaseCategory.GENERIC;

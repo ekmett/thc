@@ -35,7 +35,7 @@ supplies execution evidence.
 
 Generated SIMD min/max additions use the shared SIMD smoke and family checks
 when layouts and the generator are unchanged and the capability entries and
-generated Java/Kotlin blocks match exactly. Changes to existing operations,
+generated Java blocks match exactly. Changes to existing operations,
 other registry entries, or the generator still select the full suite. This
 bounded rule avoids unrelated native fixtures and driver tests for those additions.
 

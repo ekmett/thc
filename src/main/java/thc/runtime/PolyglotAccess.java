@@ -23,7 +23,7 @@ public final class PolyglotAccess extends Node {
         return Language.currentState(this).getEnv().parsePublic(Source.newBuilder(language.utf8(), source.utf8(), name.utf8()).build());
     }
     public ForeignValue eval(ManagedAddress language, ManagedAddress source, ManagedAddress name, Object state) {
-        TupleResultsKt.requireVoidCarrier(state);
+        TupleResults.requireVoidCarrier(state);
         var owner = Language.currentState(this);
         var threads = Language.currentState(this).getThreads();
         var previous = threads.enterForeign(ForeignSafety.SAFE);
@@ -41,7 +41,7 @@ public final class PolyglotAccess extends Node {
         return handle.getReceiver();
     }
     public ForeignValue readMember(VirtualFrame frame, Object value, ManagedAddress name, Object state) {
-        TupleResultsKt.requireVoidCarrier(state);
+        TupleResults.requireVoidCarrier(state);
         var receiver = receiver(frame, value);
         var threads = Language.currentState(this).getThreads();
         var previous = threads.enterForeign(ForeignSafety.SAFE);
@@ -53,7 +53,7 @@ public final class PolyglotAccess extends Node {
         } catch (AbstractTruffleException error) { throw foreignExceptions.raise(error); }
     }
     public long executeInt(VirtualFrame frame, Object value, long argument, Object state) {
-        TupleResultsKt.requireVoidCarrier(state);
+        TupleResults.requireVoidCarrier(state);
         var receiver = receiver(frame, value);
         // This first scalar bridge uses the integer range shared by Int# and JS Number.
         if (argument < -9_007_199_254_740_991L || argument > 9_007_199_254_740_991L)

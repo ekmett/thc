@@ -1,5 +1,5 @@
 The two JSON declarations are original GHC 9.14.1 exports, not generated
-approximations. Only JSON whitespace/key order has changed. Surrounding Kotlin
+approximations. Only JSON whitespace/key order has changed. Surrounding Java
 callers are explicitly synthetic; `test/fixtures/run-library-memory` separately
 exercises the original Haskell library implementations and native output.
 

@@ -31,7 +31,7 @@ final class Application extends Expr {
         catch (AstCapture cut) {
             throw cut.append(new AstResumeStep() {
                 @Override public Object resume(VirtualFrame frame, Object input) {
-                    return applyArguments(frame, ApplicationKt.requireClosure(input),
+                    return applyArguments(frame, Applications.requireClosure(input),
                         new Object[ArgumentLayout.width(inputLayout, arguments.length)], 0);
                 }
             });

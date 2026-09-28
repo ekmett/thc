@@ -280,7 +280,7 @@ INTERMEDIATE_SUFFIXES = frozenset({".o", ".hi", ".dyn_o", ".dyn_hi"})
 # writes JVM products there. A future fixture there requires a plan/output review.
 NON_FIXTURE_BUILD_ROOTS = frozenset({
     "aggregate-ghc", "aggregate-post-ghc", "cbv-post-ghc", "classes", "compiler",
-    "fast", "float-decode-originals", "generated", "ghc", "kotlin", "libs", "reports", "resources",
+    "fast", "float-decode-originals", "generated", "ghc", "libs", "reports", "resources",
     "snapshot", "source-ghc", "test-results", "tmp",
 })
 COMMON_SOURCES = (

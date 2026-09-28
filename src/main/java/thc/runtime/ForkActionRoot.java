@@ -23,7 +23,7 @@ final class ForkActionRoot extends RootNode {
         frame.setLong(FrameLayout.BLOOM_FILTER, 0L);
         Object input = frame.getArguments()[0];
         Closure action;
-        try { action = ApplicationKt.requireClosure(force.execute(frame, input)); }
+        try { action = Applications.requireClosure(force.execute(frame, input)); }
         catch (ThunkSuspended suspended) {
             AsyncRequest request = suspended.getAsyncRequest();
             if (request == null) throw RuntimeFault.fault("fork# action head suspended without an async request");

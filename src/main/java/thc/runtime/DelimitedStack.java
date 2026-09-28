@@ -11,7 +11,7 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import thc.Language;
 import static thc.runtime.RuntimeServiceStatus.fault;
-import static thc.runtime.DelimitedContinuationsKt.copyContinuationFrame;
+import static thc.runtime.DelimitedContinuations.copyContinuationFrame;
 
 /** Immutable multi-shot image: each invocation receives its own copied frame graph. */
 public final class DelimitedStack {
@@ -26,7 +26,7 @@ public final class DelimitedStack {
         IdentityHashMap<MaterializedFrame, MaterializedFrame> copies = new IdentityHashMap<>();
         ArrayList<DelimitedFrame> image = new ArrayList<>();
         for (DelimitedFrame entry : cut.getFrames())
-            image.add(new DelimitedFrame(copies.computeIfAbsent(entry.getFrame(), DelimitedContinuationsKt::copyContinuationFrame), entry.getStep()));
+            image.add(new DelimitedFrame(copies.computeIfAbsent(entry.getFrame(), DelimitedContinuations::copyContinuationFrame), entry.getStep()));
         frames = List.copyOf(image);
     }
     @TruffleBoundary(transferToInterpreterOnException = false)
@@ -44,7 +44,7 @@ public final class DelimitedStack {
         for (DelimitedFrame entry : frames) {
             DelimitedStep step = entry.getStep() instanceof DelimitedAnnotationStep annotation ?
                 annotation.rebase(java.util.Objects.requireNonNull(outsideAnnotations), ambientAnnotations, annotationCopies) : entry.getStep();
-            active.add(new DelimitedFrame(copies.computeIfAbsent(entry.getFrame(), DelimitedContinuationsKt::copyContinuationFrame), step));
+            active.add(new DelimitedFrame(copies.computeIfAbsent(entry.getFrame(), DelimitedContinuations::copyContinuationFrame), step));
             if (step instanceof DelimitedMaskStep) outerMask = step;
         }
         try {

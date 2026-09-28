@@ -4,8 +4,8 @@ package thc.runtime;
 
 import static thc.runtime.RuntimeServiceStatus.fault;
 
-public final class AstSelfCallsKt {
-    private AstSelfCallsKt() {}
+public final class AstSelfCalls {
+    private AstSelfCalls() {}
     /** Class.cast alone would also accept null; the carrier proof does not. */
     public static Object requireReferenceCarrier(Object value, Class<?> carrier) {
         if (!carrier.isInstance(value)) throw fault("Expected proven reference value");

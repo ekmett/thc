@@ -191,7 +191,7 @@ done:
 }
 
 /* Return captured errno separately from the original C result. Only reaping
- * runs under the owning Kotlin child lock. pidfd avoids PID reuse races. */
+ * runs under the owning managed child lock. pidfd avoids PID reuse races. */
 int thc_process_poll(int pidfd, int result[2]) {
     siginfo_t info = {0};
     result[0] = 0; result[1] = 0;

@@ -15,7 +15,7 @@ public final class ForkThread extends Expr {
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
         Long requested = capability == null ? null : capability.executeRequiredLong(frame);
         Object child = action.execute(frame); // Do not force the lifted action on its parent.
-        TupleResultsKt.requireVoidCarrier(state.execute(frame));
+        TupleResults.requireVoidCarrier(state.execute(frame));
         FrameAccess.write(frame, slots[offset], GuestThreadOps.fork(this, child, AstControl.enabled(this), requested));
         return null;
     }

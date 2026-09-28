@@ -53,12 +53,12 @@ reference. It never accesses a retired array. `cabal run exe:thc-fixtures --offl
 rebuilds the pinned exporter and generates fresh pre/post Core, native TSV and
 source/artifact hashes. `ResizeByteArrayNative.hs` owns native input generation
 and execution; `ResizeByteArrayTest` checks every native row against an independent
-Kotlin byte-list model before either backend runs. The corpus covers all 17×17 small
+Java byte-list model before either backend runs. The corpus covers all 17×17 small
 size pairs, all 256 byte patterns across grow/shrink/equal/zero cases, machine-width
 selectors and seeded repeated resizing: 3,192 rows, four strict accepted audits.
 Every newly introduced byte is initialized before native observation. The
 byte-array native drivers share `ByteArrayFixtureInputs.hs`; producer orchestration
-is in Haskell and the independent runtime models are in Kotlin.
+is in Haskell and the independent runtime models are in Java.
 
 `ResizeByteArrayTest` checks these values on AST/bytecode with inline/residual
 calls, per-row compiled guest entry, unchanged actual call targets and valid
@@ -67,7 +67,7 @@ increments, not a claim of one guest call per row. Separate primitive controls
 require exactly one compiled entry, check every retained byte, invalid State and
 full-width sizes, publication failure, wrong carriers, and malformed proofs.
 Result/input loan depth and retained references must return to zero. Fixture-free
-Kotlin checks cover the input grid and reject malformed, missing, duplicate,
+Java checks cover the input grid and reject malformed, missing, duplicate,
 reordered and incorrect oracle rows. Python-auditor-specific representation
 mutations remain in the shared `scripts/test-core-bytearrays.py` suite.
 

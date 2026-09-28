@@ -19,10 +19,10 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.StringJoiner;
-import static thc.runtime.DataValuesKt.*;
+import static thc.runtime.DataValues.*;
 
-/* Fixed immutable representations follow Cadenza frame/frame_assembly.kt;
- * StaticShape construction follows frame/capture_layout.kt. See NOTICE.md and
+/* Fixed immutable representations and StaticShape construction follow Cadenza
+ * frame assembly and capture layouts. See NOTICE.md and
  * LICENSE.txt. Constructor fields need neither object fallbacks nor tags. */
 public final class DataLayout {
     private final String id;
@@ -43,7 +43,7 @@ public final class DataLayout {
     private final StaticShape<DataValueFactory> shape;
     private final Object classOwnerToken = new Object();
     private final Class<?> ownedCarrier;
-    private final boolean classIdentityEnabled = Boolean.getBoolean(ConstructorClassIdentityKt.CONSTRUCTOR_CLASS_IDENTITY_PROPERTY);
+    private final boolean classIdentityEnabled = Boolean.getBoolean(ConstructorClassIdentity.CONSTRUCTOR_CLASS_IDENTITY_PROPERTY);
     private final ConstructorClassIdentity constructorClass;
     private final DataValue nullaryValue;
     @CompilationFinal(dimensions = 1) private final DataValue[] boxedValues;
@@ -70,7 +70,7 @@ public final class DataLayout {
             collectSums(logicalFields.getLogicalProofs()[i], logicalFields.getOffsets()[i], sums);
         sumFields = sums.toArray(SumField[]::new);
         exactFieldReps = fieldReps.clone();
-        boolean requested = Boolean.parseBoolean(System.getProperty(ClassOwnedLayoutsKt.CLASS_OWNED_LAYOUTS_PROPERTY, "true"));
+        boolean requested = Boolean.parseBoolean(System.getProperty(ClassOwnedLayouts.CLASS_OWNED_LAYOUTS_PROPERTY, "true"));
         Field[] chosenFields = newFields(fieldReps, referenceTypes, vectorProofs);
         StaticShape<DataValueFactory> chosenShape = buildShape(language, chosenFields, requested);
         DataValue sample = chosenShape.getFactory().create(this, allocationKey);
@@ -115,7 +115,7 @@ public final class DataLayout {
     }
     private static StaticShape<DataValueFactory> buildShape(TruffleLanguage<?> language, Field[] properties, boolean fieldless) {
         StaticShape.Builder builder = StaticShape.newBuilder(language);
-        builder.safetyChecks(!Boolean.getBoolean(FramesKt.STATIC_SHAPE_UNCHECKED_PROPERTY));
+        builder.safetyChecks(!Boolean.getBoolean(Frames.STATIC_SHAPE_UNCHECKED_PROPERTY));
         for (Field property : properties) property.register(builder);
         return fieldless ? builder.build(DataValue.class, DataValueFactory.class) : builder.build(LayoutDataValue.class, DataValueFactory.class);
     }
@@ -188,7 +188,7 @@ public final class DataLayout {
     public void restoreVector(DataValue value, int index, Frame frame, int[] slots, int offset) { checkedVector(value, index).restore(value, frame, slots, offset); }
     public void restoreVector(DataValue value, int index, BytecodeNode bytecode, VirtualFrame frame, LocalAccessor[] slots, int offset) { checkedVector(value, index).restore(value, bytecode, frame, slots, offset); }
     public Object read(DataValue value, int index) { checkField(value, index); return fields[index].read(value); }
-    public boolean compactPointer(int index) { return exactFieldReps[index].equals("LiftedRep") || exactFieldReps[index].equals("UnliftedRep"); }
+    public boolean compactPointer(int index) { return exactFieldReps[index].equals("LiftedRep") || exactFieldReps[index].equals("UnliftedRep") || exactFieldReps[index].equals("BoxedRep"); }
     public boolean inactiveSumReference(DataValue value, int index) {
         if (!compactPointer(index)) return false;
         for (SumField field : sumFields) {
@@ -278,7 +278,7 @@ public final class DataLayout {
             Field[] firstFields = fields;
             if (firstFields == null) {
                 CompilerDirectives.transferToInterpreter();
-                throw new NullPointerException("Parameter specified as non-null is null: method kotlin.collections.ArraysKt___ArraysKt.firstOrNull, parameter <this>");
+                throw new NullPointerException("Constructor fields must not be null");
             }
             if (firstFields.length != 0 && firstFields[0] != null && firstFields[0].isLifted) return read(value, 0);
         }
@@ -326,7 +326,7 @@ public final class DataLayout {
             kind = vector != null ? VECTOR : narrowInteger != null ? INT : switch (representation) {
                 case "IntRep", "WordRep", "Int64Rep", "Word64Rep" -> LONG;
                 case "FloatRep" -> FLOAT; case "DoubleRep" -> DOUBLE;
-                case "LiftedRep", "UnliftedRep", "AddrRep" -> OBJECT;
+                case "LiftedRep", "UnliftedRep", "BoxedRep", "AddrRep" -> OBJECT;
                 case "VoidRep" -> VOID;
                 default -> throw new UnsupportedCore("Unsupported constructor field representation: " + representation);
             };

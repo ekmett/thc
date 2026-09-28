@@ -4,7 +4,7 @@ import thc.buildlogic.BytecodeNormalizers
 import thc.buildlogic.BytecodeNormalizerChecks
 import thc.buildlogic.BytecodeColdApplyPreparation
 
-// Keep the task names and controls stable through the Kotlin-to-Java build migration.
+// Normalize generated metadata before the final Java compilation.
 def checks = [
     testBytecodeMetadataSplit: { task ->
         def path = providers.gradleProperty('thc.metadataFixture').orNull

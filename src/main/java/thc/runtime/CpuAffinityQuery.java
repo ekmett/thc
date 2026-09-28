@@ -19,7 +19,7 @@ final class CpuAffinityQuery extends Expr {
     }
 
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
-        TupleResultsKt.requireVoidCarrier(state.execute(frame));
+        TupleResults.requireVoidCarrier(state.execute(frame));
         var threads = GuestThreads.current(this);
         FrameAccess.INSTANCE.writeInt(frame, slots[offset], applied ? (threads.currentIdentity().getAffinityApplied() ? 1 : 0) :
             threads.getCpuAffinity().getMode().ordinal());

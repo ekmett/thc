@@ -66,18 +66,18 @@ class HandoffTest {
     @FunctionalInterface private interface Action { void run(Language language) throws Exception; }
     private void withLanguage(Action action) throws Exception { withLanguage(true, action); }
     private void withLanguage(boolean inlining, Action action) throws Exception {
-        String previous = System.getProperty(HandoffKt.HANDOFF_PROPERTY); System.setProperty(HandoffKt.HANDOFF_PROPERTY, "true");
+        String previous = System.getProperty(Handoff.HANDOFF_PROPERTY); System.setProperty(Handoff.HANDOFF_PROPERTY, "true");
         try { try (var context = inlining ? executionContext() : Context.newBuilder("thc").allowExperimentalOptions(true).option("compiler.Inlining", "false").option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").option("compiler.CompilationTimeout", "30").build()) {
             context.initialize("thc"); context.enter(); try { action.run(TruffleLanguage.LanguageReference.create(Language.class).get(null)); } finally { context.leave(); }
-        } } finally { if (previous == null) System.clearProperty(HandoffKt.HANDOFF_PROPERTY); else System.setProperty(HandoffKt.HANDOFF_PROPERTY, previous); }
+        } } finally { if (previous == null) System.clearProperty(Handoff.HANDOFF_PROPERTY); else System.setProperty(Handoff.HANDOFF_PROPERTY, previous); }
     }
     private void assertReleased(HandoffState state) { assertEquals(0, state.getArguments().getDepth()); assertNull(state.getPending()); assertEquals(0, state.getArguments().retainedReferences()); }
     @Test void requestedModeReachesTestProcessAndContext() {
         // Unlike withLanguage, this proof never changes the process property.
         // Named Gradle forks supply an independent expectation; legacy `test`
         // still accepts the caller's JAVA_TOOL_OPTIONS setting.
-        boolean actual = Boolean.getBoolean(HandoffKt.HANDOFF_PROPERTY); String expected = System.getProperty("thc.expectedHandoffSlabs");
-        if (expected != null) { assertTrue(expected.equals("true") || expected.equals("false")); assertEquals(expected, System.getProperty(HandoffKt.HANDOFF_PROPERTY), "The fork must receive its requested handoff mode"); }
+        boolean actual = Boolean.getBoolean(Handoff.HANDOFF_PROPERTY); String expected = System.getProperty("thc.expectedHandoffSlabs");
+        if (expected != null) { assertTrue(expected.equals("true") || expected.equals("false")); assertEquals(expected, System.getProperty(Handoff.HANDOFF_PROPERTY), "The fork must receive its requested handoff mode"); }
         try (var context = executionContext()) { context.initialize("thc"); context.enter(); try { var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); assertEquals(expected == null ? actual : Boolean.parseBoolean(expected), language.getHandoffLayouts().getEnabled(), "The runtime context must use the fork's handoff mode"); } finally { context.leave(); } }
         System.out.println("THC_HANDOFF_MODE=" + actual);
     }

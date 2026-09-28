@@ -30,7 +30,7 @@ activity are not excluded by those checks.
 The Mac had recovered to charging before this comparison. The
 [power observations](power-status.json) cover each process; the summary reports
 no power warning. Earlier low-battery runs remain separately marked as rejected.
-Only idle Gradle/Kotlin daemons were present before this serial workload; no
+Only idle build daemons were present before this serial workload; no
 other local benchmark or build was started during it.
 
 [Summary](summary.json), [validation](validation.json), [all windows](timings.tsv),

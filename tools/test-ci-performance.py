@@ -67,9 +67,9 @@ class ConfigurationTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / 'repo'
             files = {
-                'src/main/Runtime.kt': b'runtime',
+                'src/main/Runtime.java': b'runtime',
                 'src/diagnostics/java/thc/Probe.java': b'probe source',
-                'src/test/Test.kt': b'test',
+                'src/test/Test.java': b'test',
                 'build/install/thc/lib/thc.jar': b'runtime jar',
                 'build/diagnostics/thc-tools.jar': b'tools jar',
                 'build/map/core.json': b'core',

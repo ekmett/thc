@@ -1,6 +1,5 @@
 .gradle/
 .gradle-user-home/
-.kotlin/
 build/
 work/
 *.hi

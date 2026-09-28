@@ -21,7 +21,7 @@ capacity. The unsafe pure query is not a synchronization mechanism.
 The fresh preparer retains original OPAQUE `getSizeWorker`/`pureSizeWorker` calls in
 both pre/post Core and checks exact pinned signatures and ten strict audits.
 `MutableByteArraySizeNative.hs` produces the input inventory and 3,070 native rows;
-`MutableByteArraySizeTest` compares them with an independent Kotlin size/byte model
+`MutableByteArraySizeTest` compares them with an independent Java size/byte model
 before running either backend. It covers zero/boundary sizes,
 all 17×17 grow/shrink/equal pairs, repeat resize, ordered writes and reads, machine-width
 selectors and all 256 byte patterns. No uninitialized or retired storage is observed.
@@ -29,7 +29,7 @@ selectors and all 256 byte patterns. No uninitialized or retired storage is obse
 `MutableByteArraySizeTest` runs the native roots on AST and bytecode, inline and
 residual, with source/artifact hash checks, per-row compiled guest activity, unchanged
 active target identities, valid original/host/active targets and clear input/result
-pools. Fixture-free Kotlin tests check the full input inventory and reject malformed,
+pools. Fixture-free Java tests check the full input inventory and reject malformed,
 missing, duplicate, reordered and incorrect oracle rows. Independent direct primitive entries require exactly one compiled entry for
 each measured call. State-failure controls require no destination publication;
 malformed saturation, State/empty-tuple confusion, levity, missing aggregate proofs

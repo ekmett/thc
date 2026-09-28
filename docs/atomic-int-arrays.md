@@ -33,8 +33,8 @@ atomic reads, writes and fetch operations all provide full memory barriers.
 These are managed-storage guarantees, not hardware lock-free operations or
 support for racing unchecked native accesses to exposed storage.
 
-Kotlin owns the numeric behavior and AST path. Java specializations are confined
-to the Truffle Bytecode DSL. Results write directly to typed destination slots;
+Java implements the numeric behavior, AST path and Truffle Bytecode DSL
+specializations. Results write directly to typed destination slots;
 there is no temporary pair. Lowering checks physical integer, reference and
 state carriers, arity, and tuple order. Exact GHC `RuntimeRep` spelling belongs
 to the strict exporter audit, so runtime operations do not recheck lexical
@@ -54,7 +54,7 @@ JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew --no-daemon test --tests thc
 
 The producer exports genuine pre/post-tidy Core, requires strict audits, builds
 a separate native GHC oracle, and records input/artifact hashes and command logs.
-The Kotlin test independently models every native row. It checks both backends,
+The Java test independently models every native row. It checks both backends,
 with inlining enabled and disabled, exact compiled-entry counts starting with
 the first call after installation, stable active call-target identities, and
 handoff cleanup. Direct typed-backend tests cover effects, state validation and

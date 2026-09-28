@@ -33,7 +33,7 @@ final class RtsEventForeignExpression extends Expr {
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
         long count = op == RtsEventForeignOp.CAPABILITIES
             ? Integer.toUnsignedLong(operands[0].executeRequiredInt(frame)) : 0L;
-        TupleResultsKt.requireVoidCarrier(operands[operands.length - 1].execute(frame));
+        TupleResults.requireVoidCarrier(operands[operands.length - 1].execute(frame));
         long value = op.invoke(this, count);
         if (op == RtsEventForeignOp.PROCESSORS) FrameAccess.INSTANCE.writeInt(frame, slots[offset], (int) value);
         else if (op.getResult() != null) FrameAccess.INSTANCE.writeLong(frame, slots[offset], value);

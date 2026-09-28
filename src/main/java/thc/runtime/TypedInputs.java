@@ -12,8 +12,8 @@ import java.util.Arrays;
 import java.util.function.Function;
 import static thc.runtime.RuntimeServiceStatus.fault;
 
-public final class TypedInputsKt {
-    private TypedInputsKt() {}
+public final class TypedInputs {
+    private TypedInputs() {}
     private static final ScalarArrayInputSource scalarPrefixSource = new ScalarArrayInputSource(null);
     @CompilerDirectives.TruffleBoundary public static void discardTypedInput(Language language, HandoffStorage input) {
         switch (input.getInputMode()) {
@@ -58,7 +58,7 @@ public final class TypedInputsKt {
         source.copy(frame, node, values, sourceOffset, storage, prefixWidth, sourceWidth, layout);
         return new Closure(function.environment, Closure.NO_PAP_ARGUMENTS, remainingArity - count, function.target, oldCount + count, storage);
     }
-    // Transitional Java functional bridges for existing non-node Kotlin callers.
+    // Functional entry points for non-node callers.
     // Hot direct and indirect call sites inline these ownership scopes explicitly.
     public static Object invokeTypedInput(RootCallTarget target, HandoffStorage input, Function<Object[], Object> action) {
         var root = target.getRootNode();
@@ -70,7 +70,7 @@ public final class TypedInputsKt {
         if (layout == null) throw fault("Target has no typed input entry");
         long generation = input.getGeneration();
         try { return action.apply(new Object[] {input}); }
-        finally { GenericTypedInputsKt.releaseGenericInput(layout, input, generation); }
+        finally { GenericTypedInputs.releaseGenericInput(layout, input, generation); }
     }
     public static Object invokeTypedInput(TypedInputLayout layout, HandoffStorage input, Function<Object[], Object> action) {
         long generation = input.getGeneration();
@@ -166,7 +166,7 @@ public final class TypedInputsKt {
     }
     static Object[] scalarPacket(VirtualFrame frame, Node node, Closure function, InputSource source, Object[] values, int start, int count, int genericMaximum) {
         check(function.typedSupplied == null);
-        Object[] args = genericMaximum >= 0 ? GenericTypedInputsKt.genericScalarValues(frame, node, source, values, genericMaximum, start, count) :
+        Object[] args = genericMaximum >= 0 ? GenericTypedInputs.genericScalarValues(frame, node, source, values, genericMaximum, start, count) :
             scalarValues(frame, node, source, values, start, count);
         int skip = function.environment == null ? 1 : 2;
         Object[] packet = new Object[skip + function.supplied.length + args.length];
@@ -180,7 +180,7 @@ public final class TypedInputsKt {
         return function.papCompact(args, 0, args.length, count);
     }
     static Closure legacyGenericPap(VirtualFrame frame, Node node, Closure function, InputSource source, Object[] values, int maximum, int offset, int count) {
-        Object[] args = GenericTypedInputsKt.genericScalarValues(frame, node, source, values, maximum, offset, count);
+        Object[] args = GenericTypedInputs.genericScalarValues(frame, node, source, values, maximum, offset, count);
         return function.papCompact(args, 0, args.length, count);
     }
     private static void check(boolean condition) { if (!condition) throw new IllegalStateException("Check failed."); }

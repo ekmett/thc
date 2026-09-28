@@ -98,7 +98,7 @@ public final class CoreRtsShutdown {
     /** Close only the guest context; an owning launcher interprets negative Unix signal codes. */
     @TruffleBoundary(transferToInterpreterOnException = false)
     public static Void shutdown(Node node, RtsShutdownOp operation, long code, long fast, Object state) {
-        TupleResultsKt.requireVoidCarrier(state);
+        TupleResults.requireVoidCarrier(state);
         if (code != (long) (int) code || fast != (long) (int) fast) throw RuntimeFault.fault("Shutdown arguments require signed CInt carriers");
         int status = operation == RtsShutdownOp.EXIT ? (int) code & 255 : code >= 1 && code <= 64 ? -(int) code : 255;
         var context = Language.currentState(node);

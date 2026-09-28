@@ -12,8 +12,8 @@ remain unsupported.
 The initial `914ed462` checkpoint passed focused 15 and full 530 default + 530
 dense-handoff tests, but its first graph campaign failed correctly. All 16
 native-backed graph runs completed; independent offline inspection found eight
-passing bytecode graphs and eight genuinely failing AST graphs. Kotlin's enum
-`when` lowering retained a mutable switch-map array read, all family branches
+passing bytecode graphs and eight genuinely failing AST graphs. The initial enum
+dispatch retained a mutable switch-map array read, all family branches
 and a default exception allocation/stack-trace call. AST loads additionally
 retained vector carriers and FloatVector lane calls. Integer-branch packed
 loads were not mistaken for Float memory evidence.

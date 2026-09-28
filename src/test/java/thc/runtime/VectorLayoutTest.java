@@ -59,8 +59,8 @@ class VectorLayoutTest {
         });
     }
     private Closure append(boolean generic, Closure function, TypedInputLayout input, AstInputSource source, Slots original, Node node) {
-        return generic ? GenericTypedInputsKt.genericTypedPap(function, input, source, original.frame, node, null, 1, 0, 1)
-            : TypedInputsKt.typedPap(function, input, source, original.frame, node, null, 0, 1, function.suppliedCount, function.arity);
+        return generic ? GenericTypedInputs.genericTypedPap(function, input, source, original.frame, node, null, 1, 0, 1)
+            : TypedInputs.typedPap(function, input, source, original.frame, node, null, 0, 1, function.suppliedCount, function.arity);
     }
     @Test void papPrefixesOwnImmutableVectorReferencesAfterCallerLocalsAreReused() throws Exception {
         withLanguage(language -> {

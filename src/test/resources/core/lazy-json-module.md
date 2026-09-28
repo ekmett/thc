@@ -13,7 +13,7 @@ thc-json-index lazy-json-module.json lazy-json-module.idx
 ```
 
 The runtime test checks both source and sidecar hashes and requires the actual
-sidecar-loading path. There is no Kotlin reference-encoder fallback. Regenerate
+sidecar-loading path. Regenerate
 the sidecar with the production writer whenever the source changes.
 
 Source SHA-256: `0d9dacecb7b3e8b617e01f7eca52a5017aba4a922d994c79f89416229841b1b6`

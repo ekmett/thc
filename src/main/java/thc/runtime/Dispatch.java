@@ -12,8 +12,8 @@ import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import java.util.Arrays;
-import static thc.runtime.ApplicationKt.appendWithHeader;
-import static thc.runtime.ApplicationKt.requireClosure;
+import static thc.runtime.Applications.appendWithHeader;
+import static thc.runtime.Applications.requireClosure;
 
 /** Cadenza exact/PAP/overapplication specializations with fixed site arity. */
 @ReportPolymorphism

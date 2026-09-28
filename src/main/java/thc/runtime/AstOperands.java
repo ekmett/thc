@@ -38,7 +38,7 @@ public final class AstOperands extends Expr {
         Cleanup(AstOperands owner, List<AstResumeStep> steps) { this.owner = owner; this.steps = steps; }
         @Override public Object resume(VirtualFrame frame, Object input) {
             boolean suspended = false;
-            try { return AstContinuationKt.resumeAstSteps(frame, steps, input); }
+            try { return AstContinuations.resumeAstSteps(frame, steps, input); }
             catch (AstCapture cut) {
                 suspended = true;
                 throw cut.enclose(saved -> new Cleanup(owner, saved));

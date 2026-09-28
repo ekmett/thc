@@ -528,7 +528,7 @@ Manual byte vectors live in
 The integer vectors cover canonical
 thresholds and signed/unsigned endpoints. The native Haskell tests also reject
 truncation, overlong integers, overflow, invalid versions/reserved fields and
-inconsistent segment extents. Kotlin consumes the same byte contract independently.
+inconsistent segment extents. Java consumes the same byte contract independently.
 
 `cbd-module-v1.json` is a small, explicitly specified semantic/debug model with
 an integer answer of 42 and a scalar identity function. It is test data, not a

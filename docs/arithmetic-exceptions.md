@@ -27,21 +27,29 @@ compiled AST/bytecode results, including a cold first throw and a separately
 profiled throw. It does not run as part of the stock-GHC default suite.
 
 Prepare and run the explicit full-Core check with a GHC 9.14.1 installation
-whose `ghc-internal` interfaces contain complete Core:
+whose `ghc-internal` interfaces contain complete Core. When the installed
+interfaces lack foreign-registration provenance, select the matching configured
+GHC source tree so the existing production provider can acquire it:
 
 ```sh
-cabal run exe:thc-fixtures --offline -- arithmetic-exceptions
-./gradlew --no-daemon arithmeticExceptionsFullCoreTest
+THC_INSTALLED_CORE_GHC_SOURCE=/path/to/configured/ghc-9.14.1 \
+  cabal run exe:thc-fixtures --offline -- arithmetic-exceptions
+./gradlew --no-daemon --continue \
+  arithmeticExceptionsFullCoreTest arithmeticExceptionsFullCoreDenseTest
 ```
 
-The producer fails before writing a success manifest if any strict audit
-rejects a root. In the latest combined Linux check, the 42 native rows passed
-and each of the twelve arithmetic audits had zero missing globals and one
-remaining unrelated `Conc.Bound` foreign-registration issue. The standalone
-fixture-independent lazy-payload test passed in both default and dense modes.
-The full-Core JVM suite is still pending a successful strict fixture and must
-not be reported as passed yet. Regular CI runs `ArithmeticExceptionLazinessTest`
-without requiring installed complete Core.
+The source profile retains the original package identity and supplies genuine
+`Conc.Bound` registration metadata; it does not replace the native compiler or
+relax archive admission. A previously prepared private interface view can still
+be selected without the source option. The producer writes no success manifest
+if any strict audit rejects a root, and reuses its native receipt only after
+checking the selected compiler, sources and artifacts. Regular CI runs
+`ArithmeticExceptionLazinessTest` without requiring installed complete Core.
+
+Both backends treat an intentional guest raise across a Truffle boundary as
+expected control flow. The first compiled throw therefore does not invalidate
+its caller merely because the boundary encountered an exception. The full-Core
+suites retain the first-call checks for the original profiled raise path.
 
 Semantic basis: pinned GHC commit
 `902339d332fb4ce2b3c87dcac1ee6495d41ad886`,

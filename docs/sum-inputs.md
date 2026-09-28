@@ -33,9 +33,9 @@ Tuples may recursively contain supported sums; physical tag/payload slots expand
 at the sum's logical position without losing surrounding tuple boundaries or
 zero-width components. Concrete nested sums, evaluated managed addresses and
 supported exact vector species use the same derived typed storage as results;
-the original GHC physical proof remains unchanged. Unresolved sum payloads,
-ordinary sum let/global storage and public host sum parameters/results
-remain excluded. Scalar host roots may use all the
+the original GHC physical proof remains unchanged. Nonrecursive unlifted sum lets
+evaluate once into typed frame locals. Unresolved sum payloads, recursive/lifted
+sum lets, global aggregate storage and public host sum parameters/results remain excluded. Scalar host roots may use all the
 supported sum operations internally. Unsaturated sum constructors remain excluded.
 
 ## Reproduce

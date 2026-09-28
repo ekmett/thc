@@ -13,7 +13,7 @@ public final class ThreadLabel extends Expr {
     @Override public Object execute(VirtualFrame frame) { throw RuntimeFault.fault("threadLabel# requires a tuple destination"); }
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
         Object target = identity.execute(frame);
-        TupleResultsKt.requireVoidCarrier(state.execute(frame));
+        TupleResults.requireVoidCarrier(state.execute(frame));
         Object label = GuestThreadOps.threadLabel(this, target);
         FrameAccess.writeLong(frame, slots[offset], label == null ? 0L : 1L);
         FrameAccess.write(frame, slots[offset + 1], label);

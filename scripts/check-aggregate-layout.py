@@ -85,7 +85,8 @@ EXPECTED = {
     'polymorphicTuple': tup([UNKNOWN, INT], None, False),
     'polymorphicSum': summ([UNKNOWN, INT], None, False),
     'polymorphicNested': tup([tup([UNKNOWN, VOID], None), summ([UNKNOWN, INT], None)], None, False),
-    'levityPolymorphic': tup([leaf('object', ['BoxedRep Nothing'], False), INT], None, False),
+    'levityPolymorphic': tup([leaf('object', ['BoxedRep Nothing'], False), INT], ['BoxedRep Nothing', 'IntRep'], False),
+    'boxedTupleThrough': tup([leaf('object', ['BoxedRep Nothing'], False), INT], ['BoxedRep Nothing', 'IntRep'], False),
     'tupleAliasIdentity': ALIASED_TUPLE,
     'sumAliasIdentity': summ([VOID, BOX], ['WordRep', LIFTED]),
     'nestedAliasIdentity': ALIASED_TUPLE,
@@ -112,6 +113,8 @@ def inventory(stage):
     check(module['schema'] == 1 and module['ghc'] == '9.14.1', 'Pinned schema/compiler mismatch')
     check(module['boundary'] == STAGES[stage], f'{stage}: wrong real export boundary')
     bindings = {b['name']: b for b in module['bindings']}
+    check(bindings['boxedThrough']['expr'][3]['resultRep'] == leaf('object', ['BoxedRep Nothing'], False),
+          f'{stage}: polymorphic tail result lost its known pointer representation')
     records = 0
     for value in walk(module):
         if not isinstance(value, dict) or 'aggregate' not in value:

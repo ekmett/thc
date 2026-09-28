@@ -32,6 +32,6 @@ public final class AstInputSource extends InputSource {
         throw fault("Expected primitive Double input");
     }
     @Override public Object reference(VirtualFrame frame, Node node, Object[] values, int index) { return FrameAccess.read(frame, slots[index]); }
-    @Override public void setReference(VirtualFrame frame, Node node, Object[] values, int index, Object value) { TypedInputsKt.writeInputReference(frame, slots[index], value); }
+    @Override public void setReference(VirtualFrame frame, Node node, Object[] values, int index, Object value) { TypedInputs.writeInputReference(frame, slots[index], value); }
     @ExplodeLoop public void clear(VirtualFrame frame) { for (int slot : slots) frame.clear(slot); }
 }

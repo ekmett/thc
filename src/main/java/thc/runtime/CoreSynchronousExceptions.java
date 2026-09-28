@@ -35,8 +35,5 @@ public final class CoreSynchronousExceptions {
                 !List.of("IntRep").equals(components.get(1).getPrimReps()) || !List.of("IntRep").equals(result.getPrimReps())))
             throw new RuntimeFault(name + ": expected exact boxed exception, State# and result tuple contract");
         TupleShape.Companion.validate(result);
-        for (CoreRepresentation leaf : TupleShape.Companion.flatten(result))
-            if (List.of("BoxedRep Nothing").equals(leaf.getPrimReps()))
-                throw new UnsupportedCore(name + ": result layout has unresolved boxed levity");
     }
 }

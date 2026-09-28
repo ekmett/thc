@@ -3,7 +3,7 @@
 `runtime-services-descriptors.json` retains the three genuine foreign-call
 descriptor objects from GHC 9.14.1's post-Tidy export of
 `runtime/THC/Internal/RuntimeABI.hs`. No convention, safety, target, arity,
-argument or result representation has been changed. Callers assembled by Kotlin
+argument or result representation has been changed. Callers assembled by Java
 tests remain explicitly synthetic; the descriptor objects themselves are GHC
 output, not handwritten ABI approximations.
 

@@ -29,48 +29,8 @@ public final class ClassInitializationInventory {
             && invoke.type().equalsString("()V");
     }
 
-    private static boolean companionHolder(ClassModel model) {
-        var name = model.thisClass().asInternalName();
-        if (!statelessHierarchy(model.superclass().orElseThrow().asInternalName())
-            || !model.interfaces().stream().allMatch(i -> statelessHierarchy(i.asInternalName()))) return false;
-        var fields = model.fields().stream().filter(f -> f.flags().has(java.lang.reflect.AccessFlag.STATIC)).toList();
-        var companionName = name + "$Companion";
-        if (fields.size() != 1 || !fields.getFirst().fieldName().equalsString("Companion")
-            || !fields.getFirst().fieldType().equalsString("L" + companionName + ";")
-            || !fields.getFirst().flags().has(java.lang.reflect.AccessFlag.FINAL)) return false;
-        var companion = classes.get(companionName);
-        if (companion == null || !companion.fields().isEmpty()
-            || !companion.superclass().orElseThrow().asInternalName().equals("java/lang/Object")
-            || !statelessHierarchy(companionName)) return false;
-        var constructors = companion.methods().stream().filter(m -> m.methodName().equalsString("<init>")).toList();
-        if (constructors.size() != 2) return false;
-        String marker = "(Lkotlin/jvm/internal/DefaultConstructorMarker;)V";
-        for (var ctor : constructors) {
-            if (!ctor.code().orElseThrow().exceptionHandlers().isEmpty()) return false;
-            var body = instructions(ctor);
-            String parent;
-            if (ctor.methodType().equalsString("()V")) parent = "java/lang/Object";
-            else if (ctor.methodType().equalsString(marker)) parent = companionName;
-            else return false;
-            if (body.size() != 3 || !body.get(0).opcode().name().equals("ALOAD_0")
-                || !constructorCall(body.get(1), parent) || !body.get(2).opcode().name().equals("RETURN")) return false;
-        }
-        var initializer = model.methods().stream().filter(m -> m.methodName().equalsString("<clinit>")).findFirst();
-        if (initializer.isEmpty() || !initializer.get().code().orElseThrow().exceptionHandlers().isEmpty()) return false;
-        var init = instructions(initializer.get());
-        return init.size() == 6 && init.get(0) instanceof NewObjectInstruction allocation
-            && allocation.className().asInternalName().equals(companionName)
-            && init.get(1).opcode().name().equals("DUP") && init.get(2).opcode().name().equals("ACONST_NULL")
-            && init.get(3) instanceof InvokeInstruction invoke && invoke.opcode().name().equals("INVOKESPECIAL")
-            && invoke.owner().asInternalName().equals(companionName) && invoke.name().equalsString("<init>")
-            && invoke.type().equalsString(marker) && init.get(4) instanceof FieldInstruction store
-            && store.opcode().name().equals("PUTSTATIC") && store.owner().asInternalName().equals(name)
-            && store.name().equalsString("Companion") && store.type().equalsString("L" + companionName + ";")
-            && init.get(5).opcode().name().equals("RETURN");
-    }
-
     // Exact bytecode proof for fieldless marker/utility singletons and generated
-    // non-adoptable operation singletons, not arbitrary Kotlin objects or nodes.
+    // non-adoptable operation singletons, not arbitrary objects or nodes.
     private static boolean markerSingleton(ClassModel model) {
         var name = model.thisClass().asInternalName();
         var parent = model.superclass().orElseThrow().asInternalName();
@@ -133,27 +93,9 @@ public final class ClassInitializationInventory {
         return model.interfaces().stream().allMatch(i -> statelessHierarchy(i.asInternalName()));
     }
 
-    private static boolean emptyCompanion(String name) {
-        var model = classes.get(name);
-        if (model == null || !model.fields().isEmpty() || !statelessHierarchy(name)
-            || !model.superclass().orElseThrow().asInternalName().equals("java/lang/Object")) return false;
-        var ctors = model.methods().stream().filter(m -> m.methodName().equalsString("<init>")).toList();
-        if (ctors.size() != 2) return false;
-        for (var ctor : ctors) {
-            if (!ctor.code().orElseThrow().exceptionHandlers().isEmpty()) return false;
-            var body = instructions(ctor);
-            var parent = ctor.methodType().equalsString("()V") ? "java/lang/Object" : name;
-            if (!ctor.methodType().equalsString("()V")
-                && !ctor.methodType().equalsString("(Lkotlin/jvm/internal/DefaultConstructorMarker;)V")) return false;
-            if (body.size() != 3 || !body.get(0).opcode().name().equals("ALOAD_0")
-                || !constructorCall(body.get(1), parent) || !body.get(2).opcode().name().equals("RETURN")) return false;
-        }
-        return true;
-    }
-
     // Inspect enum initialization and every constructor/helper it invokes.
-    // Only literal metadata, immutable Kotlin lists, exact enum construction and
-    // an empty companion are admitted. The two external enum inputs below were
+    // Only literal metadata and exact enum construction are admitted.
+    // The two external enum inputs below were
     // independently inspected (CoreKind tags; native-target byte order).
     private static boolean metadataEnum(ClassModel model) {
         if (!model.flags().has(java.lang.reflect.AccessFlag.ENUM)
@@ -170,11 +112,7 @@ public final class ClassInitializationInventory {
                     var owner = call.owner().asInternalName();
                     var member = call.name().stringValue();
                     if (owner.equals(name) && (member.equals("<init>") || member.equals("$values"))) continue;
-                    if (owner.equals(name + "$Companion") && member.equals("<init>") && emptyCompanion(owner)) continue;
                     if (owner.equals("java/lang/Enum") && member.equals("<init>")) continue;
-                    if (owner.equals("kotlin/enums/EnumEntriesKt") && member.equals("enumEntries")) continue;
-                    if (owner.equals("kotlin/collections/CollectionsKt")
-                        && (member.equals("listOf") || member.equals("emptyList"))) continue;
                     return false;
                 } else if (instruction instanceof FieldInstruction field) {
                     var owner = field.owner().asInternalName();
@@ -184,33 +122,7 @@ public final class ClassInitializationInventory {
                     return false;
                 } else if (instruction instanceof NewObjectInstruction allocation) {
                     var type = allocation.className().asInternalName();
-                    if (!type.equals(name) && !(type.equals(name + "$Companion") && emptyCompanion(type))) return false;
-                }
-            }
-        }
-        return true;
-    }
-
-    private static boolean metadataSwitch(ClassModel model) {
-        var name = model.thisClass().asInternalName();
-        if (!name.endsWith("$WhenMappings") || !model.superclass().orElseThrow().asInternalName().equals("java/lang/Object")
-            || !model.interfaces().isEmpty()) return false;
-        if (model.fields().stream().anyMatch(f -> !f.flags().has(java.lang.reflect.AccessFlag.STATIC)
-            || !f.flags().has(java.lang.reflect.AccessFlag.FINAL) || !f.fieldType().equalsString("[I"))) return false;
-        for (var method : model.methods()) {
-            if (!method.methodName().equalsString("<clinit>")) return false;
-            if (method.code().orElseThrow().exceptionHandlers().stream().anyMatch(h -> h.catchType().isEmpty()
-                || !h.catchType().get().asInternalName().equals("java/lang/NoSuchFieldError"))) return false;
-            for (var instruction : instructions(method)) {
-                if (instruction.opcode().name().equals("INVOKEDYNAMIC") || instruction instanceof NewObjectInstruction) return false;
-                if (instruction instanceof InvokeInstruction call) {
-                    var owner = classes.get(call.owner().asInternalName());
-                    if (owner == null || !metadataEnum(owner)
-                        || !(call.name().equalsString("values") || call.name().equalsString("ordinal"))) return false;
-                } else if (instruction instanceof FieldInstruction field) {
-                    if (field.owner().asInternalName().equals(name)) continue;
-                    var owner = classes.get(field.owner().asInternalName());
-                    if (!field.opcode().name().equals("GETSTATIC") || owner == null || !metadataEnum(owner)) return false;
+                    if (!type.equals(name)) return false;
                 }
             }
         }
@@ -227,7 +139,7 @@ public final class ClassInitializationInventory {
             }
         }
         if (args[1].equals("enums")) {
-            System.out.println(String.join(",", classes.values().stream().filter(m -> metadataEnum(m) || metadataSwitch(m))
+            System.out.println(String.join(",", classes.values().stream().filter(ClassInitializationInventory::metadataEnum)
                 .map(m -> m.thisClass().asInternalName().replace('/', '.')).sorted().toList()));
         } else if (args[1].equals("enum-audit")) {
             classes.values().stream().filter(m -> m.flags().has(java.lang.reflect.AccessFlag.ENUM)).forEach(model -> {
@@ -252,9 +164,6 @@ public final class ClassInitializationInventory {
                 .map(n -> n.replace('/', '.')).sorted().toList()));
         } else if (args[1].equals("markers")) {
             System.out.println(String.join(",", classes.values().stream().filter(ClassInitializationInventory::markerSingleton)
-                .map(m -> m.thisClass().asInternalName().replace('/', '.')).sorted().toList()));
-        } else if (args[1].equals("companions")) {
-            System.out.println(String.join(",", classes.values().stream().filter(ClassInitializationInventory::companionHolder)
                 .map(m -> m.thisClass().asInternalName().replace('/', '.')).sorted().toList()));
         } else if (args[1].equals("external-parents")) {
             var external = new java.util.TreeSet<String>();

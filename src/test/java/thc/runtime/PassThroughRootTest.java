@@ -144,7 +144,7 @@ class PassThroughRootTest {
             var incoming = typed.getPacket().create(); incoming.setInputMode(2); typed.getPacket().setLong(incoming, 0, 0); typed.getPacket().setInt(incoming, 1, 11);
             var transfer = assertThrows(TailCall.class, () -> Calls.target(root.getCallTarget(), new Object[]{incoming})); assertSame(root.getCallTarget(), transfer.getTarget()); assertEquals(11, originalArgument[0]); assertEquals(0, incoming.getInputMode());
             var outgoing = Objects.requireNonNull(transfer.getInput());
-            try { assertEquals(22, typed.getPacket().getInt(outgoing, 1)); assertTrue(outgoing.getInputMode() >= 1 && outgoing.getInputMode() <= 3); } finally { TypedInputsKt.discardTypedInput(language, outgoing); }
+            try { assertEquals(22, typed.getPacket().getInt(outgoing, 1)); assertTrue(outgoing.getInputMode() >= 1 && outgoing.getInputMode() <= 3); } finally { TypedInputs.discardTypedInput(language, outgoing); }
             var state = language.getHandoffState().get(); assertEquals(0, state.getArguments().getDepth()); assertEquals(0, state.getArguments().retainedReferences());
         });
     }

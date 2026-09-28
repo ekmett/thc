@@ -20,9 +20,9 @@ import com.oracle.truffle.api.source.SourceSection;
 import java.util.Arrays;
 import java.util.List;
 import static thc.runtime.RuntimeFault.fault;
-import static thc.runtime.AstSelfCallsKt.requireReferenceCarrier;
-import static thc.runtime.AstStackKt.astStackScope;
-import static thc.runtime.SavedGuestContinuationKt.savedGuestContinuation;
+import static thc.runtime.AstSelfCalls.requireReferenceCarrier;
+import static thc.runtime.AstStacks.astStackScope;
+import static thc.runtime.SavedGuestContinuations.savedGuestContinuation;
 
 /* Indexed frames, selective captures, rooted application and self-tail frame
  * restoration follow Cadenza. See NOTICE.md and LICENSE.txt. */
@@ -42,6 +42,9 @@ public final class FunctionRoot extends GuestRoot {
     private final FunctionRootRole role;
     private final boolean stackCapture;
     private final boolean capturesContinuations;
+    private final boolean deferredBudget;
+    private final boolean budgetBoundary;
+    private volatile long budgetGeneration;
     @CompilationFinal(dimensions = 1) private final Class<?>[] argumentReferences;
     @CompilationFinal(dimensions = 1) private final boolean[] strictArguments;
     @CompilationFinal(dimensions = 1) private final int[] strictSlots;
@@ -65,6 +68,18 @@ public final class FunctionRoot extends GuestRoot {
                         HandoffEntry handoff, TupleShape tuple, int[] tupleSlots, ArgumentLayout inputLayout,
                         boolean enableAsync, int[][] environmentVectorSlots, boolean enableDelimited,
                         FunctionRootRole role, boolean stackCapture) {
+        this(language, descriptor, label, captureLayout, environmentSlots, argumentSlots, argumentIndices,
+            body, metrics, argumentProofs, resultProof, coreSourceLocation, entryStrict, handoff, tuple,
+            tupleSlots, inputLayout, enableAsync, environmentVectorSlots, enableDelimited, role, stackCapture,
+            false, false);
+    }
+    public FunctionRoot(TruffleLanguage<?> language, FrameDescriptor descriptor, String label,
+                        CaptureLayout captureLayout, int[] environmentSlots, int[] argumentSlots,
+                        int[] argumentIndices, Expr body, Metrics metrics, CoreRepresentation[] argumentProofs,
+                        CoreRepresentation resultProof, CoreSourceLocation coreSourceLocation, boolean[] entryStrict,
+                        HandoffEntry handoff, TupleShape tuple, int[] tupleSlots, ArgumentLayout inputLayout,
+                        boolean enableAsync, int[][] environmentVectorSlots, boolean enableDelimited,
+                        FunctionRootRole role, boolean stackCapture, boolean deferredBudget, boolean budgetBoundary) {
         super(language, descriptor);
         this.label = label; this.captureLayout = captureLayout; this.environmentSlots = environmentSlots;
         this.argumentSlots = argumentSlots; this.argumentIndices = argumentIndices; this.argumentProofs = argumentProofs;
@@ -72,6 +87,8 @@ public final class FunctionRoot extends GuestRoot {
         this.enableAsync = enableAsync; this.environmentVectorSlots = environmentVectorSlots;
         this.enableDelimited = enableDelimited; this.role = role; this.stackCapture = stackCapture;
         capturesContinuations = enableAsync || stackCapture;
+        this.deferredBudget = deferredBudget;
+        this.budgetBoundary = budgetBoundary;
         configureEntry(entryStrict, captureLayout != null);
         configureInput(inputLayout);
         configureTupleResult(tuple);
@@ -244,7 +261,7 @@ public final class FunctionRoot extends GuestRoot {
             else {
                 Object value = source.reference(frame, node, null, from);
                 Class<?> expected = i < argumentReferences.length ? argumentReferences[i] : null;
-                TypedInputsKt.writeInputReference(frame, to, expected == null ? value : requireReferenceCarrier(value, expected));
+                TypedInputs.writeInputReference(frame, to, expected == null ? value : requireReferenceCarrier(value, expected));
             }
         }
         if (captureLayout != null) {
@@ -267,7 +284,7 @@ public final class FunctionRoot extends GuestRoot {
                 else {
                     Object value = entry.getPacket().getObject(input, from);
                     Class<?> expected = i < argumentReferences.length ? argumentReferences[i] : null;
-                    TypedInputsKt.writeInputReference(frame, to, expected == null || strictArguments[i] ? value : requireReferenceCarrier(value, expected));
+                    TypedInputs.writeInputReference(frame, to, expected == null || strictArguments[i] ? value : requireReferenceCarrier(value, expected));
                 }
             }
             if (captureLayout != null) {
@@ -433,5 +450,14 @@ public final class FunctionRoot extends GuestRoot {
     public List<CoreSourceNote> getCoreSourceNotes() { return coreSourceLocation == null ? List.of() : coreSourceLocation.getNotes(); }
     @Override public String getName() { return label; }
     @Override public String toString() { return label; }
-    @Override public boolean isCloningAllowed() { return true; }
+    @Override public long getGraphBudgetGeneration() { return budgetGeneration; }
+    @Override public synchronized long prepareGraphBudgetRetry(long failedGeneration) {
+        if (deferredBudget && failedGeneration == 0L && budgetGeneration == 0L && AstDeferredArm.extract(this))
+            budgetGeneration = 1L;
+        return budgetGeneration;
+    }
+    @Override protected boolean prepareForCompilation(boolean rootCompilation, int compilationTier, boolean lastTier) {
+        return (!budgetBoundary || rootCompilation) && super.prepareForCompilation(rootCompilation, compilationTier, lastTier);
+    }
+    @Override public boolean isCloningAllowed() { return !budgetBoundary; }
 }

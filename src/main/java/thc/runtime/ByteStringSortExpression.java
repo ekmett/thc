@@ -23,7 +23,7 @@ final class ByteStringSortExpression extends Expr {
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
         ManagedAddress address = operands[0].executeRequiredAddress(frame);
         long count = operands[1].executeRequiredLong(frame);
-        TupleResultsKt.requireVoidCarrier(operands[2].execute(frame));
+        TupleResults.requireVoidCarrier(operands[2].execute(frame));
         ByteStringSort.sort(address, count);
         return null;
     }

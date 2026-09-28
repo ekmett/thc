@@ -5,10 +5,10 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import static thc.runtime.RuntimeServiceStatus.fault;
-import static thc.runtime.TupleResultsKt.requireVoidCarrier;
+import static thc.runtime.TupleResults.requireVoidCarrier;
 import java.util.List;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
-import static thc.runtime.ApplicationKt.requireClosure;
+import static thc.runtime.Applications.requireClosure;
 
 public final class CatchException extends Expr {
     private final TupleShape shape;
@@ -88,7 +88,7 @@ public final class CatchException extends Expr {
         private final List<AstResumeStep> steps;
         CatchScope(CatchException node, Object handler, List<AstResumeStep> steps) { this.node = node; this.handler = handler; this.steps = steps; }
         @Override public Object resume(VirtualFrame frame, Object input) {
-            try { return AstContinuationKt.resumeAstSteps(frame, steps, input); }
+            try { return AstContinuations.resumeAstSteps(frame, steps, input); }
             catch (GuestException guest) { return node.runHandler(frame, handler, guest.getPayload()); }
             catch (AsyncDelivery delivered) {
                 delivered.getRequest().acknowledge();

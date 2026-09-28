@@ -31,7 +31,7 @@ public final class ManagedMVars {
         @Child private Expr state;
         New(Expr state) { this.state = state; }
         @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
-            TupleResultsKt.requireVoidCarrier(state.execute(frame));
+            TupleResults.requireVoidCarrier(state.execute(frame));
             FrameAccess.write(frame, slots[offset], new ManagedMVar());
             return null;
         }
@@ -64,7 +64,7 @@ public final class ManagedMVars {
         }
         @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
             var reference = ManagedMVar.require(cell.execute(frame));
-            TupleResultsKt.requireVoidCarrier(state.execute(frame));
+            TupleResults.requireVoidCarrier(state.execute(frame));
             Object value;
             try { value = remove ? reference.take(this, async) : reference.read(this, async); }
             catch (AsyncBlocked blocked) {
@@ -82,7 +82,7 @@ public final class ManagedMVars {
         TryRead(Expr cell, Expr state, boolean remove) { this.cell = cell; this.state = state; this.remove = remove; }
         @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
             var reference = ManagedMVar.require(cell.execute(frame));
-            TupleResultsKt.requireVoidCarrier(state.execute(frame));
+            TupleResults.requireVoidCarrier(state.execute(frame));
             var result = remove ? reference.tryTake() : reference.tryRead();
             FrameAccess.writeLong(frame, slots[offset], result.getPresent() ? 1L : 0L);
             // Failure still overwrites the payload so an earlier successful read cannot retain a guest reference.
@@ -117,7 +117,7 @@ public final class ManagedMVars {
         @Override public Object execute(VirtualFrame frame) {
             var reference = ManagedMVar.require(cell.execute(frame));
             var stored = value.execute(frame);
-            TupleResultsKt.requireVoidCarrier(state.execute(frame));
+            TupleResults.requireVoidCarrier(state.execute(frame));
             try { reference.put(stored, this, async); }
             catch (AsyncBlocked blocked) {
                 throw new AstCapture(blocked.getRequest(), SynchronousMasking.current(this))
@@ -134,7 +134,7 @@ public final class ManagedMVars {
         @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
             var reference = ManagedMVar.require(cell.execute(frame));
             var stored = value.execute(frame);
-            TupleResultsKt.requireVoidCarrier(state.execute(frame));
+            TupleResults.requireVoidCarrier(state.execute(frame));
             FrameAccess.writeLong(frame, slots[offset], reference.tryPut(stored) ? 1L : 0L);
             return null;
         }
@@ -145,7 +145,7 @@ public final class ManagedMVars {
         IsEmpty(Expr cell, Expr state) { this.cell = cell; this.state = state; }
         @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
             var reference = ManagedMVar.require(cell.execute(frame));
-            TupleResultsKt.requireVoidCarrier(state.execute(frame));
+            TupleResults.requireVoidCarrier(state.execute(frame));
             FrameAccess.writeLong(frame, slots[offset], reference.isEmpty() ? 1L : 0L);
             return null;
         }

@@ -21,23 +21,26 @@ handwritten checksum implementations.
 THC's frame, closure and application runtime is a close adaptation of Edward
 Kmett's Cadenza at commit `e2b66e241527cde5d29014af1e4f83d9f2402f88`.
 
-- `src/main/kotlin/thc/runtime/Frames.kt`: indexed frame layout, primitive slot
+- [FrameLayout.java](src/main/java/thc/runtime/FrameLayout.java),
+  [FrameAccess.java](src/main/java/thc/runtime/FrameAccess.java) and
+  [CaptureLayout.java](src/main/java/thc/runtime/CaptureLayout.java): indexed frame layout, primitive slot
   specialization and selective final StaticShape capture properties, from
   Cadenza's `jit/frame_layout.kt` and `frame/capture_layout.kt`.
-- `src/main/kotlin/thc/runtime/DataValues.kt`: constructor-specific final primitive
+- [DataLayout.java](src/main/java/thc/runtime/DataLayout.java): constructor-specific final primitive
   and object fields, following Cadenza's `frame/frame_assembly.kt`, with StaticShape
   construction adapted from `frame/capture_layout.kt`.
-- `src/main/kotlin/thc/runtime/Application.kt`: closure/PAP representation,
+- `src/main/java/thc/runtime/Application.java`: closure/PAP representation,
   generated exact/under/overapplication specializations, bounded direct and
   indirect call caches, bloom-filter tail detection and trampoline, from
   Cadenza's `jit/dispatch.kt`, `jit/tail_calls.kt` and `data/Closure.kt`.
-- `src/main/kotlin/thc/runtime/Program.kt`: selective capture construction,
+- [Program.java](src/main/java/thc/runtime/Program.java) and
+  [FunctionRoot.java](src/main/java/thc/runtime/FunctionRoot.java): selective capture construction,
   cached closed closures, shared empty PAP prefix, recursive indirection
   publication, function frame preamble and peeled self-tail loop restoration,
   following Cadenza's lambda, recursive-let and root machinery.
 - `src/main/java/thc/runtime/Calls.java`: Java vararg call bridge.
 - `src/main/java/thc/runtime/BytecodeRoot.java` and
-  `src/main/kotlin/thc/runtime/BytecodeProgram.kt`: Bytecode DSL root, constant
+  `src/main/java/thc/runtime/BytecodeProgram.java`: Bytecode DSL root, constant
   operation metadata, shared dispatch operations, and replayable lowering, guided
   by Cadenza's `bytecode/BytecodeRoot.java` and `bytecode/compiler.kt`. THC retains
   selective StaticShape captures and adds Core laziness and native self backedges.

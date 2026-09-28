@@ -49,14 +49,14 @@ class HandoffReferenceTest {
     }
     @FunctionalInterface private interface Action { void run(Language language) throws ReflectiveOperationException; }
     private void withLanguage(Action action) throws ReflectiveOperationException {
-        String old = System.getProperty(HandoffKt.HANDOFF_PROPERTY); System.setProperty(HandoffKt.HANDOFF_PROPERTY, "true");
+        String old = System.getProperty(Handoff.HANDOFF_PROPERTY); System.setProperty(Handoff.HANDOFF_PROPERTY, "true");
         try {
             try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).option("compiler.Inlining", "false").option("engine.BackgroundCompilation", "false")
                     .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build()) {
                 context.initialize("thc"); context.enter();
                 try { action.run(TruffleLanguage.LanguageReference.create(Language.class).get(null)); } finally { context.leave(); }
             }
-        } finally { if (old == null) System.clearProperty(HandoffKt.HANDOFF_PROPERTY); else System.setProperty(HandoffKt.HANDOFF_PROPERTY, old); }
+        } finally { if (old == null) System.clearProperty(Handoff.HANDOFF_PROPERTY); else System.setProperty(Handoff.HANDOFF_PROPERTY, old); }
     }
     private void compile(RootCallTarget target) throws ReflectiveOperationException {
         var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"); type.getMethod("compile", boolean.class).invoke(target, true);

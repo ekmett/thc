@@ -115,7 +115,7 @@ clean:
 	$(RM) -r -- build dist dist-newstyle dist-thc
 
 distclean: clean
-	$(RM) -r -- .gradle .kotlin .gradle-user-home
+	$(RM) -r -- .gradle .gradle-user-home
 
 check-java:
 	@test -n "$${JAVA_HOME:-}" && test -x "$$JAVA_HOME/bin/java" && test -x "$$JAVA_HOME/bin/javac" || { \

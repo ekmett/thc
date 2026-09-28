@@ -131,8 +131,8 @@ class TupleRepresentationTest {
             assertThrows(IllegalStateException.class, () -> wrong.consume(frame, token, new int[]{slot}, 0)); assertEquals(0, language.getHandoffState().get().getResults().getDepth()); assertEquals(0, language.getHandoffState().get().getResults().retainedReferences());
             // A deoptimized fresh carrier owns no loan and retains raw pointer identity.
             var fresh = source.getLayout().create(); source.getLayout().setObject(fresh, 0, marker); source.consume(frame, fresh, new int[]{slot}, 0); assertSame(marker, frame.getObject(slot)); assertEquals(0, language.getHandoffState().get().getResults().getDepth());
-            var completion = source.finish(frame, new int[]{slot}); var owned = TupleResultsKt.ownedTupleResult(completion, source); assertSame(marker, source.getLayout().getObject(owned, 0)); assertEquals(0, language.getHandoffState().get().getResults().getDepth()); assertEquals(0, language.getHandoffState().get().getResults().retainedReferences());
-            var malformed = source.finish(frame, new int[]{slot}); assertThrows(IllegalStateException.class, () -> TupleResultsKt.ownedTupleResult(malformed, wrong)); assertEquals(0, language.getHandoffState().get().getResults().getDepth()); assertEquals(0, language.getHandoffState().get().getResults().retainedReferences());
+            var completion = source.finish(frame, new int[]{slot}); var owned = TupleResults.ownedTupleResult(completion, source); assertSame(marker, source.getLayout().getObject(owned, 0)); assertEquals(0, language.getHandoffState().get().getResults().getDepth()); assertEquals(0, language.getHandoffState().get().getResults().retainedReferences());
+            var malformed = source.finish(frame, new int[]{slot}); assertThrows(IllegalStateException.class, () -> TupleResults.ownedTupleResult(malformed, wrong)); assertEquals(0, language.getHandoffState().get().getResults().getDepth()); assertEquals(0, language.getHandoffState().get().getResults().retainedReferences());
         });
     }
     @Test void forcingAConsumedLazyFieldCanBlackholeWithoutRetainingTheOutputLoan() throws Exception {
@@ -171,10 +171,10 @@ class TupleRepresentationTest {
         });
     }
     @Test void scalarHandoffCannotClaimSingletonReferenceTupleResults() throws Exception {
-        String previous = System.getProperty(HandoffKt.HANDOFF_PROPERTY); System.setProperty(HandoffKt.HANDOFF_PROPERTY, "true");
+        String previous = System.getProperty(Handoff.HANDOFF_PROPERTY); System.setProperty(Handoff.HANDOFF_PROPERTY, "true");
         try { withLanguage(language -> {
             var ref = new CoreRepresentation(CoreKind.OBJECT, false, true, List.of("BoxedRep (Just Lifted)"), null, null, null, null, null); var result = new CoreRepresentation(CoreKind.UNKNOWN, true, true, ref.getPrimReps(), List.of(ref), null, null, null, null);
             assertNull(HandoffEntry.create(language, new FrameLayout(), List.of(), result, false));
-        }); } finally { if (previous == null) System.clearProperty(HandoffKt.HANDOFF_PROPERTY); else System.setProperty(HandoffKt.HANDOFF_PROPERTY, previous); }
+        }); } finally { if (previous == null) System.clearProperty(Handoff.HANDOFF_PROPERTY); else System.setProperty(Handoff.HANDOFF_PROPERTY, previous); }
     }
 }

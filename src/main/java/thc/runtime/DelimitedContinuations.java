@@ -7,8 +7,8 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.ControlFlowException;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
-public final class DelimitedContinuationsKt {
-    private DelimitedContinuationsKt() {}
+public final class DelimitedContinuations {
+    private DelimitedContinuations() {}
     @TruffleBoundary public static MaterializedFrame copyContinuationFrame(MaterializedFrame frame) {
         var descriptor = frame.getFrameDescriptor();
         MaterializedFrame copy = Truffle.getRuntime().createMaterializedFrame(frame.getArguments().clone(), descriptor);

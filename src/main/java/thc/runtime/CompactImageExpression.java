@@ -25,7 +25,7 @@ final class CompactImageExpression extends Expr {
             case FIRST, NEXT -> {
                 var region = state.compactRegions.require(operands[0].execute(frame));
                 var previous = op == CompactImageOp.NEXT ? operands[1].executeRequiredAddress(frame) : null;
-                TupleResultsKt.requireVoidCarrier(operands[operands.length - 1].execute(frame));
+                TupleResults.requireVoidCarrier(operands[operands.length - 1].execute(frame));
                 var address = previous == null ? state.compactImages.first(region) : state.compactImages.next(region, previous);
                 FrameAccess.INSTANCE.write(frame, slots[offset], address);
                 FrameAccess.INSTANCE.writeLong(frame, slots[offset + 1], address == ManagedAddress.nullAddress() ? 0 : address.availableBytes());
@@ -33,20 +33,20 @@ final class CompactImageExpression extends Expr {
             case ALLOCATE -> {
                 var size = operands[0].executeRequiredLong(frame);
                 var previous = operands[1].executeRequiredAddress(frame);
-                TupleResultsKt.requireVoidCarrier(operands[2].execute(frame));
+                TupleResults.requireVoidCarrier(operands[2].execute(frame));
                 FrameAccess.INSTANCE.write(frame, slots[offset], state.compactImages.allocate(size, previous));
             }
             case FIXUP -> {
                 var first = operands[0].executeRequiredAddress(frame);
                 var oldRoot = operands[1].executeRequiredAddress(frame);
-                TupleResultsKt.requireVoidCarrier(operands[2].execute(frame));
+                TupleResults.requireVoidCarrier(operands[2].execute(frame));
                 var fixed = state.compactImages.fixup(first, oldRoot);
                 FrameAccess.INSTANCE.write(frame, slots[offset], fixed.getRegion());
                 FrameAccess.INSTANCE.write(frame, slots[offset + 1], fixed.getRoot());
             }
             case TO_ADDRESS -> {
                 var value = operands[0].execute(frame);
-                TupleResultsKt.requireVoidCarrier(operands[1].execute(frame));
+                TupleResults.requireVoidCarrier(operands[1].execute(frame));
                 FrameAccess.INSTANCE.write(frame, slots[offset], state.heapAddresses.address(value));
             }
             case FROM_ADDRESS -> FrameAccess.INSTANCE.write(frame, slots[offset],

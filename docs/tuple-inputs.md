@@ -9,13 +9,18 @@ execute in source order before a call or partial application is published.
 
 Boxed tuples remain DataValue references. An unlifted boxed datatype remains one
 reference. Neither is flattened. A lifted leaf inside an unboxed tuple stays lazy,
-including when the tuple parameter is strict or unused. Unknown layouts or levity
-are excluded; exact vector leaves retain their fixed species. Supported sums may
+including when the tuple parameter is strict or unused. `BoxedRep Nothing` also
+has a known traced reference carrier: unknown levity does not introduce a force
+or establish evaluatedness. Its proof can refine to either concrete boxed levity;
+conflicting concrete levities still reject. Unknown runtime layouts are excluded;
+exact vector leaves retain their fixed species. Supported sums may
 occur inside recursive tuples: their physical tag/payload slots expand at that
 logical component without changing neighbouring offsets. An exact evaluated
 `AddrRep` leaf carries only a checked `ManagedAddress`, never a native pointer.
-Ordinary aggregate let bindings and aggregate parameters/results at the public host
-entry remain rejected. [Tuple closure/thunk captures](tuple-captures.md) preserve owned
+Nonrecursive unlifted tuple/sum lets evaluate their right-hand side once into
+typed frame locals, even when unused. Recursive or lifted aggregate lets, global
+aggregate storage and aggregate parameters/results at the public host entry remain
+rejected. [Tuple closure/thunk captures](tuple-captures.md) preserve owned
 physical fields and exact logical nesting. [Local tuple-join arguments](tuple-joins.md)
 use the same logical layouts but parallel moves within the current frame.
 Saturated boxed constructors support [owned tuple/sum fields](aggregate-heap-fields.md).

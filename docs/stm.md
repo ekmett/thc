@@ -87,7 +87,7 @@ cabal run exe:thc-fixtures --offline -- stm
 
 The Haskell producer exports pre/post-Tidy original Core, closes the implicit
 exception using complete installed GHC Core, performs strict audits and runs a
-78-row native oracle. Kotlin checks an independent arithmetic model, deterministic
+78-row native oracle. Java checks an independent arithmetic model, deterministic
 conflicts and stale exceptions, real retry registration/wakeup, nested rollback,
 lazy and unlifted payloads, context boundaries and cleanup. Installed guest-entry
 checks inspect the first compiled call without settling or retries, with and
@@ -106,8 +106,8 @@ The three newtype-field cases also retain an opaque consumer, giving three roots
 for a simple action or five for an alternative/catch. The rejected nested atomic
 action never runs.
 All active targets must remain installed after each row. Callback orchestration
-is Kotlin-inlined to keep virtual frames out of heap closures; expected retry and
-conflict signals do not trigger an interpreter transfer at storage boundaries.
+uses direct Java control flow; expected retry and conflict signals do not trigger
+an interpreter transfer at storage boundaries.
 
 The twelve transaction-protocol tests and strict audit mutation controls run in
 ordinary CI. The original-Core/native tests have a required explicit

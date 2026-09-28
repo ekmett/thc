@@ -239,7 +239,7 @@ def main():
     parser.add_argument('--baseline-tools-jar', type=Path, help='separate frozen diagnostics JAR; omit for historical runtimes with bundled Probe')
     parser.add_argument('--candidate-tools-jar', type=Path, help='separate frozen diagnostics JAR; required for current runtimes')
     parser.add_argument('--baseline-probe-class', default='thc.Probe',
-                        help='explicit entrypoint in the frozen baseline; use thc.ProbeKt for historical Kotlin tools')
+                        help='explicit probe entrypoint in the frozen baseline')
     parser.add_argument('--candidate-probe-class', default='thc.Probe',
                         help='explicit entrypoint in the frozen candidate (default: thc.Probe)')
     parser.add_argument('native_binary', type=Path, help='immutable native oracle with scalar and --bench-steady modes')

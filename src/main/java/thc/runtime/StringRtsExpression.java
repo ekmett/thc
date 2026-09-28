@@ -23,7 +23,7 @@ final class StringRtsExpression extends Expr {
 
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
         var address = operation.getArguments().size() == 2 ? operands[0].executeRequiredAddress(frame) : null;
-        TupleResultsKt.requireVoidCarrier(operands[operands.length - 1].execute(frame));
+        TupleResults.requireVoidCarrier(operands[operands.length - 1].execute(frame));
         // Live THC programs retain their global CAF cells; there is no native RTS CAF reversion.
         FrameAccess.INSTANCE.writeLong(frame, slots[offset], address != null ? address.cStringLength()
             : operation == StringRtsOp.KEEP_CAFS ? 1L : 0L);

@@ -17,7 +17,7 @@ including signed zero and NaN payloads; no floating arithmetic is performed.
 The ordinary Haskell fixture exports original vector Core for all 120 operations.
 An independent native GHC fixture implements the same transfers with scalar
 array primops, so verification does not require executable AVX-512 code on the
-host. Its 2,880 rows are also compared with a Kotlin scalar-byte model. The
+host. Its 2,880 rows are also compared with a Java scalar-byte model. The
 manifest explicitly records scalar-lane native evidence, not native wide-vector
 execution. Tests check full buffers, aliases, tails, invalid ranges, metadata,
 first-installed calls, and handoff cleanup on both backends/storage modes.

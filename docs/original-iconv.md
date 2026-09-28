@@ -90,7 +90,7 @@ JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew --offline --no-daemon --max-
 ```
 
 Use the host's resource gate around each command (and its JVM resource for
-Gradle). Native ABI probing remains enabled. The Kotlin source is in
+Gradle). Native ABI probing remains enabled. The Java source is in
 `src/fullCoreTest`; ordinary `test` groups do not require this full-Core fixture.
 Selecting `originalIconvFullCoreTest` without its fixture is an explicit failure.
 

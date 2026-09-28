@@ -54,7 +54,7 @@ public final class KillThread extends Expr {
     @Override public Object execute(VirtualFrame frame) {
         Object target = identity.execute(frame);
         Object exception = payload.execute(frame); // The lifted payload remains lazy.
-        TupleResultsKt.requireVoidCarrier(state.execute(frame));
+        TupleResults.requireVoidCarrier(state.execute(frame));
         if (!captureWait && target != GuestThreadOps.myThreadId(this))
             throw new UnsupportedCore("AST external killThread# requires a captured sender continuation");
         return finish(GuestThreadOps.beginKill(this, target, exception));

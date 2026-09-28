@@ -61,7 +61,7 @@ cabal run exe:thc-fixtures --offline -- ghc-bco
 
 The producer retains 24 native results, 16 strict audits, unmodified pre/post
 Core, command stdout/stderr and SHA-256 source/artifact provenance in
-`build/ghc-bco/`. Kotlin's arithmetic/state model is independent of runtime
+`build/ghc-bco/`. Java's arithmetic/state model is independent of runtime
 execution. Native comparisons run in both backends; each first-installed check
 compiles exactly the genuine public Core root and requires exactly one compiled
 entry and no interpreted call to that root, with no intervening guest call.
@@ -79,8 +79,8 @@ handoff tests and three tuple-completion tests) from one compilation in
 The final producer is `20260926-062810-m8wluvmf`; its closed 82-file cache
 payload verifies. The 287 fast CI checks and 16 coverage checks also pass.
 
-Earlier evidence is retained: `20260926-062336-i5oo_5s9` exposed a KAPT
-generated-node inference issue, fixed by declaring the existing Dispatch node
+Earlier evidence is retained: `20260926-062336-i5oo_5s9` exposed a
+generated-node inference issue during annotation processing, fixed by declaring the existing Dispatch node
 array type. `20260926-062451-h1r5isn1` passed the native comparisons but found
 that foreign-root lookup hit Truffle's sharing-layer assertion before the
 explicit ownership check. BCO entry now checks the active context first; the

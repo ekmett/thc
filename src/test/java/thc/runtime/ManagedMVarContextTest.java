@@ -98,12 +98,12 @@ public class ManagedMVarContextTest {
     }
     @FunctionalInterface private interface Variant { void run(Map<String, Object> module, String backend, String label, Fixture fixture) throws Exception; }
     private void variants(Variant action) throws Exception {
-        var fixture = fixture(); var old = System.getProperty(HandoffKt.HANDOFF_PROPERTY);
+        var fixture = fixture(); var old = System.getProperty(Handoff.HANDOFF_PROPERTY);
         try {
-            for (boolean handoff : new boolean[]{false, true}) { System.setProperty(HandoffKt.HANDOFF_PROPERTY, Boolean.toString(handoff));
+            for (boolean handoff : new boolean[]{false, true}) { System.setProperty(Handoff.HANDOFF_PROPERTY, Boolean.toString(handoff));
                 for (var stage : fixture.modules().entrySet()) for (var backend : List.of("ast", "bytecode")) action.run(stage.getValue(), backend, stage.getKey() + "/" + backend + "/handoff=" + handoff, fixture);
             }
-        } finally { if (old == null) System.clearProperty(HandoffKt.HANDOFF_PROPERTY); else System.setProperty(HandoffKt.HANDOFF_PROPERTY, old); }
+        } finally { if (old == null) System.clearProperty(Handoff.HANDOFF_PROPERTY); else System.setProperty(Handoff.HANDOFF_PROPERTY, old); }
     }
     @Test public void readyOperationsMatchEveryNativeContextOracleRow() throws Exception { variants((module, backend, label, fixture) -> withExecutor((context, executor) -> {
         executor.submit(() -> entered(context, label, language -> {

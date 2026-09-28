@@ -63,13 +63,13 @@ final class GenericTupleCaller extends Node {
                         });
                     }
                     Closure closure;
-                    try { closure = ApplicationKt.requireClosure(AstControl.force(frame, this, force, result)); }
+                    try { closure = Applications.requireClosure(AstControl.force(frame, this, force, result)); }
                     catch (AstCapture cut) {
                         CompilerDirectives.transferToInterpreter();
                         Object[] savedArguments = arguments.clone();
                         throw cut.append(new AstResumeStep() {
                             @Override public Object resume(VirtualFrame resumed, Object input) {
-                                execute(resumed, ApplicationKt.requireClosure(input), savedArguments, next);
+                                execute(resumed, Applications.requireClosure(input), savedArguments, next);
                                 return null;
                             }
                         });
@@ -90,7 +90,7 @@ final class GenericTupleCaller extends Node {
                     throw cut.append(frame, new DelimitedPendingApplication() {
                         @Override public TupleDestination getDestination() { return destination; }
                         @Override public Object resume(MaterializedFrame resumed, DelimitedResume input, MaskingState ambient, DelimitedStep outerMask) {
-                            try { execute(resumed, ApplicationKt.requireClosure(force.execute(resumed, input.get())), savedArguments.clone(), next); }
+                            try { execute(resumed, Applications.requireClosure(force.execute(resumed, input.get())), savedArguments.clone(), next); }
                             catch (DelimitedCut nested) {
                                 var frames = nested.getFrames();
                                 DelimitedStep last = frames.isEmpty() ? null : frames.get(frames.size() - 1).getStep();
@@ -103,7 +103,7 @@ final class GenericTupleCaller extends Node {
                         }
                     });
                 }
-                function = ApplicationKt.requireClosure(result);
+                function = Applications.requireClosure(result);
                 offset += count;
                 continue;
             }
@@ -122,11 +122,11 @@ final class GenericTupleCaller extends Node {
     }
     private Object resumeOverapplication(VirtualFrame frame, Object value, Object[] arguments, int next) {
         Closure closure;
-        try { closure = ApplicationKt.requireClosure(AstControl.force(frame, this, force, value)); }
+        try { closure = Applications.requireClosure(AstControl.force(frame, this, force, value)); }
         catch (AstCapture cut) {
             throw cut.append(new AstResumeStep() {
                 @Override public Object resume(VirtualFrame resumed, Object input) {
-                    execute(resumed, ApplicationKt.requireClosure(input), arguments, next);
+                    execute(resumed, Applications.requireClosure(input), arguments, next);
                     return null;
                 }
             });

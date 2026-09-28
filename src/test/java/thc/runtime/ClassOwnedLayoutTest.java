@@ -18,7 +18,7 @@ import static thc.runtime.RepresentationTestSupport.*;
 class ClassOwnedLayoutTest {
     private void options(boolean owned, CheckedRunnable action) throws Exception { options(owned, false, action); }
     private void options(boolean owned, boolean unchecked, CheckedRunnable action) throws Exception {
-        var settings = Map.of(ClassOwnedLayoutsKt.CLASS_OWNED_LAYOUTS_PROPERTY, Boolean.toString(owned), FramesKt.STATIC_SHAPE_UNCHECKED_PROPERTY, Boolean.toString(unchecked));
+        var settings = Map.of(ClassOwnedLayouts.CLASS_OWNED_LAYOUTS_PROPERTY, Boolean.toString(owned), Frames.STATIC_SHAPE_UNCHECKED_PROPERTY, Boolean.toString(unchecked));
         var previous = new HashMap<String, String>(); settings.forEach((key, value) -> previous.put(key, System.getProperty(key)));
         try { settings.forEach(System::setProperty); action.run(); }
         finally { previous.forEach((key, value) -> { if (value == null) System.clearProperty(key); else System.setProperty(key, value); }); }
@@ -40,9 +40,9 @@ class ClassOwnedLayoutTest {
         @Override public Object execute(VirtualFrame frame) { return layout.matches(frame.getArguments()[0]) ? layout.readLong((DataValue) frame.getArguments()[0], 0) : -17L; }
     }
     @Test void defaultUsesClassOwnershipAndExplicitFalseKeepsLayoutCarriers() throws Exception {
-        var previous = System.getProperty(ClassOwnedLayoutsKt.CLASS_OWNED_LAYOUTS_PROPERTY);
+        var previous = System.getProperty(ClassOwnedLayouts.CLASS_OWNED_LAYOUTS_PROPERTY);
         try {
-            System.clearProperty(ClassOwnedLayoutsKt.CLASS_OWNED_LAYOUTS_PROPERTY);
+            System.clearProperty(ClassOwnedLayouts.CLASS_OWNED_LAYOUTS_PROPERTY);
             context("field-based", language -> {
                 var owned = new DataLayout(language, "DefaultOwner", "DefaultOwner", new String[]{"IntRep"}); var first = owned.create(new Object[]{Long.MIN_VALUE});
                 assertFalse(first instanceof LayoutDataValue); assertSame(owned, first.getLayout());
@@ -52,7 +52,7 @@ class ClassOwnedLayoutTest {
                     assertEquals(Long.MIN_VALUE, owned.readLong(first, 0)); assertEquals(Long.MAX_VALUE, fallback.readLong(second, 0));
                 });
             });
-        } finally { if (previous == null) System.clearProperty(ClassOwnedLayoutsKt.CLASS_OWNED_LAYOUTS_PROPERTY); else System.setProperty(ClassOwnedLayoutsKt.CLASS_OWNED_LAYOUTS_PROPERTY, previous); }
+        } finally { if (previous == null) System.clearProperty(ClassOwnedLayouts.CLASS_OWNED_LAYOUTS_PROPERTY); else System.setProperty(ClassOwnedLayouts.CLASS_OWNED_LAYOUTS_PROPERTY, previous); }
     }
     @Test void fieldlessOwnersAndArrayFallbackKeepOldCompiledValuesValid() throws Exception {
         options(true, () -> {

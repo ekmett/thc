@@ -55,7 +55,7 @@ class DataLayoutFirstFieldTest {
                     field.set(layout, null);
                     if (layout == lifted) {
                         var failure = assertThrows(NullPointerException.class, () -> layout.readFirstLifted(value));
-                        assertEquals("Parameter specified as non-null is null: method kotlin.collections.ArraysKt___ArraysKt.firstOrNull, parameter <this>", failure.getMessage());
+                        assertEquals("Constructor fields must not be null", failure.getMessage());
                     } else {
                         var failure = assertThrows(RuntimeFault.class, () -> layout.readFirstLifted(value));
                         assertEquals("atomicModifyMutVar2# requires a lifted first record field", failure.getMessage());

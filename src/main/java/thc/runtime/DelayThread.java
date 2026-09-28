@@ -27,7 +27,7 @@ public final class DelayThread extends Expr {
     }
     @Override public Object execute(VirtualFrame frame) {
         long microseconds = duration.executeRequiredLong(frame);
-        TupleResultsKt.requireVoidCarrier(state.execute(frame));
+        TupleResults.requireVoidCarrier(state.execute(frame));
         await(new ThreadDelayToken(GuestThreads.current(this), microseconds));
         return thc.runtime.Unit.INSTANCE;
     }

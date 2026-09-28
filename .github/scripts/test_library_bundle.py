@@ -24,7 +24,7 @@ class LibraryBundleTest(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name).resolve() / "checkout"
         self.root.mkdir()
-        self.source = self.root / "src/LibraryCheck.kt"
+        self.source = self.root / "src/LibraryCheck.java"
         self.source.parent.mkdir()
         self.source.write_text("verified source\n")
         subprocess.run(["git", "init", "-q", str(self.root)], check=True)

@@ -33,7 +33,7 @@ public final class GhcBCO {
     @TruffleBoundary
     public static Closure create(Node node, Language language, Metrics metrics, Object code, Object literals, Object pointers,
                                  long arity, Object bitmap, Object state) {
-        TupleResultsKt.requireVoidCarrier(state);
+        TupleResults.requireVoidCarrier(state);
         if (arity < 0 || arity >= Integer.MAX_VALUE) throw fault("BCO arity outside managed calling convention");
         long codeBytes = ManagedByteArray.sizeGuest(code);
         long literalBytes = ManagedByteArray.sizeGuest(literals);

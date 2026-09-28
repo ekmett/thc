@@ -144,7 +144,7 @@ public class CaseArmOutliningTest {
             var worker = new Thread(() -> {
                 context.enter(); owner.getThreads().enterCurrent();
                 try {
-                    var saved = Objects.requireNonNull(SavedGuestContinuationKt.savedGuestContinuation(Calls.target(target, new Object[] {0L, prefix, blocked, 918273645L})));
+                    var saved = Objects.requireNonNull(SavedGuestContinuations.savedGuestContinuation(Calls.target(target, new Object[] {0L, prefix, blocked, 918273645L})));
                     Objects.requireNonNull(saved.asyncRequest()).acknowledge(); answer.complete(saved);
                 } catch (Throwable failure) { answer.completeExceptionally(failure); } finally { owner.getThreads().leaveCurrent(); context.leave(); }
             }); worker.setDaemon(true); worker.start();
@@ -164,7 +164,7 @@ public class CaseArmOutliningTest {
                         @Child private Force force = new Force(new Metrics(false), true);
                         @Override public Object execute(VirtualFrame frame) { return force.execute(frame, parked); }
                     }.getCallTarget();
-                    var completed = TupleResultsKt.ownedTupleResult(Calls.target(driver, new Object[0]), shape);
+                    var completed = TupleResults.ownedTupleResult(Calls.target(driver, new Object[0]), shape);
                     assertEquals(918273645L, shape.getLayout().getLong(completed, 0)); assertTrue(prefix.isEmpty()); assertTrue(blocked.isEmpty());
                     assertThrows(RuntimeFault.class, () -> saved.continueWith(thc.runtime.Unit.INSTANCE)); assertSame(target, p.entryTarget("entry")); released(language);
                 } finally { context.leave(); }

@@ -109,7 +109,7 @@ JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew test --tests thc.runtime.Del
 
 The Haskell producer retains the native GHC invocation, its 51 results, original
 pre/post Core, 34 strict entry audits, command stdout/stderr, and source/artifact
-SHA-256 provenance under `build/delimited-continuations/`. The Kotlin arithmetic
+SHA-256 provenance under `build/delimited-continuations/`. The Java arithmetic
 and shared-state model is independent of THC execution. Each mode checks 228
 interpreted observations and 76 first-installed executions with exact guest-root
 entry deltas, no intervening guest calls, and balanced argument/result pools and

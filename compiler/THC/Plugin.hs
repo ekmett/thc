@@ -352,13 +352,14 @@ unknownRepWithState evaluated = O [("primReps",Z),("kind",S "unknown"),("evaluat
 voidRep :: J
 voidRep = O [("primReps",A []),("kind",S "void"),("evaluated",B True)]
 
--- In 9.14.1 the TupleRep/SumRep callbacks underneath typePrimRep_maybe
--- still call partial runtimeRepPrimRep for their children. A valid Core type
--- such as forall r (a :: TYPE r). Box -> (# a, Int# #) can therefore panic
--- when its result is queried. Keep the entire unresolved physical vector
--- unknown, even when some logical components have known representations.
+-- Tuple storage concatenates its components, including known boxed pointers
+-- with unknown levity. GHC's aggregate RuntimeRep callbacks are partial for
+-- genuinely unknown representations and levity-polymorphic sum layouts.
 typePrimReps :: Type -> Maybe [PrimRep]
 typePrimReps ty
+  | Just (tc,args) <- splitTyConApp_maybe (unwrapType ty)
+  , isUnboxedTupleTyCon tc
+  = concat <$> traverse typePrimReps (dropRuntimeRepArgs args)
   | Just _ <- aggregateRuntimeKind ty
   , not (typeHasFixedRuntimeRep ty) = Nothing
   | otherwise = typePrimRep_maybe ty

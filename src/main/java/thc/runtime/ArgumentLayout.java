@@ -74,13 +74,15 @@ public final class ArgumentLayout {
         validate(function.target.getRootNode() instanceof GuestRoot root ? root.getInputLayout() : null,
             function.suppliedCount, supplied, offset, count);
     }
-    /** Exact logical shapes remain mandatory when physical widths agree. */
+    /** Logical shapes remain mandatory; an unknown boxed levity can refine to either exact levity. */
     public static void validate(ArgumentLayout formal, int prefixCount, ArgumentLayout supplied, int offset, int count) {
         if (formal == null && supplied == null) return;
         for (int i = 0; i < count; i++) {
             String expected = formal == null ? null : formal.tupleKeys[prefixCount + i];
             String actual = supplied == null ? null : supplied.tupleKeys[offset + i];
-            if (expected != actual) throw fault("Conflicting logical tuple argument representation");
+            if (expected != actual && (expected == null || actual == null ||
+                !TupleShape.compatible(formal.proofs[prefixCount + i], supplied.proofs[offset + i])))
+                throw fault("Conflicting logical tuple argument representation");
         }
     }
 }

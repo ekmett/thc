@@ -23,7 +23,7 @@ class GuestThreadsTest {
         try { thread.join(5000); }
         catch (InterruptedException failure) { GuestThreadsTest.<Void, RuntimeException>rethrow(failure); }
     }
-    // Preserve checked exceptions crossing Java Runnable / Kotlin callback boundaries.
+    // Preserve checked exceptions crossing Runnable and callback boundaries.
     @SuppressWarnings("unchecked")
     private static <T, E extends Throwable> T rethrow(Throwable failure) throws E { throw (E) failure; }
 

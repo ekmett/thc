@@ -57,6 +57,12 @@ ARITHMETIC_EXCEPTIONS = {name: 'ghc-internal:GHC.Internal.Exception.Type.' + pay
 _ANY = object()
 
 
+def known_levity_or_boxed_pointer(lifted, proof):
+    return (type(lifted) is bool or lifted is None and isinstance(proof, dict) and
+            proof.get('kind') in ('object', 'data', 'closure') and
+            proof.get('primReps') == ['BoxedRep Nothing'])
+
+
 class AuditStoreError(RuntimeError):
     """Infrastructure failure; never translate this into a capability issue."""
 
@@ -77,7 +83,7 @@ def _lookup_key(value):
     if not isinstance(value, str):
         # Original dictionaries permit a hashable non-string *lookup* and
         # return no match; unhashable lookups retain their original TypeError.
-        hash(value)
+        {}.get(value)
         raise KeyError(value)
     return _key(value)
 
@@ -508,10 +514,10 @@ class _InputRecords(MutableMapping):
     def encoded(self, key):
         if not self.compound:
             if not isinstance(key, str):
-                hash(key)
+                {}.get(key)
                 raise KeyError(key)
             return key
-        hash(key)
+        {}.get(key)
         if (not isinstance(key, tuple) or len(key) != 2 or
                 not all(value is None or isinstance(value, str) for value in key)):
             raise KeyError(key)
@@ -935,7 +941,7 @@ class Audit:
                 self.issue('duplicate-local-binder', owner, f'{path}/{i}', binder['id'])
             ids.add(binder['id'])
             self.binding_metadata(binder, owner, f'{path}/{i}')
-            if type(binder.get('lifted')) is not bool:
+            if not known_levity_or_boxed_pointer(binder.get('lifted'), binder.get('rep')):
                 self.issue('unknown-binder-levity', owner, f'{path}/{i}', binder['id'])
         return ids
 
@@ -1051,8 +1057,8 @@ class Audit:
     def shape(cls, rep):
         """Logical tuple boundaries are significant even at zero/one register.
 
-        Boxed leaf kinds and WHNF evidence may refine independently; primitive
-        representation names (including boxed liftedness) must still agree.
+        Boxed leaf kinds and WHNF evidence may refine independently; known
+        primitive representation names remain distinct.
         """
         if not isinstance(rep, dict):
             return None
@@ -1073,6 +1079,20 @@ class Audit:
             return ('vector', tuple(registers)) if isinstance(registers, list) else None
         return ('scalar', tuple(registers)) if isinstance(registers, list) else None
 
+    @classmethod
+    def compatible_shapes(cls, left, right):
+        if left is None or right is None:
+            return False
+        if left == right:
+            return True
+        if left[0] != right[0]:
+            return False
+        if left[0] in ('tuple', 'sum'):
+            return len(left[1]) == len(right[1]) and all(cls.compatible_shapes(a, b) for a, b in zip(left[1], right[1]))
+        boxed = {('BoxedRep Nothing',), ('BoxedRep (Just Lifted)',), ('BoxedRep (Just Unlifted)',)}
+        return (left[0] == 'scalar' and left[1] in boxed and right[1] in boxed and
+                ('BoxedRep Nothing',) in (left[1], right[1]))
+
     def compare_shapes(self, expected, actual, owner, path, component=False):
         # Exact scalar register names constrain the same lexical value too.
         # Missing/unknown legacy proofs and boxed kind refinements remain compatible.
@@ -1090,7 +1110,7 @@ class Audit:
         if not component and not (self.is_tuple(expected) or self.is_tuple(actual) or is_sum(expected) or is_sum(actual) or is_vector(expected) or is_vector(actual)):
             return
         left, right = self.shape(expected), self.shape(actual)
-        if left is None or right is None or left != right:
+        if not self.compatible_shapes(left, right):
             self.issue('aggregate-shape', owner, path, 'Conflicting or missing logical aggregate representation proofs')
 
     @staticmethod
@@ -1753,7 +1773,8 @@ class Audit:
                 self.issue('constructor-strictness', owner, path, f'{key}: missing/misaligned strictness and levity')
             else:
                 for index, (is_strict, is_lifted) in enumerate(zip(strict, lifted)):
-                    if type(is_strict) is not bool or (is_strict and type(is_lifted) is not bool):
+                    proof = fields[index] if isinstance(fields, list) and len(fields) == expected else None
+                    if type(is_strict) is not bool or (is_strict and not known_levity_or_boxed_pointer(is_lifted, proof)):
                         self.issue('constructor-strictness', owner, path, f'{key}[{index}]: unknown strictness/levity')
                     elif is_strict and is_lifted and not self.cap['strictLiftedFields']:
                         self.issue('strict-lifted-field', owner, path, f'{key}[{index}]')
@@ -1899,7 +1920,9 @@ class Audit:
                 flags = expr[3] if len(expr) > 3 else None
                 if not isinstance(arguments, list):
                     raise ValueError('Application arguments must be an array')
-                if not isinstance(flags, list) or len(flags) != len(arguments) or any(type(f) is not bool for f in flags):
+                if not isinstance(flags, list) or len(flags) != len(arguments) or any(
+                        not known_levity_or_boxed_pointer(flag, self.expression_rep(argument))
+                        for flag, argument in zip(flags, arguments)):
                     self.issue('application-levity', owner, path, 'Missing/invalid argument representation flags')
                 function = expr[1]
                 sum_constructor = function[0] == 'con' and self.constructors.get(function[1], {}).get('kind') == 'unboxed-sum'
@@ -2569,18 +2592,25 @@ class Audit:
                 for index, binding in enumerate(group):
                     if not isinstance(binding, dict):
                         continue
-                    if ('joinValueArity' not in binding and
-                            (is_sum(binding.get('rep')) or is_sum(self.expression_rep(binding.get('expr'))))):
-                        self.issue('aggregate-boundary', owner, f'{path}/bindings/{index}', 'unboxed-sum let binding')
+                    stored = binding.get('rep')
+                    actual = self.effective_rep(binding.get('expr'), local if recursive else bound)
+                    if 'joinValueArity' not in binding:
+                        sum_value = is_sum(stored) or is_sum(actual)
+                        tuple_value = self.is_tuple(stored) or self.is_tuple(actual)
+                        if sum_value and not (not recursive and binding.get('lifted') is False and
+                                self.supported_sum(stored, 'aggregateLetBindings')):
+                            self.issue('aggregate-boundary', owner, f'{path}/bindings/{index}', 'unboxed-sum let binding')
+                        if tuple_value and not (not recursive and binding.get('lifted') is False and
+                                'unboxed-tuple' in self.cap.get('aggregateLetBindings', []) and
+                                self.supported_tuple_input(stored, 'aggregateLetBindings')):
+                            self.issue('aggregate-boundary', owner, f'{path}/bindings/{index}', 'unboxed-tuple let binding')
+                        if sum_value or tuple_value:
+                            self.compare_shapes(stored, actual, owner, f'{path}/bindings/{index}/rep')
                     if ('joinValueArity' not in binding and is_vector(binding.get('rep')) and
                             not self.supported_vector(binding['rep'], 'let-bindings')):
                         self.issue('vector-boundary', owner, f'{path}/bindings/{index}', 'vector let binding')
                     if is_vector(binding.get('rep')) and binding.get('lifted') is not False:
                         self.issue('application-levity', owner, f'{path}/bindings/{index}', 'Vector let binding must be unlifted')
-                    tuple_value = self.is_tuple(binding.get('rep')) or self.is_tuple(
-                        self.effective_rep(binding.get('expr'), local if recursive else bound))
-                    if tuple_value and 'joinValueArity' not in binding:
-                        self.issue('aggregate-boundary', owner, f'{path}/bindings/{index}', 'unboxed-tuple let binding')
                     if 'joinValueArity' in binding:
                         captured = (self.free_variables(binding['expr']) - (ids if recursive else set())) & bound.keys()
                         if any(self.is_sum_value(bound[key]) and not self.supported_sum(bound[key], 'aggregateJoinCaptures')
@@ -2832,7 +2862,7 @@ class Audit:
             self.binding_metadata(binding, key, '/binding')
             if is_sum(binding.get('rep')) or is_sum(self.expression_rep(binding.get('expr'))):
                 self.issue('aggregate-boundary', key, '/binding', 'unboxed-sum global binding')
-            if type(binding.get('lifted')) is not bool:
+            if not known_levity_or_boxed_pointer(binding.get('lifted'), binding.get('rep')):
                 self.issue('unknown-binder-levity', key, '/binding', key)
             self.walk(binding.get('expr'), {}, key, '/expr', join_prefix=binding.get('joinValueArity', 0))
             del binding

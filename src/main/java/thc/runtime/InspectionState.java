@@ -11,7 +11,7 @@ public final class InspectionState extends Expr {
         setRepresentation(proof.withEvaluated(true));
     }
     @Override public Object execute(VirtualFrame frame) {
-        TupleResultsKt.requireVoidCarrier(state.execute(frame));
+        TupleResults.requireVoidCarrier(state.execute(frame));
         return thc.runtime.Unit.INSTANCE;
     }
 }

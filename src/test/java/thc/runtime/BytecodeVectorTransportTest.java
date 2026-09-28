@@ -137,7 +137,7 @@ class BytecodeVectorTransportTest {
     private void check(ExecutableProgram program, Language language, Family family, String name, long input) {
         var root = (GuestRoot) program.entryTarget(name).getRootNode(); var shape = Objects.requireNonNull(root.getTupleResult());
         assertEquals(1, shape.getWidth()); assertTrue(shape.getProof().isVector()); assertFalse(shape.getProof().isTuple());
-        var result = TupleResultsKt.ownedTupleResult(Calls.target(root.getCallTarget(), new Object[]{0L, input}), shape);
+        var result = TupleResults.ownedTupleResult(Calls.target(root.getCallTarget(), new Object[]{0L, input}), shape);
         var raw = new VectorLayout(shape.getProof()).require(shape.getLayout().getObject(result, 0));
         for (int lane = 0; lane < family.lanes; lane++) {
             long value = input + lane; var label = family.name + "/" + name + "/" + input + "/lane=" + lane;
@@ -181,7 +181,7 @@ class BytecodeVectorTransportTest {
     }
     private void valid(RootCallTarget target) throws Exception { assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), target.toString()); }
     private Object saved(Closure captured, TupleShape shape) {
-        var result = TupleResultsKt.ownedTupleResult(Calls.target(captured.target, new Object[]{0L, captured.environment, 31L}), shape);
+        var result = TupleResults.ownedTupleResult(Calls.target(captured.target, new Object[]{0L, captured.environment, 31L}), shape);
         return new VectorLayout(shape.getProof()).require(shape.getLayout().getObject(result, 0));
     }
     @Test void tupleCapturesKeepAllVectorSpeciesAndOwnedLifetimeOnBothBackends() throws Exception {
@@ -237,7 +237,7 @@ class BytecodeVectorTransportTest {
         var result = new LinkedHashMap<>(original); var bindings = new ArrayList<>((List<Map<String, Object>>) original.get("bindings")); bindings.add(binding); result.put("bindings", bindings); return result;
     }
     private void checkBits(long value, RootCallTarget entry, TupleShape shape, Family family, boolean floating, Language language) {
-        var result = TupleResultsKt.ownedTupleResult(Calls.target(entry, new Object[]{0L, value}), shape); var raw = shape.getLayout().getObject(result, 0);
+        var result = TupleResults.ownedTupleResult(Calls.target(entry, new Object[]{0L, value}), shape); var raw = shape.getLayout().getObject(result, 0);
         for (int index = 0; index < family.lanes; index++) {
             if (floating) assertEquals((int) value, Float.floatToRawIntBits(((FloatVector) raw).lane(index)));
             else assertEquals(value, Double.doubleToRawLongBits(((DoubleVector) raw).lane(index)));

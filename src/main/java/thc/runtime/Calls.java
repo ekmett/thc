@@ -10,7 +10,7 @@ import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.IndirectCallNode;
 
 /**
- * Internal Java bridge that avoids Kotlin's defensive spread-argument array copy.
+ * Truffle call helpers that pass the supplied argument array directly.
  * Callers supply the runtime's exact argument array and target convention; this
  * class neither converts host values nor establishes a stable embedding ABI.
  * Host applications should use THC's polyglot entry-loading helpers instead.

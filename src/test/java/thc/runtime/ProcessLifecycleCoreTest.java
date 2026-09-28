@@ -100,7 +100,7 @@ public class ProcessLifecycleCoreTest {
                         var worker = new Thread(() -> {
                             context.enter(); identity.set(state.getThreads().enterCurrent()); state.getMaskingState().set(mask); state.getStdio().setErrno(73);
                             try {
-                                var result = Calls.target(wait, new Object[]{0L, pid, destination}); var continuation = SavedGuestContinuationKt.savedGuestContinuation(result);
+                                var result = Calls.target(wait, new Object[]{0L, pid, destination}); var continuation = SavedGuestContinuations.savedGuestContinuation(result);
                                 if (scenario.equals("uninterruptible")) {
                                     assertNull(continuation); assertEquals(0L, result); assertEquals(73L, state.getStdio().errno()); assertEquals(mask, state.getMaskingState().get());
                                     state.getMaskingState().set(MaskingState.UNMASKED); var request = state.getThreads().poll(new Node() {}, true); assertNotNull(request); request.acknowledge();

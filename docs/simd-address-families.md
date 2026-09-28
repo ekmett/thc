@@ -34,7 +34,7 @@ On ARM the scalar oracle and original pre-Core remain available; the native
 vector128/post-tidy stage is explicitly omitted.
 
 `SimdAddressFamiliesTest` compares both AST and bytecode execution with a
-separate Kotlin scalar-byte model, including every byte after stores. It
+separate Java scalar-byte model, including every byte after stores. It
 checks 25 fixed compiled representatives spanning all shapes and typed operations,
 including the first installed call with exact source-root entry counts, retained
 handoff references and allocation baselines in both default and dense modes.

@@ -61,7 +61,7 @@ class FastWorkflowGuardsTest(unittest.TestCase):
         self.assertNotIn("pull_request_target:", workflow)
         self.assertNotIn("continue-on-error:", workflow)
 
-    def test_stdio_checks_use_haskell_and_kotlin_not_a_python_test_family(self):
+    def test_stdio_checks_use_haskell_and_java_not_a_python_test_family(self):
         workflow = (WORKFLOW.parent / "build.yml").read_text()
         block = workflow.split("name: Check merged fixture and runtime recipes with and without assertions", 1)[1].split("      - name:", 1)[0]
         for name in ("test-core-original-stdio.py", "test-original-stdio-fixtures.py", "test-generate-stdio-abi.py"):

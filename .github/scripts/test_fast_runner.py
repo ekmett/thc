@@ -68,7 +68,7 @@ class FastRunnerTest(unittest.TestCase):
             self.assertTrue(runner.hosted_ci_only(shallow, event, merge, REPO))
 
     def test_runtime_or_preparer_change_keeps_persistent_runner(self):
-        merge, event = self.merge({"src/main/kotlin/thc/Language.kt": "changed\n"})
+        merge, event = self.merge({"src/main/java/thc/Language.java": "changed\n"})
         self.assertFalse(runner.hosted_ci_only(self.root, event, merge, REPO))
         self.assertFalse(runner.ci_only_paths(b"M\0scripts/prepare-tests.sh\0"))
         self.assertFalse(runner.ci_only_paths(b"M\0docs/pinned-memory.md\0"))

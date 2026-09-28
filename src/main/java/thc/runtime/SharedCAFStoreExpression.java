@@ -15,7 +15,7 @@ public final class SharedCAFStoreExpression extends Expr {
     @Override public Object execute(VirtualFrame frame) { throw fault("RTS shared-CAF tuple requires a destination"); }
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
         var candidate = pointer.executeRequiredAddress(frame);
-        TupleResultsKt.requireVoidCarrier(state.execute(frame));
+        TupleResults.requireVoidCarrier(state.execute(frame));
         FrameAccess.write(frame, slots[offset], StablePointers.current(this).getOrSetSharedCAF(store, candidate));
         return null;
     }

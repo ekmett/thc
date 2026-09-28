@@ -47,7 +47,7 @@ mailbox and defer delivery until a real guest continuation cut.
 The Haskell fixture checks native running, masked-running, finished, died,
 MVar-take, and MVar-read statuses. Its predicates consume all three result fields
 while allowing GHC's capability assignment to differ from THC's managed model.
-Kotlin checks retained identity, context isolation, actual MVar waits, capability
+Java checks retained identity, context isolation, actual MVar waits, capability
 allocation, strict tuple rejection, and the first invocation after compilation of
 the actual guest call graph. Run:
 

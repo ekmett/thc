@@ -100,14 +100,14 @@ public enum SmallArrayOp {
                 case SHRINK: {
                     var array = ManagedSmallArray.require(operands[0].execute(frame));
                     long size = operands[1].executeRequiredLong(frame);
-                    var state = operands[2].execute(frame); TupleResultsKt.requireVoidCarrier(state);
+                    var state = operands[2].execute(frame); TupleResults.requireVoidCarrier(state);
                     array.shrink(size); return state;
                 }
                 case WRITE: {
                     var array = ManagedSmallArray.require(operands[0].execute(frame));
                     long index = operands[1].executeRequiredLong(frame);
                     var value = operands[2].execute(frame);
-                    var state = operands[3].execute(frame); TupleResultsKt.requireVoidCarrier(state);
+                    var state = operands[3].execute(frame); TupleResults.requireVoidCarrier(state);
                     ManagedSmallArray.write(array, index, value); return state;
                 }
                 case COPY, COPY_MUTABLE: {
@@ -115,7 +115,7 @@ public enum SmallArrayOp {
                     long from = operands[1].executeRequiredLong(frame);
                     var destination = ManagedSmallArray.require(operands[2].execute(frame));
                     long to = operands[3].executeRequiredLong(frame), count = operands[4].executeRequiredLong(frame);
-                    var state = operands[5].execute(frame); TupleResultsKt.requireVoidCarrier(state);
+                    var state = operands[5].execute(frame); TupleResults.requireVoidCarrier(state);
                     ManagedSmallArray.copy(source, from, destination, to, count, operation == COPY_MUTABLE); return state;
                 }
                 default: throw fault("Tuple primitive requires a destination");
@@ -126,25 +126,25 @@ public enum SmallArrayOp {
                 case NEW: {
                     long count = operands[0].executeRequiredLong(frame);
                     var initial = operands[1].execute(frame);
-                    TupleResultsKt.requireVoidCarrier(operands[2].execute(frame));
+                    TupleResults.requireVoidCarrier(operands[2].execute(frame));
                     FrameAccess.INSTANCE.write(frame, slots[offset], ManagedSmallArray.allocate(count, initial)); break;
                 }
                 case READ, INDEX: {
                     var array = ManagedSmallArray.require(operands[0].execute(frame));
                     long index = operands[1].executeRequiredLong(frame);
-                    if (operation == READ) TupleResultsKt.requireVoidCarrier(operands[2].execute(frame));
+                    if (operation == READ) TupleResults.requireVoidCarrier(operands[2].execute(frame));
                     FrameAccess.INSTANCE.write(frame, slots[offset], ManagedSmallArray.read(array, index)); break;
                 }
                 case GET_SIZE_MUTABLE: {
                     var array = ManagedSmallArray.require(operands[0].execute(frame));
-                    TupleResultsKt.requireVoidCarrier(operands[1].execute(frame));
+                    TupleResults.requireVoidCarrier(operands[1].execute(frame));
                     FrameAccess.INSTANCE.writeLong(frame, slots[offset], ManagedSmallArray.size(array)); break;
                 }
                 case CAS: {
                     var array = ManagedSmallArray.require(operands[0].execute(frame));
                     long index = operands[1].executeRequiredLong(frame);
                     var expected = operands[2].execute(frame); var replacement = operands[3].execute(frame);
-                    TupleResultsKt.requireVoidCarrier(operands[4].execute(frame));
+                    TupleResults.requireVoidCarrier(operands[4].execute(frame));
                     var witness = ManagedSmallArray.compareExchange(array, index, expected, replacement);
                     boolean success = witness == expected;
                     FrameAccess.INSTANCE.writeLong(frame, slots[offset], success ? 0L : 1L);
@@ -152,13 +152,13 @@ public enum SmallArrayOp {
                 }
                 case FREEZE, UNSAFE_THAW: {
                     var array = ManagedSmallArray.require(operands[0].execute(frame));
-                    TupleResultsKt.requireVoidCarrier(operands[1].execute(frame));
+                    TupleResults.requireVoidCarrier(operands[1].execute(frame));
                     FrameAccess.INSTANCE.write(frame, slots[offset], operation == FREEZE ? ManagedSmallArray.freeze(array) : ManagedSmallArray.thaw(array)); break;
                 }
                 case SAFE_FREEZE, THAW, CLONE_MUTABLE: {
                     var array = ManagedSmallArray.require(operands[0].execute(frame));
                     long start = operands[1].executeRequiredLong(frame), count = operands[2].executeRequiredLong(frame);
-                    TupleResultsKt.requireVoidCarrier(operands[3].execute(frame));
+                    TupleResults.requireVoidCarrier(operands[3].execute(frame));
                     var copy = ManagedSmallArray.slice(array, start, count);
                     FrameAccess.INSTANCE.write(frame, slots[offset], operation == SAFE_FREEZE ? ManagedSmallArray.freeze(copy) : copy); break;
                 }

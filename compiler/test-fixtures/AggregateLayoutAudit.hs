@@ -13,8 +13,7 @@
 -- Stability   : experimental
 -- Portability : GHC-specific primitive types and operations
 --
--- Metadata-only coverage: these declarations are checked by native GHC, but
--- their unboxed boundaries are deliberately rejected by the THC runtime.
+-- GHC-checked aggregate shapes and representation-polymorphic result metadata.
 module AggregateLayoutAudit where
 import GHC.Exts (Int, Int#, Word#, Float#, Double#, State#, Proxy#, RealWorld, RuntimeRep(..), Levity(..), TYPE, raise#)
 import GHC.Tuple (Solo)
@@ -109,6 +108,31 @@ abstractComponentIdentity x = x
 {-# OPAQUE levityPolymorphic #-}
 levityPolymorphic :: forall (l :: Levity) (a :: TYPE ('BoxedRep l)). Box -> (# a, Int# #)
 levityPolymorphic x = raise# x
+
+-- The callback knows its concrete instantiation. Its result can pass through
+-- a levity-polymorphic tail call without introducing an unknown-levity binder.
+{-# OPAQUE boxedThrough #-}
+boxedThrough :: forall (l :: Levity) (a :: TYPE ('BoxedRep l)). (Box -> a) -> Box -> a
+boxedThrough f x = f x
+
+{-# OPAQUE boxedTupleThrough #-}
+boxedTupleThrough :: forall (l :: Levity) (a :: TYPE ('BoxedRep l)).
+                     (Box -> (# a, Int# #)) -> Box -> (# a, Int# #)
+boxedTupleThrough f x = f x
+
+{-# OPAQUE boxedThroughUse #-}
+boxedThroughUse :: Int# -> Int#
+boxedThroughUse n = case boxedThrough (\x -> x) (Box n) of Box x -> x
+
+{-# OPAQUE boxedTupleThroughUse #-}
+boxedTupleThroughUse :: Int# -> Int#
+boxedTupleThroughUse n = case boxedTupleThrough (\(Box x) -> (# bottomBox, x #)) (Box n) of
+  (# _, x #) -> x
+
+{-# OPAQUE boxedTupleUnliftedThroughUse #-}
+boxedTupleUnliftedThroughUse :: Int# -> Int#
+boxedTupleUnliftedThroughUse n = case boxedTupleThrough (\b -> (# UnliftedProduct b bottomBox, 19# #)) (Box n) of
+  (# UnliftedProduct (Box x) _, _ #) -> x
 
 newtype Recursive = Recursive Recursive
 {-# OPAQUE recursiveNewtypeIdentity #-}

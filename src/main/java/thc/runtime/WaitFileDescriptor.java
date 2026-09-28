@@ -41,7 +41,7 @@ public final class WaitFileDescriptor extends Expr {
     }
     @Override public Object execute(VirtualFrame frame) {
         long descriptor = fd.executeRequiredLong(frame);
-        TupleResultsKt.requireVoidCarrier(state.execute(frame));
+        TupleResults.requireVoidCarrier(state.execute(frame));
         await(Language.currentState(this).getFiles().waitToken(descriptor, writing));
         return thc.runtime.Unit.INSTANCE;
     }

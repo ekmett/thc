@@ -37,7 +37,7 @@ public final class JavaScriptAccess extends Node {
         }
     }
     @ExplodeLoop private Object execute(Object[] arguments, Object state) {
-        TupleResultsKt.requireVoidCarrier(state);
+        TupleResults.requireVoidCarrier(state);
         if (arguments.length != declaration.getArguments().length) throw RuntimeFault.fault("JavaScript import argument count mismatch");
         for (int i = 0; i < arguments.length; i++) switch (declaration.getArguments()[i]) {
             case LONG -> {

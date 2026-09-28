@@ -123,7 +123,7 @@ cabal run exe:thc-fixtures --offline -- int8x16
 Each of the eight arity-two entries has 174 seed pairs covering byte sign/wrap
 boundaries, all eight bit positions and neighbors, varied high bits, and signed
 64-bit endpoints. Together with `laneCase`, this gives 9,168 native/model rows.
-The Haskell producer uses integer modulo/sign arithmetic; Kotlin independently
+The Haskell producer uses integer modulo/sign arithmetic; Java independently
 checks machine arithmetic and mask/sign semantics for every row. Its tests cover all 256 lane encodings,
 all 65,536 signed-byte scalar products, each lane's full operand grid, lane order,
 malformed tuple widths/leaf types, and hidden or changed guest-root boundaries.

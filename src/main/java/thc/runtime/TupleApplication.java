@@ -69,7 +69,7 @@ public final class TupleApplication extends Expr {
         catch (AstCapture cut) {
             throw cut.append(new AstResumeStep() {
                 @Override public Object resume(VirtualFrame resumed, Object input) {
-                    return executeArguments(resumed, slots, offset, ApplicationKt.requireClosure(input), new Object[ArgumentLayout.width(inputLayout, arguments.length)], 0);
+                    return executeArguments(resumed, slots, offset, Applications.requireClosure(input), new Object[ArgumentLayout.width(inputLayout, arguments.length)], 0);
                 }
             });
         }

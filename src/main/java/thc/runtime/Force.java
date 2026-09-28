@@ -14,10 +14,10 @@ import com.oracle.truffle.api.profiles.BranchProfile;
 import java.util.ArrayDeque;
 import java.util.IdentityHashMap;
 import static thc.runtime.RuntimeFault.fault;
-import static thc.runtime.SavedGuestContinuationKt.savedGuestContinuation;
-import static thc.runtime.SavedGuestContinuationKt.asyncRequest;
-import static thc.runtime.AstStackKt.astStackScope;
-import static thc.runtime.AstStackKt.stackSpill;
+import static thc.runtime.SavedGuestContinuations.savedGuestContinuation;
+import static thc.runtime.SavedGuestContinuations.asyncRequest;
+import static thc.runtime.AstStacks.astStackScope;
+import static thc.runtime.AstStacks.stackSpill;
 
 public final class Force extends Node {
     private static final Object RETRY = new Object();
@@ -408,7 +408,7 @@ public final class Force extends Node {
                 throw new CallSegmentSuspended(segment, null, request, stackSpill(saved));
             }
             // Release any producer-thread slab loan even when the callee returned under a wrong mask.
-            Object answer = segment.getTupleShape() == null ? result : TupleResultsKt.ownedTupleResult(result, segment.getTupleShape());
+            Object answer = segment.getTupleShape() == null ? result : TupleResults.ownedTupleResult(result, segment.getTupleShape());
             if (SynchronousMasking.current(this) != segment.getCallerMask())
                 throw new IllegalStateException("Completed call segment did not restore its caller mask");
             synchronized (segment.getMonitor()) {

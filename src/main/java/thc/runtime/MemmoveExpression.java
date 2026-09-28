@@ -23,7 +23,7 @@ final class MemmoveExpression extends Expr {
         var destination = operands[0].executeRequiredAddress(frame);
         var source = operands[1].executeRequiredAddress(frame);
         long count = operands[2].executeRequiredLong(frame);
-        TupleResultsKt.requireVoidCarrier(operands[3].execute(frame));
+        TupleResults.requireVoidCarrier(operands[3].execute(frame));
         FrameAccess.INSTANCE.writeObject(frame, slots[offset], source.moveTo(destination, count));
         return null;
     }

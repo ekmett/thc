@@ -34,7 +34,7 @@ resizeInputs = Set.toAscList . Set.fromList $
                  (old, new) <- [(0, 16), (16, 0), (16, 8), (8, 16), (8, 8)]] ++
   [(seed, code) | seed <- edgeSeeds, code <- [minBound, -1, 0, maxBound]]
 
--- Fixture production only: Kotlin owns the independent semantic model and
+-- Fixture production only: Java owns the independent semantic model and
 -- validates the complete ordered corpus before interpreting/compiling Core.
 runFixture :: [(Int, Int)] -> [String] -> (String -> Int -> Int -> Int) -> IO ()
 runFixture inputs names call = do

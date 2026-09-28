@@ -12,7 +12,7 @@ final class DereferenceStablePointer extends Expr {
     @Override public Object execute(VirtualFrame frame) { throw fault("StablePtr# tuple requires a destination"); }
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
         var handle = address.executeRequiredAddress(frame);
-        TupleResultsKt.requireVoidCarrier(state.execute(frame));
+        TupleResults.requireVoidCarrier(state.execute(frame));
         FrameAccess.INSTANCE.write(frame, slots[offset], StablePointers.current(this).dereference(handle));
         return null;
     }

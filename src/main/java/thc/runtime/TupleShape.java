@@ -4,6 +4,7 @@ package thc.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import java.util.ArrayList;
@@ -43,7 +44,7 @@ public final class TupleShape {
     public HandoffLayout getLayout() { return layout; }
     public int[] getOffsets() { return offsets; }
     public int getWidth() { return leaves.length; }
-    public boolean matches(TupleShape other) { return signature == other.signature; }
+    public boolean matches(TupleShape other) { return signature == other.signature || compatible(proof, other.proof); }
     @ExplodeLoop public void copyFrom(VirtualFrame frame, HandoffStorage storage, int[] slots, int offset) {
         if (storage.getLayout() != layout) throw new IllegalStateException("Check failed.");
         for (int i = 0; i < leaves.length; i++) {
@@ -108,7 +109,26 @@ public final class TupleShape {
         }
         return proof.getKind() == CoreKind.VOID ? List.of() : List.of(proof);
     }
-    public static boolean compatible(CoreRepresentation left, CoreRepresentation right) { return signature(left).equals(signature(right)); }
+    // Equal interned signatures stay inline in matches; structural mismatches
+    // must not recursively expand proof trees in the guest compilation graph.
+    @TruffleBoundary public static boolean compatible(CoreRepresentation left, CoreRepresentation right) {
+        if (left.isTuple() || right.isTuple())
+            return left.isTuple() && right.isTuple() && compatibleChildren(left.getComponents(), right.getComponents());
+        if (left.isSum() || right.isSum())
+            return left.isSum() && right.isSum() && Objects.equals(left.getPrimReps(), right.getPrimReps()) &&
+                Objects.equals(left.getTagSlot(), right.getTagSlot()) && Objects.equals(left.getAlternativeSlots(), right.getAlternativeSlots()) &&
+                compatibleChildren(left.getAlternatives(), right.getAlternatives());
+        if (left.isVector() || right.isVector())
+            return left.isVector() && right.isVector() && Objects.equals(left.getVector(), right.getVector()) &&
+                Objects.equals(left.getPrimReps(), right.getPrimReps());
+        if (left.hasUnknownBoxedLevity() && right.hasBoxedPointer() || right.hasUnknownBoxedLevity() && left.hasBoxedPointer()) return true;
+        return Objects.equals(left.getPrimReps(), right.getPrimReps());
+    }
+    private static boolean compatibleChildren(List<CoreRepresentation> left, List<CoreRepresentation> right) {
+        if (left.size() != right.size()) return false;
+        for (int i = 0; i < left.size(); i++) if (!compatible(left.get(i), right.get(i))) return false;
+        return true;
+    }
     public static String compatibilityKey(CoreRepresentation proof) { return signature(proof).toString().intern(); }
     public static void requireCompatible(CoreRepresentation expected, CoreRepresentation actual) { requireCompatible(expected, actual, false); }
     public static void requireCompatible(CoreRepresentation expected, CoreRepresentation actual, boolean component) {

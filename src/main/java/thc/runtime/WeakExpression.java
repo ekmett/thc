@@ -22,7 +22,7 @@ final class WeakExpression extends Expr {
                 action = operands[2].execute(frame);
                 if (action == null) throw fault("mkWeak# requires a finalizer carrier");
             }
-            TupleResultsKt.requireVoidCarrier(operands[operands.length - 1].execute(frame));
+            TupleResults.requireVoidCarrier(operands[operands.length - 1].execute(frame));
             FrameAccess.writeObject(frame, slots[offset], registry.make(first, value, action));
         } else if (operation == WeakOp.ADD_C_FINALIZER) {
             if (!(first instanceof ManagedAddress function)) throw fault("Expected a C function Addr#");
@@ -32,11 +32,11 @@ final class WeakExpression extends Expr {
             catch (UnexpectedResultException failure) { throw propagate(failure); }
             operands[3].executeRequiredAddress(frame);
             var weak = operands[4].execute(frame);
-            TupleResultsKt.requireVoidCarrier(operands[5].execute(frame));
+            TupleResults.requireVoidCarrier(operands[5].execute(frame));
             var provider = Language.currentState(this).cbits();
             FrameAccess.writeLong(frame, slots[offset], registry.addCFinalizer(function, address, flag, weak, provider));
         } else {
-            TupleResultsKt.requireVoidCarrier(operands[1].execute(frame));
+            TupleResults.requireVoidCarrier(operands[1].execute(frame));
             var result = operation == WeakOp.FINALIZE ? registry.finalize(first) : registry.dereference(first);
             FrameAccess.writeLong(frame, slots[offset], result.getFlag());
             FrameAccess.writeObject(frame, slots[offset + 1], result.getValue());

@@ -116,7 +116,7 @@ public class PackageSafeForeignTest {
                 var storage = pointer ? PinnedMemory.allocate(8, 64) : null; Object argument = storage == null ? 0.5 : ManagedAddress.fromAllocation(storage).plus(3);
                 Long originalBits = storage == null || storage.nativeSegment() == null ? null : storage.nativeSegment().address();
                 class Results { void check(Object result) {
-                    var tuple = TupleResultsKt.ownedTupleResult(result, shape);
+                    var tuple = TupleResults.ownedTupleResult(result, shape);
                     if (pointer) {
                         var address = (ManagedAddress) shape.getLayout().getObject(tuple, 0); assertEquals(originalBits + 3, address.toNativeBits());
                         assertEquals(originalBits, storage.nativeSegment().address(), "no copied or relocated buffer"); assertEquals(storage.readByte(3), address.readWord8(0), "returned alias retains checked backing");
@@ -132,7 +132,7 @@ public class PackageSafeForeignTest {
                         // execute the first installed foreign call.
                         for (int i = 0; i < 3; i++) { entries.get("reset").call(); var result = Calls.target(target, new Object[]{0L, argument, thc.runtime.Unit.INSTANCE}); results.check(result); }
                         entries.get("reset").call(); ready.countDown(); if (!begin.await(30, TimeUnit.SECONDS)) throw new IllegalStateException("Check failed.");
-                        var result = Calls.target(target, new Object[]{0L, argument, thc.runtime.Unit.INSTANCE}); var continuation = Objects.requireNonNull(SavedGuestContinuationKt.savedGuestContinuation(result)); var request = continuation.asyncRequest();
+                        var result = Calls.target(target, new Object[]{0L, argument, thc.runtime.Unit.INSTANCE}); var continuation = Objects.requireNonNull(SavedGuestContinuations.savedGuestContinuation(result)); var request = continuation.asyncRequest();
                         assertSame(pending.get(), request, "delivery occurs at the completed foreign-call cut");
                         if (mode.endsWith("compiled")) { assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > compiledBefore.get()); assertTrue(request.compiledCapture, "first installed call reaches the return cut in compiled code"); }
                         request.acknowledge(); completed.set(continuation);

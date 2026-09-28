@@ -137,7 +137,7 @@ class LeadingCaseReturnTest {
         each(List.of(binding("used", used), binding("legacy", legacy), binding("driver", driver(true, false))), (backend, p) -> {
             assertNull(((GuestRoot) p.entryTarget("used").getRootNode()).getLeadingCaseReturn(), backend); assertNull(((GuestRoot) p.entryTarget("legacy").getRootNode()).getLeadingCaseReturn(), backend);
             var fn = p.entryValue("used"); var stop = p.entryValue("stop"); for (int i = 0; i < 25; i++) assertEquals(12L, run(p, "driver", fn, 11L, stop, 3L)); compile(p.entryTarget("driver")); var failure = assertThrows(RuntimeFault.class, () -> run(p, "driver", fn, 11L, stop, "invalid primitive carrier"));
-            String expectedMessage = backend.equals("ast") && Boolean.getBoolean(HandoffKt.HANDOFF_PROPERTY) ? "Invalid Long handoff field" : backend.equals("ast") ? "Expected primitive Long argument" : "Expected primitive Long";
+            String expectedMessage = backend.equals("ast") && Boolean.getBoolean(Handoff.HANDOFF_PROPERTY) ? "Invalid Long handoff field" : backend.equals("ast") ? "Expected primitive Long argument" : "Expected primitive Long";
             assertEquals(expectedMessage, failure.getMessage()); assertEquals(0L, count(p));
         });
     }

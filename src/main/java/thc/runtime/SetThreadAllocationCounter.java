@@ -17,7 +17,7 @@ public final class SetThreadAllocationCounter extends Expr {
         if (target == null) identity = threads.currentIdentity();
         else if (target.execute(frame) instanceof GuestThreadId id) identity = id;
         else throw RuntimeFault.fault("Allocation counter requires ThreadId#");
-        TupleResultsKt.requireVoidCarrier(state.execute(frame));
+        TupleResults.requireVoidCarrier(state.execute(frame));
         threads.setAllocationCounter(counter, identity);
         return thc.runtime.Unit.INSTANCE;
     }

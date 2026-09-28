@@ -57,7 +57,7 @@ public final class OriginalStackInfoExpression extends Expr {
         } else if (operation == OriginalStackInfoOp.LOOKUP_IPE) {
             ManagedAddress key = operands[0].executeRequiredAddress(frame);
             ManagedAddress destination = operands[1].executeRequiredAddress(frame);
-            TupleResultsKt.requireVoidCarrier(operands[2].execute(frame));
+            TupleResults.requireVoidCarrier(operands[2].execute(frame));
             FrameAccess.writeInt(frame, slots[offset], (int) ManagedStackRuntime.lookupIpe(key, destination, layout));
         } else if (operation.getTupleResult()) incompatible(frame);
         else throw RuntimeFault.fault("Original stack info scalar cannot write a tuple");

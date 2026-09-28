@@ -12,7 +12,7 @@
 -- Portability : Native GHC; host filesystem/process services
 --
 -- The installed GHC declaration supplies Core; a private native fd supplies
--- observations. Kotlin owns the independent model and compiled comparisons.
+-- observations. Java owns the independent model and compiled comparisons.
 module OriginalStdioCloseFixtures (prepareOriginalStdioClose) where
 
 import Control.Monad (forM, unless, when)

@@ -106,8 +106,8 @@ public final class ManagedAddress {
             return body.applyAsLong(segment.asSlice(offset));
         }
     }
-    // Native owner access was a boundary before the port. Keep the full action
-    // behind it; the managed pinned branch above remains in the guest graph.
+    // Keep native-owner borrowed access behind a boundary; the managed pinned
+    // branch above remains in the guest graph.
     @TruffleBoundary private <T> T ownedNativeSegment(Function<MemorySegment, T> body) {
         try (var loan = nativeOwner.borrow()) { return body.apply(loan.segment().asSlice(offset)); }
     }

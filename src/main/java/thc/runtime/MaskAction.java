@@ -5,8 +5,8 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import static thc.runtime.RuntimeServiceStatus.fault;
-import static thc.runtime.TupleResultsKt.requireVoidCarrier;
-import static thc.runtime.ApplicationKt.requireClosure;
+import static thc.runtime.TupleResults.requireVoidCarrier;
+import static thc.runtime.Applications.requireClosure;
 public final class MaskAction extends Expr {
     private final TupleShape shape;
     private final MaskingState target;

@@ -61,7 +61,7 @@ public final class CoreFields {
                 storage[i] = switch (rep) {
                     case "BoxedRep (Just Lifted)" -> "LiftedRep";
                     case "BoxedRep (Just Unlifted)" -> "UnliftedRep";
-                    case "BoxedRep Nothing" -> throw new UnsupportedCore("Unresolved constructor field levity: " + id);
+                    case "BoxedRep Nothing" -> "BoxedRep";
                     default -> rep;
                 };
             } else throw new UnsupportedCore("Multi-register constructor field unsupported: " + id);
@@ -92,8 +92,8 @@ public final class CoreFields {
                 if (!proof.getPresent() || !Objects.equals(proof.getPrimReps(), reps.get(i))) throw new RuntimeFault("Constructor field type disagrees with its primitive representation: " + id + " field " + i);
                 if (!proof.isAggregate() && storage[offsets[i]].equals("AddrRep") && proof.getKind() != CoreKind.ADDRESS) throw new RuntimeFault("Address constructor field lacks its exact managed carrier: " + id + " field " + i);
                 if (!(strict.get(i) instanceof Boolean strictField)) throw new RuntimeFault("Unknown constructor field strictness: " + id);
-                boolean expectedLifted = !proof.isAggregate() && storage[offsets[i]].equals("LiftedRep");
-                if (!Boolean.valueOf(expectedLifted).equals(lifted.get(i))) throw new RuntimeFault("Constructor field levity disagrees with its primitive representation: " + id + " field " + i);
+                Boolean expectedLifted = proof.hasUnknownBoxedLevity() ? null : !proof.isAggregate() && storage[offsets[i]].equals("LiftedRep");
+                if (!Objects.equals(expectedLifted, lifted.get(i))) throw new RuntimeFault("Constructor field levity disagrees with its primitive representation: " + id + " field " + i);
                 if (proof.getEvaluated() != (strictField || Boolean.FALSE.equals(lifted.get(i)))) throw new RuntimeFault("Constructor field evaluatedness lacks a worker obligation: " + id + " field " + i);
                 List<CoreRepresentation> fields = leaves.get(i);
                 for (int leaf = 0; leaf < fields.size(); leaf++) {

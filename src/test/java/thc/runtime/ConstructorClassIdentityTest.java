@@ -15,12 +15,12 @@ import static thc.runtime.RepresentationTestSupport.*;
 
 class ConstructorClassIdentityTest {
     private void matching(boolean enabled, CheckedRunnable action) throws Exception {
-        var previous = System.getProperty(ConstructorClassIdentityKt.CONSTRUCTOR_CLASS_IDENTITY_PROPERTY);
+        var previous = System.getProperty(ConstructorClassIdentity.CONSTRUCTOR_CLASS_IDENTITY_PROPERTY);
         try {
-            if (enabled) System.setProperty(ConstructorClassIdentityKt.CONSTRUCTOR_CLASS_IDENTITY_PROPERTY, "true"); else System.clearProperty(ConstructorClassIdentityKt.CONSTRUCTOR_CLASS_IDENTITY_PROPERTY);
+            if (enabled) System.setProperty(ConstructorClassIdentity.CONSTRUCTOR_CLASS_IDENTITY_PROPERTY, "true"); else System.clearProperty(ConstructorClassIdentity.CONSTRUCTOR_CLASS_IDENTITY_PROPERTY);
             action.run();
         } finally {
-            if (previous == null) System.clearProperty(ConstructorClassIdentityKt.CONSTRUCTOR_CLASS_IDENTITY_PROPERTY); else System.setProperty(ConstructorClassIdentityKt.CONSTRUCTOR_CLASS_IDENTITY_PROPERTY, previous);
+            if (previous == null) System.clearProperty(ConstructorClassIdentity.CONSTRUCTOR_CLASS_IDENTITY_PROPERTY); else System.setProperty(ConstructorClassIdentity.CONSTRUCTOR_CLASS_IDENTITY_PROPERTY, previous);
         }
     }
     private void context(String strategy, CheckedConsumer<Language> action) throws Exception {

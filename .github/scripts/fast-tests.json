@@ -15,7 +15,7 @@
     "src/main/java/thc/runtime/AstStackSpill.java": {"junit": ["thc.runtime.AstStackTest", "thc.runtime.AstStackNativeTest", "thc.runtime.AstContinuationTest"], "python": []},
     "src/main/java/thc/runtime/AstStackContinuation.java": {"junit": ["thc.runtime.AstStackTest", "thc.runtime.AstStackNativeTest", "thc.runtime.AstContinuationTest"], "python": []},
     "src/main/java/thc/runtime/AstChildSuspension.java": {"junit": ["thc.runtime.AstStackTest", "thc.runtime.AstStackNativeTest", "thc.runtime.AstContinuationTest"], "python": []},
-    "src/main/java/thc/runtime/AstStackKt.java": {"junit": ["thc.runtime.AstStackTest", "thc.runtime.AstStackNativeTest", "thc.runtime.AstContinuationTest"], "python": []},
+    "src/main/java/thc/runtime/AstStacks.java": {"junit": ["thc.runtime.AstStackTest", "thc.runtime.AstStackNativeTest", "thc.runtime.AstContinuationTest"], "python": []},
     "src/main/java/thc/runtime/NativeEpoll.java": {
       "junit": ["thc.runtime.NativeEpollTest"], "python": []
     },
@@ -186,7 +186,7 @@
       "python": []
     },
     "src/main/java/thc/runtime/CoreDataLabels.java": {
-      "junit": ["thc.runtime.EnabledCapabilitiesTest", "thc.runtime.RtsFlagsTest"],
+      "junit": ["thc.runtime.EnabledCapabilitiesTest", "thc.runtime.RtsFlagsTest", "thc.runtime.ByteStringDataLabelsTest"],
       "python": ["scripts/test-audit-core.py"]
     },
     "src/main/java/thc/runtime/ManagedWeaks.java": {
@@ -1419,7 +1419,7 @@
   "owners": {
     "src/test/java/thc/runtime/SumEvidence.java": {"junit": ["thc.runtime.SumProtocolTest", "thc.runtime.SumResultTest"], "python": []},
     "src/test/java/thc/runtime/ScalarTestCalls.java": {
-      "junit": ["thc.runtime.AtomicIntArrayTest","thc.runtime.CaseArmOutliningTest","thc.runtime.CpuAffinityApiTest","thc.runtime.Md5ForeignCallTest","thc.runtime.NarrowIntegerContinuationTest","thc.runtime.NarrowReturnedPointerTest","thc.runtime.OriginalErrnoTest","thc.runtime.OriginalFcntlTest","thc.runtime.OriginalFstatAtTest","thc.runtime.OriginalFstatTest","thc.runtime.OriginalMemorySearchTest","thc.runtime.OriginalMemsetTest","thc.runtime.OriginalOpenTest","thc.runtime.OriginalPathAccessTest","thc.runtime.OriginalPathModeTest","thc.runtime.OriginalPosixStatTest","thc.runtime.OriginalStdioCallTest","thc.runtime.OriginalStrerrorNativeTest","thc.runtime.OriginalTermiosTest","thc.runtime.OriginalUnlinkAtTest","thc.runtime.ProcessSignalsTest","thc.runtime.RuntimeServicesApiTest","thc.runtime.ScalarBitCastTest","thc.runtime.UnixWaitStatusTest"],
+      "junit": ["thc.runtime.AtomicIntArrayTest","thc.runtime.CaseArmOutliningTest","thc.runtime.CpuAffinityApiTest","thc.runtime.DeferredDefaultArmTest","thc.runtime.Md5ForeignCallTest","thc.runtime.NarrowIntegerContinuationTest","thc.runtime.NarrowReturnedPointerTest","thc.runtime.OriginalErrnoTest","thc.runtime.OriginalFcntlTest","thc.runtime.OriginalFstatAtTest","thc.runtime.OriginalFstatTest","thc.runtime.OriginalMemorySearchTest","thc.runtime.OriginalMemsetTest","thc.runtime.OriginalOpenTest","thc.runtime.OriginalPathAccessTest","thc.runtime.OriginalPathModeTest","thc.runtime.OriginalPosixStatTest","thc.runtime.OriginalStdioCallTest","thc.runtime.OriginalStrerrorNativeTest","thc.runtime.OriginalTermiosTest","thc.runtime.OriginalUnlinkAtTest","thc.runtime.ProcessSignalsTest","thc.runtime.RuntimeServicesApiTest","thc.runtime.ScalarBitCastTest","thc.runtime.UnixWaitStatusTest"],
       "python": []
     },
     "src/test/java/thc/runtime/ScalarValueTestSupport.java": {
@@ -1698,7 +1698,7 @@
     "test/haskell-fixtures/RtsShutdownFixtures.hs": {"junit": ["thc.runtime.RtsShutdownTest"], "python": []},
     "compiler/test-fixtures/RtsShutdownNative.hs": {"junit": ["thc.runtime.RtsShutdownTest"], "python": []},
     "src/main/java/thc/ManagedImportAdmission.java": {"junit": ["thc.ManagedImportStubsNativeTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/test/kotlin/thc/ManagedImportStubsNativeTest.kt": {"junit": ["thc.ManagedImportStubsNativeTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/test/java/thc/ManagedImportStubsNativeTest.java": {"junit": ["thc.ManagedImportStubsNativeTest"], "python": ["scripts/test-audit-core.py"]},
     "compiler/THC/ForeignImportProvenance.hs": {"junit": ["thc.ManagedImportStubsNativeTest"], "python": ["scripts/test-audit-core.py"]},
     "compiler/test-fixtures/ForeignImportStubs.hs": {"junit": ["thc.ManagedImportStubsNativeTest"], "python": ["scripts/test-audit-core.py"]},
     "compiler/test-fixtures/ImportStubsNative.hs": {"junit": ["thc.ManagedImportStubsNativeTest"], "python": ["scripts/test-audit-core.py"]},

@@ -34,7 +34,7 @@ final class OriginalLibdwExpression extends Expr {
         Expr[] firstOperands = operands;
         if (firstOperands == null) CompilerDirectives.transferToInterpreter();
         for (int index = 0; index < firstOperands.length - 1; index++) operands[index].executeRequiredAddress(frame);
-        TupleResultsKt.requireVoidCarrier(operands[operands.length - 1].execute(frame));
+        TupleResults.requireVoidCarrier(operands[operands.length - 1].execute(frame));
         if (operation == LibdwForeignOp.LOOKUP) FrameAccess.INSTANCE.writeInt(frame, slots[offset], 1);
         else if (operation != LibdwForeignOp.CLEAR)
             FrameAccess.INSTANCE.writeObject(frame, slots[offset], ManagedAddress.nullAddress());

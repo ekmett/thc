@@ -40,7 +40,7 @@ def main():
         out.mkdir(parents=True, exist_ok=False)
         classes.mkdir()
         revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
-        paths = subprocess.check_output(['git', 'ls-files', 'src/main', 'build.gradle', 'build.gradle.kts', 'buildSrc', 'settings.gradle', 'settings.gradle.kts',
+        paths = subprocess.check_output(['git', 'ls-files', 'src/main', 'build.gradle', 'buildSrc', 'settings.gradle',
                                         'gradle.properties', 'gradle', 'gradlew', 'gradlew.bat'], cwd=ROOT, text=True).splitlines()
         sources = {p: digest(ROOT / p) for p in paths}
         for path, sha in sources.items():
@@ -48,8 +48,7 @@ def main():
                     'Commit runtime source before capture: ' + path)
         run(['python3', ROOT / 'scripts/prepare-tuple-input-audit.py', '--check-only'])
         # Build a current main JAR without replacing the historical installDist capture.
-        run([ROOT / 'gradlew', '--offline', '--no-daemon', '-Pkotlin.incremental=false',
-             '-Pkapt.incremental.apt=false', 'jar'], out / 'jar.log')
+        run([ROOT / 'gradlew', '--offline', '--no-daemon', 'jar'], out / 'jar.log')
         require(sources == {p: digest(ROOT / p) for p in paths}, 'Runtime changed during build')
         jar = ROOT / 'build/libs/thc-0.1-experiment.jar'
         dependencies = sorted(p for p in (ROOT / 'build/install/thc/lib').glob('*.jar') if p.name != jar.name)

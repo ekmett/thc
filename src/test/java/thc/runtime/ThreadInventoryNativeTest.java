@@ -146,7 +146,7 @@ public class ThreadInventoryNativeTest {
             try (var context = context()) {
                 context.initialize("thc"); context.enter();
                 try {
-                    var module = module(stage); var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); assertEquals(Boolean.getBoolean(HandoffKt.HANDOFF_PROPERTY), language.getHandoffLayouts().getEnabled()); System.out.println("THREAD_INVENTORY_HANDOFF=" + language.getHandoffLayouts().getEnabled());
+                    var module = module(stage); var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); assertEquals(Boolean.getBoolean(Handoff.HANDOFF_PROPERTY), language.getHandoffLayouts().getEnabled()); System.out.println("THREAD_INVENTORY_HANDOFF=" + language.getHandoffLayouts().getEnabled());
                     var linked = instrument(CoreModules.reachable(module, entry)); ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked, true); var function = context.asValue(new EntryValue(program, entry, 1));
                     var proof = entries.subList(0, 4).contains(entry) ? new ThreadInventoryCoreEvidence(module, entry) : null; var fixedProof = proof == null ? forkCalls(module, entry) : null; var registry = Language.currentState(null).getThreads(); registry.enterCurrent();
                     try {
@@ -191,7 +191,7 @@ public class ThreadInventoryNativeTest {
             context.initialize("thc"); context.enter();
             try {
                 var module = module(stage); var proof = new ThreadInventoryCoreEvidence(module, "selfInventory"); assertEquals(3L, proof.compiledCalls(1), "Public and occurrences at indices zero and one; State# wrapper is inlined");
-                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); assertEquals(Boolean.getBoolean(HandoffKt.HANDOFF_PROPERTY), language.getHandoffLayouts().getEnabled()); System.out.println("THREAD_INVENTORY_BOUNDARY_HANDOFF=" + language.getHandoffLayouts().getEnabled());
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); assertEquals(Boolean.getBoolean(Handoff.HANDOFF_PROPERTY), language.getHandoffLayouts().getEnabled()); System.out.println("THREAD_INVENTORY_BOUNDARY_HANDOFF=" + language.getHandoffLayouts().getEnabled());
                 var linked = instrument(CoreModules.reachable(module, "selfInventory")); ExecutableProgram program = backendName.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked, true); var entry = program.entryTarget("selfInventory"); var registry = Language.currentState(null).getThreads(); registry.enterCurrent();
                 try {
                     for (int i = 0; i < 3; i++) { assertEquals(10L, Calls.target(entry, new Object[]{0L, 0L})); released(language); }

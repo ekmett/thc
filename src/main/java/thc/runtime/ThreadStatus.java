@@ -13,7 +13,7 @@ public final class ThreadStatus extends Expr {
     @Override public Object execute(VirtualFrame frame) { throw RuntimeFault.fault("threadStatus# requires a tuple destination"); }
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
         Object target = identity.execute(frame);
-        TupleResultsKt.requireVoidCarrier(state.execute(frame));
+        TupleResults.requireVoidCarrier(state.execute(frame));
         GuestThreadSnapshot snapshot = GuestThreadOps.threadStatus(this, target);
         FrameAccess.writeLong(frame, slots[offset], snapshot.status());
         FrameAccess.writeLong(frame, slots[offset + 1], snapshot.capability());

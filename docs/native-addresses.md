@@ -62,7 +62,7 @@ add generic foreign-pointer ownership, arbitrary-pointer memory access, or
 native function pointers.
 
 The native Haskell oracle covers null, all-bit integer roundtrips, pointer offsets,
-one-past pointers, and alias writes across GC. Kotlin tests exercise actual native
+one-past pointers, and alias writes across GC. Java tests exercise actual native
 bytes, old and new Sulong transports, original MD5 input, owner closure, denied
 memory access, and the first installed compiled AST/bytecode entries.
 

@@ -8,7 +8,7 @@ import com.oracle.truffle.api.nodes.ControlFlowException;
 import com.oracle.truffle.api.CompilerDirectives;
 import thc.Language;
 import static thc.runtime.RuntimeServiceStatus.fault;
-import static thc.runtime.TupleResultsKt.requireVoidCarrier;
+import static thc.runtime.TupleResults.requireVoidCarrier;
 public final class DelimitedPrimitive extends Expr {
     private final String name;
     private final TupleShape shape;

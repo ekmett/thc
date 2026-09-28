@@ -23,12 +23,12 @@ public final class CallSegmentSuspended extends AbstractTruffleException impleme
         this.asyncRequest = asyncRequest; this.stackSpill = stackSpill;
     }
     private static AsyncRequest defaultRequest(CallSegment segment) {
-        SavedGuestContinuation saved = SavedGuestContinuationKt.savedGuestContinuation(segment.getValue());
-        return saved == null ? null : SavedGuestContinuationKt.asyncRequest(saved);
+        SavedGuestContinuation saved = SavedGuestContinuations.savedGuestContinuation(segment.getValue());
+        return saved == null ? null : SavedGuestContinuations.asyncRequest(saved);
     }
     private static boolean defaultSpill(CallSegment segment) {
-        SavedGuestContinuation saved = SavedGuestContinuationKt.savedGuestContinuation(segment.getValue());
-        return saved != null && AstStackKt.stackSpill(saved);
+        SavedGuestContinuation saved = SavedGuestContinuations.savedGuestContinuation(segment.getValue());
+        return saved != null && AstStacks.stackSpill(saved);
     }
     public CallSegment getSegment() { return segment; }
     public MaskingState getParkedActiveMask() { return parkedActiveMask; }

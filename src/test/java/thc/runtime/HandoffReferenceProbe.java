@@ -16,9 +16,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Bounded standalone diagnostic, not a timing assertion in the semantic suite.
- * The existing launcher class name is retained for script compatibility. */
-public final class HandoffReferenceProbeKt {
+/** Bounded standalone diagnostic, not a timing assertion in the semantic suite. */
+public final class HandoffReferenceProbe {
     private static long referenceProbeCalls(RootCallTarget target, Object[] packet, int count) {
         long sink = 0L;
         for (int i = 0; i < count; i++) sink += (Long) Calls.target(target, packet);
@@ -58,7 +57,7 @@ public final class HandoffReferenceProbeKt {
     @SuppressWarnings("unchecked")
     public static void referenceProbeMain(String[] arguments) throws Exception {
         boolean enabled = strictBoolean(arguments[0]), inlining = strictBoolean(arguments[1]); var workload = arguments[2];
-        System.setProperty(HandoffKt.HANDOFF_PROPERTY, Boolean.toString(enabled));
+        System.setProperty(Handoff.HANDOFF_PROPERTY, Boolean.toString(enabled));
         var builder = Context.newBuilder("thc").allowExperimentalOptions(true).option("compiler.Inlining", Boolean.toString(inlining))
             .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw")
             .option("engine.SingleTierCompilationThreshold", "10000000").option("compiler.CompilationTimeout", "30").option("compiler.MaximumGraalGraphSize", "200000");

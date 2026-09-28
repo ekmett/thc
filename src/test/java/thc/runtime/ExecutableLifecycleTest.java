@@ -30,7 +30,7 @@ class ExecutableLifecycleTest {
         }
         @Override public long bloom(VirtualFrame frame) { return 0L; }
         @Override public Object execute(VirtualFrame frame) {
-            TupleResultsKt.requireVoidCarrier(frame.getArguments()[1]);
+            TupleResults.requireVoidCarrier(frame.getArguments()[1]);
             effect.run();
             var storage = shape.getLayout().create();
             shape.getLayout().setObject(storage, 0, unitValue);

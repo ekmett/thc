@@ -645,7 +645,7 @@ public final class BytecodeProgram implements ExecutableProgram {
 
     private static boolean representation(Map<String, Object> binding) {
         if (binding.get("lifted") instanceof Boolean lifted) return lifted;
-        throw new UnsupportedCore("Unknown levity for " + binding.get("id"));
+        return CoreRepresentations.mayBeLazy(binding.get("lifted"), CoreRepresentations.binder(binding));
     }
 
     private DataLayout dataLayout(String id) {
@@ -686,9 +686,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             if (!(strict.get(i) instanceof Boolean strictField))
                 throw new RuntimeFault("Unknown constructor field strictness: " + id);
             if (strictField) {
-                if (!(lifted.get(i) instanceof Boolean liftedField))
-                    throw new UnsupportedCore("Unknown strict constructor field levity: " + id + " field " + i);
-                result[i] = liftedField;
+                result[i] = CoreRepresentations.mayBeLazy(lifted.get(i), dataLayout(id).logicalProof(i));
             }
         }
         return result;
@@ -3478,7 +3476,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             if (resumable && !loop) checkpointedApplication(e, function, arguments, evaluatedArguments, inputLayout, tail);
             else if (inputLayout != null && inputLayout.getRequiresTyped())
                 typedArguments(e, function, arguments, inputLayout, tail, null, tail && !resumable
-                    && TypedInputsKt.supportsTypedSelf(context.inputLayout, context.entryStrict, inputLayout));
+                    && TypedInputs.supportsTypedSelf(context.inputLayout, context.entryStrict, inputLayout));
             else if (inputLayout != null) compactArguments(e, function, arguments, inputLayout, (fn, values) -> {
                 b.beginApplyCompact(inputLayout, tail, metrics, evaluatedArguments);
                 b.emitLoadLocal(fn); for (var value : values) b.emitLoadLocal(value);
@@ -4375,7 +4373,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 if (resumable) checkpointedTupleApplication(e, shape, function, arguments, inputLayout, destination, true);
                 else if (inputLayout != null && inputLayout.getRequiresTyped())
                     typedArguments(e, function, arguments, inputLayout, true, tupleSlots(shape, destination),
-                        TypedInputsKt.supportsTypedSelf(context.inputLayout, context.entryStrict, inputLayout));
+                        TypedInputs.supportsTypedSelf(context.inputLayout, context.entryStrict, inputLayout));
                 else if (inputLayout == null) {
                     b.beginTailApplyTuple(tupleSlots(shape, destination), arguments.size(), metrics);
                     requireClosure(function).emit(e); for (var argument : arguments) argument.emit(e);
@@ -4992,8 +4990,8 @@ public final class BytecodeProgram implements ExecutableProgram {
             return joinRegion(group, (List<Object>) expr.get(3), recursive, scope, tail);
         for (var binding : group) {
             var proof = CoreRepresentations.binder(binding);
-            if (proof.isVector()) {
-                if (recursive || representation(binding)) throw new UnsupportedCore("Vector let binding must be nonrecursive and unlifted");
+            if (proof.isTypedTransport()) {
+                if (recursive || representation(binding)) throw new UnsupportedCore("Aggregate/vector let binding must be nonrecursive and unlifted");
                 CoreRepresentations.requireInput(proof);
             } else CoreRepresentations.requireScalar(proof, "let binding");
         }
@@ -5002,10 +5000,10 @@ public final class BytecodeProgram implements ExecutableProgram {
         for (var binding : group) {
             var proof = CoreRepresentations.binder(binding);
             var id = (String) binding.get("id");
-            if (proof.isVector()) {
+            if (proof.isTypedTransport()) {
                 var lanes = new ArrayList<Local>();
                 for (var field : TupleShape.flatten(proof))
-                    lanes.add(new Local(nextLocal++, id + " vector let lane " + lanes.size(), field.isLong(), field));
+                    lanes.add(new Local(nextLocal++, id + " let field " + lanes.size(), field.isLong(), field));
                 local.bindTuple(id, evaluatedProof(proof, true), lanes); slots.add(lanes);
             } else slots.add(List.of(bind(local, id, !representation(binding), evaluatedProof(proof, false),
                 recursive, CoreEntries.binding(binding), CoreApplicationCertificates.binding(binding))));
@@ -5014,18 +5012,17 @@ public final class BytecodeProgram implements ExecutableProgram {
         for (var binding : group) {
             var rhsExpr = (List<Object>) binding.get("expr");
             boolean lifted = representation(binding);
-            CoreRepresentations.requireNoSum(CoreRepresentations.expression(rhsExpr), "let binding");
             if (recursive && !lifted) throw new UnsupportedCore("Recursive unlifted binding unsupported");
             var rhsScope = (recursive ? local : scope).withSource(sources.binding(binding, scope.source));
             if (recursive && lifted && !Set.of("lam", "lit", "con", "void").contains(rhsExpr.getFirst()))
                 rhs.add(delay(rhsExpr, rhsScope, String.valueOf(binding.get("name"))));
             else rhs.add(argument(rhsExpr, rhsScope, lifted, String.valueOf(binding.get("name")),
-                CoreRepresentations.binder(binding).isVector(), lifted));
+                CoreRepresentations.binder(binding).isTypedTransport(), lifted));
         }
         for (int index = 0; index < slots.size(); ++index) {
             var fields = slots.get(index);
-            if (CoreRepresentations.binder(group.get(index)).isVector()) {
-                if (!rhs.get(index).proof().isVector()) throw new RuntimeFault("Vector let binding requires an exact vector result proof");
+            if (CoreRepresentations.binder(group.get(index)).isTypedTransport()) {
+                if (!rhs.get(index).proof().isTypedTransport()) throw new RuntimeFault("Aggregate/vector let binding requires an exact result shape");
                 TupleShape.requireCompatible(CoreRepresentations.binder(group.get(index)), rhs.get(index).proof(), false);
             } else {
                 var slot = fields.getFirst();
@@ -5056,7 +5053,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 }
             } else for (int index = 0; index < slots.size(); ++index) {
                 var fields = slots.get(index);
-                if (CoreRepresentations.binder(group.get(index)).isVector())
+                if (CoreRepresentations.binder(group.get(index)).isTypedTransport())
                     rhs.get(index).emitTuple(e, localSlots(e, fields));
                 else {
                     b.beginStoreLocal(e.locals.get(fields.getFirst().id)); rhs.get(index).emit(e); b.endStoreLocal();
@@ -5219,7 +5216,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             if ("lit".equals(alt.kind) && !(alt.value instanceof Long)) longLiterals = false;
         }
         var fallback = defaultArm;
-        var category = CaseCategoriesKt.caseCategory(binderProof, categories, longLiterals);
+        var category = CaseCategories.caseCategory(binderProof, categories, longLiterals);
         // Preserve original order for small cases and duplicate labels; signed comparison retains all Word# bits.
         boolean orderLiterals = binderProof.isLong() && explicit.size() > 8;
         if (orderLiterals) {
@@ -5411,7 +5408,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                     throw new RuntimeFault("Typed tuple field cannot be lifted");
                 if (component.isTypedTransport()) operands.add(compile(arg, scope, false));
                 else {
-                    if (!(flags.get(index) instanceof Boolean lifted)) throw new UnsupportedCore("Unknown tuple field levity");
+                    boolean lifted = CoreRepresentations.argumentMayBeLazy(flags.get(index), args.get(index));
                     operands.add(argument(arg, scope, lifted));
                 }
             }
@@ -5453,7 +5450,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         var operands = new ArrayList<Expression>();
         for (int index = 0; index < args.size(); ++index) {
             var arg = args.get(index);
-            if (!(flags.get(index) instanceof Boolean lifted)) throw new UnsupportedCore("Unknown argument levity");
+            boolean lifted = CoreRepresentations.argumentMayBeLazy(flags.get(index), args.get(index));
             var logical = constructor == null ? null : constructor.logicalProof(index);
             var aggregate = logical != null && logical.isAggregate() ? logical : null;
             var vectorField = aggregate == null && constructor != null
@@ -6218,7 +6215,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
         if (polyglot != null) {
             var operands = new ArrayList<Expression>();
-            for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
+            for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, CoreRepresentations.argumentMayBeLazy(flags.get(index), args.get(index))));
             return tupleExpression(tupleProof, (e, destination) -> {
                 var b = e.builder;
                 switch (polyglot) {
@@ -6570,7 +6567,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         if (Set.of("newBCO#", "mkApUpd0#").contains(name)) {
             GhcBCO.validate(name, argumentProofs(args), flags, tupleProof);
             var operands = new ArrayList<Expression>();
-            for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
+            for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, CoreRepresentations.argumentMayBeLazy(flags.get(index), args.get(index))));
             return tupleExpression(tupleProof, (e, destination) -> {
                 var b = e.builder;
                 b.beginStoreLocal(destination.getFirst());
@@ -6587,7 +6584,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             else if (name.equals("annotateStack#")) StackAnnotations.validate(proofs, flags, tupleProof);
             else CoreSynchronousExceptions.validate(name, proofs, flags, tupleProof);
             var operands = new ArrayList<Expression>();
-            for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
+            for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, CoreRepresentations.argumentMayBeLazy(flags.get(index), args.get(index))));
             var shape = new TupleShape(tupleProof, language);
             return tupleExpression(tupleProof, (e, destination) -> {
                 var b = e.builder;
@@ -6619,7 +6616,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         if (Set.of("raiseIO#", "catch#", "getMaskingState#", "unmaskAsyncExceptions#", "maskAsyncExceptions#", "maskUninterruptible#").contains(name)) {
             CoreSynchronousExceptions.validate(name, argumentProofs(args), flags, tupleProof);
             var operands = new ArrayList<Expression>();
-            for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
+            for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, CoreRepresentations.argumentMayBeLazy(flags.get(index), args.get(index))));
             return tupleExpression(tupleProof, (e, destination) -> {
                 var b = e.builder;
                 if (name.equals("raiseIO#")) {
@@ -6727,7 +6724,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         if (CoreThreadScheduling.named(name)) {
             CoreThreadScheduling.validate(name, argumentProofs(args), flags, tupleProof);
             var operands = new ArrayList<Expression>();
-            for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
+            for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, CoreRepresentations.argumentMayBeLazy(flags.get(index), args.get(index))));
             CoreThreadScheduling.validate(name, loweredProofs(operands), flags, tupleProof);
             if (name.equals("par#")) return new ProvenExpression(e -> e.builder.emitLoadConstant(1L), evaluatedProof(tupleProof, true));
             if (name.equals("delay#")) return new ProvenExpression(e -> {
@@ -6879,7 +6876,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         if (Set.of("fork#", "forkOn#", "myThreadId#", "killThread#").contains(name)) {
             CoreGuestThreads.validate(name, argumentProofs(args), flags, tupleProof);
             var operands = new ArrayList<Expression>();
-            for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
+            for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, CoreRepresentations.argumentMayBeLazy(flags.get(index), args.get(index))));
             if (name.equals("killThread#")) {
                 if (!enableAsync) return new ProvenExpression(e -> {
                     e.builder.beginThreadPrimitive(BytecodeRoot.ThreadPrimitiveKind.SELF_KILL);
@@ -6937,7 +6934,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 throw new UnsupportedCore("STM transaction frames do not support explicit checkpoint/delimited capture");
             operation.validate(argumentProofs(args), flags, tupleProof);
             var operands = new ArrayList<Expression>();
-            for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
+            for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, CoreRepresentations.argumentMayBeLazy(flags.get(index), args.get(index))));
             operation.validate(loweredProofs(operands), flags, tupleProof);
             var nested = operation == STMOp.ATOMICALLY ? globals.get(STMOp.NESTED) : null;
             if (operation == STMOp.ATOMICALLY && nested == null) throw new UnsupportedCore("atomically# requires original nestedAtomically payload");
@@ -6974,7 +6971,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             operation.validate(proofs, flags, tupleProof);
             operation.validateBindings(proofs, lexicalProofs(args, scope));
             var operands = new ArrayList<Expression>();
-            for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
+            for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, CoreRepresentations.argumentMayBeLazy(flags.get(index), args.get(index))));
             operation.validate(loweredProofs(operands), flags, tupleProof);
             if (operation.getTuple()) return tupleExpression(tupleProof, (e, destination) -> {
                 var b = e.builder;
@@ -7011,7 +7008,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             var operation = CompactImageOp.named(name);
             operation.validate(argumentProofs(args), flags, tupleProof);
             var operands = new ArrayList<Expression>();
-            for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
+            for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, CoreRepresentations.argumentMayBeLazy(flags.get(index), args.get(index))));
             return tupleExpression(tupleProof, (e, destination) -> {
                 var b = e.builder;
                 switch (operation) {
@@ -7035,7 +7032,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             if (enableAsync && operation.getAdds()) throw new UnsupportedCore("Compact graph traversal does not yet support resumable asynchronous forcing");
             operation.validate(argumentProofs(args), flags, tupleProof);
             var operands = new ArrayList<Expression>();
-            for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
+            for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, CoreRepresentations.argumentMayBeLazy(flags.get(index), args.get(index))));
             var failures = new ArrayList<GlobalBinding>();
             if (operation.getAdds()) for (var id : CompactOp.getFailures()) {
                 var binding = globals.get(id);
@@ -7063,7 +7060,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             var operation = MutVarOp.named(name);
             operation.validate(argumentProofs(args), flags, tupleProof);
             var operands = new ArrayList<Expression>();
-            for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
+            for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, CoreRepresentations.argumentMayBeLazy(flags.get(index), args.get(index))));
             if (operation.getTuple()) return tupleExpression(tupleProof, (e, destination) -> {
                 var b = e.builder;
                 switch (operation) {
@@ -7096,7 +7093,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             operation.validateBindings(proofs, lexicalProofs(args, scope));
             if (operation == WeakOp.MAKE) operation.validateAction(CoreRepresentations.knownFunctionSignature(args.get(2), bindings));
             var operands = new ArrayList<Expression>();
-            for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
+            for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, CoreRepresentations.argumentMayBeLazy(flags.get(index), args.get(index))));
             operation.validate(loweredProofs(operands), flags, tupleProof);
             return tupleExpression(tupleProof, (e, destination) -> {
                 var b = e.builder;
@@ -7117,7 +7114,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             var operation = StableNameOp.named(name);
             operation.validate(argumentProofs(args), flags, tupleProof);
             var operands = new ArrayList<Expression>();
-            for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
+            for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, CoreRepresentations.argumentMayBeLazy(flags.get(index), args.get(index))));
             if (operation == StableNameOp.MAKE) return tupleExpression(tupleProof, (e, destination) -> {
                 e.builder.beginMakeStableName(destination.getFirst()); for (var operand : operands) operand.emit(e); e.builder.endMakeStableName();
             });
@@ -7129,7 +7126,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             var operation = StablePointerOp.named(name);
             operation.validate(argumentProofs(args), flags, tupleProof);
             var operands = new ArrayList<Expression>();
-            for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
+            for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, CoreRepresentations.argumentMayBeLazy(flags.get(index), args.get(index))));
             if (operation.getTuple()) return tupleExpression(tupleProof, (e, destination) -> {
                 e.builder.beginStablePointerTuple(destination.getFirst(), operation); for (var operand : operands) operand.emit(e); e.builder.endStablePointerTuple();
             });
@@ -7141,7 +7138,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             var operation = ArrayOp.named(name);
             operation.validate(argumentProofs(args), flags, tupleProof);
             var operands = new ArrayList<Expression>();
-            for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
+            for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, CoreRepresentations.argumentMayBeLazy(flags.get(index), args.get(index))));
             if (operation.getTuple()) return tupleExpression(tupleProof, (e, destination) -> {
                 var b = e.builder;
                 switch (operation) {
@@ -7185,7 +7182,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             var operation = SmallArrayOp.named(name);
             operation.validate(argumentProofs(args), flags, tupleProof);
             var operands = new ArrayList<Expression>();
-            for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
+            for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, CoreRepresentations.argumentMayBeLazy(flags.get(index), args.get(index))));
             if (operation.getTuple()) return tupleExpression(tupleProof, (e, destination) -> {
                 var b = e.builder;
                 switch (operation) {
@@ -7236,7 +7233,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
         if (PrefetchExpression.ARITIES.containsKey(name)) {
             if (args.size() != PrefetchExpression.ARITIES.get(name)) throw RuntimeFault.fault("Wrong prefetch arity");
-            var value = argument(args.get(0), scope, (Boolean) flags.get(0));
+            var value = argument(args.get(0), scope, CoreRepresentations.argumentMayBeLazy(flags.get(0), args.get(0)));
             var offset = args.size() == 3 ? compile(args.get(1), scope, false) : null;
             var state = compile(args.getLast(), scope, false);
             return new ProvenExpression(e -> {
@@ -7258,7 +7255,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         if (name.equals("touch#")) {
             var metadata = CoreRepresentations.metadata(expr);
             CoreTouch.validateRaw(argumentMetadata(args), flags, metadata == null ? null : metadata.get("rep"));
-            var lowered = argument(args.get(0), scope, (Boolean) flags.get(0));
+            var lowered = argument(args.get(0), scope, CoreRepresentations.argumentMayBeLazy(flags.get(0), args.get(0)));
             var kept = new ProvenExpression(lowered, lowered.proof().refine(evaluatedProof(CoreRepresentations.expression(args.get(0)), false)));
             var state = compile(args.get(1), scope, false);
             CoreTouch.validate(List.of(kept.proof(), state.proof()), flags, tupleProof);
@@ -7271,7 +7268,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             var signature = args.size() > 2 ? CoreRepresentations.knownFunctionSignature(args.get(2), bindings) : null;
             CoreKeepAlive.validate(proofs, flags, tupleProof,
                 signature == null ? null : signature.getInputs(), signature == null ? null : signature.getResult());
-            var kept = argument(args.get(0), scope, (Boolean) flags.get(0));
+            var kept = argument(args.get(0), scope, CoreRepresentations.argumentMayBeLazy(flags.get(0), args.get(0)));
             var state = compile(args.get(1), scope, false);
             var function = argument(args.get(2), scope, true);
             BiConsumer<Emission, List<BytecodeLocal>> emitKeepAlive = (e, destination) -> {

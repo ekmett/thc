@@ -120,7 +120,7 @@ vector-result issue. Both must have no missing globals.
 ## Preparation and provenance
 
 The shared [integer SIMD fixture guide](integer-simd-fixtures.md) provides the
-independent Kotlin model and both-handoff recipe.
+independent Java model and both-handoff recipe.
 
 Run `cabal run exe:thc-fixtures --offline -- word16x8` with the pinned environment and the
 shared resource gate. Preparation builds the real exporter, exports pre/post
@@ -133,7 +133,7 @@ the independent integer model, including duplicate/arity rejection.
 entry arities and inputs, actual root counts, strict audits, separately labeled
 signedness controls, commands, toolchain identity, and complete source/artifact
 hashes. Artifacts cover expected rows, both original Core files, audit reports,
-negative copies, native rows/executable, and command output/status. Kotlin's
+negative copies, native rows/executable, and command output/status. Java's
 `IntegerSimdModelTest` independently checks the lane model; the existing
 `SimdWord16VectorTest` retains exact compiled-entry checks in both handoff modes.
 

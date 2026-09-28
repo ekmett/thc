@@ -92,36 +92,36 @@ public enum MutVarOp {
             if (operation != WRITE) throw fault("Tuple primitive requires a destination");
             var cell = ManagedMutVar.require(operands[0].execute(frame));
             var value = operands[1].execute(frame);
-            var state = operands[2].execute(frame); TupleResultsKt.requireVoidCarrier(state);
+            var state = operands[2].execute(frame); TupleResults.requireVoidCarrier(state);
             cell.setValue(value); return state;
         }
         @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
             if (operation == NEW) {
                 var value = operands[0].execute(frame);
-                TupleResultsKt.requireVoidCarrier(operands[1].execute(frame));
+                TupleResults.requireVoidCarrier(operands[1].execute(frame));
                 FrameAccess.INSTANCE.write(frame, slots[offset], new ManagedMutVar(value)); return null;
             }
             if (operation == WRITE) return super.executeTuple(frame, slots, offset);
             var cell = ManagedMutVar.require(operands[0].execute(frame));
             switch (operation) {
                 case READ:
-                    TupleResultsKt.requireVoidCarrier(operands[1].execute(frame));
+                    TupleResults.requireVoidCarrier(operands[1].execute(frame));
                     FrameAccess.INSTANCE.write(frame, slots[offset], cell.getValue()); break;
                 case SWAP: {
                     var replacement = operands[1].execute(frame);
-                    TupleResultsKt.requireVoidCarrier(operands[2].execute(frame));
+                    TupleResults.requireVoidCarrier(operands[2].execute(frame));
                     FrameAccess.INSTANCE.write(frame, slots[offset], cell.exchange(replacement)); break;
                 }
                 case CAS: {
                     var expected = operands[1].execute(frame); var replacement = operands[2].execute(frame);
-                    TupleResultsKt.requireVoidCarrier(operands[3].execute(frame));
+                    TupleResults.requireVoidCarrier(operands[3].execute(frame));
                     var witness = cell.compareExchange(expected, replacement); boolean success = witness == expected;
                     FrameAccess.INSTANCE.writeLong(frame, slots[offset], success ? 0L : 1L);
                     FrameAccess.INSTANCE.write(frame, slots[offset + 1], success ? replacement : witness); break;
                 }
                 case MODIFY, MODIFY2: {
                     var function = operands[1].execute(frame);
-                    TupleResultsKt.requireVoidCarrier(operands[2].execute(frame));
+                    TupleResults.requireVoidCarrier(operands[2].execute(frame));
                     var modified = cell.modify(function, site);
                     FrameAccess.INSTANCE.write(frame, slots[offset], modified.getOld());
                     FrameAccess.INSTANCE.write(frame, slots[offset + 1], modified.getResult()); break;

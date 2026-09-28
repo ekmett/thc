@@ -35,7 +35,7 @@ final class FunctionBody extends Node {
                     @Override public Object resume(MaterializedFrame frame, DelimitedResume input,
                                                    MaskingState ambient, DelimitedStep outerMask) {
                         input.get();
-                        return TupleResultsKt.ownedTupleResult(shape.finish(frame, tupleSlots, false), shape);
+                        return TupleResults.ownedTupleResult(shape.finish(frame, tupleSlots, false), shape);
                     }
                 });
             } catch (AstCapture cut) {

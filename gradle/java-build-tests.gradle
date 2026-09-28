@@ -22,7 +22,7 @@ tasks.register('testJavaBuildPipeline') {
             def suite = sourceSets[name]
             def java = tasks.named(suite.compileJavaTaskName, JavaCompile).get()
             checkBuild(java.options.annotationProcessorPath.files == configurations.testAnnotationProcessor.files) { "Suite ${name} lost the pinned test processor" }
-            checkBuild(suite.compileClasspath.files.containsAll(sourceSets.main.output.files)) { "Suite ${name} lost main output after associateWith removal" }
+            checkBuild(suite.compileClasspath.files.containsAll(sourceSets.main.output.files)) { "Suite ${name} lost main output" }
             checkBuild(!java.options.compilerArgs.contains('-proc:none')) { "Suite ${name} must retain annotation processing" }
         }
         checkBuild(processing.javaCompiler.get().metadata.languageVersion.asInt() == 25 && compilation.javaCompiler.get().metadata.languageVersion.asInt() == 25) { 'Java toolchain must remain JDK 25' }
@@ -50,7 +50,7 @@ tasks.register('verifyJavaRuntimeDependencies') {
 
 tasks.register('verifyJavaOnlySources') {
     group = 'verification'
-    description = 'Reject remaining Kotlin sources, including tools, archives and generated output.'
+    description = 'Reject Kotlin sources, including tools, archives and generated output.'
     def sourceInventory = providers.exec {
         commandLine('git', 'ls-files', '-z', '--cached', '--others', '--exclude-standard', '--', '*.kt', '*.kts')
     }.standardOutput.asText
@@ -59,7 +59,7 @@ tasks.register('verifyJavaOnlySources') {
         remaining.addAll(fileTree(layout.buildDirectory.dir('generated')) {
             include('**/*.kt', '**/*.kts')
         }.files.collect { it.path })
-        checkBuild(remaining.empty) { "Kotlin sources remain; compose the pending Java ports before cutover:\n" + remaining.join('\n') }
+        checkBuild(remaining.empty) { "Kotlin sources are not supported:\n" + remaining.join('\n') }
     }
 }
 

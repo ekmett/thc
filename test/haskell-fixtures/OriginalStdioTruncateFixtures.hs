@@ -12,7 +12,7 @@
 -- Portability : POSIX; depends on the unix package
 --
 -- The installed GHC declaration supplies Core; a private native fd supplies
--- observations. Kotlin owns the independent model and compiled comparisons.
+-- observations. Java owns the independent model and compiled comparisons.
 module OriginalStdioTruncateFixtures (prepareOriginalStdioTruncate) where
 
 import Control.Monad (forM, unless, when)

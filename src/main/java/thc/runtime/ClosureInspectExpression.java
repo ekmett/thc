@@ -35,11 +35,11 @@ public final class ClosureInspectExpression extends Expr {
             FrameAccess.writeLong(frame, slots[offset], 0);
             FrameAccess.writeObject(frame, slots[offset + 1], value);
         } else if (operation == ClosureInspectOp.CCS) {
-            TupleResultsKt.requireVoidCarrier(operands[1].execute(frame));
+            TupleResults.requireVoidCarrier(operands[1].execute(frame));
             FrameAccess.writeObject(frame, slots[offset], ManagedAddress.nullAddress());
         } else if (operation == ClosureInspectOp.WHERE) {
             operands[1].executeRequiredAddress(frame);
-            TupleResultsKt.requireVoidCarrier(operands[2].execute(frame));
+            TupleResults.requireVoidCarrier(operands[2].execute(frame));
             FrameAccess.writeLong(frame, slots[offset], 0); // No closure IPE: destination remains untouched.
         } else throw RuntimeFault.fault("closureSize# is scalar");
         return null;

@@ -93,8 +93,8 @@ compiled row also requires zero unsupported traps and released argument/result
 handoff references and depths, in both default and dense-slab runs.
 
 AST lowering uses exact Object writes for the boxed weak/payload results and
-direct enum identity predicates for operation selection. The initial enum `when`
-retained Kotlin's mutable switch-mapping array in actual Graal graphs. The first
+direct enum identity predicates for operation selection. The initial enum dispatch
+retained a mutable switch-mapping array in actual Graal graphs. The first
 installed state-lambda call deoptimized under `IntrinsifyFrameAccessor` after
 frame-array materialization; typed writes alone did not fix it. Direct identity
 dispatch together with those typed writes passes the unchanged immediate

@@ -443,7 +443,6 @@ class FastRunnerTest(unittest.TestCase):
         self.assertIn('includeTags("foreign-exceptions-full-core")', dedicated)
         self.assertTrue((root / "src/fullCoreTest/java/thc/runtime/ForeignExceptionTest.java").is_file())
         self.assertFalse((root / "src/polyglotTest/java/thc/runtime/ForeignExceptionTest.java").exists())
-        self.assertFalse((root / "src/polyglotTest/kotlin/thc/runtime/ForeignExceptionTest.kt").exists())
         makefile = (root / "Makefile").read_text()
         self.assertIn('foreign-exception-test-modes: foreign-exception-fixtures', makefile)
         self.assertIn('-- foreign-exceptions', makefile)

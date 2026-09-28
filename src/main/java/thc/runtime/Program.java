@@ -5,6 +5,7 @@ package thc.runtime;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import java.util.*;
@@ -26,6 +27,7 @@ public final class Program implements ExecutableProgram {
     private final TruffleLanguage<?> language;
     private final boolean enableAsync;
     private final boolean outlineCaseArms;
+    private final boolean deferDefaultArm;
     private final boolean capturesContinuations;
     private final CoreDemandBindings demand;
     private final ForeignExceptionBridge foreignExceptionBridge;
@@ -62,8 +64,13 @@ public final class Program implements ExecutableProgram {
     public Program(TruffleLanguage<?> language, Map<String, Object> moduleData) { this(language, moduleData, false, false); }
     public Program(TruffleLanguage<?> language, Map<String, Object> moduleData, boolean enableAsync) { this(language, moduleData, enableAsync, false); }
     public Program(TruffleLanguage<?> language, Map<String, Object> moduleData, boolean enableAsync, boolean outlineCaseArms) {
+        this(language, moduleData, enableAsync, outlineCaseArms, false);
+    }
+    public Program(TruffleLanguage<?> language, Map<String, Object> moduleData, boolean enableAsync,
+                   boolean outlineCaseArms, boolean deferDefaultArm) {
         this.language = language; this.enableAsync = enableAsync; this.outlineCaseArms = outlineCaseArms;
-        capturesContinuations = enableAsync || outlineCaseArms;
+        this.deferDefaultArm = deferDefaultArm;
+        capturesContinuations = enableAsync || outlineCaseArms || deferDefaultArm;
         thc.CoreForeignArtifacts.INSTANCE.requireExecutableInput(moduleData);
         demand = moduleData.get("demandBindings") instanceof CoreDemandBindings found ? found : null;
         foreignExceptionBridge = ForeignExceptionBridge.bind(moduleData, this::entryValue, this::dataLayout);
@@ -172,11 +179,20 @@ public final class Program implements ExecutableProgram {
         final Map<String, Local> locals;
         final Map<String, LocalJoinTarget> joins;
         AstSelfLayout self;
-        Scope(FrameLayout layout) { this(layout, new LinkedHashMap<>(), new LinkedHashMap<>(), null); }
-        Scope(FrameLayout layout, Map<String, Local> locals, Map<String, LocalJoinTarget> joins, AstSelfLayout self) {
-            this.layout = layout; this.locals = locals; this.joins = joins; this.self = self;
+        final List<Object> deferredExpression;
+        final List<DeferredArm> deferredArms;
+        Scope(FrameLayout layout) { this(layout, null); }
+        Scope(FrameLayout layout, List<Object> deferredExpression) {
+            this(layout, new LinkedHashMap<>(), new LinkedHashMap<>(), null, deferredExpression,
+                deferredExpression == null ? null : new ArrayList<>());
         }
-        Scope child() { return new Scope(layout.scope(), new LinkedHashMap<>(locals), new LinkedHashMap<>(joins), self); }
+        Scope(FrameLayout layout, Map<String, Local> locals, Map<String, LocalJoinTarget> joins, AstSelfLayout self,
+              List<Object> deferredExpression, List<DeferredArm> deferredArms) {
+            this.layout = layout; this.locals = locals; this.joins = joins; this.self = self;
+            this.deferredExpression = deferredExpression; this.deferredArms = deferredArms;
+        }
+        Scope child() { return new Scope(layout.scope(), new LinkedHashMap<>(locals), new LinkedHashMap<>(joins), self,
+            deferredExpression, deferredArms); }
         Local bind(String id, boolean primitive, CoreRepresentation proof) {
             return bind(id, primitive, proof, false, null, null, FrameSlotKind.Illegal);
         }
@@ -210,6 +226,7 @@ public final class Program implements ExecutableProgram {
         void bindJoin(String id, LocalJoinTarget target) { joins.put(id, target); locals.remove(id); }
     }
     private record FunctionSpec(RootCallTarget target, CaptureLayout captureLayout, int[] captures) {}
+    private record DeferredArm(AstDeferredArm node, CaptureLayout captures, int[] slots) {}
     private final class OperandBuilder {
         private final FrameLayout layout;
         private final List<LocalBinding> bindings = new ArrayList<>();
@@ -364,8 +381,8 @@ public final class Program implements ExecutableProgram {
         return result;
     }
     private boolean representation(Map<String, Object> binding) {
-        if (!(binding.get("lifted") instanceof Boolean lifted)) throw new UnsupportedCore("Unknown levity for " + binding.get("id"));
-        return lifted;
+        if (binding.get("lifted") instanceof Boolean lifted) return lifted;
+        return CoreRepresentations.mayBeLazy(binding.get("lifted"), CoreRepresentations.binder(binding));
     }
     private FunctionSpec function(String label, List<Map<String, Object>> args, List<Object> expression, Scope outer) {
         return function(label, args, expression, outer, CoreRepresentations.expression(expression),
@@ -374,7 +391,17 @@ public final class Program implements ExecutableProgram {
     private FunctionSpec function(String label, List<Map<String, Object>> args, List<Object> expression, Scope outer,
                                   CoreRepresentation resultProof, boolean[] entryStrict, FunctionRootRole role, boolean bodyTail) {
         if (entryStrict.length != args.size()) throw new RuntimeFault("Function entry contract arity mismatch");
-        Scope scope = new Scope(new FrameLayout());
+        List<Object> defaultArm = null;
+        if (deferDefaultArm && !outlineCaseArms && !enableAsync && !delimited &&
+                role == FunctionRootRole.FUNCTION && expression.getFirst().equals("case")) {
+            List<List<Object>> alternatives = (List<List<Object>>) expression.get(3);
+            if (alternatives.size() == 1) {
+                List<Object> alternative = alternatives.getFirst();
+                if (alternative.getFirst().equals("default") && ((List<?>) alternative.get(2)).isEmpty())
+                    defaultArm = (List<Object>) alternative.get(3);
+            }
+        }
+        Scope scope = new Scope(new FrameLayout(), defaultArm);
         Set<String> free = coreFreeVariables(expression);
         Set<String> argumentIds = new LinkedHashSet<>();
         for (Map<String, Object> arg : args) argumentIds.add((String) arg.get("id"));
@@ -497,10 +524,24 @@ public final class Program implements ExecutableProgram {
         TupleShape tuple = effectiveResult.isTypedTransport() ? new TupleShape(effectiveResult, (thc.Language) language) : null;
         int[] tupleSlots = new int[tuple == null ? 0 : tuple.getWidth()];
         for (int i = 0; i < tupleSlots.length; i++) tupleSlots[i] = scope.layout.bind("<typed return " + i + ">");
-        FunctionRoot root = new FunctionRoot(language, scope.layout.build(), label, captures, environmentSlots,
+        FrameDescriptor descriptor = scope.layout.build();
+        FunctionRoot root = new FunctionRoot(language, descriptor, label, captures, environmentSlots,
             ints(argumentSlots), ints(argumentIndices), body, metrics, argumentProofs.toArray(CoreRepresentation[]::new), resultProof,
             rootSource(body), entryStrict, handoff, tuple, tupleSlots, inputLayout, enableAsync, environmentVectorSlots,
-            delimited, role, outlineCaseArms);
+            delimited, role, outlineCaseArms || deferDefaultArm,
+            scope.deferredArms != null && !scope.deferredArms.isEmpty(), false);
+        if (scope.deferredArms != null) for (DeferredArm candidate : scope.deferredArms) {
+            AstDeferredArm.PreparedBody prepared = new AstDeferredArm.PreparedBody(
+                candidate.node.getRepresentation(), candidate.node.getCoreSourceLocation());
+            FunctionRoot side = new FunctionRoot(language, descriptor.copy(), label + " default arm",
+                candidate.captures, candidate.slots, new int[0], new int[0], prepared, metrics,
+                new CoreRepresentation[0], candidate.node.getRepresentation(), prepared.getCoreSourceLocation(), new boolean[0],
+                null, null, new int[0], null, false, new int[0][], false,
+                FunctionRootRole.PASS_THROUGH, true, false, true);
+            side.configureForeignExceptionBridge(foreignExceptionBridge);
+            candidate.node.prepare(side.getCallTarget(), prepared);
+            constructedRootCount++;
+        }
         constructedRootCount++;
         root.configureForeignExceptionBridge(foreignExceptionBridge);
         if (language instanceof thc.Language thc) root.configureTypedInput(TypedInputLayout.create(thc, inputLayout, captures != null));
@@ -513,6 +554,46 @@ public final class Program implements ExecutableProgram {
         return new FunctionSpec(root.getCallTarget(), captures, captureSources);
     }
     private Expr caseArm(List<Object> expression, Scope scope, boolean tail) {
+        if (expression == scope.deferredExpression) {
+            CoreRepresentation proof = CoreRepresentations.expression(expression);
+            Set<String> free = coreFreeVariables(expression);
+            List<Local> locals = new ArrayList<>();
+            boolean eligible = deferredScalar(proof);
+            for (String id : free) {
+                if (scope.joins.containsKey(id)) eligible = false;
+                Local local = scope.locals.get(id);
+                if (local != null) {
+                    locals.add(local);
+                    if (local.cell || local.slot < 0 || !deferredScalar(local.proof)) eligible = false;
+                }
+            }
+            if (eligible) {
+                int count = locals.size();
+                boolean[] exactLong = new boolean[count], exactFloat = new boolean[count], exactDouble = new boolean[count];
+                NarrowInteger[] narrow = new NarrowInteger[count];
+                int[] slots = new int[count];
+                for (int i = 0; i < count; i++) {
+                    Local local = locals.get(i);
+                    exactLong[i] = local.proof.isLong();
+                    exactFloat[i] = local.proof.isFloat();
+                    exactDouble[i] = local.proof.isDouble();
+                    narrow[i] = local.proof.getNarrowInteger();
+                    slots[i] = local.slot;
+                }
+                CaptureLayout captures = count == 0 ? null : CaptureLayout.withVectors(Objects.requireNonNull(language),
+                    new CoreRepresentation[count], exactLong, exactLong, new Class<?>[count], exactFloat, exactDouble, narrow);
+                OperandBuilder operands = operandBuilder;
+                operandBuilder = null;
+                Scope child = scope.child();
+                child.self = null;
+                Expr body;
+                try { body = compile(expression, child, tail); }
+                finally { operandBuilder = operands; }
+                AstDeferredArm node = new AstDeferredArm(body, captures, slots, tail);
+                scope.deferredArms.add(new DeferredArm(node, captures, slots));
+                return node;
+            }
+        }
         boolean hasLocalJoin = false;
         if (outlineCaseArms && Arrays.asList("app", "case", "let").contains(expression.getFirst()))
             for (String free : coreFreeVariables(expression)) if (scope.joins.containsKey(free)) { hasLocalJoin = true; break; }
@@ -527,7 +608,7 @@ public final class Program implements ExecutableProgram {
         return new AstCaseArm(fn.target, fn.captureLayout, fn.captures, tail).located(currentSource);
     }
     private FrameSlotKind outlinedSlotKind(CoreRepresentation proof, boolean cell) {
-        if (!outlineCaseArms) return FrameSlotKind.Illegal;
+        if (!outlineCaseArms && !deferDefaultArm) return FrameSlotKind.Illegal;
         if (cell || proof.isVector()) return FrameSlotKind.Object;
         if (!proof.getEvaluated()) return FrameSlotKind.Illegal;
         if (proof.isInt()) return FrameSlotKind.Int;
@@ -536,6 +617,9 @@ public final class Program implements ExecutableProgram {
         if (proof.isDouble()) return FrameSlotKind.Double;
         if (proof.isEvaluatedReference()) return FrameSlotKind.Object;
         return FrameSlotKind.Illegal;
+    }
+    private static boolean deferredScalar(CoreRepresentation proof) {
+        return proof.getEvaluated() && (proof.isInt() || proof.isLong() || proof.isFloat() || proof.isDouble());
     }
     private Expr delay(List<Object> expr, Scope scope, String label) {
         FunctionSpec fn = function(label, List.of(), expr, scope);
@@ -972,9 +1056,7 @@ public final class Program implements ExecutableProgram {
         for (int i = 0; i < arity; i++) {
             if (!(strict.get(i) instanceof Boolean strictField)) throw new RuntimeFault("Unknown constructor field strictness: " + id);
             if (strictField) {
-                if (!(lifted.get(i) instanceof Boolean liftedField))
-                    throw new UnsupportedCore("Unknown strict constructor field levity: " + id + " field " + i);
-                result[i] = liftedField;
+                result[i] = CoreRepresentations.mayBeLazy(lifted.get(i), dataLayout(id).logicalProof(i));
             }
         }
         return result;
@@ -1054,22 +1136,22 @@ public final class Program implements ExecutableProgram {
         if (definitions != null) return compileJoins(expr, scope, tail, definitions);
         for (Map<String, Object> binding : group) {
             CoreRepresentation proof = CoreRepresentations.binder(binding);
-            if (proof.isVector()) {
-                if (recursive || representation(binding)) throw new UnsupportedCore("Vector let binding must be nonrecursive and unlifted");
+            if (proof.isTypedTransport()) {
+                if (recursive || representation(binding)) throw new UnsupportedCore("Aggregate/vector let binding must be nonrecursive and unlifted");
                 CoreRepresentations.requireInput(proof);
             } else CoreRepresentations.requireScalar(proof, "let binding");
         }
         Scope local = scope.child();
-        int[][] vectorSlots = new int[group.size()][];
+        int[][] typedSlots = new int[group.size()][];
         int[] slots = new int[group.size()];
         for (int index = 0; index < group.size(); index++) {
             Map<String, Object> binding = group.get(index);
             CoreRepresentation proof = CoreRepresentations.binder(binding);
-            if (proof.isVector()) {
+            if (proof.isTypedTransport()) {
                 List<CoreRepresentation> fields = TupleShape.flatten(proof);
                 int[] lanes = new int[fields.size()];
-                for (int i = 0; i < lanes.length; i++) lanes[i] = local.layout.bind(binding.get("id") + " vector let lane " + i);
-                vectorSlots[index] = lanes;
+                for (int i = 0; i < lanes.length; i++) lanes[i] = local.layout.bind(binding.get("id") + " let field " + i);
+                typedSlots[index] = lanes;
                 slots[index] = local.bindTuple((String) binding.get("id"), proof, lanes).slot;
             } else slots[index] = local.bind((String) binding.get("id"), !representation(binding),
                 evaluated(proof, false), recursive, CoreEntries.binding(binding),
@@ -1081,11 +1163,11 @@ public final class Program implements ExecutableProgram {
             rhs[i] = withSource(sources.binding(binding, currentSource), () -> {
                 List<Object> body = (List<Object>) binding.get("expr");
                 boolean lifted = representation(binding);
-                CoreRepresentations.requireNoSum(CoreRepresentations.expression(body), "let binding");
                 if (recursive && !lifted) throw new UnsupportedCore("Recursive unlifted binding unsupported");
                 Expr node = recursive && lifted && !Arrays.asList("lam", "lit", "con", "void").contains(body.get(0))
                     ? delay(body, local, String.valueOf(binding.get("name")))
-                    : argument(body, recursive ? local : scope, lifted, String.valueOf(binding.get("name")), false, lifted);
+                    : argument(body, recursive ? local : scope, lifted, String.valueOf(binding.get("name")),
+                        CoreRepresentations.binder(binding).isTypedTransport(), lifted);
                 return node.proven(node.getRepresentation().refine(evaluated(CoreRepresentations.binder(binding), false)));
             });
         }
@@ -1094,7 +1176,7 @@ public final class Program implements ExecutableProgram {
             local.publish((String) group.get(i).get("id"), rhs[i].getRepresentation());
             unlifted[i] = !representation(group.get(i));
         }
-        return new Let(slots, rhs, unlifted, compile((List<Object>) expr.get(3), local, tail), recursive, vectorSlots);
+        return new Let(slots, rhs, unlifted, compile((List<Object>) expr.get(3), local, tail), recursive, typedSlots);
     }
 
     private Expr compileCase(List<Object> expr, Scope scope, boolean tail) {
@@ -1193,7 +1275,7 @@ public final class Program implements ExecutableProgram {
         CoreRepresentations.validateDeclaredCaseResult(declared, results);
         CoreRepresentations.validateAggregateCaseResult(declared, results);
         CoreRepresentations.validateFloatingCaseResult(declared, results);
-        return switch (CaseCategoriesKt.caseCategory(binderProof, kinds, allLong)) {
+        return switch (CaseCategories.caseCategory(binderProof, kinds, allLong)) {
             case DATA -> new DataCase(scrutinee, binder, alternatives, metrics, binderProof, delimited);
             case LONG -> new LongCase(scrutinee, binder, alternatives, metrics, binderProof, delimited);
             case DEFAULT_ONLY -> new DefaultCase(scrutinee, binder, alternatives, metrics, binderProof, delimited);
@@ -1281,7 +1363,7 @@ public final class Program implements ExecutableProgram {
     }
     private Expr[] argumentOperands(List<List<Object>> args, Scope scope, List<?> flags) {
         Expr[] result = new Expr[args.size()];
-        for (int i = 0; i < result.length; i++) result[i] = argument(args.get(i), scope, (Boolean) flags.get(i));
+        for (int i = 0; i < result.length; i++) result[i] = argument(args.get(i), scope, CoreRepresentations.argumentMayBeLazy(flags.get(i), args.get(i)));
         return result;
     }
     private Expr[] argumentOperands(List<List<Object>> args, Scope scope, boolean lifted) {
@@ -1929,7 +2011,7 @@ public final class Program implements ExecutableProgram {
         }
         if (primitive && PrefetchExpression.ARITIES.containsKey(fn.get(1))) {
             if (args.size() != PrefetchExpression.ARITIES.get(fn.get(1))) throw fault("Wrong prefetch arity");
-            return new PrefetchExpression(argument(args.get(0), scope, (Boolean) flags.get(0)),
+            return new PrefetchExpression(argument(args.get(0), scope, CoreRepresentations.argumentMayBeLazy(flags.get(0), args.get(0))),
                 args.size() == 3 ? compile(args.get(1), scope, false) : null,
                 compile(args.getLast(), scope, false), tupleProof);
         }
@@ -1942,7 +2024,7 @@ public final class Program implements ExecutableProgram {
         }
         if (primitive && "touch#".equals(fn.get(1))) {
             CoreTouch.validateRaw(argumentMetadata(args), flags, metadataRepresentation(expr));
-            Expr kept = argument(args.get(0), scope, (Boolean) flags.get(0));
+            Expr kept = argument(args.get(0), scope, CoreRepresentations.argumentMayBeLazy(flags.get(0), args.get(0)));
             Expr state = compile(args.get(1), scope, false);
             CoreTouch.validate(List.of(kept.getRepresentation(), state.getRepresentation()), flags, tupleProof);
             return new TouchExpression(kept, state, tupleProof);
@@ -1952,7 +2034,7 @@ public final class Program implements ExecutableProgram {
             var signature = at(args, 2) != null ? CoreRepresentations.knownFunctionSignature(args.get(2), bindings) : null;
             CoreKeepAlive.validate(proofs, flags, tupleProof,
                 signature == null ? null : signature.getInputs(), signature == null ? null : signature.getResult());
-            Expr kept = argument(args.get(0), scope, (Boolean) flags.get(0));
+            Expr kept = argument(args.get(0), scope, CoreRepresentations.argumentMayBeLazy(flags.get(0), args.get(0)));
             Expr state = compile(args.get(1), scope, false);
             Expr function = compile(args.get(2), scope, false);
             Expr[] stateArgument = {new Literal(thc.runtime.Unit.INSTANCE)};
@@ -2070,7 +2152,7 @@ public final class Program implements ExecutableProgram {
                 if (field.isTypedTransport() && !Boolean.FALSE.equals(flags.get(i))) throw new RuntimeFault("Typed tuple field cannot be lifted");
                 if (field.isTypedTransport()) operands[i] = compile(args.get(i), scope, false);
                 else {
-                    if (!(flags.get(i) instanceof Boolean lifted)) throw new UnsupportedCore("Unknown tuple field levity");
+                    boolean lifted = CoreRepresentations.argumentMayBeLazy(flags.get(i), args.get(i));
                     operands[i] = argument(args.get(i), scope, lifted);
                 }
             }
@@ -2090,7 +2172,7 @@ public final class Program implements ExecutableProgram {
         if (entryStrict != null && args.size() < entryStrict.length) entryStrict = null;
         Expr[] nodes = new Expr[args.size()];
         for (int i = 0; i < nodes.length; i++) {
-            if (!(flags.get(i) instanceof Boolean lifted)) throw new UnsupportedCore("Unknown argument levity");
+            boolean lifted = CoreRepresentations.argumentMayBeLazy(flags.get(i), args.get(i));
             CoreRepresentation field = layout != null ? layout.logicalProof(i) : null;
             if (field != null && field.isAggregate()) {
                 if (lifted) throw new RuntimeFault("Aggregate constructor operand must be unlifted");
@@ -2113,7 +2195,7 @@ public final class Program implements ExecutableProgram {
         if (input != null && input.getRequiresTyped()) return new AstTypedApplication(function, nodes, scope.layout, tail, metrics,
             tupleProof.isTypedTransport() ? new TupleShape(tupleProof, (thc.Language) language) : null,
             tail && !capturesContinuations && scope.self != null &&
-                TypedInputsKt.supportsTypedSelf(scope.self.getInputLayout(), scope.self.getEntryStrict(), input));
+                TypedInputs.supportsTypedSelf(scope.self.getInputLayout(), scope.self.getEntryStrict(), input));
         if (tupleProof.isTypedTransport()) {
             TupleShape shape = new TupleShape(tupleProof, (thc.Language) language);
             int[] vectorSlots = tupleProof.isVector() ? vectorSlots(scope, shape.getWidth(), "<vector call result ") : null;

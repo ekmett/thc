@@ -24,7 +24,7 @@ class ManagedSTMTest {
         try { assertTrue(gate.await(5, TimeUnit.SECONDS), "gate timed out"); }
         catch (InterruptedException failure) { ManagedSTMTest.<RuntimeException>rethrow(failure); }
     }
-    // Kotlin callbacks do not declare checked exceptions; preserve the original exception identity.
+    // Callbacks do not declare checked exceptions; preserve the original exception identity.
     @SuppressWarnings("unchecked")
     private static <E extends Throwable> void rethrow(Throwable failure) throws E { throw (E) failure; }
     private void queued(ManagedSTM stm) {

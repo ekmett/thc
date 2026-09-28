@@ -48,7 +48,7 @@ that is a dependency frontier, not a diagnostic execution pass.
 The explicit `graphWorkloadTest` suite reuses the optional proof-test source set,
 separate from ordinary fixture-free runtime tests. Its large unchanged source
 exports are not silently loaded by every scalar test. `GraphWorkloadTest`
-compares native observations with a Kotlin synchronous
+compares native observations with a Java synchronous
 edge-relaxation model, independently of the Haskell queue/visited algorithm.
 Hand-written small-graph distances anchor that model. Missing, reordered and
 altered oracle rows reject. THC checks use strict loading, both backends, and

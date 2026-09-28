@@ -16,6 +16,7 @@ public abstract class GuestRoot extends RootNode {
         com.oracle.truffle.api.Truffle.getRuntime();
         if (com.oracle.truffle.runtime.OptimizedCallTarget.declaredReturnPolicyVersion() != 1)
             throw new LinkageError("THC requires the declared root completion runtime");
+        SavedGuestContinuations.initializeCarrierTypes();
     }
     protected GuestRoot(TruffleLanguage<?> language, FrameDescriptor descriptor) { super(language, descriptor); }
     @CompilationFinal private boolean delimitedControlEnabled = false;

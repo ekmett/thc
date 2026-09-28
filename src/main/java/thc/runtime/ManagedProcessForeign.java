@@ -144,7 +144,7 @@ public final class ManagedProcessForeign {
     public long execute(ProcessOp operation, Object[] arguments, Node node, Runnable beforeBlock) {
         if (Language.currentState(node) != context) throw fault("Process ABI adapter belongs to another context");
         if (arguments.length != operation.getArguments().size()) throw fault("Original process call arity mismatch");
-        TupleResultsKt.requireVoidCarrier(arguments[arguments.length - 1]);
+        TupleResults.requireVoidCarrier(arguments[arguments.length - 1]);
         if (operation == ProcessOp.CREATE) return create(arguments);
         int pid = cint(arguments[0]);
         if (operation == ProcessOp.TERMINATE) {

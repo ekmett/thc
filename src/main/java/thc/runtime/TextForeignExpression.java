@@ -27,7 +27,7 @@ final class TextForeignExpression extends Expr {
             var source = operands[1].execute(frame);
             long start = operands[2].executeRequiredLong(frame);
             long length = operands[3].executeRequiredLong(frame);
-            TupleResultsKt.requireVoidCarrier(operands[4].execute(frame));
+            TupleResults.requireVoidCarrier(operands[4].execute(frame));
             ManagedText.reverse(destination, source, start, length);
             return null;
         }
@@ -36,7 +36,7 @@ final class TextForeignExpression extends Expr {
         long length = operands[2].executeRequiredLong(frame);
         long count = operation == TextForeignOp.MEMCHR ? operands[3].executeRequiredInt(frame)
             : operands[3].executeRequiredLong(frame);
-        TupleResultsKt.requireVoidCarrier(operands[4].execute(frame));
+        TupleResults.requireVoidCarrier(operands[4].execute(frame));
         FrameAccess.INSTANCE.writeLong(frame, slots[offset], ManagedText.invoke(operation, bytes, start, length, count));
         return null;
     }

@@ -67,7 +67,7 @@ class AstTailSpillTest {
                     @Child private DirectCallNode call = DirectCallNode.create(outerTarget); { setRepresentation(proof); }
                     @Override public Object execute(VirtualFrame frame) { if (++entries[0] > 2) throw new IllegalStateException("A non-tail call's saved prefix replayed"); if (entries[0] == 2) return 73L; return AstControl.complete(this, Calls.direct(call, new Object[]{((GuestRoot) getRootNode()).bloom(frame)}), outerTarget, null, true); }
                 }, false);
-                assertEquals(77L, Calls.target(outer[0].getCallTarget(), new Object[]{0L})); assertEquals(2, entries[0]); assertEquals(1, suffixes[0]); assertEquals(2L, AstStackKt.astStackScope(outer[0]).getTailAnchors()); assertNull(AstStackKt.astStackScope(outer[0]).getTailAnchor()); assertEquals(0, AstStackKt.astStackScope(outer[0]).getDepth());
+                assertEquals(77L, Calls.target(outer[0].getCallTarget(), new Object[]{0L})); assertEquals(2, entries[0]); assertEquals(1, suffixes[0]); assertEquals(2L, AstStacks.astStackScope(outer[0]).getTailAnchors()); assertNull(AstStacks.astStackScope(outer[0]).getTailAnchor()); assertEquals(0, AstStacks.astStackScope(outer[0]).getDepth());
             } finally { context.leave(); }
         }
     }
@@ -103,7 +103,7 @@ class AstTailSpillTest {
                         catch (AstCapture cut) { captured = true; throw cut.enclose(steps -> new AstResumeStep() {
                             @Override public Object resume(VirtualFrame frame, Object input) {
                                 SynchronousMasking.set(owner[0], MaskingState.MASKED_INTERRUPTIBLE);
-                                try { return AstContinuationKt.resumeAstSteps(frame, steps, input); } catch (GuestException guest) { if (!caught) throw guest; assertSame(payload, guest.getPayload()); counts.catches++; return expected; } finally { counts.cleanups++; SynchronousMasking.set(owner[0], ambient); }
+                                try { return AstContinuations.resumeAstSteps(frame, steps, input); } catch (GuestException guest) { if (!caught) throw guest; assertSame(payload, guest.getPayload()); counts.catches++; return expected; } finally { counts.cleanups++; SynchronousMasking.set(owner[0], ambient); }
                             }
                         }); } catch (GuestException guest) { if (!caught) throw guest; assertSame(payload, guest.getPayload()); counts.catches++; return expected; } finally { if (!captured) counts.cleanups++; SynchronousMasking.set(this, ambient); }
                     }
@@ -111,7 +111,7 @@ class AstTailSpillTest {
                 next = new FunctionRoot(language, new FrameLayout().build(), "side-" + index, null, new int[0], new int[0], new int[0], body, metrics, new CoreRepresentation[0], proof, body.getCoreSourceLocation(), new boolean[0], null, null, new int[0], null, false, new int[0][], false, FunctionRootRole.PASS_THROUGH, true).getCallTarget();
             }
             var first = Objects.requireNonNull(next); var body = new Expr() { @Child private DirectCallNode call = DirectCallNode.create(first); { setRepresentation(proof); } @Override public Object execute(VirtualFrame frame) { counts.iterations++; return AstControl.complete(this, Calls.direct(call, new Object[]{owner[0].bloom(frame)}), first, null, true); } };
-            owner[0] = new FunctionRoot(language, new FrameLayout().build(), "retained owner", null, new int[0], new int[0], new int[0], body, metrics, new CoreRepresentation[0], proof, body.getCoreSourceLocation(), new boolean[0], null, null, new int[0], null, false, new int[0][], false, FunctionRootRole.FUNCTION, true); var scope = AstStackKt.astStackScope(owner[0]); RootCallTarget target;
+            owner[0] = new FunctionRoot(language, new FrameLayout().build(), "retained owner", null, new int[0], new int[0], new int[0], body, metrics, new CoreRepresentation[0], proof, body.getCoreSourceLocation(), new boolean[0], null, null, new int[0], null, false, new int[0][], false, FunctionRootRole.FUNCTION, true); var scope = AstStacks.astStackScope(owner[0]); RootCallTarget target;
             if (!nonTail) target = owner[0].getCallTarget(); else {
                 var outer = new Expr() {
                     @Child private DirectCallerNode caller = new DirectCallerNode(owner[0].getCallTarget(), metrics); { setRepresentation(proof); }

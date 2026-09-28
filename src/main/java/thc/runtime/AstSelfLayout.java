@@ -6,7 +6,7 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import static thc.runtime.RuntimeServiceStatus.fault;
-import static thc.runtime.AstSelfCallsKt.requireReferenceCarrier;
+import static thc.runtime.AstSelfCalls.requireReferenceCarrier;
 
 /** Immutable frame destinations shared across lexical scopes and cloned nodes. */
 public final class AstSelfLayout {

@@ -16,7 +16,7 @@ public final class SparkResult extends Expr {
     @Override public Object execute(VirtualFrame frame) { throw RuntimeFault.fault("Spark result requires a tuple destination"); }
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
         Object value = payload == null ? null : payload.execute(frame); // Retain a thunk, never enter it.
-        TupleResultsKt.requireVoidCarrier(state.execute(frame));
+        TupleResults.requireVoidCarrier(state.execute(frame));
         if (name.equals("spark#")) FrameAccess.write(frame, slots[offset], value);
         else {
             FrameAccess.writeLong(frame, slots[offset], 0L);

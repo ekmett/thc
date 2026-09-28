@@ -11,7 +11,7 @@ import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.profiles.InlinedConditionProfile;
-import static thc.runtime.ApplicationKt.requireClosure;
+import static thc.runtime.Applications.requireClosure;
 
 /** Saturated megamorphic overapplication consumes arguments in a loop. */
 @GenerateInline

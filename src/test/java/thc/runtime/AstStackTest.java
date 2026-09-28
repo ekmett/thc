@@ -52,7 +52,7 @@ public class AstStackTest {
                 class Body extends Expr { TailCall transfer; int entries; @Override public Object execute(VirtualFrame frame) { entries++; if (entries != 1) throw new IllegalStateException("Pass-through resume installed a loop"); throw transfer; } }
                 var body = new Body(); var root = new FunctionRoot(language, new FrameLayout().build(), "sync parked side exit", null, new int[0], new int[0], new int[0], body,
                     new Metrics(false), new CoreRepresentation[0], body.getRepresentation(), body.getCoreSourceLocation(), new boolean[0], null, null, new int[0], null, false, new int[0][], false, FunctionRootRole.PASS_THROUGH, true);
-                body.transfer = new TailCall(root.getCallTarget(), new Object[]{0L}); var stack = AstStackKt.astStackScope(root); stack.setDepth(AstStackScope.MAX_DEPTH - 1); stack.setDriving(true);
+                body.transfer = new TailCall(root.getCallTarget(), new Object[]{0L}); var stack = AstStacks.astStackScope(root); stack.setDepth(AstStackScope.MAX_DEPTH - 1); stack.setDriving(true);
                 final AstContinuation saved; try { saved = (AstContinuation) Calls.target(root.getCallTarget(), new Object[]{0L}); } finally { stack.setDepth(0); stack.setDriving(false); }
                 assertTrue(saved.stackSpill()); assertNull(saved.asyncRequest()); assertEquals(0, body.entries, "Entry spill precedes the side body's effects");
                 assertSame(body.transfer, assertThrows(TailCall.class, () -> saved.continueWith(Unit.INSTANCE))); assertEquals(1, body.entries); assertEquals(0, stack.getDepth()); assertFalse(stack.getDriving()); assertThrows(RuntimeFault.class, () -> saved.continueWith(Unit.INSTANCE));
@@ -74,7 +74,7 @@ public class AstStackTest {
         assertTrue(classified(AstStackSpill.INSTANCE).stackSpill()); for (var marker : Arrays.asList(null, new Object(), spoof, hostile)) assertFalse(classified(marker).stackSpill());
         var thunk = new Thunk(new RootNode(null) { @Override public Object execute(VirtualFrame frame) { throw new IllegalStateException("Classification must not force a thunk"); } }.getCallTarget(), null); var segment = new CallSegment(classified(null));
         for (boolean spill : new boolean[]{false, true}) {
-            assertEquals(spill, classified(new ThunkSuspended(thunk, null, spill)).stackSpill()); var saved = SavedGuestContinuationKt.savedGuestContinuation(segment.getValue());
+            assertEquals(spill, classified(new ThunkSuspended(thunk, null, spill)).stackSpill()); var saved = SavedGuestContinuations.savedGuestContinuation(segment.getValue());
             assertEquals(spill, classified(new CallSegmentSuspended(segment, null, saved == null ? null : saved.asyncRequest(), spill)).stackSpill());
         }
     }
@@ -133,7 +133,7 @@ public class AstStackTest {
                 try {
                     var program = new Program(language, module(), true); class Effects { int count; AsyncRequest request; } var effects = new Effects();
                     var tick = new Closure(null, 1, new RootNode(language) { @Override public Object execute(VirtualFrame frame) { if (++effects.count == 100) effects.request = state.getThreads().send(state.getThreads().currentIdentity(), "interrupt after spill"); return 1L; } }.getCallTarget());
-                    var result = Calls.target(program.hostEntryTarget(2), new Object[]{program.entryValue("loop"), new Object[]{4096L, tick}}); var saved = Objects.requireNonNull(SavedGuestContinuationKt.savedGuestContinuation(result), "Expected the actual async continuation");
+                    var result = Calls.target(program.hostEntryTarget(2), new Object[]{program.entryValue("loop"), new Object[]{4096L, tick}}); var saved = Objects.requireNonNull(SavedGuestContinuations.savedGuestContinuation(result), "Expected the actual async continuation");
                     assertSame(effects.request, saved.asyncRequest()); assertFalse(saved.stackSpill()); assertEquals(AsyncRequestState.CLAIMED, effects.request.getState()); assertEquals(100, effects.count, "The autonomous driver must stop before delivering an async request");
                     var scope = state.getThreadPollState().get().getAstStack(); assertTrue(scope.getSpills() > 0); assertEquals(0, scope.getDepth()); assertFalse(scope.getDriving()); effects.request.acknowledge();
                     var parked = new Thunk(((RootNode) saved.getSourceRoot()).getCallTarget(), null); parked.setValue(saved.getIdentity()); parked.setState(5);

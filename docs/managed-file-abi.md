@@ -87,8 +87,8 @@ original foreign/C-bitcode boundary, or rebuilding all consumers against the
 backend's interfaces.
 
 The AST dispatch uses direct comparisons against its constant operation. A
-Kotlin enum `when` compiled through its synthetic mutable mapping array retained
-all operation branches in the captured Graal graph and triggered a frame-accessor
+previous enum switch used a synthetic mutable mapping array and retained all
+operation branches in the captured Graal graph and triggered a frame-accessor
 guard on the first compiled `size` call. Direct comparisons remove the unrelated
 paths. The regression requires the first installed targets to stay valid after
 every operation, without recompilation or relaxed assertions.

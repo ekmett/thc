@@ -84,7 +84,7 @@ class NarrowIntegerContinuationTest {
     }
     private void valid(RootCallTarget target) throws Exception { assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target)); }
     private void checkResult(Object result, TupleShape shape, Object[] actualValues, boolean narrow) {
-        var tuple = TupleResultsKt.ownedTupleResult(result, shape); assertEquals(6, shape.getWidth());
+        var tuple = TupleResults.ownedTupleResult(result, shape); assertEquals(6, shape.getWidth());
         for (int i = 0; i < actualValues.length; i++) {
             assertEquals(narrow, shape.getLayout().isInt(i)); assertEquals(!narrow, shape.getLayout().isLong(i));
             // Keep the distinct boxed carriers; a numeric conditional would widen Integer to Long.
@@ -122,7 +122,7 @@ class NarrowIntegerContinuationTest {
             var worker = new Thread(() -> {
                 context.enter(); owner.getThreads().enterCurrent(null, false, true, null);
                 try {
-                    var captured = Objects.requireNonNull(SavedGuestContinuationKt.savedGuestContinuation(callScalarTestTarget(target, arguments(prefix, blocked, actualValues))));
+                    var captured = Objects.requireNonNull(SavedGuestContinuations.savedGuestContinuation(callScalarTestTarget(target, arguments(prefix, blocked, actualValues))));
                     Objects.requireNonNull(captured.asyncRequest()).acknowledge(); answer.complete(captured);
                 } catch (Throwable failure) { answer.completeExceptionally(failure); }
                 finally { owner.getThreads().leaveCurrent(GuestThreadStatus.FINISHED); context.leave(); }

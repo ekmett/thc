@@ -77,7 +77,7 @@ public final class PackageScalarAccess extends Node {
         }
     }
     @ExplodeLoop private PackageScalarFunction prepare(Object[] arguments, Object state) {
-        TupleResultsKt.requireVoidCarrier(state);
+        TupleResults.requireVoidCarrier(state);
         if (arguments.length != argumentReps.length) throw fault("Package C argument count mismatch");
         for (int index = 0; index < argumentReps.length; index++) {
             boolean valid = switch (argumentReps[index]) {

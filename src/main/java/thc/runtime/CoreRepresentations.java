@@ -118,11 +118,18 @@ public final class CoreRepresentations {
     public static void requireInput(CoreRepresentation proof) {
         if (proof.isTuple()) {
             TupleShape.validate(proof);
-            for (var field : TupleShape.flatten(proof)) if (List.of("BoxedRep Nothing").equals(field.getPrimReps()))
-                throw new UnsupportedCore("Unsupported Core tuple input with unknown boxed levity");
         } else if (proof.isSum()) SumShape.validate(proof);
         else if (proof.isVector()) VectorLayout.validate(proof);
         else requireScalar(proof, "argument");
+    }
+    /** Unknown levity of a known pointer does not introduce a forcing obligation. */
+    public static boolean mayBeLazy(Object lifted, CoreRepresentation proof) {
+        if (lifted instanceof Boolean known) return known;
+        if (lifted == null && proof.hasUnknownBoxedLevity()) return true;
+        throw new UnsupportedCore("Unknown argument levity without a boxed pointer representation");
+    }
+    public static boolean argumentMayBeLazy(Object lifted, List<?> expression) {
+        return lifted instanceof Boolean known ? known : mayBeLazy(lifted, expression(expression));
     }
     public static void requireJoinArgument(CoreRepresentation expected, CoreRepresentation actual) {
         requireInput(actual);

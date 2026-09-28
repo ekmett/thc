@@ -3,8 +3,8 @@
 package thc.runtime;
 import static thc.runtime.RuntimeServiceStatus.fault;
 
-public final class TupleResultsKt {
-    private TupleResultsKt() {}
+public final class TupleResults {
+    private TupleResults() {}
     public static void requireVoidCarrier(Object value) {
         if (value != thc.runtime.Unit.INSTANCE) throw fault("Invalid zero-width scalar carrier");
     }

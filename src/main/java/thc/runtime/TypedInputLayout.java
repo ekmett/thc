@@ -93,7 +93,7 @@ public final class TypedInputLayout {
     public void releaseIfOwned(HandoffStorage input, long generation) {
         if (input.getGeneration() == generation) releaseChecked(input);
     }
-    private void releaseUnexpected(HandoffStorage input) { TypedInputsKt.discardTypedInput(language, input); }
+    private void releaseUnexpected(HandoffStorage input) { TypedInputs.discardTypedInput(language, input); }
     public static TypedInputLayout create(Language language, ArgumentLayout logical, boolean hasEnvironment) {
         return logical != null && logical.getRequiresTyped() ? new TypedInputLayout(language, logical, hasEnvironment) : null;
     }

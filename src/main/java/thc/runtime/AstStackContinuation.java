@@ -19,7 +19,7 @@ public final class AstStackContinuation implements SavedGuestContinuation {
     @Override public Object getIdentity() { return this; }
     @Override @TruffleBoundary public Object continueWith(Object input) {
         if (!claimed.compareAndSet(false, true)) throw fault("AST stack continuation was already resumed");
-        if (input instanceof TailCall tail && AstTailAnchor.accepts(AstStackKt.astStackScope((Node) sourceRoot).getTailAnchor(), tail)) throw tail;
+        if (input instanceof TailCall tail && AstTailAnchor.accepts(AstStacks.astStackScope((Node) sourceRoot).getTailAnchor(), tail)) throw tail;
         if (input instanceof AstChildSuspension suspended) {
             if (suspended.getChild() != yielded.getSegment()) throw fault("AST stack continuation received an unrelated child cut");
             return new AstStackContinuation(sourceRoot, new CallSegmentSuspended(yielded.getSegment(), null, suspended.getRequest(), false));

@@ -5,7 +5,7 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import java.util.List;
 import static thc.runtime.RuntimeServiceStatus.fault;
-import static thc.runtime.ApplicationKt.requireClosure;
+import static thc.runtime.Applications.requireClosure;
 
 public final class AstTypedApplication extends Expr {
     private final boolean tail, selfTransfer;
@@ -129,7 +129,7 @@ public final class AstTypedApplication extends Expr {
         Cleanup(AstTypedApplication owner, List<AstResumeStep> steps) { this.owner = owner; this.steps = steps; }
         @Override public Object resume(VirtualFrame frame, Object input) {
             boolean suspended = false;
-            try { return AstContinuationKt.resumeAstSteps(frame, steps, input); }
+            try { return AstContinuations.resumeAstSteps(frame, steps, input); }
             catch (AstCapture cut) {
                 suspended = true; throw cut.enclose(remaining -> new Cleanup(owner, remaining));
             } finally { if (!suspended) owner.operands.getSource().clear(frame); }

@@ -19,7 +19,7 @@ final class CompactExpression extends Expr {
         if (operation != CompactOp.RESIZE) throw fault("Compact primitive requires tuple destination");
         var region = Language.currentState(this).compactRegions.require(operands[0].execute(frame));
         long size = operands[1].executeRequiredLong(frame);
-        TupleResultsKt.requireVoidCarrier(operands[2].execute(frame));
+        TupleResults.requireVoidCarrier(operands[2].execute(frame));
         region.resize(size);
         return Unit.INSTANCE;
     }
@@ -28,23 +28,23 @@ final class CompactExpression extends Expr {
         switch (operation) {
             case NEW -> {
                 long size = operands[0].executeRequiredLong(frame);
-                TupleResultsKt.requireVoidCarrier(operands[1].execute(frame));
+                TupleResults.requireVoidCarrier(operands[1].execute(frame));
                 FrameAccess.write(frame, slots[offset], new ManagedCompact(registry, size));
             }
             case SIZE -> {
                 var region = registry.require(operands[0].execute(frame));
-                TupleResultsKt.requireVoidCarrier(operands[1].execute(frame));
+                TupleResults.requireVoidCarrier(operands[1].execute(frame));
                 FrameAccess.writeLong(frame, slots[offset], region.size());
             }
             case CONTAINS_ANY -> {
                 var value = operands[0].execute(frame);
-                TupleResultsKt.requireVoidCarrier(operands[1].execute(frame));
+                TupleResults.requireVoidCarrier(operands[1].execute(frame));
                 FrameAccess.writeLong(frame, slots[offset], registry.containsAny(value) ? 1L : 0L);
             }
             case CONTAINS, ADD, ADD_SHARING -> {
                 var region = registry.require(operands[0].execute(frame));
                 var value = operands[1].execute(frame);
-                TupleResultsKt.requireVoidCarrier(operands[2].execute(frame));
+                TupleResults.requireVoidCarrier(operands[2].execute(frame));
                 if (operation == CompactOp.CONTAINS) FrameAccess.writeLong(frame, slots[offset], registry.contains(region, value) ? 1L : 0L);
                 else FrameAccess.write(frame, slots[offset], copier.execute(frame, region, value, operation == CompactOp.ADD_SHARING));
             }

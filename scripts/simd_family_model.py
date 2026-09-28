@@ -177,7 +177,7 @@ def cases(family, operation=None):
             (a, b) for a in edges for b in edges]
         if operation in ('min', 'max'):
             # Native vector NaN/zero-tie rules can differ from Java. Keep the
-            # experimental native corpus finite; Kotlin checks Java edges.
+            # experimental native corpus finite; Java checks Java edges.
             pairs = [(a, b) for a, b in pairs
                      if floating(a & ((1 << width) - 1), width)[1] == 'finite'
                      and floating(b & ((1 << width) - 1), width)[1] == 'finite'

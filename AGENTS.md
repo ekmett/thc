@@ -11,11 +11,9 @@ bytecode backend contracts and the pinned GHC/Graal toolchain requirements.
   `Trustworthy` only for audited typed wrappers around an unsafe implementation
   boundary, with explicit exports and documented IO effects/authority. Test a
   `Safe` client of the public API and rejection of hazardous internal imports.
-- Use Java for production JVM implementation, including runtime nodes, primops,
-  loaders and generated runtime code. Migrate remaining production Kotlin in
-  coherent tested groups. Migrate Kotlin fixtures, tests and build scripts
-  gradually as well; the final project must not require Kotlin.
-  Keep new production Java independent of Kotlin library helpers and carriers.
+- Use Java for JVM implementation, including runtime nodes, primops, loaders,
+  generated runtime code, fixtures and tests. Build configuration uses Groovy
+  and Java build logic. Use the existing Java runtime carriers.
 - Put simple primop behavior directly in its existing implementation or
   specialization. Remove forwarding-only helpers, redundant wrappers, and
   temporary result/carrier objects when their useful work can be inlined there.

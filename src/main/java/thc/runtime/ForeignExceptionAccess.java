@@ -57,8 +57,8 @@ public final class ForeignExceptionAccess extends Node {
         flag.set(true);
         Object payload;
         try {
-            var box = ApplicationKt.requireClosure(force.execute(frame, bridge.box()));
-            var project = ApplicationKt.requireClosure(force.execute(frame, bridge.project()));
+            var box = Applications.requireClosure(force.execute(frame, bridge.box()));
+            var project = Applications.requireClosure(force.execute(frame, bridge.project()));
             var retained = bridge.projector(project);
             owner.getForeignExceptionRegistry().register(retained);
             payload = invoke(frame, box, new ForeignFailure(owner, error, retained));
@@ -103,7 +103,7 @@ public final class ForeignExceptionAccess extends Node {
     }
 
     @TruffleBoundary public long text(ManagedAddress handle, long selector, long index, Object state) {
-        TupleResultsKt.requireVoidCarrier(state);
+        TupleResults.requireVoidCarrier(state);
         var owner = Language.currentState(this);
         var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], descriptor);
         if (!(force.execute(frame, owner.getStablePointers().dereference(handle)) instanceof ForeignFailure value))

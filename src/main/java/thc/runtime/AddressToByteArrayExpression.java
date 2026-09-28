@@ -11,7 +11,7 @@ public final class AddressToByteArrayExpression extends Expr {
     @Override public Object execute(VirtualFrame frame) {
         var from = source.executeRequiredAddress(frame); Object to = destination.execute(frame);
         long start = offset.executeRequiredLong(frame), length = count.executeRequiredLong(frame);
-        Object token = state.execute(frame); TupleResultsKt.requireVoidCarrier(token);
+        Object token = state.execute(frame); TupleResults.requireVoidCarrier(token);
         from.copyToByteArray(to, start, length); return token;
     }
 }

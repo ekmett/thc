@@ -28,7 +28,7 @@ public final class CallSegment {
     }
     public CallSegment(Object continuation, MaskingState logicalMask, MaskingState callerMask,
                        TupleShape tupleShape, boolean caughtIOAction, boolean tailSpill) {
-        if (SavedGuestContinuationKt.savedGuestContinuation(continuation) == null)
+        if (SavedGuestContinuations.savedGuestContinuation(continuation) == null)
             throw new IllegalStateException("Call segment needs a saved continuation");
         value = continuation;
         this.logicalMask = logicalMask;

@@ -539,7 +539,8 @@ class ArchiveReachabilityTest(unittest.TestCase):
 
 def tuple_rep(*components):
     return dict(aggregate='unboxed-tuple', kind='unknown', evaluated=True,
-                components=list(components), primReps=[r for c in components for r in c['primReps']])
+                components=list(components), primReps=None if any(c['primReps'] is None for c in components) else
+                    [r for c in components for r in c['primReps']])
 
 
 def tuple_fixture(proof=None):
@@ -726,7 +727,7 @@ class IoMainAuditTest(unittest.TestCase):
 class AuditTest(unittest.TestCase):
     def test_bignat_intrinsic_representation_api_retains_exact_evaluated_proof(self):
         # This is an assertion on the retained Python auditor's own API. The
-        # Haskell/Kotlin BigNat fixture owns corpus and CLI admission controls.
+        # Haskell/Java BigNat fixture owns corpus and CLI admission controls.
         exact = dict(kind='object', primReps=['BoxedRep (Just Unlifted)'], evaluated=True)
         for value in ('0', '1', str((1 << 255) + (1 << 128) + 3)):
             for proof in (exact, None, dict(kind='unknown', primReps=None, evaluated=False)):
@@ -1464,7 +1465,7 @@ class AuditTest(unittest.TestCase):
                     mutations = [
                         tuple_rep(scalar, state),
                         tuple_rep(state, scalar, scalar),
-                        tuple_rep(state, dict(kind='object', primReps=['BoxedRep Nothing'], evaluated=True)),
+                        tuple_rep(state, dict(kind='unknown', primReps=None, evaluated=True)),
                         dict(tuple_rep(state, scalar), primReps=['DoubleRep']),
                         tuple_rep(state, dict(scalar, kind='float')),
                     ]
@@ -1480,7 +1481,7 @@ class AuditTest(unittest.TestCase):
         state = dict(kind='void', primReps=[], evaluated=True)
         unlifted = dict(kind='object', primReps=['BoxedRep (Just Unlifted)'], evaluated=True)
         floating = dict(kind='float', primReps=['FloatRep'], evaluated=True)
-        results = [REFERENCE, unlifted, state, tuple_rep(), floating,
+        results = [REFERENCE, unlifted, dict(kind='object', primReps=['BoxedRep Nothing'], evaluated=False), state, tuple_rep(), floating,
                    dict(kind='double', primReps=['DoubleRep'], evaluated=True),
                    tuple_rep(LONG, tuple_rep(floating, tuple_rep()))]
         results.extend(dict(kind='long', primReps=[rep], evaluated=True) for rep in
@@ -1497,7 +1498,7 @@ class AuditTest(unittest.TestCase):
                     with self.subTest(name=name, payload=payload, result=result):
                         self.assertNotIn('primitive-representation', {i['code'] for i in run(good)['issues']})
                         for malformed in (dict(kind='unknown', primReps=[], evaluated=True),
-                                          dict(kind='object', primReps=['BoxedRep Nothing'], evaluated=True)):
+                                          dict(kind='unknown', primReps=None, evaluated=True)):
                             bad = copy.deepcopy(good)
                             bad[-1]['rep'] = tuple_rep(state, malformed)
                             self.assertIn('primitive-representation', {i['code'] for i in run(bad)['issues']})
@@ -1764,7 +1765,7 @@ class EmptyTupleInputTests(unittest.TestCase):
         self.assertFalse(report['accepted'])
         self.assertIn('aggregate-shape', {i['code'] for i in report['issues']})
 
-    def test_exact_empty_join_formals_are_separately_gated_and_ordinary_empty_lets_stay_rejected(self):
+    def test_exact_empty_join_formals_and_unlifted_lets_are_separately_gated(self):
         module = self.fixture([self.empty])
         worker = module['bindings'].pop()
         worker.update(joinValueArity=1, joinResultRep=LONG, info=dict(joinArity=1))
@@ -1777,7 +1778,9 @@ class EmptyTupleInputTests(unittest.TestCase):
         value = module['bindings'][0]['expr'][2][0]
         local = dict(bind('e', value, False), rep=self.empty)
         module['bindings'][0]['expr'] = ['let', False, [local], [*lit(1), dict(rep=LONG)], dict(rep=LONG)]
-        self.assertIn('unboxed-tuple let binding', [i['detail'] for i in self.audit(module)['issues']])
+        self.assertTrue(self.audit(module)['accepted'])
+        disabled = dict(CAP, aggregateLetBindings=[])
+        self.assertIn('unboxed-tuple let binding', [i['detail'] for i in audit_core.Audit([('let', module)], disabled).run(['root'])['issues']])
 
     def test_known_partial_application_keeps_logical_positions(self):
         module = self.fixture([LONG, self.empty, LONG])
@@ -3104,7 +3107,7 @@ class OriginalStackInfoAuditTest(unittest.TestCase):
 
 
 class OriginalGmpAuditTest(unittest.TestCase):
-    """Synthetic structural controls; genuine native/pre/post proof is Haskell/Kotlin.
+    """Synthetic structural controls; genuine native/pre/post proof is Haskell/Java.
 
     Recognition is tested with an explicit local capability override. This class
     never mutates the production capability inventory or claims native execution.
@@ -4145,6 +4148,20 @@ class ExplicitWeakContractTest(unittest.TestCase):
 
 
 class RTSDataLabelTest(unittest.TestCase):
+    def test_bytestring_hex_table_requires_exact_symbol_and_address_proof(self):
+        label = ["lit", "data-addr", "hs_bytestring_lower_hex_table",
+                 dict(rep=dict(kind="address", primReps=["AddrRep"], evaluated=True))]
+        self.assertTrue(run(label)["accepted"])
+        self.assertFalse(run(label, cap=dict(CAP, dataLabels=[]))["accepted"])
+        for symbol in ("hs_bytestring_lower_hex_table_extra", "hs_bytestring_digit_pairs_table"):
+            wrong = copy.deepcopy(label); wrong[2] = symbol
+            self.assertFalse(run(wrong)["accepted"])
+        for rep in (dict(kind="address", primReps=["AddrRep"], evaluated=False),
+                    dict(kind="long", primReps=["WordRep"], evaluated=True),
+                    dict(kind="address", primReps=["AddrRep"], evaluated=True, aggregate="unboxed-tuple")):
+            wrong = copy.deepcopy(label); wrong[3]["rep"] = rep
+            self.assertFalse(run(wrong)["accepted"])
+
     def test_rtsflags_label_still_requires_exact_evaluated_address_proof(self):
         label = ['lit', 'data-addr', 'RtsFlags',
                  dict(rep=dict(kind='address', primReps=['AddrRep'], evaluated=True))]
@@ -4541,7 +4558,9 @@ class AuditStoreTest(unittest.TestCase):
                     self.assertNotIn(key, mapping)
             for key in [[], {}, ('unit', [])]:
                 with self.subTest(mapping=type(mapping).__name__, key=key):
-                    with self.assertRaisesRegex(TypeError, 'unhashable type'): mapping.get(key)
+                    with self.assertRaises(TypeError) as expected: {}.get(key)
+                    with self.assertRaises(TypeError) as actual: mapping.get(key)
+                    self.assertEqual(str(expected.exception), str(actual.exception))
 
     def test_cache_lru_entry_and_byte_bounds_and_oversized_bypass(self):
         store = self.store(cache_entries=2, cache_bytes=24)

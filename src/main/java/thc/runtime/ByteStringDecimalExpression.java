@@ -25,7 +25,7 @@ final class ByteStringDecimalExpression extends Expr {
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
         long value = operands[0].executeRequiredLong(frame);
         ManagedAddress address = operands[1].executeRequiredAddress(frame);
-        TupleResultsKt.requireVoidCarrier(operands[2].execute(frame));
+        TupleResults.requireVoidCarrier(operands[2].execute(frame));
         if (operation == ByteStringDecimalOp.SIGNED)
             FrameAccess.INSTANCE.writeObject(frame, slots[offset], ByteStringDecimal.signed(value, address));
         else ByteStringDecimal.padded18(value, address);

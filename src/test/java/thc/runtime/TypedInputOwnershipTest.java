@@ -96,7 +96,7 @@ class TypedInputOwnershipTest {
         }
         @Override public Object execute(VirtualFrame frame) {
             FrameAccess.writeLong(frame, slots.fields[0], (Long) frame.getArguments()[0]);
-            TypedInputsKt.writeInputReference(frame, slots.fields[1], frame.getArguments()[1]);
+            TypedInputs.writeInputReference(frame, slots.fields[1], frame.getArguments()[1]);
             return dispatch.execute(frame, function);
         }
     }
