@@ -84,6 +84,17 @@ The [simulated-field folding overlay](runtime-simulated-folds/README.md) uses
 graph encoding cannot represent its simulated constant without a hosted object.
 These independent opt-ins can be combined; none changes the pure-interpreter recipe.
 
+`THC_NATIVE_IMAGE_PROCESS_IDENTITY=1` additionally registers the single FFM
+downcall signature `jint()` used by the existing POSIX `getpid`/`geteuid` path.
+It does not register arbitrary foreign calls, enable LLVM/NFI, or initialize
+libc handles during image construction. `ProcessIdentity.Libc` still resolves
+its handles at runtime after the existing native-access and host-ABI checks.
+`prepare-only` records the selected option in `reproduction-inventory/foreign.args`;
+the default writes an empty file, including after a previous opt-in. The normal
+argument-composition test also checks this selection and rejection of malformed
+opt-in values. This finite registration is not a claim of general native FFI
+or Windows support.
+
 ## Inventory contract
 
 The script combines the existing
