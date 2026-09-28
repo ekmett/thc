@@ -176,6 +176,21 @@ Windows runner service or secrets are required on a development PC. An active
 run finishes while newer commits wait, avoiding cancellation starvation during
 frequent integrations. The CI result is informative, not a manual-merge gate.
 
+## Native array fixtures
+
+~~~powershell
+./scripts/windows.ps1 -Action ArrayTest -Jobs 4
+~~~
+
+This runs the existing Int, Int8, Int16, Int32, Double and Float/Word array
+producers with native GHC, then their AST/bytecode tests in both handoff layouts.
+The full Test action includes them too. Windows exports use `export.ps1` and
+GHC response files; Unix exports retain `export.sh`. Manifests fingerprint the
+selected exporter and the actual native executable, including Windows `.exe`
+names. Native expectations, independent models and first-installed-call checks
+remain unchanged. Evidence lives in the six `build/*-arrays` directories and
+the default/dense test reports.
+
 ## Original Win32 directory scans
 
 The native Windows slice recognizes the original Win32 **2.14.2.1** declarations

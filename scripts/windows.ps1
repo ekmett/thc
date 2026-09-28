@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 param(
-    [ValidateSet('Build', 'Runtime', 'Haskell', 'Fixtures', 'Test', 'DirectoryTest', 'CodePageTest', 'WindowsServicesTest', 'LibdwTest', 'MallocTest', 'JsonIndexTest', 'CheckCore')]
+    [ValidateSet('Build', 'Runtime', 'Haskell', 'Fixtures', 'Test', 'ArrayTest', 'DirectoryTest', 'CodePageTest', 'WindowsServicesTest', 'LibdwTest', 'MallocTest', 'JsonIndexTest', 'CheckCore')]
     [string]$Action = 'Build',
     [ValidateRange(1, 32)][int]$Jobs = 4
 )
@@ -19,7 +19,7 @@ try {
         Assert-ThcJava
         Invoke-ThcTool "$root/gradlew.bat" @('--no-daemon', "--max-workers=$Jobs", 'installDist', 'toolsJar')
     }
-    if ($Action -in @('Build', 'Haskell', 'Fixtures', 'Test', 'DirectoryTest', 'CodePageTest', 'WindowsServicesTest', 'LibdwTest', 'MallocTest', 'JsonIndexTest', 'CheckCore')) {
+    if ($Action -in @('Build', 'Haskell', 'Fixtures', 'Test', 'ArrayTest', 'DirectoryTest', 'CodePageTest', 'WindowsServicesTest', 'LibdwTest', 'MallocTest', 'JsonIndexTest', 'CheckCore')) {
         $tools = Get-ThcGhc
         $env:GHC = $tools.Compiler
         $env:GHC_PKG = $tools.PackageTool
@@ -51,6 +51,16 @@ try {
             'windowsSmokeTest', 'windowsDenseSmokeTest', '--rerun')
     }
     $focusedTests = @()
+    if ($Action -in @('Test', 'ArrayTest')) {
+        Assert-ThcJava
+        $fixture = Invoke-ThcTool $cabal (@('list-bin', 'exe:thc-fixtures') + $flags)
+        foreach ($group in @('int-arrays', 'int8-arrays', 'int16-arrays', 'int32-arrays', 'double-arrays', 'float-word-arrays')) {
+            Invoke-ThcTool $fixture @($group)
+        }
+        $focusedTests += @('thc.runtime.IntArrayNativeTest', 'thc.runtime.Int8ArrayNativeTest',
+            'thc.runtime.Int16ArrayNativeTest', 'thc.runtime.Int32ArrayNativeTest',
+            'thc.runtime.DoubleArrayNativeTest', 'thc.runtime.FloatWordArrayNativeTest')
+    }
     if ($Action -in @('Test', 'MallocTest')) {
         Assert-ThcJava
         $fixture = Invoke-ThcTool $cabal (@('list-bin', 'exe:thc-fixtures') + $flags)
