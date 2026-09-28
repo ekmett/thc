@@ -162,10 +162,12 @@ import Foreign.Marshal.Alloc (alloca)
 import Foreign.Ptr (Ptr, castPtr)
 import Foreign.Storable (peek, poke)
 import FixtureSupport (run, runWithTimeout, writeJson, hashes, splitTab, readInteger)
-import System.Directory (createDirectoryIfMissing, doesDirectoryExist, doesFileExist, getCurrentDirectory, listDirectory, removeFile)
+import System.Directory (createDirectoryIfMissing, doesDirectoryExist, doesFileExist, findExecutable, getCurrentDirectory, listDirectory, removeFile)
 import System.Environment (getArgs, lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>), takeExtension)
+import qualified System.Info as Host
+import GHC.ResponseFile (escapeArgs)
 
 data Family = Bit | IntegerWord | SignedNarrow | Explicit64 deriving (Eq, Show)
 
@@ -762,6 +764,7 @@ prepareArray root spec = do
   let directory = "build" </> arrayName spec
       output = root </> directory
       manifest = output </> "manifest.json"
+      windows = Host.os == "mingw32"
       groups = arrayGroups spec
       names = concatMap arrayEntries groups
       inputFor name = case arrayInputDomain spec of
@@ -796,9 +799,18 @@ prepareArray root spec = do
           closurePath = core </> "THC.InterfaceClosure.json"
           options = if stage == "post" then ["-fplugin-opt=THC.Plugin:post-tidy"] else []
           roots = ["-fplugin-opt=THC.Plugin:closure=" ++ name | name <- arrayEntries group]
-      _ <- run root [("THC_CORE_OUT",root </> core), ("THC_GHC_OUT",root </> folder </> "ghc"),
-                     ("THC_SOURCE_NOTES","true")]
-        "compiler/export.sh" (options ++ roots ++ [arraySource group]) ""
+          arguments = options ++ roots ++ [arraySource group]
+          environment = [("THC_CORE_OUT",root </> core), ("THC_GHC_OUT",root </> folder </> "ghc"),
+                         ("THC_SOURCE_NOTES","true")]
+      _ <- if windows
+        then do
+          powershell <- maybe "powershell.exe" id <$> findExecutable "pwsh"
+          let response = root </> folder </> "export.args"
+          createDirectoryIfMissing True (root </> folder)
+          -- GHC's response format keeps PowerShell from rebinding compiler flags.
+          writeFile response (escapeArgs arguments)
+          run root environment powershell ["-NoProfile", "-File", root </> "compiler/export.ps1", "@" ++ response] ""
+        else run root environment "compiler/export.sh" arguments ""
       content <- BS.readFile (root </> modulePath)
       let exportedBoundary = case decodeStrict' content of
             Just (Object value) -> KeyMap.lookup "boundary" value
@@ -810,7 +822,7 @@ prepareArray root spec = do
       pure [modulePath, closurePath]
     pure (stage,paths)
   let driver = directory </> arrayDriver spec
-      binary = directory </> "native" </> arrayOracle spec
+      binary = directory </> "native" </> arrayOracle spec ++ if windows then ".exe" else ""
       oracle = directory </> "oracle.tsv"
       requests = [(name,value) | name <- names, value <- inputFor name]
       arrayRequestText = unlines [name ++ "\t" ++ show value | (name,value) <- requests]
@@ -845,8 +857,9 @@ prepareArray root spec = do
     writeFile (root </> literalOracle) literalActual
     pure [literalOracle]
   plugin <- listDirectory (root </> "compiler/THC")
-  let sources = sort $ ["thc.cabal", "test/haskell-fixtures/Main.hs", "test/haskell-fixtures/FixtureSupport.hs", "compiler/build.sh",
-        "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py"] ++
+  let exporterSources = if windows then ["compiler/export.ps1", "scripts/windows-common.ps1", "compiler/plugin.py"]
+        else ["compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py"]
+      sources = sort $ ["thc.cabal", "test/haskell-fixtures/Main.hs", "test/haskell-fixtures/FixtureSupport.hs"] ++ exporterSources ++
         map arraySource groups ++ ["compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"]
       artifacts = concatMap snd stages ++ [driver,binary,oracle] ++ literalArtifacts
   sourceHashes <- hashes root sources
