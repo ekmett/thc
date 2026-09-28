@@ -75,7 +75,7 @@ class Md5ForeignCallTest {
                             case INIT -> new Object[]{0L, first, token}; case UPDATE -> new Object[]{0L, first, second, length, token};
                             case FINAL -> new Object[]{0L, first, second, token};
                         };
-                        return NarrowIntegerCarrierTestKt.callScalarTestTarget(entry, arguments);
+                        return ScalarTestCalls.callScalarTestTarget(entry, arguments);
                     }
                     void positive(boolean compiled) throws Exception {
                         for (int size : new int[]{0,1,15,55,56,63,64,65,129}) {

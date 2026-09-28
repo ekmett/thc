@@ -4,6 +4,7 @@
 package thc.runtime
 
 import thc.runtime.ManagedSignals.finishSignalConsumer
+import thc.runtime.ScalarTestCalls.callScalarTestTarget
 
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.TruffleSafepoint

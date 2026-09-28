@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime
 
+import thc.runtime.ScalarTestCalls.callScalarTestTarget
+
 import thc.Main.withContextProfile
 
 import com.oracle.truffle.api.Truffle
