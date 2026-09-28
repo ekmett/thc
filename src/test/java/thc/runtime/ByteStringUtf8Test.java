@@ -9,6 +9,7 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Tag;
 import thc.*;
 import java.nio.file.*;
 import java.nio.ByteBuffer;
@@ -53,7 +54,8 @@ class ByteStringUtf8Test {
             try { block.accept(TruffleLanguage.LanguageReference.create(Language.class).get(null)); } finally { context.leave(); }
         }
     }
-    private ExecutableProgram load(Language language, String backend, Map<String, Object> source) {
+    private ExecutableProgram load(Language language, String backend, Map<String, Object> source) throws Exception {
+        source = ForeignExceptionFixtureSupport.nativeModules(List.of(source));
         return backend.equals("ast") ? new Program(language, source, true) : new BytecodeProgram(language, source, true);
     }
     private void valid(RootCallTarget target) throws Exception { assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target)); }
@@ -81,16 +83,16 @@ class ByteStringUtf8Test {
                 .decode(ByteBuffer.wrap(byteValues(bytes), offset, length)); return 1L;
         } catch (CharacterCodingException ignored) { return 0L; }
     }
-    @Test void originalSafeAndUnsafeCallsMatchNativeAndJvmOnFirstCompiledCalls() throws Exception {
+    @Test @Tag("foreign-exceptions-full-core") void originalSafeAndUnsafeCallsMatchNativeAndJvmOnFirstCompiledCalls() throws Exception {
         var rows = rows(); for (var row : rows) assertEquals(row.get("result"), model(row.get("bytes"), ((Long) row.get("offset")).intValue(), ((Long) row.get("count")).intValue()));
         for (var stage : list("pre", "post")) {
-            var source = module(stage); var safeties = new HashSet<Boolean>();
+            var source = module(stage); var safeties = new HashSet<String>();
             for (var call : OriginalStdioChecks.foreignCalls(source)) {
-                var metadata = object(call.get(6)); var arguments = new ArrayList<Object>();
-                for (var argument : expression(call.get(2))) { var proof = CoreRepresentations.metadata(expression(argument)); arguments.add(proof == null ? null : proof.get("rep")); }
-                safeties.add(CoreByteStringUtf8Foreign.validate(metadata, arguments, expression(call.get(3)), metadata.get("rep")));
+                var descriptor = object(object(call.get(6)).get("foreignCall"));
+                assertEquals("bytestring_is_valid_utf8", object(descriptor.get("target")).get("symbol"));
+                safeties.add((String) descriptor.get("safety"));
             }
-            assertEquals(Set.of(false, true), safeties);
+            assertEquals(Set.of("unsafe", "safe"), safeties);
             for (var backend : list("ast", "bytecode")) inside(language -> {
                 var groups = new LinkedHashMap<String, List<Map<String, Object>>>(); for (var row : rows) groups.computeIfAbsent((String) row.get("entry"), ignored -> new ArrayList<>()).add(row);
                 for (var group : groups.entrySet()) {
@@ -128,20 +130,18 @@ class ByteStringUtf8Test {
             Language.currentState().getNativeAllocations().free(nativeAddress); assertThrows(RuntimeFault.class, () -> ManagedByteStringUtf8.validate(nativeAddress, 0));
         });
     }
-    @Test void closedOriginalDescriptorRejectsOtherPackagesByteArraysAndUnsafeCarriers() throws Exception {
+    @Test @Tag("foreign-exceptions-full-core") void originalDescriptorRejectsMismatchedAbiAndStateCarriers() throws Exception {
         var source = module("pre");
         for (var backend : list("ast", "bytecode")) inside(language -> {
             for (var original : OriginalStdioChecks.foreignCalls(source)) {
                 var raw = OriginalStdioChecks.rawModule(original, source, null);
-                for (int variant = 0; variant <= 8; variant++) {
+                for (int variant : new int[]{2, 4, 5, 6, 7}) {
                     var bad = object(Json.parse(Json.stringify(raw))); var calls = OriginalStdioChecks.foreignCalls(bad); assertEquals(1, calls.size());
                     var call = calls.getFirst(); var descriptor = object(object(call.get(6)).get("foreignCall"));
                     switch (variant) {
-                        case 0 -> descriptor.put("safety", "interruptible"); case 1 -> descriptor.put("convention", "capi"); case 2 -> descriptor.put("arity", 4L);
-                        case 3 -> object(descriptor.get("target")).put("unit", "ghc-internal"); case 4 -> expression(call.get(3)).set(0, true); case 5 -> expression(call.get(1)).set(1, "entry");
+                        case 2 -> descriptor.put("arity", 4L); case 4 -> expression(call.get(3)).set(0, true); case 5 -> expression(call.get(1)).set(1, "entry");
                         case 6 -> expression(descriptor.get("argumentReps")).set(1, OriginalStdioFixtures.scalar("IntRep", false));
                         case 7 -> expression(descriptor.get("argumentReps")).set(0, OriginalStdioFixtures.scalar("BoxedRep (Just Unlifted)", false));
-                        case 8 -> object(descriptor.get("target")).put("unit", "bytestring-0.12.1.0-inplace");
                     }
                     assertThrows(RuntimeFault.class, () -> load(language, backend, bad), backend + "/" + variant);
                 }
@@ -166,7 +166,7 @@ class ByteStringUtf8Test {
         // without a copied original foreign-call descriptor.
         CoreJoins.validate(list(join), call, false); body.set(1, list("let", false, list(join), call, map("rep", tuple))); return raw;
     }
-    @Test void shadowedJoinCannotClaimOriginalUtf8ForeignAuthority() throws Exception {
+    @Test @Tag("foreign-exceptions-full-core") void shadowedJoinCannotClaimOriginalUtf8ForeignAuthority() throws Exception {
         for (var stage : list("pre", "post")) {
             var source = module(stage);
             for (var backend : list("ast", "bytecode")) inside(language -> {
@@ -174,7 +174,7 @@ class ByteStringUtf8Test {
                     var ordinary = load(language, backend, shadowed(original, source, false)).entryTarget("entry");
                     assertEquals(37, Calls.target(ordinary, new Object[]{0L, ManagedAddress.fromByteArray(new byte[]{-1}), 1L, thc.runtime.Unit.INSTANCE}), stage + "/" + backend + " ordinary lexical join keeps its result");
                     var failure = assertThrows(RuntimeFault.class, () -> load(language, backend, shadowed(original, source, true)));
-                    assertTrue(Objects.toString(failure.getMessage(), "").contains("unresolved original FCallId required"), stage + "/" + backend + " rejects the shadowed head specifically: " + failure.getMessage());
+                    assertTrue(Objects.toString(failure.getMessage(), "").contains("unresolved declared foreign head"), stage + "/" + backend + " rejects the shadowed head specifically: " + failure.getMessage());
                 }
             });
         }

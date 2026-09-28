@@ -6,6 +6,7 @@ import java.io.*;
 import java.nio.file.Files;
 import java.security.MessageDigest;
 import java.util.*;
+import thc.CoreModules;
 import thc.Json;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -114,10 +115,18 @@ public final class OriginalStdioChecks {
         for (int i = 0; i < Math.min(ids.size(), components.size()); i++) binders.add(map("id", ids.get(i), "lifted", false, "rep", components.get(i)));
         var body = list("case", call, "pair", list(list("data", "T" + components.size(), ids, returned, map("binders", binders))),
             map("rep", result, "binder", map("id", "pair", "lifted", false, "rep", output)));
-        return map("sourceFiles", source.get("sourceFiles"), "sourceSpans", source.get("sourceSpans"), "instrument", true,
-            "constructors", list(map("id", "T" + components.size(), "kind", "unboxed-tuple", "arity", components.size(), "tag", 1)),
-            "bindings", list(map("id", "entry", "name", "entry", "arity", reps.size(), "lifted", true, "rep", OriginalStdioFixtures.closure(),
-                "expr", list("lam", formals, body, map("rep", OriginalStdioFixtures.closure(), "resultRep", result)))));
+        var constructors = new ArrayList<Object>();
+        if (source.get("constructors") instanceof List<?> existing)
+            for (var constructor : existing)
+                if (!Objects.equals(((Map<?, ?>) constructor).get("id"), "T" + components.size())) constructors.add(constructor);
+        constructors.add(map("id", "T" + components.size(), "kind", "unboxed-tuple", "arity", components.size(), "tag", 1));
+        var bindings = new ArrayList<Object>();
+        if (source.get("selectedForeignExceptionBridge") instanceof Map<?, ?> bridge)
+            bindings.addAll((List<?>) CoreModules.reachable(source,
+                List.of((String) bridge.get("box"), (String) bridge.get("project")), true).get("bindings"));
+        bindings.add(map("id", "entry", "name", "entry", "arity", reps.size(), "lifted", true, "rep", OriginalStdioFixtures.closure(),
+            "expr", list("lam", formals, body, map("rep", OriginalStdioFixtures.closure(), "resultRep", result))));
+        return with(source, "instrument", true, "constructors", constructors, "bindings", bindings);
     }
     private static void binders(Object value, Set<Object> bound) {
         if (value instanceof Map<?, ?> map) {

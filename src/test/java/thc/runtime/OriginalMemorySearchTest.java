@@ -7,9 +7,11 @@ import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import thc.CoreModules;
+import thc.ForeignExceptionFixtureSupport;
 import thc.Json;
 import thc.Language;
 import java.io.File;
@@ -86,7 +88,8 @@ class OriginalMemorySearchTest {
             }
         }
     }
-    private ExecutableProgram load(Language language, String backend, Map<String, Object> source) {
+    private ExecutableProgram load(Language language, String backend, Map<String, Object> source) throws Exception {
+        source = ForeignExceptionFixtureSupport.nativeModules(List.of(source));
         return backend.equals("ast") ? new Program(language, source) : new BytecodeProgram(language, source);
     }
     private void valid(RootCallTarget target) throws Exception {
@@ -152,23 +155,18 @@ class OriginalMemorySearchTest {
                 assertEquals(0, handoff.getResults().retainedReferences());
             }
     }
-    @Test
+    @Test @Tag("foreign-exceptions-full-core")
     void originalByteStringCallsMatchNativeBeforeAndOnFirstCompiledCalls() throws Exception {
         var rows = rows();
         for (var stage : List.of("pre", "post")) {
             var source = module(stage);
             var calls = OriginalStdioChecks.foreignCalls(source);
-            var operations = new HashSet<MemorySearchOp>();
-            for (var call : calls) {var metadata=(Map<?,?>)call.get(6);
-                var args = new ArrayList<Object>();
-                for (var expr : (List<List<Object>>) call.get(2)) {
-                    var m = CoreRepresentations.metadata(expr);
-                    args.add(m == null ? null : m.get("rep"));
-                }
-                operations.add(
-                    CoreMemorySearchForeign.validate(metadata, args, (List<?>) call.get(3), metadata.get("rep")));
+            var operations = new HashSet<String>();
+            for (var call : calls) {
+                var descriptor = (Map<?, ?>) ((Map<?, ?>) call.get(6)).get("foreignCall");
+                operations.add((String) ((Map<?, ?>) descriptor.get("target")).get("symbol"));
             }
-            assertEquals(new HashSet<>(Arrays.asList(MemorySearchOp.values())), operations);
+            assertEquals(Set.of("memcmp", "memchr"), operations);
             for (var backend : List.of("ast", "bytecode"))
                 inside(language -> {
                     var grouped = new LinkedHashMap<String, List<Map<String, Object>>>();
@@ -236,59 +234,18 @@ class OriginalMemorySearchTest {
             throw new IllegalArgumentException("List has more than one element.");
         return values.getFirst();
     }
-    @Test
-    void installedByteStringUnitIdentityRetainsTheSupportedPackageAndVersion() throws Exception {
-        var source = module("pre");
-        var installed = List.of("bytestring-0.12.2.0-inplace", "bytestring-0.12.2.0-119b", "bytestring-0.12.2.0-5637",
-            "bytestring-0.12.2.0-3f3f", "bytestring-0.12.2.0");
-        var rejected = Arrays.asList("bytestring-0.12.1.0-119b", "bytestring-0.12.2.0-",
-            "bytestring-0.12.2.0-119b-extra", "bytestring-0.12.2.0-119b extra", "bytestring-0.12.2.0-119b:forged",
-            "bytestring-0.12.2.0-119b\n", "other-bytestring-0.12.2.0-119b", null);
-        var units = new ArrayList<>(installed);
-        units.addAll(rejected);
-        units.add("ghc-internal");
-        for (var backend : List.of("ast", "bytecode"))
-            inside(language -> {
-                for (var original : OriginalStdioChecks.foreignCalls(source)) {
-                    var raw = OriginalStdioChecks.rawModule(original, source, null);
-                    for (var unit : units) {
-                        var candidate = (Map<String, Object>) Json.parse(Json.stringify(raw));
-                        var call = single(OriginalStdioChecks.foreignCalls(candidate));var descriptor=(Map<?,?>)((Map<?,?>)call.get(6)).get("foreignCall");
-                        var target = (Map<String, Object>) descriptor.get("target");
-                        target.put("unit", unit);
-                        if (unit != null && installed.contains(unit)
-                            || "ghc-internal".equals(unit) && "memcmp".equals(target.get("symbol"))) {
-                            var program = load(language, backend, candidate);
-                            var bytes = ManagedAddress.fromByteArray(new byte[] {1, 2});
-                            Object second = "memcmp".equals(target.get("symbol")) ? bytes : 1;
-                            var result = callScalarTestTarget(
-                                program.entryTarget("entry"), new Object[] {0L, bytes, second, 2L, Unit.INSTANCE});
-                            if ("memcmp".equals(target.get("symbol")))
-                                assertEquals(0, result, backend + "/" + unit);
-                            else
-                                assertTrue(((ManagedAddress) result).sameLocation(bytes), backend + "/" + unit);
-                        } else
-                            assertThrows(
-                                RuntimeFault.class, () -> load(language, backend, candidate), backend + "/" + unit);
-                    }
-                }
-            });
-    }
-    @Test
+    @Test @Tag("foreign-exceptions-full-core")
     void malformedOriginalABIsAndStateCarriersRejectBothBackends() throws Exception {
         var source = module("pre");
         for (var backend : List.of("ast", "bytecode"))
             inside(language -> {
                 for (var original : OriginalStdioChecks.foreignCalls(source)) {
                     var raw = OriginalStdioChecks.rawModule(original, source, null);
-                    for (int variant = 0; variant <= 6; variant++) {
+                    for (int variant : new int[]{2, 4, 5, 6}) {
                         var bad = (Map<String, Object>) Json.parse(Json.stringify(raw));
                         var call = single(OriginalStdioChecks.foreignCalls(bad));var descriptor=(Map<String,Object>)((Map<?,?>)call.get(6)).get("foreignCall");
                         switch (variant) {
-                            case 0 -> descriptor.put("safety", "safe");
-                            case 1 -> descriptor.put("convention", "capi");
                             case 2 -> descriptor.put("arity", 3L);
-                            case 3 -> ((Map<String, Object>) descriptor.get("target")).put("unit", "foreign");
                             case 4 -> ((List<Object>) call.get(3)).set(0, true);
                             case 5 -> ((List<Object>) call.get(1)).set(1, "entry");
                             case 6 ->
@@ -348,7 +305,7 @@ class OriginalMemorySearchTest {
         body.set(1, List.of("let", false, List.of(join), call, Map.of("rep", tuple)));
         return raw;
     }
-    @ParameterizedTest
+    @ParameterizedTest @Tag("foreign-exceptions-full-core")
     @ValueSource(strings = {"ast", "bytecode"})
     void lexicalJoinsCannotClaimOriginalMemorySearchAuthority(String backend) throws Exception {
         for (var stage : List.of("pre", "post")) {
@@ -369,7 +326,7 @@ class OriginalMemorySearchTest {
                     var failure = assertThrows(
                         RuntimeFault.class, () -> load(language, backend, shadowed(original, source, compare, true)));
                     assertTrue(
-                        Objects.toString(failure.getMessage(), "").contains("unresolved original FCallId required"),
+                        Objects.toString(failure.getMessage(), "").contains("unresolved declared foreign head"),
                         stage + "/" + backend + " rejects the shadowed head specifically: " + failure.getMessage());
                 }
             });

@@ -14,12 +14,15 @@ import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import thc.Language;
+import thc.ForeignExceptionFixtureSupport;
 import thc.PackageScalarLink;
 import thc.PackageScalarSignature;
 import static org.junit.jupiter.api.Assertions.*;
@@ -319,6 +322,66 @@ public class PackageNativeForeignTest {
     private Entry globalEntry(PackageScalarLink link, String name) {
         return new Entry(TruffleLanguage.LanguageReference.create(Language.class).get(null),
             new PackageScalarCall(link, signature(link, name)));
+    }
+    @Test @SuppressWarnings("unchecked")
+    public void rawCarrierFixturePreservesItsNativeLink() throws Exception {
+        var link = library();
+        var source = OriginalStdioFixtures.module(List.of("errno"), call -> {
+            var descriptor = (Map<String, Object>) ((Map<?, ?>) call.get(6)).get("foreignCall");
+            var target = (Map<String, Object>) descriptor.get("target");
+            target.put("symbol", "observe_errno"); target.put("unit", link.getUnit());
+        });
+        source.put("packageScalarLinks", List.of(link));
+        var raw = OriginalStdioChecks.rawModule(OriginalStdioChecks.foreignCalls(source).getFirst(), source);
+        var call = OriginalStdioChecks.foreignCalls(raw).getFirst();
+        var metadata = (Map<String, Object>) call.get(6);
+        var links = raw.get("packageScalarLinks") instanceof List<?> values
+            ? (List<PackageScalarLink>) values : List.<PackageScalarLink>of();
+        var selected = CorePackageScalarForeign.validate(metadata, List.of(OriginalStdioFixtures.scalar(null)),
+            (List<?>) call.get(3), metadata.get("rep"), links);
+        assertNotNull(selected, "raw-carrier extraction must retain genuine native linkage");
+        try (var context = globalContext()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var state = Language.currentState(); state.getPackageCbits().link(link);
+                state.getStdio().captureForeignErrno(73);
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                assertEquals(73, new Entry(language, selected).getCallTarget().call());
+            } finally { context.leave(); }
+        }
+    }
+    @Tag("foreign-exceptions-full-core")
+    @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
+    @SuppressWarnings("unchecked")
+    public void rawCarrierFixtureKeepsGenuineExceptionSupportThroughLowering(String backend) throws Exception {
+        var link = library();
+        var source = OriginalStdioFixtures.module(List.of("errno"), call -> {
+            var descriptor = (Map<String, Object>) ((Map<?, ?>) call.get(6)).get("foreignCall");
+            var target = (Map<String, Object>) descriptor.get("target");
+            target.put("symbol", "observe_errno"); target.put("unit", link.getUnit());
+        });
+        source.put("packageScalarLinks", List.of(link));
+        var call = OriginalStdioChecks.foreignCalls(source).getFirst();
+        var linked = ForeignExceptionFixtureSupport.link(source, "errno");
+        var raw = OriginalStdioChecks.rawModule(call, linked);
+        assertSame(linked.get("selectedForeignExceptionBridge"), raw.get("selectedForeignExceptionBridge"));
+        try (var context = globalContext()) {
+            context.initialize("thc"); context.enter();
+            try {
+                Language.currentState().getPackageCbits().link(link);
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                ExecutableProgram program = backend.equals("ast") ? new Program(language, raw) : new BytecodeProgram(language, raw);
+                var target = program.entryTarget("entry");
+                // Link/bridge transport through both lowerers. The original
+                // corpus tests separately require actual compiled entries.
+                Language.currentState().getStdio().captureForeignErrno(73);
+                assertEquals(73, Calls.target(target, new Object[]{0L, Unit.INSTANCE}));
+                var handoff = language.getHandoffState().get();
+                assertEquals(0, handoff.getArguments().getDepth());
+                assertEquals(0, handoff.getResults().getDepth());
+                assertEquals(0, handoff.getResults().retainedReferences());
+            } finally { context.leave(); }
+        }
     }
     private RootCallTarget compileEntry(Entry entry) throws Exception {
         var target = entry.getCallTarget();

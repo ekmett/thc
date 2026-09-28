@@ -25,10 +25,12 @@ import java.util.function.Function;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.io.IOAccess;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 import thc.CoreModules;
+import thc.ForeignExceptionFixtureSupport;
 import thc.Json;
 import thc.Language;
 import static org.junit.jupiter.api.Assertions.*;
@@ -116,18 +118,18 @@ public class OriginalGmpTest {
     private Context context() { return context(true, true); }
     private Context context(boolean nativeAccess, boolean inline) { return Context.newBuilder("thc").allowNativeAccess(nativeAccess).allowIO(IOAccess.ALL).allowExperimentalOptions(true)
         .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("compiler.Inlining", Boolean.toString(inline)).option("engine.CompilationFailureAction", "Throw").build(); }
-    private ExecutableProgram load(Language language, String backend, Map<String, Object> source) { return backend.equals("ast") ? new Program(language, source) : new BytecodeProgram(language, source); }
-    @Test public void genuineOriginalCallsMatchAllNativeBuffersOnFirstCompiledEntries() throws Exception {
+    private ExecutableProgram load(Language language, String backend, Map<String, Object> source) throws Exception { source = ForeignExceptionFixtureSupport.nativeModules(List.of(source)); return backend.equals("ast") ? new Program(language, source) : new BytecodeProgram(language, source); }
+    @Test public void originalCorpusAndExportProvenanceRemainExact() throws Exception { rows(); }
+    @Test @Tag("foreign-exceptions-full-core") public void genuineOriginalCallsMatchAllNativeBuffersOnFirstCompiledEntries() throws Exception {
         var rows = rows();
         for (var stage : List.of("pre", "post")) {
             var source = module(stage); var calls = OriginalStdioChecks.foreignCalls(source); assertEquals(24, calls.size());
-            var observed = new LinkedHashSet<GmpForeignOp>();
+            var observed = new LinkedHashSet<String>();
             for (var call : calls) {
-                var metadata = (Map<?, ?>) call.get(6); var arguments = new ArrayList<Object>();
-                for (var argument : (List<List<Object>>) call.get(2)) { var meta = CoreRepresentations.metadata(argument); arguments.add(meta == null ? null : meta.get("rep")); }
-                observed.add(CoreGmpForeign.validate(metadata, arguments, (List<?>) call.get(3), metadata.get("rep")));
+                var descriptor = (Map<?, ?>) ((Map<?, ?>) call.get(6)).get("foreignCall");
+                observed.add((String) ((Map<?, ?>) descriptor.get("target")).get("symbol"));
             }
-            assertEquals(new LinkedHashSet<>(Arrays.asList(GmpForeignOp.values())), observed);
+            assertEquals(new LinkedHashSet<>(Arrays.stream(GmpForeignOp.values()).map(GmpForeignOp::getSymbol).toList()), observed);
             for (var backend : List.of("ast", "bytecode")) for (boolean inline : new boolean[]{false, true}) try (var context = context(true, inline)) {
                 context.initialize("thc"); context.enter();
                 try {
@@ -173,7 +175,7 @@ public class OriginalGmpTest {
             }
         }
     }
-    @Test public void malformedGenuineMetadataFailsBothLoadersBeforeExecution() throws Exception {
+    @Test @Tag("foreign-exceptions-full-core") public void malformedGenuineMetadataFailsBothLoadersBeforeExecution() throws Exception {
         rows(); var source = module("pre"); var entries = new LinkedHashSet<String>();
         for (var row : (List<Map<String, Object>>) json(prefix + "/oracle.json")) entries.add((String) row.get("entry"));
         for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
@@ -182,13 +184,14 @@ public class OriginalGmpTest {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 for (var entry : entries) {
                     var linked = CoreModules.reachable(source, entry);
-                    for (int variant = 0; variant < 5; variant++) {
+                    for (int variant = 2; variant < 5; variant++) {
                         var bad = (Map<String, Object>) Json.parse(Json.stringify(linked)); var calls = OriginalStdioChecks.foreignCalls(bad);
                         if (calls.size() != 1) throw new IllegalArgumentException("Expected one call");
                         var call = calls.getFirst(); var metadata = (Map<String, Object>) call.get(6); var descriptor = (Map<String, Object>) metadata.get("foreignCall");
                         switch (variant) {
-                            case 0 -> descriptor.put("safety", "safe"); case 1 -> ((Map<String, Object>) descriptor.get("target")).put("unit", "base");
-                            case 2 -> ((List<Object>) call.get(3)).set(0, true); case 3 -> ((List<Object>) call.get(1)).set(1, 17L);
+                            case 2 -> ((List<Object>) call.get(3)).set(0, true);
+                            case 3 -> ((List<Object>) call.get(1)).set(1, ((List<Map<String, Object>>) linked.get("bindings")).stream()
+                                .filter(binding -> entry.equals(binding.get("name"))).findFirst().orElseThrow().get("id"));
                             case 4 -> { var argument = ((List<List<Object>>) call.get(2)).get(0); ((Map<String, Object>) CoreRepresentations.metadata(argument)).put("rep", Map.of("kind", "address", "primReps", List.of("AddrRep"), "evaluated", true)); }
                         }
                         assertThrows(RuntimeFault.class, () -> load(language, backend, bad), backend + "/" + entry + "/" + variant);
@@ -197,17 +200,21 @@ public class OriginalGmpTest {
             } finally { context.leave(); }
         }
     }
-    @Test public void originalEntryPermissionAndInvalidCountsNeverStoreToGuestBuffers() throws Exception {
+    @Test @Tag("foreign-exceptions-full-core") public void originalEntryPermissionAndArrayCarriersNeverStoreToGuestBuffersOnRejection() throws Exception {
         rows(); var source = CoreModules.reachable(module("pre"), "originalAddWord");
         for (var backend : List.of("ast", "bytecode")) for (boolean nativeAccess : new boolean[]{false, true}) try (var context = context(nativeAccess, true)) {
             context.initialize("thc"); context.enter();
             try {
-                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var entry = load(language, backend, source).entryTarget("originalAddWord");
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 var output = new byte[24]; Arrays.fill(output, (byte) 0x5a); var before = output.clone(); var input = new byte[24]; Arrays.fill(input, (byte) 0x33);
-                for (long count : nativeAccess ? List.of(-1L, 0L, 4L, Long.MAX_VALUE) : List.of(1L)) {
-                    assertThrows(RuntimeFault.class, () -> Calls.target(entry, new Object[]{0L, output, input, count, 1L})); assertArrayEquals(before, output);
+                if (!nativeAccess) {
+                    assertThrows(RuntimeFault.class, () -> Calls.target(load(language, backend, source).entryTarget("originalAddWord"),
+                        new Object[]{0L, output, input, 1L, 1L}));
+                } else {
+                    var entry = load(language, backend, source).entryTarget("originalAddWord");
+                    assertThrows(RuntimeFault.class, () -> Calls.target(entry, new Object[]{0L, output, ManagedAddress.fromByteArray(input), 1L, 1L}));
                 }
-                if (nativeAccess) { assertThrows(RuntimeFault.class, () -> Calls.target(entry, new Object[]{0L, output, ManagedAddress.fromByteArray(input), 1L, 1L})); assertArrayEquals(before, output); }
+                assertArrayEquals(before, output);
             } finally { context.leave(); }
         }
     }

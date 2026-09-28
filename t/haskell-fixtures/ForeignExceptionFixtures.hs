@@ -37,7 +37,7 @@ prepareForeignExceptions root = do
   plugin <- run "plugin" [] "bin/build-compiler.sh" []
   configuredSource <- lookupEnv "THC_FOREIGN_EXCEPTION_GHC_SOURCE" >>= maybe
     (die "Set THC_FOREIGN_EXCEPTION_GHC_SOURCE to the configured original GHC source tree") pure
-  installed <- prepareInstalledCoreWithForeign root directory configuredSource
+  installed <- prepareInstalledCoreWithForeignUnits root directory configuredSource ["bytestring", "text"]
   support <- run "runtime-export"
     [("THC_CORE_OUT", root </> directory </> "runtime-core"), ("THC_GHC_OUT", root </> directory </> "runtime-ghc")]
     "bin/export-core.sh" ["-isrc/runtime", "-fplugin-opt=THC.Plugin:post-tidy", "src/runtime/THC/Exception.hs", "src/examples/THC/Polyglot.hs"]

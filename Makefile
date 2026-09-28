@@ -101,6 +101,12 @@ foreign-exception-fixtures: check-java
 	}
 	GHC='$(GHC)' GHC_PKG='$(if $(GHC_PKG),$(GHC_PKG),ghc-pkg)' CABAL='$(CABAL)' \
 	  $(CABAL) run exe:thc-fixtures $(CABAL_FLAGS) --with-compiler='$(GHC)' --with-hc-pkg='$(if $(GHC_PKG),$(GHC_PKG),ghc-pkg)' -- foreign-exceptions
+	@set -eu; GHC='$(GHC)'; GHC_PKG='$(if $(GHC_PKG),$(GHC_PKG),ghc-pkg)'; CABAL='$(CABAL)'; export GHC GHC_PKG CABAL; \
+	  fixture_bin=$$($(CABAL) list-bin exe:thc-fixtures $(CABAL_FLAGS) --with-compiler='$(GHC)' --with-hc-pkg='$(if $(GHC_PKG),$(GHC_PKG),ghc-pkg)'); \
+	  for family in original-memory-search original-memset bytestring-utf8 text-cbits; do \
+	    "$$fixture_bin" "$$family"; \
+	  done; \
+	  "$$fixture_bin" original-gmp --require-supported
 
 foreign-exception-test-modes: foreign-exception-fixtures
 	./gradlew $(GRADLE_FLAGS) --continue foreignExceptionTest foreignExceptionDenseTest

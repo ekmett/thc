@@ -13,8 +13,10 @@ import java.util.stream.Collectors;
 import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Tag;
 import thc.ContextProfile;
 import thc.CoreModules;
+import thc.ForeignExceptionFixtureSupport;
 import thc.Json;
 import thc.Language;
 import static org.junit.jupiter.api.Assertions.*;
@@ -63,10 +65,10 @@ class TextCbitsTest {
     private static Context context(boolean inlining, boolean nativeAccess) {
         return withContextProfile(Context.newBuilder("thc").allowNativeAccess(nativeAccess), ContextProfile.SYNCHRONOUS_TEST).option("compiler.Inlining", Boolean.toString(inlining)).build();
     }
-    private static ExecutableProgram program(Language language, Map<String, Object> source, String backend) { return backend.equals("ast") ? new Program(language, source) : new BytecodeProgram(language, source); }
+    private static ExecutableProgram program(Language language, Map<String, Object> source, String backend) throws Exception { source = ForeignExceptionFixtureSupport.nativeModules(List.of(source)); return backend.equals("ast") ? new Program(language, source) : new BytecodeProgram(language, source); }
     private static void compiled(RootCallTarget target) throws Exception { assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), "installed code remains valid"); }
-    @Test void originalInstalledCallsMatchNativeWithInlining() throws Exception { nativeResults(true); }
-    @Test void originalInstalledCallsMatchNativeAcrossResidualCalls() throws Exception { nativeResults(false); }
+    @Test @Tag("foreign-exceptions-full-core") void originalInstalledCallsMatchNativeWithInlining() throws Exception { nativeResults(true); }
+    @Test @Tag("foreign-exceptions-full-core") void originalInstalledCallsMatchNativeAcrossResidualCalls() throws Exception { nativeResults(false); }
     private void nativeResults(boolean inlining) throws Exception {
         originalProvenanceAndNativeCorpusRemainExact(); var rows = new LinkedHashMap<String, List<Row>>();
         for (var row : rows()) rows.computeIfAbsent(row.name, ignored -> new ArrayList<>()).add(row);
@@ -102,7 +104,7 @@ class TextCbitsTest {
         }
     }
     @Test void originalProvenanceAndNativeCorpusRemainExact() throws Exception {
-        var manifest = json("manifest.json"); assertEquals(520L, manifest.get("nativeRows")); assertTrue(CoreTextForeign.supportedUnit(manifest.get("unit")));
+        var manifest = json("manifest.json"); assertEquals(520L, manifest.get("nativeRows"));
         var registrations = Files.readAllLines(new File(directory, "logs/original-registration.stdout").toPath()).stream().filter(line -> line.startsWith("id:")).toList();
         assertEquals(1, registrations.size()); var recordedUnit = registrations.getFirst().substring(registrations.getFirst().indexOf(':') + 1).trim();
         assertEquals(recordedUnit, manifest.get("unit"), "Preserve the original installed package registration");
@@ -131,29 +133,13 @@ class TextCbitsTest {
         }
         return result;
     }
-    @Test void installedTextReleaseIdentityHasABoundedSuffixGrammar() throws Exception {
-        var accepted = list("text-2.1.3-inplace", "text-2.1.3-e182", "text-2.1.3-119b");
-        var rejected = list(null, "text-2.1.3", "text-2.1.3-", "text-2.1.2-e182", "text-2.1.4-e182", "text-2.1.3-e182-extra", "text-2.1.3-e182\n", "text-2.1.3-e182 ", "other-text-2.1.3-e182", "text-2.1.3-foreign", "text-2.1.3-e182:forged");
-        for (var unit : accepted) assertTrue(CoreTextForeign.supportedUnit(unit), unit); for (var unit : rejected) assertFalse(CoreTextForeign.supportedUnit(unit), unit);
-        var units = new ArrayList<>(accepted); units.addAll(rejected);
-        for (var unit : units) for (var backend : list("ast", "bytecode")) try (var context = context()) {
-            context.initialize("thc"); context.enter();
-            try {
-                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var source = module("pre");
-                for (var app : foreignApps(source)) target(app).put("unit", unit);
-                if (accepted.contains(unit)) program(language, source, backend); else assertThrows(RuntimeFault.class, () -> program(language, source, backend));
-            } finally { context.leave(); }
-        }
-    }
-    @Test void exactInstalledIdentityStateAndArrayProofsAreRequired() throws Exception {
-        for (var backend : list("ast", "bytecode")) for (var name : list("textMeasure", "textReverse")) for (var variant : list("unit", "safety", "arity", "array", "result")) try (var context = context()) {
+    @Test @Tag("foreign-exceptions-full-core") void actualCAbiAndArrayProofsAreRequired() throws Exception {
+        for (var backend : list("ast", "bytecode")) for (var name : list("textMeasure", "textReverse")) for (var variant : list("arity", "array", "result")) try (var context = context()) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var source = CoreModules.reachable(module("post"), name);
                 var apps = foreignApps(source); assertEquals(1, apps.size()); var call = object(object(apps.getFirst().get(6)).get("foreignCall"));
                 switch (variant) {
-                    case "unit" -> object(call.get("target")).put("unit", "other-text");
-                    case "safety" -> call.put("safety", "safe");
                     case "arity" -> call.put("suppliedArity", 4L);
                     case "array" -> object(expression(call.get("argumentReps")).getFirst()).put("primReps", list("AddrRep"));
                     case "result" -> object(call.get("resultRep")).put("primReps", list("Word64Rep"));

@@ -11,6 +11,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.HashSet;
+import thc.runtime.CoreForeignExceptionBridge;
 import thc.runtime.TargetLayout;
 
 /** Immutable compiler-produced support for public foreign-program controls.
@@ -39,9 +41,9 @@ public final class ForeignExceptionFixtureSupport {
     }
     private static synchronized List<Map<String, Object>> originals() throws Exception {
         if (originals == null) {
-            var text = new StringBuilder();
-            var layout = CorePackageManifest.appendModules(text, new File(root, (String) manifest().get("packageManifest")).getPath());
-            var modules = (List<Map<String, Object>>) Json.parse("[" + text + "]");
+            var modules = new ArrayList<Map<String, Object>>();
+            var layout = CorePackageManifest.visitModules(new File(root, (String) manifest().get("packageManifest")).getPath(),
+                (module, text) -> modules.add(module)).getTargetLayout();
             if (layout == null) throw new IllegalStateException("Required value was null.");
             target = layout;
             originals = modules;
@@ -60,6 +62,38 @@ public final class ForeignExceptionFixtureSupport {
         modules.addAll(stageModules(stage));
         var merged = new LinkedHashMap<>(CoreModules.merge(modules));
         merged.put("targetLayout", target);
+        return merged;
+    }
+    /** Original closure fixtures keep their bodies. Owners contribute checked C
+     * declarations, and only the reachable genuine exception helpers are added.
+     * Link the native owners in the entered context, as Language.instantiate does. */
+    public static Map<String, Object> nativeModules(List<Map<String, Object>> modules) throws Exception {
+        var available = new HashSet<String>();
+        for (var original : originals()) available.add(original.get("unit") + ":" + original.get("module"));
+        var merger = new CoreModules.Merger(available);
+        for (var original : originals()) {
+            var admission = PackageScalarLinks.read(original);
+            if (admission != null) merger.addPackageProvenance(admission);
+        }
+        var runtime = source("post");
+        var proof = CoreForeignExceptionBridge.select(runtime);
+        var helpers = new LinkedHashMap<>(CoreModules.reachable(runtime,
+            List.of((String) proof.get("box"), (String) proof.get("project")), true));
+        var supplied = new HashSet<Object>();
+        for (var module : modules) for (var binding : (List<Map<String, Object>>) module.get("bindings"))
+            supplied.add(binding.get("id"));
+        helpers.put("bindings", ((List<Map<String, Object>>) helpers.get("bindings")).stream()
+            .filter(binding -> !supplied.contains(binding.get("id"))).toList());
+        merger.add(helpers);
+        modules.forEach(merger::add);
+        var merged = new LinkedHashMap<>(merger.finish());
+        merged.put("foreignExceptionBridges", runtime.get("foreignExceptionBridges"));
+        merged.put("foreignExceptionBridgeUnit", runtime.get("foreignExceptionBridgeUnit"));
+        merged.put("selectedForeignExceptionBridge", proof);
+        merged.put("targetLayout", target);
+        for (var module : modules) if (module.containsKey("instrument")) merged.put("instrument", module.get("instrument"));
+        for (var link : (List<PackageScalarLink>) merged.get("packageScalarLinks"))
+            Language.currentState().getPackageCbits().link(link);
         return merged;
     }
     /** Supplied protocol remains synthetic; exception support is genuine validated GHC output. */

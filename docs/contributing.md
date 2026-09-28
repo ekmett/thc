@@ -67,6 +67,16 @@ the diagnostic runner. `make clean` removes the Gradle and Cabal build products;
 checkout. Neither cleanup target requires a JDK or removes an external cache.
 Use `GRADLE_FLAGS=--offline` or `CABAL_FLAGS=--offline` for an offline build.
 
+`make foreign-exception-test-modes` uses complete installed Core and matching
+configured GHC sources. It also prepares the original memory-search, memset,
+ByteString UTF-8, GMP and text corpora once and runs their generic-FFI program
+checks in both handoff modes. These checks need genuine owner native links and
+the THC exception bridge; ordinary hosted tests retain their independent carrier,
+ownership and provenance checks. The required trusted `foreign-exceptions` CI
+job owns this full-Core lane; missing support is an error, not a skipped test.
+Loose schema-2 array FCalls are audited against their declared C ABI and retain
+an explicit native-link obligation; static acceptance does not supply a symbol.
+
 Batch related primops, fixture changes and proofs into substantial tested
 commits. Rebuild and run focused tests locally whenever useful during development;
 workers should own substantial chunks without repeated per-operation handoffs.

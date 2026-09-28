@@ -11,7 +11,7 @@
 -- Portability : Native GHC; host filesystem/process services
 --
 -- Fixture acquisition support for installed core.
-module InstalledCoreFixtures (InstalledFixture(..), prepareInstalledCore, prepareInstalledCoreUnits, prepareInstalledCoreWithForeign, field, readJson) where
+module InstalledCoreFixtures (InstalledFixture(..), prepareInstalledCore, prepareInstalledCoreUnits, prepareInstalledCoreWithForeign, prepareInstalledCoreWithForeignUnits, field, readJson) where
 
 import Control.Monad (forM, unless)
 import Data.Aeson (Value, FromJSON, decodeStrict', fromJSON, Result(..), object, (.=))
@@ -58,6 +58,11 @@ prepareInstalledCoreUnits :: FilePath -> FilePath -> [String] -> IO InstalledFix
 prepareInstalledCoreWithForeign :: FilePath -> FilePath -> FilePath -> IO InstalledFixture
 prepareInstalledCoreWithForeign root directory source =
   prepareInstalledCoreProfile (Just source) root directory []
+
+-- | Acquire the original owners needed by shared foreign fixture consumers.
+prepareInstalledCoreWithForeignUnits :: FilePath -> FilePath -> FilePath -> [String] -> IO InstalledFixture
+prepareInstalledCoreWithForeignUnits root directory source =
+  prepareInstalledCoreProfile (Just source) root directory
 
 prepareInstalledCoreUnits = prepareInstalledCoreProfile Nothing
 
