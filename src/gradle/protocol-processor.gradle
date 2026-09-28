@@ -4,6 +4,10 @@ import static thc.buildlogic.BuildChecks.*
 
 import java.security.MessageDigest
 
+buildscript {
+    dependencies { classpath "thc:build-logic" }
+}
+
 // This distinct build artifact adds only an explicitly unprofiled protocol
 // conditional. API/runtime declarations are built by their separate pinned tasks.
 def protocolProcessorVersion = "25.3.4.1"

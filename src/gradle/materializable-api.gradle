@@ -7,6 +7,10 @@ import java.lang.module.FindException
 import java.lang.module.ModuleFinder
 import java.util.jar.JarFile
 
+buildscript {
+    dependencies { classpath "thc:build-logic" }
+}
+
 def materializableApiVersion = "25.3.4.1"
 def materializableApiSource = configurations.create("materializableApiSource") {
     canBeConsumed = false; transitive = false

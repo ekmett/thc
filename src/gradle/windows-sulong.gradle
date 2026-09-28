@@ -4,6 +4,10 @@ import static thc.buildlogic.BuildChecks.*
 import java.security.MessageDigest
 import java.util.jar.JarFile
 
+buildscript {
+    dependencies { classpath "thc:build-logic" }
+}
+
 // One pinned Sulong artifact: declared mutable globals on all hosts, plus the
 // optional cwd lookup correction on Windows. Keep the original task names.
 def patchWindowsLocator = System.getProperty("os.name").startsWith("Windows")

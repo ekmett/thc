@@ -143,10 +143,10 @@ acquisitionTests env = TestLabel "project acquisition stops before audit and exe
       bytes <- BS.readFile (string $ field (field unit "bundle") "path")
       members <- either fail pure =<< decodeZip bytes
       forM_ (objects unit "modules") $ \ref -> do
-        assertEqual "fresh production modules declare JSON/index pairs" 2
+        assertEqual "fresh production modules declare one Core payload" 1
           (maybe 0 length (CoreIndex.modulePaths ref))
-        assertBool "sidecar binds final linked module bytes"
-          (maybe False ((== 2) . length) (CoreIndex.moduleEntries ref members))
+        assertBool "Core member matches the final linked module bytes"
+          (maybe False ((== 1) . length) (CoreIndex.moduleEntries ref members))
     plan <- readJson (output </> "native/cache/plan.json")
     let entry = one ((== "exe:fail-frontier") . string . (`field` "component-name"))
                     (objects plan "install-plan")
@@ -161,7 +161,7 @@ acquisitionTests env = TestLabel "project acquisition stops before audit and exe
     assertSuccess repeated
     assertNoStdout repeated
     warm <- readSourceManifest (output </> "packages.json")
-    assertEqual "warm acquisition preserves module/index records" (field manifest "units") (field warm "units")
+    assertEqual "warm acquisition preserves module records" (field manifest "units") (field warm "units")
     assertEqual "warm acquisition never rewrites immutable bundles" identities
       =<< mapM (getModificationTime . string . (`field` "path") . (`field` "bundle")) supplied
     assertEqual "prior audit untouched" "retained older audit evidence\n"

@@ -4,6 +4,10 @@ import static thc.buildlogic.BuildChecks.*
 import java.security.MessageDigest
 import java.util.jar.JarFile
 
+buildscript {
+    dependencies { classpath "thc:build-logic" }
+}
+
 def protocolRuntimeVersion = "25.3.4.1"
 def protocolRuntimeSource = configurations.create("protocolRuntimeSource") { canBeConsumed = false; transitive = false }
 def protocolRuntimeBinary = configurations.create("protocolRuntimeBinary") { canBeConsumed = false; transitive = false }

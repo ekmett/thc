@@ -6,6 +6,10 @@ import thc.buildlogic.BytecodeColdApplyPreparation
 import thc.buildlogic.BytecodeColdDelimitedPreparation
 import thc.buildlogic.BytecodeColdForcePreparation
 
+buildscript {
+    dependencies { classpath "thc:build-logic" }
+}
+
 // Normalize generated metadata before the final Java compilation.
 def checks = [
     testBytecodeMetadataSplit: { task ->

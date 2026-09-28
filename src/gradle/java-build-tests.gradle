@@ -2,6 +2,10 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 import static thc.buildlogic.BuildChecks.*
 
+buildscript {
+    dependencies { classpath "thc:build-logic" }
+}
+
 // Check the realized compilation contract without building native fixtures.
 tasks.register('testJavaBuildPipeline') {
     group = 'verification'
