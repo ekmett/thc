@@ -378,9 +378,8 @@ nativeType depth value = case member value "kind" of
           mapM_ (\key -> field value key >>= nativeType depth) keys
 
 supportedSignature :: Signature -> Bool
--- Temporary user-selected execution policy: preserve the declared safety in
--- every proof/adapter, but use the existing unsafe boundary for safe imports.
--- This does not admit interruptible calls or broaden pointer lifetime rules.
+-- Preserve declared safety for runtime foreign-call entry and readmission.
+-- Interruptible native transport requires separate support.
 supportedSignature (_,_,safety,_,_) = safety `elem` ["unsafe","safe"]
 
 setMember :: String -> Value -> Value -> Value

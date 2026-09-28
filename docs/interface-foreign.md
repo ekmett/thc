@@ -94,11 +94,12 @@ configured native compiler. LLVM acquisition is a sensible second compilation,
 not a requirement to reproduce the native object's exact bytes.
 
 Support covers static `ccall`/`capi` with a scalar, address or void result.
-Unsafe calls may take scalar arguments, `Addr#`, `ByteArray#` and
-`MutableByteArray#`. As a temporary compatibility policy requested on
-2026-09-26, safe declarations accept the same carriers through the existing
-unsafe pointer transport. Their original `safe` metadata is retained; this
-does not claim full GHC safe-FFI scheduling or callback semantics.
+Unsafe and safe calls may take scalar arguments, `Addr#`, `ByteArray#` and
+`MutableByteArray#`. Declared safety selects the runtime foreign-call protocol:
+safe calls release Loom guest admission until readmission, while unsafe calls
+reject guest reentry. Both use the shared pointer transport and its lifetime
+rules. Interruptible native transport and general C callbacks still require
+separate support.
 Pointer results retain the runtime's pointer ownership/lifetime boundary.
 Pure source imports and IO
 imports both retain GHC's actual State-token worker ABI and original safety.

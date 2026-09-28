@@ -111,7 +111,7 @@ public final class PackageScalarLinks {
             for (Object item : arguments) if (!admitted(admitted, item)) { validArguments = false; break; }
             check(validArguments && (nativeLink ? in(entry.get("result"), "void") || admitted(NATIVE_REPS, entry.get("result")) && !in(entry.get("result"), "ByteArray#", "MutableByteArray#") : admitted(REPS, entry.get("result"))), "C ABI");
             String convention = nativeLink ? text(entry.get("convention")) : "ccall", safety = nativeLink ? text(entry.get("safety")) : "unsafe";
-            // Temporary safe-as-unsafe policy; declared metadata stays exact.
+            // Declared safety selects runtime foreign-call entry and readmission.
             check(!nativeLink || in(convention, "ccall", "capi") && in(safety, "unsafe", "safe"), "unsupported C calling convention/safety");
             String entryName = (String) entry.get("entry");
             var argumentTypes = new ArrayList<String>();
