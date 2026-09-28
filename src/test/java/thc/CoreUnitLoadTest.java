@@ -196,6 +196,14 @@ class CoreUnitLoadTest {
                         assertEquals(7L, thc.runtime.Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue("main:Main.entry"), new Object[]{0L}}));
                         assertEquals(8L, thc.runtime.Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue("main:Main.second"), new Object[]{0L}}));
                         assertEquals(0L, statistic(program, "coreUnitSourceOpens"));
+                        var counts = program.rootCounts();
+                        assertEquals(3L, counts.get("loweredRootCount"));
+                        assertEquals(3L, counts.get("initializedBindingCount"));
+                        assertEquals(notes ? 3L : 0L, counts.get("sourceRootCount"));
+                        assertEquals(backend.equals("bytecode"), counts.containsKey("bytecodeRootCount"));
+                        assertEquals(backend.equals("bytecode") ? 5 : 4, counts.size());
+                        var diagnostics = program.diagnostics();
+                        counts.forEach((name, count) -> assertEquals(count, diagnostics.get(name)));
                     }
                 } finally { owner.getThreads().leaveCurrent(thc.runtime.GuestThreadStatus.FINISHED); context.leave(); }
             }

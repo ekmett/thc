@@ -15,5 +15,7 @@ public interface ExecutableProgram {
     Object entryValue(String name);
     RootCallTarget entryTarget(String name);
     DataLayout constructorLayout(String id);
+    /** Per-program counts, without copying context-wide metric snapshots. */
+    default Map<String, Object> rootCounts() { return Map.of(); }
     Map<String, Object> diagnostics();
 }

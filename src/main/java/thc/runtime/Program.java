@@ -546,16 +546,17 @@ public final class Program implements ExecutableProgram {
         if (value instanceof Thunk thunk && thunk.getTarget() != null) return thunk.getTarget();
         return hostEntryTarget(0);
     }
+    @Override public Map<String, Object> rootCounts() {
+        return Map.of("sourceRootCount", attachedRootCount, "loweredRootCount", constructedRootCount,
+            "hostEntryRootCount", hostEntries.size(), "initializedBindingCount", initializedBindingCount);
+    }
     @Override public Map<String, Object> diagnostics() {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("backend", "ast");
         result.put("asyncExceptions", enableAsync);
         result.put("sourceNotesEnabled", sources.getEnabled());
         result.put("sourceSpanCount", sources.getSpanCount());
-        result.put("sourceRootCount", attachedRootCount);
-        result.put("loweredRootCount", constructedRootCount);
-        result.put("hostEntryRootCount", hostEntries.size());
-        result.put("initializedBindingCount", initializedBindingCount);
+        result.putAll(rootCounts());
         result.put("instrumented", metrics.getEnabled());
         result.put("thunkEvaluationsByLabel", metrics.thunkCountsSnapshot());
         result.put("compiledEntries", metrics.getCompiledEntries());

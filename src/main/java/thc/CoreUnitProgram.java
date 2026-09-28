@@ -220,19 +220,16 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
     @Override public Object entryValue(String name) { var cell = demand.cell(name); if (cell == null) throw new UnsupportedCore("Unresolved external binding " + name); return cell.read(); }
     @Override public RootCallTarget entryTarget(String name) { return demand.program(name).entryTarget(name); }
     @Override public DataLayout constructorLayout(String id) { return hostProgram().constructorLayout(id); }
+    @Override public Map<String,Object> rootCounts() {
+        var result = new LinkedHashMap<String,Object>();
+        for (var program : demand.preparedPrograms()) for (var count : program.rootCounts().entrySet())
+            result.put(count.getKey(), ((Number) result.getOrDefault(count.getKey(), 0L)).longValue() + ((Number) count.getValue()).longValue());
+        return result;
+    }
     @Override public Map<String,Object> diagnostics() {
-        var programs = new ArrayList<Map<String,Object>>();
-        for (var program : demand.preparedPrograms()) programs.add(program.diagnostics());
-        var result = new LinkedHashMap<>(programs.getFirst());
-        for (String field : List.of("loweredRootCount", "bytecodeRootCount", "sourceRootCount", "hostEntryRootCount", "initializedBindingCount")) {
-            boolean present = false;
-            for (var program : programs) if (program.containsKey(field)) { present = true; break; }
-            if (present) {
-                long total = 0;
-                for (var program : programs) total += program.get(field) instanceof Number value ? value.longValue() : 0L;
-                result.put(field, total);
-            }
-        }
+        // All demanded programs share Metrics; copy its label snapshot once.
+        var result = new LinkedHashMap<>(demand.preparedPrograms().getFirst().diagnostics());
+        result.putAll(rootCounts());
         var counters = new ArrayList<CoreJsonSymbols.Statistics>();
         for (var counter : totals) counters.add(counter.statistics());
         result.put("unsupportedPolicy", "reject-at-binding-admission");
