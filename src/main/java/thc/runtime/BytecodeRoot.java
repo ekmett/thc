@@ -770,14 +770,19 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation public static final class ParkCallMask {
-        @Specialization public static DelimitedCut parkDelimited(DelimitedCut cut,
-                MaskingState rootEntry, MaskingState callerActive) { return cut; }
-        @Specialization public static CallSegmentSuspended park(CallSegmentSuspended suspended,
+        @Specialization public static Object park(Object value,
                 MaskingState rootEntry, MaskingState callerActive, @Bind("$node") Node node) {
+            if (value instanceof DelimitedCut cut) return cut;
+            if (value instanceof CallSegmentSuspended suspended) return park(suspended, rootEntry, callerActive, node);
+            throw new com.oracle.truffle.api.dsl.UnsupportedSpecializationException(node, null, value, rootEntry, callerActive);
+        }
+        public static CallSegmentSuspended park(CallSegmentSuspended suspended,
+                MaskingState rootEntry, MaskingState callerActive, Node node) {
             try {
                 if (SynchronousMasking.current(node) != callerActive)
                     throw new IllegalStateException("Captured caller lost its logical mask before Yield");
-                return new CallSegmentSuspended(suspended.getSegment(), callerActive, suspended.getAsyncRequest());
+                return new CallSegmentSuspended(suspended.getSegment(), callerActive,
+                        suspended.getAsyncRequest(), suspended.getStackSpill());
             } finally {
                 // Yield skips lexical finally. Each root parks to its own entry
                 // mask, so a chain of callers unwinds to the carrier ambient.
@@ -798,10 +803,16 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class CallSuspensionOnly {
         @Specialization public static Object capture(AbstractTruffleException failure) {
             if (failure instanceof DelimitedCut cut) return cut;
-            if (failure instanceof CapturedCallSuspension captured) return new CallSegmentSuspended(captured.getSegment());
+            if (failure instanceof CapturedCallSuspension captured) return captured(captured.getSegment());
             if (failure instanceof AsyncBlocked blocked) return blocked.getRequest();
             if (failure instanceof STMRestart restart) return restart.getRequest();
             throw failure;
+        }
+        // The first cold packet must classify its real saved continuation without
+        // specializing compiled code on whichever continuation subtype loaded first.
+        @TruffleBoundary(transferToInterpreterOnException = false)
+        private static CallSegmentSuspended captured(CallSegment segment) {
+            return new CallSegmentSuspended(segment);
         }
     }
 

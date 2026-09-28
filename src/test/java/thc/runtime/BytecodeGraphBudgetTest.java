@@ -12,6 +12,8 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -24,12 +26,27 @@ class BytecodeGraphBudgetTest {
     private static final Map<String, Object> LONG = Map.of("kind", "long", "primReps", List.of("IntRep"), "evaluated", true);
     private static final Map<String, Object> DATA = Map.of("kind", "data", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", true);
     private static final Map<String, Object> CLOSURE = Map.of("kind", "closure", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", true);
+    private static final Map<String, Object> STATE = Map.of("kind", "void", "primReps", List.of(), "evaluated", true);
+    private static final Map<String, Object> REFERENCE = Map.of("kind", "object", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", false);
+    private static final Map<String, Object> MUTABLE = Map.of("kind", "object", "primReps", List.of("BoxedRep (Just Unlifted)"), "evaluated", true);
     private static List<Object> node(Object... fields) { return Arrays.asList(fields); }
     private static Map<String, Object> binder(String id, Map<String, Object> proof, boolean lifted) {
         return Map.of("id", id, "name", id, "lifted", lifted, "rep", proof);
     }
     private static List<Object> number(long value) { return node("lit", "int", Long.toString(value), Map.of("rep", LONG)); }
     private static List<Object> variable(String id, Map<String, Object> proof) { return node("var", id, Map.of("rep", proof)); }
+    @SafeVarargs private static Map<String, Object> tuple(Map<String, Object>... fields) {
+        var reps = new ArrayList<Object>(); for (var field : fields) reps.addAll((List<?>) field.get("primReps"));
+        return Map.of("kind", "unknown", "aggregate", "unboxed-tuple", "evaluated", true,
+                "primReps", reps, "components", Arrays.asList(fields));
+    }
+    private static void constructors(Map<String, Object> module, Object... extra) {
+        var values = new ArrayList<Object>((List<?>) module.get("constructors"));
+        values.addAll(Arrays.asList(extra)); module.put("constructors", values);
+    }
+    private static Map<String, Object> tupleConstructor(String id, int arity) {
+        return Map.of("id", id, "name", id, "kind", "unboxed-tuple", "arity", arity);
+    }
     private static Map<String, Object> decision(int count) {
         return decision(count, List.of(), LONG, i -> number(i * 3L + 17));
     }
@@ -246,6 +263,265 @@ class BytecodeGraphBudgetTest {
                 }
                 assertSame(target, ((Closure) program.entryValue("entry")).target);
             } finally { context.leave(); }
+        }
+    }
+
+    @Test void recursiveCellCaptureKeepsClosureIdentityAcrossANonTailRegion() {
+        var resultProof = tuple(CLOSURE, CLOSURE);
+        var input = new LinkedHashMap<>(decision(64, List.of(), CLOSURE, ignored -> variable("recursive", CLOSURE)));
+        var bindings = new ArrayList<Map<String, Object>>((List<Map<String, Object>>) input.get("bindings"));
+        var entry = new LinkedHashMap<>(bindings.getFirst());
+        var lambda = new ArrayList<>((List<Object>) entry.get("expr"));
+        var recursive = new LinkedHashMap<>(binder("recursive", CLOSURE, true));
+        recursive.put("expr", node("lam", List.of(binder("unused", LONG, false)), number(17),
+                Map.of("rep", CLOSURE, "resultRep", LONG)));
+        var pair = node("app", node("con", "Result", 2), List.of(variable("recursive", CLOSURE), variable("selected", CLOSURE)),
+                List.of(true, true), false, false, Map.of("rep", resultProof));
+        var selected = node("case", lambda.get(2), "selected", List.of(node("default", null, List.of(), pair)),
+                Map.of("rep", resultProof, "binder", binder("selected", CLOSURE, true)));
+        lambda.set(2, node("let", true, List.of(recursive), selected, Map.of("rep", resultProof)));
+        lambda.set(3, Map.of("rep", CLOSURE, "resultRep", resultProof, "entryStrict", List.of(true)));
+        entry.put("expr", lambda); bindings.set(0, entry); input.put("bindings", bindings);
+        constructors(input, tupleConstructor("Result", 2));
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new BytecodeProgram(language, input);
+                var target = ((Closure) program.entryValue("entry")).target;
+                var root = (BytecodeRoot) target.getRootNode(); assertEquals(1, root.prepareGraphBudgetRetry(0));
+                var value = TupleResults.ownedTupleResult(Calls.target(target, new Object[]{0L, program.entryValue("chosen")}), root.getTupleResult());
+                var layout = root.getTupleResult().getLayout();
+                var recursiveValue = (Closure) layout.getObject(value, 0);
+                assertSame(recursiveValue, layout.getObject(value, 1));
+                assertEquals(17L, Calls.target(recursiveValue.target, new Object[]{0L, 0L}));
+                assertEquals(0, entries(program), "Raw-cell semantic control does not claim compiled entry");
+            } finally { context.leave(); }
+        }
+    }
+
+    @Test void recoveredPartitionsKeepConstructorFieldsAndTheOriginalDefault() {
+        var input = new LinkedHashMap<>(decision(64));
+        var constructors = new ArrayList<Object>((List<?>) input.get("constructors"));
+        constructors.set(32, Map.of("id", "C32", "name", "C32", "kind", "boxed", "arity", 3,
+                "fieldReps", List.of(List.of("IntRep"), List.of("IntRep"), List.of("IntRep")),
+                "fieldLifted", List.of(false, false, false), "strictFields", List.of(false, false, false)));
+        constructors.add(Map.of("id", "Other", "name", "Other", "kind", "boxed", "arity", 0,
+                "fieldReps", List.of(), "fieldLifted", List.of(), "strictFields", List.of()));
+        input.put("constructors", constructors);
+        var bindings = new ArrayList<Map<String, Object>>((List<Map<String, Object>>) input.get("bindings"));
+        var entry = new LinkedHashMap<>(bindings.getFirst()); var lambda = new ArrayList<>((List<Object>) entry.get("expr"));
+        var expression = new ArrayList<>((List<Object>) lambda.get(2));
+        var alternatives = new ArrayList<Object>((List<?>) expression.get(3));
+        var sum = node("app", node("prim", "+#"), List.of(variable("a", LONG), variable("c", LONG)),
+                List.of(false, false), false, false, Map.of("rep", LONG));
+        alternatives.set(32, node("data", "C32", List.of("a", "b", "c"), sum,
+                Map.of("binders", List.of(binder("a", LONG, false), binder("b", LONG, false), binder("c", LONG, false)))));
+        alternatives.add(node("default", null, List.of(), number(-7)));
+        expression.set(3, alternatives); lambda.set(2, expression); entry.put("expr", lambda);
+        bindings.set(0, entry); input.put("bindings", bindings);
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new BytecodeProgram(language, input); var target = program.entryTarget("entry");
+                assertEquals(1, ((BytecodeRoot) target.getRootNode()).prepareGraphBudgetRetry(0));
+                var layout = program.constructorLayout("C32"); var value = layout.allocate();
+                layout.initializeLong(value, 0, 11); layout.initializeLong(value, 1, 101); layout.initializeLong(value, 2, 13);
+                assertEquals(24L, Calls.target(target, new Object[]{0L, value}));
+                assertEquals(206L, Calls.target(target, new Object[]{0L, program.entryValue("chosen")}));
+                assertEquals(-7L, Calls.target(target, new Object[]{0L, program.constructorLayout("Other").allocate()}));
+            } finally { context.leave(); }
+        }
+    }
+
+    @Test void recoveredSideKeepsTheEnclosingStmCommitAndRollbackDomain() throws Exception {
+        var write = node("app", node("prim", "writeTVar#"), List.of(variable("cell", MUTABLE), variable("payload", REFERENCE),
+                node("void", Map.of("rep", STATE))), List.of(false, true, false), false, false, Map.of("rep", STATE));
+        var body = node("case", write, "written", List.of(node("default", null, List.of(), number(17))),
+                Map.of("rep", LONG, "binder", binder("written", STATE, false)));
+        var input = decision(64, List.of(binder("cell", MUTABLE, false), binder("payload", REFERENCE, true)), LONG, ignored -> body);
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new BytecodeProgram(language, input);
+                var target = ((Closure) program.entryValue("entry")).target;
+                var root = (BytecodeRoot) target.getRootNode(); assertEquals(1, root.prepareGraphBudgetRetry(0));
+                var stm = Language.currentState().stm; var old = new Object(); var replacement = new Object(); var rolledBack = new Object();
+                var cell = stm.newTVar(old);
+                assertEquals(17L, stm.atomically(root, () -> { throw new GuestException("nested", root); }, false, () -> {
+                    Object result = Calls.target(target, new Object[]{0L, program.entryValue("chosen"), cell, replacement});
+                    assertSame(old, stm.readIO(cell)); assertSame(replacement, stm.read(cell)); return result;
+                }));
+                assertSame(replacement, stm.readIO(cell)); assertFalse(stm.hasTransaction());
+                var failure = new GuestException("rollback", root);
+                assertSame(failure, assertThrows(GuestException.class, () -> stm.atomically(root,
+                        () -> { throw new GuestException("nested", root); }, false, () -> {
+                            assertEquals(17L, Calls.target(target, new Object[]{0L, program.entryValue("chosen"), cell, rolledBack}));
+                            assertSame(rolledBack, stm.read(cell)); throw failure;
+                        })));
+                assertSame(replacement, stm.readIO(cell)); assertFalse(stm.hasTransaction());
+            } finally { context.leave(); }
+        }
+    }
+
+    @Test void recoveredTailTransferReturnsToItsOriginalOwnerWithoutGrowingTheJavaStack() {
+        var next = node("app", node("prim", "-#"), List.of(variable("n", LONG), number(1)),
+                List.of(false, false), false, false, Map.of("rep", LONG));
+        var call = node("app", variable("entry", CLOSURE), List.of(variable("x", DATA), next),
+                List.of(true, false), false, false, Map.of("rep", LONG));
+        var input = new LinkedHashMap<>(decision(64, List.of(binder("n", LONG, false)), LONG, ignored -> call));
+        var bindings = new ArrayList<Map<String, Object>>((List<Map<String, Object>>) input.get("bindings"));
+        var entry = new LinkedHashMap<>(bindings.getFirst()); var lambda = new ArrayList<>((List<Object>) entry.get("expr"));
+        lambda.set(2, node("case", variable("n", LONG), "remaining", List.of(
+                node("lit", List.of("int", "0"), List.of(), number(17)), node("default", null, List.of(), lambda.get(2))),
+                Map.of("rep", LONG, "binder", binder("remaining", LONG, false))));
+        entry.put("expr", lambda); bindings.set(0, entry); input.put("bindings", bindings);
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new BytecodeProgram(language, input); var target = program.entryTarget("entry");
+                var root = (BytecodeRoot) target.getRootNode(); assertEquals(1, root.prepareGraphBudgetRetry(0));
+                assertEquals(17L, Calls.target(target, new Object[]{0L, program.entryValue("chosen"), 2048L}));
+                assertEquals(0, entries(program), "Tail ownership is checked independently of cold loop compilation");
+            } finally { context.leave(); }
+        }
+    }
+
+    @Test void aCaseUnderAnOuterJoinRetainsItsActivationInsteadOfExtractingAcrossIt() {
+        var call = node("app", variable("finish", CLOSURE), List.of(number(73)), List.of(false), false, false, Map.of("rep", LONG));
+        var input = new LinkedHashMap<>(decision(64, List.of(), LONG, ignored -> call));
+        var bindings = new ArrayList<Map<String, Object>>((List<Map<String, Object>>) input.get("bindings"));
+        var entry = new LinkedHashMap<>(bindings.getFirst()); var lambda = new ArrayList<>((List<Object>) entry.get("expr"));
+        var join = new LinkedHashMap<>(binder("finish", CLOSURE, true));
+        join.put("joinValueArity", 1); join.put("joinResultRep", LONG);
+        join.put("expr", node("lam", List.of(binder("answer", LONG, false)), variable("answer", LONG), Map.of("resultRep", LONG)));
+        lambda.set(2, node("let", false, List.of(join), lambda.get(2), Map.of("rep", LONG)));
+        entry.put("expr", lambda); bindings.set(0, entry); input.put("bindings", bindings);
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new BytecodeProgram(language, input); var target = program.entryTarget("entry");
+                var root = (BytecodeRoot) target.getRootNode(); assertEquals(0, root.prepareGraphBudgetRetry(0));
+                assertEquals(73L, Calls.target(target, new Object[]{0L, program.entryValue("chosen")}));
+            } finally { context.leave(); }
+        }
+    }
+
+    private static List<Object> take(String cell) {
+        return node("app", node("prim", "takeMVar#"), List.of(variable(cell, MUTABLE), node("void", Map.of("rep", STATE))),
+                List.of(false, false), false, false, Map.of("rep", tuple(STATE, REFERENCE)));
+    }
+    private static List<Object> afterTake(String cell, String name, List<Object> body, Map<String, Object> result) {
+        return node("case", take(cell), name + "Pair", List.of(node("data", "Pair", List.of(name + "State", name), body,
+                Map.of("binders", List.of(binder(name + "State", STATE, false), binder(name, REFERENCE, true))))),
+                Map.of("rep", result, "binder", binder(name + "Pair", tuple(STATE, REFERENCE), false)));
+    }
+
+    @Test void firstCompiledRegionCutResumesAcrossThreadsWithoutReplayingThePrefix() throws Exception {
+        checkRegionCut(false);
+    }
+    @Test void anAlreadyParkedInlinePcSurvivesRecoveryWithoutReplayingItsPrefix() throws Exception {
+        checkRegionCut(true);
+    }
+    private void checkRegionCut(boolean parkBeforeRecovery) throws Exception {
+        var resultProof = tuple(REFERENCE, REFERENCE);
+        var result = node("app", node("con", "Result", 2), List.of(variable("before", REFERENCE), variable("after", REFERENCE)),
+                List.of(true, true), false, false, Map.of("rep", resultProof));
+        var input = new LinkedHashMap<>(decision(64,
+                List.of(binder("prefix", MUTABLE, false), binder("blocked", MUTABLE, false)), resultProof,
+                ignored -> afterTake("blocked", "after", result, resultProof)));
+        var bindings = new ArrayList<Map<String, Object>>((List<Map<String, Object>>) input.get("bindings"));
+        var entry = new LinkedHashMap<>(bindings.getFirst());
+        var lambda = new ArrayList<>((List<Object>) entry.get("expr"));
+        var decision = new ArrayList<>((List<Object>) lambda.get(2));
+        // The selector is closed: this control isolates region suspension, not lazy-formal forcing.
+        decision.set(1, node("con", "C63", 0, Map.of("rep", DATA)));
+        lambda.set(1, List.of(binder("prefix", MUTABLE, false), binder("blocked", MUTABLE, false)));
+        lambda.set(2, afterTake("prefix", "before", decision, resultProof));
+        lambda.set(3, Map.of("rep", CLOSURE, "resultRep", resultProof, "entryStrict", List.of(false, false)));
+        entry.put("expr", lambda); bindings.set(0, entry); input.put("bindings", bindings);
+        constructors(input, tupleConstructor("Pair", 2), tupleConstructor("Result", 2));
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            final Language language; final Language.State owner; final BytecodeProgram program; final RootCallTarget target;
+            final BytecodeRoot root; final RootCallTarget resume;
+            try {
+                language = TruffleLanguage.LanguageReference.create(Language.class).get(null); owner = Language.currentState();
+                program = new BytecodeProgram(language, input, true); target = program.entryTarget("entry");
+                root = (BytecodeRoot) target.getRootNode();
+                resume = new RootNode(language) {
+                    @Child private Force force = new Force(new Metrics(false), true);
+                    @Override public Object execute(VirtualFrame frame) {
+                        return force.drainStack((SavedGuestContinuation) frame.getArguments()[0], root.getTupleResult());
+                    }
+                }.getCallTarget();
+                if (!parkBeforeRecovery) {
+                    assertEquals(1, root.prepareGraphBudgetRetry(0)); // Transport control; the real bailout has its own test.
+                    assertTrue(compile(target)); bypass(target); assertTrue(valid(target));
+                }
+                assertEquals(0, entries(program));
+            } finally { context.leave(); }
+            var prefix = new ManagedMVar(); var blocked = new ManagedMVar(); var before = new Object(); var after = new Object();
+            assertTrue(prefix.tryPut(before)); long compiled = entries(program);
+            var answer = new CompletableFuture<SavedGuestContinuation>();
+            var worker = new Thread(() -> {
+                context.enter(); owner.getThreads().enterCurrent(null, false, true, null);
+                try {
+                    var saved = java.util.Objects.requireNonNull(SavedGuestContinuations.savedGuestContinuation(
+                            Calls.target(target, new Object[]{0L, prefix, blocked})));
+                    java.util.Objects.requireNonNull(saved.asyncRequest()).acknowledge();
+                    assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(root));
+                    answer.complete(saved);
+                } catch (Throwable failure) { answer.completeExceptionally(failure); }
+                finally { owner.getThreads().leaveCurrent(GuestThreadStatus.FINISHED); context.leave(); }
+            });
+            worker.start();
+            try {
+                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+                while (blocked.pendingCounts().getTakers() != 1 && !answer.isDone() && System.nanoTime() < deadline) Thread.sleep(1);
+                if (answer.isCompletedExceptionally()) answer.get(1, TimeUnit.SECONDS);
+                assertEquals(1, blocked.pendingCounts().getTakers()); assertTrue(prefix.isEmpty());
+                owner.getThreads().send(java.util.Objects.requireNonNull(owner.getThreads().pollState(worker).getCurrent()).getIdentity(), "case region cut");
+                var saved = answer.get(10, TimeUnit.SECONDS); worker.join(5000); assertFalse(worker.isAlive());
+                assertEquals(compiled + (parkBeforeRecovery ? 0 : 1), entries(program));
+                if (parkBeforeRecovery) {
+                    context.enter();
+                    try {
+                        assertSame(root, saved.getSourceRoot());
+                        var parkedCode = instructions(root);
+                        assertEquals(1, root.prepareGraphBudgetRetry(0));
+                        assertTrue(compile(target)); bypass(target); assertTrue(valid(target));
+                        assertEquals(parkedCode, instructions(root), "Recovery cannot replace a parked instruction stream");
+                    } finally { context.leave(); }
+                }
+                boolean retainedAfterCapture = valid(target);
+                var completed = new CompletableFuture<Unit>();
+                var resumer = new Thread(() -> {
+                    context.enter();
+                    try {
+                        assertTrue(blocked.tryPut(after));
+                        var value = TupleResults.ownedTupleResult(Calls.target(resume, new Object[]{saved}), root.getTupleResult());
+                        var layout = root.getTupleResult().getLayout();
+                        assertSame(before, layout.getObject(value, 0)); assertSame(after, layout.getObject(value, 1));
+                        assertTrue(prefix.isEmpty(), "Completed caller effect must not replay"); assertTrue(blocked.isEmpty());
+                        assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(root));
+                        var handoff = language.getHandoffState().get(); assertNull(handoff.getPending());
+                        assertEquals(0, handoff.getArguments().getDepth()); assertEquals(0, handoff.getResults().getDepth());
+                        assertEquals(0, handoff.getArguments().retainedReferences()); assertEquals(0, handoff.getResults().retainedReferences());
+                        assertSame(target, program.entryTarget("entry")); assertTrue(retainedAfterCapture); assertTrue(valid(target));
+                        completed.complete(Unit.INSTANCE);
+                    } catch (Throwable failure) { completed.completeExceptionally(failure); }
+                    finally { context.leave(); }
+                });
+                resumer.start();
+                try { completed.get(10, TimeUnit.SECONDS); }
+                finally { if (!completed.isDone()) context.close(true); resumer.join(5000); }
+                assertFalse(resumer.isAlive());
+            } finally { if (worker.isAlive()) context.close(true); worker.join(5000); }
         }
     }
 }

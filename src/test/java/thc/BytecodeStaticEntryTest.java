@@ -117,13 +117,19 @@ class BytecodeStaticEntryTest {
         var expr = list("lam", list(binder), list("var", "x", map("rep", rep)), map("rep", map("kind", "closure", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)")), "resultRep", rep));
         return new BytecodeProgram(language, map("bindings", list(map("id", "f", "name", "f", "arity", 1L, "lifted", true, "expr", expr)), "constructors", list()), async);
     }
-    @Test void compilerCertifiesOnlyExactWideSingleWriteFormalsAndKeepsUnknownAndNarrowInputsGeneric() throws Exception {
+    @Test void compilerCertifiesExactMarkersAndKeepsUnknownAndNarrowInputsOutOfWideSlots() throws Exception {
         withLanguage(language -> {
-            for (Object marker : list(FrameSlotKind.Int, "object", "primitive", null)) {
+            for (Object marker : list(FrameSlotKind.Long, FrameSlotKind.Int, FrameSlotKind.Float, FrameSlotKind.Double,
+                    FrameSlotKind.Boolean, FrameSlotKind.Object, FrameSlotKind.Byte, FrameSlotKind.Illegal,
+                    FrameSlotKind.Static, "object", "primitive", null)) {
                 var root = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT, b -> {
-                    b.beginRoot(); var local = b.createLocal("unapproved marker", marker); b.beginStoreLocal(local); b.emitLoadArgument(0); b.endStoreLocal(); b.beginReturn(); b.emitLoadLocal(local); b.endReturn(); b.endRoot();
+                    b.beginRoot(); var local = b.createLocal("declared marker", marker); b.beginStoreLocal(local); b.emitLoadArgument(0); b.endStoreLocal(); b.beginReturn(); b.emitLoadLocal(local); b.endReturn(); b.endRoot();
                 }).getNode(0);
-                compile(root.getCallTarget()); assertEquals(FrameSlotKind.Illegal, singleLocal(root).getTypeProfile(), "Only the explicitly approved singleton may initialize a local: " + marker);
+                var expected = marker == FrameSlotKind.Long || marker == FrameSlotKind.Int || marker == FrameSlotKind.Float
+                        || marker == FrameSlotKind.Double || marker == FrameSlotKind.Boolean || marker == FrameSlotKind.Object
+                        ? marker : FrameSlotKind.Illegal;
+                compile(root.getCallTarget()); assertEquals(expected, singleLocal(root).getTypeProfile(),
+                        "Only explicitly approved physical-carrier singletons may initialize a local: " + marker);
             }
             var wide = map("kind", "long", "primReps", list("IntRep"), "evaluated", true);
             for (boolean async : list(false, true)) {
@@ -133,7 +139,8 @@ class BytecodeStaticEntryTest {
             var unknown = (BytecodeRoot) program(language, map("kind", "unknown", "evaluated", false), true, false).entryTarget("f").getRootNode();
             assertTrue(unknown.getBytecodeNode().getLocals().stream().noneMatch(local -> local.getInfo() == FrameSlotKind.Long));
             var narrow = (BytecodeRoot) program(language, map("kind", "long", "primReps", list("Int32Rep"), "evaluated", true), false, false).entryTarget("f").getRootNode();
-            assertTrue(narrow.getBytecodeNode().getLocals().stream().noneMatch(local -> local.getInfo() == FrameSlotKind.Long));
+            var narrowFormals = narrow.getBytecodeNode().getLocals().stream().filter(local -> Objects.equals(local.getName(), "x")).toList();
+            assertEquals(1, narrowFormals.size()); assertSame(FrameSlotKind.Int, narrowFormals.getFirst().getInfo());
         });
     }
     @Test void unprofiledBooleanBranchRetainsItsFirstCompiledBothArmsAndReplay() throws Exception {

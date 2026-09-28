@@ -912,7 +912,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                     var kind = FrameLayout.carrierKind(local.proof);
                     e.staticScalars.put(local.id, kind);
                     info = kind;
-                } else if (singleWrite && (staticLiftedReference(local.proof)
+                } else if (singleWrite && (staticBoxedReference(local.proof)
                         || typedFormal && FrameLayout.carrierKind(local.proof) == FrameSlotKind.Object)) {
                     e.staticObjectLocals.add(local.id);
                     info = FrameSlotKind.Object;
@@ -1091,48 +1091,17 @@ public final class BytecodeProgram implements ExecutableProgram {
         b.beginBlock();
         var values = new ArrayList<BytecodeLocal>();
         for (int i = 0; i < operands.size(); ++i) {
-            var local = b.createLocal("Blocking operand " + i, null);
-            b.beginStoreLocal(local); operands.get(i).emit(e); b.endStoreLocal();
+            // The request ABI saves boxed scalar values, without observing or forcing them.
+            var local = b.createLocal("Blocking operand " + i, FrameSlotKind.Object);
+            b.beginStaticStoreObject(local); operands.get(i).emit(e); b.endStaticStoreObject();
             values.add(local);
         }
-        var retry = b.createLocal("Blocking request pending", "primitive");
-        var request = b.createLocal("Blocking async request", FrameSlotKind.Object);
-        var active = b.createLocal("Blocking logical mask", FrameSlotKind.Object);
-        var discard = b.createLocal("Blocking resume value", FrameSlotKind.Object);
-        b.beginStoreLocal(retry); b.emitLoadConstant(true); b.endStoreLocal();
-        b.beginWhile();
-        b.emitLoadLocal(retry);
-        b.beginBlock();
-        b.beginTryCatch();
-        b.beginBlock();
-        operation.accept(values);
-        b.beginStoreLocal(retry); b.emitLoadConstant(false); b.endStoreLocal();
-        b.endBlock();
-        b.beginBlock();
-        b.beginStaticStoreObject(request);
-        b.beginCallSuspensionOnly(); b.emitLoadException(); b.endCallSuspensionOnly();
-        b.endStaticStoreObject();
-        b.beginStaticStoreObject(active); b.emitCurrentMask(); b.endStaticStoreObject();
-        b.beginStaticStoreObject(discard);
-        b.beginReenterCallMask();
-        beginAnnotationYield(e);
-        b.beginParkAsyncMask();
-        b.emitStaticLoadObject(request);
-        b.emitStaticLoadObject(Objects.requireNonNull(e.checkpointRootEntry));
-        b.endParkAsyncMask();
-        endAnnotationYield(e);
-        b.emitStaticLoadObject(active);
-        b.endReenterCallMask();
-        b.endStaticStoreObject();
-        b.endBlock();
-        b.endTryCatch();
-        b.endBlock();
-        b.endWhile();
+        emitOwnerWaitRetry(e, () -> operation.accept(values));
         if (result) b.emitLoadConstant(thc.runtime.Unit.INSTANCE);
         b.endBlock();
     }
 
-    /** Only a foreign owner wait may restart; the producer/local operand stays saved. */
+    /** Retry only an uncommitted request; the producer/local operand stays saved. */
     private void emitOwnerWaitRetry(Emission e, Runnable attempt) {
         if (!enableAsync) { attempt.run(); return; }
         var b = e.builder;
@@ -4580,10 +4549,12 @@ public final class BytecodeProgram implements ExecutableProgram {
             && Set.of("IntRep", "WordRep", "Int64Rep", "Word64Rep").contains(proof.getPrimReps().getFirst());
     }
 
-    private static boolean staticLiftedReference(CoreRepresentation proof) {
+    private static boolean staticBoxedReference(CoreRepresentation proof) {
         return !proof.isTypedTransport() && Set.of(CoreKind.OBJECT, CoreKind.DATA, CoreKind.CLOSURE).contains(proof.getKind())
             && proof.getPrimReps() != null && proof.getPrimReps().size() == 1
-            && "BoxedRep (Just Lifted)".equals(proof.getPrimReps().getFirst());
+            // Boxed storage is Object regardless of levity; this does not prove WHNF.
+            && Set.of("BoxedRep (Just Lifted)", "BoxedRep (Just Unlifted)", "BoxedRep Nothing")
+                .contains(proof.getPrimReps().getFirst());
     }
 
     private Expression primitive(String name, List<Expression> args) { return primitive(name, args, false); }
@@ -5463,7 +5434,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             // A case binder is written once, before its alternatives. A saved
             // activation retains that same slot; resumption does not rebind it.
             if (staticWideLong(binderProof)) e.staticLocals.add(binder.id);
-            else if (binderProof.getKind() == CoreKind.VOID || staticLiftedReference(binderProof))
+            else if (binderProof.getKind() == CoreKind.VOID || staticBoxedReference(binderProof))
                 e.staticObjectLocals.add(binder.id);
             if (category == CaseCategory.GENERIC) {
                 if (e.staticObjectLocals.contains(binder.id)) {
@@ -7019,7 +6990,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                     target.builder.beginPrepareThreadDelay(); for (var operand : operands) operand.emit(target); target.builder.endPrepareThreadDelay();
                 };
                 if (enableAsync) emitBlockingRequest(e, List.of(token), true, values -> {
-                    b.beginAwaitThreadDelay(true); b.emitLoadLocal(values.getFirst()); b.endAwaitThreadDelay();
+                    b.beginAwaitThreadDelay(true); b.emitStaticLoadObject(values.getFirst()); b.endAwaitThreadDelay();
                 });
                 else {
                     b.beginBlock(); b.beginAwaitThreadDelay(false); token.emit(e); b.endAwaitThreadDelay();
@@ -7077,7 +7048,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                     target.builder.beginPrepareFileWait(writing); for (var operand : operands) operand.emit(target); target.builder.endPrepareFileWait();
                 };
                 if (enableAsync) emitBlockingRequest(e, List.of(token), true, values -> {
-                    b.beginAwaitFileWait(payload, true); b.emitLoadLocal(values.getFirst()); b.endAwaitFileWait();
+                    b.beginAwaitFileWait(payload, true); b.emitStaticLoadObject(values.getFirst()); b.endAwaitFileWait();
                 });
                 else {
                     b.beginBlock(); b.beginAwaitFileWait(payload, false); token.emit(e); b.endAwaitFileWait();
@@ -7233,10 +7204,10 @@ public final class BytecodeProgram implements ExecutableProgram {
                     var slots = tupleSlots(new TupleShape(tupleProof, language), destination);
                     if (enableAsync) emitBlockingRequest(e, operands, false, values -> {
                         // Restart the discarded attempt with saved original operands, not its abandoned continuation.
-                        b.beginInvokeSTM(operation, slots, metrics, true); b.emitLoadLocal(values.get(0));
-                        if (values.size() == 3) b.emitLoadLocal(values.get(1)); else b.emitLoadNull();
+                        b.beginInvokeSTM(operation, slots, metrics, true); b.emitStaticLoadObject(values.get(0));
+                        if (values.size() == 3) b.emitStaticLoadObject(values.get(1)); else b.emitLoadNull();
                         if (nested != null) b.emitReadGlobal(nested); else b.emitLoadNull();
-                        b.emitLoadLocal(values.getLast()); b.endInvokeSTM();
+                        b.emitStaticLoadObject(values.getLast()); b.endInvokeSTM();
                     });
                     else {
                         b.beginInvokeSTM(operation, slots, metrics, enableAsync); operands.get(0).emit(e);
@@ -7263,7 +7234,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 var b = e.builder;
                 if (enableAsync && (operation == MVarOp.TAKE || operation == MVarOp.READ)) emitBlockingRequest(e, operands, false, values -> {
                     b.beginReadMVar(destination.get(0), operation == MVarOp.TAKE, true);
-                    for (var value : values) b.emitLoadLocal(value); b.endReadMVar();
+                    for (var value : values) b.emitStaticLoadObject(value); b.endReadMVar();
                 });
                 else {
                     switch (operation) {
@@ -7285,7 +7256,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             return new ProvenExpression(e -> {
                 var b = e.builder;
                 if (enableAsync && operation == MVarOp.PUT) emitBlockingRequest(e, operands, true, values -> {
-                    b.beginPutMVar(true); for (var value : values) b.emitLoadLocal(value); b.endPutMVar();
+                    b.beginPutMVar(true); for (var value : values) b.emitStaticLoadObject(value); b.endPutMVar();
                 });
                 else { b.beginPutMVar(false); for (var operand : operands) operand.emit(e); b.endPutMVar(); }
             }, evaluatedProof(tupleProof, true));
