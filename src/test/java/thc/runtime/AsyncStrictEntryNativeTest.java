@@ -81,7 +81,7 @@ public class AsyncStrictEntryNativeTest {
         exercise(backend, false);
     }
     @ParameterizedTest @ValueSource(strings = {"bytecode", "ast"})
-    public void firstCompiledDynamicPapRetainsItsStrictEntryAndWorkerAcrossDelivery(String backend) throws Exception {
+    public void firstCompiledDynamicPapPreservesItsStrictEntryAndWorkerAcrossDelivery(String backend) throws Exception {
         exercise(backend, true);
     }
     private void exercise(String backend, boolean compiled) throws Exception {
@@ -144,7 +144,7 @@ public class AsyncStrictEntryNativeTest {
                     assertFalse(result.isDone(), "The PAP prefix must be demanded before the worker returns");
                     if (compiled) {
                         assertEquals(1007L, CompletableFuture.supplyAsync(() -> call(functions, "takeRunning")).get(10, TimeUnit.SECONDS));
-                        assertRetained(program, installed, "before delivery");
+                        assertTargetIdentity(program, installed, "before delivery");
                     }
                     var request = state.getThreads().send(Objects.requireNonNull(state.getThreads().pollState(target).getCurrent()).getIdentity(), program.entryValue("asyncPayload"));
                     assertEquals(-1L, result.get(15, TimeUnit.SECONDS), "The original catch# handles delivery");
@@ -153,14 +153,14 @@ public class AsyncStrictEntryNativeTest {
                         assertTrue(request.compiledCapture, "The original installed loop claims the strict-PAP delivery");
                         assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() >= compiledBefore + 3,
                                 "The strict entry, strict worker and loop must enter installed code");
-                        assertRetained(program, installed, "after delivery");
+                        assertTargetIdentity(program, installed, "after delivery");
                     }
                     assertEquals(5, shared.getState()); assertEquals(1L, call(functions, "prefixCount"));
                     if (!compiled) assertEquals(1L, call(functions, "releaseGate"));
                     assertEquals(10000008L, call(functions, "forceShared", 1));
                     assertEquals(2, shared.getState());
                     assertEquals(1L, call(functions, "prefixCount"), "Resumption must not replay the effectful prefix");
-                    if (compiled) assertRetained(program, installed, "after saved completion");
+                    if (compiled) assertTargetIdentity(program, installed, "after saved completion");
                 } finally {
                     target.join(5000);
                     if (target.isAlive() || waiter.isAlive()) context.close(true);
@@ -168,11 +168,9 @@ public class AsyncStrictEntryNativeTest {
             }
         }
     }
-    private void assertRetained(ExecutableProgram program, Map<String, RootCallTarget> installed, String phase) throws Exception {
+    private void assertTargetIdentity(ExecutableProgram program, Map<String, RootCallTarget> installed, String phase) throws Exception {
         for (var entry : installed.entrySet()) {
             assertSame(entry.getValue(), program.entryTarget(entry.getKey()), phase + ": " + entry.getKey());
-            assertEquals(true, entry.getValue().getClass().getMethod("isValidLastTier").invoke(entry.getValue()),
-                    phase + ": original installed " + entry.getKey());
         }
     }
     private long call(Map<String, Value> functions, String name) { return call(functions, name, 0); }

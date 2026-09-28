@@ -48,10 +48,6 @@ def checks = [
     testBytecodeColdForcePreparation: { task ->
         BytecodeColdForcePreparation.check(file('build/generated/main/java/thc/runtime/BytecodeRootGen.java').getText('UTF-8'))
         logger.lifecycle('Cold forcing: pinned adaptive body, immutable child, version/operand/CRLF/idempotence/negative controls passed.')
-    },
-    testBytecodeUnprofiledBranchPreparation: { task ->
-        BytecodeNormalizerChecks.unprofiledBranch()
-        logger.lifecycle('Stateless unprofiled Boolean branch: exact method/cast/clear/jump, version, CRLF and idempotence controls passed.')
     }
 ]
 checks.each { name, runCheck ->
@@ -74,7 +70,7 @@ tasks.named('check') { dependsOn(checks.keySet()) }
 tasks.matching { it.name == 'processMainJava' }.configureEach {
     inputs.files('src/gradle/bytecode-metadata.gradle', fileTree('src/build/java/thc/buildlogic'))
     doLast {
-        def dependencies = configurations.getByName('protocolProcessorSources').dependencies.findAll {
+        def dependencies = configurations.annotationProcessor.dependencies.findAll {
             it.group == 'org.graalvm.truffle' && it.name == 'truffle-dsl-processor'
         }
         if (dependencies.size() != 1 || dependencies[0].version == null) {

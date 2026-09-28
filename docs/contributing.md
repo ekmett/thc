@@ -148,9 +148,10 @@ description is retained verbatim; the interpreter and primop implementations are
 untouched. This normalization removes no metadata and requires no GHC. It is
 idempotent and rejects unrecognized generator shapes or processor versions;
 review it when upgrading Truffle. Separate, hash-pinned
-[protocol artifacts](../tools/truffle-protocol/README.md) add unprofiled runtime
-branches and explicit root materialization/completion declarations. They are
-rebuilt from upstream source and never replace shared Maven cache files.
+[protocol artifacts](../tools/truffle-protocol/README.md) provide explicit root
+materialization/completion declarations and runtime integration. The Truffle DSL
+processor is the published upstream artifact; branches use ordinary profiling.
+API/runtime overlays are built separately and never replace shared Maven cache files.
 
 Run `./gradlew testBytecodeMetadataSplit` for compiled before/after opcode checks
 and malformed-input controls. Add

@@ -1025,16 +1025,16 @@ public final class BytecodeProgram implements ExecutableProgram {
             }
             if (enableAsync) {
                 // The saved PC follows ingress restoration, before any body effects.
-                b.beginUnprofiledIfThen(); b.emitStackLimit();
+                b.beginIfThen(); b.emitStackLimit();
                 b.beginBlock();
                 var resumed = b.createLocal("stack entry resume value", FrameSlotKind.Object);
                 b.beginStaticStoreObject(resumed);
                 b.beginYield(); b.emitLoadConstant(AstStackSpill.INSTANCE); b.endYield();
                 b.endStaticStoreObject();
-                b.endBlock(); b.endUnprofiledIfThen();
+                b.endBlock(); b.endIfThen();
             }
             if (context.mayLoop) {
-                if (resumable) b.beginUnprofiledWhile(); else b.beginWhile();
+                b.beginWhile();
                 b.emitLoadConstant(true);
                 b.beginBlock();
                 e.continueLabel = b.createLabel();
@@ -1061,7 +1061,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 b.emitLabel(Objects.requireNonNull(e.continueLabel));
                 if (enableAsync) emitAsyncPoll(e);
                 b.endBlock();
-                if (resumable) b.endUnprofiledWhile(); else b.endWhile();
+                b.endWhile();
                 // The loop condition is true; retain a terminating operation for the builder.
                 b.beginReturn(); b.emitFailCase(); b.endReturn();
             }
@@ -1127,7 +1127,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         for (var local : List.of(request, active, annotations)) {
             b.beginStaticStoreObject(local); b.emitLoadNull(); b.endStaticStoreObject();
         }
-        b.beginUnprofiledIfThen();
+        b.beginIfThen();
         if (processResult == null) b.emitPollAsync(request);
         else {
             b.beginPollProcessCompleted(request);
@@ -1141,7 +1141,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         endAnnotationYield(e);
         b.endReenterPendingAsyncMask();
         b.endBlock();
-        b.endUnprofiledIfThen();
+        b.endIfThen();
         b.endBlock();
     }
 
@@ -1171,7 +1171,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         var request = b.createLocal("owner wait async request", FrameSlotKind.Object);
         var active = b.createLocal("owner wait logical mask", FrameSlotKind.Object);
         var discard = b.createLocal("owner wait resume value", FrameSlotKind.Object);
-        b.beginUnprofiledWhile(); b.emitLoadConstant(true); b.beginBlock();
+        b.beginWhile(); b.emitLoadConstant(true); b.beginBlock();
         b.beginTryCatch();
         b.beginBlock();
         attempt.run();
@@ -1195,7 +1195,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         b.endStaticStoreObject();
         b.endBlock();
         b.endTryCatch();
-        b.endBlock(); b.endUnprofiledWhile();
+        b.endBlock(); b.endWhile();
         b.emitLabel(complete);
         b.endBlock();
     }
@@ -3236,7 +3236,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             b.emitLabel(stages.get(start));
             if (enableAsync) emitAsyncPoll(e);
             // A zero-arity closure consumes no arguments; its backward edge needs a structured loop.
-            b.beginUnprofiledWhile();
+            b.beginWhile();
             b.beginSavedCallArity(0, false); b.emitStaticLoadObject(fn); b.endSavedCallArity();
             b.beginBlock();
             if (enableAsync) emitAsyncPoll(e);
@@ -3246,10 +3246,10 @@ public final class BytecodeProgram implements ExecutableProgram {
             b.beginStaticStoreObject(fn);
             requireClosure(emission -> emission.builder.emitStaticLoadObject(result)).emit(e);
             b.endStaticStoreObject();
-            b.endBlock(); b.endUnprofiledWhile();
+            b.endBlock(); b.endWhile();
             int remaining = count - start;
             for (int take = 1; take < remaining; ++take) {
-                b.beginUnprofiledIfThen();
+                b.beginIfThen();
                 b.beginSavedCallArity(take, false); b.emitStaticLoadObject(fn); b.endSavedCallArity();
                 b.beginBlock();
                 int from = ArgumentLayout.offset(layout, start);
@@ -3269,7 +3269,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 requireClosure(emission -> emission.builder.emitStaticLoadObject(result)).emit(e);
                 b.endStaticStoreObject();
                 b.emitBranch(stages.get(start + take));
-                b.endBlock(); b.endUnprofiledIfThen();
+                b.endBlock(); b.endIfThen();
             }
             int from = ArgumentLayout.offset(layout, start);
             ArgumentLayout input = null;
@@ -3332,11 +3332,11 @@ public final class BytecodeProgram implements ExecutableProgram {
             return;
         }
         var complete = b.createLabel();
-        b.beginUnprofiledIfThen();
+        b.beginIfThen();
         b.beginSavedCallArity(arguments.size(), true); b.emitStaticLoadObject(fn); b.endSavedCallArity();
         b.beginBlock(); b.beginStaticStoreObject(result);
         stagedOverapplication(e, fn, values, layout, evaluatedArguments, callerMask, result, arguments.size(), tail, null);
-        b.endStaticStoreObject(); b.emitBranch(complete); b.endBlock(); b.endUnprofiledIfThen();
+        b.endStaticStoreObject(); b.emitBranch(complete); b.endBlock(); b.endIfThen();
         b.beginStaticStoreObject(result);
         if (tail) savedApply(e, fn, values, layout, evaluatedArguments, arguments.size(), true);
         else checkpointedCall(e, fn, values, layout, evaluatedArguments, arguments.size(), callerMask);
@@ -3656,7 +3656,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 b.endBlock();
             }
             if (reentryResult != null) {
-                if (resumable) { b.endStaticStoreObject(); b.beginUnprofiledIfThen(); }
+                if (resumable) { b.endStaticStoreObject(); b.beginIfThen(); }
                 else { b.endStoreLocal(); b.beginConditional(); }
                 b.beginIsTailReentry(false);
                 if (resumable) b.emitStaticLoadObject(reentryResult); else b.emitLoadLocal(reentryResult);
@@ -3666,7 +3666,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 b.emitBranch(Objects.requireNonNull(e.continueLabel));
                 if (!resumable) b.emitLoadConstant(thc.runtime.Unit.INSTANCE);
                 b.endBlock();
-                if (resumable) { b.endUnprofiledIfThen(); b.emitStaticLoadObject(reentryResult); }
+                if (resumable) { b.endIfThen(); b.emitStaticLoadObject(reentryResult); }
                 else { b.emitLoadLocal(reentryResult); b.endConditional(); }
                 b.endBlock();
             }
@@ -4474,11 +4474,11 @@ public final class BytecodeProgram implements ExecutableProgram {
                 });
                 b.endStaticStoreObject();
                 if (resumable) {
-                    // A first saved tail is a normal control result, not an unseen guest branch.
-                    b.beginUnprofiledIfThen();
+                    // Propagate saved tail state before inspecting the normal return value.
+                    b.beginIfThen();
                     b.beginIsTailReentry(true); b.emitStaticLoadObject(result); b.endIsTailReentry();
                     b.beginBlock(); b.beginReturn(); b.emitStaticLoadObject(result); b.endReturn(); b.endBlock();
-                    b.endUnprofiledIfThen();
+                    b.endIfThen();
                 }
                 if (!context.passThrough) {
                     b.beginIfThenElse();
@@ -5361,14 +5361,14 @@ public final class BytecodeProgram implements ExecutableProgram {
             var answer = destination == null ? b.createLocal("case choice result", FrameSlotKind.Object) : null;
             var complete = b.createLabel();
             if (emission.inline) {
-                b.beginUnprofiledIfThen();
+                b.beginIfThen();
                 b.emitInlineCaseRegions();
                 b.beginBlock();
                 if (answer != null) b.beginStaticStoreObject(answer);
                 emitResult(inline, e, destination);
                 if (answer != null) b.endStaticStoreObject();
                 b.emitBranch(complete);
-                b.endBlock(); b.endUnprofiledIfThen();
+                b.endBlock(); b.endIfThen();
             }
             var captures = new LocalAccessor[specs.size()][];
             for (int i = 0; i < captures.length; i++) {
@@ -5415,10 +5415,10 @@ public final class BytecodeProgram implements ExecutableProgram {
             b.endBlock(); b.endTryCatch();
         }
         if (tail && context.mayLoop) {
-            b.beginUnprofiledIfThen();
+            b.beginIfThen();
             b.beginIsTailReentry(false); b.emitStaticLoadObject(result); b.endIsTailReentry();
             b.beginBlock(); restoreTailArguments(e, context, result);
-            b.emitBranch(Objects.requireNonNull(e.continueLabel)); b.endBlock(); b.endUnprofiledIfThen();
+            b.emitBranch(Objects.requireNonNull(e.continueLabel)); b.endBlock(); b.endIfThen();
         }
         if (source.destination() == null) b.emitStaticLoadObject(result);
         b.endBlock();
@@ -5602,12 +5602,12 @@ public final class BytecodeProgram implements ExecutableProgram {
                         // This is a checked constructor projection, not a choice
                         // between guest arms. Keep the mismatch failure cold.
                         var matched = b.createLabel();
-                        b.beginUnprofiledIfThen();
+                        b.beginIfThen();
                         if (category == CaseCategory.DATA) b.beginMatchDataValue((DataLayout) alt.value);
                         else b.beginMatchData((DataLayout) alt.value);
                         read(binder, false).emit(e);
                         if (category == CaseCategory.DATA) b.endMatchDataValue(); else b.endMatchData();
-                        b.emitBranch(matched); b.endUnprofiledIfThen();
+                        b.emitBranch(matched); b.endIfThen();
                         b.emitFailCase(); b.emitLabel(matched); emitAlternative(alt);
                         return;
                     }
@@ -5633,7 +5633,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 var result = destination == null ? b.createLocal("case decision result", FrameSlotKind.Object) : null;
                 var complete = b.createLabel();
                 for (var alt : explicit) {
-                    b.beginUnprofiledIfThen();
+                    b.beginIfThen();
                     if ("data".equals(alt.kind)) b.beginMatchDataValue((DataLayout) alt.value);
                     else b.beginLiteralEqual((Long) alt.value);
                     read(binder, false).emit(e);
@@ -5643,7 +5643,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                     choice.emitAlternative(alt);
                     if (result != null) b.endStaticStoreObject();
                     b.emitBranch(complete);
-                    b.endBlock(); b.endUnprofiledIfThen();
+                    b.endBlock(); b.endIfThen();
                 }
                 if (fallback == null) b.emitFailCase();
                 else {

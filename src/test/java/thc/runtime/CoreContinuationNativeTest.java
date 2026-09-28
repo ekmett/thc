@@ -260,6 +260,39 @@ class CoreContinuationNativeTest {
         return false;
     }
 
+    @Test void originalOverapplicationShapesUseOrdinaryBranchProfiles() throws Exception {
+        var module = module();
+        try (var context = executionContext()) {
+            context.initialize("thc");
+            entered(context, () -> {
+                for (String entry : List.of("overapplicationAnswer", "tupleOverapplicationAnswer")) {
+                    var program = new BytecodeProgram(language(), CoreModules.reachable(module, entry, true), true);
+                    var root = (BytecodeRoot) program.entryTarget(entry).getRootNode();
+                    int shapes = 0;
+                    boolean pending = false, zeroArity = false;
+                    for (var instruction : root.getBytecodeNode().getInstructions()) {
+                        if (pending) {
+                            assertTrue(instruction.getName().startsWith("branch.false"), entry + " shape dispatch");
+                            boolean profiled = false;
+                            for (var argument : instruction.getArguments())
+                                profiled |= argument.getKind() == com.oracle.truffle.api.bytecode.Instruction.Argument.Kind.BRANCH_PROFILE;
+                            assertTrue(profiled, entry + " application shapes use stock branch profiles");
+                            shapes++;
+                        }
+                        pending = instruction.getName().startsWith("c.SavedCallArity");
+                        if (pending) for (var argument : instruction.getArguments())
+                            if (argument.getKind() == com.oracle.truffle.api.bytecode.Instruction.Argument.Kind.CONSTANT)
+                                zeroArity |= Integer.valueOf(0).equals(argument.asConstant());
+                    }
+                    assertFalse(pending);
+                    assertTrue(shapes >= 3, entry + " has the overapplication gate, zero-arity loop and exact stage");
+                    assertTrue(zeroArity, entry + " zero-arity closure loop is included");
+                }
+                return null;
+            });
+        }
+    }
+
     @Test void originalOverapplicationKeepsItsSavedSuffixAfterTheFirstCalleeYields() throws Exception {
         assertEquals("209", oracle().get(14));
         var module = module();

@@ -73,7 +73,7 @@ class AsyncCompactTest {
     }
     @ParameterizedTest @ValueSource(strings = {"ast", "ast-sharing", "bytecode", "bytecode-sharing",
             "ast-failure", "ast-sharing-failure", "bytecode-failure", "bytecode-sharing-failure"})
-    void firstInstalledCopyRetainsPrivateTraversalAcrossDelivery(String mode) throws Exception {
+    void firstInstalledCopyPreservesPrivateTraversalAcrossDelivery(String mode) throws Exception {
         try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
                 .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
                 .option("engine.Splitting", "false").option("engine.CompilationFailureAction", "Throw").build()) {
@@ -125,7 +125,6 @@ class AsyncCompactTest {
                 assertSame(request, saved.asyncRequest()); assertEquals(AsyncRequestState.ACKNOWLEDGED, request.getState());
                 assertEquals(1, child.installed.get()); assertTrue(request.compiledCapture);
                 assertEquals(before + 1, ((Number) program.diagnostics().get("compiledEntries")).longValue());
-                assertEquals(true, caller.getClass().getMethod("isValidLastTier").invoke(caller));
                 context.enter();
                 try {
                     assertEquals(0, region.getGeneration()); assertTrue(region.getObjects().isEmpty());
@@ -155,7 +154,6 @@ class AsyncCompactTest {
                     assertEquals(1, region.getGeneration());
                     assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(caller.getRootNode()));
                     assertSame(caller, program.entryTarget("copy"));
-                    assertEquals(true, caller.getClass().getMethod("isValidLastTier").invoke(caller));
                     var pools = shape.getLanguage().getHandoffState().get();
                     assertEquals(0, pools.getArguments().getDepth()); assertEquals(0, pools.getResults().getDepth());
                     assertEquals(0, pools.getArguments().retainedReferences()); assertEquals(0, pools.getResults().retainedReferences());

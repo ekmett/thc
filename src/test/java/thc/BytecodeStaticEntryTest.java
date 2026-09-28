@@ -143,34 +143,51 @@ class BytecodeStaticEntryTest {
             assertEquals(1, narrowFormals.size()); assertSame(FrameSlotKind.Int, narrowFormals.getFirst().getInfo());
         });
     }
-    @Test void unprofiledBooleanBranchRetainsItsFirstCompiledBothArmsAndReplay() throws Exception {
+    @Test void ordinaryBooleanBranchDeoptimizesOnItsFirstOppositeArmWithoutReplay() throws Exception {
         withLanguage(language -> {
             var layout = new DataLayout(language, "BranchTrue", "BranchTrue", new String[0], new Class<?>[0]); var trueValue = layout.create(new Object[0]);
             var falseValue = new DataLayout(language, "BranchFalse", "BranchFalse", new String[0], new Class<?>[0]).create(new Object[0]);
             for (boolean primitiveCondition : list(false, true)) {
                 var metrics = new Metrics(true); int[] sourceReads = {0};
                 var root = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT, b -> {
-                    if (b.isParsingSources()) { sourceReads[0]++; b.beginSource(Source.newBuilder("thc", "if p then 11 else 22", "ColdBranch.hs").build()); b.beginSourceSection(0, 20); }
-                    b.beginRoot(); b.emitEnterRoot(metrics); b.beginUnprofiledIfThen();
-                    // MatchData produces a primitive Boolean without adaptive scalar specialization.
-                    if (primitiveCondition) b.beginMatchData(layout); b.emitLoadArgument(0); if (primitiveCondition) b.endMatchData();
-                    b.beginReturn(); b.emitLoadConstant(11L); b.endReturn(); b.endUnprofiledIfThen(); b.beginReturn(); b.emitLoadConstant(22L); b.endReturn(); b.endRoot();
+                    if (b.isParsingSources()) { sourceReads[0]++; b.beginSource(Source.newBuilder("thc", "if p then 11 else 22", "Branch.hs").build()); b.beginSourceSection(0, 20); }
+                    b.beginRoot(); var condition = b.createLocal("condition", FrameSlotKind.Object); b.emitEnterRoot(metrics);
+                    // Observe the changing condition only after the effectful prefix.
+                    b.emitJoinTransfer(metrics);
+                    b.beginReadMutVar(condition);
+                    b.emitLoadArgument(0); b.emitLoadConstant(thc.runtime.Unit.INSTANCE); b.endReadMutVar();
+                    b.beginIfThen();
+                    if (primitiveCondition) b.beginMatchData(layout); b.emitStaticLoadObject(condition); if (primitiveCondition) b.endMatchData();
+                    b.beginReturn(); b.emitLoadConstant(11L); b.endReturn(); b.endIfThen(); b.beginReturn(); b.emitLoadConstant(22L); b.endReturn(); b.endRoot();
                     if (b.isParsingSources()) { b.endSourceSection(); b.endSource(); }
                 }).getNode(0);
-                var target = root.getCallTarget(); assertTrue(code(root).stream().anyMatch(instruction -> instruction.name().equals("branch.false.unprofiled"))); compile(target);
-                // Compare the prepared view before the FIRST call, not a warmed-up trace.
-                var beforeCode = code(root); assertEquals(0L, metrics.getCompiledEntries()); boolean[] conditions = {true, false, true};
-                for (int index = 0; index < conditions.length; index++) {
-                    boolean condition = conditions[index]; Object input = primitiveCondition ? (condition ? trueValue : falseValue) : condition;
-                    assertEquals(condition ? 11L : 22L, Calls.target(target, new Object[]{input}));
-                    assertEquals(index + 1L, metrics.getCompiledEntries(), "primitiveCondition=" + primitiveCondition + ", call=" + index + ", condition=" + condition); valid(target);
-                }
-                assertEquals(beforeCode, code(root), "Unprofiled branch does not require observed quickening"); root.getBytecodeNode().ensureSourceInformation();
-                assertEquals(1, sourceReads[0]); assertEquals(beforeCode, code(root)); var clone = cloneRoot(root); var clonedTarget = clone.getCallTarget(); compile(clonedTarget);
-                long before = metrics.getCompiledEntries(); Object input = primitiveCondition ? falseValue : false;
-                assertEquals(22L, Calls.target(clonedTarget, new Object[]{input})); assertEquals(before + 1, metrics.getCompiledEntries()); valid(clonedTarget);
+                var target = root.getCallTarget();
+                Object trueInput = primitiveCondition ? trueValue : true;
+                Object falseInput = primitiveCondition ? falseValue : false;
+                var cell = new ManagedMutVar(trueInput);
+                for (int i = 0; i < 3; i++) assertEquals(11L, Calls.target(target, new Object[]{cell}));
+                assertEquals(3L, metrics.getLocalJoinTransfers()); compile(target);
+                long entries = metrics.getCompiledEntries(), effects = metrics.getLocalJoinTransfers();
+                cell.setValue(falseInput);
+                assertEquals(22L, Calls.target(target, new Object[]{cell}));
+                assertEquals(entries + 1, metrics.getCompiledEntries(), "The opposite arm starts in installed code");
+                assertEquals(effects + 1, metrics.getLocalJoinTransfers(), "Deoptimization must not replay the prefix");
+                assertEquals(false, target.getClass().getMethod("isValidLastTier").invoke(target));
+                cell.setValue(trueInput);
+                assertEquals(11L, Calls.target(target, new Object[]{cell}));
+                assertEquals(effects + 2, metrics.getLocalJoinTransfers());
+                var beforeCode = code(root); root.getBytecodeNode().ensureSourceInformation();
+                assertEquals(1, sourceReads[0]); assertEquals(beforeCode, code(root)); assertSame(target, root.getCallTarget());
+                var clone = cloneRoot(root); var clonedTarget = clone.getCallTarget(); assertNotSame(target, clonedTarget);
+                cell.setValue(falseInput);
+                for (int i = 0; i < 3; i++) assertEquals(22L, Calls.target(clonedTarget, new Object[]{cell}));
+                compile(clonedTarget); entries = metrics.getCompiledEntries(); effects = metrics.getLocalJoinTransfers();
+                cell.setValue(trueInput);
+                assertEquals(11L, Calls.target(clonedTarget, new Object[]{cell}));
+                assertEquals(entries + 1, metrics.getCompiledEntries()); assertEquals(effects + 1, metrics.getLocalJoinTransfers());
                 if (!primitiveCondition) {
-                    assertThrows(ClassCastException.class, () -> Calls.target(target, new Object[]{"not Boolean"})); assertThrows(NullPointerException.class, () -> Calls.target(target, new Object[1]));
+                    cell.setValue("not Boolean"); assertThrows(ClassCastException.class, () -> Calls.target(target, new Object[]{cell}));
+                    cell.setValue(null); assertThrows(NullPointerException.class, () -> Calls.target(target, new Object[]{cell}));
                 }
             }
         });

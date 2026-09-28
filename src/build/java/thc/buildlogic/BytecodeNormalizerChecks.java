@@ -137,27 +137,6 @@ public final class BytecodeNormalizerChecks {
         }
     }
 
-    public static void unprofiledBranch() {
-        Transform patch = BytecodeNormalizers::unprofiledBranch;
-        String before = "// Ordinary and quickened handlers stay untouched.\n" + OLD_BRANCH +
-                "// End of exact initial unprofiled handler.\n";
-        String after = stable(patch, before);
-        check(!before.equals(after));
-        check(before.substring(0, before.indexOf("        @EarlyInline")).equals(after.substring(0, after.indexOf("        @EarlyInline"))));
-        String suffix = "            if (condition_)";
-        check(before.substring(before.indexOf(suffix)).equals(after.substring(after.indexOf(suffix))));
-        reject(patch, before, "changed-version");
-        reject(patch, before + before);
-        reject(patch, before.replace("bci + 8", "bci + 10"));
-        reject(patch, before.replace("bci + 2", "bci + 4"));
-        reject(patch, before.replace("long sp", "int sp"));
-        reject(patch, before.replace("sp, null", "sp, other"));
-        reject(patch, after.replace("(boolean) FRAMES", "(Boolean) FRAMES"));
-        reject(patch, after.replace("sp - 1", "sp - 2"));
-        reject(patch, after.replace("FRAMES.clear(frame, sp - 1);", ""));
-        reject(patch, before.replaceFirst("\n", "\r\n"));
-    }
-
     public static void sourceMode(Path directory) throws Exception {
         Transform patch = BytecodeNormalizers::sourceMode;
         String before = "public class SourceModeFixture {\n" +

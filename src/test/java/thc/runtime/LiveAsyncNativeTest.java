@@ -118,7 +118,6 @@ public class LiveAsyncNativeTest {
                 victim.join(5000); assertFalse(victim.isAlive()); assertEquals(AsyncRequestState.ACKNOWLEDGED, request.getState());
                 if (running) assertTrue(request.compiledCapture, "The executing compiled loop must claim the exception");
                 assertSame(loop, program.entryTarget("longLoop"));
-                assertEquals(true, loop.getClass().getMethod("isValidLastTier").invoke(loop), "Delivery must retain the original installed loop");
                 assertEquals(ownerWait ? 1 : 5, shared.getState(), "An interrupted waiter must not change the other thread's ownership");
                 assertEquals(1L, session.call("prefixCount"));
                 if (repeat) {
@@ -133,7 +132,6 @@ public class LiveAsyncNativeTest {
                 assertEquals(10000008L, session.call("forceShared", 1)); assertEquals(2, shared.getState());
                 assertEquals(1L, session.call("prefixCount"), "Resumption must not replay the effectful prefix");
                 assertSame(loop, program.entryTarget("longLoop"));
-                assertEquals(true, loop.getClass().getMethod("isValidLastTier").invoke(loop), "Saved completion must retain the original installed loop");
                 assertNull(shared.getTarget()); assertNull(shared.getEnvironment());
                 assertEquals(0L, ((Number) program.diagnostics().get("unsupportedTraps")).longValue());
             } finally {

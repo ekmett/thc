@@ -178,7 +178,7 @@ tasks.named("check") { dependsOn("testReturnPolicy") }
 def compileReturnContinuationControl = tasks.register("compileReturnContinuationControl", JavaCompile) {
     source("tools/truffle-protocol/tests/ReturnContinuationRoot.java", "tools/truffle-protocol/tests/ReturnContinuationProbe.java")
     classpath = files(compileReturnPolicyControl.flatMap { it.destinationDirectory }) + returnPolicyRuntime
-    options.annotationProcessorPath = files(tasks.named("protocolProcessorJar", Jar).flatMap { it.archiveFile }) + returnPolicyRuntime
+    options.annotationProcessorPath = configurations.annotationProcessor + returnPolicyRuntime
     options.release.set(21)
     options.compilerArgs.add("-proc:full")
     destinationDirectory.set(layout.buildDirectory.dir("protocol-runtime/checks/continuations"))

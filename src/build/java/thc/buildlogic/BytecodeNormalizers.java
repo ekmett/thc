@@ -37,7 +37,7 @@ public final class BytecodeNormalizers {
 
     /** Keep the order explicit: each transform independently checks its version and source shape. */
     public static String all(String source, String version) {
-        String result = unprofiledBranch(handlers(staticPreparation(sourceMode(metadata(source, version), version), version), version), version);
+        String result = handlers(staticPreparation(sourceMode(metadata(source, version), version), version), version);
         result = BytecodeColdApplyPreparation.transform(result, version);
         result = BytecodeColdDelimitedPreparation.transform(result, version);
         result = BytecodeColdCompactPreparation.transform(result, version);
@@ -282,36 +282,4 @@ public final class BytecodeNormalizers {
         return newline(source, replaceOnce(result, OLD_HANDLER, NEW_HANDLER, message));
     }
 
-    static final String BRANCH_MARKER = "THC stateless unprofiled Boolean branch v1";
-    static final String OLD_BRANCH = "        @EarlyInline\n" +
-            "        private long handleBranchFalseUnprofiled(FrameWithoutBoxing frame, byte[] bc, long bci, long sp) {\n" +
-            "            CompilerDirectives.transferToInterpreterAndInvalidate();\n" +
-            "            boolean condition_ = handleBranchFalseUnprofiled$slow(frame, bc, bci, sp, null);\n" +
-            "            if (condition_) {\n" +
-            "                return bci + 8;\n" +
-            "            } else {\n" +
-            "                return BYTES.getIntUnaligned(bc, bci + 2 /* imm branch_target */);\n" +
-            "            }\n" +
-            "        }\n";
-    static final String NEW_BRANCH = OLD_BRANCH.replace(
-            "            CompilerDirectives.transferToInterpreterAndInvalidate();\n" +
-                    "            boolean condition_ = handleBranchFalseUnprofiled$slow(frame, bc, bci, sp, null);\n",
-            "            // " + BRANCH_MARKER + "\n" +
-                    "            boolean condition_ = (boolean) FRAMES.getValue(frame, sp - 1);\n" +
-                    "            if (CompilerDirectives.inCompiledCode()) {\n" +
-                    "                FRAMES.clear(frame, sp - 1);\n" +
-                    "            }\n");
-
-    public static String unprofiledBranch(String source, String version) {
-        require(VERSION.equals(version), "Review unprofiled branch preparation before changing Truffle " + VERSION + ".");
-        String message = "Unexpected Truffle unprofiled Boolean branch shape.";
-        String result = unix(source, message);
-        require(!NEW_BRANCH.equals(OLD_BRANCH), message);
-        if (result.contains(BRANCH_MARKER)) result = replaceOnce(result, NEW_BRANCH, OLD_BRANCH, message);
-        require(!result.contains(BRANCH_MARKER), message);
-        String signature = "private long handleBranchFalseUnprofiled(FrameWithoutBoxing frame, byte[] bc, long bci, long sp)";
-        int at = result.indexOf(signature);
-        require(at >= 0 && result.indexOf(signature, at + signature.length()) < 0, message);
-        return newline(source, replaceOnce(result, OLD_BRANCH, NEW_BRANCH, message));
-    }
 }

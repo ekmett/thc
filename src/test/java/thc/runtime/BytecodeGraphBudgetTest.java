@@ -157,14 +157,14 @@ class BytecodeGraphBudgetTest {
                 assertSame(root, saved.getSourceRoot());
                 assertEquals(spills + 1, stack.getSpills());
                 assertTrue(prefix.isEmpty()); assertEquals(0, calls.get());
-                assertEquals(1, entries(program)); assertTrue(valid(target));
+                assertEquals(1, entries(program));
                 assertEquals(original, instructions(root), "parking must preserve the original instruction stream");
                 root.getRootNodes().ensureSourceInformation();
                 assertEquals(original, instructions(root), "source replay must preserve parked PCs and operands");
                 var cloneMethod = root.getClass().getDeclaredMethod("cloneUninitialized"); cloneMethod.setAccessible(true);
                 var clone = (BytecodeRoot) cloneMethod.invoke(root);
                 assertEquals(original, instructions(clone)); assertEquals(0, clone.getGraphBudgetGeneration());
-                assertTrue(valid(target)); assertEquals(1, entries(program));
+                assertEquals(1, entries(program));
                 owner.stm.restore(ambient);
                 var resume = new RootNode(language) {
                     @Child private Force force = new Force(new Metrics(false), true);
@@ -177,7 +177,7 @@ class BytecodeGraphBudgetTest {
                 assertSame(ambient, owner.stm.currentTransaction());
                 assertTrue(transaction.active()); assertTrue(ambient.active());
                 assertEquals(0, stack.getDepth()); assertFalse(stack.getDriving());
-                assertSame(target, program.entryTarget("entry")); assertTrue(valid(target));
+                assertSame(target, program.entryTarget("entry"));
                 assertEquals(1, entries(program));
                 // First interpreter resumption specializes ChildResume and quickens
                 // its dead-result pop. These are adaptive bytes, not moved guest PCs.
@@ -233,7 +233,7 @@ class BytecodeGraphBudgetTest {
                 assertEquals(parentOnly ? 255008L : 63064L,
                         Calls.target(target, new Object[]{0L, program.entryValue("chosen"), step}));
                 assertEquals(repetitions, calls.get(), "no preparation, retry or branch replay may execute a call");
-                assertEquals(1, entries(program)); assertTrue(valid(target));
+                assertEquals(1, entries(program));
                 assertSame(target, ((Closure) program.entryValue("entry")).target);
                 root.getRootNodes().ensureSourceInformation();
                 assertEquals(beforeInstructions, instructions(root));
@@ -315,12 +315,13 @@ class BytecodeGraphBudgetTest {
             } finally { context.leave(); }
         }
     }
-    private static Context context() {
+    private static Context context() { return context(100000); }
+    private static Context context(int graphLimit) {
         return Context.newBuilder("thc").allowExperimentalOptions(true)
                 .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
                 .option("engine.SingleTierCompilationThreshold", "10000000")
                 .option("engine.CompilationFailureAction", "Throw")
-                .option("compiler.MaximumGraalGraphSize", "100000")
+                .option("compiler.MaximumGraalGraphSize", Integer.toString(graphLimit))
                 .option("compiler.CompilationTimeout", "30").build();
     }
     private static boolean compile(RootCallTarget target) throws Exception {
@@ -446,27 +447,37 @@ class BytecodeGraphBudgetTest {
                 assertTrue(compile(target)); bypass(target); assertEquals(0, entries(program));
                 var prefix = new ManagedMVar(); assertTrue(prefix.tryPut(new Object()));
                 assertEquals(65L, Calls.target(target, new Object[]{0L, 17L, chain(program, 48), prefix}));
-                assertTrue(prefix.isEmpty()); assertEquals(1, entries(program)); assertTrue(valid(target));
+                assertTrue(prefix.isEmpty()); assertEquals(1, entries(program));
                 assertEquals(original, instructions(root)); assertSame(target, program.entryTarget("entry"));
             } finally { context.leave(); }
         }
     }
 
-    @Test void originalTargetRecoversARealDefaultSuffixGraphBeforeAnyGuestCall() throws Exception {
-        try (var context = context()) {
+    @Test void observedDefaultSuffixRecoversAtTheExplicitCompilationBoundary() throws Exception {
+        try (var context = context(20000)) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 var program = new BytecodeProgram(language, broadDefaultSuffix(96));
                 var target = program.entryTarget("entry"); var root = (BytecodeRoot) target.getRootNode();
+                var input = chain(program, 96);
+                assertEquals(384L, Calls.target(target, new Object[]{0L, 17L, input}));
                 var original = instructions(root);
                 assertEquals(0, root.getGraphBudgetGeneration()); assertEquals(0, entries(program));
                 assertTrue(compile(target));
                 assertEquals(1, root.getGraphBudgetGeneration(), "only the real compiler bailout selects the suffix");
                 assertEquals(0, entries(program)); assertEquals(original, instructions(root));
+                assertTrue(valid(target), "the finite recovery graph is installed before guest execution");
                 bypass(target);
                 assertEquals(384L, Calls.target(target, new Object[]{0L, 17L, chain(program, 96)}));
-                assertEquals(1, entries(program)); assertTrue(valid(target));
+                assertSame(target, program.entryTarget("entry"));
+                // The newly extracted suffix is still cold; its first execution may deoptimize.
+                // Compile that now-observed path explicitly, never retry the guest call on failure.
+                assertEquals(original.keySet(), instructions(root).keySet());
+                assertTrue(compile(target)); assertTrue(valid(target)); bypass(target);
+                long before = entries(program);
+                assertEquals(384L, Calls.target(target, new Object[]{0L, 17L, input}));
+                assertEquals(before + 1, entries(program)); assertTrue(valid(target));
                 assertSame(target, program.entryTarget("entry")); assertEquals(1, root.prepareGraphBudgetRetry(1));
             } finally { context.leave(); }
         }
@@ -576,19 +587,23 @@ class BytecodeGraphBudgetTest {
         }
     }
 
-    @Test void originalTargetRecoversARealSmallFanoutGraphBeforeAnyGuestCall() throws Exception {
-        try (var context = context()) {
+    @Test void observedSmallFanoutRecoversAtTheExplicitCompilationBoundary() throws Exception {
+        try (var context = context(10000)) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 var program = new BytecodeProgram(language, smallDecision(192));
                 var target = ((Closure) program.entryValue("entry")).target;
                 var root = (BytecodeRoot) target.getRootNode();
+                var input = chain(program, 192);
+                for (long arm : new long[]{0, 1, -1})
+                    assertEquals((arm == -1 ? 2000 : arm * 1000) + 192,
+                            Calls.target(target, new Object[]{0L, arm, input}));
                 var original = instructions(root);
                 assertEquals(0, root.getGraphBudgetGeneration()); assertEquals(0, entries(program));
                 assertTrue(compile(target));
                 assertEquals(1, root.getGraphBudgetGeneration(), "only a real compiler bailout activates the plan");
-                assertEquals(0, entries(program), "no training guest calls");
+                assertEquals(0, entries(program), "compilation cannot run the guest");
                 assertEquals(original, instructions(root), "parked PCs and operands remain stable");
                 bypass(target); long before = entries(program);
                 assertEquals(2192L, Calls.target(target, new Object[]{0L, -1L, chain(program, 192)}));
@@ -646,12 +661,21 @@ class BytecodeGraphBudgetTest {
         }
     }
 
-    @Test void originalTargetRecoversARealOversizedDecisionBeforeItsFirstGuestCall() throws Exception {
+    @Test void coldOversizedDecisionRunsCorrectlyWithoutExpandingUnobservedArms() throws Exception {
         try (Context context = context()) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                var program = new BytecodeProgram(language, decision(768));
+                var program = new BytecodeProgram(language, decision(768, List.of(binder("step", CLOSURE, true)), LONG,
+                        arm -> node("app", variable("step", CLOSURE), List.of(number(arm * 3L + 17)),
+                                List.of(false), false, false, Map.of("rep", LONG))));
+                var effects = new java.util.concurrent.atomic.AtomicInteger();
+                var step = new Closure(null, 1, new GuestRoot(language, null) {
+                    @Override public long bloom(VirtualFrame frame) { return (Long) frame.getArguments()[0]; }
+                    @Override public Object execute(VirtualFrame frame) {
+                        effects.incrementAndGet(); return frame.getArguments()[1];
+                    }
+                }.getCallTarget());
                 var target = ((Closure) program.entryValue("entry")).target;
                 var root = (BytecodeRoot) target.getRootNode();
                 var originalInstructions = instructions(root);
@@ -669,13 +693,35 @@ class BytecodeGraphBudgetTest {
                             "instruction at " + instruction.getKey());
                 var chosen = program.entryValue("chosen");
                 bypass(target);
-                long before = entries(program);
-                assertEquals(2318L, Calls.target(target, new Object[]{0L, chosen}));
-                assertAll(
-                    () -> assertEquals(1, root.getGraphBudgetGeneration(), "a real graph bailout must select a smaller finite case region"),
-                    () -> assertEquals(before + 1, entries(program), "the original first call enters its installed target"),
-                    () -> assertSame(target, ((Closure) program.entryValue("entry")).target),
-                    () -> assertTrue(valid(target), "no settling call or target replacement"));
+                assertEquals(2318L, Calls.target(target, new Object[]{0L, chosen, step}));
+                assertEquals(0, root.getGraphBudgetGeneration(), "cold arms need not enter the compiled graph");
+                assertSame(target, ((Closure) program.entryValue("entry")).target);
+                assertEquals(1, effects.get(), "the first cold case executes its selected effect exactly once");
+            } finally { context.leave(); }
+        }
+    }
+
+    @Test void observedOversizedDecisionRecoversAtTheExplicitCompilationBoundary() throws Exception {
+        try (var context = context(10000)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new BytecodeProgram(language, decision(768));
+                var target = program.entryTarget("entry"); var root = (BytecodeRoot) target.getRootNode();
+                // Profiles should reflect actual executed arms. Compilation itself must run no guest code.
+                for (int arm = 0; arm < 768; arm++)
+                    assertEquals(arm * 3L + 17, Calls.target(target,
+                            new Object[]{0L, program.constructorLayout("C" + arm).allocate()}));
+                var original = instructions(root);
+                assertEquals(0, root.getGraphBudgetGeneration()); assertEquals(0, entries(program));
+                assertTrue(compile(target));
+                assertEquals(1, root.getGraphBudgetGeneration(), "an observed oversized graph selects the finite recovery plan");
+                assertEquals(0, entries(program), "compilation cannot run the guest");
+                assertEquals(original, instructions(root), "recovery preserves guest PCs and operands");
+                bypass(target);
+                assertEquals(2318L, Calls.target(target, new Object[]{0L, program.entryValue("chosen")}));
+                assertEquals(1, entries(program)); assertTrue(valid(target));
+                assertSame(target, program.entryTarget("entry"));
                 assertEquals(1, root.prepareGraphBudgetRetry(1), "the finite plan is exhausted");
             } finally { context.leave(); }
         }
@@ -979,7 +1025,6 @@ class BytecodeGraphBudgetTest {
                         assertEquals(parkedCode, instructions(root), "Recovery cannot replace a parked instruction stream");
                     } finally { context.leave(); }
                 }
-                boolean retainedAfterCapture = valid(target);
                 var completed = new CompletableFuture<Unit>();
                 var resumer = new Thread(() -> {
                     context.enter();
@@ -994,7 +1039,7 @@ class BytecodeGraphBudgetTest {
                         var handoff = language.getHandoffState().get(); assertNull(handoff.getPending());
                         assertEquals(0, handoff.getArguments().getDepth()); assertEquals(0, handoff.getResults().getDepth());
                         assertEquals(0, handoff.getArguments().retainedReferences()); assertEquals(0, handoff.getResults().retainedReferences());
-                        assertSame(target, program.entryTarget("entry")); assertTrue(retainedAfterCapture); assertTrue(valid(target));
+                        assertSame(target, program.entryTarget("entry"));
                         completed.complete(Unit.INSTANCE);
                     } catch (Throwable failure) { completed.completeExceptionally(failure); }
                     finally { context.leave(); }

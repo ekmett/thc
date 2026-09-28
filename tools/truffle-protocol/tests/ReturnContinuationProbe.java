@@ -33,20 +33,20 @@ public final class ReturnContinuationProbe {
       b.beginRoot();
       b.emitDeclareReturn(declared);
       b.emitEnter(0);
-      b.beginUnprofiledIfThen();
+      b.beginIfThen();
       b.emitShouldYield(0);
       b.beginBlock();
       b.beginYield(); b.emitLoadConstant(1L); b.endYield();
       b.emitEnter(1);
-      b.beginUnprofiledIfThen();
+      b.beginIfThen();
       b.emitShouldYield(1);
       b.beginBlock();
       b.beginYield(); b.emitLoadConstant(2L); b.endYield();
       b.emitEnter(2);
       b.endBlock();
-      b.endUnprofiledIfThen();
+      b.endIfThen();
       b.endBlock();
-      b.endUnprofiledIfThen();
+      b.endIfThen();
       b.beginReturn(); b.emitLoadConstant(42L); b.endReturn();
       b.endRoot();
     };
@@ -59,17 +59,22 @@ public final class ReturnContinuationProbe {
 
   static List<ContinuationRootNode> children(ReturnContinuationRoot root) {
     List<ContinuationRootNode> result = new ArrayList<>();
+    int branches = 0;
     for (Instruction instruction : root.getBytecodeNode().getInstructions()) {
       for (Instruction.Argument argument : instruction.getArguments()) {
         if (argument.getKind() == Instruction.Argument.Kind.CONSTANT
             && argument.asConstant() instanceof ContinuationRootNode continuation)
           result.add(continuation);
       }
-      if (instruction.getName().startsWith("branch.false.unprofiled"))
+      if (instruction.getName().startsWith("branch.false")) {
+        branches++;
+        boolean profiled = false;
         for (Instruction.Argument argument : instruction.getArguments())
-          require(argument.getKind() != Instruction.Argument.Kind.BRANCH_PROFILE,
-              "continuation cut must not train a branch profile");
+          profiled |= argument.getKind() == Instruction.Argument.Kind.BRANCH_PROFILE;
+        require(profiled, "continuation cuts use ordinary branch profiles");
+      }
     }
+    require(branches == 2, "both continuation cuts have ordinary conditional branches");
     require(result.size() == 2 && result.get(0) != result.get(1), "two actual yield constants");
     return result;
   }
@@ -121,7 +126,7 @@ public final class ReturnContinuationProbe {
     boolean sourceRetained = source.isValidLastTier();
     require(root.sourceCompiled == 1 && root.sourceInterpreted == 3,
         name + ": first installed source entry without replay");
-    require(sourceRetained == declared, name + ": source first-yield retention");
+    require(!sourceRetained, name + ": the first taken branch deoptimizes without replay");
     Set<ContinuationResult> seen = Collections.newSetFromMap(new IdentityHashMap<>());
     ContinuationResult token = raw(firstValue, children.get(0), seen, 1L, name + " first source");
 
@@ -146,7 +151,7 @@ public final class ReturnContinuationProbe {
         name + ": resuming never replays the source");
     require(root.nestedCompiled == 0 && root.nestedInterpreted == 0,
         name + ": nested suffix has not executed at capture");
-    require(resumeRetained == declared, name + ": resume first nested-yield retention");
+    require(!resumeRetained, name + ": the first nested branch deoptimizes without replay");
     ContinuationResult nested = raw(nestedValue, children.get(1), seen, 2L, name + " nested");
     require(nested != token && nested.getFrame() == token.getFrame(),
         name + ": distinct raw token preserves the actual saved frame identity");
@@ -220,7 +225,7 @@ public final class ReturnContinuationProbe {
   }
 
   public static void main(String[] args) throws Exception {
-    require(args.length == 0, "usage: ReturnContinuationProbe (overlay API/runtime/processor)");
+    require(args.length == 0, "usage: ReturnContinuationProbe (protocol API/runtime, stock processor)");
     Truffle.getRuntime(); // Establish the pinned runtime module exports first.
     require(OptimizedCallTarget.declaredReturnPolicyVersion() == 1, "declared return runtime");
     require(RootNode.materializableFramePolicyVersion() == 1, "materializable frame API");

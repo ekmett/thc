@@ -5,7 +5,7 @@ package thc.buildlogic;
 /** Pinned lowering of the compiler's private, immutable budget-choice pair. */
 public final class BytecodeBudgetChoice {
     private BytecodeBudgetChoice() {}
-    private static final String MARKER = "THC early immutable budget choice v1";
+    private static final String MARKER = "THC early immutable budget choice v2";
     static final String OLD = """
                         case Instructions.INLINE_CASE_REGIONS_ :
                             bci = handleInlineCaseRegions_(frame, bc, bci, sp);
@@ -19,13 +19,27 @@ public final class BytecodeBudgetChoice {
     static final String NEW = """
                         case Instructions.INLINE_CASE_REGIONS_ :
                         case Instructions.INLINE_CASE_REGIONS$UNBOXED_ :
-                            // THC early immutable budget choice v1: no operand-stack speculation.
-                            if (BYTES.getShort(bc, bci + 6) != Instructions.BRANCH_FALSE_UNPROFILED) {
-                                throw new IllegalStateException("Budget choice must precede its unprofiled branch");
+                            // THC early immutable budget choice v2: no operand-stack speculation.
+                            if (BYTES.getShort(bc, bci + 6) != Instructions.BRANCH_FALSE) {
+                                throw new IllegalStateException("Budget choice must precede its conditional branch");
                             }
-                            bci = $root.useInlineCaseRegions() ? bci + 14
+                            bci = $root.useInlineCaseRegions() ? bci + 18
                                             : BYTES.getIntUnaligned(bc, bci + 8);
                             break;
+""";
+    // The stock branch is twelve bytes: opcode, target, profile and operand.
+    // Check its complete initial handler before skipping the private immutable pair.
+    static final String BRANCH = """
+        @EarlyInline
+        private long handleBranchFalse(FrameWithoutBoxing frame, byte[] bc, long bci, long sp) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            boolean condition_ = handleBranchFalse$slow(frame, bc, bci, sp, null);
+            if (profileBranch(BYTES.getIntUnaligned(bc, bci + 6 /* imm branch_profile */), condition_)) {
+                return bci + 12;
+            } else {
+                return BYTES.getIntUnaligned(bc, bci + 2 /* imm branch_target */);
+            }
+        }
 """;
     public static String transform(String source, String version) {
         String message = "Unexpected pinned bytecode budget-choice shape";
@@ -38,7 +52,7 @@ public final class BytecodeBudgetChoice {
             int at = result.indexOf(handler);
             BytecodeNormalizers.require(at >= 0 && result.indexOf(handler, at + handler.length()) < 0, message);
         }
-        BytecodeNormalizers.require(result.contains(BytecodeNormalizers.NEW_BRANCH), message);
+        BytecodeNormalizers.require(result.contains(BRANCH), message);
         return BytecodeNormalizers.newline(source, BytecodeNormalizers.replaceOnce(result, OLD, NEW, message));
     }
     private static String handler(String suffix) {
@@ -50,7 +64,7 @@ public final class BytecodeBudgetChoice {
                 "        }\n";
     }
     public static void check() {
-        String after = handler("") + handler("$unboxed") + BytecodeNormalizers.NEW_BRANCH;
+        String after = handler("") + handler("$unboxed") + BRANCH;
         String source = "// before\n" + OLD + after;
         String result = transform(source, BytecodeNormalizers.VERSION);
         if (!result.equals("// before\n" + NEW + after))
@@ -60,7 +74,11 @@ public final class BytecodeBudgetChoice {
             throw new AssertionError("CRLF changed");
         for (String bad : new String[]{source + OLD, source.replace("sp += 1", "sp += 2"),
                 source.replace("handleInlineCaseRegions_(", "other_("), result.replace("bci + 8", "bci + 10"),
-                source.replace("return bci + 6;", "return bci + 10;"), source.replace("FRAMES.setObject", "FRAMES.setBoolean")}) {
+                source.replace("return bci + 6;", "return bci + 10;"), source.replace("FRAMES.setObject", "FRAMES.setBoolean"),
+                source.replace("return bci + 12;", "return bci + 10;"),
+                source.replace("bci + 6 /* imm branch_profile */", "bci + 4 /* imm branch_profile */"),
+                source.replace("bci + 2 /* imm branch_target */", "bci + 4 /* imm branch_target */"),
+                result.replace("bci + 18", "bci + 14")}) {
             try { transform(bad, BytecodeNormalizers.VERSION); }
             catch (IllegalArgumentException expected) { continue; }
             throw new AssertionError("Changed budget dispatch shape accepted");
