@@ -14,8 +14,12 @@ case "${1:---help}" in
         exec "$image" "$@" ;;
     run)
         [[ $# -ge 2 ]] || { echo 'Usage: bin/native-cache run CACHE [INTEGER...]' >&2; exit 2; }
-        # Reserve the auxiliary image at isolate startup, before Engine.CacheLoad.
-        exec "$image" "-XX:AuxiliaryImagePath=$2" "$@" ;;
+        # Reserve address space, but let Engine.CacheLoad perform the ONLY load.
+        # AuxiliaryImagePath would eagerly map it and make CacheLoad reject it.
+        cache_bytes=$(wc -c < "$2")
+        reserved_bytes=$((cache_bytes + 1048576))
+        (( reserved_bytes > cache_bytes )) || exit 2
+        exec "$image" "-XX:AuxiliaryImageBytes=$reserved_bytes" "$@" ;;
     -h|--help)
         echo 'Experimental Linux AMD64 / GraalVM 25.3.4.1 cached AST code'
         echo 'bin/native-cache build | store CACHE MODULES ENTRY | run CACHE [INTEGER...]' ;;

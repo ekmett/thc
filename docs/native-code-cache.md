@@ -59,7 +59,9 @@ copy, without rebuilding. Existing cache files are never overwritten.
 `store` parses and lowers the selected program but does not execute its factory
 or guest bodies. It closes the preparation context, then asks the provider to
 prepare/compile the targets and persist them. The run wrapper supplies
-`-XX:AuxiliaryImagePath=...` at isolate startup, before `Engine.CacheLoad`.
+an `AuxiliaryImageBytes` address-space reservation (cache size plus 1 MiB) at
+isolate startup; `Engine.CacheLoad` then performs the single actual load.
+Do not substitute `AuxiliaryImagePath`, which would eagerly load it twice.
 `run` requires exactly one cached THC source with its content-derived name,
 disables guest compilation and rejects cache misses, runtime parsing/lowering,
 missing installed targets and interpreter guest entry. The actual cached factory
