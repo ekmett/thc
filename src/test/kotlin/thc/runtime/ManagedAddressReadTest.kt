@@ -153,7 +153,7 @@ class ManagedAddressReadTest {
 
     @Test fun fullWidthBoundsNegativeDerivedOffsetsAndOverflow() {
         val bytes = ByteArray(32) { (it * 37 + 129).toByte() }
-        for (operation in ManagedAddressRead.entries) {
+        for (operation in ManagedAddressRead.values()) {
             val width = operation.width
             for (base in 0..bytes.size) {
                 val address = ManagedAddress.fromByteArray(bytes).plus(base.toLong())

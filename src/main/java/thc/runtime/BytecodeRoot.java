@@ -935,7 +935,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation
     public static final class ByteArrayContents {
         @Specialization public static ManagedAddress address(Object array) {
-            return ManagedAddress.Companion.fromGuestByteArray(array);
+            return ManagedAddress.fromGuestByteArray(array);
         }
     }
 
@@ -3279,7 +3279,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
             destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
-                    ManagedAddress.Companion.nullAddress());
+                    ManagedAddress.nullAddress());
         }
     }
 
@@ -3549,7 +3549,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 : context.compactImages.next(compact, (ManagedAddress) previous);
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
             addressDestination.setObject(bytecode, frame, address);
-            sizeDestination.setLong(bytecode, frame, address == ManagedAddress.Companion.nullAddress() ? 0L : address.availableBytes());
+            sizeDestination.setLong(bytecode, frame, address == ManagedAddress.nullAddress() ? 0L : address.availableBytes());
         }
     }
     @Operation

@@ -65,7 +65,7 @@ internal class ManagedProcessForeign {
         values
     }
     private fun pointerCell(address: ManagedAddress) {
-        address.requireRange(0, 8, writable = true)
+        address.requireRange(0, 8, true)
         if (address.nativeAllocation() == null &&
             (address.cbitsOwner()?.addressWidth != 8 || address.cbitsOffset() % 8 != 0L))
             fault("Process failure pointer requires aligned LP64 pointer storage")
@@ -99,7 +99,7 @@ internal class ManagedProcessForeign {
         }
         val destination = pointer(arguments[1])
         return outputs(listOf(destination to 4L)) {
-            destination.requireByteRegion(4, writable = true)
+            destination.requireByteRegion(4, true)
             val result = context.files.processOperation(operation, pid, node, beforeBlock)
             result.exitCode?.let { destination.writeNativeScalar(0, 4, it.toLong()) }
             context.stdio.nativeError(result.errno.toLong())
@@ -126,7 +126,7 @@ internal class ManagedProcessForeign {
         val regions = listOf(failure to 8L) + destinations.indices.filter { streams[it] == -1 }.map { destinations[it] to 4L }
         return outputs(regions) {
             pointerCell(failure)
-            for (index in streams.indices) if (streams[index] == -1) destinations[index].requireByteRegion(4, writable = true)
+            for (index in streams.indices) if (streams[index] == -1) destinations[index].requireByteRegion(4, true)
             failure.writeAddressElementIndex(0, ManagedAddress.nullAddress())
             fun rejected(error: Int, stage: ProcessFailureStage): Long {
                 failure.writeAddressElementIndex(0, failures.getValue(stage))

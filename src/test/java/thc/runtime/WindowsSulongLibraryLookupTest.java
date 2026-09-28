@@ -80,9 +80,9 @@ class WindowsSulongLibraryLookupTest {
             try {
                 denied(owner, marker);
                 var pointer = buffer(owner);
-                assertNotNull(pointer.returnedAddress$org_intelligence_thc());
-                assertNull(pointer.returnedAddress$org_intelligence_thc().getBacking());
-                assertNull(pointer.nativeAllocation$org_intelligence_thc());
+                assertNotNull(pointer.returnedAddress());
+                assertNull(pointer.returnedAddress().getBacking());
+                assertNull(pointer.nativeAllocation());
                 assertThrows(RuntimeFault.class, pointer::availableBytes);
                 pointer.fill(32, 90);
                 var expected = new byte[32];

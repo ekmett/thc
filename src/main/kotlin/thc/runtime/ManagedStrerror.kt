@@ -23,7 +23,7 @@ internal class ManagedStrerror(private val cbits: () -> SulongCbits, private val
     }
 
     private fun copyMessage(error: Long, output: ManagedAddress, length: Long): Long {
-        output.requireByteRegion(length, writable = true)
+        output.requireByteRegion(length, true)
         val nativeCode = cbits()
         val library = nativeCode.strerrorLibrary()
         val localeLibrary = nativeCode.strerrorLocaleLibrary()
@@ -31,7 +31,7 @@ internal class ManagedStrerror(private val cbits: () -> SulongCbits, private val
         val enterLocale = interop.readMember(localeLibrary, "thc_strerror_locale_enter")
         val leaveLocale = interop.readMember(localeLibrary, "thc_strerror_locale_leave")
         val invoke = {
-            output.requireByteRegion(length, writable = true)
+            output.requireByteRegion(length, true)
             NativeLimbScope().use { scope ->
                 val bytes = ByteArray(length.toInt()) { output.readWord8(it.toLong()).toByte() }
                 val native = scope.allocate((length + 7L) and -8L)

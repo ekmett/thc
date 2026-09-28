@@ -644,9 +644,9 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
     }
 
     @TruffleBoundary internal fun pipe(destination: ManagedAddress): Long {
-        destination.requireByteRegion(8, writable = true)
+        destination.requireByteRegion(8, true)
         fun acquire(): Long = result {
-            destination.requireByteRegion(8, writable = true)
+            destination.requireByteRegion(8, true)
             anonymousDescriptors(AnonymousKind.PIPE, 0, 0) { fds ->
                 for (index in fds.indices) for (byte in 0..3)
                     destination.writeWord8((index * 4 + byte).toLong(), fds[index] ushr (byte * 8))
@@ -716,7 +716,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
      * this registry, and only revents are copied back to the original image. */
     @TruffleBoundary internal fun poll(address: ManagedAddress, count: Long, timeout: Int, node: Node?): Long {
         if (count < 0 || count > Int.MAX_VALUE / 8) fault("poll descriptor image exceeds managed capacity")
-        if (count != 0L) address.requireByteRegion(count * 8, writable = true)
+        if (count != 0L) address.requireByteRegion(count * 8, true)
         return address.withNativeBorrow { result {
             fun integer(offset: Long, width: Int): Long = (0 until width).fold(0L) { value, byte ->
                 value or (address.readWord8(offset + byte) shl (byte * 8))
@@ -752,7 +752,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
                         }
                     }
                     val ready = request.await(node, timeout)
-                    if (count != 0L) address.requireByteRegion(count * 8, writable = true)
+                    if (count != 0L) address.requireByteRegion(count * 8, true)
                     for (index in ready.indices) {
                         address.writeWord8(index * 8L + 6, ready[index].toLong())
                         address.writeWord8(index * 8L + 7, ready[index].toLong() ushr 8)
@@ -794,7 +794,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
         timeout: Int, node: Node?): Long = result {
         if (maximum <= 0) throw NativeFileException("epoll_wait", 22)
         if (maximum > Int.MAX_VALUE / 12) fault("epoll output image exceeds managed capacity")
-        destination.requireByteRegion(maximum * 12L, writable = true)
+        destination.requireByteRegion(maximum * 12L, true)
         val selected = descriptor(fd)
         val epoll = selected.owner.epoll ?: throw NativeFileException("epoll_wait", 22)
         val started = System.nanoTime()
@@ -835,7 +835,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
         if (output.sameLocation(ManagedAddress.nullAddress()))
             fault("Original getcwd NULL allocation is not supported")
         if (capacity !in 0..Int.MAX_VALUE.toLong()) fault("Original getcwd exceeds managed byte capacity")
-        output.requireByteRegion(capacity, writable = true)
+        output.requireByteRegion(capacity, true)
         return result {
             val provider = synchronized(this) {
                 if (disposed) fail(4, "THC file context is closed")
@@ -843,7 +843,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
             }
             output.withNativeBorrow {
                 fun publish(): Long {
-                    output.requireByteRegion(capacity, writable = true)
+                    output.requireByteRegion(capacity, true)
                     val name = provider.currentDirectory(capacity.toInt()) + byteArrayOf(0)
                     ManagedAddress.fromByteArray(name).copyNonOverlappingTo(output, name.size.toLong())
                     return 0L
@@ -871,7 +871,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
      * is safe because the pathname snapshot is complete before the output lock. */
     @TruffleBoundary internal fun readlinkOriginal(path: ManagedAddress, output: ManagedAddress, capacity: Long): Long {
         if (capacity !in 0..Int.MAX_VALUE.toLong()) fault("Original readlink exceeds managed byte capacity")
-        output.requireByteRegion(capacity, writable = true)
+        output.requireByteRegion(capacity, true)
         val bytes = originalPathBytes(path)
         return result {
             val provider = synchronized(this) {
@@ -880,7 +880,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
             }
             output.withNativeBorrow {
                 fun publish(): Long {
-                    output.requireByteRegion(capacity, writable = true)
+                    output.requireByteRegion(capacity, true)
                     val prefix = provider.readlinkRaw(bytes, capacity.toInt())
                     ManagedAddress.fromByteArray(prefix).copyNonOverlappingTo(output, prefix.size.toLong())
                     return prefix.size.toLong()
@@ -954,7 +954,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
     @TruffleBoundary internal fun statAtOriginal(fd: Long, path: ManagedAddress, destination: ManagedAddress,
                                                flags: Int, cwd: Long): Long {
         val size = PosixStat.execute(OriginalStdioOp.SIZEOF_STAT, ManagedAddress.nullAddress(), 0)
-        destination.requireByteRegion(size, writable = true)
+        destination.requireByteRegion(size, true)
         val bytes = originalPathBytes(path)
         return result {
             val provider = synchronized(this) {
@@ -963,7 +963,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
             }
             destination.withNativeBorrow {
                 fun publish(): Long {
-                    destination.requireByteRegion(size, writable = true)
+                    destination.requireByteRegion(size, true)
                     val image = if (fd == cwd || bytes[0] == '/'.code.toByte()) provider.statAtRaw(bytes, flags)
                     else try {
                         withDescriptor(fd) { entry ->
@@ -986,7 +986,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
 
     @TruffleBoundary internal fun pathStatOriginal(path: ManagedAddress, destination: ManagedAddress, followLinks: Boolean): Long {
         val size = PosixStat.execute(OriginalStdioOp.SIZEOF_STAT, ManagedAddress.nullAddress(), 0)
-        destination.requireByteRegion(size, writable = true)
+        destination.requireByteRegion(size, true)
         val bytes = originalPathBytes(path)
         return result {
             val provider = synchronized(this) {
@@ -995,7 +995,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
             }
             destination.withNativeBorrow {
                 fun copyImage(): Long {
-                    destination.requireByteRegion(size, writable = true)
+                    destination.requireByteRegion(size, true)
                     val image = provider.statRaw(bytes, followLinks)
                     if (image.size.toLong() != size) fault("Native stat image has the wrong size")
                     ManagedAddress.fromByteArray(image).copyNonOverlappingTo(destination, size)
@@ -1079,10 +1079,10 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
      * the latter across snapshot/copy prevents shrink or pointer-cell races. */
     @TruffleBoundary internal fun fstat(fd: Long, destination: ManagedAddress): Long {
         val size = PosixStat.execute(OriginalStdioOp.SIZEOF_STAT, ManagedAddress.nullAddress(), 0)
-        destination.requireByteRegion(size, writable = true)
+        destination.requireByteRegion(size, true)
         return result { withDescriptor(fd) { entry ->
             fun copyImage(): Long {
-                destination.requireByteRegion(size, writable = true)
+                destination.requireByteRegion(size, true)
                 val resource = entry.native ?: fail(7, "THC descriptor has no opened-resource metadata: $fd")
                 val image = resource.statImage()
                 if (image.size.toLong() != size) fault("Native stat image has the wrong size")
@@ -1099,7 +1099,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
      * padding nor the failed-call buffer is synthesized by the adapter. */
     @TruffleBoundary internal fun tcgetattr(fd: Long, destination: ManagedAddress): Long {
         val size = TermiosImage.scalar(OriginalStdioOp.SIZEOF_TERMIOS, ManagedAddress.nullAddress(), 0)
-        destination.requireByteRegion(size, writable = true)
+        destination.requireByteRegion(size, true)
         return result { withDescriptor(fd) { entry ->
             val resource = entry.native ?: fail(7, "THC descriptor has no native terminal capability: $fd")
             TermiosImage.transfer(destination, copyBack = true) { image ->
@@ -1113,7 +1113,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
      * tcgetattr. No write permission or copyback: libc only reads this image. */
     @TruffleBoundary internal fun tcsetattr(fd: Long, action: Int, source: ManagedAddress): Long {
         val size = TermiosImage.scalar(OriginalStdioOp.SIZEOF_TERMIOS, ManagedAddress.nullAddress(), 0)
-        source.requireByteRegion(size, writable = false)
+        source.requireByteRegion(size, false)
         return result { withDescriptor(fd) { entry ->
             val resource = entry.native ?: fail(7, "THC descriptor has no native terminal capability: $fd")
             TermiosImage.transfer(source, copyBack = false) { image ->

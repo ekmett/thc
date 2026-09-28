@@ -90,12 +90,12 @@ internal class NativeDirectoryStreams(private val directory: NativeDirectoryOwne
         fun readChecked(): Long {
             if (allocation != null && allocation === stream.entry?.name)
                 fault("Directory output pointer cell overlaps the active directory-entry image")
-            output.requireRange(0, 8, writable = true)
+            output.requireRange(0, 8, true)
             if (output.cbitsOffset() % 8 != 0L) fault("Directory entry output requires an aligned pointer cell")
             if (allocation != null) {
                 if (allocation.addressWidth != 8) fault("Directory entry output requires an LP64 pointer cell")
                 allocation.requireAddressCell(output.cbitsOffset())
-            } else output.requireByteRegion(8, writable = true)
+            } else output.requireByteRegion(8, true)
             val token = token()
             // Native cells store real projections; reserve that projection before
             // advancing the directory, so publication cannot discover bad storage.

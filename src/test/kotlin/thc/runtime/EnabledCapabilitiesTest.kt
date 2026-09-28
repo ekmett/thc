@@ -79,7 +79,7 @@ class EnabledCapabilitiesTest {
                 val cell = CoreDataLabels.fromCore("enabled_capabilities",
                     CoreRepresentations.parse(address))
                 assertEquals(cpuCount, Integer.toUnsignedLong(ManagedAddressRead.WORD32.readInt(cell, 0)))
-                for (operation in ManagedAddressRead.entries.filter { it != ManagedAddressRead.WORD32 })
+                for (operation in ManagedAddressRead.values().filter { it != ManagedAddressRead.WORD32 })
                     assertThrows(RuntimeFault::class.java) {
                         if (operation.isInt) operation.readInt(cell, 0) else operation.read(cell, 0)
                     }

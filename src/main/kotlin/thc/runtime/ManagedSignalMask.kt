@@ -61,7 +61,7 @@ internal class ManagedSignalMask(private val owner: Language.State) {
         if (how != how.toInt().toLong()) fault("Original sigprocmask requires a canonical signed CInt")
         val size = imageSize()
         if (set !== ManagedAddress.nullAddress()) set.requireByteRegion(size)
-        if (oldset !== ManagedAddress.nullAddress()) oldset.requireByteRegion(size, writable = true)
+        if (oldset !== ManagedAddress.nullAddress()) oldset.requireByteRegion(size, true)
         if (set !== ManagedAddress.nullAddress() && oldset !== ManagedAddress.nullAddress() &&
             set.overlaps(0, size, oldset, 0, size))
             fault("Original sigprocmask requires disjoint restrict-qualified input/output images")
@@ -79,9 +79,9 @@ internal class ManagedSignalMask(private val owner: Language.State) {
             }
             if (input != null && oldset !== ManagedAddress.nullAddress() && set.overlaps(0, size, oldset, 0, size))
                 fault("Original sigprocmask requires disjoint restrict-qualified input/output images")
-            if (oldset !== ManagedAddress.nullAddress()) oldset.requireByteRegion(size, writable = true)
+            if (oldset !== ManagedAddress.nullAddress()) oldset.requireByteRegion(size, true)
             val invoke = {
-                if (oldset !== ManagedAddress.nullAddress()) oldset.requireByteRegion(size, writable = true)
+                if (oldset !== ManagedAddress.nullAddress()) oldset.requireByteRegion(size, true)
                 NativeLimbScope().use { scope ->
                     val output = if (oldset === ManagedAddress.nullAddress()) null else ByteArray(size.toInt()) { oldset.readWord8(it.toLong()).toByte() }
                     val nativeInput: Any = input?.let { scope.snapshot(it, 0, it.size) } ?: scope.allocate(0)

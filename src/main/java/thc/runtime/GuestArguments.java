@@ -48,8 +48,8 @@ public final class GuestArguments {
     @TruffleBoundary
     public synchronized void get(ManagedAddress argc, ManagedAddress argv) {
         current();
-        var nil = ManagedAddress.Companion.nullAddress();
-        if (argc != nil) argc.requireByteRegion$org_intelligence_thc(4, true);
+        var nil = ManagedAddress.nullAddress();
+        if (argc != nil) argc.requireByteRegion(4, true);
         if (argv != nil) argv.requireRange(0, 8, true);
         var value = image;
         if (value == null) {
@@ -71,13 +71,13 @@ public final class GuestArguments {
         if (argc < 0 || argc > Integer.MAX_VALUE) throw fault("Program argument count is outside CInt range");
         List<byte[]> bytes = List.of();
         if (argc != 0) {
-            var owner = argv.nativeAllocation$org_intelligence_thc();
+            var owner = argv.nativeAllocation();
             try (var borrow = owner == null ? null : owner.borrow()) {
                 argv.requireRange(0, argc * 8, false);
                 bytes = new ArrayList<>((int) argc);
                 for (int index = 0; index < argc; index++) {
                     var address = argv.readAddressElementIndex(index);
-                    var stringOwner = address.nativeAllocation$org_intelligence_thc();
+                    var stringOwner = address.nativeAllocation();
                     try (var stringBorrow = stringOwner == null ? null : stringOwner.borrow()) {
                         long size = address.cStringLength();
                         if (size >= Integer.MAX_VALUE) throw fault("Program argument exceeds managed byte capacity");
@@ -127,7 +127,7 @@ public final class GuestArguments {
                 vector.writeAddressElementIndex(index, address);
                 strings.add(address);
             }
-            vector.writeAddressElementIndex(bytes.size(), ManagedAddress.Companion.nullAddress());
+            vector.writeAddressElementIndex(bytes.size(), ManagedAddress.nullAddress());
             return new Image(bytes.size(), vector, strings);
         } catch (Throwable failure) {
             for (int index = owned.size() - 1; index >= 0; index--) {
@@ -140,7 +140,7 @@ public final class GuestArguments {
 
     private static ManagedAddress allocate(ManagedNativeAllocations allocations, List<ManagedAddress> owned, long size) {
         var address = allocations.malloc(size);
-        if (address == ManagedAddress.Companion.nullAddress()) throw new OutOfMemoryError("Unable to allocate program arguments");
+        if (address == ManagedAddress.nullAddress()) throw new OutOfMemoryError("Unable to allocate program arguments");
         owned.add(address);
         return address;
     }

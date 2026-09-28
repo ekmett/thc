@@ -71,7 +71,7 @@ class RtsFlagsTest {
             }
             assertThrows(RuntimeFault::class.java) { base.plus(Long.MAX_VALUE).plus(1) }
             assertThrows(RuntimeFault::class.java) { field.readWord8(Long.MAX_VALUE) }
-            for (operation in ManagedAddressRead.entries)
+            for (operation in ManagedAddressRead.values())
                 assertThrows(RuntimeFault::class.java) { operation.read(field, 0) }
             assertThrows(RuntimeFault::class.java) { field.writeWord8(0, 0) }
             assertThrows(RuntimeFault::class.java) { field.writeNativeScalar(0, 4, 0) }
