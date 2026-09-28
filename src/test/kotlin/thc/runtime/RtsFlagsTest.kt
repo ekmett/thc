@@ -207,7 +207,7 @@ class RtsFlagsTest {
                     try {
                         assertEquals(1L, CoreDataLabels.fromCore("RtsFlags", proof, layout).readWord8(403))
                         val text = ManagedAddress.fromByteArray(byteArrayOf(65, 0))
-                        for (operation in TraceOp.entries) RtsDiagnostics.trace(null, operation, text, 1)
+                        for (operation in TraceOp.values()) RtsDiagnostics.trace(null, operation, text, 1)
                     } finally { threads.leaveCurrent(); context.leave() }
                 }
                 assertEquals("[thc trace event] A\n[thc trace binary] 41\n[thc trace marker] A\n", output.toString(Charsets.UTF_8))

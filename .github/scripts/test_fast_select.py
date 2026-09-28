@@ -1137,7 +1137,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
     def test_every_mapping_target_is_a_real_test_and_each_path_is_explicit(self):
         self.assertEqual({"RubbishLiterals", "CoreMemoryCopyForeign", "MemcpyExpression", "MemmoveExpression",
                            "CoreStringRtsForeign", "StringRtsOp", "StringRtsExpression", "GuestEnvironment", "CoreEnvironmentForeign", "GuestArguments", "CoreRtsArgumentsForeign", "EnvironmentOp", "EnvironmentExpression", "RtsArgumentsOp", "RtsArgumentsExpression", "AddressIdentity", "AtomicAddresses", "BitPrimitives", "RawBitCasts", "FloatingPrimitives", "FloatingAddresses", "ManagedSmallArray", "SmallArrayStorage", "SmallArrayOp", "ManagedMutVar", "ModifiedMutVar", "MutVarModifySite", "MutVarOp", "ManagedNativeAllocations", "StablePointers", "CoreStablePointers", "StablePointerOp", "MakeStablePointer", "DereferenceStablePointer", "EqualStablePointers", "FreeStablePointer", "CoreSharedCAFStores", "ManagedWeaks", "CoreMainThreadForeign", "CoreBoundThreadForeign",
-                         "VectorAddresses", "VectorIntegerDivision", "FloatDecodeExpression", "CoreDataLabels", "FileWaitPrimitives", "CoreRtsShutdown", "AddressArrayCopy", "AtomicIntArrayOp", "AtomicIntArrayExpression", "ThreadObservation", "ManagedSTM", "ManagedCompacts", "CompactImages", "HeapAddresses", "CompactImageOp", "CompactImageExpression", "BoundThreadSupport", "RegisterMainThread", "CpuAffinityQuery", "STMPrimops", "HintTracePrimops", "GhcBCO", "CoreCpuAffinity", "NativeEpoll", "NativeEventWait", "AstStackScope", "AstStackSpill", "AstStackContinuation", "AstChildSuspension", "AstStackKt"} |
+                         "VectorAddresses", "VectorIntegerDivision", "FloatDecodeExpression", "CoreDataLabels", "FileWaitPrimitives", "CoreRtsShutdown", "AddressArrayCopy", "AtomicIntArrayOp", "AtomicIntArrayExpression", "ThreadObservation", "ManagedSTM", "ManagedCompacts", "CompactImages", "HeapAddresses", "CompactImageOp", "CompactImageExpression", "BoundThreadSupport", "RegisterMainThread", "CpuAffinityQuery", "STMPrimops", "PrefetchExpression", "TraceExpression", "TraceOp", "GhcBCO", "CoreCpuAffinity", "NativeEpoll", "NativeEventWait", "AstStackScope", "AstStackSpill", "AstStackContinuation", "AstChildSuspension", "AstStackKt"} |
                          set(self.integer_vector_nodes + self.floating_vector_nodes),
                          {Path(path).stem for path in self.families})
         for path, group in self.families.items():
@@ -1510,6 +1510,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                           for name in self.integer_vector_nodes + self.floating_vector_nodes +
                           ("BitPrimitives", "RawBitCasts", "FloatingPrimitives", "FloatDecodeExpression",
                            "CoreMemoryCopyForeign", "MemcpyExpression", "MemmoveExpression",
+                           "RubbishLiterals", "PrefetchExpression", "TraceExpression", "TraceOp",
                            "CoreStringRtsForeign", "StringRtsOp", "StringRtsExpression",
                            "GuestArguments", "GuestEnvironment", "CoreEnvironmentForeign", "CoreRtsArgumentsForeign",
                            "EnvironmentOp", "EnvironmentExpression", "RtsArgumentsOp", "RtsArgumentsExpression",
