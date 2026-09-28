@@ -130,6 +130,12 @@ once-only effects. Default nodes still invalidate on their first exception.
 
 ## Graph-budget recovery lifecycle
 
+The runtime's `BaseOSRRootNode.getSourceRootNode()` accessor exposes the existing
+original-root relationship without retaining a context. It covers both loop OSR
+and the copied/parent-frame bytecode OSR implementations. `testOsrSourceOwnership`
+checks actual compiled wrappers and clone ownership. This read-only accessor
+does not itself forward budget recovery hooks or change OSR compilation.
+
 The pinned API/runtime pair also provides an opt-in recovery hook for a real
 graph-size bailout. `RootNode.getGraphBudgetGeneration()` supplies the logical
 boundary generation captured when a compilation task is submitted. After the
