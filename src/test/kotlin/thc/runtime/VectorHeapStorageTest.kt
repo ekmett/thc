@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime
 
+import thc.runtime.RawVectorTestValues.rawVectorTestValue
+
 import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.bytecode.BytecodeConfig
