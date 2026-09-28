@@ -4,6 +4,8 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc
 
+import thc.Main.executionContext
+
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
@@ -24,9 +26,7 @@ class CoreJsonLoadTest {
         return path
     }
     private fun request(json: Path, index: Path, backend: String, async: Boolean = false, verifyArtifacts: Boolean = false): String =
-        CoreModules.request(listOf(json.toString()), "synthetic:LazyJson.entry", backend = backend,
-            sourceNotesEnabled = false, asyncExceptions = async,
-            jsonSidecars = mapOf(json.toString() to index.toString()), verifyArtifacts = verifyArtifacts)
+        CoreModules.request(listOf(json.toString()), "synthetic:LazyJson.entry", true, false, backend, false, false, null, async, mapOf(json.toString() to index.toString()), verifyArtifacts)
     private fun statistics(value: Value) = Json.parse(value.getMember("diagnostics").asString()) as Map<String, Any?>
     private fun count(value: Value, key: String) = (statistics(value).getValue(key) as Number).toLong()
     private fun digest(path: Path) = MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(path))

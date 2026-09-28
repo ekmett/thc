@@ -28,7 +28,7 @@ import thc.NativeIO.StandardEndpoint
  * are supported, with native resources only in an explicit NativeIO context.
  * Transfers are synchronous. Native readiness has a separate cancellable wait
  * capability; this is not a scheduler or interruptible foreign byte transport. */
-internal class ManagedFiles(private val env: TruffleLanguage.Env, private val threads: GuestThreads,
+internal class ManagedFiles @JvmOverloads constructor(private val env: TruffleLanguage.Env, private val threads: GuestThreads,
     private val descriptorLimit: Long = Int.MAX_VALUE.toLong() + 1,
     // Internal protocol-test seam; the production notifier is only eventfd IO.
     private val signalReadinessClose: (NativeFdWait) -> Unit = { it.descriptorClosed() }) {

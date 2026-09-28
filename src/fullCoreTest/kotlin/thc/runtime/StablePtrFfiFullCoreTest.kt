@@ -14,7 +14,7 @@ import thc.CoreModules
 import thc.ContextProfile
 import thc.Json
 import thc.Language
-import thc.withContextProfile
+import thc.Main.withContextProfile
 import java.io.File
 
 @EnabledOnOs(OS.LINUX)
@@ -42,10 +42,9 @@ class StablePtrFfiFullCoreTest {
         assertEquals(12, rows.size)
         for (backend in listOf("ast", "bytecode")) for (name in listOf("stableRoundtrip", "stableLazy")) {
             Context.newBuilder("thc").allowNativeAccess(true)
-                .withContextProfile(ContextProfile.SYNCHRONOUS_TEST).build().use { context ->
+                .let { withContextProfile(it, ContextProfile.SYNCHRONOUS_TEST) }.build().use { context ->
                     val entry = "${manifest["unit"]}:StableForeign.$name"
-                    val function = context.eval("thc", CoreModules.request(
-                        listOf("@${File(root, "$prefix/packages.json").path}"), entry, backend = backend))
+                    val function = context.eval("thc", CoreModules.request(listOf("@${File(root, "$prefix/packages.json").path}"), entry, true, false, backend))
                     val selected = rows.filter { it.getValue("entry") == name }
                     fun diagnostics() = Json.parse(function.getMember("diagnostics").asString()) as Map<String, Any?>
                     fun check(row: Map<String, String>) {

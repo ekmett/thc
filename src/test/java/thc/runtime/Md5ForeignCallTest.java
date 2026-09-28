@@ -54,7 +54,7 @@ class Md5ForeignCallTest {
     }
     private void valid(RootCallTarget target) throws Exception { assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target)); }
     private void released(Language language) {
-        var handoff = language.getHandoffState$org_intelligence_thc().get();
+        var handoff = language.getHandoffState().get();
         assertEquals(0, handoff.getArguments().getDepth()); assertEquals(0, handoff.getResults().getDepth());
         assertEquals(0, handoff.getArguments().retainedReferences()); assertEquals(0, handoff.getResults().retainedReferences());
     }

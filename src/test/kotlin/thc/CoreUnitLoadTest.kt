@@ -3,6 +3,8 @@
 
 package thc
 
+import thc.Main.executionContext
+
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
@@ -80,8 +82,7 @@ class CoreUnitLoadTest {
         return manifest
     }
     private fun request(path: Path, backend: String, async: Boolean = false, verify: Boolean = false) =
-        CoreModules.request(listOf("@$path"), "uA:A.entry", backend = backend, sourceNotesEnabled = false,
-            asyncExceptions = async, verifyArtifacts = verify)
+        CoreModules.request(listOf("@$path"), "uA:A.entry", true, false, backend, false, false, null, async, null, verify)
     private fun count(value: Value, field: String) = ((Json.parse(value.getMember("diagnostics").asString()) as Map<*, *>)[field] as Number).toLong()
 
     @Test fun explicitFixedDigestDirectoryKeepsTheSameColdBindingPath() {
@@ -136,8 +137,7 @@ class CoreUnitLoadTest {
         for (backend in listOf("ast", "bytecode")) for (async in listOf(false, true)) {
             for (order in listOf(listOf(plain.toString(), "@$manifest"), listOf("@$manifest", plain.toString()))) {
                 executionContext().use { context ->
-                    val entry = context.eval("thc", CoreModules.request(order, "main:Main.entry", backend = backend,
-                        asyncExceptions = async, sourceNotesEnabled = false))
+                    val entry = context.eval("thc", CoreModules.request(order, "main:Main.entry", true, false, backend, false, false, null, async))
                     assertEquals(0L, count(entry, "coreUnitSourceOpens"))
                     assertEquals(41L, entry.execute(0).asLong())
                     assertEquals(0L, count(entry, "coreUnitSourceOpens"))
@@ -151,9 +151,7 @@ class CoreUnitLoadTest {
             executionContext().use { context ->
                 // This is the actual native-produced sidecar used by the loose
                 // loader controls, not a runtime reference-index fallback.
-                val entry = context.eval("thc", CoreModules.request(listOf(nativeJson.toString(), "@$manifest"),
-                    "synthetic:LazyJson.entry", backend = backend, asyncExceptions = async, sourceNotesEnabled = false,
-                    jsonSidecars = mapOf(nativeJson.toString() to nativeIndex.toString())))
+                val entry = context.eval("thc", CoreModules.request(listOf(nativeJson.toString(), "@$manifest"), "synthetic:LazyJson.entry", true, false, backend, false, false, null, async, mapOf(nativeJson.toString() to nativeIndex.toString())))
                 assertEquals(0L, count(entry, "coreUnitSourceOpens"))
                 assertEquals(1L, count(entry, "jsonBodyMaterializations"))
                 assertEquals(7L, entry.execute(5).asLong())
@@ -173,7 +171,7 @@ class CoreUnitLoadTest {
         Files.delete(directory.resolve("A.jsons"))
         for (backend in listOf("ast", "bytecode")) executionContext().use { context ->
             val failure = assertThrows(org.graalvm.polyglot.PolyglotException::class.java) {
-                context.eval("thc", CoreModules.request(listOf(loose.toString(), "@$manifest"), "uA:A.entry", backend = backend))
+                context.eval("thc", CoreModules.request(listOf(loose.toString(), "@$manifest"), "uA:A.entry", true, false, backend))
             }
             assertTrue(failure.message.orEmpty().contains("Duplicate GHC module"), failure.message)
             context.enter()

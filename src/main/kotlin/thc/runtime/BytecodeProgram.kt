@@ -57,7 +57,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
     private val callDemandsEnabled = java.lang.Boolean.getBoolean(CALL_DEMANDS_PROPERTY)
     private val sources = CoreSources(moduleData)
     private val metrics = demand?.metrics ?: Metrics(moduleData["instrument"] != false)
-    private val loadingStatistics = moduleData["coreLoadingStatistics"] as? (() -> Map<String, Any>)
+    private val loadingStatistics = moduleData["coreLoadingStatistics"] as? java.util.function.Supplier<Map<String, Any>>
     private val diagnosticUnsupported = moduleData["diagnosticUnsupported"] == true
     private val deferredUnsupported = linkedSetOf<String>()
     private val bindings = moduleData["bindings"] as? List<Map<String, Any?>> ?: throw RuntimeFault("Missing bindings")
@@ -382,7 +382,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         "deferredUnsupported" to deferredUnsupported.toList(), "unsupportedTraps" to metrics.unsupportedTraps,
         "frames" to "Bytecode DSL primitive locals; selective StaticShape captures",
         "stackPolicy" to "tail-safe; non-tail calls and nested thunk forcing use host stack", "threadPolicy" to "context-owned Java threads; resumable asynchronous delivery") +
-        (loadingStatistics?.invoke() ?: emptyMap())
+        (loadingStatistics?.get() ?: emptyMap())
 
     /** Actual decoded instruction listings, available without a Graal graph viewer. */
     override fun bytecodeDump(): String = roots.joinToString("\n\n") { "${it.name}\n${it.bytecodeNode.dump()}" }

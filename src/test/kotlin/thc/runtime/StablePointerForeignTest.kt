@@ -64,7 +64,7 @@ class StablePointerForeignTest {
             PackageScalarSignature("stable_equal", "stable_equal", listOf("AddrRep", "AddrRep"), "Int32Rep"),
             PackageScalarSignature("stable_clear", "stable_clear", emptyList(), "void"),
             PackageScalarSignature("stable_unknown", "stable_unknown", emptyList(), "AddrRep"))
-            .map { it.copy(safety = safety) }
+            .map { PackageScalarSignature(it.symbol, it.entry, it.arguments, it.result, it.convention, safety) }
         val link = PackageScalarLink("stable-ffi-control", "test-host", sha, sha, bytes, abi)
         context().use { context ->
             context.initialize("thc"); context.enter()

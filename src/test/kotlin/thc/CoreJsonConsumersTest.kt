@@ -4,6 +4,10 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc
 
+import thc.Main.loadEntry
+import thc.Main.executionContext
+import thc.Main.defaultBackend
+
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
@@ -32,8 +36,7 @@ class CoreJsonConsumersTest {
     private fun consumers(): LinkedHashMap<String, String> = linkedMapOf(
         file("indexed-consumer.json").toString() to file("indexed-consumer.idx").toString(),
         file("indexed-interface-closure.json").toString() to file("indexed-interface-closure.idx").toString())
-    private fun request(paths: List<String>, pairs: Map<String, String>, verifyArtifacts: Boolean = false) = CoreModules.request(paths,
-        "main:Main.entry", jsonSidecars = pairs, sourceNotesEnabled = false, verifyArtifacts = verifyArtifacts)
+    private fun request(paths: List<String>, pairs: Map<String, String>, verifyArtifacts: Boolean = false) = CoreModules.request(paths, "main:Main.entry", true, false, thc.Main.defaultBackend(), false, false, null, null, pairs, verifyArtifacts)
     private fun document(request: String) = Json.parse(request) as Map<String, Any?>
     private fun modules(request: String): List<Map<String, Any?>> = ArrayList<Map<String, Any?>>().also { result ->
         CoreModules.visitRequestModules(document(request), result::add)
@@ -67,12 +70,11 @@ class CoreJsonConsumersTest {
                 assertEquals("dependency:Hidden.cold", (closure["bindings"] as List<Map<String, Any?>>).single()["id"])
                 assertEquals(listOf("synthetic:LazyJson"), closure["providedModules"])
                 CoreModules.merge(selected) // exact provided owner and original binding IDs remain admissible
-                val legacy = modules(CoreModules.request(paths, "main:Main.entry", sourceNotesEnabled = false))
+                val legacy = modules(CoreModules.request(paths, "main:Main.entry", true, false, thc.Main.defaultBackend(), false))
                 assertEquals(expected, legacy.map { it["unit"] }, "legacy relative consumer order")
                 for (backend in listOf("ast", "bytecode")) for (async in listOf(false, true)) {
                     executionContext().use { context ->
-                        val value = loadEntry(context, paths, "main:Main.entry", backend = backend,
-                            asyncExceptions = async, jsonSidecars = pairs)
+                        val value = loadEntry(context, paths, "main:Main.entry", true, backend, false, null, async, pairs)
                         fun count(key: String) = ((Json.parse(value.getMember("diagnostics").asString()) as Map<*, *>)[key] as Number).toLong()
                         assertEquals(1L, count("jsonBodyMaterializations"))
                         assertEquals(1L, count("loweredRootCount"))

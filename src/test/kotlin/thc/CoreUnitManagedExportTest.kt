@@ -3,6 +3,9 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc
 
+import thc.Main.loadManagedExports
+import thc.Main.executionContext
+
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
@@ -134,7 +137,7 @@ class CoreUnitManagedExportTest {
     @Test fun explicitVerificationStillChecksTheOriginalModuleAndProjectedMetadata() {
         val good = manifest("verified")
         for (backend in listOf("ast", "bytecode")) executionContext().use { context ->
-            val symbols = exports(loadManagedExports(context, listOf("@$good"), backend, verifyArtifacts = true))
+            val symbols = exports(loadManagedExports(context, listOf("@$good"), backend, true, true))
             assertEquals(42, symbols.getMember("thc_add_one").execute(41).asInt())
             val counts = program(context).diagnostics()
             assertTrue((counts["coreUnitHashBytesScanned"] as Long) > 0)

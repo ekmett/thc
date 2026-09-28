@@ -1,0 +1,83 @@
+// SPDX-FileCopyrightText: 2026 Edward Kmett
+// SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+package thc;
+
+import java.util.*;
+import thc.runtime.CoreForeignExceptionBridge;
+import thc.runtime.TargetLayout;
+
+/** Context-owned selected records over a shared immutable file lease.
+ * Construction and cold global references never open the container. */
+public final class CoreCompactModule implements AutoCloseable {
+    private final CoreUnitDirectory.ModuleRecord module;
+    private final TargetLayout targetLayout;
+    private final boolean verifyArtifacts;
+    private final CoreCompactFile file;
+    private final CoreCompactRecords records;
+    private Map<String,Object> metadata;
+    private final Map<Long,Map<String,Object>> selected = new HashMap<>();
+    private boolean verified;
+    public CoreCompactModule(CoreUnitDirectory.ModuleRecord module, TargetLayout targetLayout, boolean verifyArtifacts) {
+        this.module = module; this.targetLayout = targetLayout; this.verifyArtifacts = verifyArtifacts;
+        var artifact = ((CoreUnitDirectory.CompactStorage) module.storage()).artifact();
+        file = new CoreCompactFile(artifact.path(), artifact.sha256(), verifyArtifacts);
+        records = new CoreCompactRecords(file, artifact.sha256());
+    }
+    public CoreCompactFile.Counters getCounters() { return file.getCounters(); }
+    public Map<String,Object> metadata() {
+        if (metadata != null) return metadata;
+        try {
+            var header = file.header();
+            require(header.getContainsDelimitedControl() == module.containsDelimitedControl() &&
+                    header.getRegistrationObligations() == module.registrationObligations() && header.getMainAlias() == module.mainAlias() &&
+                    header.getPackageScalarDeclarations() == module.packageScalarDeclarations(),
+                    "Compact Core summaries differ from package directory: " + module.getPrefix());
+            var facts = records.header();
+            require(Objects.equals(facts.get("ghc"), "9.14.1") && Objects.equals(facts.get("unit"), module.unit()) &&
+                    Objects.equals(facts.get("module"), module.name()) && Objects.equals(facts.get("boundary"), "optimized-Core-after-Tidy-before-CorePrep"),
+                    "Compact Core identity differs from package directory: " + module.getPrefix());
+            if (facts.get("targetLayout") != null) require(Objects.equals(TargetLayout.Companion.fromDocument(facts.get("targetLayout")), targetLayout),
+                    "Compact Core target layout differs from package directory");
+            var result = new LinkedHashMap<>(facts);
+            result.remove("targetLayout"); result.put("bindings", List.of());
+            synchronized (getCounters()) { getCounters().decodedModules++; }
+            return metadata = result;
+        } catch (Exception failure) { return rethrow(failure); }
+    }
+    public boolean containsSymbol(String id) {
+        try { return file.lookup(id) != null; } catch (Exception failure) { return rethrow(failure); }
+    }
+    public Map<String,Object> binding(String id) {
+        try { Long offset = file.lookup(id); return offset == null ? null : bindingAt(offset); }
+        catch (Exception failure) { return rethrow(failure); }
+    }
+    private Map<String,Object> bindingAt(long offset) {
+        return selected.computeIfAbsent(offset, ignored -> {
+            var binding = records.binding(offset);
+            String id = (String) binding.get("id");
+            require(id.startsWith(module.getPrefix()) || module.mainAlias() && id.equals("main::" + module.name() + ".main"),
+                    "Compact Core binding has a different module owner: " + id);
+            synchronized (getCounters()) { getCounters().decodedBindings++; }
+            return binding;
+        });
+    }
+    public void verify() {
+        if (!verifyArtifacts || verified) return;
+        try {
+            var facts = metadata();
+            var bindings = new ArrayList<Map<String,Object>>();
+            file.verifyBindingOffsets(offset -> bindings.add(bindingAt(offset)));
+            var original = new LinkedHashMap<>(facts); original.put("bindings", bindings);
+            CoreForeignArtifacts.INSTANCE.validateArchive(original, true);
+            CoreModules.admission(original, null);
+            CoreForeignExceptionBridge.INSTANCE.read(original);
+            verified = true;
+        } catch (Throwable failure) { rethrow(failure); }
+    }
+    @Override public void close() {
+        selected.clear(); metadata = null;
+        try { file.close(); } catch (Exception failure) { rethrow(failure); }
+    }
+    private static void require(boolean condition, String message) { if (!condition) throw new IllegalArgumentException(message); }
+    @SuppressWarnings("unchecked") private static <T,E extends Throwable> T rethrow(Throwable failure) throws E { throw (E) failure; }
+}

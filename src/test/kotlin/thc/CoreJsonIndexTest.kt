@@ -3,6 +3,9 @@
 
 package thc
 
+import thc.CoreJsonMasks.jsonMaskBlock
+import thc.CoreJsonRank.jsonRankRunPrefix
+
 import java.io.ByteArrayInputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -277,7 +280,7 @@ class CoreJsonIndexTest {
         for (text in listOf("0", "  \"λ😀\" ", "[]", "{}", "{\"x\":[1,{\"y\":true}],\"z\":null}")) {
             val source = text.toByteArray(Charsets.UTF_8)
             val binary = sidecar(text)
-            CoreJsonIndex.loadSidecar(source, ByteArrayInputStream(binary), verifyArtifacts = true).use { loaded ->
+            CoreJsonIndex.loadSidecar(source, ByteArrayInputStream(binary), true).use { loaded ->
                 val initial = loaded.statistics()
                 assertEquals(binary.size.toLong(), initial.serializedByteSize)
                 assertEquals(source.size.toLong(), initial.structuralBytesScanned)
@@ -324,7 +327,7 @@ class CoreJsonIndexTest {
             assertEquals(0L, source.statistics().sourceHashBytesScanned)
         }
         assertThrows(IllegalArgumentException::class.java) {
-            CoreJsonIndex.loadSidecar("[2]".toByteArray(), ByteArrayInputStream(binary), verifyArtifacts = true)
+            CoreJsonIndex.loadSidecar("[2]".toByteArray(), ByteArrayInputStream(binary), true)
         }
         // The ordinary path still consumes the exact envelope and rejects an
         // extent that cannot describe this snapshot, before using its offsets.
@@ -374,7 +377,7 @@ class CoreJsonIndexTest {
                 val corrupt = binary.copyOf()
                 corrupt[corrupt.lastIndex] = (corrupt.last().toInt() xor 1).toByte()
                 val integrity = assertThrows(IllegalArgumentException::class.java) {
-                    CoreJsonIndex.loadSidecar(bytes, ByteArrayInputStream(corrupt), verifyArtifacts = true).close()
+                    CoreJsonIndex.loadSidecar(bytes, ByteArrayInputStream(corrupt), true).close()
                 }
                 assertEquals("JSON index integrity mismatch", integrity.message,
                     "empty input must not bypass sidecar verification")
@@ -397,7 +400,7 @@ class CoreJsonIndexTest {
     @Test fun matchingSelfHashesDoNotAuthorizeWrongTopologyOrCounts() {
         fun rejected(text: String, binary: ByteArray = sidecar(text)) {
             assertThrows(Exception::class.java) {
-                CoreJsonIndex.loadSidecar(text.toByteArray(), ByteArrayInputStream(binary), verifyArtifacts = true).close()
+                CoreJsonIndex.loadSidecar(text.toByteArray(), ByteArrayInputStream(binary), true).close()
             }
         }
         for (text in listOf("[}", "{]", "[] []", "[1,]", "[true{}]", "[\"unterminated]", "{\"x\":1]")) rejected(text)
@@ -419,7 +422,7 @@ class CoreJsonIndexTest {
         val original = sidecar(text)
         fun rejected(binary: ByteArray) {
             assertThrows(Exception::class.java) {
-                CoreJsonIndex.loadSidecar(bytes, ByteArrayInputStream(binary), verifyArtifacts = true).close()
+                CoreJsonIndex.loadSidecar(bytes, ByteArrayInputStream(binary), true).close()
             }
         }
         for (length in original.indices) rejected(original.copyOf(length))

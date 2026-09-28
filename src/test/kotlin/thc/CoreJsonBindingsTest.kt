@@ -4,6 +4,8 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc
 
+import thc.Main.executionContext
+
 import com.oracle.truffle.api.TruffleLanguage
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test

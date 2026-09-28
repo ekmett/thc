@@ -8,7 +8,7 @@ import com.oracle.truffle.api.TruffleLanguage
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.Language
-import thc.executionContext
+import thc.Main.executionContext
 
 private typealias CellCore = List<Any?>
 

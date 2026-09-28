@@ -26,9 +26,9 @@ public final class CoreDataLabels {
             throw fault("RTS data label requires exact evaluated AddrRep proof");
         var state = Language.currentState(null);
         return switch (symbol) {
-            case "enabled_capabilities" -> ManagedAddress.Companion.enabledCapabilities$org_intelligence_thc(state.getThreads$org_intelligence_thc());
-            case "RtsFlags" -> state.getCompilerRts$org_intelligence_thc().flagsAddress(layout);
-            default -> state.getCompilerRts$org_intelligence_thc().address(symbol);
+            case "enabled_capabilities" -> ManagedAddress.Companion.enabledCapabilities$org_intelligence_thc(state.getThreads());
+            case "RtsFlags" -> state.getCompilerRts().flagsAddress(layout);
+            default -> state.getCompilerRts().address(symbol);
         };
     }
 }

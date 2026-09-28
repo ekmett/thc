@@ -135,13 +135,13 @@ class CoreLinkerTest {
         val missingGlobal = mapOf("bindings" to listOf(binding("dep:App.entry", variable("dep:Lib.missing"))),
             "constructors" to emptyList<Any?>())
         val globalError = assertThrows(IllegalArgumentException::class.java) {
-            CoreModules.reachable(missingGlobal, "dep:App.entry", strictLink = true)
+            CoreModules.reachable(missingGlobal, "dep:App.entry", true)
         }
         assertTrue(globalError.message!!.contains("dep:Lib.missing"))
         val missingConstructor = mapOf("bindings" to listOf(binding("dep:App.entry", listOf("con", "dep:Lib.C", 0))),
             "constructors" to emptyList<Any?>())
         val constructorError = assertThrows(IllegalArgumentException::class.java) {
-            CoreModules.reachable(missingConstructor, "dep:App.entry", strictLink = true)
+            CoreModules.reachable(missingConstructor, "dep:App.entry", true)
         }
         assertTrue(constructorError.message!!.contains("dep:Lib.C"))
     }

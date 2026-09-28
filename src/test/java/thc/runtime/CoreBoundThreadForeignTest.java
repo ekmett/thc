@@ -14,7 +14,7 @@ import java.util.function.Consumer;
 import kotlin.Unit;
 import org.junit.jupiter.api.Test;
 import thc.Language;
-import thc.MainKt;
+import thc.Main;
 import static org.junit.jupiter.api.Assertions.*;
 
 /** Structural/carrier controls; original-import evidence is acquired separately from installed Core. */
@@ -95,7 +95,7 @@ class CoreBoundThreadForeignTest {
                 List.of(state), List.of(false), result, true));
     }
     @Test void bothLoadersCheckStoredStateAndRuntimeCarrierBeforeWritingTypedZero() throws Exception {
-        for (var backend : List.of("ast", "bytecode")) try (var context = MainKt.executionContext(false)) {
+        for (var backend : List.of("ast", "bytecode")) try (var context = Main.executionContext(false)) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
@@ -122,7 +122,7 @@ class CoreBoundThreadForeignTest {
                 assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), backend);
                 assertSame(target, program.entryTarget("query"));
                 assertEquals(0L, ((Number) program.diagnostics().get("unsupportedTraps")).longValue());
-                var handoff = language.getHandoffState$org_intelligence_thc().get();
+                var handoff = language.getHandoffState().get();
                 assertEquals(0, handoff.getArguments().getDepth()); assertEquals(0, handoff.getArguments().retainedReferences());
                 assertEquals(0, handoff.getResults().getDepth()); assertEquals(0, handoff.getResults().retainedReferences());
                 assertNull(handoff.getPending());

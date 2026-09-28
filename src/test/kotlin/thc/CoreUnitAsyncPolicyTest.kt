@@ -88,8 +88,7 @@ class CoreUnitAsyncPolicyTest {
                 "ghc" to "9.14.1", "units" to listOf(a, b))))
         }
     }
-    private fun request(path: Path, backend: String, async: Boolean) = CoreModules.request(
-        listOf("@$path"), "uA:A.entry", backend = backend, sourceNotesEnabled = false, asyncExceptions = async)
+    private fun request(path: Path, backend: String, async: Boolean) = CoreModules.request(listOf("@$path"), "uA:A.entry", true, false, backend, false, false, null, async)
     private fun count(program: ExecutableProgram, name: String) = (program.diagnostics().getValue(name) as Number).toLong()
     private fun externalSend(threads: GuestThreads, id: Long): AsyncRequest = CompletableFuture.supplyAsync {
         threads.send(id, "pending demand")

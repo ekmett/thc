@@ -17,19 +17,19 @@ public final class CoreCapiForeign {
 
     public static long zero(Node node, CapiCall call) {
         var state = Language.currentState(node);
-        var previous = state.getThreads$org_intelligence_thc().enterForeign(ForeignSafety.UNSAFE);
-        try { return state.cbits$org_intelligence_thc().capiZero(call.unit(), call.symbol(), call.timeClock()); }
-        finally { state.getThreads$org_intelligence_thc().leaveForeign(previous); }
+        var previous = state.getThreads().enterForeign(ForeignSafety.UNSAFE);
+        try { return state.cbits().capiZero(call.unit(), call.symbol(), call.timeClock()); }
+        finally { state.getThreads().leaveForeign(previous); }
     }
 
     public static long wordAddress(Node node, CapiCall call, long word, ManagedAddress address) {
         var state = Language.currentState(node);
-        var previous = state.getThreads$org_intelligence_thc().enterForeign(ForeignSafety.UNSAFE);
+        var previous = state.getThreads().enterForeign(ForeignSafety.UNSAFE);
         try {
-            var result = state.cbits$org_intelligence_thc().capiWordAddress(call, word, address);
-            if (result.getValue() < 0) state.getStdio$org_intelligence_thc().captureForeignErrno$org_intelligence_thc(result.getErrno());
+            var result = state.cbits().capiWordAddress(call, word, address);
+            if (result.getValue() < 0) state.getStdio().captureForeignErrno$org_intelligence_thc(result.getErrno());
             return result.getValue();
-        } finally { state.getThreads$org_intelligence_thc().leaveForeign(previous); }
+        } finally { state.getThreads().leaveForeign(previous); }
     }
 
     private static final Set<String> SCALAR_KEYS = Set.of("kind", "primReps", "evaluated");

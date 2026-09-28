@@ -124,7 +124,7 @@ def compactObjectHeaders = providers.gradleProperty("thc.compactObjectHeaders").
 requireBuild(compactObjectHeaders == "true" || compactObjectHeaders == "false") { "thc.compactObjectHeaders must be true or false" }
 def compactHeaderOption = "-XX:${compactObjectHeaders == "true" ? "+" : "-"}UseCompactObjectHeaders"
 application {
-    mainClass.set("thc.MainKt")
+    mainClass.set("thc.Main")
     applicationDefaultJvmArgs = ["--add-modules=jdk.incubator.vector", "--enable-native-access=ALL-UNNAMED", "-Xss2m", compactHeaderOption] +
         // The Linux standalone guest owns GHC's supported process handlers.
         // Embedders do not inherit these launcher JVM arguments.

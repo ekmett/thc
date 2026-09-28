@@ -226,10 +226,10 @@ class CoreJsonSymbolsTest {
             assertEquals((prefix + suffix).toByteArray().size.toLong(), statistics.metadataBytes)
             assertTrue(statistics.sourceByteReads < 200)
             assertThrows(IllegalArgumentException::class.java) {
-                reader.moduleMetadata(span.copy(bindingsEnd = end + 1))
+                reader.moduleMetadata(CoreJsonSymbols.ModuleSpan(start, end, bindingsStart, end + 1))
             }
             assertThrows(IllegalArgumentException::class.java) {
-                reader.moduleMetadata(span.copy(bindingsStart = bindingsStart + 1))
+                reader.moduleMetadata(CoreJsonSymbols.ModuleSpan(start, end, bindingsStart + 1, bindingsEnd))
             }
         }
         assertEquals(1L, counts.statistics().decodedModules)

@@ -29,13 +29,13 @@ public final class DiagnosticModeTest {
             "diagnosticUnsupported", diagnostic));
     }
     @Test void normalExecutionStillRejectsUnavailableCodeAtLoad() {
-        try (Context context = MainKt.executionContext(false)) {
+        try (Context context = Main.executionContext(false)) {
             var error = assertThrows(PolyglotException.class, () -> context.eval("thc", request(false)));
             assertTrue(error.getMessage() != null && error.getMessage().contains("Unresolved external binding"));
         }
     }
     @Test void diagnosticBranchesCompileAndUnavailablePathsTrapExplicitly() {
-        try (Context context = MainKt.executionContext(false)) {
+        try (Context context = Main.executionContext(false)) {
             var fn = context.eval("thc", request(true));
             assertEquals(41L, fn.execute(0L).asLong());
             assertTrue(fn.invokeMember("compile").asBoolean());
@@ -54,7 +54,7 @@ public final class DiagnosticModeTest {
     @Test void diagnosticPrimitiveGapsRemainExplicitAndMalformedCoreStillRejects() {
         var primitive = List.of("app", List.of("prim", "futurePrim#"),
             List.of(List.of("var", "n")), List.of(false));
-        try (Context context = MainKt.executionContext(false)) {
+        try (Context context = Main.executionContext(false)) {
             var fn = context.eval("thc", request(true, primitive));
             assertEquals(41L, fn.execute(0L).asLong());
             var error = assertThrows(PolyglotException.class, () -> fn.execute(1L));

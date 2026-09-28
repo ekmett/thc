@@ -17,8 +17,8 @@ public final class MapAllocation {
     if (!bean.isThreadAllocatedMemorySupported()) throw new IllegalStateException("Allocation counter unavailable");
     bean.setThreadAllocatedMemoryEnabled(true);
     long thread = Thread.currentThread().threadId();
-    try (Context context = thc.MainKt.executionContext(false)) {
-      Value function = thc.MainKt.loadEntry(context, paths, "mapAggregate", false);
+    try (Context context = thc.Main.executionContext(false)) {
+      Value function = thc.Main.loadEntry(context, paths, "mapAggregate", false);
       long checksum = 0, calls = 0;
       for (int i = 0; i < 200; i++) checksum += function.execute(base + (i & 15)).asLong();
       function.invokeMember("compile");

@@ -49,15 +49,15 @@ class CoreForeignArtifactsTest {
         val linked = mapOf("schema" to 2L, "unit" to unit, "module" to name,
             "foreign" to archive, "foreignLink" to link, "bindings" to calls)
         assertEquals(symbols.toSet(), CoreForeignArtifacts.linked(linked)!!.symbols)
-        val header = CoreForeignArtifacts.linked(linked + ("bindings" to emptyList<Any>()), completeBindings = false)!!
-        CoreForeignArtifacts.validateCalls(calls.take(1), header, complete = false)
+        val header = CoreForeignArtifacts.linked(linked + ("bindings" to emptyList<Any>()), false)!!
+        CoreForeignArtifacts.validateCalls(calls.take(1), header, false)
         assertThrows(IllegalArgumentException::class.java) {
             CoreForeignArtifacts.linked(linked + ("bindings" to calls.take(1)))
         }
         val unknown = (calls.first()["foreignCall"] as Map<String, Any?>) +
             ("target" to mapOf("kind" to "static", "unit" to unit, "symbol" to "unknown", "isFunction" to true))
         assertThrows(IllegalArgumentException::class.java) {
-            CoreForeignArtifacts.validateCalls(listOf(mapOf("foreignCall" to unknown)), header, complete = false)
+            CoreForeignArtifacts.validateCalls(listOf(mapOf("foreignCall" to unknown)), header, false)
         }
         CoreForeignArtifacts.requireExecutable(linked)
         val originalStubs = archive["stubs"] as Map<String, Any?>

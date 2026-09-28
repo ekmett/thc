@@ -149,8 +149,7 @@ class CoreUnitCafLifetimeTest {
         for (backend in listOf("ast", "bytecode")) for (async in listOf(false, true)) {
             val output = ByteArrayOutputStream()
             Context.newBuilder("thc").err(output).build().use { context ->
-                val entry = context.eval("thc", CoreModules.request(listOf("@$manifest"), "uA:A.entry", backend = backend,
-                    sourceNotesEnabled = false, asyncExceptions = async))
+                val entry = context.eval("thc", CoreModules.request(listOf("@$manifest"), "uA:A.entry", true, false, backend, false, false, null, async))
                 assertEquals(7L, entry.execute(0).asLong())
                 context.enter()
                 try {
