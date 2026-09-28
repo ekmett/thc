@@ -3,5 +3,10 @@
 #include <HsFFI.h>
 #include <math.h>
 #include <unistd.h>
-HsDouble archive_provider_math(HsDouble value) { return erf(value); }
+extern long archive_dependency_tick(void);
+static long calls;
+__attribute__((constructor)) static void initialize(void) { archive_dependency_tick(); }
+HsDouble archive_provider_math(HsDouble value) {
+  return erf(value) + archive_dependency_tick() - ++calls - 1;
+}
 HsInt archive_provider_process(HsInt ignored) { (void) ignored; return getpid(); }

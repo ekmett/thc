@@ -34,6 +34,19 @@ class PackageScalarLinksTest {
     private Map<String, Object> binding(String id, List<?> calls) {
         return map("id", "scalar-fixture:Scalar." + id, "expr", list("lit", "int", "7", calls.stream().map(it -> map("foreignCall", it)).toList()));
     }
+    @Test void nativeDependencyBytesAreVerifiedAndPartOfLoadedIdentity() throws Exception {
+        var base = module(); var scalar = object(base, "packageScalarLink"); var entry = single(scalar, "abi");
+        var dependency = map("sha256", hash(new byte[]{1, 2}), "hex", "0102");
+        var link = with(scalar, "profile", "thc-package-c-ffi-v1", "nativeLibrary", dependency,
+            "format", System.getProperty("os.name").startsWith("Mac") ? "llvm-embedded-mach-o" : "llvm-embedded-elf",
+            "abi", list(with(entry, "entry", nativeEntry, "convention", "ccall", "safety", "unsafe")));
+        var nativeModule = with(without(base, "packageScalarLink"), "packageNativeLink", link);
+        var first = Objects.requireNonNull(PackageScalarLinks.read(nativeModule)).getLink();
+        var changed = with(link, "nativeLibrary", map("sha256", hash(new byte[]{1, 3}), "hex", "0103"));
+        assertFalse(first.same(Objects.requireNonNull(PackageScalarLinks.read(with(nativeModule, "packageNativeLink", changed))).getLink()));
+        assertThrows(IllegalArgumentException.class, () -> PackageScalarLinks.read(with(nativeModule, "packageNativeLink",
+            with(link, "nativeLibrary", with(dependency, "hex", "0103")))));
+    }
     @Test void demandedBindingsUseOriginalInventoriesWithoutClaimingCompleteness() throws Exception {
         var base = module(); var proof = object(base, "staticForeignImports"); var call = map("target", map("unit", base.get("unit"), "symbol", "scalar_value"));
         var first = binding("first", list(call)); var second = binding("second", list(call));

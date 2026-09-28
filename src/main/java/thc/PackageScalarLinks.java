@@ -73,7 +73,8 @@ public final class PackageScalarLinks {
         boolean inputs = nativeLink && raw instanceof Map<?,?> m && m.containsKey("buildInputs");
         boolean partial = nativeLink && raw instanceof Map<?,?> m && m.containsKey("availableEntries");
         boolean callbacks = nativeLink && raw instanceof Map<?,?> m && version(m.get("schema"), 2);
-        var fields = record(raw, "schema format profile unit target componentSha256 bitcodeSha256 bitcodeHex abi" + (inputs ? " buildInputs" : "") + (partial ? " availableEntries" : "") + (callbacks ? " finalizers" : ""));
+        boolean companion = nativeLink && raw instanceof Map<?,?> m && m.containsKey("nativeLibrary");
+        var fields = record(raw, "schema format profile unit target componentSha256 bitcodeSha256 bitcodeHex abi" + (inputs ? " buildInputs" : "") + (partial ? " availableEntries" : "") + (callbacks ? " finalizers" : "") + (companion ? " nativeLibrary" : ""));
         if (inputs) check(fields.get("buildInputs") instanceof Map<?,?>, "build inputs record");
         String format = text(fields.get("format"));
         check((version(fields.get("schema"), 1) || callbacks) && (format.equals("llvm-bitcode") || nativeLink &&
@@ -92,6 +93,14 @@ public final class PackageScalarLinks {
         }
         check(validEncoding, "bitcode encoding");
         byte[] bytes = HexFormat.of().parseHex(encoded); check(bytes.length != 0 && digest(bytes).equals(bitcodeHash), "bitcode digest");
+        byte[] nativeLibrary = new byte[0];
+        if (companion) {
+            check(!partial && !format.equals("llvm-bitcode"), "native dependency container");
+            var dependency = record(fields.get("nativeLibrary"), "sha256 hex");
+            String hex = text(dependency.get("hex")); nativeLibrary = HexFormat.of().parseHex(hex);
+            check(nativeLibrary.length != 0 && HexFormat.of().formatHex(nativeLibrary).equals(hex) &&
+                digest(nativeLibrary).equals(text(dependency.get("sha256"))), "native dependency digest");
+        }
         var entries = list(fields.get("abi")); var abi = new ArrayList<PackageScalarSignature>();
         for (int index = 0; index < entries.size(); index++) {
             var entry = record(entries.get(index), nativeLink ? "symbol entry convention safety arguments result" : "symbol entry arguments result");
@@ -155,7 +164,7 @@ public final class PackageScalarLinks {
         check(finalizers.isEmpty() || !partial, "partial finalizer archive");
         var selectedAbi = new ArrayList<PackageScalarSignature>();
         for (var item : abi) if (available == null || available.contains(item.entry())) selectedAbi.add(item);
-        var link = new PackageScalarLink(unit, target, componentHash, bitcodeHash, bytes, Collections.unmodifiableList(selectedAbi), format, finalizers);
+        var link = new PackageScalarLink(unit, target, componentHash, bitcodeHash, bytes, Collections.unmodifiableList(selectedAbi), format, finalizers, nativeLibrary);
         if (nativeLink && !module.containsKey("staticForeignImports")) {
             check(!module.containsKey("foreign") && !module.containsKey("staticForeignImportStubs"), "foreign products lack import provenance");
             return new PackageScalarAdmission(link, Set.of());

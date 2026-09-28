@@ -69,6 +69,11 @@ preparePackageNativeArchives root = do
   ghcPkg <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
   cabal <- maybe "cabal" id <$> lookupEnv "CABAL"
   python <- maybe "python3" id <$> lookupEnv "THC_PYTHON"
+  clang <- maybe "clang" id <$> lookupEnv "THC_CLANG"
+  ar <- maybe "llvm-ar" id <$> lookupEnv "THC_LLVM_AR"
+  _ <- execute "native-dependency-compile" [] clang ["-fPIC","-fembed-bitcode","-c",root </> fixture </> "provider/dependency.c",
+    "-o",output </> "dependency.o"]
+  _ <- execute "native-dependency-archive" [] ar ["rcs",output </> "libthc_archive_dependency.a",output </> "dependency.o"]
   built <- execute "driver-build" [] cabal ["build","--offline","-j2","exe:thc","lib:thc","exe:thc-interface"]
   driver <- locate execute cabal "exe:thc"
   helper <- locate execute cabal "exe:thc-interface"
@@ -91,6 +96,7 @@ preparePackageNativeArchives root = do
         ("THC_PROXY_PLUGIN_UNIT",plugin),("THC_PROXY_INTERFACE_HELPER",helper),
         ("THC_PROXY_INTERFACE_LIBDIR",libdir),("THC_PROXY_NATIVE_PIECES",pieces)]
   acquired <- execute "acquisition" environment cabal ["build","--offline",
+    "--extra-lib-dirs=" ++ output,
     "--project-file=" ++ root </> fixture </> "cabal.project","--builddir=" ++ native,
     "--with-compiler=" ++ wrapper,"exe:oracle"]
   plan <- readJson (native </> "cache/plan.json")
