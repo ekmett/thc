@@ -1847,13 +1847,13 @@ public final class Program implements ExecutableProgram {
             return new STMExpression(operation, tupleProof, operands,
                 operation.getCallback() ? new TupleShape(tupleProof, (thc.Language) language) : null, metrics, nested, enableAsync);
         }
-        if (primitive && MVarOp.Companion.named((String) fn.get(1)) != null) {
-            var operation = Objects.requireNonNull(MVarOp.Companion.named((String) fn.get(1)));
+        if (primitive && MVarOp.named((String) fn.get(1)) != null) {
+            var operation = Objects.requireNonNull(MVarOp.named((String) fn.get(1)));
             operation.validate(argumentProofs(args), flags, tupleProof);
             operation.validateBindings(argumentProofs(args), bindingProofs(args, scope));
             Expr[] operands = argumentOperands(args, scope, flags);
             operation.validate(loweredProofs(operands), flags, tupleProof);
-            return ManagedMVarsKt.mVarExpression(operation, tupleProof, operands, enableAsync);
+            return ManagedMVars.expression(operation, tupleProof, operands, enableAsync);
         }
         if (primitive && CompactImageOp.named((String) fn.get(1)) != null) {
             var operation = Objects.requireNonNull(CompactImageOp.named((String) fn.get(1)));

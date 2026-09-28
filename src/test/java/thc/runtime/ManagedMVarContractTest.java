@@ -42,9 +42,9 @@ class ManagedMVarContractTest {
         for (var op : MVarOp.values()) for (var payload : List.of(lifted, mvar,
             scalar(CoreKind.DATA, lifted.getPrimReps()), scalar(CoreKind.DATA, mvar.getPrimReps()), scalar(CoreKind.CLOSURE, lifted.getPrimReps()))) {
             var args = arguments(op, payload); op.validate(args, flags(args), result(op, payload));
-            assertSame(op, MVarOp.Companion.named(op.getPrimitive()));
+            assertSame(op, MVarOp.named(op.getPrimitive()));
         }
-        assertNull(MVarOp.Companion.named("newMutVar#"));
+        assertNull(MVarOp.named("newMutVar#"));
     }
     @Test void malformedArgumentProofsAndFlagsAreRejected() {
         var bad = List.of(CoreRepresentation.Companion.getUNKNOWN(), integer, scalar(CoreKind.OBJECT, List.of("BoxedRep Nothing")),
@@ -106,7 +106,7 @@ class ManagedMVarContractTest {
                 case PUT, TRY_PUT -> new Expr[]{operand(cell), operand(new Object()), operand(1L)};
                 default -> new Expr[]{operand(cell), operand(1L)};
             };
-            var expression = ManagedMVarsKt.mVarExpression(op, result(op, lifted), operands, false);
+            var expression = ManagedMVars.expression(op, result(op, lifted), operands, false);
             assertThrows(RuntimeFault.class, () -> { if (op.getTuple()) expression.executeTuple(frame, slots, 0); else expression.execute(frame); });
             assertSame(original, cell.tryRead().getValue()); assertEquals(71L, frame.getLong(slots[0])); assertSame(original, frame.getObject(slots[1]));
         }
@@ -115,7 +115,7 @@ class ManagedMVarContractTest {
         var destination = frame(); var frame = destination.frame; var slots = destination.slots;
         for (var op : List.of(MVarOp.TRY_TAKE, MVarOp.TRY_READ)) {
             var cell = new ManagedMVar();
-            var expression = ManagedMVarsKt.mVarExpression(op, result(op, lifted), new Expr[]{operand(cell), operand(Unit.INSTANCE)}, false);
+            var expression = ManagedMVars.expression(op, result(op, lifted), new Expr[]{operand(cell), operand(Unit.INSTANCE)}, false);
             FrameAccess.writeLong(frame, slots[0], 1L); FrameAccess.write(frame, slots[1], new Object());
             expression.executeTuple(frame, slots, 0);
             assertEquals(0L, frame.getLong(slots[0])); assertNull(frame.getObject(slots[1])); assertTrue(cell.isEmpty());
