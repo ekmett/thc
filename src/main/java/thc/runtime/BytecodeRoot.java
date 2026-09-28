@@ -2882,6 +2882,13 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static boolean test(long pivot, long value) { return value < pivot; }
     }
 
+    /** Exact wide-integral guard for a statically prepared recovery decision. */
+    @Operation
+    @ConstantOperand(type = long.class, name = "literal")
+    public static final class LiteralEqual {
+        @Specialization public static boolean test(long literal, Object value) { return literal == (Long) value; }
+    }
+
     @Operation
     @ConstantOperand(type = DataLayout.class, name = "layout")
     @ConstantOperand(type = int.class, name = "index")
