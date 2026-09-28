@@ -8,13 +8,13 @@ cd "$(dirname "$0")/.."
 root=$(pwd)
 . "$root/bin/toolchain.sh"
 THC_CORE_OUT="$root/build/aggregate-core" THC_GHC_OUT="$root/build/aggregate-ghc" \
-  bin/export-core.sh test/fixtures/compiler/AggregateFrontier.hs
+  bin/export-core.sh t/fixtures/compiler/AggregateFrontier.hs
 THC_CORE_OUT="$root/build/aggregate-post-core" THC_GHC_OUT="$root/build/aggregate-post-ghc" \
-  bin/export-core.sh -fplugin-opt=THC.Plugin:post-tidy test/fixtures/compiler/AggregateFrontier.hs
+  bin/export-core.sh -fplugin-opt=THC.Plugin:post-tidy t/fixtures/compiler/AggregateFrontier.hs
 mkdir -p build/aggregate-native
-"$GHC" --make -v0 -O2 -fforce-recomp -dcore-lint -itest/fixtures/compiler \
+"$GHC" --make -v0 -O2 -fforce-recomp -dcore-lint -it/fixtures/compiler \
   -odir build/aggregate-native -hidir build/aggregate-native \
-  -o build/aggregate-native/aggregate-frontier test/fixtures/compiler/AggregateFrontierNative.hs
+  -o build/aggregate-native/aggregate-frontier t/fixtures/compiler/AggregateFrontierNative.hs
 build/aggregate-native/aggregate-frontier > build/aggregate-native/oracle.tsv
 python3 bin/check-aggregate-frontier.py
 python3 bin/check-aggregate-layout.py --prepare

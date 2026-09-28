@@ -29,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class StablePointerForeignTest {
     @TempDir Path directory;
     private Path compile(boolean nativeCode) throws Exception {
-        var source = Path.of(System.getProperty("thc.projectRoot"), "test/fixtures/run-stableptr-ffi/cbits/stable.c");
+        var source = Path.of(System.getProperty("thc.projectRoot"), "t/fixtures/run-stableptr-ffi/cbits/stable.c");
         var output = directory.resolve(nativeCode ? "stable.so" : "stable.bc");
         var flags = nativeCode ? List.of("-shared", "-fPIC") : List.of("-emit-llvm", "-c");
         var target = System.getProperty("os.name").equals("Linux") ? List.of("--target=" +

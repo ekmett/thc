@@ -78,9 +78,9 @@
       "junit": ["thc.runtime.ManagedProcessesTest", "thc.runtime.ManagedProcessForeignTest", "thc.runtime.CoreProcessForeignTest", "thc.runtime.ProcessLifecycleCoreTest"],
       "commands": [{"argv": ["sh", "-c", "case \"$(uname -s)-$(uname -m)\" in Linux-x86_64) cabal run exe:thc-fixtures --offline -- process-lifecycle ;; esac"]}],
       "outputs": ["build/process-lifecycle/core"],
-      "sources": ["test/fixtures/compiler/ProcessLifecycleAudit.hs", "test/haskell-fixtures/ProcessLifecycleFixtures.hs",
-        "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal",
-        "test/fixtures/process-lifecycle/Main.hs", "test/fixtures/process-lifecycle/sigchld-policy.c",
+      "sources": ["t/fixtures/compiler/ProcessLifecycleAudit.hs", "t/haskell-fixtures/ProcessLifecycleFixtures.hs",
+        "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal",
+        "t/fixtures/process-lifecycle/Main.hs", "t/fixtures/process-lifecycle/sigchld-policy.c",
         "src/main/c/native-process-api.c", "src/main/java/thc/runtime/CoreProcessForeign.java", "src/main/java/thc/runtime/ProcessOp.java",
         "src/main/java/thc/runtime/ManagedProcessForeign.java", "src/main/java/thc/runtime/ManagedProcesses.java"]
     },
@@ -88,21 +88,21 @@
       "junit": ["thc.runtime.IntegerSimdModelTest", "thc.runtime.SimdInt8VectorTest", "thc.runtime.SimdInt16VectorTest", "thc.runtime.SimdWord16VectorTest", "thc.runtime.SimdWord32VectorTest"],
       "commands": [{"argv": ["sh", "-c", "set -e; fixture_mode=; case \"$(uname -m)\" in arm64|aarch64) fixture_mode=--export-only ;; esac; cabal build exe:thc-fixtures --offline; fixture_bin=$(cabal list-bin exe:thc-fixtures --offline); for family in int8x16 int16x8 word16x8 word32x4; do \"$fixture_bin\" \"$family\" $fixture_mode; done"]}],
       "outputs": ["build/simd-int8x16", "build/simd-int16x8", "build/simd-word16x8", "build/simd-word32x4"],
-      "sources": ["test/fixtures/compiler/SimdInt8X16.hs", "test/fixtures/compiler/SimdInt8X16Native.hs",
-        "test/fixtures/compiler/SimdInt16X8.hs", "test/fixtures/compiler/SimdInt16X8Native.hs",
-        "test/fixtures/compiler/SimdWord16X8.hs", "test/fixtures/compiler/SimdWord16X8Native.hs",
-        "test/fixtures/compiler/SimdWord32X4.hs", "test/fixtures/compiler/SimdWord32X4Native.hs",
-        "test/haskell-fixtures/IntegerSimdFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs", "thc.cabal", "src/test/java/thc/runtime/IntegerSimdModelTest.java",
+      "sources": ["t/fixtures/compiler/SimdInt8X16.hs", "t/fixtures/compiler/SimdInt8X16Native.hs",
+        "t/fixtures/compiler/SimdInt16X8.hs", "t/fixtures/compiler/SimdInt16X8Native.hs",
+        "t/fixtures/compiler/SimdWord16X8.hs", "t/fixtures/compiler/SimdWord16X8Native.hs",
+        "t/fixtures/compiler/SimdWord32X4.hs", "t/fixtures/compiler/SimdWord32X4Native.hs",
+        "t/haskell-fixtures/IntegerSimdFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs", "thc.cabal", "src/test/java/thc/runtime/IntegerSimdModelTest.java",
         "src/test/java/thc/runtime/IntegerSimdModel.java"]
     },
     "text-cbits": {
       "junit": ["thc.runtime.TextCbitsTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "text-cbits"]}],
       "outputs": ["build/text-cbits"],
-      "sources": ["test/fixtures/compiler/TextCbitsAudit.hs", "test/fixtures/compiler/TextCbitsNative.hs",
-        "test/haskell-fixtures/TextCbitsFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs", "thc.cabal", "bin/core_original_foreign.py",
+      "sources": ["t/fixtures/compiler/TextCbitsAudit.hs", "t/fixtures/compiler/TextCbitsNative.hs",
+        "t/haskell-fixtures/TextCbitsFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs", "thc.cabal", "bin/core_original_foreign.py",
         "bin/audit-core.py", "bin/core-capabilities.json", "bin/build-cbits.py",
         "src/main/c/text-api.c", "nih/pinned/text-2.1.3/cbits/utils.c",
         "nih/pinned/text-2.1.3/cbits/measure_off.c", "nih/pinned/text-2.1.3/cbits/reverse.c",
@@ -112,9 +112,9 @@
       "junit": ["thc.runtime.ProxyVoidTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "proxy-void"]}],
       "outputs": ["build/proxy-void"],
-      "sources": ["test/fixtures/compiler/ProxyVoidAudit.hs", "test/fixtures/compiler/ProxyVoidAuditNative.hs",
-        "test/fixtures/compiler/ProxyVoidPredicate.hs", "test/haskell-fixtures/ProxyVoidFixtures.hs",
-        "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal"]
+      "sources": ["t/fixtures/compiler/ProxyVoidAudit.hs", "t/fixtures/compiler/ProxyVoidAuditNative.hs",
+        "t/fixtures/compiler/ProxyVoidPredicate.hs", "t/haskell-fixtures/ProxyVoidFixtures.hs",
+        "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "simd-word32x4-bytearray": {
       "junit": [
@@ -133,13 +133,13 @@
         "build/simd-word32x4-bytearray"
       ],
       "sources": [
-        "test/haskell-fixtures/SimdByteArrayFixtures.hs",
-        "test/haskell-fixtures/SimdByteArrayModel.hs",
-        "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs",
+        "t/haskell-fixtures/SimdByteArrayFixtures.hs",
+        "t/haskell-fixtures/SimdByteArrayModel.hs",
+        "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs",
         "thc.cabal",
-        "test/fixtures/compiler/SimdWord32X4ByteArray.hs",
-        "test/fixtures/compiler/SimdWord32X4ByteArrayNative.hs",
+        "t/fixtures/compiler/SimdWord32X4ByteArray.hs",
+        "t/fixtures/compiler/SimdWord32X4ByteArrayNative.hs",
         "bench/experiments/word32x4-bytearray/evidence-x86_64/pre-core.json.gz",
         "bench/experiments/word32x4-bytearray/evidence-x86_64/post-core.json.gz",
         "bench/experiments/word32x4-bytearray/evidence-x86_64/native/provenance.json.gz"
@@ -162,13 +162,13 @@
         "build/simd-int32x4-bytearray"
       ],
       "sources": [
-        "test/haskell-fixtures/SimdByteArrayFixtures.hs",
-        "test/haskell-fixtures/SimdByteArrayModel.hs",
-        "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs",
+        "t/haskell-fixtures/SimdByteArrayFixtures.hs",
+        "t/haskell-fixtures/SimdByteArrayModel.hs",
+        "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs",
         "thc.cabal",
-        "test/fixtures/compiler/SimdInt32X4ByteArray.hs",
-        "test/fixtures/compiler/SimdInt32X4ByteArrayNative.hs",
+        "t/fixtures/compiler/SimdInt32X4ByteArray.hs",
+        "t/fixtures/compiler/SimdInt32X4ByteArrayNative.hs",
         "bench/experiments/int32x4-bytearray/evidence-x86_64/pre-core.json.gz",
         "bench/experiments/int32x4-bytearray/evidence-x86_64/post-core.json.gz",
         "bench/experiments/int32x4-bytearray/evidence-x86_64/native/provenance.json.gz"
@@ -178,271 +178,271 @@
       "junit": ["thc.runtime.BoxedCasTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "boxed-cas"]}],
       "outputs": ["build/boxed-cas"],
-      "sources": ["test/fixtures/compiler/BoxedCasAudit.hs", "test/fixtures/compiler/BoxedCasNative.hs",
-        "src/examples/THC/BoxedCasCounter.hs", "test/haskell-fixtures/BoxedCasFixtures.hs",
-        "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal"]
+      "sources": ["t/fixtures/compiler/BoxedCasAudit.hs", "t/fixtures/compiler/BoxedCasNative.hs",
+        "src/examples/THC/BoxedCasCounter.hs", "t/haskell-fixtures/BoxedCasFixtures.hs",
+        "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "scalar-memory-utilities": {
       "junit": ["thc.runtime.ScalarMemoryUtilitiesTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "scalar-memory-utilities"]}],
       "outputs": ["build/scalar-memory-utilities"],
-      "sources": ["test/fixtures/compiler/ScalarMemoryUtilities.hs", "test/fixtures/compiler/ScalarMemoryUtilitiesNative.hs",
-        "test/haskell-fixtures/ScalarMemoryUtilitiesFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+      "sources": ["t/fixtures/compiler/ScalarMemoryUtilities.hs", "t/fixtures/compiler/ScalarMemoryUtilitiesNative.hs",
+        "t/haskell-fixtures/ScalarMemoryUtilitiesFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "ghc-bco": {
       "junit": ["thc.runtime.GhcBCOTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "ghc-bco"]}],
       "outputs": ["build/ghc-bco"],
-      "sources": ["src/examples/GhcBCO.hs", "test/fixtures/compiler/GhcBCONative.hs",
-        "test/haskell-fixtures/GhcBCOFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+      "sources": ["src/examples/GhcBCO.hs", "t/fixtures/compiler/GhcBCONative.hs",
+        "t/haskell-fixtures/GhcBCOFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "delimited-continuations": {
       "junit": ["thc.runtime.DelimitedContinuationsTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "delimited-continuations"]}],
       "outputs": ["build/delimited-continuations"],
-      "sources": ["src/examples/DelimitedContinuations.hs", "test/fixtures/compiler/DelimitedContinuationsNative.hs",
-        "test/haskell-fixtures/DelimitedContinuationsFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+      "sources": ["src/examples/DelimitedContinuations.hs", "t/fixtures/compiler/DelimitedContinuationsNative.hs",
+        "t/haskell-fixtures/DelimitedContinuationsFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "thread-scheduling": {
       "junit": ["thc.runtime.ThreadSchedulingTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "thread-scheduling"]}],
       "outputs": ["build/thread-scheduling"],
-      "sources": ["src/examples/ThreadScheduling.hs", "test/fixtures/compiler/ThreadSchedulingNative.hs",
-        "test/haskell-fixtures/ThreadSchedulingFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+      "sources": ["src/examples/ThreadScheduling.hs", "t/fixtures/compiler/ThreadSchedulingNative.hs",
+        "t/haskell-fixtures/ThreadSchedulingFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "thread-inventory": {
       "junit": ["thc.runtime.ThreadInventoryNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "thread-inventory"]}],
       "outputs": ["build/thread-inventory"],
-      "sources": ["src/examples/ThreadInventory.hs", "test/fixtures/compiler/ThreadInventoryNative.hs",
-        "test/fixtures/compiler/CallbackIdentityNative.hs", "test/fixtures/compiler/callback-identity.c",
-        "test/haskell-fixtures/ThreadInventoryFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+      "sources": ["src/examples/ThreadInventory.hs", "t/fixtures/compiler/ThreadInventoryNative.hs",
+        "t/fixtures/compiler/CallbackIdentityNative.hs", "t/fixtures/compiler/callback-identity.c",
+        "t/haskell-fixtures/ThreadInventoryFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "closure-inspection": {
       "junit": ["thc.runtime.ClosureInspectionTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "closure-inspection"]}],
       "outputs": ["build/closure-inspection"],
-      "sources": ["test/fixtures/compiler/ClosureInspectionAudit.hs", "test/fixtures/compiler/ClosureInspectionNative.hs",
-        "test/haskell-fixtures/ClosureInspectionFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+      "sources": ["t/fixtures/compiler/ClosureInspectionAudit.hs", "t/fixtures/compiler/ClosureInspectionNative.hs",
+        "t/haskell-fixtures/ClosureInspectionFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "hint-trace": {
       "junit": ["thc.runtime.HintTraceTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "hint-trace"]}],
       "outputs": ["build/hint-trace"],
-      "sources": ["test/fixtures/compiler/HintTraceAudit.hs", "test/fixtures/compiler/HintTraceNative.hs",
-        "test/haskell-fixtures/HintTraceFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+      "sources": ["t/fixtures/compiler/HintTraceAudit.hs", "t/fixtures/compiler/HintTraceNative.hs",
+        "t/haskell-fixtures/HintTraceFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "simd-arithmetic": {
       "junit": ["thc.runtime.SimdArithmeticTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "simd-arithmetic"]}],
       "outputs": ["build/simd-arithmetic"],
-      "sources": ["test/haskell-fixtures/SimdArithmeticFixtures.hs", "bin/simd-families.json", "bin/generate-simd-families.py"]
+      "sources": ["t/haskell-fixtures/SimdArithmeticFixtures.hs", "bin/simd-families.json", "bin/generate-simd-families.py"]
     },
     "simd-wide-arrays": {
       "junit": ["thc.runtime.SimdWideArrayNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "simd-wide-arrays"]}],
       "outputs": ["build/simd-wide-arrays"],
-      "sources": ["test/fixtures/compiler/SimdWideArrayAudit.hs", "test/fixtures/compiler/SimdWideArrayScalar.hs",
-        "test/fixtures/compiler/SimdWideArrayNative.hs", "test/haskell-fixtures/SimdWideArrayFixtures.hs", "bin/simd-families.json"]
+      "sources": ["t/fixtures/compiler/SimdWideArrayAudit.hs", "t/fixtures/compiler/SimdWideArrayScalar.hs",
+        "t/fixtures/compiler/SimdWideArrayNative.hs", "t/haskell-fixtures/SimdWideArrayFixtures.hs", "bin/simd-families.json"]
     },
     "simd128-addresses": {
       "junit": ["thc.runtime.Simd128AddressNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "simd128-addresses"]}],
       "outputs": ["build/simd128-addresses"],
-      "sources": ["test/fixtures/compiler/Simd128AddressAudit.hs", "test/fixtures/compiler/Simd128AddressNative.hs",
-        "test/haskell-fixtures/Simd128AddressFixtures.hs", "bin/simd-families.json"]
+      "sources": ["t/fixtures/compiler/Simd128AddressAudit.hs", "t/fixtures/compiler/Simd128AddressNative.hs",
+        "t/haskell-fixtures/Simd128AddressFixtures.hs", "bin/simd-families.json"]
     },
     "simd-address-families": {
       "junit": ["thc.runtime.SimdAddressFamiliesTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "simd-address-families"]}],
       "outputs": ["build/simd-address-families"],
-      "sources": ["test/haskell-fixtures/SimdAddressFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs", "thc.cabal", "bin/simd-families.json"]
+      "sources": ["t/haskell-fixtures/SimdAddressFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs", "thc.cabal", "bin/simd-families.json"]
     },
     "simd128-arrays": {
       "junit": ["thc.runtime.Simd128ArrayNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "simd128-arrays"]}],
       "outputs": ["build/simd128-arrays"],
-      "sources": ["test/fixtures/compiler/Simd128ArrayAudit.hs", "test/fixtures/compiler/Simd128ArrayNative.hs",
-        "test/haskell-fixtures/Simd128ArrayFixtures.hs", "bin/simd-families.json"]
+      "sources": ["t/fixtures/compiler/Simd128ArrayAudit.hs", "t/fixtures/compiler/Simd128ArrayNative.hs",
+        "t/haskell-fixtures/Simd128ArrayFixtures.hs", "bin/simd-families.json"]
     },
     "thread-label": {
       "junit": ["thc.runtime.ThreadLabelNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "thread-label"]}],
       "outputs": ["build/thread-label"],
-      "sources": ["test/fixtures/compiler/ThreadLabelAudit.hs", "test/fixtures/compiler/ThreadLabelNative.hs",
-        "test/haskell-fixtures/ThreadLabelFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+      "sources": ["t/fixtures/compiler/ThreadLabelAudit.hs", "t/fixtures/compiler/ThreadLabelNative.hs",
+        "t/haskell-fixtures/ThreadLabelFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "original-tcsetattr": {
       "junit": ["thc.runtime.OriginalTcsetattrTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-tcsetattr"]}],
       "outputs": ["build/original-tcsetattr"],
-      "sources": ["test/fixtures/compiler/OriginalTcsetattrAudit.hs", "test/fixtures/compiler/OriginalTcsetattrNative.hs",
-        "test/haskell-fixtures/OriginalTcsetattrFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+      "sources": ["t/fixtures/compiler/OriginalTcsetattrAudit.hs", "t/fixtures/compiler/OriginalTcsetattrNative.hs",
+        "t/haskell-fixtures/OriginalTcsetattrFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "original-tcgetattr": {
       "junit": ["thc.runtime.OriginalTcgetattrTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-tcgetattr"]}],
       "outputs": ["build/original-tcgetattr"],
-      "sources": ["test/fixtures/compiler/OriginalTcgetattrAudit.hs", "test/fixtures/compiler/OriginalTcgetattrNative.hs",
-        "test/haskell-fixtures/OriginalTcgetattrFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+      "sources": ["t/fixtures/compiler/OriginalTcgetattrAudit.hs", "t/fixtures/compiler/OriginalTcgetattrNative.hs",
+        "t/haskell-fixtures/OriginalTcgetattrFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "original-sigprocmask": {
       "junit": ["thc.runtime.OriginalSigprocmaskTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-sigprocmask"]}],
       "outputs": ["build/original-sigprocmask"],
-      "sources": ["test/fixtures/compiler/OriginalSigprocmaskAudit.hs", "test/fixtures/compiler/OriginalSigprocmaskNative.hs",
-        "test/haskell-fixtures/OriginalSigprocmaskFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+      "sources": ["t/fixtures/compiler/OriginalSigprocmaskAudit.hs", "t/fixtures/compiler/OriginalSigprocmaskNative.hs",
+        "t/haskell-fixtures/OriginalSigprocmaskFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "original-sigset": {
       "junit": ["thc.runtime.OriginalSigsetTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-sigset"]}],
       "outputs": ["build/original-sigset"],
-      "sources": ["test/fixtures/compiler/OriginalSigsetAudit.hs", "test/fixtures/compiler/OriginalSigsetNative.hs",
-        "test/haskell-fixtures/OriginalSigsetFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+      "sources": ["t/fixtures/compiler/OriginalSigsetAudit.hs", "t/fixtures/compiler/OriginalSigsetNative.hs",
+        "t/haskell-fixtures/OriginalSigsetFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "libdw-unavailable": {
       "junit": ["thc.runtime.LibdwUnavailableTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "libdw-unavailable"]}],
       "outputs": ["build/libdw-unavailable/manifest.json", "build/libdw-unavailable/oracle.json", "build/libdw-unavailable/foreign-labels.json"],
-      "sources": ["test/fixtures/compiler/LibdwUnavailableNative.hs", "test/fixtures/compiler/CFinalizerNative.hs",
-        "test/fixtures/compiler/ForeignLabelAudit.hs", "test/haskell-fixtures/LibdwUnavailableFixtures.hs",
+      "sources": ["t/fixtures/compiler/LibdwUnavailableNative.hs", "t/fixtures/compiler/CFinalizerNative.hs",
+        "t/fixtures/compiler/ForeignLabelAudit.hs", "t/haskell-fixtures/LibdwUnavailableFixtures.hs",
         "src/compiler/THC/Plugin.hs", "src/compiler/THC/CBV.hs", "src/compiler/THC/Demands.hs", "src/compiler/THC/Sources.hs", "src/compiler/THC/Wired.hs",
-        "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal"]
+        "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "original-fcntl": {
       "junit": ["thc.runtime.OriginalFcntlTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-fcntl"]}],
       "outputs": ["build/original-fcntl"],
-      "sources": ["test/fixtures/compiler/OriginalFcntlAudit.hs", "test/fixtures/compiler/OriginalFcntlNative.hs",
-        "test/haskell-fixtures/OriginalStdioFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+      "sources": ["t/fixtures/compiler/OriginalFcntlAudit.hs", "t/fixtures/compiler/OriginalFcntlNative.hs",
+        "t/haskell-fixtures/OriginalStdioFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "original-errno": {
       "junit": ["thc.runtime.OriginalErrnoTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-errno"]}],
       "outputs": ["build/original-errno"],
-      "sources": ["test/fixtures/compiler/OriginalErrnoAudit.hs", "test/fixtures/compiler/OriginalErrnoNative.hs",
-        "test/haskell-fixtures/OriginalStdioFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+      "sources": ["t/fixtures/compiler/OriginalErrnoAudit.hs", "t/fixtures/compiler/OriginalErrnoNative.hs",
+        "t/haskell-fixtures/OriginalStdioFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "original-process-identity": {
       "junit": ["thc.runtime.OriginalProcessIdentityTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-process-identity"]}],
       "outputs": ["build/original-process-identity"],
-      "sources": ["test/fixtures/compiler/OriginalProcessIdentityAudit.hs", "test/fixtures/compiler/OriginalProcessIdentityNative.hs",
-        "test/haskell-fixtures/OriginalStdioFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs", "thc.cabal", "src/main/java/thc/runtime/ProcessIdentity.java"]
+      "sources": ["t/fixtures/compiler/OriginalProcessIdentityAudit.hs", "t/fixtures/compiler/OriginalProcessIdentityNative.hs",
+        "t/haskell-fixtures/OriginalStdioFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs", "thc.cabal", "src/main/java/thc/runtime/ProcessIdentity.java"]
     },
     "original-termios": {
       "junit": ["thc.runtime.OriginalTermiosTest", "thc.runtime.OriginalSavedTermiosTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-termios"]}],
       "outputs": ["build/original-termios"],
-      "sources": ["test/fixtures/compiler/OriginalTermiosAudit.hs", "test/fixtures/compiler/OriginalTermiosNative.hs",
-        "test/fixtures/compiler/OriginalSavedTermiosAudit.hs", "test/fixtures/compiler/OriginalSavedTermiosNative.hs",
-        "test/haskell-fixtures/OriginalTermiosFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+      "sources": ["t/fixtures/compiler/OriginalTermiosAudit.hs", "t/fixtures/compiler/OriginalTermiosNative.hs",
+        "t/fixtures/compiler/OriginalSavedTermiosAudit.hs", "t/fixtures/compiler/OriginalSavedTermiosNative.hs",
+        "t/haskell-fixtures/OriginalTermiosFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "native-addresses": {
       "junit": ["thc.runtime.NativeAddressTest", "thc.runtime.NativeMallocTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "native-addresses"]}],
       "outputs": ["build/native-addresses/manifest.json", "build/native-addresses/oracle.json",
         "build/native-malloc/manifest.json", "build/native-malloc/oracle.txt"],
-      "sources": ["test/fixtures/compiler/NativeAddressNative.hs", "test/fixtures/compiler/NativeMallocNative.hs",
-        "src/test/resources/core/original-malloc-descriptors.json", "test/haskell-fixtures/NativeAddressFixtures.hs",
-        "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal"]
+      "sources": ["t/fixtures/compiler/NativeAddressNative.hs", "t/fixtures/compiler/NativeMallocNative.hs",
+        "src/test/resources/core/original-malloc-descriptors.json", "t/haskell-fixtures/NativeAddressFixtures.hs",
+        "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "original-open": {
       "junit": ["thc.runtime.OriginalOpenTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-open"]}],
       "outputs": ["build/original-open"],
-      "sources": ["test/fixtures/compiler/OriginalOpenAudit.hs", "test/fixtures/compiler/OriginalOpenNative.hs",
-        "test/haskell-fixtures/OriginalOpenFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+      "sources": ["t/fixtures/compiler/OriginalOpenAudit.hs", "t/fixtures/compiler/OriginalOpenNative.hs",
+        "t/haskell-fixtures/OriginalOpenFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "rts-diagnostics": {
       "junit": ["thc.runtime.RtsDiagnosticsTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "rts-diagnostics"]}],
       "outputs": ["build/rts-diagnostics"],
-      "sources": ["test/fixtures/compiler/RtsDiagnosticsNative.hs", "test/haskell-fixtures/RtsDiagnosticFixtures.hs",
-        "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal"]
+      "sources": ["t/fixtures/compiler/RtsDiagnosticsNative.hs", "t/haskell-fixtures/RtsDiagnosticFixtures.hs",
+        "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "rts-shutdown": {
       "junit": ["thc.runtime.RtsShutdownTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "rts-shutdown"]}],
       "outputs": ["build/rts-shutdown"],
-      "sources": ["test/haskell-fixtures/Main.hs", "thc.cabal", "test/haskell-fixtures/RtsShutdownFixtures.hs", "test/fixtures/compiler/RtsShutdownNative.hs"]
+      "sources": ["t/haskell-fixtures/Main.hs", "thc.cabal", "t/haskell-fixtures/RtsShutdownFixtures.hs", "t/fixtures/compiler/RtsShutdownNative.hs"]
     },
     "rubbish-literals": {
       "junit": ["thc.runtime.RubbishLiteralTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "rubbish-literals"]}],
       "outputs": ["build/rubbish-literals"],
-      "sources": ["test/fixtures/compiler/RubbishLiteralAudit.hs", "test/haskell-fixtures/RubbishLiteralFixtures.hs",
-        "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal"]
+      "sources": ["t/fixtures/compiler/RubbishLiteralAudit.hs", "t/haskell-fixtures/RubbishLiteralFixtures.hs",
+        "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "original-rts-locks": {
       "junit": ["thc.runtime.OriginalRtsLocksTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-rts-locks", "--require-supported"]}],
       "outputs": ["build/original-rts-locks"],
-      "sources": ["test/fixtures/compiler/OriginalRtsLocksAudit.hs", "test/haskell-fixtures/OriginalRtsLocksFixtures.hs",
-        "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal"]
+      "sources": ["t/fixtures/compiler/OriginalRtsLocksAudit.hs", "t/haskell-fixtures/OriginalRtsLocksFixtures.hs",
+        "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "original-strerror": {
       "junit": ["thc.runtime.OriginalStrerrorNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-strerror"]}],
       "outputs": ["build/original-strerror"],
       "sources": [
-        "test/fixtures/compiler/OriginalStrerrorNative.hs",
-        "test/haskell-fixtures/OriginalStrerrorFixtures.hs",
-        "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs", "thc.cabal"
+        "t/fixtures/compiler/OriginalStrerrorNative.hs",
+        "t/haskell-fixtures/OriginalStrerrorFixtures.hs",
+        "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs", "thc.cabal"
       ]
     },
     "bytestring-utf8": {
       "junit": ["thc.runtime.ByteStringUtf8Test"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "bytestring-utf8"]}],
       "outputs": ["build/bytestring-utf8"],
-      "sources": ["test/fixtures/compiler/ByteStringUtf8Audit.hs", "test/fixtures/compiler/ByteStringUtf8Native.hs",
-        "test/haskell-fixtures/ByteStringUtf8Fixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
+      "sources": ["t/fixtures/compiler/ByteStringUtf8Audit.hs", "t/fixtures/compiler/ByteStringUtf8Native.hs",
+        "t/haskell-fixtures/ByteStringUtf8Fixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
         "nih/pinned/bytestring-0.12.2.0/cbits/is-valid-utf8.c", "src/main/c/bytestring-utf8-api.c", "bin/build-cbits.py",
-        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+        "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "original-memset": {
       "junit": ["thc.runtime.OriginalMemsetTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-memset"]}],
       "outputs": ["build/original-memset"],
-      "sources": ["test/fixtures/compiler/OriginalMemsetAudit.hs", "test/fixtures/compiler/OriginalMemsetNative.hs",
-        "test/haskell-fixtures/MemsetFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+      "sources": ["t/fixtures/compiler/OriginalMemsetAudit.hs", "t/fixtures/compiler/OriginalMemsetNative.hs",
+        "t/haskell-fixtures/MemsetFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "original-memory-search": {
       "junit": ["thc.runtime.OriginalMemorySearchTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-memory-search"]}],
       "outputs": ["build/original-memory-search"],
-      "sources": ["test/fixtures/compiler/OriginalMemorySearchAudit.hs", "test/fixtures/compiler/OriginalMemorySearchNative.hs",
-        "test/haskell-fixtures/MemorySearchFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+      "sources": ["t/fixtures/compiler/OriginalMemorySearchAudit.hs", "t/fixtures/compiler/OriginalMemorySearchNative.hs",
+        "t/haskell-fixtures/MemorySearchFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "original-gmp": {
       "junit": ["thc.runtime.OriginalGmpTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-gmp", "--require-supported"]}],
       "outputs": ["build/original-gmp"],
       "sources": [
-        "test/fixtures/compiler/OriginalGmpAudit.hs", "test/fixtures/compiler/OriginalGmpNative.hs",
-        "test/haskell-fixtures/OriginalGmpFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs", "thc.cabal"
+        "t/fixtures/compiler/OriginalGmpAudit.hs", "t/fixtures/compiler/OriginalGmpNative.hs",
+        "t/haskell-fixtures/OriginalGmpFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs", "thc.cabal"
       ]
     },
     "original-posix-stat": {
@@ -485,30 +485,30 @@
         "build/original-directory-paths"
       ],
       "sources": [
-        "test/fixtures/compiler/OriginalPosixStatAudit.hs",
-        "test/fixtures/compiler/OriginalPosixStatNative.hs",
-        "test/fixtures/compiler/OriginalPathStatAudit.hs",
-        "test/haskell-fixtures/OriginalPathStatFixtures.hs",
-        "test/fixtures/compiler/OriginalPathModeAudit.hs",
-        "test/haskell-fixtures/OriginalPathModeFixtures.hs",
-        "test/fixtures/compiler/OriginalPathLinkAudit.hs",
-        "test/haskell-fixtures/OriginalPathLinkFixtures.hs",
-        "test/haskell-fixtures/OriginalPosixStatFixtures.hs",
-        "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs",
+        "t/fixtures/compiler/OriginalPosixStatAudit.hs",
+        "t/fixtures/compiler/OriginalPosixStatNative.hs",
+        "t/fixtures/compiler/OriginalPathStatAudit.hs",
+        "t/haskell-fixtures/OriginalPathStatFixtures.hs",
+        "t/fixtures/compiler/OriginalPathModeAudit.hs",
+        "t/haskell-fixtures/OriginalPathModeFixtures.hs",
+        "t/fixtures/compiler/OriginalPathLinkAudit.hs",
+        "t/haskell-fixtures/OriginalPathLinkFixtures.hs",
+        "t/haskell-fixtures/OriginalPosixStatFixtures.hs",
+        "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs",
         "thc.cabal",
-        "test/fixtures/compiler/OriginalPathAccessAudit.hs",
-        "test/haskell-fixtures/OriginalPathAccessFixtures.hs",
-        "test/fixtures/compiler/OriginalUnlinkAtAudit.hs",
-        "test/haskell-fixtures/OriginalUnlinkAtFixtures.hs",
-        "test/fixtures/compiler/OriginalFstatAtAudit.hs",
-        "test/haskell-fixtures/OriginalFstatAtFixtures.hs",
-        "test/fixtures/compiler/OriginalCurrentDirectoryAudit.hs",
-        "test/haskell-fixtures/OriginalCurrentDirectoryFixtures.hs",
-        "test/fixtures/compiler/OriginalDirectoryStreamsAudit.hs",
-        "test/haskell-fixtures/OriginalDirectoryStreamsFixtures.hs",
-        "test/fixtures/compiler/OriginalDirectoryPathsAudit.hs",
-        "test/haskell-fixtures/OriginalDirectoryPathsFixtures.hs"
+        "t/fixtures/compiler/OriginalPathAccessAudit.hs",
+        "t/haskell-fixtures/OriginalPathAccessFixtures.hs",
+        "t/fixtures/compiler/OriginalUnlinkAtAudit.hs",
+        "t/haskell-fixtures/OriginalUnlinkAtFixtures.hs",
+        "t/fixtures/compiler/OriginalFstatAtAudit.hs",
+        "t/haskell-fixtures/OriginalFstatAtFixtures.hs",
+        "t/fixtures/compiler/OriginalCurrentDirectoryAudit.hs",
+        "t/haskell-fixtures/OriginalCurrentDirectoryFixtures.hs",
+        "t/fixtures/compiler/OriginalDirectoryStreamsAudit.hs",
+        "t/haskell-fixtures/OriginalDirectoryStreamsFixtures.hs",
+        "t/fixtures/compiler/OriginalDirectoryPathsAudit.hs",
+        "t/haskell-fixtures/OriginalDirectoryPathsFixtures.hs"
       ]
     },
     "original-fd-ready": {
@@ -516,11 +516,11 @@
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-fd-ready"]}],
       "outputs": ["build/original-fd-ready"],
       "sources": [
-        "test/fixtures/compiler/OriginalFdReadyAudit.hs",
-        "test/fixtures/compiler/OriginalFdReadyAuditNative.hs",
-        "test/haskell-fixtures/OriginalFdReadyFixtures.hs",
-        "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs",
+        "t/fixtures/compiler/OriginalFdReadyAudit.hs",
+        "t/fixtures/compiler/OriginalFdReadyAuditNative.hs",
+        "t/haskell-fixtures/OriginalFdReadyFixtures.hs",
+        "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs",
         "thc.cabal"
       ]
     },
@@ -529,11 +529,11 @@
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-stdio-truncate"]}],
       "outputs": ["build/original-stdio-truncate"],
       "sources": [
-        "test/fixtures/compiler/OriginalStdioTruncateAudit.hs",
-        "test/fixtures/compiler/OriginalStdioTruncateAuditNative.hs",
-        "test/haskell-fixtures/OriginalStdioTruncateFixtures.hs",
-        "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs",
+        "t/fixtures/compiler/OriginalStdioTruncateAudit.hs",
+        "t/fixtures/compiler/OriginalStdioTruncateAuditNative.hs",
+        "t/haskell-fixtures/OriginalStdioTruncateFixtures.hs",
+        "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs",
         "thc.cabal"
       ]
     },
@@ -542,11 +542,11 @@
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-stdio-seek"]}],
       "outputs": ["build/original-stdio-seek"],
       "sources": [
-        "test/fixtures/compiler/OriginalStdioSeekAudit.hs",
-        "test/fixtures/compiler/OriginalStdioSeekAuditNative.hs",
-        "test/haskell-fixtures/OriginalStdioSeekFixtures.hs",
-        "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs",
+        "t/fixtures/compiler/OriginalStdioSeekAudit.hs",
+        "t/fixtures/compiler/OriginalStdioSeekAuditNative.hs",
+        "t/haskell-fixtures/OriginalStdioSeekFixtures.hs",
+        "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs",
         "thc.cabal"
       ]
     },
@@ -554,20 +554,20 @@
       "junit": ["thc.runtime.OriginalPosixDupNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-posix-dup"]}],
       "outputs": ["build/original-posix-dup"],
-      "sources": ["test/fixtures/compiler/OriginalPosixDupAudit.hs", "test/fixtures/compiler/OriginalPosixDupAuditNative.hs",
-        "test/haskell-fixtures/OriginalPosixDupFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+      "sources": ["t/fixtures/compiler/OriginalPosixDupAudit.hs", "t/fixtures/compiler/OriginalPosixDupAuditNative.hs",
+        "t/haskell-fixtures/OriginalPosixDupFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "original-stdio-close": {
       "junit": ["thc.runtime.OriginalStdioCloseNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-stdio-close"]}],
       "outputs": ["build/original-stdio-close"],
       "sources": [
-        "test/fixtures/compiler/OriginalStdioCloseAudit.hs",
-        "test/fixtures/compiler/OriginalStdioCloseAuditNative.hs",
-        "test/haskell-fixtures/OriginalStdioCloseFixtures.hs",
-        "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs",
+        "t/fixtures/compiler/OriginalStdioCloseAudit.hs",
+        "t/fixtures/compiler/OriginalStdioCloseAuditNative.hs",
+        "t/haskell-fixtures/OriginalStdioCloseFixtures.hs",
+        "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs",
         "thc.cabal"
       ]
     },
@@ -576,11 +576,11 @@
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-stdio-read"]}],
       "outputs": ["build/original-stdio-read"],
       "sources": [
-        "test/fixtures/compiler/OriginalStdioReadAudit.hs",
-        "test/fixtures/compiler/OriginalStdioReadNative.hs",
-        "test/haskell-fixtures/Main.hs",
-        "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/OriginalStdioFixtures.hs",
+        "t/fixtures/compiler/OriginalStdioReadAudit.hs",
+        "t/fixtures/compiler/OriginalStdioReadNative.hs",
+        "t/haskell-fixtures/Main.hs",
+        "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/OriginalStdioFixtures.hs",
         "thc.cabal"
       ]
     },
@@ -589,10 +589,10 @@
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "mutvar"]}],
       "outputs": ["build/mutvar"],
       "sources": [
-        "test/fixtures/compiler/MutVarAudit.hs",
-        "test/haskell-fixtures/MutVarFixtures.hs",
-        "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs",
+        "t/fixtures/compiler/MutVarAudit.hs",
+        "t/haskell-fixtures/MutVarFixtures.hs",
+        "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs",
         "thc.cabal"
       ]
     },
@@ -601,10 +601,10 @@
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "weak-explicit"]}],
       "outputs": ["build/weak-explicit"],
       "sources": [
-        "test/fixtures/compiler/WeakAudit.hs",
-        "test/haskell-fixtures/WeakFixtures.hs",
-        "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs",
+        "t/fixtures/compiler/WeakAudit.hs",
+        "t/haskell-fixtures/WeakFixtures.hs",
+        "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs",
         "thc.cabal"
       ]
     },
@@ -612,21 +612,21 @@
       "junit": ["thc.runtime.StableNamesTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "stable-names"]}],
       "outputs": ["build/stable-names"],
-      "sources": ["src/examples/StableNames.hs", "test/fixtures/compiler/StableNamesNative.hs",
-        "test/haskell-fixtures/StableNameFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs", "thc.cabal", "bin/core-capabilities.json", "bin/audit-core.py"]
+      "sources": ["src/examples/StableNames.hs", "t/fixtures/compiler/StableNamesNative.hs",
+        "t/haskell-fixtures/StableNameFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs", "thc.cabal", "bin/core-capabilities.json", "bin/audit-core.py"]
     },
     "stable-pointers": {
       "junit": ["thc.runtime.StablePointerTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "stable-pointers"]}],
       "outputs": ["build/stable-pointers"],
       "sources": [
-        "test/fixtures/compiler/StablePointerAudit.hs",
-        "test/fixtures/compiler/SharedCAFNative.hs",
-        "test/fixtures/compiler/SharedCAFOriginalCalls.json",
-        "test/haskell-fixtures/StablePointerFixtures.hs",
-        "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs",
+        "t/fixtures/compiler/StablePointerAudit.hs",
+        "t/fixtures/compiler/SharedCAFNative.hs",
+        "t/fixtures/compiler/SharedCAFOriginalCalls.json",
+        "t/haskell-fixtures/StablePointerFixtures.hs",
+        "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs",
         "thc.cabal",
         "bin/core-capabilities.json",
         "bin/core_original_foreign.py",
@@ -638,10 +638,10 @@
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "shrink-bytearrays"]}],
       "outputs": ["build/shrink-bytearrays"],
       "sources": [
-        "test/fixtures/compiler/ShrinkMutableByteArrayAudit.hs",
-        "test/haskell-fixtures/ShrinkByteArrayFixtures.hs",
-        "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs",
+        "t/fixtures/compiler/ShrinkMutableByteArrayAudit.hs",
+        "t/haskell-fixtures/ShrinkByteArrayFixtures.hs",
+        "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs",
         "thc.cabal"
       ]
     },
@@ -650,10 +650,10 @@
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "atomic-int-arrays"]}],
       "outputs": ["build/atomic-int-arrays"],
       "sources": [
-        "test/fixtures/compiler/AtomicIntArrayAudit.hs",
-        "test/haskell-fixtures/AtomicIntArrayFixtures.hs",
-        "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs",
+        "t/fixtures/compiler/AtomicIntArrayAudit.hs",
+        "t/haskell-fixtures/AtomicIntArrayFixtures.hs",
+        "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs",
         "thc.cabal"
       ]
     },
@@ -662,10 +662,10 @@
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "fetch-add-int-array"]}],
       "outputs": ["build/fetch-add-int-array"],
       "sources": [
-        "test/fixtures/compiler/FetchAddIntArrayAudit.hs",
-        "test/haskell-fixtures/FetchAddIntArrayFixtures.hs",
-        "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs",
+        "t/fixtures/compiler/FetchAddIntArrayAudit.hs",
+        "t/haskell-fixtures/FetchAddIntArrayFixtures.hs",
+        "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs",
         "thc.cabal"
       ]
     },
@@ -673,65 +673,65 @@
       "junit": ["thc.runtime.InterfaceCoreNativeTest", "thc.ManagedImportStubsNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "interface-core"]}],
       "outputs": ["build/interface-core"],
-      "sources": ["test/haskell-fixtures/InstalledCacheFixtures.hs", "test/fixtures/compiler/InterfaceCacheRoot.hs", "test/fixtures/compiler/InterfaceCacheDependency.hs", "test/haskell-fixtures/InterfaceFixtures.hs", "test/haskell-fixtures/InterfaceForeignFacts.hs", "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "test/fixtures/compiler/InterfaceLibrary.hs", "test/fixtures/compiler/InterfaceNative.hs", "test/fixtures/compiler/InterfaceForeign.hs", "test/fixtures/compiler/InterfaceForeignAlias.hs", "test/fixtures/compiler/ForeignImportStubs.hs", "test/fixtures/compiler/ImportStubsNative.hs", "src/compiler/THC/ForeignImportProvenance.hs", "test/fixtures/compiler/CBVCoercionAudit.hs", "src/compiler/interface/Main.hs", "src/compiler/THC/Interface.hs", "src/driver/cbits/target-layout.c", "src/driver/THC/Driver/Installed.hs", "src/driver/THC/Driver/Project.hs", "src/driver/THC/Driver/Wired.hs", "src/driver/THC/Driver/Zip.hs", "thc.cabal"]
+      "sources": ["t/haskell-fixtures/InstalledCacheFixtures.hs", "t/fixtures/compiler/InterfaceCacheRoot.hs", "t/fixtures/compiler/InterfaceCacheDependency.hs", "t/haskell-fixtures/InterfaceFixtures.hs", "t/haskell-fixtures/InterfaceForeignFacts.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "t/fixtures/compiler/InterfaceLibrary.hs", "t/fixtures/compiler/InterfaceNative.hs", "t/fixtures/compiler/InterfaceForeign.hs", "t/fixtures/compiler/InterfaceForeignAlias.hs", "t/fixtures/compiler/ForeignImportStubs.hs", "t/fixtures/compiler/ImportStubsNative.hs", "src/compiler/THC/ForeignImportProvenance.hs", "t/fixtures/compiler/CBVCoercionAudit.hs", "src/compiler/interface/Main.hs", "src/compiler/THC/Interface.hs", "src/driver/cbits/target-layout.c", "src/driver/THC/Driver/Installed.hs", "src/driver/THC/Driver/Project.hs", "src/driver/THC/Driver/Wired.hs", "src/driver/THC/Driver/Zip.hs", "thc.cabal"]
     },
     "fused-floating": {
       "junit": ["thc.runtime.FusedFloatingTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "fused-floating"]}],
       "outputs": ["build/fused-floating"],
-      "sources": ["test/haskell-fixtures/FusedFloatingFixtures.hs", "test/haskell-fixtures/Main.hs", "test/fixtures/compiler/FloatingAudit.hs", "test/fixtures/compiler/FloatingAuditNative.hs"]
+      "sources": ["t/haskell-fixtures/FusedFloatingFixtures.hs", "t/haskell-fixtures/Main.hs", "t/fixtures/compiler/FloatingAudit.hs", "t/fixtures/compiler/FloatingAuditNative.hs"]
     },
     "simd-calls": {
       "junit": ["thc.runtime.SimdCallNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "simd-calls"]}],
       "outputs": ["build/simd-calls"],
-      "sources": ["test/haskell-fixtures/SimdCallFixtures.hs", "test/haskell-fixtures/Main.hs", "test/fixtures/compiler/SimdCallAudit.hs", "test/fixtures/compiler/SimdCallNative.hs"]
+      "sources": ["t/haskell-fixtures/SimdCallFixtures.hs", "t/haskell-fixtures/Main.hs", "t/fixtures/compiler/SimdCallAudit.hs", "t/fixtures/compiler/SimdCallNative.hs"]
     },
     "simd-floatx4-fma": {
       "junit": ["thc.runtime.SimdFloatFmaTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "simd-floatx4-fma"]}],
       "outputs": ["build/simd-floatx4-fma"],
-      "sources": ["test/haskell-fixtures/SimdFloatFmaFixtures.hs", "test/haskell-fixtures/Main.hs", "test/fixtures/compiler/SimdFloatFma.hs", "test/fixtures/compiler/SimdFloatFmaNative.hs", "bin/core_vectors.py"]
+      "sources": ["t/haskell-fixtures/SimdFloatFmaFixtures.hs", "t/haskell-fixtures/Main.hs", "t/fixtures/compiler/SimdFloatFma.hs", "t/fixtures/compiler/SimdFloatFmaNative.hs", "bin/core_vectors.py"]
     },
     "simd-wide-floating-fma": {
       "junit": ["thc.runtime.SimdWideFloatFmaTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "simd-wide-floating-fma"]}],
       "outputs": ["build/simd-wide-floating-fma"],
-      "sources": ["test/haskell-fixtures/SimdWideFloatFmaFixtures.hs", "test/haskell-fixtures/SimdFloatFmaFixtures.hs", "test/haskell-fixtures/Main.hs", "test/fixtures/compiler/SimdWideFloatFma.hs", "test/fixtures/compiler/SimdWideFloatFmaNative.hs", "bin/core_vectors.py"]
+      "sources": ["t/haskell-fixtures/SimdWideFloatFmaFixtures.hs", "t/haskell-fixtures/SimdFloatFmaFixtures.hs", "t/haskell-fixtures/Main.hs", "t/fixtures/compiler/SimdWideFloatFma.hs", "t/fixtures/compiler/SimdWideFloatFmaNative.hs", "bin/core_vectors.py"]
     },
     "word-floating": {
       "junit": ["thc.runtime.WordFloatingTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "word-floating"]}],
       "outputs": ["build/word-floating"],
-      "sources": ["test/haskell-fixtures/WordFloatingFixtures.hs", "test/haskell-fixtures/Main.hs", "test/fixtures/compiler/WordFloatingAudit.hs", "test/fixtures/compiler/WordFloatingNative.hs"]
+      "sources": ["t/haskell-fixtures/WordFloatingFixtures.hs", "t/haskell-fixtures/Main.hs", "t/fixtures/compiler/WordFloatingAudit.hs", "t/fixtures/compiler/WordFloatingNative.hs"]
     },
     "floating-tuples": {
       "junit": ["thc.runtime.FloatingTupleTest"],
       "commands": [{"argv": ["python3", "bin/prepare-floating-tuples.py"]}],
       "outputs": ["build/floating-tuple"],
-      "sources": ["bin/prepare-floating-tuples.py", "test/fixtures/compiler/FloatingTupleAudit.hs", "test/fixtures/compiler/FloatingTupleAuditNative.hs"]
+      "sources": ["bin/prepare-floating-tuples.py", "t/fixtures/compiler/FloatingTupleAudit.hs", "t/fixtures/compiler/FloatingTupleAuditNative.hs"]
     },
     "sqrt": {
       "junit": ["thc.runtime.SqrtPrimitiveTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "sqrt"]}],
       "outputs": ["build/sqrt"],
-      "sources": ["test/haskell-fixtures/SqrtFixtures.hs", "test/haskell-fixtures/Main.hs", "test/fixtures/compiler/SqrtAudit.hs", "test/fixtures/compiler/SqrtAuditNative.hs"]
+      "sources": ["t/haskell-fixtures/SqrtFixtures.hs", "t/haskell-fixtures/Main.hs", "t/fixtures/compiler/SqrtAudit.hs", "t/fixtures/compiler/SqrtAuditNative.hs"]
     },
     "pinned-addresses": {
       "junit": ["thc.runtime.PinnedAddressTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "pinned-addresses"]}],
       "outputs": ["build/pinned-addresses"],
-      "sources": ["test/haskell-fixtures/PinnedAddressFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/PinnedAddressAudit.hs",
-        "test/fixtures/compiler/PinnedAddressAuditNative.hs"]
+      "sources": ["t/haskell-fixtures/PinnedAddressFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/PinnedAddressAudit.hs",
+        "t/fixtures/compiler/PinnedAddressAuditNative.hs"]
     },
     "bignat-literals": {
       "junit": ["thc.runtime.BigNatLiteralTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "bignat-literals"]}],
       "outputs": ["build/bignat-literals"],
-      "sources": ["test/haskell-fixtures/BigNatLiteralFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/BigNatLiteralAudit.hs",
-        "test/fixtures/compiler/BigNatLiteralAuditNative.hs", "bin/export-boot.py",
+      "sources": ["t/haskell-fixtures/BigNatLiteralFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/BigNatLiteralAudit.hs",
+        "t/fixtures/compiler/BigNatLiteralAuditNative.hs", "bin/export-boot.py",
         "nih/pinned/ghc-9.14.1/libraries/ghc-internal/include/WordSize.h",
         "nih/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE",
         "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/BigNat.hs",
@@ -745,17 +745,17 @@
       "junit": ["thc.runtime.FloatingRemainderTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "floating-remainder"]}],
       "outputs": ["build/floating-remainder"],
-      "sources": ["test/haskell-fixtures/FloatingRemainderFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/FloatingRemainderAudit.hs",
-        "test/fixtures/compiler/FloatingRemainderNative.hs", "src/examples/THC/InverseHyperbolic.hs"]
+      "sources": ["t/haskell-fixtures/FloatingRemainderFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/FloatingRemainderAudit.hs",
+        "t/fixtures/compiler/FloatingRemainderNative.hs", "src/examples/THC/InverseHyperbolic.hs"]
     },
     "float-decode": {
       "junit": ["thc.runtime.FloatDecodeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "float-decode"]}],
       "outputs": ["build/float-decode"],
-      "sources": ["test/haskell-fixtures/FloatDecodeFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/FloatDecodeAudit.hs",
-        "test/fixtures/compiler/FloatDecodeNative.hs", "bin/export-boot.py", "src/examples/THC/FloatDecode.hs",
+      "sources": ["t/haskell-fixtures/FloatDecodeFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/FloatDecodeAudit.hs",
+        "t/fixtures/compiler/FloatDecodeNative.hs", "bin/export-boot.py", "src/examples/THC/FloatDecode.hs",
         "nih/pinned/ghc-9.14.1/libraries/ghc-internal/include/WordSize.h",
         "nih/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE",
         "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/BigNat.hs",
@@ -769,7 +769,7 @@
       "junit": ["thc.runtime.ScalarBitCastTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "scalar-bitcasts"]}],
       "outputs": ["build/scalar-bitcasts"],
-      "sources": ["test/haskell-fixtures/ScalarBitCastFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/ScalarBitCastAudit.hs", "test/fixtures/compiler/ScalarBitCastNative.hs"]
+      "sources": ["t/haskell-fixtures/ScalarBitCastFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/ScalarBitCastAudit.hs", "t/fixtures/compiler/ScalarBitCastNative.hs"]
     },
     "sum-results": {
       "junit": ["thc.SumLayoutMetadataTest", "thc.runtime.SumProtocolTest", "thc.runtime.SumResultTest"],
@@ -787,26 +787,26 @@
         "bin/sum_layout_model.py",
         "bin/test-sum-layout.py",
         "bin/prepare-sum-result-audit.py",
-        "test/fixtures/compiler/AggregateFrontier.hs",
-        "test/fixtures/compiler/AggregateFrontierNative.hs",
-        "test/fixtures/compiler/AggregateLayoutAudit.hs",
-        "test/fixtures/compiler/SumLayoutAudit.hs",
-        "test/fixtures/compiler/SumLayoutAuditNative.hs",
-        "test/fixtures/compiler/SumResultAudit.hs",
-        "test/fixtures/compiler/SumResultAuditNative.hs"
+        "t/fixtures/compiler/AggregateFrontier.hs",
+        "t/fixtures/compiler/AggregateFrontierNative.hs",
+        "t/fixtures/compiler/AggregateLayoutAudit.hs",
+        "t/fixtures/compiler/SumLayoutAudit.hs",
+        "t/fixtures/compiler/SumLayoutAuditNative.hs",
+        "t/fixtures/compiler/SumResultAudit.hs",
+        "t/fixtures/compiler/SumResultAuditNative.hs"
       ]
     },
     "simd-floatx4": {
       "junit": ["thc.runtime.SimdFloatVectorTest"],
       "commands": [{"argv": ["sh", "-c", "case \"$(uname -m)\" in arm64|aarch64) python3 bin/prepare-floatx4-audit.py --export-only ;; *) python3 bin/prepare-floatx4-audit.py ;; esac"]}],
       "outputs": ["build/simd-floatx4"],
-      "sources": ["bin/prepare-floatx4-audit.py", "bin/test-floatx4-model.py", "test/fixtures/compiler/SimdFloatX4.hs", "test/fixtures/compiler/SimdFloatX4Native.hs"]
+      "sources": ["bin/prepare-floatx4-audit.py", "bin/test-floatx4-model.py", "t/fixtures/compiler/SimdFloatX4.hs", "t/fixtures/compiler/SimdFloatX4Native.hs"]
     },
     "simd-doublex2": {
       "junit": ["thc.runtime.SimdDoubleVectorTest"],
       "commands": [{"argv": ["sh", "-c", "case \"$(uname -m)\" in arm64|aarch64) python3 bin/prepare-doublex2-audit.py --export-only ;; *) python3 bin/prepare-doublex2-audit.py ;; esac"]}],
       "outputs": ["build/simd-doublex2"],
-      "sources": ["bin/prepare-doublex2-audit.py", "bin/doublex2_model.py", "bin/test-doublex2-model.py", "test/fixtures/compiler/SimdDoubleX2.hs", "test/fixtures/compiler/SimdDoubleX2Native.hs"]
+      "sources": ["bin/prepare-doublex2-audit.py", "bin/doublex2_model.py", "bin/test-doublex2-model.py", "t/fixtures/compiler/SimdDoubleX2.hs", "t/fixtures/compiler/SimdDoubleX2Native.hs"]
     },
     "simd-floatx4-bytearray": {
       "junit": [
@@ -825,13 +825,13 @@
         "build/simd-floatx4-bytearray"
       ],
       "sources": [
-        "test/haskell-fixtures/SimdByteArrayFixtures.hs",
-        "test/haskell-fixtures/SimdByteArrayModel.hs",
-        "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs",
+        "t/haskell-fixtures/SimdByteArrayFixtures.hs",
+        "t/haskell-fixtures/SimdByteArrayModel.hs",
+        "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs",
         "thc.cabal",
-        "test/fixtures/compiler/SimdFloatX4ByteArray.hs",
-        "test/fixtures/compiler/SimdFloatX4ByteArrayNative.hs",
+        "t/fixtures/compiler/SimdFloatX4ByteArray.hs",
+        "t/fixtures/compiler/SimdFloatX4ByteArrayNative.hs",
         "bench/experiments/floatx4-bytearray/evidence-x86_64/pre-core.json.gz",
         "bench/experiments/floatx4-bytearray/evidence-x86_64/post-core.json.gz",
         "bench/experiments/floatx4-bytearray/evidence-x86_64/input-provenance.json.gz"
@@ -854,13 +854,13 @@
         "build/simd-doublex2-bytearray"
       ],
       "sources": [
-        "test/haskell-fixtures/SimdByteArrayFixtures.hs",
-        "test/haskell-fixtures/SimdByteArrayModel.hs",
-        "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs",
+        "t/haskell-fixtures/SimdByteArrayFixtures.hs",
+        "t/haskell-fixtures/SimdByteArrayModel.hs",
+        "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs",
         "thc.cabal",
-        "test/fixtures/compiler/SimdDoubleX2ByteArray.hs",
-        "test/fixtures/compiler/SimdDoubleX2ByteArrayNative.hs",
+        "t/fixtures/compiler/SimdDoubleX2ByteArray.hs",
+        "t/fixtures/compiler/SimdDoubleX2ByteArrayNative.hs",
         "bench/experiments/doublex2-bytearray/evidence-x86_64/captures/doublex2/pre-core.json.gz",
         "bench/experiments/doublex2-bytearray/evidence-x86_64/captures/doublex2/post-core.json.gz",
         "bench/experiments/doublex2-bytearray/evidence-x86_64/captures/doublex2/input-provenance.json.gz"
@@ -871,11 +871,11 @@
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "explicit64-arrays"]}],
       "outputs": ["build/explicit64-arrays"],
       "sources": [
-        "test/haskell-fixtures/Explicit64ArrayFixtures.hs",
-        "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs",
-        "test/fixtures/compiler/Explicit64ArrayAudit.hs",
-        "test/fixtures/compiler/Explicit64ArrayNative.hs",
+        "t/haskell-fixtures/Explicit64ArrayFixtures.hs",
+        "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs",
+        "t/fixtures/compiler/Explicit64ArrayAudit.hs",
+        "t/fixtures/compiler/Explicit64ArrayNative.hs",
         "thc.cabal"
       ]
     },
@@ -884,11 +884,11 @@
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "floating-address"]}],
       "outputs": ["build/floating-address"],
       "sources": [
-        "test/haskell-fixtures/FloatingAddressFixtures.hs",
-        "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs",
-        "test/fixtures/compiler/FloatingAddressAudit.hs",
-        "test/fixtures/compiler/FloatingAddressNative.hs",
+        "t/haskell-fixtures/FloatingAddressFixtures.hs",
+        "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs",
+        "t/fixtures/compiler/FloatingAddressAudit.hs",
+        "t/fixtures/compiler/FloatingAddressNative.hs",
         "thc.cabal"
       ]
     },
@@ -897,11 +897,11 @@
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "atomic-address"]}],
       "outputs": ["build/atomic-address"],
       "sources": [
-        "test/haskell-fixtures/AtomicAddressFixtures.hs",
-        "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs",
-        "test/fixtures/compiler/AtomicAddressAudit.hs",
-        "test/fixtures/compiler/AtomicAddressNative.hs",
+        "t/haskell-fixtures/AtomicAddressFixtures.hs",
+        "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs",
+        "t/fixtures/compiler/AtomicAddressAudit.hs",
+        "t/fixtures/compiler/AtomicAddressNative.hs",
         "thc.cabal"
       ]
     },
@@ -910,11 +910,11 @@
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "floating-byte-offset"]}],
       "outputs": ["build/floating-byte-offset"],
       "sources": [
-        "test/haskell-fixtures/FloatingByteOffsetFixtures.hs",
-        "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs",
-        "test/fixtures/compiler/FloatingByteOffsetAudit.hs",
-        "test/fixtures/compiler/FloatingByteOffsetNative.hs",
+        "t/haskell-fixtures/FloatingByteOffsetFixtures.hs",
+        "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs",
+        "t/fixtures/compiler/FloatingByteOffsetAudit.hs",
+        "t/fixtures/compiler/FloatingByteOffsetNative.hs",
         "thc.cabal"
       ]
     },
@@ -923,11 +923,11 @@
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "narrow-byte-offset"]}],
       "outputs": ["build/narrow-byte-offset"],
       "sources": [
-        "test/haskell-fixtures/NarrowByteOffsetFixtures.hs",
-        "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs",
-        "test/fixtures/compiler/NarrowByteOffsetAudit.hs",
-        "test/fixtures/compiler/NarrowByteOffsetNative.hs",
+        "t/haskell-fixtures/NarrowByteOffsetFixtures.hs",
+        "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs",
+        "t/fixtures/compiler/NarrowByteOffsetAudit.hs",
+        "t/fixtures/compiler/NarrowByteOffsetNative.hs",
         "thc.cabal"
       ]
     },
@@ -935,21 +935,21 @@
       "junit": ["thc.runtime.UnalignedScalarMemoryTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "unaligned-scalar-memory"]}],
       "outputs": ["build/unaligned-scalar-memory"],
-      "sources": ["test/haskell-fixtures/UnalignedScalarMemoryFixtures.hs",
-        "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs",
-        "test/fixtures/compiler/UnalignedScalarMemoryAudit.hs",
-        "test/fixtures/compiler/UnalignedScalarMemoryNative.hs", "thc.cabal"]
+      "sources": ["t/haskell-fixtures/UnalignedScalarMemoryFixtures.hs",
+        "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs",
+        "t/fixtures/compiler/UnalignedScalarMemoryAudit.hs",
+        "t/fixtures/compiler/UnalignedScalarMemoryNative.hs", "thc.cabal"]
     },
     "int32-byte-offset": {
       "junit": ["thc.runtime.Int32ByteOffsetTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "int32-byte-offset"]}],
       "outputs": ["build/int32-byte-offset"],
       "sources": [
-        "test/haskell-fixtures/Int32ByteOffsetFixtures.hs",
-        "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs",
-        "test/fixtures/compiler/Int32ByteOffsetAudit.hs",
-        "test/fixtures/compiler/Int32ByteOffsetNative.hs",
+        "t/haskell-fixtures/Int32ByteOffsetFixtures.hs",
+        "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs",
+        "t/fixtures/compiler/Int32ByteOffsetAudit.hs",
+        "t/fixtures/compiler/Int32ByteOffsetNative.hs",
         "thc.cabal"
       ]
     },
@@ -958,11 +958,11 @@
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-stack-formatter"]}],
       "outputs": ["build/original-stack-formatter"],
       "sources": [
-        "test/fixtures/compiler/OriginalStackFormatter.hs",
-        "test/fixtures/compiler/OriginalStackFormatterNative.hs",
-        "test/haskell-fixtures/StackFixtures.hs",
-        "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs",
+        "t/fixtures/compiler/OriginalStackFormatter.hs",
+        "t/fixtures/compiler/OriginalStackFormatterNative.hs",
+        "t/haskell-fixtures/StackFixtures.hs",
+        "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs",
         "thc.cabal",
         "src/driver/THC/Driver/Wired.hs",
         "src/driver/cbits/target-layout.c"
@@ -973,11 +973,11 @@
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "boxed-array-extensions"]}],
       "outputs": ["build/boxed-array-extensions"],
       "sources": [
-        "test/fixtures/compiler/BoxedArrayExtensionsAudit.hs",
-        "test/fixtures/compiler/BoxedArrayExtensionsNative.hs",
-        "test/haskell-fixtures/BoxedArrayExtensionsFixtures.hs",
-        "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs",
+        "t/fixtures/compiler/BoxedArrayExtensionsAudit.hs",
+        "t/fixtures/compiler/BoxedArrayExtensionsNative.hs",
+        "t/haskell-fixtures/BoxedArrayExtensionsFixtures.hs",
+        "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs",
         "thc.cabal"
       ]
     },
@@ -991,9 +991,9 @@
       "sources": [
         "bin/prepare-boxed-arrays.py",
         "bin/prepare-floating-audit.py",
-        "test/fixtures/compiler/BoxedArrayAudit.hs",
-        "test/fixtures/compiler/FloatingAudit.hs",
-        "test/fixtures/compiler/FloatingAuditNative.hs"
+        "t/fixtures/compiler/BoxedArrayAudit.hs",
+        "t/fixtures/compiler/FloatingAudit.hs",
+        "t/fixtures/compiler/FloatingAuditNative.hs"
       ]
     },
     "original-stack": {
@@ -1001,17 +1001,17 @@
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-stack"]}],
       "outputs": ["build/original-stack"],
       "sources": [
-        "test/fixtures/compiler/OriginalStackAudit.hs",
-        "test/fixtures/compiler/OriginalStackAuditNative.hs",
-        "test/fixtures/compiler/OriginalStackProof.json",
+        "t/fixtures/compiler/OriginalStackAudit.hs",
+        "t/fixtures/compiler/OriginalStackAuditNative.hs",
+        "t/fixtures/compiler/OriginalStackProof.json",
         "nih/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE",
         "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs",
         "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs",
         "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc",
         "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Heap/InfoTable.hsc",
-        "test/haskell-fixtures/StackFixtures.hs",
-        "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs",
+        "t/haskell-fixtures/StackFixtures.hs",
+        "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs",
         "thc.cabal"
       ]
     },
@@ -1020,12 +1020,12 @@
       "commands": [{"argv": ["bin/prepare-original-stdio.sh", "--require-supported"]}],
       "outputs": ["build/original-stdio"],
       "sources": [
-        "test/fixtures/compiler/OriginalStdioAudit.hs",
-        "test/fixtures/compiler/OriginalStdioAuditNative.hs",
+        "t/fixtures/compiler/OriginalStdioAudit.hs",
+        "t/fixtures/compiler/OriginalStdioAuditNative.hs",
         "bin/prepare-original-stdio.sh",
-        "test/haskell-fixtures/Main.hs",
-        "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/OriginalStdioFixtures.hs",
+        "t/haskell-fixtures/Main.hs",
+        "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/OriginalStdioFixtures.hs",
         "thc.cabal"
       ]
     },
@@ -1034,11 +1034,11 @@
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-handle-readiness"]}],
       "outputs": ["build/original-handle-readiness"],
       "sources": [
-        "test/fixtures/compiler/OriginalHandleReadinessAudit.hs",
-        "test/fixtures/compiler/OriginalHandleReadinessNative.hs",
-        "test/haskell-fixtures/Main.hs",
-        "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/OriginalHandleReadinessFixtures.hs",
+        "t/fixtures/compiler/OriginalHandleReadinessAudit.hs",
+        "t/fixtures/compiler/OriginalHandleReadinessNative.hs",
+        "t/haskell-fixtures/Main.hs",
+        "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/OriginalHandleReadinessFixtures.hs",
         "thc.cabal"
       ]
     },
@@ -1048,8 +1048,8 @@
       "outputs": ["build/addr-identity"],
       "sources": [
         "bin/prepare-address-identity.sh",
-        "test/fixtures/compiler/AddressIdentityAudit.hs",
-        "test/fixtures/compiler/AddressIdentityAuditNative.hs"
+        "t/fixtures/compiler/AddressIdentityAudit.hs",
+        "t/fixtures/compiler/AddressIdentityAuditNative.hs"
       ]
     },
     "managed-address-reads": {
@@ -1057,29 +1057,29 @@
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "managed-address-reads"]}],
       "outputs": ["build/managed-address-reads"],
       "sources": [
-        "test/haskell-fixtures/Main.hs",
-        "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/ManagedAddressReadFixtures.hs",
-        "test/fixtures/compiler/ManagedAddressReadAudit.hs",
-        "test/fixtures/compiler/ManagedAddressReadNative.hs"
+        "t/haskell-fixtures/Main.hs",
+        "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/ManagedAddressReadFixtures.hs",
+        "t/fixtures/compiler/ManagedAddressReadAudit.hs",
+        "t/fixtures/compiler/ManagedAddressReadNative.hs"
       ]
     },
     "address-array-copy": {
       "junit": ["thc.runtime.AddressArrayCopyTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "address-array-copy"]}],
       "outputs": ["build/address-array-copy"],
-      "sources": ["test/haskell-fixtures/AddressArrayCopyFixtures.hs", "test/haskell-fixtures/Main.hs",
-        "test/haskell-fixtures/FixtureSupport.hs", "thc.cabal", "test/fixtures/compiler/AddressArrayCopyAudit.hs",
-        "test/fixtures/compiler/AddressArrayCopyNative.hs"]
+      "sources": ["t/haskell-fixtures/AddressArrayCopyFixtures.hs", "t/haskell-fixtures/Main.hs",
+        "t/haskell-fixtures/FixtureSupport.hs", "thc.cabal", "t/fixtures/compiler/AddressArrayCopyAudit.hs",
+        "t/fixtures/compiler/AddressArrayCopyNative.hs"]
     },
     "pinned-pointer-cells": {
       "junit": ["thc.runtime.PinnedPointerCellsTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "pinned-pointer-cells"]}],
       "outputs": ["build/pinned-pointer-cells"],
       "sources": [
-        "test/haskell-fixtures/Main.hs",
-        "test/fixtures/compiler/PinnedPointerCellsAudit.hs",
-        "test/fixtures/compiler/PinnedPointerCellsNative.hs"
+        "t/haskell-fixtures/Main.hs",
+        "t/fixtures/compiler/PinnedPointerCellsAudit.hs",
+        "t/fixtures/compiler/PinnedPointerCellsNative.hs"
       ]
     },
     "aligned-scalar-memory": {
@@ -1087,10 +1087,10 @@
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "aligned-scalar-memory"]}],
       "outputs": ["build/aligned-scalar-memory"],
       "sources": [
-        "test/haskell-fixtures/Main.hs",
-        "test/haskell-fixtures/AlignedScalarMemoryFixtures.hs",
-        "test/fixtures/compiler/AlignedScalarMemoryAudit.hs",
-        "test/fixtures/compiler/AlignedScalarMemoryNative.hs",
+        "t/haskell-fixtures/Main.hs",
+        "t/haskell-fixtures/AlignedScalarMemoryFixtures.hs",
+        "t/fixtures/compiler/AlignedScalarMemoryAudit.hs",
+        "t/fixtures/compiler/AlignedScalarMemoryNative.hs",
         "src/examples/StableWideCells.hs"
       ]
     },
@@ -1099,10 +1099,10 @@
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "wide-char-address"]}],
       "outputs": ["build/wide-char-address"],
       "sources": [
-        "test/haskell-fixtures/Main.hs",
-        "test/haskell-fixtures/WideCharAddressFixtures.hs",
-        "test/fixtures/compiler/WideCharAddressAudit.hs",
-        "test/fixtures/compiler/WideCharAddressNative.hs"
+        "t/haskell-fixtures/Main.hs",
+        "t/haskell-fixtures/WideCharAddressFixtures.hs",
+        "t/fixtures/compiler/WideCharAddressAudit.hs",
+        "t/fixtures/compiler/WideCharAddressNative.hs"
       ]
     },
     "small-arrays": {
@@ -1110,10 +1110,10 @@
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "small-arrays"]}],
       "outputs": ["build/small-arrays"],
       "sources": [
-        "test/haskell-fixtures/SmallArrayFixtures.hs",
-        "test/haskell-fixtures/Main.hs",
-        "test/fixtures/compiler/SmallArrayAudit.hs",
-        "test/fixtures/compiler/SmallArrayAuditNative.hs"
+        "t/haskell-fixtures/SmallArrayFixtures.hs",
+        "t/haskell-fixtures/Main.hs",
+        "t/fixtures/compiler/SmallArrayAudit.hs",
+        "t/fixtures/compiler/SmallArrayAuditNative.hs"
       ]
     },
     "synchronous-exceptions": {
@@ -1125,8 +1125,8 @@
       "outputs": ["build/synchronous-exceptions"],
       "sources": [
         "bin/prepare-synchronous-exceptions.py",
-        "test/fixtures/compiler/SynchronousExceptionsAudit.hs",
-        "test/fixtures/compiler/SynchronousExceptionsNative.hs"
+        "t/fixtures/compiler/SynchronousExceptionsAudit.hs",
+        "t/fixtures/compiler/SynchronousExceptionsNative.hs"
       ]
     },
     "deep-evaluation": {
@@ -1149,12 +1149,12 @@
         "build/deep-evaluation"
       ],
       "sources": [
-        "test/haskell-fixtures/DeepEvaluationFixtures.hs",
-        "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs",
+        "t/haskell-fixtures/DeepEvaluationFixtures.hs",
+        "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs",
         "thc.cabal",
-        "test/fixtures/compiler/DeepEvaluation.hs",
-        "test/fixtures/compiler/DeepEvaluationNative.hs"
+        "t/fixtures/compiler/DeepEvaluation.hs",
+        "t/fixtures/compiler/DeepEvaluationNative.hs"
       ]
     },
     "exception-result-layouts": {
@@ -1162,12 +1162,12 @@
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "exception-result-layouts"]}],
       "outputs": ["build/exception-result-layouts"],
       "sources": [
-        "test/haskell-fixtures/ExceptionResultLayoutsFixtures.hs",
-        "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs",
+        "t/haskell-fixtures/ExceptionResultLayoutsFixtures.hs",
+        "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs",
         "thc.cabal",
-        "test/fixtures/compiler/ExceptionResultLayoutsAudit.hs",
-        "test/fixtures/compiler/ExceptionResultLayoutsNative.hs"
+        "t/fixtures/compiler/ExceptionResultLayoutsAudit.hs",
+        "t/fixtures/compiler/ExceptionResultLayoutsNative.hs"
       ]
     },
     "scalar-exception-results": {
@@ -1175,12 +1175,12 @@
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "scalar-exception-results"]}],
       "outputs": ["build/scalar-exception-results"],
       "sources": [
-        "test/haskell-fixtures/ScalarExceptionResultsFixtures.hs",
-        "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs",
+        "t/haskell-fixtures/ScalarExceptionResultsFixtures.hs",
+        "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs",
         "thc.cabal",
-        "test/fixtures/compiler/ScalarExceptionResultsAudit.hs",
-        "test/fixtures/compiler/ScalarExceptionResultsNative.hs"
+        "t/fixtures/compiler/ScalarExceptionResultsAudit.hs",
+        "t/fixtures/compiler/ScalarExceptionResultsNative.hs"
       ]
     },
     "mask-functions": {
@@ -1188,12 +1188,12 @@
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "mask-functions"]}],
       "outputs": ["build/mask-functions"],
       "sources": [
-        "test/haskell-fixtures/MaskFunctionFixtures.hs",
-        "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs",
+        "t/haskell-fixtures/MaskFunctionFixtures.hs",
+        "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs",
         "thc.cabal",
-        "test/fixtures/compiler/MaskFunctionAudit.hs",
-        "test/fixtures/compiler/MaskFunctionNative.hs"
+        "t/fixtures/compiler/MaskFunctionAudit.hs",
+        "t/fixtures/compiler/MaskFunctionNative.hs"
       ]
     },
     "core-continuation": {
@@ -1201,37 +1201,37 @@
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "core-continuation"]}],
       "outputs": ["build/core-continuation"],
       "sources": [
-        "test/haskell-fixtures/ContinuationFixtures.hs",
-        "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs",
+        "t/haskell-fixtures/ContinuationFixtures.hs",
+        "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs",
         "thc.cabal",
-        "test/fixtures/compiler/CoreContinuationAudit.hs",
-        "test/fixtures/compiler/LargeLiteralCaseAudit.hs",
-        "test/fixtures/compiler/CoreContinuationNative.hs",
-        "test/fixtures/compiler/LazyIOCallbackAudit.hs",
-        "test/fixtures/compiler/LazyIOCallbackNative.hs"
+        "t/fixtures/compiler/CoreContinuationAudit.hs",
+        "t/fixtures/compiler/LargeLiteralCaseAudit.hs",
+        "t/fixtures/compiler/CoreContinuationNative.hs",
+        "t/fixtures/compiler/LazyIOCallbackAudit.hs",
+        "t/fixtures/compiler/LazyIOCallbackNative.hs"
       ]
     },
     "thread-status": {
       "junit": ["thc.runtime.ThreadStatusNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "thread-status"]}],
       "outputs": ["build/thread-status"],
-      "sources": ["test/fixtures/compiler/ThreadStatusAudit.hs", "test/fixtures/compiler/ThreadStatusNative.hs",
-        "test/haskell-fixtures/ThreadStatusFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+      "sources": ["t/fixtures/compiler/ThreadStatusAudit.hs", "t/fixtures/compiler/ThreadStatusNative.hs",
+        "t/haskell-fixtures/ThreadStatusFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "thread-async": {
       "junit": ["thc.runtime.ThreadAsyncNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "thread-async"]}],
       "outputs": ["build/thread-async"],
       "sources": [
-        "test/haskell-fixtures/ThreadAsyncFixtures.hs",
-        "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs",
-        "test/fixtures/compiler/ThreadAsyncAudit.hs",
-        "test/fixtures/compiler/ThreadAsyncNative.hs",
-        "test/fixtures/compiler/LazyForkAudit.hs",
-        "test/fixtures/compiler/LazyForkNative.hs",
+        "t/haskell-fixtures/ThreadAsyncFixtures.hs",
+        "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs",
+        "t/fixtures/compiler/ThreadAsyncAudit.hs",
+        "t/fixtures/compiler/ThreadAsyncNative.hs",
+        "t/fixtures/compiler/LazyForkAudit.hs",
+        "t/fixtures/compiler/LazyForkNative.hs",
         "thc.cabal"
       ]
     },
@@ -1240,11 +1240,11 @@
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "uncaught-self"]}],
       "outputs": ["build/uncaught-self"],
       "sources": [
-        "test/haskell-fixtures/UncaughtSelfFixtures.hs",
-        "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs",
-        "test/fixtures/compiler/UncaughtSelfAudit.hs",
-        "test/fixtures/compiler/UncaughtSelfNative.hs",
+        "t/haskell-fixtures/UncaughtSelfFixtures.hs",
+        "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs",
+        "t/fixtures/compiler/UncaughtSelfAudit.hs",
+        "t/fixtures/compiler/UncaughtSelfNative.hs",
         "thc.cabal"
       ]
     },
@@ -1254,8 +1254,8 @@
       "outputs": ["build/io-main-pap"],
       "sources": [
         "bin/prepare-io-main-pap.py",
-        "test/fixtures/compiler/IoMainPapAudit.hs",
-        "test/fixtures/compiler/IoMainPapNative.hs"
+        "t/fixtures/compiler/IoMainPapAudit.hs",
+        "t/fixtures/compiler/IoMainPapNative.hs"
       ]
     },
     "runtime-core-native": {
@@ -1289,8 +1289,8 @@
       ],
       "outputs": ["build/explicit64-primops"],
       "sources": [
-        "test/haskell-fixtures/Main.hs",
-        "test/fixtures/compiler/Explicit64PrimopsAudit.hs"
+        "t/haskell-fixtures/Main.hs",
+        "t/fixtures/compiler/Explicit64PrimopsAudit.hs"
       ]
     },
     "tuple-input": {
@@ -1301,8 +1301,8 @@
       "outputs": ["build/tuple-input"],
       "sources": [
         "bin/prepare-tuple-input-audit.py",
-        "test/fixtures/compiler/TupleInputAudit.hs",
-        "test/fixtures/compiler/TupleInputAuditNative.hs"
+        "t/fixtures/compiler/TupleInputAudit.hs",
+        "t/fixtures/compiler/TupleInputAuditNative.hs"
       ]
     },
     "integer-primops": {
@@ -1312,8 +1312,8 @@
       ],
       "outputs": ["build/integer-primops"],
       "sources": [
-        "test/haskell-fixtures/Main.hs",
-        "test/fixtures/compiler/IntegerPrimopsAudit.hs"
+        "t/haskell-fixtures/Main.hs",
+        "t/fixtures/compiler/IntegerPrimopsAudit.hs"
       ]
     },
     "signed-narrow-primops": {
@@ -1323,8 +1323,8 @@
       ],
       "outputs": ["build/signed-narrow-primops"],
       "sources": [
-        "test/haskell-fixtures/Main.hs",
-        "test/fixtures/compiler/SignedNarrowPrimopsAudit.hs"
+        "t/haskell-fixtures/Main.hs",
+        "t/fixtures/compiler/SignedNarrowPrimopsAudit.hs"
       ]
     },
     "bit-primops": {
@@ -1334,15 +1334,15 @@
       ],
       "outputs": ["build/bit-primops"],
       "sources": [
-        "test/haskell-fixtures/Main.hs",
-        "test/fixtures/compiler/BitPrimopsAudit.hs"
+        "t/haskell-fixtures/Main.hs",
+        "t/fixtures/compiler/BitPrimopsAudit.hs"
       ]
     },
     "integer-completion": {
       "junit": ["thc.runtime.IntegerCompletionTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "integer-completion"]}],
       "outputs": ["build/integer-completion"],
-      "sources": ["test/haskell-fixtures/Main.hs", "test/haskell-fixtures/IntegerCompletionFixtures.hs", "test/fixtures/compiler/IntegerCompletionAudit.hs"]
+      "sources": ["t/haskell-fixtures/Main.hs", "t/haskell-fixtures/IntegerCompletionFixtures.hs", "t/fixtures/compiler/IntegerCompletionAudit.hs"]
     },
     "cbv-coercion": {
       "junit": [
@@ -1352,11 +1352,11 @@
         "thc.runtime.ScalarPrimitiveSignatureTest"
       ],
       "commands": [
-        {"argv": ["env", "THC_CORE_OUT=build/tuple-arithmetic/pre-core", "THC_GHC_OUT=build/tuple-arithmetic/pre-ghc", "bin/export-core.sh", "test/fixtures/compiler/TupleArithmeticAudit.hs"]},
-        {"argv": ["env", "THC_CORE_OUT=build/explicit64-primops/core", "THC_GHC_OUT=build/explicit64-primops/ghc", "bin/export-core.sh", "test/fixtures/compiler/Explicit64PrimopsAudit.hs"]},
-        {"argv": ["bin/export-core.sh", "test/fixtures/compiler/CBVAudit.hs", "test/fixtures/compiler/CBVJoinAudit.hs", "test/fixtures/compiler/CBVCoercionAudit.hs", "test/fixtures/compiler/DemandAudit.hs"]},
+        {"argv": ["env", "THC_CORE_OUT=build/tuple-arithmetic/pre-core", "THC_GHC_OUT=build/tuple-arithmetic/pre-ghc", "bin/export-core.sh", "t/fixtures/compiler/TupleArithmeticAudit.hs"]},
+        {"argv": ["env", "THC_CORE_OUT=build/explicit64-primops/core", "THC_GHC_OUT=build/explicit64-primops/ghc", "bin/export-core.sh", "t/fixtures/compiler/Explicit64PrimopsAudit.hs"]},
+        {"argv": ["bin/export-core.sh", "t/fixtures/compiler/CBVAudit.hs", "t/fixtures/compiler/CBVJoinAudit.hs", "t/fixtures/compiler/CBVCoercionAudit.hs", "t/fixtures/compiler/DemandAudit.hs"]},
         {"argv": ["python3", "bin/check-demand-metadata.py", "--ghc-api"]},
-        {"argv": ["env", "THC_CORE_OUT=build/cbv-post-core", "THC_GHC_OUT=build/cbv-post-ghc", "bin/export-core.sh", "-fplugin-opt=THC.Plugin:post-tidy", "test/fixtures/compiler/CBVAudit.hs", "test/fixtures/compiler/CBVJoinAudit.hs", "test/fixtures/compiler/CBVCoercionAudit.hs"]},
+        {"argv": ["env", "THC_CORE_OUT=build/cbv-post-core", "THC_GHC_OUT=build/cbv-post-ghc", "bin/export-core.sh", "-fplugin-opt=THC.Plugin:post-tidy", "t/fixtures/compiler/CBVAudit.hs", "t/fixtures/compiler/CBVJoinAudit.hs", "t/fixtures/compiler/CBVCoercionAudit.hs"]},
         {"argv": ["python3", "bin/check-cbv-metadata.py"]}
       ],
       "outputs": [
@@ -1371,12 +1371,12 @@
         "build/cbv-post-core/CBVCoercionAudit.json"
       ],
       "sources": [
-        "test/fixtures/compiler/TupleArithmeticAudit.hs",
-        "test/fixtures/compiler/Explicit64PrimopsAudit.hs",
-        "test/fixtures/compiler/CBVAudit.hs",
-        "test/fixtures/compiler/CBVJoinAudit.hs",
-        "test/fixtures/compiler/CBVCoercionAudit.hs",
-        "test/fixtures/compiler/DemandAudit.hs",
+        "t/fixtures/compiler/TupleArithmeticAudit.hs",
+        "t/fixtures/compiler/Explicit64PrimopsAudit.hs",
+        "t/fixtures/compiler/CBVAudit.hs",
+        "t/fixtures/compiler/CBVJoinAudit.hs",
+        "t/fixtures/compiler/CBVCoercionAudit.hs",
+        "t/fixtures/compiler/DemandAudit.hs",
         "bin/check-demand-metadata.py",
         "bin/check-cbv-metadata.py"
       ]
@@ -1385,25 +1385,25 @@
       "junit": ["thc.runtime.DataToTagTest"],
       "commands": [{"argv": ["python3", "bin/prepare-data-to-tag.py"]}],
       "outputs": ["build/data-to-tag"],
-      "sources": ["bin/prepare-data-to-tag.py", "test/fixtures/compiler/DataToTagAudit.hs"]
+      "sources": ["bin/prepare-data-to-tag.py", "t/fixtures/compiler/DataToTagAudit.hs"]
     },
     "mutable-bytearray-size": {
       "junit": ["thc.runtime.MutableByteArraySizeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "mutable-bytearray-size"]}],
       "outputs": ["build/mutable-bytearray-size"],
-      "sources": ["test/haskell-fixtures/ByteArrayFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal", "src/tools/primops/PrimopTools.hs", "test/fixtures/compiler/MutableByteArraySizeAudit.hs", "test/fixtures/compiler/MutableByteArraySizeNative.hs", "test/fixtures/compiler/ByteArrayFixtureInputs.hs"]
+      "sources": ["t/haskell-fixtures/ByteArrayFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "src/tools/primops/PrimopTools.hs", "t/fixtures/compiler/MutableByteArraySizeAudit.hs", "t/fixtures/compiler/MutableByteArraySizeNative.hs", "t/fixtures/compiler/ByteArrayFixtureInputs.hs"]
     },
     "resize-bytearrays": {
       "junit": ["thc.runtime.ResizeByteArrayTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "resize-bytearrays"]}],
       "outputs": ["build/resize-bytearrays"],
-      "sources": ["test/haskell-fixtures/ByteArrayFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal", "src/tools/primops/PrimopTools.hs", "test/fixtures/compiler/ResizeByteArrayAudit.hs", "test/fixtures/compiler/ResizeByteArrayNative.hs", "test/fixtures/compiler/ByteArrayFixtureInputs.hs"]
+      "sources": ["t/haskell-fixtures/ByteArrayFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "src/tools/primops/PrimopTools.hs", "t/fixtures/compiler/ResizeByteArrayAudit.hs", "t/fixtures/compiler/ResizeByteArrayNative.hs", "t/fixtures/compiler/ByteArrayFixtureInputs.hs"]
     },
     "bytearray": {
       "junit": ["thc.runtime.ByteArrayTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "bytearray"]}],
       "outputs": ["build/bytearray"],
-      "sources": ["test/haskell-fixtures/ByteArrayFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/ByteArrayAudit.hs", "bin/export-boot.py",
+      "sources": ["t/haskell-fixtures/ByteArrayFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/ByteArrayAudit.hs", "bin/export-boot.py",
         "nih/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE",
         "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Base.hs",
         "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/List.hs",
@@ -1417,13 +1417,13 @@
       "junit": ["thc.runtime.MutableByteArrayTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "mutable-bytearrays"]}],
       "outputs": ["build/mutable-bytearrays"],
-      "sources": ["test/haskell-fixtures/ByteArrayFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/MutableByteArrayAudit.hs", "src/tools/primops/PrimopTools.hs"]
+      "sources": ["t/haskell-fixtures/ByteArrayFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/MutableByteArrayAudit.hs", "src/tools/primops/PrimopTools.hs"]
     },
     "compare-byte-arrays": {
       "junit": ["thc.runtime.CompareByteArraysTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "compare-byte-arrays"]}],
       "outputs": ["build/compare-byte-arrays"],
-      "sources": ["test/haskell-fixtures/ByteArrayFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/CompareByteArraysAudit.hs", "bin/export-boot.py",
+      "sources": ["t/haskell-fixtures/ByteArrayFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/CompareByteArraysAudit.hs", "bin/export-boot.py",
         "nih/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE",
         "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Base.hs",
         "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/List.hs",
@@ -1437,48 +1437,48 @@
       "junit": ["thc.runtime.Int8ArrayNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "int8-arrays"]}],
       "outputs": ["build/int8-arrays"],
-      "sources": ["test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/Int8ArrayAudit.hs", "src/examples/THC/Unboxed8Arrays.hs"]
+      "sources": ["t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/Int8ArrayAudit.hs", "src/examples/THC/Unboxed8Arrays.hs"]
     },
     "int16-arrays": {
       "junit": ["thc.runtime.Int16ArrayNativeTest", "thc.runtime.Int16BoundaryCompilationTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "int16-arrays"]}],
       "outputs": ["build/int16-arrays"],
-      "sources": ["test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/Int16ArrayAudit.hs", "src/examples/THC/Unboxed16Arrays.hs"]
+      "sources": ["t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/Int16ArrayAudit.hs", "src/examples/THC/Unboxed16Arrays.hs"]
     },
     "int32-arrays": {
       "junit": ["thc.runtime.Int32ArrayNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "int32-arrays"]}],
       "outputs": ["build/int32-arrays"],
-      "sources": ["test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/Int32ArrayAudit.hs", "src/examples/THC/Unboxed32Arrays.hs"]
+      "sources": ["t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/Int32ArrayAudit.hs", "src/examples/THC/Unboxed32Arrays.hs"]
     },
     "int-arrays": {
       "junit": ["thc.runtime.IntArrayNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "int-arrays"]}],
       "outputs": ["build/int-arrays"],
-      "sources": ["test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/IntArrayAudit.hs", "src/examples/THC/UnboxedArrays.hs"]
+      "sources": ["t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/IntArrayAudit.hs", "src/examples/THC/UnboxedArrays.hs"]
     },
     "double-arrays": {
       "junit": ["thc.runtime.DoubleArrayNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "double-arrays"]}],
       "outputs": ["build/double-arrays"],
-      "sources": ["test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/DoubleArrayAudit.hs", "src/examples/THC/UnboxedDoubleArrays.hs"]
+      "sources": ["t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/DoubleArrayAudit.hs", "src/examples/THC/UnboxedDoubleArrays.hs"]
     },
     "float-word-arrays": {
       "junit": ["thc.runtime.FloatWordArrayNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "float-word-arrays"]}],
       "outputs": ["build/float-word-arrays"],
-      "sources": ["test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/FloatArrayAudit.hs", "test/fixtures/compiler/WordArrayAudit.hs", "src/examples/THC/UnboxedFloatArrays.hs", "src/examples/THC/UnboxedWordArrays.hs"]
+      "sources": ["t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/FloatArrayAudit.hs", "t/fixtures/compiler/WordArrayAudit.hs", "src/examples/THC/UnboxedFloatArrays.hs", "src/examples/THC/UnboxedWordArrays.hs"]
     },
     "live-async": {
       "junit": ["thc.runtime.LiveAsyncNativeTest", "thc.runtime.AsyncStrictEntryNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "live-async"]}],
       "outputs": ["build/live-async"],
       "sources": [
-        "test/haskell-fixtures/LiveAsyncFixtures.hs",
-        "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs",
-        "test/fixtures/compiler/LiveAsyncAudit.hs",
-        "test/fixtures/compiler/LiveAsyncNative.hs",
+        "t/haskell-fixtures/LiveAsyncFixtures.hs",
+        "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs",
+        "t/fixtures/compiler/LiveAsyncAudit.hs",
+        "t/fixtures/compiler/LiveAsyncNative.hs",
         "thc.cabal"
       ]
     },
@@ -1504,8 +1504,8 @@
       "junit": ["thc.runtime.UnixWaitStatusTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "unix-wait-status"]}],
       "outputs": ["build/unix-wait-status"],
-      "sources": ["test/fixtures/compiler/UnixWaitStatusAudit.hs", "test/haskell-fixtures/UnixWaitStatusFixtures.hs",
-        "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal",
+      "sources": ["t/fixtures/compiler/UnixWaitStatusAudit.hs", "t/haskell-fixtures/UnixWaitStatusFixtures.hs",
+        "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal",
         "src/main/c/wait-status-api.c", "bin/build-cbits.py"]
     },
     "unix-libc": {
@@ -1515,10 +1515,10 @@
       ],
       "outputs": ["build/unix-libc"],
       "sources": [
-        "test/fixtures/compiler/UnixLibcAudit.hs",
-        "test/haskell-fixtures/UnixLibcFixtures.hs",
-        "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs",
+        "t/fixtures/compiler/UnixLibcAudit.hs",
+        "t/haskell-fixtures/UnixLibcFixtures.hs",
+        "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs",
         "thc.cabal",
         "src/test/resources/core/original-unix-libc-descriptors.json"
       ]
@@ -1543,10 +1543,10 @@
         "build/bytestring-sort"
       ],
       "sources": [
-        "test/fixtures/compiler/ByteStringSortAudit.hs",
-        "test/haskell-fixtures/ByteStringSortFixtures.hs",
-        "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs",
+        "t/fixtures/compiler/ByteStringSortAudit.hs",
+        "t/haskell-fixtures/ByteStringSortFixtures.hs",
+        "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs",
         "thc.cabal",
         "src/test/resources/core/original-bytestring-sort-descriptor.json"
       ]
@@ -1571,10 +1571,10 @@
         "build/bytestring-decimal"
       ],
       "sources": [
-        "test/fixtures/compiler/ByteStringDecimalAudit.hs",
-        "test/haskell-fixtures/ByteStringDecimalFixtures.hs",
-        "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs",
+        "t/fixtures/compiler/ByteStringDecimalAudit.hs",
+        "t/haskell-fixtures/ByteStringDecimalFixtures.hs",
+        "t/haskell-fixtures/FixtureSupport.hs",
+        "t/haskell-fixtures/Main.hs",
         "thc.cabal",
         "src/test/resources/core/original-bytestring-decimal-descriptors.json"
       ]

@@ -7,7 +7,7 @@ resolved version and both flags. Native expected values come from the same
 Cabal plan and package build used for Core acquisition. They are test evidence,
 not a portable or persistent hash specification.
 
-The [probe library](../test/fixtures/run-hashable-ffi/src/HashableProbe.hs)
+The [probe library](../t/fixtures/run-hashable-ffi/src/HashableProbe.hs)
 exports five scalar entry points around genuine `hashWithSalt` instances:
 strict `Text`, strict `ByteString`, `ShortByteString`, lazy `Text` and lazy
 `ByteString`. Each takes a dynamic salt and input selector. The 300 native rows

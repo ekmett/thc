@@ -89,7 +89,7 @@ class EmptyJoinInputs(unittest.TestCase):
         self.accepts(m)
         self.rejects(m,'aggregate-boundary',dict(CAP,aggregateCaptures=[]))
     def test_full_retained_typeable_frontier_removes_only_six_formals_and_34_calls(self):
-        base=ROOT/'test/fixtures/compiler/empty-join-typeable';manifest=json.loads((base/'provenance.json').read_text())
+        base=ROOT/'t/fixtures/compiler/empty-join-typeable';manifest=json.loads((base/'provenance.json').read_text())
         for row in manifest['sources']:
             self.assertEqual(row['sha256'],hashlib.sha256((base/row['path']).read_bytes()).hexdigest())
         for stage in ('pre','post'):

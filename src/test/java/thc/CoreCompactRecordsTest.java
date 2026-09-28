@@ -91,7 +91,7 @@ class CoreCompactRecordsTest {
             "aggregate", "unboxed-tuple", "components", Arrays.asList(children), "evaluated", evaluated);
     }
     @Test void sharedManualNestedShapesKeepEveryChildOccurrenceEvaluationDistinct() throws Exception {
-        String hex = Files.readString(Path.of("test/compact-core/golden/nested-shared-rep-v1.hex"));
+        String hex = Files.readString(Path.of("t/compact-core/golden/nested-shared-rep-v1.hex"));
         byte[] bytes = HexFormat.of().parseHex(hex.replaceAll("\\s", ""));
         assertEquals(62, bytes.length);
         var firstExpected = tuple(false, tuple(true, leaf(false)), tuple(false, leaf(true)));

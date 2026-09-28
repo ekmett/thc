@@ -54,7 +54,7 @@ dependencies and native IO are separate contracts; automatic weak GC is deferred
 
 ## Evidence and reproduction
 
-`test/fixtures/compiler/ManagedMVarAudit.hs` exports genuine pre- and post-Tidy
+`t/fixtures/compiler/ManagedMVarAudit.hs` exports genuine pre- and post-Tidy
 Core for five integer-entry examples: state transitions, lifted bottoms,
 opaque aliases and snapshots, boxed-unlifted products, and closure payloads.
 All eight contracts appear in both stages; all six payload-bearing primitives

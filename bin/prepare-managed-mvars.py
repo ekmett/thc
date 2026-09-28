@@ -16,8 +16,8 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = 'test/fixtures/compiler/ManagedMVarAudit.hs'
-NATIVE = 'test/fixtures/compiler/ManagedMVarNative.hs'
+SOURCE = 't/fixtures/compiler/ManagedMVarAudit.hs'
+NATIVE = 't/fixtures/compiler/ManagedMVarNative.hs'
 ENTRIES = ['transitions', 'lazyPayload', 'aliasRoundTrip', 'unliftedPayload', 'closurePayload']
 CONTEXT_ENTRIES = ['waitTake', 'waitRead', 'waitPut', 'makeBox']
 READY_ENTRIES = ['nativeWaitTake', 'nativeWaitRead', 'nativeWaitPut']
@@ -335,7 +335,7 @@ def main():
         run([ghc, '--make', '-no-link', '-O2', '-dynamic', '-fforce-recomp', '-dcore-lint', '-g', *package_flags,
              '-package-db', plugin['packageDb'],
              '-fplugin-library=' + plugin['sharedLibrary'] + ';' + plugin['unitId'] + ';THC.Plugin;' + json.dumps(options),
-             '-itest/fixtures/compiler', '-odir', directory / 'ghc', '-hidir', directory / 'ghc', SOURCE], stage + '-export')
+             '-it/fixtures/compiler', '-odir', directory / 'ghc', '-hidir', directory / 'ghc', SOURCE], stage + '-export')
         paths = sorted(core.glob('*.json'))
         require(paths, 'Missing genuine Core exports')
         modules = [(relative(path), json.loads(path.read_text())) for path in paths]
@@ -372,7 +372,7 @@ def main():
     native.mkdir()
     executable = native / 'managed-mvar-oracle'
     run([ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint', '-dstg-lint', '-threaded', '-rtsopts', *package_flags,
-         '-itest/fixtures/compiler', '-odir', native, '-hidir', native, NATIVE, '-o', executable], 'native-build')
+         '-it/fixtures/compiler', '-odir', native, '-hidir', native, NATIVE, '-o', executable], 'native-build')
     artifacts.append(relative(executable))
     require(run([executable, '--word-bits'], 'native-word-bits').strip() == '64', 'Oracle requires a native 64-bit Int target')
     values, concurrent_values = input_vectors()

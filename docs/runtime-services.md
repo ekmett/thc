@@ -204,7 +204,7 @@ deopt counts, and zero does not establish code liveness or absence of deopts.
 
 ```sh
 cabal test runtime-services-api cpu-affinity-api -fdevelopment
-bash test/haskell-runtime/check-safe-haskell.sh
+bash t/haskell-runtime/check-safe-haskell.sh
 ghc --make -XHaskell2010 -threaded -Wall -Werror -isrc/runtime \
   src/examples/THC/RuntimeServices.hs src/runtime/cpu-affinity.c src/runtime/runtime-services.c \
   -main-is THC.RuntimeServices
@@ -214,7 +214,7 @@ The Safe Haskell check accepts imports of all stable modules and requires an
 actual unsafe-import rejection for `THC.Internal.JIT`. Native tests check honest
 fallbacks and mask/result/exception preservation, not pretend JVM measurements.
 
-The [multi-package smoke program](../test/fixtures/run-runtime-services/Main.hs)
+The [multi-package smoke program](../t/fixtures/run-runtime-services/Main.hs)
 depends on the real `thc:runtime` library and checks runtime-specific invariants
 across all six modules, including explicit JIT opt-in and nested Unicode spans.
 It does not compare variable JVM counters against native-GHC zeroes. Its
@@ -239,7 +239,7 @@ and the bytecode run from the repository root:
 
 ```sh
 THC_BACKEND=bytecode thc run runtime-services-smoke:exe:completed \
-  --project-dir test/fixtures/run-runtime-services \
+  --project-dir t/fixtures/run-runtime-services \
   --thc-root "$PWD" --runtime "$PWD/build/install/thc/bin/thc" \
   --dist-dir "$PWD/build/runtime-services-smoke" \
   --installed-core required --ghc-source "$THC_GHC_SOURCE"

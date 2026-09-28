@@ -88,8 +88,8 @@ class IntegerCompletionTest {
         var manifest = json(DIRECTORY + "/manifest.json");
         assertEquals("9.14.1", manifest.get("ghc")); assertEquals(64L, ((Number) manifest.get("wordBits")).longValue());
         assertEquals(NAMES, manifest.get("entries")); assertEquals(3373L, ((Number) manifest.get("nativeRows")).longValue());
-        var inputs = new HashSet<>(list("test/fixtures/compiler/IntegerCompletionAudit.hs", "thc.cabal", "test/haskell-fixtures/Main.hs",
-            "test/haskell-fixtures/IntegerCompletionFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs", "bin/build-compiler.sh", "bin/export-core.sh",
+        var inputs = new HashSet<>(list("t/fixtures/compiler/IntegerCompletionAudit.hs", "thc.cabal", "t/haskell-fixtures/Main.hs",
+            "t/haskell-fixtures/IntegerCompletionFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "bin/build-compiler.sh", "bin/export-core.sh",
             "bin/toolchain.sh", "bin/plugin.py", "bin/audit-core.py", "bin/core-capabilities.json", "src/main/resources/thc/scalar-primop-signatures.json"));
         for (var file : Objects.requireNonNull(new File(root, "src/compiler/THC").listFiles())) if (file.getName().endsWith(".hs")) inputs.add("src/compiler/THC/" + file.getName());
         for (var file : Objects.requireNonNull(new File(root, "bin").listFiles())) if (file.getName().startsWith("core_") && file.getName().endsWith(".py")) inputs.add("bin/" + file.getName());

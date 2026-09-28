@@ -105,8 +105,8 @@ class WindowsCodePagesTest {
         assertEquals(true, proof.get("originalFCallIds"));
         assertEquals(new ArrayList<>(operations.keySet()), proof.get("entries"));
         assertEquals("902339d332fb4ce2b3c87dcac1ee6495d41ad886", ((Map<?, ?>) proof.get("upstream")).get("revision"));
-        OriginalStdioChecks.hashes(root, proof.get("inputHashes"), Set.of("test/fixtures/compiler/WindowsCodePageAudit.hs",
-            "test/haskell-fixtures/WindowsCodePageFixtures.hs", "bin/core_original_foreign.py"), null);
+        OriginalStdioChecks.hashes(root, proof.get("inputHashes"), Set.of("t/fixtures/compiler/WindowsCodePageAudit.hs",
+            "t/haskell-fixtures/WindowsCodePageFixtures.hs", "bin/core_original_foreign.py"), null);
         OriginalStdioChecks.hashes(root, proof.get("artifactHashes"), Set.of(logs + "/pre.json", logs + "/post.json", logs + "/oracle.json"), logs + "/");
         var upstream = "nih/pinned/ghc-9.14.1/libraries/ghc-internal/";
         var sourceHashes = new LinkedHashMap<String, String>();

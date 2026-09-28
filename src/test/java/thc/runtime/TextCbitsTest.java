@@ -106,7 +106,7 @@ class TextCbitsTest {
         var registrations = Files.readAllLines(new File(directory, "logs/original-registration.stdout").toPath()).stream().filter(line -> line.startsWith("id:")).toList();
         assertEquals(1, registrations.size()); var recordedUnit = registrations.getFirst().substring(registrations.getFirst().indexOf(':') + 1).trim();
         assertEquals(recordedUnit, manifest.get("unit"), "Preserve the original installed package registration");
-        assertEquals(Set.of("test/fixtures/compiler/TextCbitsAudit.hs", "test/fixtures/compiler/TextCbitsNative.hs", "test/haskell-fixtures/TextCbitsFixtures.hs", "bin/core_original_foreign.py",
+        assertEquals(Set.of("t/fixtures/compiler/TextCbitsAudit.hs", "t/fixtures/compiler/TextCbitsNative.hs", "t/haskell-fixtures/TextCbitsFixtures.hs", "bin/core_original_foreign.py",
             "bin/audit-core.py", "bin/core-capabilities.json", "nih/pinned/text-2.1.3/cbits/utils.c", "nih/pinned/text-2.1.3/cbits/measure_off.c",
             "nih/pinned/text-2.1.3/cbits/reverse.c", "nih/pinned/text-2.1.3/LICENSE", "nih/pinned/openbsd-memchr-1.8.c", "src/main/c/text-api.c", "bin/build-cbits.py"), object(manifest.get("inputHashes")).keySet());
         for (var key : list("inputHashes", "artifactHashes")) {

@@ -36,7 +36,7 @@ Although the result kind is known, the synthetic mutable array prevents the swit
 
 ## Source attribution and reproduction
 
-The notes-on captures report 84 source spans and one attributed root. Their Truffle compilation traces identify `test/fixtures/compiler/RepresentationAudit.hs:34`; actual Graal node positions also contain the Haskell locations. Before high lowering, 195 original AST nodes, 38 bytecode nodes, and 26 repaired AST nodes contain that attribution. Both notes-off captures report zero attached spans/roots and zero Haskell positions in those graphs.
+The notes-on captures report 84 source spans and one attributed root. Their Truffle compilation traces identify `t/fixtures/compiler/RepresentationAudit.hs:34`; actual Graal node positions also contain the Haskell locations. Before high lowering, 195 original AST nodes, 38 bytecode nodes, and 26 repaired AST nodes contain that attribution. Both notes-off captures report zero attached spans/roots and zero Haskell positions in those graphs.
 
 [Manifest](manifest.json), [v1 runtime mapping](runtime-manifest.json), [v2 runtime mapping](runtime-v2-manifest.json), and per-capture provenance identify the exact sources, JARs, input, command, and raw graph hashes. The manifests' source hashes are authoritative: the captures include uncommitted snapshots, rather than pretending the recorded base revision contains every change. [Frozen runtime sources](frozen-runtime-sources.tar.xz) and the [exported Core fixture](RepresentationAudit.json) retain those inputs.
 

@@ -65,7 +65,7 @@ public class RtsDiagnosticsTest {
     private Map<String, Object> fixture() throws Exception {
         var root = new File(System.getProperty("thc.projectRoot")); var prefix = "build/rts-diagnostics";
         var manifest = (Map<String, Object>) Json.parse(Files.readString(new File(root, prefix + "/manifest.json").toPath()));
-        OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of("test/fixtures/compiler/RtsDiagnosticsNative.hs", "test/haskell-fixtures/RtsDiagnosticFixtures.hs"), null);
+        OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of("t/fixtures/compiler/RtsDiagnosticsNative.hs", "t/haskell-fixtures/RtsDiagnosticFixtures.hs"), null);
         var cases = List.of("ascii", "empty", "bytes", "nul", "newline"); var nativeCases = new ArrayList<>(cases);
         for (var name : cases) nativeCases.add("debug-" + name); nativeCases.addAll(List.of("trace-nul", "stack", "heap"));
         var required = new LinkedHashSet<String>(); required.add(prefix + "/oracle.json");

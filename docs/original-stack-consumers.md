@@ -3,7 +3,7 @@
 
 # Original stack consumer evidence
 
-`test/fixtures/compiler/OriginalStackAudit.hs` imports the original
+`t/fixtures/compiler/OriginalStackAudit.hs` imports the original
 `cloneMyStack`, `decodeStackWithIpe`, and `prettyStackFrameWithIpe`. It also
 exposes small original `peekItbl`, `lookupIPE`, and `peekInfoProv . ipeProv`
 consumers. It introduces no foreign declarations and does not rewrite a
@@ -52,7 +52,7 @@ separately from declared foreign calls in `build/reports/original-stack/proof.js
 outside the native fixture receipt directory. This is a structural frontier
 report, not a passing runtime decoder audit.
 
-`test/fixtures/compiler/OriginalStackProof.json` is a reviewed, approximately
+`t/fixtures/compiler/OriginalStackProof.json` is a reviewed, approximately
 197 KiB excerpt of the unchanged post-Tidy source exports of
 `GHC.Internal.Stack.CloneStack`, `GHC.Internal.Stack.Decode`,
 `GHC.Internal.InfoProv.Types`, and `GHC.Internal.Heap.InfoTable` from THC

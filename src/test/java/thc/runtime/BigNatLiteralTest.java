@@ -50,8 +50,8 @@ class BigNatLiteralTest {
         var stages = new LinkedHashMap<String, List<String>>();
         for (var stage : list("pre", "post")) { var paths = new ArrayList<>(list(DIRECTORY + "/" + stage + "-core/BigNatLiteralAudit.json")); for (var module : MODULES) paths.add(DIRECTORY + "/boot/core/GHC.Internal.Bignum." + module + ".json"); stages.put(stage, paths); }
         assertEquals(stages, manifest.get("stages"));
-        var sources = concat(vendorSources(), list("test/fixtures/compiler/BigNatLiteralAudit.hs", "test/fixtures/compiler/BigNatLiteralAuditNative.hs", "test/haskell-fixtures/BigNatLiteralFixtures.hs",
-            "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal", "bin/export-boot.py", "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py",
+        var sources = concat(vendorSources(), list("t/fixtures/compiler/BigNatLiteralAudit.hs", "t/fixtures/compiler/BigNatLiteralAuditNative.hs", "t/haskell-fixtures/BigNatLiteralFixtures.hs",
+            "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "bin/export-boot.py", "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py",
             "bin/audit-core.py", "bin/core-capabilities.json", "src/tools/primops/PrimopTools.hs", "src/main/resources/thc/scalar-primop-signatures.json"));
         for (var file : Objects.requireNonNull(new File(root, "src/compiler/THC").listFiles())) if (file.getName().endsWith(".hs")) sources.add(root.toPath().relativize(file.toPath()).toString());
         for (var file : Objects.requireNonNull(new File(root, "bin").listFiles())) if (file.getName().startsWith("core_") && file.getName().endsWith(".py")) sources.add(root.toPath().relativize(file.toPath()).toString());

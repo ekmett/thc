@@ -44,7 +44,7 @@ No post-compilation settling calls or retries are part of those checks.
 
 ## Genuine Core and independent observations
 
-`test/fixtures/compiler/SimdWord8X16.hs` uses the real pinned primops.
+`t/fixtures/compiler/SimdWord8X16.hs` uses the real pinned primops.
 The graph roots `plusCase`, `minusCase`, and `timesCase` have two machine `Int#`
 seeds and a machine `Int#` checksum result on a required 64-bit host. Each lane
 narrows its affine input through `int2Word#` and `wordToWord8#`:

@@ -44,7 +44,7 @@ No post-compilation settling calls or retries are part of those checks.
 
 ## Genuine Core and independent observations
 
-`test/fixtures/compiler/SimdWord16X8.hs` uses the real pinned primitives.
+`t/fixtures/compiler/SimdWord16X8.hs` uses the real pinned primitives.
 The graph roots `plusCase`, `minusCase` and `timesCase` each have arity two.
 Every input lane narrows through `int2Word#` and `wordToWord16#`; every result
 lane zero-extends through `word16ToWord#` and `word2Int#` before weighting.

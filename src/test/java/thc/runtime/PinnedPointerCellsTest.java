@@ -125,9 +125,9 @@ public class PinnedPointerCellsTest {
         var manifest = json("build/pinned-pointer-cells/manifest.json");
         assertEquals(1L, manifest.get("schema"));
         assertEquals("9.14.1", manifest.get("ghc"));
-        var inputs = new HashSet<>(Set.of("test/fixtures/compiler/PinnedPointerCellsAudit.hs",
-            "test/fixtures/compiler/PinnedPointerCellsNative.hs", "test/haskell-fixtures/Main.hs",
-            "test/haskell-fixtures/FixtureSupport.hs", "bin/audit-core.py", "bin/core-capabilities.json",
+        var inputs = new HashSet<>(Set.of("t/fixtures/compiler/PinnedPointerCellsAudit.hs",
+            "t/fixtures/compiler/PinnedPointerCellsNative.hs", "t/haskell-fixtures/Main.hs",
+            "t/haskell-fixtures/FixtureSupport.hs", "bin/audit-core.py", "bin/core-capabilities.json",
             "bin/export-core.sh", "bin/build-compiler.sh", "bin/toolchain.sh", "bin/plugin.py", "thc.cabal",
             "cabal.project"));
         try (var files = Files.list(root.resolve("src/compiler/THC"))) {

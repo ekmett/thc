@@ -14,8 +14,8 @@ import subprocess
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / 'build/tuple-return'
-FIXTURE = ROOT / 'test/fixtures/compiler/TupleReturnAudit.hs'
-NATIVE = ROOT / 'test/fixtures/compiler/TupleReturnAuditNative.hs'
+FIXTURE = ROOT / 't/fixtures/compiler/TupleReturnAudit.hs'
+NATIVE = ROOT / 't/fixtures/compiler/TupleReturnAuditNative.hs'
 INPUTS = [-(1 << 63), -4097, -1, 0, 1, 4097, 3000000000, (1 << 63) - 1]
 PRODUCERS = ['empty', 'emptyForward', 'singleInt', 'singleIntForward', 'singleBox',
              'singleClosure', 'nested', 'unliftedBoxedLeaf', 'selfTail', 'mutualA',
@@ -162,7 +162,7 @@ def prepare():
         subprocess.run(argv, cwd=ROOT, env=dict(os.environ, **(env or {})), check=True)
 
     run(['bin/build-compiler.sh'])
-    run([ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint', '-itest/fixtures/compiler',
+    run([ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint', '-it/fixtures/compiler',
          '-odir', str(native), '-hidir', str(native), '-o', str(native / 'tuple-return'), str(NATIVE)])
     commands.append(dict(argv=[str(native / 'tuple-return')], stdout=str(OUT / 'oracle.tsv')))
     (OUT / 'oracle.tsv').write_text(output([str(native / 'tuple-return')]) + '\n')

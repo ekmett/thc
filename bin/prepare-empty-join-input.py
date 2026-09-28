@@ -13,8 +13,8 @@ import subprocess
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / 'build/empty-join-input'
-SOURCE = ROOT / 'test/fixtures/compiler/EmptyJoinInputAudit.hs'
-NATIVE = ROOT / 'test/fixtures/compiler/EmptyJoinInputAuditNative.hs'
+SOURCE = ROOT / 't/fixtures/compiler/EmptyJoinInputAudit.hs'
+NATIVE = ROOT / 't/fixtures/compiler/EmptyJoinInputAuditNative.hs'
 INPUTS = [-(1 << 63), -4097, -1, 0, 1, 4097, 3000000000, (1 << 63)-1]
 PRODUCERS = ['branchCase', 'swapDepth', 'mutualDepth', 'nestedCase', 'tupleResult', 'effectCase', 'throwCase']
 
@@ -114,7 +114,7 @@ def main():
             env = dict(os.environ, THC_CORE_OUT=str(OUT/f'{stage}-core'), THC_GHC_OUT=str(OUT/f'{stage}-ghc'))
             subprocess.run(command, cwd=ROOT, env=env, check=True); commands.append(command)
         native = OUT/'native'; native.mkdir(exist_ok=True)
-        command = [ghc, '--make', '-v0', '-O2', '-fforce-recomp', '-dcore-lint', '-itest/fixtures/compiler',
+        command = [ghc, '--make', '-v0', '-O2', '-fforce-recomp', '-dcore-lint', '-it/fixtures/compiler',
                    '-odir', str(native), '-hidir', str(native), '-o', str(native/'oracle'), str(NATIVE)]
         subprocess.run(command, cwd=ROOT, check=True); commands.append(command)
         (OUT/'oracle.tsv').write_text(subprocess.check_output([str(native/'oracle')], text=True))

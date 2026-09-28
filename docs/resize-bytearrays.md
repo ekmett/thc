@@ -47,7 +47,7 @@ in place and are rejected by this primitive.
 
 ## Fixture and runtime checks
 
-`test/fixtures/compiler/ResizeByteArrayAudit.hs` retains an OPAQUE resize worker
+`t/fixtures/compiler/ResizeByteArrayAudit.hs` retains an OPAQUE resize worker
 across actual calls, including repeat resize and later writes through the returned
 reference. It never accesses a retired array. `cabal run exe:thc-fixtures --offline -- resize-bytearrays`
 rebuilds the pinned exporter and generates fresh pre/post Core, native TSV and

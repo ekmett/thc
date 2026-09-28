@@ -67,7 +67,7 @@ headers. The Gradle wrapper keeps its own Apache-2.0 identifiers. Captured
 benchmark and compiler evidence, including frozen copies of source files, is
 preserved byte for byte so recorded hashes remain valid.
 
-The retained GHC sources in `test/fixtures/compiler/empty-join-typeable/` also
+The retained GHC sources in `t/fixtures/compiler/empty-join-typeable/` also
 remain byte for byte intact. Their adjacent `LICENSE` and provenance identify
 the upstream terms; SPDX sidecars identify the BSD-3-Clause source license
 without changing the recorded source hashes.

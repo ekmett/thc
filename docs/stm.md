@@ -127,7 +127,7 @@ Fresh strict audits run against that selection; tests compare every selected
 module byte-for-byte with its hashed installed archive member. No definitions or
 module metadata are rewritten, and a reachable unsupported module still fails.
 
-`test/fixtures/compiler/STMAudit.hs` is a runnable raw-primop example: `basic`
+`t/fixtures/compiler/STMAudit.hs` is a runnable raw-primop example: `basic`
 distinguishes committed reads from private writes; `alternative` demonstrates
 rollback; `awaitEither` waits on either TVar. `STMNative.hs` runs those examples
 and the state-threaded concurrent increment action with the pinned native GHC.

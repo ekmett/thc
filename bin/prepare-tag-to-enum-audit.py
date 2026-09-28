@@ -12,7 +12,7 @@ import subprocess
 import sys
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / 'build/tag-to-enum'
-SOURCES = [ROOT / ('test/fixtures/compiler/' + name + '.hs') for name in
+SOURCES = [ROOT / ('t/fixtures/compiler/' + name + '.hs') for name in
            ['TagToEnumAudit', 'TagToEnumExternal', 'TagToEnumAuditNative', 'TagToEnumFrontier']]
 CODES = {'boolCase': [-11, 29], 'orderingCase': [71, -23, 211], 'colourCase': [17, -31, 83],
          'wrappedColourCase': [17, -31, 83],
@@ -101,13 +101,13 @@ def main():
             commands.append(dict(argv=list(map(str, argv)), environment=env or {}))
             subprocess.run(argv, cwd=ROOT, env=dict(os.environ, **(env or {})), check=True)
         (OUT / 'inputs.tsv').write_text(''.join(f'{name}\t{tag}\n' for name, tag in INPUTS))
-        run([ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint', '-dstg-lint', '-itest/fixtures/compiler',
+        run([ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint', '-dstg-lint', '-it/fixtures/compiler',
              '-odir', OUT / 'native', '-hidir', OUT / 'native', '-o', OUT / 'native/oracle', SOURCES[2]])
         argv = [str(OUT / 'native/oracle'), str(OUT / 'inputs.tsv')]
         commands.append(dict(argv=argv, stdout=str(OUT / 'oracle.tsv')))
         (OUT / 'oracle.tsv').write_text(subprocess.check_output(argv, text=True)); verify_native()
         for stage in ['pre', 'post']:
-            run(['bin/export-core.sh', '-itest/fixtures/compiler', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []), str(SOURCES[0]), str(SOURCES[3])],
+            run(['bin/export-core.sh', '-it/fixtures/compiler', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []), str(SOURCES[0]), str(SOURCES[3])],
                 dict(THC_CORE_OUT=str(OUT / f'{stage}-core'), THC_GHC_OUT=str(OUT / f'{stage}-ghc'), THC_SOURCE_NOTES='true'))
             run([sys.executable, 'bin/audit-core.py', *[str(p) for p in sorted((OUT / f'{stage}-core').glob('*.json'))],
                  *[v for name in ENTRIES for v in ['--entry', name]], '--output', str(OUT / f'{stage}-audit.json')])

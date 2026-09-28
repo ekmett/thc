@@ -116,9 +116,9 @@ class Simd128AddressNativeTest {
             for (var item : files.entrySet()) assertEquals(item.getValue(), digest(item.getKey()), "Stale " + kind + ": " + item.getKey());
         }
         var inputs = (Map<String, String>) proof.get("inputHashes");
-        for (var path : List.of("test/fixtures/compiler/Simd128AddressAudit.hs", "test/fixtures/compiler/Simd128AddressNative.hs",
-                "test/haskell-fixtures/Simd128AddressFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-                "test/haskell-fixtures/Main.hs", "thc.cabal", "bin/export-core.sh", "bin/core_vector_memory.py",
+        for (var path : List.of("t/fixtures/compiler/Simd128AddressAudit.hs", "t/fixtures/compiler/Simd128AddressNative.hs",
+                "t/haskell-fixtures/Simd128AddressFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
+                "t/haskell-fixtures/Main.hs", "thc.cabal", "bin/export-core.sh", "bin/core_vector_memory.py",
                 "bin/core_vectors.py", "bin/simd-families.json", "bin/core-capabilities.json"))
             assertTrue(inputs.containsKey(path), "Unfingerprinted source: " + path);
         var artifacts = (Map<String, String>) proof.get("artifactHashes");

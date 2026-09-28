@@ -33,7 +33,7 @@ public class CoreStackInfoForeignTest {
     private Map<String, Object> getterProof;
     private synchronized Map<String, Object> getterProof() throws Exception {
         if (getterProof == null) {
-            var file = new File(System.getProperty("thc.projectRoot"), "test/fixtures/compiler/OriginalStackProof.json");
+            var file = new File(System.getProperty("thc.projectRoot"), "t/fixtures/compiler/OriginalStackProof.json");
             var bytes = Files.readAllBytes(file.toPath());
             assertEquals("db63661c12a6ecb757697e759fcb95e4d51f3689619bdb7682a041788eb41d4f", HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes)));
             getterProof = (Map<String, Object>) Json.parse(new String(bytes, StandardCharsets.UTF_8));

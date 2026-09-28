@@ -21,7 +21,7 @@ STAGES = {'pre': 'optimized-Core-before-Tidy', 'post': 'optimized-Core-after-Tid
 FRONTIERS = ('appendFrontier', 'concatFrontier')
 OVERFLOW_WORKER = ':Data.ByteString.Internal.Type.overflowError'
 LENGTH = 'ghc-internal:GHC.Internal.List.$wlenAcc'
-FIXTURES = [ROOT/'test/fixtures/compiler'/name for name in ('ShortByteStringSliceAudit.hs', 'ShortByteStringSliceAuditNative.hs')]
+FIXTURES = [ROOT/'t/fixtures/compiler'/name for name in ('ShortByteStringSliceAudit.hs', 'ShortByteStringSliceAuditNative.hs')]
 
 def check(ok, message):
     if not ok: raise AssertionError(message)
@@ -112,7 +112,7 @@ def main():
                 dict(THC_CORE_OUT=str(OUT/f'{stage}-core'),THC_GHC_OUT=str(OUT/f'{stage}-ghc'),THC_SOURCE_NOTES='true'))
         stages, coverage = inventory(unit)
         binary=OUT/'native/short-bytes-slices-oracle'
-        run([ghc,'--make','-O2','-fforce-recomp','-dcore-lint','-dstg-lint','-itest/fixtures/compiler',
+        run([ghc,'--make','-O2','-fforce-recomp','-dcore-lint','-dstg-lint','-it/fixtures/compiler',
              '-odir',OUT/'native','-hidir',OUT/'native',FIXTURES[1],'-o',binary])
         text=''.join('\t'.join(map(str,key))+'\n' for key in requests());(OUT/'requests.tsv').write_text(text)
         commands.append(dict(argv=[str(binary)],stdin=str(OUT/'requests.tsv'),stdout=str(OUT/'oracle.tsv')))

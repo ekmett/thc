@@ -101,9 +101,9 @@ final class SimdByteArrayEvidence {
         }
         records(manifest, "artifacts", new HashSet<>(artifacts));
         String retainedBase = "bench/experiments/" + family + "-bytearray/evidence-x86_64" + (family.equals("doublex2") ? "/captures/doublex2" : "");
-        var sources = new ArrayList<>(List.of("test/fixtures/compiler/" + module + ".hs", "test/fixtures/compiler/" + module + "Native.hs",
-            "test/haskell-fixtures/SimdByteArrayFixtures.hs", "test/haskell-fixtures/SimdByteArrayModel.hs",
-            "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal",
+        var sources = new ArrayList<>(List.of("t/fixtures/compiler/" + module + ".hs", "t/fixtures/compiler/" + module + "Native.hs",
+            "t/haskell-fixtures/SimdByteArrayFixtures.hs", "t/haskell-fixtures/SimdByteArrayModel.hs",
+            "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal",
             "bin/audit-core.py", "bin/core-capabilities.json", "src/main/java/thc/runtime/VectorMemoryFamily.java",
             "src/main/java/thc/runtime/VectorMemoryOp.java", "src/main/java/thc/runtime/VectorReadCase.java",
             "src/main/java/thc/runtime/CoreVectorMemory.java", "src/main/java/thc/runtime/VectorByteArrayExpression.java",

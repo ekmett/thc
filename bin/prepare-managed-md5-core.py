@@ -17,7 +17,7 @@ import core_md5_foreign
 
 ROOT = Path(__file__).resolve().parent.parent
 BUILD = ROOT / 'build/managed-md5-core'
-SOURCE = ROOT / 'test/fixtures/compiler/ManagedMd5Audit.hs'
+SOURCE = ROOT / 't/fixtures/compiler/ManagedMd5Audit.hs'
 
 
 def main():

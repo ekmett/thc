@@ -14,8 +14,8 @@ import subprocess
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / 'build/tuple-input'
-FIXTURE = ROOT / 'test/fixtures/compiler/TupleInputAudit.hs'
-NATIVE = ROOT / 'test/fixtures/compiler/TupleInputAuditNative.hs'
+FIXTURE = ROOT / 't/fixtures/compiler/TupleInputAudit.hs'
+NATIVE = ROOT / 't/fixtures/compiler/TupleInputAuditNative.hs'
 INPUTS = [-(1 << 63), -3000000000, -4097, -1, 0, 1, 7, 4097, 3000000000, (1 << 63)-2, (1 << 63)-1]
 FORMALS = {'consumePair': [0], 'consumeMixed': [0], 'consumeLazy': [0], 'identityPair': [0],
            'mapPair': [0], 'applyPair': [1], 'prefix': [1], 'prefixedPair': [0], 'beforePair': [1], 'recur': [0],
@@ -182,7 +182,7 @@ def prepare():
         commands.append(dict(argv=argv, cwd=str(ROOT), environment=env or {}))
         subprocess.run(argv, cwd=ROOT, env=dict(os.environ, **(env or {})), check=True)
     run(['bin/build-compiler.sh'])
-    run([ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint', '-itest/fixtures/compiler',
+    run([ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint', '-it/fixtures/compiler',
          '-odir', str(native), '-hidir', str(native), '-o', str(native / 'tuple-input'), str(NATIVE)])
     for file, flags in [('oracle.tsv', []), ('oracle-pairs.tsv', ['--pairs'])]:
         argv = [str(native / 'tuple-input'), *flags]

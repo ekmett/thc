@@ -18,8 +18,8 @@ import sys
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / 'build/simd-floatx4'
-FIXTURE = ROOT / 'test/fixtures/compiler/SimdFloatX4.hs'
-NATIVE = ROOT / 'test/fixtures/compiler/SimdFloatX4Native.hs'
+FIXTURE = ROOT / 't/fixtures/compiler/SimdFloatX4.hs'
+NATIVE = ROOT / 't/fixtures/compiler/SimdFloatX4Native.hs'
 FINITE = [-33554435, -16777219, -16777217, -16777216, -16777215, -3, -2, -1,
           0, 1, 2, 3, 16777215, 16777216, 16777217, 16777219, 33554435]
 PRIMITIVES = {p + 'FloatX4#' for p in ('broadcast', 'pack', 'unpack', 'plus', 'minus', 'times')}
@@ -217,7 +217,7 @@ def main():
         native = OUT / 'native'
         native.mkdir(exist_ok=True)
         binary = native / 'floatx4-oracle'
-        run([ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint', '-dstg-lint', *args.ghc_option, '-itest/fixtures/compiler',
+        run([ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint', '-dstg-lint', *args.ghc_option, '-it/fixtures/compiler',
              '-odir', str(native), '-hidir', str(native), '-o', str(binary), str(NATIVE)])
         commands.append(dict(argv=[str(binary)], stdout=str(OUT / 'oracle.tsv')))
         output = subprocess.check_output([str(binary)], cwd=ROOT, text=True)

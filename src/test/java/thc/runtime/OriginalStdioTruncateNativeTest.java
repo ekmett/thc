@@ -57,8 +57,8 @@ class OriginalStdioTruncateNativeTest {
     @Test void originalTruncateMatchesNativeAndCompiledTargets() throws Exception {
         var manifest = json(new File(fixture, "manifest.json")); assertEquals(1L, manifest.get("schema")); assertEquals("9.14.1", manifest.get("ghc"));
         assertEquals(names, manifest.get("entries")); assertEquals(14L, manifest.get("nativeRows"));
-        hashes(root, manifest.get("inputHashes"), Set.of("test/fixtures/compiler/OriginalStdioTruncateAudit.hs", "test/fixtures/compiler/OriginalStdioTruncateAuditNative.hs",
-            "test/haskell-fixtures/OriginalStdioTruncateFixtures.hs", "bin/core_original_foreign.py"));
+        hashes(root, manifest.get("inputHashes"), Set.of("t/fixtures/compiler/OriginalStdioTruncateAudit.hs", "t/fixtures/compiler/OriginalStdioTruncateAuditNative.hs",
+            "t/haskell-fixtures/OriginalStdioTruncateFixtures.hs", "bin/core_original_foreign.py"));
         hashes(root, manifest.get("artifactHashes"), Set.of("build/original-stdio-truncate/oracle.json", "build/original-stdio-truncate/pre/core/OriginalStdioTruncateAudit.json",
             "build/original-stdio-truncate/post/core/OriginalStdioTruncateAudit.json"), "build/original-stdio-truncate/");
         var oracle = (List<Map<String, Object>>) Json.parse(Files.readString(new File(fixture, "oracle.json").toPath()));

@@ -19,7 +19,7 @@ current behavior and concrete next steps; remove obsolete implementation history
 - `nih/pinned`: version-pinned upstream submodules and generated support files;
   `nih/licenses`: third-party licenses; Gradle bootstrap files live in
   `nih/gradle/wrapper`. Preserve pinned revisions and attribution.
-- `src/test`, `src/fullCoreTest`, `src/polyglotTest`, `test`: runtime tests,
+- `src/test`, `src/fullCoreTest`, `src/polyglotTest`, `t`: runtime tests,
   Haskell tests and native/Core fixture producers. Follow the nearest existing
   suite rather than introducing another harness.
 

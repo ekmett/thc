@@ -12,7 +12,7 @@ import subprocess
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / 'build/io-main-pap'
-FIXTURES = [ROOT / 'test/fixtures/compiler' / name for name in
+FIXTURES = [ROOT / 't/fixtures/compiler' / name for name in
             ('IoMainPapAudit.hs', 'IoMainPapNative.hs')]
 ENTRIES = ['goodMain', 'badMain']
 STAGES = {'pre': 'optimized-Core-before-Tidy', 'post': 'optimized-Core-after-Tidy-before-CorePrep'}
@@ -125,7 +125,7 @@ def main():
         native.mkdir(exist_ok=True)
         executable = native / 'io-main-pap-oracle'
         run([ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint', '-dstg-lint',
-             '-i' + str(ROOT / 'test/fixtures/compiler'), '-odir', native, '-hidir', native,
+             '-i' + str(ROOT / 't/fixtures/compiler'), '-odir', native, '-hidir', native,
              FIXTURES[1], '-o', executable])
         native_result = run([executable], text=True, capture_output=True, timeout=30)
         (OUT / 'oracle.tsv').write_text(native_result.stdout)

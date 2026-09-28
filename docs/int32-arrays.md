@@ -51,7 +51,7 @@ modeled public results are:
 Each cell widens *before* the weighted checksum, preserving the observable
 signed/unsigned distinction instead of wrapping the final checksum at 32 bits.
 
-`test/fixtures/compiler/Int32ArrayAudit.hs` supplies two ordered alias controls.
+`t/fixtures/compiler/Int32ArrayAudit.hs` supplies two ordered alias controls.
 Both allocate eight bytes, write narrow elements `u` and `u xor 0x55aa55aa`,
 and read the first element before mutation. They then overwrite bytes 3 and 4
 with `(input+101)&255` and `(input+37)&255`, straddling the element boundary.

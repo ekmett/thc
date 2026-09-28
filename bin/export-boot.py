@@ -141,7 +141,7 @@ if args.frontier == 'exceptions':
                     *(['-fplugin-opt=THC.Plugin:pretty-diagnostics'] if args.pretty_diagnostics else []),
                     '-package', 'ghc-internal',
                     '-fplugin-opt=THC.Plugin:closure=exceptionInterfaceRoot',
-                    'test/fixtures/package-roots/InterfaceRoots.hs'], cwd=root, env=env, check=True)
+                    't/fixtures/package-roots/InterfaceRoots.hs'], cwd=root, env=env, check=True)
     shutil.copyfile(build / 'interface-core/THC.InterfaceClosure.json', build / 'core/GHC.InterfaceClosure.json')
 (build / 'boot-provenance.json').write_text(json.dumps({
     'ghcTag': 'ghc-9.14.1-release', 'sourcePatches': [], 'frontier': args.frontier,
@@ -153,6 +153,6 @@ if args.frontier == 'exceptions':
     'boundary': 'Original source after Tidy, before CorePrep; explicit dependency boundary',
     'unitPolicy': 'Original wired ghc-internal unit, private dynamic-interface overlay, installed packages unmodified',
     'pluginLoading': 'direct-library' if args.frontier in ('cstring', 'lists', 'show', 'bignum') else 'package-interface',
-    'interfaceRoot': 'test/fixtures/package-roots/InterfaceRoots.hs' if args.frontier == 'exceptions' else None,
+    'interfaceRoot': 't/fixtures/package-roots/InterfaceRoots.hs' if args.frontier == 'exceptions' else None,
     'interfacePolicy': 'Actual installed non-boot Core/DFun unfoldings; unsupported and missing paths remain explicit',
 }, indent=2) + '\n')

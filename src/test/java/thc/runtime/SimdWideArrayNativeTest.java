@@ -132,9 +132,9 @@ class SimdWideArrayNativeTest {
             for (var item : files.entrySet()) assertEquals(item.getValue(), digest(item.getKey()), "Stale " + kind + ": " + item.getKey());
         }
         var inputs = (Map<String, String>) proof.get("inputHashes");
-        for (var path : List.of("test/fixtures/compiler/SimdWideArrayAudit.hs", "test/fixtures/compiler/SimdWideArrayNative.hs", "test/fixtures/compiler/SimdWideArrayScalar.hs",
-                "test/haskell-fixtures/SimdWideArrayFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-                "test/haskell-fixtures/Main.hs", "thc.cabal", "bin/export-core.sh", "bin/core_vector_memory.py",
+        for (var path : List.of("t/fixtures/compiler/SimdWideArrayAudit.hs", "t/fixtures/compiler/SimdWideArrayNative.hs", "t/fixtures/compiler/SimdWideArrayScalar.hs",
+                "t/haskell-fixtures/SimdWideArrayFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
+                "t/haskell-fixtures/Main.hs", "thc.cabal", "bin/export-core.sh", "bin/core_vector_memory.py",
                 "bin/core_vectors.py", "bin/simd-families.json", "bin/core-capabilities.json"))
             assertTrue(inputs.containsKey(path), "Unfingerprinted source: " + path);
         var artifacts = (Map<String, String>) proof.get("artifactHashes");

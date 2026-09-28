@@ -28,8 +28,8 @@ SIMD_SPEC = "bin/simd-families.json"
 SIMD_GENERATOR = "bin/generate-simd-families.py"
 SIMD_ADDITIVE = {CAPABILITIES, BYTECODE_PROGRAM, BYTECODE_ROOT, SIMD_SPEC}
 POLYGLOT_TEST_ROOT = "src/polyglotTest/"
-HASKELL_TESTS = {"driver-tests": "test/haskell-driver/Main.hs", "primop-tools": "test/primop-tools/Main.hs",
-                 "compact-core-tests": "test/compact-core/Main.hs"}
+HASKELL_TESTS = {"driver-tests": "t/haskell-driver/Main.hs", "primop-tools": "t/primop-tools/Main.hs",
+                 "compact-core-tests": "t/compact-core/Main.hs"}
 DOCUMENTATION_PATHS = {"nih/licenses/succinctly-MIT.txt"}
 POLYGLOT_EXACT_INPUTS = {
     "build.gradle", "settings.gradle", "gradle.properties", "gradlew",
@@ -449,7 +449,7 @@ FULL_CORE_TEST_BODY = """  type: exitcode-stdio-1.0
   if !flag(full-core-tests)
     buildable: False
   main-is: {main}
-  hs-source-dirs: test/haskell-driver
+  hs-source-dirs: t/haskell-driver
   other-modules: TestSupport
   build-tool-depends: thc:thc
   build-depends:
@@ -514,8 +514,8 @@ def additive_full_core_tests(before, after, statuses, old_paths):
                     or body != FULL_CORE_TEST_BODY.format(main=mains[0]).splitlines()):
                 return None
             name = match[1]
-            harness = "test/haskell-driver/" + mains[0]
-            prefix = "test/fixtures/run-" + name.removesuffix("-full-core") + "/"
+            harness = "t/haskell-driver/" + mains[0]
+            prefix = "t/fixtures/run-" + name.removesuffix("-full-core") + "/"
             if harness in owned or any(path.startswith(prefix) for path in old_paths):
                 return None
             owned.add(harness)
@@ -526,7 +526,7 @@ def additive_full_core_tests(before, after, statuses, old_paths):
         if not additions or len(additions) != len(set(additions)):
             return None
         for line in additions:
-            if not re.fullmatch(r"  test/fixtures/run-[a-z0-9-]+/[A-Za-z0-9_./-]+", line):
+            if not re.fullmatch(r"  t/fixtures/run-[a-z0-9-]+/[A-Za-z0-9_./-]+", line):
                 return None
             path = line[2:]
             if (str(PurePosixPath(path)) != path or ".." in PurePosixPath(path).parts

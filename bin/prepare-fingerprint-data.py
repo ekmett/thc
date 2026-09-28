@@ -22,7 +22,7 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parent.parent
 BUILD = ROOT / 'build/fingerprint-data'
-SOURCE = ROOT / 'test/fixtures/compiler/FingerprintDataRun.hs'
+SOURCE = ROOT / 't/fixtures/compiler/FingerprintDataRun.hs'
 GHC_TAG = 'ghc-9.14.1-release'
 SOURCE_URL = ('https://raw.githubusercontent.com/ghc/ghc/' + GHC_TAG +
               '/libraries/ghc-internal/src/GHC/Internal/Foreign/Storable.hs')

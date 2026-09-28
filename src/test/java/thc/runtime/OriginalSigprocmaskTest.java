@@ -73,7 +73,7 @@ public class OriginalSigprocmaskTest {
     }
     @BeforeEach public void verifyFixture() throws Exception {
         var manifest = json(prefix + "/manifest.json"); assertEquals(true, manifest.get("supported")); assertEquals(8L, manifest.get("nativeRows"));
-        OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of("test/fixtures/compiler/OriginalSigprocmaskAudit.hs", "test/fixtures/compiler/OriginalSigprocmaskNative.hs", "test/haskell-fixtures/OriginalSigprocmaskFixtures.hs"), null);
+        OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of("t/fixtures/compiler/OriginalSigprocmaskAudit.hs", "t/fixtures/compiler/OriginalSigprocmaskNative.hs", "t/haskell-fixtures/OriginalSigprocmaskFixtures.hs"), null);
         var required = new LinkedHashSet<>(List.of(prefix + "/oracle.json", prefix + "/native/oracle"));
         for (var stage : List.of("pre", "post")) required.add(prefix + "/" + stage + "/originalSigprocmask.audit.json");
         OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"), required, prefix + "/");

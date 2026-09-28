@@ -28,7 +28,7 @@ class OriginalStrerrorNativeTest {
     @SuppressWarnings("unchecked") private static <E extends Throwable,T> T propagate(Throwable failure) throws E { throw (E) failure; }
     @Test void ownedNativeOutputRemainsBorrowedUntilCopybackCompletes() throws Exception {
         assumeTrue(System.getProperty("os.name").equals("Linux") && Set.of("amd64","x86_64").contains(System.getProperty("os.arch")));
-        var manifest = json(new File(fixture,"manifest.json")); hashes(root,manifest.get("inputHashes"),Set.of("test/fixtures/compiler/OriginalStrerrorNative.hs"));
+        var manifest = json(new File(fixture,"manifest.json")); hashes(root,manifest.get("inputHashes"),Set.of("t/fixtures/compiler/OriginalStrerrorNative.hs"));
         hashes(root,manifest.get("artifactHashes"),Set.of("build/original-strerror/oracle.json"),"build/original-strerror/");
         var rows = new ArrayList<Map<String,Object>>(); var errors = new ArrayList<Object>();
         for (var row : (List<Map<String,Object>>) json(new File(fixture,"oracle.json")).get("raw")) if (Objects.equals(row.get("length"),512L)) { rows.add(row); errors.add(row.get("errno")); }
@@ -63,7 +63,7 @@ class OriginalStrerrorNativeTest {
     }
     @Test void originalMessagesSurviveNativeCopyAndCompiledCalls() throws Exception {
         var manifest = json(new File(fixture,"manifest.json")); assertEquals(1L,manifest.get("schema")); assertEquals("9.14.1",manifest.get("ghc")); assertEquals("C",manifest.get("locale")); assertEquals(6L,manifest.get("nativeRows"));
-        hashes(root,manifest.get("inputHashes"),Set.of("test/fixtures/compiler/OriginalStrerrorNative.hs")); hashes(root,manifest.get("artifactHashes"),Set.of("build/original-strerror/oracle.json"),"build/original-strerror/");
+        hashes(root,manifest.get("inputHashes"),Set.of("t/fixtures/compiler/OriginalStrerrorNative.hs")); hashes(root,manifest.get("artifactHashes"),Set.of("build/original-strerror/oracle.json"),"build/original-strerror/");
         var oracle = json(new File(fixture,"oracle.json")); var messages = (List<Map<String,Object>>) oracle.get("messages"); var raw = (List<Map<String,Object>>) oracle.get("raw");
         var messageErrors = new ArrayList<Object>(); for (var row : messages) messageErrors.add(row.get("errno")); assertEquals(List.of(2L,22L),messageErrors);
         var rawKeys = new ArrayList<List<Object>>(); for (var row : raw) rawKeys.add(list(row.get("errno"),row.get("length")));

@@ -191,8 +191,8 @@ public class AtomicIntArrayTest {
         assertEquals("9.14.1", manifest.get("ghc"));
         assertEquals(new ArrayList<>(named.keySet()), manifest.get("entries"));
         var inputs = new HashSet<>(
-            List.of("test/fixtures/compiler/AtomicIntArrayAudit.hs", "test/haskell-fixtures/AtomicIntArrayFixtures.hs",
-                "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal",
+            List.of("t/fixtures/compiler/AtomicIntArrayAudit.hs", "t/haskell-fixtures/AtomicIntArrayFixtures.hs",
+                "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal",
                 "bin/core-capabilities.json", "bin/audit-core.py", "bin/build-compiler.sh", "bin/export-core.sh",
                 "bin/toolchain.sh", "bin/plugin.py", "src/main/resources/thc/scalar-primop-signatures.json"));
         try (var files = Files.list(root.resolve("src/compiler/THC"))) {

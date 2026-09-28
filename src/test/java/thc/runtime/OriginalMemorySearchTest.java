@@ -37,8 +37,8 @@ class OriginalMemorySearchTest {
         assertEquals(true, manifest.get("strictAccepted"));
         assertEquals(392L, manifest.get("nativeRows"));
         OriginalStdioChecks.hashes(root, manifest.get("inputHashes"),
-            Set.of("test/fixtures/compiler/OriginalMemorySearchAudit.hs",
-                "test/fixtures/compiler/OriginalMemorySearchNative.hs", "test/haskell-fixtures/MemorySearchFixtures.hs",
+            Set.of("t/fixtures/compiler/OriginalMemorySearchAudit.hs",
+                "t/fixtures/compiler/OriginalMemorySearchNative.hs", "t/haskell-fixtures/MemorySearchFixtures.hs",
                 "bin/core_original_foreign.py"),
             null);
         var required = new HashSet<String>();

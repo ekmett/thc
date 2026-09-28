@@ -33,8 +33,8 @@ class RubbishLiteralTest {
         var manifest = json("manifest.json");
         assertEquals(1L, manifest.get("schema")); assertEquals(names, manifest.get("entries")); assertEquals(147L, manifest.get("nativeRows"));
         var inputs = object(manifest.get("inputHashes"));
-        var expectedInputs = new HashSet<>(list("test/fixtures/compiler/RubbishLiteralAudit.hs", "test/haskell-fixtures/RubbishLiteralFixtures.hs",
-            "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal", "bin/audit-core.py", "bin/core-capabilities.json"));
+        var expectedInputs = new HashSet<>(list("t/fixtures/compiler/RubbishLiteralAudit.hs", "t/haskell-fixtures/RubbishLiteralFixtures.hs",
+            "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "bin/audit-core.py", "bin/core-capabilities.json"));
         try (var files = Files.list(root.resolve("src/compiler/THC"))) {
             files.filter(path -> path.getFileName().toString().endsWith(".hs")).forEach(path -> expectedInputs.add(root.relativize(path).toString()));
         }

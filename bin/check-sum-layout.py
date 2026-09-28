@@ -15,8 +15,8 @@ from sum_layout_model import alternative_slots
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / 'build/sum-layout'
-FIXTURE = ROOT / 'test/fixtures/compiler/SumLayoutAudit.hs'
-NATIVE = ROOT / 'test/fixtures/compiler/SumLayoutAuditNative.hs'
+FIXTURE = ROOT / 't/fixtures/compiler/SumLayoutAudit.hs'
+NATIVE = ROOT / 't/fixtures/compiler/SumLayoutAuditNative.hs'
 STAGES = {'pre': 'optimized-Core-before-Tidy', 'post': 'optimized-Core-after-Tidy-before-CorePrep'}
 LIFTED, UNLIFTED = 'BoxedRep (Just Lifted)', 'BoxedRep (Just Unlifted)'
 
@@ -168,7 +168,7 @@ def prepare():
         run(['bin/export-core.sh', *flags, str(FIXTURE)], dict(THC_CORE_OUT=str(OUT/f'{stage}-core'), THC_GHC_OUT=str(OUT/f'{stage}-ghc'), THC_SOURCE_NOTES='true'))
     native = OUT/'native'; native.mkdir(exist_ok=True)
     binary = native/'sum-layout-oracle'
-    run([ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint', '-dstg-lint', '-itest/fixtures/compiler',
+    run([ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint', '-dstg-lint', '-it/fixtures/compiler',
          '-odir', str(native), '-hidir', str(native), str(NATIVE), '-o', str(binary)])
     oracle = run([str(binary)])
     expected = ''.join(f'{name}\t{x}\t{model(name,x)}\n' for name in ENTRIES for x in INPUTS)

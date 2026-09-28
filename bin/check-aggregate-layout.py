@@ -21,7 +21,7 @@ from sum_layout_model import alternative_slots
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / 'build/aggregate-layout'
-FIXTURE = ROOT / 'test/fixtures/compiler/AggregateLayoutAudit.hs'
+FIXTURE = ROOT / 't/fixtures/compiler/AggregateLayoutAudit.hs'
 STAGES = {'pre': 'optimized-Core-before-Tidy',
           'post': 'optimized-Core-after-Tidy-before-CorePrep'}
 spec = importlib.util.spec_from_file_location('audit_core', ROOT / 'bin/audit-core.py')

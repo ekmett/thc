@@ -403,7 +403,7 @@ def main():
         ROOT / 'src/main/resources/thc/scalar-primop-signatures.json',
         ROOT / 'src/diagnostics/java/thc/LibraryCheck.java', ROOT / 'bin/build-compiler.sh',
         ROOT / 'bin/export-core.sh', ROOT / 'bin/export-boot.py', ROOT / 'bin/toolchain.sh',
-        ROOT / 'test/fixtures/package-roots/InterfaceRoots.hs', ROOT / 'vendor/archives/containers-0.8.tar.gz',
+        ROOT / 't/fixtures/package-roots/InterfaceRoots.hs', ROOT / 'vendor/archives/containers-0.8.tar.gz',
         ROOT / 'bin/sequence_model.py', ROOT / 'bin/test-sequence-model.py',
     }
     inputs.update((ROOT / 'src/compiler/THC').glob('*.hs'))

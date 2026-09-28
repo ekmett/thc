@@ -148,9 +148,9 @@ public class PinnedAddressTest {
         return rows;
     }
     private Map<String, Set<String>> requiredHashes() throws Exception {
-        var sources = new LinkedHashSet<>(List.of("test/fixtures/compiler/PinnedAddressAudit.hs",
-            "test/fixtures/compiler/PinnedAddressAuditNative.hs", "test/haskell-fixtures/PinnedAddressFixtures.hs",
-            "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal",
+        var sources = new LinkedHashSet<>(List.of("t/fixtures/compiler/PinnedAddressAudit.hs",
+            "t/fixtures/compiler/PinnedAddressAuditNative.hs", "t/haskell-fixtures/PinnedAddressFixtures.hs",
+            "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal",
             "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py",
             "bin/audit-core.py", "bin/core-capabilities.json", "src/tools/primops/PrimopTools.hs",
             "src/main/resources/thc/scalar-primop-signatures.json"));

@@ -25,14 +25,14 @@ import static org.junit.jupiter.api.Assertions.*;
 @SuppressWarnings("unchecked")
 public class OriginalStackConsumerProofTest {
     private final File root = new File(System.getProperty("thc.projectRoot")); private final File directory = new File(root, "build/reports/original-stack");
-    private final String proofPath = "test/fixtures/compiler/OriginalStackProof.json", proofHash = "db63661c12a6ecb757697e759fcb95e4d51f3689619bdb7682a041788eb41d4f";
+    private final String proofPath = "t/fixtures/compiler/OriginalStackProof.json", proofHash = "db63661c12a6ecb757697e759fcb95e4d51f3689619bdb7682a041788eb41d4f";
     private final List<String> entries = List.of("captureOriginal", "decodeOriginal", "renderOriginal", "peekOriginalInfoTable", "lookupOriginalIPE", "peekOriginalInfoProv");
     private final Map<String, String> retainedHashes = Map.of("GHC.Internal.Stack.CloneStack", "d0733836485a57ebc40a4ae52ce77319e4dbc44f617cbd396335ae977e5810e4",
         "GHC.Internal.Stack.Decode", "c3762b0e2ed8bb2bb50b748144fcc7da01dec204c0cc48adade79962e8b35c42", "GHC.Internal.InfoProv.Types", "63fe524cfd81c88ebd4f835c8718a30b86828c9e53549a2c001cbffac5ab2d1e", "GHC.Internal.Heap.InfoTable", "1065f91361835bb3cf0cf2547ee320c59ba542e65e26ef2ec55c297cdcf9855a");
     private final List<String> pinnedSources = List.of("GHC/Internal/Stack/CloneStack.hs", "GHC/Internal/Stack/Decode.hs", "GHC/Internal/InfoProv/Types.hsc", "GHC/Internal/Heap/InfoTable.hsc");
     private final Set<String> requiredInputs = requiredInputs();
     private Set<String> requiredInputs() {
-        var result = new LinkedHashSet<>(List.of("test/fixtures/compiler/OriginalStackAudit.hs", "test/fixtures/compiler/OriginalStackAuditNative.hs", "test/haskell-fixtures/StackFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal", proofPath,
+        var result = new LinkedHashSet<>(List.of("t/fixtures/compiler/OriginalStackAudit.hs", "t/fixtures/compiler/OriginalStackAuditNative.hs", "t/haskell-fixtures/StackFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", proofPath,
             "bin/export-core.sh", "bin/build-compiler.sh", "bin/toolchain.sh", "src/compiler/THC/Plugin.hs", "src/compiler/THC/CBV.hs", "src/compiler/THC/Demands.hs", "src/compiler/THC/Sources.hs", "src/compiler/THC/Wired.hs", "bin/plugin.py", "nih/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE"));
         for (var source : pinnedSources) result.add("nih/pinned/ghc-9.14.1/libraries/ghc-internal/" + source); return result;
     }

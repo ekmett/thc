@@ -16,7 +16,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / 'build/core-package-link'
-FIXTURE = ROOT / 'test/fixtures/compiler/core-packages'
+FIXTURE = ROOT / 't/fixtures/compiler/core-packages'
 DEP = 'dep-data-0.1.0.0-inplace'
 APP = 'app-run-0.1.0.0-inplace'
 ENTRY = APP + ':Main.score#'

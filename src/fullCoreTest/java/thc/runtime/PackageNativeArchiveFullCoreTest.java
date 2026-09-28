@@ -52,15 +52,15 @@ public class PackageNativeArchiveFullCoreTest {
         File root = new File(System.getProperty("thc.projectRoot")), directory = new File(root, "build/native-archive");
         var manifest = json(new File(directory, "manifest.json"));
         OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of(
-            "test/fixtures/run-native-archive/mixed/src/Mixed.hs", "test/fixtures/run-native-archive/mixed/native.c",
-            "test/fixtures/run-native-archive/mixed/src/Unknown.hs", "test/fixtures/run-native-archive/unresolved/Unresolved.hs",
-            "test/fixtures/run-native-archive/mixed/src/Narrow.hs", "test/fixtures/run-native-archive/mixed/src/Wide.hs",
-            "test/fixtures/run-native-archive/mixed/src/CapiMix.hs", "test/fixtures/run-native-archive/mixed/include/mixed-header.h",
-            "test/fixtures/run-native-archive/unresolved/native.c", "test/haskell-fixtures/PackageNativeArchiveFixtures.hs",
+            "t/fixtures/run-native-archive/mixed/src/Mixed.hs", "t/fixtures/run-native-archive/mixed/native.c",
+            "t/fixtures/run-native-archive/mixed/src/Unknown.hs", "t/fixtures/run-native-archive/unresolved/Unresolved.hs",
+            "t/fixtures/run-native-archive/mixed/src/Narrow.hs", "t/fixtures/run-native-archive/mixed/src/Wide.hs",
+            "t/fixtures/run-native-archive/mixed/src/CapiMix.hs", "t/fixtures/run-native-archive/mixed/include/mixed-header.h",
+            "t/fixtures/run-native-archive/unresolved/native.c", "t/haskell-fixtures/PackageNativeArchiveFixtures.hs",
             "src/driver/THC/Driver/PackageNative.hs", "src/driver/THC/Driver/NativeArgumentBridge.hs", "src/driver/THC/Driver/NativeLibrarySources.hs",
-            "test/fixtures/run-native-archive/mixed/lifecycle.cpp", "test/fixtures/run-native-archive/mixed/src/Lifecycle.hs",
-            "test/fixtures/run-native-archive/poisoned/native.c", "test/fixtures/run-native-archive/poisoned/Poisoned.hs",
-            "test/fixtures/run-native-archive/provider/native.c", "test/fixtures/run-native-archive/provider/Provider.hs",
+            "t/fixtures/run-native-archive/mixed/lifecycle.cpp", "t/fixtures/run-native-archive/mixed/src/Lifecycle.hs",
+            "t/fixtures/run-native-archive/poisoned/native.c", "t/fixtures/run-native-archive/poisoned/Poisoned.hs",
+            "t/fixtures/run-native-archive/provider/native.c", "t/fixtures/run-native-archive/provider/Provider.hs",
             "bin/core_package_manifest.py", "bin/audit-core.py"), null);
         var paths = (List<String>) manifest.get("modules"); var artifacts = new LinkedHashSet<>(paths);
         artifacts.addAll(List.of("build/native-archive/supported-audit.json", "build/native-archive/interruptible.json",

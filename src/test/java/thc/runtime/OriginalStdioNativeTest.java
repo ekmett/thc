@@ -31,7 +31,7 @@ class OriginalStdioNativeTest {
         var manifest = (Map<String,Object>) json(new File(directory,"manifest.json"));
         assertEquals(1L,manifest.get("schema")); assertEquals(false,manifest.get("installedArtifactsHashed")); assertEquals(false,manifest.get("runtimeVerified"));
         assertEquals("full",manifest.get("mode")); assertEquals("9.14.1",manifest.get("ghc")); assertEquals(true,manifest.get("strictAccepted"));
-        hashes(root,manifest.get("inputHashes"),Set.of("test/fixtures/compiler/OriginalStdioAudit.hs","test/fixtures/compiler/OriginalStdioAuditNative.hs","test/haskell-fixtures/Main.hs","test/haskell-fixtures/FixtureSupport.hs","test/haskell-fixtures/OriginalStdioFixtures.hs","bin/prepare-original-stdio.sh","thc.cabal","bin/audit-core.py","bin/core_original_foreign.py","bin/core-capabilities.json"));
+        hashes(root,manifest.get("inputHashes"),Set.of("t/fixtures/compiler/OriginalStdioAudit.hs","t/fixtures/compiler/OriginalStdioAuditNative.hs","t/haskell-fixtures/Main.hs","t/haskell-fixtures/FixtureSupport.hs","t/haskell-fixtures/OriginalStdioFixtures.hs","bin/prepare-original-stdio.sh","thc.cabal","bin/audit-core.py","bin/core_original_foreign.py","bin/core-capabilities.json"));
         var required = new HashSet<>(Set.of("build/original-stdio/oracle.json"));
         for (var stage : List.of("pre","post")) {
             for (var part : List.of("OriginalStdioAudit","THC.InterfaceClosure")) required.add("build/original-stdio/" + stage + "/core/" + part + ".json");

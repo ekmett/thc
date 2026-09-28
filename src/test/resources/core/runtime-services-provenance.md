@@ -43,7 +43,7 @@ Their ABI objects are unchanged. The concrete helpers avoid retaining an
 unneeded `Integral Word64` dictionary and its `Real`/`toRational`/GMP closure.
 
 Separately, the real multi-package smoke in
-`test/fixtures/run-runtime-services` passed on 2026-09-26 through `thc run`,
+`t/fixtures/run-runtime-services` passed on 2026-09-26 through `thc run`,
 using the actual runtime library, complete installed Core and original `:Main`
 startup/Handle shutdown. Its strict audit accepted 73,671 supplied bindings,
 2,172 reachable bindings, zero missing globals and zero issues. Default and

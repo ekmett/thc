@@ -1,6 +1,6 @@
 The two JSON declarations are original GHC 9.14.1 exports, not generated
 approximations. Only JSON whitespace/key order has changed. Surrounding Java
-callers are explicitly synthetic; `test/fixtures/run-library-memory` separately
+callers are explicitly synthetic; `t/fixtures/run-library-memory` separately
 exercises the original Haskell library implementations and native output.
 
 * `original-array-memcpy-descriptor.json`: array 0.5.8.0's `memcpy_freeze` /

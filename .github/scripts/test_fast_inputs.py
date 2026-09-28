@@ -2026,7 +2026,7 @@ class RenamedInputContractTests(unittest.TestCase):
             self.assertEqual(cache.digest(root / name), sources[name])
         self.assertNotIn("src/main/java/thc/runtime/RetiredVectorMemory.java", sources)
         self.assertFalse(any(name.startswith("compiler/Thc/") for name in sources))
-        self.assertIn("test/haskell-fixtures/PinnedAddressFixtures.hs", sources)
+        self.assertIn("t/haskell-fixtures/PinnedAddressFixtures.hs", sources)
         self.assertIn("src/tools/primops/PrimopTools.hs", sources)
         sort = "src/test/resources/core/original-bytestring-sort-descriptor.json"
         self.assertEqual(cache.digest(root / sort), sources[sort])
@@ -2046,7 +2046,7 @@ class RenamedInputContractTests(unittest.TestCase):
         self.assertEqual(expected, {name for name in cache.REQUIRED if "CBV" in name})
         self.assertFalse(any("Cbv" in name for name in cache.REQUIRED))
         for module in ("CBVAudit", "CBVJoinAudit", "CBVCoercionAudit"):
-            source = (root / "test/fixtures/compiler" / (module + ".hs")).read_text()
+            source = (root / "t/fixtures/compiler" / (module + ".hs")).read_text()
             self.assertRegex(source, r"(?m)^module " + module + r"\b")
 
 

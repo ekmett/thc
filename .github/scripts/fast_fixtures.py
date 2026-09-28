@@ -24,8 +24,8 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-# The metadata export reads the relocated src/examples fixtures with unchanged outputs.
-FULL_PREPARATION_PLAN = "56de6d21ca94c03f7b7387970fec6aee9f9706fccf2738122e52863e7fc2baec"
+# The metadata exports read the relocated t/fixtures sources with unchanged outputs.
+FULL_PREPARATION_PLAN = "aeba7ea6a42102b7010b7cf331226a0e3b4ac9e02ac3e015f7cc61a26a3d95ca"
 PROCESS_CORE_OUTPUTS = frozenset("build/process-lifecycle/core/" + name for name in (
     "manifest.json", "source.json", "pre.json", "post.json", "pre.audit.json", "post.audit.json",
     *[f"logs/{command}.{suffix}" for command in
@@ -294,7 +294,7 @@ COMMON_SOURCES = (
     "bin/export-core.sh",
     "bin/toolchain.sh",
     "bin/plugin.py",
-    "test/haskell-fixtures/**/*.hs",
+    "t/haskell-fixtures/**/*.hs",
     "bin/audit-core.py",
     "bin/core_*.py",
     "bin/core-capabilities.json",

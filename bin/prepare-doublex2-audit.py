@@ -15,8 +15,8 @@ import subprocess
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / 'build/simd-doublex2'
-FIXTURE = ROOT / 'test/fixtures/compiler/SimdDoubleX2.hs'
-NATIVE = ROOT / 'test/fixtures/compiler/SimdDoubleX2Native.hs'
+FIXTURE = ROOT / 't/fixtures/compiler/SimdDoubleX2.hs'
+NATIVE = ROOT / 't/fixtures/compiler/SimdDoubleX2Native.hs'
 from doublex2_model import entries, model_rows, parse_rows
 
 PRIMITIVES = {p + 'DoubleX2#' for p in ('broadcast', 'pack', 'unpack', 'plus', 'minus', 'times')}
@@ -154,7 +154,7 @@ def main():
         native = OUT / 'native'
         native.mkdir(exist_ok=True)
         binary = native / 'doublex2-oracle'
-        run([ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint', '-dstg-lint', *args.ghc_option, '-itest/fixtures/compiler',
+        run([ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint', '-dstg-lint', *args.ghc_option, '-it/fixtures/compiler',
              '-odir', str(native), '-hidir', str(native), '-o', str(binary), str(NATIVE)])
         commands.append(dict(argv=[str(binary)], stdout=str(OUT / 'oracle.tsv')))
         output = subprocess.check_output([str(binary)], cwd=ROOT, text=True)

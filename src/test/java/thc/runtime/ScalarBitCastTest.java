@@ -118,8 +118,8 @@ class ScalarBitCastTest {
         assertEquals(arities, manifest.get("bitcastPrimitiveArities"));
         var keys = new HashSet<String>(); for (var stage : list("pre", "post")) for (var name : NAMES) keys.add(stage + "/" + name);
         assertEquals(keys, object(manifest.get("audits")).keySet()); assertEquals(keys, object(manifest.get("structure")).keySet());
-        var requiredSources = new HashSet<>(list("test/fixtures/compiler/ScalarBitCastAudit.hs", "test/fixtures/compiler/ScalarBitCastNative.hs",
-            "thc.cabal", "test/haskell-fixtures/Main.hs", "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/ScalarBitCastFixtures.hs",
+        var requiredSources = new HashSet<>(list("t/fixtures/compiler/ScalarBitCastAudit.hs", "t/fixtures/compiler/ScalarBitCastNative.hs",
+            "thc.cabal", "t/haskell-fixtures/Main.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/ScalarBitCastFixtures.hs",
             "bin/core-capabilities.json", "bin/audit-core.py", "src/tools/primops/PrimopTools.hs", "src/main/resources/thc/scalar-primop-signatures.json",
             "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py"));
         for (var file : Objects.requireNonNull(new File(root, "src/compiler/THC").listFiles())) if (file.getName().endsWith(".hs")) requiredSources.add(root.toPath().relativize(file.toPath()).toString());

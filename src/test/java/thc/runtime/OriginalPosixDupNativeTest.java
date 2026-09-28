@@ -37,7 +37,7 @@ class OriginalPosixDupNativeTest {
     @Test void originalDuplicationMatchesNativeAndEveryFirstInstalledTarget() throws Exception {
         var manifest = json(new File(fixture,"manifest.json")); assertEquals(1L,manifest.get("schema")); assertEquals("9.14.1",manifest.get("ghc")); assertEquals(new ArrayList<>(requests.keySet()),manifest.get("entries"));
         assertEquals(19L,manifest.get("nativeRows")); assertEquals(true,manifest.get("strictAccepted")); assertEquals(false,manifest.get("runtimeVerified"));
-        hashes(root,manifest.get("inputHashes"),Set.of("test/fixtures/compiler/OriginalPosixDupAudit.hs","test/fixtures/compiler/OriginalPosixDupAuditNative.hs","test/haskell-fixtures/OriginalPosixDupFixtures.hs","test/haskell-fixtures/Main.hs","thc.cabal","test/haskell-fixtures/FixtureSupport.hs","bin/audit-core.py","bin/core_original_foreign.py","bin/core-capabilities.json"));
+        hashes(root,manifest.get("inputHashes"),Set.of("t/fixtures/compiler/OriginalPosixDupAudit.hs","t/fixtures/compiler/OriginalPosixDupAuditNative.hs","t/haskell-fixtures/OriginalPosixDupFixtures.hs","t/haskell-fixtures/Main.hs","thc.cabal","t/haskell-fixtures/FixtureSupport.hs","bin/audit-core.py","bin/core_original_foreign.py","bin/core-capabilities.json"));
         var labels = new ArrayList<>(List.of("ghc-version","ghc-info","native-build","pre-export","post-export")); for (int i = 0; i <= 18; i++) labels.add("native-" + i);
         for (var stage : List.of("pre","post")) for (var name : requests.keySet()) labels.add(stage + "-audit-" + name);
         var artifacts = new HashSet<>(Set.of("oracle.json","native/oracle"));

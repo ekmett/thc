@@ -7,7 +7,7 @@ from pathlib import Path
 import hashlib, importlib.util, json, os, subprocess
 ROOT=Path(__file__).resolve().parent.parent
 OUT=ROOT/'build/array-slices'
-SOURCE=ROOT/'test/fixtures/compiler/ArraySliceAudit.hs'
+SOURCE=ROOT/'t/fixtures/compiler/ArraySliceAudit.hs'
 ENTRIES=['sliceSnapshots','lazySlices','closureSlices','zeroSlices','publicSlices']
 FRONTIERS=['publicFreezeThaw']
 OPS={'cloneArray#','freezeArray#','thawArray#'}
@@ -71,7 +71,7 @@ def main():
         '  _ -> error "unknown array-slice entry"','emit [name,x] = putStrLn (name ++ "\\t" ++ x ++ "\\t" ++ show (call name (read x)))',
         'emit _ = error "bad input"','main = getContents >>= mapM_ (emit . words) . lines'])+'\n')
     binary=native/'array-slices-oracle'
-    run([ghc,'--make','-O2','-fforce-recomp','-dcore-lint','-dstg-lint','-itest/fixtures/compiler','-odir',native,'-hidir',native,driver,'-o',binary])
+    run([ghc,'--make','-O2','-fforce-recomp','-dcore-lint','-dstg-lint','-it/fixtures/compiler','-odir',native,'-hidir',native,driver,'-o',binary])
     result=run([binary],input=''.join(f'{n}\t{x}\n' for n,x,_ in rows()),text=True,capture_output=True,timeout=30)
     verify(result.stdout);(OUT/'oracle.tsv').write_text(result.stdout)
     sources=[SOURCE,Path(__file__).resolve(),ROOT/'src/tools/primops/PrimopTools.hs',ROOT/'thc.cabal',ROOT/'bin/audit-core.py',ROOT/'bin/core-capabilities.json',ROOT/'src/main/resources/thc/scalar-primop-signatures.json',

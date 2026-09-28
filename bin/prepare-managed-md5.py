@@ -222,7 +222,7 @@ def main():
     if len(headers) != 1:
         raise ValueError(f"Expected one installed HsFFI.h, got {headers}")
     executable = output / EXECUTABLE_NAME
-    driver = root / "test/fixtures/compiler/ManagedMd5Native.c"
+    driver = root / "t/fixtures/compiler/ManagedMd5Native.c"
     run("compile", [cc, "-std=c11", "-O2", "-fno-strict-aliasing", "-Wall", "-Wextra",
                     "-I", reference / "include", "-I", headers[0].parent, driver, reference / "cbits/md5.c", "-o", executable])
     run("native", [executable])
