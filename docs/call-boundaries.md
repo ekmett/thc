@@ -57,7 +57,7 @@ Async-enabled AST roots do not install this shortcut. Async-enabled bytecode
 roots can install it only when there are no strict entry marks. Other unsupported
 shapes keep the normal call path.
 
-[`LeadingCaseReturnTest`](../src/test/kotlin/thc/runtime/LeadingCaseReturnTest.kt)
+[`LeadingCaseReturnTest`](../src/test/java/thc/runtime/LeadingCaseReturnTest.java)
 covers enabled/disabled and interpreted/compiled paths, entry forcing, PAPs,
 source locations, layout rejection and cloned targets.
 This is an implemented opt-in mechanism, not a demonstrated throughput win or
