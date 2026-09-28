@@ -14,7 +14,7 @@
 -- exact native archive membership, never from an unresolved symbol spelling.
 module THC.Driver.NativeDependencies
   ( COnlyProduct, cOnlyProductProof, cOnlyProductPieces, readCOnlyProduct
-  , selectCOnlyPieces, nativeLinkInputs
+  , selectCOnlyPieces, nativeLinkInputs, nativeAddressArchives
   ) where
 
 import Control.Exception (evaluate)
@@ -31,6 +31,7 @@ import qualified Data.Text
 import Distribution.InstalledPackageInfo (parseInstalledPackageInfo)
 import qualified Distribution.Types.InstalledPackageInfo as Package
 import Distribution.Pretty (prettyShow)
+import Distribution.Package (pkgName)
 import Numeric (showHex)
 import System.Directory (doesFileExist, doesDirectoryExist, listDirectory)
 import System.Environment (lookupEnv)
@@ -96,6 +97,42 @@ nativeLinkInputs compiler libdir root owner arguments = do
         (Package.ldOptions info ++ map (("-F" ++) . packagePath info) (Package.frameworkDirs info) ++
           concatMap (\framework -> ["-framework",framework]) (Package.frameworks info))
   pure (linkPaths (nativeLinkOptions arguments) ++ concatMap libraries (reverse dependencies))
+
+-- Address roots can live in a Haskell package's ordinary C object archive.
+-- Select the actual declaring registration, never an inlining consumer or the
+-- RTS. The native linker extracts only the rooted archive members; no whole
+-- Haskell component is loaded alongside its Core implementation.
+nativeAddressArchives :: FilePath -> FilePath -> FilePath -> String -> [String] -> [(String,Bool)] -> IO [(FilePath,[(String,Bool)])]
+nativeAddressArchives compiler libdir root owner arguments symbols
+  | null symbols = pure []
+  | otherwise = do
+      let ghcPkg = takeDirectory compiler </> "ghc-pkg"
+          absolute path = if isAbsolute path then path else root </> path
+          database option = if "--package-db=" `isPrefixOf` option
+            then "--package-db=" ++ absolute (drop 13 option) else option
+          options = ["--global-package-db=" ++ libdir </> "package.conf.d"] ++ map database (nativePackageOptions arguments)
+      registrations <- fmap concat $ forM (nub ((True,owner):nativePackageSelectors arguments)) $ \(unitId,name) -> do
+        (status,registration,_) <- readProcessWithExitCode ghcPkg (options ++ ["--ipid" | unitId] ++ ["describe",name,"--no-expand-pkgroot"]) ""
+        if status /= ExitSuccess then pure [] else do
+          (_,info) <- either (fail . show) pure (parseInstalledPackageInfo (T.encodeUtf8 (Data.Text.pack registration)))
+          let package = prettyShow (pkgName (Package.sourcePackageId info))
+          pure [info | package /= "rts", prettyShow (Package.installedUnitId info) == owner || package == owner]
+      nm <- maybe "llvm-nm" id <$> lookupEnv "THC_LLVM_NM"
+      fmap (nub . concat) $ forM registrations $ \info -> do
+        let packagePath path
+              | Just suffix <- stripPrefix "${pkgroot}" path, Just pkgRoot <- Package.pkgRoot info = pkgRoot ++ suffix
+              | Just suffix <- stripPrefix "$topdir" path = libdir ++ suffix
+              | otherwise = path
+        archives <- filterM doesFileExist [packagePath directory </> "lib" ++ library ++ ".a" |
+          directory <- nub (Package.libraryDirsStatic info ++ Package.libraryDirs info), library <- Package.hsLibraries info]
+        fmap concat $ forM (nub archives) $ \archive -> do
+          (status,output,diagnostic) <- readProcessWithExitCode nm ["--defined-only","--extern-only","--format=posix",archive] ""
+          check (status == ExitSuccess) ("Cannot inspect native address archive: " ++ diagnostic)
+          let defined = nub [(symbol,function) | line <- lines output, name:kind:_ <- [words line],
+                (symbol,function) <- symbols,
+                kind `elem` (if function then ["T","W"] else ["B","C","D","R","S","V"]),
+                name == symbol || name == '_' : symbol]
+          pure [(archive,defined) | not (null defined)]
 
 -- The constructor stays private: callers cannot supply arbitrary extra bitcode
 -- through the dependency seam without an actual resolved C-only registration.

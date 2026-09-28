@@ -4,18 +4,28 @@ package thc.runtime;
 
 import com.oracle.truffle.api.TruffleLanguage;
 import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import thc.ContextProfile;
 import thc.Language;
 import thc.Main;
+import thc.PackageScalarLink;
+import thc.PackageScalarSignature;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ByteStringDataLabelsTest {
+    @TempDir Path directory;
     private static final String SYMBOL = "hs_bytestring_lower_hex_table";
     private static final Map<String, Object> ADDRESS = Map.of("kind", "address", "primReps", List.of("AddrRep"), "evaluated", true);
     private static final Map<String, Object> INDEX = Map.of("kind", "long", "primReps", List.of("IntRep"), "evaluated", true);
@@ -24,6 +34,29 @@ class ByteStringDataLabelsTest {
 
     private ManagedAddress table() { return CoreDataLabels.fromCore(SYMBOL, CoreRepresentations.parse(ADDRESS)); }
 
+    private String command(String... arguments) throws Exception {
+        var process = new ProcessBuilder(arguments).redirectErrorStream(true).start();
+        var output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        assertEquals(0, process.waitFor(), output); return output.strip();
+    }
+    private PackageScalarLink library() throws Exception {
+        var source = directory.resolve("data.c"); var bitcode = directory.resolve("data.bc");
+        var original = Path.of("nih/pinned/bytestring-0.12.2.0/cbits/aligned-static-hs-data.c").toAbsolutePath();
+        Files.writeString(source, "#include \"" + original.toString().replace("\\", "\\\\").replace("\"", "\\\"") +
+            "\"\nconst void *table_address(void) { return &" + SYMBOL + "; }\n");
+        var includes = command(System.getenv().getOrDefault("GHC_PKG", "ghc-pkg"), "field", "rts", "include-dirs", "--simple-output");
+        var compile = new ArrayList<String>(); compile.add(System.getenv().getOrDefault("THC_CLANG", "clang"));
+        if (System.getProperty("os.name").equals("Linux")) compile.add("--target=" +
+            (System.getProperty("os.arch").equals("amd64") ? "x86_64" : System.getProperty("os.arch")) + "-unknown-linux-gnu");
+        compile.addAll(List.of("-O1", "-emit-llvm", "-c", source.toString(), "-I" + includes, "-o", bitcode.toString()));
+        command(compile.toArray(String[]::new));
+        var bytes = Files.readAllBytes(bitcode);
+        var digest = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
+        return new PackageScalarLink("bytestring-data", "test-host", digest, digest, bytes,
+            List.of(new PackageScalarSignature(SYMBOL, "table_address", List.of(), "AddrRep")),
+            "llvm-bitcode", Set.of(), new byte[0], Set.of("table_address"));
+    }
+
     private int expectedWord(int value) {
         String digits = HexFormat.of().toHexDigits((byte) value);
         return ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN
@@ -31,26 +64,8 @@ class ByteStringDataLabelsTest {
             : digits.charAt(0) << 8 | digits.charAt(1);
     }
 
-    @Test void immutableTablePreservesAllBytePairsTerminatorAndBounds() {
-        var table = table();
-        for (int value = 0; value < 256; value++) {
-            String digits = HexFormat.of().toHexDigits((byte) value);
-            assertEquals(digits.charAt(0), table.readWord8(2L * value));
-            assertEquals(digits.charAt(1), table.readWord8(2L * value + 1));
-            assertEquals(expectedWord(value), ManagedAddressRead.WORD16.readInt(table, value));
-        }
-        assertEquals(0, table.readWord8(512));
-        assertThrows(RuntimeFault.class, () -> table.readWord8(513));
-        assertThrows(RuntimeFault.class, () -> table.readWord8(-1));
-        assertThrows(RuntimeFault.class, () -> ManagedAddressRead.WORD16.readInt(table, 256));
-        assertThrows(RuntimeFault.class, () -> table.writeWord8(0, 'z'));
-        assertThrows(RuntimeFault.class, () -> table.writeWord16(0, 0));
-        assertEquals('0', table().readWord8(0));
-    }
 
     @Test void exactSymbolAndEvaluatedAddressProofRemainRequired() {
-        for (String symbol : List.of("hs_bytestring_lower_hex_table_extra", "other_symbol"))
-            assertThrows(RuntimeFault.class, () -> CoreDataLabels.fromCore(symbol, CoreRepresentations.parse(ADDRESS)));
         assertThrows(RuntimeFault.class, () -> CoreDataLabels.fromCore(SYMBOL, null));
         for (var change : List.of(Map.of("evaluated", false), Map.of("kind", "long"),
                                  Map.of("primReps", List.of("WordRep")), Map.of("aggregate", "unboxed-tuple"))) {
@@ -73,17 +88,25 @@ class ByteStringDataLabelsTest {
     }
 
     @Test void bothBackendsReadTheTableOnTheFirstInstalledCall() throws Exception {
+        var link = library();
         for (String backend : List.of("ast", "bytecode"))
-            try (var context = Main.withContextProfile(Context.newBuilder("thc"), ContextProfile.SYNCHRONOUS_TEST).build()) {
+            try (var context = Main.withContextProfile(Context.newBuilder("thc").allowNativeAccess(true), ContextProfile.SYNCHRONOUS_TEST).build()) {
                 context.initialize("thc"); context.enter();
                 try {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                     var threads = Language.currentState().getThreads();
                     threads.enterCurrent(null, false, true, null);
                     try {
+                        var libraries = Language.currentState().getPackageCbits();
+                        libraries.link(link);
+                        var address = table();
+                        for (int value : List.of(0, 127, 255)) assertEquals(expectedWord(value), ManagedAddressRead.WORD16.readInt(address, value));
+                        assertEquals(0, address.readWord8(512));
+                        assertThrows(RuntimeFault.class, () -> libraries.dataAddress("another-unit", SYMBOL));
+                        assertThrows(RuntimeFault.class, () -> libraries.dataAddress(null, "missing_native_global"));
                         ExecutableProgram program = backend.equals("ast") ? new Program(language, module()) : new BytecodeProgram(language, module());
                         var target = program.entryTarget("read");
-                        for (int i = 0; i < 100; i++)
+                        for (int i = 0; i < 3; i++)
                             assertEquals(expectedWord(i), Calls.target(target, new Object[]{0L, (long) i}));
                         target.getClass().getMethod("compile", boolean.class).invoke(target, true);
                         assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));

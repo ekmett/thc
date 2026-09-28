@@ -8,10 +8,9 @@ import java.util.*;
 public final class PackageNativeArchive {
     private final String detail, unit;
     private final boolean wholeModule;
-    private final List<Map<?,?>> excluded, unavailable;
-    public PackageNativeArchive(String detail, boolean wholeModule, String unit, List<Map<?,?>> excluded) { this(detail, wholeModule, unit, excluded, List.of()); }
-    public PackageNativeArchive(String detail, boolean wholeModule, String unit, List<Map<?,?>> excluded, List<Map<?,?>> unavailable) {
-        this.detail = detail; this.wholeModule = wholeModule; this.unit = unit; this.excluded = excluded; this.unavailable = unavailable;
+    private final List<Map<?,?>> excluded;
+    public PackageNativeArchive(String detail, boolean wholeModule, String unit, List<Map<?,?>> excluded) {
+        this.detail = detail; this.wholeModule = wholeModule; this.unit = unit; this.excluded = excluded;
     }
     public String getDetail() { return detail; }
     public boolean getWholeModule() { return wholeModule; }
@@ -21,17 +20,6 @@ public final class PackageNativeArchive {
         for (var call : calls(binding)) {
             if (!(call.get("target") instanceof Map<?,?> target) || !Objects.equals(target.get("unit"), unit)) continue;
             for (var emitted : excluded) if (Objects.equals(target.get("symbol"), emitted.get("symbol")) && Objects.equals(call.get("convention"), emitted.get("convention")) && Objects.equals(call.get("safety"), emitted.get("safety"))) return true;
-            for (var entry : unavailable) {
-                List<Object> actual = null;
-                if (call.get("argumentReps") instanceof List<?> args) {
-                    actual = new ArrayList<>();
-                    for (Object arg : args) actual.add(arg instanceof Map<?,?> map ? map.get("primReps") : null);
-                }
-                var expected = new ArrayList<List<?>>();
-                for (Object rep : (List<?>) entry.get("arguments")) expected.add(Collections.singletonList(Objects.equals(rep, "ByteArray#") || Objects.equals(rep, "MutableByteArray#") ? "BoxedRep (Just Unlifted)" : rep));
-                expected.add(List.of());
-                if (Objects.equals(target.get("symbol"), entry.get("symbol")) && Objects.equals(call.get("convention"), entry.get("convention")) && Objects.equals(call.get("safety"), entry.get("safety")) && Objects.equals(actual, expected)) return true;
-            }
         }
         return false;
     }

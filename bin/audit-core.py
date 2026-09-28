@@ -981,7 +981,10 @@ class Audit:
             if len(selected) != 1:
                 self.issue('unsupported-literal', owner, path, f'uncertified or ambiguous C function label {value}')
         if kind == 'data-addr' and value not in self.cap.get('dataLabels', []):
-            self.issue('unsupported-literal', owner, path, f'unsupported C data label {value}')
+            selected = [(unit, entry['entry']) for unit, link in self.package_scalar_links.items()
+                for entry in link['abi'] if entry['symbol'] == value and entry['entry'] in link.get('dataSymbols', [])]
+            if len(selected) != 1:
+                self.issue('unsupported-literal', owner, path, f'unlinked or ambiguous C data label {value}')
         if kind == 'bignat':
             if not isinstance(value, str) or not value or any(c not in '0123456789' for c in value) or len(value) > 1 and value[0] == '0':
                 self.issue('invalid-literal-value', owner, path, 'bignat requires canonical nonnegative decimal')
@@ -1446,7 +1449,8 @@ class Audit:
                     set(head) != {'kind', 'primReps', 'evaluated'} or head['kind'] != 'closure' or
                     head['primReps'] != ['BoxedRep (Just Lifted)'] or head['evaluated'] is not True):
                     raise ValueError('Package C call requires its unresolved foreign identifier')
-                package_abi = core_package_manifest.select_package_scalar_call(call, package_link['abi'], package_link['unit'],
+                package_abi = core_package_manifest.select_package_scalar_call(call,
+                    [entry for entry in package_link['abi'] if entry['entry'] not in package_link.get('dataSymbols', [])], package_link['unit'],
                     [core_original_foreign.raw_rep(argument) for argument in arguments], expr[3],
                     core_original_foreign.raw_rep(expr))
                 for index, (argument, primitive) in enumerate(zip(arguments, package_abi['arguments'] + [None])):

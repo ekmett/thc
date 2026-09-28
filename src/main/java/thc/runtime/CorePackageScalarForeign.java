@@ -57,6 +57,7 @@ public final class CorePackageScalarForeign {
         check(!typedArrays || types != null && types.size() == declared.size(), "typed array arity");
         PackageScalarSignature signature = null;
         for (var candidate : link.getAbi()) {
+            if (link.getDataSymbols().contains(candidate.getEntry())) continue;
             int count = candidate.getArguments().size() + 1;
             if (!Objects.equals(candidate.getSymbol(), target.get("symbol")) || !Objects.equals(candidate.getConvention(), descriptor.get("convention"))
                 || !Objects.equals(candidate.getSafety(), descriptor.get("safety")) || declared.size() != count

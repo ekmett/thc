@@ -3,12 +3,10 @@
 package thc;
 
 import java.util.*;
-import java.util.regex.Pattern;
 
 public final class PackageNativeArchives {
     public static final PackageNativeArchives INSTANCE = new PackageNativeArchives();
     private PackageNativeArchives() {}
-    private static final Pattern HASH = Pattern.compile("[0-9a-f]{64}");
     private static final Set<String> SCALAR = Set.of("IntRep", "WordRep", "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep", "Int32Rep", "Word32Rep", "Int64Rep", "Word64Rep", "FloatRep", "DoubleRep", "AddrRep");
     private static void check(boolean value, String reason) { if (!value) throw new IllegalArgumentException("Invalid package native archive: " + reason); }
     private static boolean version(Object value, int n) { return Objects.equals(value, n) || Objects.equals(value, (long) n); }
@@ -41,66 +39,11 @@ public final class PackageNativeArchives {
     public static List<?> excluded(Map<?,?> module) {
         return module.get("packageNativeArchive") instanceof Map<?,?> archive && archive.get("unsupportedImports") instanceof List<?> imports ? imports : List.of();
     }
-    private static Map<?,?> requiredMap(Object value, String message) { if (value instanceof Map<?,?> map) return map; throw new IllegalArgumentException(message); }
-    private static Map<Object,Object> without(Map<?,?> map, String... keys) { var copy = new LinkedHashMap<Object,Object>(map); for (String key : keys) copy.remove(key); return copy; }
-    private static List<String> names(Object raw) {
-        var names = new ArrayList<String>();
-        for (Object value : list(raw)) names.add(text(value));
-        var sorted = new ArrayList<>(new LinkedHashSet<>(names)); sorted.sort(null);
-        check(names.equals(sorted), "sorted unique dependency symbols"); return Collections.unmodifiableList(names);
-    }
-    /** A strict producer receipt binds every original adapter to its LLVM closure
-     * and independently checked union. Old archives gain no authority. */
-    public static Set<String> available(Map<?,?> module) {
-        var archive = requiredMap(module.get("packageNativeArchive"), "Missing native entry archive");
-        var original = requiredMap(archive.get("artifact"), "Missing original native artifact");
-        var selected = requiredMap(module.get("packageNativeLink"), "Missing selected native artifact");
-        var proof = record(archive.get("entryResolution"), "schema profile inputBitcodeSha256 entries outputBitcodeSha256 unresolved");
-        check(version(proof.get("schema"), 1) && Objects.equals(proof.get("profile"), "llvm-globaldce-adapter-closures-v1"), "entry resolution profile");
-        check(Objects.equals(original.get("format"), "llvm-bitcode") && Objects.equals(selected.get("format"), "llvm-bitcode") && Objects.equals(original.get("bitcodeSha256"), proof.get("inputBitcodeSha256")) && Objects.equals(selected.get("bitcodeSha256"), proof.get("outputBitcodeSha256")), "entry resolution content identity");
-        check(without(original, "bitcodeSha256", "bitcodeHex").equals(without(selected, "bitcodeSha256", "bitcodeHex", "availableEntries")), "entry resolution changes component ABI/recipe");
-        var unsupported = names(archive.get("unresolvedSymbols"));
-        var externals = names(original.get("buildInputs") instanceof Map<?,?> inputs ? inputs.get("unresolved") : null);
-        check(!unsupported.isEmpty() && externals.containsAll(unsupported), "original unresolved inventory");
-        var entries = new ArrayList<Object>();
-        for (Object value : list(original.get("abi"))) entries.add(((Map<?,?>) value).get("entry"));
-        record Dependency(String entry, List<String> symbols) {}
-        var dependencies = new ArrayList<Dependency>();
-        for (Object value : list(proof.get("entries"))) {
-            var row = record(value, "entry bitcodeSha256 unresolved"); check(HASH.matcher(text(row.get("bitcodeSha256"))).matches(), "adapter closure digest");
-            var symbols = names(row.get("unresolved")); check(externals.containsAll(symbols), "unrecorded adapter dependency");
-            dependencies.add(new Dependency(text(row.get("entry")), symbols));
-        }
-        var dependencyEntries = new ArrayList<String>();
-        for (var dependency : dependencies) dependencyEntries.add(dependency.entry());
-        check(dependencyEntries.equals(entries), "complete ordered adapter coverage");
-        var available = new ArrayList<String>();
-        for (var dependency : dependencies) {
-            boolean supported = true;
-            for (String symbol : dependency.symbols()) if (unsupported.contains(symbol)) { supported = false; break; }
-            if (supported) available.add(dependency.entry());
-        }
-        check(!available.isEmpty() && available.size() < entries.size() && Objects.equals(selected.get("availableEntries"), available), "exact available adapter selection");
-        var union = names(proof.get("unresolved"));
-        boolean supportedUnion = true;
-        for (String symbol : union) if (unsupported.contains(symbol)) { supportedUnion = false; break; }
-        if (supportedUnion) {
-            var selectedSymbols = new ArrayList<String>();
-            for (var dependency : dependencies) if (available.contains(dependency.entry())) selectedSymbols.addAll(dependency.symbols());
-            supportedUnion = selectedSymbols.containsAll(union);
-        }
-        check(supportedUnion, "union unresolved dependencies");
-        boolean knownProvider = true;
-        for (String name : union) if (!in(name, "memcpy", "memmove", "memset", "memcmp", "bcmp", "__cxa_atexit", "__dso_handle") && !name.startsWith("llvm.")) { knownProvider = false; break; }
-        check(knownProvider, "selected bitcode requires an unrecorded native provider container");
-        return new LinkedHashSet<>(available);
-    }
     public static PackageNativeArchive read(Map<?,?> module) { return read(module, true); }
     public static PackageNativeArchive read(Map<?,?> module, boolean completeBindings) {
         Object raw = module.get("packageNativeArchive"); if (raw == null) return null;
         boolean conflictField = raw instanceof Map<?,?> map && map.containsKey("conflictingImports");
-        boolean resolution = raw instanceof Map<?,?> map && map.containsKey("entryResolution");
-        var archive = record(raw, "schema profile execution unit module unsupportedImports unclassifiedReason unresolvedSymbols artifact" + (conflictField ? " conflictingImports" : "") + (resolution ? " entryResolution" : ""));
+        var archive = record(raw, "schema profile execution unit module unsupportedImports unclassifiedReason unresolvedSymbols artifact" + (conflictField ? " conflictingImports" : ""));
         String unit = text(module.get("unit"));
         check(version(archive.get("schema"), 1) && Objects.equals(archive.get("profile"), "thc-package-native-archive-v1") && Objects.equals(archive.get("execution"), "not-linked") && Objects.equals(archive.get("unit"), unit) && Objects.equals(archive.get("module"), module.get("module")), "profile/owner");
         check(!module.containsKey("foreignLink") && !module.containsKey("packageScalarLink"), "mixed foreign profiles");
@@ -172,15 +115,11 @@ public final class PackageNativeArchives {
         Object artifact = archive.get("artifact"); check((artifact == null) == unresolved.isEmpty(), "unresolved artifact pair");
         check(unknown != null || !expected.isEmpty() || !unresolved.isEmpty(), "empty archive obligation");
         if (artifact != null) {
-            check((!module.containsKey("packageNativeLink") || resolution) && unknown == null, "archive is also executable");
+            check(!module.containsKey("packageNativeLink") && unknown == null, "archive is also executable");
             var retained = new LinkedHashMap<Object,Object>(module); retained.put("packageNativeLink", artifact);
             PackageScalarLinks.read(retained, false, completeBindings);
         }
-        var available = resolution ? available(module) : null;
-        if (available != null) PackageScalarLinks.read(module, false, completeBindings);
-        var unavailable = new ArrayList<Map<?,?>>();
-        if (available != null) for (Object value : list(((Map<?,?>) artifact).get("abi"))) { var entry = (Map<?,?>) value; if (!available.contains(entry.get("entry"))) unavailable.add(entry); }
-        return new PackageNativeArchive(unit + ":" + module.get("module") + " has archive-only native obligations" + " (unsupported=" + expected.size() + ", conflicting=" + conflictSymbols + ", unclassified=" + unknown + ", unresolved=" + unresolved + ")", unknown != null || !unresolved.isEmpty() && available == null, unit, expected, unavailable);
+        return new PackageNativeArchive(unit + ":" + module.get("module") + " has archive-only native obligations" + " (unsupported=" + expected.size() + ", conflicting=" + conflictSymbols + ", unclassified=" + unknown + ", unresolved=" + unresolved + ")", unknown != null || !unresolved.isEmpty(), unit, expected);
     }
     private static void proofIdentity(Map<?,?> proof, Map<?,?> module) {
         check((version(proof.get("schema"), 1) || version(proof.get("schema"), 2)) && Objects.equals(proof.get("scope"), "retained-static-import-products") && Objects.equals(proof.get("execution"), "not-linked") && Objects.equals(proof.get("profile"), "ghc-9.14.1-thc-only-static-c-imports-v1") && Objects.equals(proof.get("unit"), module.get("unit")) && Objects.equals(proof.get("module"), module.get("module")), "typed provenance identity");

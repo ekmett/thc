@@ -209,6 +209,38 @@ public final class PackageScalarLibraries {
         return function;
     }
     @TruffleBoundary public CFinalizerFunction finalizer(String symbol) { current(); return finalizers.resolve(symbol); }
+    /** Resolve an original declaration owner, or an unambiguous old C label.
+     * The address thunk takes no arguments and returns the genuine LLVM/native
+     * global, without inventing extent, writable storage or deallocation rights. */
+    @TruffleBoundary public ManagedAddress dataAddress(String unit, String symbol) {
+        current();
+        PackageScalarCall selected = null;
+        synchronized (this) {
+            if (closed) throw fault("Package C library registry is closed");
+            for (var library : libraries.values()) {
+                var link = library.link();
+                if (unit != null && !unit.equals(link.getUnit())) continue;
+                for (var signature : link.getAbi()) if (link.getDataSymbols().contains(signature.getEntry()) && signature.getSymbol().equals(symbol)) {
+                    if (selected != null) throw fault("Ambiguous native data label: " + symbol);
+                    selected = new PackageScalarCall(link, signature);
+                }
+            }
+        }
+        if (selected == null) throw fault("Unlinked native data label: " + (unit == null ? "" : unit + ":") + symbol);
+        return address(selected);
+    }
+    @TruffleBoundary public ManagedAddress address(PackageScalarCall addressThunk) {
+        var owner = current();
+        if (addressThunk.getArguments().length != 0 || !addressThunk.getResult().equals("AddrRep"))
+            throw fault("Native address thunk requires a nullary address ABI");
+        var function = resolve(addressThunk.getLink(), addressThunk.getSignature());
+        var previous = owner.getThreads().enterForeign(ForeignSafety.UNSAFE);
+        try {
+            Object address = interop.execute(function.getReceiver());
+            return ManagedAddress.fromReturnedAddress(new PackageReturnedAddress(owner, alive, address, null));
+        } catch (Exception failure) { throw rethrow(failure); }
+        finally { owner.getThreads().leaveForeign(previous); }
+    }
     public synchronized void close() { closed = true; alive.invalidate(); finalizers.close(); libraries.clear(); }
     @SuppressWarnings("unchecked") private static <E extends Throwable> RuntimeException rethrow(Throwable failure) throws E { throw (E) failure; }
 }

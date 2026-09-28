@@ -316,6 +316,9 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
       assertEqual "pointer adapter uses pointers, not integer addresses"
         (Right "extern void * identity_pointer(void *);\nvoid * thc_native_pointer_0(void * a0) { return identity_pointer(a0); }\n")
         (nativeWrapperSource [(signature,"thc_native_pointer_0",Nothing)])
+      assertEqual "function addresses do not manufacture an invocation signature"
+        (Right "extern void identity_pointer();\nvoid * thc_address_0(void) { return (void *) &identity_pointer; }\n")
+        (nativeAddressSource [("identity_pointer",True,"thc_address_0")])
   , TestCase $ mapM_ (\value -> assertBool "retained proof mismatch rejected"
       (isLeft (nativeSignatures "fixture-unit" [value])))
       [ set "unit" "other-unit" (moduleWith [ordinary])

@@ -17,7 +17,7 @@ module THC.Driver.PackageNative
   ( captureNativeObject, captureNativeComponent, capturePackageNative, finishPackageNative
   , finishPackageNativeWithDependencies
   , linkInstalledNative, installedNativeSignatures, nativeCapiSource
-  , nativeSignatures, nativeFinalizers, archiveNativeModule, archiveNativeModules, nativeWrapperSource, nativeCompilerArguments, nativeObjectOwned
+  , nativeSignatures, nativeFinalizers, archiveNativeModule, archiveNativeModules, nativeWrapperSource, nativeAddressSource, nativeCompilerArguments, nativeObjectOwned
   ) where
 
 import Control.Monad (filterM, forM, forM_, unless, when)
@@ -40,7 +40,7 @@ import System.Process (CreateProcess(..), proc, readCreateProcessWithExitCode)
 import THC.Driver.ScalarBitcode (parseDependencies, sulongScalarTarget)
 import THC.Driver.NativeLibrarySources (zlibChecksumSources)
 import THC.Driver.NativeArgumentBridge (nativeArgumentBridge)
-import THC.Driver.NativeDependencies (COnlyProduct, cOnlyProductProof, cOnlyProductPieces, nativeLinkInputs)
+import THC.Driver.NativeDependencies (COnlyProduct, cOnlyProductProof, cOnlyProductPieces, nativeLinkInputs, nativeAddressArchives)
 
 -- (original emitted symbol, convention, safety, semantic carriers, result)
 type Signature = (String, String, String, [String], String)
@@ -110,15 +110,19 @@ linkInstalledNative compiler libdir arguments directory unit modules = do
           Just stubs -> member stubs "header" == Just "" &&
             all (\key -> member stubs key == Just (toJSON ([]::[Value]))) ["initializers","finalizers"]
       selected = [(name,value) | ((name,_),value) <- zip modules decoded, eligible value]
+  let requestedAddresses = nub (concatMap (addressLabels . snd) selected)
+  dataArchives <- nativeAddressArchives compiler libdir directory unit arguments requestedAddresses
+  declaredAddresses <- mapM (either fail pure . nativeAddressDeclarations unit . snd) selected
+  let addresses = sort . nub $ concat declaredAddresses ++ concatMap snd dataArchives
   perModule <- mapM (either fail pure . installedNativeSignatures unit . snd) selected
   let signatures = sort (nub (concat perModule))
-  if null signatures then pure modules else do
+  if null signatures && null addresses then pure modules else do
     createDirectoryIfMissing True directory
     root <- canonicalizePath directory
     configured <- either fail pure (nativeCompilerArguments arguments)
     sources <- mapM (stubSource . snd) selected
     writeNativeWrappers compiler root (('-':'B':libdir):arguments) (('-':'B':libdir):configured)
-      unit root signatures [] sources perModule [] (const Nothing) True
+      unit root signatures [] sources perModule [] (const Nothing) addresses (map fst dataArchives) True
     let original = [(name,BL.toStrict (encode value)) | (name,value) <- selected]
     linked <- finishPackageNative (root </> "pieces") root unit (Just []) original
     pure [(name,maybe bytes id (lookup name linked)) | (name,bytes) <- modules]
@@ -438,6 +442,16 @@ nativeWrapperSource entries = fmap concat $ forM entries $ \((symbol,convention,
     cType value = (if "Word" `isPrefixOf` value then "uint" ++ drop 4 width else "int" ++ drop 3 width) ++ "_t"
       where width = take (length value - 3) value
 
+-- Taking a symbol address needs no invocation ABI. The function declaration has
+-- no parameter prototype and is never called here; the reached dynamic call
+-- supplies its genuine GHC ABI separately. Opaque LLVM pointers retain the
+-- actual linked definition's type, extent and storage.
+nativeAddressSource :: [(String,Bool,String)] -> Either String String
+nativeAddressSource entries = fmap concat $ forM entries $ \(symbol,function,entry) -> do
+  require (identifier symbol && identifier entry) "invalid native address symbol"
+  pure ((if function then "extern void " ++ symbol ++ "();\n" else "extern unsigned char " ++ symbol ++ "[];\n") ++
+    "void * " ++ entry ++ "(void) { return (void *) &" ++ symbol ++ "; }\n")
+
 -- Preserve the configured C include/preprocessor options and package database
 -- inputs from the actual Haskell compile, without reusing Haskell-only flags.
 nativeCompilerArguments :: [String] -> Either String [String]
@@ -498,7 +512,7 @@ capturePackageNative repository helper libdir compiler arguments unit directory 
   paths <- sort . filter ((== ".json") . takeExtension) <$> files core
   sourceValues <- mapM readJson paths
   let needed = [(path,value) | (path,value) <- zip paths sourceValues,
-        any (owned unit) (calls value) || hasFunctionAddress value]
+        any (owned unit) (calls value) || hasFunctionAddress value || not (null (addressLabels value))]
   unless (null needed) $ do
     root <- getCurrentDirectory >>= canonicalizePath
     configured <- either fail pure (nativeCompilerArguments arguments)
@@ -519,10 +533,11 @@ capturePackageNative repository helper libdir compiler arguments unit directory 
     retained <- either fail pure (archiveNativeModules unit hydrated)
     forM_ (zip needed retained) $ \((path,_),value) -> writeJson path value
     signatures <- either fail pure (nativeSignatures unit retained)
+    addresses <- sort . nub . concat <$> mapM (either fail pure . nativeAddressDeclarations unit) retained
     finalizers <- either fail pure (nativeFinalizers unit retained)
-    when (null signatures) $ writeJson (directory </> "native.json")
+    when (null signatures && null addresses) $ writeJson (directory </> "native.json")
       (object ["unit" .= unit,"archiveOnly" .= True])
-    unless (null signatures) $ do
+    unless (null signatures && null addresses) $ do
       perModule <- mapM (either fail pure . nativeSignatures unit . (:[])) retained
       sources <- mapM (\(value,signatures') -> if null signatures' then pure "" else stubSource value)
         (zip retained perModule)
@@ -558,23 +573,32 @@ capturePackageNative repository helper libdir compiler arguments unit directory 
             "bitcode" .= bitcode,"bitcodeSha256" .= digest,"target" .= target,"inputs" .= inputs])
         else pure []
       writeNativeWrappers compiler root arguments configured unit directory signatures finalizers
-        sources perModule providers wrapperHeader False
+        sources perModule providers wrapperHeader addresses [] False
 
 -- The adapter compiler is shared by source acquisition and installed FCallIds.
 -- Both paths carry the original declared ABI, actual CAPI source and headers.
 writeNativeWrappers :: FilePath -> FilePath -> [String] -> [String] -> String -> FilePath ->
-  [Signature] -> [String] -> [String] -> [[Signature]] -> [Value] -> (String -> Maybe String) -> Bool -> IO ()
-writeNativeWrappers compiler root arguments configured unit directory signatures finalizers sources perModule providers wrapperHeader installed = do
+  [Signature] -> [String] -> [String] -> [[Signature]] -> [Value] -> (String -> Maybe String) -> [(String,Bool)] -> [FilePath] -> Bool -> IO ()
+writeNativeWrappers compiler root arguments configured unit directory signatures finalizers sources perModule providers wrapperHeader addresses dataLibraries installed = do
   let nativeDirectory = directory </> "native"
   capiOwners <- if installed then forM (nub [symbol | (symbol,"capi",_,_,_) <- signatures]) $ \symbol -> do
       owner <- either fail pure (nativeCapiSource symbol sources)
       pure (symbol,owner)
     else pure []
+  dataInputs <- forM dataLibraries $ \path -> do
+    digest <- sha <$> BS.readFile path
+    pure (object ["path" .= path,"sha256" .= digest])
   let inputIdentity = object ["unit" .= unit,"compiler" .= compiler,"arguments" .= arguments,"installed" .= installed,
-        "sources" .= sources,"providers" .= providers,
+        "sources" .= sources,"providers" .= providers,"addresses" .= addresses,"dataLibraries" .= dataInputs,
         "imports" .= map (\(a,b,c,d,e) -> toJSON (a,b,c,d,e)) signatures,"finalizers" .= finalizers]
       provisional = sha (BL.toStrict (encode inputIdentity))
-      makeEntries component = [(signature,"thc_native_" ++ component ++ "_" ++ show index) | (index,signature) <- zip [0::Int ..] signatures]
+      inventory = sort ([(signature,False) | signature <- signatures] ++
+        [((symbol,"ccall","unsafe",[],"AddrRep"),True) | (symbol,_) <- addresses])
+      makeEntries component = [(signature,address,"thc_native_" ++ component ++ "_" ++ show index) |
+        (index,(signature,address)) <- zip [0::Int ..] inventory]
+      callEntries component = [(signature,entry) | (signature,False,entry) <- makeEntries component]
+      addressEntries component = [(symbol,function,entry) | ((symbol,_,_,_,_),True,entry) <- makeEntries component,
+        Just function <- [lookup symbol addresses]]
       -- GHC emits separate ccall prototypes. Keep different declared types of
       -- one symbol in separate C translation units too; signedness variants
       -- with the same native ABI do not need a retained source header.
@@ -589,12 +613,12 @@ writeNativeWrappers compiler root arguments configured unit directory signatures
       -- pointers or narrower C parameters than the emitted caller ABI.
       -- Preserve private helpers, macros and header include boundaries.
       -- Repeated direct ccall imports need just one component adapter.
-      compileUnits component = forM
+      compileCalls component = forM
         [(index,variant,convention,if convention == "capi" then source else "",entries) |
           (index,(source,ownedSignatures)) <- zip [0::Int ..] (zip sources perModule),
           convention <- ["ccall","capi"],
           let earlier = concat (take index perModule),
-          let selectedEntries = [entry | entry@(signature@(symbol,callConvention,_,_,_),_) <- makeEntries component,
+          let selectedEntries = [entry | entry@(signature@(symbol,callConvention,_,_,_),_) <- callEntries component,
                 callConvention == convention,
                 if installed && convention == "capi" then lookup symbol capiOwners == Just index
                 else signature `elem` ownedSignatures && signature `notElem` earlier],
@@ -613,6 +637,16 @@ writeNativeWrappers compiler root arguments configured unit directory signatures
               (Just (concat preamble ++ source ++ wrappers))
             headers <- headerInputs (output </> "wrappers.c") inputs
             pure (bitcode,target,inputs,headers)
+      compileUnits component = do
+        called <- compileCalls component
+        addressUnits <- if null addresses then pure [] else do
+          let output = nativeDirectory </> "addresses"
+          createDirectoryIfMissing True output
+          source <- either fail pure (nativeAddressSource (addressEntries component))
+          (bitcode,target,inputs) <- compileC compiler root configured output (Just source)
+          headers <- headerInputs (output </> "wrappers.c") inputs
+          pure [(bitcode,target,inputs,headers)]
+        pure (called ++ addressUnits)
   createDirectoryIfMissing True nativeDirectory
   discovered <- compileUnits provisional
   let dependencies = [headers | (_,_,_,headers) <- discovered]
@@ -620,7 +654,7 @@ writeNativeWrappers compiler root arguments configured unit directory signatures
       entries = makeEntries component
   compiled <- compileUnits component
   let currentDependencies = [headers | (_,_,_,headers) <- compiled]
-      inputs = [input | (_,_,input,_) <- compiled]
+      inputs = [input | (_,_,input,_) <- compiled] ++ [object ["files" .= dataInputs] | not (null dataInputs)]
   check (currentDependencies == dependencies) "package native headers changed during acquisition"
   target <- case nub [value | (_,value,_,_) <- compiled] of
     [value] -> pure value
@@ -632,11 +666,12 @@ writeNativeWrappers compiler root arguments configured unit directory signatures
   writeJson (directory </> "native.json") (object
     ["unit" .= unit,"installed" .= installed,"root" .= root,"objectRoots" .= roots,"bitcode" .= bitcode,"target" .= target,
      "componentSha256" .= component,"inputs" .= inputs,"sourceIdentity" .= inputIdentity,"providers" .= providers,
-     "finalizers" .= [entry | ((symbol,"ccall","unsafe",["AddrRep"],"void"),entry) <- entries,
+     "dataLibraries" .= dataLibraries,"dataSymbols" .= [entry | (_,True,entry) <- entries],
+     "finalizers" .= [entry | ((symbol,"ccall","unsafe",["AddrRep"],"void"),False,entry) <- entries,
        symbol `elem` finalizers],
      "abi" .= [object ["symbol" .= symbol,"entry" .= entry,"convention" .= convention,"safety" .= safety,
        "arguments" .= arguments',"result" .= result] |
-       ((symbol,convention,safety,arguments',result),entry) <- entries]])
+       ((symbol,convention,safety,arguments',result),_,entry) <- entries]])
 
 -- An inlined FCallId still names the original generated CAPI wrapper. Place
 -- its adapter with that retained source, not with whichever caller was seen
@@ -654,6 +689,23 @@ hasFunctionAddress (Array values) = case foldr (:) [] values of
   items -> any hasFunctionAddress items
 hasFunctionAddress (Object fields) = any hasFunctionAddress (KM.elems fields)
 hasFunctionAddress _ = False
+
+addressLabels :: Value -> [(String,Bool)]
+addressLabels (Array values) = case foldr (:) [] values of
+  String "lit" : String kind : String symbol : _ | kind `elem` ["data-addr","function-addr"] -> [(T.unpack symbol,kind == "function-addr")]
+  items -> concatMap addressLabels items
+addressLabels (Object fields) = concatMap addressLabels (KM.elems fields)
+addressLabels _ = []
+
+nativeAddressDeclarations :: String -> Value -> Either String [(String,Bool)]
+nativeAddressDeclarations unit value = do
+  declarations <- nativeAddresses unit value
+  symbols <- forM [entry | entry <- declarations, member entry "callback" == Just Null] $ \entry ->
+    (,) <$> field entry "symbol" <*> field entry "isFunction"
+  -- Native GHC process-global state cannot represent a THC context's scheduler
+  -- or compiler state. These exact RTS objects remain context-owned overrides.
+  pure [(symbol,function) | (symbol,function) <- symbols, function || symbol `notElem`
+    ["enabled_capabilities","ghc_unique_counter64","ghc_unique_inc","RtsFlags"]]
 
 zlibChecksumImport :: Value -> Bool
 zlibChecksumImport value = member value "header" == Just "zlib.h" &&
@@ -744,6 +796,7 @@ finishPackageNativeWithDependencies cOnlyProducts pieces directory unit currentO
     bitcodes <- mapM (\value -> get value "bitcode") native
     abi <- get record "abi" :: IO [Value]
     finalizers <- maybe (pure []) (either fail pure . parseValue) (member record "finalizers") :: IO [String]
+    dataSymbols <- maybe (pure []) (either fail pure . parseValue) (member record "dataSymbols") :: IO [String]
     entries <- mapM (\value -> get value "entry") abi
     link <- tool "THC_LLVM_LINK" "llvm-link"
     opt <- tool "THC_LLVM_OPT" "opt"
@@ -823,7 +876,9 @@ finishPackageNativeWithDependencies cOnlyProducts pieces directory unit currentO
     libdir <- command directory compiler ["--print-libdir"] >>= \output -> case lines output of
       [path] -> pure path
       _ -> fail "native compiler did not report one library directory"
-    linkArguments <- nativeLinkInputs compiler libdir root (Just unit) originalArguments
+    externalArguments <- nativeLinkInputs compiler libdir root (Just unit) originalArguments
+    dataLibraries <- maybe (pure []) (either fail pure . parseValue) (member record "dataLibraries") :: IO [FilePath]
+    let linkArguments = dataLibraries ++ externalArguments
     clang <- tool "THC_CLANG" "clang"
     (artifact,format,libraries,nativeLibrary) <- if all ("llvm." `isPrefixOf`) externals
       then pure (final,"llvm-bitcode",[],Nothing) else do
@@ -884,6 +939,7 @@ finishPackageNativeWithDependencies cOnlyProducts pieces directory unit currentO
             "dependencies" .= map cOnlyProductProof cOnlyProducts,
             "nativeLibraries" .= libraries,"unresolved" .= externals,"argumentBridges" .= bridgeInputs]] ++
           ["finalizers" .= finalizers | not (null finalizers)] ++
+          ["dataSymbols" .= dataSymbols | not (null dataSymbols)] ++
           maybe [] (\library -> ["nativeLibrary" .= library]) nativeLibrary
     writeJson (directory </> "native/inputs.json") (object ["sources" .= inputs,"unresolved" .= externals])
     forM modules $ \(name,bytes') -> do
@@ -892,7 +948,7 @@ finishPackageNativeWithDependencies cOnlyProducts pieces directory unit currentO
         Object fields -> do
           let prior = member value "packageNativeArchive"
               unclassified = prior >>= (`member` "unclassifiedReason")
-              ownsCalls = any (owned unit) (calls value) || hasFunctionAddress value
+              ownsCalls = any (owned unit) (calls value) || hasFunctionAddress value || not (null (addressLabels value))
           let next = if not ownsCalls || maybe False (/= Null) unclassified then value
                 else Object (KM.insert "packageNativeLink" proof
                   (if member record "installed" == Just (Bool True) then KM.delete "foreignLink" fields else fields))

@@ -71,10 +71,10 @@ public final class PackageScalarLinks {
         check(Objects.equals(module.get("ghc"), "9.14.1") && (version(module.get("schema"), 1) || nativeLink && version(module.get("schema"), 2)), "GHC/schema");
         check((nativeLink || !module.containsKey("foreign")) && !module.containsKey("foreignLink") && (nativeLink || !module.containsKey("staticForeignImportStubs")) && !module.containsKey("staticForeignExports") && !module.containsKey("staticForeignExportRegistration"), "mixed foreign obligations");
         boolean inputs = nativeLink && raw instanceof Map<?,?> m && m.containsKey("buildInputs");
-        boolean partial = nativeLink && raw instanceof Map<?,?> m && m.containsKey("availableEntries");
         boolean callbacks = nativeLink && raw instanceof Map<?,?> m && version(m.get("schema"), 2);
         boolean companion = nativeLink && raw instanceof Map<?,?> m && m.containsKey("nativeLibrary");
-        var fields = record(raw, "schema format profile unit target componentSha256 bitcodeSha256 bitcodeHex abi" + (inputs ? " buildInputs" : "") + (partial ? " availableEntries" : "") + (callbacks ? " finalizers" : "") + (companion ? " nativeLibrary" : ""));
+        boolean data = nativeLink && raw instanceof Map<?,?> m && m.containsKey("dataSymbols");
+        var fields = record(raw, "schema format profile unit target componentSha256 bitcodeSha256 bitcodeHex abi" + (inputs ? " buildInputs" : "") + (callbacks ? " finalizers" : "") + (companion ? " nativeLibrary" : "") + (data ? " dataSymbols" : ""));
         if (inputs) check(fields.get("buildInputs") instanceof Map<?,?>, "build inputs record");
         String format = text(fields.get("format"));
         check((version(fields.get("schema"), 1) || callbacks) && (format.equals("llvm-bitcode") || nativeLink &&
@@ -95,12 +95,15 @@ public final class PackageScalarLinks {
         byte[] bytes = HexFormat.of().parseHex(encoded); check(bytes.length != 0 && digest(bytes).equals(bitcodeHash), "bitcode digest");
         byte[] nativeLibrary = new byte[0];
         if (companion) {
-            check(!partial && !format.equals("llvm-bitcode"), "native dependency container");
+            check(!format.equals("llvm-bitcode"), "native dependency container");
             var dependency = record(fields.get("nativeLibrary"), "sha256 hex");
             String hex = text(dependency.get("hex")); nativeLibrary = HexFormat.of().parseHex(hex);
             check(nativeLibrary.length != 0 && HexFormat.of().formatHex(nativeLibrary).equals(hex) &&
                 digest(nativeLibrary).equals(text(dependency.get("sha256"))), "native dependency digest");
         }
+        var dataSymbols = new HashSet<String>();
+        if (data) for (Object value : list(fields.get("dataSymbols")))
+            check(dataSymbols.add(text(value)), "duplicate address symbol");
         var entries = list(fields.get("abi")); var abi = new ArrayList<PackageScalarSignature>();
         for (int index = 0; index < entries.size(); index++) {
             var entry = record(entries.get(index), nativeLink ? "symbol entry convention safety arguments result" : "symbol entry arguments result");
@@ -118,19 +121,21 @@ public final class PackageScalarLinks {
             for (Object item : arguments) argumentTypes.add((String) item);
             abi.add(new PackageScalarSignature(name, entryName, Collections.unmodifiableList(argumentTypes), (String) entry.get("result"), convention, safety));
         }
-        var ordered = Comparator.comparing(PackageScalarSignature::symbol).thenComparing(PackageScalarSignature::convention).thenComparing(PackageScalarSignature::safety).thenComparing(item -> String.join("\u0000", item.arguments())).thenComparing(PackageScalarSignature::result);
+        var ordered = Comparator.comparing(PackageScalarSignature::symbol).thenComparing(PackageScalarSignature::convention).thenComparing(PackageScalarSignature::safety).thenComparing(item -> String.join("\u0000", item.arguments())).thenComparing(PackageScalarSignature::result).thenComparing(item -> dataSymbols.contains(item.entry()));
         boolean validAbi = !abi.isEmpty();
         if (validAbi) {
             var sorted = new ArrayList<>(abi); sorted.sort(ordered);
             validAbi = abi.equals(sorted);
             if (validAbi) {
                 var signatures = new HashSet<List<?>>();
-                for (var item : abi) signatures.add(List.of(item.symbol(), item.convention(), item.safety(), item.arguments(), item.result()));
+                for (var item : abi) signatures.add(List.of(item.symbol(), item.convention(), item.safety(), item.arguments(), item.result(), dataSymbols.contains(item.entry())));
                 validAbi = signatures.size() == abi.size();
             }
         }
         check(validAbi, "sorted unique ABI");
-        var bySymbol = new LinkedHashMap<String,List<PackageScalarSignature>>(); for (var item : abi) bySymbol.computeIfAbsent(item.symbol(), ignored -> new ArrayList<>()).add(item);
+        var bySymbol = new LinkedHashMap<String,List<PackageScalarSignature>>();
+        for (var item : abi) if (!dataSymbols.contains(item.entry()))
+            bySymbol.computeIfAbsent(item.symbol(), ignored -> new ArrayList<>()).add(item);
         var headerAdapted = new HashSet<String>();
         for (var group : bySymbol.entrySet()) {
             var variants = group.getValue();
@@ -153,12 +158,14 @@ public final class PackageScalarLinks {
             // Exact typed calls distinguish array mutability. Erased ambiguous
             // calls remain rejected by CorePackageScalarForeign selection.
         }
-        var available = partial ? PackageNativeArchives.available(module) : null;
         var finalizers = PackageFinalizers.entries(fields, abi);
-        check(finalizers.isEmpty() || !partial, "partial finalizer archive");
-        var selectedAbi = new ArrayList<PackageScalarSignature>();
-        for (var item : abi) if (available == null || available.contains(item.entry())) selectedAbi.add(item);
-        var link = new PackageScalarLink(unit, target, componentHash, bitcodeHash, bytes, Collections.unmodifiableList(selectedAbi), format, finalizers, nativeLibrary);
+        for (String entry : dataSymbols) {
+            check(!finalizers.contains(entry), "callable address symbol");
+            check(abi.stream().anyMatch(signature -> signature.entry().equals(entry) && signature.arguments().isEmpty() &&
+                signature.result().equals("AddrRep") && signature.convention().equals("ccall") && signature.safety().equals("unsafe")), "symbol address ABI");
+        }
+        var selectedAbi = abi;
+        var link = new PackageScalarLink(unit, target, componentHash, bitcodeHash, bytes, Collections.unmodifiableList(selectedAbi), format, finalizers, nativeLibrary, dataSymbols);
         if (nativeLink && !module.containsKey("staticForeignImports")) {
             check(!module.containsKey("staticForeignImportStubs") && finalizers.isEmpty(), "unproved retained import obligations");
             if (module.containsKey("foreign")) {
@@ -193,6 +200,7 @@ public final class PackageScalarLinks {
         }
         var imports = list(proof.get("imports")); check(nativeLink || !imports.isEmpty(), "empty import inventory");
         var binders = new HashSet<Map<?,?>>(); var proved = new HashSet<String>();
+        proved.addAll(dataSymbols);
         proved.addAll(PackageFinalizers.proved(module, link));
         for (Object value : imports) {
             var item = record(value, "binder header symbol unit isFunction convention safety declaredType normalizedType normalizationRole emitted");

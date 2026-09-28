@@ -297,53 +297,19 @@ class PackageNativeVariantsTest(unittest.TestCase):
                         audit.write_report(report, output)
                         self.assertEqual(json.dumps(expected, indent=2) + '\n', output.getvalue())
 
-    def test_partial_native_link_keeps_indices_and_requires_complete_closure_receipt(self):
-        import copy
+    def test_retired_partial_native_protocol_is_rejected(self):
         module = self.module(['AddrRep', 'ByteArray#'])
         original = module['packageNativeLink']
-        original['buildInputs'] = dict(unresolved=['unknown_external'])
-        entries = original['abi']
-        selected = dict(original, availableEntries=[entries[1]['entry']], bitcodeHex='4342',
-                        bitcodeSha256=hashlib.sha256(b'CB').hexdigest())
-        rows = [dict(entry=entry['entry'], bitcodeSha256='b' * 64,
-                     unresolved=['unknown_external'] if index == 0 else []) for index, entry in enumerate(entries)]
-        resolution = dict(schema=1, profile='llvm-globaldce-adapter-closures-v1',
-                          inputBitcodeSha256=original['bitcodeSha256'], outputBitcodeSha256=selected['bitcodeSha256'],
-                          entries=rows, unresolved=[])
-        archive = dict(schema=1, profile='thc-package-native-archive-v1', execution='not-linked',
-                       unit=module['unit'], module=module['module'], unsupportedImports=[], unclassifiedReason=None,
-                       unresolvedSymbols=['unknown_external'], artifact=original, entryResolution=resolution)
-        module.update(packageNativeLink=selected, packageNativeArchive=archive)
-        link, proved = core_package_manifest.package_scalar_link(module)
-        self.assertEqual([entries[1]], link['abi'])
-        self.assertEqual({entries[1]['entry']}, proved)
-        for rep, blocked in [('AddrRep', True), ('BoxedRep (Just Unlifted)', False)]:
-            binding = dict(foreignCall=dict(target=dict(unit=module['unit'], symbol='read_bytes'),
-                           convention='ccall', safety='unsafe', argumentReps=[dict(primReps=[rep]), dict(primReps=[])]))
-            self.assertEqual(blocked, core_package_manifest.native_archive_blocks(module, binding, archive))
-        old = copy.deepcopy(module)
-        del old['packageNativeLink']; del old['packageNativeArchive']['entryResolution']
-        self.assertTrue(core_package_manifest.native_archive_blocks(old, {}, core_package_manifest.package_native_archive(old)))
-        for key, value in [('schema', True), ('profile', 'invented'), ('inputBitcodeSha256', 'c' * 64),
-                           ('outputBitcodeSha256', 'c' * 64), ('entries', rows[::-1]), ('entries', rows[:1]),
-                           ('entries', [rows[0], dict(rows[1], unresolved=['unrecorded'])]),
-                           ('unresolved', ['unknown_external'])]:
-            wrong = copy.deepcopy(module); wrong['packageNativeArchive']['entryResolution'][key] = value
-            with self.subTest(key=key), self.assertRaises(ValueError): core_package_manifest.package_scalar_link(wrong)
-        for selected_wrong in ({k: v for k, v in selected.items() if k != 'availableEntries'},
-                               dict(selected, availableEntries=[e['entry'] for e in entries]), dict(selected, bitcodeHex='4243')):
-            wrong = dict(module, packageNativeLink=selected_wrong)
-            with self.assertRaises(ValueError): core_package_manifest.package_scalar_link(wrong)
-        for symbol in ('memcpy', 'erf', 'getentropy', 'wcwidth', '_ZNSt8ios_base4InitC1Ev'):
-            candidate = copy.deepcopy(module)
-            inputs = dict(unresolved=sorted([symbol, 'unknown_external']))
-            candidate['packageNativeLink']['buildInputs'] = inputs
-            candidate['packageNativeArchive']['artifact']['buildInputs'] = inputs
-            receipt = candidate['packageNativeArchive']['entryResolution']
-            receipt['unresolved'] = [symbol]; receipt['entries'][1]['unresolved'] = [symbol]
-            if symbol == 'memcpy': self.assertEqual(1, len(core_package_manifest.package_scalar_link(candidate)[0]['abi']))
-            else:
-                with self.subTest(symbol=symbol), self.assertRaises(ValueError): core_package_manifest.package_scalar_link(candidate)
+        with self.assertRaises(ValueError):
+            core_package_manifest.package_scalar_link(dict(module,
+                packageNativeLink=dict(original, availableEntries=[original['abi'][0]['entry']])))
+        with self.assertRaises(ValueError):
+            core_package_manifest.package_native_archive(dict(module, packageNativeArchive=dict(entryResolution={})))
+        call = dict(original['abi'][0], arguments=[], result='AddrRep')
+        address = dict(call, entry=original['abi'][1]['entry'])
+        linked = dict(module, packageNativeLink=dict(original, abi=[call, address], dataSymbols=[address['entry']]))
+        del linked['staticForeignImports']
+        self.assertEqual({call['entry'], address['entry']}, core_package_manifest.package_scalar_link(linked)[1])
 
     def test_archive_preserves_mixed_imports_and_checks_unresolved_artifact_bytes(self):
         import copy

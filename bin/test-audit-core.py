@@ -4207,19 +4207,27 @@ class ExplicitWeakContractTest(unittest.TestCase):
 
 
 class RTSDataLabelTest(unittest.TestCase):
-    def test_bytestring_hex_table_requires_exact_symbol_and_address_proof(self):
+    def test_native_data_requires_link_and_address_proof(self):
         label = ["lit", "data-addr", "hs_bytestring_lower_hex_table",
                  dict(rep=dict(kind="address", primReps=["AddrRep"], evaluated=True))]
-        self.assertTrue(run(label)["accepted"])
-        self.assertFalse(run(label, cap=dict(CAP, dataLabels=[]))["accepted"])
+        def linked(expr, ambiguous=False):
+            module = dict(schema=1, ghc='9.14.1', bindings=[bind('root', expr)], constructors=[])
+            audit = audit_core.Audit([('fixture.json', module)], CAP)
+            link = dict(abi=[dict(symbol=label[2], entry='address')], dataSymbols=['address'])
+            audit.package_scalar_links['declaring-unit'] = link
+            if ambiguous: audit.package_scalar_links['another-unit'] = link
+            return audit.run(['root'])
+        self.assertFalse(run(label)["accepted"])
+        self.assertTrue(linked(label)["accepted"])
+        self.assertFalse(linked(label, ambiguous=True)["accepted"])
         for symbol in ("hs_bytestring_lower_hex_table_extra", "hs_bytestring_digit_pairs_table"):
             wrong = copy.deepcopy(label); wrong[2] = symbol
-            self.assertFalse(run(wrong)["accepted"])
+            self.assertFalse(linked(wrong)["accepted"])
         for rep in (dict(kind="address", primReps=["AddrRep"], evaluated=False),
                     dict(kind="long", primReps=["WordRep"], evaluated=True),
                     dict(kind="address", primReps=["AddrRep"], evaluated=True, aggregate="unboxed-tuple")):
             wrong = copy.deepcopy(label); wrong[3]["rep"] = rep
-            self.assertFalse(run(wrong)["accepted"])
+            self.assertFalse(linked(wrong)["accepted"])
 
     def test_rtsflags_label_still_requires_exact_evaluated_address_proof(self):
         label = ['lit', 'data-addr', 'RtsFlags',

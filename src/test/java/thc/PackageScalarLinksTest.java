@@ -81,37 +81,22 @@ class PackageScalarLinksTest {
         return map("foreignCall", map("target", map("unit", base.get("unit"), "symbol", symbol), "convention", "ccall", "safety", "unsafe",
             "argumentReps", list(map("primReps", list("Int32Rep")), map("primReps", List.of()))));
     }
-    @Test void partialNativeLinkKeepsOriginalIndicesAndRequiresCompleteDependencyReceipt() throws Exception {
-        var base = module(); var scalar = object(base, "packageScalarLink"); var entry = single(scalar, "abi"); var entries = new ArrayList<Map<String, Object>>();
-        for (int i = 0; i < 2; i++) entries.add(with(entry, "symbol", i == 0 ? "scalar_value" : "scalar_z", "entry", "thc_native_" + digest + "_" + i, "convention", "ccall", "safety", "unsafe"));
-        var original = with(scalar, "profile", "thc-package-c-ffi-v1", "abi", entries, "buildInputs", map("unresolved", list("unknown_external")));
-        var proof = object(base, "staticForeignImports"); var imported = single(proof, "imports");
-        var extra = with(imported, "symbol", "scalar_z", "binder", with(object(imported, "binder"), "occurrence", "extra"), "emitted", with(object(imported, "emitted"), "symbol", "scalar_z"));
-        var selected = with(original, "availableEntries", list(entries.get(1).get("entry")), "bitcodeHex", "4342", "bitcodeSha256", hash(new byte[]{0x43, 0x42}));
-        var closures = List.of(map("entry", entries.get(0).get("entry"), "bitcodeSha256", "b".repeat(64), "unresolved", list("unknown_external")),
-            map("entry", entries.get(1).get("entry"), "bitcodeSha256", "b".repeat(64), "unresolved", List.of()));
-        var resolution = map("schema", 1L, "profile", "llvm-globaldce-adapter-closures-v1", "inputBitcodeSha256", original.get("bitcodeSha256"),
-            "outputBitcodeSha256", selected.get("bitcodeSha256"), "entries", closures, "unresolved", List.of());
-        var archive = map("schema", 1L, "profile", "thc-package-native-archive-v1", "execution", "not-linked", "unit", base.get("unit"), "module", base.get("module"),
-            "unsupportedImports", List.of(), "unclassifiedReason", null, "unresolvedSymbols", list("unknown_external"), "artifact", original, "entryResolution", resolution);
-        var partial = with(without(base, "packageScalarLink"), "packageNativeArchive", archive, "packageNativeLink", selected, "staticForeignImports", with(proof, "imports", list(imported, extra)));
-        var admission = Objects.requireNonNull(PackageScalarLinks.read(partial));
-        assertEquals(list(entries.get(1).get("entry")), admission.getLink().getAbi().stream().map(it -> it.getEntry()).toList()); assertEquals(Set.of(entries.get(1).get("entry")), admission.getProved());
-        assertTrue(Objects.requireNonNull(PackageNativeArchives.read(partial)).blocks(foreignCall(base, "scalar_value"))); assertFalse(Objects.requireNonNull(PackageNativeArchives.read(partial)).blocks(foreignCall(base, "scalar_z")));
-        var old = with(without(partial, "packageNativeLink"), "packageNativeArchive", without(archive, "entryResolution")); assertTrue(Objects.requireNonNull(PackageNativeArchives.read(old)).blocks(Map.of()));
-        var changes = List.of(map("schema", true), map("profile", "invented"), map("inputBitcodeSha256", "c".repeat(64)), map("outputBitcodeSha256", "c".repeat(64)),
-            map("entries", list(closures.get(1), closures.get(0))), map("entries", list(closures.getFirst())), map("entries", list(closures.get(0), with(closures.get(1), "unresolved", list("unrecorded")))), map("unresolved", list("unknown_external")));
-        for (var change : changes) { var changed = with(resolution); changed.putAll(change);
-            assertThrows(IllegalArgumentException.class, () -> PackageScalarLinks.read(with(partial, "packageNativeArchive", with(archive, "entryResolution", changed)))); }
-        for (var changed : List.of(without(selected, "availableEntries"), with(selected, "availableEntries", entries.stream().map(it -> it.get("entry")).toList()), with(selected, "bitcodeHex", "4243")))
-            assertThrows(IllegalArgumentException.class, () -> PackageScalarLinks.read(with(partial, "packageNativeLink", changed)));
-        for (var symbol : List.of("memcpy", "erf", "getentropy", "wcwidth", "_ZNSt8ios_base4InitC1Ev")) {
-            var sorted = new ArrayList<>(List.of(symbol, "unknown_external")); Collections.sort(sorted); var inputs = map("unresolved", sorted);
-            var providerResolution = with(resolution, "unresolved", list(symbol), "entries", list(closures.get(0), with(closures.get(1), "unresolved", list(symbol))));
-            var candidate = with(partial, "packageNativeLink", with(selected, "buildInputs", inputs), "packageNativeArchive", with(archive, "artifact", with(original, "buildInputs", inputs), "entryResolution", providerResolution));
-            if (symbol.equals("memcpy")) assertEquals(1, Objects.requireNonNull(PackageScalarLinks.read(candidate)).getLink().getAbi().size());
-            else assertThrows(IllegalArgumentException.class, () -> PackageScalarLinks.read(candidate));
-        }
+    @Test void retiredPartialNativeProtocolIsRejected() throws Exception {
+        var base = module(); var scalar = object(base, "packageScalarLink"); var entry = single(scalar, "abi");
+        var nativeLink = with(scalar, "profile", "thc-package-c-ffi-v1",
+            "abi", list(with(entry, "entry", nativeEntry, "convention", "ccall", "safety", "unsafe")));
+        var nativeModule = with(without(base, "packageScalarLink"), "packageNativeLink", nativeLink);
+        assertThrows(IllegalArgumentException.class, () -> PackageScalarLinks.read(with(nativeModule,
+            "packageNativeLink", with(nativeLink, "availableEntries", list(nativeEntry)))));
+        assertThrows(IllegalArgumentException.class, () -> PackageNativeArchives.read(with(base,
+            "packageNativeArchive", map("entryResolution", Map.of()))));
+        var pointerCall = with(entry, "entry", nativeEntry, "convention", "ccall", "safety", "unsafe", "arguments", List.of(), "result", "AddrRep");
+        String addressEntry = "thc_native_" + digest + "_1";
+        var withAddress = with(nativeLink, "abi", list(pointerCall, with(pointerCall, "entry", addressEntry)), "dataSymbols", list(addressEntry));
+        var addressModule = with(without(nativeModule, "staticForeignImports"), "packageNativeLink", withAddress);
+        assertEquals(Set.of(nativeEntry, addressEntry), Objects.requireNonNull(PackageScalarLinks.read(addressModule)).getProved());
+        assertThrows(IllegalArgumentException.class, () -> PackageScalarLinks.read(with(addressModule,
+            "packageNativeLink", without(withAddress, "dataSymbols"))));
     }
     @Test void conflictingOriginalAbiWitnessesExcludeOnlyThatSymbol() throws Exception {
         var base = module(); var scalar = object(base, "packageScalarLink"); var abi = single(scalar, "abi");
