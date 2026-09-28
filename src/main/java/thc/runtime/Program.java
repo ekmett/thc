@@ -294,8 +294,8 @@ public final class Program implements ExecutableProgram {
             case "lam" -> {
                 for (Map<String, Object> argument : (List<Map<String, Object>>) expression.get(1)) {
                     CoreRepresentation proof = CoreRepresentations.binder(argument);
-                    if (!reusableScalar(proof) || proof.getKind() != CoreKind.DATA && representationLifted(argument))
-                        throw new UnsupportedCore("Reusable AST input requires a numeric scalar or data proof");
+                    if (!reusableScalar(proof) || proof.getKind() != CoreKind.DATA && proof.getKind() != CoreKind.CLOSURE && representationLifted(argument))
+                        throw new UnsupportedCore("Reusable AST input requires a numeric scalar, data or closure proof");
                 }
                 requireReusableBody((List<Object>) expression.get(2));
             }
@@ -320,7 +320,7 @@ public final class Program implements ExecutableProgram {
                 var bindings = (List<Map<String,Object>>) expression.get(2);
                 var joins = CoreJoins.definitions(bindings);
                 if (joins != null) for (var join : joins) {
-                    if (!reusableScalar(join.getResult()) || join.getResult().getKind() == CoreKind.DATA)
+                    if (!reusableScalar(join.getResult()) || join.getResult().getKind() == CoreKind.DATA || join.getResult().getKind() == CoreKind.CLOSURE)
                         throw new UnsupportedCore("Reusable AST join result requires a numeric scalar proof");
                 }
                 for (var binding : bindings) {
@@ -334,7 +334,7 @@ public final class Program implements ExecutableProgram {
                 CoreRepresentation binder = CoreRepresentations.caseBinder(expression);
                 CoreRepresentation result = CoreRepresentations.expression(expression);
                 if (!reusableScalar(binder) || !reusableScalar(result))
-                    throw new UnsupportedCore("Reusable AST case binder and result require numeric scalar or data proofs");
+                    throw new UnsupportedCore("Reusable AST case binder and result require numeric scalar, data or closure proofs");
                 requireReusableBody((List<Object>) expression.get(1));
                 for (var alternative : (List<List<Object>>) expression.get(3)) {
                     String kind = (String) alternative.getFirst();
@@ -351,7 +351,7 @@ public final class Program implements ExecutableProgram {
     }
     private static boolean reusableScalar(CoreRepresentation proof) {
         return proof.getPresent() && (proof.isInt() || proof.isLong() || proof.isFloat() || proof.isDouble() ||
-            proof.getKind() == CoreKind.DATA) && !proof.isTypedTransport();
+            proof.getKind() == CoreKind.DATA || proof.getKind() == CoreKind.CLOSURE) && !proof.isTypedTransport();
     }
     private static boolean reusableLiteral(String kind) {
         return switch (kind) {

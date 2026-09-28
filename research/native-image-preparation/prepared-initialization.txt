@@ -13,6 +13,20 @@ thc.HostReferenceGen
 thc.HostReferenceGen$InteropLibraryExports
 thc.HostReferenceGen$InteropLibraryExports$Cached
 thc.HostReferenceGen$InteropLibraryExports$Uncached
+# Sole static ELEMENT is an immutable CoreRepresentation/enum/string/List
+# descriptor. Receiver, Program, context, buffers and call targets stay per instance.
+thc.HostReference
+# Generated native-callback export metadata only: class literals, assertion flags
+# and two fieldless/unadoptable libraries. No receiver, callback registry, context,
+# native signature or handle is created; actual callback admission is unchanged.
+thc.runtime.DynamicGen
+thc.runtime.DynamicGen$InteropLibraryExports
+thc.runtime.DynamicGen$InteropLibraryExports$Cached
+thc.runtime.DynamicGen$InteropLibraryExports$Uncached
+thc.runtime.NativeCallbackPointerGen
+thc.runtime.NativeCallbackPointerGen$InteropLibraryExports
+thc.runtime.NativeCallbackPointerGen$InteropLibraryExports$Cached
+thc.runtime.NativeCallbackPointerGen$InteropLibraryExports$Uncached
 # The unique fieldless guest state/void value; no guest context is captured.
 thc.runtime.Unit
 thc.runtime.Applications
@@ -148,6 +162,7 @@ thc.runtime.CoreMd5Foreign$1
 thc.runtime.CoreRepresentation$1
 thc.runtime.EnvironmentExpression$1
 thc.runtime.GuestThreadOps$1
+thc.runtime.GuestThreadOps$2
 thc.runtime.GuestThreads$2
 thc.runtime.JavaScriptAccess$1
 thc.runtime.JavaScriptExpression$1
@@ -156,6 +171,8 @@ thc.runtime.ManagedFiles$1
 thc.runtime.ManagedGmp$1
 thc.runtime.ManagedMVars$1
 thc.runtime.Md5ForeignExpression$1
+thc.runtime.NativeUnix$1
+thc.runtime.PolyglotAccess$1
 thc.runtime.PolyglotExpression$1
 thc.runtime.PosixStat$1
 thc.runtime.Program$1

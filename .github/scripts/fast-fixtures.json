@@ -9,6 +9,7 @@
     "thc.runtime.SameFrameCaseTest",
     "thc.runtime.LocalJoinGraphBudgetTest",
     "thc.ReusableProgramTest",
+    "thc.ReusableHigherOrderTest",
     "thc.runtime.CapturedProgramInstanceTest",
     "thc.PackageFinalizersTest",
     "thc.runtime.PackageFinalizerTest",
