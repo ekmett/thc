@@ -736,7 +736,7 @@ private val text = "class FakeString { @Test }"
         self.full("test-class-used-as-helper")
 
     def test_native_file_buffers_inventory_remains_exact(self):
-        path = "src/test/kotlin/thc/runtime/NativeFileBuffersTest.kt"
+        path = "src/test/java/thc/runtime/NativeFileBuffersTest.java"
         source = (select.ROOT / path).read_text()
         classes, unsafe, _ = select.junit_info(source)
         self.assertEqual(["thc.runtime.NativeFileBuffersTest"], classes)
@@ -1249,7 +1249,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
     def test_unlinkat_sources_select_the_genuine_safe_call_comparison(self):
         for path in ("compiler/test-fixtures/OriginalUnlinkAtAudit.hs",
                      "test/haskell-fixtures/OriginalUnlinkAtFixtures.hs",
-                     "src/test/kotlin/thc/runtime/OriginalUnlinkAtTest.kt",
+                     "src/test/java/thc/runtime/OriginalUnlinkAtTest.java",
                      "test/haskell-fixtures/OriginalPosixStatFixtures.hs",
                      "src/main/c/native-file-api.c", "src/main/c/stdio-abi-probe.c",
                      "src/main/java/thc/runtime/NativeFileProvider.java",
@@ -1266,7 +1266,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
     def test_fstatat_sources_select_the_genuine_safe_call_comparison(self):
         for path in ("compiler/test-fixtures/OriginalFstatAtAudit.hs",
                      "test/haskell-fixtures/OriginalFstatAtFixtures.hs",
-                     "src/test/kotlin/thc/runtime/OriginalFstatAtTest.kt",
+                     "src/test/java/thc/runtime/OriginalFstatAtTest.java",
                      "test/haskell-fixtures/OriginalPosixStatFixtures.hs",
                      "src/main/c/native-file-api.c", "src/main/c/stdio-abi-probe.c",
                      "src/main/java/thc/runtime/NativeFileProvider.java",
@@ -1283,7 +1283,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
     def test_current_directory_sources_select_the_genuine_context_directory_comparison(self):
         for path in ("compiler/test-fixtures/OriginalCurrentDirectoryAudit.hs",
                      "test/haskell-fixtures/OriginalCurrentDirectoryFixtures.hs",
-                     "src/test/kotlin/thc/runtime/OriginalCurrentDirectoryTest.kt",
+                     "src/test/java/thc/runtime/OriginalCurrentDirectoryTest.java",
                      "test/haskell-fixtures/OriginalPosixStatFixtures.hs",
                      "src/main/c/native-file-api.c", "src/main/c/stdio-abi-probe.c",
                      "src/main/java/thc/runtime/NativeDirectoryOwner.java",
