@@ -184,7 +184,7 @@ class PassThroughRootTest {
         val layout = FrameLayout(); val slot = layout.bind("argument")
         val function = Function()
         val input = ArgumentLayout.fromProofs(listOf(int))!!
-        val app = AstTypedApplication(function, arrayOf(Value(22, int)), layout, true, Metrics(false), selfTransfer = true)
+        val app = AstTypedApplication(function, arrayOf(Value(22, int)), layout, true, Metrics(false), null, true)
         var originalArgument: Any? = null
         val body = object : Expr() {
             @Child var child = app
@@ -205,7 +205,7 @@ class PassThroughRootTest {
         assertEquals(0, incoming.inputMode)
         val outgoing = transfer.input!!
         try { assertEquals(22, typed.packet.getInt(outgoing, 1)); assertTrue(outgoing.inputMode in 1..3) }
-        finally { discardTypedInput(language, outgoing) }
+        finally { TypedInputsKt.discardTypedInput(language, outgoing) }
         val state = language.handoffState.get()
         assertEquals(0, state.arguments.depth); assertEquals(0, state.arguments.retainedReferences())
     }
