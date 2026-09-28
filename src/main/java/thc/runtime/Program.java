@@ -370,6 +370,7 @@ public final class Program implements ExecutableProgram {
             unsupportedPolicy = "reject-at-binding-admission"; break;
         }
         result.put("unsupportedPolicy", unsupportedPolicy);
+        result.put("foreignUnsupportedPolicy", "trap-when-reached");
         result.put("deferredUnsupported", new ArrayList<>(deferredUnsupported));
         result.put("unsupportedTraps", metrics.getUnsupportedTraps());
         result.put("frames", "indexed primitive slots; selective StaticShape captures");
@@ -530,6 +531,7 @@ public final class Program implements ExecutableProgram {
             rootSource(body), entryStrict, handoff, tuple, tupleSlots, inputLayout, enableAsync, environmentVectorSlots,
             delimited, role, outlineCaseArms || deferDefaultArm,
             scope.deferredArms != null && !scope.deferredArms.isEmpty(), false);
+        root.configureInputProofs(inputProofs);
         if (scope.deferredArms != null) for (DeferredArm candidate : scope.deferredArms) {
             AstDeferredArm.PreparedBody prepared = new AstDeferredArm.PreparedBody(
                 candidate.node.getRepresentation(), candidate.node.getCoreSourceLocation());
@@ -996,7 +998,7 @@ public final class Program implements ExecutableProgram {
         if (info == null) throw new RuntimeFault("Missing constructor metadata " + id);
         CoreFields fields = new CoreFields(info);
         if (language == null) throw new RuntimeFault("Constructor layout requires a guest language");
-        layout = DataLayout.fromFields(language, id, (String) info.get("name"), fields);
+        layout = thc.Language.currentState().constructorLayout(language, id, (String) info.get("name"), fields);
         dataLayouts.put(id, layout);
         return layout;
     }
@@ -1428,13 +1430,20 @@ public final class Program implements ExecutableProgram {
         var memorySearch = CoreMemorySearchForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
         var libdw = CoreLibdwForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
 
-        var polyglot = originalProcess == null && rtsEventForeign == null && gcForeign == null && textForeign == null && !byteStringSort &&
+        PolyglotOp polyglot;
+        try {
+            polyglot = originalProcess == null && rtsEventForeign == null && gcForeign == null && textForeign == null && !byteStringSort &&
             byteStringDecimal == null && byteStringUtf8 == null && memorySearch == null && floatingForeign == null && cpuAffinity == null &&
             runtimeService == null && !allocationCounterForeign && environment == null && packageScalar == null && !stackClone &&
             stackInfo == null && originalStdio == null && capi == null && !stableFree && shutdown == null && !mainThreadForeign &&
             !boundThreadForeign && stringRts == null && rtsDiagnostic == null && rtsArguments == null && sharedCAF == null &&
             managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null &&
             !memmove && !memcpy && !memset && processSignal == null ? CorePolyglot.validate(expr, defined) : null;
+        } catch (UnsupportedCore unavailable) {
+            // Only the final unknown-symbol fallback is deferred. Known ABI validation above stays eager.
+            deferredUnsupported.add(unavailable.getMessage());
+            return new UnsupportedForeignCall(unavailable.getMessage(), metrics);
+        }
         if ((packageScalar != null || javascript != null || polyglot != null || runtimeService == RuntimeServiceCall.EXCEPTION_TEXT) &&
             foreignExceptionBridge == null) throw fault("Foreign execution requires a linked genuine THC.Exception runtime bundle");
         if (runtimeService != null) {
@@ -1847,7 +1856,7 @@ public final class Program implements ExecutableProgram {
                 DataLayout falseLayout = dataLayouts.get(CoreThreadScheduling.FALSE);
                 if (falseLayout == null) {
                     if (language == null) throw fault("Spark constructor requires a guest language");
-                    falseLayout = new DataLayout(language, CoreThreadScheduling.FALSE, "False", new String[0], new Class<?>[0]);
+                    falseLayout = thc.Language.currentState().constructorLayout(language, CoreThreadScheduling.FALSE, "False", CoreFields.EMPTY);
                     dataLayouts.put(CoreThreadScheduling.FALSE, falseLayout);
                 }
                 falseValue = falseLayout.allocate();

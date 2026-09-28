@@ -11,12 +11,18 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
+import org.graalvm.options.OptionCategory;
+import org.graalvm.options.OptionDescriptors;
+import org.graalvm.options.OptionKey;
 import thc.runtime.*;
 
 @TruffleLanguage.Registration(id = "thc", name = "Turbo Haskell Compiler", version = "0.1-experiment",
     characterMimeTypes = "application/x-thc-core", defaultMimeType = "application/x-thc-core",
     dependentLanguages = "llvm", contextPolicy = TruffleLanguage.ContextPolicy.EXCLUSIVE)
 public final class Language extends TruffleLanguage<Language.State> {
+    @Option(name = "ThreadHosting", help = "Guest thread host: platform (default) or experimental loom (pinned JDK 25).", category = OptionCategory.USER)
+    static final OptionKey<String> THREAD_HOSTING = new OptionKey<>("platform");
+    @Override protected OptionDescriptors getOptionDescriptors() { return new LanguageOptionDescriptors(); }
     // Layout interning belongs to a context even when the language instance is shared.
     public HandoffLayouts getHandoffLayouts() { return currentState(null).handoffLayouts; }
     private final ContextThreadLocal<HandoffState> handoffState = locals.createContextThreadLocal((context, thread) -> new HandoffState());
@@ -34,6 +40,8 @@ public final class Language extends TruffleLanguage<Language.State> {
         private final ManagedExportRegistry managedExports;
         private final ManagedForeignRoots foreignRoots;
         private final HandoffLayouts handoffLayouts;
+        private record ConstructorLayoutKey(String id, CoreFields fields) {}
+        private final Map<ConstructorLayoutKey, DataLayout> constructorLayouts = new HashMap<>();
         private final JavaScriptImports javaScriptImports;
         private final PackageScalarLibraries packageCbits;
         private final CarrierLocal<MaskingState> maskingState;
@@ -88,7 +96,7 @@ public final class Language extends TruffleLanguage<Language.State> {
             packageCbits = new PackageScalarLibraries(env);
             maskingState = new CarrierLocal<>(MaskingState.UNMASKED);
             stackAnnotations = new CarrierLocal<>(StackAnnotationState.EMPTY);
-            threads = new GuestThreads(env, maskingState);
+            threads = new GuestThreads(env, maskingState, env.getOptions().get(THREAD_HOSTING));
             threadPollState = language.threadPollState;
             threadMaskingState = language.threadMaskingState;
             threadAnnotations = language.threadAnnotations;
@@ -132,6 +140,16 @@ public final class Language extends TruffleLanguage<Language.State> {
         public ManagedExportRegistry getManagedExports() { return managedExports; }
         public ManagedForeignRoots getForeignRoots() { return foreignRoots; }
         public HandoffLayouts getHandoffLayouts() { return handoffLayouts; }
+        /** Only parsed shape metadata enters this cache; demand loading happens before taking its lock. */
+        public synchronized DataLayout constructorLayout(TruffleLanguage<?> language, String id, String name, CoreFields fields) {
+            int unitEnd = id.indexOf(':');
+            // Symbolic constructor occurrences can contain or end in a dot.
+            int moduleEnd = id.indexOf('.', unitEnd + 1);
+            if (unitEnd <= 0 || moduleEnd <= unitEnd + 1 || moduleEnd == id.length() - 1)
+                return DataLayout.fromFields(language, id, name, fields);
+            return constructorLayouts.computeIfAbsent(new ConstructorLayoutKey(id, fields),
+                key -> DataLayout.fromFields(language, id, name, fields));
+        }
         public JavaScriptImports getJavaScriptImports() { return javaScriptImports; }
         public PackageScalarLibraries getPackageCbits() { return packageCbits; }
         public CarrierLocal<MaskingState> getMaskingState() { return maskingState; }
@@ -228,7 +246,10 @@ public final class Language extends TruffleLanguage<Language.State> {
     }
     @Override protected void finalizeContext(State context) {
         try { context.files.shutdownEventManagers(); }
-        finally { try { context.signals.close(); } finally { context.iconv.dispose(); } }
+        finally {
+            try { context.signals.close(); }
+            finally { try { context.threads.stopHostedThreads(); } finally { context.iconv.dispose(); } }
+        }
     }
     @Override protected void disposeContext(State context) {
         context.compilerRts.close();
@@ -327,13 +348,13 @@ public final class Language extends TruffleLanguage<Language.State> {
                     hostInputs = List.of();
                 }
                 if (hostInputs != null) {
-                    for (var proof : hostInputs) CoreRepresentations.requireScalar(proof, "host argument");
-                    CoreRepresentations.requireScalar(hostResult, "host result");
+                    for (var proof : hostInputs) HostAbi.require(proof);
+                    HostAbi.require(hostResult);
                 }
                 if (!expression.isEmpty() && "lam".equals(expression.getFirst())) {
                     for (var parameter : (List<Map<String, Object>>) expression.get(1))
-                        CoreRepresentations.requireScalar(CoreRepresentations.binder(parameter), "host argument");
-                    CoreRepresentations.requireScalar(CoreRepresentations.lambdaResult(expression), "host result");
+                        HostAbi.require(CoreRepresentations.binder(parameter));
+                    HostAbi.require(CoreRepresentations.lambdaResult(expression));
                 }
             } catch (UnsupportedCore gap) {
                 if (!Boolean.TRUE.equals(input.get("diagnosticUnsupported"))) throw gap;
@@ -409,8 +430,8 @@ public final class Language extends TruffleLanguage<Language.State> {
                         }
                     }
                     if (hostInputs != null) {
-                        for (var proof : hostInputs) CoreRepresentations.requireScalar(proof, "host argument");
-                        CoreRepresentations.requireScalar(hostResult, "host result");
+                        for (var proof : hostInputs) HostAbi.require(proof);
+                        HostAbi.require(hostResult);
                     }
                     var registrations = program.registerStartup();
                     var value = new EntryValue(program, entry, ((Number) selected.get("arity")).intValue(), null,

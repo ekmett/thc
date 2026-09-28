@@ -73,9 +73,9 @@ as a non-exhaustive case instead of inventing an alternative.
 [Sum results](sum-results.md) reuse this completion protocol with exact tag
 and projection validation. Supported sums may occur inside recursive tuple
 components, and concrete sums may themselves contain tuples or sums. Unknown/null aggregate layouts and
-unsupported physical leaves remain rejected. Host entries must return a
-scalar/reference result; diagnostic mode defers an unsupported host result to a
-trap without executing a tuple producer.
+unsupported physical leaves remain rejected. The
+[Core host ABI](site/embedding.md#load-a-core-entry) returns supported tuples as
+read-only logical arrays, copied before temporary result storage is released.
 
 `scripts/prepare-floating-tuples.py` checks genuine `Data.Complex` multiplication
 and `conjugate`: ordinary NOINLINE boxed producers become GHC CPR workers returning

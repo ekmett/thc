@@ -72,7 +72,8 @@ negotiation scheme.
 thread-creation permissions for this THC context, and its initial CPU capacity.
 CPU capacity is not the number of live Haskell threads, does not shrink when a
 child is pinned, and is independent of the logical count changed by original
-`setNumCapabilities`. That count does not resize JVM pools; see
+`setNumCapabilities`. The count controls Loom HEC routing without resizing
+JVM/compiler/GC pools; see
 [RTS capabilities](rts-event-capabilities.md).
 
 ## `THC.Thread`
@@ -82,7 +83,7 @@ child is pinned, and is independent of the logical count changed by original
 - `NativeHaskellThread`, `PlatformThread` or `VirtualThread`;
 - the current logical capability and whether it was requested as locked;
 - affinity-provider support, with unavailable/denied reasons;
-- whether this guest fork's initial native affinity request was accepted.
+- whether the platform fork's native affinity request, or its locked Loom HEC's pin, was accepted.
 
 The lock bit is not evidence of a successful physical CPU pin. Acceptance is
 not a continuing guarantee against OS policy changes and does not establish
@@ -108,11 +109,11 @@ capacity. Linux uses group zero and potentially sparse OS CPU IDs. Windows uses
 processor group and processor number, not CPU Set IDs. This is an initial
 eligibility snapshot, not the current calling thread's affinity mask.
 
-Both guest fork forms currently request **platform threads**, not virtual/green
-threads. Native affinity rejects virtual-thread callers rather than pinning a
-shared carrier. This costs a platform thread per guest fork. See the detailed
-[scheduling contract](thread-scheduling.md) for OS support and compiler-worker
-affinity reset limitations.
+Guest forks use platform threads by default. Opt-in `thc.ThreadHosting=loom`
+uses virtual threads routed through exclusive logical HEC workers; native affinity
+applies to those workers. Native affinity still rejects direct virtual-thread
+callers. See the [scheduling contract](thread-scheduling.md) for setup, foreign
+transition limits and compiler-worker affinity restrictions.
 
 ## `THC.Memory`
 

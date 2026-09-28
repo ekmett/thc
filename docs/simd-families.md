@@ -16,9 +16,11 @@ The [capability contract](../scripts/core-capabilities.json) admits 30 exact
 Both backends support exact guest arguments/results, PAP prefixes, tail
 transfers, local calls, join arguments/results and same-frame captures, unboxed
 tuple fields, nonrecursive unlifted lets, owned closure/thunk captures and boxed
-constructor fields. Recursive or lifted vector lets, sum fields and public host
-vector arguments/results remain unsupported. Transport does not add an operation
-merely because its representation is admitted.
+constructor fields. Supported sums retain exact vector payloads. The
+[Core host ABI](site/embedding.md#load-a-core-entry) accepts and returns raw
+JDK vectors with the declared species. Recursive or lifted vector lets remain
+unsupported. Transport does not add an operation merely because its
+representation is admitted.
 
 ## Generated operations
 

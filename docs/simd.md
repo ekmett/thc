@@ -24,9 +24,10 @@ See [generated families](simd-families.md) for admitted shapes and transport
 limits; operation and memory support remain separate contracts.
 
 The launcher enables `jdk.incubator.vector`. Direct Java launches need
-`--add-modules=jdk.incubator.vector` too. Public vector arguments/results and
-a hardware vector calling convention are not provided by the JVM
-`Object[] → Object` ABI.
+`--add-modules=jdk.incubator.vector` too. The [Core host ABI](site/embedding.md#load-a-core-entry)
+accepts and returns exact raw JDK vector values through polyglot interop;
+host-object access is required for vector inputs. This transport does not
+provide a native hardware vector calling convention.
 
 ## Correctness checks
 

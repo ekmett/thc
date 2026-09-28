@@ -119,7 +119,7 @@ requireBuild(compactObjectHeaders == "true" || compactObjectHeaders == "false") 
 def compactHeaderOption = "-XX:${compactObjectHeaders == "true" ? "+" : "-"}UseCompactObjectHeaders"
 application {
     mainClass.set("thc.Main")
-    applicationDefaultJvmArgs = ["--add-modules=jdk.incubator.vector", "--enable-native-access=ALL-UNNAMED", "-Xss2m", compactHeaderOption] +
+    applicationDefaultJvmArgs = ["--add-modules=jdk.incubator.vector", "--enable-native-access=ALL-UNNAMED", "--add-opens=java.base/java.lang=ALL-UNNAMED", "-Xss2m", compactHeaderOption] +
         // The Linux standalone guest owns GHC's supported process handlers.
         // Embedders do not inherit these launcher JVM arguments.
         (System.getProperty("os.name") == "Linux" ? ["-Xrs"] : [])

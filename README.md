@@ -180,11 +180,13 @@ complete boot-library closure and full FFI coverage remain unfinished.
 [Async-enabled AST evaluation](docs/async-exceptions.md) bounds nested calls
 and thunk forcing with saved continuations. Deep evaluation inside an active
 STM transaction remains unsupported; other modes keep their existing stack
-behavior. The script-level scalar entry is integer-only;
-`thc run` has the narrower `IO ()` path described above. The experimental
-[managed export API](docs/site/embedding.md) also exposes declared scalar
-functions and IO actions through polyglot bindings. Host vector arguments and
-results, and several aggregate storage forms, remain unsupported.
+behavior. The command-line scalar runner accepts integer arguments;
+`thc run` uses the `IO ()` path described above. The
+[Core embedding API](docs/site/embedding.md#load-a-core-entry) transports exact
+numeric, vector, tuple and sum values, plus context-owned references and
+functions. The declared C-export path separately exposes supported scalar
+functions and IO actions. Recursive or lifted aggregate lets and global
+aggregate storage remain unsupported.
 
 In particular, Map and Set still have cold runtime paths that strict loading
 rejects. Diagnostic mode leaves explicit traps at those gaps. A successful

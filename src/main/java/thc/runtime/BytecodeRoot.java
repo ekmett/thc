@@ -66,6 +66,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @CompilerDirectives.CompilationFinal private boolean asyncEnabled;
     public final void configureAsync(boolean enabled) { asyncEnabled = enabled; }
     public final boolean isAsyncEnabled() { return asyncEnabled; }
+    @Override public final boolean getAsynchronousExceptions() { return asyncEnabled; }
     @CompilerDirectives.CompilationFinal private boolean delimitedEnabled;
     public final void configureDelimited(boolean enabled) { delimitedEnabled = enabled; }
     public final boolean isDelimitedEnabled() { return delimitedEnabled; }
@@ -2871,6 +2872,15 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             CompilerDirectives.transferToInterpreterAndInvalidate();
             metrics.incrementUnsupportedTraps();
             throw fail("Diagnostic unsupported path reached: " + message);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = String.class, name = "message")
+    @ConstantOperand(type = Metrics.class, name = "metrics")
+    public static final class UnsupportedForeign {
+        @Specialization public static Object trap(String message, Metrics metrics) {
+            return UnsupportedForeignCall.trap(message, metrics);
         }
     }
 

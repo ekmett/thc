@@ -87,6 +87,19 @@ public class ThreadSchedulingTest {
         }
     }
     private GuestThreads threads() { return new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), _ -> {}); }
+    /** Shared native receipt, invoked by the Loom suite without unsupported counters. */
+    void nativePinnedForkOnBothBackends() throws Exception {
+        provenance();
+        for (var stage : List.of("pre", "post")) for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
+            var core = new File(directory, stage + "/core/ThreadScheduling.json");
+            var entry = context.eval("thc", CoreModules.request(List.of(core.getPath()), "pinnedFork", true, false, backend, true, false, null, true));
+            assertEquals(11L, entry.execute(0L).asLong(), stage + "/" + backend + " native forkOn");
+            assertTrue(entry.invokeMember("compile").asBoolean());
+            long before = ((Number) ((Map<?, ?>) Json.parse(entry.getMember("diagnostics").asString())).get("compiledEntries")).longValue();
+            assertEquals(11L, entry.execute(0L).asLong(), stage + "/" + backend + " first installed forkOn");
+            assertTrue(((Number) ((Map<?, ?>) Json.parse(entry.getMember("diagnostics").asString())).get("compiledEntries")).longValue() > before);
+        }
+    }
     @Test public void realAllocationCountersResetAndExcludeOutsideEntryWork() {
         var threads = threads(); var foreign = threads(); threads.enterCurrent(); var identity = threads.currentIdentity();
         try {

@@ -95,8 +95,9 @@ These contracts distinguish lifted tuples, unboxed aggregates and scalar State.
 
 The current [guest transport contract](simd-families.md) carries 30 exact `VecRep`
 shapes through calls, results, PAPs, joins, tuple fields, owned closure/thunk
-captures and boxed constructor fields. Public host vector arguments/results,
-other shapes and unimplemented operations remain outside that contract. The
+captures and boxed constructor fields. The [Core host ABI](site/embedding.md#load-a-core-entry)
+also transports exact raw JDK vectors. Other shapes and unimplemented
+operations remain outside that contract. The
 local operations and listed managed-memory families below have their own
 operation-specific native/model checks.
 

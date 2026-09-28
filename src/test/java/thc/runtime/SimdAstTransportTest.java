@@ -118,12 +118,17 @@ class SimdAstTransportTest {
             }
         }
     }
-    @Test void publicHostStillRejectsVectorIngressAndResult() {
-        var entries = new LinkedHashMap<String, String>(); entries.put("identity", "host argument"); entries.put("returnVector", "host result");
-        for (var backend : List.of("ast", "bytecode")) for (var entry : entries.entrySet()) try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).build()) {
-            var request = Json.stringify(m("entry", entry.getKey(), "backend", backend, "modules", List.of(module())));
-            var failure = assertThrows(PolyglotException.class, () -> context.eval("thc", request));
-            assertTrue(Objects.toString(failure.getMessage(), "").contains("Unsupported Core vector boundary: " + entry.getValue()), backend + "/" + entry.getKey() + ": " + failure.getMessage());
+    @Test void publicHostTransportsExactRawVectorIngressAndResult() {
+        for (var backend : List.of("ast", "bytecode")) try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                .allowHostAccess(org.graalvm.polyglot.HostAccess.ALL).build()) {
+            var raw = jdk.incubator.vector.ShortVector.fromArray(jdk.incubator.vector.ShortVector.SPECIES_128,
+                new short[]{Short.MIN_VALUE, -1, 0, 1, 13, 255, 256, Short.MAX_VALUE}, 0);
+            var identity = context.eval("thc", Json.stringify(m("entry", "identity", "backend", backend, "modules", List.of(module()))));
+            assertSame(raw, identity.execute(raw).asHostObject());
+            assertThrows(PolyglotException.class, () -> identity.execute(jdk.incubator.vector.ShortVector.zero(jdk.incubator.vector.ShortVector.SPECIES_256)));
+            assertThrows(PolyglotException.class, () -> identity.execute(jdk.incubator.vector.IntVector.zero(jdk.incubator.vector.IntVector.SPECIES_128)));
+            var producer = context.eval("thc", Json.stringify(m("entry", "returnVector", "backend", backend, "modules", List.of(module()))));
+            assertEquals(jdk.incubator.vector.ShortVector.broadcast(jdk.incubator.vector.ShortVector.SPECIES_128, Short.MIN_VALUE), producer.execute(-32768L).asHostObject());
         }
     }
     private Context compiledContext(Boolean inlining) {

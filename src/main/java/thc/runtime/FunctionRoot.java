@@ -146,6 +146,7 @@ public final class FunctionRoot extends GuestRoot {
     }
     public HandoffEntry getHandoff() { return handoff; }
     public boolean getEnableAsync() { return enableAsync; }
+    @Override public boolean getAsynchronousExceptions() { return enableAsync; }
     public boolean getEnableDelimited() { return enableDelimited; }
     public boolean getCapturesContinuations() { return capturesContinuations; }
     public boolean getStackCapture() { return stackCapture; }

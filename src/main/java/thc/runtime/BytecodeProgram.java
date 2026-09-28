@@ -620,6 +620,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             break;
         }
         result.put("unsupportedPolicy", unsupportedPolicy);
+        result.put("foreignUnsupportedPolicy", "trap-when-reached");
         result.put("deferredUnsupported", new ArrayList<>(deferredUnsupported));
         result.put("unsupportedTraps", metrics.getUnsupportedTraps());
         result.put("frames", "Bytecode DSL primitive locals; selective StaticShape captures");
@@ -665,7 +666,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         return dataLayouts.computeIfAbsent(id, key -> {
             var info = constructors.get(key);
             if (info == null) throw new RuntimeFault("Missing constructor metadata " + key);
-            return DataLayout.fromFields(language, key, (String) info.get("name"),
+            return thc.Language.currentState().constructorLayout(language, key, (String) info.get("name"),
                 new CoreFields(info));
         });
     }
@@ -844,6 +845,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         var body = new ProvenExpression(compiled, evaluatedProof(compiled.proof().refine(resultProof), compiled.proof().getEvaluated()));
         context.tuple = body.proof.isTypedTransport() ? new TupleShape(body.proof, language) : null;
         var target = build(label, context, body, !body.proof.getEvaluated());
+        ((GuestRoot) target.getRootNode()).configureInputProofs(argumentProofs);
         captureSources.addAll(vectorSources);
         return new FunctionSpec(target, context.captureLayout, captureSources, vectorCount != 0);
     }
@@ -5649,13 +5651,32 @@ public final class BytecodeProgram implements ExecutableProgram {
         boolean memset = CoreMemsetForeign.validate(foreignMetadata, representations, flags, resultRepresentation);
         var memorySearch = CoreMemorySearchForeign.validate(foreignMetadata, representations, flags, resultRepresentation);
         var libdw = CoreLibdwForeign.validate(foreignMetadata, representations, flags, resultRepresentation);
-        var polyglot = originalProcess == null && rtsEventForeign == null && gcForeign == null && textForeign == null && !byteStringSort
+        PolyglotOp polyglot;
+        try {
+            polyglot = originalProcess == null && rtsEventForeign == null && gcForeign == null && textForeign == null && !byteStringSort
                 && byteStringDecimal == null && byteStringUtf8 == null && memorySearch == null && floatingForeign == null && cpuAffinity == null
                 && runtimeService == null && !allocationCounterForeign && environment == null && packageScalar == null && !stackClone
                 && stackInfo == null && originalStdio == null && capi == null && !stableFree && shutdown == null && !mainThreadForeign
                 && !boundThreadForeign && stringRts == null && rtsDiagnostic == null && rtsArguments == null && sharedCAF == null
                 && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null
                 && !memmove && !memcpy && !memset && processSignal == null ? CorePolyglot.validate(expr, defined) : null;
+        } catch (UnsupportedCore unavailable) {
+            // Only the final unknown-symbol fallback is deferred. Known ABI validation above stays eager.
+            String message = unavailable.getMessage();
+            deferredUnsupported.add(message);
+            return new Expression() {
+                @Override public void emit(Emission emission) { emission.builder.emitUnsupportedForeign(message, metrics); }
+                @Override public void emitTuple(Emission emission, List<BytecodeLocal> destination) {
+                    // The operation never returns, and no tuple destination may be written.
+                    var b = emission.builder;
+                    b.beginBlock();
+                    b.beginStoreLocal(b.createLocal("unavailable foreign tuple", null));
+                    b.emitUnsupportedForeign(message, metrics);
+                    b.endStoreLocal();
+                    b.endBlock();
+                }
+            };
+        }
         if ((packageScalar != null || javascript != null || polyglot != null || runtimeService == RuntimeServiceCall.EXCEPTION_TEXT)
                 && foreignExceptionBridge == null)
             throw RuntimeFault.fault("Foreign execution requires a linked genuine THC.Exception runtime bundle");
@@ -6856,7 +6877,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 operands.getLast().emit(e); b.endSetThreadAllocationCounter(); b.emitLoadConstant(thc.runtime.Unit.INSTANCE); b.endBlock();
             }, evaluatedProof(tupleProof, true));
             var empty = name.equals("getSpark#") ? dataLayouts.computeIfAbsent(CoreThreadScheduling.FALSE,
-                id -> new DataLayout(language, id, "False", new String[0], new Class<?>[0])).allocate() : null;
+                id -> thc.Language.currentState().constructorLayout(language, id, "False", CoreFields.EMPTY)).allocate() : null;
             return tupleExpression(tupleProof, (e, destination) -> {
                 var b = e.builder;
                 b.beginBlock();

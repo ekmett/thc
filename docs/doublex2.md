@@ -9,8 +9,8 @@ not make `Int64X2#` or `FloatX4#` compatible.
 Both backends use primitive Double lanes and exact `DoubleRep` proofs without
 narrowing through Float. Vector arithmetic retains the raw Vector API result.
 The [guest transport contract](simd-families.md) includes calls, PAPs, joins,
-tuples and owned captures/heap fields. Public host vector arguments/results
-remain unsupported.
+tuples and owned captures/heap fields. The [Core host ABI](site/embedding.md#load-a-core-entry)
+also accepts and returns the exact raw JDK vector species.
 
 ## Operation scope
 
@@ -33,8 +33,8 @@ python3 scripts/prepare-doublex2-audit.py
 
 The producer retains all six foundation operations and exact logical signatures
 in genuine pre/post-Tidy Core, with strict audits for its scalar-host entries.
-The `vectorArgument` negative control describes a public host boundary;
-backend loaders accept exact guest vector formals. Forged shapes and scalar
+The `vectorArgument` negative control checks the separate auditor's
+scalar-entry restriction; runtime Core entries accept exact vector formals. Forged shapes and scalar
 proofs remain errors even in diagnostic mode.
 
 The independent binary64 model uses integer significands/exponents and

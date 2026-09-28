@@ -8,11 +8,13 @@ identities. Snapshot storage never aliases the registry. Context close invalidat
 further observations without modifying arrays already returned.
 
 Both backends support this operation and `isCurrentThreadBound#`. Ordinary guest
-entries and `fork#` children remain unbound. A managed foreign reverse entry gets
+entries and `fork#` children remain unbound. In platform hosting, a managed foreign
+reverse entry gets
 a fresh bound identity on its existing Java carrier, with a separate mailbox and
 an initially unmasked state. Nested ordinary guest calls keep that identity;
 nested reverse entries get another identity. Return restores the suspended caller
 and its mask. Finished callbacks remain observable through retained ThreadIds.
+Loom hosting rejects foreign callbacks.
 
 The native fixture uses GHC's actual C callback trampoline to check distinct
 ThreadIds, unmasked entry, boundness, same native carrier and caller restoration
@@ -66,7 +68,8 @@ counts and native background thread ordering are intentionally not equated.
 
 `par#` and `spark#` are implemented as discarded hints without evaluating the
 lifted argument; `getSpark#` and `numSparks#` describe an empty spark pool.
-`forkOn#` creates a real managed platform thread with best-effort CPU affinity.
+`forkOn#` uses a managed platform thread by default, or a virtual thread locked
+to a logical HEC in Loom mode. Native affinity is best effort in either mode.
 See [scheduling](thread-scheduling.md). `numSparks#` is not a Java thread count.
 
 A speculative evaluator can diverge or block without its result ever being
@@ -78,5 +81,6 @@ machinery does not establish spark admission, abandoned-result management or a
 both-backend spark scheduler.
 Logical capabilities initially reflect available CPU capacity and can be shared
 by many guest threads. Original `setNumCapabilities` changes their context-local
-count without resizing JVM pools; see [RTS capabilities](rts-event-capabilities.md).
+count and Loom HEC routing without resizing JVM/compiler/GC pools; see
+[RTS capabilities](rts-event-capabilities.md).
 No spark admission or parallel-speedup claim is made here.

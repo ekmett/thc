@@ -9,8 +9,8 @@ tuple. A vector and an equal-width tuple are different representations.
 Both backends preserve primitive Float lanes when packing/unpacking; there is
 no Double or `Number` widening step. Arithmetic uses the raw Vector API result.
 The [guest transport contract](simd-families.md) includes calls, PAPs, joins,
-tuples and owned captures/heap fields. Public host vector arguments/results
-remain unsupported.
+tuples and owned captures/heap fields. The [Core host ABI](site/embedding.md#load-a-core-entry)
+also accepts and returns the exact raw JDK vector species.
 
 ## Operation scope
 
@@ -35,9 +35,9 @@ python3 scripts/prepare-floatx4-audit.py
 The existing Python producer exports genuine pre/post-Tidy Core and compares
 fresh native GHC rows with an independent binary32 model. All six foundation
 primops must survive with exact logical pack/unpack signatures, and positive
-entries require strict reachable audits. The genuine `vectorArgument` control
-is rejected as a public host entry, not as a guest function formal: both backend
-loaders accept well-proven guest vector formals and reject forged shapes.
+entries require strict reachable audits. Both backend loaders accept well-proven
+guest vector formals and reject forged shapes. Signature-driven public entries
+also accept exact raw JDK vectors; see the [host transport contract](site/embedding.md).
 
 Finite arithmetic entries expose lane-sensitive scalar checksums and rounding
 boundaries. Exceptional entries distinguish NaNs, signed zeros, infinities,

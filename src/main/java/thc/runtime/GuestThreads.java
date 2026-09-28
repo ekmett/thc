@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.WeakHashMap;
+import java.util.concurrent.Callable;
 import thc.Language;
 import static thc.runtime.RuntimeFault.fault;
 
@@ -20,6 +21,7 @@ public final class GuestThreads {
     private final ThreadLocal<MaskingState> maskingState;
     private final CpuAffinity cpuAffinity;
     private final Wake wake;
+    @com.oracle.truffle.api.CompilerDirectives.CompilationFinal private LoomScheduler loom;
     /** This is execution permission, not the observable Haskell masking state. */
     public enum DeliveryPermission { NONE, GUEST, FOREIGN }
     private static final class DeliveryState {
@@ -34,17 +36,38 @@ public final class GuestThreads {
         logicalCapabilities = cpuAffinity.getCount();
     }
     public GuestThreads(TruffleLanguage.Env env, ThreadLocal<MaskingState> maskingState) {
+        this(env, maskingState, "platform");
+    }
+    public GuestThreads(TruffleLanguage.Env env, ThreadLocal<MaskingState> maskingState, String hosting) {
         this(maskingState, CpuAffinity.discover(env.isNativeAccessAllowed()), target ->
             env.submitThreadLocal(new Thread[]{target}, new ThreadLocalAction(true, false) {
                 // Only wake the target's safepoint. An async exception needs a saved guest cut.
                 @Override protected void perform(Access access) {}
             }));
+        if (hosting.equals("loom")) loom = new LoomScheduler(env, cpuAffinity);
+        else if (!hosting.equals("platform")) throw new RuntimeFault("Unknown THC thread hosting mode: " + hosting);
     }
     public CpuAffinity getCpuAffinity() { return cpuAffinity; }
+    public boolean isLoom() { return loom != null; }
+    public boolean needsHosting() { return loom != null && !loom.isCurrent(); }
+    @TruffleBoundary public <T> T hostEntry(Node node, Callable<T> action) {
+        var foreign = foreignActivations.get();
+        if (foreign != null && foreign.top() != null) throw new UnsupportedCore("Loom hosting does not yet support foreign callbacks or native TLS binding");
+        return loom.invoke(node, action);
+    }
+    @TruffleBoundary public Thread newThread(TruffleLanguage.Env env, Runnable task, Long capability, Node node) {
+        return loom == null ? env.newTruffleThreadBuilder(task).virtual(false).build() : loom.newThread(task, capability, node);
+    }
+    @TruffleBoundary public void startThread(Thread thread) {
+        if (loom != null) { loom.start(thread); return; }
+        try (var ignored = cpuAffinity.resetCurrent()) { thread.start(); }
+        catch (Throwable failure) { throw propagate(failure); }
+    }
+    public void stopHostedThreads() { if (loom != null) loom.stopThreads(); }
     public static final class GuestThread {
         final Thread thread;
         final GuestThreadId identity;
-        final boolean externalAsync;
+        boolean externalAsync;
         final ArrayDeque<GuestEntry> entriesPrevious = new ArrayDeque<>();
         final ArrayDeque<AsyncRequest> queue = new ArrayDeque<>();
         AsyncRequest claimed;
@@ -71,8 +94,9 @@ public final class GuestThreads {
         final AstStackScope astStack;
         final GuestThread prior;
         final MaskingState mask;
-        public GuestEntry(GuestThreadId active, GuestThreadStatus status, AstStackScope astStack, GuestThread prior, MaskingState mask) {
-            this.active = active; this.status = status; this.astStack = astStack; this.prior = prior; this.mask = mask;
+        final boolean externalAsync;
+        public GuestEntry(GuestThreadId active, GuestThreadStatus status, AstStackScope astStack, GuestThread prior, MaskingState mask, boolean externalAsync) {
+            this.active = active; this.status = status; this.astStack = astStack; this.prior = prior; this.mask = mask; this.externalAsync = externalAsync;
         }
         public GuestThreadId getActive() { return active; }
         public GuestThreadStatus getStatus() { return status; }
@@ -114,7 +138,8 @@ public final class GuestThreads {
         if (count < 1 || count > 0xffff_ffffL) throw fault("setNumCapabilities requires a positive Word32 count");
         logicalCapabilities = count; nextCapability %= count;
         // No change to the initial affinity outcome or pinning of live Java carriers.
-        for (var identity : knownThreads.keySet()) identity.capability %= count;
+        if (loom == null) for (var identity : knownThreads.keySet()) identity.capability %= count;
+        else loom.resize(count);
     }
     public synchronized void registerMainThread(MainThreadWeakKey key) {
         if (closed) throw new IllegalStateException("Guest context has closed"); mainThreadWeak = key;
@@ -148,6 +173,8 @@ public final class GuestThreads {
     @TruffleBoundary public DeliveryPermission enterForeignForDisposal() { return enterForeignImpl(ForeignSafety.UNSAFE, true); }
     private DeliveryPermission enterForeignImpl(ForeignSafety safety, boolean disposal) {
         if (closed && !disposal) throw fault("Guest context has closed");
+        if (loom != null && loom.isCurrent() && safety != ForeignSafety.UNSAFE)
+            throw new UnsupportedCore("Loom hosting does not yet support safe or interruptible foreign calls; use platform hosting");
         var state = deliveryState();
         var stack = foreignActivations.get();
         if (stack == null) { stack = new ForeignStack(); foreignActivations.set(stack); }
@@ -207,6 +234,7 @@ public final class GuestThreads {
         if (callback) {
             if (activation.owner.closed) throw fault("Foreign caller context has closed");
             if (activation.safety == ForeignSafety.UNSAFE) throw fault("Unsafe foreign call cannot re-enter guest code");
+            if (loom != null) throw new UnsupportedCore("Loom hosting does not yet support foreign callbacks or native TLS binding");
         }
         var suspended = callback ? activeIdentity.get() : null;
         // Cross-context reverse entries must never acquire two registry locks.
@@ -222,6 +250,7 @@ public final class GuestThreads {
         if (capability == null) nextCapability = (selected + 1L) % logicalCapabilities;
         if (nextIdentity <= 0) throw new IllegalStateException("Guest thread identity space exhausted");
         var identity = new GuestThreadId(nextIdentity++, this, selected, current, forked, capability != null, callback);
+        if (loom != null) loom.attach(identity);
         knownThreads.put(identity, Boolean.TRUE); return identity;
     }
     private synchronized long enterCurrentImpl(MaskingState inheritedMask, boolean forked, boolean externalAsync, Long capability, boolean callback) {
@@ -246,11 +275,21 @@ public final class GuestThreads {
             if (identity.allocationBaseline < 0) identity.allocationUnavailable = true;
         }
         var poll = pollState(current);
-        slot.entriesPrevious.addLast(new GuestEntry(activeIdentity.get(), slot.identity.status, poll.astStack, prior, previousMask));
+        slot.entriesPrevious.addLast(new GuestEntry(activeIdentity.get(), slot.identity.status, poll.astStack, prior, previousMask, slot.externalAsync));
+        if (!callback && prior != null) slot.externalAsync &= externalAsync;
         poll.astStack = new AstStackScope(); slot.identity.status = GuestThreadStatus.RUNNING; activeIdentity.set(slot.identity);
         slot.entries++; currentSlot.set(slot); pollState(current).current = slot; enterGuestPermission(); return identity.logicalId;
     }
     public long registerCurrent() { return enterCurrent(); }
+    /** Scope host-call admission without changing queued requests or the guest lifetime. */
+    @TruffleBoundary public synchronized boolean setCurrentExternalAsync(boolean enabled) {
+        var slot = currentSlot.get();
+        if (slot == null || slot.entries <= 0) throw fault("Current Java thread has not entered this guest context");
+        boolean previous = slot.externalAsync;
+        // A nested entry cannot unwind through an outer nonresumable activation.
+        slot.externalAsync = enabled && (slot.entries == 1 || slot.entriesPrevious.getLast().externalAsync);
+        return previous;
+    }
     /** myThreadId# observes an existing guest entry; it never creates a new lifetime. */
     public long currentId() { return currentIdentity().logicalId; }
     public GuestThreadId currentIdentity() {
@@ -368,7 +407,7 @@ public final class GuestThreads {
     @TruffleBoundary public synchronized boolean interruptibleForeignPending() {
         var slot = currentSlot.get();
         if (slot == null || closed || threads.get(slot.identity.logicalId) != slot || slot.claimed != null || slot.queue.isEmpty()) return false;
-        return slot.queue.getFirst().forceSelf || maskingState.get() != MaskingState.MASKED_UNINTERRUPTIBLE;
+        return slot.queue.getFirst().forceSelf || slot.externalAsync && maskingState.get() != MaskingState.MASKED_UNINTERRUPTIBLE;
     }
     @TruffleBoundary private synchronized AsyncRequest claim(GuestThread target, Node node, boolean interruptible) {
         if (closed) return null;
@@ -377,7 +416,7 @@ public final class GuestThreads {
         var state = delivery.get();
         if (state == null || state.permission != DeliveryPermission.GUEST || activeIdentity.get() != target.identity || target.claimed != null || target.queue.isEmpty()) return null;
         var request = target.queue.getFirst();
-        boolean allowed = request.forceSelf || switch (maskingState.get()) {
+        boolean allowed = request.forceSelf || target.externalAsync && switch (maskingState.get()) {
             case UNMASKED -> true; case MASKED_INTERRUPTIBLE -> interruptible; case MASKED_UNINTERRUPTIBLE -> false;
         };
         if (!allowed) return null;
@@ -398,7 +437,10 @@ public final class GuestThreads {
                 if (target.entries <= 0) throw new IllegalStateException("Check failed.");
                 var previous = target.entriesPrevious.removeLast(); pollState(current).astStack = previous.astStack;
                 if (previous.active == null) activeIdentity.remove(); else activeIdentity.set(previous.active);
-                if (--target.entries != 0) { if (!closed) target.identity.status = previous.status; }
+                if (--target.entries != 0) {
+                    target.externalAsync = previous.externalAsync;
+                    if (!closed) target.identity.status = previous.status;
+                }
                 else {
                     settleAllocation(target.identity); target.identity.lastOutcome = outcome;
                     if (!closed) target.identity.status = target.identity.forked || target.identity.callback ? outcome : GuestThreadStatus.FOREIGN;
@@ -428,6 +470,7 @@ public final class GuestThreads {
             threads.clear();
         }
         for (var request : remaining) request.finish(AsyncRequestState.TARGET_FINISHED);
+        if (loom != null) loom.close();
     }
     public boolean finish(AsyncRequest request, AsyncRequestState state) { return finish(request, state, null); }
     public synchronized boolean finish(AsyncRequest request, AsyncRequestState state, Throwable cause) {
@@ -473,6 +516,7 @@ public final class GuestThreads {
     /** Java-callable poll for bytecode roots; it never delivers from a wake action. */
     public static AsyncRequest pollCurrent(Node node, boolean interruptible) {
         var context = Language.currentState(node);
+        if (context.getThreads().loom != null) context.getThreads().loom.checkpoint();
         var slot = context.getThreadPollState().get().current;
         return slot == null ? null : context.getThreads().poll(slot, node, interruptible);
     }

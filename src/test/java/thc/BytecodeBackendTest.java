@@ -151,7 +151,7 @@ class BytecodeBackendTest {
             var malformed = apply(list("prim", "+#"), list(variable("input")), list()); var bad = module(list(binding("entry", lambda("input", coldBranch(malformed)), 1)));
             var error = assertThrows(PolyglotException.class, () -> context.eval("thc", request(bad, true))); assertTrue(error.getMessage().contains("representation flag count mismatch"), error.getMessage());
             var uncertain = constructor("Uncertain", list(true), list((Boolean) null)); var data = module(list(binding("entry", ignore(apply(list("con", "Uncertain", 1), list(integer(0)), list(true))))), list(uncertain));
-            var levity = assertThrows(PolyglotException.class, () -> context.eval("thc", request(data))); assertTrue(levity.getMessage().contains("Unknown strict constructor field levity"), levity.getMessage());
+            var levity = assertThrows(PolyglotException.class, () -> context.eval("thc", request(data))); assertTrue(levity.getMessage().contains("Unknown argument levity without a boxed pointer representation"), levity.getMessage());
         }
     }
     @Test void managedManagedAddressesPreserveUnsignedBytesNulsAndBoundsAfterCompilation() {

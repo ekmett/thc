@@ -86,15 +86,18 @@ public class CompilerHeapHintTest {
             } finally { threads.leaveCurrent(); context.leave(); }
         }
     }
-    @Test public void unknownSymbolsStillRejectThroughBothFullLowerers() {
+    @Test public void unknownSymbolsStillRejectWhenReachedThroughBothFullLowerers() {
         for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 var input = module(plus(declaration, "target", plus(target, "symbol", "setHeapSize_alias")));
-                assertThrows(UnsupportedCore.class, () -> {
-                    ExecutableProgram program = backend.equals("ast") ? new Program(language, input) : new BytecodeProgram(language, input); program.entryValue("hint");
-                });
+                ExecutableProgram program = backend.equals("ast") ? new Program(language, input) : new BytecodeProgram(language, input);
+                var target = program.entryTarget("hint");
+                assertEquals(0L, program.diagnostics().get("unsupportedTraps"));
+                var error = assertThrows(UnsupportedCore.class, () -> Calls.target(target, new Object[]{0L, 42L, Unit.INSTANCE}));
+                assertEquals("Unsupported foreign call: setHeapSize_alias", error.getMessage());
+                assertEquals(1L, program.diagnostics().get("unsupportedTraps"));
             } finally { context.leave(); }
         }
     }

@@ -25,7 +25,7 @@ handling, but uses the unprofiled condition and the existing no-profile backedge
 sentinel. Only compiler-owned owner-wait retries select it. Operands remain
 saved outside the loop, and only an uncommitted owner wait is retried.
 
-The new operation is registered after legacy custom and compatibility operations
+The new operations are registered after legacy custom and compatibility operations
 so serialized builder event IDs retain their meaning. Instruction kinds are
 appended; generated opcode numbers are separate from serialized events.
 `./gradlew testProtocolProcessor` checks legacy stock-produced serialized input,
