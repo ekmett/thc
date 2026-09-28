@@ -5,6 +5,7 @@ package thc.runtime;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import java.util.*;
@@ -26,6 +27,7 @@ public final class Program implements ExecutableProgram {
     private final TruffleLanguage<?> language;
     private final boolean enableAsync;
     private final boolean outlineCaseArms;
+    private final boolean deferDefaultArm;
     private final boolean capturesContinuations;
     private final CoreDemandBindings demand;
     private final ForeignExceptionBridge foreignExceptionBridge;
@@ -62,8 +64,13 @@ public final class Program implements ExecutableProgram {
     public Program(TruffleLanguage<?> language, Map<String, Object> moduleData) { this(language, moduleData, false, false); }
     public Program(TruffleLanguage<?> language, Map<String, Object> moduleData, boolean enableAsync) { this(language, moduleData, enableAsync, false); }
     public Program(TruffleLanguage<?> language, Map<String, Object> moduleData, boolean enableAsync, boolean outlineCaseArms) {
+        this(language, moduleData, enableAsync, outlineCaseArms, false);
+    }
+    public Program(TruffleLanguage<?> language, Map<String, Object> moduleData, boolean enableAsync,
+                   boolean outlineCaseArms, boolean deferDefaultArm) {
         this.language = language; this.enableAsync = enableAsync; this.outlineCaseArms = outlineCaseArms;
-        capturesContinuations = enableAsync || outlineCaseArms;
+        this.deferDefaultArm = deferDefaultArm;
+        capturesContinuations = enableAsync || outlineCaseArms || deferDefaultArm;
         thc.CoreForeignArtifacts.INSTANCE.requireExecutableInput(moduleData);
         demand = moduleData.get("demandBindings") instanceof CoreDemandBindings found ? found : null;
         foreignExceptionBridge = ForeignExceptionBridge.bind(moduleData, this::entryValue, this::dataLayout);
@@ -172,11 +179,20 @@ public final class Program implements ExecutableProgram {
         final Map<String, Local> locals;
         final Map<String, LocalJoinTarget> joins;
         AstSelfLayout self;
-        Scope(FrameLayout layout) { this(layout, new LinkedHashMap<>(), new LinkedHashMap<>(), null); }
-        Scope(FrameLayout layout, Map<String, Local> locals, Map<String, LocalJoinTarget> joins, AstSelfLayout self) {
-            this.layout = layout; this.locals = locals; this.joins = joins; this.self = self;
+        final List<Object> deferredExpression;
+        final List<DeferredArm> deferredArms;
+        Scope(FrameLayout layout) { this(layout, null); }
+        Scope(FrameLayout layout, List<Object> deferredExpression) {
+            this(layout, new LinkedHashMap<>(), new LinkedHashMap<>(), null, deferredExpression,
+                deferredExpression == null ? null : new ArrayList<>());
         }
-        Scope child() { return new Scope(layout.scope(), new LinkedHashMap<>(locals), new LinkedHashMap<>(joins), self); }
+        Scope(FrameLayout layout, Map<String, Local> locals, Map<String, LocalJoinTarget> joins, AstSelfLayout self,
+              List<Object> deferredExpression, List<DeferredArm> deferredArms) {
+            this.layout = layout; this.locals = locals; this.joins = joins; this.self = self;
+            this.deferredExpression = deferredExpression; this.deferredArms = deferredArms;
+        }
+        Scope child() { return new Scope(layout.scope(), new LinkedHashMap<>(locals), new LinkedHashMap<>(joins), self,
+            deferredExpression, deferredArms); }
         Local bind(String id, boolean primitive, CoreRepresentation proof) {
             return bind(id, primitive, proof, false, null, null, FrameSlotKind.Illegal);
         }
@@ -210,6 +226,7 @@ public final class Program implements ExecutableProgram {
         void bindJoin(String id, LocalJoinTarget target) { joins.put(id, target); locals.remove(id); }
     }
     private record FunctionSpec(RootCallTarget target, CaptureLayout captureLayout, int[] captures) {}
+    private record DeferredArm(AstDeferredArm node, CaptureLayout captures, int[] slots) {}
     private final class OperandBuilder {
         private final FrameLayout layout;
         private final List<LocalBinding> bindings = new ArrayList<>();
@@ -373,7 +390,17 @@ public final class Program implements ExecutableProgram {
     private FunctionSpec function(String label, List<Map<String, Object>> args, List<Object> expression, Scope outer,
                                   CoreRepresentation resultProof, boolean[] entryStrict, FunctionRootRole role, boolean bodyTail) {
         if (entryStrict.length != args.size()) throw new RuntimeFault("Function entry contract arity mismatch");
-        Scope scope = new Scope(new FrameLayout());
+        List<Object> defaultArm = null;
+        if (deferDefaultArm && !outlineCaseArms && !enableAsync && !delimited &&
+                role == FunctionRootRole.FUNCTION && expression.getFirst().equals("case")) {
+            List<List<Object>> alternatives = (List<List<Object>>) expression.get(3);
+            if (alternatives.size() == 1) {
+                List<Object> alternative = alternatives.getFirst();
+                if (alternative.getFirst().equals("default") && ((List<?>) alternative.get(2)).isEmpty())
+                    defaultArm = (List<Object>) alternative.get(3);
+            }
+        }
+        Scope scope = new Scope(new FrameLayout(), defaultArm);
         Set<String> free = coreFreeVariables(expression);
         Set<String> argumentIds = new LinkedHashSet<>();
         for (Map<String, Object> arg : args) argumentIds.add((String) arg.get("id"));
@@ -496,10 +523,24 @@ public final class Program implements ExecutableProgram {
         TupleShape tuple = effectiveResult.isTypedTransport() ? new TupleShape(effectiveResult, (thc.Language) language) : null;
         int[] tupleSlots = new int[tuple == null ? 0 : tuple.getWidth()];
         for (int i = 0; i < tupleSlots.length; i++) tupleSlots[i] = scope.layout.bind("<typed return " + i + ">");
-        FunctionRoot root = new FunctionRoot(language, scope.layout.build(), label, captures, environmentSlots,
+        FrameDescriptor descriptor = scope.layout.build();
+        FunctionRoot root = new FunctionRoot(language, descriptor, label, captures, environmentSlots,
             ints(argumentSlots), ints(argumentIndices), body, metrics, argumentProofs.toArray(CoreRepresentation[]::new), resultProof,
             rootSource(body), entryStrict, handoff, tuple, tupleSlots, inputLayout, enableAsync, environmentVectorSlots,
-            delimited, role, outlineCaseArms);
+            delimited, role, outlineCaseArms || deferDefaultArm,
+            scope.deferredArms != null && !scope.deferredArms.isEmpty(), false);
+        if (scope.deferredArms != null) for (DeferredArm candidate : scope.deferredArms) {
+            AstDeferredArm.PreparedBody prepared = new AstDeferredArm.PreparedBody(
+                candidate.node.getRepresentation(), candidate.node.getCoreSourceLocation());
+            FunctionRoot side = new FunctionRoot(language, descriptor.copy(), label + " default arm",
+                candidate.captures, candidate.slots, new int[0], new int[0], prepared, metrics,
+                new CoreRepresentation[0], candidate.node.getRepresentation(), prepared.getCoreSourceLocation(), new boolean[0],
+                null, null, new int[0], null, false, new int[0][], false,
+                FunctionRootRole.PASS_THROUGH, true, false, true);
+            side.configureForeignExceptionBridge(foreignExceptionBridge);
+            candidate.node.prepare(side.getCallTarget(), prepared);
+            constructedRootCount++;
+        }
         constructedRootCount++;
         root.configureForeignExceptionBridge(foreignExceptionBridge);
         if (language instanceof thc.Language thc) root.configureTypedInput(TypedInputLayout.create(thc, inputLayout, captures != null));
@@ -512,6 +553,46 @@ public final class Program implements ExecutableProgram {
         return new FunctionSpec(root.getCallTarget(), captures, captureSources);
     }
     private Expr caseArm(List<Object> expression, Scope scope, boolean tail) {
+        if (expression == scope.deferredExpression) {
+            CoreRepresentation proof = CoreRepresentations.expression(expression);
+            Set<String> free = coreFreeVariables(expression);
+            List<Local> locals = new ArrayList<>();
+            boolean eligible = deferredScalar(proof);
+            for (String id : free) {
+                if (scope.joins.containsKey(id)) eligible = false;
+                Local local = scope.locals.get(id);
+                if (local != null) {
+                    locals.add(local);
+                    if (local.cell || local.slot < 0 || !deferredScalar(local.proof)) eligible = false;
+                }
+            }
+            if (eligible) {
+                int count = locals.size();
+                boolean[] exactLong = new boolean[count], exactFloat = new boolean[count], exactDouble = new boolean[count];
+                NarrowInteger[] narrow = new NarrowInteger[count];
+                int[] slots = new int[count];
+                for (int i = 0; i < count; i++) {
+                    Local local = locals.get(i);
+                    exactLong[i] = local.proof.isLong();
+                    exactFloat[i] = local.proof.isFloat();
+                    exactDouble[i] = local.proof.isDouble();
+                    narrow[i] = local.proof.getNarrowInteger();
+                    slots[i] = local.slot;
+                }
+                CaptureLayout captures = count == 0 ? null : CaptureLayout.withVectors(Objects.requireNonNull(language),
+                    new CoreRepresentation[count], exactLong, exactLong, new Class<?>[count], exactFloat, exactDouble, narrow);
+                OperandBuilder operands = operandBuilder;
+                operandBuilder = null;
+                Scope child = scope.child();
+                child.self = null;
+                Expr body;
+                try { body = compile(expression, child, tail); }
+                finally { operandBuilder = operands; }
+                AstDeferredArm node = new AstDeferredArm(body, captures, slots, tail);
+                scope.deferredArms.add(new DeferredArm(node, captures, slots));
+                return node;
+            }
+        }
         boolean hasLocalJoin = false;
         if (outlineCaseArms && Arrays.asList("app", "case", "let").contains(expression.getFirst()))
             for (String free : coreFreeVariables(expression)) if (scope.joins.containsKey(free)) { hasLocalJoin = true; break; }
@@ -526,7 +607,7 @@ public final class Program implements ExecutableProgram {
         return new AstCaseArm(fn.target, fn.captureLayout, fn.captures, tail).located(currentSource);
     }
     private FrameSlotKind outlinedSlotKind(CoreRepresentation proof, boolean cell) {
-        if (!outlineCaseArms) return FrameSlotKind.Illegal;
+        if (!outlineCaseArms && !deferDefaultArm) return FrameSlotKind.Illegal;
         if (cell || proof.isVector()) return FrameSlotKind.Object;
         if (!proof.getEvaluated()) return FrameSlotKind.Illegal;
         if (proof.isInt()) return FrameSlotKind.Int;
@@ -535,6 +616,9 @@ public final class Program implements ExecutableProgram {
         if (proof.isDouble()) return FrameSlotKind.Double;
         if (proof.isEvaluatedReference()) return FrameSlotKind.Object;
         return FrameSlotKind.Illegal;
+    }
+    private static boolean deferredScalar(CoreRepresentation proof) {
+        return proof.getEvaluated() && (proof.isInt() || proof.isLong() || proof.isFloat() || proof.isDouble());
     }
     private Expr delay(List<Object> expr, Scope scope, String label) {
         FunctionSpec fn = function(label, List.of(), expr, scope);
