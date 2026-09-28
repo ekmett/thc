@@ -3387,6 +3387,17 @@ class OriginalDupAuditTest(unittest.TestCase):
             self.call(module)[6]['foreignCall']['target']['symbol'] = alias
             self.assertFalse(self.audit(module)['accepted'])
 
+    def test_unix_pipe_and_dup2_preserve_original_owner(self):
+        for symbol in ('pipe', 'dup2'):
+            for unit in ('unix-2.8.8.0-inplace', 'unix-2.8.8.0-0123abcdef'):
+                module = self.fixture(symbol)
+                self.call(module)[6]['foreignCall']['target']['unit'] = unit
+                self.assertTrue(self.audit(module)['accepted'], (symbol, unit))
+            for unit in ('main', 'unix-2.8.7.0-inplace', 'unix-2.8.8.0-not-a-hash'):
+                module = self.fixture(symbol)
+                self.call(module)[6]['foreignCall']['target']['unit'] = unit
+                self.assertFalse(self.audit(module)['accepted'], (symbol, unit))
+
     def test_process_identity_keeps_exact_owner_and_signedness(self):
         for unit in ('unix-2.8.8.0-inplace', 'unix-2.8.8.0-460b', 'unix-2.8.8.0-deadbeef'):
             module = self.fixture('geteuid')

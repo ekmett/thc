@@ -9,10 +9,42 @@ import thc.Language;
 import thc.NativeIO;
 import java.util.*;
 import java.util.function.Consumer;
+import com.oracle.truffle.api.TruffleLanguage;
+import static thc.runtime.ScalarTestCalls.callScalarTestTarget;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 class NativeEventDescriptorsTest {
+    @Test @SuppressWarnings("unchecked")
+    void unixOwnedPipeAndDupToExecuteThroughBothBackends() {
+        for (var backend : List.of("ast", "bytecode")) nativeContext(stdio -> {
+            var module = OriginalStdioFixtures.module(List.of("unlink", "dup2"), call -> {
+                var descriptor = (Map<String, Object>) ((Map<?, ?>) call.get(6)).get("foreignCall");
+                var target = (Map<String, Object>) descriptor.get("target");
+                // unlink has exactly pipe's Addr#, State# -> (# State#, Int32# #) ABI.
+                if (target.get("symbol").equals("unlink")) target.put("symbol", "pipe");
+                target.put("unit", "unix-2.8.8.0-inplace");
+            });
+            var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+            ExecutableProgram program = backend.equals("ast") ? new Program(language, module) : new BytecodeProgram(language, module);
+            var descriptors = ManagedAddress.fromByteArray(new byte[8]);
+            assertEquals(0, callScalarTestTarget(program.entryTarget("unlink"), new Object[]{0L, descriptors, Unit.INSTANCE}));
+            int reader = (int) integer(descriptors, 0, 4), writer = (int) integer(descriptors, 4, 4);
+            try {
+                assertEquals(71, callScalarTestTarget(program.entryTarget("dup2"), new Object[]{0L, writer, 71, Unit.INSTANCE}));
+                assertEquals(0L, stdio.close(writer));
+                assertEquals(1L, stdio.write(71, ManagedAddress.fromByteArray(new byte[]{42}), 1));
+                var output = ManagedAddress.fromByteArray(new byte[1]);
+                assertEquals(1L, stdio.read(reader, output, 1));
+                assertEquals(42L, output.readWord8(0));
+                assertEquals(-1, callScalarTestTarget(program.entryTarget("dup2"), new Object[]{0L, -1, 71, Unit.INSTANCE}));
+                assertEquals(9L, stdio.errno());
+            } finally { stdio.close(71); stdio.close(writer); stdio.close(reader); }
+            var handoff = language.getHandoffState().get();
+            assertEquals(0, handoff.getArguments().getDepth());
+            assertEquals(0, handoff.getResults().getDepth());
+        });
+    }
     private void nativeContext(Consumer<ManagedStdio> action) {
         assumeTrue(NativeIO.supportedHost());
         try (var context = NativeIO.createContext(Set.of())) {

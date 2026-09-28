@@ -193,7 +193,7 @@ public enum OriginalStdioOp {
             getWindowsDirectory() && value instanceof String text && WIN32_UNIT.matcher(text).matches() ||
             this == READLINK && "ghc-internal".equals(value) ||
             (this == UNLINKAT || this == FSTATAT) && value instanceof String text && DIRECTORY_UNIT.matcher(text).matches() ||
-            CoreOriginalStdio.isOriginalUnixUnit(value) && !getWindowsDirectory() && (this == CLOSE || this == DUP || this == ISATTY ||
+            CoreOriginalStdio.isOriginalUnixUnit(value) && !getWindowsDirectory() && (this == CLOSE || this == DUP || this == DUP2 || this == PIPE || this == ISATTY ||
                 this == UNIX_LSTAT || getCurrentDirectory() || getDirectoryStream() || getWaitStatus() || this == MKDIR || this == RMDIR || this == SYMLINK || this == READLINK || this == GET_EUID);
     }
     public boolean matchesSymbol(Object value) {
