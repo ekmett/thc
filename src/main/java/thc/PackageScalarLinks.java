@@ -150,14 +150,8 @@ public final class PackageScalarLinks {
                 cVariants.add(List.of(convention, safety, arguments, item.result()));
             }
             check(cVariants.size() == 1, "conflicting C ABI variants");
-            var mutabilityVariants = new HashSet<List<?>>();
-            for (var item : variants) {
-                String convention = item.convention(), safety = item.safety();
-                var arguments = new ArrayList<String>();
-                for (String rep : item.arguments()) arguments.add(rep.equals("MutableByteArray#") ? "ByteArray#" : rep);
-                mutabilityVariants.add(List.of(convention, safety, arguments, item.result()));
-            }
-            check(mutabilityVariants.size() == variants.size(), "ambiguous byte-array mutability variants");
+            // Exact typed calls distinguish array mutability. Erased ambiguous
+            // calls remain rejected by CorePackageScalarForeign selection.
         }
         var available = partial ? PackageNativeArchives.available(module) : null;
         var finalizers = PackageFinalizers.entries(fields, abi);

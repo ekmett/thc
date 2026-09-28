@@ -732,8 +732,8 @@ def package_scalar_link(module, validate_archive=True):
             header_adapted.add(name)
         require(len({shape(entry, lambda rep: integer_abi(pointer_abi(rep)))
                      for entry in variants}) == 1, 'conflicting C ABI variants')
-        require(len({shape(entry, lambda rep: 'ByteArray#' if rep == 'MutableByteArray#' else rep, False)
-                     for entry in variants}) == len(variants), 'ambiguous byte-array mutability variants')
+        # Mutability belongs to the typed call, not the component's pointer ABI.
+        # Selection below still rejects an erased call that matches both entries.
     available = native_entry_resolution(module) if partial else {entry['entry'] for entry in link['abi']}
     finalizers = link.get('finalizers', [])
     if callbacks:

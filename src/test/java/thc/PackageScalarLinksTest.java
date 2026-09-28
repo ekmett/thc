@@ -236,7 +236,7 @@ class PackageScalarLinksTest {
         assertEquals(admitted.getProved(), Objects.requireNonNull(PackageScalarLinks.read(headers(nativeModule, "original.h"))).getProved());
         for (var invalid : list("", "bad\u0000header", 7L)) assertThrows(IllegalArgumentException.class, () -> PackageScalarLinks.read(headers(nativeModule, invalid)));
         for (var one : imports) assertThrows(IllegalArgumentException.class, () -> CoreModules.merge(List.of(with(nativeModule, "staticForeignImports", with(proof, "imports", list(one))))));
-        for (var reps : List.of(List.of("AddrRep", "WordRep"), List.of("ByteArray#", "MutableByteArray#"), List.of("ByteArray#", "AddrRep"), List.of("AddrRep", "AddrRep"), List.of("Int8Rep", "Word16Rep"), List.of("IntRep", "Word64Rep")))
+        for (var reps : List.of(List.of("AddrRep", "WordRep"), List.of("ByteArray#", "AddrRep"), List.of("AddrRep", "AddrRep"), List.of("Int8Rep", "Word16Rep"), List.of("IntRep", "Word64Rep")))
             assertThrows(IllegalArgumentException.class, () -> CoreModules.merge(List.of(variant(reps))));
         for (var width : List.of("", "8", "16", "32", "64")) {
             var signed = variant(List.of("Int" + width + "Rep", "Word" + width + "Rep"));
@@ -246,6 +246,28 @@ class PackageScalarLinksTest {
             assertEquals(List.of("Int" + width + "Rep", "Word" + width + "Rep"), admittedSigned.getLink().getAbi().stream().map(it -> { assertEquals(1, it.getArguments().size()); return it.getArguments().getFirst(); }).toList());
             for (var invalid : list("", "bad\nheader", "bad\"header", "bad\\header", null)) assertThrows(IllegalArgumentException.class, () -> PackageScalarLinks.read(headers(signed, invalid)));
         }
+    }
+    @Test void typedArrayCallsSelectMutabilityWithoutGuessingErasedCalls() throws Exception {
+        var admitted = Objects.requireNonNull(PackageScalarLinks.read(variant(List.of("ByteArray#", "MutableByteArray#"))));
+        assertEquals(2, admitted.getProved().size());
+        var array = map("kind", "object", "primReps", list("BoxedRep (Just Unlifted)"), "evaluated", false);
+        var state = map("kind", "void", "primReps", list(), "evaluated", false);
+        var word = map("kind", "long", "primReps", list("WordRep"), "evaluated", true);
+        var result = map("kind", "unknown", "primReps", list("WordRep"), "evaluated", false,
+            "aggregate", "unboxed-tuple", "components", list(with(state, "evaluated", true), word));
+        var arguments = list(array, state);
+        var call = map("schema", 2L, "target", map("kind", "static", "symbol", "read_bytes", "unit", admitted.getLink().getUnit(), "isFunction", true),
+            "convention", "ccall", "safety", "unsafe", "arity", 2L, "suppliedArity", 2L,
+            "argumentReps", arguments, "resultRep", result);
+        for (String rep : List.of("ByteArray#", "MutableByteArray#")) {
+            var typed = with(call, "argumentTypes", list(rep, null));
+            var selected = thc.runtime.CorePackageScalarForeign.validate(map("foreignCall", typed, "rep", result),
+                arguments, list(false, false), result, List.of(admitted.getLink()));
+            assertEquals(List.of(rep), selected.getSignature().arguments());
+        }
+        var erased = with(call, "schema", 1L);
+        assertThrows(thc.runtime.RuntimeFault.class, () -> thc.runtime.CorePackageScalarForeign.validate(
+            map("foreignCall", erased, "rep", result), arguments, list(false, false), result, List.of(admitted.getLink())));
     }
     private Map<String, Object> nativeModule(String rep, String safety, String result) throws Exception {
         var base = module(); var oldLink = object(base, "packageScalarLink"); var oldProof = object(base, "staticForeignImports"); var oldImport = single(oldProof, "imports");

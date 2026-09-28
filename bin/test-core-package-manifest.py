@@ -375,11 +375,16 @@ class PackageNativeVariantsTest(unittest.TestCase):
         archived['packageNativeArchive']['artifact']['bitcodeHex'] = '4342'
         with self.assertRaisesRegex(ValueError, 'bitcode digest'): core_package_manifest.package_native_archive(archived)
 
-    def test_conflicts_order_duplicates_and_erased_mutability_still_reject(self):
-        for reps in (['AddrRep', 'WordRep'], ['ByteArray#', 'MutableByteArray#'],
+    def test_conflicts_order_and_duplicates_still_reject(self):
+        for reps in (['AddrRep', 'WordRep'],
                      ['ByteArray#', 'AddrRep'], ['AddrRep', 'AddrRep']):
             with self.subTest(reps=reps), self.assertRaises(ValueError):
                 core_package_manifest.package_scalar_link(self.module(reps))
+
+    def test_mutability_variants_are_distinct_adapters_not_a_component_rejection(self):
+        link, proved = core_package_manifest.package_scalar_link(self.module(['ByteArray#', 'MutableByteArray#']))
+        self.assertEqual(2, len(proved))
+        self.assertEqual([['ByteArray#'], ['MutableByteArray#']], [entry['arguments'] for entry in link['abi']])
 
     def test_conflicting_original_abis_are_archive_only_without_poisoning_other_symbols(self):
         import copy

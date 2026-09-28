@@ -52,6 +52,9 @@ public final class CorePackageScalarForeign {
         }
         if (link == null) return null;
         if (!(descriptor.get("argumentReps") instanceof List<?> declared)) throw fault("Missing package C declared arguments");
+        boolean typedArrays = descriptor.containsKey("argumentTypes");
+        var types = descriptor.get("argumentTypes") instanceof List<?> values ? values : null;
+        check(!typedArrays || types != null && types.size() == declared.size(), "typed array arity");
         PackageScalarSignature signature = null;
         for (var candidate : link.getAbi()) {
             int count = candidate.getArguments().size() + 1;
@@ -59,15 +62,17 @@ public final class CorePackageScalarForeign {
                 || !Objects.equals(candidate.getSafety(), descriptor.get("safety")) || declared.size() != count
                 || !result(descriptor.get("resultRep"), candidate.getResult(), true)) continue;
             boolean matches = true;
-            for (int i = 0; i < count; i++)
-                if (!scalar(declared.get(i), i == count - 1 ? null : candidate.getArguments().get(i), true)) { matches = false; break; }
+            for (int i = 0; i < count; i++) {
+                String rep = i == count - 1 ? null : candidate.getArguments().get(i);
+                Object expected = "ByteArray#".equals(rep) || "MutableByteArray#".equals(rep) ? rep : null;
+                if (!scalar(declared.get(i), rep, true) || typedArrays && !Objects.equals(types.get(i), expected)) { matches = false; break; }
+            }
             if (matches) {
                 if (signature != null) throw fault("Unlinked or ambiguous package C signature in scalar component: " + target.get("symbol"));
                 signature = candidate;
             }
         }
         if (signature == null) throw fault("Unlinked or ambiguous package C signature in scalar component: " + target.get("symbol"));
-        boolean typedArrays = descriptor.containsKey("argumentTypes");
         var keys = new java.util.HashSet<>(Set.of("schema", "target", "convention", "safety", "arity", "suppliedArity", "argumentReps", "resultRep"));
         if (typedArrays) keys.add("argumentTypes");
         check(descriptor.keySet().equals(keys)
@@ -76,15 +81,6 @@ public final class CorePackageScalarForeign {
             && signature.getConvention().equals(descriptor.get("convention")) && signature.getSafety().equals(descriptor.get("safety")),
             "static exact-safety declaration");
         int count = signature.getArguments().size() + 1;
-        if (typedArrays) {
-            check(descriptor.get("argumentTypes") instanceof List<?> types && types.size() == count, "typed array arity");
-            var types = (List<?>) descriptor.get("argumentTypes");
-            for (int i = 0; i < count; i++) {
-                String rep = i == count - 1 ? null : signature.getArguments().get(i);
-                Object expected = "ByteArray#".equals(rep) || "MutableByteArray#".equals(rep) ? rep : null;
-                check(Objects.equals(types.get(i), expected), "typed array carrier");
-            }
-        }
         boolean matches = number(descriptor.get("arity"), count) && number(descriptor.get("suppliedArity"), count)
             && arguments.size() == count && declared.size() == count && flags.size() == count;
         if (matches) for (int i = 0; i < count; i++) {
