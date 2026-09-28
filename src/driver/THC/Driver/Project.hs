@@ -65,7 +65,7 @@ import THC.Driver.ScalarBitcode (ScalarBitcode, scalarBuildInputs, linkScalarBit
 import THC.Driver.RuntimeShim (RuntimeShim, withRuntimeShim, runtimeShimInputs, validateRuntimeShimModules, foreignExceptionBridgeUnit)
 import THC.Driver.PackageNative (captureNativeObject, capturePackageNative, finishPackageNative,
   finishPackageNativeWithDependencies, linkInstalledNative)
-import THC.Driver.NativeDependencies (readCOnlyProduct)
+import THC.Driver.NativeDependencies (readCOnlyProduct, configuredNativeArchive)
 import THC.Driver.NativeCache (nativeToolIdentity, nativePieceIdentity)
 import THC.Driver.Installed
 import THC.Driver.InstalledForeign
@@ -885,9 +885,21 @@ acquireInstalledBundle verify cache staging recipe driverHash context registrati
               ["-package-id", registered] ++ map ("-I" ++) includes
         require (all cacheName [compilerId, compilerAbi, compilerPlatform, registered])
           "installed Core compiler or registered package-cache identity is invalid"
+        configured <- case installedSource context of
+          Nothing -> pure Nothing
+          Just source -> configuredNativeArchive source (nativeDirectory </> "configured")
+            (installedCompiler context) (registration registrationUnit)
+        let nativeArguments = maybe [] (\(archive,_) -> ["-optl" ++ archive]) configured ++ arguments
+            configuredInputs = maybe [] snd configured
         linked <- linkInstalledNative (installedGhc context) (installedLibdir context)
-          arguments nativeDirectory unit modules
-        nativeArtifacts <- installedNativeArtifacts nativeDirectory
+          nativeArguments nativeDirectory unit modules
+        forM_ configuredInputs $ \input -> do
+          path <- field input "path"
+          expected <- field input "sha256"
+          actual <- digestFile path
+          require (actual == expected) "configured native provider changed during linking"
+        linkedArtifacts <- installedNativeArtifacts nativeDirectory
+        let nativeArtifacts = nub (configuredInputs ++ linkedArtifacts)
         let inputFields = ["format" .= ("thc-core-build-inputs" :: String), "schema" .= (1 :: Int),
               "unit" .= unit, "compiler" .= installedCompiler context,
               "component" .= object ["kind" .= ("installed-interface" :: String),

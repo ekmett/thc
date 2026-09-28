@@ -93,7 +93,8 @@ missingForeignProof name core
 prepareForeignInterfaces :: ForeignCompiler -> FilePath -> FilePath -> InstalledContext ->
                             [InstalledUnit] -> IO InstalledContext
 prepareForeignInterfaces producer cache source context registrations = do
-  base <- prepareProfile [boundModule, posixModule] context
+  root <- canonicalizePath source
+  base <- prepareProfile [boundModule, posixModule] context { installedSource = Just root }
   unix <- prepareProfile unixModules base
   prepareProfile [directoryModule] unix
   where

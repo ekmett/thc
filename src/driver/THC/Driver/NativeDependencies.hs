@@ -14,7 +14,7 @@
 -- exact native archive membership, never from an unresolved symbol spelling.
 module THC.Driver.NativeDependencies
   ( COnlyProduct, cOnlyProductProof, cOnlyProductPieces, readCOnlyProduct
-  , selectCOnlyPieces, nativeLinkInputs, nativeSymbolArchives
+  , selectCOnlyPieces, nativeLinkInputs, nativeSymbolArchives, configuredNativeArchive
   ) where
 
 import Control.Exception (evaluate)
@@ -32,11 +32,21 @@ import Distribution.InstalledPackageInfo (parseInstalledPackageInfo)
 import qualified Distribution.Types.InstalledPackageInfo as Package
 import Distribution.Pretty (prettyShow)
 import Distribution.Package (pkgName)
+import Distribution.PackageDescription (library, libBuildInfo, cSources, cxxSources)
+import Distribution.Simple.Configure (getPersistBuildConfig)
+import qualified Distribution.Simple.Compiler as Compiler
+import qualified Distribution.Simple.LocalBuildInfo as Local
+import Distribution.Simple.LocalBuildInfo (localPkgDescr, buildDir, allComponentsInBuildOrder,
+  componentPackageDeps, componentUnitId)
+import Distribution.Utils.Path (getSymbolicPath, makeSymbolicPath)
 import Numeric (showHex)
-import System.Directory (doesFileExist, doesDirectoryExist, listDirectory)
+import System.Directory (doesFileExist, doesDirectoryExist, listDirectory, canonicalizePath,
+  createDirectoryIfMissing, removeFile, renameFile)
 import System.Environment (lookupEnv)
 import System.Exit (ExitCode(..))
-import System.FilePath ((</>), takeFileName, takeDirectory, isAbsolute)
+import System.FilePath ((</>), takeFileName, takeDirectory, isAbsolute, takeExtension,
+  replaceExtension, splitDirectories)
+import System.IO (hClose, openTempFile)
 import System.Process (CreateProcess(..), StdStream(..), proc, readProcessWithExitCode,
   waitForProcess, withCreateProcess)
 import THC.Driver.Installed (emptyRegistration)
@@ -118,21 +128,109 @@ nativeSymbolArchives compiler libdir root owner arguments symbols
           let package = prettyShow (pkgName (Package.sourcePackageId info))
           pure [info | package /= "rts", prettyShow (Package.installedUnitId info) == owner || package == owner]
       nm <- maybe "llvm-nm" id <$> lookupEnv "THC_LLVM_NM"
-      fmap (nub . concat) $ forM registrations $ \info -> do
+      registered <- fmap concat $ forM registrations $ \info -> do
         let packagePath path
               | Just suffix <- stripPrefix "${pkgroot}" path, Just pkgRoot <- Package.pkgRoot info = pkgRoot ++ suffix
               | Just suffix <- stripPrefix "$topdir" path = libdir ++ suffix
               | otherwise = path
-        archives <- filterM doesFileExist [packagePath directory </> "lib" ++ library ++ ".a" |
+        filterM doesFileExist [packagePath directory </> "lib" ++ library ++ ".a" |
           directory <- nub (Package.libraryDirsStatic info ++ Package.libraryDirs info), library <- Package.hsLibraries info]
-        fmap concat $ forM (nub archives) $ \archive -> do
-          (status,output,diagnostic) <- readProcessWithExitCode nm ["--defined-only","--extern-only","--format=posix",archive] ""
-          check (status == ExitSuccess) ("Cannot inspect registered native archive: " ++ diagnostic)
-          let defined = nub [(symbol,function) | line <- lines output, name:kind:_ <- [words line],
-                (symbol,function) <- symbols,
-                kind `elem` (if function then ["T","W"] else ["B","C","D","R","S","V"]),
-                name == symbol || name == '_' : symbol]
-          pure [(archive,defined) | not (null defined)]
+      -- An explicitly supplied native archive (including a configured C-only
+      -- PIC product) precedes the Haskell archive fallback. Do not select a
+      -- non-PIC vanilla member for a root already supplied by that input.
+      explicit <- filterM doesFileExist [absolute path | path <- nativeLinkOptions arguments,
+        takeExtension path == ".a", not ("-" `isPrefixOf` path)]
+      archives <- nub <$> mapM canonicalizePath (explicit ++ registered)
+      let select _ [] = pure []
+          select pending (archive:rest) = do
+            (status,output,diagnostic) <- readProcessWithExitCode nm ["--defined-only","--extern-only","--format=posix",archive] ""
+            check (status == ExitSuccess) ("Cannot inspect registered native archive: " ++ diagnostic)
+            let defined = nub [(symbol,function) | line <- lines output, name:kind:_ <- [words line],
+                  (symbol,function) <- pending,
+                  kind `elem` (if function then ["T","W"] else ["B","C","D","R","S","V"]),
+                  name == symbol || name == '_' : symbol]
+            following <- select (filter (`notElem` defined) pending) rest
+            pure ([(archive,defined) | not (null defined)] ++ following)
+      select symbols archives
+
+-- | Native objects from an explicitly selected, configured Hadrian tree. Cabal
+-- supplies the active C/C++ source inventory; its dynamic-way products supply
+-- PIC machine code. Never load the mixed Haskell shared library or include Cmm
+-- and RTS objects merely because they share the installed archive.
+--
+-- The caller passes the returned archive as an ordinary -optl input and records
+-- the returned files in its existing cache observations. GHC registrations and
+-- the ordinary installed-package path remain unchanged.
+configuredNativeArchive :: FilePath -> FilePath -> Value -> String -> IO (Maybe (FilePath,[Value]))
+configuredNativeArchive source destination compilerIdentity registration = do
+  (_,info) <- either (fail . show) pure (parseInstalledPackageInfo (T.encodeUtf8 (Data.Text.pack registration)))
+  root <- canonicalizePath source
+  let package = prettyShow (pkgName (Package.sourcePackageId info))
+      configured = root </> "_build/stage1/libraries" </> package
+      configuration = configured </> "setup-config"
+      built = configured </> "build"
+  exists <- doesFileExist configuration
+  if not exists || package == "rts" then pure Nothing else do
+    lbi <- getPersistBuildConfig Nothing (makeSymbolicPath configured)
+    selectedCompiler <- get compilerIdentity "id"
+    selectedPlatform <- get compilerIdentity "platform"
+    check (prettyShow (Compiler.compilerId (Local.compiler lbi)) == selectedCompiler &&
+      prettyShow (Local.hostPlatform lbi) == selectedPlatform)
+      "configured native provider differs from selected compiler/platform"
+    component <- case allComponentsInBuildOrder lbi of
+      [value] -> pure value
+      _ -> fail "configured native provider has multiple components"
+    check (componentUnitId component == Package.installedUnitId info &&
+      sort (map fst (componentPackageDeps component)) == sort (Package.depends info))
+      "configured native provider differs from installed unit/dependencies"
+    actual <- canonicalizePath (getSymbolicPath (buildDir lbi))
+    expected <- canonicalizePath built
+    check (actual == expected) "configured native provider belongs to another build tree"
+    declarations <- maybe (pure []) (\lib -> pure (map getSymbolicPath
+      (cSources (libBuildInfo lib)) ++ map getSymbolicPath (cxxSources (libBuildInfo lib))))
+      (library (localPkgDescr lbi))
+    if null declarations then pure Nothing else do
+      let packagePath path
+            | Just suffix <- stripPrefix "${pkgroot}" path, Just pkgRoot <- Package.pkgRoot info = pkgRoot ++ suffix
+            | otherwise = path
+      archives <- forM (Package.hsLibraries info) $ \name -> do
+        matches <- filterM doesFileExist [packagePath directory </> "lib" ++ name ++ ".a" |
+          directory <- nub (Package.libraryDirsStatic info ++ Package.libraryDirs info)]
+        paths <- nub <$> mapM canonicalizePath matches
+        installed <- case paths of
+          [path] -> pure path
+          _ -> fail "configured native provider lacks a unique installed archive"
+        -- Installation may strip/reindex archive members. The configured
+        -- component identity selects the products, not byte equivalence of
+        -- those containers. Observe the actual selected archive for caching.
+        pure installed
+      objects <- forM declarations $ \path -> do
+        check (not (isAbsolute path) && ".." `notElem` splitDirectories path)
+          "configured native source is outside its package"
+        -- Hadrian's Context.objectPath places nongenerated foreign objects
+        -- under their source extension, independently of Haskell objects.
+        pure (built </> drop 1 (takeExtension path) </> replaceExtension path "dyn_o")
+      check (length (nub (map takeFileName objects)) == length objects)
+        "configured native PIC archive has duplicate member names"
+      present <- filterM doesFileExist objects
+      if present /= objects then pure Nothing else do
+        let observe = forM (nub (configuration : objects ++ archives)) $ \path -> do
+              hash <- digest <$> BS.readFile path
+              pure (object ["path" .= path,"sha256" .= hash])
+        before <- observe
+        createDirectoryIfMissing True destination
+        directory <- canonicalizePath destination
+        let output = directory </> "libthc-configured-cbits.a"
+        (temporary,handle) <- openTempFile directory "cbits-"
+        hClose handle
+        removeFile temporary
+        ar <- maybe "ar" id <$> lookupEnv "THC_AR"
+        (status,_,diagnostic) <- readProcessWithExitCode ar (["rcs",temporary] ++ objects) ""
+        check (status == ExitSuccess) ("Cannot archive configured native PIC objects: " ++ diagnostic)
+        after <- observe
+        check (before == after) "configured native products changed during archiving"
+        renameFile temporary output
+        pure (Just (output,before))
 
 -- The constructor stays private: callers cannot supply arbitrary extra bitcode
 -- through the dependency seam without an actual resolved C-only registration.

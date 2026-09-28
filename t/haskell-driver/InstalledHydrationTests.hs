@@ -106,7 +106,7 @@ fixture names action = do
       ["name: thc-hydration-fixture", "version: 0.1", "id: " ++ identifier,
        "key: " ++ identifier, "exposed: True", "exposed-modules: " ++ unwords names,
        "import-dirs: " ++ show directory]
-    let context = InstalledContext executable directory executable (directory </> "global") [directory] Null executable
+    let context = InstalledContext executable directory executable (directory </> "global") [directory] Null executable Nothing
     unit <- discoverInstalled context identifier
     action directory context unit
   where

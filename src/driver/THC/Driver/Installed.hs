@@ -58,6 +58,7 @@ data InstalledContext = InstalledContext
   , installedPackageTool :: FilePath, installedGlobalDb :: FilePath
   , installedDatabases :: [FilePath], installedCompiler :: Value
   , installedGhc :: FilePath
+  , installedSource :: Maybe FilePath
   } deriving (Eq, Show)
 
 data InstalledUnit = InstalledUnit
@@ -119,7 +120,7 @@ installedContext ghc pkg helper databases compiler = do
   dbs <- mapM canonicalizePath databases
   unless (length dbs == length (nub dbs) && global `notElem` dbs)
     (fail "duplicate selected installed-Core package database")
-  pure (InstalledContext helper libdir pkg global dbs compiler ghc)
+  pure (InstalledContext helper libdir pkg global dbs compiler ghc Nothing)
 
 -- | Cabal's parsed registration is authoritative, including hidden modules and
 -- exact reexport providers. Do not invent bodies for native-only/facade units.
@@ -177,13 +178,14 @@ validateReexports units = do
       (fail ("missing concrete installed reexport provider " ++ owner ++ ":" ++ name))
 
 installedProvenance :: InstalledContext -> InstalledUnit -> Value
-installedProvenance context unit = object
+installedProvenance context unit = object $
   ["registeredUnit" .= registeredId unit, "registration" .= registration unit,
    "compiler" .= installedCompiler context, "libdir" .= installedLibdir context,
    "packageDatabases" .= (installedGlobalDb context : installedDatabases context),
    "way" .= ("dynamic" :: String), "coverage" .= ("registered-owned-modules" :: String),
    "interfaces" .= [object ["module" .= name, "path" .= path] | (name, path) <- installedInterfaces unit],
-   "reexports" .= installedReexports unit, "depends" .= installedDepends unit]
+   "reexports" .= installedReexports unit, "depends" .= installedDepends unit] ++
+   ["configuredSource" .= source | Just source <- [installedSource context]]
 
 -- Use the selected package database's RTS headers, rather than host headers
 -- or paths inferred from the GHC executable. The registration text is part of
