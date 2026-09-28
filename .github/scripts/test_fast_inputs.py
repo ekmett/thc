@@ -1985,7 +1985,8 @@ class RenamedInputContractTests(unittest.TestCase):
                           "src/main/java/thc/runtime/CoreVectorMemory.java",
                           "src/main/java/thc/runtime/VectorByteArrayExpression.java",
                           "src/main/java/thc/runtime/VectorMemory.java",
-                          "src/test/kotlin/thc/runtime/IntegerSimdModelTest.kt"), cache.RUNTIME_INPUTS)
+                          "src/test/java/thc/runtime/IntegerSimdModelTest.java",
+                          "src/test/java/thc/runtime/IntegerSimdModel.java"), cache.RUNTIME_INPUTS)
         with patch.object(cache, "toolchain", return_value={}):
             sources = cache.identity(root)["sources"]
         for name in (*cache.RUNTIME_INPUTS, "json-index/THC/JsonIndex.hs",

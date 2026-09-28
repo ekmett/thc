@@ -70,7 +70,8 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual({"build/" + family for family in fast_fixtures.fast_inputs.INTEGER_SIMD_FAMILIES}, set(group["outputs"]))
         self.assertTrue(all((project / path).is_file() for path in group["sources"]))
         sources = fast_fixtures._source_hashes(project, group)
-        self.assertIn("src/test/kotlin/thc/runtime/IntegerSimdModelTest.kt", sources)
+        self.assertIn("src/test/java/thc/runtime/IntegerSimdModelTest.java", sources)
+        self.assertIn("src/test/java/thc/runtime/IntegerSimdModel.java", sources)
         self.assertIn("test/haskell-fixtures/IntegerSimdFixtures.hs", sources)
         for native in (False, True):
             with tempfile.TemporaryDirectory() as directory:

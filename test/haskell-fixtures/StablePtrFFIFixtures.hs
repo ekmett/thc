@@ -92,7 +92,8 @@ prepareStablePtrFFI root = do
   inputs <- hashes root $ [fixture </> source | source <- sources] ++
     ["test/haskell-fixtures/StablePtrFFIFixtures.hs","src/THC/Driver/PackageNative.hs",
      "src/THC/Driver/NativeArgumentBridge.hs",
-     "src/main/kotlin/thc/runtime/StablePointers.kt","src/main/java/thc/runtime/PackageScalarAccess.java"]
+     "src/main/java/thc/runtime/StablePointers.java","src/main/java/thc/runtime/PackageScalarAccess.java",
+     "src/main/java/thc/runtime/PackagePointerLease.java","src/main/java/thc/runtime/PackageNativePointer.java"]
   artifacts <- hashes root $ [directory </> "packages.json",directory </> "audit.json",projectFile,packageFile] ++
     [project </> source | source <- sources] ++ concatMap commandArtifacts [built,located,managed,native]
   writeJson manifest $ object ["schema" .= (1::Int),"strictAccepted" .= True,"runtimeVerified" .= True,

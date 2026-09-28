@@ -1551,7 +1551,7 @@
       ],
       "python": []
     },
-    "src/test/kotlin/thc/runtime/SimdByteArrayCorpus.kt": {
+    "src/test/java/thc/runtime/SimdByteArrayCorpus.java": {
       "junit": [
         "thc.runtime.SimdInt32ByteArrayTest",
         "thc.runtime.SimdWord32ByteArrayTest",
@@ -1560,7 +1560,7 @@
       ],
       "python": []
     },
-    "src/test/kotlin/thc/runtime/SimdByteArrayEvidence.kt": {
+    "src/test/java/thc/runtime/SimdByteArrayEvidence.java": {
       "junit": [
         "thc.runtime.SimdInt32ByteArrayTest",
         "thc.runtime.SimdWord32ByteArrayTest",
@@ -2676,7 +2676,11 @@
         "scripts/test-simd-families.py"
       ]
     },
-    "src/test/kotlin/thc/runtime/Simd128ArrayProofTest.kt": {
+    "src/test/java/thc/runtime/Simd128ArrayProofTest.java": {
+      "junit": ["thc.runtime.Simd128ArrayProofTest", "thc.runtime.SimdWideArrayProofTest"],
+      "python": []
+    },
+    "src/test/java/thc/runtime/VectorArrayProofCases.java": {
       "junit": ["thc.runtime.Simd128ArrayProofTest", "thc.runtime.SimdWideArrayProofTest"],
       "python": []
     },
@@ -2816,7 +2820,11 @@
       "junit": ["thc.runtime.IntegerSimdModelTest", "thc.runtime.SimdInt8VectorTest", "thc.runtime.SimdInt16VectorTest", "thc.runtime.SimdWord16VectorTest", "thc.runtime.SimdWord32VectorTest"],
       "python": ["scripts/test-core-vectors.py"]
     },
-    "src/test/kotlin/thc/runtime/IntegerSimdModelTest.kt": {
+    "src/test/java/thc/runtime/IntegerSimdModelTest.java": {
+      "junit": ["thc.runtime.IntegerSimdModelTest", "thc.runtime.SimdInt8VectorTest", "thc.runtime.SimdInt16VectorTest", "thc.runtime.SimdWord16VectorTest", "thc.runtime.SimdWord32VectorTest"],
+      "python": ["scripts/test-core-vectors.py"]
+    },
+    "src/test/java/thc/runtime/IntegerSimdModel.java": {
       "junit": ["thc.runtime.IntegerSimdModelTest", "thc.runtime.SimdInt8VectorTest", "thc.runtime.SimdInt16VectorTest", "thc.runtime.SimdWord16VectorTest", "thc.runtime.SimdWord32VectorTest"],
       "python": ["scripts/test-core-vectors.py"]
     },
@@ -3207,7 +3215,7 @@
       "junit": ["thc.runtime.SimdWideFloatFmaTest"],
       "python": []
     },
-    "src/test/kotlin/thc/runtime/SimdFloatFmaTest.kt": {
+    "src/test/java/thc/runtime/SimdFloatFmaTest.java": {
       "junit": ["thc.runtime.SimdFloatFmaTest", "thc.runtime.SimdWideFloatFmaTest"],
       "python": []
     },

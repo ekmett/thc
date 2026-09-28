@@ -499,11 +499,10 @@ prepareSimdByteArray root name args = do
   auditorSources <- map ("scripts" </>) . filter (\path -> "core_" `isPrefixOf` path && takeExtension path == ".py") <$> listDirectory (root </> "scripts")
   sources <- mapM (record root) . sort . Set.toList . Set.fromList $ [fixture,nativeSource,
     "test/haskell-fixtures/SimdByteArrayFixtures.hs","test/haskell-fixtures/SimdByteArrayModel.hs","test/haskell-fixtures/FixtureSupport.hs","test/haskell-fixtures/Main.hs","thc.cabal",
-    "scripts/audit-core.py","scripts/core-capabilities.json","src/main/java/thc/runtime/VectorMemoryFamily.java",
-            "src/main/java/thc/runtime/VectorMemoryOp.java",
-            "src/main/java/thc/runtime/VectorReadCase.java",
-            "src/main/java/thc/runtime/CoreVectorMemory.java",
-            "src/main/java/thc/runtime/VectorByteArrayExpression.java",
+    "scripts/audit-core.py","scripts/core-capabilities.json",
+    "src/main/java/thc/runtime/VectorMemoryFamily.java","src/main/java/thc/runtime/VectorMemoryOp.java",
+    "src/main/java/thc/runtime/VectorReadCase.java","src/main/java/thc/runtime/CoreVectorMemory.java",
+    "src/main/java/thc/runtime/VectorByteArrayExpression.java",
     "src/main/resources/thc/scalar-primop-signatures.json","compiler/build.sh","compiler/export.sh","compiler/toolchain.sh","compiler/plugin.py"] ++
     ["src/main/java/thc/runtime/VectorMemory.java" | family == DoubleLanes] ++ compilerSources ++ auditorSources ++ retainedSources
   artifactRecords <- mapM (record root) (sort (Set.toList (Set.fromList artifacts)))
