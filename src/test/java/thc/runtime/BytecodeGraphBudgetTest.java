@@ -158,12 +158,13 @@ class BytecodeGraphBudgetTest {
                 assertEquals(spills + 1, stack.getSpills());
                 assertTrue(prefix.isEmpty()); assertEquals(0, calls.get());
                 assertEquals(1, entries(program));
-                assertEquals(original, instructions(root), "parking must preserve the original instruction stream");
+                var parked = assertOnlyFirstEntryQuickening(original, instructions(root));
                 root.getRootNodes().ensureSourceInformation();
-                assertEquals(original, instructions(root), "source replay must preserve parked PCs and operands");
+                assertEquals(parked, instructions(root), "source replay must preserve parked PCs and operands");
                 var cloneMethod = root.getClass().getDeclaredMethod("cloneUninitialized"); cloneMethod.setAccessible(true);
                 var clone = (BytecodeRoot) cloneMethod.invoke(root);
-                assertEquals(original, instructions(clone)); assertEquals(0, clone.getGraphBudgetGeneration());
+                assertUninitializedClone(original, parked, instructions(clone));
+                assertEquals(0, clone.getGraphBudgetGeneration());
                 assertEquals(1, entries(program));
                 owner.stm.restore(ambient);
                 var resume = new RootNode(language) {
@@ -182,12 +183,12 @@ class BytecodeGraphBudgetTest {
                 // First interpreter resumption specializes ChildResume and quickens
                 // its dead-result pop. These are adaptive bytes, not moved guest PCs.
                 // Assert exactly those two changes; do not normalize other operands.
-                var resumedInstructions = new LinkedHashMap<>(original);
-                var resumeSites = original.entrySet().stream()
+                var resumedInstructions = new LinkedHashMap<>(parked);
+                var resumeSites = parked.entrySet().stream()
                         .filter(entry -> entry.getValue().equals("c.ResumeApplication[state_0(0)]")).toList();
                 assertEquals(1, resumeSites.size());
                 int resumeBci = resumeSites.getFirst().getKey();
-                int popBci = original.entrySet().stream()
+                int popBci = parked.entrySet().stream()
                         .filter(entry -> entry.getKey() > resumeBci && entry.getValue().equals("pop[child0(ffffffff)]"))
                         .mapToInt(Map.Entry::getKey).findFirst().orElseThrow();
                 resumedInstructions.put(resumeBci, "c.ResumeApplication[state_0(2)]");
@@ -247,11 +248,13 @@ class BytecodeGraphBudgetTest {
                 var high = program.entryValue("chosen"); var low = program.constructorLayout("C17").allocate();
                 assertEquals(80227L, Calls.target(target, new Object[]{0L, second ? low : high, step, second ? high : low}));
                 assertEquals(128, calls.get()); assertEquals(1, entries(program));
-                assertSame(target, program.entryTarget("entry")); assertTrue(valid(target));
-                root.getRootNodes().ensureSourceInformation(); assertEquals(original, instructions(root));
+                assertSame(target, program.entryTarget("entry"));
+                var executed = assertOnlyFirstEntryQuickening(original, instructions(root));
+                root.getRootNodes().ensureSourceInformation(); assertEquals(executed, instructions(root));
                 var cloneMethod = root.getClass().getDeclaredMethod("cloneUninitialized"); cloneMethod.setAccessible(true);
                 var clone = (BytecodeRoot) cloneMethod.invoke(root);
-                assertEquals(original, instructions(clone)); assertEquals(0, clone.getGraphBudgetGeneration());
+                assertUninitializedClone(original, executed, instructions(clone));
+                assertEquals(0, clone.getGraphBudgetGeneration());
                 var handoff = language.getHandoffState().get(); assertNull(handoff.getPending());
                 assertEquals(0, handoff.getArguments().getDepth()); assertEquals(0, handoff.getResults().getDepth());
                 assertEquals(0, handoff.getArguments().retainedReferences()); assertEquals(0, handoff.getResults().retainedReferences());
@@ -358,12 +361,14 @@ class BytecodeGraphBudgetTest {
                 assertEquals(repetitions, calls.get(), "no preparation, retry or branch replay may execute a call");
                 assertEquals(1, entries(program));
                 assertSame(target, ((Closure) program.entryValue("entry")).target);
+                var executed = assertOnlyFirstEntryQuickening(beforeInstructions, instructions(root));
                 root.getRootNodes().ensureSourceInformation();
-                assertEquals(beforeInstructions, instructions(root));
+                assertEquals(executed, instructions(root));
                 assertEquals(0, root.getGraphBudgetGeneration());
                 var cloneMethod = root.getClass().getDeclaredMethod("cloneUninitialized"); cloneMethod.setAccessible(true);
                 var clone = (BytecodeRoot) cloneMethod.invoke(root);
-                assertEquals(beforeInstructions, instructions(clone)); assertEquals(0, clone.getGraphBudgetGeneration());
+                assertUninitializedClone(beforeInstructions, executed, instructions(clone));
+                assertEquals(0, clone.getGraphBudgetGeneration());
                 var regionField = BytecodeRoot.class.getDeclaredField("caseRegions"); regionField.setAccessible(true);
                 var region = ((BytecodeCaseRegion[]) regionField.get(root))[0];
                 var widthField = BytecodeCaseRegion.class.getDeclaredField("width"); widthField.setAccessible(true);
@@ -473,6 +478,38 @@ class BytecodeGraphBudgetTest {
         return result;
     }
 
+    /** Stock first-entry specialization may change these adaptive bytes, never PCs or operands. */
+    private static Map<Integer, String> assertOnlyFirstEntryQuickening(
+            Map<Integer, String> before, Map<Integer, String> after) {
+        assertEquals(before.keySet(), after.keySet());
+        before.forEach((bci, old) -> {
+            if (old.equals(after.get(bci))) return;
+            int operands = old.indexOf('[');
+            String name = old.substring(0, operands);
+            String expected = switch (name) {
+                case "branch.false", "load.constant" -> name + "$Boolean" + old.substring(operands);
+                case "c.StackLimit", "c.PollAsync", "c.MatchData" -> name + "$unboxed" + old.substring(operands);
+                case "c.ForceLocal" -> old.replace("state_0(0)", "state_0(8)");
+                case "branch.backward" -> old.replaceAll(
+                        "loop_header_branch_profile\\((\\d+):never executed\\)", "loop_header_branch_profile($1:1.00)");
+                default -> old;
+            };
+            assertEquals(expected, after.get(bci), "unexpected instruction change at " + bci);
+        });
+        return after;
+    }
+
+    private static void assertUninitializedClone(Map<Integer, String> original,
+            Map<Integer, String> executed, Map<Integer, String> clone) {
+        var expected = new LinkedHashMap<>(original);
+        // cloneUninitialized resets instruction quickening and branch profiles,
+        // while the precreated ForceLocal child's specialization state is copied.
+        original.forEach((bci, value) -> {
+            if (value.startsWith("c.ForceLocal[")) expected.put(bci, executed.get(bci));
+        });
+        assertEquals(expected, clone);
+    }
+
     private static Map<String, Object> smallDecision(int depth) {
         var alternatives = new ArrayList<List<Object>>();
         for (int arm = 0; arm < 3; arm++) {
@@ -533,14 +570,22 @@ class BytecodeGraphBudgetTest {
     }
 
     private static Map<String, Object> broadDefaultSuffix(int depth) {
-        var input = new LinkedHashMap<>(smallDecision(depth));
+        return broadDefaultSuffix(depth, depth);
+    }
+
+    private static Map<String, Object> broadDefaultSuffix(int prefixDepth, int suffixDepth) {
+        var input = new LinkedHashMap<>(smallDecision(suffixDepth));
         var entry = new LinkedHashMap<>(((List<Map<String, Object>>) input.get("bindings")).getFirst());
         var lambda = new ArrayList<>((List<Object>) entry.get("expr"));
         var alternatives = (List<List<Object>>) ((List<Object>) lambda.get(2)).get(3);
         var part = (List<Object>) alternatives.getFirst().get(3);
+        var prefixEntry = ((List<Map<String, Object>>) smallDecision(prefixDepth).get("bindings")).getFirst();
+        var prefixLambda = (List<Object>) prefixEntry.get("expr");
+        var prefixAlternatives = (List<List<Object>>) ((List<Object>) prefixLambda.get(2)).get(3);
+        var prefixPart = (List<Object>) prefixAlternatives.getFirst().get(3);
         List<Object> prefix = number(0), suffix = variable("selected", LONG);
         for (int i = 0; i < 2; i++) {
-            prefix = node("app", node("prim", "+#"), List.of(part, prefix), List.of(false, false), false, false, Map.of("rep", LONG));
+            prefix = node("app", node("prim", "+#"), List.of(prefixPart, prefix), List.of(false, false), false, false, Map.of("rep", LONG));
             suffix = node("app", node("prim", "+#"), List.of(part, suffix), List.of(false, false), false, false, Map.of("rep", LONG));
         }
         lambda.set(2, node("case", prefix, "selected", List.of(node("default", null, List.of(), suffix)),
@@ -571,7 +616,7 @@ class BytecodeGraphBudgetTest {
                 var prefix = new ManagedMVar(); assertTrue(prefix.tryPut(new Object()));
                 assertEquals(65L, Calls.target(target, new Object[]{0L, 17L, chain(program, 48), prefix}));
                 assertTrue(prefix.isEmpty()); assertEquals(1, entries(program));
-                assertEquals(original, instructions(root)); assertSame(target, program.entryTarget("entry"));
+                assertOnlyFirstEntryQuickening(original, instructions(root)); assertSame(target, program.entryTarget("entry"));
             } finally { context.leave(); }
         }
     }
@@ -581,10 +626,12 @@ class BytecodeGraphBudgetTest {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                var program = new BytecodeProgram(language, broadDefaultSuffix(96));
+                // The observed 48-link suffix exceeds the fixed budget, while the
+                // smaller unsplit prefix fits after the suffix moves out of line.
+                var program = new BytecodeProgram(language, broadDefaultSuffix(8, 48));
                 var target = program.entryTarget("entry"); var root = (BytecodeRoot) target.getRootNode();
-                var input = chain(program, 96);
-                assertEquals(384L, Calls.target(target, new Object[]{0L, 17L, input}));
+                var input = chain(program, 48);
+                assertEquals(112L, Calls.target(target, new Object[]{0L, 17L, input}));
                 var original = instructions(root);
                 assertEquals(0, root.getGraphBudgetGeneration()); assertEquals(0, entries(program));
                 assertTrue(compile(target));
@@ -592,14 +639,14 @@ class BytecodeGraphBudgetTest {
                 assertEquals(0, entries(program)); assertEquals(original, instructions(root));
                 assertTrue(valid(target), "the finite recovery graph is installed before guest execution");
                 bypass(target);
-                assertEquals(384L, Calls.target(target, new Object[]{0L, 17L, chain(program, 96)}));
+                assertEquals(112L, Calls.target(target, new Object[]{0L, 17L, chain(program, 48)}));
                 assertSame(target, program.entryTarget("entry"));
                 // The newly extracted suffix is still cold; its first execution may deoptimize.
                 // Compile that now-observed path explicitly, never retry the guest call on failure.
                 assertEquals(original.keySet(), instructions(root).keySet());
                 assertTrue(compile(target)); assertTrue(valid(target)); bypass(target);
                 long before = entries(program);
-                assertEquals(384L, Calls.target(target, new Object[]{0L, 17L, input}));
+                assertEquals(112L, Calls.target(target, new Object[]{0L, 17L, input}));
                 assertEquals(before + 1, entries(program)); assertTrue(valid(target));
                 assertSame(target, program.entryTarget("entry")); assertEquals(1, root.prepareGraphBudgetRetry(1));
             } finally { context.leave(); }
@@ -861,17 +908,24 @@ class BytecodeGraphBudgetTest {
         lambda.set(2, node("app", node("prim", "+#"), List.of(first, second),
                 List.of(false, false), false, false, Map.of("rep", LONG)));
         entry.put("expr", lambda); bindings.set(0, entry); input.put("bindings", bindings);
-        try (var context = context()) {
+        try (var context = context(10000)) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 var program = new BytecodeProgram(language, input); var target = program.entryTarget("entry");
-                var root = (BytecodeRoot) target.getRootNode(); var original = instructions(root);
+                var root = (BytecodeRoot) target.getRootNode();
                 var field = BytecodeRoot.class.getDeclaredField("caseRegions"); field.setAccessible(true);
                 assertEquals(2, ((BytecodeCaseRegion[]) field.get(root)).length);
+                var uninitialized = instructions(root);
+                // Ordinary branch profiles intentionally prune cold arms. Observe
+                // each pure arm before asking the compiler to compile that graph.
+                for (int arm = 0; arm < 768; arm++)
+                    assertEquals(2L * (arm * 3L + 17), Calls.target(target,
+                            new Object[]{0L, program.constructorLayout("C" + arm).allocate()}));
+                var original = instructions(root);
                 assertEquals(0, root.getGraphBudgetGeneration()); assertEquals(0, entries(program));
                 assertTrue(compile(target));
-                assertEquals(1, root.getGraphBudgetGeneration(), "a real normal-limit bailout must select both regions");
+                assertEquals(1, root.getGraphBudgetGeneration(), "a real observed-graph bailout must select both regions");
                 assertEquals(0, entries(program)); assertEquals(original, instructions(root));
                 bypass(target);
                 assertEquals(4636L, Calls.target(target, new Object[]{0L, program.entryValue("chosen")}));
@@ -880,7 +934,8 @@ class BytecodeGraphBudgetTest {
                 root.getRootNodes().ensureSourceInformation(); assertEquals(original, instructions(root));
                 var cloneMethod = root.getClass().getDeclaredMethod("cloneUninitialized"); cloneMethod.setAccessible(true);
                 var clone = (BytecodeRoot) cloneMethod.invoke(root);
-                assertEquals(original, instructions(clone)); assertEquals(1, clone.getGraphBudgetGeneration());
+                assertUninitializedClone(uninitialized, original, instructions(clone));
+                assertEquals(1, clone.getGraphBudgetGeneration());
             } finally { context.leave(); }
         }
     }
