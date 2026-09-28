@@ -1,8 +1,10 @@
 # Explicit runtime protocol support
 
-THC builds distinct Truffle artifacts from the published 25.3.4.1 source
+By default, THC builds distinct Truffle artifacts from the published 25.3.4.1 source
 archives. It never replaces shared Maven cache files. The build checks pinned
 source and binary hashes and preserves the upstream notices.
+`-Pthc.stockTruffle=true` selects the upstream API, runtime and Sulong instead;
+see the [stock-mode limits](../../docs/contributing.md#generated-instruction-metadata).
 
 ## Bytecode generation
 
@@ -32,8 +34,8 @@ unknown carriers retain the generic path.
 and `ContinuationRootNode` sources. The distinct API jar retains every unrelated upstream
 class, resource, service, module descriptor and multi-release entry byte-for-byte.
 `verifyMaterializableApiSelection` checks that preservation and the runtime
-classpath; THC also hard-links the additive policy-version method so stock API
-selection fails immediately instead of silently ignoring the override.
+classpath. THC's optional declarations also compile against the stock API,
+which uses its ordinary observed materialization policy.
 
 A root can declare that its frame may materialize before the call target is
 published. The default is false. The declaration uses the existing compiler
@@ -79,9 +81,9 @@ execute a dummy guest call, train a branch, or change compiler algorithms.
 classes, and the declared indirect-call node below into a distinct runtime jar. `verifyProtocolRuntimeSelection` verifies
 pinned inputs, exact artifact selection, and byte-for-byte preservation of every
 unrelated upstream entry, including notices, module and multi-release resources.
-THC links an additive runtime version method so selecting stock runtime cannot
-silently ignore the contract. The original dependency metadata is preserved
-explicitly when replacing Maven binaries with file artifacts.
+The original dependency metadata is preserved explicitly when replacing Maven
+binaries with file artifacts. Stock runtime selection uses ordinary return
+profiling; the first captured completion may invalidate compiled code.
 
 `./gradlew testReturnPolicy testReturnContinuations` checks the same handwritten
 control binary against stock and declared jars, with exact first installed entry
@@ -97,21 +99,9 @@ change for materializable roots, so these correctness checks make no throughput
 or ordinary-allocation performance claim. Native-image execution of the changed
 artifacts requires its own validation; JVM AOT preparation is not that evidence.
 
-## Declared cold indirect-call exceptions
-
-An untouched compiled generic call can transfer a delimited capture or another
-exception on its first invocation. The additive
-`OptimizedIndirectCallNode.createUnprofiledExceptions()` factory declares that
-polymorphic exception contract with an immutable flag. THC uses it only for
-the prepared cold-generic call path. Ordinary indirect nodes retain their
-existing observed exception-class profile.
-
-The declared node keeps the original indirect-call algorithm, argument handling,
-stack-frame recording and exact thrown object. It introduces no call boundary,
-wrapper exception, synthetic observation or guest execution during preparation.
-The same `testReturnPolicy` stock/overlay control binary checks first compiled
-guest/control/host exceptions, lazy payload identity, clone independence and
-once-only effects. Default nodes still invalidate on their first exception.
+THC's prepared cold-generic calls use ordinary `IndirectCallNode.create()` and
+its exception profiling in both runtime configurations. A first exception may
+invalidate compiled code; saved state and once-only effects must survive it.
 
 ## Graph-budget recovery lifecycle
 

@@ -89,11 +89,11 @@ class DeferredDefaultArmTest {
                 Program program = program(language, true);
                 RootCallTarget target = program.entryTarget("entry");
                 assertEquals(0, count(program));
-                assertEquals(0, target.getRootNode().getGraphBudgetGeneration());
+                assertEquals(0, ((FunctionRoot) target.getRootNode()).getGraphBudgetGeneration());
                 assertTrue(NodeUtil.findAllNodeInstances(target.getRootNode(), AstCaseArm.class).isEmpty(),
                         "the original caller must still contain its arm before the real budget failure");
                 assertTrue(compile(target));
-                assertEquals(1, target.getRootNode().getGraphBudgetGeneration(), "one real structural extraction");
+                assertEquals(1, ((FunctionRoot) target.getRootNode()).getGraphBudgetGeneration(), "one real structural extraction");
                 assertEquals(0, count(program), "compilation cannot execute a settling guest call");
                 assertEquals(1, NodeUtil.findAllNodeInstances(target.getRootNode(), AstCaseArm.class).size());
                 bypass(target);
@@ -116,7 +116,7 @@ class DeferredDefaultArmTest {
                 RootCallTarget target = program.entryTarget("entry");
                 InvocationTargetException error = assertThrows(InvocationTargetException.class, () -> compile(target));
                 assertTrue(error.getCause().toString().contains("GraphTooBigBailoutException"));
-                assertEquals(0, target.getRootNode().getGraphBudgetGeneration());
+                assertEquals(0, ((FunctionRoot) target.getRootNode()).getGraphBudgetGeneration());
                 assertEquals(0, count(program));
                 assertFalse(valid(target));
             } finally { context.leave(); }
@@ -154,9 +154,9 @@ class DeferredDefaultArmTest {
                 Language language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 Program program = program(language, module(expression, argument, proof));
                 RootCallTarget original = program.entryTarget("entry");
-                RootNode clone = NodeUtil.cloneNode(original.getRootNode());
+                FunctionRoot clone = NodeUtil.cloneNode((FunctionRoot) original.getRootNode());
                 assertTrue(compile(original));
-                assertEquals(0, original.getRootNode().getGraphBudgetGeneration(), "small body stays inline");
+                assertEquals(0, ((FunctionRoot) original.getRootNode()).getGraphBudgetGeneration(), "small body stays inline");
                 assertEquals(1, deferredArmCount(original.getRootNode()));
                 bypass(original);
                 long before = count(program);
@@ -166,7 +166,7 @@ class DeferredDefaultArmTest {
                 // Explicit callback unit control, not evidence of a real budget failure.
                 // The oversized test above exercises the actual compiler lifecycle.
                 assertEquals(1, clone.prepareGraphBudgetRetry(0));
-                assertEquals(0, original.getRootNode().getGraphBudgetGeneration());
+                assertEquals(0, ((FunctionRoot) original.getRootNode()).getGraphBudgetGeneration());
                 RootCallTarget extracted = clone.getCallTarget();
                 assertTrue(compile(extracted));
                 bypass(extracted);
@@ -178,7 +178,7 @@ class DeferredDefaultArmTest {
                 assertEquals(original.getRootNode().getSourceSection(), call.getTarget().getRootNode().getSourceSection());
                 assertFalse(call.getTarget().getRootNode().isCloningAllowed());
                 RootCallTarget after = NodeUtil.cloneNode(clone).getCallTarget();
-                assertEquals(1, after.getRootNode().getGraphBudgetGeneration());
+                assertEquals(1, ((FunctionRoot) after.getRootNode()).getGraphBudgetGeneration());
                 assertTrue(compile(after));
                 bypass(after);
                 before = count(program);
@@ -207,7 +207,7 @@ class DeferredDefaultArmTest {
                 Language language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 for (List<Object> expression : List.of(choice, primitive("+#", choice, integer(17)))) {
                     Program program = program(language, module(expression, parameter("x"), LONG));
-                    RootNode root = program.entryTarget("entry").getRootNode();
+                    FunctionRoot root = (FunctionRoot) program.entryTarget("entry").getRootNode();
                     assertTrue(deferredArmCount(root) == 0);
                     assertEquals(0, root.prepareGraphBudgetRetry(0));
                     assertEquals(0, count(program));
@@ -228,7 +228,7 @@ class DeferredDefaultArmTest {
                             Map.of("rep", LONG, "binder", parameter("seen")));
                     Program program = program(language, module(expression, parameter("x"), LONG));
                     RootCallTarget target = program.entryTarget("entry");
-                    assertEquals(1, target.getRootNode().prepareGraphBudgetRetry(0));
+                    assertEquals(1, ((FunctionRoot) target.getRootNode()).prepareGraphBudgetRetry(0));
                     AstCaseArm arm = NodeUtil.findAllNodeInstances(target.getRootNode(), AstCaseArm.class).getFirst();
                     assertNotSame(previous, arm.getTarget());
                     previous = arm.getTarget();

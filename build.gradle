@@ -52,8 +52,13 @@ def generateSimdFamilies = tasks.register("generateSimdFamilies", Exec) {
 }
 sourceSets.main { java.srcDir(layout.buildDirectory.dir("generated/simd/java")) }
 def graalVersion = "25.3.4.1"
-apply(from: "src/gradle/materializable-api.gradle")
-apply(from: "src/gradle/protocol-runtime.gradle")
+def stockTruffleOption = providers.gradleProperty("thc.stockTruffle").orElse("false").get()
+requireBuild(stockTruffleOption in ["true", "false"]) { "thc.stockTruffle must be true or false" }
+def stockTruffle = stockTruffleOption == "true"
+if (!stockTruffle) {
+    apply(from: "src/gradle/materializable-api.gradle")
+    apply(from: "src/gradle/protocol-runtime.gradle")
+}
 // Additional languages are opt-in; the ordinary runtime stays language-neutral.
 def polyglotDemoRuntime = configurations.create("polyglotDemoRuntime")
 dependencies {
@@ -70,7 +75,28 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     add(polyglotDemoRuntime.name, "org.graalvm.polyglot:js:$graalVersion")
 }
-apply(from: "src/gradle/windows-sulong.gradle")
+if (!stockTruffle) apply(from: "src/gradle/windows-sulong.gradle")
+if (stockTruffle) {
+    def verifyStockTruffle = tasks.register("verifyStockTruffle") {
+        group = "verification"
+        description = "Check that the runtime uses the pinned upstream Truffle API, runtime and Sulong."
+        inputs.files(configurations.runtimeClasspath)
+        doLast {
+            def artifacts = configurations.runtimeClasspath.files.collect { it.name }
+            for (module in ["truffle-api", "truffle-runtime", "llvm-language"]) {
+                checkBuild(artifacts.count { it == "${module}-${graalVersion}.jar" } == 1) {
+                    "Expected exactly one upstream ${module} artifact"
+                }
+            }
+            checkBuild(artifacts.every { !it.startsWith("thc-truffle-") && !it.startsWith("thc-llvm-language-") }) {
+                "A patched runtime artifact remains on the stock classpath"
+            }
+        }
+    }
+    tasks.withType(Test).configureEach { dependsOn(verifyStockTruffle) }
+    tasks.named("startScripts") { dependsOn(verifyStockTruffle) }
+    tasks.named("check") { dependsOn(verifyStockTruffle) }
+}
 apply(from: "src/gradle/bytecode-metadata.gradle")
 apply(from: "src/gradle/java-build-tests.gradle")
 java { toolchain { languageVersion = JavaLanguageVersion.of(25) } }

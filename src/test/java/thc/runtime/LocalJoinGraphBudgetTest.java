@@ -99,12 +99,12 @@ class LocalJoinGraphBudgetTest {
                             if (failed.getBoolean(side)) states.add("failed-side-" + mode);
                         }
                     }
-                    throw new AssertionError("real OSR failed at generation " + target.getRootNode().getGraphBudgetGeneration() +
+                    throw new AssertionError("real OSR failed at generation " + ((FunctionRoot) target.getRootNode()).getGraphBudgetGeneration() +
                             ", slots=" + target.getRootNode().getFrameDescriptor().getNumberOfSlots() +
                             ", arms=" + arms.size() + ", states=" + states, failure);
                 }
                 assertEquals(10193L, result);
-                assertTrue(target.getRootNode().getGraphBudgetGeneration() > 0, "actual structural budget recovery");
+                assertTrue(((FunctionRoot) target.getRootNode()).getGraphBudgetGeneration() > 0, "actual structural budget recovery");
                 assertEquals(1501L, ((Number) program.diagnostics().get("localJoinTransfers")).longValue(), "no replayed join transfer");
                 assertSame(target, program.entryTarget("entry"));
                 var loops = NodeUtil.findAllNodeInstances(target.getRootNode(), OptimizedOSRLoopNode.class);
@@ -138,12 +138,13 @@ class LocalJoinGraphBudgetTest {
                 var sides = (com.oracle.truffle.api.RootCallTarget[]) field.get(arm);
                 com.oracle.truffle.api.RootCallTarget rawSide = sides[2];
                 var side = (OptimizedCallTarget) rawSide;
-                long generation = side.getRootNode().getGraphBudgetGeneration();
+                var sideRoot = (AstSameFrameArm.ArmRoot) side.getRootNode();
+                long generation = sideRoot.getGraphBudgetGeneration();
                 var failure = assertThrows(com.oracle.truffle.api.OptimizationFailedException.class,
                         () -> ((OptimizedCallTarget) rawSide).compile(true));
                 assertTrue(failure.toString().contains("GraphTooBigBailoutException"));
-                assertEquals(generation, side.getRootNode().getGraphBudgetGeneration());
-                assertEquals(generation, side.getRootNode().prepareGraphBudgetRetry(generation),
+                assertEquals(generation, sideRoot.getGraphBudgetGeneration());
+                assertEquals(generation, sideRoot.prepareGraphBudgetRetry(generation),
                         "no unbounded retry when no unused boundary remains");
                 assertFalse(side.isValid());
                 assertEquals(0L, ((Number) program.diagnostics().get("localJoinTransfers")).longValue());

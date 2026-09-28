@@ -200,8 +200,9 @@ public final class FunctionRoot extends GuestRoot {
     public boolean getCapturesContinuations$org_intelligence_thc() { return capturesContinuations; }
     public FunctionRootRole getRole$org_intelligence_thc() { return role; }
 
-    @Override public boolean requiresUnprofiledReturn() { return capturesContinuations || enableDelimited; }
-    @Override protected boolean requiresMaterializableFrame() { return capturesContinuations || enableDelimited; }
+    // Optional overlay declarations; stock Truffle uses its ordinary policies.
+    public boolean requiresUnprofiledReturn() { return capturesContinuations || enableDelimited; }
+    protected boolean requiresMaterializableFrame() { return capturesContinuations || enableDelimited; }
     @Override public long bloom(VirtualFrame frame) { return frame.getLong(FrameLayout.BLOOM_FILTER); }
     /** A pass-through side root has no catcher of its own. */
     public long entryBloom(long inherited) {
@@ -513,8 +514,8 @@ public final class FunctionRoot extends GuestRoot {
     public List<CoreSourceNote> getCoreSourceNotes() { return coreSourceLocation == null ? List.of() : coreSourceLocation.getNotes(); }
     @Override public String getName() { return label; }
     @Override public String toString() { return label; }
-    @Override public long getGraphBudgetGeneration() { return budgetGeneration; }
-    @Override public synchronized long prepareGraphBudgetRetry(long failedGeneration) {
+    public long getGraphBudgetGeneration() { return budgetGeneration; }
+    public synchronized long prepareGraphBudgetRetry(long failedGeneration) {
         if (deferredBudget && failedGeneration == 0L && budgetGeneration == 0L && AstDeferredArm.extract(this))
             budgetGeneration = 1L;
         else if (failedGeneration == budgetGeneration && AstSameFrameArm.extract(this))

@@ -153,6 +153,16 @@ materialization/completion declarations and runtime integration. The Truffle DSL
 processor is the published upstream artifact; branches use ordinary profiling.
 API/runtime overlays are built separately and never replace shared Maven cache files.
 
+For an upstream-runtime build, use `./gradlew -Pthc.stockTruffle=true installDist`.
+This selects the published Truffle API, runtime and Sulong artifacts; the
+`verifyStockTruffle` task checks the runtime classpath. Generated-source
+normalization still applies. Ordinary calls and saved continuations can use this
+configuration, with deoptimization allowed on a first uncommon event.
+Automatic graph-budget extraction and retry still require the default runtime
+overlay. Stock OSR wrappers expose no public source-owner accessor, so their
+events are omitted from per-context JIT counters. Full application, native-image
+and Windows native-library parity are not yet established for this mode.
+
 Run `./gradlew testBytecodeMetadataSplit` for compiled before/after opcode checks
 and malformed-input controls. Add
 `-Pthc.metadataFixture=/absolute/path/to/BytecodeRootGen.java` to compare every

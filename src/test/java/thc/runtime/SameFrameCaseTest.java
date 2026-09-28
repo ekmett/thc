@@ -187,7 +187,7 @@ class SameFrameCaseTest {
                     FrameSlotKind.Object, FrameSlotKind.Object, FrameSlotKind.Long}) builder.addSlot(kind, null, null);
             return builder.build();
         }
-        @Override protected boolean requiresMaterializableFrame() { return true; }
+        protected boolean requiresMaterializableFrame() { return true; }
         @Override protected ExecutionSignature prepareForAOT() { return ExecutionSignature.GENERIC; }
         @Override public Object execute(VirtualFrame frame) {
             frame.setLong(0, 7L);
