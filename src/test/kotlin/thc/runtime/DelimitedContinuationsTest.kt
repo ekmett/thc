@@ -836,7 +836,7 @@ class DelimitedContinuationsTest {
                         assertEquals(0, language.handoffState.get().results.depth,
                             "The transferred root must detach its tuple before another saved step runs")
                         FrameAccess.writeLong(frame, slot, 99L)
-                        ownedTupleResult(shape.finish(frame, intArrayOf(slot)), shape)
+                        TupleResultsKt.ownedTupleResult(shape.finish(frame, intArrayOf(slot)), shape)
                         return shape.layout.getLong(answer as HandoffStorage, 0)
                     }
                 })

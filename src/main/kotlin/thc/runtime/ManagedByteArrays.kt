@@ -392,7 +392,7 @@ internal object ManagedByteArray {
         is ManagedAllocation -> value.wholeBytesForPrimitive()
         else -> fault("Expected a managed ByteArray#")
     }
-    @JvmStatic fun requireState(value: Any?) = requireVoidCarrier(value)
+    @JvmStatic fun requireState(value: Any?) = TupleResultsKt.requireVoidCarrier(value)
 }
 
 private const val BYTE_ARRAY_REP = "BoxedRep (Just Unlifted)"

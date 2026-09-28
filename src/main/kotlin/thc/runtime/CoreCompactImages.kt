@@ -43,7 +43,7 @@ internal class CompactImageExpression(private val op: CompactImageOp,
             CompactImageOp.FIRST, CompactImageOp.NEXT -> {
                 val region = state.compactRegions.require(operands[0].execute(frame))
                 val previous = if (op == CompactImageOp.NEXT) operands[1].executeRequiredAddress(frame) else null
-                requireVoidCarrier(operands.last().execute(frame))
+                TupleResultsKt.requireVoidCarrier(operands.last().execute(frame))
                 val address = if (previous == null) state.compactImages.first(region) else state.compactImages.next(region, previous)
                 FrameAccess.write(frame, slots[offset], address)
                 FrameAccess.writeLong(frame, slots[offset + 1], if (address === ManagedAddress.nullAddress()) 0 else address.availableBytes())
@@ -51,20 +51,20 @@ internal class CompactImageExpression(private val op: CompactImageOp,
             CompactImageOp.ALLOCATE -> {
                 val size = operands[0].executeRequiredLong(frame)
                 val previous = operands[1].executeRequiredAddress(frame)
-                requireVoidCarrier(operands[2].execute(frame))
+                TupleResultsKt.requireVoidCarrier(operands[2].execute(frame))
                 FrameAccess.write(frame, slots[offset], state.compactImages.allocate(size, previous))
             }
             CompactImageOp.FIXUP -> {
                 val first = operands[0].executeRequiredAddress(frame)
                 val oldRoot = operands[1].executeRequiredAddress(frame)
-                requireVoidCarrier(operands[2].execute(frame))
+                TupleResultsKt.requireVoidCarrier(operands[2].execute(frame))
                 val fixed = state.compactImages.fixup(first, oldRoot)
                 FrameAccess.write(frame, slots[offset], fixed.region)
                 FrameAccess.write(frame, slots[offset + 1], fixed.root)
             }
             CompactImageOp.TO_ADDRESS -> {
                 val value = operands[0].execute(frame)
-                requireVoidCarrier(operands[1].execute(frame))
+                TupleResultsKt.requireVoidCarrier(operands[1].execute(frame))
                 FrameAccess.write(frame, slots[offset], state.heapAddresses.address(value))
             }
             CompactImageOp.FROM_ADDRESS -> FrameAccess.write(frame, slots[offset],

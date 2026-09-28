@@ -103,7 +103,7 @@ internal class MakeStablePointer(@field:Child private var value: Expr, @field:Ch
     override fun execute(frame: VirtualFrame): Nothing = fault("StablePtr# tuple requires a destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val stored = value.execute(frame)
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         FrameAccess.write(frame, slots[offset], StablePointers.current(this).make(stored))
         return null
     }
@@ -113,7 +113,7 @@ internal class DereferenceStablePointer(@field:Child private var address: Expr, 
     override fun execute(frame: VirtualFrame): Nothing = fault("StablePtr# tuple requires a destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val handle = address.executeRequiredAddress(frame)
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         FrameAccess.write(frame, slots[offset], StablePointers.current(this).dereference(handle))
         return null
     }
@@ -129,7 +129,7 @@ internal class FreeStablePointer(@field:Child private var address: Expr, @field:
     override fun execute(frame: VirtualFrame): Nothing = fault("StablePtr# free requires a tuple destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val handle = address.executeRequiredAddress(frame)
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         StablePointers.current(this).free(handle)
         return null
     }

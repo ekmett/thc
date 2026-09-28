@@ -38,7 +38,7 @@ internal object CoreKeepAlive {
                 result.refine(continuation.second)
                 // keepAlive# preserves the continuation's exact logical result,
                 // including scalar widths that share THC's Long carrier.
-                TupleShape.requireCompatible(result, continuation.second, component = true)
+                TupleShape.requireCompatible(result, continuation.second, true)
             } else if (!reference(result) || result.primReps != listOf("BoxedRep (Just Lifted)"))
                 throw RuntimeFault("keepAlive#: partially applied continuation must return a lifted function")
         }

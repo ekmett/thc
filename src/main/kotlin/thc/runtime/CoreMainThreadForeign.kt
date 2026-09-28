@@ -97,7 +97,7 @@ internal class RegisterMainThread(@field:Child private var weak: Expr, @field:Ch
     override fun execute(frame: VirtualFrame): Nothing = fault("Main-thread registration requires a tuple destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val handle = weak.execute(frame)
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         CoreMainThreadForeign.register(this, handle)
         return null
     }

@@ -53,7 +53,7 @@ internal object CoreCpuAffinity {
 internal class CpuAffinityQuery(private val applied: Boolean, @field:Child private var state: Expr) : Expr() {
     override fun execute(frame: VirtualFrame): Nothing = fault("CPU-affinity query requires a tuple destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         val threads = GuestThreads.current(this)
         FrameAccess.writeInt(frame, slots[offset], if (applied) {
             if (threads.currentIdentity().affinityApplied) 1 else 0

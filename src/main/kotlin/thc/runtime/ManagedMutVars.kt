@@ -226,7 +226,7 @@ private class NewMutVarExpression(@field:Child private var value: Expr,
     override fun execute(frame: VirtualFrame): Nothing = fault("Tuple primitive requires a destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val stored = value.execute(frame)
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         FrameAccess.write(frame, slots[offset], ManagedMutVar(stored))
         return null
     }
@@ -236,7 +236,7 @@ private class ReadMutVarExpression(@field:Child private var cell: Expr,
     override fun execute(frame: VirtualFrame): Nothing = fault("Tuple primitive requires a destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val reference = ManagedMutVar.require(cell.execute(frame))
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         FrameAccess.write(frame, slots[offset], reference.value)
         return null
     }
@@ -246,7 +246,7 @@ private class WriteMutVarExpression(@field:Child private var cell: Expr,
     override fun execute(frame: VirtualFrame): Any {
         val reference = ManagedMutVar.require(cell.execute(frame))
         val stored = value.execute(frame)
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         reference.value = stored
         return Unit
     }
@@ -258,7 +258,7 @@ private class SwapMutVarExpression(@field:Child private var cell: Expr,
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val reference = ManagedMutVar.require(cell.execute(frame))
         val replacement = value.execute(frame)
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         FrameAccess.write(frame, slots[offset], reference.exchange(replacement))
         return null
     }
@@ -272,7 +272,7 @@ private class CasMutVarExpression(@field:Child private var cell: Expr,
         val reference = ManagedMutVar.require(cell.execute(frame))
         val old = expected.execute(frame)
         val new = replacement.execute(frame)
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         val witness = reference.compareExchange(old, new)
         val success = witness === old
         FrameAccess.writeLong(frame, slots[offset], if (success) 0L else 1L)
@@ -289,7 +289,7 @@ private class ModifyMutVar2Expression(@field:Child private var cell: Expr,
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val reference = ManagedMutVar.require(cell.execute(frame))
         val modifier = function.execute(frame)
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         val modified = reference.modify(modifier, site)
         FrameAccess.write(frame, slots[offset], modified.old)
         FrameAccess.write(frame, slots[offset + 1], modified.result)

@@ -85,7 +85,7 @@ internal object CoreBoundThreadForeign {
 internal class BoundThreadSupport(@field:Child private var state: Expr, private val allocationCounter: Boolean = false) : Expr() {
     override fun execute(frame: VirtualFrame): Nothing = fault("Bound-thread support query requires a tuple destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         // Bound-thread support stays false; the distinct counter query samples this guest thread.
         FrameAccess.writeLong(frame, slots[offset], if (allocationCounter) GuestThreads.current(this).allocationCounter() else 0L)
         return null

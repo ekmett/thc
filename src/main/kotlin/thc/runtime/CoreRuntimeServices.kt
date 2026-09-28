@@ -12,7 +12,7 @@ internal class RuntimeQueryExpression(private val backend: Int,
         val key = selector.executeRequiredInt(frame)
         val item = index.executeLong(frame)
         val field = detail.executeLong(frame)
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         FrameAccess.writeLong(frame, slots[offset], RuntimeServices.query(this, backend, key, item, field))
         return null
     }
@@ -24,7 +24,7 @@ internal class RuntimeControlExpression(@field:Child private var selector: Expr,
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val key = selector.executeRequiredInt(frame)
         val value = setting.executeLong(frame)
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         FrameAccess.writeLong(frame, slots[offset], RuntimeServices.control(this, key, value))
         return null
     }
@@ -39,7 +39,7 @@ internal class RuntimeTraceExpression(@field:Child private var operation: Expr,
         val id = token.executeLong(frame)
         val bytes = address.executeAddress(frame)
         val count = length.executeLong(frame)
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         FrameAccess.writeLong(frame, slots[offset], RuntimeServices.trace(this, op, id, bytes, count))
         return null
     }

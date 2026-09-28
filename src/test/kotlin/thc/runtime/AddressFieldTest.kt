@@ -187,7 +187,7 @@ class AddressFieldTest {
         }
         TupleConstruct(shape, arrayOf(field(literal), number)).executeTuple(frame, slots, 0)
         val result = shape.finish(frame, slots)
-        assertSame(TupleComplete, result)
+        assertSame(TupleComplete.INSTANCE, result)
         assertEquals(1, language.handoffState.get().results.retainedReferences())
         shape.consume(frame, result, slots, 2)
         assertSame(literal, frame.getObject(slots[2]))
@@ -204,7 +204,7 @@ class AddressFieldTest {
             shape.layout.setObject(loan, 0, bad)
             shape.layout.setLong(loan, 1, 17L)
             pool.complete(loan)
-            assertThrows(RuntimeFault::class.java) { shape.consume(frame, TupleComplete, slots, 2) }
+            assertThrows(RuntimeFault::class.java) { shape.consume(frame, TupleComplete.INSTANCE, slots, 2) }
             released(language)
         }
     }

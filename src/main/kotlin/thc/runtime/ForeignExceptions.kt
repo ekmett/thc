@@ -150,7 +150,7 @@ internal class ForeignExceptionAccess : Node() {
 
     @TruffleBoundary
     fun text(handle: ManagedAddress, selector: Long, index: Long, state: Any?): Long {
-        requireVoidCarrier(state)
+        TupleResultsKt.requireVoidCarrier(state)
         val owner = Language.currentState(this)
         val frame = Truffle.getRuntime().createVirtualFrame(emptyArray<Any?>(), descriptor)
         val value = force.execute(frame, owner.stablePointers.dereference(handle)) as? ForeignFailure

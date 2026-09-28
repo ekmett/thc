@@ -50,7 +50,7 @@ internal class AnnotatedTuple(@field:Child private var annotation: Expr,
     override fun execute(frame: VirtualFrame): Nothing = fault("annotateStack# requires a tuple destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val value = annotation.execute(frame)
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         val prior = StackAnnotations.enter(this, value)
         return try { body.executeTuple(frame, slots, offset) }
         catch (cut: DelimitedCut) {
@@ -121,10 +121,10 @@ internal class AnnotatedAction(private val shape: TupleShape,
             AstControl.complete(this, returned, closure.target, shape)
         } catch (cut: AstCapture) {
             throw cut.append(object : AstResumeStep {
-                override fun resume(frame: VirtualFrame, input: Any?): Any? = ownedTupleResult(input, shape)
+                override fun resume(frame: VirtualFrame, input: Any?): Any? = TupleResultsKt.ownedTupleResult(input, shape)
             })
         }
-        return ownedTupleResult(result, shape)
+        return TupleResultsKt.ownedTupleResult(result, shape)
     }
 
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
@@ -152,12 +152,12 @@ internal class AnnotatedAction(private val shape: TupleShape,
         catch (cut: AstCapture) {
             throw cut.append(object : AstResumeStep {
                 override fun resume(frame: VirtualFrame, input: Any?): Any? {
-                    requireVoidCarrier(input)
+                    TupleResultsKt.requireVoidCarrier(input)
                     return runAction(frame, value, function, slots, offset)
                 }
             })
         }
-        requireVoidCarrier(token)
+        TupleResultsKt.requireVoidCarrier(token)
         return runAction(frame, value, function, slots, offset)
     }
 

@@ -28,7 +28,7 @@ internal class PrefetchExpression(@field:Child private var value: Expr,
         // or dereferencing/bounds-checking any ignored memory hint.
         value.execute(frame)
         offset?.executeLong(frame)
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         return Unit
     }
 }
@@ -40,7 +40,7 @@ internal class TraceExpression(private val operation: TraceOp,
     override fun execute(frame: VirtualFrame): Any {
         val location = address.executeAddress(frame)
         val count = length?.executeLong(frame) ?: 0L
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         RtsDiagnostics.trace(this, operation, location, count)
         return Unit
     }

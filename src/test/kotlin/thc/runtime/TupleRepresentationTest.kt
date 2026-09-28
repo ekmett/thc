@@ -153,12 +153,12 @@ class TupleRepresentationTest {
         assertSame(marker, frame.getObject(slot))
         assertEquals(0, language.handoffState.get().results.depth)
         val completion = source.finish(frame, intArrayOf(slot))
-        val owned = ownedTupleResult(completion, source)
+        val owned = TupleResultsKt.ownedTupleResult(completion, source)
         assertSame(marker, source.layout.getObject(owned, 0))
         assertEquals(0, language.handoffState.get().results.depth)
         assertEquals(0, language.handoffState.get().results.retainedReferences())
         val malformed = source.finish(frame, intArrayOf(slot))
-        assertThrows(IllegalStateException::class.java) { ownedTupleResult(malformed, wrong) }
+        assertThrows(IllegalStateException::class.java) { TupleResultsKt.ownedTupleResult(malformed, wrong) }
         assertEquals(0, language.handoffState.get().results.depth)
         assertEquals(0, language.handoffState.get().results.retainedReferences())
     }

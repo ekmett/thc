@@ -81,7 +81,7 @@ internal class MakeStableName(@field:Child private var value: Expr, @field:Child
     override fun execute(frame: VirtualFrame): Nothing = fault("StableName# tuple requires a destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val referent = value.execute(frame)
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         FrameAccess.write(frame, slots[offset], StableNames.current(this).make(referent))
         return null
     }

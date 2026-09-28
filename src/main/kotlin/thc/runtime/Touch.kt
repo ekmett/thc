@@ -36,7 +36,7 @@ internal object CoreTouch {
 
 internal object Touch {
     @JvmStatic fun preserve(kept: Any?, state: Any?): Any {
-        requireVoidCarrier(state)
+        TupleResultsKt.requireVoidCarrier(state)
         Reference.reachabilityFence(kept)
         return Unit
     }

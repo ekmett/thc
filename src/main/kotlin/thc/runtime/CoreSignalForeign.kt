@@ -18,7 +18,7 @@ internal class InstallProcessSignal(@field:Children private var operands: Array<
         val signal = operands[0].executeRequiredInt(frame).toLong()
         val action = operands[1].executeRequiredInt(frame).toLong()
         val mask = operands[2].executeRequiredAddress(frame)
-        requireVoidCarrier(operands[3].execute(frame))
+        TupleResultsKt.requireVoidCarrier(operands[3].execute(frame))
         FrameAccess.writeInt(frame, slots[offset], ManagedSignals.install(this, signal, action, mask).toInt())
         return null
     }

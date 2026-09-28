@@ -12,7 +12,7 @@ internal class RtsDiagnosticExpression(private val operation: RtsDiagnosticOp,
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val first = if (operands.size > 1) operands[0].execute(frame) else null
         val second = if (operands.size > 2) operands[1].executeRequiredAddress(frame) else null
-        requireVoidCarrier(operands.last().execute(frame))
+        TupleResultsKt.requireVoidCarrier(operands.last().execute(frame))
         RtsDiagnostics.report(this, operation, first, second)
         return null
     }

@@ -18,7 +18,7 @@ internal class GcForeignExpression(private val op: GcForeignOp,
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         if (op == GcForeignOp.STATS) operands[0].executeRequiredAddress(frame)
         if (op == GcForeignOp.HEAP_HINT) operands[0].executeLong(frame)
-        requireVoidCarrier(operands.last().execute(frame))
+        TupleResultsKt.requireVoidCarrier(operands.last().execute(frame))
         val value = op.invoke()
         if (op.result != null) FrameAccess.writeLong(frame, slots[offset], value)
         if (op.safety == "safe" && AstControl.enabled(this)) {

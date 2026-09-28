@@ -507,7 +507,7 @@ class PolyglotFFITest {
                             arrayOf("eval", "(x => globalThis.thcCompleted(x))")) else null
                         val arguments = if (polyglot) arrayOf<Any?>(0L, handle, 35L, Unit)
                             else arrayOf<Any?>(0L, 35L, Unit)
-                        fun result(value: Any?) = shape.layout.getLong(ownedTupleResult(value, shape), 0)
+                        fun result(value: Any?) = shape.layout.getLong(TupleResultsKt.ownedTupleResult(value, shape), 0)
                         fun count() = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                         owner.threads.enterCurrent()
                         try {

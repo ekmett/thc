@@ -177,7 +177,7 @@ private class NewArrayExpression(@field:Child private var size: Expr, @field:Chi
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val count = size.executeRequiredLong(frame)
         val value = initial.execute(frame)
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         FrameAccess.write(frame, slots[offset], ManagedArray.allocate(count, value))
         return null
     }
@@ -188,7 +188,7 @@ private class ReadArrayExpression(@field:Child private var array: Expr, @field:C
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val storage = ManagedArray.require(array.execute(frame))
         val at = index.executeRequiredLong(frame)
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         FrameAccess.write(frame, slots[offset], ManagedArray.read(storage, at))
         return null
     }
@@ -199,7 +199,7 @@ private class WriteArrayExpression(@field:Child private var array: Expr, @field:
         val storage = ManagedArray.require(array.execute(frame))
         val at = index.executeRequiredLong(frame)
         val stored = value.execute(frame)
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         ManagedArray.write(storage, at, stored)
         return Unit
     }
@@ -213,7 +213,7 @@ private class CasArrayExpression(@field:Child private var array: Expr, @field:Ch
         val at = index.executeRequiredLong(frame)
         val old = expected.execute(frame)
         val new = replacement.execute(frame)
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         val witness = ManagedArray.compareExchange(storage, at, old, new)
         val success = witness === old
         FrameAccess.writeLong(frame, slots[offset], if (success) 0L else 1L)
@@ -226,7 +226,7 @@ private class FreezeArrayExpression(@field:Child private var array: Expr, @field
     override fun execute(frame: VirtualFrame): Nothing = fault("Tuple primitive requires a destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val storage = ManagedArray.require(array.execute(frame))
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         FrameAccess.write(frame, slots[offset], if (freeze) ManagedArray.freeze(storage) else ManagedArray.thaw(storage))
         return null
     }
@@ -264,7 +264,7 @@ private class TransferArrayExpression(private val mutableSource: Boolean,
         val to = ManagedArray.require(destination.execute(frame))
         val toOffset = destinationOffset.executeRequiredLong(frame)
         val length = count.executeRequiredLong(frame)
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         ManagedArray.copy(from, fromOffset, to, toOffset, length, mutableSource)
         return Unit
     }
@@ -276,7 +276,7 @@ private class CopyArrayExpression(@field:Child private var array: Expr, @field:C
         val storage = ManagedArray.require(array.execute(frame))
         val start = this.offset.executeRequiredLong(frame)
         val length = count.executeRequiredLong(frame)
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         val copy = ManagedArray.slice(storage, start, length)
         FrameAccess.write(frame, slots[offset], if (freeze) ManagedArray.freeze(copy) else copy)
         return null

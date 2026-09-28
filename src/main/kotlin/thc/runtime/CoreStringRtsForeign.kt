@@ -112,7 +112,7 @@ internal class StringRtsExpression(private val operation: StringRtsOp,
     override fun execute(frame: VirtualFrame): Nothing = fault("Original Posix call requires a tuple destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val address = if (operation.arguments.size == 2) operands[0].executeRequiredAddress(frame) else null
-        requireVoidCarrier(operands.last().execute(frame))
+        TupleResultsKt.requireVoidCarrier(operands.last().execute(frame))
         // Live THC programs retain their global CAF cells; there is no native RTS CAF reversion.
         FrameAccess.writeLong(frame, slots[offset], address?.cStringLength() ?: if (operation == StringRtsOp.KEEP_CAFS) 1L else 0L)
         return null

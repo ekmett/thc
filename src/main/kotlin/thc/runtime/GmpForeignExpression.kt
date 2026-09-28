@@ -15,14 +15,14 @@ internal class GmpForeignExpression(private val operation: GmpForeignOp,
             val start = if (operation.form == GmpForm.GET_DOUBLE) 1 else 0
             val a = operands[start].executeRequiredLong(frame)
             val b = operands[start + 1].executeRequiredLong(frame)
-            requireVoidCarrier(operands[start + 2].execute(frame))
+            TupleResultsKt.requireVoidCarrier(operands[start + 2].execute(frame))
             FrameAccess.writeDouble(frame, slots[offset], ManagedGmp.invokeDouble(this, operation, input, a, b))
             return null
         }
         if (operation.form == GmpForm.WORD_PAIR) {
             val left = operands[0].executeRequiredLong(frame)
             val right = operands[1].executeRequiredLong(frame)
-            requireVoidCarrier(operands[2].execute(frame))
+            TupleResultsKt.requireVoidCarrier(operands[2].execute(frame))
             FrameAccess.writeLong(frame, slots[offset], ManagedGmp.invoke(this, operation,
                 null, null, null, null, left, right, 0))
             return null
@@ -37,47 +37,47 @@ internal class GmpForeignExpression(private val operation: GmpForeignOp,
             operation.form == GmpForm.BINARY -> {
                 val second = operands[1].execute(frame); val a = operands[2].executeRequiredLong(frame)
                 val third = operands[3].execute(frame); val b = operands[4].executeRequiredLong(frame)
-                requireVoidCarrier(operands[5].execute(frame))
+                TupleResultsKt.requireVoidCarrier(operands[5].execute(frame))
                 ManagedGmp.invoke(this, operation, first, second, third, null, a, b, 0)
             }
             operation.form == GmpForm.WORD -> {
                 val second = operands[1].execute(frame); val a = operands[2].executeRequiredLong(frame)
                 val b = operands[3].executeRequiredLong(frame)
-                requireVoidCarrier(operands[4].execute(frame))
+                TupleResultsKt.requireVoidCarrier(operands[4].execute(frame))
                 ManagedGmp.invoke(this, operation, first, second, null, null, a, b, 0)
             }
             operation.form == GmpForm.COMPARE -> {
                 val second = operands[1].execute(frame); val a = operands[2].executeRequiredLong(frame)
-                requireVoidCarrier(operands[3].execute(frame))
+                TupleResultsKt.requireVoidCarrier(operands[3].execute(frame))
                 ManagedGmp.invoke(this, operation, first, second, null, null, a, 0, 0)
             }
             operation.form == GmpForm.DIVIDE_WORD -> {
                 val a = operands[1].executeRequiredLong(frame); val second = operands[2].execute(frame)
                 val b = operands[3].executeRequiredLong(frame); val c = operands[4].executeRequiredLong(frame)
-                requireVoidCarrier(operands[5].execute(frame))
+                TupleResultsKt.requireVoidCarrier(operands[5].execute(frame))
                 ManagedGmp.invoke(this, operation, first, second, null, null, a, b, c)
             }
             operation.form == GmpForm.MODULO_WORD -> {
                 val a = operands[1].executeRequiredLong(frame); val b = operands[2].executeRequiredLong(frame)
-                requireVoidCarrier(operands[3].execute(frame))
+                TupleResultsKt.requireVoidCarrier(operands[3].execute(frame))
                 ManagedGmp.invoke(this, operation, first, null, null, null, a, b, 0)
             }
             operation.form == GmpForm.LOGICAL -> {
                 val second = operands[1].execute(frame); val third = operands[2].execute(frame)
                 val count = operands[3].executeRequiredLong(frame)
-                requireVoidCarrier(operands[4].execute(frame))
+                TupleResultsKt.requireVoidCarrier(operands[4].execute(frame))
                 ManagedGmp.invoke(this, operation, first, second, third, null, count, 0, 0)
             }
             operation.form == GmpForm.COUNT -> {
                 val count = operands[1].executeRequiredLong(frame)
-                requireVoidCarrier(operands[2].execute(frame))
+                TupleResultsKt.requireVoidCarrier(operands[2].execute(frame))
                 ManagedGmp.invoke(this, operation, first, null, null, null, count, 0, 0)
             }
             else -> { // GmpForm.DIVIDE
                 val second = operands[1].execute(frame); val a = operands[2].executeRequiredLong(frame)
                 val third = operands[3].execute(frame); val b = operands[4].executeRequiredLong(frame)
                 val fourth = operands[5].execute(frame); val c = operands[6].executeRequiredLong(frame)
-                requireVoidCarrier(operands[7].execute(frame))
+                TupleResultsKt.requireVoidCarrier(operands[7].execute(frame))
                 ManagedGmp.invoke(this, operation, first, second, third, fourth, a, b, c)
             }
         }

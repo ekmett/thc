@@ -307,7 +307,7 @@ class OriginalUnlinkAtTest {
                 pending!!.acknowledge()
                 Files.writeString(file, "replacement")
                 val completed = saved.continueWith(Unit)
-                assertEquals(0L, shape.layout.getLong(ownedTupleResult(completed, shape), 0))
+                assertEquals(0L, shape.layout.getLong(TupleResultsKt.ownedTupleResult(completed, shape), 0))
                 assertEquals("replacement", Files.readString(file)); assertEquals(1, evaluated)
                 released(language)
 

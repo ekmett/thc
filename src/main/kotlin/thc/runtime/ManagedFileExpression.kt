@@ -13,7 +13,7 @@ internal class ManagedFileExpression(private val operation: ManagedFileOp,
     override fun execute(frame: VirtualFrame): Nothing = fault("Managed file call requires a State/result tuple destination")
 
     private fun files(frame: VirtualFrame): ManagedFiles {
-        requireVoidCarrier(operands.last().execute(frame))
+        TupleResultsKt.requireVoidCarrier(operands.last().execute(frame))
         return Language.currentState(this).files
     }
 

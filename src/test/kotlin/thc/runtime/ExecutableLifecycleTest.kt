@@ -27,7 +27,7 @@ class ExecutableLifecycleTest {
         init { configureTupleResult(shape) }
         override fun bloom(frame: VirtualFrame) = 0L
         override fun execute(frame: VirtualFrame): Any {
-            requireVoidCarrier(frame.arguments[1])
+            TupleResultsKt.requireVoidCarrier(frame.arguments[1])
             effect()
             return shape.layout.create().also { shape.layout.setObject(it, 0, unitValue) }
         }

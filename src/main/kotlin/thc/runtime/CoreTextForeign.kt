@@ -89,7 +89,7 @@ internal class TextForeignExpression(private val operation: TextForeignOp,
             val source = operands[1].execute(frame)
             val start = operands[2].executeRequiredLong(frame)
             val length = operands[3].executeRequiredLong(frame)
-            requireVoidCarrier(operands[4].execute(frame))
+            TupleResultsKt.requireVoidCarrier(operands[4].execute(frame))
             ManagedText.reverse(destination, source, start, length)
             return null
         }
@@ -98,7 +98,7 @@ internal class TextForeignExpression(private val operation: TextForeignOp,
         val length = operands[2].executeRequiredLong(frame)
         val count = if (operation == TextForeignOp.MEMCHR) operands[3].executeRequiredInt(frame).toLong()
             else operands[3].executeRequiredLong(frame)
-        requireVoidCarrier(operands[4].execute(frame))
+        TupleResultsKt.requireVoidCarrier(operands[4].execute(frame))
         FrameAccess.writeLong(frame, slots[offset], ManagedText.invoke(operation, bytes, start, length, count))
         return null
     }
