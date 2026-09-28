@@ -189,7 +189,7 @@ public final class ManagedProcesses implements Closeable {
         finally {
             Throwable cleanupFailure = null;
             for (int fd : duplicates) if (fd >= 0) {
-                try { NativePollApi.INSTANCE.close(fd); }
+                try { NativePollApi.close(fd); }
                 catch (Throwable closing) { cleanupFailure = combine(cleanupFailure, closing); }
             }
             if (!published || cleanupFailure != null) {

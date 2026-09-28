@@ -32,8 +32,8 @@ public final class NativeEventWait implements AutoCloseable, TruffleSafepoint.In
         one = arena.allocate(ValueLayout.JAVA_LONG);
         one.set(ValueLayout.JAVA_LONG, 0, 1L);
         drained = arena.allocate(ValueLayout.JAVA_LONG);
-        interruptErrors = arena.allocate(NativePollApi.INSTANCE.getCapture());
-        drainErrors = arena.allocate(NativePollApi.INSTANCE.getCapture());
+        interruptErrors = arena.allocate(NativePollApi.CAPTURE);
+        drainErrors = arena.allocate(NativePollApi.CAPTURE);
         watches = new Watch[descriptors.length];
         for (int index = 0; index < descriptors.length; index++) watches[index] = new Watch(index, invalid[index]);
         for (int index = 0; index < descriptors.length; index++) {
@@ -53,13 +53,13 @@ public final class NativeEventWait implements AutoCloseable, TruffleSafepoint.In
         Watch(int index, boolean invalid) {
             this.index = index;
             closed = new AtomicBoolean(invalid);
-            errors = arena.allocate(NativePollApi.INSTANCE.getCapture());
+            errors = arena.allocate(NativePollApi.CAPTURE);
         }
         public int getIndex() { return index; }
         public AtomicBoolean getClosed() { return closed; }
         public void descriptorClosed() {
             closed.set(true);
-            NativePollApi.INSTANCE.signal(wake, one, errors);
+            NativePollApi.signal(wake, one, errors);
         }
     }
 
@@ -70,15 +70,15 @@ public final class NativeEventWait implements AutoCloseable, TruffleSafepoint.In
         var arena = Arena.ofShared();
         int wake = -1;
         try {
-            wake = NativePollApi.INSTANCE.eventfd();
+            wake = NativePollApi.eventfd();
             return new NativeEventWait(descriptors, events, invalid, wake, arena);
         } catch (Throwable failure) {
             for (int fd : descriptors) if (fd >= 0) {
-                try { NativePollApi.INSTANCE.close(fd); }
+                try { NativePollApi.close(fd); }
                 catch (Throwable closing) { failure.addSuppressed(closing); }
             }
             if (wake >= 0) {
-                try { NativePollApi.INSTANCE.close(wake); }
+                try { NativePollApi.close(wake); }
                 catch (Throwable closing) { failure.addSuppressed(closing); }
             }
             arena.close();
@@ -88,11 +88,11 @@ public final class NativeEventWait implements AutoCloseable, TruffleSafepoint.In
 
     @Override public void interrupt(Thread thread) {
         interrupted.set(true);
-        NativePollApi.INSTANCE.signal(wake, one, interruptErrors);
+        NativePollApi.signal(wake, one, interruptErrors);
     }
 
     @Override public void resetInterrupted() {
-        NativePollApi.INSTANCE.drain(wake, drained, drainErrors);
+        NativePollApi.drain(wake, drained, drainErrors);
         interrupted.set(false);
     }
 
@@ -103,13 +103,13 @@ public final class NativeEventWait implements AutoCloseable, TruffleSafepoint.In
         TruffleSafepoint.InterruptibleFunction<kotlin.Unit, short[]> action = ignored -> {
             while (true) {
                 if (interrupted.get()) throw new InterruptedException();
-                NativePollApi.INSTANCE.poll(polls, 0, (long) descriptors.length + 1);
+                NativePollApi.poll(polls, 0, (long) descriptors.length + 1);
                 if (interrupted.get()) throw new InterruptedException();
                 short[] immediate = results();
                 if (ready(immediate) || timeout == 0) return immediate;
                 // Observe again after a Truffle wake without claiming guest delivery.
                 if (beforeBlock != null) beforeBlock.run();
-                NativePollApi.INSTANCE.poll(polls, remaining(started, timeout), (long) descriptors.length + 1);
+                NativePollApi.poll(polls, remaining(started, timeout), (long) descriptors.length + 1);
                 if (interrupted.get()) throw new InterruptedException();
                 short[] result = results();
                 if (ready(result) || timeout >= 0 && remaining(started, timeout) == 0) return result;
@@ -144,11 +144,11 @@ public final class NativeEventWait implements AutoCloseable, TruffleSafepoint.In
         Throwable failure = null;
         try {
             for (int fd : descriptors) if (fd >= 0) {
-                try { NativePollApi.INSTANCE.close(fd); }
+                try { NativePollApi.close(fd); }
                 catch (Throwable error) { if (failure == null) failure = error; else failure.addSuppressed(error); }
             }
             if (wake >= 0) {
-                try { NativePollApi.INSTANCE.close(wake); }
+                try { NativePollApi.close(wake); }
                 catch (Throwable error) { if (failure == null) failure = error; else failure.addSuppressed(error); }
             }
         } finally { arena.close(); }
