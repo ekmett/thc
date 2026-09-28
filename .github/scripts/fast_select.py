@@ -39,7 +39,7 @@ POLYGLOT_EXACT_INPUTS = {
     "compiler/toolchain.sh", "scripts/audit-core.py",
     "scripts/polyglot-demo.sh", "scripts/javascript-demo.sh",
     "compiler/build.sh", "compiler/export.sh", "compiler/test-javascript-ffi.py",
-    "src/main/kotlin/thc/Language.kt", "src/main/kotlin/thc/Json.kt",
+    "src/main/java/thc/Language.java", "src/main/java/thc/Json.java",
     "src/examples/java/thc/PolyglotDemo.java",
     "src/main/java/thc/runtime/Calls.java", "src/main/java/thc/runtime/BytecodeRoot.java",
     "src/main/java/thc/runtime/RuntimeTypes.java",

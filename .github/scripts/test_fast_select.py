@@ -314,6 +314,7 @@ class FastSelectionTest(unittest.TestCase):
 
     def test_shared_core_and_frontend_changes_require_polyglot_but_leaf_does_not(self):
         for path in ("src/main/java/thc/runtime/CoreRepresentations.java",
+                     "src/main/java/thc/Language.java", "src/main/java/thc/Json.java",
                      "compiler/THC/Plugin.hs", "src/main/java/thc/runtime/Calls.java",
                      "src/main/java/thc/runtime/WindowsMalloc.java", "src/main/java/thc/runtime/StdioHostAbi.java",
                      "scripts/audit-core.py", "build.gradle", "Makefile",
@@ -1231,7 +1232,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
     def test_sigprocmask_sources_select_the_platform_thread_controls(self):
         for path in ("compiler/test-fixtures/OriginalSigprocmaskAudit.hs", "compiler/test-fixtures/OriginalSigprocmaskNative.hs",
                      "test/haskell-fixtures/OriginalSigprocmaskFixtures.hs", "src/main/c/native-signal-api.c",
-                     "src/main/kotlin/thc/runtime/ManagedSignalMask.kt", "src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java",
+                     "src/main/java/thc/runtime/ManagedSignalMask.java", "src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java",
                      "src/main/java/thc/runtime/OriginalStdioExpression.java", "test/haskell-fixtures/Main.hs"):
             self.assertIn("thc.runtime.OriginalSigprocmaskTest", self.policy["owners"][path]["junit"], path)
 

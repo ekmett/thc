@@ -1667,7 +1667,7 @@
     "compiler/test-fixtures/ScalarBitCastNative.hs": {"junit": ["thc.runtime.ScalarBitCastTest"], "python": []},
     "test/haskell-fixtures/RtsShutdownFixtures.hs": {"junit": ["thc.runtime.RtsShutdownTest"], "python": []},
     "compiler/test-fixtures/RtsShutdownNative.hs": {"junit": ["thc.runtime.RtsShutdownTest"], "python": []},
-    "src/main/kotlin/thc/ManagedImportMetadata.kt": {"junit": ["thc.ManagedImportStubsNativeTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/main/java/thc/ManagedImportAdmission.java": {"junit": ["thc.ManagedImportStubsNativeTest"], "python": ["scripts/test-audit-core.py"]},
     "src/test/kotlin/thc/ManagedImportStubsNativeTest.kt": {"junit": ["thc.ManagedImportStubsNativeTest"], "python": ["scripts/test-audit-core.py"]},
     "compiler/THC/ForeignImportProvenance.hs": {"junit": ["thc.ManagedImportStubsNativeTest"], "python": ["scripts/test-audit-core.py"]},
     "compiler/test-fixtures/ForeignImportStubs.hs": {"junit": ["thc.ManagedImportStubsNativeTest"], "python": ["scripts/test-audit-core.py"]},
@@ -1677,7 +1677,7 @@
     "compiler/test-fixtures/OriginalSigprocmaskNative.hs": {"junit": ["thc.runtime.OriginalSigprocmaskTest"], "python": []},
     "test/haskell-fixtures/OriginalSigprocmaskFixtures.hs": {"junit": ["thc.runtime.OriginalSigprocmaskTest"], "python": []},
     "src/main/c/native-signal-api.c": {"junit": ["thc.runtime.OriginalSigprocmaskTest"], "python": []},
-    "src/main/kotlin/thc/runtime/ManagedSignalMask.kt": {"junit": ["thc.runtime.OriginalSigprocmaskTest"], "python": []},
+    "src/main/java/thc/runtime/ManagedSignalMask.java": {"junit": ["thc.runtime.OriginalSigprocmaskTest"], "python": []},
     "compiler/test-fixtures/OriginalTcgetattrAudit.hs": {"junit": ["thc.runtime.OriginalTcgetattrTest"], "python": []},
     "compiler/test-fixtures/OriginalTcsetattrNative.hs": {"junit": ["thc.runtime.OriginalTcsetattrTest"], "python": []},
     "compiler/test-fixtures/OriginalTcgetattrNative.hs": {"junit": ["thc.runtime.OriginalTcgetattrTest"], "python": []},
@@ -2238,17 +2238,17 @@
       "junit": ["thc.runtime.AddressIdentityNativeTest"],
       "python": []
     },
-    "src/main/kotlin/thc/CorePackageManifest.kt": {
+    "src/main/java/thc/CorePackageManifest.java": {
       "junit": ["thc.CoreZipBundleTest", "thc.CoreLinkerTest", "thc.runtime.InterfaceCoreNativeTest"],
       "python": []
     },
-    "src/main/kotlin/thc/CoreForeignArtifacts.kt": {
+    "src/main/java/thc/CoreForeignArtifacts.java": {
       "junit": ["thc.CoreForeignArtifactsTest", "thc.runtime.InterfaceCoreNativeTest", "thc.ManagedImportStubsNativeTest"], "python": []
     },
-    "src/test/kotlin/thc/CoreForeignArtifactsTest.kt": {
+    "src/test/java/thc/CoreForeignArtifactsTest.java": {
       "junit": ["thc.CoreForeignArtifactsTest"], "python": []
     },
-    "src/test/kotlin/thc/CoreZipBundleTest.kt": {
+    "src/test/java/thc/CoreZipBundleTest.java": {
       "junit": ["thc.CoreZipBundleTest"],
       "python": []
     },
