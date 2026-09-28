@@ -5,6 +5,7 @@
 from core_vectors import proof_error as vector_proof_error
 LIFTED = 'BoxedRep (Just Lifted)'
 UNLIFTED = 'BoxedRep (Just Unlifted)'
+UNKNOWN_BOXED = 'BoxedRep Nothing'
 ORDER = (LIFTED, UNLIFTED, 'WordRep', 'Word64Rep', 'FloatRep', 'DoubleRep')
 WORD = {'IntRep', 'WordRep', 'Int8Rep', 'Word8Rep', 'Int16Rep', 'Word16Rep', 'Int32Rep', 'Word32Rep'}
 WIDE = {'Int64Rep', 'Word64Rep'}
@@ -29,8 +30,18 @@ def contains_sum(proof):
 
 
 def lifted_payload(proof):
+    if isinstance(proof, dict) and 'aggregate' not in proof and proof.get('primReps') == [UNKNOWN_BOXED]:
+        return None
     return (isinstance(proof, dict) and 'aggregate' not in proof and
             proof.get('primReps') == [LIFTED])
+
+
+def payload_levity_matches(expected, actual, lifted):
+    expected_levity, actual_levity = lifted_payload(expected), lifted_payload(actual)
+    if lifted is None:
+        return actual_levity is None
+    return (type(lifted) is bool and (expected_levity is None or lifted is expected_levity) and
+            (actual_levity is None or lifted is actual_levity))
 
 
 def payload_leaves(proof):
@@ -41,7 +52,8 @@ def payload_leaves(proof):
         children = proof.get('components')
         if kind != 'unknown' or not isinstance(children, list):
             raise ValueError('Missing exact sum tuple payload components')
-        leaves = [leaf for child in children for leaf in payload_leaves(child)]
+        payloads = [payload_leaves(child) for child in children]
+        leaves = None if any(row is None for row in payloads) else [leaf for row in payloads for leaf in row]
         if reps != leaves:
             raise ValueError('Tuple payload components disagree with physical representations')
         return leaves
@@ -64,7 +76,7 @@ def payload_leaves(proof):
     valid = (kind == 'long' and rep in WORD | WIDE or
              kind == 'float' and rep == 'FloatRep' or kind == 'double' and rep == 'DoubleRep' or
              kind == 'address' and rep == 'AddrRep' and proof['evaluated'] or
-             kind in ('data', 'closure', 'object') and rep in (LIFTED, UNLIFTED))
+             kind in ('data', 'closure', 'object') and rep in (LIFTED, UNLIFTED, UNKNOWN_BOXED))
     if not valid:
         raise ValueError('Unsupported sum payload representation')
     return reps
@@ -73,8 +85,11 @@ def payload_leaves(proof):
 def layout(alternatives):
     if not isinstance(alternatives, list) or len(alternatives) < 2:
         raise ValueError('Unboxed sum requires at least two exact alternatives')
+    payloads = [payload_leaves(alternative) for alternative in alternatives]
+    if any(row is None or UNKNOWN_BOXED in row for row in payloads):
+        return None, None
     fields = [[('WordRep' if r in WORD or r == 'AddrRep' else 'Word64Rep' if r in WIDE else r)
-               for r in payload_leaves(alternative)] for alternative in alternatives]
+               for r in row] for row in payloads]
     # Mirror GHC.Types.RepType.ubxSumRepType, including Word/Word64 sharing.
     slots = []
     for row in fields:
@@ -116,10 +131,15 @@ def proof_error(proof):
         if 'components' in proof or 'vector' in proof:
             raise ValueError('Sum proof cannot also describe a tuple or vector')
         physical, projections = layout(proof.get('alternatives'))
+        if 'primReps' not in proof or 'alternativeSlots' not in proof:
+            raise ValueError('Missing sum native layout evidence')
         if type(proof.get('tagSlot')) is not int or proof['tagSlot'] != 0 or proof.get('primReps') != physical:
             raise ValueError('Sum physical representation or tag slot mismatch')
         actual = proof.get('alternativeSlots')
-        if (not isinstance(actual, list) or any(not isinstance(row, list) or
+        if projections is None:
+            if actual is not None:
+                raise ValueError('Unknown boxed levity has no native sum projection')
+        elif (not isinstance(actual, list) or any(not isinstance(row, list) or
                 any(type(index) is not int for index in row) for row in actual) or actual != projections):
             raise ValueError('Sum alternative projection mismatch')
     except (TypeError, ValueError) as error:

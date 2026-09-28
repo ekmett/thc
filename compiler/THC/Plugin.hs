@@ -360,9 +360,20 @@ typePrimReps ty
   | Just (tc,args) <- splitTyConApp_maybe (unwrapType ty)
   , isUnboxedTupleTyCon tc
   = concat <$> traverse typePrimReps (dropRuntimeRepArgs args)
+  | Just (tc,args) <- splitTyConApp_maybe (unwrapType ty)
+  , isUnboxedSumTyCon tc
+  = do
+      alternatives <- traverse typePrimReps (dropRuntimeRepArgs args)
+      if all knownSumSlot (concat alternatives)
+        then Just (map slotPrimRep (NE.toList (ubxSumRepType alternatives)))
+        else Nothing
   | Just _ <- aggregateRuntimeKind ty
   , not (typeHasFixedRuntimeRep ty) = Nothing
   | otherwise = typePrimRep_maybe ty
+
+knownSumSlot :: PrimRep -> Bool
+knownSumSlot (BoxedRep Nothing) = False
+knownSumSlot _ = True
 
 -- A type variable or opaque family can expose an aggregate RuntimeRep without
 -- exposing logical payload types. This is aggregate evidence, even for zero
@@ -423,15 +434,13 @@ typeRep ty evaluated = O $
           physical <- reps
           -- primRepSlot is partial for levity-polymorphic BoxedRep. Never call
           -- it (or the merger which calls it) on unresolved representation.
-          if all knownSlot (concat alternatives) then do
+          if all knownSumSlot (concat alternatives) then do
             let slots = ubxSumRepType alternatives
             if physical == map slotPrimRep (NE.toList slots)
               then Just [map (+1) (layoutUbxSum (NE.tail slots) (map primRepSlot alternative))
                         | alternative <- alternatives]
               else Nothing
           else Nothing
-        knownSlot (BoxedRep Nothing) = False
-        knownSlot _ = True
     -- An evaluated tuple/sum does not evaluate its lifted payloads. This is a
     -- type layout, so only an unlifted component supplies a WHNF guarantee;
     -- unknown RuntimeRep/levity and lifted components stay conservative.

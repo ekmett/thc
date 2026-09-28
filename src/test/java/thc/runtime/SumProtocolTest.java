@@ -75,7 +75,8 @@ class SumProtocolTest {
             boolean allLong = true; for (var field : SumShape.storage(exact)) if (!field.isLong()) { allLong = false; break; } assertTrue(allLong);
         }
         for (String name : List.of("nestedSum", "addressResult", "vectorResult")) assertTrue(CoreRepresentations.parse(shape(module(), name)).isSum());
-        for (String name : List.of("runtimePolymorphic", "levityPolymorphic", "abstractSumIdentity", "abstractRuntimeSum", "abstractAlternative")) assertThrows(UnsupportedCore.class, () -> CoreRepresentations.parse(shape(module(), name)));
+        assertTrue(CoreRepresentations.parse(shape(module(), "levityPolymorphic")).isSum());
+        for (String name : List.of("runtimePolymorphic", "abstractSumIdentity", "abstractRuntimeSum", "abstractAlternative")) assertThrows(UnsupportedCore.class, () -> CoreRepresentations.parse(shape(module(), name)));
         var proof = shape(module(), "returnedSum"); proof.put("alternativeSlots", null); assertThrows(UnsupportedCore.class, () -> CoreRepresentations.parse(proof));
         withLanguage(language -> assertThrows(RuntimeFault.class, () -> new TupleShape(new CoreRepresentation(CoreKind.LONG, true, true, List.of("WordRep"), null, null, null, null, null), language)));
     }

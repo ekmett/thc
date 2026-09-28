@@ -12,11 +12,11 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 
-/** Logical alternatives retain GHC's native slots; narrow payloads convert at projections. */
+/** Native GHC slots and canonical JVM projections are distinct contracts. */
 public final class SumShape {
     public static final SumShape INSTANCE = new SumShape();
     private SumShape() {}
-    private static final String LIFTED = "BoxedRep (Just Lifted)", UNLIFTED = "BoxedRep (Just Unlifted)";
+    private static final String LIFTED = "BoxedRep (Just Lifted)", UNLIFTED = "BoxedRep (Just Unlifted)", POINTER = "BoxedRep Nothing";
     private static final List<String> ORDER = List.of(LIFTED, UNLIFTED, "WordRep", "Word64Rep", "FloatRep", "DoubleRep");
     private static final List<String> ELEMENTS = List.of("Int8ElemRep", "Int16ElemRep", "Int32ElemRep", "Int64ElemRep",
         "Word8ElemRep", "Word16ElemRep", "Word32ElemRep", "Word64ElemRep", "FloatElemRep", "DoubleElemRep");
@@ -60,20 +60,36 @@ public final class SumShape {
         return result;
     }
     public static void validate(CoreRepresentation proof) {
+        NativeLayout nativeLayout = nativeLayout(proof);
+        if (nativeLayout.projections != null && proof.getAlternativeSlots() == null)
+            throw new UnsupportedCore("Unsupported Core aggregate representation: unboxed-sum lacks exact projection");
+        if (!Objects.equals(nativeLayout.fields, proof.getPrimReps()) || !Integer.valueOf(0).equals(proof.getTagSlot()))
+            throw fault("Sum physical representation or tag slot mismatch");
+        if (!Objects.equals(nativeLayout.projections, proof.getAlternativeSlots())) throw fault("Sum alternative projection mismatch");
+    }
+    private record NativeLayout(List<String> fields, List<List<Integer>> projections) {}
+    private static NativeLayout nativeLayout(CoreRepresentation proof) {
         List<CoreRepresentation> alternatives = proof.getAlternatives();
         if (alternatives == null) throw fault("Missing sum alternatives");
         if (proof.getKind() != CoreKind.UNKNOWN || proof.getComponents() != null || proof.getVector() != null) throw fault("Sum proof must retain its aggregate kind");
         if (alternatives.size() < 2) throw new UnsupportedCore("Unsupported Core aggregate representation: unboxed-sum requires at least two alternatives");
         var fields = new ArrayList<List<String>>();
+        boolean unresolved = false;
         for (CoreRepresentation alternative : alternatives) {
             var row = new ArrayList<String>();
-            for (String rep : nativePayload(alternative)) row.add(slot(rep));
+            List<String> nativeReps = nativePayload(alternative);
+            if (nativeReps == null) unresolved = true;
+            else for (String rep : nativeReps) {
+                if (POINTER.equals(rep)) unresolved = true;
+                else row.add(slot(rep));
+            }
             fields.add(row);
         }
+        // A known pointer is transportable, but unknown levity supplies no GHC slot.
+        if (unresolved) return new NativeLayout(null, null);
         List<String> merged = List.of();
         for (List<String> row : fields) { var sorted = new ArrayList<>(row); sorted.sort(SLOT_ORDER); merged = merge(merged, sorted); }
         var physical = new ArrayList<String>(); physical.add("WordRep"); physical.addAll(merged);
-        if (!physical.equals(proof.getPrimReps()) || !Integer.valueOf(0).equals(proof.getTagSlot())) throw fault("Sum physical representation or tag slot mismatch");
         var expected = new ArrayList<List<Integer>>();
         for (List<String> row : fields) {
             var used = new HashSet<Integer>();
@@ -86,14 +102,23 @@ public final class SumShape {
             }
             expected.add(selected);
         }
-        if (!expected.equals(proof.getAlternativeSlots())) throw fault("Sum alternative projection mismatch");
+        return new NativeLayout(physical, expected);
+    }
+    static CoreRepresentation relayout(CoreRepresentation proof) {
+        NativeLayout layout = nativeLayout(proof);
+        return proof.copy(proof.getKind(), proof.getEvaluated(), proof.getPresent(), layout.fields,
+            null, null, proof.getAlternatives(), 0, layout.projections);
     }
     private static List<String> nativePayload(CoreRepresentation proof) {
         if (proof.isSum()) validate(proof);
         else if (proof.isTuple()) {
             if (proof.getKind() != CoreKind.UNKNOWN) throw fault("Sum tuple payload components disagree with physical representations");
-            var reps = new ArrayList<String>();
-            for (CoreRepresentation component : proof.getComponents()) reps.addAll(nativePayload(component));
+            List<String> reps = new ArrayList<>();
+            for (CoreRepresentation component : proof.getComponents()) {
+                List<String> child = nativePayload(component);
+                if (child == null) reps = null;
+                else if (reps != null) reps.addAll(child);
+            }
             if (!Objects.equals(proof.getPrimReps(), reps)) throw fault("Sum tuple payload components disagree with physical representations");
         } else if (proof.isVector()) VectorLayout.validate(proof);
         else if (proof.getKind() == CoreKind.VOID) {
@@ -103,67 +128,61 @@ public final class SumShape {
         } else if (proof.getKind() != CoreKind.LONG && proof.getKind() != CoreKind.FLOAT && proof.getKind() != CoreKind.DOUBLE &&
                    proof.getKind() != CoreKind.DATA && proof.getKind() != CoreKind.CLOSURE && proof.getKind() != CoreKind.OBJECT)
             throw new UnsupportedCore("Unsupported Core aggregate representation: unboxed-sum payload");
-        if (proof.getPrimReps() == null) throw new UnsupportedCore("Unsupported Core aggregate representation: unboxed-sum unresolved field");
+        if (proof.getPrimReps() == null && !proof.isAggregate()) throw new UnsupportedCore("Unsupported Core aggregate representation: unboxed-sum unresolved field");
         return proof.getPrimReps();
     }
     public static final class Transport {
         private final List<CoreRepresentation> fields;
-        private final List<Integer> nativeSlots;
         private final List<List<Integer>> projections;
-        public Transport(List<CoreRepresentation> fields, List<Integer> nativeSlots) { this(fields, nativeSlots, List.of()); }
-        public Transport(List<CoreRepresentation> fields, List<Integer> nativeSlots, List<List<Integer>> projections) {
-            this.fields = fields; this.nativeSlots = nativeSlots; this.projections = projections;
+        public Transport(List<CoreRepresentation> fields, List<List<Integer>> projections) {
+            this.fields = fields; this.projections = projections;
         }
         public List<CoreRepresentation> getFields() { return fields; }
-        public List<Integer> getNativeSlots() { return nativeSlots; }
         public List<List<Integer>> getProjections() { return projections; }
     }
-    private record Register(int nativeSlot, boolean address) {}
+    private record Register(String representation, int ordinal) {}
+    private static final List<String> JVM_ORDER = List.of(POINTER, "WordRep", "AddrRep", "FloatRep", "DoubleRep");
+    private static String storageRep(CoreRepresentation proof) {
+        if (proof.hasBoxedPointer()) return POINTER;
+        if (proof.getKind() == CoreKind.LONG) return "WordRep";
+        return proof.getPrimReps().getFirst();
+    }
     public static Transport transport(CoreRepresentation proof) {
         validate(proof);
         var registers = new LinkedHashMap<Register, CoreRepresentation>();
-        registers.put(new Register(0, false), scalarStorage("WordRep"));
         var alternatives = new ArrayList<List<Register>>();
-        for (int index = 0; index < proof.getAlternatives().size(); index++) {
-            Transport payload = payloadTransport(proof.getAlternatives().get(index));
+        for (CoreRepresentation alternative : proof.getAlternatives()) {
+            List<CoreRepresentation> payload = TupleShape.flatten(alternative);
             var row = new ArrayList<Register>();
-            for (int field = 0; field < payload.fields.size(); field++) {
-                CoreRepresentation leaf = payload.fields.get(field);
-                int nativeSlot = proof.getAlternativeSlots().get(index).get(payload.nativeSlots.get(field));
-                Register key = new Register(nativeSlot, leaf.getKind() == CoreKind.ADDRESS);
-                registers.putIfAbsent(key, key.address ? leaf : scalarStorage(proof.getPrimReps().get(nativeSlot)));
+            var counts = new LinkedHashMap<String, Integer>();
+            for (CoreRepresentation leaf : payload) {
+                String rep = storageRep(leaf);
+                int ordinal = counts.getOrDefault(rep, 0);
+                counts.put(rep, ordinal + 1);
+                Register key = new Register(rep, ordinal);
+                registers.putIfAbsent(key, leaf.getKind() == CoreKind.ADDRESS ? leaf : scalarStorage(rep));
                 row.add(key);
             }
             alternatives.add(row);
         }
         var keys = new ArrayList<>(registers.keySet());
-        keys.sort(Comparator.comparingInt(Register::nativeSlot).thenComparing(Register::address));
-        var fields = new ArrayList<CoreRepresentation>();
-        var nativeSlots = new ArrayList<Integer>();
-        for (Register key : keys) { fields.add(registers.get(key)); nativeSlots.add(key.nativeSlot); }
+        keys.sort((left, right) -> {
+            int l = JVM_ORDER.indexOf(left.representation), r = JVM_ORDER.indexOf(right.representation);
+            if (l < 0) l = JVM_ORDER.size();
+            if (r < 0) r = JVM_ORDER.size();
+            int order = Integer.compare(l, r);
+            if (order == 0 && l == JVM_ORDER.size()) order = SLOT_ORDER.compare(left.representation, right.representation);
+            return order != 0 ? order : Integer.compare(left.ordinal, right.ordinal);
+        });
+        var fields = new ArrayList<CoreRepresentation>(); fields.add(scalarStorage("WordRep"));
+        for (Register key : keys) fields.add(registers.get(key));
         var projections = new ArrayList<List<Integer>>();
         for (List<Register> row : alternatives) {
             var projection = new ArrayList<Integer>();
-            for (Register key : row) projection.add(keys.indexOf(key));
+            for (Register key : row) projection.add(1 + keys.indexOf(key));
             projections.add(projection);
         }
-        return new Transport(fields, nativeSlots, projections);
-    }
-    private static Transport payloadTransport(CoreRepresentation proof) {
-        if (proof.isSum()) return transport(proof);
-        if (proof.isTuple()) {
-            var fields = new ArrayList<CoreRepresentation>();
-            var nativeSlots = new ArrayList<Integer>();
-            int offset = 0;
-            for (CoreRepresentation component : proof.getComponents()) {
-                Transport child = payloadTransport(component);
-                fields.addAll(child.fields);
-                for (int slot : child.nativeSlots) nativeSlots.add(slot + offset);
-                offset += component.getPrimReps().size();
-            }
-            return new Transport(fields, nativeSlots);
-        }
-        return proof.getKind() == CoreKind.VOID ? new Transport(List.of(), List.of()) : new Transport(List.of(proof), List.of(0));
+        return new Transport(fields, projections);
     }
     private static CoreRepresentation scalarStorage(String rep) {
         CoreVector vector = null;
@@ -173,7 +192,7 @@ public final class SumShape {
             case "FloatRep" -> CoreKind.FLOAT; case "DoubleRep" -> CoreKind.DOUBLE;
             default -> CoreKind.OBJECT;
         };
-        return new CoreRepresentation(kind, true, true, List.of(rep), null, vector, null, null, null);
+        return new CoreRepresentation(kind, kind != CoreKind.OBJECT, true, List.of(rep), null, vector, null, null, null);
     }
     public static List<CoreRepresentation> storage(CoreRepresentation proof) { return transport(proof).fields; }
     public static List<Integer> projection(CoreRepresentation proof, int alternative) { return transport(proof).projections.get(alternative); }
@@ -187,10 +206,16 @@ public final class SumShape {
         if (number.doubleValue() != (double) tag || tag < 1 || tag > proof.getAlternatives().size()) throw fault("Invalid sum constructor tag");
         return tag;
     }
-    public static void payload(CoreRepresentation expected, CoreRepresentation actual) { payload(expected, actual, null); }
-    public static void payload(CoreRepresentation expected, CoreRepresentation actual, Boolean liftedFlag) {
+    public static void payload(CoreRepresentation expected, CoreRepresentation actual) {
         if (!actual.getPresent() || !TupleShape.Companion.compatible(expected, actual)) throw fault("Sum payload logical shape mismatch");
-        if (liftedFlag != null && liftedFlag != (!expected.isAggregate() && List.of(LIFTED).equals(expected.getPrimReps()))) throw fault("Sum payload levity mismatch");
+    }
+    public static void payload(CoreRepresentation expected, CoreRepresentation actual, Boolean liftedFlag) {
+        payload(expected, actual);
+        if (liftedFlag == null) {
+            if (!actual.hasUnknownBoxedLevity()) throw fault("Sum payload levity mismatch");
+        } else if (!expected.hasUnknownBoxedLevity() && liftedFlag != (!expected.isAggregate() && List.of(LIFTED).equals(expected.getPrimReps())) ||
+                   !actual.hasUnknownBoxedLevity() && liftedFlag != (!actual.isAggregate() && List.of(LIFTED).equals(actual.getPrimReps())))
+            throw fault("Sum payload levity mismatch");
     }
     public static int checkedTag(long value, int arity) {
         if (arity < 2 || value < 1L || value > (long) arity) throw fault("Invalid unboxed sum tag");

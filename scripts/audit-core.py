@@ -27,7 +27,7 @@ import core_package_manifest
 from pathlib import Path
 import sys
 
-from core_sums import is_sum, contains_sum, lifted_payload, proof_error as sum_proof_error, constructor_tag as sum_constructor_tag
+from core_sums import is_sum, contains_sum, lifted_payload, payload_levity_matches, proof_error as sum_proof_error, constructor_tag as sum_constructor_tag
 from core_vectors import OPERATIONS as VECTOR_OPERATIONS, is_vector, proof_error as vector_proof_error, signature_matches as vector_signature_matches, shuffle_indices
 from core_tuple_inputs import contains_tuple, proof_error as tuple_input_proof_error
 from core_vector_memory import OPERATIONS as VECTOR_MEMORY_OPERATIONS, read_case as vector_read_case, validate_direct as validate_vector_memory
@@ -843,9 +843,13 @@ class Audit:
                     self.representation(component, owner, f'{path}/components/{index}')
                     registers = component.get('primReps') if isinstance(component, dict) else None
                     if not isinstance(registers, list):
-                        self.issue('aggregate-representation', owner, path, aggregate + ': unresolved component')
+                        if not (is_sum(component) and sum_proof_error(component) is None or self.is_tuple(component) and
+                                tuple_input_proof_error(component, allow_vectors=True, allow_addresses=True, allow_sums=True) is None):
+                            self.issue('aggregate-representation', owner, path, aggregate + ': unresolved component')
+                        physical = None
                     else:
-                        physical.extend(registers)
+                        if physical is not None:
+                            physical.extend(registers)
                         if 'aggregate' not in component and not self.supported_vector(component, 'tuple-fields') and (component.get('kind') == 'unknown' or
                                 any(r not in self.cap['aggregateFieldRepresentations'] for r in registers)):
                             self.issue('aggregate-representation', owner, path, aggregate + ': unsupported component')
@@ -2540,7 +2544,8 @@ class Audit:
                             selected = sum_constructor_tag(self.constructors.get(function[1]), len(arguments), proof) - 1
                             expected = proof['alternatives'][selected]
                             self.compare_shapes(expected, self.effective_rep(argument, bound), owner, f'{path}/arguments/{index}/rep', component=True)
-                            if not isinstance(flags, list) or index >= len(flags) or flags[index] is not lifted_payload(expected):
+                            if not isinstance(flags, list) or index >= len(flags) or not payload_levity_matches(
+                                    expected, self.effective_rep(argument, bound), flags[index]):
                                 self.issue('application-levity', owner, path, 'Sum payload levity mismatch')
                         except ValueError as error:
                             self.issue('constructor-arity', owner, path, str(error))
@@ -2690,7 +2695,7 @@ class Audit:
                                     raise ValueError('Sum alternative requires one exact payload binder')
                                 expected = alternatives[selected - 1]
                                 self.compare_shapes(expected, records[0].get('rep'), owner, altpath + '/binders/0/rep', component=True)
-                                if records[0].get('lifted') is not lifted_payload(expected):
+                                if not payload_levity_matches(expected, records[0].get('rep'), records[0].get('lifted')):
                                     raise ValueError('Sum payload binder levity mismatch')
                             except ValueError as error:
                                 self.issue('aggregate-shape', owner, altpath, str(error))

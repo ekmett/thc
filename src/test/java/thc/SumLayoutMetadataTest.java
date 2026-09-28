@@ -24,15 +24,15 @@ class SumLayoutMetadataTest {
         var checks = object(Json.parse(Files.readString(root.resolve("build/sum-layout/checks.json"))));
         var stages = objects(checks.get("coverage"));
         assertEquals(list("pre", "post"), stages.stream().map(stage -> stage.get("stage")).toList());
-        assertEquals(130, ((Number) checks.get("nativeRows")).intValue());
-        assertEquals(21, ((Number) checks.get("supportedSumEntries")).intValue());
+        assertEquals(169, ((Number) checks.get("nativeRows")).intValue());
+        assertEquals(27, ((Number) checks.get("supportedSumEntries")).intValue());
         var manifestProof = object(checks.get("provenance"));
         assertEquals("build/sum-layout/provenance.json", manifestProof.get("path"));
         assertEquals(manifestProof.get("sha256"), hash(root.resolve((String) manifestProof.get("path"))));
         for (var stage : stages) {
             String name = (String) stage.get("stage");
-            assertEquals(17, ((Number) stage.get("exactResultShapes")).intValue());
-            assertEquals(27, ((List<?>) stage.get("audits")).size());
+            assertEquals(19, ((Number) stage.get("exactResultShapes")).intValue());
+            assertEquals(32, ((List<?>) stage.get("audits")).size());
             var module = Json.parse(Files.readString(root.resolve("build/sum-layout/" + name + "-core/SumLayoutAudit.json")));
             for (String backend : list("ast", "bytecode")) try (var context = Main.executionContext(false)) {
                 for (var entry : objects(stage.get("audits"))) {

@@ -29,15 +29,14 @@ def proof_error(proof, allow_vectors=False, allow_addresses=False, allow_sums=Fa
         if not isinstance(rep, dict) or type(rep.get('evaluated')) is not bool:
             raise ValueError('Missing exact tuple input representation record')
         registers = rep.get('primReps')
-        if not isinstance(registers, list) or any(not isinstance(r, str) for r in registers):
-            raise ValueError('Unresolved tuple input primitive representations')
         aggregate = rep.get('aggregate')
         if aggregate == 'unboxed-tuple':
             if vector_proof_error(rep):
                 raise ValueError('Invalid physical vector annotation on tuple input')
             if rep.get('kind') != 'unknown' or not isinstance(rep.get('components'), list):
                 raise ValueError('Missing exact recursive tuple input components')
-            flattened = [r for child in rep['components'] for r in visit(child)]
+            children = [visit(child) for child in rep['components']]
+            flattened = None if any(child is None for child in children) else [r for child in children for r in child]
             if registers != flattened:
                 raise ValueError('Tuple input components disagree with physical representations')
             return flattened
@@ -52,6 +51,8 @@ def proof_error(proof, allow_vectors=False, allow_addresses=False, allow_sums=Fa
             return registers
         if 'aggregate' in rep or rep.get('kind') == 'vector' or 'vector' in rep:
             raise ValueError('Sum/vector tuple input component unsupported')
+        if not isinstance(registers, list) or any(not isinstance(r, str) for r in registers):
+            raise ValueError('Unresolved tuple input primitive representations')
         kind = rep.get('kind')
         valid = (kind == 'void' and registers == [] or
                  kind == 'long' and len(registers) == 1 and registers[0] in LONG_REPS or

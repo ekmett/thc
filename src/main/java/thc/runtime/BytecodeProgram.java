@@ -4755,9 +4755,9 @@ public final class BytecodeProgram implements ExecutableProgram {
                 if (metadata.size() != 1 || !Objects.equals(metadata.getFirst().get("id"), ids.getFirst()))
                     throw new RuntimeFault("Missing sum payload binder proof");
                 var actual = CoreRepresentations.binder(metadata.getFirst());
-                if (!(metadata.getFirst().get("lifted") instanceof Boolean lifted))
-                    throw new RuntimeFault("Unknown sum payload binder levity");
-                SumShape.payload(component, actual, lifted);
+                Object lifted = metadata.getFirst().get("lifted");
+                CoreRepresentations.mayBeLazy(lifted, actual);
+                SumShape.payload(component, actual, (Boolean) lifted);
                 var logical = evaluatedProof(component.refine(actual), component.getEvaluated());
                 var leaves = TupleShape.flatten(logical);
                 var projected = new ArrayList<Local>();
@@ -5458,9 +5458,9 @@ public final class BytecodeProgram implements ExecutableProgram {
             int tag = SumShape.constructor(tupleProof, metadata, fn.get(2));
             if (args.size() != 1) throw new RuntimeFault("Sum constructor must be saturated");
             var selected = tupleProof.getAlternatives().get(tag - 1);
-            if (!(flags.getFirst() instanceof Boolean lifted)) throw new UnsupportedCore("Unknown sum payload levity");
+            boolean lifted = CoreRepresentations.argumentMayBeLazy(flags.getFirst(), args.getFirst());
             var payload = selected.isTypedTransport() ? compile(args.getFirst(), scope, false) : argument(args.getFirst(), scope, lifted);
-            SumShape.payload(selected, payload.proof(), lifted);
+            SumShape.payload(selected, payload.proof(), (Boolean) flags.getFirst());
             var shape = new TupleShape(tupleProof, language);
             var leaves = TupleShape.flatten(selected);
             return tupleExpression(tupleProof, (e, destination) -> {
