@@ -1780,11 +1780,11 @@ public final class Program implements ExecutableProgram {
             CoreYield.validate(argumentProofs(args), flags, tupleProof);
             return new YieldThread(argument(args.get(0), scope, false), enableAsync, tupleProof);
         }
-        if (primitive && CoreFileWait.INSTANCE.named((String) fn.get(1))) {
+        if (primitive && CoreFileWait.named((String) fn.get(1))) {
             String name = (String) fn.get(1);
-            CoreFileWait.INSTANCE.validate(name, argumentProofs(args), flags, tupleProof);
+            CoreFileWait.validate(name, argumentProofs(args), flags, tupleProof);
             Expr[] operands = argumentOperands(args, scope, false);
-            CoreFileWait.INSTANCE.validate(name, loweredProofs(operands), flags, tupleProof);
+            CoreFileWait.validate(name, loweredProofs(operands), flags, tupleProof);
             GlobalBinding payload = globals.get(CoreFileWait.badFd);
             if (payload == null) throw new UnsupportedCore(name + " requires original blockedOnBadFD payload");
             return new WaitFileDescriptor(operands[0], operands[1], payload, name.equals("waitWrite#"), enableAsync, tupleProof);

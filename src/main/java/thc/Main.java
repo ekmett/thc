@@ -41,8 +41,8 @@ public final class Main {
     public static Context executionContext() { return executionContext(false); }
     public static Context executionContext(boolean fileIO) { return executionContext(fileIO, FfiMode.configured()); }
     public static Context executionContext(boolean fileIO, FfiMode ffiMode) {
-        if (fileIO && NativeIO.INSTANCE.supportedHost$org_intelligence_thc())
-            return NativeIO.INSTANCE.commandLineContext$org_intelligence_thc(ffiMode);
+        if (fileIO && NativeIO.supportedHost())
+            return NativeIO.commandLineContext(ffiMode);
         return ffiMode.configure(withContextProfile(Context.newBuilder("thc").allowNativeAccess(true)
             .allowIO(fileIO ? IOAccess.ALL : IOAccess.NONE), ContextProfile.LAUNCHER)).build();
     }

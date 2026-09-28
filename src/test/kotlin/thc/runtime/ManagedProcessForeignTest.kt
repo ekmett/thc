@@ -22,7 +22,7 @@ class ManagedProcessForeignTest {
     @TempDir lateinit var directory: Path
     private val nil get() = ManagedAddress.nullAddress()
     private fun inside(allowed: Boolean = true, body: () -> Unit) {
-        NativeFileProvider.createContext(emptySet(), allowProcesses = allowed).use { context ->
+        NativeFileProvider.createContext(emptySet(), thc.ContextProfile.NATIVE, thc.FfiMode.NATIVE, allowed).use { context ->
             context.enter()
             try { body() } finally { context.leave() }
         }

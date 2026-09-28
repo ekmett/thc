@@ -179,7 +179,9 @@
       "junit": ["thc.runtime.CoreBoundThreadForeignTest", "thc.runtime.ThreadSchedulingTest"],
       "python": ["scripts/test-audit-core.py"]
     },
-    "src/main/kotlin/thc/runtime/FileWaitPrimitives.kt": {
+    "src/main/java/thc/runtime/CoreFileWait.java": {"junit":["thc.runtime.FileWaitPrimitiveTest"],"python":["scripts/test-audit-core.py"]},
+    "src/main/java/thc/runtime/WaitFileDescriptor.java": {"junit":["thc.runtime.FileWaitPrimitiveTest"],"python":["scripts/test-audit-core.py"]},
+    "src/main/java/thc/runtime/FileWaitPrimitives.java": {
       "junit": ["thc.runtime.FileWaitPrimitiveTest"],
       "python": ["scripts/test-audit-core.py"]
     },
@@ -1754,13 +1756,14 @@
     "src/main/java/thc/runtime/NativeFileLease.java": {
       "junit": ["thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"], "python": []
     },
-    "src/main/kotlin/thc/NativeIO.kt": {
+    "src/main/java/thc/NativeIO.java": {
       "junit": ["thc.runtime.NativeDirectoryFileSystemTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"], "python": []
     },
-    "src/main/kotlin/thc/NativeFileSystem.kt": {
+    "src/main/java/thc/NativeFileSystem.java": {
       "junit": ["thc.runtime.NativeDirectoryFileSystemTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"], "python": []
     },
-    "src/main/kotlin/thc/runtime/NativeDirectoryOwner.kt": {
+    "src/main/java/thc/runtime/NativeDirectoryApi.java": {"junit":["thc.runtime.NativeDirectoryStreamsTest","thc.runtime.NativeDirectoryFileSystemTest","thc.runtime.OriginalOpenTest","thc.runtime.OriginalPathStatTest","thc.runtime.OriginalPathModeTest","thc.runtime.OriginalPathLinkTest","thc.runtime.OriginalDirectoryPathsTest","thc.runtime.OriginalPathAccessTest","thc.runtime.OriginalFstatTest","thc.runtime.NativeFileProviderTest","thc.runtime.OriginalUnlinkAtTest","thc.runtime.OriginalFstatAtTest","thc.runtime.OriginalCurrentDirectoryTest","thc.runtime.OriginalDirectoryStreamsTest"],"python":[]},
+    "src/main/java/thc/runtime/NativeDirectoryOwner.java": {
       "junit": ["thc.runtime.NativeDirectoryStreamsTest", "thc.runtime.NativeDirectoryFileSystemTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"], "python": []
     },
     "src/main/c/native-directory-api.c": {
@@ -1769,7 +1772,7 @@
     "src/main/java/thc/runtime/NativeFileException.java": {
       "junit": ["thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"], "python": []
     },
-    "src/main/kotlin/thc/runtime/NativeFileProvider.kt": {
+    "src/main/java/thc/runtime/NativeFileProvider.java": {
       "junit": ["thc.runtime.NativeDirectoryStreamsTest", "thc.runtime.NativeDirectoryFileSystemTest", "thc.runtime.NativeEventWaitTest", "thc.runtime.NativeEpollTest", "thc.runtime.NativeEventDescriptorsTest", "thc.runtime.OriginalUnlinkTest", "thc.runtime.NativeFileBuffersTest", "thc.runtime.OriginalFcntlTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"], "python": []
     },
     "src/main/java/thc/runtime/NativeOpenRequest.java": {
@@ -1781,7 +1784,7 @@
     "src/main/java/thc/runtime/OpenedNativeFile.java": {
       "junit": ["thc.runtime.NativeDirectoryFileSystemTest", "thc.runtime.OriginalFcntlTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"], "python": []
     },
-    "src/main/kotlin/thc/runtime/ManagedFiles.kt": {
+    "src/main/java/thc/runtime/ManagedFiles.java": {
       "junit": ["thc.runtime.NativeDirectoryStreamsTest", "thc.runtime.NativeEventWaitTest", "thc.runtime.NativeEpollTest", "thc.runtime.NativeEventDescriptorsTest", "thc.runtime.OriginalUnlinkTest", "thc.runtime.NativeFileBuffersTest", "thc.runtime.OriginalFcntlTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest", "thc.runtime.FileWaitPrimitiveTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalSigprocmaskTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.ManagedFilesTest", "thc.runtime.ManagedFileCallTest", "thc.runtime.ManagedStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.GuestThreadsTest", "thc.GuestExceptionsTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"],
       "python": []
     },
@@ -2833,7 +2836,7 @@
     "compiler/test-fixtures/OriginalDirectoryStreamsAudit.hs": {"junit":["thc.runtime.OriginalDirectoryStreamsTest"],"python":["scripts/test-audit-core.py"]},
     "test/haskell-fixtures/OriginalDirectoryStreamsFixtures.hs": {"junit":["thc.runtime.OriginalDirectoryStreamsTest"],"python":["scripts/test-audit-core.py"]},
     "src/test/kotlin/thc/runtime/NativeDirectoryStreamsTest.kt": {"junit":["thc.runtime.NativeDirectoryStreamsTest"],"python":[]},
-    "src/main/kotlin/thc/runtime/NativeDirectoryStreams.kt": {"junit":["thc.runtime.NativeDirectoryStreamsTest", "thc.runtime.OriginalDirectoryStreamsTest"],"python":[]},
+    "src/main/java/thc/runtime/NativeDirectoryStreams.java": {"junit":["thc.runtime.NativeDirectoryStreamsTest", "thc.runtime.OriginalDirectoryStreamsTest"],"python":[]},
     "src/test/kotlin/thc/runtime/OriginalCurrentDirectoryTest.kt": {"junit":["thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"],"python":["scripts/test-audit-core.py"]},
     "compiler/test-fixtures/OriginalCurrentDirectoryAudit.hs": {"junit":["thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"],"python":["scripts/test-audit-core.py"]},
     "test/haskell-fixtures/OriginalCurrentDirectoryFixtures.hs": {"junit":["thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"],"python":["scripts/test-audit-core.py"]},
