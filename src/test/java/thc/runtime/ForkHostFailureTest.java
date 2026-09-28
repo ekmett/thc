@@ -17,7 +17,9 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.PolyglotException;
@@ -66,7 +68,31 @@ class ForkHostFailureTest {
     }
     @FunctionalInterface private interface Failure { void run(Language.State state); }
     @FunctionalInterface private interface Check { void run(Context context, Future<Long> parent, ManagedMVar cell, CountDownLatch release, CompletableFuture<Thread> child, ByteArrayOutputStream errors) throws Exception; }
+    /** The native pipe is replaced; registration, blocking safepoints and cleanup are real. */
+    private static final class SignalReader implements ProcessSignalTransport {
+        final LinkedBlockingQueue<Object> events = new LinkedBlockingQueue<>();
+        final CompletableFuture<Thread> thread = new CompletableFuture<>();
+        final CompletableFuture<Throwable> failure = new CompletableFuture<>();
+        final AtomicInteger closes = new AtomicInteger();
+        @Override public Result install(int signal, int action) { return new Result(-1, 0); }
+        @Override public Event take() {
+            Thread.currentThread().setUncaughtExceptionHandler((_, caught) -> failure.complete(caught));
+            thread.complete(Thread.currentThread());
+            Object event;
+            try { event = events.take(); }
+            catch (InterruptedException caught) { return rethrow(caught); }
+            if (event instanceof RuntimeException caught) throw caught;
+            return null;
+        }
+        @Override public void wake() { events.offer(Boolean.TRUE); }
+        @Override public void resetWake() { events.removeIf(event -> event == Boolean.TRUE); }
+        @Override public void close() { closes.incrementAndGet(); }
+    }
+    @SuppressWarnings("unchecked") private static <T, E extends Throwable> T rethrow(Throwable failure) throws E { throw (E) failure; }
     private void exercise(String backend, String hosting, Failure failure, Check check) throws Exception {
+        exercise(backend, hosting, null, failure, check);
+    }
+    private void exercise(String backend, String hosting, SignalReader signals, Failure failure, Check check) throws Exception {
         var errors = new ByteArrayOutputStream();
         var context = Context.newBuilder("thc").allowCreateThread(true).allowExperimentalOptions(true).err(errors)
             .option("engine.Compilation", "false").option("thc.ThreadHosting", hosting).build();
@@ -77,6 +103,17 @@ class ForkHostFailureTest {
                 try {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var state = Language.currentState();
                     if (hosting.equals("loom")) state.getThreads().setCapabilityCount(1);
+                    if (signals != null) {
+                        var service = new ManagedSignals(state, language, true, () -> true, () -> signals);
+                        service.bind(new ProcessSignalsTest().program(language, backend)); service.authorizeLauncher();
+                        var signalService = service;
+                        if (hosting.equals("loom")) state.getThreads().hostEntry(null, () -> {
+                            state.getThreads().enterCurrent();
+                            try { return signalService.install(2, -4, ManagedAddress.nullAddress()); }
+                            finally { state.getThreads().leaveCurrent(); }
+                        });
+                        else service.install(2, -4, ManagedAddress.nullAddress());
+                    }
                     var target = new RootNode(language) {
                         @Override public Object execute(VirtualFrame frame) {
                             Thread.currentThread().setUncaughtExceptionHandler((_, uncaught) -> uncaught.printStackTrace(new PrintStream(errors, true)));
@@ -100,6 +137,7 @@ class ForkHostFailureTest {
                 Thread.yield();
             }
             child.get(5, TimeUnit.SECONDS);
+            if (signals != null) signals.thread.get(5, TimeUnit.SECONDS);
             check.run(context, parent, cell, release, child, errors);
         } finally {
             release.countDown();
@@ -126,6 +164,39 @@ class ForkHostFailureTest {
             assertTrue(errors.toString().contains("fork compiler failure"), errors.toString());
             assertTrue(errors.toString().contains("original compiler cause"), errors.toString());
         });
+    }
+    @ParameterizedTest @MethodSource("variants") void internalForkFailureReachesParkedSignalReader(String backend, String hosting) throws Exception {
+        var signals = new SignalReader(); var failure = new RuntimeFault("fork failure with a signal reader");
+        failure.initCause(new IllegalArgumentException("original fork cause"));
+        exercise(backend, hosting, signals, _ -> { throw failure; }, (context, parent, cell, release, child, errors) -> {
+            release.countDown();
+            assertParentFailure(parent, "fork failure with a signal reader", "original fork cause");
+            var caught = signals.failure.get(5, TimeUnit.SECONDS);
+            assertInstanceOf(InternalGuestControl.class, caught);
+            assertSame(failure, caught.getCause(), "The delivered failure must retain the original cause");
+            signals.thread.get().join(5000); assertFalse(signals.thread.get().isAlive()); assertEquals(1, signals.closes.get());
+            child.get().join(5000); assertFalse(child.get().isAlive());
+            assertFalse(errors.toString().contains(caught.getClass().getName()), "A delivered control must not be reported and broadcast again: " + errors);
+            assertFalse(errors.toString().contains("permission to close"), errors.toString());
+        });
+    }
+    @ParameterizedTest @MethodSource("variants") void signalReaderFailureUnwindsBlockedParent(String backend, String hosting) throws Exception {
+        var signals = new SignalReader(); var failure = new RuntimeFault("signal reader failure");
+        failure.initCause(new IllegalArgumentException("original reader cause"));
+        exercise(backend, hosting, signals, _ -> { throw new AssertionError("The parked child must unwind without running its body"); }, (context, parent, cell, release, child, errors) -> {
+            signals.events.offer(failure);
+            assertParentFailure(parent, "signal reader failure", "original reader cause");
+            assertSame(failure, signals.failure.get(5, TimeUnit.SECONDS));
+            signals.thread.get().join(5000); assertFalse(signals.thread.get().isAlive()); assertEquals(1, signals.closes.get());
+            child.get().join(5000); assertFalse(child.get().isAlive()); assertEquals(1L, release.getCount());
+            assertFalse(errors.toString().contains("permission to close"), errors.toString());
+        });
+    }
+    private void assertParentFailure(Future<Long> parent, String message, String cause) throws Exception {
+        var observed = assertThrows(ExecutionException.class, () -> parent.get(5, TimeUnit.SECONDS)).getCause();
+        var internal = assertInstanceOf(PolyglotException.class, observed); assertTrue(internal.isInternalError(), internal.toString());
+        var report = new ByteArrayOutputStream(); internal.printStackTrace(new PrintStream(report, true));
+        assertTrue(report.toString().contains(message), report.toString()); assertTrue(report.toString().contains(cause), report.toString());
     }
     @ParameterizedTest @MethodSource("variants") void ordinaryGuestDeathDoesNotCancelParent(String backend, String hosting) throws Exception {
         guestDeath(backend, hosting, new GuestException(new Object(), null));

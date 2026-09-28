@@ -97,15 +97,7 @@ public final class GuestThreadOps {
                 catch (Throwable cleanup) { failure = cleanupFailure(failure, cleanup); }
             }
             if (failure != null) {
-                if (identity.get() != null && fatalForkFailure(failure)) {
-                    // The language cannot closeCancelled its non-creator TruffleContext.
-                    // Unwind active entries at their safepoints; this does not permanently close the context.
-                    failure.printStackTrace(new PrintStream(state.getEnv().err(), true));
-                    Throwable cause = failure;
-                    state.getEnv().submitThreadLocal(null, new ThreadLocalAction(true, false) {
-                        @Override protected void perform(Access access) { throw new ForkFailure(cause); }
-                    });
-                }
+                if (identity.get() != null) reportHostFailure(state, failure);
                 GuestThreadOps.<RuntimeException, Object>rethrow(failure);
             }
         }, capability, node);
@@ -125,6 +117,15 @@ public final class GuestThreadOps {
         GuestThreadId result = identity.get();
         if (result == null) throw RuntimeFault.fault("fork# child did not publish its ThreadId#");
         return result;
+    }
+    /** A language-owned thread cannot cancel its non-creator TruffleContext. */
+    static void reportHostFailure(Language.State state, Throwable failure) {
+        if (!fatalForkFailure(failure)) return;
+        // Unwind active entries at their safepoints without permanently closing the context.
+        failure.printStackTrace(new PrintStream(state.getEnv().err(), true));
+        state.getEnv().submitThreadLocal(null, new ThreadLocalAction(true, false) {
+            @Override protected void perform(Access access) { throw new ForkFailure(failure); }
+        });
     }
     /** A delivered host failure must neither enter a Haskell handler nor broadcast again. */
     private static final class ForkFailure extends RuntimeException implements InternalGuestControl {
