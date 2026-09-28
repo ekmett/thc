@@ -21,9 +21,9 @@ public final class VectorOperation extends Expr {
     @Override public LongVector execute(VirtualFrame frame) {
         return switch (operation) {
             case "broadcastInt64X2#" -> LongVector.broadcast(LongVector.SPECIES_128, arguments[0].executeRequiredLong(frame));
-            case "plusInt64X2#" -> vector(frame, 0).add(vector(frame, 1));
-            case "minusInt64X2#" -> vector(frame, 0).sub(vector(frame, 1));
-            case "negateInt64X2#" -> vector(frame, 0).neg();
+            case "plusInt64X2#" -> vector(arguments[0].execute(frame)).add(vector(arguments[1].execute(frame)));
+            case "minusInt64X2#" -> vector(arguments[0].execute(frame)).sub(vector(arguments[1].execute(frame)));
+            case "negateInt64X2#" -> vector(arguments[0].execute(frame)).neg();
             default -> {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 throw new RuntimeFault("Invalid vector operation");
@@ -31,7 +31,7 @@ public final class VectorOperation extends Expr {
         };
     }
 
-    private LongVector vector(VirtualFrame frame, int index) {
-        return CoreVectors.requireLong(arguments[index].execute(frame), LongVector.SPECIES_128);
+    private static LongVector vector(Object value) {
+        return CoreVectors.requireLong(value, LongVector.SPECIES_128);
     }
 }

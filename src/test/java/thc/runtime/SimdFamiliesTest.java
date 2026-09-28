@@ -4,8 +4,11 @@ package thc.runtime;
 
 import jdk.incubator.vector.*;
 import com.oracle.truffle.api.RootCallTarget;
+import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.bytecode.Instruction;
+import com.oracle.truffle.api.frame.FrameDescriptor;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.*;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Value;
@@ -16,6 +19,7 @@ import java.io.File;
 import java.nio.file.Files;
 import java.security.MessageDigest;
 import java.util.*;
+import java.util.function.Function;
 import static org.junit.jupiter.api.Assertions.*;
 
 @SuppressWarnings("unchecked")
@@ -58,6 +62,51 @@ class SimdFamiliesTest {
         assertThrows(RuntimeFault.class, () -> CoreVectors.requireDouble(DoubleVector.zero(DoubleVector.SPECIES_128), DoubleVector.SPECIES_256));
         for (long index : List.of(-1L, 8L, Long.MIN_VALUE, Long.MAX_VALUE)) assertThrows(RuntimeFault.class, () -> CoreVectors.laneIndex(index, 8));
         for (long index = 0; index <= 7; index++) assertEquals((int) index, CoreVectors.laneIndex(index, 8));
+    }
+    @Test void operationOperandsRunOnceInOrderAndStopAtTheOriginalFailure() {
+        var operations = List.<Function<Expr[], Expr>>of(
+            arguments -> new Vector16Operation("plusInt16X8#", arguments),
+            arguments -> new GeneratedInt16X16Operation("plusInt16X16#", arguments),
+            arguments -> new VectorFloat8Fused("fmaddFloatX8#", arguments));
+        var values = List.of(ShortVector.broadcast(ShortVector.SPECIES_128, (short) 2),
+            ShortVector.broadcast(ShortVector.SPECIES_256, (short) 2),
+            FloatVector.broadcast(FloatVector.SPECIES_256, 2.0f));
+        var expected = List.of(ShortVector.broadcast(ShortVector.SPECIES_128, (short) 4),
+            ShortVector.broadcast(ShortVector.SPECIES_256, (short) 4),
+            FloatVector.broadcast(FloatVector.SPECIES_256, 6.0f));
+        var wrongSpecies = List.of(ShortVector.zero(ShortVector.SPECIES_256),
+            ShortVector.zero(ShortVector.SPECIES_128), FloatVector.zero(FloatVector.SPECIES_128));
+        var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], FrameDescriptor.newBuilder().build());
+        for (int family = 0; family < operations.size(); family++) {
+            int arity = family == 2 ? 3 : 2;
+            var order = new ArrayList<Integer>();
+            var arguments = new Expr[arity];
+            for (int i = 0; i < arity; i++) arguments[i] = observedOperand(i, values.get(family), order, null);
+            assertEquals(expected.get(family), operations.get(family).apply(arguments).execute(frame));
+            assertEquals(arity == 3 ? List.of(0, 1, 2) : List.of(0, 1), order);
+            for (int failed = 0; failed < arity; failed++) {
+                order.clear();
+                var failure = new RuntimeFault("operand " + failed);
+                for (int i = 0; i < arity; i++) arguments[i] = observedOperand(i, values.get(family), order, i == failed ? failure : null);
+                var operation = operations.get(family).apply(arguments);
+                assertSame(failure, assertThrows(RuntimeFault.class, () -> operation.execute(frame)));
+                assertEquals(List.of(0, 1, 2).subList(0, failed + 1), order);
+            }
+            order.clear();
+            for (int i = 0; i < arity; i++) arguments[i] = observedOperand(i, i == 0 ? wrongSpecies.get(family) : values.get(family), order, null);
+            var operation = operations.get(family).apply(arguments);
+            assertThrows(RuntimeFault.class, () -> operation.execute(frame));
+            assertEquals(List.of(0), order);
+        }
+    }
+    private Expr observedOperand(int index, Object value, List<Integer> order, RuntimeFault failure) {
+        return new Expr() {
+            @Override public Object execute(VirtualFrame frame) {
+                order.add(index);
+                if (failure != null) throw failure;
+                return value;
+            }
+        };
     }
     private record Family(String name, CoreRepresentation tuple, CoreRepresentation vector) {}
     @Test void exactLaneSignWidthLogicalTupleAndCallingProofsRemainRequired() {

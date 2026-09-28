@@ -28,10 +28,10 @@ public final class Vector8Operation extends Expr {
     @Override public ByteVector execute(VirtualFrame frame) {
         return switch (operation) {
             case 0 -> ByteVector.broadcast(ByteVector.SPECIES_128, (byte) arguments[0].executeRequiredInt(frame));
-            case 1 -> vector(frame, 0).add(vector(frame, 1));
-            case 2 -> vector(frame, 0).sub(vector(frame, 1));
-            case 3 -> vector(frame, 0).neg();
-            case 4 -> vector(frame, 0).mul(vector(frame, 1));
+            case 1 -> vector(arguments[0].execute(frame)).add(vector(arguments[1].execute(frame)));
+            case 2 -> vector(arguments[0].execute(frame)).sub(vector(arguments[1].execute(frame)));
+            case 3 -> vector(arguments[0].execute(frame)).neg();
+            case 4 -> vector(arguments[0].execute(frame)).mul(vector(arguments[1].execute(frame)));
             default -> {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 throw new RuntimeFault("Invalid Int8X16 operation");
@@ -39,7 +39,7 @@ public final class Vector8Operation extends Expr {
         };
     }
 
-    private ByteVector vector(VirtualFrame frame, int index) {
-        return CoreVectors.requireByte(arguments[index].execute(frame), ByteVector.SPECIES_128);
+    private static ByteVector vector(Object value) {
+        return CoreVectors.requireByte(value, ByteVector.SPECIES_128);
     }
 }

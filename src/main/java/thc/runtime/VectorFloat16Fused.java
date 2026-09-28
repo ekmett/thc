@@ -23,15 +23,15 @@ public final class VectorFloat16Fused extends Expr {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             throw new RuntimeFault("Invalid FloatX16 fused operation");
         }
-        FloatVector a = vector(frame, 0);
-        FloatVector b = vector(frame, 1);
-        FloatVector c = vector(frame, 2);
+        FloatVector a = vector(arguments[0].execute(frame));
+        FloatVector b = vector(arguments[1].execute(frame));
+        FloatVector c = vector(arguments[2].execute(frame));
         FloatVector left = operation >= 2 ? a.neg() : a;
         FloatVector addend = (operation & 1) != 0 ? c.neg() : c;
         return left.fma(b, addend);
     }
 
-    private FloatVector vector(VirtualFrame frame, int index) {
-        return CoreVectors.requireFloat(arguments[index].execute(frame), FloatVector.SPECIES_512);
+    private static FloatVector vector(Object value) {
+        return CoreVectors.requireFloat(value, FloatVector.SPECIES_512);
     }
 }
