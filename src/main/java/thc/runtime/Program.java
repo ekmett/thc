@@ -1313,7 +1313,7 @@ public final class Program implements ExecutableProgram {
         var originalProcess = CoreProcessForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
         var capi = CoreCapiForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr), foreignLinks);
         var stableFree = CoreStablePointers.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
-        var sharedCAF = CoreSharedCAFStores.INSTANCE.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
+        var sharedCAF = CoreSharedCAFStores.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
         var shutdown = CoreRtsShutdown.INSTANCE.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
         var mainThreadForeign = CoreMainThreadForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
         var boundThreadForeign = CoreBoundThreadForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr), false);
@@ -1432,11 +1432,11 @@ public final class Program implements ExecutableProgram {
             return new FreeStablePointer(compile(args.get(0), scope, false), compile(args.get(1), scope, false)).proven(evaluated(tupleProof, true));
         }
         if (sharedCAF != null) {
-            CoreSharedCAFStores.INSTANCE.validateHead(fn, defined);
+            CoreSharedCAFStores.validateHead(fn, defined);
             Expr[] operands = new Expr[args.size()];
             for (int i = 0; i < operands.length; i++) {
                 operands[i] = compile(args.get(i), scope, false);
-                CoreSharedCAFStores.INSTANCE.validateOperand(i, operands[i].getRepresentation(), bindingProof(args.get(i), scope));
+                CoreSharedCAFStores.validateOperand(i, operands[i].getRepresentation(), bindingProof(args.get(i), scope));
             }
             return new SharedCAFStoreExpression(sharedCAF, operands[0], operands[1]).proven(evaluated(tupleProof, true));
         }
@@ -1651,7 +1651,7 @@ public final class Program implements ExecutableProgram {
         if (primitive && Set.of("newBCO#", "mkApUpd0#").contains(fn.get(1))) {
             String name = (String) fn.get(1);
             if (capturesContinuations) throw new UnsupportedCore("GHC BCO frames do not yet preserve AST captures");
-            GhcBCO.INSTANCE.validate(name, argumentProofs(args), flags, tupleProof);
+            GhcBCO.validate(name, argumentProofs(args), flags, tupleProof);
             return new GhcBCOExpression(name, argumentOperands(args, scope, flags), (thc.Language) language, metrics, tupleProof);
         }
         if (primitive && Set.of("newPromptTag#", "prompt#", "control0#").contains(fn.get(1))) {

@@ -69,7 +69,7 @@ class CoreCompactDebugTest {
     @Test fun selectedIntervalsRestoreSourcesAndKeepGapsExplicit() = withFile { file ->
         val debug = CoreCompactDebug(file)
         val origin = CoreCompactRecords.Origin("identity", 20, 0, debug)
-        val location = CoreSources(emptyMap()).binding(mapOf("compactOrigin" to origin))!!
+        val location = CoreSources(emptyMap<String, Any?>()).binding(mapOf("compactOrigin" to origin))!!
         assertSame(origin, location.compactOrigin)
         assertEquals(0L, file.counters.statistics().debugBytesRead)
         assertEquals("second", location.section!!.characters.toString())
