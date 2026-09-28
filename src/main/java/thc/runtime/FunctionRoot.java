@@ -517,6 +517,8 @@ public final class FunctionRoot extends GuestRoot {
     @Override public synchronized long prepareGraphBudgetRetry(long failedGeneration) {
         if (deferredBudget && failedGeneration == 0L && budgetGeneration == 0L && AstDeferredArm.extract(this))
             budgetGeneration = 1L;
+        else if (failedGeneration == budgetGeneration && AstSameFrameArm.extract(this))
+            budgetGeneration++;
         return budgetGeneration;
     }
     @Override protected boolean prepareForCompilation(boolean rootCompilation, int compilationTier, boolean lastTier) {

@@ -3,6 +3,7 @@
 package thc.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import java.util.List;
@@ -19,17 +20,21 @@ public final class AstOperands extends Expr {
     @ExplodeLoop private void prepare(VirtualFrame frame, int start) {
         for (int index = start; index < operands.length; index++) {
             try { operands[index].write(frame); }
-            catch (AstCapture cut) {
-                int next = index + 1;
-                throw cut.append((saved, input) -> { prepare(saved, next); return thc.runtime.Unit.INSTANCE; });
-            }
+            catch (AstCapture cut) { throw appendPrepare(cut, index + 1); }
         }
+    }
+    @TruffleBoundary private AstCapture appendPrepare(AstCapture cut, int next) {
+        return cut.append((saved, input) -> { prepare(saved, next); return thc.runtime.Unit.INSTANCE; });
     }
     private void prepareBody(VirtualFrame frame, int[] slots, int offset) {
         try { prepare(frame, 0); }
-        catch (AstCapture cut) {
-            throw cut.append((saved, input) -> slots == null ? body.execute(saved) : body.executeTuple(saved, slots, offset));
-        }
+        catch (AstCapture cut) { throw appendBody(cut, slots, offset); }
+    }
+    @TruffleBoundary private AstCapture appendBody(AstCapture cut, int[] slots, int offset) {
+        return cut.append((saved, input) -> slots == null ? body.execute(saved) : body.executeTuple(saved, slots, offset));
+    }
+    @TruffleBoundary private AstCapture encloseCleanup(AstCapture cut) {
+        return cut.enclose(saved -> new Cleanup(this, saved));
     }
     @ExplodeLoop private void clear(VirtualFrame frame) { for (int slot : temporaries) frame.clear(slot); }
     private static final class Cleanup implements AstResumeStep {
@@ -52,7 +57,7 @@ public final class AstOperands extends Expr {
             return body.execute(frame);
         } catch (AstCapture cut) {
             suspended = true;
-            throw cut.enclose(saved -> new Cleanup(this, saved));
+            throw encloseCleanup(cut);
         } finally {
             // Only parked suffixes retain operand temporaries.
             if (!suspended) clear(frame);
@@ -65,7 +70,7 @@ public final class AstOperands extends Expr {
             return body.executeInt(frame);
         } catch (AstCapture cut) {
             suspended = true;
-            throw cut.enclose(saved -> new Cleanup(this, saved));
+            throw encloseCleanup(cut);
         } finally {
             // Only parked suffixes retain operand temporaries.
             if (!suspended) clear(frame);
@@ -78,7 +83,7 @@ public final class AstOperands extends Expr {
             return body.executeLong(frame);
         } catch (AstCapture cut) {
             suspended = true;
-            throw cut.enclose(saved -> new Cleanup(this, saved));
+            throw encloseCleanup(cut);
         } finally {
             // Only parked suffixes retain operand temporaries.
             if (!suspended) clear(frame);
@@ -91,7 +96,7 @@ public final class AstOperands extends Expr {
             return body.executeFloat(frame);
         } catch (AstCapture cut) {
             suspended = true;
-            throw cut.enclose(saved -> new Cleanup(this, saved));
+            throw encloseCleanup(cut);
         } finally {
             // Only parked suffixes retain operand temporaries.
             if (!suspended) clear(frame);
@@ -104,7 +109,7 @@ public final class AstOperands extends Expr {
             return body.executeDouble(frame);
         } catch (AstCapture cut) {
             suspended = true;
-            throw cut.enclose(saved -> new Cleanup(this, saved));
+            throw encloseCleanup(cut);
         } finally {
             // Only parked suffixes retain operand temporaries.
             if (!suspended) clear(frame);
@@ -117,7 +122,7 @@ public final class AstOperands extends Expr {
             return body.executeClosure(frame);
         } catch (AstCapture cut) {
             suspended = true;
-            throw cut.enclose(saved -> new Cleanup(this, saved));
+            throw encloseCleanup(cut);
         } finally {
             // Only parked suffixes retain operand temporaries.
             if (!suspended) clear(frame);
@@ -130,7 +135,7 @@ public final class AstOperands extends Expr {
             return body.executeDataValue(frame);
         } catch (AstCapture cut) {
             suspended = true;
-            throw cut.enclose(saved -> new Cleanup(this, saved));
+            throw encloseCleanup(cut);
         } finally {
             // Only parked suffixes retain operand temporaries.
             if (!suspended) clear(frame);
@@ -143,7 +148,7 @@ public final class AstOperands extends Expr {
             return body.executeAddress(frame);
         } catch (AstCapture cut) {
             suspended = true;
-            throw cut.enclose(saved -> new Cleanup(this, saved));
+            throw encloseCleanup(cut);
         } finally {
             // Only parked suffixes retain operand temporaries.
             if (!suspended) clear(frame);
@@ -156,7 +161,7 @@ public final class AstOperands extends Expr {
             return body.executeTuple(frame, slots, offset);
         } catch (AstCapture cut) {
             suspended = true;
-            throw cut.enclose(saved -> new Cleanup(this, saved));
+            throw encloseCleanup(cut);
         } finally {
             // Only parked suffixes retain operand temporaries.
             if (!suspended) clear(frame);

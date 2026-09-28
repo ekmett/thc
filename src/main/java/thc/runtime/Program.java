@@ -696,7 +696,20 @@ public final class Program implements ExecutableProgram {
         }
         return new FunctionSpec(root.getCallTarget(), captures, captureSources);
     }
+    private boolean sameFrameCandidate(List<Object> expression, Scope scope) {
+        if (!enableAsync || outlineCaseArms || deferDefaultArm || scope.joins.isEmpty() ||
+                !Arrays.asList("app", "case", "let").contains(expression.getFirst())) return false;
+        for (String free : coreFreeVariables(expression))
+            if (scope.joins.containsKey(free)) return false;
+        return true;
+    }
     private Expr caseArm(List<Object> expression, Scope scope, boolean tail) {
+        if (sameFrameCandidate(expression, scope)) {
+            OperandBuilder operands = operandBuilder;
+            operandBuilder = null;
+            try { return new AstSameFrameArm(compile(expression, scope, tail)); }
+            finally { operandBuilder = operands; }
+        }
         if (expression == scope.deferredExpression) {
             CoreRepresentation proof = CoreRepresentations.expression(expression);
             Set<String> free = coreFreeVariables(expression);
@@ -1028,6 +1041,9 @@ public final class Program implements ExecutableProgram {
             nodes[i] = argument(args.get(i), scope, lifted && !callStrict[i] && !target.getEntryStrict()[i],
                 "argument thunk", target.getProofs()[i].isTypedTransport(), lifted);
             CoreRepresentations.requireJoinArgument(target.getProofs()[i], nodes[i].getRepresentation());
+            // The returning argument may be larger than any one nested case arm.
+            // Keep argument preparation and the actual local jump in this region.
+            if (sameFrameCandidate(args.get(i), scope)) nodes[i] = new AstSameFrameArm(nodes[i]);
         }
         int[][] typedTemps = new int[nodes.length][];
         int[] temps = new int[nodes.length];
