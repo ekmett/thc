@@ -70,19 +70,19 @@
     "src/main/java/thc/runtime/RtsArgumentsOp.java": {"junit": ["thc.runtime.GuestArgumentsTest"], "python": ["bin/test-audit-core.py"]},
     "src/main/java/thc/runtime/RtsArgumentsExpression.java": {"junit": ["thc.runtime.GuestArgumentsTest"], "python": ["bin/test-audit-core.py"]},
     "src/main/java/thc/runtime/ManagedCompacts.java": {
-      "junit": ["thc.runtime.ManagedCompactsTest", "thc.runtime.CompactImagesTest"], "python": ["bin/test-audit-core.py"]
+      "junit": ["thc.runtime.ManagedCompactsTest", "thc.runtime.CompactImagesTest", "thc.runtime.AsyncCompactTest"], "python": ["bin/test-audit-core.py"]
     },
     "src/main/java/thc/runtime/ManagedCompact.java": {
-      "junit": ["thc.runtime.ManagedCompactsTest", "thc.runtime.CompactImagesTest"], "python": ["bin/test-audit-core.py"]
+      "junit": ["thc.runtime.ManagedCompactsTest", "thc.runtime.CompactImagesTest", "thc.runtime.AsyncCompactTest"], "python": ["bin/test-audit-core.py"]
     },
     "src/main/java/thc/runtime/CompactCopyNode.java": {
-      "junit": ["thc.runtime.ManagedCompactsTest", "thc.runtime.CompactImagesTest"], "python": ["bin/test-audit-core.py"]
+      "junit": ["thc.runtime.ManagedCompactsTest", "thc.runtime.CompactImagesTest", "thc.runtime.AsyncCompactTest"], "python": ["bin/test-audit-core.py"]
     },
     "src/main/java/thc/runtime/CompactOp.java": {
-      "junit": ["thc.runtime.ManagedCompactsTest", "thc.runtime.CompactImagesTest"], "python": ["bin/test-audit-core.py"]
+      "junit": ["thc.runtime.ManagedCompactsTest", "thc.runtime.CompactImagesTest", "thc.runtime.AsyncCompactTest"], "python": ["bin/test-audit-core.py"]
     },
     "src/main/java/thc/runtime/CompactExpression.java": {
-      "junit": ["thc.runtime.ManagedCompactsTest", "thc.runtime.CompactImagesTest"], "python": ["bin/test-audit-core.py"]
+      "junit": ["thc.runtime.ManagedCompactsTest", "thc.runtime.CompactImagesTest", "thc.runtime.AsyncCompactTest"], "python": ["bin/test-audit-core.py"]
     },
     "src/main/java/thc/runtime/CompactImages.java": {
       "junit": ["thc.runtime.CompactImagesTest"], "python": ["bin/test-audit-core.py"]
