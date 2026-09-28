@@ -706,8 +706,8 @@ finishPackageNativeWithDependencies cOnlyProducts pieces directory unit currentO
       _ -> fail "native compiler did not report one library directory"
     linkArguments <- nativeLinkInputs compiler libdir root (Just unit) originalArguments
     clang <- tool "THC_CLANG" "clang"
-    (artifact,format,libraries) <- if all ("llvm." `isPrefixOf`) externals
-      then pure (final,"llvm-bitcode",[]) else do
+    (artifact,format,libraries,nativeLibrary) <- if all ("llvm." `isPrefixOf`) externals
+      then pure (final,"llvm-bitcode",[],Nothing) else do
         let darwin = "-darwin" `isInfixOf` target || "-apple-macosx" `isInfixOf` target
             artifact = directory </> if darwin then "native/final.dylib" else "native/final.so"
             format = if darwin then "llvm-embedded-mach-o" else "llvm-embedded-elf"
@@ -719,9 +719,35 @@ finishPackageNativeWithDependencies cOnlyProducts pieces directory unit currentO
             arguments = ["--target=" ++ target,"-shared","-fPIC",final] ++ embedding ++
               linkArguments ++ [if darwin then "-Wl,-undefined,error" else "-Wl,--no-undefined","-o",artifact]
         _ <- command directory clang arguments
+        -- A container's machine code is not executed by Sulong. Materialize
+        -- native dependencies separately, rooting archive extraction with the
+        -- actual unresolved symbols. Never include the component here: its
+        -- globals and constructors must exist only in the LLVM instance.
+        let dependency = directory </> if darwin then "native/dependencies.dylib" else "native/dependencies.so"
+            nativeRoots = concatMap (\symbol -> ["-Xlinker","-u","-Xlinker",if darwin then '_' : symbol else symbol])
+              (filter (not . ("llvm." `isPrefixOf`)) externals)
+            dependencyArguments = ["--target=" ++ target,"-shared","-fPIC"] ++ nativeRoots ++ linkArguments ++
+              [if darwin then "-Wl,-undefined,error" else "-Wl,--no-undefined","-o",dependency]
+        _ <- command directory clang dependencyArguments
+        -- Native archives can themselves carry compiler-embedded LLVM. Keep
+        -- their companion native-only, and the ELF component's LLVM section
+        -- exactly final.bc rather than concatenated archive-member payloads.
+        objcopy <- tool "THC_LLVM_OBJCOPY" (takeDirectory clang </> "llvm-objcopy")
+        let stripArguments = map ("--remove-section=" ++)
+              (if darwin then ["__LLVM,__bundle","__LLVM,__bitcode","__LLVM,__cmdline"] else [".llvmbc",".llvmcmd"]) ++ [dependency]
+            componentArguments = ["--update-section=.llvmbc=" ++ final,artifact]
+        _ <- command directory objcopy stripArguments
+        unless darwin $ do
+          _ <- command directory objcopy componentArguments
+          pure ()
+        dependencyBytes <- BS.readFile dependency
+        objcopyHash <- sha <$> BS.readFile objcopy
         compilerHash <- sha <$> BS.readFile clang
         pure (artifact,format,[object ["provider" .= ("package-declared-native-libraries-v1"::String),
-          "symbols" .= externals,"compiler" .= clang,"compilerSha256" .= compilerHash,"arguments" .= arguments]])
+          "symbols" .= externals,"compiler" .= clang,"compilerSha256" .= compilerHash,"arguments" .= arguments,
+          "dependencyArguments" .= dependencyArguments,"objcopy" .= objcopy,"objcopySha256" .= objcopyHash,
+          "objcopyArguments" .= (stripArguments : [componentArguments | not darwin])]],
+          Just (object ["sha256" .= sha dependencyBytes,"hex" .= hex dependencyBytes]))
     bytes <- BS.readFile artifact
     component <- get record "componentSha256" :: IO String
     providerInputs <- mapM (\value -> get value "inputs") providers
@@ -732,7 +758,8 @@ finishPackageNativeWithDependencies cOnlyProducts pieces directory unit currentO
           "buildInputs" .= object ["translationUnits" .= inputs,"providers" .= providers,
             "dependencies" .= map cOnlyProductProof cOnlyProducts,
             "nativeLibraries" .= libraries,"unresolved" .= externals,"argumentBridges" .= bridgeInputs]] ++
-          ["finalizers" .= finalizers | not (null finalizers)]
+          ["finalizers" .= finalizers | not (null finalizers)] ++
+          maybe [] (\library -> ["nativeLibrary" .= library]) nativeLibrary
     writeJson (directory </> "native/inputs.json") (object ["sources" .= inputs,"unresolved" .= externals])
     forM modules $ \(name,bytes') -> do
       value <- either fail pure (eitherDecodeStrict' bytes')

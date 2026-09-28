@@ -668,8 +668,10 @@ def package_scalar_link(module, validate_archive=True):
     inputs = native and isinstance(raw_link, dict) and 'buildInputs' in raw_link
     partial = native and isinstance(raw_link, dict) and 'availableEntries' in raw_link
     callbacks = native and isinstance(raw_link, dict) and raw_link.get('schema') == 2
+    companion = native and isinstance(raw_link, dict) and 'nativeLibrary' in raw_link
     link = record(raw_link, 'schema format profile unit target componentSha256 bitcodeSha256 bitcodeHex abi' +
-                  (' buildInputs' if inputs else '') + (' availableEntries' if partial else '') + (' finalizers' if callbacks else ''))
+                  (' buildInputs' if inputs else '') + (' availableEntries' if partial else '') + (' finalizers' if callbacks else '') +
+                  (' nativeLibrary' if companion else ''))
     if inputs: require(isinstance(link['buildInputs'], dict), 'build inputs record')
     require(type(link['schema']) is int and (link['schema'] == 1 or callbacks) and (link['format'] == 'llvm-bitcode' or
             native and (link['format'] == 'llvm-embedded-elf' and platform.system() == 'Linux' or
@@ -687,6 +689,14 @@ def package_scalar_link(module, validate_archive=True):
     try: data = bytes.fromhex(encoded)
     except ValueError as error: raise ValueError('Invalid package scalar bitcode encoding') from error
     require(data and data.hex() == encoded and hashlib.sha256(data).hexdigest() == link['bitcodeSha256'], 'bitcode digest')
+    if companion:
+        require(not partial and link['format'] != 'llvm-bitcode', 'native dependency container')
+        dependency = record(link['nativeLibrary'], 'sha256 hex')
+        encoded = text(dependency['hex'])
+        try: native_bytes = bytes.fromhex(encoded)
+        except ValueError as error: raise ValueError('Invalid native dependency encoding') from error
+        require(native_bytes and native_bytes.hex() == encoded and
+                hashlib.sha256(native_bytes).hexdigest() == text(dependency['sha256']), 'native dependency digest')
     require(isinstance(link['abi'], list) and link['abi'], 'empty ABI')
     reps = ('Int32Rep', 'Int64Rep', 'FloatRep', 'DoubleRep')
     if native:

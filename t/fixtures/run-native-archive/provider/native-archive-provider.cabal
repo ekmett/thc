@@ -3,9 +3,10 @@ name: native-archive-provider
 version: 0.1.0.0
 build-type: Simple
 license: BSD-3-Clause
+extra-source-files: dependency.c
 library
   exposed-modules: Provider
   c-sources: native.c
-  extra-libraries: m
+  extra-libraries: m thc_archive_dependency
   build-depends: base
   default-language: Haskell2010
