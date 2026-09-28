@@ -1275,10 +1275,10 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static void apply(VirtualFrame frame, TargetLayout layout,
                 LocalAccessor standard, LocalAccessor key, Object snapshot, long offset,
                 @Bind("$node") Node node) {
-            kotlin.Pair<ManagedAddress, ManagedAddress> result = ManagedStackRuntime.frameInfo(snapshot, offset, layout);
+            ManagedStackFrameInfo result = ManagedStackRuntime.frameInfo(snapshot, offset, layout);
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
-            standard.setObject(bytecode, frame, result.getFirst());
-            key.setObject(bytecode, frame, result.getSecond());
+            standard.setObject(bytecode, frame, result.getStandard());
+            key.setObject(bytecode, frame, result.getKey());
         }
     }
 

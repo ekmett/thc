@@ -129,13 +129,13 @@ class GuestThreadStatusTest {
         var reps = List.of("IntRep", "IntRep", "IntRep");
         var fields = List.of(state, integer, integer, integer);
         var result = new CoreRepresentation(CoreKind.UNKNOWN, false, false, reps, fields, null, null, null, null);
-        CoreGuestThreads.INSTANCE.validate("threadStatus#", List.of(thread, state), List.of(false, false), result);
-        assertThrows(RuntimeFault.class, () -> CoreGuestThreads.INSTANCE.validate("threadStatus#", List.of(thread, state), List.of(true, false), result));
-        assertThrows(RuntimeFault.class, () -> CoreGuestThreads.INSTANCE.validate("threadStatus#", List.of(integer, state), List.of(false, false), result));
+        CoreGuestThreads.validate("threadStatus#", List.of(thread, state), List.of(false, false), result);
+        assertThrows(RuntimeFault.class, () -> CoreGuestThreads.validate("threadStatus#", List.of(thread, state), List.of(true, false), result));
+        assertThrows(RuntimeFault.class, () -> CoreGuestThreads.validate("threadStatus#", List.of(integer, state), List.of(false, false), result));
         for (var bad : List.of(
             new CoreRepresentation(CoreKind.UNKNOWN, false, false, reps, List.of(state, integer, thread, integer), null, null, null, null),
             new CoreRepresentation(CoreKind.UNKNOWN, false, false, List.of("IntRep"), fields, null, null, null, null),
             new CoreRepresentation(CoreKind.UNKNOWN, false, false, reps, List.of(state, integer), null, null, null, null)))
-            assertThrows(RuntimeFault.class, () -> CoreGuestThreads.INSTANCE.validate("threadStatus#", List.of(thread, state), List.of(false, false), bad));
+            assertThrows(RuntimeFault.class, () -> CoreGuestThreads.validate("threadStatus#", List.of(thread, state), List.of(false, false), bad));
     }
 }

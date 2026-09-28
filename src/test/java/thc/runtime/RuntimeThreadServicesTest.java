@@ -162,9 +162,9 @@ class RuntimeThreadServicesTest {
     }
     @Test void realLinuxCoordinatesMatchOriginalSparseMaskWithoutPinning() {
         assumeTrue(System.getProperty("os.name").startsWith("Linux"));
-        var provider = LinuxCpuAffinity.Companion.discover();
+        var provider = LinuxCpuAffinity.discover();
         assertNotNull(provider, "Native access is enabled in the test JVM");
-        var original = provider.currentMask$org_intelligence_thc();
+        var original = provider.currentMask();
         assertNotNull(original);
         var cpus = new ArrayList<Integer>();
         for (int i = 0; i < original.length * 8; i++) if ((original[i / 8] & (1 << (i % 8))) != 0) cpus.add(i);
@@ -176,7 +176,7 @@ class RuntimeThreadServicesTest {
             assertEquals(0L, query(current, 109, index));
             assertEquals(cpus.get(index).longValue(), query(current, 110, index));
         }
-        assertArrayEquals(original, provider.currentMask$org_intelligence_thc());
+        assertArrayEquals(original, provider.currentMask());
     }
     @Test void malformedQueryIndicesAndUnknownSelectorsFailExplicitly() {
         var current = threads();

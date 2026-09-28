@@ -17,7 +17,7 @@ public final class TraceExpression extends Expr {
         ManagedAddress location = address.executeAddress(frame);
         long count = length == null ? 0L : length.executeLong(frame);
         TupleResultsKt.requireVoidCarrier(state.execute(frame));
-        RtsDiagnostics.INSTANCE.trace(this, operation, location, count);
+        RtsDiagnostics.trace(this, operation, location, count);
         return kotlin.Unit.INSTANCE;
         } catch (com.oracle.truffle.api.nodes.UnexpectedResultException failure) { throw propagate(failure); }
     }

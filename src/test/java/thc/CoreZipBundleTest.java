@@ -87,14 +87,14 @@ class CoreZipBundleTest {
     @Test void wiredTargetLayoutIsValidatedAndCarriedToBothBackends() throws Exception {
         var layout = targetLayout(); var path = manifest(List.of(unit("pkg-a", map("layout", layout))));
         for (var backend : List.of("ast", "bytecode")) {
-            var request = request(path, backend, false); var input = document(request); var record = TargetLayout.Companion.fromDocument(input.get("targetLayout")); assertEquals(8, record.getWordBytes()); assertTrue(record.getTablesNextToCode()); assertEquals(8, record.offset("infoProvEntProvOffset"));
+            var request = request(path, backend, false); var input = document(request); var record = TargetLayout.fromDocument(input.get("targetLayout")); assertEquals(8, record.getWordBytes()); assertTrue(record.getTablesNextToCode()); assertEquals(8, record.offset("infoProvEntProvOffset"));
             try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).build()) { assertEquals(51L, context.eval("thc", request).execute().asLong(), backend); var original = (Map<?, ?>) input.get("targetLayout"); var source = (Map<?, ?>) original.get("layout"); var malformed = with(input, "targetLayout", with(original, "layout", with(source, "infoProvSpanOffset", 64))); assertThrows(RuntimeException.class, () -> context.eval("thc", Json.stringify(malformed))); }
         }
         assertTrue(rejected(List.of(unit("pkg-a", map("layout", with(layout, "endianness", "invalid"))))).getMessage().contains("endianness"));
         assertTrue(rejected(List.of(unit("pkg-a", map("layout", with(layout, "infoProvSpanOffset", 64))))).getMessage().contains("exceeds"));
         assertTrue(rejected(List.of(unit("pkg-a", map("layout", layout, "platform", "other-os")))).getMessage().contains("identity or way"));
         assertTrue(rejected(List.of(unit("pkg-a", map("layout", layout, "way", "profiling")))).getMessage().contains("identity or way"));
-        var otherLayout = with(layout, "tablesNextToCode", false); var other = document(request(manifest(List.of(unit("pkg-a", map("layout", otherLayout)))))); assertFalse(TargetLayout.Companion.fromDocument(other.get("targetLayout")).getTablesNextToCode());
+        var otherLayout = with(layout, "tablesNextToCode", false); var other = document(request(manifest(List.of(unit("pkg-a", map("layout", otherLayout)))))); assertFalse(TargetLayout.fromDocument(other.get("targetLayout")).getTablesNextToCode());
         assertTrue(rejected(List.of(unit("pkg-a", map("layout", with(layout, "tablesNextToCode", "false"))))).getMessage().contains("tables-next-to-code"));
         assertTrue(rejected(List.of(unit("pkg-a", map("layout", layout)), unit("pkg-b", map("layout", otherLayout)))).getMessage().contains("Conflicting GHC target layouts"));
         assertTrue(rejected(List.of(unit("pkg-a", map("layout", layout)), unit("pkg-b", map("layout", layout, "abi", "other")))).getMessage().contains("Conflicting GHC target layouts"));
@@ -106,14 +106,14 @@ class CoreZipBundleTest {
     }
     private String selectedRequest(String rts, String recipe, String digest, Map<String, Object> receiptLayout) throws Exception { return request(manifest(List.of(unit("pkg-a", map("layout", targetLayout(), "generated", null, "inputs", selectedInputs(rts, recipe, digest, receiptLayout)))))); }
     @Test void selectedInstalledLayoutRequiresItsRtsAndRecipeReceipt() throws Exception {
-        var layout = targetLayout(); var accepted = document(selectedRequest("rts-1.0.3", "compiler/target-layout.c", "a".repeat(64), layout)); assertEquals(8, TargetLayout.Companion.fromDocument(accepted.get("targetLayout")).getWordBytes());
+        var layout = targetLayout(); var accepted = document(selectedRequest("rts-1.0.3", "compiler/target-layout.c", "a".repeat(64), layout)); assertEquals(8, TargetLayout.fromDocument(accepted.get("targetLayout")).getWordBytes());
         for (var invalid : List.of(list(null, "compiler/target-layout.c", "a".repeat(64)), list("", "compiler/target-layout.c", "a".repeat(64)), list("rts-1.0.3", null, "a".repeat(64)), list("rts-1.0.3", "other.c", "a".repeat(64)), list("rts-1.0.3", "compiler/target-layout.c", "z".repeat(64)))) {
             var error = assertThrows(RuntimeException.class, () -> selectedRequest((String) invalid.get(0), (String) invalid.get(1), (String) invalid.get(2), layout)); assertTrue(error.getMessage().contains("selected-GHC layout provenance"));
         }
         var mismatch = assertThrows(RuntimeException.class, () -> selectedRequest("rts-1.0.3", "compiler/target-layout.c", "a".repeat(64), with(layout, "tablesNextToCode", false))); assertTrue(mismatch.getMessage().contains("receipts differ"));
     }
     @Test void generatedReceiptCatalogRejectsMissingDuplicateStaleMalformedAndMismatchedSources() throws Exception {
-        var generated = generatedReceipts(); var layout = targetLayout(); var reordered = manifest(List.of(unit("pkg-a", map("layout", layout, "generated", generated.reversed())))); assertEquals(8, TargetLayout.Companion.fromDocument(document(request(reordered)).get("targetLayout")).getWordBytes());
+        var generated = generatedReceipts(); var layout = targetLayout(); var reordered = manifest(List.of(unit("pkg-a", map("layout", layout, "generated", generated.reversed())))); assertEquals(8, TargetLayout.fromDocument(document(request(reordered)).get("targetLayout")).getWordBytes());
         var malformed = new ArrayList<List<?>>(); malformed.add(null); malformed.add(List.of()); var duplicate = new ArrayList<>(generated); duplicate.add(generated.getFirst()); malformed.add(duplicate); var replaceLast = new ArrayList<>(generated.subList(0, generated.size() - 1)); replaceLast.add(generated.getFirst()); malformed.add(replaceLast);
         var invented = new ArrayList<>(); for (int i = 0; i < 6; i++) invented.add(map("path", "source" + i + ".hsc", "sha256", "a".repeat(64))); malformed.add(invented); malformed.add(generated.stream().map(it -> with(it, "path", "other/" + Objects.requireNonNull(it.get("path")))).toList());
         for (int missing = 0; missing < generated.size(); missing++) { var fewer = new ArrayList<>(generated); fewer.remove(missing); malformed.add(fewer); }

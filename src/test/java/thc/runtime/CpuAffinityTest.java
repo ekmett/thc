@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 @Timeout(30)
 class CpuAffinityTest {
     @Test void unavailableNativeAccessStillReportsCpuCapacityAndForkSelection() throws Exception {
-        var affinity = CpuAffinity.Companion.discover(false);
+        var affinity = CpuAffinity.discover(false);
         assertEquals(CpuAffinityMode.UNAVAILABLE, affinity.getMode());
         assertEquals(Runtime.getRuntime().availableProcessors(), affinity.getCount());
         assertNull(affinity.bindCurrent(Long.MIN_VALUE));
@@ -48,9 +48,9 @@ class CpuAffinityTest {
     }
     @Test void linuxPinAndNestedResetRestoreMasksEvenOnExceptions() throws Exception {
         assumeTrue(System.getProperty("os.name").startsWith("Linux"));
-        var provider = LinuxCpuAffinity.Companion.discover();
+        var provider = LinuxCpuAffinity.discover();
         assertNotNull(provider, "Linux test JVM enables native access");
-        var original = provider.currentMask$org_intelligence_thc();
+        var original = provider.currentMask();
         assertNotNull(original);
         int expectedCount = Math.min(provider.getCount(), Runtime.getRuntime().availableProcessors());
         var affinity = new CpuAffinity(provider, expectedCount);
@@ -59,33 +59,33 @@ class CpuAffinityTest {
             assertNotNull(pin, "At least the current eligible CPU must be selectable");
             assertThrows(IllegalStateException.class, () -> {
                 try (pin) {
-                    var singleton = provider.currentMask$org_intelligence_thc();
+                    var singleton = provider.currentMask();
                     assertNotNull(singleton);
                     assertEquals(1, bits(singleton));
                     assertEquals(expectedCount, affinity.getCount(), "Snapshot does not query a pinned carrier");
                     inThread(() -> {
-                        assertArrayEquals(singleton, provider.currentMask$org_intelligence_thc(), "Linux pthread inheritance");
+                        assertArrayEquals(singleton, provider.currentMask(), "Linux pthread inheritance");
                         try (var reset = provider.resetCurrent()) {
-                            assertArrayEquals(original, provider.currentMask$org_intelligence_thc());
+                            assertArrayEquals(original, provider.currentMask());
                             System.gc();
                             for (int i = 0; i < 128; i++) assertEquals(8192, new byte[8192].length);
                         }
-                        assertArrayEquals(singleton, provider.currentMask$org_intelligence_thc());
+                        assertArrayEquals(singleton, provider.currentMask());
                     });
-                    assertArrayEquals(singleton, provider.currentMask$org_intelligence_thc());
+                    assertArrayEquals(singleton, provider.currentMask());
                     // Production start(): broaden the creator, create a child, then restore its pin.
                     try (var reset = provider.resetCurrent()) {
-                        inThread(() -> assertArrayEquals(original, provider.currentMask$org_intelligence_thc()));
+                        inThread(() -> assertArrayEquals(original, provider.currentMask()));
                     }
-                    assertArrayEquals(singleton, provider.currentMask$org_intelligence_thc());
+                    assertArrayEquals(singleton, provider.currentMask());
                     throw new IllegalStateException("guest unwind");
                 }
             });
-            assertArrayEquals(original, provider.currentMask$org_intelligence_thc());
+            assertArrayEquals(original, provider.currentMask());
             assertNull(provider.bindCurrent(-1));
             assertNull(provider.bindCurrent(provider.getCount()));
         });
-        assertArrayEquals(original, provider.currentMask$org_intelligence_thc(), "Never changes the unrelated host carrier");
+        assertArrayEquals(original, provider.currentMask(), "Never changes the unrelated host carrier");
         var virtualFailure = new AtomicReference<Throwable>();
         var virtual = Thread.ofVirtual().start(() -> {
             try { assertNull(provider.bindCurrent(0)); assertNull(provider.resetCurrent()); }

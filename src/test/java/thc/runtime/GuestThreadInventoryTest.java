@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class GuestThreadInventoryTest {
     private static GuestThreads registry() {
         return new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED),
-            CpuAffinity.Companion.discover(false), ignored -> Unit.INSTANCE);
+            CpuAffinity.discover(false), ignored -> Unit.INSTANCE);
     }
 
     @Test void logicalCountIsContextLocalAndShrinkDoesNotRewriteAffinityClaims() {
@@ -192,11 +192,11 @@ class GuestThreadInventoryTest {
         for (var name : List.of("listThreads#", "isCurrentThreadBound#")) {
             var value = name.equals("listThreads#") ? objectRep : integer;
             var result = tuple(state, value);
-            CoreThreadObservation.INSTANCE.validate(name, List.of(state), List.of(false), result);
-            assertThrows(RuntimeFault.class, () -> CoreThreadObservation.INSTANCE.validate(name, List.of(state), List.of(true), result));
-            assertThrows(RuntimeFault.class, () -> CoreThreadObservation.INSTANCE.validate(name, List.of(integer), List.of(false), result));
+            CoreThreadObservation.validate(name, List.of(state), List.of(false), result);
+            assertThrows(RuntimeFault.class, () -> CoreThreadObservation.validate(name, List.of(state), List.of(true), result));
+            assertThrows(RuntimeFault.class, () -> CoreThreadObservation.validate(name, List.of(integer), List.of(false), result));
             for (var bad : List.of(tuple(value, state), tuple(value), value, tuple(state, state)))
-                assertThrows(RuntimeFault.class, () -> CoreThreadObservation.INSTANCE.validate(name, List.of(state), List.of(false), bad));
+                assertThrows(RuntimeFault.class, () -> CoreThreadObservation.validate(name, List.of(state), List.of(false), bad));
         }
         ArrayOp.INDEX.validate(List.of(objectRep, integer), List.of(false, false), tuple(objectRep));
         ArrayOp.READ.validate(List.of(objectRep, integer, state), List.of(false, false, false), tuple(state, objectRep));

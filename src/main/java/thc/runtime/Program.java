@@ -257,7 +257,7 @@ public final class Program implements ExecutableProgram {
         CoreOriginalStdio.INSTANCE.validateHeads(requested);
         CoreProcessForeign.validateHeads(requested);
         CoreStablePointers.validateHeads(requested);
-        CoreRtsShutdown.INSTANCE.validateHeads(requested);
+        CoreRtsShutdown.validateHeads(requested);
         CoreMainThreadForeign.validateHeads(requested);
         CoreBoundThreadForeign.validateHeads(requested);
         CoreStringRtsForeign.validateHeads(requested);
@@ -1314,7 +1314,7 @@ public final class Program implements ExecutableProgram {
         var capi = CoreCapiForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr), foreignLinks);
         var stableFree = CoreStablePointers.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
         var sharedCAF = CoreSharedCAFStores.INSTANCE.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
-        var shutdown = CoreRtsShutdown.INSTANCE.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
+        var shutdown = CoreRtsShutdown.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
         var mainThreadForeign = CoreMainThreadForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
         var boundThreadForeign = CoreBoundThreadForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr), false);
         var gcForeign = CoreGcForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
@@ -1520,11 +1520,11 @@ public final class Program implements ExecutableProgram {
             return new StringRtsExpression(stringRts, operands, tupleProof);
         }
         if (shutdown != null) {
-            CoreRtsShutdown.INSTANCE.validateHead(fn, defined);
+            CoreRtsShutdown.validateHead(fn, defined);
             Expr[] operands = new Expr[args.size()];
             for (int i = 0; i < operands.length; i++) {
                 operands[i] = compile(args.get(i), scope, false);
-                CoreRtsShutdown.INSTANCE.validateOperand(shutdown, i, operands[i].getRepresentation(), bindingProof(args.get(i), scope));
+                CoreRtsShutdown.validateOperand(shutdown, i, operands[i].getRepresentation(), bindingProof(args.get(i), scope));
             }
             return new ShutdownRuntime(shutdown, operands[0], operands[1], operands[2]).proven(evaluated(tupleProof, true));
         }
@@ -1748,11 +1748,11 @@ public final class Program implements ExecutableProgram {
             CoreNoDuplicate.validate(argumentProofs(args), flags, tupleProof);
             return new NoDuplicate(argument(args.get(0), scope, false), tupleProof);
         }
-        if (primitive && CoreThreadScheduling.INSTANCE.named((String) fn.get(1))) {
+        if (primitive && CoreThreadScheduling.named((String) fn.get(1))) {
             String name = (String) fn.get(1);
-            CoreThreadScheduling.INSTANCE.validate(name, argumentProofs(args), flags, tupleProof);
+            CoreThreadScheduling.validate(name, argumentProofs(args), flags, tupleProof);
             Expr[] operands = argumentOperands(args, scope, flags);
-            CoreThreadScheduling.INSTANCE.validate(name, loweredProofs(operands), flags, tupleProof);
+            CoreThreadScheduling.validate(name, loweredProofs(operands), flags, tupleProof);
             if (name.equals("par#")) return new Literal(1L).proven(evaluated(tupleProof, true));
             if (name.equals("delay#")) return new DelayThread(operands[0], operands[1], enableAsync, tupleProof);
             if (name.equals("setThreadAllocationCounter#")) return new SetThreadAllocationCounter(operands[0], null, operands[1], tupleProof);
@@ -1769,11 +1769,11 @@ public final class Program implements ExecutableProgram {
             }
             return new SparkResult(name, operands[operands.length - 1], name.equals("spark#") ? operands[0] : null, falseValue, tupleProof);
         }
-        if (primitive && CoreThreadObservation.INSTANCE.named((String) fn.get(1))) {
+        if (primitive && CoreThreadObservation.named((String) fn.get(1))) {
             String name = (String) fn.get(1);
-            CoreThreadObservation.INSTANCE.validate(name, argumentProofs(args), flags, tupleProof);
+            CoreThreadObservation.validate(name, argumentProofs(args), flags, tupleProof);
             Expr state = argument(args.get(0), scope, false);
-            CoreThreadObservation.INSTANCE.validate(name, List.of(state.getRepresentation()), flags, tupleProof);
+            CoreThreadObservation.validate(name, List.of(state.getRepresentation()), flags, tupleProof);
             return new ThreadObservation(name.equals("listThreads#"), state, tupleProof);
         }
         if (primitive && "yield#".equals(fn.get(1))) {
@@ -1791,9 +1791,9 @@ public final class Program implements ExecutableProgram {
         }
         if (primitive && List.of("fork#", "forkOn#", "myThreadId#", "threadStatus#", "killThread#", "labelThread#", "threadLabel#").contains(fn.get(1))) {
             String name = (String) fn.get(1);
-            CoreGuestThreads.INSTANCE.validate(name, argumentProofs(args), flags, tupleProof);
+            CoreGuestThreads.validate(name, argumentProofs(args), flags, tupleProof);
             Expr[] operands = argumentOperands(args, scope, flags);
-            CoreGuestThreads.INSTANCE.validate(name, loweredProofs(operands), flags, tupleProof);
+            CoreGuestThreads.validate(name, loweredProofs(operands), flags, tupleProof);
             return switch (name) {
                 case "fork#" -> new ForkThread(operands[0], operands[1], tupleProof, null);
                 case "forkOn#" -> new ForkThread(operands[1], operands[2], tupleProof, operands[0]);
@@ -1805,7 +1805,7 @@ public final class Program implements ExecutableProgram {
             };
         }
         if (primitive && "annotateStack#".equals(fn.get(1))) {
-            StackAnnotations.INSTANCE.validate(argumentProofs(args), flags, tupleProof);
+            StackAnnotations.validate(argumentProofs(args), flags, tupleProof);
             if (capturesContinuations) return new AnnotatedAction(new TupleShape(tupleProof, (thc.Language) language),
                 argument(args.get(0), scope, true), argument(args.get(1), scope, true), argument(args.get(2), scope, false), metrics, enableAsync);
             return new AnnotatedTuple(argument(args.get(0), scope, true), argument(args.get(2), scope, false),
@@ -1814,13 +1814,13 @@ public final class Program implements ExecutableProgram {
                     false, metrics, null));
         }
         if (primitive && "clearCCS#".equals(fn.get(1))) {
-            CoreProfileAction.INSTANCE.validate(argumentProofs(args), flags, tupleProof);
+            CoreProfileAction.validate(argumentProofs(args), flags, tupleProof);
             return new TupleApplication((thc.Language) language, new TupleShape(tupleProof, (thc.Language) language),
                 argument(args.get(0), scope, true), new Expr[]{new InspectionState(compile(args.get(1), scope, false))},
                 tail, metrics, null).proven(evaluated(tupleProof, true));
         }
-        if (primitive && ClosureInspectOp.Companion.named((String) fn.get(1)) != null) {
-            var operation = Objects.requireNonNull(ClosureInspectOp.Companion.named((String) fn.get(1)));
+        if (primitive && ClosureInspectOp.named((String) fn.get(1)) != null) {
+            var operation = Objects.requireNonNull(ClosureInspectOp.named((String) fn.get(1)));
             operation.validate(argumentProofs(args), flags, tupleProof);
             Expr[] operands = new Expr[args.size()];
             for (int i = 0; i < operands.length; i++) operands[i] = argument(args.get(i), scope, i == 0);

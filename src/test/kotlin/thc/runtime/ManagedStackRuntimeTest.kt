@@ -109,9 +109,9 @@ class ManagedStackRuntimeTest {
         val output = ManagedAllocation.mutable(91, 8)
         // Populate the cache before discarding the canonical key: cached IPE must
         // not introduce a strong registry -> image -> key -> allocation cycle.
-        assertEquals(1L, ManagedStackRuntime.lookupIpe(pair.second, ManagedAddress.fromAllocation(output), layout))
-        return Alias(pair.first.plus(7), listOf(WeakReference(snapshot), WeakReference(pair.first),
-            WeakReference(pair.second), WeakReference(snapshot.frames[1])), WeakReference(snapshot.frames[0]))
+        assertEquals(1L, ManagedStackRuntime.lookupIpe(pair.key, ManagedAddress.fromAllocation(output), layout))
+        return Alias(pair.standard.plus(7), listOf(WeakReference(snapshot), WeakReference(pair.standard),
+            WeakReference(pair.key), WeakReference(snapshot.frames[1])), WeakReference(snapshot.frames[0]))
     }
 
     private fun exerciseRetainedAlias(language: Language, layout: TargetLayout): List<WeakReference<*>> {
@@ -142,7 +142,7 @@ class ManagedStackRuntimeTest {
 
     private fun copiedKey(language: Language, layout: TargetLayout): Pair<ManagedAllocation, WeakReference<ManagedStackSnapshot>> {
         val snapshot = capture(language)
-        val key = ManagedStackRuntime.frameInfo(snapshot, 0, layout).second
+        val key = ManagedStackRuntime.frameInfo(snapshot, 0, layout).key
         val output = ManagedAllocation.mutable(91, 8)
         assertEquals(1L, ManagedStackRuntime.lookupIpe(key, ManagedAddress.fromAllocation(output), layout))
         return output to WeakReference(snapshot)
@@ -167,7 +167,7 @@ class ManagedStackRuntimeTest {
     private fun discardedRegistrations(language: Language, layout: TargetLayout): List<WeakReference<*>> =
         (0 until 32).flatMap {
             val snapshot = capture(language)
-            val key = ManagedStackRuntime.frameInfo(snapshot, 0, layout).second
+            val key = ManagedStackRuntime.frameInfo(snapshot, 0, layout).key
             val output = ManagedAddress.fromAllocation(ManagedAllocation.mutable(91, 8))
             assertEquals(1L, ManagedStackRuntime.lookupIpe(key, output, layout))
             listOf(WeakReference(snapshot), WeakReference(key), WeakReference(snapshot.frames[0]))
@@ -190,15 +190,15 @@ class ManagedStackRuntimeTest {
         assertEquals(53L, unsigned(stack, 8, 4))
         val pairs = snapshot.frames.indices.map { ManagedStackRuntime.frameInfo(snapshot, it.toLong(), layout) }
         for ((i, pair) in pairs.withIndex()) {
-            assertSame(pair.first, ManagedStackRuntime.frameInfo(snapshot, i.toLong(), layout).first)
-            assertSame(pair.second, ManagedStackRuntime.frameInfo(snapshot, i.toLong(), layout).second)
-            assertFalse(pair.first.sameLocation(pair.second))
-            assertTrue(pair.first.plus(16).sameLocation(pair.second))
-            assertEquals(30L, unsigned(pair.first, 8, 4))
-            assertEquals(0L, unsigned(pair.first, 0, 8))
-            assertThrows(RuntimeFault::class.java) { pair.first.writeWord8(0, 1) }
+            assertSame(pair.standard, ManagedStackRuntime.frameInfo(snapshot, i.toLong(), layout).standard)
+            assertSame(pair.key, ManagedStackRuntime.frameInfo(snapshot, i.toLong(), layout).key)
+            assertFalse(pair.standard.sameLocation(pair.key))
+            assertTrue(pair.standard.plus(16).sameLocation(pair.key))
+            assertEquals(30L, unsigned(pair.standard, 8, 4))
+            assertEquals(0L, unsigned(pair.standard, 0, 8))
+            assertThrows(RuntimeFault::class.java) { pair.standard.writeWord8(0, 1) }
         }
-        assertFalse(pairs[0].second.sameLocation(pairs[1].second))
+        assertFalse(pairs[0].key.sameLocation(pairs[1].key))
         for (offset in listOf(-1L, 2L, Long.MIN_VALUE, Long.MAX_VALUE))
             assertThrows(RuntimeFault::class.java) { ManagedStackRuntime.frameInfo(snapshot, offset, layout) }
     }
@@ -252,7 +252,9 @@ class ManagedStackRuntimeTest {
         context(native = true) { language ->
             snapshot = capture(language)
             val words = snapshot.frames.indices.map { offset ->
-                val (standard, key) = ManagedStackRuntime.frameInfo(snapshot, offset.toLong(), layout)
+                val frameInfo = ManagedStackRuntime.frameInfo(snapshot, offset.toLong(), layout)
+                val standard = frameInfo.standard
+                val key = frameInfo.key
                 assertEquals(layout.offset("infoTableBytes").toLong(), standard.availableBytes())
                 assertFalse(standard.cbitsWritable())
                 assertThrows(RuntimeFault::class.java) { standard.writeWord8(0, 0) }
@@ -353,7 +355,7 @@ class ManagedStackRuntimeTest {
         lateinit var oldLabel: ManagedAddress
         context { language ->
             retained = capture(language)
-            key = ManagedStackRuntime.frameInfo(retained, 0, layout).second
+            key = ManagedStackRuntime.frameInfo(retained, 0, layout).key
             storage.fill(0, storage.size, 0x5a)
             assertEquals(1L, ManagedStackRuntime.lookupIpe(key.plus(-1).plus(1), destination, layout))
             assertTrue(key.sameLocation(storage.readAddressByteOffset(7 + 3)))
@@ -387,7 +389,7 @@ class ManagedStackRuntimeTest {
     @Test fun anonymousMissingMetadataNeverUsesDebugNamesAsBindingProvenance(): Unit = context { language ->
         val layout = layout(); val snapshot = capture(language, false)
         val storage = ManagedAllocation.mutable(91, 8)
-        val key = ManagedStackRuntime.frameInfo(snapshot, 0, layout).second
+        val key = ManagedStackRuntime.frameInfo(snapshot, 0, layout).key
         assertEquals(1L, ManagedStackRuntime.lookupIpe(key, ManagedAddress.fromAllocation(storage), layout))
         for (field in listOf("Label", "Unit", "Module", "File", "Span", "TyDesc"))
             assertEquals("", text(storage, 0, layout, field).utf8(), field)
@@ -398,7 +400,7 @@ class ManagedStackRuntimeTest {
     }
 
     @Test fun rejectedDestinationsAndUnknownKeysNeverPartiallyWrite() = context { language ->
-        val layout = layout(); val key = ManagedStackRuntime.frameInfo(capture(language), 0, layout).second
+        val layout = layout(); val key = ManagedStackRuntime.frameInfo(capture(language), 0, layout).key
         for (exposure in listOf("raw", "native", "short", "width", "partial")) {
             val storage = ManagedAllocation.mutable(100, if (exposure == "width") 4 else 8)
             storage.fill(0, 100, 0x42)
@@ -419,7 +421,7 @@ class ManagedStackRuntimeTest {
 
     @Test fun layoutMismatchesAndMalformedIpeLayoutsFailBeforeAnyWrite() = context { language ->
         val snapshot = capture(language); val layout = layout()
-        val key = ManagedStackRuntime.frameInfo(snapshot, 0, layout).second
+        val key = ManagedStackRuntime.frameInfo(snapshot, 0, layout).key
         val storage = ManagedAllocation.mutable(100, 8); storage.fill(0, 100, 0x33)
         val destination = ManagedAddress.fromAllocation(storage)
         assertThrows(RuntimeFault::class.java) { ManagedStackRuntime.frameInfo(snapshot, 0, layout(abi = "other")) }
@@ -434,7 +436,7 @@ class ManagedStackRuntimeTest {
     }
 
     @Test fun invalidProvenanceAndAllocationCopyRangesAreTransactional() = context { language ->
-        val layout = layout(); val key = ManagedStackRuntime.frameInfo(capture(language, occurrence = "bad\u0000name"), 0, layout).second
+        val layout = layout(); val key = ManagedStackRuntime.frameInfo(capture(language, occurrence = "bad\u0000name"), 0, layout).key
         val storage = ManagedAllocation.mutable(100, 8); storage.fill(0, 100, 0x77)
         val destination = ManagedAddress.fromAllocation(storage).plus(3)
         assertThrows(RuntimeFault::class.java) { ManagedStackRuntime.lookupIpe(key, destination, layout) }
