@@ -3639,7 +3639,7 @@ CoreStackForeign.validateHead(fn, defined)
             CoreRepresentations.validateAggregateCaseResult(CoreRepresentations.expression(expr), alternatives.map { it.body.representation })
             CoreRepresentations.validateFloatingCaseResult(CoreRepresentations.expression(expr),
                 alternatives.map { it.body.representation })
-            when (caseCategory(binderProof, alternatives.map { it.kind },
+            when (CaseCategoriesKt.caseCategory(binderProof, alternatives.map { it.kind },
                 alternatives.all { it.kind != LITERAL_ALTERNATIVE || it.value is Long })) {
                 CaseCategory.DATA -> DataCase(scrutinee, binder, alternatives, metrics, binderProof, delimited)
                 CaseCategory.LONG -> LongCase(scrutinee, binder, alternatives, metrics, binderProof, delimited)

@@ -108,7 +108,7 @@ class DataLayout private constructor(
         else builder.build(LayoutDataValue::class.java, DataValueFactory::class.java)
     }
 
-    private val classIdentityEnabled = java.lang.Boolean.getBoolean(CONSTRUCTOR_CLASS_IDENTITY_PROPERTY)
+    private val classIdentityEnabled = java.lang.Boolean.getBoolean(ConstructorClassIdentityKt.CONSTRUCTOR_CLASS_IDENTITY_PROPERTY)
     private val constructorClass: ConstructorClassIdentity
     private val nullaryValue: DataValue?
     @CompilationFinal(dimensions = 1)
@@ -117,7 +117,7 @@ class DataLayout private constructor(
     internal val hasBoxedValueCache: Boolean get() = boxedValues != null
 
     init {
-        val requested = java.lang.Boolean.parseBoolean(System.getProperty(CLASS_OWNED_LAYOUTS_PROPERTY, "true"))
+        val requested = java.lang.Boolean.parseBoolean(System.getProperty(ClassOwnedLayoutsKt.CLASS_OWNED_LAYOUTS_PROPERTY, "true"))
         var chosenFields = Array(fieldReps.size) { Field(it, fieldReps[it], referenceTypes[it], vectorProofs[it]) }
         var chosenShape = buildShape(language, chosenFields, requested)
         var sample = chosenShape.factory.create(this, allocationKey)
@@ -321,7 +321,7 @@ class DataLayout private constructor(
     internal fun acceptsCompactPointer(index: Int, value: Any?): Boolean = fields[index].acceptsReference(value)
     internal fun compactBytes(): Long = 8L + fields.indices.sumOf { index ->
         fields[index].vector?.let { it.proof.vector!!.lanes.toLong() *
-            when (it.proof.vector.element) {
+            when (it.proof.vector!!.element) {
                 "Int8ElemRep", "Word8ElemRep" -> 1
                 "Int16ElemRep", "Word16ElemRep" -> 2
                 "Int32ElemRep", "Word32ElemRep", "FloatElemRep" -> 4

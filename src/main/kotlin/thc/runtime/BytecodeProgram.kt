@@ -4099,7 +4099,7 @@ CoreStackForeign.validateHead(fn, defined)
             }
             val explicit = alternatives.filter { it.kind != "default" }
             val fallback = alternatives.lastOrNull { it.kind == "default" }
-            val category = caseCategory(binderProof, alternatives.map { when (it.kind) {
+            val category = CaseCategoriesKt.caseCategory(binderProof, alternatives.map { when (it.kind) {
                 "default" -> 0; "data" -> 1; else -> 2
             } }, alternatives.all { it.kind != "lit" || it.value is Long })
             // Disjoint integral labels can be partitioned without evaluating an

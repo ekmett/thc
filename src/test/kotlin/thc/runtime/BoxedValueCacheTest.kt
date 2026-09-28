@@ -124,7 +124,7 @@ class BoxedValueCacheTest {
     }
 
     @Test fun cachesRemainOwnedByTheirLayoutAcrossSharedArrayCarriersAndContexts() = cache(true) {
-        property(CONSTRUCTOR_CLASS_IDENTITY_PROPERTY, "true") {
+        property(ConstructorClassIdentityKt.CONSTRUCTOR_CLASS_IDENTITY_PROPERTY, "true") {
             for (strategy in listOf("field-based", "array-based")) {
                 lateinit var first: DataLayout
                 lateinit var value: DataValue
