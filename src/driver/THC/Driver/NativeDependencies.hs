@@ -14,7 +14,7 @@
 -- exact native archive membership, never from an unresolved symbol spelling.
 module THC.Driver.NativeDependencies
   ( COnlyProduct, cOnlyProductProof, cOnlyProductPieces, readCOnlyProduct
-  , selectCOnlyPieces
+  , selectCOnlyPieces, nativeLinkInputs
   ) where
 
 import Control.Exception (evaluate)
@@ -25,18 +25,77 @@ import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KM
 import qualified Data.ByteString as BS
 import Data.Char (isAscii, isAlphaNum)
-import Data.List (nub, sort)
+import Data.List (isPrefixOf, nub, sort, stripPrefix)
 import qualified Data.Text.Encoding as T
+import qualified Data.Text
 import Distribution.InstalledPackageInfo (parseInstalledPackageInfo)
 import qualified Distribution.Types.InstalledPackageInfo as Package
+import Distribution.Pretty (prettyShow)
 import Numeric (showHex)
 import System.Directory (doesFileExist, doesDirectoryExist, listDirectory)
 import System.Environment (lookupEnv)
 import System.Exit (ExitCode(..))
-import System.FilePath ((</>), takeFileName)
+import System.FilePath ((</>), takeFileName, takeDirectory, isAbsolute)
 import System.Process (CreateProcess(..), StdStream(..), proc, readProcessWithExitCode,
   waitForProcess, withCreateProcess)
 import THC.Driver.Installed (emptyRegistration)
+import THC.Driver.NativeLibrarySources (nativeLinkOptions, nativePackageOptions,
+  nativePackageSelectors, packageNativeLibraries)
+
+-- Capture external native libraries from the actual selected registration
+-- closure. Haskell archives (and therefore the native GHC RTS) are not inputs:
+-- those bodies execute as Core, while captured C objects execute in Sulong.
+nativeLinkInputs :: FilePath -> FilePath -> FilePath -> Maybe String -> [String] -> IO [String]
+nativeLinkInputs compiler libdir root owner arguments = do
+  let ghcPkg = takeDirectory compiler </> "ghc-pkg"
+      absolute path = if isAbsolute path then path else root </> path
+      database option = if "--package-db=" `isPrefixOf` option
+        then "--package-db=" ++ absolute (drop 13 option) else option
+      -- Cabal may already have removed its unpack directory. Resolve search
+      -- paths against that original cwd, without requiring it for absolute
+      -- inputs or changing detached -optl argument boundaries.
+      linkPaths (flag:path:rest) | flag `elem` ["-L","-F"] = flag : absolute path : linkPaths rest
+      linkPaths (('-':kind:path):rest) | kind `elem` ['L','F'], not (null path) =
+        (['-',kind] ++ absolute path) : linkPaths rest
+      linkPaths (flag:rest) = flag : linkPaths rest
+      linkPaths [] = []
+      databaseOptions = ["--global-package-db=" ++ libdir </> "package.conf.d"] ++ map database (nativePackageOptions arguments)
+      visit seen [] = pure (seen,[])
+      visit seen (selected@(unitId,name):rest)
+        | selected `elem` seen = visit seen rest
+        | otherwise = do
+            (status,registration,diagnostic) <- readProcessWithExitCode ghcPkg
+              (databaseOptions ++ ["--ipid" | unitId] ++ ["describe",name,"--no-expand-pkgroot"]) ""
+            check (status == ExitSuccess) ("Cannot read native link dependency: " ++ diagnostic)
+            (_,info) <- either (fail . show) pure
+              (parseInstalledPackageInfo (T.encodeUtf8 (Data.Text.pack registration)))
+            let identity = prettyShow (Package.installedUnitId info)
+            (visited,dependencies) <- visit (selected:(True,identity):seen)
+              [(True,prettyShow dependency) | dependency <- Package.depends info]
+            (finished,following) <- visit visited rest
+            pure (finished,dependencies ++ [info] ++ following)
+  -- A library's own extra-libraries live in its registration, not necessarily
+  -- its compile-only invocation. Executables have no registration. Query this
+  -- after Cabal finishes, while dependency flags still select the exact DBs.
+  registered <- case owner of
+    Nothing -> pure []
+    Just unit -> do
+      (status,_,_) <- readProcessWithExitCode ghcPkg (databaseOptions ++ ["--ipid","describe",unit]) ""
+      pure [(True,unit) | status == ExitSuccess]
+  (_,dependencies) <- visit [] (registered ++ nativePackageSelectors arguments)
+  -- Reverse postorder puts every dependent before its dependency, even when
+  -- both were explicitly selected. This also preserves static archive lookup.
+  let packagePath info path
+        | Just suffix <- stripPrefix "${pkgroot}" path, Just pkgRoot <- Package.pkgRoot info = pkgRoot ++ suffix
+        | Just suffix <- stripPrefix "$topdir" path = libdir ++ suffix
+        | otherwise = path
+      libraries info = packageNativeLibraries
+        (nub (map (packagePath info) (Package.libraryDirs info ++ Package.libraryDirsStatic info ++ Package.libraryDynDirs info)))
+        (if "-static" `elem` arguments && not (null (Package.extraLibrariesStatic info))
+          then Package.extraLibrariesStatic info else Package.extraLibraries info)
+        (Package.ldOptions info ++ map (("-F" ++) . packagePath info) (Package.frameworkDirs info) ++
+          concatMap (\framework -> ["-framework",framework]) (Package.frameworks info))
+  pure (linkPaths (nativeLinkOptions arguments) ++ concatMap libraries (reverse dependencies))
 
 -- The constructor stays private: callers cannot supply arbitrary extra bitcode
 -- through the dependency seam without an actual resolved C-only registration.

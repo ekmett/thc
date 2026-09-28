@@ -21,9 +21,8 @@ import Data.Either (isLeft)
 import Data.List (isInfixOf, isPrefixOf)
 import Test.HUnit
 import THC.Driver.PackageNative
-import THC.Driver.NativeLibrarySources (validateNativeMathIR, validateNativeEntropyIR, validateNativeWidthIR,
-  nativeCxxInitSymbols, nativeLifecycleSymbols, validateNativeLifecycleIR,
-  validateNativeLibcIR, validateNativeZlibIR)
+import THC.Driver.NativeLibrarySources (nativeLinkOptions, nativePackageOptions,
+  nativePackageSelectors, packageNativeLibraries)
 import THC.Driver.NativeArgumentBridge (nativeArgumentBridge)
 import THC.Driver.NativeDependencies (selectCOnlyPieces)
 
@@ -61,40 +60,6 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
       assertEqual "inert labels are not granted executable adapters" (Right [])
         (nativeFinalizers "fixture-unit" [module' [set "callback" Null (address integer)]])
   , TestCase $ do
-      let target = "x86_64-unknown-linux-gnu"
-          declarations =
-            [ ("adler32", "i64", ["i64", "ptr", "i32"])
-            , ("crc32", "i64", ["i64", "ptr", "i32"])
-            , ("zlibVersion", "ptr", [])
-            , ("deflate", "i32", ["ptr", "i32"])
-            , ("inflate", "i32", ["ptr", "i32"])
-            , ("deflateInit2_", "i32", ["ptr", "i32", "i32", "i32", "i32", "i32", "ptr", "i32"])
-            , ("inflateInit2_", "i32", ["ptr", "i32", "ptr", "i32"])
-            , ("deflateSetDictionary", "i32", ["ptr", "ptr", "i32"])
-            , ("inflateSetDictionary", "i32", ["ptr", "ptr", "i32"])
-            , ("inflateReset", "i32", ["ptr"])
-            , ("deflateEnd", "i32", ["ptr"]), ("inflateEnd", "i32", ["ptr"])
-            ]
-          declaration name result parameters = "declare " ++ result ++ " @" ++ name ++ "(" ++
-            foldr (\a b -> a ++ if null b then "" else ", " ++ b) "" parameters ++ ")"
-      forM_ declarations $ \(name,result,parameters) -> do
-        let plain = declaration name result parameters
-            attributed = declaration name ("noundef " ++ result) (map (++ " noundef") parameters) ++ " #1"
-            validate = validateNativeZlibIR target [name]
-        assertEqual "original zlib ABI admitted" (Right ()) (validate plain)
-        assertEqual "ordinary noundef attributes preserved" (Right ()) (validate attributed)
-        forM_ ["", plain ++ "\n" ++ plain, declaration name "float" parameters,
-            declaration name ("fastcc " ++ result) parameters,
-            declaration name result (parameters ++ ["..."]),
-            declaration name result ("ptr addrspace(1)" : drop 1 parameters)] $ \bad ->
-          assertBool ("unproved zlib declaration rejected: " ++ name) (isLeft (validate bad))
-        assertBool "LP64 does not admit Windows ABI" (isLeft
-          (validateNativeZlibIR "x86_64-pc-windows-msvc" [name] plain))
-      assertBool "wrong uLong width remains rejected" (isLeft
-        (validateNativeZlibIR target ["adler32"] "declare i32 @adler32(i32, ptr, i32)"))
-      assertBool "unlisted zlib operation remains unsupported" (isLeft
-        (validateNativeZlibIR target ["gzopen"] "declare ptr @gzopen(ptr, ptr)"))
-  , TestCase $ do
       let caller = "define i64 @entry(ptr %0) {\n  %1 = call i64 @result(ptr %0)\n  ret i64 %1\n}\n"
           callee = "define i32 @result(ptr nocapture noundef readonly %0) {\n"
           body = "  %2 = getelementptr inbounds nuw i8, ptr %0, i64 12\n  %3 = load i32, ptr %2, align 4, !tbaa !117\n  ret i32 %3\n}\n"
@@ -131,18 +96,6 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
           "  store i64 0, ptr %0\n" ++ load "%0" ++ narrowed,
           "  %3 = load volatile i64, ptr %0, align 8\n" ++ narrowed] $ \body ->
         assertEqual "only the exact side-effect-free load/trunc/return shape adapts" Nothing (bridge body)
-  , TestCase $ do
-      let validate = validateNativeLibcIR "x86_64-unknown-linux-gnu" ["realloc"]
-      assertEqual "original libc allocation declaration" (Right ())
-        (validate "declare noalias noundef ptr @realloc(ptr allocptr nocapture noundef, i64 noundef) local_unnamed_addr #5")
-      forM_ ["declare ptr @realloc(ptr, i32)","declare fastcc ptr @realloc(ptr, i64)",
-          "declare ptr @realloc(ptr addrspace(1), i64)","declare ptr @realloc(ptr, ...)",
-          "declare ptr @realloc(ptr byval(i64), i64)","", "declare ptr @realloc(ptr, i64)\ndeclare ptr @realloc(ptr, i64)"] $ \source ->
-        assertBool "unsupported native ABI stays rejected" (isLeft (validate source))
-      assertBool "LP64 assumptions do not leak to Windows" (isLeft
-        (validateNativeLibcIR "x86_64-pc-windows-msvc" ["realloc"] "declare ptr @realloc(ptr, i64)"))
-      assertBool "unlisted libc entry stays unsupported" (isLeft
-        (validateNativeLibcIR "x86_64-unknown-linux-gnu" ["system"] "declare i32 @system(ptr)"))
   , TestCase $ do
       let piece root name hash target = object ["root" .= (root :: String),
             "object" .= (root ++ "/" ++ name),"objectSha256" .= (hash :: String),
@@ -208,15 +161,6 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
       let swapped = "define i64 @caller(i64 %0, i64 %1) {\n  %2 = call i64 @callee(i64 %1, i64 %0)\n  ret i64 %2\n}\ndefine i64 @callee(i8 %0, i8 %1) {"
       assertEqual "original argument ordering is required" Nothing
         (nativeArgumentBridge "x86_64-unknown-linux-gnu" "callee" "caller" swapped)
-  , TestCase $ do
-      let validate = validateNativeWidthIR "x86_64-unknown-linux-gnu"
-      mapM_ (assertEqual "exact signed wchar_t/int ABI" (Right ()) . validate)
-        ["declare i32 @wcwidth(i32)","declare noundef i32 @wcwidth(i32 noundef) #0"]
-      mapM_ (assertBool "wrong width/arity/convention remains rejected" . isLeft . validate)
-        ["declare i64 @wcwidth(i32)","declare i32 @wcwidth(i64)","declare i32 @wcwidth(ptr)",
-         "declare i32 @wcwidth(i32, ...)","declare fastcc i32 @wcwidth(i32)","",
-         "declare i32 @wcwidth(i32)\ndeclare i32 @wcwidth(i32)"]
-      assertBool "wchar ABI is target-specific" (isLeft (validateNativeWidthIR "x86_64-pc-windows-msvc" "declare i32 @wcwidth(i32)"))
   , TestCase $ assertEqual "CAPI values, byte arrays, pointers and void keep their emitted ABI"
       (Right [("read_bytes","capi","unsafe",["ByteArray#","IntRep","Word64Rep"],"Word64Rep"),
               ("write_state","ccall","unsafe",["MutableByteArray#","AddrRep"],"void")])
@@ -280,13 +224,6 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
         (Right [("identity","ccall","safe",["WordRep"],"WordRep"),
                 ("identity","ccall","unsafe",["WordRep"],"WordRep")])
         (nativeSignatures "fixture-unit" [moduleWith [ordinary,changeEmitted "safety" "safe" ordinary]])
-  , TestCase $ do
-      assertEqual "libm scalar declarations preserve exact native widths" (Right ())
-        (validateNativeMathIR ["erf","erff"]
-          "declare double @erf(double noundef) local_unnamed_addr\ndeclare float @erff(float)\n")
-      mapM_ (assertBool "wrong native libm prototype rejected" . isLeft . validateNativeMathIR ["erf"])
-        ["declare float @erf(float)\n", "declare double @erf(ptr)\n",
-         "declare double @erf(double, double)\n", "declare fastcc double @erf(double)\n", ""]
   , TestCase $ assertBool "conflicting emitted ABIs rejected" $ isLeft $ nativeSignatures "fixture-unit"
       [moduleWith [ordinary,entry "identity" "ccall" ["IntRep","void"] ["void","IntRep"]]]
   , TestCase $ do
@@ -329,17 +266,6 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
             (marker >>= lookupField "unsupportedImports")
           assertEqual "unrelated supported import retains its adapter across all three modules"
             (nativeSignatures "fixture-unit" [moduleWith [ordinary]]) (nativeSignatures "fixture-unit" archived)
-  , TestCase $ do
-      let target = "x86_64-unknown-linux-gnu"
-          valid = "declare i32 @getentropy(ptr noundef, i64 noundef) local_unnamed_addr\n"
-      assertEqual "getentropy preserves native pointer/size_t/status ABI" (Right ())
-        (validateNativeEntropyIR target valid)
-      mapM_ (assertBool "wrong getentropy prototype rejected" . isLeft . validateNativeEntropyIR target)
-        ["declare i64 @getentropy(ptr, i64)\n", "declare i32 @getentropy(ptr, i32)\n",
-         "declare i32 @getentropy(i64, i64)\n", "declare i32 @getentropy(ptr, i64, ...)\n",
-         "declare fastcc i32 @getentropy(ptr, i64)\n", valid ++ valid, ""]
-      assertBool "unsupported getentropy target rejected"
-        (isLeft (validateNativeEntropyIR "x86_64-apple-darwin" valid))
   , TestCase $ assertEqual "one C pointer ABI retains each distinct Core carrier adapter"
       (Right [("read_bytes","ccall","unsafe",["AddrRep","WordRep"],"WordRep"),
               ("read_bytes","ccall","unsafe",["ByteArray#","WordRep"],"WordRep")])
@@ -394,28 +320,38 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
       (nativeCompilerArguments ["--make","-hide-all-packages","-Iinclude","-O2","-odir","/build",
         "-optc-DREAL=1","-package-db","/db","-package-id","base-unit","-main-is","Main","Main.hs"])
   , TestCase $ do
-      let source = unlines ["@__dso_handle = external hidden global i8",
-            "declare void @_ZNSt8ios_base4InitC1Ev(ptr noundef nonnull align 1 dereferenceable(1)) unnamed_addr #0",
-            "declare void @_ZNSt8ios_base4InitD1Ev(ptr noundef nonnull align 1 dereferenceable(1)) unnamed_addr #1",
-            "declare i32 @__cxa_atexit(ptr, ptr, ptr) local_unnamed_addr #2"]
-          symbols = nativeCxxInitSymbols ++ nativeLifecycleSymbols
-          validate = validateNativeLifecycleIR "x86_64-unknown-linux-gnu" symbols
-      assertEqual "exact original simdutf iostream lifecycle ABI" (Right ()) (validate source)
-      assertBool "different platform ABI is not guessed" (isLeft (validateNativeLifecycleIR "aarch64-unknown-linux-gnu" symbols source))
-      mapM_ (\line -> assertBool "malformed supported lifetime declaration remains fatal" (isLeft
-        (validateNativeLifecycleIR "x86_64-unknown-linux-gnu" ["__cxa_atexit"] line)))
-        ["declare i64 @__cxa_atexit(ptr, ptr, ptr)", "declare i32 @__cxa_atexit(ptr, ptr)",
-         "declare i32 @__cxa_atexit(ptr, ptr, ...)", "declare fastcc i32 @__cxa_atexit(ptr, ptr, ptr)",
-         "declare i32 @__cxa_atexit(ptr addrspace(1), ptr, ptr)"]
-      assertBool "DSO identity must retain its actual type" (isLeft
-        (validateNativeLifecycleIR "x86_64-unknown-linux-gnu" ["__dso_handle"] "@__dso_handle = external hidden global i64"))
-  , TestCase $ do
       let roots = ["/package/dist/build"]
           allRoots = roots ++ ["/package/dist/build/tool/tool-tmp"]
       assertBool "own C object admitted" (nativeObjectOwned roots allRoots "/package/dist/build/cbits/a.o")
       assertBool "nested component C objects excluded"
         (not (nativeObjectOwned roots allRoots "/package/dist/build/tool/tool-tmp/cbits/a.o"))
       assertBool "unrelated output excluded" (not (nativeObjectOwned roots allRoots "/other/a.o"))
+
+  , TestCase $ do
+      let options = ["--make","-no-link","-package-db","/exact/db","-hide-all-packages",
+            "-package-id","owned-unit","-plugin-package-id","plugin-unit","-package","base",
+            "-L","/native/lib","-lm","-l","custom","-optl","-pthread","-optl-Wl,-z,now",
+            "-O2","-odir","/objects","Main.hs"]
+      assertEqual "actual linker flags preserve their order"
+        ["-L/native/lib","-lm","-lcustom","-pthread","-Wl,-z,now"] (nativeLinkOptions options)
+      assertEqual "dependency selection excludes compiler plugins"
+        [(True,"owned-unit"),(False,"base")] (nativePackageSelectors options)
+      assertEqual "the selected package database survives"
+        ["--global","--user","--package-db=/exact/db"] (nativePackageOptions options)
+      assertEqual "clear/reset database stack and equals syntax"
+        ["--global","--package-db=/exact/db"]
+        (nativePackageOptions ["-clear-package-db","-global-package-db","-no-user-package-db","-package-db=/exact/db"])
+      assertEqual "linker flags exclude unrelated GHC LLVM options"
+        ["-pthread","-lm"] (nativeLinkOptions ["-optlo","-O2","-linkdir","ignored","-optl=-pthread","-lm"])
+      assertEqual "framework paths are not GHC's preprocessor flag"
+        ["-F/frameworks","-framework","Native","-lm"]
+        (nativeLinkOptions ["-F","-framework-path","/frameworks","-framework","Native","-lm"])
+      assertEqual "detached native linker options stay detached"
+        ["-L","relative/lib","-F","relative/frameworks"]
+        (nativeLinkOptions ["-optl","-L","-optl","relative/lib","-optl","-F","-optl","relative/frameworks"])
+      assertEqual "arbitrary declared libraries do not need a symbol provider"
+        ["-L/native/lib","-Wl,-rpath,/native/lib","-lcustom","-lm","-lcustom","-pthread"]
+        (packageNativeLibraries ["/native/lib"] ["custom","m","custom"] ["-pthread"])
   ]
   where
     ordinary = entry "identity" "ccall" ["WordRep","void"] ["void","WordRep"]

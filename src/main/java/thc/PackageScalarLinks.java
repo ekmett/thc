@@ -76,7 +76,10 @@ public final class PackageScalarLinks {
         var fields = record(raw, "schema format profile unit target componentSha256 bitcodeSha256 bitcodeHex abi" + (inputs ? " buildInputs" : "") + (partial ? " availableEntries" : "") + (callbacks ? " finalizers" : ""));
         if (inputs) check(fields.get("buildInputs") instanceof Map<?,?>, "build inputs record");
         String format = text(fields.get("format"));
-        check((version(fields.get("schema"), 1) || callbacks) && (format.equals("llvm-bitcode") || nativeLink && format.equals("llvm-embedded-elf") && System.getProperty("os.name").equals("Linux")) && Objects.equals(fields.get("profile"), nativeLink ? "thc-package-c-ffi-v1" : "thc-local-scalar-ccall-v1"), "link profile");
+        check((version(fields.get("schema"), 1) || callbacks) && (format.equals("llvm-bitcode") || nativeLink &&
+            (format.equals("llvm-embedded-elf") && System.getProperty("os.name").equals("Linux") ||
+             format.equals("llvm-embedded-mach-o") && System.getProperty("os.name").startsWith("Mac"))) &&
+            Objects.equals(fields.get("profile"), nativeLink ? "thc-package-c-ffi-v1" : "thc-local-scalar-ccall-v1"), "link profile");
         String unit = text(fields.get("unit")); check(unit.equals(module.get("unit")), "component owner");
         String target = text(fields.get("target")); target(target);
         String componentHash = text(fields.get("componentSha256")), bitcodeHash = text(fields.get("bitcodeSha256"));

@@ -52,7 +52,7 @@ public class WcwidthTest {
         for (String entry : List.of("rawWidth", "displayWidth")) assertEquals(true, json(entry + ".json").get("accepted"));
         var original = json("Width.json"); var proof = (Map<?, ?>) original.get("packageNativeLink"); assertEquals("llvm-embedded-elf", proof.get("format"));
         var libraries = (List<Map<?, ?>>) ((Map<?, ?>) proof.get("buildInputs")).get("nativeLibraries"); var providers = new ArrayList<Object>(); for (var library : libraries) providers.add(library.get("provider"));
-        assertEquals(List.of("native-libc-wcwidth-v1"), providers); var merged = CoreModules.merge(List.of(original)); var links = (List<PackageScalarLink>) merged.get("packageScalarLinks");
+        assertEquals(List.of("package-declared-native-libraries-v1"), providers); var merged = CoreModules.merge(List.of(original)); var links = (List<PackageScalarLink>) merged.get("packageScalarLinks");
         assertEquals(1, links.size()); var link = links.getFirst(); assertFalse(link.getAbi().isEmpty());
         for (var abi : link.getAbi()) { assertEquals("safe", abi.getSafety()); assertEquals("capi", abi.getConvention()); assertEquals(List.of("Int32Rep"), abi.getArguments()); assertEquals("Int32Rep", abi.getResult()); }
         var observations = new LinkedHashMap<String, List<List<Long>>>();

@@ -66,7 +66,11 @@ public final class PackageScalarLibraries {
             } else {
                 selected = new Loaded(link, new FutureTask<>(() -> {
                     Object library = env.parseInternal(Source.newBuilder("llvm", ByteSequence.create(link.getBytes()),
-                        link.getComponentSha256() + (link.getFormat().equals("llvm-embedded-elf") ? ".so" : ".bc")).build()).call();
+                        link.getComponentSha256() + switch (link.getFormat()) {
+                            case "llvm-embedded-elf" -> ".so";
+                            case "llvm-embedded-mach-o" -> ".dylib";
+                            default -> ".bc";
+                        }).build()).call();
                     var functions = new HashMap<String, PackageScalarFunction>();
                     for (var signature : link.getAbi()) {
                         if (!interop.isMemberReadable(library, signature.getEntry())) throw fault("Missing package C entry: " + signature.getEntry());

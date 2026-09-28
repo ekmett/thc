@@ -24,7 +24,6 @@ import System.Directory
 import System.Environment (lookupEnv, unsetEnv)
 import System.FilePath
 import THC.Driver.GhcProxy (ghcProxyCommand)
-import THC.Driver.NativeLibrarySources (validateNativeEntropyIR)
 import THC.Driver.PackageNative (finishPackageNative)
 
 -- Use the unchanged package, actual Cabal configuration, production GHC proxy,
@@ -126,7 +125,6 @@ prepareGetEntropy root = do
   irBuilt <- execute "control-ir" [] clang
     ["--target=x86_64-unknown-linux-gnu","-O1","-emit-llvm","-S",
      "t/fixtures/compiler/NativeGetEntropy.c","-o",output </> "control.ll"]
-  either fail pure . validateNativeEntropyIR "x86_64-unknown-linux-gnu" =<< readFile (output </> "control.ll")
   sourceHashes <- hashes root (map (makeRelative root) retained)
   inputHashes <- hashes root ["t/fixtures/compiler/NativeGetEntropy.c","t/fixtures/compiler/OriginalSplitmixNative.hs",
     "t/fixtures/compiler/OriginalSplitmixEntry.hs",

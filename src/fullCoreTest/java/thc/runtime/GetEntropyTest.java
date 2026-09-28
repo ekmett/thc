@@ -122,7 +122,7 @@ public class GetEntropyTest {
         assertEquals("llvm-embedded-elf", proof.get("format"));
         var libraries = (List<Map<?, ?>>) ((Map<?, ?>) proof.get("buildInputs")).get("nativeLibraries");
         var providers = new ArrayList<Object>(); for (var library : libraries) providers.add(library.get("provider"));
-        assertEquals(List.of("native-libc-getentropy-v1"), providers);
+        assertEquals(List.of("package-declared-native-libraries-v1"), providers);
         var modules = new ArrayList<Map<String, Object>>(); modules.add(original);
         for (String name : List.of("System.Random.SplitMix.json", "System.Random.SplitMix32.json", "entry/units/u-original-splitmix-entry/OriginalSplitmixEntry.json")) modules.add(json(name));
         var merged = CoreModules.merge(modules); var links = (List<PackageScalarLink>) merged.get("packageScalarLinks");
