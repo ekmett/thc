@@ -13,10 +13,15 @@ import com.oracle.truffle.api.nodes.UnexpectedResultException;
 public final class BytecodeProcessArguments {
     private final ProcessOp operation;
     @CompilationFinal(dimensions = 1) private final LocalAccessor[] slots;
+    @CompilationFinal(dimensions = 1) private final boolean[] intArguments;
 
     public BytecodeProcessArguments(ProcessOp operation, LocalAccessor[] slots) {
         this.operation = operation;
         this.slots = slots;
+        var arguments = operation.getArguments();
+        intArguments = new boolean[arguments.size()];
+        for (int index = 0; index < intArguments.length; index++)
+            intArguments[index] = "Int32Rep".equals(arguments.get(index));
     }
 
     public ProcessOp getOperation() { return operation; }
@@ -25,7 +30,7 @@ public final class BytecodeProcessArguments {
     public Object[] read(BytecodeNode bytecode, VirtualFrame frame) {
         Object[] values = new Object[slots.length];
         for (int index = 0; index < values.length; index++) {
-            if ("Int32Rep".equals(operation.getArguments().get(index))) {
+            if (intArguments[index]) {
                 try {
                     values[index] = (long) slots[index].getInt(bytecode, frame);
                 } catch (UnexpectedResultException failure) {
