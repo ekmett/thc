@@ -38,7 +38,7 @@ On a shared host, wrap each command in its existing build-directory lease and
 check available host capacity. The script does not acquire a host-specific lock
 itself. Do not run duplicate image builders.
 
-`prepare-only` compiles the included inventory tool and writes three sorted class
+`prepare-only` compiles the included inventory tool and writes four sorted class
 lists plus `build/native-image/reproduction-inventory/prepared-initialization.args`.
 It does not build an image. `build` prepares the same inventory and invokes Native
 Image with an 8 GiB heap and two compiler threads, writing the experimental
@@ -103,7 +103,7 @@ or Windows support.
 ## Inventory contract
 
 The script combines the existing
-[pure inventory](../../bin/native-image/pure-initialization.txt), three
+[pure inventory](../../bin/native-image/pure-initialization.txt), four
 generated categories, and the explicit
 [additional inventory](prepared-initialization.txt). It excludes LLVM/NFI JARs
 just as the pure probe does. These additions remain separate from the public
@@ -112,7 +112,17 @@ pure recipe.
 `ClassInitializationInventory.java` uses the pinned JDK ClassFile API to read
 class bytes without loading or executing THC initializers. It recognizes
 classes without static initializers, exactly checked fieldless markers and
-singletons, and restricted enum metadata.
+singletons, restricted enum metadata, and synthetic enum-switch holders.
+
+The switch-holder pass runs last and depends only on enums already approved by
+the preceding inventories. It proves the entire javac initializer shape: only
+its own final synthetic `int[]` fields, array allocations sized by an enum's
+checked `values()` clone, positive-literal stores indexed by genuine enum
+constants' ordinals, and exact forward `NoSuchFieldError` handlers. Additional
+calls, foreign writes, changed handlers and unapproved enum dependencies fail
+closed. It neither executes initializers nor adds enum dependencies. Existing
+explicit entries remain unchanged; the generated list adds only missing holders.
+New compiler shapes still need review rather than broader automatic admission.
 
 These checks depend on the pinned Truffle initialization contract and inspected
 bytecode shapes. Re-audit them when the toolchain or matched source changes.
