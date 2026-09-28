@@ -62,6 +62,19 @@ class BytecodeGraphBudgetTest {
                 .invoke(runtime, target);
     }
     private static long entries(BytecodeProgram program) { return ((Number) program.diagnostics().get("compiledEntries")).longValue(); }
+    private static Map<Integer, String> instructions(BytecodeRoot root) {
+        var result = new java.util.LinkedHashMap<Integer, String>();
+        for (var instruction : root.getBytecodeNode().getInstructions()) {
+            var operands = new ArrayList<String>();
+            for (var argument : instruction.getArguments()) {
+                String value = argument.toString();
+                // Cache/profile display is not the instruction encoding or a guest PC.
+                if (!value.startsWith("node(") && !value.startsWith("branch_profile(")) operands.add(value);
+            }
+            result.put(instruction.getBytecodeIndex(), instruction.getName() + operands);
+        }
+        return result;
+    }
 
     @Test void explicitProtocolControlPreservesPreparedSelectionWithoutClaimingACompilerBailout() throws Exception {
         try (Context context = context()) {
@@ -88,20 +101,28 @@ class BytecodeGraphBudgetTest {
                 var program = new BytecodeProgram(language, decision(768));
                 var target = ((Closure) program.entryValue("entry")).target;
                 var root = (BytecodeRoot) target.getRootNode();
-                var instructions = root.getBytecodeNode().dump();
+                var originalInstructions = instructions(root);
                 assertEquals(0, entries(program));
                 assertEquals(0, root.getGraphBudgetGeneration());
-                assertTrue(compile(target));
-                assertEquals(1, root.getGraphBudgetGeneration(), "a real graph bailout must select a smaller finite case region");
+                try { assertTrue(compile(target)); }
+                catch (Exception failure) {
+                    throw new AssertionError("Original target compile failed at generation " + root.getGraphBudgetGeneration(), failure);
+                }
                 assertEquals(0, entries(program), "compilation cannot run the guest");
-                assertEquals(instructions, root.getBytecodeNode().dump(), "parked bytecode PCs must not change");
+                var preparedInstructions = instructions(root);
+                assertEquals(originalInstructions.keySet(), preparedInstructions.keySet(), "parked bytecode PCs must not change");
+                for (var instruction : originalInstructions.entrySet())
+                    assertEquals(instruction.getValue(), preparedInstructions.get(instruction.getKey()),
+                            "instruction at " + instruction.getKey());
                 var chosen = program.entryValue("chosen");
                 bypass(target);
                 long before = entries(program);
                 assertEquals(2318L, Calls.target(target, new Object[]{0L, chosen}));
-                assertEquals(before + 1, entries(program), "the original first call enters its installed target");
-                assertSame(target, ((Closure) program.entryValue("entry")).target);
-                assertTrue(valid(target), "no settling call or target replacement");
+                assertAll(
+                    () -> assertEquals(1, root.getGraphBudgetGeneration(), "a real graph bailout must select a smaller finite case region"),
+                    () -> assertEquals(before + 1, entries(program), "the original first call enters its installed target"),
+                    () -> assertSame(target, ((Closure) program.entryValue("entry")).target),
+                    () -> assertTrue(valid(target), "no settling call or target replacement"));
                 assertEquals(1, root.prepareGraphBudgetRetry(1), "the finite plan is exhausted");
             } finally { context.leave(); }
         }

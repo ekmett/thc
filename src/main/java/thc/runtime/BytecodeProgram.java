@@ -5227,7 +5227,7 @@ public final class BytecodeProgram implements ExecutableProgram {
     }
 
     private Expression partitionedCase(List<Object> expr, Scope scope, boolean tail) {
-        var inline = inlineCase(expr, scope, tail);
+        var inline = inlineCase(expr, scope, tail, true);
         var alternatives = (List<List<Object>>) expr.get(3);
         var explicit = alternatives.stream().filter(a -> "data".equals(a.getFirst())).toList();
         var fallback = alternatives.stream().filter(a -> "default".equals(a.getFirst())).toList();
@@ -5323,6 +5323,10 @@ public final class BytecodeProgram implements ExecutableProgram {
     }
 
     private Expression inlineCase(List<Object> expr, Scope scope, boolean tail) {
+        return inlineCase(expr, scope, tail, false);
+    }
+
+    private Expression inlineCase(List<Object> expr, Scope scope, boolean tail, boolean preparedDecision) {
         var vectorRead = CoreVectorMemory.readCase(expr, constructors);
         if (vectorRead != null) return vectorReadCase(vectorRead, scope, tail);
         var local = scope.child();
@@ -5495,7 +5499,34 @@ public final class BytecodeProgram implements ExecutableProgram {
                 }
             }
             var choice = new Choice();
-            if (ordered == null) choice.emit(0);
+            if (preparedDecision) {
+                // The finite recovery decision must be compilable before any
+                // arm has run. Preserve its ordered constructor guards without
+                // Conditional's adaptive branch/merge instructions. Scalar
+                // results use the same boxed merge contract; aggregate leaves
+                // still write their exact caller-owned destination slots.
+                var result = destination == null ? b.createLocal("case decision result", FrameSlotKind.Object) : null;
+                var complete = b.createLabel();
+                for (var alt : explicit) {
+                    b.beginUnprofiledIfThen();
+                    b.beginMatchDataValue((DataLayout) alt.value);
+                    read(binder, false).emit(e); b.endMatchDataValue();
+                    b.beginBlock();
+                    if (result != null) b.beginStaticStoreObject(result);
+                    choice.emitAlternative(alt);
+                    if (result != null) b.endStaticStoreObject();
+                    b.emitBranch(complete);
+                    b.endBlock(); b.endUnprofiledIfThen();
+                }
+                if (fallback == null) b.emitFailCase();
+                else {
+                    if (result != null) b.beginStaticStoreObject(result);
+                    choice.emitAlternative(fallback);
+                    if (result != null) b.endStaticStoreObject();
+                }
+                b.emitLabel(complete);
+                if (result != null) b.emitStaticLoadObject(result);
+            } else if (ordered == null) choice.emit(0);
             else {
                 // One copy of each arm and one shared default avoid nested merge growth.
                 var result = destination == null ? b.createLocal("literal case result", null) : null;

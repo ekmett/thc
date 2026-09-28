@@ -56,23 +56,27 @@ public final class BytecodeCaseRegion extends Node {
         return sides.length - 1; // That region owns the original default (or FailCase).
     }
 
-    @ExplodeLoop
     Object execute(VirtualFrame frame, BytecodeRoot owner, Source source, Object value, MaskingState callerMask) {
         int selected = select(value);
+        Object answer;
+        try {
+            answer = invoke(frame, owner, source, value, selected);
+        } catch (TailCall transfer) {
+            // Only the original logical root can consume its own backedge.
+            if (tail && owner.isSelf(transfer.getTarget())) return transfer;
+            throw transfer;
+        }
+        answer = complete(sides[selected].target, answer, callerMask,
+                source.destination() == null ? null : source.destination().getShape());
+        if (source.destination() != null) source.destination().consume(frame, this, answer);
+        return source.destination() == null ? answer : Unit.INSTANCE;
+    }
+
+    @ExplodeLoop
+    private Object invoke(VirtualFrame frame, BytecodeRoot owner, Source source, Object value, int selected) {
         for (int i = 0; i < sides.length; i++) {
             if (i == selected) {
-                Object answer;
-                try {
-                    answer = sides[i].execute(frame, owner, source.captures()[i], value);
-                } catch (TailCall transfer) {
-                    // Only the original logical root can consume its own backedge.
-                    if (tail && owner.isSelf(transfer.getTarget())) return transfer;
-                    throw transfer;
-                }
-                answer = complete(sides[i].target, answer, callerMask,
-                        source.destination() == null ? null : source.destination().getShape());
-                if (source.destination() != null) source.destination().consume(frame, this, answer);
-                return source.destination() == null ? answer : Unit.INSTANCE;
+                return sides[i].execute(frame, owner, source.captures()[i], value);
             }
         }
         throw new IllegalStateException("Invalid bytecode case region");

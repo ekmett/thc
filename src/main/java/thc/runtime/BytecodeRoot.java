@@ -72,6 +72,10 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         if (regions.length != 0) casePlan = new BytecodeCaseRegion.Plan();
     }
     final long entryMask() { return passThrough ? 0L : mask; }
+    final boolean useInlineCaseRegions() {
+        if (casePlan == null) throw new IllegalStateException("Unconfigured bytecode case decision");
+        return casePlan.inline.isValid();
+    }
     @Override public final long getGraphBudgetGeneration() { return casePlan == null ? 0 : casePlan.generation(); }
     @Override public final long prepareGraphBudgetRetry(long failedGeneration) {
         return casePlan == null ? failedGeneration : casePlan.recover(failedGeneration);
@@ -137,7 +141,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class InlineCaseRegions {
         @Specialization public static boolean test(@Bind("$node") Node node) {
             BytecodeRoot root = (BytecodeRoot) node.getRootNode();
-            return root.casePlan.inline.isValid();
+            return root.useInlineCaseRegions();
         }
     }
 
