@@ -38,13 +38,21 @@ while IFS= read -r prepared; do
     initialization="${initialization:+$initialization,}$prepared"
 done < "$repo_dir/scripts/native-image/pure-initialization.txt"
 for kind in stateless companions markers enums; do
-    initialization="$initialization,$(<"$inventory_dir/$kind.txt")"
+    generated=$(<"$inventory_dir/$kind.txt")
+    [[ -z "$generated" ]] && continue
+    initialization="${initialization:+$initialization,}$generated"
 done
 while IFS= read -r prepared; do
     [[ -z "$prepared" || "$prepared" == \#* ]] && continue
     [[ "$prepared" =~ ^[a-zA-Z0-9_.$]+$ ]] || exit 2
-    initialization="$initialization,$prepared"
+    initialization="${initialization:+$initialization,}$prepared"
 done < "$recipe_dir/prepared-initialization.txt"
+# Native Image interprets an empty class/package entry as the whole hierarchy.
+# Empty categories (for example Java-only companions) must not broaden policy.
+[[ "$initialization" =~ ^[a-zA-Z0-9_.$]+(,[a-zA-Z0-9_.$]+)*$ ]] || {
+    echo 'Initialization inventory must contain only nonempty class names' >&2
+    exit 2
+}
 initialization_args="$inventory_dir/prepared-initialization.args"
 printf '%s\n' "--initialize-at-build-time=$initialization" > "$initialization_args"
 [[ "$mode" == prepare-only ]] && exit 0

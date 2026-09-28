@@ -27,6 +27,17 @@ It does not build an image. `build` prepares the same inventory and invokes Nati
 Image with an 8 GiB heap and two compiler threads, writing the experimental
 `build/native-image/thc-reproduced-prepared` executable if construction succeeds.
 The argument-file format avoids the host's single-command-argument length limit.
+Empty generated categories are skipped. The combined list must contain only
+nonempty class names: Native Image treats an empty class/package entry as a
+request to initialize the whole hierarchy. Named entries keep their order.
+
+The argument-composition regression uses isolated Java metadata fixtures and the
+real `prepare-only` path, without invoking the image builder:
+
+```sh
+java research/native-image-preparation/InitializationArgumentsTest.java \
+  research/native-image-preparation "$(mktemp -d)"
+```
 
 Retain the source revision, installed-JAR hashes, generated inventories, exact
 argument file, command, output and exit status for each attempt. Reusing a JAR
