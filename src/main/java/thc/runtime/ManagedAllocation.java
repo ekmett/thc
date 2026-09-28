@@ -78,7 +78,7 @@ public final class ManagedAllocation {
     }
     // Publication spans C and registry recovery, but never keeps this monitor
     // across registry access. Wait only while holding this one allocation monitor.
-    private synchronized void awaitPointerPublication() {
+    @TruffleBoundary private synchronized void awaitPointerPublication() {
         boolean interrupted = false;
         while (pointerPublicationPending()) {
             try { wait(); } catch (InterruptedException ignored) { interrupted = true; }
@@ -263,7 +263,7 @@ public final class ManagedAllocation {
         }
     }
     /** Atomic pointer CAS already resolved the old value outside its owner monitor. */
-    synchronized ManagedAddress knownAddressByteOffset(long offset) {
+    @TruffleBoundary synchronized ManagedAddress knownAddressByteOffset(long offset) {
         int start = range(offset, pointerBytes);
         if (pointerPublicationPending()) return null;
         return pointers == null ? null : pointers.get(start);

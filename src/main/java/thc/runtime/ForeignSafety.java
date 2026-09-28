@@ -11,7 +11,10 @@ public enum ForeignSafety {
         return switch (declared) {
             case "unsafe" -> UNSAFE;
             case "safe" -> SAFE;
-            default -> throw RuntimeFault.fault("Unsupported synchronous foreign safety: " + declared);
+            default -> {
+                com.oracle.truffle.api.CompilerDirectives.transferToInterpreter();
+                throw RuntimeFault.fault("Unsupported synchronous foreign safety: " + declared);
+            }
         };
     }
 }

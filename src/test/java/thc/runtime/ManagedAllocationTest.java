@@ -17,6 +17,71 @@ import static org.junit.jupiter.api.Assertions.*;
 import static thc.PrimopTestContext.primopTestContext;
 
 class ManagedAllocationTest {
+    @Test void publicationWaitRestoresInterruptAndKnownPointersKeepRangeOrdering() throws Exception {
+        var storage = ManagedAllocation.mutable(24, 8);
+        var referent = ManagedAddress.fromByteArray(new byte[]{42});
+        storage.writeAddressByteOffset(8, referent);
+        var completed = new java.util.concurrent.CompletableFuture<Boolean>();
+        storage.beginPointerPublication();
+        var worker = new Thread(() -> {
+            try {
+                assertNull(storage.knownAddressByteOffset(8));
+                assertThrows(RuntimeFault.class, () -> storage.knownAddressByteOffset(-1));
+                var resized = storage.resized(32);
+                assertSame(referent, resized.readAddressByteOffset(8));
+                completed.complete(Thread.currentThread().isInterrupted());
+            } catch (Throwable failure) { completed.completeExceptionally(failure); }
+        });
+        try {
+            assertSame(referent, storage.knownAddressByteOffset(8));
+            worker.start();
+            long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
+            while (worker.getState() != Thread.State.WAITING && !completed.isDone() && System.nanoTime() < deadline)
+                Thread.onSpinWait();
+            assertEquals(Thread.State.WAITING, worker.getState());
+            worker.interrupt();
+            assertFalse(completed.isDone(), "resize must not escape the pending publication");
+        } finally { storage.endPointerPublication(); }
+        assertTrue(completed.get(5, java.util.concurrent.TimeUnit.SECONDS));
+        worker.join(5000);
+        assertFalse(worker.isAlive());
+        assertSame(referent, storage.knownAddressByteOffset(8));
+        assertNull(storage.knownAddressByteOffset(0));
+    }
+
+    @Test void pointerCompareExchangeRetainsTheFirstInstalledTargetAndAliasIdentity() throws Exception {
+        try (var context = primopTestContext()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                class PointerRoot extends RootNode {
+                    long compiledEntries;
+                    PointerRoot() { super(language); }
+                    @Override public Object execute(VirtualFrame frame) {
+                        if (CompilerDirectives.inCompiledCode()) compiledEntries++;
+                        return AtomicAddressOp.CAS_ADDR.address((ManagedAddress) frame.getArguments()[0],
+                            (ManagedAddress) frame.getArguments()[1], (ManagedAddress) frame.getArguments()[2]);
+                    }
+                }
+                var storage = ManagedAllocation.mutable(16, 8);
+                var location = ManagedAddress.fromAllocation(storage);
+                var first = ManagedAddress.fromByteArray(new byte[]{17});
+                var second = ManagedAddress.fromByteArray(new byte[]{29});
+                storage.writeAddressByteOffset(0, first);
+                var root = new PointerRoot(); var target = root.getCallTarget();
+                assertSame(first, target.call(location, first, first));
+                install(target);
+                long before = root.compiledEntries;
+                assertSame(first, target.call(location, first, second));
+                assertEquals(before + 1, root.compiledEntries); valid(target);
+                assertSame(second, storage.readAddressByteOffset(0));
+                assertSame(second, target.call(location, first, first));
+                assertEquals(before + 2, root.compiledEntries); valid(target);
+                assertSame(second, storage.readAddressByteOffset(0));
+                assertFalse(Thread.holdsLock(storage));
+            } finally { context.leave(); }
+        }
+    }
     @Test void atomicPreflightKeepsOwnerMonitorAndFailureOrdering() {
         var storage = ManagedAllocation.mutable(16, 8);
         var missing = assertThrows(IllegalMonitorStateException.class, () -> storage.atomicSegment(-1, 8, true));

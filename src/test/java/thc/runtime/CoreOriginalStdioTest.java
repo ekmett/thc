@@ -14,6 +14,14 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @SuppressWarnings("unchecked")
 class CoreOriginalStdioTest {
+    @Test void synchronousSafetyKeepsExactDeclarationsAndUnsupportedFailures() {
+        assertSame(ForeignSafety.UNSAFE, ForeignSafety.synchronous("unsafe"));
+        assertSame(ForeignSafety.SAFE, ForeignSafety.synchronous("safe"));
+        for (var invalid : List.of("interruptible", "", "Safe"))
+            assertEquals("Unsupported synchronous foreign safety: " + invalid,
+                assertThrows(RuntimeFault.class, () -> ForeignSafety.synchronous(invalid)).getMessage());
+        assertThrows(NullPointerException.class, () -> ForeignSafety.synchronous(null));
+    }
     private static class Input {
         final Map<String, Object> descriptor;
         final Map<String, Object> metadata;
