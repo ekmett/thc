@@ -77,10 +77,11 @@ retains its normal argument signature and initialization behavior while respecti
 the declared completion contract. This does not call AOT preparation implicitly,
 execute a dummy guest call, train a branch, or change compiler algorithms.
 
-`./gradlew protocolRuntimeJar` rebuilds `OptimizedCallTarget`, its nested
-classes, and the declared indirect-call node below into a distinct runtime jar. `verifyProtocolRuntimeSelection` verifies
+`./gradlew protocolRuntimeJar` rebuilds `OptimizedCallTarget` and the OSR support
+classes into a distinct runtime jar. `verifyProtocolRuntimeSelection` verifies
 pinned inputs, exact artifact selection, and byte-for-byte preservation of every
 unrelated upstream entry, including notices, module and multi-release resources.
+`OptimizedIndirectCallNode` is copied unchanged from the upstream runtime.
 The original dependency metadata is preserved explicitly when replacing Maven
 binaries with file artifacts. Stock runtime selection uses ordinary return
 profiling; the first captured completion may invalidate compiled code.

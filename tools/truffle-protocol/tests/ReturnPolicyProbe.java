@@ -191,42 +191,38 @@ public final class ReturnPolicyProbe {
     }
   }
 
-  static void firstException(Language language, boolean overlay, boolean declared) throws Exception {
-    // Stock uses the ordinary factory; the additive symbol is not linked there.
-    IndirectCallNode call = overlay && declared
-        ? com.oracle.truffle.runtime.OptimizedIndirectCallNode.createUnprofiledExceptions()
-        : IndirectCallNode.create();
-    ExceptionState state = new ExceptionState();
-    ExceptionCaller original = new ExceptionCaller(language, call, state);
-    ExceptionCaller clone = NodeUtil.cloneNode(original);
-    require(original.call != clone.call, "cloned call node owns its profile/declaration");
+  static void firstException(Language language, boolean overlay) throws Exception {
     Object payload = new Object() {
       @Override public String toString() { throw new AssertionError("payload forced"); }
     };
     RuntimeException[] failures = {new GuestFailure(payload), new Control(), new IllegalStateException("host")};
-    RootCallTarget throwing = new RootNode(language) {
-      @Override public Object execute(VirtualFrame frame) {
-        state.calls++;
-        throw (RuntimeException) frame.getArguments()[0];
-      }
-    }.getCallTarget();
-    for (ExceptionCaller root : new ExceptionCaller[]{original, clone}) {
-      OptimizedCallTarget target = (OptimizedCallTarget) root.getCallTarget();
-      int before = state.entered, effects = state.effects, compiled = state.compiled, calls = state.calls;
-      install(target);
-      require(state.entered == before && state.calls == calls, "no preparation calls");
-      int count = overlay && declared ? failures.length : 1;
-      for (int i = 0; i < count; i++) {
-        require(target.call(throwing, failures[i]).equals(42L), "caught result");
-        require(state.caught == failures[i], "original thrown identity");
-        require(state.entered == before + i + 1 && state.effects == effects + i + 1 &&
-            state.calls == calls + i + 1 && state.compiled == compiled + i + 1,
+    for (RuntimeException failure : failures) {
+      // Each exception kind gets a fresh ordinary profile, including its cloned child.
+      ExceptionState state = new ExceptionState();
+      ExceptionCaller original = new ExceptionCaller(language, IndirectCallNode.create(), state);
+      ExceptionCaller clone = NodeUtil.cloneNode(original);
+      require(original.call != clone.call, "cloned call node owns its exception profile");
+      RootCallTarget throwing = new RootNode(language) {
+        @Override public Object execute(VirtualFrame frame) {
+          state.calls++;
+          throw (RuntimeException) frame.getArguments()[0];
+        }
+      }.getCallTarget();
+      for (ExceptionCaller root : new ExceptionCaller[]{original, clone}) {
+        OptimizedCallTarget target = (OptimizedCallTarget) root.getCallTarget();
+        int before = state.entered, effects = state.effects, compiled = state.compiled, calls = state.calls;
+        install(target);
+        require(state.entered == before && state.calls == calls, "no preparation calls");
+        require(target.call(throwing, failure).equals(42L), "caught result");
+        require(state.caught == failure, "original thrown identity");
+        require(state.entered == before + 1 && state.effects == effects + 1 &&
+            state.calls == calls + 1 && state.compiled == compiled + 1,
             "first installed exception has no replay");
-        require(target.isValidLastTier() == (overlay && declared), "declared exception retention");
+        require(!target.isValidLastTier(), "ordinary first exception may invalidate compiled code");
       }
       require(((GuestFailure) failures[0]).payload == payload, "lazy payload identity");
+      System.out.println("PASS cold indirect " + failure.getClass().getSimpleName() + " overlay=" + overlay);
     }
-    System.out.println("PASS cold indirect exceptions declared=" + declared + " overlay=" + overlay);
   }
 
   static void cloneControl(Language language, boolean declared, boolean overlay) throws Exception {
@@ -264,8 +260,8 @@ public final class ReturnPolicyProbe {
       context.initialize("thc"); context.enter();
       try {
         Language language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+        firstException(language, overlay);
         for (boolean declared : new boolean[]{false, true}) {
-          firstException(language, overlay, declared);
           firstAlternate(new ProbeRoot(language, declared, false, new State()), overlay,
               "ordinary declared=" + declared);
           firstAlternate(new ProbeRoot(language, declared, true, new State()), overlay,
