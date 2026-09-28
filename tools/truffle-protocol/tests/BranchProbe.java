@@ -85,6 +85,7 @@ public final class BranchProbe {
         () -> new DataInputStream(new ByteArrayInputStream(bytes.toByteArray())), (c, in) -> BranchRoot.readConstant(in)).getNode(0);
       remaining.set(20000);
       require(copy.getCallTarget().call(remaining).equals(42L) && remaining.get() == -1, "loop backedge/OSR roundtrip");
+      require(copy.getBytecodeNode().getTier() == BytecodeTier.CACHED, "loop backedge cached tier");
       boolean found = false;
       for (Instruction instruction : copy.getBytecodeNode().getInstructions())
         if (instruction.getName().startsWith("branch.false.unprofiled")) {
@@ -93,9 +94,15 @@ public final class BranchProbe {
             require(argument.getKind() != Instruction.Argument.Kind.BRANCH_PROFILE, "loop invented profile");
         }
       require(found, "unprofiled loop instruction");
-      copy.getBytecodeNode().setUncachedThreshold(Integer.MAX_VALUE);
+      var uncached = BranchRootGen.deserialize(language, BytecodeConfig.DEFAULT,
+        () -> new DataInputStream(new ByteArrayInputStream(bytes.toByteArray())), (c, in) -> BranchRoot.readConstant(in)).getNode(0);
+      uncached.getBytecodeNode().setUncachedThreshold(Integer.MAX_VALUE);
+      require(uncached.getBytecodeNode().getTier() == BytecodeTier.UNCACHED, "uncached loop initial tier");
       remaining.set(2);
-      require(copy.getCallTarget().call(remaining).equals(42L) && remaining.get() == -1, "uncached loop");
+      effects = BranchRoot.effects.get();
+      require(uncached.getCallTarget().call(remaining).equals(42L) && remaining.get() == -1, "uncached loop");
+      require(BranchRoot.effects.get() == effects + 1, "uncached prefix once");
+      require(uncached.getBytecodeNode().getTier() == BytecodeTier.UNCACHED, "uncached loop retained tier");
     }
     System.out.println("PASS first opposite loop direction unprofiled=" + unprofiled);
   }
