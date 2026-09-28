@@ -190,7 +190,7 @@ class WindowsDirectoryStreamsTest {
             assertEquals(name(next), name(output))
             // Win32's mallocForeignPtrBytes uses pinned byte-array storage.
             // The separate Linux libc malloc provider is not a Windows allocator.
-            val owner = ManagedAllocation.mutable(WindowsDirectoryStreams.Abi.size + 16, 8, pinned = true)
+            val owner = ManagedAllocation.mutable(WindowsDirectoryStreams.Abi.size + 16, 8, true)
             val memory = ManagedAddress.fromAllocation(owner)
             memory.fill(WindowsDirectoryStreams.Abi.size + 16, 165)
             val native = memory.plus(8)

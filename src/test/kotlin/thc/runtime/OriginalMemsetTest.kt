@@ -66,7 +66,7 @@ class OriginalMemsetTest {
     private fun address(values: List<Long>, kind: Int): ManagedAddress = when (kind) {
         0 -> ManagedAddress.fromByteArray(values.map(Long::toByte).toByteArray())
         3 -> Language.currentState().nativeAllocations.malloc(values.size.toLong())
-        else -> ManagedAddress.fromAllocation(ManagedAllocation.mutable(values.size.toLong(), 8, pinned = kind == 2))
+        else -> ManagedAddress.fromAllocation(ManagedAllocation.mutable(values.size.toLong(), 8, kind == 2))
     }.also { address -> values.forEachIndexed { index, value -> address.writeWord8(index.toLong(), value) } }
 
     @Test fun originalWrapperAndRawCIntCallMatchNativeOnFirstCompiledEntries() {

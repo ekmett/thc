@@ -39,7 +39,7 @@ class WindowsCodePagesTest {
     private fun program(language: Language, backend: String, module: Map<String, Any?>): ExecutableProgram =
         if (backend == "ast") Program(language, module) else BytecodeProgram(language, module)
     private fun buffer(size: Int = 64, fill: Long = 165, pinned: Boolean = false) =
-        ManagedAddress.fromAllocation(ManagedAllocation.mutable(size.toLong(), 8, pinned = pinned)).also { it.fill(size.toLong(), fill) }
+        ManagedAddress.fromAllocation(ManagedAllocation.mutable(size.toLong(), 8, pinned)).also { it.fill(size.toLong(), fill) }
     private fun bytes(address: ManagedAddress, size: Int = 64) = (0 until size).map { address.readWord8(it.toLong()) }
     private fun valid(target: RootCallTarget) = assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
     private val operations = linkedMapOf("ansiPage" to OriginalStdioOp.ANSI_CODE_PAGE,

@@ -74,7 +74,7 @@ class SulongLimbProviderTest {
         assertArrayEquals(bytes(1, 0x5a5a), ordinary)
         assertEquals(0L, arithmetic.shiftRight(output(ordinary, 1), input(1), 1, false))
         assertEquals(1L, arithmetic.shiftRight(output(ordinary, 1), input(1), 1, true))
-        val pinned = ManagedAllocation.mutable(24, 8, pinned = true)
+        val pinned = ManagedAllocation.mutable(24, 8, true)
         bytes(1, -1, 0x5a5a).forEachIndexed { index, value -> pinned.writeByte(index.toLong(), value.toLong() and 255) }
         assertEquals(1L, arithmetic.shiftRight(LimbRegion.write(pinned, 2), LimbRegion.read(pinned, 2), 64, true))
         assertArrayEquals(bytes(0, 1, 0x5a5a), ByteArray(24) { pinned.readByte(it.toLong()).toByte() })

@@ -4,6 +4,14 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
+import thc.runtime.ByteArrayOp.expression as byteArrayExpression
+
+import thc.runtime.MutVarOp.expression as mutVarExpression
+
+import thc.runtime.SmallArrayOp.expression as smallArrayExpression
+
+import thc.runtime.ArrayOp.expression as arrayExpression
+
 import thc.runtime.Scalar64Primitives.scalar64PrimitiveOperation
 import thc.runtime.Scalar64Primitives.word64Literal
 

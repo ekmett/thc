@@ -113,7 +113,7 @@ class AtomicIntArrayTest {
         val owner = CoreRepresentation(CoreKind.OBJECT, primReps = listOf("BoxedRep (Just Unlifted)"))
         val state = CoreRepresentation(CoreKind.VOID, primReps = emptyList())
         val integer = CoreRepresentation(CoreKind.LONG, primReps = listOf("IntRep"))
-        for (operation in AtomicIntArrayOp.entries) {
+        for (operation in AtomicIntArrayOp.values()) {
             val payload = integer.copy(primReps = listOf(when (operation.width) {
                 1 -> "Int8Rep"; 2 -> "Int16Rep"; 4 -> "Int32Rep"; else -> "IntRep"
             }))
@@ -249,7 +249,7 @@ class AtomicIntArrayTest {
         it.copyBytesIn(bytes, 0, 0, bytes.size.toLong())
     }
     @Test fun everyWidthChecksOwnedMutableContainedPointerFreeStorageBeforeEffects() {
-        for (operation in AtomicIntArrayOp.entries) {
+        for (operation in AtomicIntArrayOp.values()) {
             val bytes = image(operation.width, -1)
             val owner = owner(bytes)
             for (index in listOf(-1L, Long.MIN_VALUE, Long.MAX_VALUE, 1L shl 32, 32L / operation.width)) {
@@ -329,7 +329,7 @@ class AtomicIntArrayTest {
                 "resultRep" to if (operation.tuple) (result["components"] as List<*>)[1] else long)))))
     }
     @Test fun typedBackendsReturnOldSignedValuesAndRejectStateBeforeMutation() {
-        for (operation in AtomicIntArrayOp.entries) for (backend in listOf("ast", "bytecode")) context().use { context ->
+        for (operation in AtomicIntArrayOp.values()) for (backend in listOf("ast", "bytecode")) context().use { context ->
             context.initialize("thc"); context.enter()
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
@@ -412,7 +412,7 @@ class AtomicIntArrayTest {
         }
     }
     @Test fun everyCasWidthHasOneWinnerAndLinearizableRetryLoops() {
-        for (operation in AtomicIntArrayOp.entries.filter { it.operands == 2 }) {
+        for (operation in AtomicIntArrayOp.values().filter { it.operands == 2 }) {
             val owner = owner(image(operation.width, 0))
             val old = Collections.synchronizedList(mutableListOf<Long>())
             parallel { old.add(operation.execute(owner, 1, 0, 1)) }
