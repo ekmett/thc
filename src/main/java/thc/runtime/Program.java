@@ -369,6 +369,7 @@ public final class Program implements ExecutableProgram {
             unsupportedPolicy = "reject-at-binding-admission"; break;
         }
         result.put("unsupportedPolicy", unsupportedPolicy);
+        result.put("foreignUnsupportedPolicy", "trap-when-reached");
         result.put("deferredUnsupported", new ArrayList<>(deferredUnsupported));
         result.put("unsupportedTraps", metrics.getUnsupportedTraps());
         result.put("frames", "indexed primitive slots; selective StaticShape captures");
@@ -1425,13 +1426,20 @@ public final class Program implements ExecutableProgram {
         var memorySearch = CoreMemorySearchForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
         var libdw = CoreLibdwForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
 
-        var polyglot = originalProcess == null && rtsEventForeign == null && gcForeign == null && textForeign == null && !byteStringSort &&
+        PolyglotOp polyglot;
+        try {
+            polyglot = originalProcess == null && rtsEventForeign == null && gcForeign == null && textForeign == null && !byteStringSort &&
             byteStringDecimal == null && byteStringUtf8 == null && memorySearch == null && floatingForeign == null && cpuAffinity == null &&
             runtimeService == null && !allocationCounterForeign && environment == null && packageScalar == null && !stackClone &&
             stackInfo == null && originalStdio == null && capi == null && !stableFree && shutdown == null && !mainThreadForeign &&
             !boundThreadForeign && stringRts == null && rtsDiagnostic == null && rtsArguments == null && sharedCAF == null &&
             managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null &&
             !memmove && !memcpy && !memset && processSignal == null ? CorePolyglot.validate(expr, defined) : null;
+        } catch (UnsupportedCore unavailable) {
+            // Only the final unknown-symbol fallback is deferred. Known ABI validation above stays eager.
+            deferredUnsupported.add(unavailable.getMessage());
+            return new UnsupportedForeignCall(unavailable.getMessage(), metrics);
+        }
         if ((packageScalar != null || javascript != null || polyglot != null || runtimeService == RuntimeServiceCall.EXCEPTION_TEXT) &&
             foreignExceptionBridge == null) throw fault("Foreign execution requires a linked genuine THC.Exception runtime bundle");
         if (runtimeService != null) {

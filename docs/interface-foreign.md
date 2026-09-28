@@ -37,6 +37,17 @@ metadata; a schema-1 document cannot hide a `foreign` field. The strict Core
 auditor applies the same reachability and global-obligation boundary. This
 does not change the ordinary source-plugin foreign-output contract.
 
+For already-admitted Core, an unknown foreign symbol at the backend's final
+foreign-call fallback becomes an explicit nonreturning operation. An unselected
+alternative can therefore be prepared without granting that symbol an
+implementation. Reaching it raises `UnsupportedCore` with the original
+`Unsupported foreign call: SYMBOL` message: no C call or result write occurs.
+Known-call ABI validation, archive admission, missing bindings and unsupported
+primitive rejection retain their existing boundaries. This is independent of
+diagnostic mode. Diagnostics report `foreignUnsupportedPolicy: "trap-when-reached"`,
+list these messages in `deferredUnsupported`, and increment `unsupportedTraps`
+only on execution. None of this implements native object linking.
+
 ## Package-owned C, C++ and CAPI calls
 
 The `thc-package-c-ffi-v1` profile acquires ordinary local and Cabal-store

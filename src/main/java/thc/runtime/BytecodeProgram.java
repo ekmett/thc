@@ -607,6 +607,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             break;
         }
         result.put("unsupportedPolicy", unsupportedPolicy);
+        result.put("foreignUnsupportedPolicy", "trap-when-reached");
         result.put("deferredUnsupported", new ArrayList<>(deferredUnsupported));
         result.put("unsupportedTraps", metrics.getUnsupportedTraps());
         result.put("frames", "Bytecode DSL primitive locals; selective StaticShape captures");
@@ -5538,13 +5539,32 @@ public final class BytecodeProgram implements ExecutableProgram {
         boolean memset = CoreMemsetForeign.validate(foreignMetadata, representations, flags, resultRepresentation);
         var memorySearch = CoreMemorySearchForeign.validate(foreignMetadata, representations, flags, resultRepresentation);
         var libdw = CoreLibdwForeign.validate(foreignMetadata, representations, flags, resultRepresentation);
-        var polyglot = originalProcess == null && rtsEventForeign == null && gcForeign == null && textForeign == null && !byteStringSort
+        PolyglotOp polyglot;
+        try {
+            polyglot = originalProcess == null && rtsEventForeign == null && gcForeign == null && textForeign == null && !byteStringSort
                 && byteStringDecimal == null && byteStringUtf8 == null && memorySearch == null && floatingForeign == null && cpuAffinity == null
                 && runtimeService == null && !allocationCounterForeign && environment == null && packageScalar == null && !stackClone
                 && stackInfo == null && originalStdio == null && capi == null && !stableFree && shutdown == null && !mainThreadForeign
                 && !boundThreadForeign && stringRts == null && rtsDiagnostic == null && rtsArguments == null && sharedCAF == null
                 && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null
                 && !memmove && !memcpy && !memset && processSignal == null ? CorePolyglot.validate(expr, defined) : null;
+        } catch (UnsupportedCore unavailable) {
+            // Only the final unknown-symbol fallback is deferred. Known ABI validation above stays eager.
+            String message = unavailable.getMessage();
+            deferredUnsupported.add(message);
+            return new Expression() {
+                @Override public void emit(Emission emission) { emission.builder.emitUnsupportedForeign(message, metrics); }
+                @Override public void emitTuple(Emission emission, List<BytecodeLocal> destination) {
+                    // The operation never returns, and no tuple destination may be written.
+                    var b = emission.builder;
+                    b.beginBlock();
+                    b.beginStoreLocal(b.createLocal("unavailable foreign tuple", null));
+                    b.emitUnsupportedForeign(message, metrics);
+                    b.endStoreLocal();
+                    b.endBlock();
+                }
+            };
+        }
         if ((packageScalar != null || javascript != null || polyglot != null || runtimeService == RuntimeServiceCall.EXCEPTION_TEXT)
                 && foreignExceptionBridge == null)
             throw RuntimeFault.fault("Foreign execution requires a linked genuine THC.Exception runtime bundle");

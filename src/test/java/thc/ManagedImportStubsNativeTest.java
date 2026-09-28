@@ -39,7 +39,7 @@ class ManagedImportStubsNativeTest {
             assertTrue(context.getBindings("thc").getMemberKeys().isEmpty(), "C imports do not create host exports");
         }
     }
-    @Test void unknownCallsAreStillRejectedAfterManagedArchiveAdmission() throws Exception {
+    @Test void unknownCallsStillFailWhenReachedAfterManagedArchiveAdmission() throws Exception {
         var module = original(); var imports = objects(object(module.get("staticForeignImportStubs")).get("imports"));
         for (String backend : list("ast", "bytecode")) try (var context = Context.create("thc")) {
             context.initialize("thc"); context.enter();
@@ -49,8 +49,19 @@ class ManagedImportStubsNativeTest {
                     var declarations = imports.stream().filter(d -> name.equals(object(d.get("binder")).get("occurrence"))).toList(); assertEquals(1, declarations.size());
                     var symbol = (String) object(declarations.getFirst().get("emitted")).get("symbol");
                     var linked = CoreModules.reachable(CoreModules.merge(list(module)), name, true);
-                    var error = assertThrows(UnsupportedCore.class, () -> { if (backend.equals("ast")) new Program(language, linked, false, false); else new BytecodeProgram(language, linked); });
+                    ExecutableProgram program = backend.equals("ast") ? new Program(language, linked, false, false) : new BytecodeProgram(language, linked);
+                    // CInt/CLong wrappers in the original Core consume Int32/Int64 constructors.
+                    var argument = name.equals("direct")
+                        ? program.constructorLayout("ghc-internal:GHC.Internal.Int.I64#").createLong(-3L)
+                        : program.constructorLayout("ghc-internal:GHC.Internal.Int.I32#").createInt(-3);
+                    var target = program.entryTarget(name);
+                    assertEquals(0L, program.diagnostics().get("unsupportedTraps"));
+                    var error = assertThrows(UnsupportedCore.class, () -> Calls.target(target, new Object[]{0L, argument, Unit.INSTANCE}));
                     assertEquals("Unsupported foreign call: " + symbol, error.getMessage());
+                    assertEquals(1L, program.diagnostics().get("unsupportedTraps"));
+                    var handoff = language.getHandoffState().get();
+                    assertEquals(0, handoff.getArguments().getDepth()); assertEquals(0, handoff.getArguments().retainedReferences());
+                    assertEquals(0, handoff.getResults().getDepth()); assertEquals(0, handoff.getResults().retainedReferences());
                 }
             } finally { context.leave(); }
         }
