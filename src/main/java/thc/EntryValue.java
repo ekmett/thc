@@ -56,6 +56,8 @@ public final class EntryValue implements TruffleObject {
     @ExportMessage public boolean isExecutable() { return ioTarget == null; }
     @ExportMessage public Object execute(Object[] arguments,
             @Cached(value = "create()", uncached = "create()", neverDefault = true) HostDispatch dispatch) {
+        var threads = Language.currentState(dispatch).getThreads();
+        if (threads.needsHosting()) return threads.hostEntry(dispatch, () -> execute(arguments, dispatch));
         if (ioTarget != null) throw new RuntimeFault("IO main must be invoked through runIO");
         if (hostResultFault != null) throw new RuntimeFault("Diagnostic unsupported path reached: " + hostResultFault);
         if (arguments.length != argumentCount) {
@@ -79,7 +81,6 @@ public final class EntryValue implements TruffleObject {
             if (narrow == null) normalized[index] = value;
             else normalized[index] = narrow.fromHost(value);
         }
-        var threads = Language.currentState(dispatch).getThreads();
         threads.enterCurrent(null, false, program.getAsynchronousExceptions(), null);
         var outcome = GuestThreadStatus.FINISHED;
         try {
@@ -149,6 +150,8 @@ public final class EntryValue implements TruffleObject {
     @ExportMessage @TruffleBoundary public Object invokeMember(String member, Object[] arguments,
             @Cached(value = "create()", uncached = "create()", neverDefault = true) HostDispatch dispatch) throws UnknownIdentifierException {
         if ("runIO".equals(member) && ioTarget != null) {
+            var hosting = Language.currentState(dispatch).getThreads();
+            if (hosting.needsHosting()) return hosting.hostEntry(dispatch, () -> invokeMember(member, arguments, dispatch));
             if (arguments.length != 0) throw new IllegalArgumentException("runIO takes no arguments");
             if (lifecycleStarted != null && !lifecycleStarted.compareAndSet(false, true)) throw new RuntimeFault("Executable IO lifecycle already started");
             var owner = Language.currentState(dispatch);

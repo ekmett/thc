@@ -54,6 +54,7 @@ public final class ManagedSignals {
     private void current() { if (Language.currentState(null) != owner) throw fault("Process signals belong to another context"); }
     @TruffleBoundary(transferToInterpreterOnException = false) public synchronized long install(long signal, long action, ManagedAddress mask) {
         current();
+        if (owner.getThreads().isLoom()) throw new UnsupportedCore("Loom hosting does not yet support the native process signal dispatcher; use platform hosting");
         if (!authorized) throw fault("Process signals require explicit NativeIO launcher authority");
         if ((signal != 1 && signal != 2 && signal != 3 && signal != 10 && signal != 12 && signal != 15 && signal != 24 && signal != 25) ||
             (action != -1 && action != -2 && action != -4 && action != -5) || mask != ManagedAddress.nullAddress())

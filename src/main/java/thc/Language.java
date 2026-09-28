@@ -11,12 +11,18 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
+import org.graalvm.options.OptionCategory;
+import org.graalvm.options.OptionDescriptors;
+import org.graalvm.options.OptionKey;
 import thc.runtime.*;
 
 @TruffleLanguage.Registration(id = "thc", name = "Turbo Haskell Compiler", version = "0.1-experiment",
     characterMimeTypes = "application/x-thc-core", defaultMimeType = "application/x-thc-core",
     dependentLanguages = "llvm", contextPolicy = TruffleLanguage.ContextPolicy.EXCLUSIVE)
 public final class Language extends TruffleLanguage<Language.State> {
+    @Option(name = "ThreadHosting", help = "Guest thread host: platform (default) or experimental loom (pinned JDK 25).", category = OptionCategory.USER)
+    static final OptionKey<String> THREAD_HOSTING = new OptionKey<>("platform");
+    @Override protected OptionDescriptors getOptionDescriptors() { return new LanguageOptionDescriptors(); }
     // Layout interning belongs to a context even when the language instance is shared.
     public HandoffLayouts getHandoffLayouts() { return currentState(null).handoffLayouts; }
     private final ContextThreadLocal<HandoffState> handoffState = locals.createContextThreadLocal((context, thread) -> new HandoffState());
@@ -88,7 +94,7 @@ public final class Language extends TruffleLanguage<Language.State> {
             packageCbits = new PackageScalarLibraries(env);
             maskingState = new CarrierLocal<>(MaskingState.UNMASKED);
             stackAnnotations = new CarrierLocal<>(StackAnnotationState.EMPTY);
-            threads = new GuestThreads(env, maskingState);
+            threads = new GuestThreads(env, maskingState, env.getOptions().get(THREAD_HOSTING));
             threadPollState = language.threadPollState;
             threadMaskingState = language.threadMaskingState;
             threadAnnotations = language.threadAnnotations;
@@ -228,7 +234,10 @@ public final class Language extends TruffleLanguage<Language.State> {
     }
     @Override protected void finalizeContext(State context) {
         try { context.files.shutdownEventManagers(); }
-        finally { try { context.signals.close(); } finally { context.iconv.dispose(); } }
+        finally {
+            try { context.signals.close(); }
+            finally { try { context.threads.stopHostedThreads(); } finally { context.iconv.dispose(); } }
+        }
     }
     @Override protected void disposeContext(State context) {
         context.compilerRts.close();

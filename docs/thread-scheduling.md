@@ -4,6 +4,33 @@ THC implements `par#`, `spark#`, `numSparks#`, `getSpark#`, `forkOn#`,
 `delay#`, `setThreadAllocationCounter#` and `setOtherThreadAllocationCounter#`
 on both backends.
 
+## Thread hosting
+
+Platform hosting remains the default. Experimental per-context
+`thc.ThreadHosting=loom` uses one Truffle-managed virtual thread per guest thread,
+including public entries; nested entries and ordinary thunk evaluation remain on
+that same virtual thread. Embedders must allow experimental options and thread
+creation. Loom requires the pinned JDK 25 and
+`--add-opens=java.base/java.lang=ALL-UNNAMED` (included by the launcher). Missing
+support fails explicitly; there is no platform fallback.
+
+Each logical capability (HEC) has one exclusive platform worker. MVar waits park
+the guest virtual thread without retaining its HEC. Runnable, unmounted ordinary
+threads may move between HECs; `forkOn#` stays on its selected logical HEC.
+Resizing normalizes parked and queued routes immediately and mounted routes at
+their next unmounted boundary. Cooperative guest polls yield to waiting work;
+this is not preemptive scheduling. Shutdown cancels and joins managed threads
+before closing carrier queues.
+
+Loom currently rejects safe/interruptible foreign calls, foreign callbacks and
+process-signal handler installation. Unsafe foreign calls retain the HEC and can
+block its progress. There is no native-blocking compensation. Per-virtual-thread
+allocation counters are unavailable and explicit reads/resets fail, not return
+zero. Platform hosting retains the existing foreign and allocation facilities.
+Existing async delivery, masking and saved-continuation rules apply in both modes.
+
+## Hints, affinity and accounting
+
 Spark hints are discarded without evaluating their lifted arguments. `par#`
 returns one, `spark#` returns the identical argument, and the empty pool queries
 return zero; `getSpark#` carries the pinned RTS's boxed `False` filler. There is
@@ -13,7 +40,7 @@ no speculative worker pool or parallel-speedup claim.
 and inherited masking state. It records a locked context-local logical capability,
 reducing the requested number modulo the context's logical capability count. It
 maps that index modulo eligible CPU capacity and attempts native affinity on
-the child **platform** thread. Affinity is best
+the child platform thread, or the Loom HEC's exclusive platform worker. Affinity is best
 effort: an unavailable API, denied native access or rejected request never prevents
 the fork. `threadStatus#` reports the logical capability and requested lock, not
 proof that the OS accepted a pin. This is not `forkOS` or bound foreign TLS.
@@ -23,8 +50,9 @@ JVM's available-processor count, capped by discovered eligible CPUs. This respec
 JVM/container capacity limits. The separate logical count starts at this capacity;
 original `setNumCapabilities` changes it per context and `enabled_capabilities`
 reports it. Ordinary carriers share logical indices round-robin. Shrinking the
-count normalizes retained thread indices without repinning existing carriers or
-changing their initial affinity outcome. Eligible OS CPU IDs need not be contiguous.
+count in platform mode normalizes retained thread indices without repinning existing
+carriers or changing their initial affinity outcome. Loom changes actual routing at
+unmounted boundaries as described above. Eligible OS CPU IDs need not be contiguous.
 No JVM pool scaling or GHC `-N` scheduler configuration is implied. See
 [RTS event prerequisites and capabilities](rts-event-capabilities.md).
 
@@ -34,10 +62,10 @@ Windows uses advisory CPU Sets, preserving hard process/thread masks and restori
 the exact prior selection. It currently declines multi-group process topologies
 whose full hard eligibility cannot be resolved, rather than truncating to 64 CPUs.
 Unsupported platforms retain the JVM capacity count without claiming a pin.
-Virtual carriers are never pinned. A completed fork restores its prior native
-mask, including exceptional exits.
+Virtual threads are never pinned directly. A completed platform fork restores its
+prior native mask, including exceptional exits; a Loom worker restores it on exit.
 
-`fork#` clears inherited affinity back to the context's original CPU eligibility.
+In platform mode, `fork#` clears inherited affinity back to the context's original CPU eligibility.
 Thread creation temporarily restores that eligibility on the creator, then
 restores the creator's pin; `forkOn#` applies its new selection in the child.
 This avoids accidentally restricting an ordinary fork to its pinned parent's CPU.
