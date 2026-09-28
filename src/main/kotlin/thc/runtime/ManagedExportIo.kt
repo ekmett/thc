@@ -10,7 +10,7 @@ import thc.Language
 private class ManagedExportDestination(shape: TupleShape, private val language: Language) : TupleDestination(shape) {
     override fun consume(frame: VirtualFrame, node: Node, result: Any?) {
         AsyncContinuations.publicResult(result, node)
-        val raw = if (result === TupleComplete) {
+        val raw = if (result === TupleComplete.INSTANCE) {
             val pool = language.handoffState.get().results
             val storage = pool.completed()
             try {

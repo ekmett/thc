@@ -220,7 +220,7 @@ class OriginalTermiosTest {
                                 assertSame(target, program.entryTarget(cafId))
                                 val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                                 val value = Calls.target(target, arrayOf(0L)) as DataValue
-                                assertEquals(BOXED_INT_CONSTRUCTOR_ID, value.layout.id)
+                                assertEquals(DataValuesKt.BOXED_INT_CONSTRUCTOR_ID, value.layout.id)
                                 assertEquals(1, value.layout.arity)
                                 assertEquals(constants[index], value.layout.readLong(value, 0))
                                 assertEquals(0, thunk.state); assertSame(target, thunk.target)

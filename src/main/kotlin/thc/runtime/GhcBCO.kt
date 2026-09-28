@@ -35,7 +35,7 @@ internal object GhcBCO {
     @JvmStatic @TruffleBoundary
     fun create(node: Node, language: Language, metrics: Metrics, code: Any?, literals: Any?, pointers: Any?,
                arity: Long, bitmap: Any?, state: Any?): Closure {
-        requireVoidCarrier(state)
+        TupleResultsKt.requireVoidCarrier(state)
         if (arity < 0 || arity >= Int.MAX_VALUE) fault("BCO arity outside managed calling convention")
         val codeBytes = ManagedByteArray.sizeGuest(code)
         val literalBytes = ManagedByteArray.sizeGuest(literals)
