@@ -21,7 +21,7 @@ import java.nio.ByteOrder
 
 class Int32VectorMemoryProofTest {
     // These fixtures use 128-bit vectors and ByteArray#, not wider vectors or Addr#.
-    private val operations = VectorMemoryOp.entries.filter {
+    private val operations = VectorMemoryOp.values().filter {
         it.family == VectorMemoryFamily.INT32 && it.vectorBytes == 16 && !it.isAddress
     }
     private fun scalar(kind: String, rep: String?) = mapOf("kind" to kind,
@@ -181,6 +181,9 @@ class Int32VectorMemoryProofTest {
         assertEquals(0L, count())
         assertFalse(valid(host), "host bridge remains interpreted")
         target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+        val runtime = Truffle.getRuntime()
+        runtime.javaClass.getMethod("bypassedInstalledCode",
+            Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")).invoke(runtime, target)
         assertTrue(valid(target), "first installed guest target")
         val before = count()
         call()
@@ -374,6 +377,10 @@ class Int32VectorMemoryProofTest {
                 assertEquals(0L, count(), "$label no automatic compiled entries")
                 assertFalse(valid(target), "$label no automatic installation")
                 target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+                // Restore the shared entry stub without executing a settling guest call.
+                val runtime = Truffle.getRuntime()
+                runtime.javaClass.getMethod("bypassedInstalledCode",
+                    Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")).invoke(runtime, target)
                 assertTrue(valid(target), "$label installed guest")
                 val before = count()
                 validCall("installed")

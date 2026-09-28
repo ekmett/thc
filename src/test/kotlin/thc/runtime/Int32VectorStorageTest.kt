@@ -3,6 +3,8 @@
 
 package thc.runtime
 
+import thc.runtime.VectorMemory.*
+
 import jdk.incubator.vector.IntVector
 
 import java.math.BigInteger

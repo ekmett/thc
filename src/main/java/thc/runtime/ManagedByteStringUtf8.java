@@ -17,7 +17,7 @@ final class ManagedByteStringUtf8 {
         var state = Language.currentState(null);
         var cbits = state.cbits();
         // Language loading may block; do it before taking storage locks.
-        Object function = cbits.utf8Function$org_intelligence_thc();
+        Object function = cbits.utf8Function();
         // The original function returns true before inspecting the pointer.
         if (address == ManagedAddress.Companion.nullAddress() && length == 0)
             return call(state, cbits, function, address, 0L, length);
@@ -54,7 +54,7 @@ final class ManagedByteStringUtf8 {
             Object bytes, long length) {
         var threads = state.getThreads();
         var previous = threads.enterForeign(ForeignSafety.UNSAFE);
-        try { return cbits.utf8Validate$org_intelligence_thc(function, bytes, length); }
+        try { return cbits.utf8Validate(function, bytes, length); }
         finally {
             threads.leaveForeign(previous);
             Reference.reachabilityFence(address);

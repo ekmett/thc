@@ -66,9 +66,13 @@ internal object SimdByteArrayEvidence {
         val sources = listOf("compiler/test-fixtures/$module.hs", "compiler/test-fixtures/${module}Native.hs",
             "test/haskell-fixtures/SimdByteArrayFixtures.hs", "test/haskell-fixtures/SimdByteArrayModel.hs",
             "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal",
-            "scripts/audit-core.py", "scripts/core-capabilities.json", "src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt",
+            "scripts/audit-core.py", "scripts/core-capabilities.json", "src/main/java/thc/runtime/VectorMemoryFamily.java",
+            "src/main/java/thc/runtime/VectorMemoryOp.java",
+            "src/main/java/thc/runtime/VectorReadCase.java",
+            "src/main/java/thc/runtime/CoreVectorMemory.java",
+            "src/main/java/thc/runtime/VectorByteArrayExpression.java",
             "src/main/resources/thc/scalar-primop-signatures.json", "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py") +
-            (if (family == "doublex2") listOf("src/main/kotlin/thc/runtime/VectorMemory.kt") else emptyList()) +
+            (if (family == "doublex2") listOf("src/main/java/thc/runtime/VectorMemory.java") else emptyList()) +
             File(root, "compiler/THC").listFiles()!!.filter { it.extension == "hs" }.map { "compiler/THC/${it.name}" } +
             File(root, "scripts").listFiles()!!.filter { it.name.startsWith("core_") && it.extension == "py" }.map { "scripts/${it.name}" } +
             listOf("pre-core.json.gz", "post-core.json.gz", if (floating(family)) "input-provenance.json.gz" else "native/provenance.json.gz").map { "$retainedBase/$it" }

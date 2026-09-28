@@ -614,7 +614,7 @@ public final class Program implements ExecutableProgram {
                 if (!value.equals("0")) throw new UnsupportedCore("Malformed null Addr# literal");
                 yield ManagedAddress.Companion.nullAddress();
             }
-            case "function-addr" -> CFinalizerLabels.INSTANCE.fromCore(value, proof);
+            case "function-addr" -> CFinalizerLabels.fromCore(value, proof);
             case "data-addr" -> CoreDataLabels.fromCore(value, proof, stackTargetLayout instanceof TargetLayout target ? target : null);
             case "bignat" -> BigNatLiterals.decode(value);
             default -> throw new UnsupportedCore("Unsupported literal kind " + kind);
@@ -732,7 +732,7 @@ public final class Program implements ExecutableProgram {
     }
     private Expr compileVectorReadCase(VectorReadCase read, Scope scope, boolean tail) {
         Scope local = scope.child();
-        local.bindVoid(read.getStateBinder(), CoreVectorMemory.INSTANCE.getStateProof());
+        local.bindVoid(read.getStateBinder(), CoreVectorMemory.getStateProof());
         CoreRepresentation proof = read.getOperation().getVectorProof();
         int[] lanes = new int[TupleShape.flatten(proof).size()];
         for (int i = 0; i < lanes.length; i++) lanes[i] = local.layout.bind("<vector read lane " + i + ">");
@@ -1096,7 +1096,7 @@ public final class Program implements ExecutableProgram {
     }
 
     private Expr compileCase(List<Object> expr, Scope scope, boolean tail) {
-        var vectorRead = CoreVectorMemory.INSTANCE.readCase(expr, constructors);
+        var vectorRead = CoreVectorMemory.readCase(expr, constructors);
         if (vectorRead != null) return compileVectorReadCase(vectorRead, scope, tail);
         List<Object> scrutineeExpr = (List<Object>) expr.get(1);
         Expr scrutinee = compile(scrutineeExpr, scope, false);
@@ -1305,7 +1305,7 @@ public final class Program implements ExecutableProgram {
         var cpuAffinity = CoreCpuAffinity.validate(expr, defined || scope.joins.containsKey(at(fn, 1)));
         var runtimeService = CoreRuntimeServices.validate(expr, defined || scope.joins.containsKey(at(fn, 1)));
         var packageScalar = cpuAffinity == null && runtimeService == null ?
-            CorePackageScalarForeign.INSTANCE.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr), packageScalarLinks) : null;
+            CorePackageScalarForeign.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr), packageScalarLinks) : null;
         var foreignMetadata = packageScalar == null ? metadata : null;
         var stackClone = CoreStackForeign.validate(foreignMetadata, argumentMetadata(args), flags);
         var stackInfo = CoreStackInfoForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
@@ -1423,7 +1423,7 @@ public final class Program implements ExecutableProgram {
             Expr[] operands = new Expr[args.size()];
             for (int i = 0; i < operands.length; i++) {
                 operands[i] = compile(args.get(i), scope, false);
-                CorePackageScalarForeign.INSTANCE.validateOperand(packageScalar, i, operands[i].getRepresentation(), bindingProof(args.get(i), scope));
+                CorePackageScalarForeign.validateOperand(packageScalar, i, operands[i].getRepresentation(), bindingProof(args.get(i), scope));
             }
             return new PackageScalarExpression(packageScalar, operands, tupleProof);
         }
@@ -1919,8 +1919,8 @@ public final class Program implements ExecutableProgram {
             operation.validate(argumentProofs(args), flags, tupleProof);
             return SmallArrayOp.expression(operation, tupleProof, argumentOperands(args, scope, flags));
         }
-        if (primitive && VectorMemoryOp.Companion.named((String) fn.get(1)) != null) {
-            var operation = Objects.requireNonNull(VectorMemoryOp.Companion.named((String) fn.get(1)));
+        if (primitive && VectorMemoryOp.named((String) fn.get(1)) != null) {
+            var operation = Objects.requireNonNull(VectorMemoryOp.named((String) fn.get(1)));
             operation.validate(argumentProofs(args), flags, tupleProof);
             return operation.isAddress() ? new VectorAddressExpression(operation, compileOperands(args, scope)) :
                 new VectorByteArrayExpression(operation, compileOperands(args, scope));
