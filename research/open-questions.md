@@ -75,13 +75,13 @@ and retain first-installed-call checks rather than warming away a failure.
 
 ## Native Image beyond pure interpretation
 
-What is the smallest configuration that permits a successful first installed
-guest call while keeping contexts and resource owners initialized at runtime?
-The [pure-image recipe](../docs/native-image-feasibility.md) does not establish
-guest JIT, Sulong execution or full executable lifecycle support.
+The [selected-Core cache](../docs/native-code-cache.md) compiles synchronous AST
+code ahead of execution and loads it in fresh native processes with guest
+compilation disabled. How should that preparation extend to the ordinary typed
+calling convention, async continuations and the full executable lifecycle while
+keeping contexts, CAFs and resource owners local to each load?
 
-Separate graph preparation from native-resource validation. Any admitted native
-call needs an actual image-side lifecycle check, including callbacks and cleanup
-where applicable; passing JVM tests is not that check. Guest-specific AOT also
-needs a demonstrated compilation/export path: embedding Core in a compiled
-interpreter does not turn it into precompiled guest machine code.
+Foreign execution needs image-side support for callbacks and resource cleanup;
+JVM coverage alone does not establish it. The separate
+[pure-image recipe](../docs/native-image-feasibility.md) still needs successful
+first installed guest calls to support runtime compilation.

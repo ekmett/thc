@@ -1,21 +1,23 @@
 # Native Image
 
-THC has an experimental native launcher for interpreting accepted pure Core.
-It packages the Java interpreter with the pinned GraalVM Native Image
-toolchain and loads Core files at run time. It is not a shipping distribution
-or a guest ahead-of-time compiler.
+THC provides two experimental Native Image workflows on the pinned GraalVM
+toolchain:
 
-The optimizing Truffle runtime is included, but explicit guest compilation is
-not supported by the working pure-image recipe. Including that compiler,
-embedding Core as a resource, or successfully compiling guest code on the JVM
-does not establish guest JIT or guest AOT in the native executable.
-Sulong/FFI execution and the full Haskell executable/resource lifecycle remain
-unverified by this recipe.
+- The [selected-Core native code cache](native-code-cache.md) compiles selected
+  guest code ahead of execution. `bin/native-cache build/store/run` produces a
+  native launcher and matching machine-code cache. Each fresh run loads that
+  cache with guest compilation disabled and rejects runtime lowering or
+  interpreted guest entry. It admits synchronous AST code with numeric scalars,
+  boxed data, closures, higher-order calls and recursive loops.
+- The pure interpreter recipe below packages the Java interpreter in a native
+  executable and loads Core at launch. Its explicit guest compilation diagnostic
+  remains unsupported.
 
-The separate [selected-Core native code cache](native-code-cache.md) provides an
-opt-in `bin/native-cache build/store/run` workflow for the admitted synchronous
-AST scalar family. It stores compiled guest code before a fresh run process;
-its pinned platform/toolchain limits do not broaden the pure recipe below.
+Neither workflow is a general Haskell executable distribution. The code cache
+does not yet admit bytecode, typed aggregates, async delivery, IO or FFI.
+Sulong execution and the full executable/resource lifecycle still need native
+image support and validation. See the cache guide for exact admission,
+platform requirements and the experimental preparation overlays it uses.
 
 ## Build and run the pure interpreter
 
@@ -57,21 +59,18 @@ bailouts; it does not silently substitute interpretation for successful guest
 compilation. A valid compiled target and successful first installed call remain
 required before claiming native-image guest JIT support.
 
-Compiling the interpreter into a native executable is also distinct from
-compiling a particular Haskell program ahead of time. Embedding Core files as
-resources would fix the input bundle, not remove runtime loading/lowering or
-demonstrate guest AOT. THC has no demonstrated guest-specific AOT export pipeline.
-
 The pure classpath cannot establish Sulong, foreign callbacks, native-resource
 cleanup or complete executable startup/shutdown support. JVM tests of those
 facilities do not substitute for native-image execution checks.
 
 ## Planned work
 
-Guest runtime compilation needs compatible graph preparation and first-call
-execution checks. Foreign execution and full executable lifecycle need their
-own image configuration and resource tests. Guest-specific AOT requires a
-separate demonstrated compilation/export path.
+Extend the selected-Core cache to the ordinary typed calling convention,
+including aggregates and vectors, while preserving per-load ownership and CAF
+state. Async execution, foreign calls and the full executable lifecycle need
+image-side support for suspension, callbacks and native-resource cleanup.
+The pure recipe separately needs successful first installed guest calls before
+it can support runtime compilation.
 
 The [open design questions](../research/open-questions.md#native-image-beyond-pure-interpretation)
-separate compiler preparation from resource-lifecycle and guest-AOT work.
+track wider cache admission, runtime compilation and executable lifecycle support.
