@@ -419,7 +419,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 Object original, Object result, Node node) {
             if (!(original instanceof Thunk thunk)) return;
             if (cell) {
-                ProgramKt.updateForcedCell((RecCell) binding, thunk, result);
+                ((RecCell) binding).updateForced(thunk, result);
             } else {
                 BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
                 if (local.getObject(bytecode, frame) == thunk) {
@@ -2284,7 +2284,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 if (metrics.getEnabled()) metrics.incrementSelfTailReentries();
                 return transfer;
             } finally {
-                BytecodeTypedInputSlotsKt.clearBytecodeInputSource(source, frame, (BytecodeRoot) node.getRootNode());
+                BytecodeTypedInputSlots.clearSource(source, frame, (BytecodeRoot) node.getRootNode());
             }
         }
         public static InputDispatch create(BytecodeInputSource source, boolean tail, Metrics metrics) {
@@ -2322,7 +2322,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 throw captureTupleCall(function, source.getLayout().getLogicalArity(),
                         destination, yielded, node, callerMask);
             } finally {
-                BytecodeTypedInputSlotsKt.clearBytecodeInputSource(source, frame, (BytecodeRoot) node.getRootNode());
+                BytecodeTypedInputSlots.clearSource(source, frame, (BytecodeRoot) node.getRootNode());
             }
         }
         public static InputDispatch create(BytecodeInputSource source, BytecodeTupleSlots destination,

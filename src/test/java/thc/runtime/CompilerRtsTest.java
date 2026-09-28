@@ -95,7 +95,7 @@ class CompilerRtsTest {
         StablePointerToken token;
         context.initialize("thc"); context.enter();
         try {
-            var registry = Language.currentState(null).getStablePointers$org_intelligence_thc();
+            var registry = Language.currentState(null).getStablePointers();
             var winner = registry.make(new Object());
             registry.getOrSetSharedCAF(SharedCAFStore.FAST_STRING, winner);
             token = registry.nativeTransport(winner);

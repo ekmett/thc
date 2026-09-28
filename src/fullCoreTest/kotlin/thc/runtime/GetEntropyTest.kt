@@ -3,6 +3,8 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
+import thc.Main.withContextProfile
+
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.RootNode
@@ -18,7 +20,7 @@ class GetEntropyTest {
     private val root = File(System.getProperty("thc.projectRoot"))
     private val directory = File(root, "build/getentropy")
     private fun context() = Context.newBuilder("thc").allowNativeAccess(true)
-        .withContextProfile(ContextProfile.SYNCHRONOUS_TEST).build()
+        .let { withContextProfile(it, ContextProfile.SYNCHRONOUS_TEST) }.build()
     private fun verify() {
         val manifest = Json.parse(File(directory, "manifest.json").readText()) as Map<String, Any?>
         assertEquals(9L, manifest["nativeRows"])
@@ -137,7 +139,7 @@ class GetEntropyTest {
                 val owner = Language.currentState()
                 owner.packageCbits.link(link)
                 val program: ExecutableProgram = if (backend == "ast") Program(language, source, true)
-                    else BytecodeProgram(language, source, enableAsync = true)
+                    else BytecodeProgram(language, source, true)
                 val target = program.entryTarget(entry)
                 owner.threads.enterCurrent()
                 try {

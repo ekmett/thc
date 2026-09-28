@@ -146,7 +146,7 @@ internal class NativeSignalTransport : ProcessSignalTransport {
  * The native handler slot is intentionally never reused by another context in
  * this JVM. This prevents late old handlers from targeting a new context.
  */
-internal class ManagedSignals(private val owner: Language.State, private val language: Language,
+internal class ManagedSignals @JvmOverloads constructor(private val owner: Language.State, private val language: Language,
                               private val reducedVmSignals: Boolean = hasReducedVmSignals(),
                               private val userSignalAvailable: () -> Boolean = { NativeSignalTransport.userSignalAvailable() },
                               private val factory: () -> ProcessSignalTransport = { NativeSignalTransport() }) {

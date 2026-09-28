@@ -36,8 +36,7 @@ import thc.NativeFileSystem
 import thc.NativeIO
 import thc.ContextProfile
 import thc.FfiMode
-import thc.withContextProfile
-import thc.withFfiMode
+import thc.Main.withContextProfile
 
 /** Linux provider proof only. Acquisition is reachable solely through the
  * explicitly configured NativeFileSystem request, never from a guest fd.
@@ -54,9 +53,9 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
                 throw UnsupportedOperationException("Native files are currently verified only on Linux x86_64")
             val filesystem = NativeFileSystem(endpoints)
             val context = try {
-                Context.newBuilder("thc").allowNativeAccess(true).allowCreateProcess(allowProcesses)
+                ffiMode.configure(Context.newBuilder("thc").allowNativeAccess(true).allowCreateProcess(allowProcesses)
                     .allowIO(IOAccess.newBuilder().fileSystem(filesystem).build())
-                    .withContextProfile(profile).withFfiMode(ffiMode).build()
+                    .let { withContextProfile(it, profile) }).build()
             } catch (failure: Throwable) {
                 try { filesystem.directoryOwner.close() } catch (closing: Throwable) { failure.addSuppressed(closing) }
                 throw failure

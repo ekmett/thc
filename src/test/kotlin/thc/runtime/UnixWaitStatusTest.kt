@@ -3,6 +3,8 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
+import thc.Main.withContextProfile
+
 import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.TruffleLanguage
 import org.graalvm.polyglot.Context
@@ -21,7 +23,7 @@ import java.util.HexFormat
 class UnixWaitStatusTest {
     private val root = File(System.getProperty("thc.projectRoot"))
     private val directory = File(root, "build/unix-wait-status")
-    private val operations = OriginalStdioOp.entries.filter { it.waitStatus }
+    private val operations = OriginalStdioOp.values().filter { it.waitStatus }
     private fun json(name: String) = Json.parse(File(directory, name).readText()) as Map<String, Any?>
     private data class Row(val name: String, val input: Long, val result: Long)
     private fun rows(): List<Row> = File(directory, "oracle.tsv").readLines().map {
@@ -34,7 +36,7 @@ class UnixWaitStatusTest {
         for (corpus in it.groupBy { row -> row.name }.values) assertEquals(40, corpus.size)
     }
     private fun context(inlining: Boolean = true, native: Boolean = true) = Context.newBuilder("thc")
-        .allowNativeAccess(native).withContextProfile(ContextProfile.SYNCHRONOUS_TEST)
+        .allowNativeAccess(native).let { withContextProfile(it, ContextProfile.SYNCHRONOUS_TEST) }
         .option("compiler.Inlining", inlining.toString()).build()
     private fun program(language: Language, source: Map<String, Any?>, backend: String): ExecutableProgram =
         if (backend == "ast") Program(language, source) else BytecodeProgram(language, source)
@@ -84,7 +86,7 @@ class UnixWaitStatusTest {
     @Test fun originalDeclarationsAndOracleStayExact() {
         val manifest = json("manifest.json")
         assertEquals("9.14.1", manifest["ghc"])
-        assertTrue(isOriginalUnixUnit(manifest["unixUnit"]))
+        assertTrue(CoreOriginalStdio.isOriginalUnixUnit(manifest["unixUnit"]))
         assertEquals(280L, manifest["nativeRows"]); assertEquals(true, manifest["strictAccepted"])
         val owner = manifest["unixUnit"] as String
         assertEquals(operations.map { "wait${it.name}" }.toSet(), (manifest["entries"] as List<*>).toSet())

@@ -238,8 +238,7 @@ class GraphWorkloadTest {
         for (stage in manifest["stages"] as List<Map<String, Any?>>) for (backend in listOf("ast", "bytecode"))
             for (entry in if (compiled) listOf("graphChecksum", "graphControl") else entries) context(compiled, inlining).use { context ->
                 val modules = (stage["modules"] as List<String>).map { File(root, it).path }
-                val source = Source.newBuilder("thc", CoreModules.request(modules, entry,
-                    instrument = true, diagnosticUnsupported = false, backend = backend), "graph:${stage["stage"]}:$entry")
+                val source = Source.newBuilder("thc", CoreModules.request(modules, entry, true, false, backend), "graph:${stage["stage"]}:$entry")
                     .cached(false).buildLiteral()
                 context.enter()
                 try {

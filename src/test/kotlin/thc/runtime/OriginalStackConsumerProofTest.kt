@@ -243,7 +243,7 @@ class OriginalStackConsumerProofTest {
                 val foreign = calls(linked, id)
                 foreign.filter { it.symbol in specs }.forEach(::checkCall)
                 // Missing Haskell definitions are distinct from explicitly declared FCallIds.
-                val frontier = try { CoreModules.reachable(linked, id, strictLink = true); null }
+                val frontier = try { CoreModules.reachable(linked, id, true); null }
                     catch (missing: IllegalArgumentException) { missing.message }
                 reports += mapOf("stage" to stage, "entry" to entry, "evidence" to "fresh-interface", "reachableBindings" to reached.size,
                     "foreignCounts" to foreign.groupingBy { it.symbol }.eachCount(), "missingDefinitions" to frontier,

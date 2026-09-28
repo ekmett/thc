@@ -4,6 +4,7 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
+import thc.Main.executionContext
 import thc.runtime.ArrayOp.expression as arrayExpression
 
 import com.oracle.truffle.api.RootCallTarget

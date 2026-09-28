@@ -28,7 +28,7 @@ import thc.CoreModules;
 import thc.EntryValue;
 import thc.Json;
 import thc.Language;
-import thc.MainKt;
+import thc.Main;
 import thc.NumericPrimopCoreEvidence;
 import thc.PrimopTestContextKt;
 import thc.ScalarPrimopModel;
@@ -131,7 +131,7 @@ public final class BitPrimopsTest {
                     assertEquals(1, ((List<?>) module.get("bindings")).size(), label + " one composite guest root");
                     ExecutableProgram program = backend.equals("ast") ? new Program(language, module, false, false) : new BytecodeProgram(language, module);
                     RootCallTarget host = program.hostEntryTarget(entries.size() + 1);
-                    Value function = context.asValue(new EntryValue(program, composite, entries.size() + 1, null, null, null, null, null, false, null));
+                    Value function = context.asValue(new EntryValue(program, composite, entries.size() + 1));
                     for (Long[] row : cases) check(function, label, row, 0);
                     List<Long[]> wrongExpectations = new ArrayList<>();
                     for (int i = 0; i < entries.size(); i++) {
@@ -169,7 +169,7 @@ public final class BitPrimopsTest {
     @Test void malformedArityIsRejectedAtLoadEvenWithDiagnosticExecutionEnabled() throws Exception {
         var entries = (List<Map<String, Object>>) manifest().get("entries");
         for (String backend : List.of("ast", "bytecode")) for (boolean diagnostic : new boolean[] {false, true}) {
-            try (Context context = MainKt.executionContext(false)) {
+            try (Context context = Main.executionContext(false)) {
                 for (var entry : entries) for (int supplied : new int[] {0, 2}) {
                     String primitive = (String) entry.get("primitive");
                     var body = List.of("app", List.of("prim", primitive), Collections.nCopies(supplied, List.of("lit", "word", "1")), Collections.nCopies(supplied, false));

@@ -22,10 +22,9 @@ import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.io.IOAccess;
 import thc.ContextProfile;
 import thc.FfiMode;
-import thc.FfiModeKt;
 import thc.Json;
 import thc.Language;
-import thc.MainKt;
+import thc.Main;
 
 import static java.lang.foreign.ValueLayout.*;
 
@@ -39,7 +38,7 @@ public final class WindowsDirectoryStreams implements Closeable {
     private boolean disposed;
 
     private WindowsDirectoryStreams(Language.State context) { this.context = context; }
-    private CarrierLocal<Long> lastError() { return context.getWindowsCodePages$org_intelligence_thc().lastError; }
+    private CarrierLocal<Long> lastError() { return context.getWindowsCodePages().lastError; }
     private void current() {
         if (Language.currentState(null) != context) ProgramKt.fault("Windows directory handle belongs to another context");
         if (disposed) ProgramKt.fault("Windows directory registry is closed");
@@ -57,10 +56,10 @@ public final class WindowsDirectoryStreams implements Closeable {
     }
     @FunctionalInterface private interface ForeignAction<T> { T run() throws Throwable; }
     private <T> T foreign(ForeignAction<T> action) {
-        var previous = context.getThreads$org_intelligence_thc().enterForeign(ForeignSafety.UNSAFE);
+        var previous = context.getThreads().enterForeign(ForeignSafety.UNSAFE);
         try { return action.run(); }
         catch (Throwable failure) { throw propagate(failure); }
-        finally { context.getThreads$org_intelligence_thc().leaveForeign(previous); }
+        finally { context.getThreads().leaveForeign(previous); }
     }
     // Preserve the original checked FFM/resource exception across Java callbacks.
     @SuppressWarnings("unchecked")
@@ -243,7 +242,7 @@ public final class WindowsDirectoryStreams implements Closeable {
     }
     public static ManagedAddress invalidHandle() { return ManagedAddress.Companion.unownedNumeric$org_intelligence_thc(-1L); }
     public static WindowsDirectoryStreams current(Node node) {
-        var streams = Language.currentState(node).getWindowsDirectories$org_intelligence_thc();
+        var streams = Language.currentState(node).getWindowsDirectories();
         if (streams == null) throw new SecurityException("Windows directory scanning requires the fixed-filesystem NativeIO context");
         return streams;
     }
@@ -255,7 +254,7 @@ public final class WindowsDirectoryStreams implements Closeable {
         // authority is installed. Never authenticate custom wrappers.
         var builder = Context.newBuilder("thc").allowNativeAccess(true)
             .allowIO(IOAccess.newBuilder().allowHostFileAccess(true).build());
-        var context = FfiModeKt.withFfiMode(MainKt.withContextProfile(builder, profile), ffiMode).build();
+        var context = ffiMode.configure(Main.withContextProfile(builder, profile)).build();
         try {
             context.initialize("thc");
             context.enter();
@@ -263,7 +262,7 @@ public final class WindowsDirectoryStreams implements Closeable {
                 var state = Language.currentState(null);
                 var streams = new WindowsDirectoryStreams(state);
                 state.getEnv().registerOnDispose(streams);
-                state.setWindowsDirectories$org_intelligence_thc(streams);
+                state.setWindowsDirectories(streams);
             } finally { context.leave(); }
             return context;
         } catch (Throwable failure) {

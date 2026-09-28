@@ -10,7 +10,7 @@ import java.util.Set;
 public final class CoreManagedFiles {
     private CoreManagedFiles() {}
     public static ManagedFiles current(com.oracle.truffle.api.nodes.Node node) {
-        return thc.Language.currentState(node).getFiles$org_intelligence_thc();
+        return thc.Language.currentState(node).getFiles();
     }
 
     private static final Set<String> SCALAR_KEYS = Set.of("kind", "primReps", "evaluated");

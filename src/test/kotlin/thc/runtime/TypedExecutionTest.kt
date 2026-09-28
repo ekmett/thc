@@ -10,7 +10,7 @@ import com.oracle.truffle.api.nodes.RootNode
 import com.oracle.truffle.api.nodes.UnexpectedResultException
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
-import thc.executionContext
+import thc.Main.executionContext
 
 class TypedExecutionTest {
     private class Effects {

@@ -88,7 +88,7 @@ class PackageScalarForeignTest {
     @Test fun safeCallDoesNotMatchAnUnsafeComponentAdapter() {
         val original = link("safe-unit", "DoubleRep")
         val safe = PackageScalarLink(original.unit, original.target, original.componentSha256, original.bitcodeSha256,
-            original.bytes, original.abi.map { it.copy(safety = "safe") })
+            original.bytes, original.abi.map { PackageScalarSignature(it.symbol, it.entry, it.arguments, it.result, it.convention, "safe") })
         val descriptor = mapOf("schema" to 1L, "target" to mapOf("kind" to "static", "symbol" to "stg_sig_install",
             "unit" to "safe-unit", "isFunction" to true), "convention" to "ccall", "safety" to "safe",
             "arity" to 2L, "suppliedArity" to 2L, "argumentReps" to listOf(scalar("DoubleRep", false), scalar(null, false)),
@@ -143,7 +143,7 @@ class PackageScalarForeignTest {
         for (signature in variants) assertSame(signature, validate(signature.arguments.single())!!.signature)
         assertThrows(RuntimeFault::class.java) { validate("WordRep") }
         val ambiguous = PackageScalarLink("first", "unused", "", "", byteArrayOf(), listOf(variants[1],
-            variants[1].copy(entry = "writable_adapter", arguments = listOf("MutableByteArray#"))))
+            PackageScalarSignature(variants[1].symbol, "writable_adapter", listOf("MutableByteArray#"), variants[1].result, variants[1].convention, variants[1].safety)))
         assertThrows(RuntimeFault::class.java) { validate("ByteArray#", ambiguous) }
     }
 }

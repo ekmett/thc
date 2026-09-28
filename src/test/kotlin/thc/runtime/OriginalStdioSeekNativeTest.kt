@@ -149,14 +149,14 @@ class OriginalStdioSeekNativeTest {
                                             assertEquals(0L, files.close(fd))
                                         }
                                         if (compiled) {
-                                            assertEquals(before + 2, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
+                                            assertEquals(before + 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
                                             targets(entry).forEach(::valid)
                                         }
                                     }
                                 }
                                 exercise(false)
                                 val active = targets(entry)
-                                assertEquals(2, active.size, "entry and runRW State lambda")
+                                assertEquals(1, active.size, "entry contains the inlined runRW State body")
                                 active.forEach { it.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(it, true); valid(it) }
                                 exercise(true)
                                 assertEquals(active, targets(entry)); active.forEach(::valid)

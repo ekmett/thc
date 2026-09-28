@@ -58,7 +58,7 @@ class WindowsDirectoryStreamsTest {
         try { return TruffleLanguage.LanguageReference.create(Language.class).get(null); }
         catch (RuntimeException | Error failure) { context.leave(); throw failure; }
     }
-    private WindowsDirectoryStreams service() { return Language.currentState(null).getWindowsDirectories$org_intelligence_thc(); }
+    private WindowsDirectoryStreams service() { return Language.currentState(null).getWindowsDirectories(); }
     private ExecutableProgram program(Language language, String backend, Map<String, Object> module) {
         return backend.equals("ast") ? new Program(language, module, false, false) : new BytecodeProgram(language, module);
     }
@@ -85,7 +85,7 @@ class WindowsDirectoryStreamsTest {
             var metadata = CoreRepresentations.metadata(argument);
             return metadata == null ? null : metadata.get("rep");
         }).toList();
-        return CoreOriginalStdio.INSTANCE.validate(call.get(6), reps, (List<?>) call.get(3), ((Map<?, ?>) call.get(6)).get("rep"));
+        return CoreOriginalStdio.validate(call.get(6), reps, (List<?>) call.get(3), ((Map<?, ?>) call.get(6)).get("rep"));
     }
 
     @Test void genuineWindowsCoreMatchesNativeOracleInInterpreterAndEveryFirstCompiledCall() throws Exception {
@@ -150,7 +150,7 @@ class WindowsDirectoryStreamsTest {
                                 assertEquals(before + 1, ((Number) executable.diagnostics().get("compiledEntries")).longValue(), stage + "/" + backend + "/" + entry);
                                 valid(target);
                             }
-                            var handoff = language.getHandoffState$org_intelligence_thc().get();
+                            var handoff = language.getHandoffState().get();
                             assertEquals(0, handoff.getArguments().getDepth());
                             assertEquals(0, handoff.getResults().getDepth());
                             assertEquals(0, handoff.getArguments().retainedReferences$org_intelligence_thc());

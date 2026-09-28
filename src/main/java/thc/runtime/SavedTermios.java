@@ -37,7 +37,7 @@ public final class SavedTermios {
     public synchronized void close() { closed = true; Arrays.fill(slots, null); }
 
     public static ManagedAddress execute(Node node, OriginalStdioOp operation, long fd, ManagedAddress address) {
-        var saved = Language.currentState(node).getSavedTermios$org_intelligence_thc();
+        var saved = Language.currentState(node).getSavedTermios();
         return switch (operation) {
             case GET_SAVED_TERMIOS -> saved.get(fd);
             case SET_SAVED_TERMIOS -> { saved.set(fd, address); yield ManagedAddress.Companion.nullAddress(); }

@@ -16,7 +16,7 @@ import thc.Language
 import thc.NativeFileSystem
 import thc.NativeIO
 import thc.NativeIO.StandardEndpoint
-import thc.executionContext
+import thc.Main.executionContext
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.nio.ByteBuffer
@@ -61,7 +61,7 @@ class NativeFileProviderTest {
     }
 
     @Test fun nativeAndCommandLineContextsPermitGuestThreads() {
-        for (factory in listOf<() -> Context>({ nativeContext() }, { executionContext(fileIO = true) })) factory().use {
+        for (factory in listOf<() -> Context>({ nativeContext() }, { executionContext(true) })) factory().use {
             entered(it) {
                 assertNotNull(Language.currentState().nativeFiles)
                 val ran = CountDownLatch(1)
@@ -72,7 +72,7 @@ class NativeFileProviderTest {
                 assertFalse(thread.isAlive)
             }
         }
-        executionContext(fileIO = true).use { context -> entered(context) {
+        executionContext(true).use { context -> entered(context) {
             for (endpoint in StandardEndpoint.entries) provider().standard(endpoint).use {
                 assertTrue(it.isOpen, "The command line explicitly grants $endpoint")
             }

@@ -3,6 +3,9 @@
 
 package thc
 
+import thc.Main.loadEntry
+import thc.Main.executionContext
+
 import org.graalvm.polyglot.Context
 import org.graalvm.polyglot.Engine
 import org.graalvm.polyglot.PolyglotException
@@ -28,7 +31,7 @@ class BytecodeBackendTest {
         Json.parse(function.getMember("diagnostics").asString()) as Map<String, Any?>
     private fun count(function: Value, key: String): Long = (diagnostics(function)[key] as Number).toLong()
     private fun load(context: Context, entry: String): Value =
-        loadEntry(context, modules, entry, backend = "bytecode").also {
+        loadEntry(context, modules, entry, true, "bytecode").also {
             assertEquals("bytecode", diagnostics(it)["backend"], "Must execute the requested backend")
         }
     private fun compileAndCheck(function: Value, input: Long, expected: Long) {
@@ -308,7 +311,7 @@ class BytecodeBackendTest {
         Engine.newBuilder().allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false").build().use { engine ->
             Context.newBuilder("thc").engine(engine).build().use { first ->
                 Context.newBuilder("thc").engine(engine).build().use { second ->
-                    val ast = loadEntry(first, modules, "shared", backend = "ast")
+                    val ast = loadEntry(first, modules, "shared", true, "ast")
                     val bytecode = load(first, "shared")
                     val otherContext = load(second, "shared")
                     assertEquals("ast", diagnostics(ast)["backend"])
@@ -327,7 +330,7 @@ class BytecodeBackendTest {
                     assertEquals(30L, otherContext.execute(2L).asLong())
                     assertEquals(120L, ast.execute(7L).asLong())
                     val bad = assertThrows(PolyglotException::class.java) {
-                        first.eval("thc", CoreModules.request(modules, "under", backend = "unknown-backend"))
+                        first.eval("thc", CoreModules.request(modules, "under", true, false, "unknown-backend"))
                     }
                     assertTrue(bad.message.orEmpty().contains("Unknown THC backend: unknown-backend"), bad.message)
                     assertEquals(14L, load(first, "under").execute(7L).asLong())

@@ -185,8 +185,8 @@ class SimdWord8VectorTest {
             return base + ("bindings" to listOf(binding + ("expr" to lambda)))
         }
         val malformed = listOf("-1", "-128", "256", "", "+1", "01", "-0", " 1", "1.0", "18446744073709551616")
-        for (value in 0L..255L) assertEquals(value.toInt(), narrowWordLiteral("word8", value.toString()))
-        for (text in malformed) assertThrows(RuntimeFault::class.java) { narrowWordLiteral("word8", text) }
+        for (value in 0L..255L) assertEquals(value.toInt(), ScalarLiterals.narrowWordLiteral("word8", value.toString()))
+        for (text in malformed) assertThrows(RuntimeFault::class.java) { ScalarLiterals.narrowWordLiteral("word8", text) }
         for (backend in listOf("ast", "bytecode")) for (diagnostic in listOf(false, true)) {
             for (text in malformed) for (input in listOf(broadcastModule(listOf("lit", "word8", text, mapOf("rep" to lane))), alternative(text)))
                 assertThrows(RuntimeFault::class.java) { program(language, backend, input, "root", diagnostic) }

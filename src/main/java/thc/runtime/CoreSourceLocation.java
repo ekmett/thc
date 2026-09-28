@@ -51,7 +51,7 @@ public final class CoreSourceLocation {
         Objects.requireNonNull(origin);
         return new CoreSourceLocation(origin, () -> {
             if (!enabled) return null;
-            var debug = origin.getDebug$org_intelligence_thc();
+            var debug = origin.getDebug();
             return debug == null ? null : debug.location(origin.getDataOffset());
         });
     }

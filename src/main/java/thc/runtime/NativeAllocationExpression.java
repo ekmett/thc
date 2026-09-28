@@ -27,17 +27,17 @@ final class NativeAllocationExpression extends Expr {
             long size = operands[0].executeRequiredLong(frame);
             TupleResultsKt.requireVoidCarrier(operands[1].execute(frame));
             FrameAccess.INSTANCE.writeObject(frame, slots[offset],
-                Language.currentState(this).getNativeAllocations$org_intelligence_thc().malloc(size));
+                Language.currentState(this).getNativeAllocations().malloc(size));
         } else if (operation == NativeAllocationOp.REALLOC) {
             var address = operands[0].executeRequiredAddress(frame);
             long size = operands[1].executeRequiredLong(frame);
             TupleResultsKt.requireVoidCarrier(operands[2].execute(frame));
             FrameAccess.INSTANCE.writeObject(frame, slots[offset],
-                Language.currentState(this).getNativeAllocations$org_intelligence_thc().realloc(address, size));
+                Language.currentState(this).getNativeAllocations().realloc(address, size));
         } else {
             var address = operands[0].executeRequiredAddress(frame);
             TupleResultsKt.requireVoidCarrier(operands[1].execute(frame));
-            Language.currentState(this).getNativeAllocations$org_intelligence_thc().free(address);
+            Language.currentState(this).getNativeAllocations().free(address);
         }
         return null;
     }

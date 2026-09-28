@@ -8,7 +8,7 @@ import org.graalvm.polyglot.Value
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.Json
-import thc.executionContext
+import thc.Main.executionContext
 
 /** Synthetic boundary adversaries; genuine optimized Core has a separate native fixture. */
 class IoMainBoundaryTest {

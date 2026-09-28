@@ -9,7 +9,7 @@ import com.oracle.truffle.api.TruffleLanguage
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.Language
-import thc.executionContext
+import thc.Main.executionContext
 
 /** Strict fields can exclude thunks without imposing evaluation on their lazy neighbors. */
 class ReferenceFieldTest {

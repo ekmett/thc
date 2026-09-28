@@ -30,7 +30,7 @@ public final class HandoffEntry {
     public boolean getResultInt() { return resultInt; }
     public int[] getSnapshotSlots() { return snapshotSlots; }
     public int getDestinationSlot() { return destinationSlot; }
-    public HandoffState state() { return language.getHandoffState$org_intelligence_thc().get(); }
+    public HandoffState state() { return language.getHandoffState().get(); }
     public int destination(VirtualFrame frame) { return (int) frame.getLong(destinationSlot); }
     public void initializeOrdinary(VirtualFrame frame) { frame.setLong(destinationSlot, -1L); }
     @ExplodeLoop public void snapshot(VirtualFrame frame, HandoffStorage input) {
@@ -55,7 +55,7 @@ public final class HandoffEntry {
                                      CoreRepresentation resultRep, boolean hasEnvironment) {
         if (!(language instanceof Language thc)) return null;
         for (CoreRepresentation proof : argumentReps) if (proof.isTuple() && !proof.isEmptyTuple()) return null;
-        if (!thc.getHandoffLayouts$org_intelligence_thc().getEnabled() || resultRep.isAggregate()) return null;
+        if (!thc.getHandoffLayouts().getEnabled() || resultRep.isAggregate()) return null;
         List<String> resultReps = resultRep.getPrimReps();
         boolean resultReference = resultReps != null && resultReps.size() == 1 && resultReps.getFirst().startsWith("BoxedRep ");
         if (!resultRep.isInt() && !resultRep.isLong() && !resultReference) return null;
@@ -70,7 +70,7 @@ public final class HandoffEntry {
         }
         int[] slots = new int[packetReps.size()];
         for (int i = 0; i < slots.length; i++) slots[i] = layout.bind("<handoff entry " + i + ">");
-        return new HandoffEntry(thc, thc.getHandoffLayouts$org_intelligence_thc().intern(packetReps), resultRep.isLong(),
+        return new HandoffEntry(thc, thc.getHandoffLayouts().intern(packetReps), resultRep.isLong(),
             slots, layout.bind("<handoff result destination>"), resultRep.isInt());
     }
 }

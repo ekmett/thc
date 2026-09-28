@@ -28,7 +28,7 @@ import thc.NativeIO.StandardEndpoint
  * are supported, with native resources only in an explicit NativeIO context.
  * Transfers are synchronous. Native readiness has a separate cancellable wait
  * capability; this is not a scheduler or interruptible foreign byte transport. */
-internal class ManagedFiles(private val env: TruffleLanguage.Env, private val threads: GuestThreads,
+internal class ManagedFiles @JvmOverloads constructor(private val env: TruffleLanguage.Env, private val threads: GuestThreads,
     private val descriptorLimit: Long = Int.MAX_VALUE.toLong() + 1,
     // Internal protocol-test seam; the production notifier is only eventfd IO.
     private val signalReadinessClose: (NativeFdWait) -> Unit = { it.descriptorClosed() }) {
@@ -540,7 +540,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
         require(streams.size == 3)
         val claims = arrayOfNulls<OpenClaim>(3)
         val pins = mutableListOf<OpenDescription>()
-        val endpoints = Array<ManagedProcesses.Stream>(3) { ManagedProcesses.Stream.Closed }
+        val endpoints = Array<ManagedProcesses.Stream>(3) { ManagedProcesses.Stream.Endpoint.CLOSED }
         val acquired = mutableListOf<NativeFileResource>()
         var launch: ManagedProcesses.Launch? = null
         var processes: ManagedProcesses? = null
@@ -564,7 +564,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
                         fd == -1 -> {
                             val claim = OpenClaim(null, index == 0, unusedDescriptor(0))
                             claims[index] = claim; opening.add(claim)
-                            endpoints[index] = ManagedProcesses.Stream.Pipe
+                            endpoints[index] = ManagedProcesses.Stream.Endpoint.PIPE
                         }
                         fd == -2 -> Unit
                         fd >= 0 -> {
@@ -1217,7 +1217,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
     }
 
     private fun awaitReady(entry: Descriptor, fd: Long, writing: Boolean, milliseconds: Long,
-                           node: Node?, beforeBlock: (() -> Unit)? = null): Int {
+                           node: Node?, beforeBlock: Runnable? = null): Int {
         val native = synchronized(this) {
             if (disposed || entry.closed || descriptors[fd] !== entry) return -2
             if (entry.owner.readiness == Readiness.REGULAR_FILE) return 1

@@ -12,7 +12,7 @@ import com.oracle.truffle.api.nodes.RootNode
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.Language
-import thc.executionContext
+import thc.Main.executionContext
 
 /** Target splitting must retain the original source provenance on the cloned executable tree. */
 class SourceCloneTest {

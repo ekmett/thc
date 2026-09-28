@@ -126,8 +126,7 @@ class ThreadStatusNativeTest {
                         // inspect its installed dispatch graph, not reconstruct a
                         // private Program or load independent CAFs for each root.
                         Language.currentState().env.parsePublic(Source.newBuilder("thc",
-                            CoreModules.request(listOf(source.path), entry, backend = backend,
-                                asyncExceptions = asyncExceptions), "thread-status-request").build()).call() as EntryValue
+                            CoreModules.request(listOf(source.path), entry, true, false, backend, true, false, null, asyncExceptions), "thread-status-request").build()).call() as EntryValue
                     } finally { context.leave() }
                     val function = context.asValue(loaded)
                     val host = EntryValue::class.java.getDeclaredField("guestTarget").run {

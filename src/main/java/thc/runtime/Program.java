@@ -35,7 +35,7 @@ public final class Program implements ExecutableProgram {
     private final Object stackTargetLayout;
     private final boolean callDemandsEnabled = Boolean.getBoolean(CALL_DEMANDS_PROPERTY);
     private final Metrics metrics;
-    private final kotlin.jvm.functions.Function0<Map<String, Object>> loadingStatistics;
+    private final Supplier<Map<String, Object>> loadingStatistics;
     private final boolean delimited;
     private final boolean containsDelimited;
     private final CoreSources sources;
@@ -72,7 +72,7 @@ public final class Program implements ExecutableProgram {
         packageScalarLinks = moduleData.get("packageScalarLinks") instanceof List<?> found ? (List<thc.PackageScalarLink>) found : List.of();
         stackTargetLayout = moduleData.get("targetLayout");
         metrics = demand != null ? demand.getMetrics() : new Metrics(!Boolean.FALSE.equals(moduleData.get("instrument")));
-        loadingStatistics = moduleData.get("coreLoadingStatistics") instanceof kotlin.jvm.functions.Function0<?> found ? (kotlin.jvm.functions.Function0<Map<String, Object>>) found : null;
+        loadingStatistics = moduleData.get("coreLoadingStatistics") instanceof Supplier<?> found ? (Supplier<Map<String, Object>>) found : null;
         boolean containsDelimited = false;
         if (moduleData.get("bindings") instanceof List<?> values) {
             for (Object binding : values) {
@@ -254,7 +254,7 @@ public final class Program implements ExecutableProgram {
         ArrayOp.validateApplications(requested);
         CoreStackForeign.validateHeads(requested);
         CoreStackInfoForeign.validateHeads(requested);
-        CoreOriginalStdio.INSTANCE.validateHeads(requested);
+        CoreOriginalStdio.validateHeads(requested);
         CoreProcessForeign.validateHeads(requested);
         CoreStablePointers.validateHeads(requested);
         CoreRtsShutdown.INSTANCE.validateHeads(requested);
@@ -359,7 +359,7 @@ public final class Program implements ExecutableProgram {
             "tail-safe; non-tail calls and nested thunk forcing use host stack");
         result.put("threadPolicy", enableAsync ? "context-owned Java threads; captured asynchronous delivery" :
             "context-owned Java threads; external asynchronous delivery disabled");
-        if (loadingStatistics != null) result.putAll(loadingStatistics.invoke());
+        if (loadingStatistics != null) result.putAll(loadingStatistics.get());
         return result;
     }
     private boolean representation(Map<String, Object> binding) {
@@ -599,16 +599,16 @@ public final class Program implements ExecutableProgram {
                 if (proof == null) throw new IllegalArgumentException("Required value was null.");
                 yield rubbishLiterals.decode(proof);
             }
-            case "int8" -> ProgramKt.int8Literal(value);
-            case "int16" -> ProgramKt.int16Literal(value);
-            case "int32" -> ProgramKt.int32Literal(value);
-            case "int64" -> ProgramKt.int64Literal(value);
+            case "int8" -> ScalarLiterals.int8Literal(value);
+            case "int16" -> ScalarLiterals.int16Literal(value);
+            case "int32" -> ScalarLiterals.int32Literal(value);
+            case "int64" -> ScalarLiterals.int64Literal(value);
             case "word64" -> word64Literal(value);
             case "int", "char" -> Long.parseLong(value);
             case "word" -> Long.parseUnsignedLong(value);
             case "float" -> Float.parseFloat(value);
             case "double" -> Double.parseDouble(value);
-            case "word8", "word16", "word32" -> ProgramKt.narrowWordLiteral(kind, value);
+            case "word8", "word16", "word32" -> ScalarLiterals.narrowWordLiteral(kind, value);
             case "string-bytes" -> ManagedAddress.Companion.fromHex(value);
             case "null-addr" -> {
                 if (!value.equals("0")) throw new UnsupportedCore("Malformed null Addr# literal");
@@ -1309,7 +1309,7 @@ public final class Program implements ExecutableProgram {
         var foreignMetadata = packageScalar == null ? metadata : null;
         var stackClone = CoreStackForeign.validate(foreignMetadata, argumentMetadata(args), flags);
         var stackInfo = CoreStackInfoForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
-        var originalStdio = CoreOriginalStdio.INSTANCE.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
+        var originalStdio = CoreOriginalStdio.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
         var originalProcess = CoreProcessForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
         var capi = CoreCapiForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr), foreignLinks);
         var stableFree = CoreStablePointers.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
@@ -1400,12 +1400,12 @@ public final class Program implements ExecutableProgram {
             return new ProcessForeignExpression(originalProcess, operands, tupleProof);
         }
         if (originalStdio != null) {
-            CoreOriginalStdio.INSTANCE.validateHead(fn, defined);
+            CoreOriginalStdio.validateHead(fn, defined);
             Expr[] operands = new Expr[args.size()];
             for (int i = 0; i < operands.length; i++) {
                 operands[i] = compile(args.get(i), scope, false);
                 if (originalStdio.getProcessIdentity() || originalStdio.getEventDescriptor() || originalStdio.getWaitStatus() || originalStdio.getPathRemoval() || originalStdio.getFlagConstant() || originalStdio.getFcntl() || originalStdio.getReadiness() || originalStdio.getSeekConstant() || originalStdio.getStat() || originalStdio.getTermios() || originalStdio.getSigset() || originalStdio.getSavedTermios() || originalStdio.getReadImage() || originalStdio.getPathStat() || originalStdio.getPathMode() || originalStdio.getPathLink() || originalStdio.getCurrentDirectory() || originalStdio.getDirectoryStream() || originalStdio.getOpening() || originalStdio.getIconv() || originalStdio.getStrerror() || originalStdio.getDuplication() || originalStdio.getLocking() || originalStdio == OriginalStdioOp.SET_ERRNO || originalStdio == OriginalStdioOp.SIGPROCMASK || originalStdio == OriginalStdioOp.ACCESS || originalStdio == OriginalStdioOp.UNLINKAT || originalStdio == OriginalStdioOp.FSTATAT || originalStdio == OriginalStdioOp.TCSETATTR)
-                    CoreOriginalStdio.INSTANCE.validateScalarOperand(originalStdio, i, operands[i].getRepresentation(), bindingProof(args.get(i), scope));
+                    CoreOriginalStdio.validateScalarOperand(originalStdio, i, operands[i].getRepresentation(), bindingProof(args.get(i), scope));
             }
             return new OriginalStdioExpression(originalStdio, operands, tupleProof);
         }
@@ -1847,26 +1847,26 @@ public final class Program implements ExecutableProgram {
             return new STMExpression(operation, tupleProof, operands,
                 operation.getCallback() ? new TupleShape(tupleProof, (thc.Language) language) : null, metrics, nested, enableAsync);
         }
-        if (primitive && MVarOp.Companion.named((String) fn.get(1)) != null) {
-            var operation = Objects.requireNonNull(MVarOp.Companion.named((String) fn.get(1)));
+        if (primitive && MVarOp.named((String) fn.get(1)) != null) {
+            var operation = Objects.requireNonNull(MVarOp.named((String) fn.get(1)));
             operation.validate(argumentProofs(args), flags, tupleProof);
             operation.validateBindings(argumentProofs(args), bindingProofs(args, scope));
             Expr[] operands = argumentOperands(args, scope, flags);
             operation.validate(loweredProofs(operands), flags, tupleProof);
-            return ManagedMVarsKt.mVarExpression(operation, tupleProof, operands, enableAsync);
+            return ManagedMVars.expression(operation, tupleProof, operands, enableAsync);
         }
         if (primitive && CompactImageOp.named((String) fn.get(1)) != null) {
             var operation = Objects.requireNonNull(CompactImageOp.named((String) fn.get(1)));
             operation.validate(argumentProofs(args), flags, tupleProof);
             return new CompactImageExpression(operation, argumentOperands(args, scope, flags)).proven(evaluated(tupleProof, true));
         }
-        if (primitive && CompactOp.Companion.named((String) fn.get(1)) != null) {
-            var operation = Objects.requireNonNull(CompactOp.Companion.named((String) fn.get(1)));
+        if (primitive && CompactOp.named((String) fn.get(1)) != null) {
+            var operation = Objects.requireNonNull(CompactOp.named((String) fn.get(1)));
             if (capturesContinuations && operation.getAdds())
                 throw new UnsupportedCore("Compact graph traversal does not yet support resumable asynchronous forcing");
             operation.validate(argumentProofs(args), flags, tupleProof);
             List<GlobalBinding> failures = new ArrayList<>();
-            if (operation.getAdds()) for (String id : CompactOp.Companion.getFailures()) {
+            if (operation.getAdds()) for (String id : CompactOp.getFailures()) {
                 GlobalBinding failure = globals.get(id);
                 if (failure == null) throw new UnsupportedCore("Compact addition requires original exception payload: " + id);
                 failures.add(failure);
@@ -1879,8 +1879,8 @@ public final class Program implements ExecutableProgram {
             operation.validate(argumentProofs(args), flags, tupleProof);
             return MutVarOp.expression(operation, tupleProof, argumentOperands(args, scope, flags), language, metrics, enableAsync);
         }
-        if (primitive && WeakOp.Companion.named((String) fn.get(1)) != null) {
-            var operation = Objects.requireNonNull(WeakOp.Companion.named((String) fn.get(1)));
+        if (primitive && WeakOp.named((String) fn.get(1)) != null) {
+            var operation = Objects.requireNonNull(WeakOp.named((String) fn.get(1)));
             operation.validate(argumentProofs(args), flags, tupleProof);
             operation.validateBindings(argumentProofs(args), bindingProofs(args, scope));
             if (operation == WeakOp.MAKE) operation.validateAction(CoreRepresentations.knownFunctionSignature(args.get(2), bindings));

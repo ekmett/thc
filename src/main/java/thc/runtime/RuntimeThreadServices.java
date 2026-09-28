@@ -29,7 +29,7 @@ public final class RuntimeThreadServices {
 
     @TruffleBoundary
     public static long query(Language.State state, int selector, long index, long detail) {
-        return query(state.getThreads$org_intelligence_thc(), state.getEnv().isNativeAccessAllowed(), selector, index, detail);
+        return query(state.getThreads(), state.getEnv().isNativeAccessAllowed(), selector, index, detail);
     }
 
     public static long query(GuestThreads threads, boolean nativeAccess, int selector, long index, long detail) {

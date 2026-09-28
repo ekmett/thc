@@ -101,7 +101,7 @@ public final class CoreMainThreadForeign {
 
     public static void register(Node node, Object weak) {
         var context = Language.currentState(node);
-        var key = context.getWeaks$org_intelligence_thc().mainThreadKey(weak, context.getThreads$org_intelligence_thc());
-        context.getThreads$org_intelligence_thc().registerMainThread(key);
+        var key = context.getWeaks().mainThreadKey(weak, context.getThreads());
+        context.getThreads().registerMainThread(key);
     }
 }

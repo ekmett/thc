@@ -232,7 +232,7 @@ class OriginalTimeClockTest {
             val missing = audit["missingGlobals"] as List<*>
             assertEquals(1, missing.size)
             assertTrue(missing.single().toString().contains("HSzuCLOCKzuREALTIME"))
-            assertThrows(IllegalArgumentException::class.java) { CoreModules.reachable(source(stage), "originalId", strictLink = true) }
+            assertThrows(IllegalArgumentException::class.java) { CoreModules.reachable(source(stage), "originalId", true) }
         }
     }
 }

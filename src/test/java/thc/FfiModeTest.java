@@ -13,15 +13,15 @@ import static org.junit.jupiter.api.Assertions.*;
 @ResourceLock(Resources.SYSTEM_PROPERTIES)
 class FfiModeTest {
     @Test void configurationUsesPropertyThenEnvironmentThenNative() {
-        assertEquals(FfiMode.NATIVE, FfiMode.Companion.configured(null, null));
-        assertEquals(FfiMode.MANAGED, FfiMode.Companion.configured(null, "managed"));
-        assertEquals(FfiMode.NATIVE, FfiMode.Companion.configured("native", "managed"));
-        assertEquals(FfiMode.MANAGED, FfiMode.Companion.configured("managed", "invalid"));
+        assertEquals(FfiMode.NATIVE, FfiMode.configured(null, null));
+        assertEquals(FfiMode.MANAGED, FfiMode.configured(null, "managed"));
+        assertEquals(FfiMode.NATIVE, FfiMode.configured("native", "managed"));
+        assertEquals(FfiMode.MANAGED, FfiMode.configured("managed", "invalid"));
         for (String invalid : List.of("", "MANAGED", "hybrid", "native,managed")) {
             assertTrue(assertThrows(FfiConfigurationException.class,
-                () -> FfiMode.Companion.configured(invalid, "native")).getMessage().contains("thc.ffiMode"));
+                () -> FfiMode.configured(invalid, "native")).getMessage().contains("thc.ffiMode"));
             assertTrue(assertThrows(FfiConfigurationException.class,
-                () -> FfiMode.Companion.configured(null, invalid)).getMessage().contains("THC_FFI_MODE"));
+                () -> FfiMode.configured(null, invalid)).getMessage().contains("THC_FFI_MODE"));
         }
     }
     private String unavailable() {
@@ -38,7 +38,7 @@ class FfiModeTest {
                 List.of("--run-executable", "missing.json", "main", "shutdown"), List.of("missing.json", "entry", "0"))) {
                 var arguments = new ArrayList<>(option);
                 arguments.addAll(entry);
-                var failure = assertThrows(FfiConfigurationException.class, () -> MainKt.launch(arguments.toArray(String[]::new)));
+                var failure = assertThrows(FfiConfigurationException.class, () -> Main.launch(arguments.toArray(String[]::new)));
                 assertTrue(failure.getMessage().contains("--ffi managed is unavailable"));
                 assertTrue(failure.getMessage().contains(reason), failure.getMessage());
             }
@@ -50,7 +50,7 @@ class FfiModeTest {
             System.setProperty("thc.ffiMode", "managed");
             for (boolean io : new boolean[]{false, true}) {
                 assertTrue(assertThrows(FfiConfigurationException.class,
-                    () -> MainKt.executionContext(io).close()).getMessage().contains(unavailable()));
+                    () -> Main.executionContext(io).close()).getMessage().contains(unavailable()));
             }
         } finally {
             if (old == null) System.clearProperty("thc.ffiMode"); else System.setProperty("thc.ffiMode", old);
@@ -59,7 +59,7 @@ class FfiModeTest {
     @Test void malformedLauncherModeNeverFallsThroughToAFileName() {
         for (var option : List.of(new String[]{"--ffi"}, new String[]{"--ffi="},
             new String[]{"--ffi", "hybrid"}, new String[]{"--ffi=MANAGED"})) {
-            assertTrue(assertThrows(FfiConfigurationException.class, () -> MainKt.launch(option)).getMessage().startsWith("--ffi"));
+            assertTrue(assertThrows(FfiConfigurationException.class, () -> Main.launch(option)).getMessage().startsWith("--ffi"));
         }
     }
 }

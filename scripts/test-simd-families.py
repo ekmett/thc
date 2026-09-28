@@ -279,7 +279,7 @@ class SimdFamiliesTest(unittest.TestCase):
     def test_generated_regions_cannot_silently_drift(self):
         families = GEN.families()
         GEN.region(ROOT / 'src/main/java/thc/runtime/BytecodeRoot.java', GEN.bytecode_nodes(families), False)
-        GEN.region(ROOT / 'src/main/kotlin/thc/runtime/BytecodeProgram.kt', GEN.bytecode_emitter(families), False)
+        GEN.region(ROOT / 'src/main/java/thc/runtime/BytecodeProgram.java', GEN.java_bytecode_emitter(families), False)
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / 'sample.java'
             path.write_text('    // BEGIN GENERATED SIMD FAMILIES\nwrong\n    // END GENERATED SIMD FAMILIES\n')

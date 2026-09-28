@@ -99,7 +99,7 @@ public final class CoreEnvironmentForeign {
         requireProof(descriptor.keySet().equals(DESCRIPTOR_KEYS) && exact(descriptor.get("schema"), 1), "descriptor schema");
         requireProof(target.keySet().equals(Set.of("kind", "symbol", "unit", "isFunction")) &&
             "static".equals(target.get("kind")) && ("ghc-internal".equals(target.get("unit")) ||
-                operation == EnvironmentOp.GET && CoreOriginalStdioKt.isOriginalUnixUnit(target.get("unit"))) &&
+                operation == EnvironmentOp.GET && CoreOriginalStdio.isOriginalUnixUnit(target.get("unit"))) &&
             Boolean.TRUE.equals(target.get("isFunction")), "static supported installed-library function target");
         requireProof("ccall".equals(descriptor.get("convention")) && "unsafe".equals(descriptor.get("safety")), "convention/safety");
         int count = operation.getArguments().size();

@@ -4,6 +4,8 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
+import thc.Main.executionContext
+
 import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.bytecode.Instruction
@@ -66,7 +68,7 @@ class MaskFunctionNativeTest {
         for (stage in listOf("pre", "post")) {
             val module = source(stage)
             for ((entry, primitive) in primitives) {
-                val linked = CoreModules.reachable(module, entry, strictLink = true)
+                val linked = CoreModules.reachable(module, entry, true)
                 val opaque = calls(linked, "var", "main:MaskFunctionAudit.applyLater").single()
                 val lambda = (opaque[2] as List<List<Any?>>)[0]
                 assertEquals("lam", lambda[0], "$stage/$entry passes the mask as a function")
@@ -86,7 +88,7 @@ class MaskFunctionNativeTest {
                 assertTrue(Regex("applyLater\\s+\\(${Regex.escape(primitive)}\\s+@LiftedRep\\s+@Payload")
                     .containsMatchIn(module["sourceCore"] as String), "$stage/$entry original one-action Core")
             }
-            val bare = CoreModules.reachable(module, "bareMasks", strictLink = true)
+            val bare = CoreModules.reachable(module, "bareMasks", true)
             val wrappers = calls(bare, "var", "main:MaskFunctionAudit.applyMask").map {
                 (it[2] as List<List<Any?>>)[0]
             }
@@ -139,7 +141,7 @@ class MaskFunctionNativeTest {
                     context.initialize("thc"); context.enter()
                     try {
                         val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                        val linked = CoreModules.reachable(source(stage), entry, strictLink = true) + ("instrument" to true)
+                        val linked = CoreModules.reachable(source(stage), entry, true) + ("instrument" to true)
                         val program = program(language, linked, backend)
                         val target = program.entryTarget(entry)
                         val label = "$stage/$backend/$entry"
@@ -180,7 +182,7 @@ class MaskFunctionNativeTest {
 
     @Test fun malformedMaskArityAndProofsStillFailInBothPolicies() {
         for (stage in listOf("pre", "post")) for ((entry, primitive) in primitives) {
-            val linked = CoreModules.reachable(source(stage), entry, strictLink = true)
+            val linked = CoreModules.reachable(source(stage), entry, true)
             val app = calls(linked, "prim", primitive).single()
             val arguments = (app[2] as List<List<Any?>>).map(CoreRepresentations::expression)
             val flags = app[3] as List<*>

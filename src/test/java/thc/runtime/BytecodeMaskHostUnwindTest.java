@@ -10,12 +10,12 @@ import java.util.List;
 import kotlin.Unit;
 import org.junit.jupiter.api.Test;
 import thc.Language;
-import thc.MainKt;
+import thc.Main;
 import static org.junit.jupiter.api.Assertions.*;
 
 class BytecodeMaskHostUnwindTest {
     @Test void hostFaultRestoresMaskAcrossActionAndHandlerCalls() {
-        try (var context = MainKt.executionContext(false)) {
+        try (var context = Main.executionContext(false)) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);

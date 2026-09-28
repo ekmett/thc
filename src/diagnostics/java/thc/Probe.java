@@ -31,8 +31,8 @@ public final class Probe {
             "Usage: probe MODULES ENTRY REPETITIONS INPUTBASE, or MODULES ENTRY --steady WARM_SECONDS SAMPLE_SECONDS SAMPLES INPUTBASE");
         var modules = Arrays.asList(args[0].split(",", -1));
         String entry = args[1];
-        try (Context context = MainKt.executionContext(false)) {
-            var fn = MainKt.loadEntry(context, modules, entry, false);
+        try (Context context = Main.executionContext(false)) {
+            var fn = Main.loadEntry(context, modules, entry, false);
             if (args[2].equals("--steady")) {
                 if (args.length != 7) throw new IllegalArgumentException("Failed requirement.");
                 double warmSeconds = Double.parseDouble(args[3]), sampleSeconds = Double.parseDouble(args[4]);

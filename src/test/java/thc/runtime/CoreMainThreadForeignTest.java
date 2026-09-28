@@ -12,7 +12,7 @@ import java.util.Map;
 import kotlin.Unit;
 import org.junit.jupiter.api.Test;
 import thc.Language;
-import thc.MainKt;
+import thc.Main;
 import static org.junit.jupiter.api.Assertions.*;
 
 /** The declaration is GHC.Internal.TopHandler.runMainIO1's original unsafe ccall. */
@@ -72,17 +72,17 @@ class CoreMainThreadForeignTest {
         assertThrows(RuntimeFault.class, () -> CoreMainThreadForeign.validateHeads(forged));
     }
     @Test void bothLoadersRegisterTheWeakKeyWithoutRetainingItsValueOrAThreadIdSnapshot() throws Exception {
-        for (var backend : List.of("ast", "bytecode")) try (var context = MainKt.executionContext(false)) {
+        for (var backend : List.of("ast", "bytecode")) try (var context = Main.executionContext(false)) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 ExecutableProgram program = backend.equals("ast") ? new Program(language, module(), false, false) : new BytecodeProgram(language, module());
-                var runtime = Language.currentState(null); var threads = runtime.getThreads$org_intelligence_thc();
+                var runtime = Language.currentState(null); var threads = runtime.getThreads();
                 threads.enterCurrent(null, false, true, null);
                 try {
                     var target = program.entryTarget("register"); var key = threads.currentIdentity(); var wrongValue = new Object();
-                    var first = runtime.getWeaks$org_intelligence_thc().make(key, wrongValue, null);
-                    var second = runtime.getWeaks$org_intelligence_thc().make(key, new Object(), null);
+                    var first = runtime.getWeaks().make(key, wrongValue, null);
+                    var second = runtime.getWeaks().make(key, new Object(), null);
                     var resultShape = new TupleShape(CoreRepresentations.parse(tuple(false)), language);
                     var destination = Truffle.getRuntime().createVirtualFrame(new Object[0], FrameDescriptor.newBuilder().build());
                     class Caller {
@@ -91,8 +91,8 @@ class CoreMainThreadForeignTest {
                             var result = Calls.target(target, new Object[]{0L, handle, token});
                             // Even a zero-width State tuple owns a completion loan.
                             resultShape.consume(destination, result, new int[0], 0);
-                            assertEquals(0, language.getHandoffState$org_intelligence_thc().get().getResults().getDepth());
-                            assertEquals(0, language.getHandoffState$org_intelligence_thc().get().getResults().retainedReferences());
+                            assertEquals(0, language.getHandoffState().get().getResults().getDepth());
+                            assertEquals(0, language.getHandoffState().get().getResults().retainedReferences());
                         }
                     }
                     var caller = new Caller(); caller.call(first);
@@ -112,11 +112,11 @@ class CoreMainThreadForeignTest {
                     assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), backend);
                     assertSame(target, program.entryTarget("register"));
                     var replacement = threads.mainThreadRegistration(); assertNotNull(replacement); assertNotSame(warmed, replacement);
-                    assertEquals(0L, runtime.getWeaks$org_intelligence_thc().finalize(first).getFlag());
+                    assertEquals(0L, runtime.getWeaks().finalize(first).getFlag());
                     assertNull(initial.liveJavaId()); assertEquals(Thread.currentThread().threadId(), replacement.liveJavaId());
-                    assertEquals(0L, runtime.getWeaks$org_intelligence_thc().finalize(second).getFlag());
+                    assertEquals(0L, runtime.getWeaks().finalize(second).getFlag());
                     assertNull(replacement.liveJavaId(), "registration may retain only the now-dead capability");
-                    var handoff = language.getHandoffState$org_intelligence_thc().get();
+                    var handoff = language.getHandoffState().get();
                     assertEquals(0, handoff.getArguments().getDepth()); assertEquals(0, handoff.getArguments().retainedReferences());
                     assertEquals(0, handoff.getResults().getDepth()); assertEquals(0, handoff.getResults().retainedReferences());
                     assertNull(handoff.getPending());

@@ -3,6 +3,8 @@
 
 package thc
 
+import thc.Main.executionContext
+
 import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.frame.VirtualFrame
 import org.junit.jupiter.api.Assertions.*
