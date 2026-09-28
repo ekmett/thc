@@ -1,7 +1,7 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
-{-# LANGUAGE MagicHash, UnboxedTuples #-}
+{-# LANGUAGE MagicHash, UnboxedTuples, UnboxedSums #-}
 
 -- |
 -- Module      : SimdCallAudit
@@ -86,6 +86,20 @@ keepAliveThrowCase :: Int# -> Int#
 keepAliveThrowCase x = runRW# (\s ->
   case catch#
     (\s1 -> case keepAliveThrowVector (I# x) s1 of vector -> (# s1, I# (vectorWorker vector 0#) #))
+    (\payload s2 -> (# s2, payload #)) s of
+      (# _, I# answer #) -> answer)
+
+{-# OPAQUE keepAliveThrowSum #-}
+keepAliveThrowSum :: Int -> State# RealWorld -> (# Int# | Int# #)
+keepAliveThrowSum payload s = keepAlive# payload s (\_ -> raise# payload)
+
+{-# OPAQUE keepAliveThrowSumCase #-}
+keepAliveThrowSumCase :: Int# -> Int#
+keepAliveThrowSumCase x = runRW# (\s ->
+  case catch#
+    (\s1 -> case keepAliveThrowSum (I# x) s1 of
+      (# value | #) -> (# s1, I# value #)
+      (# | value #) -> (# s1, I# value #))
     (\payload s2 -> (# s2, payload #)) s of
       (# _, I# answer #) -> answer)
 

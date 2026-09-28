@@ -2763,8 +2763,6 @@ class Audit:
                     self.issue('case-binder-metadata', owner, path, 'Sum case binder must be unlifted')
                 if is_vector(binder_proof) and metadata.get('binder', {}).get('lifted') is not False:
                     self.issue('application-levity', owner, path, 'Vector case binder must be unlifted')
-                if is_sum(binder_proof) and not expr[3]:
-                    self.issue('aggregate-shape', owner, path, 'Empty sum case')
                 if self.is_tuple(binder_proof):
                     if len(expr[3]) > 1:
                         self.issue('aggregate-boundary', owner, path, 'unboxed-tuple requires at most one alternative')

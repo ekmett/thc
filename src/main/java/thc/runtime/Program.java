@@ -1070,9 +1070,6 @@ public final class Program implements ExecutableProgram {
     private Expr compileVectorCase(List<Object> expr, Expr scrutinee, CoreRepresentation proof, Scope scope, boolean tail) {
         CoreRepresentations.requireInput(proof);
         List<List<Object>> alternatives = (List<List<Object>>) expr.get(3);
-        if (alternatives.isEmpty()) return new TupleCase(scrutinee,
-            vectorSlots(scope, TupleShape.flatten(proof).size(), "<empty vector case lane "),
-            new EmptyCaseResult(CoreRepresentations.expression(expr)));
         if (alternatives.size() != 1) throw new RuntimeFault("Vector case requires one default alternative");
         List<Object> only = alternatives.getFirst();
         if (!"default".equals(only.getFirst()) || !((List<?>) only.get(2)).isEmpty())
@@ -1449,6 +1446,8 @@ public final class Program implements ExecutableProgram {
         }
         CoreRepresentation binderProof = evaluated(scrutinee.getRepresentation().refine(
             evaluated(CoreRepresentations.caseBinder(expr), false)), true);
+        if (binderProof.isTypedTransport() && ((List<?>) expr.get(3)).isEmpty())
+            return compileTupleCase(expr, scrutinee, binderProof, local, tail);
         if (binderProof.isSum()) return compileSumCase(expr, scrutinee, binderProof, local, tail);
         if (binderProof.isTuple()) return compileTupleCase(expr, scrutinee, binderProof, local, tail);
         if (binderProof.isVector()) return compileVectorCase(expr, scrutinee, binderProof, local, tail);

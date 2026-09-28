@@ -4942,7 +4942,10 @@ public final class BytecodeProgram implements ExecutableProgram {
             b.beginBlock();
             var slots = new ArrayList<BytecodeLocal>(fields.size());
             for (var field : fields) slots.add(b.createLocal(field.name, FrameLayout.carrierKind(field.proof)));
-            scrutinee.emitTuple(e, slots); b.emitFailCase(); b.endBlock();
+            scrutinee.emitTuple(e, slots);
+            if (destination != null) b.beginStoreLocal(b.createLocal("non-returning empty case", null));
+            b.emitFailCase();
+            if (destination != null) b.endStoreLocal(); b.endBlock();
         }), CoreRepresentations.expression(expr));
         if (alternatives.size() != 1) throw new RuntimeFault("Tuple or vector case requires one alternative");
         var alt = alternatives.getFirst();
@@ -5470,6 +5473,8 @@ public final class BytecodeProgram implements ExecutableProgram {
         var scrutineeExpr = (List<Object>) expr.get(1);
         var scrutinee = force(compile(scrutineeExpr, scope, false));
         var binderProof = evaluatedProof(scrutinee.proof().refine(CoreRepresentations.caseBinder(expr)), true);
+        if (binderProof.isTypedTransport() && ((List<?>) expr.get(3)).isEmpty())
+            return tupleOrVectorCase(expr, scrutinee, binderProof, local, tail);
         if (binderProof.isSum()) return sumCase(expr, scrutinee, binderProof, local, tail);
         if (binderProof.isTuple() || binderProof.isVector()) return tupleOrVectorCase(expr, scrutinee, binderProof, local, tail);
         var binder = bind(local, (String) expr.get(2), true, binderProof);

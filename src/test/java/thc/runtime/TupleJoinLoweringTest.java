@@ -81,17 +81,30 @@ class TupleJoinLoweringTest {
             } finally { context.leave(); }
         }
     }
-    @Test void emptyTupleCasesRunTheScrutineeAndTrapIfMalformedCoreReturns() {
+    @Test void emptyTypedCasesRunTheScrutineeAndTrapIfMalformedCoreReturns() {
         var scalar = Map.of("kind", "long", "primReps", List.of("IntRep"), "evaluated", true); var closure = Map.of("kind", "closure", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", true);
         var tuple = Map.of("kind", "unknown", "aggregate", "unboxed-tuple", "components", List.of(scalar), "primReps", List.of("IntRep"), "evaluated", true);
+        var empty = Map.of("kind", "unknown", "aggregate", "unboxed-tuple", "components", List.of(), "primReps", List.of(), "evaluated", true);
+        var vector = Map.of("kind", "vector", "primReps", List.of("VecRep 8 Int16ElemRep"), "vector", Map.of("lanes", 8, "element", "Int16ElemRep"), "evaluated", true);
+        var sum = Map.of("kind", "unknown", "aggregate", "unboxed-sum", "alternatives", List.of(scalar, scalar), "primReps", List.of("WordRep", "WordRep"), "tagSlot", 0, "alternativeSlots", List.of(List.of(1), List.of(1)), "evaluated", true);
+        var nested = Map.of("kind", "unknown", "aggregate", "unboxed-tuple", "components", List.of(vector, sum), "primReps", List.of("VecRep 8 Int16ElemRep", "WordRep", "WordRep"), "evaluated", true);
         var value = List.of("app", List.of("con", "Tuple", 1), List.of(List.of("var", "x", Map.of("rep", scalar))), List.of(false), true, true, Map.of("rep", tuple));
-        var body = List.of("case", value, "dead", List.of(), Map.of("rep", scalar, "binder", Map.of("id", "dead", "lifted", false, "rep", tuple)));
-        var function = List.of("lam", List.of(Map.of("id", "x", "name", "x", "lifted", false, "rep", scalar)), body, Map.of("rep", closure, "resultRep", scalar));
-        Map<String, Object> module = Map.of("constructors", List.of(Map.of("id", "Tuple", "kind", "unboxed-tuple", "arity", 1, "fieldReps", List.of(List.of("IntRep")), "fieldLifted", List.of(false), "strictFields", List.of(false))),
-            "bindings", List.of(Map.of("id", "entry", "name", "entry", "rep", closure, "lifted", true, "expr", function)));
-        for (String backend : List.of("ast", "bytecode")) try (var context = Context.newBuilder("thc").build()) {
+        var narrow = List.of("app", List.of("prim", "intToInt16#"), List.of(List.of("var", "x", Map.of("rep", scalar))), List.of(false), false, false, Map.of("rep", Map.of("kind", "long", "primReps", List.of("Int16Rep"), "evaluated", true)));
+        var vectorValue = List.of("app", List.of("prim", "broadcastInt16X8#"), List.of(narrow), List.of(false), false, false, Map.of("rep", vector));
+        var sumValue = List.of("app", List.of("con", "Left", 1), List.of(List.of("var", "x", Map.of("rep", scalar))), List.of(false), true, true, Map.of("rep", sum));
+        record Shape(Map<String, ?> proof, List<?> value, Map<String, ?> result) {}
+        var shapes = List.of(new Shape(tuple, value, scalar), new Shape(vector, vectorValue, sum), new Shape(sum, sumValue, nested), new Shape(empty, List.of("con", "Empty", 0, Map.of("rep", empty)), vector));
+        for (var shape : shapes) for (String backend : List.of("ast", "bytecode")) try (var context = Context.newBuilder("thc").build()) {
             context.initialize("thc"); context.enter();
             try {
+                var bottom = List.of("case", shape.value(), "dead", List.of(), Map.of("rep", shape.result(), "binder", Map.of("id", "dead", "lifted", false, "rep", shape.proof())));
+                var body = List.of("case", bottom, "unreachable", List.of(), Map.of("rep", scalar, "binder", Map.of("id", "unreachable", "lifted", false, "rep", shape.result())));
+                var function = List.of("lam", List.of(Map.of("id", "x", "name", "x", "lifted", false, "rep", scalar)), body, Map.of("rep", closure, "resultRep", scalar));
+                Map<String, Object> module = Map.of("constructors", List.of(
+                    Map.of("id", "Tuple", "kind", "unboxed-tuple", "arity", 1, "fieldReps", List.of(List.of("IntRep")), "fieldLifted", List.of(false), "strictFields", List.of(false)),
+                    Map.of("id", "Empty", "kind", "unboxed-tuple", "arity", 0, "fieldReps", List.of(), "fieldLifted", List.of(), "strictFields", List.of()),
+                    Map.of("id", "Left", "kind", "unboxed-sum", "arity", 1, "sumArity", 2, "tag", 1)),
+                    "bindings", List.of(Map.of("id", "entry", "name", "entry", "rep", closure, "lifted", true, "expr", function)));
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); ExecutableProgram program = backend.equals("ast") ? new Program(language, module) : new BytecodeProgram(language, module);
                 var failure = assertThrows(RuntimeFault.class, () -> Calls.target(program.entryTarget("entry"), new Object[]{0L, 42L})); assertTrue(Objects.requireNonNull(failure.getMessage()).contains("Non-exhaustive"), failure.getMessage()); assertEquals(0, language.getHandoffState().get().getResults().getDepth());
             } finally { context.leave(); }
@@ -101,6 +114,8 @@ class TupleJoinLoweringTest {
             @Override public Object execute(VirtualFrame frame) { throw new IllegalStateException("No scalar tuple execution"); }
             @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) { evaluated[0]++; throw bottom; }
         };
-        assertSame(bottom, assertThrows(RuntimeFault.class, () -> new TupleCase(scrutinee, new int[0], new EmptyCaseResult(longProof)).executeLong(frame))); assertEquals(1, evaluated[0]);
+        for (var result : List.of(longProof, CoreRepresentations.parse(vector), CoreRepresentations.parse(sum), CoreRepresentations.parse(nested)))
+            assertSame(bottom, assertThrows(RuntimeFault.class, () -> new TupleCase(scrutinee, new int[0], new EmptyCaseResult(result)).executeTuple(frame, new int[0], 0)));
+        assertEquals(4, evaluated[0]);
     }
 }
