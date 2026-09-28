@@ -1980,10 +1980,10 @@ class RenamedInputContractTests(unittest.TestCase):
                           "src/main/c/bytestring-utf8-api.c",
                           "src/main/java/thc/runtime/CoreEnvironmentForeign.java", "src/main/java/thc/runtime/EnvironmentOp.java", "src/main/java/thc/runtime/EnvironmentExpression.java",
                           "src/main/java/thc/runtime/VectorMemoryFamily.java",
-                  "src/main/java/thc/runtime/VectorMemoryOp.java",
-                  "src/main/java/thc/runtime/VectorReadCase.java",
-                  "src/main/java/thc/runtime/CoreVectorMemory.java",
-                  "src/main/java/thc/runtime/VectorByteArrayExpression.java",
+                          "src/main/java/thc/runtime/VectorMemoryOp.java",
+                          "src/main/java/thc/runtime/VectorReadCase.java",
+                          "src/main/java/thc/runtime/CoreVectorMemory.java",
+                          "src/main/java/thc/runtime/VectorByteArrayExpression.java",
                           "src/main/java/thc/runtime/VectorMemory.java",
                           "src/test/kotlin/thc/runtime/IntegerSimdModelTest.kt"), cache.RUNTIME_INPUTS)
         with patch.object(cache, "toolchain", return_value={}):

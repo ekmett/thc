@@ -189,7 +189,7 @@ class ThreadedThunkTest {
             assertFalse(state.getSingleThreadedAssumption().isValid());
             ExecutableProgram program = entered(context, () -> backend.equals("ast") ? new Program(language, module, false, false) : new BytecodeProgram(language, module, null, false));
             var thunk = entered(context, () -> (Thunk) program.entryValue("entry"));
-            var entry = entered(context, () -> new EntryValue(program, "entry", 0, null, null, null, null, null, false, null));
+            var entry = entered(context, () -> new EntryValue(program, "entry", 0));
             entered(context, () -> {
                 var warm = new Thunk(Objects.requireNonNull(thunk.getTarget()), thunk.getEnvironment());
                 for (int i = 0; i < 8; i++) Calls.target(program.hostEntryTarget(0), new Object[]{warm, new Object[0]});

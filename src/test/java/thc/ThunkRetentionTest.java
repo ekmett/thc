@@ -131,7 +131,7 @@ class ThunkRetentionTest {
                     else assertSame(result, invokeEntry(program, thunk), backend + " retains the already evaluated answer");
                     if (result instanceof Closure) assertEquals(3_000_000_000L, Calls.target(program.hostEntryTarget(1), new Object[]{thunk, new Object[]{3_000_000_000L}}));
                 }
-                var entry = new EntryValue(program, name, result instanceof Closure ? 1 : 0, null, null, null, null, null, false, null);
+                var entry = new EntryValue(program, name, result instanceof Closure ? 1 : 0);
                 assertEquals(true, assertDoesNotThrow(() -> InteropLibrary.getUncached().invokeMember(entry, "compile"), backend + " updated " + name + " must install guest code"));
                 assertUpdatedValueInstalled(name, backend, program, expectedTarget);
                 if (name.equals("failure")) assertSame(result, assertThrows(RuntimeFault.class, () -> invokeEntry(program, thunk)));

@@ -49,7 +49,7 @@ class BytecodeSourceNotesTest {
     private List<String> instructions(BytecodeRoot root) {
         var result = new ArrayList<String>(); for (var instruction : root.getBytecodeNode().getInstructions()) result.add(instruction.getName()); return result;
     }
-    private EntryValue entry(BytecodeProgram program) { return new EntryValue(program, "entry", 1, null, null, null, null, null, false, null); }
+    private EntryValue entry(BytecodeProgram program) { return new EntryValue(program, "entry", 1); }
     @Test void notesAttachToNativeBytecodeWithoutChangingInstructionsOrLocalWriteback() throws Exception {
         withRuntime(language -> {
             var off = new BytecodeProgram(language, module(false)); var on = new BytecodeProgram(language, module(true));

@@ -41,7 +41,7 @@ class LoopSafepointTest {
             ExecutableProgram program = entered(context, () -> backend.equals("ast") ? new Program(language, module(), false, false) : new BytecodeProgram(language, module()));
             entered(context, () -> {
                 for (int i = 0; i < 8; i++) assertEquals(36L, invoke(program, 8L));
-                if (compiled) assertTrue((Boolean) InteropLibrary.getUncached().invokeMember(new EntryValue(program, "loop", 2, null, null, null, null, null, false, null), "compile"));
+                if (compiled) assertTrue((Boolean) InteropLibrary.getUncached().invokeMember(new EntryValue(program, "loop", 2), "compile"));
                 return null;
             });
             long before = ((Number) program.diagnostics().get("selfTailReentries")).longValue(); var pool = Executors.newSingleThreadExecutor();

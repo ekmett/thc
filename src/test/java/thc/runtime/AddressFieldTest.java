@@ -58,7 +58,7 @@ class AddressFieldTest {
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var source = object(Json.parse(Files.readString(root.resolve((String) stage.getValue()))));
                 var name = entry.getKey(); var inputs = entry.getValue(); var program = program(language, with(CoreModules.reachable(source, name, false), "instrument", true), backend);
-                var value = context.asValue(new EntryValue(program, name, 1, null, null, null, null, null, false, null)); var host = program.hostEntryTarget(1); var original = program.entryTarget(name);
+                var value = context.asValue(new EntryValue(program, name, 1)); var host = program.hostEntryTarget(1); var original = program.entryTarget(name);
                 var label = stage.getKey() + "/" + backend + "/" + name + "/inline=" + inline;
                 for (var row : inputs) check(value, row, label);
                 var active = active(host, original); assertTrue(!active.isEmpty(), label + " observed host-to-entry call"); assertTrue(value.invokeMember("compile").asBoolean(), label + " installed");
