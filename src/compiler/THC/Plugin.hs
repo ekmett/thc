@@ -298,12 +298,13 @@ nameKey n = case nameModule_maybe n of
     occurrence = unpackFS (occNameMangledFS (nameOccName n))
 
 -- Direct binary publication through the shared typed encoder. CBD owns its
--- fingerprints and source maps; no JSON payload or side index is produced.
+-- fingerprints and source maps. Explicit diagnostics retain the producer's
+-- rich model rather than reconstructing it from the compact runtime payload.
 writeCoreOutput :: [CommandLineOption] -> FilePath -> J -> IO ()
 writeCoreOutput options path result = do
   _ <- writeModuleValue path (moduleValue result)
   when ("pretty-diagnostics" `elem` options) $
-    BS.readFile path >>= inspectCore >>= BS.writeFile (replaceExtension path "json")
+    BS.writeFile (replaceExtension path "json") (diagnosticCore result)
 
 -- Cabal can compile the same module name in several distinct units. Keep the
 -- historical flat layout for fixtures, but let package exports preserve the
@@ -953,9 +954,11 @@ exportModule opts guts = do
 -- | The same pre-Tidy serializer used by the plugin, without filesystem writes
 -- or closure registration. Callers must supply genuine optimized ModGuts.
 serializeOptimizedCore :: DynFlags -> [CommandLineOption] -> ModGuts -> IO String
-serializeOptimizedCore flags opts guts = do
-  bytes <- serializeOptimizedCoreCBD flags opts guts
-  utf8DecodeByteString <$> inspectCore bytes
+serializeOptimizedCore flags opts guts
+  | "pretty-diagnostics" `elem` opts =
+      utf8DecodeByteString . diagnosticCore . snd <$> optimizedModule flags opts guts
+  | otherwise =
+      serializeOptimizedCoreCBD flags opts guts >>= fmap utf8DecodeByteString . inspectCore
 
 serializeOptimizedCoreCBD :: DynFlags -> [CommandLineOption] -> ModGuts -> IO BS.ByteString
 serializeOptimizedCoreCBD flags opts guts = do
@@ -1031,8 +1034,10 @@ exportLate hsc opts pair@(guts,_)
       pure pair
 
 -- | Serialize actual post-Tidy Core, including Core hydrated from a complete
--- installed interface. Only "source-notes" and "unit-qualified" affect this
--- entry point. It neither writes files nor registers plugin closure roots.
+-- installed interface. "pretty-diagnostics" retains the rich producer model;
+-- otherwise JSON inspection is derived from CBD. "source-notes" and
+-- "unit-qualified" also affect this entry point. It neither writes files nor
+-- registers plugin closure roots.
 -- Foreign products are archival metadata, not executable registration. The
 -- schema bump prevents older runtimes/auditors from silently ignoring them.
 serializePostTidyCore :: DynFlags -> [CommandLineOption] -> Module -> [TyCon] -> CoreProgram -> ForeignCore.IfaceForeign -> IO String
@@ -1049,11 +1054,14 @@ serializePostTidyCoreWithAnnotations flags opts m tycons program foreignArtifact
 -- | The same ordered document in UTF-8 bytes, without a full output String.
 -- Callers must force the strict ByteString before emitting a success response.
 serializePostTidyCoreWithAnnotationsBytes :: DynFlags -> [CommandLineOption] -> Module -> [TyCon] -> CoreProgram -> ForeignCore.IfaceForeign -> [Annotation] -> IO BS.ByteString
-serializePostTidyCoreWithAnnotationsBytes flags opts m tycons program foreignArtifacts annotations =
-  serializePostTidyCoreWithAnnotationsCBD flags opts m tycons program foreignArtifacts annotations >>= inspectCore
+serializePostTidyCoreWithAnnotationsBytes flags opts m tycons program foreignArtifacts annotations
+  | "pretty-diagnostics" `elem` opts = diagnosticCore <$>
+      postTidyCoreWithAnnotations flags opts m tycons program foreignArtifacts annotations
+  | otherwise =
+      serializePostTidyCoreWithAnnotationsCBD flags opts m tycons program foreignArtifacts annotations >>= inspectCore
 
--- Explicit inspection helpers above derive their output from the same CBD
--- payload; normal compiler and interface publication use these binary APIs.
+-- Normal compiler and interface publication always use these binary APIs,
+-- including when pretty diagnostics are requested.
 serializePostTidyCoreCBD :: DynFlags -> [CommandLineOption] -> Module -> [TyCon] -> CoreProgram -> ForeignCore.IfaceForeign -> IO BS.ByteString
 serializePostTidyCoreCBD flags opts m tycons program foreignArtifacts =
   serializePostTidyCoreWithAnnotationsCBD flags opts m tycons program foreignArtifacts []
@@ -1064,6 +1072,9 @@ serializePostTidyCoreWithAnnotationsCBD flags opts m tycons program foreignArtif
 
 inspectCore :: BS.ByteString -> IO BS.ByteString
 inspectCore bytes = (\value -> BS.snoc (BL.toStrict (Aeson.encode value)) 10) <$> either fail pure (readModuleValue bytes)
+
+diagnosticCore :: J -> BS.ByteString
+diagnosticCore = (`BS.snoc` 10) . BL.toStrict . Aeson.encode . moduleValue
 
 postTidyCoreWithAnnotations :: DynFlags -> [CommandLineOption] -> Module -> [TyCon] -> CoreProgram -> ForeignCore.IfaceForeign -> [Annotation] -> IO J
 postTidyCoreWithAnnotations flags opts m tycons program foreignArtifacts annotations = do
