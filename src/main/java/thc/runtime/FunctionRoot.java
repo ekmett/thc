@@ -50,6 +50,7 @@ public final class FunctionRoot extends GuestRoot {
     private final boolean stackCapture;
     private final boolean capturesContinuations;
     @CompilationFinal private boolean copyInitialFrame;
+    @CompilationFinal(dimensions = 1) private int[] initialClears = new int[0];
     private final boolean deferredBudget;
     private final boolean budgetBoundary;
     private volatile long budgetGeneration;
@@ -209,6 +210,17 @@ public final class FunctionRoot extends GuestRoot {
     public HandoffEntry getHandoff() { return handoff; }
     /** Set by lowering before publication, only for bodies without exposed frame aliases. */
     void configureInitialFrameCopy(boolean enabled) { copyInitialFrame = enabled; }
+    /** Freeze lowering's dead-slot list before publication; saved frames never reinitialize it. */
+    void configureInitialClears(int[] slots) {
+        for (int slot : slots)
+            if (slot <= FrameLayout.TAIL_ARGUMENTS || slot >= getFrameDescriptor().getNumberOfSlots() ||
+                    contains(argumentSlots, slot) || contains(environmentSlots, slot))
+                throw new IllegalArgumentException("Initial scratch slot aliases live input");
+        initialClears = slots.clone();
+    }
+    @ExplodeLoop private void clearInitialLocals(VirtualFrame frame) {
+        for (int slot : initialClears) frame.clear(slot);
+    }
     void configureProgramSlot(int slot, Object codeIdentity) {
         if (slot < 0 || programSlot >= 0 || metrics != null) throw new IllegalStateException("Invalid reusable root configuration");
         programSlot = slot;
@@ -489,6 +501,7 @@ public final class FunctionRoot extends GuestRoot {
         } finally { if (driver) stack.setDriving(false); }
     }
     private Object executeInitial(VirtualFrame frame, boolean spill) {
+        clearInitialLocals(frame);
         if (metrics != null && metrics.getEnabled() && CompilerDirectives.inCompiledCode()) metrics.incrementCompiledEntries();
         HandoffEntry entry = handoff;
         TypedInputLayout typed = getTypedInput();
