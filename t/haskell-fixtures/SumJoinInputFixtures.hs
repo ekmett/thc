@@ -25,6 +25,7 @@ import System.Directory (createDirectoryIfMissing, doesFileExist, listDirectory,
 import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>), takeExtension)
+import THC.Compact.Module (readModuleValue)
 
 walk :: Value -> [Value]
 walk value = value : case value of
@@ -64,8 +65,8 @@ prepareSumJoinInputs root = do
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", output </> stage </> "ghc")]
       "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
         ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries] ++ [source])
-    let path = core </> "SumJoinInputAudit.json"
-    nodes <- walk <$> readJson (root </> path)
+    let path = core </> "SumJoinInputAudit.cbd"
+    nodes <- BS.readFile (root </> path) >>= either die (pure . walk) . readModuleValue
     let sumJoins = [() | Object fields <- nodes, KeyMap.member "joinValueArity" fields,
           Just (Array rhs) <- [KeyMap.lookup "expr" fields], String "lam" : Array parameters : _ <- [toList rhs],
           Object parameter <- toList parameters, Just (Object proof) <- [KeyMap.lookup "rep" parameter],

@@ -70,7 +70,7 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
       for suffix in ("stdout", "stderr", "command.json")],
     "build/sum-join/manifest.json", "build/sum-join/oracle.tsv", "build/sum-join/native/oracle",
     *[f"build/sum-join/{stage}/{suffix}" for stage in ("pre", "post")
-      for suffix in ("core/SumJoinAudit.json", "audit.json")],
+      for suffix in ("core/SumJoinAudit.cbd", "audit.json")],
     *[f"build/sum-join/commands/{command}.{suffix}"
       for command in ("ghc-version", "native-build", "native-run", "pre-export", "pre-audit", "post-export", "post-audit")
       for suffix in ("stdout", "stderr", "command.json")],

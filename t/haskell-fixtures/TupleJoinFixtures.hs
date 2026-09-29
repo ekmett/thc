@@ -27,6 +27,7 @@ import System.Directory (copyFile, createDirectoryIfMissing, doesFileExist, list
 import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>), takeExtension, takeDirectory)
+import THC.Compact.Module (readModuleValue)
 
 -- Reuse a hash-checked production bundle for the exact two boot owners when
 -- supplied. No compiler re-export and no editing/filtering of module bodies.
@@ -102,9 +103,9 @@ prepareTupleJoins originalLibrary root = do
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", output </> stage </> "ghc")]
       "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
         ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries] ++ ["-package", "ghc-internal", source])
-    modules <- sort . filter (== "TupleJoinInputAudit.json") <$> listDirectory (root </> core)
+    modules <- sort . filter (== "TupleJoinInputAudit.cbd") <$> listDirectory (root </> core)
     let paths = map (core </>) modules
-    nodes <- concatMap walk <$> mapM (readJson . (root </>)) paths
+    nodes <- concatMap walk <$> mapM (\path -> BS.readFile (root </> path) >>= either die pure . readModuleValue) paths
     let tupleJoins = [() | Object fields <- nodes, KeyMap.member "joinValueArity" fields,
           Just (Array rhs) <- [KeyMap.lookup "expr" fields], String "lam" : Array parameters : _ <- [toList rhs],
           Object parameter <- toList parameters, Just (Object proof) <- [KeyMap.lookup "rep" parameter],

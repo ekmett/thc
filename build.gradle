@@ -700,7 +700,7 @@ compactInteropTests[1].configure { mustRunAfter(compactInteropTests[0]) }
         classpath = fullCoreTests.runtimeClasspath
         useJUnitPlatform()
         filter { includeTestsMatching("thc.runtime.TupleJoinNativeTest") }
-        inputs.files(fileTree("build/tuple-join-input") { include("**/*.json", "*.tsv") })
+        inputs.files(fileTree("build/tuple-join-input") { include("**/*.cbd", "**/*.json", "*.tsv") })
         systemProperty("thc.handoffSlabs", dense.toString())
         outputs.upToDateWhen { false }
         outputs.doNotCacheIf("Native and first-compiled tuple join checks require a fresh process") { true }
@@ -715,7 +715,7 @@ compactInteropTests[1].configure { mustRunAfter(compactInteropTests[0]) }
         classpath = fullCoreTests.runtimeClasspath
         useJUnitPlatform()
         filter { includeTestsMatching("thc.runtime.SumInputNativeTest") }
-        inputs.files(fileTree("build/sum-input") { include("**/*.json", "*.tsv") })
+        inputs.files(fileTree("build/sum-input") { include("**/*.cbd", "**/*.json", "*.tsv") })
         systemProperty("thc.handoffSlabs", dense.toString())
         outputs.upToDateWhen { false }
         outputs.doNotCacheIf("Native and first-compiled sum checks require a fresh process") { true }
@@ -745,7 +745,7 @@ compactInteropTests[1].configure { mustRunAfter(compactInteropTests[0]) }
         classpath = fullCoreTests.runtimeClasspath
         useJUnitPlatform()
         filter { includeTestsMatching("thc.runtime.SumJoinInputNativeTest") }
-        inputs.files(fileTree("build/sum-join-input") { include("**/*.json", "*.tsv") })
+        inputs.files(fileTree("build/sum-join-input") { include("**/*.cbd", "**/*.json", "*.tsv") })
         systemProperty("thc.handoffSlabs", dense.toString())
         outputs.upToDateWhen { false }
         outputs.doNotCacheIf("Native and first-compiled sum join checks require a fresh process") { true }

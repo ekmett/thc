@@ -44,7 +44,7 @@ public class TupleJoinNativeTest {
         var tests = new ArrayList<DynamicTest>();
         for (String stage : List.of("pre", "post")) {
             assertEquals(true, json(new File(directory, stage + "/audit.json")).get("accepted")); var modules = new ArrayList<>(originals);
-            modules.add(json(new File(directory, stage + "/core/TupleJoinInputAudit.json"))); var combined = new LinkedHashMap<>(CoreModules.merge(modules));
+            modules.add(CoreCbdFixtures.read(new File(directory, stage + "/core/TupleJoinInputAudit.cbd").toPath())); var combined = new LinkedHashMap<>(CoreModules.merge(modules));
             if (layout != null) combined.put("targetLayout", layout);
             for (var group : rows.entrySet()) {
                 String entry = group.getKey(), name = "main:TupleJoinInputAudit." + entry; var cases = group.getValue();
