@@ -26,8 +26,8 @@ import static org.junit.jupiter.api.Assertions.*;
 @SuppressWarnings("unchecked")
 class GhcBCOTest {
     private final File root = new File(System.getProperty("thc.projectRoot"));
-    private final List<String> entries = List.of("bcoConstant", "bcoApply", "bcoApplyTwo", "bcoFunction", "bcoArithmetic", "bcoBranch", "bcoLargeOperand", "bcoSharing", "bcoCase", "bcoCaseNested", "bcoCasePointer", "bcoCaseFloat", "bcoCaseDouble", "bcoCaseLong", "bcoCaseVoid", "bcoPacked8", "bcoPacked16", "bcoPacked32", "bcoCaseTuple", "bcoCaseTupleCall", "bcoCaseTupleOverapply");
-    private long expected(String entry, long n) { return switch (entry) { case "bcoConstant", "bcoFunction", "bcoLargeOperand", "bcoCasePointer", "bcoCaseLong", "bcoCaseVoid", "bcoCaseTupleCall", "bcoCaseTupleOverapply" -> n; case "bcoApply", "bcoCase", "bcoCaseTuple" -> n + 7; case "bcoCaseNested" -> n + 10; case "bcoCaseFloat" -> paddedWord(2143294004L, 4); case "bcoCaseDouble" -> 9221120237041095220L; case "bcoPacked8" -> 3 * paddedWord(171, 1); case "bcoPacked16" -> 3 * paddedWord(52719, 2); case "bcoPacked32" -> 3 * paddedWord(2309737967L, 4); case "bcoApplyTwo" -> n * 10 + 3; case "bcoArithmetic" -> 100 - n; case "bcoBranch" -> n < 0 ? -1 : 1; case "bcoSharing" -> n * 2 + 1; default -> throw new IllegalStateException(entry); }; }
+    private final List<String> entries = List.of("bcoConstant", "bcoApply", "bcoApplyTwo", "bcoFunction", "bcoArithmetic", "bcoBranch", "bcoLargeOperand", "bcoSharing", "bcoCase", "bcoCaseNested", "bcoCasePointer", "bcoCaseFloat", "bcoCaseDouble", "bcoCaseLong", "bcoCaseVoid", "bcoPacked8", "bcoPacked16", "bcoPacked32", "bcoCaseTuple", "bcoCaseTupleCall", "bcoCaseTupleOverapply", "bcoCapturedPap", "bcoCapturedAp", "bcoCapturedNoUpd", "bcoCapturedApChain", "bcoCapturedRecursive", "bcoCapturedFloat", "bcoCapturedDouble", "bcoCapturedLong", "bcoCapturedNoUpdEscape", "bcoApplyIntCore", "bcoApplyFloatCore", "bcoApplyDoubleCore", "bcoApplyLongCore", "bcoApplyVoidCore");
+    private long expected(String entry, long n) { return switch (entry) { case "bcoConstant", "bcoFunction", "bcoLargeOperand", "bcoCasePointer", "bcoCaseLong", "bcoCaseVoid", "bcoCaseTupleCall", "bcoCaseTupleOverapply" -> n; case "bcoApply", "bcoCase", "bcoCaseTuple", "bcoCapturedPap" -> n + 7; case "bcoCaseNested" -> n + 10; case "bcoCaseFloat" -> paddedWord(2143294004L, 4); case "bcoCaseDouble" -> 9221120237041095220L; case "bcoPacked8" -> 3 * paddedWord(171, 1); case "bcoPacked16" -> 3 * paddedWord(52719, 2); case "bcoPacked32" -> 3 * paddedWord(2309737967L, 4); case "bcoApplyTwo" -> n * 10 + 3; case "bcoArithmetic" -> 100 - n; case "bcoBranch" -> n < 0 ? -1 : 1; case "bcoCapturedNoUpd", "bcoCapturedApChain", "bcoCapturedRecursive" -> n; case "bcoCapturedFloat" -> n + paddedWord(2143294004L, 4); case "bcoCapturedDouble" -> n + 9221120237041095220L; case "bcoApplyIntCore" -> n + 14; case "bcoApplyFloatCore", "bcoApplyDoubleCore" -> n + 3; case "bcoApplyLongCore", "bcoApplyVoidCore", "bcoCapturedLong", "bcoCapturedNoUpdEscape" -> n + 7; case "bcoCapturedAp", "bcoSharing" -> n * 2 + 1; default -> throw new IllegalStateException(entry); }; }
     private static long paddedWord(long bits, int width) {
         var bytes = ByteBuffer.allocate(8).order(ByteOrder.nativeOrder());
         switch (width) { case 1 -> bytes.put((byte) bits); case 2 -> bytes.putShort((short) bits); case 4 -> bytes.putInt((int) bits); default -> throw new IllegalArgumentException(); }
@@ -47,7 +47,7 @@ class GhcBCOTest {
         for (String stage : List.of("pre", "post")) for (String backend : List.of("ast", "bytecode")) for (String entry : entries) try (var context = context()) {
             context.initialize("thc"); context.enter(); try {
                 var module = (Map<String, Object>) Json.parse(Files.readString(new File(root, "build/ghc-bco/" + stage + "/core/GhcBCO.json").toPath())); var evidence = new ArrayCoreEvidence(module, entry);
-                assertEquals(entry.equals("bcoCase") ? 2 : 1, evidence.getPrimitiveCounts().get("newBCO#"), "Actual primitive, not a synthetic BCO substitute"); assertEquals(List.of("bcoConstant", "bcoApply", "bcoApplyTwo", "bcoBranch", "bcoLargeOperand", "bcoSharing", "bcoCasePointer", "bcoCaseTupleCall", "bcoCaseTupleOverapply").contains(entry) ? Integer.valueOf(1) : null, evidence.getPrimitiveCounts().get("mkApUpd0#"));
+                assertEquals(entry.equals("bcoCase") ? 2 : 1, evidence.getPrimitiveCounts().get("newBCO#"), "Actual primitive, not a synthetic BCO substitute"); assertEquals(List.of("bcoConstant", "bcoApply", "bcoApplyTwo", "bcoBranch", "bcoLargeOperand", "bcoSharing", "bcoCasePointer", "bcoCaseTupleCall", "bcoCaseTupleOverapply", "bcoCapturedAp", "bcoCapturedNoUpd", "bcoCapturedApChain", "bcoCapturedNoUpdEscape").contains(entry) ? Integer.valueOf(1) : null, evidence.getPrimitiveCounts().get("mkApUpd0#"));
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var linked = CoreModules.reachable(module, entry); ExecutableProgram program = backend.equals("ast") ? new Program(language, linked, async) : new BytecodeProgram(language, linked, async); var function = context.asValue(new EntryValue(program, entry, 1));
                 long[] inputs = {-2, 0, 7}; for (int index = 0; index < inputs.length; index++) { long n = inputs[index]; assertEquals(nativeResults.get(index * entries.size() + entries.indexOf(entry)), function.execute(n).asLong(), stage + "/" + backend + "/" + entry + "/" + n); ThreadInventoryCoreEvidence.released(language); }
                 // Compile precisely the genuine public Core root. BCOs are
@@ -111,6 +111,58 @@ class GhcBCOTest {
             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
             var owner = create(language, code(14,0,25,0,1,61), 1, words(1,1), words(7), new Object[]{foreign});
             assertTrue(assertThrows(RuntimeFault.class, () -> owner.target.call(0L,7L)).getMessage().contains("another context"));
+        } finally { context.leave(); } }
+    }
+    @Test void zeroArityCoreEntryStillCompletesItsPendingApplication() {
+        try (var context = context()) { context.initialize("thc"); context.enter(); try {
+            var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+            var answer = new Object(); int[] entered = {0,0};
+            var identity = new GuestRoot(language, FrameDescriptor.newBuilder().build()) {
+                @Override public long bloom(VirtualFrame frame) { return 0L; }
+                @Override public Object execute(VirtualFrame frame) { entered[1]++; return frame.getArguments()[1]; }
+            };
+            var first = new GuestRoot(language, FrameDescriptor.newBuilder().build()) {
+                @Override public long bloom(VirtualFrame frame) { return 0L; }
+                @Override public Object execute(VirtualFrame frame) { entered[0]++; return new Closure(null,1,identity.getCallTarget()); }
+            };
+            var code = create(language, code(11,1,31,11,0,58), 0, words(0), words(), new Object[]{new Closure(null,0,first.getCallTarget()),answer});
+            assertSame(answer, code.target.call(0L)); assertArrayEquals(new int[]{1,1}, entered);
+            ThreadInventoryCoreEvidence.released(language);
+        } finally { context.leave(); } }
+    }
+    @Test void capturedPayloadsCheckInitializationKindsAndContext() {
+        Closure foreign;
+        try (var context = context()) { context.initialize("thc"); context.enter(); try {
+            var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+            var body = create(language, code(58), 1, words(1,0));
+            var rawBody = create(language, code(90,61), 2, words(2,3));
+            var uninitialized = create(language, code(39,0,58), 0, words(0));
+            assertTrue(assertThrows(RuntimeFault.class, () -> uninitialized.target.call(0L)).getMessage().contains("before initialization"));
+            var wrongWidth = create(language, code(39,0,11,0,42,1,0), 0, words(0), words(), new Object[]{body});
+            assertTrue(assertThrows(RuntimeFault.class, () -> wrongWidth.target.call(0L)).getMessage().contains("payload/arity"));
+            var rawPointer = create(language, code(39,1,25,0,1,11,0,42,2,1), 0, words(0), words(7), new Object[]{body});
+            assertTrue(assertThrows(RuntimeFault.class, () -> rawPointer.target.call(0L)).getMessage().contains("pointer operation"));
+            var wrongKind = create(language, code(41,1,1,11,1,11,0,42,2,1), 0, words(0), words(), new Object[]{body,new Object()});
+            assertTrue(assertThrows(RuntimeFault.class, () -> wrongKind.target.call(0L)).getMessage().contains("allocation kind"));
+            var twice = create(language, code(39,1,11,1,11,0,42,2,1,11,1,11,0,42,2,1), 0, words(0), words(), new Object[]{body,new Object()});
+            assertTrue(assertThrows(RuntimeFault.class, () -> twice.target.call(0L)).getMessage().contains("filled twice"));
+            // A case header is never a managed guest pointer, including inside an AP payload.
+            var continuation = create(language, code(54), 0, words(0));
+            var marker = create(language, code(39,1,14,0,2,0,11,1,42,4,1), 0, words(0), words(), new Object[]{continuation,body});
+            assertTrue(assertThrows(RuntimeFault.class, () -> marker.target.call(0L)).getMessage().contains("stack marker"));
+            var allocator = create(language, code(41,1,1,25,0,1,11,0,43,2,1,60), 0, words(0), words(7), new Object[]{rawBody});
+            foreign = (Closure) allocator.target.call(0L);
+            assertEquals(12L, foreign.target.call(0L,foreign.environment,5L));
+            // Retained ordinary Core PAP prefixes remain physical scalar carriers.
+            var ternary = create(language, code(90,90,61), 3, words(3,7));
+            var partial = create(language, code(41,2,1,25,0,1,11,0,43,2,1,60), 0, words(0), words(7), new Object[]{ternary});
+            var pap = ((Closure) partial.target.call(0L)).pap(new Object[]{5L});
+            var caller = create(language, code(25,0,1,26,11,0,58), 0, words(0), words(3), new Object[]{pap});
+            assertEquals(15L, caller.target.call(0L));
+            ThreadInventoryCoreEvidence.released(language);
+        } finally { context.leave(); } }
+        try (var context = context()) { context.initialize("thc"); context.enter(); try {
+            assertTrue(assertThrows(RuntimeFault.class, () -> foreign.target.call(0L,foreign.environment,5L)).getMessage().contains("another context"));
         } finally { context.leave(); } }
     }
     @Test void paddedFloatUsesTheFirstFourNativeBytesAtEntryAndReturn() {

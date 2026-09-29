@@ -3,6 +3,7 @@
 package thc.runtime;
 
 import com.oracle.truffle.api.TruffleSafepoint;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import java.util.Arrays;
@@ -10,9 +11,10 @@ import java.util.List;
 import thc.Language;
 import static thc.runtime.RuntimeFault.fault;
 
-/** Normal Dispatch supplies PAPs/overapplication; Thunk/Force supplies lazy updates. */
+/** Native BCO stack frames and owned AP/PAP payloads; Thunk/Force supplies lazy updates. */
 public final class GhcBCORoot extends GuestRoot {
     private final Language.State owner;
+    private final Metrics metrics;
     private final GhcInstruction[] code;
     private final long[] literals;
     private final Object[] pointers;
@@ -20,16 +22,93 @@ public final class GhcBCORoot extends GuestRoot {
     private final boolean[] nonPointers;
     @Child private Force force;
     @Children private Dispatch[] calls;
-    private static final class Apply implements GhcBCOStack.Marker { final int count; Apply(int count) { this.count = count; } }
+    private record Apply(ReturnKind kind, int count) implements GhcBCOStack.Marker {
+        int words() { return kind == ReturnKind.V ? 0 : count; }
+    }
+    // The cached target owns only layout metadata. Each closure/thunk environment
+    // owns its payload, which Force can release when an updating thunk completes.
+    private final CaptureLayout applicationLayout;
+    private GhcBCORoot applicationEntry;
+    private static final class Application {
+        final GhcBCORoot entry;
+        final int arity, words;
+        final boolean thunk;
+        private volatile Body body;
+        Application(GhcBCORoot entry, int arity, int words, boolean thunk) {
+            this.entry = entry; this.arity = arity; this.words = words; this.thunk = thunk;
+        }
+        synchronized void fill(GhcBCORoot root, GhcBCOStack payload) {
+            if (body != null) throw fault("BCO application filled twice");
+            if (payload.words() != words || arity > root.arity || thunk && words != root.nonPointers.length)
+                throw fault("BCO application payload/arity mismatch");
+            payload.validatePrefix(root.nonPointers);
+            body = new Body(root, payload);
+        }
+        Body body() {
+            Body result = body;
+            if (result == null) throw fault("BCO application entered before initialization");
+            return result;
+        }
+    }
+    private record Body(GhcBCORoot root, GhcBCOStack payload) {}
+
     private enum ReturnKind implements GhcBCOStack.Marker { P, N, F, D, L, V, T }
     private record CaseFrame(ReturnKind kind, Closure continuation, long info, GhcBCORoot tuple) implements GhcBCOStack.Marker {}
     public GhcBCORoot(Language language, Language.State owner, Metrics metrics, GhcInstruction[] code,
                       long[] literals, Object[] pointers, int arity, boolean[] nonPointers) {
         super(language, FrameDescriptor.newBuilder().build());
-        this.owner = owner; this.code = code; this.literals = literals; this.pointers = pointers; this.arity = arity; this.nonPointers = nonPointers;
+        this.owner = owner; this.metrics = metrics; this.code = code; this.literals = literals; this.pointers = pointers; this.arity = arity; this.nonPointers = nonPointers;
+        applicationLayout = code == null ? new CaptureLayout(language, new boolean[] { false }) : null;
+        if (applicationLayout != null) configureEntry(new boolean[0], true);
         force = new Force(metrics, true);
         calls = new Dispatch[6];
         for (int i = 0; i < calls.length; i++) calls[i] = DispatchNodeGen.create(i + 1, false, metrics);
+    }
+    @TruffleBoundary private synchronized GhcBCORoot applicationEntry() {
+        if (applicationEntry == null)
+            applicationEntry = new GhcBCORoot(getLanguage(Language.class), owner, metrics, null, null, null, 0, new boolean[0]);
+        return applicationEntry;
+    }
+    private Application application(CapturedFrame environment) {
+        requireOwner();
+        if (applicationLayout == null || environment == null || environment.getLayout() != applicationLayout ||
+            !(environment.getObject(0) instanceof Application app) || app.entry != this)
+            throw fault("BCO application environment mismatch");
+        return app;
+    }
+    private static int bound(long value) {
+        if (value < 0 || value > Integer.MAX_VALUE / 8 - 1) throw fault("BCO application outside managed bounds");
+        return (int) value;
+    }
+    private static int logicalArity(long value) {
+        if (value <= 0 || value >= Integer.MAX_VALUE) throw fault("BCO PAP arity outside managed bounds");
+        return (int) value;
+    }
+    private Object allocate(int arity, int words, boolean thunk) {
+        if (!thunk && arity == 0) throw fault("BCO PAP requires positive arity");
+        GhcBCORoot entry = applicationEntry();
+        Application app = new Application(entry, arity, words, thunk);
+        CapturedFrame environment = entry.applicationLayout.captureValues(new Object[] { app });
+        return thunk ? new Thunk(entry.getCallTarget(), environment) : new Closure(environment, arity, entry.getCallTarget());
+    }
+    private static Application allocated(Object value, boolean thunk) {
+        if (thunk && value instanceof Thunk pending && pending.getTarget() != null && pending.getTarget().getRootNode() instanceof GhcBCORoot root)
+            return root.application(pending.getEnvironment());
+        if (!thunk && value instanceof Closure closure && closure.suppliedCount == 0 && closure.target.getRootNode() instanceof GhcBCORoot root)
+            return root.application(closure.environment);
+        throw fault("BCO application allocation kind mismatch");
+    }
+    private void fill(GhcBCOStack stack, long offset, int count, boolean thunk) {
+        if (offset <= count) throw fault("BCO application destination overlaps its payload");
+        Application app = allocated(stack.pointer(offset), thunk);
+        if (app.thunk != thunk) throw fault("BCO application allocation kind mismatch");
+        Object function = stack.pointer(0);
+        if (!(function instanceof Closure closure) || closure.environment != null || closure.suppliedCount != 0 ||
+            !(closure.target.getRootNode() instanceof GhcBCORoot root) || root.applicationLayout != null)
+            throw fault("BCO application body requires an unapplied BCO");
+        root.requireOwner();
+        app.fill(root, stack.snapshot(1, count));
+        stack.dropWords(count + 1);
     }
     public Language.State getOwner() { return owner; }
     @Override public boolean getAsynchronousExceptions() { return true; }
@@ -54,7 +133,7 @@ public final class GhcBCORoot extends GuestRoot {
         if (!(value instanceof Closure closure) || closure.suppliedCount != 0 || !(closure.target.getRootNode() instanceof GhcBCORoot root))
             throw fault("BCO continuation requires an unapplied BCO");
         root.requireOwner();
-        if (root.arity != 0) throw fault("BCO continuation must have zero arity");
+        if (root.arity != 0 || root.applicationLayout != null) throw fault("BCO continuation must have zero arity");
         return root;
     }
     private void pushCase(GhcBCOStack stack, ReturnKind kind, Object value, long info, Object tupleValue) {
@@ -111,37 +190,65 @@ public final class GhcBCORoot extends GuestRoot {
                 return AstControl.complete(this, continuation.executeStack(frame, stack), continuation.getCallTarget());
             }
             if (!(stack.pop() instanceof Apply apply)) throw fault("BCO returned over unconsumed arguments");
-            var arguments = new Object[apply.count];
-            for (int i = 0; i < arguments.length; i++) arguments[i] = stack.popPointer();
+            GhcBCOStack arguments = stack.snapshot(0, apply.words());
+            if (apply.kind == ReturnKind.P) for (int i = 0; i < arguments.words(); i++) arguments.pointer(i);
+            else if (apply.kind != ReturnKind.V) arguments.read(0, 8);
+            stack.dropWords(apply.words());
             Object ready;
             try { ready = AstControl.force(frame, this, force, answer); }
             catch (AstCapture cut) {
-                throw cut.append((saved, input) -> finish(saved, stack, call(saved, stack, input, arguments), true, null));
+                throw cut.append((saved, input) -> finish(saved, stack, call(saved, stack, input, apply, arguments), true, null));
             }
-            answer = call(frame, stack, ready, arguments);
+            answer = call(frame, stack, ready, apply, arguments);
             kind = null;
             try { answer = AstControl.force(frame, this, force, answer); }
             catch (AstCapture cut) { throw cut.append((saved, input) -> finish(saved, stack, input, false, null)); }
         }
         return answer;
     }
-    private Object call(VirtualFrame frame, GhcBCOStack stack, Object value, Object[] arguments) {
+    private Object call(VirtualFrame frame, GhcBCOStack stack, Object value, Apply apply, GhcBCOStack arguments) {
         if (!(value instanceof Closure function)) throw fault("BCO application requires a function");
-        // A saturated or overapplied BCO keeps the native return continuation on this stack.
-        if (function.arity <= arguments.length && function.target.getRootNode() instanceof GhcBCORoot root) {
-            root.requireOwner();
-            Object[] all = new Object[function.supplied.length + function.arity];
-            System.arraycopy(function.supplied, 0, all, 0, function.supplied.length);
-            System.arraycopy(arguments, 0, all, function.supplied.length, function.arity);
-            if (function.arity < arguments.length) {
-                for (int i = arguments.length - 1; i >= function.arity; i--) stack.pushReference(arguments[i]);
-                stack.pushReference(new Apply(arguments.length - function.arity));
+        if (function.target.getRootNode() instanceof GhcBCORoot target) {
+            target.requireOwner();
+            if (function.arity == 0) throw fault("BCO function entry requires positive arity");
+            Body body;
+            if (target.applicationLayout != null) body = target.application(function.environment).body();
+            else body = new Body(target, new GhcBCOStack());
+            GhcBCORoot root = body.root;
+            var prefix = new GhcBCOStack();
+            // Ordinary Core PAPs have a checked one-word layout. Internal BCO
+            // PAPs instead retain physical payload and logical arity separately.
+            root.pushExternal(prefix, function.supplied, 0, body.payload.words(), function.suppliedCount);
+            prefix.pushPayload(body.payload);
+            int consumed = Math.min(function.arity, apply.count);
+            if (consumed < apply.count && apply.kind != ReturnKind.P) throw fault("BCO non-pointer overapplication");
+            if (consumed < apply.count) {
+                stack.pushPayload(arguments.snapshot(consumed, apply.count - consumed));
+                stack.pushReference(new Apply(ReturnKind.P, apply.count - consumed));
             }
-            root.pushArguments(stack, all, 0);
+            var payload = arguments.snapshot(0, apply.kind == ReturnKind.V ? 0 : consumed);
+            payload.pushPayload(prefix);
+            payload.validatePrefix(root.nonPointers);
+            if (function.arity > apply.count) {
+                Closure result = (Closure) root.allocate(function.arity - apply.count, payload.words(), false);
+                allocated(result, false).fill(root, payload);
+                return result;
+            }
+            if (payload.words() != root.nonPointers.length) throw fault("BCO saturated application disagrees with its bitmap");
+            stack.pushPayload(payload);
             try { return AstControl.complete(this, root.executeStack(frame, stack), root.getCallTarget()); }
             catch (AstCapture cut) { throw cut.append((saved, input) -> finish(saved, stack, input, true, null)); }
         }
-        try { return calls[arguments.length - 1].execute(frame, function, arguments); }
+        Object[] values = new Object[apply.count];
+        for (int i = 0; i < values.length; i++) values[i] = switch (apply.kind) {
+            case P -> arguments.pointer(i);
+            case N, L -> arguments.read(0, 8);
+            case F -> Float.intBitsToFloat((int) arguments.read(0, 4));
+            case D -> Double.longBitsToDouble(arguments.read(0, 8));
+            case V -> Unit.INSTANCE;
+            default -> throw fault("BCO application convention unsupported");
+        };
+        try { return calls[values.length - 1].execute(frame, function, values); }
         catch (AstCapture cut) { throw cut.append((saved, input) -> finish(saved, stack, input, true, null)); }
     }
     void requireOwner() {
@@ -159,20 +266,36 @@ public final class GhcBCORoot extends GuestRoot {
     @Override public Object execute(VirtualFrame frame) {
         // Check ownership before node lookup can consult another root's sharing layer.
         requireOwner();
-        if (frame.getArguments().length != getArity() + 1) throw fault("BCO argument packet mismatch");
         var stack = new GhcBCOStack();
-        pushArguments(stack, frame.getArguments(), 1);
-        return executeStack(frame, stack);
+        GhcBCORoot body = this;
+        if (applicationLayout != null) {
+            Object[] arguments = frame.getArguments();
+            if (arguments.length < 2 || !(arguments[1] instanceof CapturedFrame environment))
+                throw fault("BCO application argument packet mismatch");
+            Application app = application(environment);
+            Body contents = app.body();
+            body = contents.root;
+            body.pushExternal(stack, arguments, 2, contents.payload.words(), app.arity);
+            stack.pushPayload(contents.payload);
+            if (stack.words() != body.nonPointers.length) throw fault("BCO application entry disagrees with its bitmap");
+        } else pushArguments(stack, frame.getArguments(), 1);
+        return executeStack(frame, stack, body);
     }
-    private void pushArguments(GhcBCOStack stack, Object[] arguments, int skip) {
-        if (arity != nonPointers.length || arguments.length - skip != arity)
+    private void pushExternal(GhcBCOStack stack, Object[] arguments, int skip, int offset, int logical) {
+        if (arguments.length - skip != logical || logical > nonPointers.length - offset)
             throw fault("BCO function entry requires a known argument word layout");
-        for (int i = arity - 1; i >= 0; i--) {
-            if (nonPointers[i]) pushWord(stack, arguments[i + skip]);
+        for (int i = logical - 1; i >= 0; i--) {
+            if (nonPointers[offset + i]) pushWord(stack, arguments[i + skip]);
             else stack.pushReference(arguments[i + skip]);
         }
     }
-    private Object executeStack(VirtualFrame frame, GhcBCOStack stack) {
+    private void pushArguments(GhcBCOStack stack, Object[] arguments, int skip) {
+        if (arity != nonPointers.length) throw fault("BCO function entry requires a known argument word layout");
+        pushExternal(stack, arguments, skip, 0, arity);
+    }
+    private Object executeStack(VirtualFrame frame, GhcBCOStack stack) { return executeStack(frame, stack, this); }
+    private Object executeStack(VirtualFrame frame, GhcBCOStack stack, GhcBCORoot body) {
+        body.requireOwner();
         AstStackScope scope = AstStacks.astStackScope(this);
         boolean driver = !scope.getDriving();
         if (driver) scope.setDriving(true);
@@ -184,9 +307,9 @@ public final class GhcBCORoot extends GuestRoot {
                     if (scope.getDepth() >= AstStackScope.MAX_DEPTH) {
                         scope.setSpills(scope.getSpills() + 1);
                         throw new AstCapture(AstStackSpill.INSTANCE, SynchronousMasking.current(this))
-                            .append((saved, input) -> resumeLoop(saved, stack, 0, input));
+                            .append((saved, input) -> body.resumeLoop(saved, stack, 0, input));
                     }
-                    result = run(frame, stack, 0);
+                    result = body.run(frame, stack, 0);
                 } catch (AstCapture cut) { result = own(cut).freeze(this, frame.materialize()); }
                 catch (DelimitedCut ignored) { throw fault("Delimited capture through a GHC BCO is not supported"); }
             } finally { scope.setDepth(scope.getDepth() - 1); }
@@ -223,7 +346,11 @@ public final class GhcBCORoot extends GuestRoot {
                 case 19, 20, 21 -> stack.push(0, 1 << (op - 19));
                 case 22, 23, 24 -> stack.push(literals[(int) args[0]], 1 << (op - 22));
                 case 25 -> { for (int i = (int) args[1] - 1; i >= 0; i--) stack.push(literals[(int) args[0] + i], 8); }
-                case 31, 32, 33, 34, 35, 36 -> stack.pushReference(new Apply(op - 30));
+                case 26, 27, 28, 29, 30 -> stack.pushReference(new Apply(ReturnKind.values()[op - 25], 1));
+                case 31, 32, 33, 34, 35, 36 -> stack.pushReference(new Apply(ReturnKind.P, op - 30));
+                case 39, 40 -> stack.pushReference(allocate(0, bound(args[0]), true));
+                case 41 -> stack.pushReference(allocate(logicalArity(args[0]), bound(args[1]), false));
+                case 42, 43 -> fill(stack, args[0], bound(args[1]), op == 42);
                 case 38 -> stack.slide(args[0], args[1]);
                 case 70 -> pushCase(stack, ReturnKind.T, pointers[(int) args[0]], literals[(int) args[1]], pointers[(int) args[2]]);
                 case 46, 47, 67, 68 -> {

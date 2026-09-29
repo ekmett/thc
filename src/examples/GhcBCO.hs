@@ -259,3 +259,127 @@ bcoCaseTupleOverapply n = case runRW# (\s ->
   case makeBCO [70,0,0,1,11,2,11,2,32,11,3,58] [3]
     [unsafeCoerce# cont, unsafeCoerce# tuple, unsafeCoerce# (I# n), unsafeCoerce# first] 0# [0] s4 of { (# _, bco #) ->
   case mkApUpd0# bco of { (# value #) -> value } } } } } }) of I# result -> result
+
+-- A captured Int# plus a void parameter and an Int# parameter: logical arity
+-- three, bitmap width two. Applying the void consumes no payload word.
+{-# OPAQUE bcoCapturedPap #-}
+bcoCapturedPap :: Int# -> Int#
+bcoCapturedPap n = runRW# (\s ->
+  case makeBCO [90,61] [] [] 3# [2,3] s of { (# s1, body #) ->
+  case makeBCO [41,2,1,25,0,1,11,0,43,2,1,2,1,26,30,2,3,38,4,2,58]
+    [7] [unsafeCoerce# body] 1# [1,1] s1 of { (# _, bco #) ->
+  (unsafeCoerce# bco :: Int# -> Int#) n } })
+
+
+{-# OPAQUE sumCaptured #-}
+sumCaptured :: Int -> Int -> Int
+sumCaptured (I# a) (I# b) = I# (a +# b)
+
+-- Both payload words are managed pointers. The AP escapes to a compiled
+-- consumer, whose two demands must share the single native update.
+{-# OPAQUE bcoCapturedAp #-}
+bcoCapturedAp :: Int# -> Int#
+bcoCapturedAp n = runRW# (\s ->
+  case newMutVar# (I# 0#) s of { (# s0, cell #) ->
+  case makeBCO [2,1,31,2,2,38,3,2,58] [] [] 2# [2,0] s0 of { (# s1, body #) ->
+  case makeBCO [39,2,11,1,11,0,11,2,42,3,2,2,0,32,11,3,58] []
+    [unsafeCoerce# (tick cell), unsafeCoerce# (I# n), unsafeCoerce# body, unsafeCoerce# sumCaptured] 0# [0] s1 of { (# s2, bco #) ->
+  case mkApUpd0# bco of { (# value #) -> case value of { I# result ->
+  case readMutVar# cell s2 of { (# _, I# count #) -> result +# count } } } } } })
+
+-- ALLOC_AP_NOUPD is produced only for a guaranteed single entry. The pinned
+-- interpreter's AP entry still installs its ordinary update frame.
+{-# OPAQUE bcoCapturedNoUpd #-}
+bcoCapturedNoUpd :: Int# -> Int#
+bcoCapturedNoUpd n = case runRW# (\s ->
+  case makeBCO [58] [] [] 1# [1,0] s of { (# s1, body #) ->
+  case makeBCO [40,1,11,1,11,0,42,2,1,58] []
+    [unsafeCoerce# body, unsafeCoerce# (I# n)] 0# [0] s1 of { (# _, bco #) ->
+  case mkApUpd0# bco of { (# value #) -> value } } }) of I# result -> result
+
+-- Allocate both shells before initializing either payload; the first retains
+-- the second while it is still uninitialized, as in the native letrec producer.
+{-# OPAQUE bcoCapturedApChain #-}
+bcoCapturedApChain :: Int# -> Int#
+bcoCapturedApChain n = case runRW# (\s ->
+  case makeBCO [58] [] [] 1# [1,0] s of { (# s1, body #) ->
+  case makeBCO [39,1,39,1,2,0,11,0,42,3,1,11,1,11,0,42,2,1,38,0,1,58] []
+    [unsafeCoerce# body, unsafeCoerce# (I# n)] 0# [0] s1 of { (# _, bco #) ->
+  case mkApUpd0# bco of { (# value #) -> value } } }) of I# result -> result
+
+{-# OPAQUE bcoCapturedRecursive #-}
+bcoCapturedRecursive :: Int# -> Int#
+bcoCapturedRecursive n = case runRW# (\s ->
+  case makeBCO [2,1,47,0,11,38,0,3,11,0,60,25,1,1,2,1,91,26,2,3,38,3,3,58]
+    [0,1] [unsafeCoerce# (I# n)] 2# [2,2] s of { (# s1, body #) ->
+  case makeBCO [41,1,1,2,0,11,0,43,2,1,25,0,1,2,2,90,26,2,2,38,3,2,58]
+    [2] [unsafeCoerce# body] 1# [1,1] s1 of { (# _, bco #) ->
+  (unsafeCoerce# bco :: Int# -> Int) n } }) of I# result -> result
+
+{-# OPAQUE capturedTyped #-}
+capturedTyped :: [Int] -> Int# -> Int# -> Int#
+capturedTyped instructions bits n = runRW# (\s ->
+  case makeBCO [90,61] [] [] 2# [2,3] s of { (# s1, body #) ->
+  case makeBCO instructions
+    [I# bits] [unsafeCoerce# body] 1# [1,1] s1 of { (# _, bco #) ->
+  (unsafeCoerce# bco :: Int# -> Int#) n } })
+
+{-# OPAQUE bcoCapturedFloat #-}
+bcoCapturedFloat :: Int# -> Int#
+bcoCapturedFloat n = capturedTyped [41,1,1,2,1,11,0,43,2,1,21,24,0,27,2,2,38,3,2,58] 2143294004# n
+{-# OPAQUE bcoCapturedDouble #-}
+bcoCapturedDouble :: Int# -> Int#
+bcoCapturedDouble n = capturedTyped [41,1,1,2,1,11,0,43,2,1,25,0,1,28,2,2,38,3,2,58] 9221120237041095220# n
+{-# OPAQUE bcoCapturedLong #-}
+bcoCapturedLong :: Int# -> Int#
+bcoCapturedLong n = capturedTyped [41,1,1,2,1,11,0,43,2,1,25,0,1,29,2,2,38,3,2,58] 7# n
+
+
+{-# OPAQUE bcoCapturedNoUpdEscape #-}
+bcoCapturedNoUpdEscape :: Int# -> Int#
+bcoCapturedNoUpdEscape n = case runRW# (\s ->
+  case makeBCO [58] [] [] 1# [1,0] s of { (# s1, body #) ->
+  case makeBCO [40,1,11,1,11,0,42,2,1,31,11,2,58] []
+    [unsafeCoerce# body, unsafeCoerce# (I# n), unsafeCoerce# plusSeven] 0# [0] s1 of { (# _, bco #) ->
+  case mkApUpd0# bco of { (# value #) -> value } } }) of I# result -> result
+
+
+{-# OPAQUE bcoIntCallee #-}
+bcoIntCallee :: Int# -> Int#
+bcoIntCallee n = n +# 7#
+{-# OPAQUE bcoFloatCallee #-}
+bcoFloatCallee :: Float# -> Int#
+bcoFloatCallee n = float2Int# n
+{-# OPAQUE bcoDoubleCallee #-}
+bcoDoubleCallee :: Double# -> Int#
+bcoDoubleCallee n = double2Int# n
+{-# OPAQUE bcoLongCallee #-}
+bcoLongCallee :: Int64# -> Int#
+bcoLongCallee n = int64ToInt# n
+{-# OPAQUE bcoVoidCallee #-}
+bcoVoidCallee :: State# RealWorld -> Int#
+bcoVoidCallee _ = 7#
+
+{-# OPAQUE scalarCoreCall #-}
+scalarCoreCall :: [Int] -> Int# -> Any -> Int# -> Int#
+scalarCoreCall instructions bits callee n = runRW# (\s ->
+  case makeBCO [38,0,1,38,1,2,90,61] [] [] 0# [1,1] s of { (# s1, cont #) ->
+  case makeBCO instructions [I# bits] [unsafeCoerce# cont,callee] 1# [1,1] s1 of { (# _, bco #) ->
+  (unsafeCoerce# bco :: Int# -> Int#) n } })
+
+{-# OPAQUE bcoApplyIntCore #-}
+bcoApplyIntCore :: Int# -> Int#
+bcoApplyIntCore n = scalarCoreCall [14,0,25,0,1,26,11,1,58] 7# (unsafeCoerce# bcoIntCallee) n
+{-# OPAQUE bcoApplyFloatCore #-}
+bcoApplyFloatCore :: Int# -> Int#
+bcoApplyFloatCore n = scalarCoreCall [14,0,21,24,0,27,11,1,58] 1080033280# (unsafeCoerce# bcoFloatCallee) n
+{-# OPAQUE bcoApplyDoubleCore #-}
+bcoApplyDoubleCore :: Int# -> Int#
+bcoApplyDoubleCore n = scalarCoreCall [14,0,25,0,1,28,11,1,58] 4615063718147915776# (unsafeCoerce# bcoDoubleCallee) n
+{-# OPAQUE bcoApplyLongCore #-}
+bcoApplyLongCore :: Int# -> Int#
+-- Int64Rep maps to N on PW8; L is only its compiled PW4 convention.
+bcoApplyLongCore n = scalarCoreCall [14,0,25,0,1,26,11,1,58] 7# (unsafeCoerce# bcoLongCallee) n
+{-# OPAQUE bcoApplyVoidCore #-}
+bcoApplyVoidCore :: Int# -> Int#
+bcoApplyVoidCore n = scalarCoreCall [14,0,30,11,1,58] 0# (unsafeCoerce# bcoVoidCallee) n

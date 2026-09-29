@@ -103,6 +103,40 @@ final class GhcBCOStack {
         for (int i = 0; i < keep; i++) managed.set(into + i, managed.get(from + i));
         drop((int) remove * 8);
     }
+    /** Owned, word-aligned AP/PAP payload, excluding interpreter frame headers. */
+    GhcBCOStack snapshot(int offset, int count) {
+        int words = words();
+        if (offset < 0 || count < 0 || offset > words || count > words - offset)
+            throw fault("BCO payload outside live stack");
+        for (int i = 0; i < count; i++)
+            if (peek(offset + i) instanceof Marker) throw fault("BCO payload contains a stack marker");
+        var copy = new GhcBCOStack();
+        copy.reserve(count * 8);
+        int first = words - offset - count;
+        System.arraycopy(bytes, first * 8, copy.bytes, 0, count * 8);
+        System.arraycopy(references, first, copy.references, 0, count);
+        for (int i = 0; i < count; i++) copy.managed.set(i, managed.get(first + i));
+        copy.size = count * 8;
+        return copy;
+    }
+    void pushPayload(GhcBCOStack payload) {
+        aligned(); payload.aligned(); reserve(payload.size);
+        int first = size / 8, count = payload.size / 8;
+        System.arraycopy(payload.bytes, 0, bytes, size, payload.size);
+        System.arraycopy(payload.references, 0, references, first, count);
+        for (int i = 0; i < count; i++) managed.set(first + i, payload.managed.get(i));
+        size += payload.size;
+    }
+    void dropWords(int count) {
+        if (count < 0 || count > words()) throw fault("BCO payload outside live stack");
+        drop(count * 8);
+    }
+    void validatePrefix(boolean[] nonPointers) {
+        if (words() > nonPointers.length) throw fault("BCO payload exceeds its bitmap");
+        for (int i = 0; i < words(); i++) {
+            if (nonPointers[i]) read((long) i * 8, 8); else pointer(i);
+        }
+    }
     void validate(boolean[] nonPointers, int offset) {
         if (offset < 0 || nonPointers.length > words() - offset) throw fault("BCO bitmap exceeds its live stack");
         for (int i = 0; i < nonPointers.length; i++) {
