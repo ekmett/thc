@@ -142,8 +142,7 @@ public final class Main {
             var guest = launcherArguments(args, 4);
             try (Context context = executionContext(true)) {
                 initializeArguments(context, guest);
-                Boolean async = configuredAsyncExceptions();
-                var action = loadEntry(context, modules(args[1]), args[2], true, defaultBackend(), true, args[3], async == null ? true : async, verifyArtifacts);
+                var action = loadEntry(context, modules(args[1]), args[2], true, defaultBackend(), true, args[3], configuredAsyncExceptions(), verifyArtifacts);
                 check(action.invokeMember("runIO").asBoolean(), "Executable IO did not complete");
                 if (Boolean.getBoolean("thc.diagnostics")) System.err.println(action.getMember("diagnostics").asString());
             }

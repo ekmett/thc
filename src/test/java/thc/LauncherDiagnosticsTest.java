@@ -220,15 +220,12 @@ public class LauncherDiagnosticsTest {
         }
     }
     @Test public void executableAsyncDefaultAndOverridesReachTheRunningProgram() throws Throwable {
-        for (var backend : List.of("ast", "bytecode")) {
+        for (var mode : List.of("--run-executable", "--run-io")) for (var backend : List.of("ast", "bytecode")) {
             for (var setting : Arrays.asList(null, "true", "false")) {
-                var metrics = (Map<?, ?>) Json.parse(launch("--run-executable", backend, "true", List.of(), setting).trim());
-                assertEquals(!"false".equals(setting), metrics.get("asyncExceptions"), backend + "/" + setting);
+                var metrics = (Map<?, ?>) Json.parse(launch(mode, backend, "true", List.of(), setting).trim());
+                assertEquals("true".equals(setting), metrics.get("asyncExceptions"), mode + "/" + backend + "/" + setting);
             }
-            assertThrows(IllegalArgumentException.class, () -> launch("--run-executable", backend, "true", List.of(), "enabled"));
-        }
-        for (var backend : List.of("ast", "bytecode")) {
-            var metrics = (Map<?, ?>) Json.parse(launch("--run-io", backend, "true").trim()); assertEquals(backend.equals("bytecode"), metrics.get("asyncExceptions"), "raw IO/" + backend);
+            assertThrows(IllegalArgumentException.class, () -> launch(mode, backend, "true", List.of(), "enabled"));
         }
     }
     @Test public void guestOptionsRemainOpaqueToTheLauncher() throws Throwable {

@@ -186,21 +186,24 @@ public class ProcessSignalsTest {
         finally { property("thc.asyncExceptions", previous); }
     }
     private void property(String key, String value) { if (value == null) System.clearProperty(key); else System.setProperty(key, value); }
-    @Test public void launcherAsyncPropertyAndExplicitArgumentPreserveBackendDefaults(@TempDir Path directory) throws Exception {
+    @Test public void launcherAsyncPropertyAndExplicitArgumentPreserveDefaultOff(@TempDir Path directory) throws Exception {
         Map<String, Object> integer = Map.of("kind", "long", "primReps", List.of("IntRep"), "evaluated", true);
         var identity = Map.of("id", "identity", "name", "identity", "arity", 1, "lifted", true, "rep", closure, "expr", List.of("lam",
             List.of(Map.of("id", "x", "lifted", false, "rep", integer)), variable("x", integer), Map.of("rep", closure, "resultRep", integer)));
-        var core = directory.resolve("SignalOptions.json");
-        Files.writeString(core, Json.stringify(Map.of("schema", 1, "ghc", "9.14.1", "module", "SignalOptions", "unit", "main", "constructors", List.of(), "bindings", List.of(identity))));
+        var core = CoreCbdTestSupport.writeModel(directory.resolve("SignalOptions.cbd"), Map.of("schema", 1, "ghc", "9.14.1", "module", "SignalOptions", "unit", "main", "boundary", "synthetic", "constructors", List.of(), "bindings", List.of(identity)));
         var previous = System.getProperty("thc.asyncExceptions");
         try {
             for (var setting : Arrays.asList(null, "true", "false")) {
                 property("thc.asyncExceptions", setting);
                 for (var backend : List.of("ast", "bytecode")) try (var context = Context.newBuilder("thc").build()) {
                     var action = loadEntry(context, List.of(core.toString()), "identity", true, backend);
-                    assertEquals(setting == null ? backend.equals("bytecode") : Boolean.parseBoolean(setting), ((Map<?, ?>) Json.parse(action.getMember("diagnostics").asString())).get("asyncExceptions"));
-                    assertEquals(17L, action.execute(17L).asLong()); var explicit = loadEntry(context, List.of(core.toString()), "identity", true, backend, false, null, true);
-                    assertEquals(true, ((Map<?, ?>) Json.parse(explicit.getMember("diagnostics").asString())).get("asyncExceptions"));
+                    assertEquals("true".equals(setting), ((Map<?, ?>) Json.parse(action.getMember("diagnostics").asString())).get("asyncExceptions"));
+                    assertEquals(17L, action.execute(17L).asLong());
+                    for (boolean override : new boolean[]{false, true}) {
+                        var explicit = loadEntry(context, List.of(core.toString()), "identity", true, backend, false, null, override);
+                        assertEquals(override, ((Map<?, ?>) Json.parse(explicit.getMember("diagnostics").asString())).get("asyncExceptions"));
+                        assertEquals(17L, explicit.execute(17L).asLong());
+                    }
                 }
             }
         } finally { property("thc.asyncExceptions", previous); }

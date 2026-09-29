@@ -11,17 +11,17 @@ runtime permits thread creation; an embedding must enable
 
 The public request accepts an optional Boolean `asyncExceptions`. `true` enables
 ordinary asynchronous polling immediately; when omitted it defaults to
-`false` for AST and `true` for bytecode. A string such as `"true"` is rejected.
+`false` for both AST and bytecode. A string such as `"true"` is rejected.
 `CoreModules.request(..., asyncExceptions = true)` exposes the same option.
 `loadEntry` also accepts a nullable `asyncExceptions` argument, defaulting to
 the optional strict `-Dthc.asyncExceptions=true|false` launcher property. With
-neither set, the backend defaults above are unchanged.
+neither set, both backends use speculative single-origin execution.
 
-The standalone `--run-executable` launcher enables asynchronous exceptions on
-both backends by default, so original GHC startup can install its process signal
-handlers. An explicit `-Dthc.asyncExceptions=false` selects speculative single-thread
-execution. Raw `--run-io` and embedding requests retain the backend defaults
-above. Process signal dispatch admits concurrency with either hosting option; see
+The standalone `--run-executable` launcher, raw `--run-io` and embedding requests
+all default to `false` on both backends. An explicit
+`-Dthc.asyncExceptions=true` enables ordinary polling eagerly. Original GHC
+startup can install its process signal handlers without opting in: process
+signal dispatch admits concurrency with either hosting option; see
 [standalone process signals](process-signals.md).
 
 Ordinary programs always retain continuation capture from their first lowering.

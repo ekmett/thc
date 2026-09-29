@@ -51,7 +51,7 @@ class CoreUnitAsyncPolicyTest {
             "fieldReps", list(list("IntRep")), "fieldTypes", list(longRep), "strictFields", list(false), "fieldLifted", list(false))));
         return Files.writeString(directory.resolve("packages.json"), Json.stringify(map("format", "thc-core-packages", "schema", 1, "ghc", "9.14.1", "units", list(a, b))));
     }
-    private String request(Path path, String backend, boolean async) { return CoreFormatTestSupport.request(List.of("@" + path), "uA:A.entry", backend, false, async, false); }
+    private String request(Path path, String backend, Boolean async) { return CoreFormatTestSupport.request(List.of("@" + path), "uA:A.entry", backend, false, async, false); }
     private long count(ExecutableProgram program, String name) { return ((Number) program.diagnostics().get(name)).longValue(); }
     private AsyncRequest externalSend(GuestThreads threads, long id) throws Exception {
         var pending = CompletableFuture.supplyAsync(() -> threads.send(id, "pending demand")).get(5, TimeUnit.SECONDS);
@@ -59,6 +59,22 @@ class CoreUnitAsyncPolicyTest {
     }
     private Context context(ByteArrayOutputStream output) { return Context.newBuilder("thc").err(output).build(); }
     private CoreUnitProgram program(Language.State owner) { var programs = owner.getCoreUnitPrograms(); assertEquals(1, programs.size()); return programs.getFirst(); }
+    @Test void defaultOffAndExplicitOverridesRetainCaptureOnBothBackends() throws Exception {
+        var manifest = fixture(false);
+        for (var backend : List.of("ast", "bytecode")) for (var async : Arrays.asList(null, false, true))
+            try (var context = context(new ByteArrayOutputStream())) {
+                var entry = context.eval("thc", request(manifest, backend, async));
+                assertEquals(Boolean.TRUE.equals(async), ((Map<?, ?>) Json.parse(entry.getMember("diagnostics").asString())).get("asyncExceptions"));
+                context.enter();
+                try {
+                    var owner = Language.currentState(null); var program = program(owner);
+                    assertTrue(program.getCapturesContinuations());
+                    assertEquals(Boolean.TRUE.equals(async), ((GuestRoot) program.entryTarget("uA:A.entry").getRootNode()).getEagerAsyncPolls());
+                    assertTrue(owner.getSingleGuestOriginAssumption().isValid());
+                } finally { context.leave(); }
+                assertEquals(7L, entry.execute(0).asLong());
+            }
+    }
     @Test void publicWrapperHonorsExternalDeliveryPolicyAndBytecodeInspection() throws Exception {
         var manifest = fixture(true);
         for (var backend : List.of("ast", "bytecode")) for (boolean async : new boolean[]{false, true}) {

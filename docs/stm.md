@@ -39,11 +39,12 @@ foreign-context, disposed and wrong-carrier TVars fail before mutation.
 
 ## Asynchronous interruption
 
-The public load request's `asyncExceptions` boolean selects synchronous or
-asynchronous execution on either backend. Omitting it preserves the existing
-defaults: synchronous AST and asynchronous bytecode.
+The public load request's `asyncExceptions` boolean controls eager asynchronous
+polling. Both backends default to `false`, speculating on a single guest admission
+origin until concurrency is admitted, while always retaining continuation capture.
+Explicit `true` enables ordinary polling immediately.
 
-In asynchronous mode, an exception crossing `atomically#` aborts the entire
+An asynchronous exception crossing `atomically#` aborts the entire
 attempt and cancels any retry registration before the enclosing IO handler runs.
 The request is acknowledged by that handler (or the uncaught IO boundary), not
 by transaction cleanup. Neither `catchSTM#` nor `catchRetry#` catches asynchronous

@@ -150,13 +150,13 @@ public class ThreadAsyncNativeTest {
     @Test public void astSavedSelfDeliveryRestoresMaskBeforeSavedHandler() throws Exception { exercise("savedMaskCatchSelf", List.of(110102L, 110103L), "ast", false); }
     @Test public void forkedChildOwnsAndResumesTheSharedLazyActionHead() throws Exception { exercise("lazyFork", List.of(52L, 53L), "LazyForkAudit", "bytecode", true); }
     @Test public void astForkedChildOwnsAndResumesTheSharedLazyActionHead() throws Exception { exercise("lazyFork", List.of(52L, 53L), "LazyForkAudit", "ast", true); }
-    @Test public void publicRequestValidatesAndSelectsSynchronousOrAsyncExecution() throws Exception {
+    @Test public void publicRequestValidatesAndSelectsAdaptiveOrEagerPolling() throws Exception {
         checkReceipt(); var core = new File(root, "build/thread-async/post/core/ThreadAsyncAudit.json");
         for (var backend : List.of("ast", "bytecode")) for (var mode : Arrays.asList(null, false, true)) try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
                 .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build()) {
             var request = CoreModules.request(List.of(core.getPath()), "yieldProbe", true, false, backend, true, false, null, mode); var entry = context.eval("thc", request);
             assertTrue(entry.invokeMember("compile").asBoolean()); assertEquals(37L, entry.execute(0L).asLong(), backend + "/" + mode + " first installed entry");
-            var diagnostics = (Map<?, ?>) Json.parse(entry.getMember("diagnostics").asString()); assertEquals(backend, diagnostics.get("backend")); assertEquals(mode == null ? backend.equals("bytecode") : mode, diagnostics.get("asyncExceptions"));
+            var diagnostics = (Map<?, ?>) Json.parse(entry.getMember("diagnostics").asString()); assertEquals(backend, diagnostics.get("backend")); assertEquals(Boolean.TRUE.equals(mode), diagnostics.get("asyncExceptions"));
             var document = (Map<String, Object>) Json.parse(request);
             var failure = assertThrows(PolyglotException.class, () -> { var changed = new LinkedHashMap<>(document); changed.put("asyncExceptions", "true"); context.eval("thc", Json.stringify(changed)); });
             assertTrue(failure.getMessage().contains("asyncExceptions must be a Boolean"));

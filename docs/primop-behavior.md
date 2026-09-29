@@ -39,7 +39,7 @@ test commands.
 | `spark#` | Discards the hint and returns the identical, unforced payload. |
 | `numSparks#` | Always returns `0`; there is no spark queue. |
 | `getSpark#` | Always returns failure flag `0` and the pinned GHC boxed `False` filler; no work is dequeued. |
-| `fork#` | Creates a Truffle-managed platform thread by default, or one virtual thread per guest thread with opt-in `thc.ThreadHosting=loom`. Thread creation must be allowed by the embedding. Platform mode clears inherited CPU affinity; Loom routes unmounted work between exclusive logical HEC workers. Resumable external delivery requires `asyncExceptions: true`; see `killThread#` below. |
+| `fork#` | Creates a Truffle-managed platform thread by default, or one virtual thread per guest thread with opt-in `thc.ThreadHosting=loom`. Thread creation must be allowed by the embedding. Platform mode clears inherited CPU affinity; Loom routes unmounted work between exclusive logical HEC workers. Fork admission enables ordinary asynchronous polling before child publication on both backends, including with `asyncExceptions: false`; see `killThread#` below. |
 | `forkOn#` | Same thread and delivery requirements as `fork#`. Chooses a dense logical capability modulo the context's current logical capability count, then maps modulo its immutable eligible CPU capacity. Native affinity is **best effort**: Linux requests a per-thread pin; Windows requests advisory CPU Sets and declines unresolved multi-group topology; macOS, unavailable native access, or a rejected request run unpinned without failing the fork. |
 | `threadStatus#` | Capability is a context-local assignment, not a measurement of the currently executing physical CPU. The lock flag records a `forkOn#` request, **not successful OS affinity**. Ordinary threads share logical capabilities. |
 | `listThreads#` | Lists context-owned guest identities, not every JVM thread. Retained completed identities and, in platform mode, host carriers between guest invocations can appear; ordering is unspecified. |
@@ -77,10 +77,11 @@ Details: [scheduling and affinity](thread-scheduling.md),
 ## Exceptions, blocking and transactions
 
 Public load requests accept a Boolean `asyncExceptions`. When omitted, it
-defaults to `false` for AST and `true` for bytecode. Enabling it supports ordinary
-AST calls, cases, lets, local joins, mask/catch scopes and shared-thunk updates
-across asynchronous suspension. The representation and composition limits below
-still apply.
+defaults to `false` on both backends, speculating on a single guest admission
+origin until concurrency is admitted. Explicit `true` enables polling eagerly.
+Ordinary calls, cases, lets, local joins, mask/catch scopes and shared-thunk
+updates always retain continuation capture across asynchronous suspension.
+The representation and composition limits below still apply.
 
 | Primop | Current behavior and consequence |
 | --- | --- |
