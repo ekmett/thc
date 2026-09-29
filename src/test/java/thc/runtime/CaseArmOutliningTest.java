@@ -58,6 +58,83 @@ public class CaseArmOutliningTest {
         assertEquals(0, state.getResults().getDepth()); assertEquals(0, state.getResults().retainedReferences());
     }
 
+    @Test @SuppressWarnings("unchecked")
+    public void reusableWideCaseKeepsColdArmsAndFreshInvocationOwners() throws Exception {
+        var alternatives = new ArrayList<List<?>>();
+        for (int i = 0; i < 67; i++) alternatives.add(List.of("lit", List.of("int", Integer.toString(i)),
+            List.of(), i == 1 ? app(variable("entry", closure), integer(0), prim("+#", variable("offset"), integer(7)))
+                : prim("+#", variable("seen"), variable("offset"))));
+        alternatives.add(fallback(prim("+#", variable("seen"), integer(-100))));
+        var body = choice(variable("x"), "seen", alternatives.toArray(List<?>[]::new));
+        var module = Map.<String,Object>of("instrument", true, "bindings", List.of(binding("entry",
+            lambda(List.of(parameter("x"), parameter("offset")), body))));
+        try (var engine = org.graalvm.polyglot.Engine.newBuilder().allowExperimentalOptions(true)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("engine.CompilationFailureAction", "Throw").build()) {
+            Program.PreparedCode code;
+            try (var context = org.graalvm.polyglot.Context.newBuilder("thc").engine(engine).build()) {
+                context.initialize("thc"); context.enter();
+                try { code = Program.prepareCode(TruffleLanguage.LanguageReference.create(Language.class).get(null), module, List.of("entry")); }
+                finally { context.leave(); }
+            }
+            var field = Program.PreparedCode.class.getDeclaredField("targets"); field.setAccessible(true);
+            var targets = (List<RootCallTarget>) field.get(code);
+            var arms = targets.stream().filter(t -> ((FunctionRoot)t.getRootNode()).getRole$org_intelligence_thc() == FunctionRootRole.PASS_THROUGH).toList();
+            assertFalse(arms.isEmpty(), "Wide reusable cases need separate cold compilation units");
+            for (var target : targets) {
+                var root = (FunctionRoot) target.getRootNode();
+                assertFalse(root.getStackCapture()); assertFalse(root.getCapturesContinuations$org_intelligence_thc());
+                assertEquals(false, target.getClass().getMethod("wasExecuted").invoke(target));
+                assertEquals(true, target.getClass().getMethod("prepareForAOT").invoke(target)); compile(target);
+                assertEquals(false, target.getClass().getMethod("wasExecuted").invoke(target));
+            }
+            for (int load = 0; load < 2; load++) try (var context = org.graalvm.polyglot.Context.newBuilder("thc").engine(engine).build()) {
+                context.initialize("thc"); context.enter();
+                try {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    var programs = List.of(code.newInstance(language), code.newInstance(language));
+                    for (int owner = 0; owner < 2; owner++) {
+                        var program = programs.get(owner); var closure = (Closure) program.entryValue("entry");
+                        long before = count(program, "compiledEntries");
+                        assertEquals(47L + load + owner, Calls.target(closure.target, new Object[]{0L, closure.environment, 6L, 41L + load + owner}));
+                        assertEquals(-25L, Calls.target(closure.target, new Object[]{0L, closure.environment, 75L, 900L}));
+                        assertEquals(48L, Calls.target(closure.target, new Object[]{0L, closure.environment, 1L, 41L}));
+                        // The recursive edge reuses the owning root's self loop;
+                        // only its next selected arm is a new root entry.
+                        assertEquals(before + 7, count(program, "compiledEntries"));
+                        assertEquals(1L, count(program, "selfTailReentries"));
+                        assertEquals(0, count(program, "loweredRootCount"));
+                        code.requireInstalledCode(); released(language);
+                    }
+                } finally { context.leave(); }
+            }
+        }
+    }
+
+    @Test @SuppressWarnings("unchecked")
+    public void reusableWideCaseKeepsOuterJoinInItsOwningFrame() throws Exception {
+        withLanguage(language -> {
+            var join = new LinkedHashMap<>(binding("finish", lambda(List.of(parameter("n")), prim("+#", variable("n"), integer(9)))));
+            join.put("joinValueArity", 1); join.put("joinResultRep", wide);
+            var alternatives = new ArrayList<List<?>>();
+            for (int i = 0; i < 33; i++) alternatives.add(List.of("lit", List.of("int", Integer.toString(i)), List.of(), app(variable("finish", closure), variable("seen"))));
+            alternatives.add(fallback(app(variable("finish", closure), variable("seen"))));
+            var body = List.of("let", false, List.of(join), choice(variable("x"), "seen", alternatives.toArray(List<?>[]::new)), Map.of("rep", wide));
+            var code = Program.prepareCode(language, Map.of("instrument", true,
+                "bindings", List.of(binding("entry", lambda(List.of(parameter("x")), body)))), List.of("entry"));
+            var field = Program.PreparedCode.class.getDeclaredField("targets"); field.setAccessible(true);
+            for (var target : (List<RootCallTarget>)field.get(code)) {
+                assertTrue(NodeUtil.findAllNodeInstances(target.getRootNode(), AstCaseArm.class).isEmpty());
+                assertEquals(false, target.getClass().getMethod("wasExecuted").invoke(target));
+                assertEquals(true, target.getClass().getMethod("prepareForAOT").invoke(target)); compile(target);
+            }
+            var program = code.newInstance(language); var entry = (Closure)program.entryValue("entry");
+            assertEquals(38L, Calls.target(entry.target, new Object[]{0L, entry.environment, 29L}));
+            assertEquals(1L, count(program, "localJoinTransfers"));
+            code.requireInstalledCode(); released(language);
+        });
+    }
+
     @Test public void coldSelectedArmUsesTypedCapturesAndRetainsFirstCompiledCaller() throws Exception {
         withLanguage(language -> { for (boolean async : new boolean[] {false, true}) {
             var body = choice(variable("x"), "seen", fallback(prim("+#", variable("seen"), integer(17))));
@@ -69,6 +146,48 @@ public class CaseArmOutliningTest {
             assertSame(target, p.entryTarget("entry")); assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
             assertEquals(true, arm.getTarget().getClass().getMethod("isValidLastTier").invoke(arm.getTarget())); released(language);
         } });
+    }
+
+    @Test @SuppressWarnings("unchecked")
+    public void reusableWideTupleArmsPreserveExactCapturesAndCleanLoans() throws Exception {
+        withLanguage(language -> {
+            Map<String, Object> narrow = Map.of("kind", "long", "primReps", List.of("Int8Rep"), "evaluated", true);
+            Map<String, Object> floating = Map.of("kind", "float", "primReps", List.of("FloatRep"), "evaluated", true);
+            Map<String, Object> tuple = Map.of("kind", "unknown", "aggregate", "unboxed-tuple", "evaluated", true,
+                "primReps", List.of("Int8Rep", "FloatRep", "BoxedRep (Just Lifted)"), "components", List.of(narrow, floating, closure));
+            var construct = List.of("app", List.of("con", "Tuple3", 3),
+                List.of(variable("narrow", narrow), variable("floating", floating), variable("marker", closure)),
+                List.of(false, false, true), false, false, Map.of("rep", tuple));
+            var alternatives = new ArrayList<List<?>>();
+            for (int i = 0; i < 33; i++) alternatives.add(List.of("lit", List.of("int", Integer.toString(i)), List.of(), construct));
+            alternatives.add(fallback(construct));
+            var body = choice(tuple, variable("x"), "seen", alternatives.toArray(List<?>[]::new));
+            var module = Map.<String,Object>of("instrument", true,
+                "constructors", List.of(Map.of("id", "Tuple3", "name", "(#,,#)", "arity", 3, "tag", 1, "kind", "unboxed-tuple")),
+                "bindings", List.of(binding("entry", lambda(List.of(parameter("x"), parameter("narrow", narrow),
+                    parameter("floating", floating), parameter("marker", closure)), body, tuple))));
+            var code = Program.prepareCode(language, module, List.of("entry"));
+            var field = Program.PreparedCode.class.getDeclaredField("targets"); field.setAccessible(true);
+            for (var target : (List<RootCallTarget>)field.get(code)) {
+                assertEquals(false, target.getClass().getMethod("wasExecuted").invoke(target));
+                assertEquals(true, target.getClass().getMethod("prepareForAOT").invoke(target)); compile(target);
+            }
+            var marker = new Closure(null, 0, new RootNode(language) {
+                @Override public Object execute(VirtualFrame frame) { throw new AssertionError("Lazy capture was forced"); }
+            }.getCallTarget());
+            for (int owner = 0; owner < 2; owner++) {
+                var program = code.newInstance(language); var entry = (Closure)program.entryValue("entry");
+                var shape = Objects.requireNonNull(((GuestRoot)entry.target.getRootNode()).getTupleResult());
+                var layout = new FrameLayout(); var slots = new int[3];
+                for (int i = 0; i < slots.length; i++) slots[i] = layout.bind("result " + i);
+                var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], layout.build());
+                shape.consume(frame, callScalarTestTarget(entry.target,
+                    new Object[]{0L, entry.environment, owner == 0 ? 0L : 100L, -128, Float.intBitsToFloat(0x80000000), marker}), slots, 0);
+                assertEquals(-128, frame.getInt(slots[0])); assertEquals(0x80000000, Float.floatToRawIntBits(frame.getFloat(slots[1])));
+                assertSame(marker, frame.getObject(slots[2])); assertEquals(2L, count(program, "compiledEntries"));
+                code.requireInstalledCode(); released(language);
+            }
+        });
     }
     @Test public void scrutineeIsEvaluatedOnceAndReturningArmKeepsItsNontailSuffix() throws Exception {
         withLanguage(language -> { for (boolean async : new boolean[] {false, true}) {

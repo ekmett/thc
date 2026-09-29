@@ -899,7 +899,7 @@ public final class Program implements ExecutableProgram {
             if (scope.joins.containsKey(free)) return false;
         return true;
     }
-    private Expr caseArm(List<Object> expression, Scope scope, boolean tail) {
+    private Expr caseArm(List<Object> expression, Scope scope, boolean tail, int alternativeCount) {
         if (sameFrameCandidate(expression, scope)) {
             OperandBuilder operands = operandBuilder;
             operandBuilder = null;
@@ -946,10 +946,13 @@ public final class Program implements ExecutableProgram {
                 return node;
             }
         }
+        // Wide cold dispatches otherwise compile every nontrivial arm into one
+        // graph. Reuse side roots without enabling continuation frame capture.
+        boolean outline = outlineCaseArms || reusableCode && !capturesContinuations && !delimited && alternativeCount > 32;
         boolean hasLocalJoin = false;
-        if (outlineCaseArms && Arrays.asList("app", "case", "let").contains(expression.getFirst()))
+        if (outline && Arrays.asList("app", "case", "let").contains(expression.getFirst()))
             for (String free : coreFreeVariables(expression)) if (scope.joins.containsKey(free)) { hasLocalJoin = true; break; }
-        if (!outlineCaseArms || !Arrays.asList("app", "case", "let").contains(expression.getFirst()) || hasLocalJoin)
+        if (!outline || !Arrays.asList("app", "case", "let").contains(expression.getFirst()) || hasLocalJoin)
             return compile(expression, scope, tail);
         OperandBuilder operands = operandBuilder;
         operandBuilder = null;
@@ -957,7 +960,7 @@ public final class Program implements ExecutableProgram {
         try { fn = function("case arm", List.of(), expression, scope, CoreRepresentations.expression(expression),
             new boolean[0], FunctionRootRole.PASS_THROUGH, tail); }
         finally { operandBuilder = operands; }
-        return new AstCaseArm(fn.target, fn.captureLayout, fn.captures, tail).located(currentSource);
+        return new AstCaseArm(fn.target, fn.captureLayout, fn.captures, tail, scope.programSlot).located(currentSource);
     }
     private FrameSlotKind outlinedSlotKind(CoreRepresentation proof, boolean cell) {
         if (reusableCode) return cell || !proof.getEvaluated() || proof.getKind() == CoreKind.UNKNOWN
@@ -1152,7 +1155,7 @@ public final class Program implements ExecutableProgram {
                 else if (component.getKind() == CoreKind.VOID) child.bindVoid(ids.getFirst(), field);
                 else child.bindSlot(ids.getFirst(), new Local(projection[0], component.isLong(), field, false, null, null, null));
             }
-            Expr body = caseArm((List<Object>) alt.get(3), child, tail);
+            Expr body = caseArm((List<Object>) alt.get(3), child, tail, alternatives.size());
             arms[index] = conversionSlots.isEmpty() ? body : new Let(ints(conversionSlots), conversionValues.toArray(Expr[]::new),
                 new boolean[conversionSlots.size()], body, false);
         }
@@ -1233,7 +1236,7 @@ public final class Program implements ExecutableProgram {
                 else local.bindSlot(id, new Local(slots[offset], component.isLong(), evaluated(field, component.isLong() || component.getEvaluated()), false, null, null, null));
             }
         } else if (!"default".equals(alt.getFirst()) || !ids.isEmpty()) throw new RuntimeFault("Invalid tuple alternative");
-        return new TupleCase(scrutinee, slots, caseArm((List<Object>) alt.get(3), local, tail));
+        return new TupleCase(scrutinee, slots, caseArm((List<Object>) alt.get(3), local, tail, 1));
     }
     private Expr joinJump(LocalJoinTarget target, List<List<Object>> args, List<?> flags, Scope scope) {
         return joinJump(target, args, flags, scope, new boolean[args.size()]);
@@ -1655,7 +1658,7 @@ public final class Program implements ExecutableProgram {
                 case "lit" -> LITERAL_ALTERNATIVE;
                 default -> throw new RuntimeFault("Invalid Core alternative kind " + kind);
             };
-            Expr body = caseArm((List<Object>) alt.get(3), child, tail);
+            Expr body = caseArm((List<Object>) alt.get(3), child, tail, alternatives.length);
             alternatives[a] = reusableCode && layout != null ?
                 new Alternative(tag, layout.reusableStorage(), ints(slots), body, vectorFields, false,
                     scope.programSlot, required(constructorIndices, layout.getId())) :
