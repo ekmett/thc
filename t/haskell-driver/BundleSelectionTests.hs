@@ -20,6 +20,7 @@ import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KM
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
+import qualified Data.Map.Strict as Map
 import Data.Either (isLeft)
 import Data.Maybe (isNothing)
 import Numeric (showHex)
@@ -29,7 +30,7 @@ import System.IO.Error (tryIOError)
 import Test.HUnit (Test(..), assertBool, assertEqual)
 import THC.Driver.CoreSymbols (publishCoreUnit)
 import THC.Driver.Project (Bundle(..), BundleReceipt(..), readGlobalBundle, readBundle,
-  exceptionBridgeModules, projectWindowsWiredBundle)
+  exceptionBridgeModules, projectWindowsWiredBundle, readCapturedStoreBundles)
 import THC.Driver.Zip (encodeZip)
 import TestSupport (Env, withFixtureNamed)
 
@@ -53,6 +54,34 @@ tests env = TestLabel "upstream successful Core selections" $ TestList
         =<< readGlobalBundle False path "test-unit" [] "build" "new-export"
       removeFile (path ++ ".selection.json")
       assertBool "missing selection receipt takes cold path" . isNothing =<< readSelected False
+  , TestCase $ scratch "captured" $ \directory -> do
+      let path = directory </> "captured.zip"
+          manifest = directory </> "captured.json"
+          identity = object ["unit" .= ("test-unit" :: String), "depends" .= ([] :: [String]),
+            "configuration" .= object ["style" .= ("global" :: String)]]
+          request = object ["compiler" .= ("ghc-9.14.1" :: String),
+            "units" .= [identity], "inputs" .= object []]
+      bundle <- archive path "test-unit" [("A", core "test-unit" "A")] Nothing []
+      let row = object ["unit" .= ("test-unit" :: String), "path" .= path,
+            "sha256" .= bundleHash bundle, "buildKey" .= ("build" :: String), "exportKey" .= ("export" :: String)]
+          supplied :: [Value] -> Value
+          supplied rows = object ["format" .= ("thc-captured-store-bundles" :: String),
+            "schema" .= (1 :: Int), "request" .= request, "bundles" .= rows]
+          load expected = readCapturedStoreBundles True expected [("test-unit",[])] manifest
+      BS.writeFile manifest (encoded (supplied [row]))
+      selected <- load request
+      assertEqual "explicit capture keeps the original producer identity and path"
+        (Just (snapshot bundle)) (snapshot <$> Map.lookup "test-unit" selected)
+      assertBool "different local/native input snapshot rejects retained capture" . isLeft =<<
+        tryIOError (load (object ["compiler" .= ("ghc-9.14.1" :: String),
+          "units" .= [identity], "inputs" .= object ["changed" .= True]]))
+      BS.writeFile manifest (encoded (supplied [row,row]))
+      assertBool "duplicate supplied owners are rejected" . isLeft =<< tryIOError (load request)
+      BS.writeFile manifest (encoded (supplied []))
+      assertBool "missing owner cannot silently trigger a whole capture" . isLeft =<< tryIOError (load request)
+      BS.writeFile manifest (encoded (supplied [row]))
+      BS.appendFile path "changed"
+      assertBool "supplied digest is checked against the validated archive" . isLeft =<< tryIOError (load request)
   , TestCase $ scratch "configured" $ \directory -> do
       let path = directory </> "configured.zip"
           inputs = object ["unit" .= ("test-unit" :: String), "component" .= ("original" :: String)]
