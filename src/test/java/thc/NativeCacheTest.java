@@ -162,6 +162,16 @@ class NativeCacheTest {
         assertNotEquals(NativeCache.sourceName("a"), NativeCache.sourceName("b"));
     }
 
+    @Test void ioStoreOptionsReachTheImageRequirementWithoutGuestExecution() {
+        var accepted = assertThrows(IllegalStateException.class, () -> NativeCache.main(new String[]{
+            "store", "cache", "module.json", "main", "--io-main", "--shutdown-entry=shutdown", "--verify-artifacts"}));
+        assertTrue(accepted.getMessage().contains("native-cache image"));
+        assertThrows(IllegalArgumentException.class, () -> NativeCache.main(new String[]{
+            "store", "cache", "module.json", "main", "--shutdown-entry=shutdown"}));
+        assertThrows(IllegalArgumentException.class, () -> NativeCache.main(new String[]{
+            "store", "cache", "module.json", "main", "--io-main", "--unknown"}));
+    }
+
     @Test void commandArgumentsPreserveExplicitNumericCarriers() {
         assertEquals(Long.MIN_VALUE, NativeCache.argument("-9223372036854775808"));
         assertEquals(16777216f, NativeCache.argument("f:16777217"));

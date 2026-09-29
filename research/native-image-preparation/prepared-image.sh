@@ -18,7 +18,11 @@ unset JAVA_TOOL_OPTIONS THC_BACKEND JAVA_OPTS THC_OPTS JDK_JAVA_OPTIONS GHC_PACK
 cd "$repo_dir"
 classpath=
 for jar in build/install/thc/lib/*.jar; do
-    case "${jar##*/}" in llvm-*|thc-llvm-language-*|antlr4-*|truffle-nfi-*) continue ;; esac
+    # Cached package FFI uses the distribution's existing Sulong/NFI providers
+    # at load time; preparation itself does not open or execute a guest library.
+    if [[ "$mode" != cache* ]]; then
+        case "${jar##*/}" in llvm-*|thc-llvm-language-*|antlr4-*|truffle-nfi-*) continue ;; esac
+    fi
     classpath="${classpath:+$classpath:}$repo_dir/$jar"
 done
 test -f build/install/thc/lib/thc-0.1-experiment.jar
