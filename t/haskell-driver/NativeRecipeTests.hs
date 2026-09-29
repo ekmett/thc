@@ -14,7 +14,7 @@
 module NativeRecipeTests (tests, interfaceTests) where
 
 import Control.Exception (bracket)
-import Control.Monad (forM_)
+import Control.Monad (forM_, when)
 import qualified Crypto.Hash.SHA256 as SHA
 import Data.Aeson (Value(..), object, (.=), encode, eitherDecodeStrict', toJSON)
 import qualified Data.Aeson.KeyMap as KeyMap
@@ -82,8 +82,19 @@ tests = TestLabel "actual native compiler receipts" $ TestList
             field _ _ = fail "component descriptor must be an object"
         writeFile "Owner.hs" "{-# LANGUAGE NoImplicitPrelude #-}\nmodule Owner where\ndata Sentinel = Sentinel\n"
         _ <- command compiler ["-c","Owner.hs","-fPIC"]
-        provider <- prepare "nativeprovider" []
-          "int shared_state=40; int next(void){return ++shared_state;} int unimported(void){return shared_state;}\n"
+        provider <- prepare "nativeprovider" [] (unlines
+          [ "__attribute__((visibility(\"hidden\"))) volatile int hidden_state=0;"
+          , "__attribute__((visibility(\"hidden\"),noinline)) int hidden_helper(void){return hidden_state;}"
+          , "int shared_state=40; const int public_constant=7; int private(void){return 0;}"
+          , "int next(void){return ++shared_state+hidden_helper();} int unimported(void){return shared_state;}"
+          -- Mach-O C does not support GNU alias attributes. Exercise aliases
+          -- where the actual compiler emits them, not invented native products.
+          , "#ifdef __ELF__"
+          , "extern int public_alias(void) __attribute__((alias(\"next\")));"
+          , "extern int public_state_alias __attribute__((alias(\"shared_state\")));"
+          , "__attribute__((visibility(\"protected\"))) int protected_function(void){return public_constant;}"
+          , "#endif"
+          ])
         assertEqual "only actual C membership, not native Haskell code" 1 (length (nativeProductPieces provider))
         let localSource = object ["type" .= ("local"::String),"path" .= root]
             localPlan style source = object ["id" .= ("nativeprovider"::String),"type" .= ("configured"::String),
@@ -101,7 +112,21 @@ tests = TestLabel "actual native compiler receipts" $ TestList
             tryIOError (readNativeProduct invalid [] (root </> "nativeprovider.conf") pieces)
         (_,Just descriptor) <- finish "nativeprovider" provider []
         exports <- field "exports" descriptor
-        assertBool "unimported public definition remains rooted" (String "unimported" `elem` case exports of Array names -> foldr (:) [] names; _ -> [])
+        let advertised = case exports of Array names -> foldr (:) [] names; _ -> []
+        assertBool "public functions, data and constants remain rooted"
+          (all ((`elem` advertised) . String) ["next","unimported","shared_state","public_constant","private"])
+        assertBool "hidden helpers and data are not cross-component exports"
+          (all ((`notElem` advertised) . String) ["hidden_helper","hidden_state"])
+        providerDefinitions <- command nm ["--defined-only","--format=posix",root </> "linked/nativeprovider/native/package.bc"]
+        assertBool "referenced hidden helper and data remain in the component"
+          (all (`isInfixOf` providerDefinitions) ["hidden_helper ","hidden_state "])
+        [providerPiece] <- pure (nativeProductPieces provider)
+        String providerBitcode <- field "bitcode" providerPiece
+        originalDefinitions <- command nm ["--defined-only","--format=posix",Text.unpack providerBitcode]
+        forM_ ["public_alias","public_state_alias","protected_function"] $ \alias ->
+          when ((alias ++ " ") `isInfixOf` originalDefinitions) $
+            assertBool "compiler-emitted public aliases and protected definitions remain rooted and advertised"
+              (String (Text.pack alias) `elem` advertised && (alias ++ " ") `isInfixOf` providerDefinitions)
         (_,Just repeated) <- finish "nativeprovider" provider []
         assertEqual "direct/dependency use keeps one exact component payload" descriptor repeated
         consumer <- prepare "nativeconsumer" ["nativeprovider"]
