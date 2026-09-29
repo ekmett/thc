@@ -180,6 +180,32 @@ class CoreCompactRecordsTest {
             assertEquals(3, ((List<?>) call.get("argumentReps")).size());
         });
     }
+    @Test void mixedNativeDependenciesAndClosureProvenanceStayInHeader() throws Exception {
+        byte[] text = bytes(0, id.length);
+        byte[] payload = concat(bytes(1), text, text, text, text, text, text, bytes(1, 42));
+        byte[] leaf = concat(payload, bytes(1), text, bytes(0, 2), text, bytes(1, 43));
+        byte[] component = concat(payload, bytes(1), text, bytes(1), leaf, bytes(0));
+        byte[] nativeLink = concat(payload, bytes(0, 0, 4, 0, 0, 1), text, bytes(1), component);
+        byte[] facts = concat(bytes(1), text, text, text, text, new byte[12], bytes(2), nativeLink, bytes(0));
+        byte[] provenance = concat(bytes(1, 2, 1), text, bytes(2, 1), text, bytes(2, 1), text, text, text,
+            bytes(1), text, bytes(2), text, bytes(1));
+        module(new byte[0], id, concat(facts, provenance), (records, file) -> {
+            var header = records.header();
+            var link = (Map<?,?>) header.get("packageNativeLink");
+            assertEquals(List.of("unit:M.f"), link.get("exports"));
+            var parent = (Map<?,?>) ((List<?>) link.get("dependencies")).getFirst();
+            var child = (Map<?,?>) ((List<?>) parent.get("dependencies")).getFirst();
+            assertEquals("2a", child.get("bitcodeHex"));
+            assertEquals(Map.of("sha256", "unit:M.f", "hex", "2b"), child.get("nativeLibrary"));
+            assertFalse(child.containsKey("abi"));
+            assertEquals(List.of("unit:M.f"), header.get("roots"));
+            assertEquals(List.of("unit:M.f"), header.get("sourceModules"));
+            assertEquals(List.of(Map.of("id", "unit:M.f", "type", "unit:M.f", "reason", "unit:M.f")), header.get("missingDefinitions"));
+            var origin = (Map<?,?>) ((List<?>) header.get("bindingOrigins")).getFirst();
+            assertEquals("unit:M.f", origin.get("origin")); assertTrue(origin.containsKey("originModule"));
+            assertNull(origin.get("originModule")); assertEquals(0L, file.getCounters().statistics().dataBytesRead());
+        });
+    }
     @Test void explicitLiteralRecordsPreserveRawBytesIntegersAndIeeeBits() throws Exception {
         var cases = List.of(
             new LiteralCase(0, bytes(83), "int", "-42"),
