@@ -16,7 +16,7 @@ module THC.Driver.Project
   ( runProject, acquireProject, prepareWindowsRuntime, Bundle(..), InstalledBundle(..)
   , prepareInstalledBundle, installedRecords
   , BundleReceipt(..), readGlobalBundle, readBundle, exceptionBridgeModules, projectWindowsWiredBundle
-  , publishCapturedStoreUnit
+  , publishCapturedStoreUnit, readCapturedStoreBundles
   ) where
 
 import Control.Exception (evaluate, finally, onException)
@@ -477,6 +477,8 @@ runBuiltProject action project working thcRoot runtime output native target proj
         "--builddir=" ++ dist, componentTarget] sourceRoot (Just environment)
   let globals = [unit | unit <- ordered, not (unitLocal unit),
                        jsonField (unitValue unit) "type" == Just ("configured" :: String)]
+  capturedPath <- lookupEnv "THC_CAPTURED_STORE_BUNDLES"
+  captured <- traverse (\_ -> prepareGlobalBundles context project targetComponent byId localComponents globals) capturedPath
   installed <- if installedPolicy == "pinned" then pure Map.empty else do
     originalContext <- prepareInterfaceHelper context thcRoot
     let installedUnits = [unit | unit <- ordered,
@@ -510,8 +512,8 @@ runBuiltProject action project working thcRoot runtime output native target proj
     pure (Map.fromList bundles)
   selectedPackage <- field (unitValue selected) "pkg-name"
   selectedComponent <- field (unitValue selected) "component-name"
-  globalBundles <- prepareGlobalBundles context project
-    (selectedPackage ++ ":" ++ selectedComponent) byId localComponents globals
+  globalBundles <- maybe (prepareGlobalBundles context project
+    (selectedPackage ++ ":" ++ selectedComponent) byId localComponents globals) pure captured
   (_, described) <- foldlM (\(keys, acc) unit -> do
     kind <- optionalField (unitValue unit) "type" ("" :: String)
     bundle <- if unitLocal unit
@@ -1350,43 +1352,82 @@ prepareGlobalBundles context project target planned locals units = do
           pure (unitId unit, object ["unit" .= unitId unit, "nativeInputs" .= artifacts])
         pure (Map.fromList (localInputs ++ sourceInputs))
   inputs <- observeInputs
-  located <- forM units $ \unit -> do
-    (buildKey, exportKey, path) <- globalLocation context planned inputs unit
-    cached <- doesFileExist path
-    hit <- if cached then readGlobalBundle (contextVerifyArtifacts context) path (unitId unit) (unitDepends unit) buildKey exportKey
-           else pure Nothing
-    pure (unit, buildKey, exportKey, path, hit)
-  let missing = [(unit, buildKey, exportKey, path)
-                | (unit, buildKey, exportKey, path, Nothing) <- located]
-      validateInputs = do
-        currentInputs <- observeInputs
-        forM_ located $ \(unit, buildKey, _, _, _) -> do
-          (currentKey, _, _) <- globalLocation context planned currentInputs unit
-          require (currentKey == buildKey)
-            ("project dependency inputs changed during capture for " ++ unitId unit)
-  when (not (null missing)) $ do
-    -- Only identical missing batches serialize the expensive private Cabal
-    -- build. Unrelated projects do not wait behind a cache-wide export lock.
-    let batch = shaHex (BL.toStrict (encode (sort [key | (_, _, key, _) <- missing])))
-    withLock (lockDir </> batch <.> "lock") $ do
-      pending <- filterM (\(unit, buildKey, exportKey, path) -> do
-        present <- doesFileExist path
-        ready <- if present then readGlobalBundle (contextVerifyArtifacts context) path (unitId unit) (unitDepends unit) buildKey exportKey
-                 else pure Nothing
-        pure (case ready of Nothing -> True; Just _ -> False)) missing
-      when (not (null pending)) $
-        captureGlobalUnits context project target planned (map first4 pending) pending validateInputs
-  -- Check warm hits too, before they enter the combined manifest.
-  validateInputs
-  pairs <- forM located $ \(unit, buildKey, exportKey, path, hit) -> do
-    bundle <- case hit of
-      Just value -> pure value
-      Nothing -> do
-        ready <- readGlobalBundle (contextVerifyArtifacts context) path (unitId unit) (unitDepends unit) buildKey exportKey
-        maybe (fail ("Cabal store Core bundle was not published: " ++ unitId unit)) pure ready
-    pure (unitId unit, bundle)
-  pure (Map.fromList pairs)
+  suppliedPath <- lookupEnv "THC_CAPTURED_STORE_BUNDLES"
+  case suppliedPath of
+    Just path -> do
+      require (isAbsolute path) "THC_CAPTURED_STORE_BUNDLES must be an absolute path"
+      let closure = Map.elems (Map.fromList [(unitId unit, unit) | unit <- concat closures])
+          request = object ["compiler" .= contextCompiler context, "abi" .= contextAbi context,
+            "platform" .= contextPlatform context, "units" .= map sourceIdentity closure, "inputs" .= inputs]
+      -- This is the current consumer snapshot, not invented historical producer
+      -- evidence. An explicit retained-stage handoff must bind its bundles to it.
+      atomicJson (path ++ ".request.json") request
+      readCapturedStoreBundles (contextVerifyArtifacts context) request
+        [(unitId unit, unitDepends unit) | unit <- units] path
+    Nothing -> do
+      located <- forM units $ \unit -> do
+        (buildKey, exportKey, path) <- globalLocation context planned inputs unit
+        cached <- doesFileExist path
+        hit <- if cached then readGlobalBundle (contextVerifyArtifacts context) path (unitId unit) (unitDepends unit) buildKey exportKey
+               else pure Nothing
+        pure (unit, buildKey, exportKey, path, hit)
+      let missing = [(unit, buildKey, exportKey, path)
+                    | (unit, buildKey, exportKey, path, Nothing) <- located]
+          validateInputs = do
+            currentInputs <- observeInputs
+            forM_ located $ \(unit, buildKey, _, _, _) -> do
+              (currentKey, _, _) <- globalLocation context planned currentInputs unit
+              require (currentKey == buildKey)
+                ("project dependency inputs changed during capture for " ++ unitId unit)
+      when (not (null missing)) $ do
+        -- Only identical missing batches serialize the expensive private Cabal
+        -- build. Unrelated projects do not wait behind a cache-wide export lock.
+        let batch = shaHex (BL.toStrict (encode (sort [key | (_, _, key, _) <- missing])))
+        withLock (lockDir </> batch <.> "lock") $ do
+          pending <- filterM (\(unit, buildKey, exportKey, path) -> do
+            present <- doesFileExist path
+            ready <- if present then readGlobalBundle (contextVerifyArtifacts context) path (unitId unit) (unitDepends unit) buildKey exportKey
+                     else pure Nothing
+            pure (case ready of Nothing -> True; Just _ -> False)) missing
+          when (not (null pending)) $
+            captureGlobalUnits context project target planned (map first4 pending) pending validateInputs
+      -- Check warm hits too, before they enter the combined manifest.
+      validateInputs
+      pairs <- forM located $ \(unit, buildKey, exportKey, path, hit) -> do
+        bundle <- case hit of
+          Just value -> pure value
+          Nothing -> do
+            ready <- readGlobalBundle (contextVerifyArtifacts context) path (unitId unit) (unitDepends unit) buildKey exportKey
+            maybe (fail ("Cabal store Core bundle was not published: " ++ unitId unit)) pure ready
+        pure (unitId unit, bundle)
+      pure (Map.fromList pairs)
   where first4 (unit, _, _, _) = unit
+
+-- | Explicit reuse of a preserved capture, separate from current-producer cache
+-- lookup. The caller supplies the exact compiler/plan/local-native snapshot;
+-- original archive paths, hashes and producer keys are never rewritten.
+readCapturedStoreBundles :: Bool -> Value -> [(String, [String])] -> FilePath -> IO (Map.Map String Bundle)
+readCapturedStoreBundles verify request requested path = do
+  manifest <- readJson path
+  require (jsonField manifest "format" == Just ("thc-captured-store-bundles" :: String) &&
+           jsonField manifest "schema" == Just (1 :: Int) && jsonField manifest "request" == Just request)
+    "captured store compiler, plan or local/native input snapshot differs"
+  rows <- field manifest "bundles" :: IO [Value]
+  owners <- mapM (`field` "unit") rows
+  require (length owners == length (nub owners) && sort owners == sort (map fst requested))
+    "captured store bundle inventory differs from requested closure"
+  let dependencies = Map.fromList requested
+  pairs <- forM (zip owners rows) $ \(owner, row) -> do
+    archive <- field row "path"
+    expectedHash <- field row "sha256"
+    buildKey <- field row "buildKey"
+    exportKey <- field row "exportKey"
+    require (isAbsolute archive) "captured store bundle path must be absolute"
+    selected <- readGlobalBundle verify archive owner (dependencies Map.! owner) buildKey exportKey
+    bundle <- maybe (fail ("invalid captured store bundle: " ++ owner)) pure selected
+    require (bundleHash bundle == expectedHash) ("captured store bundle digest differs: " ++ owner)
+    pure (owner, bundle)
+  pure (Map.fromList pairs)
 
 captureGlobalUnits :: ExportContext -> FilePath -> String -> Map.Map String Unit -> [Unit] ->
                       [(Unit, String, String, FilePath)] -> IO () -> IO ()
@@ -1545,7 +1586,7 @@ packGlobalBundle store dist capture planned unit buildKey exportKey destination 
       [store </> partition </> "package.db" </> identifier <.> "conf" | partition <- partitions]
     case registrations of
       [] -> pure []
-      [path] -> maybe [] (:[]) <$> readCOnlyProduct (unitValue dependency) path pieces
+      [path] -> maybe [] (:[]) <$> readCOnlyProduct (unitValue dependency) (unitDepends dependency) path pieces
       _ -> fail "C-only dependency has ambiguous private-store registration"
   -- Cabal has installed these units and may have deleted their temporary
   -- intra-package DBs. Keep the recorded compiler recipe unchanged, but resolve

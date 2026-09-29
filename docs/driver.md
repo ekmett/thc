@@ -129,6 +129,20 @@ and generated headers exist. Successful publication removes its temporary
 staging. A failed capture or publication retains the staging directory and prints
 its path for diagnosis. Preserve it when reporting the failure; remove it when
 no longer needed. Failed refreshes leave earlier complete bundles intact.
+
+For an explicit retained-stage handoff, `THC_CAPTURED_STORE_BUNDLES` may name an
+absolute JSON file with `format: "thc-captured-store-bundles"`, `schema: 1`,
+`request`, and `bundles`. The driver writes the current compiler, dependency-plan
+and local/native input snapshot to `<file>.request.json`; the supplied `request`
+must match it. Each bundle names its `unit`, absolute `path`, `sha256`, and
+original `buildKey`/`exportKey`. The inventory must cover every requested store
+unit exactly once. Selection uses the existing archive validator and successful
+selection receipts; `--verify-artifacts` still forces full validation. This
+explicit reuse does not relabel old artifacts with current producer keys, and a
+missing or mismatched bundle fails rather than starting another store capture.
+Installed libraries and missing local exports retain their ordinary acquisition
+paths.
+
 `cabal clean --builddir <dist-dir>/native` removes the corresponding local build
 and bundles.
 

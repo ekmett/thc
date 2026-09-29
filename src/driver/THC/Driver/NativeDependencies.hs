@@ -270,11 +270,12 @@ selectCOnlyPieces members pieces = do
       pure (takeFileName path == name && observed == expected)
 
 -- | Read one exact resolved Cabal plan row and its matching registration.
+-- Dependencies are the caller's resolved library closure: Custom Setup plans
+-- nest them under components.lib rather than the row's top-level depends.
 -- Haskell-bearing packages and reexport facades are not C-only providers.
-readCOnlyProduct :: Value -> FilePath -> FilePath -> IO (Maybe COnlyProduct)
-readCOnlyProduct unit registration pieces = do
+readCOnlyProduct :: Value -> [String] -> FilePath -> FilePath -> IO (Maybe COnlyProduct)
+readCOnlyProduct unit dependencies registration pieces = do
   identifier <- get unit "id"
-  dependencies <- get unit "depends"
   bytes <- BS.readFile registration
   if not (emptyRegistration identifier dependencies bytes) then pure Nothing else do
     (_, info) <- either (fail . show) pure (parseInstalledPackageInfo bytes)
@@ -323,9 +324,10 @@ readCOnlyProduct unit registration pieces = do
         path <- get piece "bitcode"
         hash <- digest <$> BS.readFile path
         pure (object ["receipt" .= piece,"bitcodeSha256" .= hash])
-      let identity = object [Key.fromString key .= maybe Null id (member unit key) |
-            key <- ["id","depends","type","style","pkg-name","pkg-version","flags",
-                    "component-name","pkg-src-sha256","pkg-cabal-sha256"]]
+      let identity = object ("depends" .= dependencies :
+            [Key.fromString key .= maybe Null id (member unit key) |
+            key <- ["id","type","style","pkg-name","pkg-version","flags",
+                    "component-name","pkg-src-sha256","pkg-cabal-sha256"]])
           proof = object ["profile" .= ("resolved-c-only-archive-products-v1" :: String),
             "unit" .= identifier,"sourceIdentity" .= identity,
             "registration" .= T.decodeUtf8 bytes,"registrationSha256" .= digest bytes,
