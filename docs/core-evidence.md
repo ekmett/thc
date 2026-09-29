@@ -185,7 +185,9 @@ Bytecode budget recovery can prepare a separate target for a substantial closed
 nonrecursive join body, using the existing finite expression-region protocol.
 The original transfer binds and demands its arguments before that target captures
 the selected locals. Bodies referencing an ambient join stay in their activation;
-prepared sides do not recursively outline themselves. Selection retains the
+prepared sides do not recursively outline themselves. Existing nested case or
+join plans take precedence over an optional whole-body side, so its eligibility
+cannot suppress normal local-capacity partitioning. Selection retains the
 original result destination, masks and captured values. Fresh-entry recovery does
 not move, restart or migrate saved activations; their frame and bytecode PC remain
 the resume point. This eligibility rule does not guarantee that either resulting

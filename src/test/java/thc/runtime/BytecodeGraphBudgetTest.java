@@ -416,6 +416,58 @@ class BytecodeGraphBudgetTest {
         }
     }
 
+    @Test void failedNonrecursiveSideKeepsNestedCaseCapacityRecovery() throws Exception {
+        var input = new LinkedHashMap<>(decision(64, List.of(binder("step", CLOSURE, true)), LONG,
+                arm -> capacityCalls(64, arm, variable("value63", LONG), LONG)));
+        var bindings = new ArrayList<Map<String, Object>>((List<Map<String, Object>>) input.get("bindings"));
+        var binding = new LinkedHashMap<>(bindings.getFirst());
+        var lambda = new ArrayList<>((List<Object>) binding.get("expr"));
+        var worker = localJoin("worker", List.of(), (List<Object>) lambda.get(2), LONG);
+        lambda.set(2, node("let", false, List.of(worker), joinedCall("worker", List.of(), LONG), Map.of("rep", LONG)));
+        binding.put("expr", lambda); bindings.set(0, binding); input.put("bindings", bindings);
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            var threads = Language.currentState().getThreads(); threads.enterCurrent();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new BytecodeProgram(language, input, true);
+                var target = program.entryTarget("entry"); var root = (BytecodeRoot) target.getRootNode();
+                var sides = regionSides(root);
+                assertTrue(sides.size() > 2, "the existing nested case must subdivide its oversized sides");
+                assertEquals(sides.size() + 2, ((Number) program.diagnostics().get("bytecodeRootCount")).intValue(),
+                        "discarded whole-body attempts must not retain roots");
+                assertEquals(1L, ((Number) program.diagnostics().get("localJoinCount")).longValue());
+                assertEquals(0, root.prepareGraphBudgetRetry(0), "capacity selection happens before publication");
+                var original = instructions(root);
+                root.getRootNodes().ensureSourceInformation(); assertEquals(original, instructions(root));
+                var cloneMethod = root.getClass().getDeclaredMethod("cloneUninitialized"); cloneMethod.setAccessible(true);
+                var clone = (BytecodeRoot) cloneMethod.invoke(root);
+                assertEquals(original, instructions(clone));
+                assertEquals(0, clone.getGraphBudgetGeneration());
+                assertTrue(compile(target)); assertTrue(valid(target)); bypass(target);
+                assertEquals(0, entries(program));
+                var calls = new java.util.concurrent.atomic.AtomicInteger();
+                var step = new Closure(null, 1, new RootNode(language) {
+                    @Override public Object execute(VirtualFrame frame) {
+                        assertEquals(63000L + calls.getAndIncrement(), frame.getArguments()[1]);
+                        return (Long) frame.getArguments()[1] + 1;
+                    }
+                }.getCallTarget());
+                assertEquals(63064L, Calls.target(target, new Object[]{0L, program.entryValue("chosen"), step}));
+                assertEquals(64, calls.get()); assertEquals(1, entries(program));
+                assertSame(target, program.entryTarget("entry"));
+                var executed = instructions(root);
+                var stores = new LinkedHashMap<Integer, String>();
+                // The original NonRec join-result accesses quicken to their Long
+                // specialization; its local index, offset and operand PC stay exact.
+                executed.forEach((pc, instruction) -> stores.put(pc, instruction
+                        .replace("store.local$Long[", "store.local[").replace("load.local$Long[", "load.local[")));
+                assertOnlyFirstEntryQuickening(original, stores);
+                root.getRootNodes().ensureSourceInformation(); assertEquals(executed, instructions(root));
+            } finally { threads.leaveCurrent(); context.leave(); }
+        }
+    }
+
     @ParameterizedTest @ValueSource(booleans = {false, true})
     void localEncodingCapacityNarrowsSidesBeforePublishingTheOriginalTarget(boolean parentOnly) throws Exception {
         int arms = parentOnly ? 256 : 64, repetitions = parentOnly ? 8 : 64;

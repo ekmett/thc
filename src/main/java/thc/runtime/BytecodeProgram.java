@@ -3994,11 +3994,14 @@ public final class BytecodeProgram implements ExecutableProgram {
                     && context.caseRegions.size() < BytecodeCaseRegion.MAX_REGIONS
                     && joinRegionWork(definition.getBody(), 64) >= 64
                     && CoreFreeVariables.coreFreeVariables(definition.getBody()).stream().noneMatch(bodyScope.joins::containsKey);
-            Expression body;
-            if (outlined) context.preparingCaseRegion = true;
-            try {
-                body = compile(definition.getBody(), bodyScope, tail);
-                if (outlined) {
+            // Preserve normal case preparation first: an optional whole-body
+            // side can itself exceed local capacity. Existing nested plans take
+            // precedence; never wrap one in another region in this activation.
+            int regionMark = context.caseRegions.size();
+            Expression body = compile(definition.getBody(), bodyScope, tail);
+            if (outlined && context.caseRegions.size() == regionMark) {
+                context.preparingCaseRegion = true;
+                try {
                     // The existing join transfer has already bound and demanded
                     // its arguments. Capture those exact locals, not a new call
                     // to the join or a restart of an already-saved activation.
@@ -4016,9 +4019,9 @@ public final class BytecodeProgram implements ExecutableProgram {
                         roots.subList(rootMark, roots.size()).clear();
                         localJoinCount = joinMark;
                     }
+                } finally {
+                    context.preparingCaseRegion = false;
                 }
-            } finally {
-                if (outlined) context.preparingCaseRegion = false;
             }
             var proven = new ProvenExpression(body, body.proof().refine(evaluatedProof(definition.getResult(), false)));
             bodies.add(proven); region.owner.bodies.set(targets.get(i).selectorIndex, proven);
