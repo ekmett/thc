@@ -36,7 +36,7 @@ import System.IO.Error (tryIOError)
 import System.Process (readProcessWithExitCode)
 import Test.HUnit (Test(..), assertBool, assertEqual)
 import THC.Driver.NativeDependencies (nativeLinkInputs, readNativeProduct, nativeProductPieces)
-import THC.Driver.PackageNative (captureNativeObject, finishPackageNativeWithDependencies)
+import THC.Driver.PackageNative (captureNativeObject, finishPackageNativeWithDependencies, nativeWrapperSource)
 import THC.Driver.NativeRecipe
 import THC.Driver.Installed (boundedInterfaceProcessInput)
 import THC.Driver.ScalarBitcode (withScalarBitcode)
@@ -104,8 +104,20 @@ tests = TestLabel "actual native compiler receipts" $ TestList
         assertBool "distinct declared providers cannot silently win by load order" $ case ambiguous of
           Left reason -> "ambiguous declared native providers for next" `isInfixOf` show reason
           Right _ -> False
+        schedulerWrapper <- either fail pure (nativeWrapperSource
+          [(("rtsSupportsBoundThreads","ccall","unsafe",[],"IntRep"),"scheduler_adapter",Nothing)])
+        scheduler <- prepare "nativescheduler" [] ("#include <stdint.h>\n" ++ schedulerWrapper ++
+          "extern int getpid(void); intptr_t scheduler_probe(void){return scheduler_adapter()+(getpid()==0);}\n")
+        _ <- finish "nativescheduler" scheduler []
+        schedulerDefinitions <- command nm ["--defined-only","--format=posix",root </> "linked/nativescheduler/native/package.bc"]
+        schedulerReferences <- command nm ["--undefined-only","--format=posix",root </> "linked/nativescheduler/native/package.bc"]
+        assertBool "declared IntRep adapter remains, with context-owned scheduler query unresolved"
+          ("scheduler_adapter " `isInfixOf` schedulerDefinitions &&
+            "rtsSupportsBoundThreads " `isInfixOf` schedulerReferences &&
+            not ("rtsSupportsBoundThreads " `isInfixOf` schedulerDefinitions))
         broken <- prepare "nativebroken" ["nativeprovider"]
-          "extern int next(void); extern int unrelated_missing(void); int consume(void){return next()+unrelated_missing();}\n"
+          ("#include <stdint.h>\n" ++ schedulerWrapper ++
+            "extern int next(void); extern int unrelated_missing(void); intptr_t consume(void){return next()+scheduler_adapter()+unrelated_missing();}\n")
         failure <- tryIOError (finish "nativebroken" broken [(["nativeprovider"],descriptor)])
         assertBool "a declared peer exemption never hides another missing symbol" $ case failure of
           Left reason -> "unrelated_missing" `isInfixOf` show reason

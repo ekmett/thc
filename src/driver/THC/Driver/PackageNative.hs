@@ -1013,9 +1013,10 @@ finishPackageNativeWithDependencies ownedProduct dependencyPaths publishedDataba
         pure [(member peer "unit",member peer "componentSha256",member peer "bitcodeSha256") | symbol `elem` names]
       check (length owners <= 1) ("ambiguous declared native providers for " ++ symbol)
       pure (not (null owners))) externals
-    -- These references belong to this context's managed callback namespace,
-    -- not to an ELF/RTS implementation. Keep them in verified LLVM unchanged.
-    let managedExternals = filter (`elem` ("hs_free_stable_ptr" : exportNames)) externals
+    -- Stable pointers, exported callbacks and bound-thread support belong to
+    -- this context. A native RTS would describe its scheduler, not THC's.
+    -- Keep their calls and declared ABI in verified LLVM unchanged.
+    let managedExternals = filter (`elem` (["hs_free_stable_ptr","rtsSupportsBoundThreads"] ++ exportNames)) externals
         deferredExternals = nub (managedExternals ++ peerExternals)
         nativeExternals = filter (\name -> name `notElem` deferredExternals && not ("llvm." `isPrefixOf` name)) externals
     -- The configured C compiler and linker own native symbol resolution.
