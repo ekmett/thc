@@ -36,7 +36,7 @@ public final class CoreCbdFixtures {
             fields.forEach((key, child) -> { if (!key.equals("compactOrigin")) copy.put((String) key, snapshot(child)); });
             return copy;
         }
-        if (value instanceof List<?> fields) return fields.stream().map(CoreCbdFixtures::snapshot).toList();
+        if (value instanceof List<?> fields) return new ArrayList<>(fields.stream().map(CoreCbdFixtures::snapshot).toList());
         return value;
     }
     private static Object inspection(Object value) {
