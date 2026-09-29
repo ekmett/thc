@@ -28,6 +28,10 @@ class CoreUnitLoadTest {
     private Map<String, Object> unit(String name, Object body) throws Exception { return unit(name, body, "", false); }
     /** Model writer for focused runtime tests, not the production publisher. */
     private Map<String, Object> unit(String name, Object body, String padding, boolean diagnostics) throws Exception {
+        return unit(name, body, padding, diagnostics, Map.of(), List.of());
+    }
+    private Map<String, Object> unit(String name, Object body, String padding, boolean diagnostics,
+            Map<String,Object> extra, List<String> dependencies) throws Exception {
         // Windows cannot replace mapped files. Evict only idle fixture leases.
         CoreFileMappings.shared.evictIdleBelow(directory);
         var id = "u" + name + ":" + name + ".entry";
@@ -35,9 +39,11 @@ class CoreUnitLoadTest {
         var prefix = "{" + ignored + "\"schema\":1,\"ghc\":\"9.14.1\",\"unit\":\"u" + name + "\",\"module\":\"" + name + "\",\"boundary\":\"" + boundary + "\",\"bindings\":";
         var expr = Json.stringify(list(binding(id, body), binding("u" + name + ":" + name + ".unused", list("unsupported", padding))));
         var notes = map("sourceFiles", list(map("id", "source", "content", "original source")));
-        var suffix = ",\"constructors\":[]" + (diagnostics ? ",\"groups\":" + Json.stringify(Collections.nCopies(10000, id)) + ",\"sourceFiles\":" + Json.stringify(notes.get("sourceFiles")) + "}" : "}");
+        var fields = new StringBuilder(); extra.forEach((key, value) -> fields.append(',').append(Json.stringify(key)).append(':').append(Json.stringify(value)));
+        var suffix = fields + ",\"constructors\":[]" + (diagnostics ? ",\"groups\":" + Json.stringify(Collections.nCopies(10000, id)) + ",\"sourceFiles\":" + Json.stringify(notes.get("sourceFiles")) + "}" : "}");
         var original = (prefix + expr + suffix).getBytes(UTF_8);
-        var metadata = Json.stringify(map("schema", 1, "ghc", "9.14.1", "unit", "u" + name, "module", name, "boundary", boundary, "constructors", List.of())).getBytes(UTF_8);
+        var header = map("schema", 1, "ghc", "9.14.1", "unit", "u" + name, "module", name, "boundary", boundary, "constructors", List.of()); header.putAll(extra);
+        var metadata = Json.stringify(header).getBytes(UTF_8);
         var source = diagnostics ? Json.stringify(notes).getBytes(UTF_8) : new byte[0];
         var output = new ByteArrayOutputStream(); output.write(original); output.write(10); output.write(metadata); output.write(10); output.write(source); var bytes = output.toByteArray();
         var json = directory.resolve(name + ".jsons"); var symbols = directory.resolve(name + ".symbols"); Files.write(json, bytes);
@@ -45,9 +51,83 @@ class CoreUnitLoadTest {
         var rows = (id + " " + first + "\nu" + name + ":" + name + ".unused " + unused + "\n").getBytes(UTF_8); Files.write(symbols, rows);
         var module = map("name", name, "path", name + ".json", "sha256", hash(original), "boundary", boundary, "start", 0, "end", original.length,
             "bindingsStart", prefix.getBytes(UTF_8).length, "bindingsEnd", prefix.getBytes(UTF_8).length + expr.getBytes(UTF_8).length,
-            "metadataStart", original.length + 1, "metadataEnd", original.length + 1 + metadata.length, "containsDelimitedControl", false, "registrationObligations", false, "mainAlias", false, "packageScalarDeclarations", false);
+            "metadataStart", original.length + 1, "metadataEnd", original.length + 1 + metadata.length, "containsDelimitedControl", false, "registrationObligations", false, "mainAlias", false, "packageScalarDeclarations", PackageFinalizers.hasDeclarations(header));
         if (diagnostics) { module.put("sourceMetadataStart", original.length + metadata.length + 2); module.put("sourceMetadataEnd", bytes.length); }
-        return map("id", "u" + name, "depends", List.of(), "json", map("path", json.toString(), "sha256", hash(bytes)), "symbols", map("path", symbols.toString(), "sha256", hash(rows)), "modules", list(module));
+        return map("id", "u" + name, "depends", dependencies, "json", map("path", json.toString(), "sha256", hash(bytes)), "symbols", map("path", symbols.toString(), "sha256", hash(rows)), "modules", list(module));
+    }
+
+    private Map<String,Object> nativeAddressUnit(String name, String kind) throws Exception {
+        return nativeAddressUnit(name, kind, false);
+    }
+    private Map<String,Object> nativeAddressUnit(String name, String kind, boolean corrupt) throws Exception {
+        String component = hash(name.getBytes(UTF_8)), entry = "thc_native_" + component + "_0";
+        var c = directory.resolve(name + ".c"); var bc = directory.resolve(name + ".bc");
+        Files.writeString(c, (kind.equals("function-addr") ? "long original_label(void) { return 43; }\n"
+            : "long original_label = 43;\n") + "void *" + entry + "(void) { return &original_label; }\n");
+        var compiler = new ProcessBuilder(System.getenv().getOrDefault("THC_CLANG", "clang"),
+            "--target=x86_64-unknown-linux-gnu", "-O1", "-emit-llvm", "-c", c.toString(), "-o", bc.toString()).redirectErrorStream(true).start();
+        var output = new String(compiler.getInputStream().readAllBytes(), UTF_8); assertEquals(0, compiler.waitFor(), output);
+        var bytes = Files.readAllBytes(bc);
+        var type = map("kind", "tycon", "name", map("unit", "ghc-internal", "module", "GHC.Internal.Ptr", "occurrence", "Ptr", "namespace", "type"), "arguments", List.of());
+        var declaration = map("binder", map("unit", "u" + name, "module", name, "occurrence", "label", "namespace", "value"),
+            "symbol", "original_label", "header", null, "isFunction", kind.equals("function-addr"), "convention", "ccall",
+            "declaredType", type, "normalizedType", type, "normalizationRole", "representational", "callback", null);
+        var product = map("schema", 1, "execution", "not-linked", "files", List.of(), "stubs", null);
+        var proof = map("schema", 2, "scope", "retained-static-import-products", "execution", "not-linked", "profile", "ghc-9.14.1-thc-only-static-c-imports-v1",
+            "unit", "u" + name, "module", name, "status", "verified", "wordBits", 64, "expectedForeign", product,
+            "imports", List.of(), "expectedCalls", List.of(), "addresses", list(declaration));
+        var link = map("schema", 1, "format", "llvm-bitcode", "profile", "thc-package-c-ffi-v1", "unit", "u" + name,
+            "target", "x86_64-unknown-linux-gnu", "componentSha256", component, "bitcodeSha256", corrupt ? "0".repeat(64) : hash(bytes), "bitcodeHex", HexFormat.of().formatHex(bytes),
+            "dataSymbols", list(entry), "abi", list(map("symbol", "original_label", "entry", entry, "arguments", List.of(), "result", "AddrRep", "convention", "ccall", "safety", "unsafe")));
+        return unit(name, list("unsupported", "address owner body must remain cold"), "", false,
+            map("staticForeignImports", proof, "packageNativeLink", link), List.of());
+    }
+    @Test void inlinedNativeLabelsAdmitOnlyDeclaredDependencyProvenance() throws Exception {
+        Assumptions.assumeTrue(System.getProperty("os.name").equals("Linux") && System.getProperty("os.arch").equals("amd64"));
+        var address = map("kind", "address", "primReps", list("AddrRep"), "evaluated", true);
+        var index = map("kind", "long", "primReps", list("IntRep"), "evaluated", true);
+        for (String kind : List.of("function-addr", "data-addr")) {
+            var label = list("lit", kind, "original_label", map("rep", address));
+            var body = kind.equals("function-addr")
+                ? list("app", list("prim", "neAddr#"), list(label, list("lit", "null-addr", "0", map("rep", address))), list(false, false))
+                : list("app", list("prim", "indexIntOffAddr#"), list(label, list("lit", "int", "0", map("rep", index))), list(false, false), false, false, map("rep", index));
+            var nativeUnit = nativeAddressUnit("Native", kind);
+            var unrelated = nativeAddressUnit("Unrelated", kind);
+            Files.delete(directory.resolve("Unrelated.jsons")); Files.delete(directory.resolve("Unrelated.symbols"));
+            var facade = map("id", "facade", "depends", list("uNative"), "modules", List.of());
+            var a = unit("A", body, "", false, Map.of(), List.of("facade"));
+            var manifest = directory.resolve("label-packages.json");
+            Files.writeString(manifest, Json.stringify(map("format", "thc-core-packages", "schema", 1, "ghc", "9.14.1", "units", list(a, facade, nativeUnit, unrelated))));
+            for (var backend : List.of("ast", "bytecode")) try (var context = Context.newBuilder("thc").allowNativeAccess(true).build()) {
+                var entry = context.eval("thc", request(manifest, backend));
+                assertEquals(kind.equals("function-addr") ? 1L : 43L, entry.execute(0).asLong());
+                assertEquals(1L, count(entry, "coreUnitDecodedBindings"), "declaration lookup cannot demand the owner's body");
+                assertEquals(2L, count(entry, "coreUnitSourceOpens"), "unrelated native metadata remains unopened");
+                long reads = count(entry, "coreUnitSourceByteReads");
+                assertEquals(kind.equals("function-addr") ? 1L : 43L, entry.execute(1).asLong());
+                assertEquals(reads, count(entry, "coreUnitSourceByteReads"));
+            }
+        }
+    }
+    @Test void inlinedNativeLabelsDoNotBypassDependencyAmbiguityOrComponentProof() throws Exception {
+        Assumptions.assumeTrue(System.getProperty("os.name").equals("Linux") && System.getProperty("os.arch").equals("amd64"));
+        var address = map("kind", "address", "primReps", list("AddrRep"), "evaluated", true);
+        var label = list("lit", "function-addr", "original_label", map("rep", address));
+        var body = list("app", list("prim", "neAddr#"), list(label, list("lit", "null-addr", "0", map("rep", address))), list(false, false));
+        var nativeUnit = nativeAddressUnit("Native", "function-addr");
+        var other = nativeAddressUnit("Other", "function-addr");
+        var corrupt = nativeAddressUnit("Corrupt", "function-addr", true);
+        var dependencies = List.of(List.<String>of(), List.of("uNative", "uOther"), List.of("uCorrupt"));
+        var expected = List.of("Unlinked native data label", "Ambiguous native address declaration", "bitcode digest");
+        for (int i = 0; i < dependencies.size(); i++) {
+            var a = unit("A", body, "", false, Map.of(), dependencies.get(i));
+            var manifest = directory.resolve("bad-label-packages.json");
+            Files.writeString(manifest, Json.stringify(map("format", "thc-core-packages", "schema", 1, "ghc", "9.14.1", "units", list(a, nativeUnit, other, corrupt))));
+            for (var backend : List.of("ast", "bytecode")) try (var context = Context.newBuilder("thc").allowNativeAccess(true).build()) {
+                var failure = assertThrows(PolyglotException.class, () -> context.eval("thc", request(manifest, backend)));
+                assertTrue(failure.getMessage().contains(expected.get(i)), failure.getMessage());
+            }
+        }
     }
     private Path fixture() throws Exception { return fixture(false, false); }
     private Path fixture(boolean badB, boolean cycle) throws Exception {
