@@ -8,14 +8,16 @@ toolchain:
   native launcher and matching machine-code cache. Each fresh run loads that
   cache with guest compilation disabled and rejects runtime lowering or
   interpreted guest entry. It admits synchronous AST code with numeric scalars,
-  boxed data, closures, higher-order calls and recursive loops.
+  boxed data, closures, higher-order calls and recursive loops. Tuples, sums,
+  vectors and zero-width values use the existing typed calling convention.
 - The pure interpreter recipe below packages the Java interpreter in a native
   executable and loads Core at launch. Its explicit guest compilation diagnostic
   remains unsupported.
 
 Neither workflow is a general Haskell executable distribution. The code cache
-does not yet admit bytecode, typed aggregates, async delivery, IO or FFI.
-Sulong execution and the full executable/resource lifecycle still need native
+does not yet admit bytecode, async delivery, IO or FFI. Its numeric CLI entry
+can exercise typed internal calls; direct typed public-host persistence remains
+to be qualified. Sulong execution and the full executable/resource lifecycle still need native
 image support and validation. See the cache guide for exact admission,
 platform requirements and the experimental preparation overlays it uses.
 
@@ -65,9 +67,10 @@ facilities do not substitute for native-image execution checks.
 
 ## Planned work
 
-Extend the selected-Core cache to the ordinary typed calling convention,
-including aggregates and vectors, while preserving per-load ownership and CAF
-state. Async execution, foreign calls and the full executable lifecycle need
+Extend reusable boxed construction to typed fields and constructor partial
+applications while preserving per-load ownership and CAF state. Qualify direct
+typed public-host persistence through the existing host ABI. Async execution,
+foreign calls and the full executable lifecycle need
 image-side support for suspension, callbacks and native-resource cleanup.
 The pure recipe separately needs successful first installed guest calls before
 it can support runtime compilation.
