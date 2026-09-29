@@ -80,14 +80,15 @@ prepareForeignExceptions root = do
     listDirectory (root </> directory </> "runtime-core")
   let supportModules = map ((directory </> "runtime-core") </>) supportNames
       interopEntries = ["getLibrary", "readOne", "writeOne", "sumBytes", "arrayLong", "caughtRead"]
-  storageAudits <- forM ["copySlice", "view", "mutableView", "copyInto", "readByte"] $ \entry ->
-    run ("storage-audit-" ++ entry) [] "python3"
-      (["bin/audit-core.py", "--package-manifest", packages, "--entry", "main:PolyglotStorage." ++ entry ++ "#",
-        "--output", directory </> "storage-" ++ entry ++ "-audit.json"] ++ supportModules)
-  interopAudits <- forM interopEntries $ \entry ->
-    run ("interop-audit-" ++ entry) [] "python3"
-      (["bin/audit-core.py", "--package-manifest", packages, "--entry", "main:InteropPrimitives." ++ entry,
-        "--output", directory </> "interop-" ++ entry ++ "-audit.json"] ++ supportModules)
+      storageEntries = ["copySlice", "view", "mutableView", "copyInto", "readByte"]
+  storageAudit <- run "storage-audit" [] "python3"
+    (["bin/audit-core.py", "--package-manifest", packages] ++
+      concatMap (\entry -> ["--entry", "main:PolyglotStorage." ++ entry ++ "#"]) storageEntries ++
+      ["--output", directory </> "storage-audit.json"] ++ supportModules)
+  interopAudit <- run "interop-audit" [] "python3"
+    (["bin/audit-core.py", "--package-manifest", packages] ++
+      concatMap (\entry -> ["--entry", "main:InteropPrimitives." ++ entry]) interopEntries ++
+      ["--output", directory </> "interop-audit.json"] ++ supportModules)
   stages <- forM ["pre", "post"] $ \stage -> do
     let output = directory </> stage </> "core"
         options = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
@@ -98,11 +99,11 @@ prepareForeignExceptions root = do
     names <- sort . filter (\name -> takeExtension name == ".cbd" && name /= "THC.InterfaceClosure.cbd") <$>
       listDirectory (root </> output)
     let modules = map (output </>) (filter (== "ForeignExceptionAudit.cbd") names) ++ supportModules
-    audits <- forM entries $ \entry ->
-      run (stage ++ "-audit-" ++ entry) [] "python3"
-        (["bin/audit-core.py", "--package-manifest", packages, "--entry", "main:ForeignExceptionAudit." ++ entry,
-          "--output", directory </> stage </> entry ++ "-audit.json"] ++ modules)
-    pure (stage, modules, exported : audits)
+    audit <- run (stage ++ "-audit") [] "python3"
+      (["bin/audit-core.py", "--package-manifest", packages] ++
+        concatMap (\entry -> ["--entry", "main:ForeignExceptionAudit." ++ entry]) entries ++
+        ["--output", directory </> stage </> "audit.json"] ++ modules)
+    pure (stage, modules, [exported, audit])
   let native = directory </> "native"
       common = ["--make", "-O2", "-dynamic", "-fforce-recomp", "-isrc/runtime", "-odir", native, "-hidir", native]
   createDirectoryIfMissing True (root </> native)
@@ -132,13 +133,11 @@ prepareForeignExceptions root = do
         ["src/compiler/THC" </> file | file <- compiler, takeExtension file == ".hs"] ++
         ["src/cbd/THC/Compact" </> file | file <- codec, takeExtension file == ".hs"] ++
         ["bin" </> file | file <- scripts, take 5 file == "core_", takeExtension file == ".py"]
-      commands = installedCommands ++ [plugin, support] ++ storageAudits ++ interopAudits ++ concat [runs | (_, _, runs) <- stages] ++ [built, oracle, safe, rejected]
+      commands = installedCommands ++ [plugin, support, storageAudit, interopAudit] ++ concat [runs | (_, _, runs) <- stages] ++ [built, oracle, safe, rejected]
       outputs = installedArtifacts ++ concatMap commandArtifacts commands ++
         concat [modules ++ [directory </> stage </> "core/THC.InterfaceClosure.cbd"] ++
-          [directory </> stage </> entry ++ "-audit.json" | entry <- entries] | (stage, modules, _) <- stages] ++
-        [native </> "oracle"] ++ [directory </> "storage-" ++ entry ++ "-audit.json" |
-          entry <- ["copySlice", "view", "mutableView", "copyInto", "readByte"]] ++
-        [directory </> "interop-" ++ entry ++ "-audit.json" | entry <- interopEntries]
+          [directory </> stage </> "audit.json"] | (stage, modules, _) <- stages] ++
+        [native </> "oracle", directory </> "storage-audit.json", directory </> "interop-audit.json"]
   inputs <- hashes root (sort sources)
   artifacts <- hashes root (sort outputs)
   writeJson (root </> directory </> "manifest.json") $ object
