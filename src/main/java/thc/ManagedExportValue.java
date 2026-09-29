@@ -55,6 +55,7 @@ public final class ManagedExportValue implements TruffleObject {
     @ExportMessage public boolean isExecutable() { checkOwner(); return true; }
     @ExportMessage public Object execute(Object[] values, @Cached(value = "create()", uncached = "create()", neverDefault = true) HostDispatch dispatch) throws ArityException, UnsupportedTypeException {
         checkOwner();
+        owner.admitGuestOrigin();
         var threads = owner.getThreads();
         if (threads.needsHosting()) return threads.hostEntry(dispatch, () -> execute(values, dispatch));
         if (values.length != arguments.length) throw ArityException.create(arguments.length, arguments.length, values.length);
@@ -71,7 +72,7 @@ public final class ManagedExportValue implements TruffleObject {
                     : arguments[index].fromNative(unwrapped, callbacks);
             }
         } catch (RuntimeFault failure) { throw UnsupportedTypeException.create(values, failure.getMessage()); }
-        threads.enterCurrent(null, false, program.getAsynchronousExceptions(), null);
+        threads.enterCurrent(null, false, program.getCapturesContinuations(), null);
         var outcome = GuestThreadStatus.FINISHED;
         try {
             try {

@@ -33,10 +33,10 @@ public final class SignalDispatchRoot extends ContextRoot {
         frame.setLong(FrameLayout.BLOOM_FILTER, 0L);
         var closure = Applications.requireClosure(force.execute(frame, action));
         var target = closure.target.getRootNode();
-        boolean async = switch (target) { case FunctionRoot function -> function.getEnableAsync();
+        boolean captures = switch (target) { case FunctionRoot function -> function.getCapturesContinuations$org_intelligence_thc();
             case BytecodeRoot bytecode -> bytecode.isAsyncEnabled(); default -> false; };
-        if (!async || !(target instanceof GuestRoot guest) || guest.getTupleResult() == null || !guest.getTupleResult().matches(shape))
-            throw RuntimeFault.fault("Signal dispatcher requires an async IO unit tuple");
+        if (!captures || !(target instanceof GuestRoot guest) || guest.getTupleResult() == null || !guest.getTupleResult().matches(shape))
+            throw RuntimeFault.fault("Signal dispatcher requires a continuation-capable IO unit tuple");
         var boxedPointer = pointer.create(new Object[]{frame.getArguments()[0]});
         var number = frame.getArguments()[1];
         if (number == null) {

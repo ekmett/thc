@@ -35,7 +35,7 @@ public final class KillThread extends Expr {
             throw new AstCapture(blocked.getRequest(), SynchronousMasking.current(this)).append(new ResumeWait(this, sent));
         }
         boolean polledCompiled = CompilerDirectives.inCompiledCode();
-        AsyncRequest incoming = GuestThreads.pollCurrent(this, false);
+        AsyncRequest incoming = sent.getForceSelf() ? GuestThreads.pollMandatoryCurrent(this, false) : GuestThreads.pollCurrent(this, false);
         if (incoming != null) {
             if (sent.getForceSelf()) {
                 if (incoming != sent) throw RuntimeFault.fault("Self-directed killThread# claimed a different request");

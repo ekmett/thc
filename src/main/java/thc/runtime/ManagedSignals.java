@@ -51,7 +51,7 @@ public final class ManagedSignals {
     public synchronized void bind(ExecutableProgram program) {
         current();
         if (closed || this.program != null) throw fault("Process signal dispatcher already bound");
-        if (!program.getAsynchronousExceptions()) throw fault("Process signal delivery requires asyncExceptions=true");
+        if (!program.getCapturesContinuations()) throw fault("Process signal delivery requires continuation capture");
         // Resolve action/layouts only at the first actual installation.
         this.program = program;
     }
@@ -77,6 +77,7 @@ public final class ManagedSignals {
         }
         var nativeTransport = transport;
         if (nativeTransport == null) {
+            owner.admitGuestConcurrency();
             acquired = factory.get(); transport = nativeTransport = acquired;
             selectedRoot = root; starting = startup = new CountDownLatch(1);
         }

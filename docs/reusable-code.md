@@ -64,6 +64,12 @@ recursive or lifted aggregate lets retain their ordinary rejection. Bytecode,
 asynchronous delivery, IO, foreign calls, diagnostic execution and managed exports
 remain outside reusable admission.
 
+Instantiating prepared code requires the context's single guest admission origin
+assumption to remain valid. Once it contains prepared code, the context rejects
+guest fork/signal publication and a different-origin public entry before effects.
+Prepared code is not silently upgraded to ordinary adaptive continuations, nor
+allowed to invalidate strict cached code that has no interpreter fallback.
+
 The public host ABI accepts logical tuple arrays, tagged sum payloads, exact
 vector species and null State#/Void# values. The
 [native-cache CLI](native-code-cache.md) currently parses and prints numeric

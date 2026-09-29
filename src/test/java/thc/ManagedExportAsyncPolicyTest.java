@@ -29,6 +29,10 @@ class ManagedExportAsyncPolicyTest {
         return exported(context, backend, async, list(scalar));
     }
     private Value exported(Context context, String backend, boolean async, List<Map<String, Object>> arguments) {
+        return exported(context, backend, async, arguments, null);
+    }
+    private Value exported(Context context, String backend, boolean async, List<Map<String, Object>> arguments,
+            java.util.function.Consumer<com.oracle.truffle.api.nodes.Node> onEntry) {
         context.initialize("thc"); context.enter();
         try {
             var owner = Language.currentState(null); var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
@@ -39,6 +43,21 @@ class ManagedExportAsyncPolicyTest {
                 "expr", list("lam", list(map("id", "x", "name", "x", "type", "Int32", "lifted", true, "coercion", false, "rep", dataRep)), body, map("rep", closureRep, "resultRep", dataRep)))),
                 "constructors", list(map("id", "ghc-internal:GHC.Internal.Int.I32#", "name", "I32#", "kind", "boxed", "arity", 1, "fieldReps", list(list("Int32Rep")), "strictFields", list(false), "fieldLifted", list(false))));
             ExecutableProgram program = backend.equals("ast") ? new Program(language, module, async, false) : new BytecodeProgram(language, module, async);
+            if (onEntry != null) {
+                var original = program; var delegate = original.hostEntryTarget(arguments.size());
+                var target = new com.oracle.truffle.api.nodes.RootNode(language) {
+                    @Override public Object execute(VirtualFrame frame) { onEntry.accept(this); return Calls.target(delegate, frame.getArguments()); }
+                }.getCallTarget();
+                program = new ExecutableProgram() {
+                    public boolean getAsynchronousExceptions() { return original.getAsynchronousExceptions(); }
+                    public boolean getCapturesContinuations() { return original.getCapturesContinuations(); }
+                    public RootCallTarget hostEntryTarget(int arity) { return target; }
+                    public Object entryValue(String name) { return original.entryValue(name); }
+                    public RootCallTarget entryTarget(String name) { return original.entryTarget(name); }
+                    public DataLayout constructorLayout(String id) { return original.constructorLayout(id); }
+                    public Map<String, Object> diagnostics() { return original.diagnostics(); }
+                };
+            }
             var signature = new ManagedExportSignature("model", "Export", "identity", "model:Export.identity", arguments, scalar, false, 64, null);
             return context.asValue(new ManagedExportValue(owner.getManagedExports(), owner, language, program, signature));
         } finally { context.leave(); }
@@ -52,15 +71,13 @@ class ManagedExportAsyncPolicyTest {
                     if (length > 0) {
                         observed[0]++; var threads = Language.currentState(null).getThreads();
                         var slot = Objects.requireNonNull(threads.pollState(Thread.currentThread()).getCurrent());
-                        active[0] = slot.getIdentity(); assertEquals(async, slot.getExternalAsync(), backend + " async=" + async + " imported=" + imported);
+                        active[0] = slot.getIdentity(); assertTrue(slot.getExternalAsync(), backend + " async=" + async + " imported=" + imported);
                         try {
                             CompletableFuture.runAsync(() -> {
-                                if (async) {
-                                    var request = threads.send(slot.getIdentity(), "external policy probe");
-                                    try { assertFalse(request.getForceSelf(), "Another carrier cannot use self delivery"); assertEquals(AsyncRequestState.PENDING, request.getState()); }
-                                    finally { assertTrue(request.cancel()); }
-                                    assertEquals(AsyncRequestState.CANCELLED, request.getState());
-                                } else assertThrows(UnsupportedCore.class, () -> threads.send(slot.getIdentity(), "must not wait on a nonpolling export"));
+                                var request = threads.send(slot.getIdentity(), "external policy probe");
+                                try { assertFalse(request.getForceSelf(), "Another carrier cannot use self delivery"); assertEquals(AsyncRequestState.PENDING, request.getState()); }
+                                finally { assertTrue(request.cancel()); }
+                                assertEquals(AsyncRequestState.CANCELLED, request.getState());
                             }).get(5, TimeUnit.SECONDS);
                         } catch (Exception error) { ManagedExportAsyncPolicyTest.<RuntimeException>rethrow(error); }
                     }
@@ -99,6 +116,37 @@ class ManagedExportAsyncPolicyTest {
     }
     @Test void directExportsPreserveTheirExecutableAsyncPolicy() throws Exception { checkPolicy(false); }
     @Test void safeCrossContextImportsPreserveExporterPolicyAndRestoreCaller() throws Exception { checkPolicy(true); }
+
+    @ParameterizedTest @CsvSource({"ast,platform", "ast,loom", "bytecode,platform", "bytecode,loom"})
+    @org.junit.jupiter.api.Timeout(60)
+    void anotherOriginExportInvalidatesBeforeEffectsWhileOriginalStackIsActive(String backend, String hosting) throws Exception {
+        var first = new CountDownLatch(1); var second = new CountDownLatch(1);
+        var calls = new java.util.concurrent.atomic.AtomicInteger();
+        var owner = new AtomicReference<Language.State>();
+        try (var context = Context.newBuilder("thc").err(new ByteArrayOutputStream()).allowCreateThread(true).allowExperimentalOptions(true)
+                .option("thc.ThreadHosting", hosting).build()) {
+            var value = exported(context, backend, false, list(scalar), node -> {
+                if (calls.incrementAndGet() == 1) {
+                    assertTrue(owner.get().getSingleGuestOriginAssumption().isValid()); first.countDown();
+                    var threads = owner.get().getThreads(); var permission = threads.enterForeign(ForeignSafety.SAFE);
+                    try {
+                        com.oracle.truffle.api.TruffleSafepoint.setBlockedThreadInterruptible(node,
+                            gate -> assertTrue(gate.await(10, TimeUnit.SECONDS)), second);
+                    } finally { threads.leaveForeign(permission); }
+                    assertFalse(owner.get().getSingleGuestOriginAssumption().isValid());
+                } else {
+                    assertFalse(owner.get().getSingleGuestOriginAssumption().isValid()); second.countDown();
+                }
+            });
+            context.enter(); try { owner.set(Language.currentState()); } finally { context.leave(); }
+            var active = CompletableFuture.supplyAsync(() -> value.execute(19).asInt());
+            try {
+                assertTrue(first.await(10, TimeUnit.SECONDS));
+                assertEquals(23, value.execute(23).asInt()); assertEquals(19, active.get(10, TimeUnit.SECONDS));
+                assertEquals(2, calls.get());
+            } finally { second.countDown(); }
+        }
+    }
 
     private Map<String, Object> binder(String id, Map<String, Object> proof, boolean lifted) {
         return map("id", id, "name", id, "lifted", lifted, "rep", proof);
@@ -140,12 +188,12 @@ class ManagedExportAsyncPolicyTest {
         // Observe the real lowered self-kill token before boundary cleanup, without
         // replacing delivery, acknowledging it, or fabricating a control signal.
         var observed = new GuestRoot(language, new FrameLayout().build()) {
-            @Override public boolean getAsynchronousExceptions() { return async; }
+            @Override public boolean getAsynchronousExceptions() { return true; }
             @Override public long bloom(VirtualFrame frame) { return 0L; }
             @Override public Object execute(VirtualFrame frame) {
                 identity.set(owner.getThreads().currentIdentity());
                 assertEquals(MaskingState.UNMASKED, owner.getMaskingState().get());
-                assertEquals(async, owner.getThreads().pollState(Thread.currentThread()).getCurrent().getExternalAsync());
+                assertTrue(owner.getThreads().pollState(Thread.currentThread()).getCurrent().getExternalAsync());
                 try {
                     Object answer = Calls.target(original.target, frame.getArguments());
                     var saved = SavedGuestContinuations.savedGuestContinuation(answer instanceof TailYield tail ? tail.getContinuation()
@@ -165,6 +213,7 @@ class ManagedExportAsyncPolicyTest {
         var entry = new Closure(original.environment, original.supplied, original.arity, target, original.suppliedCount, original.typedSupplied);
         var observingProgram = new ExecutableProgram() {
             @Override public boolean getAsynchronousExceptions() { return program.getAsynchronousExceptions(); }
+            @Override public boolean getCapturesContinuations() { return program.getCapturesContinuations(); }
             @Override public RootCallTarget hostEntryTarget(int arity) { return program.hostEntryTarget(arity); }
             @Override public Object entryValue(String name) { return entry; }
             @Override public RootCallTarget entryTarget(String name) { return target; }

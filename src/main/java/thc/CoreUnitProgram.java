@@ -74,6 +74,7 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
     private static void require(boolean value, String message) { if (!value) throw new IllegalArgumentException(message); }
     private static String requiredText(Object value, String message) { if (value instanceof String text) return text; throw new IllegalStateException(message); }
     @Override public boolean getAsynchronousExceptions() { return async; }
+    @Override public boolean getCapturesContinuations() { return true; }
     public TargetLayout getTargetLayout() { return sources.getTargetLayout(); }
     @Override public boolean getHasBytecode() { return demand.preparedPrograms().stream().anyMatch(ExecutableProgram::getHasBytecode); }
     @Override public String bytecodeDump() {

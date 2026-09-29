@@ -145,7 +145,7 @@ class TypedInputProtocolTest {
             calls++; if (fail) throw new GuestException("strict prefix", this); return 123L;
         }
     }
-    @Test void genericStrictPrefixForcingPrecedesLoansAndNonStrictPrefixesStayLazy() throws ReflectiveOperationException {
+    @Test void genericStrictPrefixesForceAfterCapturableIngressReleasesLoansAndNonStrictPrefixesStayLazy() throws ReflectiveOperationException {
         for (String backend : List.of("ast", "bytecode")) for (boolean strict : new boolean[]{false, true}) for (boolean fail : new boolean[]{false, true}) withLanguage(false, (context, language) -> {
             var worker = bind("worker", lam(List.of(arg("prefix", ref), arg("p", pair)), unpack(v("p", pair), prim("+#", v("a"), v("b"))), integer, List.of(strict, false)));
             var p = program(language, backend, List.of(worker, bind("make", lam(List.of(arg("prefix", ref)), app(v("worker", closure), List.of(v("prefix", ref)), closure, List.of(true)), closure))));
@@ -156,15 +156,17 @@ class TypedInputProtocolTest {
             var source = new AstInputSource(Objects.requireNonNull(ArgumentLayout.fromProofs(List.of(input.getLogical().proof(1)))), slots); var node = new Node() {};
             class Prepare { HandoffStorage get() { return GenericTypedInputs.prepareGenericInput(frame, node, pap, input, source, null, 1, 0, 1, new Force(new Metrics(false))); } }
             var prepare = new Prepare(); assertEquals(0, thunkRoot.calls); clear(language);
-            if (strict && fail) assertThrows(GuestException.class, prepare::get);
-            else {
-                var storage = prepare.get();
-                try {
-                    assertTrue(storage.getLive()); assertEquals(1, storage.getInputMode()); assertEquals(1, language.getHandoffState().get().getArguments().getDepth());
-                    if (strict) assertEquals(123L, input.getPacket().getObject(storage, input.getHeader())); else assertSame(thunk, input.getPacket().getObject(storage, input.getHeader()));
-                    assertEquals(11L, input.getPacket().getLong(storage, input.getHeader() + 1)); assertEquals(7L, input.getPacket().getLong(storage, input.getHeader() + 2));
-                } finally { GenericTypedInputs.releaseGenericInput(input, storage, storage.getGeneration()); }
-            }
+            var storage = prepare.get(); long generation = storage.getGeneration();
+            try {
+                assertTrue(storage.getLive()); assertEquals(1, storage.getInputMode()); assertEquals(1, language.getHandoffState().get().getArguments().getDepth());
+                // Ordinary roots are always capturable: strict ingress runs in
+                // the callee's owned frame, after releasing its input loan.
+                assertSame(thunk, input.getPacket().getObject(storage, input.getHeader())); assertEquals(0, thunkRoot.calls);
+                assertEquals(11L, input.getPacket().getLong(storage, input.getHeader() + 1)); assertEquals(7L, input.getPacket().getLong(storage, input.getHeader() + 2));
+                if (strict && fail) assertThrows(GuestException.class, () -> Calls.target(pap.target, new Object[]{storage}));
+                else assertEquals(18L, Calls.target(pap.target, new Object[]{storage}));
+                assertFalse(storage.getLive());
+            } finally { GenericTypedInputs.releaseGenericInput(input, storage, generation); }
             assertEquals(strict ? 1 : 0, thunkRoot.calls); assertSame(thunk, prefix.getLayout().getObject(prefix, 0)); assertFalse(prefix.getLive()); assertEquals(0, prefix.getInputMode());
             assertEquals(11L, FrameAccess.read(frame, slots[0])); assertEquals(7L, FrameAccess.read(frame, slots[1])); clear(language);
         });

@@ -17,8 +17,11 @@ public abstract class GuestRoot extends ContextRoot {
         SavedGuestContinuations.initializeCarrierTypes();
     }
     protected GuestRoot(TruffleLanguage<?> language, FrameDescriptor descriptor) { super(language, descriptor); }
-    /** Whether an independent host entry may admit external asynchronous exceptions. */
+    /** Capture capability at independent host entry, not ordinary polling eagerness. */
     public boolean getAsynchronousExceptions() { return false; }
+    @CompilationFinal private boolean eagerAsyncPolls = true;
+    public final boolean getEagerAsyncPolls() { return eagerAsyncPolls; }
+    public final void configureEagerAsyncPolls(boolean value) { eagerAsyncPolls = value; }
     @CompilationFinal private boolean delimitedControlEnabled = false;
     public final boolean getDelimitedControlEnabled() { return delimitedControlEnabled; }
     public final boolean getDelimitedControlEnabled$org_intelligence_thc() { return delimitedControlEnabled; }

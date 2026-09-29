@@ -8,7 +8,6 @@ import com.oracle.truffle.api.nodes.RootNode;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
-import java.security.MessageDigest;
 import java.util.*;
 import java.util.concurrent.*;
 import org.graalvm.polyglot.Context;
@@ -27,40 +26,29 @@ class CoreUnitAsyncPolicyTest {
     private final Map<String, Object> longRep = map("kind", "long", "primReps", list("IntRep"), "evaluated", true);
     private final Map<String, Object> dataRep = map("kind", "data", "primReps", list("BoxedRep (Just Lifted)"), "evaluated", false);
     private final Map<String, Object> closureRep = map("kind", "closure", "primReps", list("BoxedRep (Just Lifted)"), "evaluated", true);
-    private byte[] bytes(String text) { return text.getBytes(StandardCharsets.UTF_8); }
-    private String hash(byte[] bytes) throws Exception { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes)); }
     private List<Object> literal(int value) { return list("lit", "int", Integer.toString(value), map("rep", longRep)); }
     private List<Object> traceThen(List<Object> body, Map<String, Object> result) {
-        return list("case", list("app", list("prim", "traceEvent#"), list(list("lit", "string-bytes", "64656d616e64"), list("void", map("rep", stateRep))),
-            list(false, false), false, false, map("rep", stateRep)), "traced", list(list("default", null, List.of(), body)),
+        return list("case", list("app", list("prim", "traceEvent#", map("rep", closureRep)), list(list("lit", "string-bytes", "64656d616e64",
+            map("rep", map("kind", "address", "primReps", list("AddrRep"), "evaluated", true))), list("void", map("rep", stateRep))),
+            list(false, false), false, false, map("rep", stateRep)), "traced", list(list("default", null, List.of(), body, map("binders", List.of()))),
             map("rep", result, "binder", map("id", "traced", "lifted", false, "rep", stateRep)));
     }
     private Map<String, Object> function(String id, List<Object> body) {
         return map("id", id, "name", id.substring(id.lastIndexOf('.') + 1), "type", "Int# -> Int#", "lifted", true, "arity", 1, "rep", closureRep,
             "expr", list("lam", list(map("id", "x", "name", "x", "type", "Int#", "lifted", false, "coercion", false, "rep", longRep)), body, map("rep", closureRep, "resultRep", longRep)));
     }
-    /** Model unit-pair writer: exact offsets, explicit filtered metadata, sorted symbol rows. */
+    /** Model units use the real CBD encoder; runtime loading has no JSON fallback. */
     private Map<String, Object> unit(String name, List<Map<String, Object>> bindings, List<Object> constructors) throws Exception {
-        var metadata = map("schema", 1, "ghc", "9.14.1", "unit", "u" + name, "module", name, "boundary", boundary, "constructors", constructors);
-        var text = Json.stringify(metadata); var prefix = text.substring(0, text.length() - 1) + ",\"bindings\":";
-        var encoded = bindings.stream().map(Json::stringify).toList(); var bodies = "[" + String.join(",", encoded) + "]";
-        var module = bytes(prefix + bodies + "}"); var admitted = bytes(Json.stringify(metadata));
-        var out = new ByteArrayOutputStream(); out.writeBytes(module); out.write(10); out.writeBytes(admitted); var bytes = out.toByteArray();
-        int offset = bytes(prefix).length + 1; var rowList = new ArrayList<String>();
-        for (int i = 0; i < bindings.size(); i++) { rowList.add(bindings.get(i).get("id") + " " + offset + "\n"); offset += bytes(encoded.get(i)).length + 1; }
-        Collections.sort(rowList); var rows = bytes(String.join("", rowList)); var json = directory.resolve(name + ".jsons"); var symbols = directory.resolve(name + ".symbols");
-        Files.write(json, bytes); Files.write(symbols, rows);
-        return map("id", "u" + name, "depends", List.of(), "json", map("path", json.toString(), "sha256", hash(bytes)),
-            "symbols", map("path", symbols.toString(), "sha256", hash(rows)), "modules", list(map("name", name, "path", name + ".json", "sha256", hash(module),
-                "boundary", boundary, "start", 0, "end", module.length, "bindingsStart", bytes(prefix).length, "bindingsEnd", bytes(prefix).length + bytes(bodies).length,
-                "metadataStart", module.length + 1, "metadataEnd", bytes.length, "containsDelimitedControl", false, "registrationObligations", false, "mainAlias", false, "packageScalarDeclarations", false)));
+        var module = map("schema", 1, "ghc", "9.14.1", "unit", "u" + name, "module", name, "boundary", boundary,
+            "constructors", constructors, "bindings", bindings);
+        return map("id", "u" + name, "depends", List.of(), "modules", list(CoreCbdFixtures.module(directory.resolve(name + ".cbd"), module)));
     }
     private Path fixture(boolean traceEntry) throws Exception {
         var a = unit("A", List.of(function("uA:A.entry", traceEntry ? traceThen(literal(7), longRep) : literal(7))), List.of());
-        var boxed = list("app", list("con", "uB:B.Box", 1), list(literal(17)), list(false), true, true, map("rep", with(dataRep, "evaluated", true)));
+        var boxed = list("app", list("con", "uB:B.Box", 1, map("rep", closureRep)), list(literal(17)), list(false), true, true, map("rep", with(dataRep, "evaluated", true)));
         var caf = map("id", "uB:B.caf", "name", "caf", "type", "Box", "lifted", true, "arity", 0, "rep", dataRep, "expr", traceThen(boxed, dataRep));
-        var b = unit("B", List.of(function("uB:B.function", traceThen(literal(19), longRep)), caf), list(map("id", "uB:B.Box", "name", "Box", "kind", "boxed", "arity", 1,
-            "fieldReps", list(list("IntRep")), "strictFields", list(false), "fieldLifted", list(false))));
+        var b = unit("B", List.of(function("uB:B.function", traceThen(literal(19), longRep)), caf), list(map("id", "uB:B.Box", "name", "Box", "kind", "boxed", "arity", 1, "tag", 1,
+            "fieldReps", list(list("IntRep")), "fieldTypes", list(longRep), "strictFields", list(false), "fieldLifted", list(false))));
         return Files.writeString(directory.resolve("packages.json"), Json.stringify(map("format", "thc-core-packages", "schema", 1, "ghc", "9.14.1", "units", list(a, b))));
     }
     private String request(Path path, String backend, boolean async) { return CoreFormatTestSupport.request(List.of("@" + path), "uA:A.entry", backend, false, async, false); }
@@ -80,13 +68,11 @@ class CoreUnitAsyncPolicyTest {
                     if (!observed[0]) {
                         observed[0] = true; var threads = Language.currentState(null).getThreads();
                         var slot = Objects.requireNonNull(threads.pollState(Thread.currentThread()).getCurrent());
-                        assertEquals(async, slot.getExternalAsync(), backend + " wrapper policy");
+                        assertTrue(slot.getExternalAsync(), backend + " wrapper capture capability");
                         // A different Java thread prevents self-throwTo from bypassing policy.
                         try { CompletableFuture.runAsync(() -> {
-                            if (async) {
-                                var pending = threads.send(slot.getIdentity(), "policy probe"); assertFalse(pending.getForceSelf());
-                                assertEquals(AsyncRequestState.PENDING, pending.getState()); assertTrue(pending.cancel()); assertEquals(AsyncRequestState.CANCELLED, pending.getState());
-                            } else assertThrows(UnsupportedCore.class, () -> threads.send(slot.getIdentity(), "rejected"));
+                            var pending = threads.send(slot.getIdentity(), "policy probe"); assertFalse(pending.getForceSelf());
+                            assertEquals(AsyncRequestState.PENDING, pending.getState()); assertTrue(pending.cancel()); assertEquals(AsyncRequestState.CANCELLED, pending.getState());
                         }).get(5, TimeUnit.SECONDS); } catch (Exception failure) { throw new AssertionError(failure); }
                     }
                     super.write(bytes, start, length);
@@ -105,12 +91,13 @@ class CoreUnitAsyncPolicyTest {
             context.eval("thc", request(manifest, backend, async)); context.enter();
             try {
                 var owner = Language.currentState(null); var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var program = program(owner);
-                assertEquals(async, program.getAsynchronousExceptions()); long decoded = count(program, "coreUnitDecodedBindings");
+                assertEquals(async, program.getAsynchronousExceptions()); long decoded = count(program, "coreCompactDecodedBindings");
                 var signals = new ManagedSignals(owner, language, true, () -> NativeSignalTransport.userSignalAvailable(),
                     () -> { throw new IllegalStateException("binding alone must not acquire the native signal transport"); });
                 try {
-                    if (async) signals.bind(program); else assertTrue(Objects.toString(assertThrows(RuntimeFault.class, () -> signals.bind(program)).getMessage(), "").contains("asyncExceptions=true"));
-                    assertEquals(decoded, count(program, "coreUnitDecodedBindings"));
+                    signals.bind(program);
+                    assertTrue(owner.getSingleGuestOriginAssumption().isValid(), "Binding does not publish a signal worker");
+                    assertEquals(decoded, count(program, "coreCompactDecodedBindings"));
                 } finally { signals.close(); }
             } finally { context.leave(); }
         }
@@ -125,11 +112,11 @@ class CoreUnitAsyncPolicyTest {
                 try {
                     var program = program(owner); var pending = externalSend(threads, id); var closure = (Closure) program.entryValue("uB:B.function");
                     assertEquals(AsyncRequestState.PENDING, pending.getState(), backend + " preparation is not guest execution"); assertSame(closure, program.entryValue("uB:B.function"));
-                    assertEquals(2L, count(program, "coreUnitDecodedBindings")); assertEquals(0, output.size());
+                    assertEquals(2L, count(program, "coreCompactDecodedBindings")); assertEquals(0, output.size());
                     var saved = Objects.requireNonNull(SavedGuestContinuations.savedGuestContinuation(Calls.target(closure.target, new Object[]{0L, 1L})));
                     assertSame(pending, SavedGuestContinuations.asyncRequest(saved)); assertEquals(AsyncRequestState.CLAIMED, pending.getState()); assertEquals(0, output.size(), "pending delivery precedes the function effect");
                     pending.acknowledge(); assertEquals(19L, saved.continueWith(thc.runtime.Unit.INSTANCE)); assertSame(closure, program.entryValue("uB:B.function"));
-                    assertEquals(2L, count(program, "coreUnitDecodedBindings")); assertEquals("[thc trace event] demand\n", output.toString(StandardCharsets.UTF_8));
+                    assertEquals(2L, count(program, "coreCompactDecodedBindings")); assertEquals("[thc trace event] demand\n", output.toString(StandardCharsets.UTF_8));
                 } finally { threads.leaveCurrent(thc.runtime.GuestThreadStatus.FINISHED); context.leave(); }
             }
         }
@@ -154,7 +141,7 @@ class CoreUnitAsyncPolicyTest {
                     assertEquals(AsyncRequestState.CLAIMED, pending.getState()); assertEquals(5, thunk.getState()); assertEquals(0, output.size()); pending.acknowledge();
                     var value = (DataValue) Calls.target(force, new Object[]{thunk}); assertEquals(17L, value.getLayout().readLong(value, 0));
                     assertEquals(2, thunk.getState()); assertSame(thunk, program.entryValue("uB:B.caf")); assertSame(value, Calls.target(force, new Object[]{thunk}));
-                    assertEquals(1L, metrics.getThunkEvaluations()); assertEquals(2L, count(program, "coreUnitDecodedBindings")); assertEquals("[thc trace event] demand\n", output.toString(StandardCharsets.UTF_8));
+                    assertEquals(1L, metrics.getThunkEvaluations()); assertEquals(2L, count(program, "coreCompactDecodedBindings")); assertEquals("[thc trace event] demand\n", output.toString(StandardCharsets.UTF_8));
                 } finally { threads.leaveCurrent(thc.runtime.GuestThreadStatus.FINISHED); context.leave(); }
             }
         }

@@ -22,12 +22,14 @@ DFL, IGN, HAN and RST actions and a null signal mask are supported. Other
 signals, non-null masks and Windows delivery remain outside
 this bridge's current implementation.
 
-Delivery requires `asyncExceptions=true`. Bytecode enables it by default; AST
-retains its synchronous default and needs an explicit opt-in. The standalone executable launcher enables it for both backends. For raw AST
-entry launches, add `-Dthc.asyncExceptions=true` to `JAVA_OPTS`. `loadEntry(..., asyncExceptions = true)` and the public Core request
-expose the same option. A malformed property fails explicitly; omitting it does
-not change either backend's default. A synchronous program is rejected before
-the native transport is acquired.
+Delivery requires continuation-capable code, which ordinary AST and bytecode
+programs retain even with `asyncExceptions=false`. Binding alone preserves the
+single-origin assumption; installing the first handler invalidates it before
+native transport acquisition or signal-worker publication. `asyncExceptions=true`
+enables ordinary polling eagerly. The standalone executable launcher chooses it
+for both backends; raw AST defaults to speculative polling and bytecode defaults
+to eager polling. A malformed launcher property fails explicitly. Prepared
+synchronous code rejects concurrency admission before acquiring the transport.
 
 ## JVM and embedding ownership
 

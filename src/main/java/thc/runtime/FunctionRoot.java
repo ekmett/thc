@@ -520,6 +520,9 @@ public final class FunctionRoot extends GuestRoot {
         return saved;
     }
     @TruffleBoundary public Object finishCapture(AstCapture cut, MaterializedFrame frame) {
+        // The synchronous caller has left: a saved suffix returns an owned value,
+        // never a token referring to that caller's transient scalar destination.
+        if (handoff != null) handoff.initializeOrdinary(frame);
         if (cut.getYielded() instanceof AstPendingTail && isTailSpillIdentityRoot()) {
             AstPendingTail pending = cut.pendingTail();
             if (pending != null && role == FunctionRootRole.PASS_THROUGH) {
@@ -536,6 +539,7 @@ public final class FunctionRoot extends GuestRoot {
     }
     /** A root-entry cut has no executed body or caller suffix to unwind here. */
     @TruffleBoundary private AstContinuation captureStack(MaterializedFrame frame) {
+        if (handoff != null) handoff.initializeOrdinary(frame);
         AstStackScope stack = astStackScope(this);
         stack.setSpills(stack.getSpills() + 1);
         return new AstCapture(AstStackSpill.INSTANCE, SynchronousMasking.current(this)).append(new ResumeBody(this)).freeze(this, frame, true);

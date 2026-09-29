@@ -241,7 +241,10 @@ class HostReferenceProvenanceTest {
                         if (!record.startsWith("[thc trace event] ")) return;
                         calls.incrementAndGet();
                         var threads = Language.currentState().getThreads();
-                        assertEquals(async, threads.pollState(Thread.currentThread()).getCurrent().getExternalAsync());
+                        // This test explicitly constructs the helper thunk with a
+                        // fixed capability; its ordinary lowered result is adaptive.
+                        assertEquals(record.contains("force") ? async : true,
+                            threads.pollState(Thread.currentThread()).getCurrent().getExternalAsync());
                     }
                 }
             };

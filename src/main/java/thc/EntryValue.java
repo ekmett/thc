@@ -86,14 +86,15 @@ public final class EntryValue implements TruffleObject {
     @ExportMessage public Object execute(Object[] arguments,
             @Cached(value = "create()", uncached = "create()", neverDefault = true) HostDispatch dispatch) {
         requireOwner(dispatch);
-        var threads = owner.getThreads();
-        if (threads.needsHosting()) return threads.hostEntry(dispatch, () -> execute(arguments, dispatch));
         if (ioTarget != null) throw new RuntimeFault("IO main must be invoked through runIO");
         if (hostResultFault != null) throw new RuntimeFault("Diagnostic unsupported path reached: " + hostResultFault);
         if (arguments.length != argumentCount) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             throw new IllegalArgumentException("Host kernel " + entry + " expects " + argumentCount + " arguments");
         }
+        owner.admitGuestOrigin();
+        var threads = owner.getThreads();
+        if (threads.needsHosting()) return threads.hostEntry(dispatch, () -> execute(arguments, dispatch));
         Closure closure = guestEntry instanceof Closure value ? value : null;
         GuestRoot signature = closure != null && closure.target.getRootNode() instanceof GuestRoot root ? root : null;
         Object[] normalized;
@@ -113,7 +114,7 @@ public final class EntryValue implements TruffleObject {
                 else normalized[index] = narrow.fromHost(value);
             }
         }
-        threads.enterCurrent(null, false, program.getAsynchronousExceptions(), null);
+        threads.enterCurrent(null, false, program.getCapturesContinuations(), null);
         var outcome = GuestThreadStatus.FINISHED;
         try {
             try {
@@ -198,11 +199,14 @@ public final class EntryValue implements TruffleObject {
             @Cached(value = "create()", uncached = "create()", neverDefault = true) HostDispatch dispatch) throws UnknownIdentifierException {
         if ("runIO".equals(member) && ioTarget != null) {
             requireOwner(dispatch);
+            if (arguments.length != 0) throw new IllegalArgumentException("runIO takes no arguments");
+            if (lifecycleStarted != null && lifecycleStarted.get()) throw new RuntimeFault("Executable IO lifecycle already started");
+            owner.admitGuestOrigin();
             var threads = owner.getThreads();
             if (threads.needsHosting()) return threads.hostEntry(dispatch, () -> invokeMember(member, arguments, dispatch));
-            if (arguments.length != 0) throw new IllegalArgumentException("runIO takes no arguments");
+            // Hosting may race another valid entry; reserve the one-shot lifecycle only here.
             if (lifecycleStarted != null && !lifecycleStarted.compareAndSet(false, true)) throw new RuntimeFault("Executable IO lifecycle already started");
-            threads.enterCurrent(null, false, program.getAsynchronousExceptions(), null);
+            threads.enterCurrent(null, false, program.getCapturesContinuations(), null);
             var outcome = GuestThreadStatus.FINISHED;
             try {
                 if (processSignals) owner.getSignals().bind(program);
