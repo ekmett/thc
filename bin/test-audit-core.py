@@ -31,6 +31,10 @@ spec = importlib.util.spec_from_file_location('audit_core', ROOT / 'audit-core.p
 audit_core = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(audit_core)
 CAP = json.loads((ROOT / 'core-capabilities.json').read_text())
+model_spec = importlib.util.spec_from_file_location('audit_cbd_models', ROOT / 'test-core-package-manifest.py')
+model_support = importlib.util.module_from_spec(model_spec)
+model_spec.loader.exec_module(model_support)
+write_core = model_support.write_core
 
 
 def bind(key, expr, lifted=True):
@@ -89,9 +93,9 @@ class DeepCoreTest(unittest.TestCase):
 class CommandLineEncodingTest(unittest.TestCase):
     def test_inspection_stdin_preserves_utf8_in_both_audit_modes(self):
         entry = 'root\u201d'
-        source = json.dumps(dict(schema=1, ghc='9.14.1',
-            bindings=[bind(entry, lit(42))], constructors=[]), ensure_ascii=False).encode('utf-8')
         with tempfile.TemporaryDirectory() as directory:
+            source = write_core(Path(directory) / 'input.cbd', dict(schema=1, ghc='9.14.1',
+                bindings=[bind(entry, [*lit(42), dict(rep=LONG)])], constructors=[]))
             for mode in ([], ['--eager']):
                 with self.subTest(mode=mode):
                     report = Path(directory) / 'audit.json'
@@ -112,9 +116,9 @@ class CommandLineEncodingTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             entry = 'root\u201d'
-            source = root / 'core\u201d.json'
-            source.write_bytes(json.dumps(dict(schema=1, ghc='9.14.1',
-                bindings=[bind(entry, lit(42))], constructors=[]), ensure_ascii=False).encode('utf-8'))
+            source = root / 'core\u201d.cbd'
+            write_core(source, dict(schema=1, ghc='9.14.1',
+                bindings=[bind(entry, [*lit(42), dict(rep=LONG)])], constructors=[]))
             manifest = root / 'modules.txt'
             manifest.write_bytes((source.name + '\n').encode('utf-8'))
             report = root / 'audit.json'
@@ -5020,9 +5024,8 @@ class AuditStoreTest(unittest.TestCase):
         for name in ['First', 'Last']:
             module = dict(schema=1, ghc='9.14.1', unit='unit', module=name,
                 boundary=core_package_manifest.BOUNDARY, bindings=[self.binding('unit:' + name + '.f')], constructors=[])
-            data = json.dumps(module).encode()
-            (root / (name + '.json')).write_bytes(data)
-            records.append(dict(name=name, boundary=module['boundary'], path=name + '.json',
+            data = write_core(root / (name + '.cbd'), module)
+            records.append(dict(name=name, boundary=module['boundary'], path=name + '.cbd',
                                 sha256=hashlib.sha256(data).hexdigest()))
         manifest = root / 'packages.json'
         manifest.write_text(json.dumps(dict(format='thc-core-packages', schema=1, ghc='9.14.1',
@@ -5031,7 +5034,7 @@ class AuditStoreTest(unittest.TestCase):
             with self.subTest(mode=mode):
                 store = AuditStore(root / (mode + '.sqlite'), {'manifestSha256': hashlib.sha256(manifest.read_bytes()).hexdigest()})
                 self.addCleanup(store.close)
-                if mode == 'late-corrupt': (root / 'Last.json').write_bytes(b'corrupt')
+                if mode == 'late-corrupt': (root / 'Last.cbd').write_bytes(b'corrupt')
                 def ingest():
                     with store:
                         with core_package_manifest.open_modules(manifest, audit_archives=True) as modules:
@@ -5101,9 +5104,9 @@ class BoundedAuditIntegrationTest(unittest.TestCase):
                 exceptionType='ghc-internal:GHC.Internal.Exception.Type.SomeException')
             module = dict(schema=1, ghc='9.14.1', unit=unit, module=bridge['module'], boundary=boundary,
                 foreignExceptionBridge=bridge, constructors=[],
-                bindings=[bind(bridge['box'], lit(1)), bind(bridge['project'], lit(2))])
-            source = self.root / (unit + '.json')
-            source.write_text(json.dumps(module))
+                bindings=[bind(bridge['box'], [*lit(1), dict(rep=LONG)]), bind(bridge['project'], [*lit(2), dict(rep=LONG)])])
+            source = self.root / (unit + '.cbd')
+            write_core(source, module)
             units.append(dict(id=unit, depends=[], modules=[dict(name=module['module'],
                 boundary=boundary, path=source.name, sha256=hashlib.sha256(source.read_bytes()).hexdigest())]))
         declaration = json.loads((ROOT.parent / 'src/test/resources/core/foreign-exception-descriptor.json').read_text())
@@ -5116,9 +5119,9 @@ class BoundedAuditIntegrationTest(unittest.TestCase):
         helper = bind('query', ['lam', parameters, call,
             dict(rep=CLOSURE, resultRep=declaration['resultRep'])])
         module = dict(schema=1, ghc='9.14.1', unit='app', module='Main', boundary=boundary,
-            constructors=[], bindings=[bind('app:Main.entry', ['let', False, [helper], lit(0)])])
-        source = self.root / 'app.json'
-        source.write_text(json.dumps(module))
+            constructors=[], bindings=[bind('app:Main.entry', ['let', False, [helper], [*lit(0), dict(rep=LONG)], dict(rep=LONG)])])
+        source = self.root / 'app.cbd'
+        write_core(source, module)
         units.append(dict(id='app', depends=['runtime-a', 'runtime-b'], modules=[dict(name='Main',
             boundary=boundary, path=source.name, sha256=hashlib.sha256(source.read_bytes()).hexdigest())]))
         manifest = dict(format=core_package_manifest.FORMAT, schema=1, ghc='9.14.1', units=units)
@@ -5314,8 +5317,8 @@ class BoundedAuditIntegrationTest(unittest.TestCase):
         self.assertEqual(1, len(list(self.root.glob('.report.json.*.partial'))))
 
     def test_late_cli_parse_failure_never_replaces_report_or_seals_catalogue(self):
-        first, last = self.root / 'first.json', self.root / 'last.json'
-        first.write_text(json.dumps(dict(schema=1, ghc='9.14.1', bindings=[bind('root', lit(0))], constructors=[])))
+        first, last = self.root / 'first.cbd', self.root / 'last.cbd'
+        write_core(first, dict(schema=1, ghc='9.14.1', bindings=[bind('root', [*lit(0), dict(rep=LONG)])], constructors=[]))
         last.write_text('{"incomplete":')
         output, store = self.root / 'report.json', self.root / 'failed.sqlite'
         output.write_text('previous verified output')
@@ -5327,19 +5330,18 @@ class BoundedAuditIntegrationTest(unittest.TestCase):
         with closing(sqlite3.connect(store)) as connection:
             self.assertEqual(b'"ingesting"', connection.execute("SELECT payload FROM metadata WHERE key='phase'").fetchone()[0])
 
-    def test_loose_cli_json_retains_previous_duplicate_key_behavior(self):
+    def test_loose_cli_rejects_json_in_both_modes(self):
         module = dict(schema=1, ghc='9.14.1', bindings=[bind('root', lit(0))], constructors=[], future=0)
         source = self.root / 'loose.json'
         source.write_text(json.dumps(module)[:-1] + ', "future":1}')
-        reports = []
         for mode in ['eager', 'indexed']:
             output = self.root / (mode + '.json')
             options = ['--eager'] if mode == 'eager' else ['--store', str(self.root / 'loose.sqlite')]
             result = subprocess.run([sys.executable, str(ROOT / 'audit-core.py'), str(source), '--entry', 'root',
                 '--output', str(output), *options], capture_output=True, text=True)
-            self.assertEqual(0, result.returncode, result.stderr)
-            reports.append(output.read_bytes())
-        self.assertEqual(*reports)
+            self.assertEqual(2, result.returncode, result.stderr)
+            self.assertIn('Core input must be CBD', result.stderr)
+            self.assertFalse(output.exists())
 
 
 class RetainedAuditStoreTest(unittest.TestCase):
