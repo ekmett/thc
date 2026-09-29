@@ -77,6 +77,7 @@ public final class BytecodeProgram implements ExecutableProgram {
     private final Object preparationLock = new Object();
     private int nextLocal;
     private int localJoinCount;
+    private int nextJoinSource;
     private List<String> pendingInitializers = List.of();
 
     public static BytecodeProgram forNativeStartup(Language language, Map<String,Object> module, boolean async) {
@@ -204,6 +205,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         CaptureLayout captureLayout;
         boolean mayLoop;
         boolean passThrough;
+        boolean entryPoll = true;
         boolean preparingCaseRegion;
         CaseRegionEmission caseEmission;
         final List<BytecodeCaseRegion> caseRegions = new ArrayList<>();
@@ -271,7 +273,17 @@ public final class BytecodeProgram implements ExecutableProgram {
     }
     private record JoinTarget(JoinRegion region, int index, List<Map<String, Object>> parameters,
         List<List<Local>> locals, boolean[] entryStrict, CoreRepresentation result,
-        List<CapturedLocal> captures, int selectorIndex) {}
+        List<CapturedLocal> captures, int selectorIndex, JoinSource source) {}
+    // Only the free lexical views are retained, not a copy of every enclosing scope.
+    private static final class JoinSource {
+        final CoreJoinDefinition definition;
+        final FunctionContext function;
+        final Map<String, Object> bindings;
+        final int order;
+        JoinSource(CoreJoinDefinition definition, FunctionContext function, Map<String, Object> bindings, int order) {
+            this.definition = definition; this.function = function; this.bindings = bindings; this.order = order;
+        }
+    }
     private static final class JoinEmission {
         final BytecodeLocal selector;
         final BytecodeLabel next;
@@ -786,9 +798,15 @@ public final class BytecodeProgram implements ExecutableProgram {
 
     private FunctionSpec function(String label, List<Map<String, Object>> args, List<Object> expression, Scope outer,
             CoreRepresentation resultProof, boolean[] entryStrict, boolean tail, boolean passThrough) {
+        return function(label, args, expression, outer, resultProof, entryStrict, tail, passThrough, true);
+    }
+
+    private FunctionSpec function(String label, List<Map<String, Object>> args, List<Object> expression, Scope outer,
+            CoreRepresentation resultProof, boolean[] entryStrict, boolean tail, boolean passThrough, boolean entryPoll) {
         if (entryStrict.length != args.size()) throw new RuntimeFault("Function entry contract arity mismatch");
         var context = new FunctionContext(args.size(), entryStrict.clone());
         context.passThrough = passThrough;
+        context.entryPoll = entryPoll;
         context.preparingCaseRegion = passThrough;
         var scope = new Scope(context, outer.source);
         var free = CoreFreeVariables.coreFreeVariables(expression);
@@ -1095,7 +1113,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 b.beginBlock();
                 e.continueLabel = b.createLabel();
             }
-            if (enableAsync) emitAsyncPoll(e);
+            if (enableAsync && context.entryPoll) emitAsyncPoll(e);
             if (enableAsync) emitEntryStrictDemands(e, context);
             var tuple = context.tuple;
             if (tuple != null) {
@@ -3820,8 +3838,50 @@ public final class BytecodeProgram implements ExecutableProgram {
         result.joins.replaceAll((id, target) -> new JoinTarget(target.region, target.index, target.parameters,
             target.locals, target.entryStrict, target.result, target.captures.stream()
                 .map(capture -> new CapturedLocal(copies.getOrDefault(capture.source.id, capture.source), capture.destination))
-                .toList(), target.selectorIndex));
+                .toList(), target.selectorIndex, target.source));
         return result;
+    }
+
+    private static Object lexicalBinding(Scope scope, String id) {
+        if (scope.locals.containsKey(id)) return scope.locals.get(id);
+        if (scope.tuples.containsKey(id)) return scope.tuples.get(id);
+        return scope.joins.get(id); // null records an unshadowed global.
+    }
+
+    private JoinSource joinSource(CoreJoinDefinition definition, Scope scope) {
+        var free = new LinkedHashSet<>(CoreFreeVariables.coreFreeVariables(definition.body()));
+        for (var parameter : definition.parameters()) free.remove((String) parameter.get("id"));
+        var bindings = new LinkedHashMap<String, Object>();
+        for (String id : free) bindings.put(id, lexicalBinding(scope, id));
+        return new JoinSource(definition, scope.function, bindings, nextJoinSource++);
+    }
+
+    /** Close only inert forward exits whose original lexical views remain available. */
+    private static List<Object> closedJoinRegion(List<Object> expression, Scope scope) {
+        var pending = new ArrayList<JoinTarget>();
+        for (String id : CoreFreeVariables.coreFreeVariables(expression)) {
+            var target = scope.joins.get(id);
+            if (target != null) pending.add(target);
+        }
+        var sources = new LinkedHashMap<Integer, JoinSource>();
+        for (int i = 0; i < pending.size(); ++i) {
+            var target = pending.get(i);
+            var source = target.source;
+            if (target.region.owner.recursive || source == null || source.function != scope.function) return null;
+            if (sources.putIfAbsent(source.order, source) != null) continue;
+            for (var binding : source.bindings.entrySet()) {
+                // Identity includes the physical owner, proof, cell/entry contract,
+                // aggregate components and zero-width bindings, not just a slot number.
+                if (lexicalBinding(scope, binding.getKey()) != binding.getValue()) return null;
+                if (binding.getValue() instanceof JoinTarget dependency) pending.add(dependency);
+            }
+        }
+        var ordered = new ArrayList<>(sources.values());
+        ordered.sort(java.util.Comparator.comparingInt(source -> source.order));
+        List<Object> body = expression;
+        for (int i = ordered.size() - 1; i >= 0; --i)
+            body = List.of("let", false, List.of(ordered.get(i).definition.binding()), body);
+        return body;
     }
 
     private Expression joinRegion(List<Map<String, Object>> group, List<Object> expression, boolean recursive,
@@ -3903,7 +3963,8 @@ public final class BytecodeProgram implements ExecutableProgram {
                 parameters.add(fields);
             }
             var target = new JoinTarget(region, i, definition.getParameters(), parameters, entryStrict,
-                definition.getResult(), captures, region.owner.targets.size());
+                definition.getResult(), captures, region.owner.targets.size(),
+                recursive ? null : joinSource(definition, scope));
             region.owner.targets.add(target); region.owner.bodies.add(null);
             targets.add(target);
             local.bindJoin(definition.getId(), target);
@@ -5247,6 +5308,33 @@ public final class BytecodeProgram implements ExecutableProgram {
         for (var binding : group) if (CoreRepresentations.joinArity(binding) != null) {
             var context = scope.function;
             if (!context.preparingCaseRegion && context.caseRegions.size() < BytecodeCaseRegion.MAX_REGIONS) {
+                if (recursive && joinRegionWork(expr, 64) >= 64) {
+                    var closed = closedJoinRegion(expr, scope);
+                    if (closed != null) {
+                        context.preparingCaseRegion = true;
+                        try {
+                            var inline = joinRegion(group, (List<Object>) expr.get(3), true, scope, tail);
+                            int rootMark = roots.size(), joinMark = localJoinCount;
+                            FunctionSpec side;
+                            try {
+                                side = function("join region " + group.getFirst().get("id"), List.of(), closed, scope,
+                                        inline.proof(), new boolean[0], tail, true, false);
+                            } catch (BytecodeEncodingException failure) {
+                                if (!localIndexOverflow(failure)) throw failure;
+                                // This optional side has not escaped preparation. Keep the
+                                // usable inline body and any previously accepted region plans.
+                                roots.subList(rootMark, roots.size()).clear();
+                                localJoinCount = joinMark;
+                                return inline;
+                            }
+                            if (context.caseEmission == null) context.caseEmission = new CaseRegionEmission();
+                            int index = context.caseRegions.size();
+                            context.caseRegions.add(new BytecodeCaseRegion(side.target, side.captureLayout, tail));
+                            return preparedRegion(inline, List.of(side), scope, tail, index,
+                                    new ProvenExpression(e -> e.builder.emitLoadConstant(thc.runtime.Unit.INSTANCE), UNKNOWN));
+                        } finally { context.preparingCaseRegion = false; }
+                    }
+                }
                 var prefix = new ArrayList<List<Object>>();
                 var joins = new LinkedHashSet<String>();
                 var body = expr;
@@ -5458,6 +5546,23 @@ public final class BytecodeProgram implements ExecutableProgram {
         return count;
     }
 
+    // Count join bodies, but never count an ordinary nested closure as work in this root.
+    private static int joinRegionWork(Object value, int remaining) {
+        if (remaining <= 0) return 0;
+        if (value instanceof Map<?, ?> raw) {
+            var binding = (Map<String, Object>) raw;
+            if (CoreRepresentations.joinArity(binding) == null) return 0;
+            return joinRegionWork(CoreJoins.definitions(List.of(binding)).getFirst().body(), remaining);
+        }
+        if (!(value instanceof List<?> list) || list.isEmpty() || "lam".equals(list.getFirst())) return 0;
+        int count = 1;
+        for (Object child : list) {
+            count += joinRegionWork(child, remaining - count);
+            if (count >= remaining) break;
+        }
+        return count;
+    }
+
     private Expression partitionedCase(List<Object> expr, Scope scope, boolean tail, boolean scalar) {
         return partitionedCase(expr, scope, tail, scalar, inlineCase(expr, scope, tail, true), List.of());
     }
@@ -5526,7 +5631,13 @@ public final class BytecodeProgram implements ExecutableProgram {
         int index = scope.function.caseRegions.size();
         scope.function.caseRegions.add(new BytecodeCaseRegion(guards, width, targets, layouts, tail));
         var scrutinee = force(compile((List<Object>) expr.get(1), scope, false));
-        return new LoweredCaseExpression(new ProvenExpression(new ResultExpression((e, destination) -> {
+        return new LoweredCaseExpression(preparedRegion(inline, specs, scope, tail, index, scrutinee));
+    }
+
+    private Expression preparedRegion(Expression inline, List<FunctionSpec> specs, Scope scope, boolean tail,
+            int index, Expression scrutinee) {
+        var emission = scope.function.caseEmission;
+        return new ProvenExpression(new ResultExpression((e, destination) -> {
             var b = e.builder;
             b.beginBlock();
             var answer = destination == null ? b.createLocal("case choice result", FrameSlotKind.Object) : null;
@@ -5555,7 +5666,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             b.emitLabel(complete);
             if (answer != null) b.emitStaticLoadObject(answer);
             b.endBlock();
-        }), inline.proof()));
+        }), inline.proof());
     }
 
     private void emitCaseRegionCall(Emission e, FunctionContext context, int index, BytecodeCaseRegion.Source source,
