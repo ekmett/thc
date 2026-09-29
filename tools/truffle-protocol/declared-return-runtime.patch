@@ -55,3 +55,13 @@ index 1ea9febf..69a95056 100644
              returnProfile = new ReturnProfile(returnType);
          } else {
              returnProfile = ReturnProfile.INVALID;
+@@ -1991,6 +2005,9 @@ public abstract class OptimizedCallTarget implements TruffleCompilable, RootCall
+ 
+         this.returnProfile = returnProfile;
+         this.argumentsProfile = newProfile;
++        // AOT code must accept its first declared control transfer or failure
++        // without learning an exception profile from guest execution.
++        this.exceptionProfile = PROFILE_GENERIC;
+         this.aotInitialized = true;
+         return true;
+     }

@@ -26,11 +26,11 @@ class CoreVectorCarrierTest {
     }
 
     @Test void exactCarriersPreserveIdentityAndRejectWrongSpeciesAndElements() {
-        checkSpecies(List.of(ByteVector.SPECIES_128, ByteVector.SPECIES_256, ByteVector.SPECIES_512), CoreVectors::requireByte);
-        checkSpecies(List.of(ShortVector.SPECIES_128, ShortVector.SPECIES_256, ShortVector.SPECIES_512), CoreVectors::requireShort);
-        checkSpecies(List.of(IntVector.SPECIES_128, IntVector.SPECIES_256, IntVector.SPECIES_512), CoreVectors::requireInt);
-        checkSpecies(List.of(LongVector.SPECIES_128, LongVector.SPECIES_256, LongVector.SPECIES_512), CoreVectors::requireLong);
-        checkSpecies(List.of(FloatVector.SPECIES_128, FloatVector.SPECIES_256, FloatVector.SPECIES_512), CoreVectors::requireFloat);
-        checkSpecies(List.of(DoubleVector.SPECIES_128, DoubleVector.SPECIES_256, DoubleVector.SPECIES_512), CoreVectors::requireDouble);
+        checkSpecies(List.of(ByteVector.SPECIES_128, ByteVector.SPECIES_256, ByteVector.SPECIES_512), RuntimeTypes::requireByte);
+        checkSpecies(List.of(ShortVector.SPECIES_128, ShortVector.SPECIES_256, ShortVector.SPECIES_512), RuntimeTypes::requireShort);
+        checkSpecies(List.of(IntVector.SPECIES_128, IntVector.SPECIES_256, IntVector.SPECIES_512), RuntimeTypes::requireInt);
+        checkSpecies(List.of(LongVector.SPECIES_128, LongVector.SPECIES_256, LongVector.SPECIES_512), RuntimeTypes::requireLong);
+        checkSpecies(List.of(FloatVector.SPECIES_128, FloatVector.SPECIES_256, FloatVector.SPECIES_512), RuntimeTypes::requireFloat);
+        checkSpecies(List.of(DoubleVector.SPECIES_128, DoubleVector.SPECIES_256, DoubleVector.SPECIES_512), RuntimeTypes::requireDouble);
     }
 }

@@ -11,9 +11,9 @@ import static thc.runtime.RuntimeServiceStatus.fault;
 public final class IoUnitDestination extends TupleDestination {
     private final Language language;
     public IoUnitDestination(TupleShape shape, Language language) { super(shape); this.language = language; }
-    @Override public void consume(VirtualFrame frame, Node node, Object result) {
+    @Override public void consume(VirtualFrame frame, Node node, Object result) { consumeFrom(frame, node, result, getShape()); }
+    @Override protected void consumeFrom(VirtualFrame frame, Node node, Object result, TupleShape shape) {
         AsyncContinuations.publicResult(result, node);
-        TupleShape shape = getShape();
         Object raw;
         if (result == TupleComplete.INSTANCE) {
             TupleResultPool pool = language.getHandoffState().get().getResults();
@@ -21,7 +21,7 @@ public final class IoUnitDestination extends TupleDestination {
             try {
                 if (storage.getLayout() != shape.getLayout()) throw fault("IO main returned the wrong tuple layout");
                 raw = shape.getLayout().getObject(storage, 0);
-            } finally { pool.releaseChecked(storage, shape.getLayout()); }
+            } finally { pool.releaseChecked(storage, getShape().getLayout()); }
         } else {
             if (!(result instanceof HandoffStorage storage)) throw fault("IO main returned no tuple");
             if (storage.getLayout() != shape.getLayout()) throw fault("IO main returned the wrong tuple layout");

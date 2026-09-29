@@ -453,7 +453,7 @@ public final class Language extends TruffleLanguage<Language.State> {
             }
             var language = getLanguage(Language.class);
             return new EntryValue(code.newInstance(language), entry, arity, null, null, language,
-                null, null, false, inputs, result);
+                null, null, false, inputs, result, code);
         }
         @Override protected ExecutionSignature prepareForAOT() {
             return ExecutionSignature.create(EntryValue.class, new Class<?>[0]);

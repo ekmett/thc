@@ -38,6 +38,6 @@ public final class VectorWord8Operation extends Expr {
     }
 
     private static ByteVector vector(Object value) {
-        return CoreVectors.requireByte(value, ByteVector.SPECIES_128);
+        return RuntimeTypes.requireByte(value, ByteVector.SPECIES_128);
     }
 }

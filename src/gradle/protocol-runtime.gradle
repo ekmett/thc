@@ -64,7 +64,7 @@ def protocolRuntimeJar = tasks.register("protocolRuntimeJar", Jar) {
     group = "build"
     description = "Build the pinned runtime with an explicit per-root polymorphic completion declaration."
     archiveBaseName.set("thc-truffle-runtime")
-    archiveVersion.set("$protocolRuntimeVersion-return1-budget1")
+    archiveVersion.set("$protocolRuntimeVersion-return1-budget1-aot1")
     destinationDirectory.set(layout.buildDirectory.dir("protocol-runtime"))
     preserveFileTimestamps = false
     reproducibleFileOrder = true
@@ -84,7 +84,7 @@ def protocolRuntimeJar = tasks.register("protocolRuntimeJar", Jar) {
             manifest.attributes(jar.manifest.mainAttributes.collectEntries { key, value -> [(key.toString()): value.toString()] })
         }
         manifest.attributes(["Implementation-Title": "THC declared root completion Truffle runtime",
-            "Implementation-Version": "$protocolRuntimeVersion-return1-budget1",
+            "Implementation-Version": "$protocolRuntimeVersion-return1-budget1-aot1",
             "Upstream-Source-SHA256": "bc365db6f4765d57bc4779508dbe0fcdd2c379b4027eb954fd5b0c9e55c8a519"])
     }
 }

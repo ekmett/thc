@@ -113,13 +113,13 @@ def packed(f, values):
 
 
 def checked(f, value):
-    return f'CoreVectors.require{vector_type(f).removesuffix("Vector")}({value}, {species(f)})'
+    return f'RuntimeTypes.require{vector_type(f).removesuffix("Vector")}({value}, {species(f)})'
 
 
 def operation_expression(f, op, args):
     if op == 'broadcast': return f'{vector_type(f)}.broadcast({species(f)}, {args[0]})'
     if op == 'insert':
-        return f'{args[0]}.withLane(CoreVectors.laneIndex({args[2]}, {f["lanes"]}), {args[1]})'
+        return f'{args[0]}.withLane(RuntimeTypes.laneIndex({args[2]}, {f["lanes"]}), {args[1]})'
     if op in ('quot', 'rem'):
         return f'VectorIntegerDivision.{op}{vector_type(f).removesuffix("Vector")}({args[0]}, {args[1]}, {str(f["laneRep"].startswith("Word")).lower()})'
     if op == 'negate': return f'{args[0]}.neg()'
@@ -188,6 +188,7 @@ def ast_code(fs):
                       '    @CompilationFinal(dimensions = 1) private final int[] slots;',
                       f'    Generated{n}Pack(Expr argument, int[] slots) {{',
                       '        this.argument = argument; this.slots = slots;',
+                      '        argument.prepareTuple(slots, 0);',
                       f'        setRepresentation(GeneratedVectors.proof{n});', '    }',
                       f'    @Override public {vector_type(f)} execute(VirtualFrame frame) {{', '        argument.executeTuple(frame, slots, 0);',
                       f'        return {packed(f, [f"{cast}frame.get{access}(slots[{i}])" for i in range(count)])};','    }','}']

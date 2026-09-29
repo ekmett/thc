@@ -15,6 +15,7 @@ public final class VectorPack extends Expr {
     public VectorPack(Expr argument, int[] slots) {
         this.argument = argument;
         this.slots = slots;
+        argument.prepareTuple(slots, 0);
         setRepresentation(CoreVectors.proof);
     }
 

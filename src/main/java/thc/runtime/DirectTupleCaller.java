@@ -18,6 +18,7 @@ final class DirectTupleCaller extends Node {
     private final int arity, prefixSize, prefixCount;
     private final ArgumentLayout formalLayout;
     private final boolean hasEnvironment;
+    private final TupleShape resultShape;
     @Child private EntryArguments entry;
     @Child private DirectCallNode call;
     @Child private TailCheck tailCheck;
@@ -37,6 +38,7 @@ final class DirectTupleCaller extends Node {
         force = new Force(metrics);
         if (metrics.getEnabled()) metrics.incrementDirectCacheMisses();
         if (!(target.getRootNode() instanceof GuestRoot root)) throw fault("Invalid tuple call target");
+        resultShape = root.getTupleResult();
         if (arity > argsSize) throw fault("Tuple result application is under-saturated");
         if (arity == argsSize && !root.hasTupleResult(destination.getShape())) throw fault("Tuple call target result shape mismatch");
         if (arity < argsSize && root.getTupleResult() != null) throw fault("Cannot overapply an unboxed tuple");
@@ -95,10 +97,10 @@ final class DirectTupleCaller extends Node {
         entry.execute(frame, packet);
         if (tail) {
             tailCheck.check(frame, target, packet);
-            destination.consume(frame, this, Calls.direct(call, packet));
+            destination.consume(frame, this, Calls.direct(call, packet), resultShape);
         } else {
             packet[0] = 0L;
-            try { destination.consume(frame, this, Calls.direct(call, packet)); }
+            try { destination.consume(frame, this, Calls.direct(call, packet), resultShape); }
             catch (TailCall transfer) { bounce.execute(frame, transfer); }
         }
     }

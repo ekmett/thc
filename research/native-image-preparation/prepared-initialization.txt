@@ -51,6 +51,10 @@ thc.runtime.BytecodeRootGen$InstructionDescriptorImpl
 thc.runtime.BytecodeRootGen$InstructionDescriptorList
 thc.runtime.BytecodeRootGen$Instructions$ArgumentDescriptorImpl
 thc.runtime.CoreRepresentation
+# Runtime carrier checks share this existing type-system owner. Its only static
+# state is javac's own-class desiredAssertionStatus() boolean; no proof registry,
+# guest context, receiver, frame or native resource is initialized.
+thc.runtime.RuntimeTypes
 # Only primitive tag constants.
 # No instance Field, property, shape, frame, guest context or thread is created.
 thc.runtime.DataLayout$Field

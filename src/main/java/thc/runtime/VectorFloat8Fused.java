@@ -32,6 +32,6 @@ public final class VectorFloat8Fused extends Expr {
     }
 
     private static FloatVector vector(Object value) {
-        return CoreVectors.requireFloat(value, FloatVector.SPECIES_256);
+        return RuntimeTypes.requireFloat(value, FloatVector.SPECIES_256);
     }
 }

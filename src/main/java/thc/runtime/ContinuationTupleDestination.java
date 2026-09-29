@@ -12,12 +12,13 @@ public final class ContinuationTupleDestination extends TupleDestination {
         if (root == null) throw new NullPointerException("null cannot be cast to non-null type thc.runtime.BytecodeRoot");
         return TupleResults.ownedTupleResult(destination.finish(frame, ((BytecodeRoot) root).getBytecodeNode()), getShape());
     }
-    @Override public void consume(VirtualFrame frame, Node node, Object result) {
-        DelimitedControl.captureBytecode(result, getShape());
+    @Override public void consume(VirtualFrame frame, Node node, Object result) { consumeFrom(frame, node, result, getShape()); }
+    @Override protected void consumeFrom(VirtualFrame frame, Node node, Object result, TupleShape producer) {
+        DelimitedControl.captureBytecode(result, producer);
         if (result instanceof TailYield tail) throw new TupleCallYield(tail.getContinuation(), true, tail.getTarget());
         if (result instanceof AstTailYield tail) throw new TupleCallYield(tail.getContinuation(), true, tail.getTarget());
         if (result instanceof ContinuationResult continuation) throw new TupleCallYield(continuation);
         if (result instanceof SavedGuestContinuation continuation) throw new TupleCallYield(continuation);
-        destination.consume(frame, node, result);
+        destination.consume(frame, node, result, producer);
     }
 }

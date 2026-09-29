@@ -91,6 +91,7 @@ class TypedInputProtocolTest {
             var p = program(language, backend, bindings);
             for (String name : List.of("cycle", "prefixCycle")) {
                 String label = backend + "/" + name + "/inline=" + inlining;
+                long trampolinesBefore = (Long)p.diagnostics().get("trampolineIterations");
                 var fn = context.asValue(new EntryValue(p, name, 1)); var inputs = List.of(Long.MIN_VALUE, -1L, 0L, 11L, Long.MAX_VALUE);
                 for (long x : inputs) { assertEquals(x + 7L, fn.execute(x).asLong(), label + "/interpreted"); clear(language); }
                 assertTrue(fn.invokeMember("compile").asBoolean(), label);
@@ -107,8 +108,29 @@ class TypedInputProtocolTest {
                 if (backend.equals("bytecode-async")) {
                     var path = name.equals("cycle") ? List.of("a", "b", "c") : List.of("pa", "pb", "pc", "pd", "pe");
                     var masks = new ArrayList<String>();
-                    for (var id : path) masks.add(Long.toUnsignedString(((GuestRoot) p.entryTarget(id).getRootNode()).mask, 16));
-                    assertEquals(0L, p.diagnostics().get("trampolineIterations"), label + " should reenter locally; masks=" + masks);
+                    for (var id : path) masks.add(Long.toUnsignedString(((GuestRoot)p.entryTarget(id).getRootNode()).mask, 16));
+                    long visited = 0L, prefixBounces = 0L;
+                    var liveRoots = new HashSet<String>();
+                    int index = 0, cycleStart = name.equals("cycle") ? 0 : 2;
+                    // Follow this invocation's actual 17-edge path. A collision
+                    // unwinds the old roots, so an earlier-listed root may need
+                    // another first entry. Only a root still live after the last
+                    // reset proves that the remaining cycle reenters locally.
+                    for (int remaining = 17; remaining >= 0; remaining--) {
+                        String id = path.get(index);
+                        if (!liveRoots.add(id)) break;
+                        long mask = ((GuestRoot)p.entryTarget(id).getRootNode()).mask;
+                        if ((visited & mask) == mask) {
+                            prefixBounces++; visited = 0L;
+                            liveRoots.clear(); liveRoots.add(id);
+                        }
+                        visited |= mask;
+                        index = index + 1 < path.size() ? index + 1 : cycleStart;
+                    }
+                    // Both five-call interpreter/compiled lanes traverse it.
+                    assertEquals(prefixBounces * inputs.size() * 2L,
+                        (Long)p.diagnostics().get("trampolineIterations") - trampolinesBefore,
+                        label + " should only bounce for prefix collisions; masks=" + masks);
                 }
             }
         });

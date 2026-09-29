@@ -15,6 +15,7 @@ public final class VectorWord8Pack extends Expr {
     public VectorWord8Pack(Expr argument, int[] slots) {
         this.argument = argument;
         this.slots = slots;
+        argument.prepareTuple(slots, 0);
         setRepresentation(CoreVectors.proofWord8);
     }
 

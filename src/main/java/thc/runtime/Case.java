@@ -57,6 +57,9 @@ class Case extends Expr {
                 binderProof.getTagSlot(), binderProof.getAlternativeSlots())));
         this.scrutinee = new LocalBinding(binderSlot, evaluatedScrutinee, true);
     }
+    @Override public void prepareTuple(int[] slots, int offset) {
+        for (Alternative alternative : alternatives) alternative.getBody().prepareTuple(slots, offset);
+    }
     protected final void prepare(VirtualFrame frame) { prepare(frame, null, 0); }
     protected final void prepare(VirtualFrame frame, int[] destination, int offset) {
         try { scrutinee.write(frame); }

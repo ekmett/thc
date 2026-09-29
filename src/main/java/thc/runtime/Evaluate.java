@@ -18,6 +18,7 @@ public final class Evaluate extends Expr {
             proof.getComponents(), proof.getVector(), proof.getAlternatives(), proof.getTagSlot(), proof.getAlternativeSlots()));
         setCoreSourceLocation(value.getCoreSourceLocation());
     }
+    @Override public void prepareTuple(int[] slots, int offset) { value.prepareTuple(slots, offset); }
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
         return value.executeTuple(frame, slots, offset);
     }

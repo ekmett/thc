@@ -48,20 +48,69 @@ class SimdFamiliesTest {
     private CoreRepresentation copy(CoreRepresentation p, List<String> reps, List<CoreRepresentation> components) {
         return new CoreRepresentation(p.getKind(), p.getEvaluated(), p.getPresent(), reps, components, p.getVector(), p.getAlternatives(), p.getTagSlot(), p.getAlternativeSlots());
     }
+    @Test void runtimeVectorChecksDoNotInitializeProofMetadata() throws Exception {
+        // Native Image rejects an unpack graph if its carrier check initializes
+        // the proof registry. Inspect the actual call owner, not a hardcoded name.
+        var classes = java.lang.classfile.ClassFile.of();
+        String owner;
+        try (var bytes = Vector16Unpack.class.getResourceAsStream("Vector16Unpack.class")) {
+            var method = classes.parse(Objects.requireNonNull(bytes).readAllBytes()).methods().stream()
+                .filter(m -> m.methodName().equalsString("executeTuple")).findFirst().orElseThrow();
+            var calls = method.code().orElseThrow().elementStream()
+                .filter(java.lang.classfile.instruction.InvokeInstruction.class::isInstance)
+                .map(java.lang.classfile.instruction.InvokeInstruction.class::cast)
+                .filter(call -> call.name().equalsString("requireShort")).toList();
+            assertEquals(1, calls.size());
+            owner = calls.getFirst().owner().asInternalName();
+        }
+        try (var bytes = Vector16Unpack.class.getResourceAsStream("/" + owner + ".class")) {
+            var helper = classes.parse(Objects.requireNonNull(bytes).readAllBytes());
+            assertTrue(helper.fields().stream().allMatch(field -> field.fieldName().equalsString("$assertionsDisabled")
+                && field.fieldType().equalsString("Z") && field.flags().has(java.lang.reflect.AccessFlag.STATIC)
+                && field.flags().has(java.lang.reflect.AccessFlag.FINAL) && field.flags().has(java.lang.reflect.AccessFlag.SYNTHETIC)),
+                "runtime carrier checks must not own proof metadata");
+            for (var initializer : helper.methods().stream().filter(m -> m.methodName().equalsString("<clinit>")).toList()) {
+                // RuntimeTypes has only javac's assertion-status flag. Preserve
+                // it, but reject object allocation or any metadata initializer.
+                var code = initializer.code().orElseThrow();
+                assertTrue(code.exceptionHandlers().isEmpty());
+                var instructions = code.elementStream().filter(java.lang.classfile.Instruction.class::isInstance)
+                    .map(java.lang.classfile.Instruction.class::cast).toList();
+                for (var instruction : instructions) {
+                    assertFalse(instruction.opcode().name().contains("NEW"), "no object or array allocation");
+                    assertFalse(instruction instanceof java.lang.classfile.instruction.InvokeDynamicInstruction);
+                    if (instruction instanceof java.lang.classfile.instruction.ConstantInstruction constant) {
+                        assertFalse(constant.constantValue() instanceof java.lang.constant.DynamicConstantDesc<?>);
+                        if (constant.constantValue() instanceof java.lang.constant.ClassDesc type)
+                            assertEquals(java.lang.constant.ClassDesc.ofDescriptor("L" + owner + ";"), type);
+                    } else if (instruction instanceof java.lang.classfile.instruction.InvokeInstruction call) {
+                        assertEquals("java/lang/Class", call.owner().asInternalName());
+                        assertEquals("desiredAssertionStatus", call.name().stringValue());
+                        assertEquals("()Z", call.type().stringValue());
+                    } else if (instruction instanceof java.lang.classfile.instruction.FieldInstruction store) {
+                        assertEquals(java.lang.classfile.Opcode.PUTSTATIC, store.opcode());
+                        assertEquals(owner, store.owner().asInternalName());
+                        assertEquals("$assertionsDisabled", store.name().stringValue());
+                        assertEquals("Z", store.type().stringValue());
+                    }
+                }
+            }
+        }
+    }
     @Test void rawVectorBoundariesRejectWrongSpeciesAndElementTypes() {
         var shorts = ShortVector.broadcast(ShortVector.SPECIES_128, (short) 0).withLane(1, (short) 1).withLane(2, (short) -1).withLane(3, Short.MIN_VALUE)
             .withLane(4, Short.MAX_VALUE).withLane(5, (short) 5).withLane(6, (short) 6).withLane(7, (short) 7);
         assertEquals(ShortVector.SPECIES_128, shorts.species()); var actual = new ArrayList<Integer>(); for (int i = 0; i < 8; i++) actual.add((int) shorts.lane(i));
-        assertEquals(List.of(0, 1, -1, -32768, 32767, 5, 6, 7), actual); assertEquals(shorts, CoreVectors.requireShort(shorts, ShortVector.SPECIES_128));
-        assertThrows(RuntimeFault.class, () -> CoreVectors.requireShort(shorts, ShortVector.SPECIES_256)); assertThrows(RuntimeFault.class, () -> CoreVectors.requireInt(shorts, IntVector.SPECIES_128));
-        for (var wrong : Arrays.asList(null, 1L, new short[]{1, 2})) assertThrows(RuntimeFault.class, () -> CoreVectors.requireShort(wrong, ShortVector.SPECIES_128));
-        assertThrows(RuntimeFault.class, () -> CoreVectors.requireByte(ByteVector.zero(ByteVector.SPECIES_128), ByteVector.SPECIES_256));
-        assertThrows(RuntimeFault.class, () -> CoreVectors.requireInt(IntVector.zero(IntVector.SPECIES_128), IntVector.SPECIES_256));
-        assertThrows(RuntimeFault.class, () -> CoreVectors.requireLong(LongVector.zero(LongVector.SPECIES_128), LongVector.SPECIES_256));
-        assertThrows(RuntimeFault.class, () -> CoreVectors.requireFloat(FloatVector.zero(FloatVector.SPECIES_128), FloatVector.SPECIES_256));
-        assertThrows(RuntimeFault.class, () -> CoreVectors.requireDouble(DoubleVector.zero(DoubleVector.SPECIES_128), DoubleVector.SPECIES_256));
-        for (long index : List.of(-1L, 8L, Long.MIN_VALUE, Long.MAX_VALUE)) assertThrows(RuntimeFault.class, () -> CoreVectors.laneIndex(index, 8));
-        for (long index = 0; index <= 7; index++) assertEquals((int) index, CoreVectors.laneIndex(index, 8));
+        assertEquals(List.of(0, 1, -1, -32768, 32767, 5, 6, 7), actual); assertEquals(shorts, RuntimeTypes.requireShort(shorts, ShortVector.SPECIES_128));
+        assertThrows(RuntimeFault.class, () -> RuntimeTypes.requireShort(shorts, ShortVector.SPECIES_256)); assertThrows(RuntimeFault.class, () -> RuntimeTypes.requireInt(shorts, IntVector.SPECIES_128));
+        for (var wrong : Arrays.asList(null, 1L, new short[]{1, 2})) assertThrows(RuntimeFault.class, () -> RuntimeTypes.requireShort(wrong, ShortVector.SPECIES_128));
+        assertThrows(RuntimeFault.class, () -> RuntimeTypes.requireByte(ByteVector.zero(ByteVector.SPECIES_128), ByteVector.SPECIES_256));
+        assertThrows(RuntimeFault.class, () -> RuntimeTypes.requireInt(IntVector.zero(IntVector.SPECIES_128), IntVector.SPECIES_256));
+        assertThrows(RuntimeFault.class, () -> RuntimeTypes.requireLong(LongVector.zero(LongVector.SPECIES_128), LongVector.SPECIES_256));
+        assertThrows(RuntimeFault.class, () -> RuntimeTypes.requireFloat(FloatVector.zero(FloatVector.SPECIES_128), FloatVector.SPECIES_256));
+        assertThrows(RuntimeFault.class, () -> RuntimeTypes.requireDouble(DoubleVector.zero(DoubleVector.SPECIES_128), DoubleVector.SPECIES_256));
+        for (long index : List.of(-1L, 8L, Long.MIN_VALUE, Long.MAX_VALUE)) assertThrows(RuntimeFault.class, () -> RuntimeTypes.laneIndex(index, 8));
+        for (long index = 0; index <= 7; index++) assertEquals((int) index, RuntimeTypes.laneIndex(index, 8));
     }
     @Test void operationOperandsRunOnceInOrderAndStopAtTheOriginalFailure() {
         var operations = List.<Function<Expr[], Expr>>of(
@@ -170,7 +219,7 @@ class SimdFamiliesTest {
     @Test void insertRejectsInvalidMachineIndicesBeforeAnyNarrowing() {
         var original = LongVector.broadcast(LongVector.SPECIES_128, 1L).withLane(1, 2L);
         for (long index : List.of(-1L, 2L, Long.MIN_VALUE, Long.MAX_VALUE, 0x1_0000_0000L)) {
-            assertThrows(RuntimeFault.class, () -> original.withLane(CoreVectors.laneIndex(index, 2), -1L));
+            assertThrows(RuntimeFault.class, () -> original.withLane(RuntimeTypes.laneIndex(index, 2), -1L));
             assertThrows(RuntimeFault.class, () -> BytecodeRoot.GeneratedDoubleX2Insert.apply(DoubleVector.broadcast(DoubleVector.SPECIES_128, 1.0), 2.0, index));
         }
         for (long index : List.of(-1L, 16L, Long.MAX_VALUE, 0x1_0000_0000L))
@@ -191,15 +240,15 @@ class SimdFamiliesTest {
         }
     }
     @Test void word32X16ExtremaUseUnsignedLaneOrderAcrossTheFullCarrier() {
-        var left = IntVector.broadcast(IntVector.SPECIES_512, Integer.MIN_VALUE).withLane(CoreVectors.laneIndex(15L, 16), -1);
-        var right = IntVector.broadcast(IntVector.SPECIES_512, Integer.MAX_VALUE).withLane(CoreVectors.laneIndex(15L, 16), 0);
+        var left = IntVector.broadcast(IntVector.SPECIES_512, Integer.MIN_VALUE).withLane(RuntimeTypes.laneIndex(15L, 16), -1);
+        var right = IntVector.broadcast(IntVector.SPECIES_512, Integer.MAX_VALUE).withLane(RuntimeTypes.laneIndex(15L, 16), 0);
         var minimum = left.lanewise(VectorOperators.UMIN, right); var maximum = left.lanewise(VectorOperators.UMAX, right);
         assertEquals(Integer.MAX_VALUE, minimum.lane(0)); assertEquals(Integer.MAX_VALUE, minimum.lane(7)); assertEquals(0, minimum.lane(15));
         assertEquals(Integer.MIN_VALUE, maximum.lane(0)); assertEquals(Integer.MIN_VALUE, maximum.lane(7)); assertEquals(-1, maximum.lane(15));
     }
     @Test void int32X16ExtremaKeepSignedLanesAndExactShape() {
-        var left = IntVector.broadcast(IntVector.SPECIES_512, Integer.MIN_VALUE).withLane(CoreVectors.laneIndex(15L, 16), -1);
-        var right = IntVector.broadcast(IntVector.SPECIES_512, Integer.MAX_VALUE).withLane(CoreVectors.laneIndex(15L, 16), 0);
+        var left = IntVector.broadcast(IntVector.SPECIES_512, Integer.MIN_VALUE).withLane(RuntimeTypes.laneIndex(15L, 16), -1);
+        var right = IntVector.broadcast(IntVector.SPECIES_512, Integer.MAX_VALUE).withLane(RuntimeTypes.laneIndex(15L, 16), 0);
         var minimum = left.min(right); var maximum = left.max(right);
         assertEquals(Integer.MIN_VALUE, minimum.lane(0)); assertEquals(Integer.MIN_VALUE, minimum.lane(7)); assertEquals(-1, minimum.lane(15));
         assertEquals(Integer.MAX_VALUE, maximum.lane(0)); assertEquals(Integer.MAX_VALUE, maximum.lane(7)); assertEquals(0, maximum.lane(15));
@@ -215,10 +264,10 @@ class SimdFamiliesTest {
         }
     }
     @Test void short16ExtremaDistinguishSignedFromUnsignedOrder() {
-        var signedLeft = ShortVector.broadcast(ShortVector.SPECIES_256, Short.MIN_VALUE).withLane(CoreVectors.laneIndex(15L, 16), (short) -1);
-        var signedRight = ShortVector.broadcast(ShortVector.SPECIES_256, Short.MAX_VALUE).withLane(CoreVectors.laneIndex(15L, 16), (short) 0);
-        var unsignedLeft = ShortVector.broadcast(ShortVector.SPECIES_256, Short.MIN_VALUE).withLane(CoreVectors.laneIndex(15L, 16), (short) -1);
-        var unsignedRight = ShortVector.broadcast(ShortVector.SPECIES_256, Short.MAX_VALUE).withLane(CoreVectors.laneIndex(15L, 16), (short) 0);
+        var signedLeft = ShortVector.broadcast(ShortVector.SPECIES_256, Short.MIN_VALUE).withLane(RuntimeTypes.laneIndex(15L, 16), (short) -1);
+        var signedRight = ShortVector.broadcast(ShortVector.SPECIES_256, Short.MAX_VALUE).withLane(RuntimeTypes.laneIndex(15L, 16), (short) 0);
+        var unsignedLeft = ShortVector.broadcast(ShortVector.SPECIES_256, Short.MIN_VALUE).withLane(RuntimeTypes.laneIndex(15L, 16), (short) -1);
+        var unsignedRight = ShortVector.broadcast(ShortVector.SPECIES_256, Short.MAX_VALUE).withLane(RuntimeTypes.laneIndex(15L, 16), (short) 0);
         var signedMin = signedLeft.min(signedRight); var signedMax = signedLeft.max(signedRight);
         var unsignedMin = unsignedLeft.lanewise(VectorOperators.UMIN, unsignedRight); var unsignedMax = unsignedLeft.lanewise(VectorOperators.UMAX, unsignedRight);
         assertEquals(List.of(-32768, -32768, -1), List.of((int) signedMin.lane(0), (int) signedMin.lane(7), (int) signedMin.lane(15)));

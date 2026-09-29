@@ -33,6 +33,6 @@ public final class Vector32Operation extends Expr {
     }
 
     private static IntVector vector(Object value) {
-        return CoreVectors.requireInt(value, IntVector.SPECIES_128);
+        return RuntimeTypes.requireInt(value, IntVector.SPECIES_128);
     }
 }

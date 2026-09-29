@@ -32,6 +32,6 @@ public final class VectorOperation extends Expr {
     }
 
     private static LongVector vector(Object value) {
-        return CoreVectors.requireLong(value, LongVector.SPECIES_128);
+        return RuntimeTypes.requireLong(value, LongVector.SPECIES_128);
     }
 }

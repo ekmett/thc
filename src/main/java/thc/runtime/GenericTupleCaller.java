@@ -111,10 +111,10 @@ final class GenericTupleCaller extends Node {
             if (metrics.getEnabled()) metrics.incrementIndirectCalls();
             if (tail) {
                 tailCheck.check(frame, function.target, packet);
-                destination.consume(frame, this, Calls.indirect(call, function.target, packet));
+                destination.consume(frame, this, Calls.indirect(call, function.target, packet), root.getTupleResult());
             } else {
                 packet[0] = 0L;
-                try { destination.consume(frame, this, Calls.indirect(call, function.target, packet)); }
+                try { destination.consume(frame, this, Calls.indirect(call, function.target, packet), root.getTupleResult()); }
                 catch (TailCall transfer) { bounce.execute(frame, transfer); }
             }
             return;

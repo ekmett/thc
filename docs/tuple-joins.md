@@ -22,9 +22,18 @@ fabricated successful result is required.
 
 This contract covers the original GHC 9.14.1 `GHC.Internal.Float.$wroundTo` local
 join whose third argument is `(# Int, [Int] #)`. [Binary sum arguments and PAPs](sum-inputs.md)
-and [owned tuple closure/thunk captures](tuple-captures.md) have separate typed
-transport paths. Ordinary aggregate let/global storage and public host aggregate
-parameters/results remain unsupported.
+and [owned tuple closure/thunk captures](tuple-captures.md) use the existing typed
+transport alongside joins. Both backends also support nonrecursive unlifted
+aggregate lets and public host aggregate arguments/results. The host ABI preserves
+logical tuple arrays, tagged sums, exact vector species and null State#/Void#
+values. Recursive or lifted aggregate lets and global aggregate storage remain
+unsupported.
+
+[Reusable AST preparation](reusable-code.md) admits this synchronous typed
+transport using predeclared physical slots and prebound destinations, without
+executing guests or seeding profiles. Capture owners, sum projections, join
+parallel moves and loan cleanup retain their ordinary checks. The native-cache
+CLI's numeric input/output syntax is a separate presentation limit.
 
 ## Reproduce
 

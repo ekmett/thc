@@ -21,6 +21,7 @@ public final class LocalBinding extends Node {
     public LocalBinding(int slot, Expr value, boolean preferLong) { this(slot, value, preferLong, null); }
     public LocalBinding(int slot, Expr value, boolean preferLong, int[] typedSlots) {
         this.slot = slot; this.value = value; this.typedSlots = typedSlots;
+        if (typedSlots != null) value.prepareTuple(typedSlots, 0);
         CoreRepresentation proof = value.getRepresentation();
         exactLong = proof.isLong();
         referenceKind = proof.getEvaluated() ? proof.getKind() : CoreKind.UNKNOWN;
