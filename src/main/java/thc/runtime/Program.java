@@ -1772,12 +1772,15 @@ public final class Program implements ExecutableProgram {
         CoreRepresentations.validateDeclaredCaseResult(declared, results);
         CoreRepresentations.validateAggregateCaseResult(declared, results);
         CoreRepresentations.validateFloatingCaseResult(declared, results);
-        return switch (CaseCategories.caseCategory(binderProof, kinds, allLong)) {
+        Case selection = switch (CaseCategories.caseCategory(binderProof, kinds, allLong)) {
             case DATA -> new DataCase(scrutinee, binder, alternatives, codeMetrics(), binderProof, delimited);
             case LONG -> new LongCase(scrutinee, binder, alternatives, codeMetrics(), binderProof, delimited);
             case DEFAULT_ONLY -> new DefaultCase(scrutinee, binder, alternatives, codeMetrics(), binderProof, delimited);
             case GENERIC -> new Case(scrutinee, binder, alternatives, codeMetrics(), null, delimited);
         };
+        for (List<Object> alt : rawAlternatives)
+            if (coreFreeVariables((List<Object>) alt.get(3)).contains(expr.get(2))) return selection;
+        return selection.discardUnusedBinder();
     }
 
     private Expr compileConstructor(List<Object> expr, Scope scope) {
