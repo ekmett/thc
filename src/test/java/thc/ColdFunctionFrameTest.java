@@ -34,15 +34,24 @@ class ColdFunctionFrameTest {
             assertEquals(slots[i], target.getRootNode().getFrameDescriptor().getSlotKind(fixture.slot));
         }
     }
-    @Test void unknownLazyAndAsynchronouslyForcedInputsRetainDynamicStorage() {
-        for (var proof : List.of(CoreRepresentation.UNKNOWN, proof(CoreKind.DATA, false, false), proof(CoreKind.OBJECT, false, false))) {
-            var fixture = root(proof); assertEquals(FrameSlotKind.Illegal, fixture.root.getFrameDescriptor().getSlotKind(fixture.slot));
+    @Test void unknownLazyAndAsynchronouslyForcedInputsUsePreparedObjectStorage() {
+        // These inputs can still be boxes or thunks; prepare their carrier before publication.
+        for (var fixture : List.of(root(CoreRepresentation.UNKNOWN), root(proof(CoreKind.DATA, false, false)),
+                root(proof(CoreKind.OBJECT, false, false)), root(proof(CoreKind.LONG, true, false), true, FrameSlotKind.Illegal))) {
+            var descriptor = fixture.root.getFrameDescriptor();
+            assertEquals(FrameSlotKind.Object, descriptor.getSlotKind(fixture.slot));
+            assertSame(fixture.root, fixture.root.getCallTarget().getRootNode());
+            assertEquals(FrameSlotKind.Object, descriptor.getSlotKind(fixture.slot));
+            var thunk = new Thunk(fixture.root.getCallTarget(), null);
+            for (Object value : List.of(new Object(), Long.MAX_VALUE, thunk)) {
+                var frame = Truffle.getRuntime().createVirtualFrame(new Object[]{0L, value}, descriptor);
+                fixture.root.buildFrame(frame.getArguments(), frame);
+                assertEquals(FrameSlotKind.Object, descriptor.getSlotKind(fixture.slot));
+                assertTrue(frame.isObject(fixture.slot));
+                assertSame(value, FrameAccess.read(frame, fixture.slot));
+            }
+            assertEquals(0, thunk.getState(), "Frame ingress must not force a deferred input");
         }
-        var fixture = root(proof(CoreKind.LONG, true, false), true, FrameSlotKind.Illegal);
-        assertEquals(FrameSlotKind.Illegal, fixture.root.getFrameDescriptor().getSlotKind(fixture.slot));
-        var frame = Truffle.getRuntime().createVirtualFrame(new Object[]{0L, new Object()}, fixture.root.getFrameDescriptor());
-        fixture.root.buildFrame(frame.getArguments(), frame);
-        assertSame(frame.getArguments()[1], FrameAccess.read(frame, fixture.slot));
     }
     @Test void preparedScalarSlotsStillWidenMonotonicallyAndDoNotNarrowExistingObjectSlots() {
         var proof = proof(CoreKind.LONG, true, true); var fixture = root(proof);
