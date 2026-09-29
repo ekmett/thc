@@ -11,9 +11,12 @@
 module BackpackTests (tests) where
 
 import Control.Monad (forM_)
+import Data.Aeson (Value(Null))
+import qualified Data.ByteString as BS
 import Data.List (nub)
 import System.Environment (lookupEnv)
-import System.FilePath ((</>))
+import System.FilePath ((</>), takeExtension)
+import System.IO (IOMode(ReadMode), withBinaryFile)
 import Test.HUnit (Test(..), assertEqual)
 import TestSupport
 
@@ -48,7 +51,17 @@ tests env = TestLabel "Cabal Backpack keeps two client instantiations distinct" 
       assertSuccess guest
       assertEqual (backend ++ " native/THC") (out native) (out guest)
       assertContains ("\"backend\":\"" ++ backend ++ "\"") (err guest)
-    manifest <- readSourceManifest (output </> "guest/packages.json")
+    manifest <- readJson (output </> "guest/packages.json")
+    forM_ (objects manifest "units") $ \unit -> do
+      assertEqual "no JSON runtime payload" Null (field unit "json")
+      assertEqual "no text symbol index" Null (field unit "symbols")
+      forM_ (objects unit "modules") $ \ref -> do
+        let compact = field ref "compact"
+            path = string (field compact "path")
+        assertEqual "published Core format" "thc-cbd-v1" (string (field compact "format"))
+        assertEqual "published Core extension" ".cbd" (takeExtension path)
+        signature <- withBinaryFile path ReadMode (`BS.hGet` 4)
+        assertEqual "published Core is a CBD archive" (BS.pack [0x50, 0x4b, 0x03, 0x04]) signature
     let clients = [string (field unit "id") | unit <- objects manifest "units",
           any ((== "Client") . string . (`field` "name")) (objects unit "modules")]
     assertEqual "two distinct concrete client owners" 2 (length (nub clients))

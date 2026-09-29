@@ -17,7 +17,7 @@ module THC.Driver.Installed
   , installedContext, discoverInstalled, validateReexports, acquireInstalled, acquireInstalledWithJobs
   , installedProvenance, installedLayoutHeaders, helperCommand, probeInstalled, prepareInstalledProbe
   , emptyRegistration, modulelessRegistration
-  , boundedInterfaceProcess, boundedInterfaceProcessInput
+  , boundedInterfaceProcess, boundedInterfaceProcessIn, boundedInterfaceProcessInput
   ) where
 
 import Control.Concurrent (ThreadId, forkIOWithUnmask, killThread)
@@ -52,6 +52,8 @@ import System.Timeout (timeout)
 import Text.Read (readMaybe)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
+import Data.Text.Encoding.Error (lenientDecode)
+import THC.Compact.Module (readModuleMetadata)
 
 data InstalledContext = InstalledContext
   { installedHelper :: FilePath, installedLibdir :: FilePath
@@ -397,12 +399,9 @@ acquireInstalledWithJobs jobs context unit = do
       pure (Right (InstalledCore owner [(name, bytes) | (_, name, bytes) <- reverse modules]))
     load item@(name, path) = do
       (status, output, diagnostic) <- boundedInterfaceProcess (installedHelper context) (helperCommand context unit item)
-      response <- either (fail . ("invalid thc-interface JSON: " ++)) pure
-        (eitherDecodeStrict' output)
-      unless (valueAt response "schema" == Just (1 :: Int)) (fail "unsupported thc-interface protocol")
-      case (status, valueAt response "status" :: Maybe String) of
-        (ExitSuccess, Just "loaded") -> do
-          core <- required response "core"
+      case status of
+        ExitSuccess -> do
+          (_, core) <- either (fail . ("invalid thc-interface CBD: " ++)) pure (readModuleMetadata output)
           owner <- required core "unit"
           let schema = valueAt core "schema" :: Maybe Int
               foreignArtifacts = valueAt core "foreign" :: Maybe Value
@@ -414,13 +413,12 @@ acquireInstalledWithJobs jobs context unit = do
                   valueAt core "ghc" == Just ("9.14.1" :: String) &&
                   valueAt core "boundary" == Just ("optimized-Core-after-Tidy-before-CorePrep" :: String))
             (fail "thc-interface returned inconsistent Core identity/boundary")
-          -- Force each strict payload before visiting the next interface. A
-          -- lazy tuple field otherwise retains every decoded Aeson Core tree
-          -- until the whole package is packaged (notably the compiler itself).
-          let bytes = BL.toStrict (encode core)
-          bytes `seq` pure (Right (owner, name, bytes))
-        (ExitFailure 3, Just "unavailable") -> do
-          unless (valueAt response "capability" == Just ("complete-interface-core" :: String) &&
+          pure (Right (owner, name, output))
+        ExitFailure 3 -> do
+          response <- either (fail . ("invalid thc-interface status: " ++)) pure (eitherDecodeStrict' output)
+          unless (valueAt response "schema" == Just (1 :: Int) &&
+                  valueAt response "status" == Just ("unavailable" :: String) &&
+                  valueAt response "capability" == Just ("complete-interface-core" :: String) &&
                   valueAt response "unit" == Just (registeredId unit) &&
                   valueAt response "module" == Just name && valueAt response "interface" == Just path &&
                   valueAt response "way" == Just ("dynamic" :: String) &&
@@ -429,7 +427,7 @@ acquireInstalledWithJobs jobs context unit = do
           pure (Left (MissingCore (registeredId unit) name path))
         _ -> fail ("thc-interface failed for " ++ registeredId unit ++ ":" ++ name ++
                     " (" ++ show status ++ "): " ++ clipped output ++ clipped diagnostic)
-    clipped = take 2000 . Text.unpack . Text.decodeUtf8
+    clipped = take 2000 . Text.unpack . Text.decodeUtf8With lenientDecode
 
 valueAt :: FromJSON a => Value -> String -> Maybe a
 valueAt (Object fields) name = do
@@ -440,20 +438,26 @@ valueAt _ _ = Nothing
 required :: FromJSON a => Value -> String -> IO a
 required value name = maybe (fail ("missing/invalid helper field " ++ name)) pure (valueAt value name)
 
--- Full Core stdout can be tens of megabytes. Keep its UTF-8 bytes instead of
--- building a linked-list String and encoding it back to bytes for Aeson. Drain
--- both outputs concurrently even while sending a request larger than a pipe
--- buffer. Preserve timeout, UTF-8 rejection and child cleanup. JSON requests
--- are bytes too: a locale-encoded String pipe cannot carry every Windows path.
+-- CBD payloads use binary stdout; status/probe consumers decode their own JSON.
+-- Drain both outputs concurrently even while sending a request larger than a
+-- pipe buffer. Preserve timeout, UTF-8 diagnostics and child cleanup.
 boundedInterfaceProcess :: FilePath -> [String] -> IO (ExitCode, BS.ByteString, BS.ByteString)
 boundedInterfaceProcess executable arguments = boundedInterfaceProcessInput executable arguments BS.empty
 
+-- | Set the child's working directory without changing the parent's directory.
+boundedInterfaceProcessIn :: FilePath -> FilePath -> [String] -> IO (ExitCode, BS.ByteString, BS.ByteString)
+boundedInterfaceProcessIn directory executable arguments =
+  boundedInterfaceProcessInputAt (Just directory) executable arguments BS.empty
+
 boundedInterfaceProcessInput :: FilePath -> [String] -> BS.ByteString -> IO (ExitCode, BS.ByteString, BS.ByteString)
-boundedInterfaceProcessInput executable arguments request = do
+boundedInterfaceProcessInput = boundedInterfaceProcessInputAt Nothing
+
+boundedInterfaceProcessInputAt :: Maybe FilePath -> FilePath -> [String] -> BS.ByteString -> IO (ExitCode, BS.ByteString, BS.ByteString)
+boundedInterfaceProcessInputAt directory executable arguments request = do
   inherited <- getEnvironment
   let clean = filter (\(key, _) -> key `notElem` ["GHC_PACKAGE_PATH", "GHC_ENVIRONMENT"]) inherited
       commandLine = (proc executable arguments)
-        {env = Just clean, std_in = CreatePipe, std_out = CreatePipe, std_err = CreatePipe}
+        {cwd = directory, env = Just clean, std_in = CreatePipe, std_out = CreatePipe, std_err = CreatePipe}
       execute = withCreateProcess commandLine $ \input output diagnostic child ->
         case (input, output, diagnostic) of
           (Just stdinPipe, Just stdoutPipe, Just stderrPipe) -> do
@@ -476,9 +480,7 @@ boundedInterfaceProcessInput executable arguments request = do
                     out <- await outputResult
                     err <- await diagnosticResult
                     status <- waitForProcess child
-                    -- The previous text Handle rejected invalid UTF-8 even on
-                    -- otherwise successful output. Do not relax that protocol.
-                    forM_ [out, err] $ \bytes -> either (fail . show) (const (pure ())) (Text.decodeUtf8' bytes)
+                    either (fail . show) (const (pure ())) (Text.decodeUtf8' err)
                     pure (status, out, err))
                   -- Windows pipe IO can defer a worker's asynchronous exception.
                   -- Terminate the child before joining blocked readers/writers;

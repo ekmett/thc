@@ -27,16 +27,18 @@ import GHC.Fingerprint (getFileHash)
 import System.Directory (canonicalizePath, createDirectory, createDirectoryIfMissing,
   copyFile, removeFile, removePathForcibly)
 import System.Environment (getEnv, lookupEnv)
+import System.Exit (ExitCode(..))
 import System.FilePath ((</>), takeDirectory, replaceExtension)
 import System.IO (openTempFile, hClose)
 import System.IO.Error (tryIOError)
 import qualified System.Info as Host
 import Numeric (showHex)
 import Test.HUnit (Test(..), assertBool, assertEqual)
+import THC.Compact.Module (readModuleValue)
 import THC.Driver.Installed
 import THC.Driver.InstalledForeign (missingForeignProof, createView, viewContext, observeProbeInterfaces,
   retainedUsageFiles, verifyUsageFiles, matchUsageFiles, ForeignCompiler(..), prepareForeignInterfaces)
-import TestSupport (Env(..), runExe, assertSuccess, out, field, string, array, json, readJson)
+import TestSupport (Env(..), runExe, assertSuccess, out, field, string, array, readJson)
 
 unixModules :: [String]
 unixModules = ["System.Posix.Files.PosixString", "System.Posix.Process.Internals", "System.Posix.Signals",
@@ -227,12 +229,10 @@ sourceTests env = TestLabel "original Unix/directory configured-source provenanc
        (directoryModule, [("fchmodat", "sys/stat.h", "safe"), ("fstatat", "sys/stat.h", "safe")])]
     readOriginal context unit name = do
       path <- maybe (fail ("missing original interface: " ++ name)) pure (lookup name (installedInterfaces unit))
-      result <- runExe env (root env) Nothing 120 (installedHelper context)
+      (status, bytes, _) <- boundedInterfaceProcess (installedHelper context)
         (helperCommand context unit (name, path))
-      assertSuccess result
-      response <- json (out result)
-      assertEqual (name ++ " has complete retained Core") "loaded" (string (field response "status"))
-      pure (field response "core")
+      assertEqual (name ++ " has complete retained Core") ExitSuccess status
+      either fail pure (readModuleValue bytes)
 
 -- Exercise the actual ghc-pkg view against the selected installation. This
 -- performs no compilation and gives thin stock interfaces no runtime admission.

@@ -38,6 +38,7 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
+import Data.Text.Encoding.Error (lenientDecode)
 import Numeric (showHex)
 import System.Directory (canonicalizePath, createDirectory, createDirectoryIfMissing,
                          doesDirectoryExist, doesFileExist, findExecutable, getPermissions,
@@ -73,6 +74,9 @@ import THC.Driver.Installed
 import THC.Driver.InstalledForeign
 import THC.Driver.Run (RunOptions(..), runtimeLaunchArguments, runResolvedPackage)
 import THC.Driver.Zip (decodeZip, encodeZip)
+import THC.Compact.Core (Presence(..))
+import THC.Compact.Debug (SourceFile(..))
+import THC.Compact.Module (readModuleMetadata, readModuleSources)
 import THC.Driver.Wired (WiredArtifacts(..), moduleSources, sourceHashes, pinnedSourcePath,
                          exportPinnedCore, exportPinnedWindowsCore, probeTargetLayout)
 
@@ -607,7 +611,7 @@ exceptionBridgeModules verify units = fmap concat $ forM units $ \unit -> do
         digest <- field ref "sha256"
         body <- maybe (fail "exception runtime bundle lacks its declared module") pure (lookup member entries)
         require (shaHex body == digest) "exception runtime module hash mismatch"
-        value <- either fail pure (eitherDecodeStrict' body)
+        value <- either fail pure (snd <$> readModuleMetadata body)
         require (jsonField value "unit" == (jsonField unit "id" :: Maybe String) &&
           jsonField value "module" == (jsonField ref "name" :: Maybe String))
           "exception runtime module identity mismatch"
@@ -865,17 +869,19 @@ sourceObservation path contents = do
 installedSourceObservations :: [(String, BS.ByteString)] -> IO [Value]
 installedSourceObservations modules = do
   observations <- fmap concat $ forM modules $ \(_, bytes) -> do
-    core <- either fail pure (eitherDecodeStrict' bytes)
-    sources <- field core "sourceFiles" :: IO [Value]
-    forM sources $ \source -> do
-      path <- field source "path"
-      content <- field source "content"
+    sources <- either fail pure (readModuleSources bytes)
+    forM sources $ \(SourceFile _ pathBytes contents) -> do
+      path <- text pathBytes
+      content <- case contents of
+        Known value -> Just <$> text value
+        _ -> pure Nothing
       record <- sourceObservation path content
       pure (path, record)
   let unique = Map.fromList observations
   require (all (\(path, record) -> Map.lookup path unique == Just record) observations)
     "source changed between installed module exports"
   pure (Map.elems unique)
+  where text = either (fail . show) (pure . Text.unpack) . Text.decodeUtf8'
 
 validateSourceObservations :: [Value] -> IO ()
 validateSourceObservations sources = forM_ sources $ \expected -> do
@@ -969,7 +975,7 @@ acquireInstalledBundle verify cache staging recipe driverHash context registrati
                        jsonField layout "targetPlatform" == Just compilerPlatform)
                 "installed GHC target layout differs from selected compiler"
               (refs, members) <- packageModules
-                [(name, "core/" ++ show index ++ ".json", bytes)
+                [(name, "core/" ++ show index ++ ".cbd", bytes)
                 | (index, (name, bytes)) <- zip [0 :: Int ..] linked]
               let receiptBytes = BL.toStrict (encode (object (inputFields ++
                     ["buildKey" .= buildKey, "exportKey" .= exportKey,
@@ -1127,9 +1133,9 @@ wiredGhcInternal context thcRoot = do
             digest <- digestFile path
             pure (object ["path" .= map (\c -> if c == '\\' then '/' else c) name, "sha256" .= digest])
           originalMembers <- forM names $ \name -> do
-            let core = staging </> "core" </> (name ++ ".json")
-                member = "core/" ++ name ++ ".json"
-            artifact <- readJson core
+            let core = staging </> "core" </> (name ++ ".cbd")
+                member = "core/" ++ name ++ ".cbd"
+            artifact <- readCoreMetadata core
             foundUnit <- field artifact "unit"
             foundName <- field artifact "module"
             foundBoundary <- field artifact "boundary"
@@ -1215,7 +1221,7 @@ projectWindowsWiredBundleCold verify path full refs names excluded key source ex
       _ -> fail "Ambiguous archived module"
     member <- field ref "path"
     body <- maybe (fail "Missing archived module") pure (lookup member entries)
-    value <- either fail pure (eitherDecodeStrict' body)
+    value <- either fail pure (snd <$> readModuleMetadata body)
     foreignCode <- field value "foreign"
     stubs <- field foreignCode "stubs"
     initializers <- field stubs "initializers" :: IO [Value]
@@ -1686,7 +1692,7 @@ publishCapturedStoreUnit planPath store dist capture identifier destination = do
 packGlobalBundle :: FilePath -> FilePath -> FilePath -> Map.Map String Unit -> Unit -> String -> String -> FilePath -> IO ()
 packGlobalBundle store dist capture planned unit buildKey exportKey destination = do
   let core = capture </> unitId unit </> "core"
-  exported <- filter ((== ".json") . takeExtension) <$> recursiveFiles core
+  exported <- filter ((== ".cbd") . takeExtension) <$> recursiveFiles core
   empty <- if not (null exported) then pure [] else do
     -- Inspect only this freshly rebuilt private store, never the original
     -- native store or a guessed empty module. Cabal owns the compiler partition.
@@ -1704,7 +1710,7 @@ packGlobalBundle store dist capture planned unit buildKey exportKey destination 
       (modulelessRegistration (unitId unit) (unitDepends unit) bytes)
     pure [(if null reexports then "emptyRegistration" else "reexportRegistration") .= Text.decodeUtf8 bytes]
   checked <- forM exported $ \path -> do
-    value <- readJson path
+    value <- readCoreMetadata path
     foundUnit <- field value "unit"
     foundBoundary <- field value "boundary" :: IO String
     name <- field value "module" :: IO String
@@ -1742,10 +1748,10 @@ packGlobalBundle store dist capture planned unit buildKey exportKey destination 
         _ -> fail "native dependency has ambiguous private-store registration"
       nativeReceipt <- doesFileExist (sourceDirectory </> "native.json")
       bodies <- if owner == unitId unit then pure checked else if not nativeReceipt then pure [] else do
-        paths <- filter ((== ".json") . takeExtension) <$> recursiveFiles (sourceDirectory </> "core")
+        paths <- filter ((== ".cbd") . takeExtension) <$> recursiveFiles (sourceDirectory </> "core")
         forM paths $ \path -> do
           bytes <- BS.readFile path
-          value <- either fail pure (eitherDecodeStrict' bytes)
+          value <- either fail pure (snd <$> readModuleMetadata bytes)
           require (jsonField value "unit" == Just owner && jsonField value "boundary" == Just boundary)
             "native dependency Core owner/boundary differs"
           name <- field value "module"
@@ -1760,7 +1766,7 @@ packGlobalBundle store dist capture planned unit buildKey exportKey destination 
   require (length names == length (nub names))
     ("duplicate exported store modules for " ++ unitId unit)
   (modules, members) <- packageModules
-    [(name, "core/" ++ show index ++ ".json", bytes)
+    [(name, "core/" ++ show index ++ ".cbd", bytes)
     | (index, (name, bytes)) <- zip [0 :: Int ..] sorted]
   let inner = object (["format" .= ("thc-core-bundle" :: String), "schema" .= (1 :: Int),
                       "unit" .= unitId unit, "buildKey" .= buildKey,
@@ -1804,7 +1810,7 @@ readGlobalBundleCold path unit dependencies buildKey exportKey = do
           foundBoundary <- jsonField item "boundary" :: Maybe String
           checkedPair <- moduleEntries item entries
           body <- lookup member checkedPair
-          artifact <- either (const Nothing) Just (eitherDecodeStrict' body)
+          artifact <- either (const Nothing) Just (snd <$> readModuleMetadata body)
           owner <- jsonField artifact "unit" :: Maybe String
           actual <- jsonField artifact "module" :: Maybe String
           artifactBoundary <- jsonField artifact "boundary" :: Maybe String
@@ -1960,9 +1966,9 @@ freshExport context component unit scalar runtimeShim helper nativeObjects build
           ["-fforce-recomp", "-dcore-lint", "-fwrite-if-simplified-core", "-hisuf", "hi"] ++
           map snd (componentSources component)
     runCommand True (componentCompiler component) arguments sourceDir
-    exported <- filter ((== ".json") . takeExtension) <$> recursiveFiles core
+    exported <- filter ((== ".cbd") . takeExtension) <$> recursiveFiles core
     checked <- forM exported $ \path -> do
-      value <- readJson path
+      value <- readCoreMetadata path
       foundUnit <- field value "unit"
       foundBoundary <- field value "boundary" :: IO String
       name <- field value "module"
@@ -1980,7 +1986,7 @@ freshExport context component unit scalar runtimeShim helper nativeObjects build
           capturePackageNative (contextRoot context) (installedHelper selectedHelper) (installedLibdir selectedHelper)
             (componentCompiler component) arguments (unitId unit) staging
         updated <- forM exported $ \path -> do
-          value <- readJson path
+          value <- readCoreMetadata path
           name <- field value "module"
           bytes <- BS.readFile path
           pure (name,bytes)
@@ -1993,7 +1999,7 @@ freshExport context component unit scalar runtimeShim helper nativeObjects build
         validateRuntimeShimModules shim retained
       _ -> fail "scalar cbits interface helper missing"
     (modules, members) <- packageModules
-      [(name, "core/" ++ show index ++ ".json", bytes)
+      [(name, "core/" ++ show index ++ ".cbd", bytes)
       | (index, (name, bytes)) <- zip [0 :: Int ..] sorted]
     let inputsBytes = BL.toStrict (encode buildInputs)
         inner = object ["format" .= ("thc-core-bundle" :: String), "schema" .= (1 :: Int),
@@ -2007,9 +2013,8 @@ freshExport context component unit scalar runtimeShim helper nativeObjects build
     rememberFreshBundle PlainBundle (unitId unit) exportKey buildInputs expected
       (Bundle destination (shaHex (BL.toStrict archive)) modules buildKey [])) `finally` cleanup
 
--- Source late-plugin JSON has no typed annotations. Recover the exact emitted
--- full-Core interfaces through the selected GHC helper and Cabal's actual
--- library registration; never graft an inferred proof onto that JSON.
+-- Recover exact typed annotations from the emitted full-Core interfaces through
+-- the selected GHC helper and Cabal's actual library registration.
 scalarInterfaceModules :: InstalledContext -> Component -> Unit -> FilePath -> [String] -> IO [(String,BS.ByteString)]
 scalarInterfaceModules helper component unit objects names = do
   sourceDir <- field (componentValue component) "src-dir"
@@ -2022,17 +2027,14 @@ scalarInterfaceModules helper component unit objects names = do
           "--interface",interface,"--way",exportInterfaceWay,"--source-notes"] ++
           concatMap (\database -> ["--package-db",database]) databases
     requireFile interface
-    (status,output,diagnostic) <- readCreateProcessWithExitCode
-      (proc (installedHelper helper) arguments) {cwd=Just sourceDir} ""
-    require (status == ExitSuccess) ("scalar cbits interface acquisition failed: " ++ take 4096 (output ++ diagnostic))
-    response <- either fail pure (Aeson.eitherDecodeStrict' (Text.encodeUtf8 (Text.pack output)))
-    require (jsonField response "schema" == Just (1::Int) && jsonField response "status" == Just ("loaded"::String))
-      "scalar cbits interface helper did not return full Core"
-    value <- field response "core"
+    (status,output,diagnostic) <- boundedInterfaceProcessIn sourceDir (installedHelper helper) arguments
+    require (status == ExitSuccess) ("scalar cbits interface acquisition failed: " ++
+      take 4096 (Text.unpack (Text.decodeUtf8With lenientDecode (output <> diagnostic))))
+    value <- either fail pure (snd <$> readModuleMetadata output)
     require (jsonField value "unit" == Just (unitId unit) && jsonField value "module" == Just name &&
       jsonField value "boundary" == Just boundary && jsonField value "ghc" == Just ("9.14.1"::String))
       "scalar cbits interface identity or boundary mismatch"
-    pure (name,BL.toStrict (encode value))
+    pure (name,output)
 
 -- | Read a configured bundle under its complete expected inputs and inventory.
 -- True retains exhaustive archive, layout, provenance and module validation.
@@ -2086,7 +2088,7 @@ readBundleCold receipt path unit buildKey exportKey buildInputs expected = do
           foundBoundary <- jsonField item "boundary" :: Maybe String
           checkedPair <- moduleEntries item entries
           body <- lookup member checkedPair
-          artifact <- either (const Nothing) Just (eitherDecodeStrict' body)
+          artifact <- either (const Nothing) Just (snd <$> readModuleMetadata body)
           owner <- jsonField artifact "unit" :: Maybe String
           actual <- jsonField artifact "module" :: Maybe String
           artifactBoundary <- jsonField artifact "boundary" :: Maybe String
@@ -2347,6 +2349,9 @@ optionalField value name fallback = case value of
     Nothing -> pure fallback
     Just _ -> field value name
   _ -> fail ("JSON object expected for field " ++ name)
+
+readCoreMetadata :: FilePath -> IO Value
+readCoreMetadata path = BS.readFile path >>= either (fail . (("invalid CBD " ++ path ++ ": ") ++)) pure . fmap snd . readModuleMetadata
 
 readJson :: FilePath -> IO Value
 readJson path = do
