@@ -138,7 +138,8 @@ class FusedFloatingTest {
     }
     private static void require(boolean condition) { if (!condition) throw new IllegalArgumentException(); }
     private static Map<String, Object> json(File file) throws Exception { return object(Json.parse(Files.readString(file.toPath()))); }
-    private Map<String, Object> module(String stage) throws Exception { return json(new File(directory, stage + "-core/FloatingAudit.json")); }
+    private Map<String, Object> module(String stage) throws Exception { return thc.CoreCbdFixtures.read(new File(directory, stage + "-core/FloatingAudit.cbd").toPath()); }
+    private static String entryId(String name) { return "main:FloatingAudit." + name; }
     private void provenance() throws Exception { provenance(json(new File(directory, "manifest.json"))); }
     private void provenance(Map<String, Object> manifest) throws Exception {
         require(manifest.keySet().equals(Set.of("schema", "ghc", "ghcInfo", "installedArtifactsHashed", "nativeFlags", "entries", "stages", "nativeRows", "inputHashes", "artifactHashes")));
@@ -149,7 +150,7 @@ class FusedFloatingTest {
         for (var file : Objects.requireNonNull(new File(root, "src/compiler/THC").listFiles())) if (file.getName().endsWith(".hs")) inputs.add("src/compiler/THC/" + file.getName());
         for (var file : Objects.requireNonNull(new File(root, "bin").listFiles())) if (file.getName().startsWith("core_") && file.getName().endsWith(".py")) inputs.add("bin/" + file.getName());
         var artifacts = new HashSet<>(list("build/fused-floating/oracle.tsv"));
-        for (var stage : list("pre", "post")) { artifacts.add("build/fused-floating/" + stage + "-core/FloatingAudit.json"); artifacts.add("build/fused-floating/" + stage + "-audit.json"); }
+        for (var stage : list("pre", "post")) { artifacts.add("build/fused-floating/" + stage + "-core/FloatingAudit.cbd"); artifacts.add("build/fused-floating/" + stage + "-audit.json"); }
         require(object(manifest.get("inputHashes")).keySet().equals(inputs)); require(object(manifest.get("artifactHashes")).keySet().equals(artifacts));
         assertEquals(1L, manifest.get("schema")); assertEquals("9.14.1", manifest.get("ghc")); assertEquals(false, manifest.get("installedArtifactsHashed"));
         assertEquals(list("-O2", "-fforce-recomp", "-dcore-lint", "-dstg-lint"), manifest.get("nativeFlags"));
@@ -204,13 +205,13 @@ class FusedFloatingTest {
         return result;
     }
     private static Map<String, Object> worker(Map<String, Object> source, String name) {
-        var matches = objects(source.get("bindings")).stream().filter(binding -> (name + "Worker").equals(binding.get("name"))).toList();
+        var matches = objects(source.get("bindings")).stream().filter(binding -> entryId(name + "Worker").equals(binding.get("id"))).toList();
         assertEquals(1, matches.size()); return matches.getFirst();
     }
     @Test void genuineCoreRetainsEveryFusedTernaryProofAndRejectsCorruption() throws Exception {
         provenance();
         for (var stage : list("pre", "post")) for (var f : FORMATS) for (int operation = 0; operation < 4; operation++) {
-            var name = f.names().get(operation); var source = CoreModules.reachable(module(stage), name, true);
+            var name = f.names().get(operation); var source = CoreModules.reachable(module(stage), entryId(name), true);
             assertEquals(2, objects(source.get("bindings")).size()); var worker = worker(source, name);
             var primop = list("fmadd", "fmsub", "fnmadd", "fnmsub").get(operation) + (f.width == 32 ? "Float#" : "Double#");
             var calls = calls(worker.get("expr")); assertEquals(1, calls.size()); var call = calls.getFirst();
@@ -256,8 +257,8 @@ class FusedFloatingTest {
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 for (var f : FORMATS) for (var name : f.names()) {
-                    var source = with(CoreModules.reachable(module(stage), name, true), "instrument", true);
-                    var p = program(language, source, backend); var target = p.entryTarget(name);
+                    var source = with(CoreModules.reachable(module(stage), entryId(name), true), "instrument", true);
+                    var p = program(language, source, backend); var target = p.entryTarget(entryId(name));
                     var targets = objects(source.get("bindings")).stream().map(binding -> p.entryTarget((String) binding.get("id"))).toList();
                     assertEquals(2, targets.size()); var selected = rows.stream().filter(row -> row.name.equals(name)).toList();
                     CheckedBiConsumer<Row, Boolean> check = (row, compiled) -> {
