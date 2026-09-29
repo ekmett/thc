@@ -45,7 +45,7 @@ public final class CoreBoxedForeignDeclarations {
                 var emitted = (Map<?,?>) ((Map<?,?>) item).get("emitted");
                 boolean boxed = ((List<?>) emitted.get("arguments")).stream().anyMatch(CoreBoxedForeignDeclarations::boxed) ||
                     ((List<?>) emitted.get("result")).stream().anyMatch(CoreBoxedForeignDeclarations::boxed);
-                if (boxed || "interruptible".equals(emitted.get("safety"))) excluded.add(emitted);
+                if (boxed || "prim".equals(emitted.get("convention")) || "interruptible".equals(emitted.get("safety"))) excluded.add(emitted);
             }
             var archive = new LinkedHashMap<String,Object>();
             archive.put("schema", 1L); archive.put("profile", "thc-package-native-archive-v1"); archive.put("execution", "not-linked");

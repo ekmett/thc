@@ -4,6 +4,7 @@ package thc;
 
 import java.util.*;
 import thc.runtime.CoreBoxedForeignDeclarations;
+import thc.runtime.CorePrimForeignDeclarations;
 
 public final class PackageNativeArchives {
     public static final PackageNativeArchives INSTANCE = new PackageNativeArchives();
@@ -19,19 +20,27 @@ public final class PackageNativeArchives {
     private static List<?> list(Object value) { check(value instanceof List<?>, "list"); return (List<?>) value; }
     private static boolean scalar(Object value) { return value instanceof String s && SCALAR.contains(s); }
     private static boolean boxed(Object value) { return in(value, "BoxedRep (Just Unlifted)", "BoxedRep (Just Lifted)"); }
+    static boolean importProfile(Object value) { return in(value, "ghc-9.14.1-thc-only-static-c-imports-v1", "ghc-9.14.1-thc-stock-static-foreign-imports-v2"); }
+    private static boolean prim(Map<?,?> emitted) { return Objects.equals(emitted.get("convention"), "prim"); }
     private static boolean gcBoxed(Map<?,?> emitted) {
         return list(emitted.get("arguments")).stream().anyMatch(PackageNativeArchives::boxed) ||
             list(emitted.get("result")).stream().anyMatch(PackageNativeArchives::boxed);
     }
     private static Map<?,?> emitted(Object value, String unit) {
         var emitted = record(value, "symbol unit convention safety arguments result");
-        check(text(emitted.get("symbol")).matches("[A-Za-z_][A-Za-z0-9_]*") && Objects.equals(emitted.get("unit"), unit) && in(emitted.get("convention"), "ccall", "capi") && in(emitted.get("safety"), "unsafe", "safe", "interruptible"), "emitted identity");
+        check(text(emitted.get("symbol")).matches("[A-Za-z_][A-Za-z0-9_]*") && Objects.equals(emitted.get("unit"), unit) && in(emitted.get("convention"), "ccall", "capi", "prim") && in(emitted.get("safety"), "unsafe", "safe", "interruptible"), "emitted identity");
         var args = list(emitted.get("arguments")); var result = list(emitted.get("result"));
+        if (prim(emitted)) {
+            check(Objects.equals(emitted.get("safety"), "safe") && args.stream().allMatch(PackageNativeArchives::primCarrier) &&
+                result.stream().allMatch(PackageNativeArchives::primCarrier), "prim emitted carriers");
+            return emitted;
+        }
         boolean valid = !args.isEmpty() && Objects.equals(args.getLast(), "void");
         if (valid) for (Object arg : args.subList(0, args.size() - 1)) if (!scalar(arg) && !boxed(arg) && !in(arg, "ByteArray#", "MutableByteArray#")) { valid = false; break; }
         check(valid && (result.equals(List.of("void")) || result.size() == 2 && Objects.equals(result.getFirst(), "void") && (scalar(result.get(1)) || boxed(result.get(1)))), "emitted carriers");
         return emitted;
     }
+    private static boolean primCarrier(Object value) { return scalar(value) || boxed(value) || in(value, "void", "ByteArray#", "MutableByteArray#"); }
     private static List<?> cAbi(Map<?,?> emitted) {
         Object convention = emitted.get("convention"), safety = Objects.equals(emitted.get("safety"), "safe") ? "unsafe" : emitted.get("safety");
         var arguments = new ArrayList<Object>();
@@ -47,7 +56,13 @@ public final class PackageNativeArchives {
     }
     public static PackageNativeArchive read(Map<?,?> module) { return read(module, true); }
     public static PackageNativeArchive read(Map<?,?> module, boolean completeBindings) {
-        Object raw = module.get("packageNativeArchive"); if (raw == null) return null;
+        Object raw = module.get("packageNativeArchive");
+        if (raw == null) {
+            check(!(module.get("staticForeignImports") instanceof Map<?,?> proof &&
+                Objects.equals(proof.get("profile"), "ghc-9.14.1-thc-stock-static-foreign-imports-v2") &&
+                Objects.equals(proof.get("status"), "verified")), "missing prim archive obligation");
+            return null;
+        }
         boolean conflictField = raw instanceof Map<?,?> map && map.containsKey("conflictingImports");
         var archive = record(raw, "schema profile execution unit module unsupportedImports unclassifiedReason unresolvedSymbols artifact" + (conflictField ? " conflictingImports" : ""));
         String unit = text(module.get("unit"));
@@ -89,16 +104,21 @@ public final class PackageNativeArchives {
                     for (int i = 0; i < header.length(); i++) if ("\n\r\"\\".indexOf(header.charAt(i)) >= 0) { validHeader = false; break; }
                 }
                 check(validHeader, "import header");
-                check((entry.get("unit") == null || Objects.equals(entry.get("unit"), unit)) && in(entry.get("convention"), "ccall", "capi") && (Objects.equals(entry.get("isFunction"), true) || Objects.equals(entry.get("convention"), "capi") && Objects.equals(entry.get("isFunction"), false)) && in(entry.get("safety"), "unsafe", "safe", "interruptible") && Objects.equals(entry.get("normalizationRole"), "representational"), "import metadata");
+                check((entry.get("unit") == null || Objects.equals(entry.get("unit"), unit)) && in(entry.get("convention"), "ccall", "capi", "prim") && (Objects.equals(entry.get("isFunction"), true) || Objects.equals(entry.get("convention"), "capi") && Objects.equals(entry.get("isFunction"), false)) && in(entry.get("safety"), "unsafe", "safe", "interruptible") && Objects.equals(entry.get("normalizationRole"), "representational"), "import metadata");
                 PackageScalarLinks.archiveType(entry.get("declaredType")); PackageScalarLinks.archiveType(entry.get("normalizedType"));
                 var emitted = emitted(entry.get("emitted"), unit);
+                if (prim(emitted)) check(Objects.equals(p.get("profile"), "ghc-9.14.1-thc-stock-static-foreign-imports-v2") &&
+                    entry.get("header") == null && Objects.equals(entry.get("unit"), unit) &&
+                    Objects.equals(entry.get("symbol"), emitted.get("symbol")), "stock prim declaration identity");
                 CoreBoxedForeignDeclarations.validate(entry);
                 check(Objects.equals(emitted.get("convention"), entry.get("convention")) && Objects.equals(emitted.get("safety"), entry.get("safety")), "emitted declaration"); imports.add(emitted);
             }
+            check(Objects.equals(p.get("profile"), "ghc-9.14.1-thc-stock-static-foreign-imports-v2") == imports.stream().anyMatch(PackageNativeArchives::prim), "stock prim profile inventory");
+            if (imports.stream().anyMatch(PackageNativeArchives::prim)) CorePrimForeignDeclarations.validate(module, p);
         }
         if (module.containsKey("staticForeignImportStubs")) check(Objects.equals(module.get("staticForeignImportStubs"), proof), "retained stub provenance differs");
         var conflicts = new ArrayList<Map<?,?>>(); if (conflictField) for (Object value : list(archive.get("conflictingImports"))) {
-            var witness = emitted(value, unit); check(!gcBoxed(witness), "GC-boxed conflict is not a native ABI"); conflicts.add(witness);
+            var witness = emitted(value, unit); check(!prim(witness) && !gcBoxed(witness), "non-native conflict witness"); conflicts.add(witness);
         }
         if (conflictField) check(!conflicts.isEmpty() && new ArrayList<>(new LinkedHashSet<>(conflicts)).equals(conflicts) && unknown == null, "conflicting import inventory");
         var conflictGroups = new LinkedHashMap<Object,List<Map<?,?>>>(); for (var entry : conflicts) conflictGroups.computeIfAbsent(entry.get("symbol"), ignored -> new ArrayList<>()).add(entry);
@@ -113,12 +133,12 @@ public final class PackageNativeArchives {
             }
             check(validVariants, "imports do not have conflicting C ABIs");
             var local = new ArrayList<Map<?,?>>();
-            for (var entry : imports) if (Objects.equals(entry.get("symbol"), group.getKey()) && !Objects.equals(entry.get("safety"), "interruptible") && !gcBoxed(entry)) local.add(entry);
+            for (var entry : imports) if (Objects.equals(entry.get("symbol"), group.getKey()) && !prim(entry) && !Objects.equals(entry.get("safety"), "interruptible") && !gcBoxed(entry)) local.add(entry);
             check(!local.isEmpty() && variants.containsAll(local), "conflict witnesses differ from local imports");
         }
         var conflictSymbols = conflictGroups.keySet();
         var selectedImports = new ArrayList<Map<?,?>>();
-        for (var entry : imports) if (Objects.equals(entry.get("safety"), "interruptible") || gcBoxed(entry) || conflictSymbols.contains(entry.get("symbol"))) selectedImports.add(entry);
+        for (var entry : imports) if (prim(entry) || Objects.equals(entry.get("safety"), "interruptible") || gcBoxed(entry) || conflictSymbols.contains(entry.get("symbol"))) selectedImports.add(entry);
         List<Map<?,?>> expected = Collections.unmodifiableList(selectedImports);
         check(list(archive.get("unsupportedImports")).equals(expected), "unsupported import inventory differs");
         var unresolved = new ArrayList<String>();
@@ -134,6 +154,6 @@ public final class PackageNativeArchives {
         return new PackageNativeArchive(unit + ":" + module.get("module") + " has archive-only native obligations" + " (unsupported=" + expected.size() + ", conflicting=" + conflictSymbols + ", unclassified=" + unknown + ", unresolved=" + unresolved + ")", unknown != null || !unresolved.isEmpty(), unit, expected);
     }
     private static void proofIdentity(Map<?,?> proof, Map<?,?> module) {
-        check((version(proof.get("schema"), 1) || version(proof.get("schema"), 2) || version(proof.get("schema"), 3) || version(proof.get("schema"), 4)) && Objects.equals(proof.get("scope"), "retained-static-import-products") && Objects.equals(proof.get("execution"), "not-linked") && Objects.equals(proof.get("profile"), "ghc-9.14.1-thc-only-static-c-imports-v1") && Objects.equals(proof.get("unit"), module.get("unit")) && Objects.equals(proof.get("module"), module.get("module")), "typed provenance identity");
+        check((version(proof.get("schema"), 1) || version(proof.get("schema"), 2) || version(proof.get("schema"), 3) || version(proof.get("schema"), 4)) && Objects.equals(proof.get("scope"), "retained-static-import-products") && Objects.equals(proof.get("execution"), "not-linked") && importProfile(proof.get("profile")) && Objects.equals(proof.get("unit"), module.get("unit")) && Objects.equals(proof.get("module"), module.get("module")), "typed provenance identity");
     }
 }
