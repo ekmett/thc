@@ -100,6 +100,62 @@ class GhcBCOContinuationTest {
             return result.get(10, TimeUnit.SECONDS);
         } finally { if (!result.isDone()) context.close(true); worker.join(5000); assertFalse(worker.isAlive()); }
     }
+    @ParameterizedTest @CsvSource({"ast,false", "bytecode,false", "ast,true", "bytecode,true"})
+    void capturedApplicationsKeepRepeatedCutsUpdatesAndPendingApply(String backend, boolean updating) throws Exception {
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            Language language; Language.State owner; Closure code, second; RootCallTarget resume; Object application;
+            var prefix1 = new ManagedMVar(); var prefix2 = new ManagedMVar();
+            var cell1 = new ManagedMVar(); var cell2 = new ManagedMVar();
+            assertTrue(prefix1.tryPut("once")); assertTrue(prefix2.tryPut("once"));
+            try {
+                language = TruffleLanguage.LanguageReference.create(Language.class).get(null); owner = Language.currentState();
+                ExecutableProgram program = backend.equals("ast") ? new Program(language, waitingModule(), true) : new BytecodeProgram(language, waitingModule(), true);
+                var waiting = (Closure) program.entryValue("wait");
+                var first = waiting.pap(new Object[]{prefix1}); second = waiting.pap(new Object[]{prefix2});
+                var body = bco(language, 2, 0, new Object[0], 2,1,31,2,2,38,3,2,58);
+                var allocator = updating
+                    ? bco(language, 0, 0, new Object[]{first, cell1, body}, 39,2,11,1,11,0,11,2,42,3,2,60)
+                    : bco(language, 0, 0, new Object[]{first, body}, 41,1,1,11,0,11,1,43,2,1,60);
+                application = allocator.target.call(0L);
+                code = updating
+                    ? bco(language, 0, 0, new Object[]{application, cell2}, 11,1,31,11,0,58)
+                    : bco(language, 0, 0, new Object[]{application, cell1, cell2}, 11,2,11,1,32,11,0,58);
+                resume = new RootNode(language) {
+                    @Child private Force force = new Force(new Metrics(false), true);
+                    @Override public Object execute(VirtualFrame frame) { return force.drainStack((SavedGuestContinuation) frame.getArguments()[0]); }
+                }.getCallTarget();
+            } finally { context.leave(); }
+            var cut = interrupt(context, owner, cell1, () -> code.target.call(0L));
+            assertTrue(prefix1.isEmpty()); assertFalse(prefix2.isEmpty());
+            if (updating) assertEquals(5, ((Thunk) application).getState());
+            try (var foreign = context()) {
+                foreign.initialize("thc"); foreign.enter();
+                try { assertThrows(RuntimeFault.class, () -> cut.continueWith(Unit.INSTANCE)); }
+                finally { foreign.leave(); }
+            }
+            var again = interrupt(context, owner, cell1, () -> resume.call(cut));
+            assertNotSame(cut.asyncRequest(), again.asyncRequest());
+            assertTrue(prefix1.isEmpty()); assertFalse(prefix2.isEmpty());
+            assertTrue(cell1.tryPut(second));
+            var outer = interrupt(context, owner, cell2, () -> resume.call(again));
+            assertTrue(prefix2.isEmpty()); assertTrue(cell1.isEmpty());
+            var answer = new Object(); assertTrue(cell2.tryPut(answer));
+            context.enter(); try {
+                assertSame(answer, resume.call(outer));
+                assertThrows(RuntimeFault.class, () -> outer.continueWith(Unit.INSTANCE));
+                assertTrue(cell2.isEmpty());
+                if (updating) {
+                    var thunk = (Thunk) application;
+                    assertEquals(2, thunk.getState()); assertNull(thunk.getTarget()); assertNull(thunk.getEnvironment());
+                    assertSame(second, thunk.getValue());
+                    var forceAgain = bco(language, 0, 0, new Object[]{thunk}, 11,0,58);
+                    assertSame(second, forceAgain.target.call(0L));
+                }
+                ThreadInventoryCoreEvidence.released(language);
+            } finally { context.leave(); }
+        }
+    }
     @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
     void overapplicationKeepsBothArgumentsAndRepeatedChildCuts(String backend) throws Exception {
         try (var context = context()) {

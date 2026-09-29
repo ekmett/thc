@@ -215,8 +215,8 @@ Details: [native address projection](native-addresses.md), [managed pinning](pin
 | `compactGetNextBlock#` | Continues that same context-local image in checked 64-KiB blocks, with the same format/size restrictions. |
 | `compactAllocateBlock#` | Allocates blocks for that THC image, not arbitrary GHC heap images or cross-context/process import. Abandoned raw imports are retained until context disposal. |
 | `compactFixupPointers#` | Reconstructs a fresh graph using originating-context constructor metadata. Corrupt/incompatible images fail through the API's `Nothing` result; portable constructor resolution is not implemented. |
-| `newBCO#` | Decodes and executes the documented GHC 9.14.1 **opcode/ABI subset**, including scalar cases, internal tuple continuations and packed subword stacks. Function arity is independent of continuation bitmap width. Ordinary external function entry still requires one word per argument; external Core tuple and SIMD conventions require unsupported ABI adapters. |
-| `mkApUpd0#` | Creates an updating wrapper for a zero-arity BCO with an empty entry bitmap. Native calls, info-table/PACK/AP instructions, unboxed apply frames, breakpoints and explicit delimited capture through the interpreter remain unsupported. One-shot asynchronous and stack cuts preserve pending work and the shared update. |
+| `newBCO#` | Decodes and executes the documented GHC 9.14.1 **opcode/ABI subset**, including scalar cases, internal tuple continuations, packed subword stacks and captured AP/PAP application. Function arity is independent of continuation bitmap width. Ordinary external function entry still requires one word per argument; external Core tuple and SIMD conventions require unsupported ABI adapters. |
+| `mkApUpd0#` | Creates an updating wrapper for a zero-arity BCO with an empty entry bitmap. Native calls, info-table/PACK instructions, breakpoints and explicit delimited capture through the interpreter remain unsupported. One-shot asynchronous and stack cuts preserve pending work and the shared update. |
 
 Details: [compact regions and serialization](compact-regions.md),
 [BCO opcode list and ABI](ghc-bco.md).

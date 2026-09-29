@@ -6,10 +6,12 @@ format. [GhcBCO.hs](../src/examples/GhcBCO.hs) constructs actual instruction,
 literal, bitmap and pointer arrays with primops and runs them under both GHC
 and THC. It includes boxed one-/two-argument calls, a positive-arity BCO,
 unboxed arithmetic, branches, large operands, shared updates, nested scalar cases,
-internal tuple calls, packed subwords and padded floats.
+internal tuple calls, packed subwords, padded floats, captured AP/PAP environments,
+recursive bindings and typed scalar applications.
 
 A BCO is an ordinary THC closure with an executable interpreter root.
-Positive-arity application uses the existing closure/PAP/application convention.
+Positive-arity application uses ordinary THC closures; internal PAPs retain
+logical arity separately from their physical payload.
 `mkApUpd0#` accepts only a zero-arity BCO with an empty entry bitmap and produces the existing lazy updating
 thunk: construction does not enter the code, repeated forcing shares the
 answer, and a successful update releases the old target/environment. Each
@@ -49,7 +51,8 @@ bitmap construction.
 Supported instructions are `STKCHECK`, `PUSH_L/LL/LLL`, `PUSH_G`, `PUSH_UBX`,
 `PUSH8/16/32`, `PUSH8/16/32_W`, `PUSH_PAD8/16/32`, `PUSH_UBX8/16/32`,
 `PUSH_ALTS_P/N/F/D/L/V/T`,
-`PUSH_APPLY_P` through `PUSH_APPLY_PPPPPP`, `SLIDE`, `TESTLT_I/TESTEQ_I`,
+`PUSH_APPLY_N/F/D/L/V`, `PUSH_APPLY_P` through `PUSH_APPLY_PPPPPP`,
+`ALLOC_AP`, `ALLOC_AP_NOUPD`, `ALLOC_PAP`, `MKAP`, `MKPAP`, `SLIDE`, `TESTLT_I/TESTEQ_I`,
 `TESTLT_W/TESTEQ_W`, `JMP`, `SWIZZLE`, `ENTER`, `RETURN_P/N/F/D/L/V/T`, `BCO_NAME`,
 and the 64-bit arithmetic, bit, shift and comparison opcodes. Shift counts
 must be in GHC's defined domain. `CASEFAIL` fails explicitly. Decoding rejects
@@ -57,8 +60,31 @@ unknown opcodes, truncated operands, out-of-range tables and jumps into operands
 execution checks live stack bounds and pointer/word boundaries.
 
 This is not a complete GHCi implementation. Native calls, RTS info-table
-construction/PACK, allocation/AP-building opcodes, unboxed apply frames,
-breakpoints and other unlisted instructions are unsupported.
+construction/PACK, breakpoints and other unlisted instructions are unsupported.
+
+Allocation creates an uninitialized managed closure/thunk shell; `MKAP/MKPAP`
+commits its owned payload once after checking the body owner, bitmap, allocation
+kind and physical size. This preserves recursive references without exposing
+native addresses. The environment owns the bytes and references; a shared entry
+target retains only layout metadata. AP updates release that environment through
+ordinary `Force`. Opaque case/apply headers cannot enter a captured payload.
+Typed Apply frames track logical arguments and physical words independently:
+`V` consumes one argument and zero words, while the admitted scalar conventions
+consume one argument and one 64-bit word. Internal underapplication copies the
+exact tagged payload; saturation restores it ahead of the new arguments, and
+pointer overapplication retains the remaining Apply frame. This uses the same
+stack and cut ownership as case continuations.
+
+The `ALLOC_AP_NOUPD` producer promises a single entry. Pinned `Apply.cmm` omits
+its native update frame, whereas `Interpreter.c` handles both AP headers through
+its updating AP entry. THC uses the existing managed update cell; native checks
+cover lawful single entry both inside the interpreter and after passing the AP
+to an original compiled consumer. No repeated-entry guarantee is inferred for
+this opcode. The native scalar-call controls follow `StgToCmm/ArgRep.hs`: on
+64-bit GHC, `Int64Rep` and `Word64Rep` use `N`, not `L`. Internal `L` application
+is qualified separately. Machine addresses, narrow scalar species and external
+aggregate layouts still require their own checked ABI information; a nonpointer
+bitmap is not a logical type proof.
 
 Scalar cases use the pinned interpreter's two-word continuation headers and
 P/N/F/D/L/V return layouts. Internal tuple returns use its four-word receiving
@@ -99,7 +125,7 @@ cabal run exe:thc-fixtures --offline -- ghc-bco
   testDense --tests 'thc.runtime.GhcBCO*'
 ```
 
-The producer retains 63 native results, 42 strict audits, unmodified pre/post
+The producer retains 105 native results, 70 strict audits, unmodified pre/post
 Core, command stdout/stderr and SHA-256 source/artifact provenance in
 `build/ghc-bco/`. Java's arithmetic/state model is independent of runtime
 execution. Native comparisons run in both backends; each first-installed check
@@ -110,14 +136,15 @@ roots. Handoff pools must be balanced and free of retained references.
 
 Additional JVM cases cover malformed streams, odd-sized/truncated encodings,
 stack order, signed extremes, logical shifts, raw NaN bits, malformed case/tuple
-headers, exact tuple descriptors, external ABI rejection, lazy/shared thunk
+headers, exact tuple descriptors, external ABI rejection, uninitialized or twice-filled
+AP/PAPs, payload kind/bitmap checks, retained scalar PAP prefixes, lazy/shared thunk
 updates, released update targets, and foreign/closed-context use.
 
 The genuine corpus runs with synchronous and capturing callers. Separate JVM
 continuation checks use real MVar interruptions through both Core backends:
 repeated cuts, overapplication with an outer pending Apply frame, initial and
 returned thunk forcing, tail transfers, strict direct/megamorphic arguments,
-constructor operands, nested P/T cases and instruction-loop interruption followed
+constructor operands, captured AP/PAP payloads with pending applications, nested P/T cases and instruction-loop interruption followed
 by completion. A packed-loop control interrupts while a live byte keeps the
 countdown stack unaligned, then widens that retained byte after resumption.
 A deep BCO chain checks bounded stack spilling and result completion. Foreign
