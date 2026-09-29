@@ -33,14 +33,57 @@ import THC.Compact.Compression
 import THC.Compact.Debug
 import THC.Compact.Encode (newEncoder, internString)
 import THC.Compact.JSON (parseModuleWithDebug, parseModuleWithoutDebug)
-import THC.Compact.Module (writeModuleWithDebug, writeModuleWithDebugCompressed, encodeModuleValue, readModuleValue, rewriteModuleFacts)
-import THC.Compact.Inspect (inspectContainer, unpackContainer)
+import THC.Compact.Module (writeModuleWithDebug, writeModuleWithDebugCompressed, encodeModuleValue, readModuleValue, readModuleSources, rewriteModuleFacts)
+import THC.Compact.Inspect (inspectContainer, inspectSource, unpackContainer)
 import THC.Compact.Wire
 import THC.Compact.Writer
 
 debugTests :: Test
 debugTests = TestList
-  [ TestLabel "direct CBD publication and metadata amendment preserve executable/debug bytes" $ TestCase $ do
+  [ TestLabel "module source observations preserve original path and unknown content" $ TestCase $ do
+      bytes <- encodeModuleValue originalModule
+      assertEqual "persisted file is distinct from an absent source catalog"
+        (Right [SourceFile "f0" "Original.hs" Unknown]) (readModuleSources bytes)
+  , TestLabel "source inventory reads only persisted filename records" $ TestCase $
+      withSystemTempDirectory "compact-source-inventory" $ \directory -> do
+        let destination = directory </> "sources.cbd"
+            files = [SourceFile "f0" "Absent.hs" Missing,
+              SourceFile "f1" "Unavailable.hs" Unknown,
+              SourceFile "f2" "Empty.hs" (Known ""),
+              SourceFile "f3" unicodeName (Known "original contents\n")]
+            location = SourceLocation 0 [(source,positionA) | source <- files]
+        _ <- writeContainer destination BS.empty 0 $ \streams -> do
+          encoder <- newEncoder streams
+          debug <- newDebugEncoder streams (internString encoder)
+          -- Neither malformed executable records nor unrelated debug tables
+          -- are a prerequisite for the acquisition source observations.
+          void (appendBytes streams ExecutableData (BS.replicate 24 255))
+          void (appendBytes streams RealNames "not a name table")
+          recordLocation debug 3 (Just location)
+          recordLocation debug 10 Nothing
+          recordLocation debug 12 (Just location)
+          finishDebug debug 24
+          void (appendBytes streams LineColumnIntervals "not a position table")
+          pure 0
+        bytes <- BS.readFile destination
+        assertBool "control: source-position inspection rejects the unrelated malformed table"
+          (isLeft (inspectSource bytes 3))
+        assertEqual "restorations deduplicate exact records without collapsing presence"
+          (Right files) (readModuleSources bytes)
+  , TestLabel "source inventory preserves absence and rejects malformed filename records" $ TestCase $
+      withSystemTempDirectory "compact-source-absence" $ \directory -> do
+        let destination = directory </> "sources.cbd"
+            emit filenames = do
+              _ <- writeContainer destination BS.empty 0 $ \streams -> do
+                void (appendBytes streams ExecutableData "unread executable")
+                void (appendBytes streams FilenameIntervals filenames)
+                pure 0
+              BS.readFile destination
+        absent <- emit BS.empty
+        assertEqual "no persisted source records means no observations" (Right []) (readModuleSources absent)
+        invalid <- emit "truncated"
+        assertBool "malformed source directory is not silent absence" (isLeft (readModuleSources invalid))
+  , TestLabel "direct CBD publication and metadata amendment preserve executable/debug bytes" $ TestCase $ do
       original <- encodeModuleValue originalModule
       value <- either fail pure (readModuleValue original)
       let amended = case value of

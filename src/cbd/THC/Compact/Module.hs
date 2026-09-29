@@ -15,7 +15,7 @@
 -- are written; the existing canonical MD5 encoder sorts only lookup records.
 module THC.Compact.Module
   ( writeModule, writeModuleWithDebug, writeModuleCompressed, writeModuleWithDebugCompressed
-  , writeModuleValue, encodeModuleValue, readModuleValue, readModuleMetadata, rewriteModuleFacts
+  , writeModuleValue, encodeModuleValue, readModuleValue, readModuleMetadata, readModuleSources, rewriteModuleFacts
   ) where
 
 import Control.Exception (bracket)
@@ -60,6 +60,16 @@ readModuleMetadata bytes = do
   (header,factsBytes,segments) <- unpackContainer bytes
   facts <- decodeFacts factsBytes (segments !! 1)
   pure (header,moduleJSON facts [])
+
+-- | Read exact persisted source observations without decoding executable
+-- bindings, display names, or line/column records. An absent table yields no
+-- observations, not invented files with unknown contents.
+readModuleSources :: BS.ByteString -> Either String [SourceFile]
+readModuleSources bytes = do
+  (_,_,segments) <- unpackContainer bytes
+  case segments of
+    [payload,strings,_,filenames,_,_] -> sourceFiles filenames strings (fromIntegral (BS.length payload))
+    _ -> Left "Compact container requires six segments"
 
 -- | Native linkage changes header facts, not executable identities or debug
 -- origins. Keep all DATA/debug/symbol bytes and original string offsets; append
