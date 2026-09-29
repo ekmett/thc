@@ -15,11 +15,10 @@ module InterfaceFixtures (prepareInterfaceCore) where
 
 import Control.Monad (filterM, forM, forM_, unless)
 import qualified Control.Exception as Exception
-import Data.Aeson (Value(..), Result(..), fromJSON, toJSON, object, (.=), decodeStrict', encode)
+import Data.Aeson (Value(..), Result(..), fromJSON, toJSON, object, (.=), decodeStrict')
 import Data.Aeson.Key (Key)
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString.Char8 as BS
-import qualified Data.ByteString.Lazy as BL
 import Data.Char (isHexDigit)
 import Data.List (isInfixOf, sort)
 import Data.Foldable (toList)
@@ -46,6 +45,7 @@ import System.Exit (die)
 import System.FilePath ((</>), makeRelative, splitDirectories, takeExtension, takeDirectory)
 import qualified System.Info as Info
 import THC.Interface
+import THC.Compact.Module (readModuleValue, writeModuleValue)
 import THC.Driver.ForeignBitcode (linkClockGetTime)
 import qualified THC.Driver.Installed as Installed
 import qualified THC.Driver.Project as Project
@@ -252,7 +252,7 @@ prepareInterfaceCore root = do
           "full/CBVCoercionAudit.hi", "thin/CBVCoercionAudit.hi", "source/CBVCoercionAudit.saved",
           "wired-unit.json"]] ++
         [directory </> "packages.json", directory </> "foreign-packages.json", directory </> "InterfaceForeign.json",
-         directory </> "clock-capi.json",
+         directory </> "clock-capi.cbd",
          directory </> "driver-controls.json", directory </> "foreign-association.json",
          directory </> "installed-bound-facts.json", directory </> "installed-wrapper-facts.json", directory </> "foreign-alias/a.json",
          directory </> "foreign-alias/b.json", directory </> "source/InterfaceForeignAlias.hs.saved"] ++
@@ -377,18 +377,25 @@ checkDriver root directory ghc ghcPkg helper baseUnit = do
                              else [capiScalar (Just "Word64Rep") False,
                                    capiScalar (Just "AddrRep") False, capiScalar Nothing False]),
          "resultRep" .= capiTuple (if zero then "Word64Rep" else "Int32Rep")]]
-      capiArchiveFor bindings = object ["schema" .= (2 :: Int), "unit" .= capiUnit,
-        "module" .= capiName, "bindings" .= bindings,
+      capiArchiveFor calls = object ["schema" .= (2 :: Int), "unit" .= capiUnit,
+        "ghc" .= ("9.14.1" :: String), "boundary" .= ("optimized-Core-after-Tidy-before-CorePrep" :: String),
+        "constructors" .= ([] :: [Value]), "module" .= capiName,
+        "bindings" .= [object ["id" .= (capiUnit ++ ":" ++ capiName ++ ".wrapper" ++ show index),
+          "arity" .= (0 :: Int), "expr" .= [String "prim",String "foreign",call]] |
+          (index,call) <- zip [0 :: Int ..] calls],
         "foreign" .= object ["schema" .= (1 :: Int), "execution" .= ("not-linked" :: String),
           "stubs" .= object ["header" .= ("" :: String), "source" .= capiSource,
             "initializers" .= ([] :: [Value]), "finalizers" .= ([] :: [Value])],
           "files" .= ([] :: [Value])]]
       capiArchive = capiArchiveFor (zipWith capiCall [True, False, False] capiSymbols)
+      capiPath = root </> directory </> "clock-capi.cbd"
+      wrongAbiPath = root </> directory </> "clock-capi-wrong-abi.cbd"
+  _ <- writeModuleValue capiPath capiArchive
   capiLinked <- linkClockGetTime (Installed.installedLibdir full) []
     (root </> directory </> "native/staging") (Info.arch ++ "-" ++ Info.os)
-    capiUnit capiName (BL.toStrict (encode capiArchive))
-  let capiRecord = maybe Null id (decodeStrict' capiLinked)
-      capiLink = valueAt "foreignLink" capiRecord
+    capiUnit capiName capiPath
+  capiRecord <- either fail pure . readModuleValue =<< BS.readFile capiLinked
+  let capiLink = valueAt "foreignLink" capiRecord
   check (valueAt "format" capiLink == "llvm-bitcode" &&
          valueAt "symbols" capiLink == toJSON capiSymbols &&
          valueAt "abi" capiLink == toJSON
@@ -397,14 +404,14 @@ checkDriver root directory ghc ghcPkg helper baseUnit = do
          valueAt "sourceSha256" capiLink /= Null &&
          valueAt "bitcodeSha256" capiLink /= Null)
     "Original callback-free CAPI source was not acquired as LLVM bitcode"
+  _ <- writeModuleValue wrongAbiPath (capiArchiveFor
+    (capiCall False capiId : zipWith capiCall [True, False, False] capiSymbols))
   wrongAbi <- Exception.try (linkClockGetTime (Installed.installedLibdir full) []
     (root </> directory </> "native/staging") (Info.arch ++ "-" ++ Info.os)
-    capiUnit capiName (BL.toStrict (encode (capiArchiveFor
-      (capiCall False capiId : zipWith capiCall [True, False, False] capiSymbols)))))
-    :: IO (Either Exception.IOException BS.ByteString)
+    capiUnit capiName wrongAbiPath)
+    :: IO (Either Exception.IOException FilePath)
   check (case wrongAbi of Left _ -> True; Right _ -> False)
     "Original CAPI acquisition accepted a symbol with a different ABI"
-  BS.writeFile (root </> directory </> "clock-capi.json") capiLinked
   writeJson (root </> directory </> "foreign-packages.json") $ object
     ["format" .= ("thc-core-packages" :: String), "schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
      "units" .= Project.installedRecords foreignUnit foreignBundle]
