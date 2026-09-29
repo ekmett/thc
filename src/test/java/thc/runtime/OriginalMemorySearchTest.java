@@ -110,13 +110,15 @@ class OriginalMemorySearchTest {
             return ManagedAddress.fromByteArray(bytes);
         if (kind == 3)
             return ManagedAddress.fromHex(HexFormat.of().formatHex(bytes));
-        var result = ManagedAddress.fromAllocation(ManagedAllocation.mutable(bytes.length, 8, kind == 2));
+        var result = ManagedAddress.fromAllocation(kind == 4 ? ManagedAllocation.nativeMutable(bytes.length, 8)
+            : ManagedAllocation.mutable(bytes.length, 8, kind == 2));
         for (int i = 0; i < bytes.length; i++) result.writeWord8(i, bytes[i]);
         return result;
     }
     private void exercise(boolean compiled, List<Map<String, Object>> examples, String entry, ExecutableProgram program,
         RootCallTarget target, Language language, String stage, String backend) throws Exception {
-        for (int kind = 0; kind <= 3; kind++)
+        // Match the native withArray oracle: strong-pinned, static, and ordinary native owners.
+        for (int kind : new int[]{2, 3, 4})
             for (int index = 0; index < examples.size(); index++) {
                 var row = examples.get(index);
                 var base = address(row.get("left"), kind);

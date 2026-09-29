@@ -63,7 +63,9 @@ class TextCbitsTest {
     private static String hex(byte[] bytes) { return bytes.length == 0 ? "-" : HexFormat.of().formatHex(bytes); }
     private static Context context() { return context(true, true); }
     private static Context context(boolean inlining, boolean nativeAccess) {
-        return withContextProfile(Context.newBuilder("thc").allowNativeAccess(nativeAccess), ContextProfile.SYNCHRONOUS_TEST).option("compiler.Inlining", Boolean.toString(inlining)).build();
+        return withContextProfile(Context.newBuilder("thc").allowNativeAccess(nativeAccess), ContextProfile.SYNCHRONOUS_TEST)
+            .option("thc.ByteArrayStorage", nativeAccess ? "native" : "heap")
+            .option("compiler.Inlining", Boolean.toString(inlining)).build();
     }
     private static ExecutableProgram program(Language language, Map<String, Object> source, String backend) throws Exception { source = ForeignExceptionFixtureSupport.nativeModules(List.of(source)); return backend.equals("ast") ? new Program(language, source) : new BytecodeProgram(language, source); }
     private static void compiled(RootCallTarget target) throws Exception { assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), "installed code remains valid"); }
@@ -82,7 +84,8 @@ class TextCbitsTest {
                     var entry = program.entryValue(entryName); var host = program.hostEntryTarget(name.equals("reverse") ? 3 : 4);
                     var targets = objects(source.get("bindings")).stream().map(binding -> program.entryTarget((String) binding.get("id"))).toList();
                     CheckedConsumer<Row> call = row -> {
-                        Object[] arguments = name.equals("reverse") ? new Object[]{row.bytes, row.offset, row.length} : new Object[]{row.bytes, row.offset, row.length, row.count};
+                        var input = ManagedAllocation.immutableGuest(row.bytes, 8);
+                        Object[] arguments = name.equals("reverse") ? new Object[]{input, row.offset, row.length} : new Object[]{input, row.offset, row.length, row.count};
                         var result = Calls.target(host, new Object[]{entry, arguments}); String actual;
                         if (!name.equals("reverse")) actual = String.valueOf(result);
                         else if (result instanceof byte[] bytes) actual = hex(bytes);

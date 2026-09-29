@@ -576,6 +576,25 @@ public class PackageNativeForeignTest {
             } finally { context.leave(); }
         }
     }
+    @Test public void defaultHeapBuffersRejectNativePointerProjection() throws Exception {
+        var link = library();
+        try (var context = globalContext()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var owner = Language.currentState();
+                assertFalse(owner.getNativeByteArrays());
+                owner.getPackageCbits().link(link);
+                var target = globalEntry(link, "native_bits").getCallTarget();
+                for (var address : List.of(ManagedAddress.fromByteArray(new byte[]{42}),
+                        ManagedAddress.fromAllocation(ManagedAllocation.mutable(1, 8)))) {
+                    var failure = assertThrows(com.oracle.truffle.api.exception.AbstractTruffleException.class,
+                        () -> target.call(address));
+                    assertTrue(failure.getMessage().contains("native pointer"), failure.getMessage());
+                    assertFalse(address.hasNativeStorage(), "a foreign call cannot promote an existing heap alias");
+                }
+            } finally { context.leave(); }
+        }
+    }
     private record Conversion(String rep, long value) {}
     @Test public void integerConversionsRetainUnsignedBitsAndRejectOutOfRangeInputs() {
         assertEquals((byte) -1, PackageScalarAccess.packageCInteger("Word8Rep", 255)); assertEquals((short) -1, PackageScalarAccess.packageCInteger("Word16Rep", 65535));

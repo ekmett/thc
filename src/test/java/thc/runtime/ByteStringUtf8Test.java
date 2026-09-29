@@ -73,7 +73,8 @@ class ByteStringUtf8Test {
             case 0 -> ManagedAddress.fromByteArray(bytes);
             case 3 -> ManagedAddress.fromHex(HexFormat.of().formatHex(bytes));
             default -> {
-                var result = ManagedAddress.fromAllocation(ManagedAllocation.mutable(bytes.length, 8, kind == 2));
+                var result = ManagedAddress.fromAllocation(kind == 4 ? ManagedAllocation.nativeMutable(bytes.length, 8)
+                    : ManagedAllocation.mutable(bytes.length, 8, kind == 2));
                 for (int i = 0; i < bytes.length; i++) result.writeWord8(i, bytes[i]); yield result;
             }
         };
@@ -99,7 +100,8 @@ class ByteStringUtf8Test {
                 for (var group : groups.entrySet()) {
                     var entry = group.getKey(); var examples = group.getValue(); var program = load(language, backend, with(CoreModules.reachable(source, entry), "instrument", true)); var target = program.entryTarget(entry);
                     CheckedConsumer<Boolean> exercise = compiled -> {
-                        for (int kind = 0; kind <= 3; kind++) for (int index = 0; index < examples.size(); index++) {
+                        // The original Ptr ABI and withArray oracle use native addresses.
+                        for (int kind : new int[]{2, 3, 4}) for (int index = 0; index < examples.size(); index++) {
                             var row = examples.get(index); var base = address(row.get("bytes"), kind); long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
                             var result = callScalarTestTarget(target, new Object[]{0L, base.plus((Long) row.get("offset")), row.get("count")});
                             var label = stage + "/" + backend + "/" + entry + "/storage=" + kind + "/" + index + "/compiled=" + compiled;
@@ -146,7 +148,7 @@ class ByteStringUtf8Test {
                     }
                     assertThrows(RuntimeFault.class, () -> load(language, backend, bad), backend + "/" + variant);
                 }
-                var target = load(language, backend, raw).entryTarget("entry"); var bytes = ManagedAddress.fromByteArray(new byte[]{65});
+                var target = load(language, backend, raw).entryTarget("entry"); var bytes = address(list(65L), 4);
                 assertThrows(RuntimeFault.class, () -> callScalarTestTarget(target, new Object[]{0L, bytes, 1L, 17L}));
                 assertEquals(1, callScalarTestTarget(target, new Object[]{0L, bytes, 1L, thc.runtime.Unit.INSTANCE}));
             }
