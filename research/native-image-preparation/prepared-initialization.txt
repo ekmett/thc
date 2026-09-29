@@ -106,6 +106,10 @@ thc.runtime.WindowsLibdwFinalizers
 thc.runtime.RuntimeFault
 thc.runtime.UnsupportedCore
 thc.runtime.FunctionRoot
+# Ordinary atomic-MutVar helper roots have no own static state or initializer.
+# Their GuestRoot parent only initializes the audited carrier-class array below.
+thc.runtime.MutVarModifySite$ModifyApplicationRoot
+thc.runtime.MutVarModifySite$ModifySelectorRoot
 # Literal representation sets, an empty persistent annotation sentinel, and a
 # scalar input descriptor with a null layout; no guest context or frame captured.
 thc.runtime.HandoffLayout
