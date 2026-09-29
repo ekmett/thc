@@ -6,6 +6,7 @@ import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.frame.*;
 import com.oracle.truffle.api.nodes.RootNode;
 import java.nio.file.*;
+import java.security.MessageDigest;
 import java.util.*;
 import org.graalvm.polyglot.*;
 import org.junit.jupiter.api.Test;
@@ -26,6 +27,28 @@ class RuntimeTest {
     }
     private Map<String, Object> diagnostics(Value value) { return object(Json.parse(value.getMember("diagnostics").asString())); }
     private long count(Value value, String key) { return ((Number) diagnostics(value).get(key)).longValue(); }
+    private String thunkLabel(String owner, String name) throws Exception {
+        var path = root.resolve("build/core/Fixtures.cbd");
+        var hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(path)));
+        try (var file = new CoreCompactFile(path, hash, true)) {
+            var records = new CoreCompactRecords(file, path.toString());
+            var binding = records.binding(Objects.requireNonNull(file.lookup("main:Fixtures." + owner)));
+            var matches = new HashSet<String>();
+            thunkLabels(binding, name, matches);
+            assertEquals(1, matches.size(), owner + "/" + name + " must identify one actual local thunk");
+            return matches.iterator().next();
+        }
+    }
+    private void thunkLabels(Object value, String name, Set<String> matches) {
+        if (value instanceof Map<?, ?> fields) {
+            if (fields.containsKey("expr") && fields.get("id") instanceof String id && id.startsWith("\u0000compact-local:")
+                    && fields.get("compactOrigin") instanceof CoreCompactRecords.Origin origin) {
+                long ordinal = Long.parseLong(id.substring(id.lastIndexOf(':') + 1));
+                if (name.equals(origin.debug().name(origin.bindingOffset(), ordinal + 1))) matches.add(id);
+            }
+            fields.values().forEach(child -> thunkLabels(child, name, matches));
+        } else if (value instanceof List<?> values) values.forEach(child -> thunkLabels(child, name, matches));
+    }
     @Test void exportedHaskellMatchesNativeGhcBeforeAndAfterGuestCompilation() throws Exception {
         try (var context = Main.executionContext(false)) {
             var grouped = new LinkedHashMap<String, List<Example>>();
@@ -41,12 +64,12 @@ class RuntimeTest {
             }
         }
     }
-    @Test void sharingPapAndOverapplicationHaveObservableRuntimeCoverage() {
+    @Test void sharingPapAndOverapplicationHaveObservableRuntimeCoverage() throws Exception {
         try (var context = Main.executionContext(false)) {
             var shared = Main.loadEntry(context, modules, "main:Fixtures.shared"); assertEquals(120L, shared.execute(7L).asLong());
             assertTrue(count(shared, "thunkEvaluations") > 0);
             var entries = (Map<?, ?>) diagnostics(shared).get("thunkEvaluationsByLabel");
-            assertEquals(1L, ((Number) entries.get("x")).longValue(), "Shared Core binding x entered exactly once");
+            assertEquals(1L, ((Number) entries.get(thunkLabel("shared", "x"))).longValue(), "Shared Core binding x entered exactly once");
             var under = Main.loadEntry(context, modules, "main:Fixtures.under"); assertEquals(14L, under.execute(7L).asLong());
             assertTrue(count(under, "papAllocations") > 0); long updates = count(under, "thunkEvaluations");
             assertEquals(15L, under.execute(8L).asLong());
@@ -100,7 +123,7 @@ class RuntimeTest {
         Object count = ((Map<?, ?>) diagnostics(value).get("thunkEvaluationsByLabel")).get(label);
         return count instanceof Number number ? number.longValue() : 0;
     }
-    @Test void recursiveCapturedCellsAndEscapedThunksKeepTheirOwnLexicalValues() {
+    @Test void recursiveCapturedCellsAndEscapedThunksKeepTheirOwnLexicalValues() throws Exception {
         try (var context = Main.executionContext(false)) {
             var mutual = Main.loadEntry(context, modules, "main:Fixtures.localMutualClosures"); assertEquals(20_040L, mutual.execute(10_000L).asLong());
             assertTrue(mutual.invokeMember("compile").asBoolean());
@@ -108,10 +131,11 @@ class RuntimeTest {
             var escaped = Main.loadEntry(context, modules, "main:Fixtures.nestedCaptureThunk");
             for (int i = 0; i < 20; i++) escaped.execute((long) i).asLong();
             assertTrue(escaped.invokeMember("compile").asBoolean());
-            long outer = labelCount(escaped, "outer"), middle = labelCount(escaped, "middle");
+            String outerLabel = thunkLabel("escapingFactory", "outer"), middleLabel = thunkLabel("escapingFactory", "middle");
+            long outer = labelCount(escaped, outerLabel), middle = labelCount(escaped, middleLabel);
             long[] inputs = {3_000_000_000L, -3_000_000_000L, 7, 0, 13, -5, 7};
             for (long input : inputs) assertEquals(input * input + 23L, escaped.execute(input).asLong());
-            assertEquals((long) inputs.length, labelCount(escaped, "outer") - outer); assertEquals((long) inputs.length, labelCount(escaped, "middle") - middle);
+            assertEquals((long) inputs.length, labelCount(escaped, outerLabel) - outer); assertEquals((long) inputs.length, labelCount(escaped, middleLabel) - middle);
             assertEquals(0L, count(escaped, "blackholes"));
         }
     }
