@@ -98,9 +98,9 @@ withRuntimeShim native dist roots compiler unit component action = do
     check (actual == expected) ("runtime shim input changed during acquisition: " ++ path)
   pure result
 
-validateRuntimeShimModules :: RuntimeShim -> [(String, BS.ByteString)] -> IO [(String, BS.ByteString)]
+validateRuntimeShimModules :: RuntimeShim -> [(String, FilePath)] -> IO [(String, FilePath)]
 validateRuntimeShimModules shim modules = do
-  values <- forM modules $ \(_, bytes) -> either fail pure (readModuleValue bytes)
+  values <- forM modules $ \(_, path) -> BS.readFile path >>= either fail pure . readModuleValue
   either fail pure (validateRuntimeShimInventory (runtimeShimUnit shim) values)
   pure modules
 
