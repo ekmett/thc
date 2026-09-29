@@ -14,7 +14,7 @@ public final class CorePolyglot {
         return !proof.isAggregate() && !proof.isVector() && proof.getPresent() &&
             (rep.equals(STATE) ? List.of() : List.of(rep)).equals(proof.getPrimReps()) &&
             proof.getKind() == switch (rep) { case STATE -> CoreKind.VOID; case "AddrRep" -> CoreKind.ADDRESS;
-                case "IntRep", "WordRep", "Int8Rep", "Int16Rep", "Int32Rep", "Int64Rep" -> CoreKind.LONG;
+                case "IntRep", "WordRep", "Int8Rep", "Int16Rep", "Int32Rep", "Int64Rep", "Word8Rep", "Word16Rep", "Word32Rep", "Word64Rep" -> CoreKind.LONG;
                 case "FloatRep" -> CoreKind.FLOAT; case "DoubleRep" -> CoreKind.DOUBLE;
                 default -> CoreKind.OBJECT; };
     }

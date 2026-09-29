@@ -5960,6 +5960,8 @@ public final class BytecodeProgram implements ExecutableProgram {
         boolean memcpy = override == CoreForeignOverride.MEMCPY && CoreMemoryCopyForeign.MEMCPY.validate(metadata, representations, flags, resultRepresentation);
         var vectorApi = VectorApiOp.validate(expr, defined);
         if (vectorApi != null) {
+            if (vectorApi.javaArray() && foreignExceptionBridge == null)
+                throw RuntimeFault.fault("Java vector array access requires a linked genuine THC.Exception runtime bundle");
             var operands = new ArrayList<Expression>();
             for (var arg : args) operands.add(compile(arg, scope, false));
             java.util.function.Consumer<Emission> operation = e -> {
@@ -6499,8 +6501,10 @@ public final class BytecodeProgram implements ExecutableProgram {
                     storeTupleResult(e, destination.getFirst(), () -> {
                         var b = e.builder;
                         switch (polyglot.getResult()) {
-                            case "Int8Rep" -> { b.beginToInt(); message.accept(e); b.endToInt(); }
+                            case "Int8Rep", "Int16Rep", "Int32Rep", "Word8Rep", "Word16Rep", "Word32Rep" -> { b.beginToInt(); message.accept(e); b.endToInt(); }
                             case "IntRep", "Int64Rep" -> { b.beginToLong(); message.accept(e); b.endToLong(); }
+                            case "FloatRep" -> { b.beginToFloat(); message.accept(e); b.endToFloat(); }
+                            case "DoubleRep" -> { b.beginToDouble(); message.accept(e); b.endToDouble(); }
                             default -> message.accept(e);
                         }
                     });

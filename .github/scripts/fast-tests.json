@@ -1420,6 +1420,10 @@
   "owners": {
     "bin/run.sh": {"junit": ["thc.LauncherDiagnosticsTest"], "python": []},
     "src/test/java/thc/runtime/ExplicitInteropLibraryTest.java": {"junit": ["thc.runtime.ExplicitInteropLibraryTest"], "python": []},
+    "src/test/java/thc/runtime/JavaArrayTest.java": {"junit": ["thc.runtime.JavaArrayTest"], "python": []},
+    "t/haskell-fixtures/JavaArrayFixtures.hs": {"junit": ["thc.runtime.JavaArrayTest"], "python": [".github/scripts/test_fast_fixtures.py"]},
+    "t/fixtures/compiler/JavaArrays.hs": {"junit": ["thc.runtime.JavaArrayTest"], "python": []},
+    "t/fixtures/compiler/JavaInteropSafe.hs": {"junit": ["thc.runtime.JavaArrayTest"], "python": []},
     "src/test/java/thc/runtime/ExplicitInteropProbeRoot.java": {"junit": ["thc.runtime.ExplicitInteropLibraryTest"], "python": []},
     "src/test/java/thc/runtime/SumEvidence.java": {"junit": ["thc.runtime.SumProtocolTest", "thc.runtime.SumResultTest"], "python": []},
     "src/test/java/thc/runtime/ScalarTestCalls.java": {

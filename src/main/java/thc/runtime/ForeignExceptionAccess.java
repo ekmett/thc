@@ -68,6 +68,15 @@ public final class ForeignExceptionAccess extends Node {
         throw new GuestException(payload, this, true);
     }
 
+    /** Preserve ordinary Java failures from direct host-array operations. */
+    @TruffleBoundary public RuntimeException raiseHost(RuntimeException error) {
+        if (!ForeignExceptionPolicy.host(error)) throw error;
+        Object value = Language.currentState(this).getEnv().asGuestValue(error);
+        try { throw interop.throwException(value); }
+        catch (AbstractTruffleException foreign) { throw raise(foreign); }
+        catch (InteropException unavailable) { throw error; }
+    }
+
     /** Only a compatible public exit asks the real Haskell dictionary whether a
      * lazy SomeException contains our type. Projection failure remains guest failure. */
     @TruffleBoundary public RuntimeException escaping(GuestException failure) {

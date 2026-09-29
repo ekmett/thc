@@ -109,6 +109,8 @@ public final class CoreForeignExceptionBridge {
             return scalar.executesForeign();
         }
         if (CoreJavaScript.validate((List<Object>) expr, defined) != null) return true;
+        var vector = VectorApiOp.validate(expr, defined);
+        if (vector != null) return vector.javaArray();
         for (var operation : PolyglotOp.values()) {
             if (operation.getSymbol().equals(symbol)) {
                 CorePolyglot.validate((List<Object>) expr, defined);

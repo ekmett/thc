@@ -34,8 +34,10 @@ final class InteropExpression extends Expr {
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
         Object answer = access.execute(operation, arguments(frame));
         switch (operation.getResult()) {
-            case "Int8Rep" -> FrameAccess.writeInt(frame, slots[offset], (Integer) answer);
+            case "Int8Rep", "Int16Rep", "Int32Rep", "Word8Rep", "Word16Rep", "Word32Rep" -> FrameAccess.writeInt(frame, slots[offset], (Integer) answer);
             case "IntRep", "Int64Rep" -> FrameAccess.writeLong(frame, slots[offset], (Long) answer);
+            case "FloatRep" -> FrameAccess.writeFloat(frame, slots[offset], (Float) answer);
+            case "DoubleRep" -> FrameAccess.writeDouble(frame, slots[offset], (Double) answer);
             default -> FrameAccess.write(frame, slots[offset], answer);
         }
         AstForeignCompleted.poll(this);

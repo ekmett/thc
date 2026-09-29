@@ -772,6 +772,7 @@ library interop
   exposed-modules:
     THC.Prim
     THC.Interop
+    THC.Interop.Java
     THC.Polyglot
     THC.Interop.Buffer
     THC.Interop.Array
@@ -1288,6 +1289,7 @@ executable thc-fixtures
     FusedFloatingFixtures
     SimdCallFixtures
     VectorApiFixtures
+    JavaArrayFixtures
     Simd128AddressFixtures
     Simd128ArrayFixtures
     SimdWideArrayFixtures

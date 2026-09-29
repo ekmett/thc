@@ -4,6 +4,7 @@
     "thc.StaticExportStartupTest",
     "thc.HostInteropAbiTest",
     "thc.runtime.ExplicitInteropLibraryTest",
+    "thc.runtime.JavaArrayTest",
     "thc.runtime.SemanticForeignOverrideTest",
     "thc.runtime.PackageNativeForeignTest",
     "thc.runtime.PackageScalarForeignTest",

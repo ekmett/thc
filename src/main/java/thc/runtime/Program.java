@@ -1696,6 +1696,8 @@ public final class Program implements ExecutableProgram {
 
         var vectorApi = VectorApiOp.validate(expr, defined);
         if (vectorApi != null) {
+            if (vectorApi.javaArray() && foreignExceptionBridge == null)
+                throw fault("Java vector array access requires a linked genuine THC.Exception runtime bundle");
             Expr[] operands = new Expr[args.size()];
             for (int index = 0; index < operands.length; index++) operands[index] = compile(args.get(index), scope, false);
             return new VectorApiExpression(vectorApi, operands).proven(evaluated(tupleProof, true));
