@@ -133,6 +133,106 @@ class StaticExportStartupTest {
                 "symbols", map("path", symbols.toString(), "sha256", hash(Files.readAllBytes(symbols))), "modules", list(record))))));
     }
     @AfterEach void releaseMappings() { CoreFileMappings.shared.evictIdleBelow(directory); }
+
+    /** Real C constructors, with the existing exact legacy CAPI admission shape. */
+    private Map<String,Object> capiModule(String initializer) throws Exception {
+        String capiUnit = "base-test-unit", capiModule = "System.CPUTime.Posix.ClockGetTime";
+        String source = """
+            #include <stdio.h>
+            extern int declared_identity(int);
+            extern void missing_capi_initializer(void);
+            static long initial;
+            __attribute__((constructor)) static void initialize(void) { %s }
+            long fixture_clock_id(void) { return initial++; }
+            int fixture_clock_read(unsigned long n, void *p) { return 0; }
+            int fixture_clock_res(unsigned long n, void *p) { return 0; }
+            int thc_capi_errno(void) { return 0; }
+            """.formatted(initializer);
+        var c = directory.resolve("capi.c"); var bc = directory.resolve("capi.bc");
+        Files.writeString(c, source);
+        var process = new ProcessBuilder(System.getenv().getOrDefault("THC_CLANG", "clang"),
+            "--target=x86_64-unknown-linux-gnu", "-O1", "-emit-llvm", "-c", c.toString(), "-o", bc.toString()).redirectErrorStream(true).start();
+        var output = new String(process.getInputStream().readAllBytes(), UTF_8); assertEquals(0, process.waitFor(), output);
+        var bytes = Files.readAllBytes(bc);
+        var symbols = List.of("fixture_clock_id", "fixture_clock_read", "fixture_clock_res");
+        var link = map("schema", 2L, "format", "llvm-bitcode", "unit", capiUnit, "module", capiModule,
+            "target", "x86_64-unknown-linux-gnu", "symbols", symbols, "abi", list(
+                map("symbol", symbols.get(0), "kind", "clock-id"), map("symbol", symbols.get(1), "kind", "clock-buffer"),
+                map("symbol", symbols.get(2), "kind", "clock-buffer")),
+            "sourceSha256", hash(source.getBytes(UTF_8)), "bitcodeSha256", hash(bytes), "bitcodeHex", HexFormat.of().formatHex(bytes));
+        return map("schema", 2L, "ghc", "9.14.1", "unit", capiUnit, "module", capiModule, "bindings", List.of(), "constructors", List.of(),
+            "foreign", map("schema", 1L, "execution", "not-linked", "files", List.of(), "stubs",
+                map("header", "", "source", source, "initializers", List.of(), "finalizers", List.of())), "foreignLink", link);
+    }
+    private String capiRequest(Map<String,Object> capi, String backend, boolean prepared) throws Exception {
+        // Export declarations remain checked; the only native component is CAPI,
+        // so a package initializer cannot accidentally supply its callback stage.
+        var exports = without(module(), "packageNativeLink", "staticForeignImports");
+        return Json.stringify(map("modules", list(exports, capi), "entry", id, "backend", backend,
+            "strictLink", true, "detachedBindings", true, "prepareCode", prepared, "asyncExceptions", false));
+    }
+    @ParameterizedTest @CsvSource({"ast,false", "bytecode,false", "ast,true"}) @Timeout(30)
+    void capiConstructorCallsPublishedExportBeforePackageInitialization(String backend, boolean prepared) throws Exception {
+        var capi = capiModule("initial = declared_identity(13);");
+        String request = capiRequest(capi, backend, prepared);
+        thc.runtime.SulongCbits previous = null;
+        for (String hosting : List.of("platform", "loom")) try (var context = Context.newBuilder("thc").allowNativeAccess(true).allowCreateThread(true)
+                .allowExperimentalOptions(true).option("thc.ThreadHosting", hosting).build()) {
+            context.eval("thc", request);
+            context.enter();
+            try {
+                var owner = Language.currentState(); var link = Objects.requireNonNull(CoreForeignArtifacts.linked(capi, false));
+                if (previous != null) {
+                    var other = previous;
+                    assertThrows(thc.runtime.RuntimeFault.class, () -> other.capiZero(link.unit(), "fixture_clock_id"));
+                }
+                assertEquals(13L, owner.cbits().capiZero(link.unit(), "fixture_clock_id"));
+                owner.cbits().link(link);
+                assertEquals(14L, owner.cbits().capiZero(link.unit(), "fixture_clock_id"), "native state survives repeated linking");
+                assertEquals(1, owner.getForeignRoots().size());
+                previous = owner.cbits();
+            } finally { context.leave(); }
+        }
+    }
+    @ParameterizedTest @CsvSource({"ast,false", "bytecode,false", "ast,true"}) @Timeout(30)
+    void failedCapiConstructorRetainsOriginalFailureAndReleasesExports(String backend, boolean prepared) throws Exception {
+        var capi = capiModule("initial = declared_identity(13); missing_capi_initializer();");
+        String request = capiRequest(capi, backend, prepared);
+        try (var context = Context.newBuilder("thc").allowNativeAccess(true).build()) {
+            var failure = assertThrows(RuntimeException.class, () -> context.eval("thc", request));
+            assertTrue(failure.getMessage().contains("missing_capi_initializer"), failure.toString());
+            context.enter();
+            try {
+                var owner = Language.currentState(); var link = Objects.requireNonNull(CoreForeignArtifacts.linked(capi, false));
+                var original = assertThrows(RuntimeException.class, () -> owner.cbits().link(link));
+                assertTrue(original.getMessage().contains("missing_capi_initializer"), original.toString());
+                assertSame(original, assertThrows(RuntimeException.class, () -> owner.cbits().link(link)));
+                assertSame(original, assertThrows(RuntimeException.class, () -> owner.cbits().capiZero(link.unit(), "fixture_clock_id")));
+                assertEquals(0, owner.getForeignRoots().size());
+                assertFalse(com.oracle.truffle.api.interop.InteropLibrary.getUncached().isMemberReadable(
+                    owner.getNativeCallbacks().namespace(), "declared_identity"));
+            } finally { context.leave(); }
+        }
+    }
+    @ParameterizedTest @ValueSource(booleans = {false, true})
+    void conflictingCapiOwnershipRejectsBeforeConstructorEffects(boolean sameModule) throws Exception {
+        var original = Objects.requireNonNull(CoreForeignArtifacts.linked(capiModule("initial = 1;"), false));
+        var marker = directory.resolve("conflicting-constructor.txt");
+        String path = marker.toString().replace("\\", "\\\\").replace("\"", "\\\"");
+        var different = Objects.requireNonNull(CoreForeignArtifacts.linked(capiModule(
+            "FILE *file = fopen(\"" + path + "\", \"w\"); if (file) { fputs(\"executed\", file); fclose(file); }"), false));
+        var conflict = new ForeignBitcode(different.unit(), sameModule ? different.module() : "Other",
+            different.target(), different.symbols(), different.abi(), different.bytes());
+        try (var context = Context.newBuilder("thc").allowNativeAccess(true).allowIO(org.graalvm.polyglot.io.IOAccess.ALL).build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var cbits = Language.currentState().cbits(); cbits.link(original);
+                assertThrows(IllegalArgumentException.class, () -> cbits.link(conflict));
+                assertFalse(Files.exists(marker), "Conflicting library must never run its constructor");
+                assertEquals(1L, cbits.capiZero(original.unit(), "fixture_clock_id"));
+            } finally { context.leave(); }
+        }
+    }
     @ParameterizedTest @ValueSource(booleans = {false, true}) @Timeout(30)
     @SuppressWarnings("unchecked")
     void preparedLoadRegistersBeforeOriginalConstructorCallsBack(boolean earlyFinalizer) throws Exception {

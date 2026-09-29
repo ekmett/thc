@@ -166,7 +166,7 @@ public final class PackageScalarLibraries {
         for (var component : initializing.get()) if (component.unit().equals(unit)) return true;
         return false;
     }
-    private void registerCallbacks(Language.State owner) {
+    void registerCallbacks(Language.State owner) {
         synchronized (this) { if (callbacksRegistered) return; }
         env.initializeLanguage(env.getInternalLanguages().get("llvm"));
         var nativeContext = LLVMContext.get(null).getContextExtensionOrNull(NativeContextExtension.class);
