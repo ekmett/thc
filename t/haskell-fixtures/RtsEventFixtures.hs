@@ -39,7 +39,7 @@ import System.Exit (die, exitSuccess)
 import System.FilePath ((</>))
 import Text.Read (readMaybe)
 import THC.Interface (loadInterfaceCore, interfaceBindings)
-import THC.Plugin (serializeOptimizedCore, serializePostTidyCore)
+import THC.Plugin (serializeOptimizedCoreCBD, serializePostTidyCoreCBD)
 import Unsafe.Coerce (unsafeCoerce)
 
 calls :: [(String,String,String)]
@@ -175,10 +175,10 @@ prepareRtsEvent root = do
     _ <- liftIO $ forM ([(entry,[target],consumer) | (entry,target,consumer) <- calls] ++ descriptorCalls) $ \(entry,selected,consumer) -> do
       let (v,body) = specializeMany "original" consumer selected
           adapted = optimized { mg_binds = [NonRec v body], mg_exports = filter ((== varName v) . availName) (mg_exports optimized) }
-      serializeOptimizedCore flags ["unit-qualified"] adapted >>= writeFile (root </> directory </> entry ++ "-pre.json")
+      serializeOptimizedCoreCBD flags ["unit-qualified"] adapted >>= BS.writeFile (root </> directory </> entry ++ "-pre.cbd")
       (tidied,_) <- hscTidy current adapted
-      serializePostTidyCore flags ["unit-qualified"] (cg_module tidied) (cg_tycons tidied)
-        (cg_binds tidied) emptyIfaceForeign >>= writeFile (root </> directory </> entry ++ "-post.json")
+      serializePostTidyCoreCBD flags ["unit-qualified"] (cg_module tidied) (cg_tycons tidied)
+        (cg_binds tidied) emptyIfaceForeign >>= BS.writeFile (root </> directory </> entry ++ "-post.cbd")
     observations <- forM calls $ \call@(entry,_,_) -> liftIO $ do
       let (_,body) = specialize "native" call
       (value,_,_) <- hscCompileCoreExpr current noSrcSpan (mkLets (mg_binds optimized) body)
@@ -223,13 +223,13 @@ prepareRtsEvent root = do
       descriptorEntries = [(entry,"original" ++ consumer) | (entry,_,consumer) <- descriptorCalls]
       allEntries = entries ++ descriptorEntries
   _ <- forM allEntries $ \(entry,binder) -> forM ["pre","post"] $ \stage ->
-    execute (entry ++ "-" ++ stage) [] "python3" ["bin/audit-core.py","--entry",binder,
-      "--output",directory </> entry ++ "-" ++ stage ++ ".audit.json",directory </> entry ++ "-" ++ stage ++ ".json"]
+    execute (entry ++ "-" ++ stage) [] "python3" ["bin/audit-core.py","--entry","main:RtsEventAudit." ++ binder,
+      "--output",directory </> entry ++ "-" ++ stage ++ ".audit.json",directory </> entry ++ "-" ++ stage ++ ".cbd"]
   inputHashes <- hashes root [source,"t/haskell-fixtures/RtsEventFixtures.hs","src/compiler/THC/Plugin.hs",
     "src/compiler/THC/Interface.hs","bin/core_original_foreign.py","bin/audit-core.py","bin/core-capabilities.json"]
   artifactHashes <- hashes root ([directory </> "oracle.json"] ++
     [directory </> entry ++ "-" ++ stage ++ extension | (entry,_) <- allEntries, stage <- ["pre","post"],
-      extension <- [".json",".audit.json"]])
+      extension <- [".cbd",".audit.json"]])
   interfaceHashes <- hashes root interfaces
   writeJson (root </> directory </> "manifest.json") $ object
     ["schema" .= (1 :: Int),"ghc" .= ("9.14.1" :: String),"entries" .= entries,"descriptorEntries" .= descriptorEntries,

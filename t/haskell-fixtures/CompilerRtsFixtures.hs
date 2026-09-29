@@ -37,7 +37,7 @@ import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>))
 import THC.Interface (loadInterfaceCore, interfaceBindings)
-import THC.Plugin (serializeOptimizedCore, serializePostTidyCore)
+import THC.Plugin (serializeOptimizedCoreCBD, serializePostTidyCoreCBD)
 import Unsafe.Coerce (unsafeCoerce)
 import Text.Read (readMaybe)
 
@@ -128,10 +128,10 @@ prepareCompilerRts root = do
         adapted = optimized { mg_binds = [NonRec v body | (v, body) <- guests],
                               mg_exports = filter (\a -> availName a `elem` map (varName . fst) guests) (mg_exports optimized) }
     liftIO $ do
-      serializeOptimizedCore flags ["unit-qualified"] adapted >>= writeFile (root </> directory </> "pre.json")
+      serializeOptimizedCoreCBD flags ["unit-qualified"] adapted >>= BS.writeFile (root </> directory </> "pre.cbd")
       (tidied, _) <- hscTidy current adapted
-      serializePostTidyCore flags ["unit-qualified"] (cg_module tidied) (cg_tycons tidied)
-        (cg_binds tidied) emptyIfaceForeign >>= writeFile (root </> directory </> "post.json")
+      serializePostTidyCoreCBD flags ["unit-qualified"] (cg_module tidied) (cg_tycons tidied)
+        (cg_binds tidied) emptyIfaceForeign >>= BS.writeFile (root </> directory </> "post.cbd")
     let native name target = liftIO $ do
           let (_, body) = specialize name target
           (value, _, _) <- hscCompileCoreExpr current noSrcSpan (mkLets (mg_binds optimized) body)
@@ -163,11 +163,11 @@ prepareCompilerRts root = do
     Nothing -> die "Invalid native unique observation"
   writeFile (root </> directory </> "oracle.tsv") (unlines (rows ++ uniqueRows))
   _ <- forM ["pre", "post"] $ \stage -> forM entries $ \entry ->
-    execute (stage ++ "-audit-" ++ entry) [] "python3" ["bin/audit-core.py", "--entry", entry,
-      "--output", directory </> stage ++ "-" ++ entry ++ ".audit.json", directory </> stage ++ ".json"]
+    execute (stage ++ "-audit-" ++ entry) [] "python3" ["bin/audit-core.py", "--entry", "main:CompilerRtsAudit." ++ entry,
+      "--output", directory </> stage ++ "-" ++ entry ++ ".audit.json", directory </> stage ++ ".cbd"]
   inputHashes <- hashes root [source, "t/haskell-fixtures/CompilerRtsFixtures.hs", "src/compiler/THC/Plugin.hs", "src/compiler/THC/Interface.hs",
     "bin/core_original_foreign.py", "bin/audit-core.py", "bin/core-capabilities.json"]
-  artifactHashes <- hashes root [directory </> file | file <- ["pre.json", "post.json", "oracle.tsv", "UniqueOracle.hs", "unique-oracle"]]
+  artifactHashes <- hashes root [directory </> file | file <- ["pre.cbd", "post.cbd", "oracle.tsv", "UniqueOracle.hs", "unique-oracle"]]
   interfaceHashes <- hashes root interfaces
   writeJson (root </> directory </> "manifest.json") $ object
     ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String), "entries" .= entries,

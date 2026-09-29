@@ -231,7 +231,7 @@ class FixturePreparationTest(unittest.TestCase):
             with self.assertRaises(cache.CacheMiss): cache.unix_wait_artifact_hashes(dict(receipt, artifactHashes=missing))
             artifact = self.root / item; artifact.write_text('changed')
             with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
-            artifact.unlink(); artifact.symlink_to(self.root / 'build/unix-wait-status/pre.json')
+            artifact.unlink(); artifact.symlink_to(self.root / 'build/unix-wait-status/pre.cbd')
             with self.assertRaises(cache.CacheMiss): fast_fixtures._output_hashes(self.root, group)
             artifact.unlink(); artifact.write_text('fixture\n')
 
@@ -1290,7 +1290,7 @@ class FixturePreparationTest(unittest.TestCase):
             with mock.patch.object(fast_fixtures, 'FULL_REQUIRED', set(expected)), \
                     mock.patch.object(fast_fixtures, 'FULL_OUTPUT_ROOTS', frozenset(group['outputs'])):
                 self.assertEqual(set(expected), set(fast_fixtures._full_output_hashes(self.root)))
-            path = self.root / 'build/original-path-stat/pre.json'
+            path = self.root / 'build/original-path-stat/pre.cbd'
             path.write_text('mutated')
             with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
             path.unlink(); path.symlink_to(scratch / 'link')
@@ -1336,7 +1336,7 @@ class FixturePreparationTest(unittest.TestCase):
             with mock.patch.object(fast_fixtures, 'FULL_REQUIRED', set(expected)), \
                     mock.patch.object(fast_fixtures, 'FULL_OUTPUT_ROOTS', frozenset(group['outputs'])):
                 self.assertEqual(set(expected), set(fast_fixtures._full_output_hashes(self.root)))
-            path = self.root / 'build/original-path-mode/pre.json'
+            path = self.root / 'build/original-path-mode/pre.cbd'
             path.write_text('mutated')
             with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
             path.unlink(); path.symlink_to(scratch / 'link')
@@ -1382,7 +1382,7 @@ class FixturePreparationTest(unittest.TestCase):
             with mock.patch.object(fast_fixtures, 'FULL_REQUIRED', set(expected)), \
                     mock.patch.object(fast_fixtures, 'FULL_OUTPUT_ROOTS', frozenset(group['outputs'])):
                 self.assertEqual(set(expected), set(fast_fixtures._full_output_hashes(self.root)))
-            path = self.root / 'build/original-path-link/pre.json'
+            path = self.root / 'build/original-path-link/pre.cbd'
             path.write_text('mutated')
             with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
             path.unlink(); path.symlink_to(scratch / 'link')
@@ -1428,7 +1428,7 @@ class FixturePreparationTest(unittest.TestCase):
             with mock.patch.object(fast_fixtures, 'FULL_REQUIRED', set(expected)), \
                     mock.patch.object(fast_fixtures, 'FULL_OUTPUT_ROOTS', frozenset(group['outputs'])):
                 self.assertEqual(set(expected), set(fast_fixtures._full_output_hashes(self.root)))
-            path = self.root / 'build/original-directory-paths/pre.json'
+            path = self.root / 'build/original-directory-paths/pre.cbd'
             path.write_text('mutated')
             with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
             path.unlink(); path.symlink_to(scratch / 'link')
@@ -1474,7 +1474,7 @@ class FixturePreparationTest(unittest.TestCase):
             with mock.patch.object(fast_fixtures, 'FULL_REQUIRED', set(expected)), \
                     mock.patch.object(fast_fixtures, 'FULL_OUTPUT_ROOTS', frozenset(group['outputs'])):
                 self.assertEqual(set(expected), set(fast_fixtures._full_output_hashes(self.root)))
-            path = self.root / 'build/original-path-access/pre.json'
+            path = self.root / 'build/original-path-access/pre.cbd'
             path.write_text('mutated')
             with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
             path.unlink(); path.symlink_to(scratch / 'link')
@@ -1523,7 +1523,7 @@ class FixturePreparationTest(unittest.TestCase):
             with mock.patch.object(fast_fixtures, 'FULL_REQUIRED', set(expected)), \
                     mock.patch.object(fast_fixtures, 'FULL_OUTPUT_ROOTS', frozenset(group['outputs'])):
                 self.assertEqual(set(expected), set(fast_fixtures._full_output_hashes(self.root)))
-            path = self.root / 'build/original-unlinkat/pre.json'
+            path = self.root / 'build/original-unlinkat/pre.cbd'
             path.write_text('mutated')
             with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
             path.unlink(); path.symlink_to(scratch / 'link')
@@ -1572,7 +1572,7 @@ class FixturePreparationTest(unittest.TestCase):
             with mock.patch.object(fast_fixtures, 'FULL_REQUIRED', set(expected)), \
                     mock.patch.object(fast_fixtures, 'FULL_OUTPUT_ROOTS', frozenset(group['outputs'])):
                 self.assertEqual(set(expected), set(fast_fixtures._full_output_hashes(self.root)))
-            path = self.root / 'build/original-fstatat/pre.json'
+            path = self.root / 'build/original-fstatat/pre.cbd'
             path.write_text('mutated')
             with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
             path.unlink(); path.symlink_to(scratch / 'link')
@@ -1622,7 +1622,7 @@ class FixturePreparationTest(unittest.TestCase):
             with mock.patch.object(fast_fixtures, 'FULL_REQUIRED', set(expected)), \
                     mock.patch.object(fast_fixtures, 'FULL_OUTPUT_ROOTS', frozenset(group['outputs'])):
                 self.assertEqual(set(expected), set(fast_fixtures._full_output_hashes(self.root)))
-            path = self.root / 'build/original-current-directory/pre.json'
+            path = self.root / 'build/original-current-directory/pre.cbd'
             path.write_text('mutated')
             with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
             path.unlink(); path.symlink_to(scratch / 'link')
@@ -1672,7 +1672,7 @@ class FixturePreparationTest(unittest.TestCase):
             with mock.patch.object(fast_fixtures, 'FULL_REQUIRED', set(expected)), \
                     mock.patch.object(fast_fixtures, 'FULL_OUTPUT_ROOTS', frozenset(group['outputs'])):
                 self.assertEqual(set(expected), set(fast_fixtures._full_output_hashes(self.root)))
-            path = self.root / 'build/original-directory-streams/pre.json'
+            path = self.root / 'build/original-directory-streams/pre.cbd'
             path.write_text('mutated')
             with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
             path.unlink(); path.symlink_to(scratch / 'link')

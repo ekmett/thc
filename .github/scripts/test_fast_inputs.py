@@ -36,7 +36,7 @@ class FastInputTests(unittest.TestCase):
         for changes in (dict(schema=True), dict(ghc='9.14.0'), dict(unixUnit='unix-2.8.8.0-ABC'),
                         dict(entries=['pathStat', 'pathLstat']), dict(installedArtifactsHashed=True),
                         dict(artifactHashes={}), dict(artifactHashes=dict(artifacts, unknown='a' * 64)),
-                        dict(artifactHashes={**artifacts, 'build/original-path-stat/pre.json': 'bad'})):
+                        dict(artifactHashes={**artifacts, 'build/original-path-stat/pre.cbd': 'bad'})):
             with self.assertRaises(cache.CacheMiss):
                 cache.original_path_stat_artifact_hashes(dict(good, **changes))
         for path in artifacts:
@@ -61,7 +61,7 @@ class FastInputTests(unittest.TestCase):
         for changes in (dict(schema=True), dict(ghc='9.14.0'), dict(unixUnit='unix-2.8.8.0-ABC'),
                         dict(entries=['pathMkdir']), dict(installedArtifactsHashed=True),
                         dict(artifactHashes={}), dict(artifactHashes=dict(artifacts, unknown='a' * 64)),
-                        dict(artifactHashes={**artifacts, 'build/original-path-mode/pre.json': 'bad'})):
+                        dict(artifactHashes={**artifacts, 'build/original-path-mode/pre.cbd': 'bad'})):
             with self.assertRaises(cache.CacheMiss):
                 cache.original_path_mode_artifact_hashes(dict(good, **changes))
         for path in artifacts:
@@ -86,7 +86,7 @@ class FastInputTests(unittest.TestCase):
         for changes in (dict(schema=True), dict(ghc='9.14.0'), dict(unixUnit='unix-2.8.8.0-ABC'),
                         dict(entries=['pathSymlink']), dict(installedArtifactsHashed=True),
                         dict(artifactHashes={}), dict(artifactHashes=dict(artifacts, unknown='a' * 64)),
-                        dict(artifactHashes={**artifacts, 'build/original-path-link/pre.json': 'bad'})):
+                        dict(artifactHashes={**artifacts, 'build/original-path-link/pre.cbd': 'bad'})):
             with self.assertRaises(cache.CacheMiss):
                 cache.original_path_link_artifact_hashes(dict(good, **changes))
         for path in artifacts:
@@ -111,7 +111,7 @@ class FastInputTests(unittest.TestCase):
         for changes in (dict(schema=True), dict(ghc='9.14.0'), dict(unixUnit='unix-2.8.8.0-ABC'),
                         dict(entries=['pathRemoveDirectory']), dict(installedArtifactsHashed=True), dict(readlinkUnit="main"),
                         dict(artifactHashes={}), dict(artifactHashes=dict(artifacts, unknown='a' * 64)),
-                        dict(artifactHashes={**artifacts, 'build/original-directory-paths/pre.json': 'bad'})):
+                        dict(artifactHashes={**artifacts, 'build/original-directory-paths/pre.cbd': 'bad'})):
             with self.assertRaises(cache.CacheMiss):
                 cache.original_directory_paths_artifact_hashes(dict(good, **changes))
         for path in artifacts:
@@ -136,7 +136,7 @@ class FastInputTests(unittest.TestCase):
         for changes in (dict(schema=True), dict(ghc='9.14.0'), dict(unixUnit='unix-2.8.8.0-ABC'),
                         dict(entries=[]), dict(installedArtifactsHashed=True),
                         dict(artifactHashes={}), dict(artifactHashes=dict(artifacts, unknown='a' * 64)),
-                        dict(artifactHashes={**artifacts, 'build/original-path-access/pre.json': 'bad'})):
+                        dict(artifactHashes={**artifacts, 'build/original-path-access/pre.cbd': 'bad'})):
             with self.assertRaises(cache.CacheMiss):
                 cache.original_path_access_artifact_hashes(dict(good, **changes))
         for path in artifacts:
@@ -169,7 +169,7 @@ class FastInputTests(unittest.TestCase):
         for changes in (dict(schema=True), dict(ghc='9.14.0'), dict(directoryUnit='directory-1.3.10.0-ABC'),
                         dict(entries=[]), dict(installedArtifactsHashed=True),
                         dict(artifactHashes={}), dict(artifactHashes=dict(artifacts, unknown='a' * 64)),
-                        dict(artifactHashes={**artifacts, 'build/original-unlinkat/pre.json': 'bad'})):
+                        dict(artifactHashes={**artifacts, 'build/original-unlinkat/pre.cbd': 'bad'})):
             with self.assertRaises(cache.CacheMiss):
                 cache.original_unlinkat_artifact_hashes(dict(good, **changes))
         for path in artifacts:
@@ -202,7 +202,7 @@ class FastInputTests(unittest.TestCase):
         for changes in (dict(schema=True), dict(ghc='9.14.0'), dict(directoryUnit='directory-1.3.10.0-ABC'),
                         dict(entries=[]), dict(installedArtifactsHashed=True),
                         dict(artifactHashes={}), dict(artifactHashes=dict(artifacts, unknown='a' * 64)),
-                        dict(artifactHashes={**artifacts, 'build/original-fstatat/pre.json': 'bad'})):
+                        dict(artifactHashes={**artifacts, 'build/original-fstatat/pre.cbd': 'bad'})):
             with self.assertRaises(cache.CacheMiss):
                 cache.original_fstatat_artifact_hashes(dict(good, **changes))
         for path in artifacts:
@@ -240,7 +240,7 @@ class FastInputTests(unittest.TestCase):
                         dict(nativeIsolatedChild=False), dict(coordinatorCwdUnchanged=False),
                         dict(privateRebuiltUnix=False), dict(unixSourceReceipt="wrong"), dict(unixArchiveSha256="a" * 64),
                         dict(artifactHashes={}), dict(artifactHashes=dict(artifacts, unknown='a' * 64)),
-                        dict(artifactHashes={**artifacts, 'build/original-current-directory/pre.json': 'bad'})):
+                        dict(artifactHashes={**artifacts, 'build/original-current-directory/pre.cbd': 'bad'})):
             with self.assertRaises(cache.CacheMiss):
                 cache.original_current_directory_artifact_hashes(dict(good, **changes))
         for path in artifacts:
@@ -277,7 +277,7 @@ class FastInputTests(unittest.TestCase):
                         dict(entries=[]), dict(installedArtifactsHashed=True),
                         dict(privateRebuiltUnix=False), dict(unixSourceReceipt="wrong"), dict(unixArchiveSha256="a" * 64),
                         dict(artifactHashes={}), dict(artifactHashes=dict(artifacts, unknown='a' * 64)),
-                        dict(artifactHashes={**artifacts, 'build/original-directory-streams/pre.json': 'bad'})):
+                        dict(artifactHashes={**artifacts, 'build/original-directory-streams/pre.cbd': 'bad'})):
             with self.assertRaises(cache.CacheMiss):
                 cache.original_directory_streams_artifact_hashes(dict(good, **changes))
         for path in artifacts:

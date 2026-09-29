@@ -27,7 +27,7 @@ FULL_STAMP = STAMP_DIR / "full.json"
 # Includes raw vector/string Core exports and their native scalar oracles.
 FULL_PREPARATION_PLAN = "b2c7ffce07f5c6589fe5329ce1e06f1ada7cab816cf1db11c597ed3f858b268a"
 PROCESS_CORE_OUTPUTS = frozenset("build/process-lifecycle/core/" + name for name in (
-    "manifest.json", "source.json", "pre.json", "post.json", "pre.audit.json", "post.audit.json",
+    "manifest.json", "source.json", "pre.cbd", "post.cbd", "pre.audit.json", "post.audit.json",
     *[f"logs/{command}.{suffix}" for command in
       ("version", "libdir", "source-extract", "source-build", "unit", "imports", "pre-audit", "post-audit")
       for suffix in ("stdout", "stderr", "command.json")],

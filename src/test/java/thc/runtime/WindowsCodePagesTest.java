@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Edward Kmett
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
+import thc.CoreCbdFixtures;
 
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
@@ -33,12 +34,14 @@ import static org.junit.jupiter.api.Assertions.*;
 @EnabledOnOs(OS.WINDOWS)
 @SuppressWarnings("unchecked")
 class WindowsCodePagesTest {
+    private Map<String,Object> cbd(String path) throws Exception { return CoreCbdFixtures.read(new File(root,path).toPath()); }
+    private String entryId(String name) { return "main:WindowsCodePageAudit." + name; }
     private final File root = new File(System.getProperty("thc.projectRoot"));
     private Map<String, Object> json(String path) throws Exception {
         return (Map<String, Object>) Json.INSTANCE.parse(Files.readString(root.toPath().resolve(path)));
     }
     private Map<String, Object> receipt() throws Exception { return json("build/windows-codepages/manifest.json"); }
-    private Map<String, Object> source(String stage) throws Exception { return json(receipt().get("logs") + "/" + stage + ".json"); }
+    private Map<String, Object> source(String stage) throws Exception { return cbd(receipt().get("logs") + "/" + stage + ".cbd"); }
     private Map<String, Object> source() throws Exception { return source("post"); }
     private Context context(boolean nativeAccess) {
         return Main.withContextProfile(Context.newBuilder("thc").allowNativeAccess(nativeAccess)
@@ -86,7 +89,7 @@ class WindowsCodePagesTest {
         operations.put("localFree", OriginalStdioOp.LOCAL_FREE);
     }
     private List<Object> original(String name) throws Exception {
-        var calls = OriginalStdioChecks.foreignCalls(CoreModules.INSTANCE.reachable(source(), name, false));
+        var calls = OriginalStdioChecks.foreignCalls(CoreModules.INSTANCE.reachable(source(),entryId(name), false));
         assertEquals(1, calls.size());
         return calls.getFirst();
     }
@@ -107,7 +110,7 @@ class WindowsCodePagesTest {
         assertEquals("902339d332fb4ce2b3c87dcac1ee6495d41ad886", ((Map<?, ?>) proof.get("upstream")).get("revision"));
         OriginalStdioChecks.hashes(root, proof.get("inputHashes"), Set.of("t/fixtures/compiler/WindowsCodePageAudit.hs",
             "t/haskell-fixtures/WindowsCodePageFixtures.hs", "bin/core_original_foreign.py"), null);
-        OriginalStdioChecks.hashes(root, proof.get("artifactHashes"), Set.of(logs + "/pre.json", logs + "/post.json", logs + "/oracle.json"), logs + "/");
+        OriginalStdioChecks.hashes(root, proof.get("artifactHashes"), Set.of(logs + "/pre.cbd", logs + "/post.cbd", logs + "/oracle.json"), logs + "/");
         var upstream = "nih/pinned/ghc-9.14.1/libraries/ghc-internal/";
         var sourceHashes = new LinkedHashMap<String, String>();
         for (var entry : ((Map<String, String>) proof.get("sourceHashes")).entrySet()) {
@@ -138,7 +141,7 @@ class WindowsCodePagesTest {
                     module.put("instrument", true);
                     var executable = program(language, backend, module);
                     var targets = new LinkedHashMap<String, RootCallTarget>();
-                    for (var entry : operations.keySet()) targets.put(entry, executable.entryTarget(entry));
+                    for (var entry : operations.keySet()) targets.put(entry, executable.entryTarget(entryId(entry)));
                     class Exercise {
                         boolean compiled;
                         Object invoke(String name, Object... args) throws Exception {

@@ -71,14 +71,14 @@ narrow-literal-proofs native-addresses native-malloc libdw-unavailable original-
 show-int show-word-list signed-narrow-primops simd-capability-smoke simd-calls simd-floatx4-fma simd-wide-floating-fma synchronous-exceptions tuple-arithmetic word-floating""".split()
 BYTESTRING_SORT_ENTRIES = ("sortBytes",)
 BYTESTRING_SORT_OUTPUTS = frozenset("build/bytestring-sort/" + name for name in (
-    "manifest.json", "pre.json", "post.json", "oracle.json",
+    "manifest.json", "pre.cbd", "post.cbd", "oracle.json",
     *(f"{stage}-{entry}.audit.json" for stage in ("pre", "post") for entry in BYTESTRING_SORT_ENTRIES),
     *(f"logs/{command}.{suffix}" for command in ("version", "libdir", "imports", "unit",
       *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in BYTESTRING_SORT_ENTRIES))
       for suffix in ("stdout", "stderr", "command.json"))))
 BYTESTRING_DECIMAL_ENTRIES = ("decimal", "padded18")
 BYTESTRING_DECIMAL_OUTPUTS = frozenset("build/bytestring-decimal/" + name for name in (
-    "manifest.json", "pre.json", "post.json", "oracle.json",
+    "manifest.json", "pre.cbd", "post.cbd", "oracle.json",
     *(f"{stage}-{entry}.audit.json" for stage in ("pre", "post") for entry in BYTESTRING_DECIMAL_ENTRIES),
     *(f"logs/{command}.{suffix}" for command in ("version", "libdir", "imports", "unit",
       *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in BYTESTRING_DECIMAL_ENTRIES))
@@ -87,76 +87,76 @@ UNIX_LIBC_ENTRIES = ("unixClose", "unixDup", "unixIsatty", "unixGetenv")
 UNIX_WAIT_ENTRIES = tuple("wait" + name for name in (
     "WCOREDUMP", "WSTOPSIG", "WIFSTOPPED", "WTERMSIG", "WIFSIGNALED", "WEXITSTATUS", "WIFEXITED"))
 UNIX_WAIT_OUTPUTS = frozenset("build/unix-wait-status/" + name for name in (
-    "manifest.json", "pre.json", "post.json", "oracle.tsv",
+    "manifest.json", "pre.cbd", "post.cbd", "oracle.tsv",
     *(f"{stage}-{entry}.audit.json" for stage in ("pre", "post") for entry in UNIX_WAIT_ENTRIES),
     *(f"logs/{command}.{suffix}" for command in ("version", "libdir", "imports", "unit",
       *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in UNIX_WAIT_ENTRIES))
       for suffix in ("stdout", "stderr", "command.json"))))
 UNIX_LIBC_OUTPUTS = frozenset("build/unix-libc/" + name for name in (
-    "manifest.json", "pre.json", "post.json", "oracle.json",
+    "manifest.json", "pre.cbd", "post.cbd", "oracle.json",
     *(f"{stage}-{entry}.audit.json" for stage in ("pre", "post") for entry in UNIX_LIBC_ENTRIES),
     *(f"logs/{command}.{suffix}" for command in ("version", "libdir", "imports", "unit",
       *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in UNIX_LIBC_ENTRIES))
       for suffix in ("stdout", "stderr", "command.json"))))
 ORIGINAL_PATH_STAT_ENTRIES = ("pathStat", "pathLstat", "unixPathLstat")
 ORIGINAL_PATH_STAT_OUTPUTS = frozenset("build/original-path-stat/" + name for name in (
-    "manifest.json", "pre.json", "post.json", "oracle.json",
+    "manifest.json", "pre.cbd", "post.cbd", "oracle.json",
     *(f"{stage}-{entry}.audit.json" for stage in ("pre", "post") for entry in ORIGINAL_PATH_STAT_ENTRIES),
     *(f"logs/{command}.{suffix}" for command in ("version", "libdir", "imports", "unit", "ghc-imports",
       *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_PATH_STAT_ENTRIES))
       for suffix in ("stdout", "stderr", "command.json"))))
 ORIGINAL_PATH_MODE_ENTRIES = ("pathMkdir", "pathChmod")
 ORIGINAL_PATH_MODE_OUTPUTS = frozenset("build/original-path-mode/" + name for name in (
-    "manifest.json", "pre.json", "post.json", "oracle.json",
+    "manifest.json", "pre.cbd", "post.cbd", "oracle.json",
     *(f"{stage}-{entry}.audit.json" for stage in ("pre", "post") for entry in ORIGINAL_PATH_MODE_ENTRIES),
     *(f"logs/{command}.{suffix}" for command in ("version", "libdir", "imports", "unit", "ghc-imports",
       *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_PATH_MODE_ENTRIES))
       for suffix in ("stdout", "stderr", "command.json"))))
 ORIGINAL_PATH_LINK_ENTRIES = ("pathSymlink", "pathReadlink")
 ORIGINAL_PATH_LINK_OUTPUTS = frozenset("build/original-path-link/" + name for name in (
-    "manifest.json", "pre.json", "post.json", "oracle.json",
+    "manifest.json", "pre.cbd", "post.cbd", "oracle.json",
     *(f"{stage}-{entry}.audit.json" for stage in ("pre", "post") for entry in ORIGINAL_PATH_LINK_ENTRIES),
     *(f"logs/{command}.{suffix}" for command in ("version", "libdir", "imports", "unit", "ghc-imports",
       *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_PATH_LINK_ENTRIES))
       for suffix in ("stdout", "stderr", "command.json"))))
 ORIGINAL_DIRECTORY_PATHS_ENTRIES = ("pathRemoveDirectory", "executableReadlink")
 ORIGINAL_DIRECTORY_PATHS_OUTPUTS = frozenset("build/original-directory-paths/" + name for name in (
-    "manifest.json", "pre.json", "post.json", "oracle.json",
+    "manifest.json", "pre.cbd", "post.cbd", "oracle.json",
     *(f"{stage}-{entry}.audit.json" for stage in ("pre", "post") for entry in ORIGINAL_DIRECTORY_PATHS_ENTRIES),
     *(f"logs/{command}.{suffix}" for command in ("version", "libdir", "imports", "unit", "ghc-imports",
       *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_DIRECTORY_PATHS_ENTRIES))
       for suffix in ("stdout", "stderr", "command.json"))))
 ORIGINAL_PATH_ACCESS_ENTRIES = ("pathAccess",)
 ORIGINAL_PATH_ACCESS_OUTPUTS = frozenset("build/original-path-access/" + name for name in (
-    "manifest.json", "pre.json", "post.json", "oracle.json",
+    "manifest.json", "pre.cbd", "post.cbd", "oracle.json",
     *(f"{stage}-{entry}.audit.json" for stage in ("pre", "post") for entry in ORIGINAL_PATH_ACCESS_ENTRIES),
     *(f"logs/{command}.{suffix}" for command in ("version", "libdir", "imports", "unit", "ghc-imports",
       *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_PATH_ACCESS_ENTRIES))
       for suffix in ("stdout", "stderr", "command.json"))))
 ORIGINAL_UNLINKAT_ENTRIES = ("pathUnlinkAt",)
 ORIGINAL_UNLINKAT_OUTPUTS = frozenset("build/original-unlinkat/" + name for name in (
-    "manifest.json", "pre.json", "post.json", "oracle.json",
+    "manifest.json", "pre.cbd", "post.cbd", "oracle.json",
     *(f"{stage}-{entry}.audit.json" for stage in ("pre", "post") for entry in ORIGINAL_UNLINKAT_ENTRIES),
     *(f"logs/{command}.{suffix}" for command in ("version", "libdir", "imports", "unit", "ghc-imports", "abi-compile", "abi-run",
       *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_UNLINKAT_ENTRIES))
       for suffix in ("stdout", "stderr", "command.json"))))
 ORIGINAL_FSTATAT_ENTRIES = ("pathFstatAt",)
 ORIGINAL_FSTATAT_OUTPUTS = frozenset("build/original-fstatat/" + name for name in (
-    "manifest.json", "pre.json", "post.json", "oracle.json",
+    "manifest.json", "pre.cbd", "post.cbd", "oracle.json",
     *(f"{stage}-{entry}.audit.json" for stage in ("pre", "post") for entry in ORIGINAL_FSTATAT_ENTRIES),
     *(f"logs/{command}.{suffix}" for command in ("version", "libdir", "imports", "unit", "ghc-imports", "abi-compile", "abi-run",
       *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_FSTATAT_ENTRIES))
       for suffix in ("stdout", "stderr", "command.json"))))
 ORIGINAL_CURRENT_DIRECTORY_ENTRIES = ("pathChdir", "pathGetCwd")
 ORIGINAL_CURRENT_DIRECTORY_OUTPUTS = frozenset("build/original-current-directory/" + name for name in (
-    "manifest.json", "pre.json", "post.json", "oracle.json", "unix.project", "unix-source.json",
+    "manifest.json", "pre.cbd", "post.cbd", "oracle.json", "unix.project", "unix-source.json",
     *(f"{stage}-{entry}.audit.json" for stage in ("pre", "post") for entry in ORIGINAL_CURRENT_DIRECTORY_ENTRIES),
     *(f"logs/{command}.{suffix}" for command in ("version", "libdir", "imports", "unit", "ghc-imports", "native-child", "unix-extract", "unix-build",
       *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_CURRENT_DIRECTORY_ENTRIES))
       for suffix in ("stdout", "stderr", "command.json"))))
 ORIGINAL_DIRECTORY_STREAMS_ENTRIES = ("directoryOpen", "directoryFdOpen", "directoryClose", "directoryRead", "directoryName", "directoryFree")
 ORIGINAL_DIRECTORY_STREAMS_OUTPUTS = frozenset("build/original-directory-streams/" + name for name in (
-    "manifest.json", "pre.json", "post.json", "oracle.json", "unix-source.json",
+    "manifest.json", "pre.cbd", "post.cbd", "oracle.json", "unix-source.json",
     *(f"{stage}-{entry}.audit.json" for stage in ("pre", "post") for entry in ORIGINAL_DIRECTORY_STREAMS_ENTRIES),
     *(f"logs/{command}.{suffix}" for command in ("version", "libdir", "imports", "unit", "ghc-imports",
       *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_DIRECTORY_STREAMS_ENTRIES))

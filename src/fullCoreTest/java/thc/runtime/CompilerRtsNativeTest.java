@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Edward Kmett
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
+import thc.CoreCbdFixtures;
 
 import com.oracle.truffle.api.TruffleLanguage;
 import org.graalvm.polyglot.Context;
@@ -24,6 +25,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @SuppressWarnings("unchecked")
 public class CompilerRtsNativeTest {
+    private Map<String, Object> cbd(File file) throws Exception { return CoreCbdFixtures.read(file.toPath()); }
+    private String entryId(String name) { return "main:CompilerRtsAudit." + name; }
     private final File root = new File(System.getProperty("thc.projectRoot"));
     private final File directory = new File(root, "build/compiler-rts");
     private Map<String, Object> json(File file) throws Exception {
@@ -50,7 +53,7 @@ public class CompilerRtsNativeTest {
             : CoreSharedCAFStores.validate(updated, operands, flags, result);
     }
     @Test public void genuineDeclarationsRejectOtherUnitsSafetyAndArity() throws Exception {
-        var actual = new ArrayList<List<?>>(); calls(json(new File(directory, "post.json")), actual);
+        var actual = new ArrayList<List<?>>(); calls(cbd(new File(directory, "post.cbd")), actual);
         assertFalse(actual.isEmpty());
         var seen = new LinkedHashSet<String>();
         for (var call : actual) {
@@ -87,7 +90,7 @@ public class CompilerRtsNativeTest {
         }
         assertEquals(Set.of("originalKeep", "originalFast", "originalPpr", "originalNoDebug", "originalNoState", "uniqueCells"), rows.keySet());
         for (String stage : List.of("pre", "post")) {
-            var module = json(new File(directory, stage + ".json"));
+            var module = cbd(new File(directory, stage + ".cbd"));
             for (var group : rows.entrySet()) {
                 String entry = group.getKey(); var cases = group.getValue();
                 assertEquals(true, json(new File(directory, stage + "-" + entry + ".audit.json")).get("accepted"));
@@ -95,9 +98,9 @@ public class CompilerRtsNativeTest {
                     context.initialize("thc"); context.enter();
                     try {
                         Language language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                        var linked = CoreModules.reachable(CoreModules.merge(List.of(module)), entry, true);
+                        var linked = CoreModules.reachable(CoreModules.merge(List.of(module)),entryId(entry), true);
                         ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
-                        var callable = context.asValue(new EntryValue(program, entry, 1));
+                        var callable = context.asValue(new EntryValue(program,entryId(entry), 1));
                         for (String[] row : cases) assertEquals(Long.parseLong(row[2]), callable.execute(Long.parseLong(row[1])).asLong(), stage + "/" + backend + "/" + entry);
                         assertTrue(callable.invokeMember("compile").asBoolean());
                         for (String[] row : cases.reversed()) {

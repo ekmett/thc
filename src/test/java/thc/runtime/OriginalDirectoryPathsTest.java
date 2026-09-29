@@ -15,6 +15,7 @@ import java.nio.file.*;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
+import static thc.runtime.ScalarTestCalls.callScalarTestTarget;
 import static thc.runtime.OriginalStdioChecks.*;
 
 @EnabledOnOs(OS.LINUX)
@@ -22,12 +23,14 @@ import static thc.runtime.OriginalStdioChecks.*;
 @SuppressWarnings("unchecked")
 class OriginalDirectoryPathsTest {
     @TempDir Path directory;
+    private Map<String,Object> cbd(String path) throws Exception { return CoreCbdFixtures.read(new File(root,path).toPath()); }
+    private String entryId(String name) { return "main:OriginalDirectoryPathsAudit." + name; }
     private final File root = new File(System.getProperty("thc.projectRoot"));
     private final String prefix = "build/original-directory-paths";
     private final Map<String,OriginalStdioOp> operations = new LinkedHashMap<>();
     OriginalDirectoryPathsTest() { operations.put("pathRemoveDirectory",OriginalStdioOp.RMDIR); operations.put("executableReadlink",OriginalStdioOp.READLINK); }
     private Map<String,Object> json(String path) throws Exception { return (Map<String,Object>) Json.parse(Files.readString(new File(root,path).toPath())); }
-    private Map<String,Object> source(String stage) throws Exception { return json(prefix + "/" + stage + ".json"); }
+    private Map<String,Object> source(String stage) throws Exception { return cbd(prefix + "/" + stage + ".cbd"); }
     private Object copy(Object value) { return Json.parse(Json.stringify(value)); }
     private ManagedAddress address(byte[] bytes) { return ManagedAddress.fromByteArray(Arrays.copyOf(bytes,bytes.length + 1)); }
     private ManagedAddress address(String value) { return address(value.getBytes(StandardCharsets.UTF_8)); }
@@ -39,7 +42,7 @@ class OriginalDirectoryPathsTest {
     private ExecutableProgram program(Language language,String backend,Map<String,Object> module) { return backend.equals("ast") ? new Program(language,module) : new BytecodeProgram(language,module); }
     private void valid(RootCallTarget target) throws Exception { assertEquals(true,target.getClass().getMethod("isValidLastTier").invoke(target)); }
     private List<Object> original(String name) throws Exception { return original(name,"post"); }
-    private List<Object> original(String name,String stage) throws Exception { return single(foreignCalls(CoreModules.reachable(source(stage),name)),ignored -> true); }
+    private List<Object> original(String name,String stage) throws Exception { return single(foreignCalls(CoreModules.reachable(source(stage),entryId(name))),ignored -> true); }
     private OriginalStdioOp validate(List<Object> call) {
         var reps = new ArrayList<Object>(); for (var arg : (List<List<Object>>) call.get(2)) { var metadata = CoreRepresentations.metadata(arg); reps.add(metadata == null ? null : metadata.get("rep")); }
         return CoreOriginalStdio.validate(call.get(6),reps,(List<?>) call.get(3),((Map<?,?>) call.get(6)).get("rep"));
@@ -58,18 +61,18 @@ class OriginalDirectoryPathsTest {
     @Test void genuineInstalledOwnersMatchNativeAndEveryFirstInstalledEntry() throws Exception {
         var manifest = json(prefix + "/manifest.json"); assertEquals(new ArrayList<>(operations.keySet()),manifest.get("entries")); assertTrue(CoreOriginalStdio.isOriginalUnixUnit(manifest.get("unixUnit"))); assertEquals("ghc-internal",manifest.get("readlinkUnit"));
         hashes(root,manifest.get("inputHashes"),Set.of("t/fixtures/compiler/OriginalDirectoryPathsAudit.hs","t/haskell-fixtures/OriginalDirectoryPathsFixtures.hs","bin/core_original_foreign.py","bin/core-capabilities.json"));
-        var artifacts = new HashSet<>(Set.of(prefix + "/oracle.json")); for (var stage : List.of("pre","post")) { artifacts.add(prefix + "/" + stage + ".json"); for (var name : operations.keySet()) artifacts.add(prefix + "/" + stage + "-" + name + ".audit.json"); } hashes(root,manifest.get("artifactHashes"),artifacts,prefix + "/");
+        var artifacts = new HashSet<>(Set.of(prefix + "/oracle.json")); for (var stage : List.of("pre","post")) { artifacts.add(prefix + "/" + stage + ".cbd"); for (var name : operations.keySet()) artifacts.add(prefix + "/" + stage + "-" + name + ".audit.json"); } hashes(root,manifest.get("artifactHashes"),artifacts,prefix + "/");
         var oracle = json(prefix + "/oracle.json"); var removeRows = (List<Map<String,Object>>) oracle.get("removeRows"); var readRows = (List<Map<String,Object>>) oracle.get("readRows"); assertEquals(15,removeRows.size()); assertEquals(12,readRows.size());
         var removeNames = new HashSet<Object>(); for (var row : removeRows) removeNames.add(row.get("name")); var readNames = new HashSet<Object>(); for (var row : readRows) readNames.add(row.get("name")); assertEquals(15,removeNames.size()); assertEquals(12,readNames.size()); assertEquals(true,oracle.get("processCwdUnchanged"));
         var processDirectory = Files.readSymbolicLink(Path.of("/proc/self/cwd"));
         for (var stage : List.of("pre","post")) for (var entry : operations.entrySet()) {
             var name = entry.getKey(); var operation = entry.getValue(); var audit = json(prefix + "/" + stage + "-" + name + ".audit.json"); assertEquals(true,audit.get("accepted")); assertEquals(List.of(),audit.get("issues")); assertEquals(List.of(),audit.get("missingGlobals"));
-            var linked = with(CoreModules.reachable(source(stage),name),"instrument",true); var evidence = new ArrayCoreEvidence(linked,name); assertEquals(1,evidence.getBindings().size()); assertEquals(1,evidence.loweredGuestLambdas(evidence.getRoot().get("expr")).size()); assertEquals(operation,validate(original(name,stage)));
+            var linked = with(CoreModules.reachable(source(stage),entryId(name)),"instrument",true); var evidence = new ArrayCoreEvidence(linked,entryId(name)); assertEquals(1,evidence.getBindings().size()); assertEquals(1,evidence.loweredGuestLambdas(evidence.getRoot().get("expr")).size()); assertEquals(operation,validate(original(name,stage)));
             assertEquals(operation == OriginalStdioOp.RMDIR ? manifest.get("unixUnit") : "ghc-internal",((Map<?,?>) ((Map<?,?>) ((Map<?,?>) original(name,stage).get(6)).get("foreignCall")).get("target")).get("unit"));
             for (var backend : List.of("ast","bytecode")) try (var context = context()) {
                 context.initialize("thc"); context.enter();
                 try {
-                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var executable = program(language,backend,linked); var target = executable.entryTarget(name); var stdio = Language.currentState().getStdio();
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var executable = program(language,backend,linked); var target = executable.entryTarget(entryId(name)); var stdio = Language.currentState().getStdio();
                     class Exercise { void run(boolean compiled) throws Exception {
                         for (var row : operation == OriginalStdioOp.RMDIR ? removeRows : readRows) {
                             var base = setup();
@@ -77,7 +80,7 @@ class OriginalDirectoryPathsTest {
                                 assertEquals(0L,stdio.changeDirectory(path(base))); var suffix = bytes(row,"path"); var argument = Objects.equals(row.get("absolute"),true) ? address(joined(base,suffix)) : address(suffix);
                                 int capacity = row.get("capacity") instanceof Long count ? count.intValue() : 64; byte[] image = new byte[capacity + 16]; Arrays.fill(image,(byte) 90); stdio.setErrno(9); if (compiled) valid(target);
                                 long before = ((Number) executable.diagnostics().get("compiledEntries")).longValue(); Object[] args = operation == OriginalStdioOp.RMDIR ? new Object[]{0L,argument} : new Object[]{0L,argument,ManagedAddress.fromByteArray(image).plus(8),(long) capacity};
-                                var result = Calls.target(target,args); assertEquals(row.get("status"),result,stage + "/" + backend + "/" + name + "/" + row.get("name")); assertEquals(row.get("errno"),stdio.errno());
+                                var result = callScalarTestTarget(target,args); assertEquals(row.get("status"),result,stage + "/" + backend + "/" + name + "/" + row.get("name")); assertEquals(row.get("errno"),stdio.errno());
                                 if (compiled) { assertEquals(before + 1,((Number) executable.diagnostics().get("compiledEntries")).longValue()); valid(target); }
                                 restorePermissions(base); if (operation == OriginalStdioOp.RMDIR) assertEquals(row.get("remaining"),remaining(base)); else assertArrayEquals(bytes(row,"image"),image);
                                 assertEquals("unchanged",Files.readString(base.resolve("file"))); assertEquals("unchanged",Files.readString(base.resolve("nonempty/file"))); var handoff = language.getHandoffState().get();
@@ -120,10 +123,10 @@ class OriginalDirectoryPathsTest {
                 try {
                     assertEquals(0L,stdio.changeDirectory(path(base))); var remove = program(language,backend,rawModule(original("pathRemoveDirectory"),source("post"))).entryTarget("entry"); var read = program(language,backend,rawModule(original("executableReadlink"),source("post"))).entryTarget("entry");
                     byte[] image = new byte[32]; Arrays.fill(image,(byte) 90); var output = ManagedAddress.fromByteArray(image).plus(8); stdio.setErrno(9);
-                    assertThrows(RuntimeFault.class,() -> Calls.target(remove,new Object[]{0L,address("empty"),7L})); assertThrows(RuntimeFault.class,() -> Calls.target(read,new Object[]{0L,address("link"),output,16L,7L}));
+                    assertThrows(RuntimeFault.class,() -> callScalarTestTarget(remove,new Object[]{0L,address("empty"),7L})); assertThrows(RuntimeFault.class,() -> callScalarTestTarget(read,new Object[]{0L,address("link"),output,16L,7L}));
                     assertTrue(Files.isDirectory(base.resolve("empty"))); for (byte value : image) assertEquals((byte) 90,value); assertEquals(9L,stdio.errno());
-                    Files.move(base,moved); Files.createDirectory(base); Files.createDirectory(base.resolve("empty")); assertEquals(0,Calls.target(remove,new Object[]{0L,address("empty"),thc.runtime.Unit.INSTANCE}));
-                    assertFalse(Files.exists(moved.resolve("empty"))); assertTrue(Files.isDirectory(base.resolve("empty"))); assertEquals(5,Calls.target(read,new Object[]{0L,address("link"),output,16L,thc.runtime.Unit.INSTANCE}));
+                    Files.move(base,moved); Files.createDirectory(base); Files.createDirectory(base.resolve("empty")); assertEquals(0,callScalarTestTarget(remove,new Object[]{0L,address("empty"),thc.runtime.Unit.INSTANCE}));
+                    assertFalse(Files.exists(moved.resolve("empty"))); assertTrue(Files.isDirectory(base.resolve("empty"))); assertEquals(5,callScalarTestTarget(read,new Object[]{0L,address("link"),output,16L,thc.runtime.Unit.INSTANCE}));
                     assertArrayEquals("empty".getBytes(StandardCharsets.UTF_8),Arrays.copyOfRange(image,8,13)); assertEquals((byte) 90,image[13]);
                 } finally { restorePermissions(Files.exists(moved) ? moved : base); }
             } finally { context.leave(); }

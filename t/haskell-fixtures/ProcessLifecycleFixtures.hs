@@ -37,7 +37,7 @@ import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>))
 import qualified THC.Interface as Interface
-import THC.Plugin (serializeOptimizedCore, serializePostTidyCore)
+import THC.Plugin (serializeOptimizedCoreCBD, serializePostTidyCoreCBD)
 
 operations :: [(String, String, F.Safety)]
 operations = [("processCreate", "runInteractiveProcess", F.PlayRisky),
@@ -173,13 +173,13 @@ prepareProcessLifecycle root = do
         adapted = optimized { mg_binds = [NonRec value body | (value, body) <- guests],
           mg_exports = filter (\available -> availName available `elem` map (varName . fst) guests) (mg_exports optimized) }
     liftIO $ do
-      serializeOptimizedCore flags ["unit-qualified"] adapted >>= writeFile (root </> directory </> "pre.json")
+      serializeOptimizedCoreCBD flags ["unit-qualified"] adapted >>= BS.writeFile (root </> directory </> "pre.cbd")
       (tidied, _) <- hscTidy current adapted
-      serializePostTidyCore flags ["unit-qualified"] (cg_module tidied) (cg_tycons tidied)
-        (cg_binds tidied) emptyIfaceForeign >>= writeFile (root </> directory </> "post.json")
+      serializePostTidyCoreCBD flags ["unit-qualified"] (cg_module tidied) (cg_tycons tidied)
+        (cg_binds tidied) emptyIfaceForeign >>= BS.writeFile (root </> directory </> "post.cbd")
   audits <- forM ["pre", "post"] $ \stage -> execute (stage ++ "-audit") [] "python3"
-    (["bin/audit-core.py", directory </> stage ++ ".json", "--output", directory </> stage ++ ".audit.json"] ++
-      concat [["--entry", entryName] | entryName <- entries])
+    (["bin/audit-core.py", directory </> stage ++ ".cbd", "--output", directory </> stage ++ ".audit.json"] ++
+      concat [["--entry", "main:ProcessLifecycleAudit." ++ entryName] | entryName <- entries])
   inputHashes <- hashes root [source, "t/haskell-fixtures/ProcessLifecycleFixtures.hs",
     "src/compiler/THC/Plugin.hs", "src/compiler/THC/Interface.hs", "bin/audit-core.py", "bin/core_original_foreign.py", "bin/core-capabilities.json"]
   interfaceHashes <- hashes root interfaces
@@ -187,7 +187,7 @@ prepareProcessLifecycle root = do
     ["archiveSha256" .= archiveHash, "sourceHashes" .= sourceHashes, "processUnit" .= oneLine owner]
   let commands = [version, library, extracted, built, owner, imports] ++ audits
   artifactHashes <- hashes root ((directory </> "source.json") :
-    [directory </> stage ++ suffix | stage <- ["pre", "post"], suffix <- [".json", ".audit.json"]] ++ concatMap commandArtifacts commands)
+    [directory </> stage ++ suffix | stage <- ["pre", "post"], suffix <- [".cbd", ".audit.json"]] ++ concatMap commandArtifacts commands)
   writeJson (root </> directory </> "manifest.json") $ object
     ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String), "processUnit" .= oneLine owner,
      "entries" .= entries, "consumerKind" .= ("typed consumers of genuine installed process FCallIds" :: String),

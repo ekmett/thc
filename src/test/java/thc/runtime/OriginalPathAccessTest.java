@@ -26,10 +26,12 @@ import static thc.runtime.OriginalStdioChecks.*;
 @SuppressWarnings("unchecked")
 class OriginalPathAccessTest {
     @TempDir Path directory;
+    private Map<String,Object> cbd(String path) throws Exception { return CoreCbdFixtures.read(new File(root,path).toPath()); }
+    private String entryId(String name) { return "main:OriginalPathAccessAudit." + name; }
     private final File root = new File(System.getProperty("thc.projectRoot"));
     private final String prefix = "build/original-path-access";
     private Map<String,Object> json(String path) throws Exception { return (Map<String,Object>) Json.parse(Files.readString(new File(root,path).toPath())); }
-    private Map<String,Object> source(String stage) throws Exception { return json(prefix + "/" + stage + ".json"); }
+    private Map<String,Object> source(String stage) throws Exception { return cbd(prefix + "/" + stage + ".cbd"); }
     private Object copy(Object value) { return Json.parse(Json.stringify(value)); }
     private ManagedAddress cstring(String value) { return ManagedAddress.fromByteArray((value + "\0").getBytes(StandardCharsets.UTF_8)); }
     private ExecutableProgram program(Language language,String backend,Map<String,Object> module) { return backend.equals("ast") ? new Program(language,module) : new BytecodeProgram(language,module); }
@@ -39,7 +41,7 @@ class OriginalPathAccessTest {
     private void released(Language language) { var handoff = language.getHandoffState().get(); assertEquals(0,handoff.getArguments().getDepth()); assertEquals(0,handoff.getResults().getDepth()); assertEquals(0,handoff.getArguments().retainedReferences()); assertEquals(0,handoff.getResults().retainedReferences()); }
     private OriginalStdioOp validate(List<Object> call) { var reps = new ArrayList<Object>(); for (var arg : (List<List<Object>>) call.get(2)) { var metadata = CoreRepresentations.metadata(arg); reps.add(metadata == null ? null : metadata.get("rep")); } return CoreOriginalStdio.validate(call.get(6),reps,(List<?>) call.get(3),((Map<?,?>) call.get(6)).get("rep")); }
     private List<Object> original() throws Exception { return original("post"); }
-    private List<Object> original(String stage) throws Exception { return single(foreignCalls(CoreModules.reachable(source(stage),"pathAccess")),ignored -> true); }
+    private List<Object> original(String stage) throws Exception { return single(foreignCalls(CoreModules.reachable(source(stage),entryId("pathAccess"))),ignored -> true); }
     private Map<String,Object> raw(List<Object> call) throws Exception { return rawModule(call,source("post")); }
     private ManagedAddress path(Path scratch,byte[] bytes) {
         byte[] prefix = bytes.length == 0 ? new byte[0] : (Path.of(Language.currentState().getEnv().getCurrentWorkingDirectory().getPath()).relativize(scratch) + "/").getBytes(StandardCharsets.UTF_8);
@@ -55,22 +57,22 @@ class OriginalPathAccessTest {
     @Test void originalNativeAccessMatchesBothBackendsAndFirstInstalledCalls() throws Exception {
         var manifest = json(prefix + "/manifest.json"); assertEquals(List.of("pathAccess"),manifest.get("entries"));
         hashes(root,manifest.get("inputHashes"),Set.of("t/fixtures/compiler/OriginalPathAccessAudit.hs","t/haskell-fixtures/OriginalPathAccessFixtures.hs","bin/core_original_foreign.py","bin/core-capabilities.json"));
-        var artifacts = new HashSet<>(Set.of(prefix + "/oracle.json")); for (var stage : List.of("pre","post")) { artifacts.add(prefix + "/" + stage + ".json"); artifacts.add(prefix + "/" + stage + "-pathAccess.audit.json"); } hashes(root,manifest.get("artifactHashes"),artifacts,prefix + "/");
+        var artifacts = new HashSet<>(Set.of(prefix + "/oracle.json")); for (var stage : List.of("pre","post")) { artifacts.add(prefix + "/" + stage + ".cbd"); artifacts.add(prefix + "/" + stage + "-pathAccess.audit.json"); } hashes(root,manifest.get("artifactHashes"),artifacts,prefix + "/");
         var rows = (List<Map<String,Object>>) json(prefix + "/oracle.json").get("rows"); assertEquals(68,rows.size()); var names = new ArrayList<Object>(); for (int i = 0; i < 60; i += 5) names.add(rows.get(i).get("name"));
         assertEquals(List.of("file","executable","zero","directory","locked-child","link","dangling","missing","empty","not-directory","raw","relative"),names);
         var modes = new ArrayList<Object>(); for (var row : rows) modes.add(row.get("mode")); assertTrue(modes.containsAll(List.of(0L,1L,2L,3L,4L,5L,6L,7L,8L,-1L,(long) Integer.MIN_VALUE,(long) Integer.MAX_VALUE,0x1_0000_0000L)));
         for (var stage : List.of("pre","post")) {
-            var audit = json(prefix + "/" + stage + "-pathAccess.audit.json"); assertEquals(true,audit.get("accepted")); assertEquals(List.of(),audit.get("issues")); assertEquals(List.of(),audit.get("missingGlobals")); var linked = with(CoreModules.reachable(source(stage),"pathAccess"),"instrument",true);
-            var evidence = new ArrayCoreEvidence(linked,"pathAccess"); assertEquals(1,evidence.getBindings().size()); assertEquals(1,evidence.guestLambdas(evidence.getRoot().get("expr")).size()); assertEquals(1,evidence.loweredGuestLambdas(evidence.getRoot().get("expr")).size()); assertEquals(OriginalStdioOp.ACCESS,validate(original(stage)));
+            var audit = json(prefix + "/" + stage + "-pathAccess.audit.json"); assertEquals(true,audit.get("accepted")); assertEquals(List.of(),audit.get("issues")); assertEquals(List.of(),audit.get("missingGlobals")); var linked = with(CoreModules.reachable(source(stage),entryId("pathAccess")),"instrument",true);
+            var evidence = new ArrayCoreEvidence(linked,entryId("pathAccess")); assertEquals(1,evidence.getBindings().size()); assertEquals(1,evidence.guestLambdas(evidence.getRoot().get("expr")).size()); assertEquals(1,evidence.loweredGuestLambdas(evidence.getRoot().get("expr")).size()); assertEquals(OriginalStdioOp.ACCESS,validate(original(stage)));
             assertEquals("ghc-internal",((Map<?,?>) ((Map<?,?>) ((Map<?,?>) original(stage).get(6)).get("foreignCall")).get("target")).get("unit"));
             for (var backend : List.of("ast","bytecode")) try (var context = context()) { entered(context,() -> {
-                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var executable = program(language,backend,linked); var entry = executable.entryTarget("pathAccess"); var stdio = Language.currentState().getStdio();
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var executable = program(language,backend,linked); var entry = executable.entryTarget(entryId("pathAccess")); var stdio = Language.currentState().getStdio();
                 class Exercise { void run(boolean compiled) throws Exception {
                     var scratch = setup();
                     try {
                         for (var row : rows) { var raw = (List<Long>) row.get("path"); byte[] bytes = new byte[raw.size()]; for (int i = 0; i < bytes.length; i++) bytes[i] = raw.get(i).byteValue();
                             assertEquals(-1L,stdio.close(-1)); long before = ((Number) executable.diagnostics().get("compiledEntries")).longValue(); if (compiled) valid(entry);
-                            assertEquals(row.get("status"),Calls.target(entry,new Object[]{0L,path(scratch,bytes),row.get("mode")}),stage + "/" + backend + "/" + row.get("name") + "/" + row.get("mode")); assertEquals(row.get("errno"),stdio.errno());
+                            assertEquals(row.get("status"),callScalarTestTarget(entry,new Object[]{0L,path(scratch,bytes),row.get("mode")}),stage + "/" + backend + "/" + row.get("name") + "/" + row.get("mode")); assertEquals(row.get("errno"),stdio.errno());
                             if (compiled) { assertEquals(before + 1,((Number) executable.diagnostics().get("compiledEntries")).longValue()); valid(entry); } released(language);
                         }
                         assertEquals("unchanged",Files.readString(scratch.resolve("target"))); assertTrue(Files.isSymbolicLink(scratch.resolve("link")));
@@ -95,7 +97,7 @@ class OriginalPathAccessTest {
         for (var backend : List.of("ast","bytecode")) try (var context = context()) { entered(context,() -> {
             var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var entry = program(language,backend,raw(original())).entryTarget("entry"); var stdio = Language.currentState().getStdio(); var missing = cstring(directory.resolve("missing").toString());
             class Call { Object invoke(ManagedAddress address,Object mode,Object state) { return callScalarTestTarget(entry,new Object[]{0L,address,mode,state}); }}
-            var call = new Call(); assertThrows(RuntimeFault.class,() -> Calls.target(entry,new Object[]{0L,ManagedAddress.nullAddress(),0,9L})); assertEquals(-1L,stdio.close(-1)); long prior = stdio.errno(); assertThrows(RuntimeFault.class,() -> call.invoke(missing,0,9L));
+            var call = new Call(); assertThrows(RuntimeFault.class,() -> callScalarTestTarget(entry,new Object[]{0L,ManagedAddress.nullAddress(),0,9L})); assertEquals(-1L,stdio.close(-1)); long prior = stdio.errno(); assertThrows(RuntimeFault.class,() -> call.invoke(missing,0,9L));
             for (long mode : new long[]{(long) Integer.MIN_VALUE - 1,(long) Integer.MAX_VALUE + 1,0x1_0000_0000L}) assertThrows(RuntimeFault.class,() -> call.invoke(missing,mode,thc.runtime.Unit.INSTANCE));
             assertThrows(RuntimeFault.class,() -> call.invoke(ManagedAddress.nullAddress(),0,thc.runtime.Unit.INSTANCE)); assertThrows(RuntimeFault.class,() -> call.invoke(ManagedAddress.fromByteArray(new byte[]{65}),0,thc.runtime.Unit.INSTANCE));
             var allocation = ManagedAllocation.mutable(16,8); allocation.writeAddressByteOffset(0,ManagedAddress.nullAddress()); assertThrows(RuntimeFault.class,() -> call.invoke(ManagedAddress.fromAllocation(allocation),0,thc.runtime.Unit.INSTANCE)); assertEquals(prior,stdio.errno()); released(language); return null;
