@@ -30,6 +30,7 @@ fixture_bin=$(cabal list-bin exe:thc-fixtures --offline)
 "$fixture_bin" sum-join
 "$fixture_bin" unsafe-equality
 "$fixture_bin" proxy-void
+"$fixture_bin" selector-proof
 "$fixture_bin" unix-libc
 "$fixture_bin" unix-wait-status
 "$fixture_bin" text-cbits

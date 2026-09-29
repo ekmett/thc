@@ -69,10 +69,14 @@ wiredCase _ = Nothing
 -- runRW# f becomes f realWorld#, while lazy/noinline return their retained
 -- operand. Preserve the root certificate only when GHC confirms equal types;
 -- unary-class erasure can change the apparent type and stays uncertified.
+-- A non-unary selector instead uses GHC's typed mkDictSelRhs case template;
+-- its dictionary, fields and result retain their original representation.
 -- Keep the exact GHC type check here rather than trusting a printed type/name.
 preservesWiredTypes :: CoreExpr -> CoreExpr -> Bool
 preservesWiredTypes original lowered = case collectArgs original of
   (Var v, _) | any (v `hasKey`) [runRWKey, lazyIdKey, noinlineIdKey] ->
+    eqType (exprType original) (exprType lowered)
+  (Var v, _) | Just _ <- isClassOpId_maybe v, not (isUnaryClassId v) ->
     eqType (exprType original) (exprType lowered)
   _ -> False
 

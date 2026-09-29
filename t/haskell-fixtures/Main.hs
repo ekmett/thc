@@ -50,6 +50,7 @@ import SqrtFixtures (prepareSqrt)
 import FloatDecodeFixtures (prepareFloatDecode)
 import FloatingRemainderFixtures (prepareFloatingRemainder)
 import ProxyVoidFixtures (prepareProxyVoid)
+import SelectorProofFixtures (prepareSelectorProof)
 import UnsafeEqualityFixtures (prepareUnsafeEquality)
 import ContinuationFixtures (prepareCoreContinuation)
 import DelimitedContinuationsFixtures (prepareDelimitedContinuations)
@@ -1006,6 +1007,7 @@ main = do
     ["simd-wide-floating-fma"] -> prepareSimdWideFloatFma root
     ["sqrt"] -> prepareSqrt root
     ["proxy-void"] -> prepareProxyVoid root
+    ["selector-proof"] -> prepareSelectorProof root
     ["unsafe-equality"] -> prepareUnsafeEquality root False
     ["unsafe-equality", "--check-only"] -> prepareUnsafeEquality root True
     ["original-fcntl"] -> prepareOriginalFcntl root

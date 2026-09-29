@@ -27,6 +27,10 @@ Binder, binding and expression metadata can carry:
 
 Newtypes, type families and unary class representations do not establish a data-object layout. Unboxed tuples and sums keep `kind: "unknown"`, including the empty unboxed tuple, while their separate aggregate metadata can establish an executable layout. An empty register list alone does not make an aggregate a scalar void token. The shared parser checks exact carriers for positive primitive/reference proofs. Absent metadata supplies no positive evidence; unsupported operations and unresolved required representations fail explicitly.
 
+Non-unary class selectors use GHC's `mkDictSelRhs` template with its dictionary,
+case, fields and result certificates only when GHC `eqType` confirms the original
+and lowered types agree. Unary selector/constructor erasure remains uncertified.
+
 The six narrow literal forms (`int8`/`word8`, `int16`/`word16`, and
 `int32`/`word32`) intrinsically establish their exact signed or unsigned
 representation. Shared expression lookup recovers that proof for absent or

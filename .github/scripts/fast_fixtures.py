@@ -24,8 +24,8 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-# The smoke exporter reads t/fixtures/core/Fixtures.hs; its declared output is Fixtures.json.
-FULL_PREPARATION_PLAN = "7f9437c182f93b957ff5e52065d15f641b96cf8145a941f46070ebf1acf59f94"
+# Includes relocated core fixtures and the selector-proof exports and GHC checks.
+FULL_PREPARATION_PLAN = "8f4f47dc238381a6204451e9443b81d0a74a00420f5b0b9c76dcc13bc95d9129"
 PROCESS_CORE_OUTPUTS = frozenset("build/process-lifecycle/core/" + name for name in (
     "manifest.json", "source.json", "pre.json", "post.json", "pre.audit.json", "post.audit.json",
     *[f"logs/{command}.{suffix}" for command in
@@ -45,7 +45,7 @@ FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS
     "build/original-stdio", "build/original-stdio-read", "build/original-stdio-close", "build/original-stdio-seek", "build/original-stdio-truncate", "build/original-handle-readiness", "build/core-continuation", "build/live-async", "build/thread-async", "build/thread-status", "build/thread-label", "build/uncaught-self", "build/small-arrays", "build/floating-address", "build/atomic-address",
     "build/floating-byte-offset", "build/narrow-byte-offset", "build/int32-byte-offset", "build/unaligned-scalar-memory",
     "build/explicit64-arrays", "build/mask-functions", "build/scalar-exception-results", "build/exception-result-layouts", "build/deep-evaluation", "build/interface-core",
-    "build/original-fd-ready", "build/simd-calls", "build/sum-join", "build/record-fields",
+    "build/original-fd-ready", "build/simd-calls", "build/sum-join", "build/record-fields", "build/selector-proof",
 })
 FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     *(PROCESS_CORE_OUTPUTS if fast_inputs.GMP_NATIVE_HOST else ()),
@@ -54,6 +54,11 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     *fast_inputs.MEMSET_OUTPUTS,
     *fast_inputs.MEMORY_SEARCH_OUTPUTS,
     *fast_inputs.RUBBISH_OUTPUTS,
+    "build/selector-proof/manifest.json", "build/selector-proof/api/predicate",
+    *[f"build/selector-proof/{stage}/core/SelectorProofAudit.json" for stage in ("pre", "post")],
+    *[f"build/selector-proof/commands/{command}.{suffix}"
+      for command in ("pre-export", "post-export", "predicate-build", "libdir", "predicate-run")
+      for suffix in ("stdout", "stderr", "command.json")],
     "build/sum-join/manifest.json", "build/sum-join/oracle.tsv", "build/sum-join/native/oracle",
     *[f"build/sum-join/{stage}/{suffix}" for stage in ("pre", "post")
       for suffix in ("core/SumJoinAudit.json", "audit.json")],
