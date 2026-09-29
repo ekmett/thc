@@ -97,7 +97,7 @@ class UnsafeEqualityTest {
             }
         }
     }
-    @Test void wrongCalleeAndDemandedBottomIntentionallyDeoptWithoutPublishingResults() throws Exception {
+    @Test void wrongCalleeAndDemandedBottomThrowFromCompiledCodeWithoutPublishingResults() throws Exception {
         verifyEvidence();
         for (var stage : list("pre", "post")) for (var backend : list("ast", "bytecode")) for (boolean inlining : list(true, false))
             for (var name : list("wrongCalleeCase", "demandedBottomCase")) try (var context = context(inlining)) {
@@ -115,14 +115,19 @@ class UnsafeEqualityTest {
                     compile(original); compile(host); valid(original, name); for (var target : active) valid(target, name);
                     long before = count(program); var raised = fail.get(); released(language);
                     assertSame(initial.getPayload(), raised.getPayload(), "Preserve the real guest exception payload");
-                    // raise# deliberately transfers to the interpreter and invalidates.
-                    // An always-throwing graph can deopt before entry instrumentation;
-                    // this checks installed-code invalidation, not compiled value execution.
-                    var validity = new ArrayList<Boolean>();
-                    for (var target : active) validity.add((Boolean) target.getClass().getMethod("isValidLastTier").invoke(target));
-                    assertTrue(validity.contains(false), stage + "/" + backend + "/" + name + "/inlining=" + inlining + " intentional raise# deopt");
-                    System.out.println("raise-control " + stage + "/" + backend + "/" + name + "/inlining=" + inlining
-                        + " installed=" + active.size() + " validAfter=" + validity + " compiledEntryDelta=" + (count(program) - before));
+                    var label = stage + "/" + backend + "/" + name + "/inlining=" + inlining;
+                    assertTrue(count(program) > before, label + " first installed call entered guest code");
+                    valid(original, label + " original");
+                    if (name.equals("wrongCalleeCase")) {
+                        // Direct raise# is expected control flow and preserves callers.
+                        for (var target : active) valid(target, label + " active");
+                    } else {
+                        // Demanding the already failed bottom rethrows a memoized
+                        // thunk failure; Force.rethrowFailure deliberately invalidates.
+                        var validity = new ArrayList<Boolean>();
+                        for (var target : active) validity.add((Boolean) target.getClass().getMethod("isValidLastTier").invoke(target));
+                        assertTrue(validity.contains(false), label + " memoized bottom deopt");
+                    }
                     assertEquals(active, activeTargets(host));
                     assertEquals(0L, ((Number) program.diagnostics().get("unsupportedTraps")).longValue());
                     assertEquals(0L, ((Number) program.diagnostics().get("blackholes")).longValue());
