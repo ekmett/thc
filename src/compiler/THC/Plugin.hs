@@ -1159,7 +1159,15 @@ importProvenanceFields owner annotations original core = do
     Just (ImportProvenance.VerifiedMixed [] [] [] _) -> []
     Just value ->
       let schema = case value of ImportProvenance.VerifiedMixed {} -> 4; ImportProvenance.VerifiedWrappers {} -> 3; ImportProvenance.Verified _ (_:_) -> 2; _ -> 1
-          record = O (("schema",num (schema::Int)) : common ++ details value)
+          imports = case value of
+            ImportProvenance.Verified xs _ -> xs
+            ImportProvenance.VerifiedWrappers xs _ _ -> xs
+            ImportProvenance.VerifiedMixed xs _ _ _ -> xs
+            _ -> []
+          primitive (ImportProvenance.Import _ _ _ _ _ conv _ _ _ _) = conv == "prim"
+          profile = if any primitive imports then "ghc-9.14.1-thc-stock-static-foreign-imports-v2"
+            else "ghc-9.14.1-thc-only-static-c-imports-v1"
+          record = O (("schema",num (schema::Int)) : ("profile",S profile) : common ++ details value)
           associations = case value of
             ImportProvenance.Verified [] [] -> []
             _ -> [("staticForeignImports", record)]
@@ -1175,7 +1183,6 @@ importProvenanceFields owner annotations original core = do
       ForeignCore.IfaceForeign (Just (ForeignCore.IfaceCStubs "" "" [] [])) [] -> True
       _ -> False
     common = [("scope",S "retained-static-import-products"),("execution",S "not-linked"),
-      ("profile",S "ghc-9.14.1-thc-only-static-c-imports-v1"),
       ("unit",S (unitString (moduleUnit owner))),("module",S (moduleNameString (moduleName owner)))]
     details (ImportProvenance.Unknown reason) = [("status",S "unclassified"),("reason",S reason)]
     details (ImportProvenance.Rejected reason) = [("status",S "rejected"),("reason",S reason)]

@@ -320,6 +320,30 @@ class TimeClockLinkTest(unittest.TestCase):
 
 class PackageNativeVariantsTest(unittest.TestCase):
     """Structural controls only; the placeholder bitcode is never executed."""
+    def test_genuine_original_primitive_nominals_and_missing_declaration(self):
+        import copy
+        root = Path(__file__).resolve().parent.parent
+        path = Path(os.environ.get('THC_ORIGINAL_STACK_CBD', root / 'build/package-native-gc-carriers/original-v2/GHC.Internal.Stack.Decode.cbd'))
+        if not path.is_file(): self.skipTest('optional genuine original Stack.Decode fixture is not prepared')
+        module = read_core(path)
+        proof = module['staticForeignImports']
+        self.assertEqual(('ghc-internal', 'GHC.Internal.Stack.Decode'), (module['unit'], module['module']))
+        self.assertEqual(core_package_manifest.IMPORT_PROFILES[1], proof['profile'])
+        self.assertEqual(13, len(proof['imports']))
+        archive = core_package_manifest.package_native_archive(module)
+        self.assertEqual(13, len(archive['unsupportedImports']))
+        self.assertFalse(any(core_package_manifest.native_archive_blocks(module, b, archive) for b in module['bindings']))
+        bad = copy.deepcopy(module)
+        removed = bad['staticForeignImports']['imports'].pop()
+        bad['packageNativeArchive']['unsupportedImports'].remove(removed['emitted'])
+        with self.assertRaisesRegex(ValueError, 'missing original Stack primitive declaration'):
+            core_package_manifest.package_native_archive(bad)
+        bad = copy.deepcopy(module)
+        entry = next(e for e in bad['staticForeignImports']['imports'] if e['symbol'] == 'getWordzh')
+        entry['normalizedType']['argument']['name']['occurrence'] = 'ThreadId#'
+        with self.assertRaisesRegex(ValueError, 'exact stock Stack'):
+            core_package_manifest.package_native_archive(bad)
+
     def module(self, reps):
         unit, name = 'variants', 'Variants'
         scalar_type = dict(kind='tycon', arguments=[], name=dict(unit='ghc-internal',
@@ -595,6 +619,103 @@ class PackageNativeVariantsTest(unittest.TestCase):
                 bad['staticForeignImports']['imports'][-1]['emitted']['arguments'] = ['BoxedRep Nothing', 'void']
                 bad['packageNativeArchive']['unsupportedImports'] = [bad['staticForeignImports']['imports'][-1]['emitted']]
                 with self.assertRaises(ValueError): core_package_manifest.package_native_archive(bad)
+
+    def test_owned_boxed_archive_requires_nominal_proof_and_complete_calls(self):
+        import copy
+        def ty(module, name, *arguments, namespace='type'):
+            return dict(kind='tycon', name=dict(unit='ghc-internal', module=module,
+                occurrence=name, namespace=namespace), arguments=list(arguments))
+        weak = ty('GHC.Internal.Prim', 'Weak#', ty('GHC.Internal.Types', 'Lifted', namespace='data'),
+                  ty('GHC.Internal.Conc.Sync', 'ThreadId'))
+        nominal = dict(kind='function', multiplicity=ty('GHC.Internal.Types', 'Many', namespace='data'),
+            argument=weak, result=ty('GHC.Internal.Types', 'IO', ty('GHC.Internal.Tuple', 'Unit')))
+        module = self.module(['WordRep'])
+        module.pop('packageNativeLink')
+        module['unit'] = 'ghc-internal'
+        proof = module['staticForeignImports']; proof['unit'] = module['unit']
+        declaration = proof['imports'][0]
+        declaration['binder']['unit'] = module['unit']
+        declaration.update(symbol='rts_setMainThread', unit=module['unit'],
+            declaredType=nominal, normalizedType=nominal)
+        declaration['emitted'].update(symbol='rts_setMainThread', unit=module['unit'],
+            arguments=['BoxedRep (Just Unlifted)', 'void'], result=['void'])
+        call = dict(schema=1, target=dict(kind='static', symbol='rts_setMainThread',
+            unit=module['unit'], isFunction=True), convention='ccall', safety='unsafe', arity=2, suppliedArity=2,
+            argumentReps=[dict(kind='object', primReps=['BoxedRep (Just Unlifted)'], evaluated=False),
+                dict(kind='void', primReps=[], evaluated=False)],
+            resultRep=dict(kind='unknown', primReps=[], aggregate='unboxed-tuple',
+                components=[dict(kind='void', primReps=[], evaluated=True)], evaluated=False))
+        binding = dict(foreignCall=call)
+        module['bindings'] = [binding]; proof['expectedCalls'] = [call]
+        module['packageNativeArchive'] = dict(schema=1, profile='thc-package-native-archive-v1',
+            execution='not-linked', unit=module['unit'], module=module['module'],
+            unsupportedImports=[declaration['emitted']], unclassifiedReason=None, unresolvedSymbols=[], artifact=None)
+        archive = core_package_manifest.package_native_archive(module)
+        self.assertFalse(core_package_manifest.native_archive_blocks(module, binding, archive))
+        for mutation in ('weak-payload', 'missing-call', 'abi'):
+            bad = copy.deepcopy(module)
+            if mutation == 'weak-payload':
+                for field in ('declaredType', 'normalizedType'):
+                    bad['staticForeignImports']['imports'][0][field]['argument']['arguments'][1] = ty('GHC.Internal.Types', 'Int')
+            elif mutation == 'missing-call': bad['staticForeignImports']['expectedCalls'] = []
+            else: bad['staticForeignImports']['imports'][0]['emitted']['result'] = ['void', 'WordRep']
+            with self.subTest(mutation=mutation), self.assertRaises(ValueError):
+                core_package_manifest.package_native_archive(bad)
+        whole = dict(archive, unclassifiedReason='non-static-c-import-declaration')
+        self.assertTrue(core_package_manifest.native_archive_blocks(module, binding, whole))
+        unresolved = dict(archive, unresolvedSymbols=['ordinary_native_import'])
+        self.assertTrue(core_package_manifest.native_archive_blocks(module, binding, unresolved))
+
+    def test_primitive_archive_retains_recursive_nominal_tuple_without_native_abi(self):
+        import copy
+        def ty(module, name, *arguments, namespace='type'):
+            return dict(kind='tycon', name=dict(unit='ghc-internal', module=module,
+                occurrence=name, namespace=namespace), arguments=list(arguments))
+        word = ty('GHC.Internal.Prim', 'Word#')
+        nominal = dict(kind='function', multiplicity=ty('GHC.Internal.Types', 'Many', namespace='data'),
+            argument=word, result=ty('GHC.Internal.Types', 'Tuple2#',
+                ty('GHC.Internal.Types', 'WordRep', namespace='data'),
+                ty('GHC.Internal.Types', 'WordRep', namespace='data'), word, word))
+        module = self.module(['WordRep']); module.pop('packageNativeLink')
+        proof = module['staticForeignImports']; proof['profile'] = core_package_manifest.IMPORT_PROFILES[1]
+        entry = proof['imports'][0]
+        entry.update(convention='prim', safety='safe', declaredType=nominal, normalizedType=nominal)
+        entry['emitted'].update(convention='prim', safety='safe', arguments=['WordRep'], result=['WordRep', 'WordRep'])
+        rep = lambda evaluated: dict(kind='long', primReps=['WordRep'], evaluated=evaluated)
+        call = dict(schema=1, target=dict(kind='static', isFunction=True, symbol=entry['symbol'], unit=module['unit']),
+            convention='prim', safety='safe', arity=1, suppliedArity=1, argumentReps=[rep(False)],
+            resultRep=dict(kind='unknown', aggregate='unboxed-tuple', primReps=['WordRep', 'WordRep'],
+                components=[rep(True), rep(True)], evaluated=False))
+        proof['expectedCalls'] = [call]; module['bindings'] = [dict(foreignCall=call)]
+        module['packageNativeArchive'] = dict(schema=1, profile='thc-package-native-archive-v1', execution='not-linked',
+            unit=module['unit'], module=module['module'], unsupportedImports=[entry['emitted']],
+            unclassifiedReason=None, unresolvedSymbols=[], artifact=None)
+        archive = core_package_manifest.package_native_archive(module)
+        self.assertIsNone(core_package_manifest.package_scalar_link(module))
+        self.assertTrue(core_package_manifest.native_archive_blocks(module, module['bindings'][0], archive))
+        mixed = self.module(['WordRep'])
+        mixed['staticForeignImports']['profile'] = core_package_manifest.IMPORT_PROFILES[1]
+        primitive = copy.deepcopy(entry); primitive['binder']['occurrence'] = 'primitive'
+        primitive['symbol'] = primitive['emitted']['symbol'] = 'primitive_words'
+        mixed_call = copy.deepcopy(call); mixed_call['target']['symbol'] = 'primitive_words'
+        mixed['staticForeignImports']['imports'].append(primitive)
+        mixed['staticForeignImports']['expectedCalls'] = [mixed_call]
+        mixed['bindings'] = [dict(foreignCall=mixed_call)]
+        mixed['packageNativeArchive'] = dict(module['packageNativeArchive'], unsupportedImports=[primitive['emitted']])
+        link, proved = core_package_manifest.package_scalar_link(mixed)
+        self.assertEqual({link['abi'][0]['entry']}, proved, 'ordinary C adapter must survive beside prim exclusions')
+        for mutation in ('v1', 'tuple-to-scalar', 'nominal', 'missing-call', 'native-conflict', 'missing-archive'):
+            bad = copy.deepcopy(module)
+            if mutation == 'v1': bad['staticForeignImports']['profile'] = core_package_manifest.IMPORT_PROFILES[0]
+            elif mutation == 'tuple-to-scalar':
+                bad['bindings'][0]['foreignCall']['resultRep'] = rep(False)
+                bad['staticForeignImports']['expectedCalls'] = [bad['bindings'][0]['foreignCall']]
+            elif mutation == 'nominal': bad['staticForeignImports']['imports'][0]['normalizedType']['result'] = word
+            elif mutation == 'missing-call': bad['staticForeignImports']['expectedCalls'] = []
+            elif mutation == 'missing-archive': bad.pop('packageNativeArchive')
+            else: bad['packageNativeArchive']['conflictingImports'] = [entry['emitted']]
+            with self.subTest(mutation=mutation), self.assertRaises(ValueError):
+                core_package_manifest.package_native_archive(bad)
 
     def test_conflicts_order_and_duplicates_still_reject(self):
         for reps in (['AddrRep', 'WordRep'],

@@ -472,6 +472,176 @@ def operation(target):
             if isinstance(unit, str) else OPERATIONS[symbol])
 
 
+def context_owned_rts_call(call):
+    """The original RTS identity subset selected before package C in Java.
+
+    This is selection only: the existing operation validator still checks the
+    descriptor, operands and capabilities. Ordinary library names are excluded.
+    """
+    target = call.get('target', {}) if isinstance(call, dict) else {}
+    return target.get('unit') == 'ghc-internal' and target.get('symbol') in (
+        STACK_CLONE, *STACK_INFO, 'hs_free_stable_ptr', 'rts_setMainThread',
+        'rtsSupportsBoundThreads', 'stg_getThreadAllocationCounterzh',
+        'rts_getThreadId', 'eq_thread', 'cmp_thread', 'shutdownHaskellAndExit',
+        'shutdownHaskellAndSignal', 'reportStackOverflow', 'reportHeapOverflow',
+        'errorBelch2', 'debugBelch2')
+
+
+def boxed_owned_call(call):
+    target = call.get('target', {}) if isinstance(call, dict) else {}
+    return target.get('unit') == 'ghc-internal' and target.get('symbol') in (
+        'rts_getThreadId', 'eq_thread', 'cmp_thread', 'rts_setMainThread', 'reportStackOverflow')
+
+
+def validate_boxed_declaration(declaration, calls):
+    """Mirror the cold exact nominal boundary of CoreBoxedForeignDeclarations."""
+    emitted = declaration['emitted']
+    symbol = emitted['symbol']
+    if emitted['unit'] != 'ghc-internal' or symbol not in (
+            'rts_getThreadId', 'eq_thread', 'cmp_thread', 'rts_setMainThread', 'reportStackOverflow'):
+        return
+    def ty(module, name, *arguments, namespace='type'):
+        return dict(kind='tycon', name=dict(unit='ghc-internal', module=module,
+            occurrence=name, namespace=namespace), arguments=list(arguments))
+    def arrow(argument, result):
+        return dict(kind='function', multiplicity=ty('GHC.Internal.Types', 'Many', namespace='data'),
+                    argument=argument, result=result)
+    thread = ty('GHC.Internal.Prim', 'ThreadId#')
+    if symbol in ('rts_getThreadId', 'eq_thread', 'cmp_thread'):
+        c_name, module, name, rep, count = {
+            'rts_getThreadId': ('CULLong', 'GHC.Internal.Word', 'Word64', 'Word64Rep', 1),
+            'eq_thread': ('CBool', 'GHC.Internal.Word', 'Word8', 'Word8Rep', 2),
+            'cmp_thread': ('CInt', 'GHC.Internal.Int', 'Int32', 'Int32Rep', 2)}[symbol]
+        declared, normalized = ty('GHC.Internal.Foreign.C.Types', c_name), ty(module, name)
+        for _ in range(count): declared, normalized = arrow(thread, declared), arrow(thread, normalized)
+        outputs = ['void', rep]
+    else:
+        argument = (ty('GHC.Internal.Prim', 'Weak#', ty('GHC.Internal.Types', 'Lifted', namespace='data'),
+                       ty('GHC.Internal.Conc.Sync', 'ThreadId')) if symbol == 'rts_setMainThread' else thread)
+        declared = normalized = arrow(argument, ty('GHC.Internal.Types', 'IO', ty('GHC.Internal.Tuple', 'Unit')))
+        count, outputs = 1, ['void']
+    require(declaration['symbol'] == symbol and declaration['unit'] == 'ghc-internal' and
+        declaration['header'] is None and declaration['isFunction'] is True and
+        declaration['convention'] == emitted['convention'] == 'ccall' and
+        declaration['safety'] == emitted['safety'] == 'unsafe' and
+        declaration['normalizationRole'] == 'representational', 'boxed static declaration identity')
+    require(declaration['declaredType'] == declared and declaration['normalizedType'] == normalized,
+            'exact boxed declared and normalized nominal types')
+    require(emitted['arguments'] == ['BoxedRep (Just Unlifted)'] * count + ['void'] and
+            emitted['result'] == outputs, 'boxed emitted carriers')
+    for call in calls:
+        target = call.get('target', {})
+        if target.get('unit') != emitted['unit'] or target.get('symbol') != symbol: continue
+        require(type(call.get('schema')) is int and call['schema'] == 1 and
+            call.get('target') == dict(kind='static', symbol=symbol, unit='ghc-internal', isFunction=True) and
+            call.get('arity') == count + 1 and call.get('suppliedArity') == count + 1 and
+            call.get('convention') == emitted['convention'] and call.get('safety') == emitted['safety'] and
+            all(scalar(raw, primitive, True) for raw, primitive in zip(call['argumentReps'],
+                ['BoxedRep (Just Unlifted)'] * count + [None])) and
+            len(call['argumentReps']) == count + 1 and
+            result(call['resultRep'], tuple(None if rep == 'void' else rep for rep in outputs), True),
+            'boxed call inventory differs from nominal declaration')
+
+
+def validate_prim_declaration(declaration, calls):
+    """Associate concrete stock prim nominal types with recursive Core reps.
+
+    This is retained proof, not a native adapter or an execution capability.
+    Unknown nominal carriers remain unsupported instead of guessing their ABI.
+    """
+    emitted = declaration['emitted']
+    require(declaration['header'] is None and declaration['isFunction'] is True and
+        declaration['symbol'] == emitted['symbol'] and declaration['unit'] == emitted['unit'] and
+        declaration['convention'] == emitted['convention'] == 'prim' and
+        declaration['safety'] == emitted['safety'] == 'safe', 'stock primitive identity')
+    if emitted['unit'] == 'ghc-internal' and emitted['symbol'] in STACK_INFO:
+        _, _, parameters, returns = OPERATIONS[emitted['symbol']]
+        def ty(module, name, *arguments, namespace='type'):
+            return dict(kind='tycon', name=dict(unit='ghc-internal', module=module,
+                occurrence=name, namespace=namespace), arguments=list(arguments))
+        def primitive(rep):
+            if rep == 'BoxedRep (Just Unlifted)': return ty('GHC.Internal.Prim', 'StackSnapshot#')
+            if rep == 'BoxedRep (Just Lifted)': return ty('GHC.Internal.Types', 'Any', ty('GHC.Internal.Types', 'Type'))
+            return ty('GHC.Internal.Prim', rep[:-3] + '#')
+        if isinstance(returns, tuple):
+            prefix = [ty('GHC.Internal.Types', 'UnliftedRep') if rep == 'BoxedRep (Just Unlifted)'
+                      else ty('GHC.Internal.Types', rep, namespace='data') for rep in returns]
+            normalized = ty('GHC.Internal.Types', 'Tuple' + str(len(returns)) + '#',
+                            *(prefix + list(map(primitive, returns))))
+        else: normalized = primitive(returns)
+        for rep in reversed(parameters):
+            normalized = dict(kind='function', multiplicity=ty('GHC.Internal.Types', 'Many', namespace='data'),
+                              argument=primitive(rep), result=normalized)
+        symbol = emitted['symbol']
+        alias = ('LargeBitmapGetter' if symbol in ('getLargeBitmapzh', 'getBCOLargeBitmapzh', 'getRetFunLargeBitmapzh')
+                 else 'SmallBitmapGetter' if symbol in ('getSmallBitmapzh', 'getRetFunSmallBitmapzh') else None)
+        declared = ty('GHC.Internal.Stack.Decode', alias) if alias else normalized
+        require(declaration['declaredType'] == declared and declaration['normalizedType'] == normalized,
+                'exact stock Stack declared and normalized nominal types')
+    def named(value, module, name, namespace='type'):
+        return value.get('kind') == 'tycon' and value.get('name') == dict(
+            unit='ghc-internal', module=module, occurrence=name, namespace=namespace)
+    def representation(value, evaluated):
+        require(value.get('kind') == 'tycon', 'concrete primitive nominal type')
+        args, name = value['arguments'], value['name']
+        if name['unit'] == 'ghc-internal' and name['module'] == 'GHC.Internal.Types':
+            require(name['namespace'] == 'type', 'primitive nominal namespace')
+            if name['occurrence'] == 'Unit#' and not args: fields = []
+            elif re.fullmatch(r'Tuple[1-9][0-9]*#', name['occurrence']):
+                count = int(name['occurrence'][5:-1])
+                require(len(args) == count * 2, 'primitive tuple nominal arity')
+                fields = [representation(field, True) for field in args[count:]]
+                for nominal_rep, field in zip(args[:count], fields):
+                    reps = field['primReps']
+                    rep = ('ZeroBitRep' if not reps else 'UnliftedRep' if reps == ['BoxedRep (Just Unlifted)']
+                           else 'LiftedRep' if reps == ['BoxedRep (Just Lifted)'] else reps[0])
+                    require(len(reps) <= 1 and named(nominal_rep, 'GHC.Internal.Types', rep,
+                        'type' if rep in ('ZeroBitRep', 'UnliftedRep', 'LiftedRep') else 'data') and
+                        not nominal_rep['arguments'], 'primitive tuple runtime-rep identity')
+            elif name['occurrence'] == 'Any' and len(args) == 1:
+                require(named(args[0], 'GHC.Internal.Types', 'Type') and not args[0]['arguments'], 'primitive Any kind')
+                return dict(kind='object', primReps=['BoxedRep (Just Lifted)'], evaluated=evaluated)
+            else: raise ValueError('Unsupported concrete primitive nominal type')
+            return dict(kind='unknown', aggregate='unboxed-tuple',
+                primReps=[rep for field in fields for rep in field['primReps']], components=fields, evaluated=evaluated)
+        require(name['unit'] == 'ghc-internal' and name['module'] == 'GHC.Internal.Prim' and
+                name['namespace'] == 'type', 'primitive nominal owner')
+        occurrence = name['occurrence']
+        if occurrence == 'State#':
+            require(len(args) == 1 and named(args[0], 'GHC.Internal.Prim', 'RealWorld') and
+                    not args[0]['arguments'], 'primitive State identity')
+            primitive = None
+        elif occurrence in ('StackSnapshot#', 'ThreadId#'):
+            require(not args, 'primitive boxed nominal arity'); primitive = 'BoxedRep (Just Unlifted)'
+        elif occurrence == 'StablePtr#':
+            require(len(args) == 2, 'primitive stable pointer nominal arity'); primitive = 'AddrRep'
+        else:
+            primitives = {rep[:-3] + '#': rep for rep in ('IntRep', 'WordRep', 'Int8Rep', 'Word8Rep',
+                'Int16Rep', 'Word16Rep', 'Int32Rep', 'Word32Rep', 'Int64Rep', 'Word64Rep', 'AddrRep', 'FloatRep', 'DoubleRep')}
+            require(not args and occurrence in primitives, 'primitive scalar nominal identity')
+            primitive = primitives[occurrence]
+        return dict(kind=scalar_kind(primitive), primReps=[] if primitive is None else [primitive], evaluated=evaluated)
+    arguments, value = [], declaration['normalizedType']
+    while value.get('kind') == 'function':
+        require(named(value['multiplicity'], 'GHC.Internal.Types', 'Many', 'data') and
+                not value['multiplicity']['arguments'], 'primitive arrow multiplicity')
+        arguments.append(representation(value['argument'], False)); value = value['result']
+    output = representation(value, False)
+    def carrier(rep):
+        require(len(rep['primReps']) <= 1, 'primitive immediate scalar carrier')
+        return rep['primReps'][0] if rep['primReps'] else 'void'
+    require(emitted['arguments'] == list(map(carrier, arguments)) and
+        emitted['result'] == list(map(carrier, output['components'] if 'components' in output else [output])),
+        'primitive emitted/nominal carriers differ')
+    for call in calls:
+        if call.get('target', {}).get('unit') != emitted['unit'] or call['target'].get('symbol') != emitted['symbol']: continue
+        require(call.get('schema') == 1 and call.get('target') == dict(kind='static', isFunction=True,
+            unit=emitted['unit'], symbol=emitted['symbol']) and call.get('convention') == 'prim' and
+            call.get('safety') == 'safe' and call.get('arity') == len(arguments) and
+            call.get('suppliedArity') == len(arguments) and call.get('argumentReps') == arguments and
+            call.get('resultRep') == output, 'primitive recursive call/nominal ABI differs')
+
+
 def require(condition, detail):
     if not condition:
         raise ValueError('Invalid original foreign call: ' + detail)

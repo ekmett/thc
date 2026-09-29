@@ -16,12 +16,15 @@ import stat
 import subprocess
 from tempfile import TemporaryDirectory
 import zlib
+import core_original_foreign
 from zipfile import BadZipFile, ZipFile
 
 
 FORMAT = 'thc-core-packages'
 BOUNDARY = 'optimized-Core-after-Tidy-before-CorePrep'
 SHA256 = re.compile(r'[0-9a-f]{64}\Z')
+IMPORT_PROFILES = ('ghc-9.14.1-thc-only-static-c-imports-v1',
+                   'ghc-9.14.1-thc-stock-static-foreign-imports-v2')
 
 
 @lru_cache(maxsize=1)
@@ -521,7 +524,10 @@ def native_archive_calls(value):
 
 def package_native_archive(module):
     """Validate original unsupported obligations without granting execution."""
-    if 'packageNativeArchive' not in module: return None
+    if 'packageNativeArchive' not in module:
+        if module.get('staticForeignImports', {}).get('profile') == IMPORT_PROFILES[1]:
+            raise ValueError('Primitive import provenance requires its package native archive')
+        return None
     def require(ok, reason):
         if not ok: raise ValueError('Invalid package native archive: ' + reason)
     def record(value, fields):
@@ -554,7 +560,7 @@ def package_native_archive(module):
         else: require(False, 'unknown type')
     def proof_identity(proof):
         require(type(proof['schema']) is int and proof['schema'] in (1, 2, 3, 4) and proof['scope'] == 'retained-static-import-products' and
-            proof['execution'] == 'not-linked' and proof['profile'] == 'ghc-9.14.1-thc-only-static-c-imports-v1' and
+            proof['execution'] == 'not-linked' and proof['profile'] in IMPORT_PROFILES and
             proof['unit'] == module['unit'] and proof['module'] == module['module'], 'typed provenance identity')
     raw_archive = module['packageNativeArchive']
     conflict_field = isinstance(raw_archive, dict) and 'conflictingImports' in raw_archive
@@ -573,8 +579,12 @@ def package_native_archive(module):
     def emitted_signature(value):
         emitted = record(value, 'symbol unit convention safety arguments result')
         require(re.fullmatch('[A-Za-z_][A-Za-z0-9_]*', text(emitted['symbol'])) and emitted['unit'] == unit and
-            emitted['convention'] in ('ccall', 'capi') and emitted['safety'] in ('unsafe', 'safe', 'interruptible'), 'emitted identity')
+            emitted['convention'] in ('ccall', 'capi', 'prim') and emitted['safety'] in ('unsafe', 'safe', 'interruptible'), 'emitted identity')
         args, result = sequence(emitted['arguments']), sequence(emitted['result'])
+        if emitted['convention'] == 'prim':
+            require(proof['profile'] == IMPORT_PROFILES[1] and emitted['safety'] == 'safe' and
+                all(rep in scalar + gc_boxed + ('void',) for rep in args + result), 'primitive carriers/profile')
+            return emitted
         require(args and args[-1] == 'void' and all(rep in scalar + ('ByteArray#', 'MutableByteArray#') + gc_boxed for rep in args[:-1]) and
             (result == ['void'] or len(result) == 2 and result[0] == 'void' and result[1] in scalar + gc_boxed), 'emitted carriers')
         return emitted
@@ -617,13 +627,23 @@ def package_native_archive(module):
             binders.append(binder); text(entry['symbol'])
             require(entry['header'] is None or isinstance(entry['header'], str) and text(entry['header']) and
                 not any(char in entry['header'] for char in '\n\r"\\'), 'import header')
-            require(entry['unit'] in (None, unit) and entry['convention'] in ('ccall', 'capi') and
+            require(entry['unit'] in (None, unit) and entry['convention'] in ('ccall', 'capi', 'prim') and
                 (entry['isFunction'] is True or entry['convention'] == 'capi' and entry['isFunction'] is False) and
                 entry['safety'] in ('unsafe', 'safe', 'interruptible') and entry['normalizationRole'] == 'representational', 'import metadata')
             typ(entry['declaredType']); typ(entry['normalizedType'])
             emitted = emitted_signature(entry['emitted'])
             require(emitted['convention'] == entry['convention'] and emitted['safety'] == entry['safety'], 'emitted declaration')
+            core_original_foreign.validate_boxed_declaration(entry, proof['expectedCalls'])
+            if entry['convention'] == 'prim': core_original_foreign.validate_prim_declaration(entry, proof['expectedCalls'])
             emitted_imports.append(emitted)
+        require((proof['profile'] == IMPORT_PROFILES[1]) == any(e['convention'] == 'prim' for e in emitted_imports),
+                'primitive producer profile inventory')
+        if unit == 'ghc-internal' and module['module'] == 'GHC.Internal.Stack.Decode':
+            for call in proof['expectedCalls']:
+                target = call.get('target', {})
+                if target.get('unit') == unit and target.get('symbol') in core_original_foreign.STACK_INFO and call.get('convention') == 'prim':
+                    require(any(entry['symbol'] == target['symbol'] for entry in emitted_imports),
+                            'missing original Stack primitive declaration')
     require('staticForeignImportStubs' not in module or module['staticForeignImportStubs'] == proof, 'retained stub provenance differs')
     conflicts = [emitted_signature(value) for value in sequence(archive['conflictingImports'])] if conflict_field else []
     if conflict_field:
@@ -632,14 +652,14 @@ def package_native_archive(module):
     conflict_symbols = {value['symbol'] for value in conflicts}
     for symbol in conflict_symbols:
         variants = [value for value in conflicts if value['symbol'] == symbol]
-        require(all(value['safety'] in ('unsafe', 'safe') and
+        require(all(value['convention'] in ('ccall', 'capi') and value['safety'] in ('unsafe', 'safe') and
             not any(rep in gc_boxed for rep in value['arguments'] + value['result']) for value in variants) and
             len({c_abi(value) for value in variants}) > 1,
                 'imports do not have conflicting C ABIs')
         local = [value for value in emitted_imports if value['symbol'] == symbol and value['safety'] != 'interruptible' and
                  not any(rep in gc_boxed for rep in value['arguments'] + value['result'])]
         require(local and all(value in variants for value in local), 'conflict witnesses differ from local imports')
-    expected = [entry for entry in emitted_imports if entry['safety'] == 'interruptible' or entry['symbol'] in conflict_symbols or
+    expected = [entry for entry in emitted_imports if entry['convention'] == 'prim' or entry['safety'] == 'interruptible' or entry['symbol'] in conflict_symbols or
                 any(rep in gc_boxed for rep in entry['arguments'] + entry['result'])]
     require(sequence(archive['unsupportedImports']) == expected, 'unsupported import inventory differs')
     unresolved = [text(value) for value in sequence(archive['unresolvedSymbols'])]
@@ -656,6 +676,7 @@ def package_native_archive(module):
 def native_archive_blocks(module, binding, archive):
     if archive['unclassifiedReason'] is not None or archive['unresolvedSymbols']: return True
     return any(isinstance(call, dict) and isinstance(call.get('target'), dict) and
+        not core_original_foreign.context_owned_rts_call(call) and
         call['target'].get('unit') == module['unit'] and any(
             call['target'].get('symbol') == emitted['symbol'] and call.get('convention') == emitted['convention'] and
             call.get('safety') == emitted['safety'] for emitted in archive['unsupportedImports'])
@@ -865,7 +886,7 @@ def package_scalar_link(module, validate_archive=True):
     if native and 'staticForeignImportStubs' in module:
         require(exact(module['staticForeignImportStubs'], proof), 'retained CAPI import provenance differs')
     require(type(proof['schema']) is int and proof['schema'] in (1, 2, 3, 4) and proof['scope'] == 'retained-static-import-products' and
-        proof['execution'] == 'not-linked' and proof['profile'] == 'ghc-9.14.1-thc-only-static-c-imports-v1' and
+        proof['execution'] == 'not-linked' and proof['profile'] in (IMPORT_PROFILES if native else IMPORT_PROFILES[:1]) and
         proof['unit'] == unit and proof['module'] == module.get('module') and proof['status'] == 'verified' and
         type(proof['wordBits']) is int and proof['wordBits'] == 64, 'typed import profile/owner')
     callbacks = native_callback_declarations(module, proof, typ, identity)

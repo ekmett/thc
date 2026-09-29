@@ -81,11 +81,76 @@ preparePackageNativeGcCarriers root = do
     "src/compiler/THC/ForeignImportProvenance.hs","src/driver/THC/Driver/PackageNative.hs"]
   artifacts <- hashes root [relative </> "PackageNativeGcCarriers.cbd",relative </> "oracle.txt"]
   originals <- prepareOriginalGcCarriers root ghc helper libdir
+  primitive <- preparePrimitiveCarriers root helper libdir
   writeJson (output </> "manifest.json") (object ["schema" .= (1::Int),"inputHashes" .= inputs,
     "artifactHashes" .= artifacts,"nativeRows" .= (6::Int),"gcImports" .= (7::Int),
     "originalModules" .= originals,
+    "primitiveModule" .= primitive,
     "commands" .= map commandRecord [exported,hydrated,validated,compiled,oracle]])
   putStrLn "package-native-gc-carriers: exact GC imports archived; scalar adapter retained; six native relational observations"
+
+-- Pure scalar/tuple and nested zero-width prim results must survive the stock
+-- probe without being mistaken for a C State ABI. No stack pointer is executed.
+preparePrimitiveCarriers :: FilePath -> FilePath -> FilePath -> IO Value
+preparePrimitiveCarriers root helper libdir = do
+  let relative = "build/package-native-gc-carriers/primitive"
+      output = root </> relative
+      source = "t/fixtures/compiler/PackageNativePrimCarriers.hs"
+      objects = output </> "objects"
+      core = output </> "PackageNativePrimCarriers.cbd"
+      execute = runLogged 180 root (relative </> "logs")
+  createDirectoryIfMissing True output
+  exported <- execute "export" [("THC_CORE_OUT",output </> "source-core"),("THC_GHC_OUT",objects)]
+    "bin/export-core.sh" ["-package","ghc-internal","-fwrite-if-simplified-core",
+      "-fplugin-opt=THC.Plugin:foreign-import-provenance",source]
+  hydrated <- execute "hydrate" [] helper ["--libdir",libdir,"--unit","main",
+    "--module","PackageNativePrimCarriers","--way","dynamic","--home-interfaces",objects,
+    "--interface",objects </> "PackageNativePrimCarriers.hi"]
+  BS.writeFile core (commandStdout hydrated)
+  original <- either fail pure (readModuleValue (commandStdout hydrated))
+  proof <- field original "staticForeignImports" :: IO Value
+  status <- field proof "status" :: IO String
+  profile <- field proof "profile" :: IO String
+  unless (status == "verified" && profile == "ghc-9.14.1-thc-stock-static-foreign-imports-v2")
+    (fail "stock primitive declarations did not retain their v2 provenance")
+  archived <- either fail pure (archiveNativeModule "main" original)
+  signatures <- either fail pure (nativeSignatures "main" [archived])
+  unless (null signatures) (fail "primitive declarations leaked into native adapters")
+  marker <- field archived "packageNativeArchive" :: IO Value
+  excluded <- field marker "unsupportedImports" :: IO [Value]
+  unless (length excluded == 4) (fail "primitive archive inventory differs")
+  results <- sort <$> mapM (\entry -> field entry "result" :: IO [String]) excluded
+  unless (results == sort [["WordRep"],["AddrRep","AddrRep"],
+      ["BoxedRep (Just Unlifted)","WordRep","IntRep"],["void","void"]])
+    (fail "primitive scalar, tuple or nested zero-width result was flattened incorrectly")
+  finalizeModuleMetadata core archived
+  validated <- execute "validate" [("PYTHONPATH",root </> "bin")] "python3"
+    ["-c","import pathlib,sys,core_package_manifest as c; c.package_native_archive(c.inspect_cbd(pathlib.Path(sys.argv[1]).read_bytes()))",core]
+  let unknownSource = "t/fixtures/compiler/PackageNativeUnknownPrim.hs"
+      unknownCore = output </> "PackageNativeUnknownPrim.cbd"
+  unknownExport <- execute "unknown-export" [("THC_CORE_OUT",output </> "unknown-source-core"),("THC_GHC_OUT",objects)]
+    "bin/export-core.sh" ["-package","ghc-internal","-fwrite-if-simplified-core",
+      "-fplugin-opt=THC.Plugin:foreign-import-provenance",unknownSource]
+  unknownHydrate <- execute "unknown-hydrate" [] helper ["--libdir",libdir,"--unit","main",
+    "--module","PackageNativeUnknownPrim","--way","dynamic","--home-interfaces",objects,
+    "--interface",objects </> "PackageNativeUnknownPrim.hi"]
+  unknown <- either fail pure (readModuleValue (commandStdout unknownHydrate))
+  unknownProof <- field unknown "staticForeignImports" :: IO Value
+  unknownStatus <- field unknownProof "status" :: IO String
+  unless (unknownStatus == "unclassified") (fail "unknown primitive nominal carrier gained verified provenance")
+  unknownArchive <- either fail pure (archiveNativeModule "main" unknown)
+  unknownSignatures <- either fail pure (nativeSignatures "main" [unknownArchive])
+  unless (null unknownSignatures) (fail "unknown primitive carrier gained a native adapter")
+  BS.writeFile unknownCore (commandStdout unknownHydrate)
+  finalizeModuleMetadata unknownCore unknownArchive
+  unknownValidated <- execute "unknown-validate" [("PYTHONPATH",root </> "bin")] "python3"
+    ["-c","import pathlib,sys,core_package_manifest as c; m=c.inspect_cbd(pathlib.Path(sys.argv[1]).read_bytes()); a=c.package_native_archive(m); assert a['unclassifiedReason']=='non-static-c-import-declaration'; assert all(c.native_archive_blocks(m,b,a) for b in m['bindings'])",unknownCore]
+  inputs <- hashes root [source,unknownSource,"src/compiler/THC/ForeignImportProvenance.hs","src/compiler/THC/Plugin.hs",
+    "src/driver/THC/Driver/PackageNative.hs"]
+  artifacts <- hashes root [core,unknownCore,objects </> "PackageNativePrimCarriers.hi"]
+  pure (object ["inputHashes" .= inputs,"artifactHashes" .= artifacts,
+    "nativeSignatures" .= signatures,"commands" .= map commandRecord
+      [exported,hydrated,validated,unknownExport,unknownHydrate,unknownValidated]])
 
 -- Optional original-unit qualification uses explicitly supplied genuine source
 -- and home interfaces. Copies isolate GHC's one-shot -hidir lookup and writes;
@@ -100,7 +165,7 @@ prepareOriginalGcCarriers root ghc helper libdir = do
     (Just suppliedSource,Just suppliedHome) -> do
       sourceRoot <- canonicalizePath suppliedSource
       home <- canonicalizePath suppliedHome
-      let relative = "build/package-native-gc-carriers/original"
+      let relative = "build/package-native-gc-carriers/original-v2"
           output = root </> relative
           objects = output </> "objects"
           execute = runLogged 180 root (relative </> "logs")
@@ -127,15 +192,20 @@ prepareOriginalGcCarriers root ghc helper libdir = do
         "-fplugin-opt=THC.Plugin:unit-qualified"] >>= line
       forM [("GHC.Internal.Conc.Sync",["rts_getThreadId","eq_thread","cmp_thread",
                 "rts_enableThreadAllocationLimit","rts_disableThreadAllocationLimit","reportStackOverflow"]),
-            ("GHC.Internal.TopHandler",["rts_setMainThread"])] $ \(name,expectedGc) -> do
+            ("GHC.Internal.TopHandler",["rts_setMainThread"]),
+            ("GHC.Internal.Stack.Decode",["getUnderflowFrameNextChunkzh","getWordzh","isArgGenBigRetFunTypezh",
+              "getLargeBitmapzh","getBCOLargeBitmapzh","getRetFunLargeBitmapzh","getSmallBitmapzh",
+              "getRetFunSmallBitmapzh","getInfoTableAddrszh","getStackInfoTableAddrzh","getStackClosurezh",
+              "getStackFieldszh","advanceStackFrameLocationzh"])] $ \(name,expectedGc) -> do
         let modulePath = map (\character -> if character == '.' then pathSeparator else character) name
             source = sourceRoot </> "libraries/ghc-internal/src" </> modulePath <.> "hs"
             core = output </> name <.> "cbd"
-        compiled <- execute (name ++ "-compile") [] ghc ["-c","-dynamic","-O2","-fforce-recomp",
+        compiled <- execute (name ++ "-compile") [] ghc $ ["-c","-dynamic","-O2","-fforce-recomp",
           "-fwrite-if-simplified-core","-dcore-lint","-this-unit-id","ghc-internal",
           "-this-package-name","ghc-internal","-hide-all-packages","-package","rts",
           "-i","-i" ++ objects,"-I" ++ (home </> "include"),"-package-db",pluginDb,plugin,
-          "-odir",objects,"-hidir",objects,source]
+          "-odir",objects,"-hidir",objects] ++
+          ["-XNoImplicitPrelude" | name == "GHC.Internal.Stack.Decode"] ++ [source]
         hydrated <- execute (name ++ "-hydrate") [] helper ["--libdir",libdir,"--unit","ghc-internal",
           "--module",name,"--way","dynamic","--home-interfaces",objects,
           "--interface",objects </> modulePath <.> "hi"]
@@ -154,6 +224,8 @@ prepareOriginalGcCarriers root ghc helper libdir = do
         symbols <- sort <$> mapM (\entry -> field entry "symbol" :: IO String) excluded
         unless (symbols == sort expectedGc) (fail "original GC archive exclusion inventory differs")
         signatures <- either fail pure (nativeSignatures "ghc-internal" [archived])
+        unless (name /= "GHC.Internal.Stack.Decode" || null signatures)
+          (fail "original Stack.Decode primitive imports leaked into native adapters")
         finalizeModuleMetadata core archived
         validated <- execute (name ++ "-validate") [("PYTHONPATH",root </> "bin")] "python3"
           ["-c","import pathlib,sys,core_package_manifest as c; c.package_native_archive(c.inspect_cbd(pathlib.Path(sys.argv[1]).read_bytes()))",core]

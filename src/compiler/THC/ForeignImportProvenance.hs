@@ -41,7 +41,7 @@ import GHC.Types.ForeignCall
 import GHC.Types.ForeignStubs
 import GHC.Types.RepType (typePrimRep_maybe, unwrapType)
 import qualified GHC.Unit.Module.WholeCoreBindings as Foreign
-import THC.ForeignExports (ExportName, nameIdentity)
+import THC.ForeignExports (ExportName(..), nameIdentity)
 import THC.ForeignExportProvenance (knownPipeline)
 
 data Call = Call String (Maybe String) String String [String] [String] deriving (Eq, Data)
@@ -91,6 +91,7 @@ productOf (Foreign.IfaceForeign stubs files) = Product (fmap stub stubs) (map fi
 convention :: CCallConv -> String
 convention CCallConv = "ccall"
 convention CApiConv = "capi"
+convention PrimCallConv = "prim"
 convention _ = "unsupported"
 
 safetyName :: Safety -> String
@@ -126,6 +127,30 @@ importTypeIdentity = go []
         ImportForall <$> go bound (tyVarKind variable) <*> go (variable : bound) body
       _ -> Left "static import type contains casts or constraints"
 
+-- Keep the v2 primitive profile no broader than the cold readers' concrete
+-- nominal/recursive association. C byte-array handling remains independent.
+-- Unknown GC families and polymorphic reps retain the existing unclassified
+-- obligation instead of claiming a proof that no reader can check.
+primitiveType :: ImportType -> Bool
+primitiveType (ImportTyCon (ExportName "ghc-internal" modName occurrence "type") arguments)
+  | modName == "GHC.Internal.Prim" =
+      (null arguments && occurrence `elem` ["Int#","Word#","Int8#","Word8#","Int16#","Word16#",
+        "Int32#","Word32#","Int64#","Word64#","Addr#","Float#","Double#","StackSnapshot#","ThreadId#"]) ||
+      (occurrence == "StablePtr#" && length arguments == 2) ||
+      (occurrence == "State#" && arguments == [ImportTyCon (ExportName "ghc-internal" "GHC.Internal.Prim" "RealWorld" "type") []])
+  | modName == "GHC.Internal.Types", occurrence == "Any" =
+      arguments == [ImportTyCon (ExportName "ghc-internal" "GHC.Internal.Types" "Type" "type") []]
+  | modName == "GHC.Internal.Types", occurrence == "Unit#" = null arguments
+  | modName == "GHC.Internal.Types", take 5 occurrence == "Tuple", last occurrence == '#' =
+      even (length arguments) && all primitiveType (drop (length arguments `div` 2) arguments)
+primitiveType _ = False
+
+primitiveFunction :: ImportType -> Bool
+primitiveFunction (ImportArrow multiplicity argument result) =
+  multiplicity == ImportTyCon (ExportName "ghc-internal" "GHC.Internal.Types" "Many" "data") [] &&
+  primitiveType argument && primitiveFunction result
+primitiveFunction result = primitiveType result
+
 callIn :: CoreExpr -> [Either String Call]
 callIn = callInWithState False
 
@@ -137,13 +162,14 @@ callInWithState suppliedState expression = case collectArgs expression of
               instantiated = exprType (mkApps function types)
               (parameters,result) = splitFunTys instantiated
           unless (null (fst (splitForAllTyVars instantiated)) &&
-              length values + (if suppliedState then 0 else 1) == length parameters)
+              length values + (if suppliedState || conv == PrimCallConv then 0 else 1) == length parameters)
             (Left "emitted foreign worker has an unexpected State application")
           inputs <- traverse (scalar . scaledThing) parameters
-          unless (not (null inputs) && last inputs == "void" && "void" `notElem` init inputs)
+          unless (conv == PrimCallConv || not (null inputs) && last inputs == "void" && "void" `notElem` init inputs)
             (Left "emitted foreign worker does not leave a final State argument")
           outputs <- case splitTyConApp_maybe (unwrapType result) of
             Just (constructor,args) | isUnboxedTupleTyCon constructor -> traverse scalar (dropRuntimeRepArgs args)
+            _ | conv == PrimCallConv -> (:[]) <$> scalar result
             _ -> Left "emitted foreign call lacks a State/result tuple"
           pure (Call (unpackFS symbol) (unitString <$> unit) (convention conv) (safetyName safe) inputs outputs)]
   _ -> case expression of
@@ -242,12 +268,14 @@ recordImports options environment
       _ -> Left "static import did not emit exactly one foreign call"
     classify (L _ ForeignImport { fd_name = L _ binder, fd_i_ext = coercion,
         fd_fi = CImport _ (L _ conv) (L _ safe) header (CFunction (StaticTarget _ name unit function)) })
-      | conv `elem` [CCallConv,CApiConv], function || conv == CApiConv = do
+      | conv `elem` [CCallConv,CApiConv,PrimCallConv], function || conv == CApiConv = do
           unless (idType binder `eqType` coercionRKind coercion && coercionRole coercion == Representational)
             (Left "foreign-import normalization disagrees with actual binder")
           identity <- nameIdentity (varName binder)
           declared <- importTypeIdentity (idType binder)
           normalized <- importTypeIdentity (coercionLKind coercion)
+          unless (conv /= PrimCallConv || primitiveFunction normalized)
+            (Left "non-static-c-import-declaration")
           pure $ \_ bindings -> Imported . Import identity (fmap (\(Header _ name') -> unpackFS name') header) (unpackFS name)
             (unitString <$> unit) function (convention conv) (safetyName safe) declared normalized <$> oneCall bindings
     classify (L _ ForeignImport { fd_name = L _ binder, fd_i_ext = coercion,
