@@ -191,7 +191,9 @@ def ast_code(fs):
                       '        argument.prepareTuple(slots, 0);',
                       f'        setRepresentation(GeneratedVectors.proof{n});', '    }',
                       f'    @Override public {vector_type(f)} execute(VirtualFrame frame) {{', '        argument.executeTuple(frame, slots, 0);',
-                      f'        return {packed(f, [f"{cast}frame.get{access}(slots[{i}])" for i in range(count)])};','    }','}']
+                      f'        return pack({", ".join(f"{cast}frame.get{access}(slots[{i}])" for i in range(count))});','    }',
+                      f'    private static {vector_type(f)} pack({", ".join(f"{scalar} lane{i}" for i in range(count))}) {{',
+                      f'        return {packed(f, [f"lane{i}" for i in range(count)])};', '    }', '}']
         if 'unpack' in f['operations']:
             lines += [f'final class Generated{n}Unpack extends Expr {{',
                       '    @Child private Expr argument;',
@@ -201,12 +203,13 @@ def ast_code(fs):
                       '        CompilerDirectives.transferToInterpreterAndInvalidate();',
                       '        throw new RuntimeFault("Vector unpack requires a tuple destination");', '    }',
                       '    @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {',
-                      f'        {vector_type(f)} value = {checked(f, "argument.execute(frame)")};']
+                      f'        {vector_type(f)} value = vector(argument.execute(frame));']
             mask = UNSIGNED_MASK.get(f['laneRep'])
             for i in range(count):
                 lane = f'value.lane({i})' + (f' & {mask}' if mask else '')
                 lines.append(f'        FrameAccess.INSTANCE.write{access}(frame, slots[offset + {i}], {lane});')
-            lines += ['        return null;','    }','}']
+            lines += ['        return null;','    }',
+                      f'    private static {vector_type(f)} vector(Object value) {{ return {checked(f, "value")}; }}', '}']
         if 'shuffle' in f['operations']:
             boxed = {'byte':'Byte', 'short':'Short', 'int':'Integer', 'long':'Long', 'float':'Float', 'double':'Double'}[scalar]
             lines += [f'final class Generated{n}Shuffle extends Expr {{',
@@ -217,9 +220,10 @@ def ast_code(fs):
                       f'        shuffle = VectorShuffle.fromArray({species(f)}, indices, 0);',
                       f'        setRepresentation(GeneratedVectors.proof{n});', '    }',
                       f'    @Override public {vector_type(f)} execute(VirtualFrame frame) {{',
-                      f'        {vector_type(f)} a = {checked(f, "left.execute(frame)")};',
-                      f'        {vector_type(f)} b = {checked(f, "right.execute(frame)")};',
-                      '        return a.rearrange(shuffle, b);', '    }', '}']
+                      f'        {vector_type(f)} a = vector(left.execute(frame));',
+                      f'        {vector_type(f)} b = vector(right.execute(frame));',
+                      '        return a.rearrange(shuffle, b);', '    }',
+                      f'    private static {vector_type(f)} vector(Object value) {{ return {checked(f, "value")}; }}', '}']
         ops=[op for op in f['operations'] if op not in ('pack','unpack','shuffle')]
         lines += [f'final class Generated{n}Operation extends Expr {{',
                   '    @Children private Expr[] arguments;', '    private final int operation;',
@@ -236,11 +240,21 @@ def ast_code(fs):
                 lines += [f'            case {i} -> {{', f'                {vector_type(f)} value = {operands[0]};',
                           f'                {scalar} lane = {operands[1]};', f'                long index = {operands[2]};',
                           f'                yield {operation_expression(f, op, ["value", "lane", "index"])};', '            }']
+            elif op == 'broadcast':
+                lines.append(f'            case {i} -> broadcast({operands[0]});')
+            elif f['laneRep'].startswith('Word') and op in ('min', 'max'):
+                lines.append(f'            case {i} -> {op}({", ".join(operands)});')
             else:
                 lines.append(f'            case {i} -> {operation_expression(f, op, operands)};')
         lines += ['            default -> {', '                CompilerDirectives.transferToInterpreterAndInvalidate();',
                   f'                throw new RuntimeFault("Invalid {n} operation");', '            }','        };','    }',
-                  f'    private static {vector_type(f)} vector(Object value) {{ return {checked(f, "value")}; }}','}\n']
+                  f'    private static {vector_type(f)} vector(Object value) {{ return {checked(f, "value")}; }}']
+        if 'broadcast' in ops:
+            lines += [f'    private static {vector_type(f)} broadcast({scalar} value) {{ return {operation_expression(f, "broadcast", ["value"])}; }}']
+        for op in ('min', 'max'):
+            if f['laneRep'].startswith('Word') and op in ops:
+                lines += [f'    private static {vector_type(f)} {op}({vector_type(f)} left, {vector_type(f)} right) {{ return {operation_expression(f, op, ["left", "right"])}; }}']
+        lines += ['}\n']
     return '\n'.join(lines)+'\n'
 
 

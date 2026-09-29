@@ -30,7 +30,7 @@ public final class VectorFloatOperation extends Expr {
 
     @Override public FloatVector execute(VirtualFrame frame) {
         return switch (operation) {
-            case 0 -> FloatVector.broadcast(FloatVector.SPECIES_128, arguments[0].executeRequiredFloat(frame));
+            case 0 -> broadcast(arguments[0].executeRequiredFloat(frame));
             case 1 -> vector(arguments[0].execute(frame)).add(vector(arguments[1].execute(frame)));
             case 2 -> vector(arguments[0].execute(frame)).sub(vector(arguments[1].execute(frame)));
             case 3 -> vector(arguments[0].execute(frame)).mul(vector(arguments[1].execute(frame)));
@@ -46,6 +46,10 @@ public final class VectorFloatOperation extends Expr {
         FloatVector left = operation >= 2 ? a.neg() : a;
         FloatVector addend = (operation & 1) != 0 ? c.neg() : c;
         return left.fma(b, addend);
+    }
+
+    private static FloatVector broadcast(float value) {
+        return FloatVector.broadcast(FloatVector.SPECIES_128, value);
     }
 
     private static FloatVector vector(Object value) {

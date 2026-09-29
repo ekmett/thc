@@ -27,7 +27,7 @@ public final class Vector16Operation extends Expr {
 
     @Override public ShortVector execute(VirtualFrame frame) {
         return switch (operation) {
-            case 0 -> ShortVector.broadcast(ShortVector.SPECIES_128, (short) arguments[0].executeRequiredInt(frame));
+            case 0 -> broadcast((short) arguments[0].executeRequiredInt(frame));
             case 1 -> vector(arguments[0].execute(frame)).add(vector(arguments[1].execute(frame)));
             case 2 -> vector(arguments[0].execute(frame)).sub(vector(arguments[1].execute(frame)));
             case 3 -> vector(arguments[0].execute(frame)).neg();
@@ -37,6 +37,10 @@ public final class Vector16Operation extends Expr {
                 throw new RuntimeFault("Invalid Int16X8 operation");
             }
         };
+    }
+
+    private static ShortVector broadcast(short value) {
+        return ShortVector.broadcast(ShortVector.SPECIES_128, value);
     }
 
     private static ShortVector vector(Object value) {

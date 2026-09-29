@@ -30,7 +30,7 @@ public final class VectorDoubleOperation extends Expr {
 
     @Override public DoubleVector execute(VirtualFrame frame) {
         return switch (operation) {
-            case 0 -> DoubleVector.broadcast(DoubleVector.SPECIES_128, arguments[0].executeRequiredDouble(frame));
+            case 0 -> broadcast(arguments[0].executeRequiredDouble(frame));
             case 1 -> vector(arguments[0].execute(frame)).add(vector(arguments[1].execute(frame)));
             case 2 -> vector(arguments[0].execute(frame)).sub(vector(arguments[1].execute(frame)));
             case 3 -> vector(arguments[0].execute(frame)).mul(vector(arguments[1].execute(frame)));
@@ -46,6 +46,10 @@ public final class VectorDoubleOperation extends Expr {
         DoubleVector left = operation >= 2 ? a.neg() : a;
         DoubleVector addend = (operation & 1) != 0 ? c.neg() : c;
         return left.fma(b, addend);
+    }
+
+    private static DoubleVector broadcast(double value) {
+        return DoubleVector.broadcast(DoubleVector.SPECIES_128, value);
     }
 
     private static DoubleVector vector(Object value) {
