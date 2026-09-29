@@ -58,7 +58,7 @@ public final class AstContinuation implements SavedGuestContinuation {
             StackAnnotations.set(sourceRoot, annotations);
             // A shared child abandoned by external delivery belongs to a new attempt on demand.
             if (transaction == null || transaction.active()) stm.restore(transaction);
-            try { return AstContinuations.resumeAstSteps(frame, steps, input); }
+            try { return resumeSteps(input); }
             catch (AstCapture cut) {
                 return sourceRoot instanceof FunctionRoot root ? root.finishCapture(cut, frame) : cut.freeze(sourceRoot, frame);
             } catch (DelimitedCut cut) {
@@ -75,6 +75,13 @@ public final class AstContinuation implements SavedGuestContinuation {
             SynchronousMasking.set(sourceRoot, ambient);
             StackAnnotations.set(sourceRoot, ambientAnnotations);
             stm.restore(ambientTransaction);
+        }
+    }
+    private Object resumeSteps(Object input) {
+        try { return AstContinuations.resumeAstSteps(frame, steps, input); }
+        catch (AstSelfCall self) {
+            if (sourceRoot instanceof FunctionRoot root) return root.resumeSelf(frame);
+            throw self;
         }
     }
 }

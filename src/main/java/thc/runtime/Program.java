@@ -2642,7 +2642,7 @@ public final class Program implements ExecutableProgram {
         AstSelfLayout self = scope.self;
         boolean emptyTuple = false;
         for (Expr node : nodes) if (node.getRepresentation().isEmptyTuple()) { emptyTuple = true; break; }
-        if (!reusableCode && tail && !capturesContinuations && self != null && self.getInputLayout() == null && !emptyTuple && self.getArity() > 0 && nodes.length <= self.getArity())
+        if (!reusableCode && tail && self != null && self.getInputLayout() == null && !emptyTuple && self.getArity() > 0 && nodes.length <= self.getArity())
             return new AstTailApplication(function, nodes, self, vectorSlots(scope, self.getArity(), "<self argument "), metrics);
         return new Application(function, nodes, tail, codeMetrics());
     }
