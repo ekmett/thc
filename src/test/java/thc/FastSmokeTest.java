@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /** Small native-oracle baseline for the two execution backends. */
 class FastSmokeTest {
     private final Path project = Path.of(System.getProperty("thc.projectRoot"));
-    private final List<String> modules = List.of("THC.Prim.Test", "THC.Fixtures").stream()
+    private final List<String> modules = List.of("THC.Prim.Test", "Fixtures").stream()
         .map(name -> project.resolve("build/core/" + name + ".json").toString()).toList();
     private record Row(String entry, long input, long expected) {}
     private Map<String, List<Row>> nativeRows() throws Exception {

@@ -45,8 +45,8 @@ POLYGLOT_EXACT_INPUTS = {
     "src/test/resources/thc/polyglot-abi.json",
 }
 POLYGLOT_INPUT_PREFIXES = (
-    POLYGLOT_TEST_ROOT, "src/build/", "src/gradle/", "src/compiler/THC/", "src/examples/THC/Polyglot",
-    "src/examples/THC/JavaScript", "src/main/java/thc/runtime/",
+    POLYGLOT_TEST_ROOT, "src/build/", "src/gradle/", "src/compiler/THC/", "src/examples/Polyglot",
+    "src/examples/JavaScript", "src/main/java/thc/runtime/",
 )
 TEST_ANNOTATION = r"@\s*(?:org\.junit\.(?:jupiter\.api|jupiter\.params)\.)?(?:Test|TestFactory|TestTemplate|ParameterizedTest|RepeatedTest)\b"
 LIFECYCLE = r"@\s*(?:org\.junit\.jupiter\.api\.)?(?:BeforeEach|AfterEach|BeforeAll|AfterAll)\b"

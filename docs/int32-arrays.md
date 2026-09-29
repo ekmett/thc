@@ -21,5 +21,5 @@ publish their primitive Int result. Accesses are not atomic/concurrent APIs.
 Canonical `int32` literals accept `[-2147483648,2147483647]`; `word32` accepts
 `[0,4294967295]`. The literal kind determines range and signedness even when
 optional metadata is absent. Contradictory carriers and malformed records fail.
-See [Unboxed32Arrays.hs](../src/examples/THC/Unboxed32Arrays.hs) for public
+See [Unboxed32Arrays.hs](../t/fixtures/core/Unboxed32Arrays.hs) for public
 array examples.

@@ -38,11 +38,11 @@ remain non-dereferenceable. Managed mutable pointers cannot be stored in native
 cells because they have no real native address. Freed owners, foreign contexts,
 unowned numeric locations and opaque labels reject before memory access.
 
-[AtomicTickets.hs](../src/examples/AtomicTickets.hs) shows a ticket dispenser whose
+[AtomicTickets.hs](../t/fixtures/core/AtomicTickets.hs) shows a ticket dispenser whose
 fetch-add returns the first reserved ticket. Export it from the repository root:
 
 ```sh
-bin/export-core.sh src/examples/AtomicTickets.hs
+bin/export-core.sh t/fixtures/core/AtomicTickets.hs
 ```
 
 `reserveTickets :: Int# -> Int# -> Int#` needs two arguments. The low-level

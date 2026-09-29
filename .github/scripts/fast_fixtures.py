@@ -24,8 +24,8 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-# The metadata exports read the relocated t/fixtures sources with unchanged outputs.
-FULL_PREPARATION_PLAN = "aeba7ea6a42102b7010b7cf331226a0e3b4ac9e02ac3e015f7cc61a26a3d95ca"
+# The smoke exporter reads t/fixtures/core/Fixtures.hs; its declared output is Fixtures.json.
+FULL_PREPARATION_PLAN = "7f9437c182f93b957ff5e52065d15f641b96cf8145a941f46070ebf1acf59f94"
 PROCESS_CORE_OUTPUTS = frozenset("build/process-lifecycle/core/" + name for name in (
     "manifest.json", "source.json", "pre.json", "post.json", "pre.audit.json", "post.audit.json",
     *[f"logs/{command}.{suffix}" for command in

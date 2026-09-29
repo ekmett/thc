@@ -60,7 +60,7 @@ prepareFloatDecode root = do
   let directory = "build/float-decode"
       output = root </> directory
       source = "t/fixtures/compiler/FloatDecodeAudit.hs"
-      example = "src/examples/THC/FloatDecode.hs"
+      example = "t/fixtures/core/FloatDecode.hs"
       driver = "t/fixtures/compiler/FloatDecodeNative.hs"
       native = directory </> "native"
       binary = native </> "oracle"
@@ -82,7 +82,7 @@ prepareFloatDecode root = do
       requestPath = directory </> "inputs.tsv"
   writeFile (root </> requestPath) (unlines [name ++ "\t" ++ show bits | (name,bits) <- requests])
   compiled <- runLogged 300 root logs "native-build" [] ghc
-    ["--make","-O2","-fforce-recomp","-dcore-lint","-dstg-lint","-it/fixtures/compiler","-isrc/examples",
+    ["--make","-O2","-fforce-recomp","-dcore-lint","-dstg-lint","-it/fixtures/compiler","-it/fixtures/core",
      "-odir",root </> native,"-hidir",root </> native,driver,"-o",root </> binary]
   executed <- runLoggedWithInput requestPath 120 root logs "native-oracle" [] (root </> binary) []
   let parse line = case splitTab line of
@@ -107,7 +107,7 @@ prepareFloatDecode root = do
     exported <- runLogged 300 root logs (stage ++ "-export")
       [("THC_CORE_OUT",output </> stage ++ "-core"),("THC_GHC_OUT",output </> stage ++ "-ghc")]
       "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source,example])
-    let corePaths = [directory </> stage ++ "-core" </> name ++ ".json" | name <- ["FloatDecodeAudit","THC.FloatDecode"]]
+    let corePaths = [directory </> stage ++ "-core" </> name ++ ".json" | name <- ["FloatDecodeAudit","FloatDecode"]]
     reports <- forM entries $ \name -> do
       let reportPath = directory </> stage ++ "-" ++ name ++ "-audit.json"
       audited <- runLogged 120 root logs (stage ++ "-" ++ name ++ "-audit") [] "python3"

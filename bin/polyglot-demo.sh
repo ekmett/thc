@@ -15,13 +15,13 @@ for stage in pre post; do
   if [ "$stage" = post ]; then set -- -fplugin-opt=THC.Plugin:post-tidy; fi
   THC_CORE_OUT="$root/build/polyglot/$stage-core" \
   THC_GHC_OUT="$root/build/polyglot/$stage-ghc" \
-    bin/export-core.sh -fplugin-opt=THC.Plugin:closure=main "$@" src/examples/THC/PolyglotDemo.hs
+    bin/export-core.sh -fplugin-opt=THC.Plugin:closure=main "$@" src/examples/PolyglotDemo.hs
   python3 bin/audit-core.py \
     "build/polyglot/$stage-core/THC.Polyglot.json" \
     "build/polyglot/$stage-core/THC.Internal.Polyglot.json" \
-    "build/polyglot/$stage-core/THC.PolyglotDemo.json" \
+    "build/polyglot/$stage-core/PolyglotDemo.json" \
     "build/polyglot/$stage-core/THC.InterfaceClosure.json" \
-    --entry main:THC.PolyglotDemo.main --io-main \
+    --entry main:PolyglotDemo.main --io-main \
     --output "build/polyglot/$stage-audit.json"
 done
 

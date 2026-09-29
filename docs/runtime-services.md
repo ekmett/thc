@@ -19,7 +19,7 @@ main = do
     pure ()
 ```
 
-The [complete example](../src/examples/THC/RuntimeServices.hs) also shows thread,
+The [complete example](../src/examples/RuntimeServices.hs) also shows thread,
 affinity, allocation and collector queries. The `THC` facade re-exports runtime
 identity/capabilities and the original [affinity API](cpu-affinity-api.md), but
 does not re-export hazardous internal diagnostics.

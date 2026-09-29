@@ -18,4 +18,4 @@ fi
 plugin=$(python3 bin/plugin.py --external-plugin "$out" "$@")
 exec "$GHC" --make -no-link -O2 -dynamic -fforce-recomp -dcore-lint \
   -package-db "$plugin_db" "$plugin" \
-  -i"$root/src/examples" -i"$root/src/runtime" -i"$root/t/fixtures/compiler" -odir "$obj" -hidir "$obj" "$@"
+  -i"$root/src/examples" -i"$root/t/fixtures/core" -i"$root/src/runtime" -i"$root/t/fixtures/compiler" -odir "$obj" -hidir "$obj" "$@"

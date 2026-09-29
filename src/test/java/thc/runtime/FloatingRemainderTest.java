@@ -58,7 +58,7 @@ class FloatingRemainderTest {
         var manifest = json(DIR + "/manifest.json");
         assertEquals(1L, manifest.get("schema")); assertEquals("9.14.1", manifest.get("ghc")); assertEquals(NAMES, manifest.get("entries"));
         var inputs = new HashSet<>(list("t/fixtures/compiler/FloatingRemainderAudit.hs", "t/fixtures/compiler/FloatingRemainderNative.hs",
-            "src/examples/THC/InverseHyperbolic.hs", "thc.cabal", "t/haskell-fixtures/Main.hs", "t/haskell-fixtures/FixtureSupport.hs",
+            "t/fixtures/core/InverseHyperbolic.hs", "thc.cabal", "t/haskell-fixtures/Main.hs", "t/haskell-fixtures/FixtureSupport.hs",
             "t/haskell-fixtures/FloatingRemainderFixtures.hs", "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py",
             "bin/audit-core.py", "bin/core-capabilities.json", "src/main/resources/thc/scalar-primop-signatures.json"));
         for (var file : Objects.requireNonNull(new File(root, "src/compiler/THC").listFiles())) if (file.getName().endsWith(".hs")) inputs.add(root.toPath().relativize(file.toPath()).toString());
@@ -67,7 +67,7 @@ class FloatingRemainderTest {
         var outputs = new HashSet<>(list(DIR + "/inputs.tsv", DIR + "/oracle.tsv", DIR + "/native/oracle"));
         for (var stage : list("pre", "post")) {
             commands.add(stage + "-export"); for (var name : NAMES) commands.add(stage + "-" + name + "-audit");
-            outputs.add(DIR + "/" + stage + "-core/FloatingRemainderAudit.json"); outputs.add(DIR + "/" + stage + "-core/THC.InverseHyperbolic.json");
+            outputs.add(DIR + "/" + stage + "-core/FloatingRemainderAudit.json"); outputs.add(DIR + "/" + stage + "-core/InverseHyperbolic.json");
             for (var name : NAMES) outputs.add(DIR + "/" + stage + "-" + name + "-audit.json");
         }
         for (var command : commands) for (var suffix : list("stdout", "stderr", "command.json")) outputs.add(DIR + "/commands/" + command + "." + suffix);
@@ -223,7 +223,7 @@ class FloatingRemainderTest {
     private void nativeResults(boolean inlining) throws Exception {
         var corpus = new LinkedHashMap<String, List<Row>>(); for (var row : evidence()) corpus.computeIfAbsent(row.name, ignored -> new ArrayList<>()).add(row);
         for (var stage : list("pre", "post")) {
-            var module = CoreModules.merge(list(json(DIR + "/" + stage + "-core/FloatingRemainderAudit.json"), json(DIR + "/" + stage + "-core/THC.InverseHyperbolic.json")));
+            var module = CoreModules.merge(list(json(DIR + "/" + stage + "-core/FloatingRemainderAudit.json"), json(DIR + "/" + stage + "-core/InverseHyperbolic.json")));
             for (var backend : list("ast", "bytecode")) for (var name : NAMES) try (var context = context(inlining)) {
                 context.initialize("thc"); context.enter();
                 try {

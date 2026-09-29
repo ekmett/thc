@@ -137,14 +137,14 @@ prepareWindowsSmoke root = do
       logs = directory </> stamp
       native = "build/native"
       oracle = native </> "native-oracle.exe"
-      modules = ["build/core/THC.Prim.Test.json", "build/core/THC.Fixtures.json"]
+      modules = ["build/core/THC.Prim.Test.json", "build/core/Fixtures.json"]
   createDirectoryIfMissing True (root </> native)
   powershell <- maybe "powershell.exe" id <$> findExecutable "pwsh"
   exported <- runLogged 300 root logs "export" [] powershell
-    ["-NoProfile", "-File", root </> "bin/export-core.ps1", "src/examples/THC/Fixtures.hs"]
+    ["-NoProfile", "-File", root </> "bin/export-core.ps1", "t/fixtures/core/Fixtures.hs"]
   compiled <- runLogged 180 root logs "native-build" [] ghc
-    ["--make", "-O2", "-fforce-recomp", "-dcore-lint", "-dstg-lint", "-isrc/examples", "-it/fixtures/compiler",
-     "-odir", root </> native, "-hidir", root </> native, "src/examples/NativeOracle.hs",
+    ["--make", "-O2", "-fforce-recomp", "-dcore-lint", "-dstg-lint", "-it/fixtures/core", "-it/fixtures/compiler",
+     "-odir", root </> native, "-hidir", root </> native, "t/fixtures/core/NativeOracle.hs",
      "-o", root </> oracle]
   observed <- runLogged 60 root logs "native-oracle" [] (root </> oracle) []
   let rows = map (splitTab . BSC.unpack) (BSC.lines (commandStdout observed))
@@ -160,8 +160,8 @@ prepareWindowsSmoke root = do
   (cstringCommands, cstringArtifacts) <- prepareCString root logs ghc
   compiler <- listDirectory (root </> "src/compiler/THC")
   scripts <- listDirectory (root </> "bin")
-  let sources = ["src/examples/NativeOracle.hs", "src/examples/THC/Fixtures.hs",
-        "t/fixtures/compiler/THC/Prim/Test.hs", "src/examples/THC/MapWorkload.hs",
+  let sources = ["t/fixtures/core/NativeOracle.hs", "t/fixtures/core/Fixtures.hs",
+        "t/fixtures/compiler/THC/Prim/Test.hs", "t/fixtures/core/MapWorkload.hs",
         "t/haskell-fixtures/WindowsSmokeFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
         "t/haskell-fixtures/Main.hs",
         "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/CString.hs", "src/compiler/interface/Main.hs", "bin/export-core.ps1",

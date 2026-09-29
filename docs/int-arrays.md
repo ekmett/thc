@@ -25,6 +25,6 @@ has no payload slot. State expressions are evaluated before memory access, and
 failed reads do not publish a result. Plain accesses make no atomic or
 concurrent-use guarantee.
 
-See [UnboxedArrays.hs](../src/examples/THC/UnboxedArrays.hs) for public array
+See [UnboxedArrays.hs](../t/fixtures/core/UnboxedArrays.hs) for public array
 examples. A complete program also needs its library error paths and native
 imports; primitive support alone does not supply those dependencies.

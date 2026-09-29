@@ -28,7 +28,7 @@ prepareGhcBCO :: FilePath -> IO ()
 prepareGhcBCO root = do
   let directory = "build/ghc-bco"
       output = root </> directory
-      source = "src/examples/GhcBCO.hs"
+      source = "t/fixtures/core/GhcBCO.hs"
       driver = "t/fixtures/compiler/GhcBCONative.hs"
       entries = ["bcoConstant", "bcoApply", "bcoApplyTwo", "bcoFunction", "bcoArithmetic", "bcoBranch", "bcoLargeOperand", "bcoSharing", "bcoCase", "bcoCaseNested", "bcoCasePointer", "bcoCaseFloat", "bcoCaseDouble", "bcoCaseLong", "bcoCaseVoid", "bcoPacked8", "bcoPacked16", "bcoPacked32", "bcoCaseTuple", "bcoCaseTupleCall", "bcoCaseTupleOverapply", "bcoCapturedPap", "bcoCapturedAp", "bcoCapturedNoUpd", "bcoCapturedApChain", "bcoCapturedRecursive", "bcoCapturedFloat", "bcoCapturedDouble", "bcoCapturedLong", "bcoCapturedNoUpdEscape", "bcoApplyIntCore", "bcoApplyFloatCore", "bcoApplyDoubleCore", "bcoApplyLongCore", "bcoApplyVoidCore"]
       stages = ["pre", "post"]
@@ -39,7 +39,7 @@ prepareGhcBCO root = do
   version <- runLogged 30 root logs "ghc-version" [] ghc ["--numeric-version"]
   unless (commandStdout version == "9.14.1\n") (die "BCO format requires GHC 9.14.1")
   compiled <- runLogged 120 root logs "native-build" [] ghc
-    ["--make", "-O2", "-dynamic", "-fforce-recomp", "-dcore-lint", "-dstg-lint", "-isrc/examples",
+    ["--make", "-O2", "-dynamic", "-fforce-recomp", "-dcore-lint", "-dstg-lint", "-it/fixtures/core",
      "-odir", native, "-hidir", native, driver, "-o", native </> "oracle"]
   observations <- runLogged 30 root logs "native-run" [] (output </> "native/oracle") []
   let values = map (read . BSC.unpack) (BSC.lines (commandStdout observations)) :: [Integer]

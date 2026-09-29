@@ -53,18 +53,18 @@ original = json.loads((build / 'provenance.json').read_text())
 for item in original['modules']:
     if digest(root / item['path']) != item['sha256']:
         raise SystemExit('Measured bundle differs from its provenance: ' + item['path'])
-if digest(root / 'src/examples/THC/MapWorkload.hs') != original['workloadSha256']:
+if digest(root / 't/fixtures/core/MapWorkload.hs') != original['workloadSha256']:
     raise SystemExit('Workload differs from its recorded bundle provenance')
 module_data = [json.loads(p.read_text()) for p in modules]
 source_paths = {
-    root / 'src/examples/THC/MapWorkload.hs',
+    root / 't/fixtures/core/MapWorkload.hs',
     root / 't/fixtures/package-roots/InterfaceRoots.hs',
     root / 'vendor/containers-0.8/containers.cabal',
     root / 'vendor/containers-0.8/LICENSE',
     root / 'vendor/archives/containers-0.8.tar.gz',
 }
 for module in module_data:
-    if module['unit'] == 'main' and module['module'] != 'THC.MapWorkload':
+    if module['unit'] == 'main' and module['module'] != 'MapWorkload':
         stem = root / 'vendor/containers-0.8/src' / module['module'].replace('.', '/')
         candidates = [stem.with_suffix(ext) for ext in ['.hs', '.lhs']]
         source = next((p for p in candidates if p.is_file()), None)
@@ -103,7 +103,7 @@ exporter_paths = sorted(set((root / 'src/compiler/THC').rglob('*.hs')) | {
 # invented package record. Script hashes remain the executable specification.
 shared_export = ['--make', '-no-link', '-O2', '-dynamic', '-fforce-recomp', '-dcore-lint',
                  '-package-db', plugin['packageDb'], '-plugin-package-id', plugin['unitId'],
-                 '-fplugin=THC.Plugin', '-i$ROOT/src/examples']
+                 '-fplugin=THC.Plugin', '-i$ROOT/src/examples', '-i$ROOT/t/fixtures/core', '-i$ROOT/src/runtime', '-i$ROOT/t/fixtures/compiler']
 # Existing-bundle supplements describe the actual files, even if today's driver
 # default differs from the setting used to produce them.
 source_notes_exported = any('sourceFiles' in m for m in module_data)
@@ -117,7 +117,7 @@ recipes = {
     'pluginBuildDriver': ['bin/build-compiler.sh'],
     'mapSource': shared_export + ['-fplugin-opt=THC.Plugin:$ROOT/build/map/core', '-odir', '$ROOT/build/map/ghc',
                   '-hidir', '$ROOT/build/map/ghc', '-i$ROOT/vendor/containers-0.8/src', '-I$ROOT/vendor/containers-0.8/include',
-                  '-fplugin-opt=THC.Plugin:closure=mapAggregate'] + source_note_flags + ['src/examples/THC/MapWorkload.hs'],
+                  '-fplugin-opt=THC.Plugin:closure=mapAggregate'] + source_note_flags + ['t/fixtures/core/MapWorkload.hs'],
     'bootSignatures': boot_common + ['$ROOT/nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/{GHC/Internal/Exception/Type.hs-boot,GHC/Internal/Exception.hs-boot}'],
     'bootSources': boot_common + ['-O2', '-dcore-lint', '-package-db', plugin['packageDb'],
                     '-plugin-package-id', plugin['unitId'], '-fplugin=THC.Plugin',

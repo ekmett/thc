@@ -126,7 +126,7 @@ class CorpusChecks:
         self.root = root
         self.build = root / "build/corpus"
         self.facts = facts
-        manifest = read_json(root / "src/examples/coverage.json")
+        manifest = read_json(root / "t/fixtures/core/coverage.json")
         require(manifest.get("schema") == 1, "Expected coverage manifest schema 1")
         self.groups = {}
         self.modules = {}
@@ -137,7 +137,7 @@ class CorpusChecks:
             self.modules[group_id] = read_json(
                 self.build / "groups" / group_id / "core" / (group["module"] + ".json"))
         self.modules["support"] = read_json(
-            self.build / "groups/functions/core/THC.CoverageSupport.json")
+            self.build / "groups/functions/core/CoverageSupport.json")
         for name, module in self.modules.items():
             require(module.get("ghc") == "9.14.1", f"{name}: expected GHC 9.14.1 export")
         self.global_ids = {b["id"] for module in self.modules.values()
@@ -220,7 +220,7 @@ class CorpusChecks:
                            if node[0] == "case" and node[1] == retain_call),
                           "sharedCapturedThunk closure extraction")
         alternative = data_alternative(
-            extraction, "main:THC.FunctionCoverage.Unary", "sharedCapturedThunk Unary case")
+            extraction, "main:FunctionCoverage.Unary", "sharedCapturedThunk Unary case")
         extracted = only(alternative[2], "sharedCapturedThunk extracted function")
         reuse = self.binding("functions", "reuseUnary")
         reuse_call = only(calls(alternative[3], reuse["id"]), "sharedCapturedThunk reuse call")
@@ -295,7 +295,7 @@ class CorpusChecks:
                   countCheckedBeforeSpine=True)
 
     def recursive_trees(self):
-        expected = {"main:THC.TreeCoverage." + name for name in ("Leaf", "Fork", "Tagged")}
+        expected = {"main:TreeCoverage." + name for name in ("Leaf", "Fork", "Tagged")}
         for name, arity in (("foldTree", 1), ("mapTree", 2), ("selectTree", 2)):
             binding = self.binding("trees", name)
             _, body = lambda_parts(binding, arity)
@@ -309,7 +309,7 @@ class CorpusChecks:
                       alternatives=alternatives, recursiveCalls=recursive_calls)
 
         tagged = only((c for c in self.modules["trees"]["constructors"]
-                       if c["id"] == "main:THC.TreeCoverage.Tagged"), "Tagged constructor")
+                       if c["id"] == "main:TreeCoverage.Tagged"), "Tagged constructor")
         require(tagged["fieldLifted"] == [False, True]
                 and tagged["fieldReps"][0] == ["IntRep"],
                 "Tagged: strict source Int must be unboxed beside the lifted Tree field")
@@ -350,7 +350,7 @@ class CorpusChecks:
                 "narrowWordRecordChecksum: both consumers must reference the shared records")
         audit = read_json(self.build / "groups/narrow-words/narrowWordRecordChecksum.audit.json")
         sample = only((c for c in audit["constructors"]
-                       if c["id"] == "main:THC.NarrowWordCoverage.Sample"), "Reachable narrow Sample")
+                       if c["id"] == "main:NarrowWordCoverage.Sample"), "Reachable narrow Sample")
         expected = [["Word8Rep"], ["Word16Rep"], ["Word32Rep"]]
         require(sample["metadata"]["fieldReps"] == expected
                 and sample["metadata"]["fieldLifted"] == [False, False, False],

@@ -33,10 +33,10 @@ lazy child evaluation, masking and child exception behavior remain those of
 pinning is not a promise against later OS/cpuset policy changes. This API does
 not establish bound foreign TLS or a scoped pin of the calling thread.
 
-The complete example is [THC.CpuAffinity](../src/examples/THC/CpuAffinity.hs). When
+The complete example is [CpuAffinity](../src/examples/CpuAffinity.hs). When
 building it outside Cabal, use `ghc --make -XHaskell2010 -threaded -isrc/runtime
-src/examples/THC/CpuAffinity.hs src/runtime/cpu-affinity.c src/runtime/runtime-services.c
--main-is THC.CpuAffinity`.
+src/examples/CpuAffinity.hs src/runtime/cpu-affinity.c src/runtime/runtime-services.c
+-main-is CpuAffinity`.
 
 The same source compiles and links under ordinary native GHC. Its tiny C shim
 returns `NoCpuAffinity`/`False`: ordinary GHC `forkOn` by itself does not promise

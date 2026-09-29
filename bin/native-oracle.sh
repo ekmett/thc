@@ -7,7 +7,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD="$ROOT/build/native"
 . "$ROOT/bin/toolchain.sh"
 mkdir -p "$BUILD"
-cd "$ROOT/src/examples"
+cd "$ROOT/t/fixtures/core"
 "$GHC" --make -O2 -fforce-recomp -dcore-lint -dstg-lint \
   -ddump-simpl -ddump-to-file -dsuppress-all -dsuppress-uniques \
   -i. -i"$ROOT/t/fixtures/compiler" -odir "$BUILD" -hidir "$BUILD" -dumpdir "$BUILD/" \

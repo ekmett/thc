@@ -71,7 +71,7 @@ mathematical values.
 `decodeDouble_2Int#` returns sign, high 32 significand bits, low 32 bits and
 exponent. Its two Word fields are unsigned. The native RTS leaves the sign output
 uninitialized for zero; THC deterministically returns `(+1,0,0,0)` for either
-zero. See [FloatDecode.hs](../src/examples/THC/FloatDecode.hs) for an example.
+zero. See [FloatDecode.hs](../t/fixtures/core/FloatDecode.hs) for an example.
 
 ## Storage and calls
 

@@ -4,7 +4,7 @@
 """Independent list/deque oracle for the ordinary Data.Sequence workload.
 
 No finger-tree representation or containers implementation is reproduced here.
-The eleven entry names and arithmetic mirror src/examples/THC/SequenceWorkload.hs.
+The eleven entry names and arithmetic mirror t/fixtures/core/SequenceWorkload.hs.
 """
 from collections import deque
 

@@ -31,7 +31,7 @@ CHECK_SOURCE
 bin/build-compiler.sh
 THC_CORE_OUT="$root/build/map/core" THC_GHC_OUT="$root/build/map/ghc" \
   bin/export-core.sh -i"$root/vendor/containers-0.8/src" -I"$root/vendor/containers-0.8/include" \
-  -fplugin-opt=THC.Plugin:closure=mapAggregate src/examples/THC/MapWorkload.hs
+  -fplugin-opt=THC.Plugin:closure=mapAggregate t/fixtures/core/MapWorkload.hs
 python3 bin/export-boot.py
 python3 - <<'MANIFEST'
 import hashlib, json, os, pathlib, subprocess
@@ -54,7 +54,7 @@ provenance = {
     "packages": packages,
     "interfacePolicy": "Only actual Core/DFun unfoldings; missing definitions require source export, never synthesized bodies",
     "modules": [{"path": str(path.relative_to(root)), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()} for path in modules],
-    "workloadSha256": hashlib.sha256((root / "src/examples/THC/MapWorkload.hs").read_bytes()).hexdigest(),
+    "workloadSha256": hashlib.sha256((root / "t/fixtures/core/MapWorkload.hs").read_bytes()).hexdigest(),
     "initialMissingDefinitions": closure["missingDefinitions"],
     "bootExports": json.loads((root / "build/map/boot-provenance.json").read_text()),
     "status": "Bounded dependency frontier; run the strict reachable audit before claiming complete linkage",

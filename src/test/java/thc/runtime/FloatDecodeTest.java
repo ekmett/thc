@@ -39,10 +39,10 @@ class FloatDecodeTest {
     private Map<String, Object> json(String path) throws Exception { return object(Json.parse(read(path))); }
     private Map<String, Object> originalModule() throws Exception { return json(DIRECTORY + "/original/GHC.Internal.Bignum.Integer.json"); }
     private Map<String, Object> module(String stage) throws Exception {
-        return CoreModules.merge(list(json(DIRECTORY + "/" + stage + "-core/FloatDecodeAudit.json"), originalModule(), json(DIRECTORY + "/" + stage + "-core/THC.FloatDecode.json")));
+        return CoreModules.merge(list(json(DIRECTORY + "/" + stage + "-core/FloatDecodeAudit.json"), originalModule(), json(DIRECTORY + "/" + stage + "-core/FloatDecode.json")));
     }
     private static Set<String> reachableIds(String name) {
-        var ids = new HashSet<>(list("main:" + (name.contains("Example") ? "THC.FloatDecode" : "FloatDecodeAudit") + "." + name));
+        var ids = new HashSet<>(list("main:" + (name.contains("Example") ? "FloatDecode" : "FloatDecodeAudit") + "." + name));
         switch (name) {
             case "floatCall" -> ids.add("main:FloatDecodeAudit.floatWorker");
             case "doubleCall" -> ids.add("main:FloatDecodeAudit.doubleWorker");
@@ -102,7 +102,7 @@ class FloatDecodeTest {
     private void verifyEvidence(Map<String, Object> manifest) throws Exception {
         assertEquals(1L, manifest.get("schema")); assertEquals("9.14.1", manifest.get("ghc")); assertEquals(NAMES, manifest.get("entries"));
         assertEquals(inputs(32), manifest.get("floatInputs")); assertEquals(inputs(64), manifest.get("doubleInputs")); assertEquals(4L * (inputs(32).size() + inputs(64).size()), manifest.get("nativeRows"));
-        var sources = new HashSet<>(list("t/fixtures/compiler/FloatDecodeAudit.hs", "t/fixtures/compiler/FloatDecodeNative.hs", "src/examples/THC/FloatDecode.hs", "thc.cabal",
+        var sources = new HashSet<>(list("t/fixtures/compiler/FloatDecodeAudit.hs", "t/fixtures/compiler/FloatDecodeNative.hs", "t/fixtures/core/FloatDecode.hs", "thc.cabal",
             "t/haskell-fixtures/Main.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/FloatDecodeFixtures.hs", "bin/core-capabilities.json",
             "bin/audit-core.py", "src/main/resources/thc/scalar-primop-signatures.json", "bin/build-compiler.sh", "bin/export-core.sh", "bin/export-boot.py", "bin/toolchain.sh", "bin/plugin.py",
             "nih/pinned/ghc-9.14.1/libraries/ghc-internal/include/WordSize.h", "nih/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE"));
@@ -112,7 +112,7 @@ class FloatDecodeTest {
         var commands = new ArrayList<>(list("native-build", "native-oracle", "boot-export"));
         var artifacts = new HashSet<>(list(DIRECTORY + "/inputs.tsv", DIRECTORY + "/oracle.tsv", DIRECTORY + "/native/oracle", DIRECTORY + "/original/GHC.Internal.Bignum.Integer.json", DIRECTORY + "/original/boot-provenance.json"));
         for (var stage : list("pre", "post")) {
-            commands.add(stage + "-export"); artifacts.add(DIRECTORY + "/" + stage + "-core/FloatDecodeAudit.json"); artifacts.add(DIRECTORY + "/" + stage + "-core/THC.FloatDecode.json");
+            commands.add(stage + "-export"); artifacts.add(DIRECTORY + "/" + stage + "-core/FloatDecodeAudit.json"); artifacts.add(DIRECTORY + "/" + stage + "-core/FloatDecode.json");
             for (var name : NAMES) { commands.add(stage + "-" + name + "-audit"); artifacts.add(DIRECTORY + "/" + stage + "-" + name + "-audit.json"); }
         }
         for (var command : commands) for (var suffix : list("stdout", "stderr", "command.json")) artifacts.add(DIRECTORY + "/commands/" + command + "." + suffix);

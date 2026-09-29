@@ -1,6 +1,6 @@
 # GHC Core exporter
 
-The root `thc.cabal` builds `THC.Plugin` as the `thc` library against **GHC 9.14.1**, using only packages shipped with GHC. `cabal build` builds it alongside the driver; `bin/build-compiler.sh` remains a convenience wrapper for fixture scripts. `./bin/export-core.sh src/examples/THC/Fixtures.hs` compiles the Haskell modules with `-O2 -g -dcore-lint` and exports `build/core/THC.Prim.Test.json` and `build/core/THC.Fixtures.json`. GHC still produces native object/interface files in `build/ghc`; this is useful for checking that the same source is valid GHC Haskell. The THC runtime evaluates the exported expression trees.
+The root `thc.cabal` builds `THC.Plugin` as the `thc` library against **GHC 9.14.1**, using only packages shipped with GHC. `cabal build` builds it alongside the driver; `bin/build-compiler.sh` remains a convenience wrapper for fixture scripts. `./bin/export-core.sh t/fixtures/core/Fixtures.hs` compiles the Haskell modules with `-O2 -g -dcore-lint` and exports `build/core/THC.Prim.Test.json` and `build/core/Fixtures.json`. GHC still produces native object/interface files in `build/ghc`; this is useful for checking that the same source is valid GHC Haskell. The THC runtime evaluates the exported expression trees.
 
 The default source-fixture export appends `CoreDoPluginPass` to `installCoreToDos`, observing the **optimized Core pipeline's final `ModGuts`, before Tidy/CorePrep/STG**. With `post-tidy`, the plugin instead uses `latePlugin` to export **after Tidy and before CorePrep**; package manifests require that boundary. The ordinary GHC Core optimization passes run first in both paths. This is executable tree export directly from the GHC API; the runtime never parses a Core pretty dump.
 
@@ -87,7 +87,7 @@ Caller-demand lowering is **opt-in** with `-Dthc.callDemands=true`; the default 
 After building the distribution and exported fixtures, opt in for a run with:
 
 ```sh
-JAVA_OPTS='-Dthc.callDemands=true -Dpolyglot.compiler.InliningPolicy=Default' ./bin/run.sh build/core/THC.Prim.Test.json,build/core/THC.Fixtures.json sumLoop 10000 --compile
+JAVA_OPTS='-Dthc.callDemands=true -Dpolyglot.compiler.InliningPolicy=Default' ./bin/run.sh build/core/THC.Prim.Test.json,build/core/Fixtures.json sumLoop 10000 --compile
 ```
 
 `JAVA_OPTS` is read by the installed application launcher. Passing `-Dthc.callDemands=true` only to Gradle does not forward it to the test or application JVM. For benchmark comparisons, hold the inlining policy fixed explicitly on both sides and vary only `thc.callDemands`; retain the same Core and runtime. The policy selection in the example is a comparison control, not a requirement for caller-demand semantics. See [the current demand contract](demand-probe.md).

@@ -14,7 +14,7 @@
 module Main (main) where
 import GHC.Exts
 import qualified FloatingRemainderAudit as P
-import qualified THC.InverseHyperbolic as Example
+import qualified InverseHyperbolic as Example
 
 invoke :: String -> Int -> Int -> [Int]
 invoke name (I# a) (I# b) = case name of

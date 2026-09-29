@@ -37,7 +37,7 @@ try {
     New-Item -ItemType Directory -Force $out, $obj | Out-Null
     $arguments = @('--make', '-no-link', '-O2', '-fforce-recomp', '-dcore-lint',
         '-package-db', $db, '-plugin-package-id', $library.id, '-fplugin=THC.Plugin',
-        "-fplugin-opt=THC.Plugin:$out", "-i$root/src/examples", "-i$root/t/fixtures/compiler", '-odir', $obj, '-hidir', $obj)
+        "-fplugin-opt=THC.Plugin:$out", "-i$root/src/examples", "-i$root/t/fixtures/core", "-i$root/t/fixtures/compiler", '-odir', $obj, '-hidir', $obj)
     if ($env:THC_SOURCE_NOTES -ne 'false') { $arguments += @('-g', '-fplugin-opt=THC.Plugin:source-notes') }
     Invoke-ThcTool $tools.Compiler ($arguments + $GhcArguments)
 } finally { Pop-Location }

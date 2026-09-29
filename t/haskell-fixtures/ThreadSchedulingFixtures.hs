@@ -29,7 +29,7 @@ prepareThreadScheduling root = do
   let directory = "build/thread-scheduling"
       output = root </> directory
       manifest = output </> "manifest.json"
-      source = "src/examples/ThreadScheduling.hs"
+      source = "t/fixtures/core/ThreadScheduling.hs"
       driver = "t/fixtures/compiler/ThreadSchedulingNative.hs"
       entries = ["emptySpark", "lazyPar", "lazySpark", "sparkValue", "currentCounter", "negativeCounter", "pinnedFork", "otherCounter", "timedDelay"]
       stages = ["pre", "post"]
@@ -59,7 +59,7 @@ prepareThreadScheduling root = do
   -- Direct delay# is implemented by the non-threaded POSIX I/O manager.
   -- The threaded RTS deliberately rejects it; base's threadDelay uses its event manager instead.
   _ <- run root [] ghc ["--make", "-O2", "-dynamic", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
-    "-i" ++ (root </> "src/examples"), "-odir", native, "-hidir", native,
+    "-i" ++ (root </> "t/fixtures/core"), "-odir", native, "-hidir", native,
     root </> driver, "-o", native </> "oracle"] ""
   observations <- runWithTimeout (Just 30000000) root [] (native </> "oracle") [] ""
   unless (observations == "1\n1\n1\n1\n1\n1\n11\n11\n2000\n") (die "Native thread scheduling disagreed")

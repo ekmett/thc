@@ -16,7 +16,7 @@ module Main (main) where
 import GHC.Exts
 import GHC.Float (castWord32ToFloat, castWord64ToDouble)
 import qualified FloatDecodeAudit as P
-import qualified THC.FloatDecode as Example
+import qualified FloatDecode as Example
 
 emit :: String -> (Int# -> Int# -> Int#) -> Int -> IO ()
 emit name function input@(I# raw) = do

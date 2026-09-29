@@ -969,9 +969,9 @@ private String text = "class FakeString { @Test }";
         changed = ["t/fixtures/compiler/CBVCoercionAudit.hs",
                    "t/fixtures/compiler/DataToTagAudit.hs",
                    "t/fixtures/compiler/MutableByteArraySizeAudit.hs",
-                   "src/examples/THC/Unboxed8Arrays.hs",
-                   "src/examples/THC/Unboxed16Arrays.hs",
-                   "src/examples/THC/Unboxed32Arrays.hs"]
+                   "t/fixtures/core/Unboxed8Arrays.hs",
+                   "t/fixtures/core/Unboxed16Arrays.hs",
+                   "t/fixtures/core/Unboxed32Arrays.hs"]
         for path in changed:
             self.write(path, "fixture before\n")
         base = self.commit()
@@ -1080,7 +1080,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
     def test_thread_inventory_lowering_and_example_keep_native_and_structural_owners(self):
         self.assertEqual({"thc.runtime.GuestThreadInventoryTest", "thc.runtime.ThreadInventoryNativeTest"},
                          set(self.family("ThreadObservation")["junit"]))
-        for path in ("src/examples/ThreadInventory.hs", "t/fixtures/compiler/ThreadInventoryNative.hs",
+        for path in ("t/fixtures/core/ThreadInventory.hs", "t/fixtures/compiler/ThreadInventoryNative.hs",
                      "t/fixtures/compiler/CallbackIdentityNative.hs", "t/fixtures/compiler/callback-identity.c",
                      "t/haskell-fixtures/ThreadInventoryFixtures.hs", "t/haskell-fixtures/Main.hs"):
             self.assertIn("thc.runtime.ThreadInventoryNativeTest", self.policy["owners"][path]["junit"])
@@ -1115,7 +1115,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
     def test_fixture_owners_match_the_preparation_manifest(self):
         fixture = json.loads(Path(__file__).with_name("fast-fixtures.json").read_text())
         owners = self.policy["owners"]
-        native_only = {"src/examples/NativeOracle.hs", "src/examples/THC/MapWorkload.hs",
+        native_only = {"t/fixtures/core/NativeOracle.hs", "t/fixtures/core/MapWorkload.hs",
                        "bin/native-oracle.sh"}
         source_groups = {}
         for group in fixture["groups"].values():
@@ -1264,7 +1264,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         for path in ("src/test/java/thc/runtime/Int16ArrayNativeTest.java",
                      "src/test/java/thc/runtime/ArrayCoreEvidence.java",
                      "t/fixtures/compiler/Int16ArrayAudit.hs",
-                     "src/examples/THC/Unboxed16Arrays.hs", "t/haskell-fixtures/Main.hs"):
+                     "t/fixtures/core/Unboxed16Arrays.hs", "t/haskell-fixtures/Main.hs"):
             self.assertTrue(expected <= set(self.policy["owners"][path]["junit"]), path)
         self.assertTrue(expected <= self.classes)
 

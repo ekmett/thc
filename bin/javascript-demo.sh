@@ -15,13 +15,13 @@ for stage in pre post; do
   if [ "$stage" = post ]; then set -- -fplugin-opt=THC.Plugin:post-tidy; fi
   THC_CORE_OUT="$root/build/javascript/$stage-core" \
   THC_GHC_OUT="$root/build/javascript/$stage-ghc" \
-    bin/export-core.sh -fplugin-opt=THC.Plugin:closure=main "$@" src/examples/THC/JavaScriptDemo.hs
+    bin/export-core.sh -fplugin-opt=THC.Plugin:closure=main "$@" src/examples/JavaScriptDemo.hs
   python3 bin/audit-core.py \
-    "build/javascript/$stage-core/THC.JavaScriptDemo.json" \
+    "build/javascript/$stage-core/JavaScriptDemo.json" \
     "build/javascript/$stage-core/THC.InterfaceClosure.json" \
-    --entry main:THC.JavaScriptDemo.main --io-main \
+    --entry main:JavaScriptDemo.main --io-main \
     --output "build/javascript/$stage-audit.json"
 done
 
 exec ./gradlew polyglotDemo --console=plain \
-  --args='build/javascript main:THC.JavaScriptDemo.main THC.JavaScriptDemo.json THC.InterfaceClosure.json'
+  --args='build/javascript main:JavaScriptDemo.main JavaScriptDemo.json THC.InterfaceClosure.json'

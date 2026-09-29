@@ -35,7 +35,7 @@ kernels: prepare-kernels
 	        printf 'Running %s fork %s: JVM warmup %ss, %s windows of %ss per engine\n' "$$entry" "$$fork" "$$WARM_SECONDS" "$$SAMPLES" "$$SAMPLE_SECONDS"; \
 	        "$$THC_JAVA" --add-modules=jdk.incubator.vector --enable-native-access=ALL-UNNAMED -Xss2m -XX:+UseCompactObjectHeaders -Dthc.traceCompilation=true \
 	            -cp 'build/install/thc/lib/*:build/diagnostics/thc-tools.jar' thc.Probe \
-	            build/core/THC.Prim.Test.json,build/core/THC.Fixtures.json \
+	            build/core/THC.Prim.Test.json,build/core/Fixtures.json \
 	            "$$entry" --steady "$$WARM_SECONDS" "$$SAMPLE_SECONDS" "$$SAMPLES" "$$inputBase" \
 	            > "$$OUT/$$entry-$$fork-jvm.tsv" 2> "$$OUT/$$entry-$$fork.log"; \
 	        while IFS= read -r result; do printf 'thc-graal\t%s\t%s\n' "$$fork" "$$result" >> "$$OUT/timings.tsv"; done < "$$OUT/$$entry-$$fork-jvm.tsv"; \
