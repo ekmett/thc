@@ -173,6 +173,12 @@ and unrelated continuation roots. `ThreadAsyncNativeTest` covers public
 fork/throw/catch and lazy action heads with async explicitly enabled on both
 backends. It and `AsyncStrictEntryNativeTest` pass in ordinary and dense handoff
 modes; strict-entry checks preserve demanded PAP arguments and the caller.
+Typed calls into synchronous strict targets also retain pending boxed demands,
+including typed PAP prefixes, before acquiring their input loan or entering the
+callee. `MixedBackendContinuationTest` interrupts direct and generic preparation
+repeatedly on both backends and checks scalar, tuple and tail completion, including
+a later tail transfer to an asynchronous tuple callee. Saved preparation owns
+its input scratch and resumes the remaining invocation once.
 The thread suite's nested uninterruptible-mask/unmask/self-throw case verifies that the original
 handler receives the exception and that the outer mask is restored, interpreted
 and compiled, before and after Tidy.

@@ -52,6 +52,17 @@ final class InputCallArm extends Node {
             return input != null ? typedPap(function, input, source, frame, this, values, start, count, prefixCount, arity) :
                 legacyPap(frame, this, function, source, values, start, count);
         }
+        if (input != null && strictPositions.length != 0 && capturesInput(this)) {
+            Object[] overrides;
+            try { overrides = forceInputCaptured(frame, this, function, input, source, values, start, strictPositions, force); }
+            catch (AstCapture cut) {
+                throw cut.append((saved, value) -> callEntered(saved, function, values, (Object[]) value, true));
+            }
+            return callEntered(frame, function, values, overrides, true);
+        }
+        return callEntered(frame, function, values, null, false);
+    }
+    private Object callEntered(VirtualFrame frame, Closure function, Object[] values, Object[] overrides, boolean prepared) {
         boolean isTail = tail && arity == count;
         Object result;
         try {
@@ -59,7 +70,9 @@ final class InputCallArm extends Node {
             try {
                 if (input == null) answer = legacy.call(frame, scalarPacket(frame, this, function, source, values, start, arity, -1), isTail, arity == count && destination != null ? root.getTupleResult() : null);
                 else {
-                    HandoffStorage loan = prepareInput(frame, this, function, input, source, values, start, arity, force, prefixCount, strictPositions);
+                    HandoffStorage loan = prepared
+                        ? packInput(frame, this, function, input, source, values, start, arity, prefixCount, strictPositions, overrides)
+                        : prepareInput(frame, this, function, input, source, values, start, arity, force, prefixCount, strictPositions);
                     long generation = loan.getGeneration();
                     boolean transferred = false;
                     try {

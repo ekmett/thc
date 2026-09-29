@@ -129,6 +129,11 @@ public final class GenericTypedInputs {
             overrides[physical] = force.execute(frame, prefixValue(function, input, physical));
         }
         forceActuals(frame, node, function, source, values, maximum, offset, count, strict, force);
+        return packGenericInput(frame, node, function, input, source, values, maximum, offset, count, strict, overrides);
+    }
+    static HandoffStorage packGenericInput(VirtualFrame frame, Node node, Closure function, TypedInputLayout input,
+            InputSource source, Object[] values, int maximum, int offset, int count, int[] strict, Object[] overrides) {
+        int prefixCount = function.suppliedCount, prefixWidth = input.getLogical().offset(prefixCount);
         HandoffStorage storage = acquireGenericInput(input, CompilerDirectives.inCompiledCode());
         try {
             putLong(storage, 0, 0L);

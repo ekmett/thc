@@ -180,6 +180,199 @@ class MixedBackendContinuationTest {
         assertEquals(0, handoff.getArguments().getDepth()); assertEquals(0, handoff.getResults().getDepth());
         assertEquals(0, handoff.getArguments().retainedReferences()); assertEquals(0, handoff.getResults().retainedReferences());
     }
+
+    private static Map<String, Object> typedStrictModule(boolean caller, boolean pap, String mode) {
+        boolean scalar = mode.equals("scalar"), tail = mode.equals("tail");
+        var result = scalar ? LONG : PAIR;
+        var params = caller ? list(arg("fn", CLOSURE), arg("left", REF), arg("right", REF),
+                arg("entered", CELL), arg("observed", CELL), arg("suffix", CELL), arg("n", LONG), arg("marker", REF))
+            : list(arg("left", REF), arg("right", REF), arg("entered", CELL), arg("observed", CELL), arg("input", PAIR));
+        List<Object> body;
+        if (caller) {
+            var actuals = new ArrayList<Object>();
+            if (!pap) actuals.addAll(list(v("left", REF), v("right", REF)));
+            actuals.addAll(list(v("entered", CELL), v("observed", CELL), pack(v("n", LONG), v("marker", REF))));
+            var call = app(v("fn", CLOSURE), actuals, result);
+            body = tail ? call : scalar ? sequence(call, "answer", LONG,
+                sequence(prim("putMVar#", list(v("suffix", CELL), v("marker", REF), state()), VOID), "done", VOID,
+                    v("answer", LONG), LONG), LONG) : unpack(call,
+                sequence(prim("putMVar#", list(v("suffix", CELL), v("marker", REF), state()), VOID), "done", VOID,
+                    pack(v("number", LONG), v("reference", REF)), PAIR), PAIR);
+        } else body = sequence(prim("putMVar#", list(v("entered", CELL), v("left", REF), state()), VOID), "entry", VOID,
+                sequence(prim("putMVar#", list(v("observed", CELL), v("right", REF), state()), VOID), "second", VOID,
+                    scalar ? unpack(v("input", PAIR), v("number", LONG), LONG) : v("input", PAIR), result), result);
+        var strict = caller ? Collections.nCopies(params.size(), false) : list(true, true, false, false, false);
+        return map("instrument", true, "constructors", list(map("id", "Pair", "name", "Pair", "kind", "unboxed-tuple", "arity", 2)),
+            "bindings", list(map("id", "run", "name", "run", "lifted", true, "entryStrict", strict,
+                "expr", list("lam", params, body, map("resultRep", result, "entryStrict", strict)))));
+    }
+    private static Map<String, Object> strictThunkModule() {
+        var take = prim("takeMVar#", list(v("blocked", CELL), state()), READ);
+        var waiting = list("case", take, "taken", list(list("data", "Read", list("s", "value"), v("value", REF),
+                map("binders", list(arg("s", VOID), arg("value", REF))))), map("rep", REF, "binder", arg("taken", READ)));
+        waiting = sequence(prim("takeMVar#", list(v("prefix", CELL), state()), READ), "prefixRead", READ, waiting, REF);
+        return map("instrument", true, "constructors", list(map("id", "Read", "name", "Read", "kind", "unboxed-tuple", "arity", 2),
+                map("id", "Box", "name", "Box", "kind", "boxed", "arity", 1, "fieldTypes", list(REF), "fieldReps", list(REF.get("primReps")), "strictFields", list(false), "fieldLifted", list(true))),
+            "bindings", list(map("id", "make", "name", "make", "lifted", true,
+                "expr", list("lam", list(arg("prefix", CELL), arg("blocked", CELL)),
+                    app(list("con", "Box", 1), list(waiting), REF), map("resultRep", REF)))));
+    }
+    private record StrictCut(SavedGuestContinuation saved, AsyncRequest request) {}
+    private static SavedGuestContinuation interruptStrict(Context context, Language.State owner, Language language,
+            ManagedMVar blocked, Thunk parked, java.util.concurrent.Callable<Object> action) throws Exception {
+        var answer = new CompletableFuture<StrictCut>(); var identity = new AtomicReference<GuestThreadId>();
+        var worker = new Thread(() -> {
+            context.enter(); owner.getThreads().enterCurrent(null, false, true, null);
+            try {
+                identity.set(owner.getThreads().currentIdentity());
+                SynchronousMasking.set(null, MaskingState.MASKED_INTERRUPTIBLE);
+                SavedGuestContinuation cut; AsyncRequest request;
+                try { cut = saved(action.call()); request = cut.asyncRequest(); }
+                catch (ThunkSuspended suspended) {
+                    if (parked == null) throw suspended;
+                    assertSame(parked, suspended.getThunk());
+                    cut = saved(parked.getValue()); request = suspended.getAsyncRequest();
+                }
+                assertEquals(MaskingState.MASKED_INTERRUPTIBLE, SynchronousMasking.current(null));
+                assertSame(StackAnnotationState.EMPTY, StackAnnotations.current(null));
+                request.acknowledge(); clear(language); answer.complete(new StrictCut(cut, request));
+            } catch (Throwable failure) { answer.completeExceptionally(failure); }
+            finally { owner.getThreads().leaveCurrent(GuestThreadStatus.FINISHED); context.leave(); }
+        }, "typed-strict-capture");
+        worker.start();
+        try {
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+            while (blocked.pendingCounts().getTakers() != 1 && !answer.isDone() && System.nanoTime() < deadline) Thread.sleep(1);
+            if (answer.isCompletedExceptionally()) answer.get(1, TimeUnit.SECONDS);
+            assertEquals(1, blocked.pendingCounts().getTakers());
+            var request = owner.getThreads().send(Objects.requireNonNull(identity.get()), "strict cut");
+            var cut = answer.get(10, TimeUnit.SECONDS); assertSame(request, cut.request()); return cut.saved();
+        } finally { if (!answer.isDone()) context.close(true); worker.join(5000); assertFalse(worker.isAlive()); }
+    }
+    @ParameterizedTest @CsvSource({"true,false,tuple,false", "true,true,tuple,false", "false,false,tuple,false", "false,true,tuple,false", "true,false,scalar,false", "true,true,scalar,false", "false,false,scalar,false", "false,true,scalar,false", "true,false,tail,false", "true,true,tail,false", "false,false,tail,false", "false,true,tail,false", "true,false,tuple,true", "true,true,tuple,true", "false,false,tuple,true", "false,true,tuple,true", "true,false,bounce,false", "false,false,bounce,false", "true,true,bounce,false", "false,true,bounce,false"})
+    void typedStrictInputsKeepTheUnenteredCallAcrossRepeatedCuts(boolean ast, boolean pap, String mode, boolean compiled) throws Exception {
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("engine.Splitting", "false").option("engine.CompilationFailureAction", "Throw").build()) {
+            context.initialize("thc"); context.enter();
+            Language language; Language.State owner; ExecutableProgram caller, maker; TupleShape shape; RootCallTarget resume;
+            var targets = new ExecutableProgram[4];
+            var bounced = new RootCallTarget[4];
+            var leafPrefixes = new ManagedMVar[4]; var leafBlocked = new ManagedMVar[4]; var leafSuffixes = new ManagedMVar[4];
+            try {
+                language = TruffleLanguage.LanguageReference.create(Language.class).get(null); owner = Language.currentState();
+                caller = ast ? new Program(language, typedStrictModule(true, pap, mode), true) : new BytecodeProgram(language, typedStrictModule(true, pap, mode), true);
+                maker = ast ? new BytecodeProgram(language, strictThunkModule(), true) : new Program(language, strictThunkModule(), true);
+                for (int i = 0; i < targets.length; i++) {
+                    targets[i] = new BytecodeProgram(language, typedStrictModule(false, false, mode), false);
+                    var root = (BytecodeRoot) targets[i].entryTarget("run").getRootNode();
+                    assertFalse(root.isAsyncEnabled()); assertNotNull(root.getTypedInput());
+                    assertArrayEquals(new int[]{0, 1}, TypedInputs.strictInputPositions(root, root.getTypedInput()));
+                    if (mode.equals("bounce")) {
+                        int index = i;
+                        leafPrefixes[i] = new ManagedMVar(); leafBlocked[i] = new ManagedMVar(); leafSuffixes[i] = new ManagedMVar();
+                        var leaf = new Program(language, module(2, true, false, false), true).entryTarget("run");
+                        var wrapper = new GuestRoot(language, new FrameLayout().build()) {
+                            @Override public long bloom(VirtualFrame frame) { return 0L; }
+                            @Override public Object execute(VirtualFrame frame) {
+                                var input = getTypedInput(); var storage = input.take(frame.getArguments()); var layout = input.getPacket();
+                                Object[] arguments;
+                                try {
+                                    assertTrue(((ManagedMVar) layout.getObject(storage, 3)).tryPut(layout.getObject(storage, 1)));
+                                    assertTrue(((ManagedMVar) layout.getObject(storage, 4)).tryPut(layout.getObject(storage, 2)));
+                                    arguments = new Object[]{0L, leafPrefixes[index], leafSuffixes[index], leafBlocked[index],
+                                        layout.getLong(storage, 5), layout.getObject(storage, 6)};
+                                } finally { input.release(storage); }
+                                throw new TailCall(leaf, arguments);
+                            }
+                        };
+                        wrapper.configureEntry(root.getEntryStrict(), false); wrapper.configureInput(root.getInputLayout());
+                        wrapper.configureTypedInput(root.getTypedInput()); wrapper.configureTupleResult(root.getTupleResult());
+                        bounced[i] = wrapper.getCallTarget();
+                    }
+                }
+                shape = ((GuestRoot) caller.entryTarget("run").getRootNode()).getTupleResult();
+                resume = new RootNode(language) {
+                    @Child private Force force = new Force(new Metrics(false), true);
+                    @Override public Object execute(VirtualFrame frame) { return force.execute(frame, frame.getArguments()[0]); }
+                }.getCallTarget();
+                if (compiled) {
+                    var target = caller.entryTarget("run");
+                    assertEquals(true, target.getClass().getMethod("compile", boolean.class).invoke(target, true));
+                    assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
+                    var runtime = Truffle.getRuntime();
+                    runtime.getClass().getMethod("bypassedInstalledCode", Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")).invoke(runtime, target);
+                }
+            } finally { context.leave(); }
+            for (int i = 0; i < targets.length; i++) {
+                var left = new Object(); var right = new Object(); var marker = new Object();
+                var entered = new ManagedMVar(); var observed = new ManagedMVar(); var suffix = new ManagedMVar();
+                var first = new ManagedMVar(); var second = new ManagedMVar();
+                var prefixes = new ManagedMVar[]{new ManagedMVar(), new ManagedMVar()};
+                for (var prefix : prefixes) assertTrue(prefix.tryPut(marker));
+                Object a = left, b = right; Closure target;
+                boolean interrupt = i == 0 || i == 3; // Same call site reaches direct and megamorphic dispatch.
+                context.enter();
+                try {
+                    if (interrupt) {
+                        var box1 = (DataValue) Calls.target(maker.entryTarget("make"), new Object[]{0L, prefixes[0], first});
+                        var box2 = (DataValue) Calls.target(maker.entryTarget("make"), new Object[]{0L, prefixes[1], second});
+                        a = assertInstanceOf(Thunk.class, box1.getLayout().read(box1, 0));
+                        b = assertInstanceOf(Thunk.class, box2.getLayout().read(box2, 0));
+                    }
+                    target = mode.equals("bounce") ? new Closure(null, 5, bounced[i]) : (Closure) targets[i].entryValue("run");
+                    if (mode.equals("bounce")) {
+                        assertTrue(leafPrefixes[i].tryPut(marker));
+                        if (!interrupt) assertTrue(leafBlocked[i].tryPut(marker));
+                    }
+                    if (pap) {
+                        target = (Closure) Calls.target(targets[i].hostEntryTarget(2), new Object[]{target, new Object[]{a, b}});
+                        assertNotNull(target.typedSupplied);
+                    }
+                } finally { context.leave(); }
+                Object[] packet = {0L, target, a, b, entered, observed, suffix, 37L, marker};
+                SavedGuestContinuation cut = null; Thunk parked = null;
+                if (interrupt) {
+                    cut = interruptStrict(context, owner, language, first, null, () -> Calls.target(caller.entryTarget("run"), packet));
+                    assertTrue(entered.isEmpty()); assertTrue(observed.isEmpty()); assertTrue(suffix.isEmpty());
+                    assertTrue(prefixes[0].isEmpty()); assertFalse(prefixes[1].isEmpty());
+                    if (compiled && i == 0) assertEquals(1L, caller.diagnostics().get("compiledEntries"), "first entry ran installed code before the cut");
+                    // Preserve acknowledged cuts, rather than drainStack's deliberate delivery through saved handlers.
+                    parked = new Thunk(((GuestRoot) cut.getSourceRoot()).getCallTarget(), null);
+                    parked.setValue(cut.getIdentity()); parked.setState(5);
+                    var current = parked;
+                    cut = interruptStrict(context, owner, language, first, current, () -> Calls.target(resume, new Object[]{current}));
+                    assertTrue(entered.isEmpty()); assertTrue(first.tryPut(left));
+                    cut = interruptStrict(context, owner, language, second, current, () -> Calls.target(resume, new Object[]{current}));
+                    assertTrue(entered.isEmpty()); assertTrue(observed.isEmpty()); assertTrue(suffix.isEmpty());
+                    assertTrue(prefixes[0].isEmpty()); assertTrue(prefixes[1].isEmpty()); assertTrue(second.tryPut(right));
+                    if (mode.equals("bounce")) {
+                        cut = interruptStrict(context, owner, language, leafBlocked[i], current, () -> Calls.target(resume, new Object[]{current}));
+                        assertFalse(entered.isEmpty()); assertFalse(observed.isEmpty()); assertTrue(suffix.isEmpty());
+                        assertTrue(leafPrefixes[i].isEmpty()); assertTrue(leafSuffixes[i].isEmpty());
+                        assertTrue(leafBlocked[i].tryPut(marker));
+                    }
+                }
+                context.enter(); owner.getThreads().enterCurrent(null, false, true, null);
+                try {
+                    SynchronousMasking.set(null, MaskingState.MASKED_INTERRUPTIBLE);
+                    Object output = cut == null ? Calls.target(caller.entryTarget("run"), packet) : Calls.target(resume, new Object[]{parked});
+                    if (mode.equals("scalar")) assertEquals(37L, output);
+                    else {
+                        var value = TupleResults.ownedTupleResult(output, shape);
+                        assertEquals(37L, shape.getLayout().getLong(value, 0)); assertSame(marker, shape.getLayout().getObject(value, 1));
+                    }
+                    assertSame(left, entered.tryTake().getValue()); assertSame(right, observed.tryTake().getValue());
+                    if (!mode.equals("tail")) assertSame(marker, suffix.tryTake().getValue());
+                    if (mode.equals("bounce")) { assertTrue(leafPrefixes[i].isEmpty()); assertSame(marker, leafSuffixes[i].tryTake().getValue()); }
+                    assertTrue(entered.isEmpty()); assertTrue(observed.isEmpty()); assertTrue(suffix.isEmpty());
+                    if (interrupt) { assertEquals(2, ((Thunk) a).getState()); assertEquals(2, ((Thunk) b).getState()); }
+                    assertEquals(MaskingState.MASKED_INTERRUPTIBLE, SynchronousMasking.current(null));
+                    assertSame(StackAnnotationState.EMPTY, StackAnnotations.current(null)); clear(language);
+                } finally { owner.getThreads().leaveCurrent(GuestThreadStatus.FINISHED); context.leave(); }
+            }
+        }
+    }
     @ParameterizedTest
     @CsvSource({"false,scalar,false", "true,scalar,false", "false,tuple,false", "true,tuple,false",
                 "false,scalar,true", "true,scalar,true", "false,tuple,true", "true,tuple,true",

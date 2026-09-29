@@ -96,6 +96,11 @@ public final class TypedInputs {
                 source.setReference(frame, node, values, position, force.execute(frame, source.reference(frame, node, values, position)));
             }
         }
+        return packInput(frame, node, function, input, source, values, logicalOffset, count, prefixCount, strictPositions, overrides);
+    }
+    @ExplodeLoop static HandoffStorage packInput(VirtualFrame frame, Node node, Closure function, TypedInputLayout input,
+            InputSource source, Object[] values, int logicalOffset, int count, int prefixCount, int[] strictPositions, Object[] overrides) {
+        int prefixWidth = input.getLogical().offset(prefixCount);
         HandoffStorage loan;
         if (CompilerDirectives.inCompiledCode()) { loan = input.getPacket().create(); loan.setInputMode(2); }
         else { loan = input.state().getArguments().acquire(input.getPacket()); loan.setInputMode(1); }
@@ -117,6 +122,44 @@ public final class TypedInputs {
             }
             return loan;
         } catch (Throwable failure) { input.release(loan); throw failure; }
+    }
+    static boolean capturesInput(Node node) {
+        return AstControl.captures(node) || node.getRootNode() instanceof BytecodeRoot root && root.isAsyncEnabled();
+    }
+    /** Complete strict demands before acquiring a packet or entering the callee. */
+    static Object[] forceInputCaptured(VirtualFrame frame, Node node, Closure function, TypedInputLayout input,
+            InputSource source, Object[] values, int logicalOffset, int[] strict, Force force) {
+        Object[] overrides = function.suppliedCount == 0 ? null : new Object[input.getLogical().offset(function.suppliedCount)];
+        return forceInputFrom(frame, node, function, input, source, values, logicalOffset, strict, force, overrides, 0);
+    }
+    private static Object[] forceInputFrom(VirtualFrame frame, Node node, Closure function, TypedInputLayout input,
+            InputSource source, Object[] values, int logicalOffset, int[] strict, Force force, Object[] overrides, int start) {
+        for (int index = start; index < strict.length; index++) {
+            int formal = strict[index];
+            boolean prefix = formal < function.suppliedCount;
+            int position = prefix ? input.getLogical().offset(formal)
+                : ArgumentLayout.offset(source.getLayout(), logicalOffset + formal - function.suppliedCount);
+            if (!prefix) {
+                CoreRepresentation proof = source.getPhysicalProofs() == null ? null : source.getPhysicalProofs()[position];
+                if (proof != null && (proof.isInt() || proof.isLong() || proof.isFloat() || proof.isDouble())) continue;
+            }
+            Object raw = prefix ? function.typedSupplied != null
+                ? input.prefix(function.suppliedCount).getObject(function.typedSupplied, position) : function.supplied[position]
+                : source.reference(frame, node, values, position);
+            Object answer;
+            try { answer = AstControl.forceCallback(frame, node, force, raw); }
+            catch (AstCapture cut) {
+                int next = index + 1;
+                throw cut.append((saved, value) -> {
+                    if (prefix) overrides[position] = value;
+                    else source.setReference(saved, node, values, position, value);
+                    return forceInputFrom(saved, node, function, input, source, values, logicalOffset, strict, force, overrides, next);
+                });
+            }
+            if (prefix) overrides[position] = answer;
+            else source.setReference(frame, node, values, position, answer);
+        }
+        return overrides;
     }
     @CompilerDirectives.TruffleBoundary public static int[] strictInputPositions(GuestRoot root, TypedInputLayout input) {
         if (root instanceof BytecodeRoot bytecode && bytecode.isAsyncEnabled() ||
