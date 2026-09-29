@@ -6,6 +6,10 @@ import com.oracle.truffle.api.TruffleLanguage;
 import java.util.*;
 import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.ResourceLock;
+import org.junit.jupiter.api.parallel.Resources;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import thc.Language;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -127,6 +131,33 @@ class NativeByteArrayPolicyTest {
                     assertEquals(0, language.getHandoffState().get().getResults().getDepth());
                 } finally { context.leave(); }
             }
+        }
+    }
+    @ParameterizedTest
+    @CsvSource({"true,,true", "true,heap,false", "false,native,false"})
+    @ResourceLock(Resources.SYSTEM_PROPERTIES)
+    void launcherDefaultsToNativeButHonorsHeapWithoutChangingEmbeddings(boolean launcher, String setting, boolean nativeBacking) {
+        var previous = System.getProperty("thc.byteArrayStorage");
+        try {
+            if (setting == null) System.clearProperty("thc.byteArrayStorage");
+            else System.setProperty("thc.byteArrayStorage", setting);
+            try (var context = launcher ? thc.Main.executionContext() : Context.newBuilder("thc").build()) {
+                context.initialize("thc"); context.enter();
+                try {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    for (String backend : List.of("ast", "bytecode")) {
+                        ExecutableProgram program = backend.equals("ast") ? new Program(language, module()) : new BytecodeProgram(language, module());
+                        var bytes = (ManagedAllocation) run(program, "allocate", 16L);
+                        assertEquals(nativeBacking, bytes.hasNativeStorage(), backend);
+                        assertFalse(bytes.isPinned(), backend);
+                        bytes.writeByte(3, 91);
+                        assertEquals(91, ManagedAddress.fromGuestByteArray(bytes).plus(3).readWord8(0), backend);
+                    }
+                } finally { context.leave(); }
+            }
+        } finally {
+            if (previous == null) System.clearProperty("thc.byteArrayStorage");
+            else System.setProperty("thc.byteArrayStorage", previous);
         }
     }
     @Test void nativeStorageRequiresNativeAuthorityAtContextCreation() {

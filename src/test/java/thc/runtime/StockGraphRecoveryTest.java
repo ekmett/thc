@@ -831,7 +831,7 @@ class StockGraphRecoveryTest {
         }
 
         static void launcherPolicy() {
-            try (var context = thc.Main.withContextProfile(Context.newBuilder("thc"), thc.ContextProfile.LAUNCHER)
+            try (var context = thc.Main.withContextProfile(Context.newBuilder("thc").allowNativeAccess(true), thc.ContextProfile.LAUNCHER)
                     .option("engine.SingleTierCompilationThreshold", "1")
                     .option("compiler.MaximumGraalGraphSize", "10000").build()) {
                 context.initialize("thc"); context.enter();

@@ -29,7 +29,7 @@ public final class Main {
             throw new IllegalArgumentException("Native Haskell contexts require polyglot.llvm.managed to be absent or false");
         builder.allowCreateThread(true).useSystemExit(false);
         if (profile == ContextProfile.LAUNCHER)
-            builder.option("thc.ByteArrayStorage", System.getProperty("thc.byteArrayStorage", "heap"));
+            builder.option("thc.ByteArrayStorage", System.getProperty("thc.byteArrayStorage", "native"));
         if (profile == ContextProfile.NATIVE) return builder;
         builder.allowExperimentalOptions(true)
             .option("engine.BackgroundCompilation", "false")

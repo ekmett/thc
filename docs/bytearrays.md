@@ -6,9 +6,8 @@ The [primop checklist](primops.md) lists available operations; [Int](int-arrays.
 this storage with element indices of their respective widths.
 
 `ByteArray#` and `MutableByteArray# s` are each one unlifted boxed reference.
-Guest allocations use an owner containing ordinary heap storage or pinned
-native storage; host-supplied primitive `byte[]` values retain their typed
-fast paths. Neither representation boxes individual bytes. They are
+Guest allocations use an owner containing heap or native storage; host-supplied
+primitive `byte[]` values retain their typed fast paths. Neither representation boxes individual bytes. They are
 not unboxed tuples. Allocation and freeze return logical
 `(# State# s, reference #)` results: two logical components, zero storage for
 the State# component, and one physical reference destination. Saturated
@@ -18,14 +17,17 @@ Lowering checks State, unlifted references, physical carriers, saturation and
 logical result shape. Integral scalar annotations share `Long`; strict exporter
 audits independently check exact source-level representations.
 
-Heap storage remains the default. Embedders may opt in to native backing at
-creation with `allowExperimentalOptions(true)`, `allowNativeAccess(true)` and
-`option("thc.ByteArrayStorage", "native")`; `heap` explicitly selects the default.
-Launcher contexts accept `-Dthc.byteArrayStorage=native` through JVM options.
-The option is context-local and requires native authority before the context
-initializes. It does not enable any additional C ABI.
+Standalone launchers use native backing by default, so guest byte arrays can pass
+their original storage to native C functions. Set `-Dthc.byteArrayStorage=heap`
+through JVM options to choose heap backing explicitly.
 
-Under this policy ordinary guest allocations and resize replacements use the
+Embedded contexts default to heap storage. Embedders may select native backing
+at creation with `allowExperimentalOptions(true)`, `allowNativeAccess(true)` and
+`option("thc.ByteArrayStorage", "native")`. The option is context-local and
+requires native authority before the context initializes. It does not enable
+any additional C ABI.
+
+With native backing, ordinary guest allocations and resize replacements use the
 existing automatic FFM arena ownership. Unsafe freeze/thaw keep the same owner;
 compact copies and imported compact byte storage use the same creation policy.
 Physical native backing is distinct from GHC's strong-pinned contract: ordinary
@@ -40,7 +42,7 @@ be passed to C implementations requiring a native pointer. Static literal images
 retain their existing separate transport. Native arrays follow the lifetime of
 their owners and views, not context closure; numeric pointer bits do not root
 them. Each allocation incurs native-memory/FFM cleanup bookkeeping instead of a
-JVM byte array. This opt-in policy is not a default-performance recommendation.
+JVM byte array.
 
 Writes and copies evaluate all their operands, including the state expression, before the
 effect. Core case evaluation preserves ordering. Freeze returns the same object
