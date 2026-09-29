@@ -1538,7 +1538,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 : CFinalizerLabels.fromCore(value, proof);
             case "data-addr" -> CoreDataLabels.fromCore(value, proof,
                 stackTargetLayout instanceof TargetLayout layout ? layout : null);
-            case "bignat" -> BigNatLiterals.decode(value);
+            case "bignat" -> ManagedByteArray.fromFreshBytes(BigNatLiterals.decode(value));
             default -> throw new UnsupportedCore("Unsupported literal kind " + kind);
         };
     }

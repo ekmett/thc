@@ -26,6 +26,11 @@ public final class BigNatLiterals {
             throw new RuntimeFault("bignat literal exceeds managed byte-array size");
         return (int) (((bits + 63) / 64) * 8);
     }
+    /** Shared code retains inert limbs; each invoking load or expression owns its guest value. */
+    public static Object instantiate(byte[] template) {
+        return thc.Language.currentState().getNativeByteArrays()
+            ? ManagedByteArray.fromFreshBytes(template) : template.clone();
+    }
     public static byte[] decode(String decimal) {
         if (decimal.isEmpty() || decimal.length() > 1 && decimal.charAt(0) == '0')
             throw new RuntimeFault("bignat literal requires canonical nonnegative decimal");

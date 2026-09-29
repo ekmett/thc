@@ -21,7 +21,7 @@ final class Literal extends Expr {
         };
         setRepresentation(new CoreRepresentation(kind, true, false, null, null, null, null, null, null));
     }
-    @Override public Object execute(VirtualFrame frame) { return copyBytes ? ((byte[]) value).clone() : value; }
+    @Override public Object execute(VirtualFrame frame) { return copyBytes ? BigNatLiterals.instantiate((byte[]) value) : value; }
     @Override public int executeInt(VirtualFrame frame) throws UnexpectedResultException { return RuntimeTypesGen.expectInteger(value); }
     @Override public long executeLong(VirtualFrame frame) throws UnexpectedResultException { return RuntimeTypesGen.expectLong(value); }
     @Override public float executeFloat(VirtualFrame frame) throws UnexpectedResultException { return RuntimeTypesGen.expectFloat(value); }

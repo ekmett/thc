@@ -130,7 +130,8 @@ class ReusableProgramTest {
         try (var engine = Engine.newBuilder().allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false")
                 .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build()) {
             Program.PreparedCode code;
-            try (var preparation = Context.newBuilder("thc").engine(engine).build()) {
+            try (var preparation = Context.newBuilder("thc").engine(engine).allowExperimentalOptions(true).allowNativeAccess(true)
+                    .option("thc.ByteArrayStorage", "native").build()) {
                 preparation.initialize("thc"); preparation.enter();
                 try { code = Program.prepareCode(TruffleLanguage.LanguageReference.create(Language.class).get(null), module(bindings),
                     List.of("globalLabel", "inlineLabel", "globalBig", "inlineBig", "nullAddress")); }
@@ -143,9 +144,10 @@ class ReusableProgramTest {
             code.requireInstalledCode();
             String previous = System.getProperty("thc.requireCompiledCode"); System.setProperty("thc.requireCompiledCode", "true");
             ManagedAddress previousLabel = null;
-            byte[] previousBytes = null;
+            Object previousBytes = null;
             try {
-                for (int load = 0; load < 2; load++) try (var context = Context.newBuilder("thc").engine(engine).allowNativeAccess(true).build()) {
+                for (int load = 0; load < 2; load++) try (var context = Context.newBuilder("thc").engine(engine).allowExperimentalOptions(true).allowNativeAccess(true)
+                        .option("thc.ByteArrayStorage", load == 0 ? "heap" : "native").build()) {
                     context.initialize("thc"); context.enter();
                     try {
                         var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
@@ -165,15 +167,21 @@ class ReusableProgramTest {
                                 assertThrows(RuntimeFault.class, () -> oldLabel.finalizerFunction().requireOwner(Language.currentState().cbits()));
                             }
                             previousLabel = currentLabel;
-                            var currentBytes = (byte[])results.get("globalBig");
+                            var currentBytes = results.get("globalBig");
                             assertNotSame(previousBytes, currentBytes); assertNotSame(currentBytes, results.get("inlineBig"));
                             for (String name : List.of("globalBig", "inlineBig")) {
-                                byte[] value = (byte[])results.get(name);
-                                assertEquals(16, value.length); assertEquals(1L, ManagedByteArray.readInt(value, 0));
-                                assertEquals(1L, ManagedByteArray.readInt(value, 1));
+                                Object value = results.get(name);
+                                assertEquals(16, ManagedByteArray.sizeGuest(value)); assertEquals(1L, ManagedByteArray.readIntGuest(value, 0));
+                                assertEquals(1L, ManagedByteArray.readIntGuest(value, 1));
+                                if (load == 0) assertInstanceOf(byte[].class, value);
+                                else assertTrue(assertInstanceOf(ManagedAllocation.class, value).hasNativeStorage());
                             }
-                            ManagedByteArray.writeInt(currentBytes, 0, 7L);
-                            assertEquals(1L, ManagedByteArray.readInt((byte[])results.get("inlineBig"), 0));
+                            assertSame(currentBytes, ManagedByteArray.freezeGuest(currentBytes));
+                            ManagedByteArray.writeIntGuest(ManagedByteArray.freezeGuest(currentBytes), 0, 7L);
+                            assertEquals(1L, ManagedByteArray.readIntGuest(results.get("inlineBig"), 0));
+                            var inlineFunction = (Closure) program.entryValue("inlineBig");
+                            Object fresh = Calls.target(inlineFunction.target, new Object[]{0L, inlineFunction.environment, 0L});
+                            assertNotSame(results.get("inlineBig"), fresh); assertEquals(1L, ManagedByteArray.readIntGuest(fresh, 0));
                             previousBytes = currentBytes;
                             assertEquals(0, count(program, "loweredRootCount")); assertTrue(count(program, "compiledEntries") >= 5);
                             code.requireInstalledCode();

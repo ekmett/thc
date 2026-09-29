@@ -281,6 +281,13 @@ public final class Program implements ExecutableProgram {
             String id = (String) binding.get("id");
             if (values.containsKey(id)) continue;
             List<Object> expression = (List<Object>) binding.get("expr");
+            if (expression.size() >= 3 && expression.getFirst().equals("lit") && expression.get(1).equals("bignat")) {
+                builder.validateBindings(List.of(binding));
+                BigNatLiterals.proof(expression);
+                // Preparation stores inert bytes even when its context selects native guest storage.
+                values.put(id, new CodeValue(null, null, 0, BigNatLiterals.decode((String) expression.get(2)), -1));
+                continue;
+            }
             if (expression.size() >= 3 && expression.getFirst().equals("lit") && expression.get(1).equals("function-addr")) {
                 // Never resolve a native label while preparing the source. The
                 // descriptor has no provider or context; each load resolves its own.
@@ -367,8 +374,6 @@ public final class Program implements ExecutableProgram {
                     expression.getFirst().equals("lit") && (expression.get(1).equals("string-bytes") ||
                     expression.get(1).equals("null-addr") && value == ManagedAddress.nullAddress()))
                 return new CodeValue(null, null, 0, value, -1);
-            if (value instanceof byte[] && expression.size() >= 3 && expression.getFirst().equals("lit") && expression.get(1).equals("bignat"))
-                return new CodeValue(null, null, 0, value, -1);
             // Store an immutable constructor index, never the preparation load's
             // nullary value or its allocation key/cache.
             if (value instanceof DataValue data && data.getLayout().getArity() == 0 && data.getLayout().reusableStorage() != null)
@@ -378,7 +383,7 @@ public final class Program implements ExecutableProgram {
         Object instantiate(Program instance) {
             if (target == null) {
                 if (literal instanceof CFinalizerLabels label) return label.resolve();
-                if (literal instanceof byte[] bytes) return bytes.clone();
+                if (literal instanceof byte[] bytes) return BigNatLiterals.instantiate(bytes);
                 return constructorIndex >= 0 ? instance.constructorLayout(constructorIndex).allocate() : literal;
             }
             CapturedFrame environment = captures.captureValues(new Object[0], instance);
@@ -1103,7 +1108,10 @@ public final class Program implements ExecutableProgram {
                 ? thc.Language.currentState(null).getNativeCallbacks().helper(nativeCallbacks.get(value), this, (thc.Language) language)
                 : CFinalizerLabels.fromCore(value, proof);
             case "data-addr" -> CoreDataLabels.fromCore(value, proof, stackTargetLayout instanceof TargetLayout target ? target : null);
-            case "bignat" -> BigNatLiterals.decode(value);
+            case "bignat" -> {
+                byte[] bytes = BigNatLiterals.decode(value);
+                yield reusableCode ? bytes : ManagedByteArray.fromFreshBytes(bytes);
+            }
             default -> throw new UnsupportedCore("Unsupported literal kind " + kind);
         };
     }

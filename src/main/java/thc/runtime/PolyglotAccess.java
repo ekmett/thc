@@ -122,7 +122,7 @@ public final class PolyglotAccess extends Node {
             case BUFFER_WRITE_LONG -> {
                 storage.writeBufferLong(value, order((Long) arguments[1]), (Long) arguments[2], (Long) arguments[3]); yield 0L;
             }
-            case BUFFER_COPY -> copy(value, (Long) arguments[1], (Long) arguments[2]);
+            case BUFFER_COPY -> ManagedByteArray.fromFreshBytes(copy(value, (Long) arguments[1], (Long) arguments[2]));
             case BUFFER_COPY_INTO -> {
                 Object destination = arguments[2];
                 long offset = (Long) arguments[3], length = (Long) arguments[4];
