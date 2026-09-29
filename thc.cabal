@@ -645,6 +645,14 @@ extra-source-files:
   t/fixtures/run-project/app-run/app-run.cabal
   t/fixtures/run-project/app-run/src/Bridge.hs
   t/fixtures/run-project/app-run/app/Main.hs
+  t/fixtures/run-backpack/cabal.project
+  t/fixtures/run-backpack/run-backpack.cabal
+  t/fixtures/run-backpack/client/Number.hsig
+  t/fixtures/run-backpack/client/Client.hs
+  t/fixtures/run-backpack/implementations/Additive.hs
+  t/fixtures/run-backpack/implementations/Multiplicative.hs
+  t/fixtures/run-backpack/app/Main.hs
+  t/fixtures/run-backpack/app/Independent.hs
   t/fixtures/run-store-project/cabal.project
   t/fixtures/run-store-project/app/app.cabal
   t/fixtures/run-store-project/app/app/Main.hs
@@ -1008,6 +1016,7 @@ test-suite driver-tests
     RunTests
     RunOptionsTests
     BenchmarkTests
+    BackpackTests
     ProjectTests
     StoreProjectTests
     EmptyStoreProjectTests

@@ -1,0 +1,35 @@
+cabal-version: 3.4
+-- SPDX-FileCopyrightText: 2026 Edward Kmett
+-- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+name: run-backpack
+version: 0.1.0.0
+build-type: Simple
+license: UPL-1.0 AND BSD-3-Clause
+
+library client
+  signatures: Number
+  exposed-modules: Client
+  hs-source-dirs: client
+  build-depends: base >= 4.22 && < 4.23
+  default-language: Haskell2010
+
+library implementations
+  exposed-modules: Additive, Multiplicative
+  hs-source-dirs: implementations
+  build-depends: base >= 4.22 && < 4.23
+  default-language: Haskell2010
+
+executable backpack
+  main-is: Main.hs
+  hs-source-dirs: app
+  build-depends: base >= 4.22 && < 4.23, run-backpack:client, run-backpack:implementations
+  mixins:
+    run-backpack:client (Client as AddClient) requires (Number as Additive),
+    run-backpack:client (Client as MultiplyClient) requires (Number as Multiplicative)
+  default-language: Haskell2010
+
+executable independent
+  main-is: Independent.hs
+  hs-source-dirs: app
+  build-depends: base >= 4.22 && < 4.23
+  default-language: Haskell2010

@@ -21,7 +21,7 @@ module THC.Driver.Project
 
 import Control.Exception (evaluate, finally, onException)
 import Control.Monad (filterM, forM, forM_, unless, when)
-import Data.Char (isAlphaNum, isHexDigit)
+import Data.Char (isAlphaNum, isHexDigit, isSpace)
 import GHC.ResponseFile (expandResponse)
 import Distribution.Types.Flag (mkFlagName, unFlagName)
 import qualified Distribution.InstalledPackageInfo as Package
@@ -439,7 +439,7 @@ runBuiltProject action project working thcRoot runtime output native target proj
   let context = ExportContext compilerId abi (arch ++ "-" ++ os) pluginDb pluginUnit
                               pluginLibrary native cacheRoot driverHash ghc ghcPkg driver thcRoot projectOptions nativeTools verifyArtifacts noLinkUnit
   records <- field plan "install-plan" :: IO [Value]
-  units <- mapM readUnit records
+  units <- mapM readUnit records >>= concreteProjectUnits context
   let byId = Map.fromList [(unitId unit, unit) | unit <- units]
   require (Map.size byId == length units) "Cabal plan has duplicate unit IDs"
   selected <- selectRunnable selection units
@@ -454,6 +454,7 @@ runBuiltProject action project working thcRoot runtime output native target proj
   builtComponents <- forM builtLocals $ \unit -> do
     component <- readComponentMetadata (unitId unit `elem` map unitId ordered) unit context
     pure (unit, component)
+  prepareBackpackSignatures context byId ordered builtComponents
   roots <- fmap (sort . nub . concat) $ forM builtComponents $ \(unit, component) -> do
     dist <- field (unitValue unit) "dist-dir"
     componentRoots dist (componentValue component)
@@ -1262,6 +1263,78 @@ readUnit value = do
   kind <- optionalField value "type" ("" :: String)
   style <- optionalField value "style" ("" :: String)
   pure (Unit identifier value dependencies (kind == "configured" && style == "local"))
+
+-- Cabal's plan records component dependencies before Backpack instantiation.
+-- Built compiler inputs name the concrete units; an instantiated library's
+-- registration also carries providers used only to fill its signatures.
+concreteProjectUnits :: ExportContext -> [Unit] -> IO [Unit]
+concreteProjectUnits context units = do
+  let knownUnits = Set.fromList (map unitId units)
+  built <- filterM (\unit -> case jsonField (unitValue unit) "build-info" of
+    Just path | unitLocal unit -> doesFileExist path
+    _ -> pure False) units
+  components <- forM built $ \unit -> do
+    component <- readComponentMetadata False unit context
+    pure (unit, component)
+  if not (any (elem "-instantiated-with" . componentArguments . snd) components)
+    then pure units
+    else do
+      dependencies <- forM components $ \(unit, component) -> do
+        let arguments = componentArguments component
+            values flag = [value | (key,value) <- zip arguments (drop 1 arguments), key == flag]
+        actual <- if "-fno-code" `elem` arguments then pure (unitDepends unit)
+          else if "-instantiated-with" `elem` arguments then do
+            registered <- backpackRegistration (unitId unit) component
+            require (not (Package.indefinite registered))
+              ("Backpack registration is not concrete: " ++ unitId unit)
+            pure (map prettyShow (Package.depends registered))
+          else pure (map (takeWhile (not . isSpace)) (values "-package-id"))
+        require (all (`Set.member` knownUnits) actual)
+          ("compiled Backpack dependency absent from Cabal plan for " ++ unitId unit)
+        pure (unitId unit, nub actual)
+      let resolved = Map.fromList dependencies
+      pure [unit {unitDepends = Map.findWithDefault (unitDepends unit) (unitId unit) resolved} | unit <- units]
+
+-- Cabal typechecks indefinite libraries only in the vanilla way. The dynamic
+-- exporter needs their signature interfaces, but only for concrete instances
+-- in the selected runnable closure, never unrelated previously built targets.
+prepareBackpackSignatures :: ExportContext -> Map.Map String Unit -> [Unit] -> [(Unit, Component)] -> IO ()
+prepareBackpackSignatures context units selected components = when (Host.os /= "mingw32") $ do
+  let selectedIds = Set.fromList (map unitId selected)
+      indefinite = Map.fromList [(unitId unit, component) | (unit, component) <- components,
+                    "-fno-code" `elem` componentArguments component]
+      requiredSignatures = nub [identifier | (unit, component) <- components,
+        unitId unit `Set.member` selectedIds,
+        let arguments = componentArguments component, "-fno-code" `notElem` arguments,
+        (flag, identifier) <- zip arguments (drop 1 arguments), flag == "-this-component-id",
+        Map.member identifier indefinite]
+  ordered <- concat <$> mapM (dependencyClosure units) requiredSignatures
+  forM_ (nub (map unitId ordered)) $ \identifier ->
+    forM_ (Map.lookup identifier indefinite) $ \component -> do
+      registered <- backpackRegistration identifier component
+      require (Package.indefinite registered) ("Backpack signature unit is not indefinite: " ++ identifier)
+      directory <- case Package.importDirs registered of
+        [path] | within (contextNative context) path -> pure path
+        _ -> fail ("Backpack signature interfaces are not in the owned build: " ++ identifier)
+      source <- field (componentValue component) "src-dir"
+      targets <- sourcePaths (componentValue component) (componentArguments component)
+      runCommand True (contextGhc context)
+        (["--make", "-no-link"] ++ componentArguments component ++
+         ["-dynamic", "-hisuf", "dyn_hi", "-hidir", directory] ++ map snd targets) source
+
+backpackRegistration :: String -> Component -> IO Package.InstalledPackageInfo
+backpackRegistration identifier component = do
+  source <- field (componentValue component) "src-dir"
+  let arguments = componentArguments component
+  paths <- filterM doesFileExist [source </> database </> identifier <.> "conf" |
+    (flag,database) <- zip arguments (drop 1 arguments), flag == "-package-db"]
+  path <- case nub paths of
+    [value] -> pure value
+    _ -> fail ("no unique Backpack registration for " ++ identifier)
+  (_, registered) <- either (fail . show) pure . Package.parseInstalledPackageInfo =<< BS.readFile path
+  require (prettyShow (Package.installedUnitId registered) == identifier)
+    ("Backpack registration has a different unit ID: " ++ identifier)
+  pure registered
 
 selectRunnable :: (Maybe String, String) -> [Unit] -> IO Unit
 selectRunnable target@(wantedPackage, wantedComponent) units = do
@@ -2101,11 +2174,12 @@ normalizePaths build value = case value of
 expectedModuleNames :: Value -> IO [String]
 expectedModuleNames component = do
   modules <- optionalField component "modules" ([] :: [String])
+  signatures <- optionalField component "thc-signatures" ([] :: [String])
   files <- optionalField component "src-files" ([] :: [String])
   mainModule <- componentMainModule component
   when (mainModule /= Nothing) $
     require (length files == 1) "project runnable component must have one Haskell main source"
-  pure (sort (modules ++ maybe [] pure mainModule))
+  pure (sort (filter (`notElem` signatures) modules ++ maybe [] pure mainModule))
 
 readComponent :: Unit -> ExportContext -> IO Component
 readComponent = readComponentMetadata True
@@ -2192,7 +2266,11 @@ readComponentMetadata selected unit context = do
         Object fields -> Object (KeyMap.insert "modules" (Aeson.toJSON modules) fields)
         _ -> configured
   sources <- if selected then sourcePaths completed arguments else pure []
-  pure (Component completed (contextGhc context) arguments sources)
+  let signatures = [name | (name,path) <- sources, takeExtension path `elem` [".hsig", ".lhsig"]]
+      described = case completed of
+        Object fields -> Object (KeyMap.insert "thc-signatures" (Aeson.toJSON signatures) fields)
+        _ -> completed
+  pure (Component described (contextGhc context) arguments sources)
 
 sourcePaths :: Value -> [String] -> IO [(String, FilePath)]
 sourcePaths component arguments = do
@@ -2204,8 +2282,16 @@ sourcePaths component arguments = do
                           [drop 2 flag | flag <- arguments, "-i" `isPrefix` flag, length flag > 2]]
   foundModules <- forM modules $ \name -> do
     let relative = joinPath (split '.' name)
-    path <- uniqueSource name [directory </> replaceExtension relative extension |
-                               directory <- directories, extension <- ["hs", "lhs"]]
+        candidates extensions = [directory </> replaceExtension relative extension |
+                                  directory <- directories, extension <- extensions]
+    implementations <- filterM doesFileExist (candidates ["hs", "lhs"])
+    path <- if not (null implementations) then uniqueSource name implementations else do
+      -- Preserve implementation-source ambiguity checks. Cabal also emits
+      -- signature stubs in autogen; for signatures, use directory search order.
+      signatures <- filterM doesFileExist (candidates ["hsig", "lhsig"])
+      case signatures of
+        signature:_ -> canonicalizePath signature
+        [] -> uniqueSource name []
     pure (name, path)
   foundFiles <- forM files $ \name -> do
     path <- uniqueSource name [directory </> name | directory <- directories]
