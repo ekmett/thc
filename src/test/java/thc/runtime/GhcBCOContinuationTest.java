@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.CsvSource;
 import thc.Language;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -63,6 +64,11 @@ class GhcBCOContinuationTest {
         for (int i = 0; i < instructions.length; i++) ManagedByteArray.writeInt16(code, i, instructions[i]);
         return GhcBCO.create(new Node() {}, language, new Metrics(false), code, words(0, 1), pointers,
             arity, arity == 0 ? words(0) : words(arity, bits), Unit.INSTANCE);
+    }
+    private static Closure caseBco(Language language, int arity, long[] bitmap, long[] literals, Object[] pointers, int... instructions) {
+        byte[] code = new byte[instructions.length * 2];
+        for (int i = 0; i < instructions.length; i++) ManagedByteArray.writeInt16(code, i, instructions[i]);
+        return GhcBCO.create(new Node() {}, language, new Metrics(false), code, words(literals), pointers, arity, words(bitmap), Unit.INSTANCE);
     }
     private static SavedGuestContinuation saved(Object value) {
         return Objects.requireNonNull(SavedGuestContinuations.savedGuestContinuation(
@@ -263,15 +269,19 @@ class GhcBCOContinuationTest {
             }
         }
     }
-    @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
-    void instructionLoopHasARealInterruptibleGuestCut(String backend) throws Exception {
+    @ParameterizedTest @CsvSource({"ast,false", "bytecode,false", "ast,true", "bytecode,true"})
+    void instructionLoopHasARealInterruptibleGuestCut(String backend, boolean packed) throws Exception {
         try (var context = context()) {
             context.initialize("thc"); context.enter();
             Language.State owner; Closure code; RootCallTarget target, resume;
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); owner = Language.currentState();
                 // No calls or allocation instructions can provide a guest poll.
-                code = bco(language, 1, 1, new Object[0], 47, 0, 4, 61, 25, 1, 1, 2, 1, 91, 38, 1, 1, 55, 0);
+                code = packed
+                    // The countdown runs above an unaligned live byte. Completion widens that exact byte.
+                    ? caseBco(language, 1, new long[]{1,1}, new long[]{0,-1,165,2_000_000}, new Object[0],
+                        22,2,25,3,1,47,0,10,55,16,25,1,1,90,55,5,21,20,19,8,15,38,1,3,61)
+                    : bco(language, 1, 1, new Object[0], 47, 0, 4, 61, 25, 1, 1, 2, 1, 91, 38, 1, 1, 55, 0);
                 var number = map("kind", "long", "primReps", list("IntRep"), "evaluated", true);
                 var closure = map("kind", "closure", "primReps", REF.get("primReps"), "evaluated", true);
                 var call = list("app", v("code", closure), list(v("n", number)), list(false), false, false, map("rep", number));
@@ -309,9 +319,77 @@ class GhcBCOContinuationTest {
                 assertNotNull(cut.asyncRequest());
                 worker.join(5000); assertFalse(worker.isAlive());
                 context.enter(); try {
-                    assertEquals(0L, resume.call(cut), "the saved instruction stream and raw operand stack complete normally");
+                    assertEquals(packed ? 165L : 0L, resume.call(cut), "the saved instruction stream and byte-addressed operand stack complete normally");
                 } finally { context.leave(); }
             } finally { if (!result.isDone()) context.close(true); worker.join(5000); assertFalse(worker.isAlive()); }
+        }
+    }
+    @ParameterizedTest @CsvSource({"ast,false,false", "bytecode,false,false", "ast,true,false", "bytecode,true,false", "ast,true,true", "bytecode,true,true"})
+    void caseFramesKeepTheirStackAcrossRepeatedCutsAndAnOuterApply(String backend, boolean tuple, boolean overapply) throws Exception {
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            Language language; Language.State owner; Closure code; RootCallTarget resume; Thunk shared;
+            var prefixes = new ManagedMVar[]{new ManagedMVar(), new ManagedMVar(), new ManagedMVar()};
+            var cells = new ManagedMVar[]{new ManagedMVar(), new ManagedMVar(), new ManagedMVar()};
+            for (var prefix : prefixes) assertTrue(prefix.tryPut("once"));
+            Closure last;
+            try {
+                language = TruffleLanguage.LanguageReference.create(Language.class).get(null); owner = Language.currentState();
+                ExecutableProgram program = backend.equals("ast") ? new Program(language, waitingModule(), true) : new BytecodeProgram(language, waitingModule(), true);
+                Closure wait = (Closure) program.entryValue("wait");
+                Closure first = wait.pap(new Object[]{prefixes[0]}), second = wait.pap(new Object[]{prefixes[1]});
+                last = wait.pap(new Object[]{prefixes[2]});
+                Closure initial;
+                if (tuple) {
+                    var layout = caseBco(language, 0, new long[]{3,5}, new long[0], new Object[0], 38,0,1,69);
+                    var cont = caseBco(language, 0, new long[]{2,1}, new long[0], new Object[]{second,cells[1]},
+                        38,0,3,38,2,4,38,1,1,38,0,1,11,1,31,11,0,58);
+                    var pack = caseBco(language, 0, new long[]{1,0}, new long[]{3,7}, new Object[]{layout},
+                        38,0,1,38,1,2,38,1,1,25,1,1,2,1,38,2,1,25,0,1,11,0,69);
+                    var worker = caseBco(language, 1, new long[]{1,0}, new long[0], new Object[]{pack,first},
+                        13,0,2,2,31,11,1,58);
+                    if (overapply) worker = caseBco(language, 1, new long[]{1,0}, new long[0], new Object[]{worker}, 38,0,1,11,0,60);
+                    initial = caseBco(language, 0, new long[]{0}, new long[]{3}, new Object[]{cont,layout,cells[0],worker,cells[2]},
+                        overapply ? new int[]{11,4,31,70,0,0,1,11,2,11,2,32,11,3,58} : new int[]{11,4,31,70,0,0,1,11,2,31,11,3,58});
+                } else {
+                    var cont = caseBco(language, 0, new long[]{0}, new long[0], new Object[]{second,cells[1]},
+                        38,0,1,38,1,2,38,0,1,11,1,31,11,0,58);
+                    initial = caseBco(language, 0, new long[]{0}, new long[0], new Object[]{cont,first,cells[0],cells[2]},
+                        11,3,31,13,0,11,2,31,11,1,58);
+                }
+                shared = GhcBCO.updating(new Node() {}, initial);
+                code = bco(language, 0, 0, new Object[]{shared}, 11,0,58);
+                resume = new RootNode(language) {
+                    @Child private Force force = new Force(new Metrics(false), true);
+                    @Override public Object execute(VirtualFrame frame) { return force.drainStack((SavedGuestContinuation) frame.getArguments()[0]); }
+                }.getCallTarget();
+            } finally { context.leave(); }
+            var cut = interrupt(context, owner, cells[0], () -> code.target.call(0L));
+            assertTrue(prefixes[0].isEmpty()); assertFalse(prefixes[1].isEmpty()); assertEquals(5, shared.getState());
+            try (var foreign = context()) {
+                foreign.initialize("thc"); foreign.enter();
+                try { assertThrows(RuntimeFault.class, () -> cut.continueWith(Unit.INSTANCE)); }
+                finally { foreign.leave(); }
+            }
+            var again = interrupt(context, owner, cells[0], () -> resume.call(cut));
+            assertNotSame(cut.asyncRequest(), again.asyncRequest());
+            assertTrue(cells[0].tryPut(new Object()));
+            var selected = interrupt(context, owner, cells[1], () -> resume.call(again));
+            assertTrue(prefixes[1].isEmpty()); assertFalse(prefixes[2].isEmpty());
+            var selectedAgain = interrupt(context, owner, cells[1], () -> resume.call(selected));
+            assertNotSame(selected.asyncRequest(), selectedAgain.asyncRequest());
+            assertTrue(cells[1].tryPut(last));
+            var applied = interrupt(context, owner, cells[2], () -> resume.call(selectedAgain));
+            assertTrue(prefixes[2].isEmpty());
+            var answer = new Object(); assertTrue(cells[2].tryPut(answer));
+            context.enter(); try {
+                assertSame(answer, resume.call(applied)); assertSame(answer, code.target.call(0L));
+                assertThrows(RuntimeFault.class, () -> cut.continueWith(Unit.INSTANCE));
+                assertEquals(2, shared.getState()); assertNull(shared.getTarget()); assertNull(shared.getEnvironment());
+                for (var cell : cells) assertTrue(cell.isEmpty());
+                for (var prefix : prefixes) assertTrue(prefix.isEmpty());
+                ThreadInventoryCoreEvidence.released(language);
+            } finally { context.leave(); }
         }
     }
     @Test void nestedBcoCallsSpillAndCompleteTheirPendingApplications() {
