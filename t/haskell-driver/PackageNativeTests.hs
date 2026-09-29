@@ -62,6 +62,39 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
         (nativeCapiSource "wrapper" ["", "int wrapper_extra(void) { return 1; }", "int wrapper(void) { return 2; }"])
       assertBool "missing retained CAPI source stays explicit" (isLeft (nativeCapiSource "wrapper" [""]))
   , TestCase $ do
+      let marker = "thc_javascript_v1_2878293d3e78"
+          scalar = object ["kind" .= ("long"::String), "primReps" .= (["IntRep"]::[String]), "evaluated" .= True]
+          state = object ["kind" .= ("void"::String), "primReps" .= ([]::[String]), "evaluated" .= True]
+          call = object ["schema" .= (1::Int), "intrinsic" .= ("javascript-v1"::String),
+            "javascriptSource" .= ("(x)=>x"::String), "target" .= object
+              ["kind" .= ("static"::String), "unit" .= ("fixture-unit"::String),
+               "symbol" .= (marker::String), "isFunction" .= True],
+            "convention" .= ("ccall"::String), "safety" .= ("unsafe"::String),
+            "arity" .= (2::Int), "suppliedArity" .= (2::Int), "argumentReps" .= [scalar,state],
+            "resultRep" .= object ["aggregate" .= ("unboxed-tuple"::String), "components" .= [state,scalar]]]
+          javascript = entry marker "ccall" ["IntRep","void"] ["void","IntRep"]
+          withCall descriptor = set "bindings" (toJSON [object ["foreignCall" .= descriptor]])
+            . changeProof "expectedCalls" (toJSON [descriptor])
+          mixed descriptor = withCall descriptor (moduleWith [ordinary,javascript])
+          native = [("identity","ccall","unsafe",["WordRep"],"WordRep")]
+          markerSignature = (marker,"ccall","unsafe",["IntRep"],"IntRep")
+          installed descriptor = object ["unit" .= ("fixture-unit"::String),
+            "bindings" .= [object ["foreignCall" .= descriptor]]]
+      assertEqual "mixed modules retain their ordinary native import" (Right native)
+        (nativeSignatures "fixture-unit" [mixed call])
+      assertEqual "retained installed modules use the same intrinsic classification" (Right native)
+        (installedNativeSignatures "fixture-unit" (mixed call))
+      assertEqual "installed FCallId fallback does not create JavaScript native adapters" (Right [])
+        (installedNativeSignatures "fixture-unit" (installed call))
+      forM_ [set "intrinsic" Null call, set "javascriptSource" "different" call,
+             change "target" "unit" "other-unit" call] $ \unproved ->
+        assertEqual "only the exact owned descriptor excludes the reserved C marker"
+          (Right (native ++ [markerSignature])) (nativeSignatures "fixture-unit" [mixed unproved])
+      assertEqual "an encoded C symbol alone remains a native call" (Right [markerSignature])
+        (installedNativeSignatures "fixture-unit" (installed (set "intrinsic" Null call)))
+      assertBool "intrinsic classification cannot hide malformed retained import proof" (isLeft
+        (nativeSignatures "fixture-unit" [withCall call (moduleWith [set "isFunction" (Bool False) javascript])]))
+  , TestCase $ do
       let named modName name args = object ["kind" .= ("tycon"::String), "name" .= object
             ["unit" .= ("ghc-internal"::String), "module" .= (modName::String),
              "occurrence" .= (name::String), "namespace" .= ("type"::String)], "arguments" .= (args::[Value])]

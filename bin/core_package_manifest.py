@@ -773,6 +773,19 @@ def package_scalar_link(module, validate_archive=True):
                 stub['initializers'] == [] and stub['finalizers'] == [], 'nonempty foreign products')
         require(not native or 'foreign' in module or stub['source'] == '', 'missing retained C stubs')
     require(isinstance(proof['imports'], list) and (native or proof['imports']), 'empty import inventory')
+    # Explicit JavaScript descriptors select Truffle, not a native adapter.
+    # Keep their declarations and complete call inventory under the same checks.
+    javascript = set()
+    require(isinstance(proof['expectedCalls'], list), 'foreign call inventory')
+    for call in proof['expectedCalls']:
+        if not isinstance(call, dict): continue
+        target, source = call.get('target'), call.get('javascriptSource')
+        if (call.get('intrinsic') == 'javascript-v1' and type(call.get('schema')) is int and call['schema'] == 1 and
+                call.get('convention') == 'ccall' and call.get('safety') in ('safe', 'unsafe') and
+                isinstance(source, str) and source and isinstance(target, dict) and target.get('unit') == unit and
+                target.get('kind') == 'static' and target.get('isFunction') is True and
+                target.get('symbol') == 'thc_javascript_v1_' + source.encode('utf-8').hex()):
+            javascript.add(target['symbol'])
     address_symbols = package_address_declarations(module, proof, typ, identity)
     binders, proved = [], set(data_symbols) | {entry['entry'] for entry in link['abi'] if entry['entry'] in finalizers and entry['symbol'] in address_symbols}
     for item in proof['imports']:
@@ -790,6 +803,16 @@ def package_scalar_link(module, validate_archive=True):
         typ(item['declaredType']); typ(item['normalizedType'])
         text(item['symbol'])
         emitted = record(item['emitted'], 'symbol unit convention safety arguments result')
+        if native and text(emitted['symbol']) in javascript:
+            arguments, result = emitted['arguments'], emitted['result']
+            require(item['symbol'] == emitted['symbol'] and emitted['unit'] == unit and
+                    emitted['convention'] == convention == 'ccall' and emitted['safety'] == item['safety'] and
+                    item['safety'] in ('safe', 'unsafe') and isinstance(arguments, list) and arguments and
+                    arguments[-1] == 'void' and all(rep in reps for rep in arguments[:-1]) and
+                    (result == ['void'] or isinstance(result, list) and len(result) == 2 and
+                     result[0] == 'void' and result[1] in results and result[1] != 'void'),
+                    'JavaScript declaration differs from emitted ABI')
+            continue
         if native and item['safety'] == 'interruptible':
             require(emitted['unit'] == unit and emitted['convention'] == convention and
                     emitted['safety'] == item['safety'], 'unlinked declaration identity')

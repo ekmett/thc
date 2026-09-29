@@ -58,6 +58,12 @@ interopTests env = TestLabel "interop acquisition skips only the selected native
     let record = one ((== identifier) . string . (`field` "id")) (objects manifest "units")
     assertBool "normal acquisition publishes the selected application's original Core"
       (any ((== "Main") . string . (`field` "name")) (objects record "modules"))
+    mainCore <- readPublishedCore record
+      (one ((== "Main") . string . (`field` "name")) (objects record "modules"))
+    assertBool "the selected application retains its real JavaScript import"
+      ("javascript-v1" `isInfixOf` show mainCore)
+    assertBool "mixed JavaScript and C retains the native adapter"
+      ("packageNativeLink" `isInfixOf` show mainCore && "abs" `isInfixOf` show mainCore)
     let apiRecord = one (any ((== "InteropApi") . string . (`field` "name")) . (`objects` "modules"))
           (objects manifest "units")
         apiModule = one ((== "InteropApi") . string . (`field` "name")) (objects apiRecord "modules")

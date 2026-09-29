@@ -66,13 +66,33 @@ main = do
 ```
 
 The complete example is [PolyglotDemo.hs](../src/examples/PolyglotDemo.hs).
-Run `bin/polyglot-demo.sh` from the repository root. The script builds the
-pinned GHC plugin, exports optimized Core before and after Tidy, audits the
-reachable `IO ()` entry, and runs the demo with the optional GraalVM JavaScript
-dependency. The Gradle `polyglotDemo` task builds the separate `src/examples/`
-source set and runs both THC backends. Example classes are not included in the
-runtime JAR, production distribution, or JVM API reference. The normal
-test runtime does not need JavaScript.
+Both demos are ordinary Cabal executables depending on `thc:interop`. With the
+[complete-Core GHC toolchain](ghc-core.md) selected, run:
+
+```sh
+bin/polyglot-demo.sh --ghc-source /path/to/configured/ghc-9.14.1
+bin/javascript-demo.sh --ghc-source /path/to/configured/ghc-9.14.1
+```
+
+The scripts use `thc acquire` to build the selected application and link its
+dependencies, including the genuine `THC.Exception` support required for foreign
+calls. They audit the acquired entry and run it on both THC backends with the
+optional GraalVM JavaScript dependency. Each backend prints
+`THC polyglot result: 42`. Further acquisition flags are passed through to the
+driver. Dependencies and build tools still compile natively; only the selected
+guest executable skips its native final link.
+
+[The Java host](../src/examples/java/thc/PolyglotDemo.java) loads the generated
+`packages.json` through `Main.loadEntry` and invokes `runIO`. To rerun an acquired
+application without rebuilding it:
+
+```sh
+./gradlew polyglotDemo --args="build/polyglot/packages.json $(cat build/polyglot/entry.txt)"
+```
+
+Example classes and the optional JavaScript dependency are separate from the
+runtime JAR. Compiled-entry regression checks live in `AcquiredPolyglotDemoTest`;
+the public host needs no compilation controls or runtime-internal calls.
 
 The host must permit the requested language through `PolyglotAccess`; the demo
 does so explicitly. THC uses `Env.parsePublic`, so the bridge obeys that policy.

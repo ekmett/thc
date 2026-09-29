@@ -39,6 +39,23 @@ public class PackageScalarForeignTest {
     private PackageScalarCall validate(Map<String, Object> declaration, Object metadataResult, List<?> arguments, List<?> flags, Object returned, PackageScalarLink link) {
         return CorePackageScalarForeign.validate(Map.of("foreignCall", declaration, "rep", metadataResult), arguments, flags, returned, List.of(link));
     }
+    @Test public void javascriptInNativeUnitRetainsItsOwnFullProofCheck() {
+        String source = "() => 7", symbol = "thc_javascript_v1_" + java.util.HexFormat.of().formatHex(source.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        var target = Map.<String,Object>of("kind", "static", "symbol", symbol, "unit", "first", "isFunction", true);
+        var descriptor = plus(plus(Map.of("schema", 1L, "target", target, "convention", "ccall", "safety", "unsafe",
+            "arity", 1L, "suppliedArity", 1L, "argumentReps", List.of(scalar(null, false)), "resultRep", result("IntRep", false)),
+            "intrinsic", "javascript-v1"), "javascriptSource", source);
+        var output = result("IntRep"); var args = List.of(scalar(null)); var flags = List.of(false);
+        for (var call : List.of(descriptor, plus(descriptor, "javascriptSource", "() => 8"), plus(descriptor, "arity", 2L))) {
+            assertNull(validate(call, output, args, flags, output, link("first", "IntRep")));
+            var expression = List.of("app", List.of("var", "foreign"), List.of(List.of("var", "state", Map.of("rep", scalar(null)))),
+                flags, false, false, Map.of("rep", output, "foreignCall", call));
+            if (call == descriptor) assertNotNull(CoreJavaScript.validate(expression, false));
+            else assertThrows(RuntimeFault.class, () -> CoreJavaScript.validate(expression, false));
+        }
+        var ordinary = new LinkedHashMap<>(descriptor); ordinary.remove("intrinsic"); ordinary.remove("javascriptSource");
+        assertThrows(RuntimeFault.class, () -> validate(ordinary, output, args, flags, output, link("first", "IntRep")));
+    }
     @Test public void exactWidthStateAndUnitProofsAreRequiredForAllScalarKinds() {
         for (var rep : List.of("IntRep", "WordRep", "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep", "Int32Rep", "Word32Rep", "Int64Rep", "Word64Rep", "FloatRep", "DoubleRep")) {
             var link = link("first", rep);

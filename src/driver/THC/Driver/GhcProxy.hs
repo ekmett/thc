@@ -44,8 +44,21 @@ runGhcProxy arguments = do
   noLinkUnit <- lookupEnv "THC_PROXY_NO_LINK_UNIT"
   let noLink = ["-no-link" | "--make" `elem` options, Just unit <- [valueAfter "-this-unit-id" options],
                             not (null unit), noLinkUnit == Just unit]
-      nativeOptions = options ++ noLink
-  native <- rawSystem compiler (arguments ++ noLink)
+  guestPlugin <- if null noLink then pure [] else do
+    capture <- getEnv "THC_PROXY_CAPTURE"
+    pluginDb <- getEnv "THC_PROXY_PLUGIN_DB"
+    pluginUnit <- getEnv "THC_PROXY_PLUGIN_UNIT"
+    pluginLibrary <- getEnv "THC_PROXY_PLUGIN_LIBRARY"
+    let core = capture </> "guest-core"
+    createDirectoryIfMissing True core
+    -- JavaScript declarations need the parser rewrite even in Cabal's
+    -- first compilation. Direct loading avoids linking guest dependencies.
+    pure ["-package-db", pluginDb, "-fplugin-trustworthy",
+          directPlugin pluginLibrary pluginUnit
+            [core, "post-tidy", "unit-qualified", "foreign-import-provenance"] options]
+  let added = noLink ++ guestPlugin
+      nativeOptions = options ++ added
+  native <- rawSystem compiler (arguments ++ added)
   when (native /= ExitSuccess) (exitWith native)
   receipts <- lookupEnv "THC_PROXY_NATIVE_RECIPES"
   mapM_ (\directory -> captureNativeRecipe directory compiler nativeOptions) receipts

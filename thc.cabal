@@ -520,6 +520,12 @@ extra-source-files:
   docs/runtime-services.md
   src/examples/CpuAffinity.hs
   src/examples/RuntimeServices.hs
+  src/examples/JavaScriptDemo.hs
+  src/examples/PolyglotDemo.hs
+  src/examples/cabal.project
+  src/examples/thc-examples.cabal
+  src/examples/javascript/Main.hs
+  src/examples/polyglot/Main.hs
   t/haskell-runtime/SafeClient.hs
   t/haskell-runtime/UnsafeClient.hs
   t/haskell-runtime/check-safe-haskell.sh

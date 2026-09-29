@@ -34,6 +34,34 @@ class PackageScalarLinksTest {
     private Map<String, Object> binding(String id, List<?> calls) {
         return map("id", "scalar-fixture:Scalar." + id, "expr", list("lit", "int", "7", calls.stream().map(it -> map("foreignCall", it)).toList()));
     }
+    @Test void javascriptDescriptorLeavesRealNativeAdapterObligations() throws Exception {
+        var base = module(); var scalar = object(base, "packageScalarLink"); var abi = single(scalar, "abi");
+        var link = with(scalar, "profile", "thc-package-c-ffi-v1", "abi", list(with(abi, "entry", nativeEntry, "convention", "ccall", "safety", "unsafe")));
+        var proof = object(base, "staticForeignImports"); var original = single(proof, "imports");
+        String source = "() => 7", symbol = "thc_javascript_v1_" + HexFormat.of().formatHex(source.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        var call = map("schema", 1L, "intrinsic", "javascript-v1", "javascriptSource", source, "convention", "ccall", "safety", "unsafe",
+            "target", map("kind", "static", "isFunction", true, "unit", base.get("unit"), "symbol", symbol));
+        var emitted = with(object(original, "emitted"), "symbol", symbol, "arguments", list("void"), "result", list("void", "IntRep"));
+        var javascript = with(original, "symbol", symbol, "binder", with(object(original, "binder"), "occurrence", "javascript"), "emitted", emitted);
+        var imports = list(original, javascript);
+        var mixed = with(without(base, "packageScalarLink"), "packageNativeLink", link,
+            "staticForeignImports", with(proof, "imports", imports, "expectedCalls", list(call)), "bindings", list(binding("javascript", list(call))));
+        assertEquals(Set.of(nativeEntry), Objects.requireNonNull(PackageScalarLinks.read(mixed)).getProved());
+        assertEquals(Set.of(nativeEntry), Objects.requireNonNull(PackageScalarLinks.read(with(mixed, "bindings", List.of()), true, false)).getProved());
+        for (var bad : list(with(call, "intrinsic", "other"), with(call, "javascriptSource", "() => 8"),
+                with(call, "target", with(object(call, "target"), "unit", "other"))))
+            assertThrows(IllegalArgumentException.class, () -> PackageScalarLinks.read(with(mixed,
+                "staticForeignImports", with(proof, "imports", imports, "expectedCalls", list(bad)), "bindings", list(binding("javascript", list(bad))))));
+        for (var bad : list(with(emitted, "unit", "other"), with(emitted, "safety", "safe"),
+                with(emitted, "arguments", list("invented", "void")), with(emitted, "result", list("void", "MutableByteArray#"))))
+            assertThrows(IllegalArgumentException.class, () -> PackageScalarLinks.read(with(mixed, "staticForeignImports",
+                with(proof, "imports", list(original, with(javascript, "emitted", bad)), "expectedCalls", list(call)))));
+        assertThrows(IllegalArgumentException.class, () -> PackageScalarLinks.read(with(mixed, "bindings", List.of())));
+        for (var bad : list(list(original, with(javascript, "normalizedType", Map.of())),
+                list(with(original, "emitted", with(object(original, "emitted"), "result", list("void", "IntRep"))), javascript)))
+            assertThrows(IllegalArgumentException.class, () -> PackageScalarLinks.read(with(mixed, "staticForeignImports",
+                with(proof, "imports", bad, "expectedCalls", list(call)))));
+    }
     @Test void nativeDependencyBytesAreVerifiedAndPartOfLoadedIdentity() throws Exception {
         var base = module(); var scalar = object(base, "packageScalarLink"); var entry = single(scalar, "abi");
         var dependency = map("sha256", hash(new byte[]{1, 2}), "hex", "0102");

@@ -398,6 +398,9 @@ runBuiltProject action project working thcRoot runtime output native target proj
   inherited <- getEnvironment
   let overrides = [("THC_PROXY_DRIVER", driver), ("THC_PROXY_GHC", ghc),
                    ("THC_PROXY_NATIVE_RECIPES", receipts), ("THC_PROXY_GLOBAL_UNITS", ""),
+                   ("THC_PROXY_CAPTURE", native </> "cache/thc/capture"),
+                   ("THC_PROXY_PLUGIN_DB", pluginDb), ("THC_PROXY_PLUGIN_UNIT", pluginUnit),
+                   ("THC_PROXY_PLUGIN_LIBRARY", pluginLibrary),
                    ("THC_PROXY_NO_LINK_UNIT", ""),
                    ("THC_PROXY_NATIVE_PIECES", native </> "cache/thc/native-pieces-v1")]
       selectionEnvironment = overrides ++ filter (\(key, _) -> key `notElem` map fst overrides) inherited

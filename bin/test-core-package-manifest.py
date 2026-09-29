@@ -300,6 +300,44 @@ class PackageNativeVariantsTest(unittest.TestCase):
         return dict(schema=1, ghc='9.14.1', unit=unit, module=name, bindings=[], constructors=[],
                     packageNativeLink=link, staticForeignImports=proof)
 
+    def test_javascript_descriptor_leaves_real_native_adapter_obligations(self):
+        import copy
+        module = self.module(['WordRep'])
+        proof = module['staticForeignImports']
+        original = proof['imports'][0]
+        source = '() => 7'
+        symbol = 'thc_javascript_v1_' + source.encode('utf-8').hex()
+        call = dict(schema=1, intrinsic='javascript-v1', javascriptSource=source,
+                    convention='ccall', safety='unsafe',
+                    target=dict(kind='static', isFunction=True, unit=module['unit'], symbol=symbol))
+        javascript = dict(original, symbol=symbol,
+            binder=dict(original['binder'], occurrence='javascript'),
+            emitted=dict(original['emitted'], symbol=symbol, arguments=['void'], result=['void', 'IntRep']))
+        proof.update(imports=[original, javascript], expectedCalls=[call])
+        module['bindings'] = [dict(foreignCall=call)]
+        link, proved = core_package_manifest.package_scalar_link(module)
+        self.assertEqual({link['abi'][0]['entry']}, proved)
+        for altered in (dict(call, intrinsic='other'), dict(call, javascriptSource='() => 8'),
+                        dict(call, target=dict(call['target'], unit='other'))):
+            bad = copy.deepcopy(module)
+            bad['staticForeignImports']['expectedCalls'] = [altered]
+            bad['bindings'] = [dict(foreignCall=altered)]
+            with self.subTest(call=altered), self.assertRaises(ValueError):
+                core_package_manifest.package_scalar_link(bad)
+        for key, value in (('unit', 'other'), ('safety', 'safe'), ('arguments', ['invented', 'void']),
+                           ('result', ['void', 'MutableByteArray#'])):
+            bad = copy.deepcopy(module)
+            bad['staticForeignImports']['imports'][1]['emitted'][key] = value
+            with self.subTest(emitted=key), self.assertRaises(ValueError):
+                core_package_manifest.package_scalar_link(bad)
+        for kind in ('inventory', 'type', 'native'):
+            bad = copy.deepcopy(module)
+            if kind == 'inventory': bad['bindings'] = []
+            elif kind == 'type': bad['staticForeignImports']['imports'][1]['normalizedType'] = {}
+            else: bad['staticForeignImports']['imports'][0]['emitted']['result'] = ['void', 'IntRep']
+            with self.subTest(kind=kind), self.assertRaises(ValueError):
+                core_package_manifest.package_scalar_link(bad)
+
     def test_pointer_variants_keep_distinct_provenance_entries(self):
         module = self.module(['AddrRep', 'ByteArray#'])
         link, proved = core_package_manifest.package_scalar_link(module)

@@ -1,0 +1,21 @@
+cabal-version: 3.0
+-- SPDX-FileCopyrightText: 2026 Edward Kmett
+-- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+name: thc-examples
+version: 0.1.0.0
+build-type: Simple
+license: UPL-1.0 AND BSD-3-Clause
+
+common guest
+  build-depends: base >= 4.22 && < 4.23, thc:interop
+  default-language: Haskell2010
+
+executable javascript
+  import: guest
+  main-is: javascript/Main.hs
+  other-modules: JavaScriptDemo
+
+executable polyglot
+  import: guest
+  main-is: polyglot/Main.hs
+  other-modules: PolyglotDemo
