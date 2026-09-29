@@ -25,6 +25,7 @@ public final class ManagedProcessForeign {
     private final Language.State context = Language.currentState(null);
     private final EnumMap<ProcessFailureStage, ManagedAddress> failures = new EnumMap<>(ProcessFailureStage.class);
 
+    @TruffleBoundary
     public ManagedProcessForeign() {
         for (var stage : ProcessFailureStage.values()) {
             ManagedAddress address;
