@@ -22,6 +22,64 @@ from zipfile import ZipFile
 import core_package_manifest
 
 
+class DeepJsonTest(unittest.TestCase):
+    def setUp(self):
+        # New Python releases can decode deeper containers in C. Force the
+        # same fallback exercised by supported older interpreters.
+        raw_decode = json.JSONDecoder.raw_decode
+        dumps = json.dumps
+        def bounded_decode(decoder, text, idx=0):
+            if text[idx:idx + 1] in ('[', '{'):
+                raise RecursionError()
+            return raw_decode(decoder, text, idx)
+        def bounded_dumps(value, **kwargs):
+            if isinstance(value, (dict, list, tuple)):
+                raise RecursionError()
+            return dumps(value, **kwargs)
+        self.stdlib_dumps = dumps
+        self.raw_decode = raw_decode
+        for target, name, replacement in ((json.JSONDecoder, 'raw_decode', bounded_decode),
+                                           (json, 'dumps', bounded_dumps)):
+            patcher = patch.object(target, name, replacement)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def test_deep_mixed_containers_keep_strict_admission_and_exact_bytes(self):
+        text = '{"child":[' * 1200 + '"\\u20ac"' + ']}' * 1200
+        value = core_package_manifest.strict_json(text)
+        self.assertEqual(text, core_package_manifest.json_dumps(value))
+        self.assertTrue(core_package_manifest._same_json_value(value, core_package_manifest.strict_json(text)))
+        wrapped = '{"label":"€","bindings":' + text + ',"tail":false}'
+        start, end = core_package_manifest._bindings_span(wrapped)
+        self.assertEqual(text.encode(), wrapped.encode()[start:end])
+        for leaf in ('{"x":1,"x":2}', 'NaN', 'Infinity', '{"x":}', '[0,]', '{"x":0,}'):
+            with self.subTest(leaf=leaf), self.assertRaises(ValueError):
+                core_package_manifest.strict_json('[' * 1200 + leaf + ']' * 1200)
+
+    def test_compact_codec_matches_stdlib_and_retains_raw_cursor(self):
+        values = [None, True, False, 0, -0.0, 1e30, float('inf'), '€' + chr(0xd800),
+                  [1, {'escaped': chr(34) + chr(92) + chr(10), 'nul': chr(0)}],
+                  {1: 'integer', False: 'boolean', None: 'null', 'é': [2, 3]}]
+        for value in values:
+            with self.subTest(value=value):
+                expected = self.stdlib_dumps(value, ensure_ascii=True, separators=(',', ':'))
+                self.assertEqual(expected, core_package_manifest.json_dumps(value))
+                self.assertEqual(self.raw_decode(json.JSONDecoder(), expected)[0], core_package_manifest.json_loads(expected))
+        text = ' [1,{"x":true}] rest'
+        self.assertEqual(self.raw_decode(json.JSONDecoder(), text, 1), core_package_manifest.json_raw_decode(text, 1))
+        for text in ('', '[] x', '[,]', '{1:2}', '{"a" 2}', '[1 2]'):
+            with self.subTest(text=text), self.assertRaises(ValueError):
+                core_package_manifest.strict_json(text)
+
+    def test_cyclic_storage_and_typed_projection_equality_remain_checked(self):
+        cycle = []
+        cycle.append(cycle)
+        with self.assertRaisesRegex(ValueError, 'Circular reference'):
+            core_package_manifest.json_dumps(cycle)
+        self.assertFalse(core_package_manifest._same_json_value([True], [1]))
+        self.assertFalse(core_package_manifest._same_json_value({'x': []}, {'x': [0]}))
+
+
 class ManagedImportTypeTest(unittest.TestCase):
     """Scoped metadata controls, without registering or executing native code."""
     @staticmethod

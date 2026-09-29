@@ -91,7 +91,7 @@ def _lookup_key(value):
 
 def _pack(value):
     # This serializes already parsed values; it is not an input admission path.
-    data = json.dumps(value, ensure_ascii=True, separators=(',', ':')).encode('ascii')
+    data = core_package_manifest.json_dumps(value).encode('ascii')
     return data, hashlib.sha256(data).digest()
 
 
@@ -99,7 +99,7 @@ def _unpack(data, digest):
     if hashlib.sha256(data).digest() != digest:
         raise AuditStoreError('Audit store record checksum mismatch')
     try:
-        return json.loads(data)
+        return core_package_manifest.json_loads(data)
     except (ValueError, TypeError) as error:
         raise AuditStoreError('Audit store record JSON is invalid') from error
 
@@ -1779,20 +1779,41 @@ class Audit:
         return True
 
     def free_variables(self, expr):
+        pending, result = [self._free_variables(expr)], None
+        while pending:
+            try:
+                child = pending[-1].send(result)
+            except StopIteration as done:
+                pending.pop()
+                result = done.value
+            else:
+                pending.append(self._free_variables(child))
+                result = None
+        return result
+
+    def _free_variables(self, expr):
         if not isinstance(expr, list) or not expr:
             return set()
         if expr[0] == 'var':
             return {expr[1]}
         if expr[0] == 'lam':
-            return self.free_variables(expr[2]) - {b['id'] for b in expr[1]}
+            return (yield expr[2]) - {b['id'] for b in expr[1]}
         if expr[0] == 'app':
-            return self.free_variables(expr[1]) | set().union(*(self.free_variables(a) for a in expr[2]))
+            result = yield expr[1]
+            for argument in expr[2]:
+                result |= (yield argument)
+            return result
         if expr[0] == 'let':
             ids = {b['id'] for b in expr[2]}
-            rhs = set().union(*(self.free_variables(b['expr']) for b in expr[2]))
-            return (rhs - ids if expr[1] else rhs) | (self.free_variables(expr[3]) - ids)
+            rhs = set()
+            for binding in expr[2]:
+                rhs |= (yield binding['expr'])
+            return (rhs - ids if expr[1] else rhs) | ((yield expr[3]) - ids)
         if expr[0] == 'case':
-            return self.free_variables(expr[1]) | set().union(*(self.free_variables(a[3]) - set(a[2]) - {expr[2]} for a in expr[3]))
+            result = yield expr[1]
+            for alternative in expr[3]:
+                result |= (yield alternative[3]) - set(alternative[2]) - {expr[2]}
+            return result
         return set()
 
     def constructor(self, key, owner, path, constructing, arity, tuple_rep=None):
@@ -1898,6 +1919,16 @@ class Audit:
                         self.issue('strict-lifted-field', owner, path, f'{key}[{index}]')
 
     def walk(self, expr, bound, owner, path, primitive_arity=None, tuple_result=None, join_prefix=0, sum_payload=False):
+        pending = [self._walk(expr, bound, owner, path, primitive_arity, tuple_result, join_prefix, sum_payload)]
+        while pending:
+            try:
+                child = next(pending[-1])
+            except StopIteration:
+                pending.pop()
+            else:
+                pending.append(child)
+
+    def _walk(self, expr, bound, owner, path, primitive_arity=None, tuple_result=None, join_prefix=0, sum_payload=False):
         if not isinstance(expr, list) or not expr or not isinstance(expr[0], str):
             self.issue('malformed-expression', owner, path, repr(expr)[:160])
             return
@@ -1924,14 +1955,14 @@ class Audit:
                 metadata_proofs(alternative[4], ('pattern',))
                 self.binder_ids(alternative[4]['binders'], owner, path + '/alternatives/0/binders')
                 self.constructor(alternative[1], owner, path + '/alternatives/0', False, 2, expr[4]['binder']['rep'])
-                self.walk(expr[1][1], bound, owner, path + '/scrutinee/function', 3)
+                yield self._walk(expr[1][1], bound, owner, path + '/scrutinee/function', 3)
                 for index, argument in enumerate(read['arguments']):
-                    self.walk(argument, bound, owner, f'{path}/scrutinee/arguments/{index}')
+                    yield self._walk(argument, bound, owner, f'{path}/scrutinee/arguments/{index}')
                 declared, actual = self.expression_rep(expr), self.expression_rep(read['body'])
                 known = all(isinstance(rep, dict) and isinstance(rep.get('primReps'), list)
                             for rep in (declared, actual))
                 self.compare_shapes(declared, actual, owner, path + '/alternatives/0/body/rep', component=known)
-                self.walk(read['body'], bound | self.binder_scope(alternative[4]['binders']), owner,
+                yield self._walk(read['body'], bound | self.binder_scope(alternative[4]['binders']), owner,
                           path + '/alternatives/0/body')
                 return
             self.expression_metadata(expr, owner, path)
@@ -2032,7 +2063,7 @@ class Audit:
                 local = bound | self.binder_scope(expr[1])
                 self.compare_shapes(metadata.get('resultRep'), self.effective_rep(expr[2], local)
                                     if self.is_tuple(metadata.get('resultRep')) else self.expression_rep(expr[2]), owner, path + '/resultRep')
-                self.walk(expr[2], local, owner, path + '/body')
+                yield self._walk(expr[2], local, owner, path + '/body')
             elif tag == 'app':
                 arguments = expr[2]
                 flags = expr[3] if len(expr) > 3 else None
@@ -2637,7 +2668,7 @@ class Audit:
                     # and the runtime links this exact versioned symbol.
                     self.expression_metadata(function, owner, path + '/function')
                 else:
-                    self.walk(function, bound, owner, path + '/function', len(arguments), proof if tuple_constructor or sum_constructor else None)
+                    yield self._walk(function, bound, owner, path + '/function', len(arguments), proof if tuple_constructor or sum_constructor else None)
                 for index, argument in enumerate(arguments):
                     constructor = self.constructors.get(function[1], {}) if function[0] == 'con' else {}
                     fields = constructor.get('fieldTypes')
@@ -2700,7 +2731,7 @@ class Audit:
                             if (self.is_tuple(argument_rep) and isinstance(flags, list) and
                                     index < len(flags) and flags[index] is not False):
                                 self.issue('application-levity', owner, f'{path}/arguments/{index}', 'Tuple argument must be unlifted')
-                    self.walk(argument, bound, owner, f'{path}/arguments/{index}', sum_payload=sum_constructor or sum_payload)
+                    yield self._walk(argument, bound, owner, f'{path}/arguments/{index}', sum_payload=sum_constructor or sum_payload)
             elif tag == 'let':
                 recursive, group = expr[1], expr[2]
                 if type(recursive) is not bool:
@@ -2750,13 +2781,13 @@ class Audit:
                             self.issue('vector-boundary', owner, f'{path}/bindings/{index}', 'vector thunk capture')
                     if recursive and binding.get('lifted') is False:
                         self.issue('recursive-unlifted', owner, f'{path}/bindings/{index}', binding.get('id'))
-                    self.walk(binding.get('expr'), local if recursive else bound,
+                    yield self._walk(binding.get('expr'), local if recursive else bound,
                               owner, f'{path}/bindings/{index}/rhs', join_prefix=binding.get('joinValueArity', 0), sum_payload=sum_payload)
                 self.compare_shapes(self.expression_rep(expr), self.effective_rep(expr[3], local)
                                     if sum_payload or self.is_tuple(self.expression_rep(expr)) else self.expression_rep(expr[3]), owner, path + '/body/rep')
-                self.walk(expr[3], local, owner, path + '/body', sum_payload=sum_payload)
+                yield self._walk(expr[3], local, owner, path + '/body', sum_payload=sum_payload)
             elif tag == 'case':
-                self.walk(expr[1], bound, owner, path + '/scrutinee', sum_payload=sum_payload)
+                yield self._walk(expr[1], bound, owner, path + '/scrutinee', sum_payload=sum_payload)
                 if not isinstance(expr[2], str):
                     raise ValueError('Case binder must be a string')
                 metadata = expr[4] if len(expr) > 4 and isinstance(expr[4], dict) else {}
@@ -2860,7 +2891,7 @@ class Audit:
                         local.update(self.binder_scope(records))
                     self.compare_shapes(self.expression_rep(expr), self.effective_rep(rhs, local)
                                         if sum_payload or self.is_tuple(self.expression_rep(expr)) else self.expression_rep(rhs), owner, altpath + '/body/rep')
-                    self.walk(rhs, local, owner, altpath + '/body', sum_payload=sum_payload)
+                    yield self._walk(rhs, local, owner, altpath + '/body', sum_payload=sum_payload)
             elif tag == 'con':
                 if self.constructors.get(expr[1], {}).get('kind') == 'unboxed-sum' and primitive_arity != 1:
                     self.issue('aggregate-boundary', owner, path, 'Sum constructor requires a saturated application')
@@ -3067,7 +3098,7 @@ def _input_modules(package_manifest, files, store=None, manifest_identity=None):
                 store.put_record('input-completion', 'package-manifest', dict(complete=modules.complete))
     for index, path in enumerate(files):
         data = path.read_bytes()
-        module = json.loads(data.decode('utf-8'))
+        module = core_package_manifest.json_loads(data.decode('utf-8'))
         if store is not None:
             store.put_record('input-provenance', 'loose:' + str(index),
                 dict(path=str(path.resolve()), sha256=hashlib.sha256(data).hexdigest()))
