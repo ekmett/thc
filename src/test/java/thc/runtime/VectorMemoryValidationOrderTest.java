@@ -47,14 +47,14 @@ class VectorMemoryValidationOrderTest {
             VectorMemory.copyWrite(snapshot, segment, 2, order);
             assertArrayEquals(Arrays.copyOfRange(expected, 1, 17), Arrays.copyOfRange(bytes, 2, 18));
             var raw = VectorMemory.copyReinterpret(vector, ByteVector.SPECIES_128);
-            var little = ByteBuffer.allocate(16).order(ByteOrder.LITTLE_ENDIAN);
-            // The JDK bit reinterpretation contract uses little-endian lanes,
-            // independently of native byte order and the memory operation above.
-            if (order == ByteOrder.LITTLE_ENDIAN)
+            byte[] restoredBytes = new byte[16];
+            // Match the JDK's native-order bit reinterpretation independently
+            // of the explicit byte order used by the memory operation above.
+            if (order == ByteOrder.nativeOrder())
                 assertArrayEquals(Arrays.copyOfRange(expected, 1, 17), ((ByteVector) raw).toArray());
             var restored = VectorMemory.copyReinterpret(raw, vector.species());
-            VectorMemory.copyWrite(restored, MemorySegment.ofArray(little.array()), 0, order);
-            assertArrayEquals(Arrays.copyOfRange(expected, 1, 17), little.array());
+            VectorMemory.copyWrite(restored, MemorySegment.ofArray(restoredBytes), 0, order);
+            assertArrayEquals(Arrays.copyOfRange(expected, 1, 17), restoredBytes);
         }
     }
 

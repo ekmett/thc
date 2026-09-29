@@ -62,11 +62,11 @@ public final class VectorMemory {
     static <E> Vector<E> copyReinterpret(Vector<?> vector, VectorSpecies<E> species) {
         if (vector.bitSize() != species.vectorBitSize()) throw new IllegalArgumentException("Mismatched vector shape");
         // AbstractVector.defaultReinterpret uses vector segment operations even
-        // on heap memory. Scalar bulk copies preserve that little-endian bit
+        // on heap memory. Scalar bulk copies preserve that native-order bit
         // contract without entering the unsupported vector segment intrinsics.
         var bytes = MemorySegment.ofArray(new byte[vector.byteSize()]);
-        copyWrite(vector, bytes, 0, ByteOrder.LITTLE_ENDIAN);
-        return copyRead(species, bytes, 0, ByteOrder.LITTLE_ENDIAN);
+        copyWrite(vector, bytes, 0, ByteOrder.nativeOrder());
+        return copyRead(species, bytes, 0, ByteOrder.nativeOrder());
     }
 
     public static ByteVector asBytes(Vector<?> vector) {
