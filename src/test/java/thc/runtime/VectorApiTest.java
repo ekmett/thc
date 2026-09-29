@@ -120,6 +120,28 @@ class VectorApiTest {
     }
 
     @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
+    void compiledFullBlocksCanEnterAMaskedTail(String backend) throws Exception {
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var program = program(backend, "multiplyFloat");
+                for (int pass = 0; pass < 2; pass++) {
+                    for (int count : pass == 0 ? new int[]{16, 16, 16} : new int[]{16, 13, 1, 16}) {
+                        byte[] output = new byte[count * 4];
+                        assertSame(Unit.INSTANCE, call(program, "multiplyFloat", 128L, (long) count,
+                            floats(count, false), floats(count, true), output, Unit.INSTANCE));
+                        float[] want = javaFloating(FloatVector.SPECIES_128, count, false);
+                        for (int i = 0; i < count; i++) assertEquals(want[i], ManagedByteArray.readFloat(output, i));
+                        if (pass == 1 && count == 13) compile(program, "multiplyFloat");
+                    }
+                    if (pass == 0) compile(program, "multiplyFloat");
+                }
+                assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > 0);
+            } finally { context.leave(); }
+        }
+    }
+
+    @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
     void runtimeSpeciesMasksConversionsAndTupleProperties(String backend) throws Exception {
         try (var context = context()) {
             context.initialize("thc"); context.enter();
