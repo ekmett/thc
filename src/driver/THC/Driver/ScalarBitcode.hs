@@ -40,7 +40,7 @@ import System.Exit (ExitCode(..))
 import System.FilePath
 import System.IO (hClose, openTempFile)
 import System.Process (proc, readCreateProcessWithExitCode, CreateProcess(..))
-import THC.Compact.Module (readModuleValue, rewriteModuleFacts)
+import THC.Compact.Module (readModuleMetadataFile, finalizeModuleMetadata)
 
 -- Kept inside the bracket containing the compiler's immutable bitcode snapshot.
 data ScalarBitcode = ScalarBitcode
@@ -174,10 +174,10 @@ targetTriple ir = case [value | line <- lines ir, Just value <- [quoted "target 
   [value] -> pure value
   _ -> fail "scalar cbits: LLVM target missing or ambiguous"
 
-linkScalarBitcode :: ScalarBitcode -> String -> [(String,BS.ByteString)] -> IO [(String,BS.ByteString)]
+linkScalarBitcode :: ScalarBitcode -> String -> [(String,FilePath)] -> IO [(String,FilePath)]
 linkScalarBitcode recipe componentHash modules = do
-  parsed <- forM modules $ \(name,bytes) -> do
-    value <- either fail pure (readModuleValue bytes)
+  parsed <- forM modules $ \(name,path) -> do
+    (_,value) <- readModuleMetadataFile path
     imports <- case member value "staticForeignImports" of
       Nothing -> pure []
       Just proof -> do
@@ -199,7 +199,7 @@ linkScalarBitcode recipe componentHash modules = do
             not (null arguments) && last arguments == "void" &&
             all (`elem` reps) (init arguments ++ [output])) "scalar cbits import is outside the unsafe scalar ccall profile"
           pure (symbol,init arguments,output)
-    pure (name,bytes,value,imports)
+    pure (name,path,value,imports)
   let abi = sortOn first (nub (concat [imports | (_,_,_,imports) <- parsed]))
   check (not (null abi) && length (map first abi) == length (nub (map first abi)))
     "scalar cbits has no imports or conflicting signatures"
@@ -225,8 +225,8 @@ linkScalarBitcode recipe componentHash modules = do
                   | (symbol,entry,args,result) <- entries]]
   forM parsed $ \(name,original,value,imports) -> case value of
     Object fields -> do
-      linkedBytes <- rewriteModuleFacts original (Object (if null imports then fields else KM.insert "packageScalarLink" proof fields))
-      pure (name,linkedBytes)
+      finalizeModuleMetadata original (Object (if null imports then fields else KM.insert "packageScalarLink" proof fields))
+      pure (name,original)
     _ -> fail "scalar cbits module is not an object"
   where first (name,_,_) = name
 

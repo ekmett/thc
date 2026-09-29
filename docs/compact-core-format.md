@@ -1,7 +1,7 @@
 # Core Binary Distribution
 
-Version 1 containers are the executable format for both runtime backends.
-The compiler writes typed executable and header records directly, shared strings,
+Version 1.1 containers are the executable format for both runtime backends.
+The compiler writes typed executable and header records directly, isolated metadata strings,
 and optional name/source maps. The runtime decodes selected bindings on demand,
 including all eight module-level foreign provenance families. Source locations
 resolve when requested; original display names are available through explicit
@@ -12,10 +12,10 @@ Core JSON file. JSON manifests remain control metadata, never executable Core.
 ## Assembly and addressing
 
 One module produces one ordinary ZIP archive named `.cbd`. Its seven members,
-in producer order, are `header`, `data`, `strings`, `names`, `filenames`,
-`line-columns`, and `symbols`. All are present; absent debug maps have zero
-length. Readers accept any physical or directory order, with exactly one of
-each member. The ZIP central directory owns physical placement and compression;
+in physical and central-directory order, are `data`, `strings`, `names`, `filenames`,
+`line-columns`, `symbols`, and finally `header`. All are present; absent debug maps
+have zero length. Readers require this order and exactly one of each member.
+The ZIP central directory owns physical placement and compression;
 there is no separate THC offset footer or embedded whole-container member.
 
 The producer constructs the six payload fragments through scoped binary
@@ -26,6 +26,19 @@ are available in its local header. Standard ZIP64 fields carry sizes/offsets
 that do not fit ordinary ZIP fields. Deterministic member order and timestamps
 make identical inputs/options reproducible. Only the completed archive is
 atomically published; owned temporaries are cleaned on success and failure.
+
+Native linkage finalizes the header only after archive classification and all
+link receipts are complete. In an exclusively owned mutable staging file, the
+six preceding local records (including compressed bytes) stay in place, untouched.
+Their central-directory records are carried verbatim at identical offsets.
+Unbuffered, bounded file reads inspect ZIP framing and the old header only; the
+replacement header and directory tail are completely prepared before seeking and
+writing. Finalization never reads, inflates, hashes, repacks, recompresses or
+reconstructs executable/debug payloads. Unchanged facts cause no writes. Publication
+then copies/hashes the completed artifact into the immutable cache; finalization
+must never target a published cache file. Capture retains the original
+interface payload; intermediate archive classification stays in memory until
+the final linkage stage.
 
 All record references are relative to their uncompressed logical member.
 A string reference is its byte start and byte
@@ -42,16 +55,20 @@ Fixed-width integers are little-endian. The `header` member starts with 32 bytes
 | ---: | ---: | --- |
 | 0 | 8 | ASCII `THCCBD1` followed by one zero byte |
 | 8 | 2 | major version, `1` |
-| 10 | 2 | minor version, `0` |
+| 10 | 2 | minor version, `1` |
 | 12 | 4 | actual module-summary flags |
 | 16 | 8 | top-level binding count |
 | 24 | 4 | debug-presence flags |
 | 28 | 4 | reserved, `0` |
 
-Unchanged typed facts follow to the end of the member. They carry module
-identity, compiler, target layout and operative provenance. Their string
-references remain relative to `strings`; executable origins are relative to
-`data`, independently of ZIP compression and placement.
+At byte 32 is a uint64 little-endian private string-pool byte length, followed
+by that many raw UTF-8 bytes, then the unchanged typed facts grammar to the end
+of the member. Facts carry module identity, compiler, target layout and operative
+provenance. Every facts string span is relative to this private pool, not to
+`strings`. Executable/debug strings remain relative to `strings`, and executable
+origins to `data`. Identical spans can mean different text in the two pools;
+metadata finalization cannot change executable string positions. Version 1.0
+inputs require their pinned old reader, not a production compatibility fallback.
 
 Summary bits 0 through 3 are, respectively, `containsDelimitedControl`,
 `registrationObligations`, `mainAlias`, and `packageScalarDeclarations`, with
@@ -578,9 +595,9 @@ for admission checks. It does not open unrelated modules.
 STORED members are slices of the exact mapped snapshot. Deflated members inflate
 once on demand into shared immutable memory, with exact length and CRC checked
 during inflation. Inflation is per member; record decoding remains per binding.
-Thus the first DATA access inflates all of `data`, and header string references
-can inflate `strings`, including source text stored there, even while debug-map
-read counts remain zero. Diagnostics distinguish directory reads, member
+Thus the first DATA access inflates all of `data`; metadata reads access only
+`header`, including its private pool, without inflating `strings` or source text.
+Diagnostics distinguish directory reads, member
 inflations, inflated bytes, compressed bytes read, slab-cache hits and explicitly
 verified STORED bytes from selected-record decode bytes. Idle inflated storage
 has separate bounded caching; active member handles retain their snapshot or

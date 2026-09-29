@@ -41,7 +41,7 @@ inspectContainer bytes = do
   (header,factsBytes,segments) <- unpackContainer bytes
   case segments of
     [payload,strings,_,_,_,directory] -> do
-      facts <- decodeFacts factsBytes strings
+      facts <- decodeMetadata factsBytes
       rows <- mapM (\start -> decodeExact ((,) <$> getByteString 16 <*> getWord64le)
         (BS.take 24 (BS.drop start directory))) [0,24..BS.length directory-1]
       let hasSignatures = headerSummaries header .&. 16 /= 0

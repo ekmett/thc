@@ -41,13 +41,13 @@ cbdTests headerGolden = TestList
       assertEqual "logical lengths" (Right ()) (validateContainer header [2,3,0,0,0,24])
   , TestLabel "header and member invariants" $ TestCase $ do
       forM_ [BS.empty,BS.init headerGolden,replace 0 0 headerGolden,
-        replace 8 2 headerGolden,replace 10 1 headerGolden,replace 12 32 headerGolden,
+        replace 8 2 headerGolden,replace 10 0 headerGolden,replace 12 32 headerGolden,
         replace 24 8 headerGolden,replace 28 1 headerGolden] $ \bad ->
           assertBool "malformed header" (isLeft (decodeExact getHeader bad))
       assertBool "count mismatch" (isLeft (validateContainer header (replicate 6 0)))
       assertBool "debug mismatch" (isLeft (validateContainer header [0,0,1,0,0,24]))
       assertBool "overflow cannot wrap" (isLeft (validateContainer header {headerBindingCount=maxBound} [0,0,0,0,0,24]))
-      assertEqual "empty optional members" (Right ()) (validateContainer (Header 1 0 0 0 0) (replicate 6 0))
+      assertEqual "empty optional members" (Right ()) (validateContainer (Header 1 1 0 0 0) (replicate 6 0))
   , TestLabel "stored deflated mixed ZIP retains bytes and replaces deterministically" $ TestCase $
       withSystemTempDirectory "cbd-methods" $ \directory -> do
         forM_ [[],["9"],["data=1","strings=9","header=6"]] $ \options -> do
@@ -66,14 +66,14 @@ cbdTests headerGolden = TestList
           (actualHeader,actualFacts,actualPayloads) <- either fail pure (unpackContainer bytes)
           assertEqual "same metadata" (containerHeader container) actualHeader
           assertEqual "all debug members present" 7 (headerDebugFlags actualHeader)
-          assertEqual "unchanged facts" facts actualFacts
+          assertEqual "private empty metadata string pool and facts" (BS.replicate 8 0 <> facts) actualFacts
           assertEqual "unchanged payloads" payloads actualPayloads
           archive <- either fail pure (Zip.toArchiveOrFail (BL.fromStrict bytes))
           let entries = Zip.zEntries archive
           assertEqual "standard ZIP inventory"
-            ["header","data","strings","names","filenames","line-columns","symbols"] (map Zip.eRelativePath entries)
+            ["data","strings","names","filenames","line-columns","symbols","header"] (map Zip.eRelativePath entries)
           assertEqual "independent standard decompression"
-            ((putBytes (putHeader actualHeader) <> facts) : payloads) (map (BL.toStrict . Zip.fromEntry) entries)
+            (payloads ++ [putBytes (putHeader actualHeader) <> BS.replicate 8 0 <> facts]) (map (BL.toStrict . Zip.fromEntry) entries)
           forM_ entries $ \entry -> do
             member <- maybe (fail "Unknown member") pure (lookup (Zip.eRelativePath entry)
               [(memberName member,member) | member <- [minBound..maxBound]])
@@ -103,7 +103,7 @@ cbdTests headerGolden = TestList
           let destination = directory </> "empty.cbd"
           _ <- writeContainerStreamedWith policy destination (const (pure BS.empty)) (const (pure (0,0)))
           bytes <- BS.readFile destination
-          assertEqual "six empty payload members" (Right (Header 1 0 0 0 0,BS.empty,replicate 6 BS.empty))
+          assertEqual "six empty payload members" (Right (Header 1 1 0 0 0,BS.replicate 8 0,replicate 6 BS.empty))
             (unpackContainer bytes)
   , TestLabel "shared typed module archive controls preserve expected model" $ TestCase $
       withSystemTempDirectory "cbd-golden" $ \directory -> do
@@ -128,6 +128,6 @@ cbdTests headerGolden = TestList
       assertEqual "ZIP64 end signature" "PK\6\6" (BS.take 4 ending)
   ]
   where
-    header = Header 1 0 10 1 0
+    header = Header 1 1 10 1 0
     putBytes = BL.toStrict . runPut
     replace at value bytes = BS.take at bytes <> BS.singleton value <> BS.drop (at+1) bytes

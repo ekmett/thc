@@ -162,24 +162,23 @@ semanticTests = TestList
           assertBool ("truncated at " ++ show size) (isLeft (decodeExprAt (BS.take size bytes) strings 0))
         assertBool "no full-string fallback" (isLeft (decodeExprAt bytes BS.empty 0))
         assertBool "invalid selected UTF8" (isLeft (decodeExprAt bytes (BS.replicate 7 255) 0))
-  , TestLabel "known-start facts need no executable bytes and share raw strings" $ TestCase $
+  , TestLabel "known-start facts have independent metadata and executable strings" $ TestCase $
       withSystemTempDirectory "compact-header" $ \directory -> do
-        encoderSlot <- newIORef Nothing
         let destination = directory </> "header.cbd"
             prepare streams = do
               encoder <- newEncoder streams
-              writeIORef encoderSlot (Just encoder)
               encodeFacts encoder completeFacts
-            produce _ = do
-              encoder <- readIORef encoderSlot >>= maybe (fail "Missing encoder") pure
+            produce streams = do
+              encoder <- newEncoder streams
               _ <- encodeBinding encoder completeBinding
               pure 0
         _ <- writeContainerPrepared destination prepare 0 produce
         file <- BS.readFile destination
         (_,factBytes,segments) <- either fail pure (unpackContainer file)
         case segments of
-          _ : strings : _ -> do
-            assertEqual "header-only decode" (Right completeFacts) (decodeFacts factBytes strings)
+          payload : strings : _ -> do
+            assertEqual "header-only decode" (Right completeFacts) (decodeMetadata factBytes)
+            assertEqual "execution has its own strings" (Right completeBinding) (fst <$> decodeBindingAt payload strings 0)
             assertBool "header includes inline constructor shape" (not (BS.null factBytes))
           _ -> assertFailure "Missing strings"
   , TestLabel "unmapped present provenance cannot disappear during preparation" $ TestCase $
@@ -239,10 +238,10 @@ semanticTests = TestList
         bytes <- BS.readFile destination
         (_,factBytes,segments) <- either fail pure (unpackContainer bytes)
         case segments of
-          payload:strings:_ -> do
+          payload:_:_ -> do
             assertEqual "header provenance has no executable shape references" BS.empty payload
             assertEqual "all scoped types, safety and original expected calls preserved"
-              (Right facts) (decodeFacts factBytes strings)
+              (Right facts) (decodeMetadata factBytes)
           _ -> assertFailure "Missing provenance container segments"
   , TestLabel "unclassified and rejected provenance remain non-verified records" $ TestCase $
       forM_ [(ImportsUnclassified "unknown original declaration",RegistrationUnclassified "unknown original product"),

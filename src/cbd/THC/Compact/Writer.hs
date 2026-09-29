@@ -14,20 +14,20 @@
 -- Only the completed CBD archive is published; temporary fragments are scoped.
 module THC.Compact.Writer
   ( Streams, streamOffset, appendBytes, appendRecord, writeContainer, writeContainerPrepared
-  , writeContainerStreamed, writeContainerStreamedWith ) where
+  , writeContainerStreamed, writeContainerStreamedWith, encodeMetadata ) where
 
 import Control.Exception (IOException, bracket, bracketOnError, catch)
 import Control.Monad (unless)
-import Data.Binary.Put (Put, runPut)
+import Data.Binary.Put (Put, putWord64le, runPut)
 import Data.Bits ((.|.))
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import Data.Digest.CRC32 (crc32, crc32Update)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Word (Word32, Word64)
-import System.Directory (removeFile, renameFile)
+import System.Directory (getTemporaryDirectory, removeFile, renameFile)
 import System.FilePath (takeDirectory)
-import System.IO (Handle, hClose, openBinaryTempFile)
+import System.IO (Handle, SeekMode(AbsoluteSeek), hClose, hFlush, hSeek, openBinaryTempFile)
 import THC.Compact.Compression
 import THC.Compact.Wire
 import THC.Compact.Zip
@@ -70,9 +70,8 @@ appendRecord streams segment record = do
 writeContainer :: FilePath -> BS.ByteString -> Word32 -> (Streams -> IO Word64) -> IO Container
 writeContainer destination facts = writeContainerPrepared destination (const (pure facts))
 
--- | Prepare small known-start facts while interning their strings in the
--- auxiliary stream. Preparation cannot emit executable bytes. Header facts are
--- complete before the prefix is written; no output seek or fixup is needed.
+-- | Prepare facts using a private metadata string pool, independent of every
+-- executable/debug member. The completed header is assembled last.
 writeContainerPrepared :: FilePath -> (Streams -> IO BS.ByteString) -> Word32 -> (Streams -> IO Word64) -> IO Container
 writeContainerPrepared destination prepare summaries produce =
   writeContainerStreamed destination prepare $ \streams -> do
@@ -89,12 +88,9 @@ writeContainerStreamed = writeContainerStreamedWith defaultCompression
 writeContainerStreamedWith :: Compression -> FilePath -> (Streams -> IO BS.ByteString) -> (Streams -> IO (Word64,Word32)) -> IO Container
 writeContainerStreamedWith policy destination prepare produce = bracketOnError
   (openBinaryTempFile directory "compact-archive.tmp") cleanup $ \(path, output) -> do
-    container <- withAuxiliaries 6 [] $ \auxiliaries -> do
-      streams <- Streams <$> mapM (\handle -> Fragment handle <$> newIORef 0 <*> newIORef 0) auxiliaries
-      facts <- prepare streams
-      preparedData <- streamOffset streams ExecutableData
-      unless (preparedData == 0) (fail "Compact fact preparation emitted executable data")
+    container <- withStreams directory $ \streams -> do
       (count,summaries) <- produce streams
+      facts <- encodeMetadata prepare
       let Streams handles = streams
       lengths <- mapM (\(Fragment _ size _) -> readIORef size) handles
       let debug = case lengths of
@@ -103,7 +99,7 @@ writeContainerStreamedWith policy destination prepare produce = bracketOnError
               (if files == 0 then 0 else 2) .|.
               (if positions == 0 then 0 else 4)
             _ -> 0
-          header = Header 1 0 summaries count debug
+          header = Header 1 1 summaries count debug
           result = Container header lengths
           headerBytes = BL.toStrict (runPut (putHeader header)) <> facts
           members = [DataMember,StringsMember,NamesMember,FilenamesMember,LineColumnsMember,SymbolsMember]
@@ -114,18 +110,40 @@ writeContainerStreamedWith policy destination prepare produce = bracketOnError
       bracket (openBinaryTempFile directory "compact-header.tmp") cleanup $ \(_,headerHandle) -> do
         BS.hPut headerHandle headerBytes
         writeZip directory output
-          (ZipSource "header" (compressionLevel HeaderMember policy) (fromIntegral (BS.length headerBytes)) (crc32 headerBytes) headerHandle : sources)
+          (sources ++ [ZipSource "header" (compressionLevel HeaderMember policy) (fromIntegral (BS.length headerBytes)) (crc32 headerBytes) headerHandle])
       pure result
     hClose output
     renameFile path destination
     pure container
   where
     directory = takeDirectory destination
-    withAuxiliaries :: Int -> [Handle] -> ([Handle] -> IO a) -> IO a
-    withAuxiliaries 0 handles action = action (reverse handles)
-    withAuxiliaries remaining handles action = bracket
+
+-- | Encode bounded metadata with its own strings. This never reads or writes
+-- an executable archive and reuses the ordinary typed encoder's stream API.
+encodeMetadata :: (Streams -> IO BS.ByteString) -> IO BS.ByteString
+encodeMetadata prepare = do
+  directory <- getTemporaryDirectory
+  withStreams directory $ \streams@(Streams fragments) -> do
+    facts <- prepare streams
+    lengths <- mapM (streamOffset streams) [minBound..maxBound]
+    unless (and [size == 0 | (segment,size) <- zip [minBound..maxBound] lengths, segment /= CommonStrings])
+      (fail "Compact metadata preparation emitted non-string payload")
+    let Fragment handle size _ = fragments !! fromEnum CommonStrings
+    extent <- readIORef size
+    hFlush handle
+    hSeek handle AbsoluteSeek 0
+    strings <- BS.hGetContents handle
+    pure (BL.toStrict (runPut (putWord64le extent)) <> strings <> facts)
+
+withStreams :: FilePath -> (Streams -> IO a) -> IO a
+withStreams directory action = withAuxiliaries 6 [] $ \handles ->
+  (Streams <$> mapM (\handle -> Fragment handle <$> newIORef 0 <*> newIORef 0) handles) >>= action
+  where
+    withAuxiliaries :: Int -> [Handle] -> ([Handle] -> IO b) -> IO b
+    withAuxiliaries 0 handles use = use (reverse handles)
+    withAuxiliaries remaining handles use = bracket
       (openBinaryTempFile directory "compact-aux.tmp") cleanup $ \(_, handle) ->
-        withAuxiliaries (remaining-1) (handle:handles) action
+        withAuxiliaries (remaining-1) (handle:handles) use
 
 checkedAdd :: Word64 -> Word64 -> IO Word64
 checkedAdd start size
