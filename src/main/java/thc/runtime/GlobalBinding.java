@@ -12,8 +12,11 @@ public final class GlobalBinding {
     @CompilationFinal private boolean initialized;
     @CompilationFinal private Object value;
     @CompilationFinal private Object preparationLock;
-    private volatile boolean prepared;
-    private Object preparedValue;
+    // A prepared cell never changes again. Compilations after publication may
+    // fold its identity; earlier cold compilations keep the idempotent boundary
+    // below, so publication need not invalidate their still-correct code.
+    @CompilationFinal private volatile boolean prepared;
+    @CompilationFinal private Object preparedValue;
     private Preparation prepare;
     private boolean preparing;
     private Exception preparationFailure;
