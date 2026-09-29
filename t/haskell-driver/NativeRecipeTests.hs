@@ -15,6 +15,7 @@ module NativeRecipeTests (tests, interfaceTests) where
 
 import Control.Exception (bracket)
 import Control.Monad (forM_)
+import qualified Crypto.Hash.SHA256 as SHA
 import Data.Aeson (Value(..), object, (.=), encode, eitherDecodeStrict', toJSON)
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString.Lazy.Char8 as BL
@@ -23,7 +24,9 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import Data.Either (isLeft)
 import Data.IORef
+import Data.List (isInfixOf)
 import GHC.ResponseFile (escapeArgs, unescapeArgs)
+import Numeric (showHex)
 import System.Directory
 import System.Environment (lookupEnv)
 import System.Exit (ExitCode(..))
@@ -32,7 +35,8 @@ import System.IO (hClose, openTempFile)
 import System.IO.Error (tryIOError)
 import System.Process (readProcessWithExitCode)
 import Test.HUnit (Test(..), assertBool, assertEqual)
-import THC.Driver.NativeDependencies (nativeLinkInputs)
+import THC.Driver.NativeDependencies (nativeLinkInputs, readNativeProduct, nativeProductPieces)
+import THC.Driver.PackageNative (captureNativeObject, finishPackageNativeWithDependencies)
 import THC.Driver.NativeRecipe
 import THC.Driver.Installed (boundedInterfaceProcessInput)
 import THC.Driver.ScalarBitcode (withScalarBitcode)
@@ -43,6 +47,69 @@ tests = TestLabel "actual native compiler receipts" $ TestList
   [ TestCase $ do
       let args = ["-c", "cbits/a café.c", "-I/a \"quoted\" path", "-DVALUE=\\x"]
       assertEqual "GHC response quoting preserves complete arguments" args (unescapeArgs (escapeArgs args))
+  , TestLabel "mixed native providers stay separate and preserve strict unresolved checks" $ TestCase $
+      withScratch $ \root -> withCurrentDirectory root $ do
+        ghc <- maybe "ghc" id <$> lookupEnv "GHC"
+        compiler <- maybe (fail "GHC is required") canonicalizePath =<< findExecutable ghc
+        ar <- maybe "ar" id <$> lookupEnv "THC_AR"
+        nm <- maybe "llvm-nm" id <$> lookupEnv "THC_LLVM_NM"
+        let pieces = root </> "pieces"
+            command program arguments = do
+              (status,output,diagnostic) <- readProcessWithExitCode program arguments ""
+              assertEqual diagnostic ExitSuccess status
+              pure output
+            digest = concatMap (\byte -> let text = showHex byte "" in if length text == 1 then '0':text else text)
+              . BS.unpack . SHA.hash
+            prepare owner dependencies source = do
+              let cfile = root </> owner <.> "c"
+                  obj = root </> owner <.> "o"
+                  arguments = ["-c",cfile,"-fPIC","-o",obj]
+                  registration = root </> owner <.> "conf"
+              writeFile cfile source
+              _ <- command compiler arguments
+              captureNativeObject pieces compiler arguments
+              _ <- command ar ["rcs",root </> "libHS" ++ owner ++ ".a",obj,root </> "Owner.o"]
+              writeFile registration (unlines ["name: " ++ owner,"version: 0.1","id: " ++ owner,
+                "key: " ++ owner,"exposed-modules: Owner","hs-libraries: HS" ++ owner,
+                "library-dirs: " ++ show root,"depends: " ++ unwords dependencies])
+              let planned = object ["id" .= owner,"type" .= ("configured"::String),"style" .= ("global"::String),
+                    "pkg-src-sha256" .= digest (Text.encodeUtf8 (Text.pack source))]
+              selected <- readNativeProduct planned dependencies registration pieces
+              maybe (fail "mixed archive lost its captured C member") pure selected
+            finish owner captured dependencies = finishPackageNativeWithDependencies (Just captured) dependencies []
+              pieces (root </> "original" </> owner) (root </> "linked" </> owner) owner Nothing []
+            field name (Object fields) = maybe (fail ("missing " ++ show name)) pure (KeyMap.lookup name fields)
+            field _ _ = fail "component descriptor must be an object"
+        writeFile "Owner.hs" "{-# LANGUAGE NoImplicitPrelude #-}\nmodule Owner where\ndata Sentinel = Sentinel\n"
+        _ <- command compiler ["-c","Owner.hs","-fPIC"]
+        provider <- prepare "nativeprovider" []
+          "int shared_state=40; int next(void){return ++shared_state;} int unimported(void){return shared_state;}\n"
+        assertEqual "only actual C membership, not native Haskell code" 1 (length (nativeProductPieces provider))
+        (_,Just descriptor) <- finish "nativeprovider" provider []
+        exports <- field "exports" descriptor
+        assertBool "unimported public definition remains rooted" (String "unimported" `elem` case exports of Array names -> foldr (:) [] names; _ -> [])
+        (_,Just repeated) <- finish "nativeprovider" provider []
+        assertEqual "direct/dependency use keeps one exact component payload" descriptor repeated
+        consumer <- prepare "nativeconsumer" ["nativeprovider"]
+          "extern int next(void); extern int getpid(void); int consume(void){return next()+(getpid()==0);}\n"
+        (_,Just consumerDescriptor) <- finish "nativeconsumer" consumer [(["nativeprovider"],descriptor)]
+        assertEqual "declared provider is referenced, not copied" (toJSON [descriptor]) =<< field "dependencies" consumerDescriptor
+        definitions <- command nm ["--defined-only","--format=posix",root </> "linked/nativeconsumer/native/package.bc"]
+        assertBool "consumer LLVM does not duplicate provider state or functions"
+          (not ("shared_state" `isInfixOf` definitions || "next " `isInfixOf` definitions))
+        competing <- prepare "nativecompeting" [] "int next(void){return 99;}\n"
+        (_,Just competingDescriptor) <- finish "nativecompeting" competing []
+        ambiguous <- tryIOError (finish "nativeconsumer" consumer
+          [(["nativeprovider"],descriptor),(["nativecompeting"],competingDescriptor)])
+        assertBool "distinct declared providers cannot silently win by load order" $ case ambiguous of
+          Left reason -> "ambiguous declared native providers for next" `isInfixOf` show reason
+          Right _ -> False
+        broken <- prepare "nativebroken" ["nativeprovider"]
+          "extern int next(void); extern int unrelated_missing(void); int consume(void){return next()+unrelated_missing();}\n"
+        failure <- tryIOError (finish "nativebroken" broken [(["nativeprovider"],descriptor)])
+        assertBool "a declared peer exemption never hides another missing symbol" $ case failure of
+          Left reason -> "unrelated_missing" `isInfixOf` show reason
+          Right _ -> False
   , TestLabel "published native dependencies survive removed Cabal package DBs" $ TestCase $ withScratch $ \root -> do
       ghc <- maybe "ghc" id <$> lookupEnv "GHC"
       compiler <- maybe (fail "GHC is required") canonicalizePath =<< findExecutable ghc

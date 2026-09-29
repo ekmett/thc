@@ -24,7 +24,7 @@ import THC.Driver.PackageNative
 import THC.Driver.NativeLibrarySources (nativeLinkOptions, nativePackageOptions,
   nativePackageSelectors, packageNativeLibraries)
 import THC.Driver.NativeArgumentBridge (nativeArgumentBridge)
-import THC.Driver.NativeDependencies (selectCOnlyPieces)
+import THC.Driver.NativeDependencies (selectNativePieces)
 
 tests :: Test
 tests = TestLabel "package-owned native C acquisition" $ TestList
@@ -170,17 +170,21 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
           second = piece "/selected" "b.o" "second" "target"
           sibling = piece "/sibling" "a.o" "different" "target"
       assertEqual "archive content selects only owned products" (Right [first,second])
-        (selectCOnlyPieces [("a.o","first"),("b.o","second")] [sibling,second,first])
+        (selectNativePieces True [("a.o","first"),("b.o","second")] [sibling,second,first])
+      assertEqual "mixed archive keeps captured C members, never native Haskell objects" (Right [first])
+        (selectNativePieces False [("a.o","first"),("Owner.o","haskell")] [sibling,first])
+      assertEqual "an uncaptured Haskell archive is not a native provider" (Right [])
+        (selectNativePieces False [("Owner.o","haskell")] [first])
       assertBool "matching basename cannot bless different native object" (isLeft
-        (selectCOnlyPieces [("a.o","other")] [first]))
+        (selectNativePieces True [("a.o","other")] [first]))
       assertBool "unrecorded member is not silently omitted" (isLeft
-        (selectCOnlyPieces [("a.o","first"),("b.o","second")] [first]))
+        (selectNativePieces True [("a.o","first"),("b.o","second")] [first]))
       assertBool "different recipes for one native object remain ambiguous" (isLeft
-        (selectCOnlyPieces [("a.o","first")] [first,piece "/sibling" "a.o" "first" "other"]))
+        (selectNativePieces True [("a.o","first")] [first,piece "/sibling" "a.o" "first" "other"]))
       assertBool "duplicate archive members cannot expand authority" (isLeft
-        (selectCOnlyPieces [("a.o","first"),("a.o","first")] [first]))
+        (selectNativePieces True [("a.o","first"),("a.o","first")] [first]))
       forM_ ["../a.o","/a.o",".","","-N","@response","a b.o","a\nb.o"] $ \name ->
-        assertBool "archive member paths cannot escape selection" (isLeft (selectCOnlyPieces [(name,"first")] [first]))
+        assertBool "archive member paths cannot escape selection" (isLeft (selectNativePieces True [(name,"first")] [first]))
   , TestCase $ do
       let source = unlines ["define i64 @caller(ptr %0, i64 %1, i64 %2) {",
             "  %3 = call i64 @callee(ptr %0, i64 %1, i64 %2)", "  ret i64 %3", "}",
