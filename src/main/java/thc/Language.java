@@ -348,7 +348,8 @@ public final class Language extends TruffleLanguage<Language.State> {
         require(!Boolean.TRUE.equals(input.get("ioMain")) || !Boolean.TRUE.equals(input.get("diagnosticUnsupported")),
             "IO main requires strict unsupported-Core rejection");
         var loadingStatistics = new CoreJsonLoadingStatistics();
-        var layout = CoreModules.visitRequestModules(input, loadingStatistics::include, merger::add);
+        var layout = CoreModules.visitRequestModules(input, loadingStatistics::include,
+            Boolean.TRUE.equals(input.get("detachedBindings")) ? merger::addDetached : merger::add);
         var linked = new LinkedHashMap<String, Object>(CoreModules.reachable(merger.finish(),
             shutdownEntry == null ? List.of(entry) : List.of(entry, shutdownEntry), Boolean.TRUE.equals(input.get("strictLink"))));
         linked.put("instrument", !Boolean.FALSE.equals(input.get("instrument")));
@@ -403,12 +404,14 @@ public final class Language extends TruffleLanguage<Language.State> {
         var acceptedResult = hostResult;
         var resultFault = hostResultFault;
         var shutdownProof = shutdownResult;
+        boolean processSignals = bindings.stream().anyMatch(binding -> CoreSignalForeign.dispatcher.equals(binding.get("id")));
         if (prepareCode) {
-            require(backend.equals("ast") && !async && ioResult == null && shutdownEntry == null &&
-                !Boolean.TRUE.equals(input.get("diagnosticUnsupported")) && registrations.isEmpty(),
-                "Reusable code currently requires synchronous, strict, foreign-free AST scalar entries");
-            return new PreparedRoot(this, Program.prepareCode(this, linked, List.of(entry)), entry,
-                ((Number) selected.get("arity")).intValue(), acceptedInputs, acceptedResult).getCallTarget();
+            require(backend.equals("ast") && !async && !Boolean.TRUE.equals(input.get("diagnosticUnsupported")),
+                "Reusable code currently requires synchronous, strict AST preparation");
+            var entries = shutdownEntry == null ? List.of(entry) : List.of(entry, shutdownEntry);
+            return new PreparedRoot(this, Program.prepareCode(this, linked, entries), entry,
+                ((Number) selected.get("arity")).intValue(), acceptedInputs, acceptedResult,
+                ioResult, shutdownEntry, shutdownProof, processSignals).getCallTarget();
         }
         return new RootNode(this) {
             @Override public Object execute(VirtualFrame frame) { return instantiate(); }
@@ -425,8 +428,6 @@ public final class Language extends TruffleLanguage<Language.State> {
                     owner.foreignRoots.register(program, Language.this, registrations, ManagedExportPlan.checked(exports, ignored -> bindings),
                         () -> { for (var link : (List<PackageScalarLink>) linked.get("packageScalarLinks")) owner.packageCbits.link(link); });
                     int argumentCount = ((Number) selected.get("arity")).intValue();
-                    boolean processSignals = false;
-                    for (var binding : bindings) if (CoreSignalForeign.dispatcher.equals(binding.get("id"))) { processSignals = true; break; }
                     var value = new EntryValue(program, entry, argumentCount, resultFault,
                         ioResult, Language.this, shutdownEntry, shutdownProof,
                         processSignals, acceptedInputs, acceptedResult);
@@ -440,14 +441,18 @@ public final class Language extends TruffleLanguage<Language.State> {
     /** Cached load factory: code is shared, while every execution creates fresh ordinary runtime state. */
     static final class PreparedRoot extends RootNode {
         final Program.PreparedCode code;
-        private final String entry;
+        private final String entry, shutdownEntry;
         private final int arity;
         private final List<CoreRepresentation> inputs;
-        private final CoreRepresentation result;
+        private final CoreRepresentation result, ioResult, shutdownResult;
+        private final boolean processSignals;
         PreparedRoot(Language language, Program.PreparedCode code, String entry, int arity,
-                List<CoreRepresentation> inputs, CoreRepresentation result) {
+                List<CoreRepresentation> inputs, CoreRepresentation result, CoreRepresentation ioResult,
+                String shutdownEntry, CoreRepresentation shutdownResult, boolean processSignals) {
             super(language);
             this.code = code; this.entry = entry; this.arity = arity; this.inputs = inputs; this.result = result;
+            this.ioResult = ioResult; this.shutdownEntry = shutdownEntry; this.shutdownResult = shutdownResult;
+            this.processSignals = processSignals;
         }
         @Override public Object execute(VirtualFrame frame) { return instantiate(); }
         @TruffleBoundary private EntryValue instantiate() {
@@ -457,8 +462,18 @@ public final class Language extends TruffleLanguage<Language.State> {
                 code.requireInstalledCode();
             }
             var language = getLanguage(Language.class);
-            return new EntryValue(code.newInstance(language), entry, arity, null, null, language,
-                null, null, false, inputs, result, code);
+            // The saved factory owns declarations, never the preparation Context's
+            // native functions, CAFs, bridge projectors or registration lifetimes.
+            var owner = currentState(this);
+            for (var link : code.getForeignLinks()) owner.cbits().link(link);
+            for (var link : code.getPackageScalarLinks()) owner.packageCbits.declare(link);
+            var program = code.newInstanceForNativeStartup(language);
+            try {
+                owner.foreignRoots.register(program, language, code.getManagedRegistrations(), code.getManagedExports(),
+                    () -> { for (var link : code.getPackageScalarLinks()) owner.packageCbits.link(link); });
+                return new EntryValue(program, entry, arity, null, ioResult, language,
+                    shutdownEntry, shutdownResult, processSignals, inputs, result, code);
+            } catch (Throwable failure) { owner.foreignRoots.release(program); throw failure; }
         }
         @Override protected ExecutionSignature prepareForAOT() {
             return ExecutionSignature.create(EntryValue.class, new Class<?>[0]);

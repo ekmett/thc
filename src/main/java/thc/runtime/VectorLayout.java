@@ -18,29 +18,25 @@ public final class VectorLayout {
     private final int lanes;
     private final CoreRepresentation lane;
     private final Class<?> carrierType;
-    private final VectorSpecies<?> species;
+    private final Class<? extends Vector<?>> exactType;
     public VectorLayout(CoreRepresentation proof) {
         validate(proof);
         this.proof = proof;
         vector = proof.getVector();
         lanes = vector.getLanes();
         lane = laneProof(vector);
-        int elementBits = switch (vector.getElement()) {
-            case "Int8ElemRep", "Word8ElemRep" -> 8;
-            case "Int16ElemRep", "Word16ElemRep" -> 16;
-            case "Int32ElemRep", "Word32ElemRep", "FloatElemRep" -> 32;
-            default -> 64;
-        };
-        VectorShape shape = VectorShape.forBitSize(lanes * elementBits);
-        switch (vector.getElement()) {
-            case "Int8ElemRep", "Word8ElemRep" -> { carrierType = ByteVector.class; species = ByteVector.SPECIES_128.withShape(shape); }
-            case "Int16ElemRep", "Word16ElemRep" -> { carrierType = ShortVector.class; species = ShortVector.SPECIES_128.withShape(shape); }
-            case "Int32ElemRep", "Word32ElemRep" -> { carrierType = IntVector.class; species = IntVector.SPECIES_128.withShape(shape); }
-            case "Int64ElemRep", "Word64ElemRep" -> { carrierType = LongVector.class; species = LongVector.SPECIES_128.withShape(shape); }
-            case "FloatElemRep" -> { carrierType = FloatVector.class; species = FloatVector.SPECIES_128.withShape(shape); }
-            case "DoubleElemRep" -> { carrierType = DoubleVector.class; species = DoubleVector.SPECIES_128.withShape(shape); }
+        carrierType = switch (vector.getElement()) {
+            case "Int8ElemRep", "Word8ElemRep" -> ByteVector.class;
+            case "Int16ElemRep", "Word16ElemRep" -> ShortVector.class;
+            case "Int32ElemRep", "Word32ElemRep" -> IntVector.class;
+            case "Int64ElemRep", "Word64ElemRep" -> LongVector.class;
+            case "FloatElemRep" -> FloatVector.class;
+            case "DoubleElemRep" -> DoubleVector.class;
             default -> { com.oracle.truffle.api.CompilerDirectives.transferToInterpreterAndInvalidate(); throw new RuntimeFault("Unknown vector lane representation"); }
-        }
+        };
+        // Retain the exact physical carrier, not runtime-initialized JDK species
+        // metadata. Prepared layouts and their compiled checks must be persistable.
+        exactType = getSpecies().vectorType();
     }
     public CoreRepresentation getProof() { return proof; }
     public CoreVector getVector() { return vector; }
@@ -48,12 +44,28 @@ public final class VectorLayout {
     public int getWidth() { return 1; }
     public CoreRepresentation getLane() { return lane; }
     public Class<?> getCarrierType() { return carrierType; }
-    public VectorSpecies<?> getSpecies() { return species; }
+    public VectorSpecies<?> getSpecies() {
+        int elementBits = switch (vector.getElement()) {
+            case "Int8ElemRep", "Word8ElemRep" -> 8;
+            case "Int16ElemRep", "Word16ElemRep" -> 16;
+            case "Int32ElemRep", "Word32ElemRep", "FloatElemRep" -> 32;
+            default -> 64;
+        };
+        VectorShape shape = VectorShape.forBitSize(lanes * elementBits);
+        return switch (vector.getElement()) {
+            case "Int8ElemRep", "Word8ElemRep" -> ByteVector.SPECIES_128.withShape(shape);
+            case "Int16ElemRep", "Word16ElemRep" -> ShortVector.SPECIES_128.withShape(shape);
+            case "Int32ElemRep", "Word32ElemRep" -> IntVector.SPECIES_128.withShape(shape);
+            case "Int64ElemRep", "Word64ElemRep" -> LongVector.SPECIES_128.withShape(shape);
+            case "FloatElemRep" -> FloatVector.SPECIES_128.withShape(shape);
+            case "DoubleElemRep" -> DoubleVector.SPECIES_128.withShape(shape);
+            default -> { com.oracle.truffle.api.CompilerDirectives.transferToInterpreterAndInvalidate(); throw new RuntimeFault("Unknown vector lane representation"); }
+        };
+    }
     public Vector<?> require(Object value) {
         if (!(value instanceof Vector<?> raw)) { com.oracle.truffle.api.CompilerDirectives.transferToInterpreterAndInvalidate(); throw new RuntimeFault("Expected raw vector carrier"); }
-        Class<? extends Vector<?>> exact = species.vectorType();
-        if (!exact.isInstance(raw)) { com.oracle.truffle.api.CompilerDirectives.transferToInterpreterAndInvalidate(); throw new RuntimeFault("Vector carrier species disagrees with VecRep"); }
-        return CompilerDirectives.castExact(raw, exact);
+        if (!exactType.isInstance(raw)) { com.oracle.truffle.api.CompilerDirectives.transferToInterpreterAndInvalidate(); throw new RuntimeFault("Vector carrier species disagrees with VecRep"); }
+        return CompilerDirectives.castExact(raw, exactType);
     }
     public void write(VirtualFrame frame, int[] slots, int offset, Object value) { FrameAccess.writeObject(frame, slots[offset], require(value)); }
     public Object read(VirtualFrame frame, int[] slots, int offset) { return require(frame.getObject(slots[offset])); }

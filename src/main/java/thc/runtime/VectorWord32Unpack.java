@@ -22,11 +22,15 @@ public final class VectorWord32Unpack extends Expr {
     }
 
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
-        IntVector value = RuntimeTypes.requireInt(argument.execute(frame), IntVector.SPECIES_128);
+        IntVector value = vector(argument.execute(frame));
         FrameAccess.INSTANCE.writeInt(frame, slots[offset], value.lane(0));
         FrameAccess.INSTANCE.writeInt(frame, slots[offset + 1], value.lane(1));
         FrameAccess.INSTANCE.writeInt(frame, slots[offset + 2], value.lane(2));
         FrameAccess.INSTANCE.writeInt(frame, slots[offset + 3], value.lane(3));
         return null;
+    }
+
+    private static IntVector vector(Object value) {
+        return RuntimeTypes.requireInt(value, IntVector.SPECIES_128);
     }
 }

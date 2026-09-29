@@ -21,9 +21,13 @@ public final class VectorFloatPack extends Expr {
 
     @Override public FloatVector execute(VirtualFrame frame) {
         argument.executeTuple(frame, slots, 0);
-        return FloatVector.broadcast(FloatVector.SPECIES_128, frame.getFloat(slots[0]))
-            .withLane(1, frame.getFloat(slots[1]))
-            .withLane(2, frame.getFloat(slots[2]))
-            .withLane(3, frame.getFloat(slots[3]));
+        return pack(frame.getFloat(slots[0]), frame.getFloat(slots[1]), frame.getFloat(slots[2]), frame.getFloat(slots[3]));
+    }
+
+    private static FloatVector pack(float lane0, float lane1, float lane2, float lane3) {
+        return FloatVector.broadcast(FloatVector.SPECIES_128, lane0)
+            .withLane(1, lane1)
+            .withLane(2, lane2)
+            .withLane(3, lane3);
     }
 }

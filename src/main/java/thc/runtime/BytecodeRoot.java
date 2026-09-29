@@ -4911,7 +4911,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class IndexVectorShortAddress {
         @Specialization public static ShortVector index(boolean scalarOffset, int vectorBytes, ManagedAddress address, long index) {
-            ShortVector vector = address.readVectorBytes(index, scalarOffset ? 2 : vectorBytes, vectorBytes).reinterpretAsShorts();
+            ShortVector vector = VectorMemory.asShorts(address.readVectorBytes(index, scalarOffset ? 2 : vectorBytes, vectorBytes));
             return (java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES));
         }
     }
@@ -4920,7 +4920,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class ReadVectorShortAddress {
         @Specialization public static ShortVector read(boolean scalarOffset, int vectorBytes, ManagedAddress address, long index, Object state) {
             ManagedByteArray.requireState(state);
-            ShortVector vector = address.readVectorBytes(index, scalarOffset ? 2 : vectorBytes, vectorBytes).reinterpretAsShorts();
+            ShortVector vector = VectorMemory.asShorts(address.readVectorBytes(index, scalarOffset ? 2 : vectorBytes, vectorBytes));
             return (java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES));
         }
     }
@@ -4930,7 +4930,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static Object write(boolean scalarOffset, int vectorBytes, ManagedAddress address, long index, ShortVector vector, Object state) {
             vector = RuntimeTypes.requireShort(vector, ShortVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)));
             ManagedByteArray.requireState(state);
-            address.writeVectorBytes(index, scalarOffset ? 2 : vectorBytes, (java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES)).reinterpretAsBytes(), vectorBytes);
+            address.writeVectorBytes(index, scalarOffset ? 2 : vectorBytes, VectorMemory.asBytes((java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES))), vectorBytes);
             return thc.runtime.Unit.INSTANCE;
         }
     }
@@ -4938,7 +4938,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class IndexVectorIntAddress {
         @Specialization public static IntVector index(boolean scalarOffset, int vectorBytes, ManagedAddress address, long index) {
-            IntVector vector = address.readVectorBytes(index, scalarOffset ? 4 : vectorBytes, vectorBytes).reinterpretAsInts();
+            IntVector vector = VectorMemory.asInts(address.readVectorBytes(index, scalarOffset ? 4 : vectorBytes, vectorBytes));
             return (java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES));
         }
     }
@@ -4947,7 +4947,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class ReadVectorIntAddress {
         @Specialization public static IntVector read(boolean scalarOffset, int vectorBytes, ManagedAddress address, long index, Object state) {
             ManagedByteArray.requireState(state);
-            IntVector vector = address.readVectorBytes(index, scalarOffset ? 4 : vectorBytes, vectorBytes).reinterpretAsInts();
+            IntVector vector = VectorMemory.asInts(address.readVectorBytes(index, scalarOffset ? 4 : vectorBytes, vectorBytes));
             return (java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES));
         }
     }
@@ -4957,7 +4957,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static Object write(boolean scalarOffset, int vectorBytes, ManagedAddress address, long index, IntVector vector, Object state) {
             vector = RuntimeTypes.requireInt(vector, IntVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)));
             ManagedByteArray.requireState(state);
-            address.writeVectorBytes(index, scalarOffset ? 4 : vectorBytes, (java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES)).reinterpretAsBytes(), vectorBytes);
+            address.writeVectorBytes(index, scalarOffset ? 4 : vectorBytes, VectorMemory.asBytes((java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES))), vectorBytes);
             return thc.runtime.Unit.INSTANCE;
         }
     }
@@ -4965,7 +4965,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class IndexVectorLongAddress {
         @Specialization public static LongVector index(boolean scalarOffset, int vectorBytes, ManagedAddress address, long index) {
-            LongVector vector = address.readVectorBytes(index, scalarOffset ? 8 : vectorBytes, vectorBytes).reinterpretAsLongs();
+            LongVector vector = VectorMemory.asLongs(address.readVectorBytes(index, scalarOffset ? 8 : vectorBytes, vectorBytes));
             return (java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES));
         }
     }
@@ -4974,7 +4974,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class ReadVectorLongAddress {
         @Specialization public static LongVector read(boolean scalarOffset, int vectorBytes, ManagedAddress address, long index, Object state) {
             ManagedByteArray.requireState(state);
-            LongVector vector = address.readVectorBytes(index, scalarOffset ? 8 : vectorBytes, vectorBytes).reinterpretAsLongs();
+            LongVector vector = VectorMemory.asLongs(address.readVectorBytes(index, scalarOffset ? 8 : vectorBytes, vectorBytes));
             return (java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES));
         }
     }
@@ -4984,7 +4984,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static Object write(boolean scalarOffset, int vectorBytes, ManagedAddress address, long index, LongVector vector, Object state) {
             vector = RuntimeTypes.requireLong(vector, LongVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)));
             ManagedByteArray.requireState(state);
-            address.writeVectorBytes(index, scalarOffset ? 8 : vectorBytes, (java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES)).reinterpretAsBytes(), vectorBytes);
+            address.writeVectorBytes(index, scalarOffset ? 8 : vectorBytes, VectorMemory.asBytes((java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES))), vectorBytes);
             return thc.runtime.Unit.INSTANCE;
         }
     }
@@ -4992,8 +4992,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class IndexVectorFloatAddress {
         @Specialization public static FloatVector index(boolean scalarOffset, int vectorBytes, ManagedAddress address, long index) {
-            IntVector vector = address.readVectorBytes(index, scalarOffset ? 4 : vectorBytes, vectorBytes).reinterpretAsInts();
-            return (java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES)).reinterpretAsFloats();
+            IntVector vector = VectorMemory.asInts(address.readVectorBytes(index, scalarOffset ? 4 : vectorBytes, vectorBytes));
+            return VectorMemory.asFloats((java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES)));
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
@@ -5001,8 +5001,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class ReadVectorFloatAddress {
         @Specialization public static FloatVector read(boolean scalarOffset, int vectorBytes, ManagedAddress address, long index, Object state) {
             ManagedByteArray.requireState(state);
-            IntVector vector = address.readVectorBytes(index, scalarOffset ? 4 : vectorBytes, vectorBytes).reinterpretAsInts();
-            return (java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES)).reinterpretAsFloats();
+            IntVector vector = VectorMemory.asInts(address.readVectorBytes(index, scalarOffset ? 4 : vectorBytes, vectorBytes));
+            return VectorMemory.asFloats((java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES)));
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
@@ -5011,8 +5011,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static Object write(boolean scalarOffset, int vectorBytes, ManagedAddress address, long index, FloatVector vector, Object state) {
             vector = RuntimeTypes.requireFloat(vector, FloatVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)));
             ManagedByteArray.requireState(state);
-            IntVector bits = vector.reinterpretAsInts();
-            address.writeVectorBytes(index, scalarOffset ? 4 : vectorBytes, (java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? bits : bits.lanewise(VectorOperators.REVERSE_BYTES)).reinterpretAsBytes(), vectorBytes);
+            IntVector bits = VectorMemory.asInts(vector);
+            address.writeVectorBytes(index, scalarOffset ? 4 : vectorBytes, VectorMemory.asBytes((java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? bits : bits.lanewise(VectorOperators.REVERSE_BYTES))), vectorBytes);
             return thc.runtime.Unit.INSTANCE;
         }
     }
@@ -5020,8 +5020,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class IndexVectorDoubleAddress {
         @Specialization public static DoubleVector index(boolean scalarOffset, int vectorBytes, ManagedAddress address, long index) {
-            LongVector vector = address.readVectorBytes(index, scalarOffset ? 8 : vectorBytes, vectorBytes).reinterpretAsLongs();
-            return (java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES)).reinterpretAsDoubles();
+            LongVector vector = VectorMemory.asLongs(address.readVectorBytes(index, scalarOffset ? 8 : vectorBytes, vectorBytes));
+            return VectorMemory.asDoubles((java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES)));
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
@@ -5029,8 +5029,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class ReadVectorDoubleAddress {
         @Specialization public static DoubleVector read(boolean scalarOffset, int vectorBytes, ManagedAddress address, long index, Object state) {
             ManagedByteArray.requireState(state);
-            LongVector vector = address.readVectorBytes(index, scalarOffset ? 8 : vectorBytes, vectorBytes).reinterpretAsLongs();
-            return (java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES)).reinterpretAsDoubles();
+            LongVector vector = VectorMemory.asLongs(address.readVectorBytes(index, scalarOffset ? 8 : vectorBytes, vectorBytes));
+            return VectorMemory.asDoubles((java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? vector : vector.lanewise(VectorOperators.REVERSE_BYTES)));
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
@@ -5039,8 +5039,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static Object write(boolean scalarOffset, int vectorBytes, ManagedAddress address, long index, DoubleVector vector, Object state) {
             vector = RuntimeTypes.requireDouble(vector, DoubleVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)));
             ManagedByteArray.requireState(state);
-            LongVector bits = vector.reinterpretAsLongs();
-            address.writeVectorBytes(index, scalarOffset ? 8 : vectorBytes, (java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? bits : bits.lanewise(VectorOperators.REVERSE_BYTES)).reinterpretAsBytes(), vectorBytes);
+            LongVector bits = VectorMemory.asLongs(vector);
+            address.writeVectorBytes(index, scalarOffset ? 8 : vectorBytes, VectorMemory.asBytes((java.nio.ByteOrder.nativeOrder() == java.nio.ByteOrder.LITTLE_ENDIAN ? bits : bits.lanewise(VectorOperators.REVERSE_BYTES))), vectorBytes);
             return thc.runtime.Unit.INSTANCE;
         }
     }

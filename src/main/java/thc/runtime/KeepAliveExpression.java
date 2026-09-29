@@ -17,6 +17,7 @@ public final class KeepAliveExpression extends Expr {
             proof.getComponents(), proof.getVector(), proof.getAlternatives(), proof.getTagSlot(), proof.getAlternativeSlots()));
     }
     private enum Route { GENERIC, INT, LONG, FLOAT, DOUBLE, ADDRESS, DATA, CLOSURE, TUPLE }
+    @Override public void prepareTuple(int[] slots, int offset) { action.prepareTuple(slots, offset); }
     private static AstCapture enclose(AstCapture cut, Object value) {
         return cut.enclose(steps -> new KeptScope(value, steps));
     }

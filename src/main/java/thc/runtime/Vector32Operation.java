@@ -20,7 +20,7 @@ public final class Vector32Operation extends Expr {
 
     @Override public IntVector execute(VirtualFrame frame) {
         return switch (operation) {
-            case "broadcastInt32X4#" -> IntVector.broadcast(IntVector.SPECIES_128, arguments[0].executeRequiredInt(frame));
+            case "broadcastInt32X4#" -> broadcast(arguments[0].executeRequiredInt(frame));
             case "plusInt32X4#" -> vector(arguments[0].execute(frame)).add(vector(arguments[1].execute(frame)));
             case "minusInt32X4#" -> vector(arguments[0].execute(frame)).sub(vector(arguments[1].execute(frame)));
             case "timesInt32X4#" -> vector(arguments[0].execute(frame)).mul(vector(arguments[1].execute(frame)));
@@ -30,6 +30,10 @@ public final class Vector32Operation extends Expr {
                 throw new RuntimeFault("Invalid vector operation");
             }
         };
+    }
+
+    private static IntVector broadcast(int value) {
+        return IntVector.broadcast(IntVector.SPECIES_128, value);
     }
 
     private static IntVector vector(Object value) {

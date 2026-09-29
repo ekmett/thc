@@ -19,21 +19,29 @@ import java.util.function.Supplier;
 import thc.Language;
 import static thc.runtime.RuntimeFault.fault;
 
-/** One adopted call site for an exact component ABI in its exclusive context. */
+/** One adopted call site for an exact component ABI; reusable sites receive
+ * their invoking program's function rather than caching a context receiver. */
 public final class PackageScalarAccess extends Node {
     private final PackageScalarCall call;
+    private final int functionIndex;
     @Child private ForeignExceptionAccess foreignExceptions = new ForeignExceptionAccess();
     @CompilationFinal(dimensions = 1) private final String[] argumentReps;
     @CompilationFinal private volatile PackageScalarFunction cached;
-    @Child private InteropLibrary calls = InteropLibrary.getFactory().createDispatched(1);
-    @Child private InteropLibrary numbers = InteropLibrary.getFactory().createDispatched(1);
+    @Child private InteropLibrary calls;
+    @Child private InteropLibrary numbers;
     private final boolean pointers;
     private final boolean integerResult;
     private final boolean addressResult;
     private final List<ManagedAddress> noPointerArguments;
 
     public PackageScalarAccess(PackageScalarCall call) {
+        this(call, -1);
+    }
+    public PackageScalarAccess(PackageScalarCall call, int functionIndex) {
         this.call = call;
+        this.functionIndex = functionIndex;
+        calls = functionIndex < 0 ? InteropLibrary.getFactory().createDispatched(1) : InteropLibrary.getUncached();
+        numbers = functionIndex < 0 ? InteropLibrary.getFactory().createDispatched(1) : InteropLibrary.getUncached();
         argumentReps = call.getArguments().clone();
         boolean hasPointers = false;
         for (String rep : argumentReps)
@@ -63,10 +71,13 @@ public final class PackageScalarAccess extends Node {
             default -> throw fault("Package C argument is not a narrow integer");
         };
     }
-    private PackageScalarFunction function() {
+    private PackageScalarFunction function(Program instance) {
         var owner = Language.currentState(null);
-        var entry = cached;
-        if (entry == null) entry = initialize(owner);
+        var entry = functionIndex < 0 ? cached : instance.packageFunction(functionIndex);
+        if (entry == null) {
+            if (functionIndex >= 0) throw fault("Prepared package C function is absent");
+            entry = initialize(owner);
+        }
         if (entry.getOwner() != owner) throw fault("Package C call site belongs to another context");
         if (!entry.getAlive().isValid()) throw fault("Package C library registry is closed");
         return entry;
@@ -79,7 +90,7 @@ public final class PackageScalarAccess extends Node {
             return cached;
         }
     }
-    @ExplodeLoop private PackageScalarFunction prepare(Object[] arguments, Object state) {
+    @ExplodeLoop private PackageScalarFunction prepare(Object[] arguments, Object state, Program instance) {
         TupleResults.requireVoidCarrier(state);
         if (arguments.length != argumentReps.length) throw fault("Package C argument count mismatch");
         for (int index = 0; index < argumentReps.length; index++) {
@@ -96,9 +107,9 @@ public final class PackageScalarAccess extends Node {
             };
             if (!valid) throw fault("Package C argument differs from its scalar carrier");
         }
-        return function();
+        return function(instance);
     }
-    private Object invoke(PackageScalarFunction entry, Object[] arguments) {
+    private Object invoke(PackageScalarFunction entry, Object[] arguments, Program instance) {
         if (call.getKind() == PackageScalarCall.Kind.CREATE_CALLBACK)
             return entry.getOwner().getNativeCallbacks().create((ManagedAddress) arguments[0], (ManagedAddress) arguments[1], (ManagedAddress) arguments[2]);
         if (call.getKind() == PackageScalarCall.Kind.FREE_CALLBACK) {
@@ -115,6 +126,7 @@ public final class PackageScalarAccess extends Node {
                 Reference.reachabilityFence(arguments);
             }
         } catch (AbstractTruffleException error) {
+            if (instance != null) throw foreignExceptions.raise(error, instance.foreignExceptionBridge());
             throw foreignExceptions.raise(error);
         } catch (Exception failure) { throw rethrow(failure); }
     }
@@ -226,8 +238,11 @@ public final class PackageScalarAccess extends Node {
     }
 
     public int executeInt(Object[] arguments, Object state) {
+        return executeInt(arguments, state, null);
+    }
+    public int executeInt(Object[] arguments, Object state, Program instance) {
         if (NarrowInteger.fromRep(call.getResult()) == null) throw fault("Package C result is not a narrow integer ABI");
-        Object result = invoke(prepare(arguments, state), arguments);
+        Object result = invoke(prepare(arguments, state, instance), arguments, instance);
         try {
             return switch (call.getResult()) {
                 case "Int8Rep", "Word8Rep" -> {
@@ -248,32 +263,47 @@ public final class PackageScalarAccess extends Node {
         } catch (Exception failure) { throw rethrow(failure); }
     }
     public long executeLong(Object[] arguments, Object state) {
+        return executeLong(arguments, state, null);
+    }
+    public long executeLong(Object[] arguments, Object state, Program instance) {
         if (!integerResult || NarrowInteger.fromRep(call.getResult()) != null) throw fault("Package C result is not a machine or 64-bit integer ABI");
-        Object result = invoke(prepare(arguments, state), arguments);
+        Object result = invoke(prepare(arguments, state, instance), arguments, instance);
         if (!numbers.fitsInLong(result)) throw fault("Package C result is not Int64");
         try { return numbers.asLong(result); } catch (Exception failure) { throw rethrow(failure); }
     }
     public float executeFloat(Object[] arguments, Object state) {
+        return executeFloat(arguments, state, null);
+    }
+    public float executeFloat(Object[] arguments, Object state, Program instance) {
         if (!call.getResult().equals("FloatRep")) throw fault("Package C result is not a Float ABI");
-        var entry = prepare(arguments, state);
-        Object result = invoke(entry, arguments);
+        var entry = prepare(arguments, state, instance);
+        Object result = invoke(entry, arguments, instance);
         if (!numbers.fitsInFloat(result)) throw fault("Package C result is not Float");
         try { return numbers.asFloat(result); } catch (Exception failure) { throw rethrow(failure); }
     }
     public double executeDouble(Object[] arguments, Object state) {
+        return executeDouble(arguments, state, null);
+    }
+    public double executeDouble(Object[] arguments, Object state, Program instance) {
         if (!call.getResult().equals("DoubleRep")) throw fault("Package C result is not a Double ABI");
-        var entry = prepare(arguments, state);
-        Object result = invoke(entry, arguments);
+        var entry = prepare(arguments, state, instance);
+        Object result = invoke(entry, arguments, instance);
         if (!numbers.fitsInDouble(result)) throw fault("Package C result is not Double");
         try { return numbers.asDouble(result); } catch (Exception failure) { throw rethrow(failure); }
     }
     public void executeVoid(Object[] arguments, Object state) {
+        executeVoid(arguments, state, null);
+    }
+    public void executeVoid(Object[] arguments, Object state, Program instance) {
         if (!call.getResult().equals("void")) throw fault("Package C result is not void");
-        invoke(prepare(arguments, state), arguments);
+        invoke(prepare(arguments, state, instance), arguments, instance);
     }
     public ManagedAddress executeAddress(Object[] arguments, Object state) {
+        return executeAddress(arguments, state, null);
+    }
+    public ManagedAddress executeAddress(Object[] arguments, Object state, Program instance) {
         if (!addressResult) throw fault("Package C result is not a pointer ABI");
-        return (ManagedAddress) invoke(prepare(arguments, state), arguments);
+        return (ManagedAddress) invoke(prepare(arguments, state, instance), arguments, instance);
     }
     private Object normalizeResult(PackageScalarFunction entry, Object result, List<ManagedAddress> arguments,
             int[] indices, Object[] carriers, PackagePointerCells projection) throws com.oracle.truffle.api.interop.UnsupportedMessageException {

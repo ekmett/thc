@@ -21,7 +21,11 @@ public final class VectorDoublePack extends Expr {
 
     @Override public DoubleVector execute(VirtualFrame frame) {
         argument.executeTuple(frame, slots, 0);
-        return DoubleVector.broadcast(DoubleVector.SPECIES_128, frame.getDouble(slots[0]))
-            .withLane(1, frame.getDouble(slots[1]));
+        return pack(frame.getDouble(slots[0]), frame.getDouble(slots[1]));
+    }
+
+    private static DoubleVector pack(double lane0, double lane1) {
+        return DoubleVector.broadcast(DoubleVector.SPECIES_128, lane0)
+            .withLane(1, lane1);
     }
 }

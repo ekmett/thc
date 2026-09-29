@@ -80,11 +80,16 @@ public final class InitializationArgumentsTest {
         return prepare(root, processIdentity, "prepare-only");
     }
     private static int prepare(Path root, String processIdentity, String mode) throws Exception {
+        return prepare(root, processIdentity, mode, null);
+    }
+    private static int prepare(Path root, String processIdentity, String mode, String vectorProfile) throws Exception {
         var command = new ProcessBuilder("bash", root.resolve("recipe/prepared-image.sh").toString(),
             root.toString(), mode);
         command.environment().put("JAVA_HOME", javaHome.toString());
         command.environment().remove("THC_NATIVE_IMAGE_PROCESS_IDENTITY");
+        command.environment().remove("THC_NATIVE_IMAGE_VECTOR_PROFILE");
         if (processIdentity != null) command.environment().put("THC_NATIVE_IMAGE_PROCESS_IDENTITY", processIdentity);
+        if (vectorProfile != null) command.environment().put("THC_NATIVE_IMAGE_VECTOR_PROFILE", vectorProfile);
         command.redirectErrorStream(true).redirectOutput(root.resolve("prepare.log").toFile());
         return command.start().waitFor();
     }
@@ -227,6 +232,13 @@ public final class InitializationArgumentsTest {
         check(prepare(manual) == 0, "ordinary preparation after cache mode");
         check(inventory(manual, "prepared-initialization.args").equals(
             "--initialize-at-build-time=thc.fixture.Tag\n"), "ordinary image must not inherit cached-mode holders");
+        check(prepare(manual, null, "prepare-only", "resource-copy") == 0, "resource-copy profile preparation");
+        check(inventory(manual, "vector-profile.args").equals(
+            "-H:-VectorAPISupport\n-H:+SharedArenaSupport\n-Dthc.nativeImage.resourceCopies=true\n"),
+            "shared arenas and the image-only memory fallback must be selected together");
+        check(prepare(manual) == 0 && inventory(manual, "vector-profile.args").isEmpty(),
+            "default image must not inherit resource-copy flags from a prior build");
+        check(prepare(manual, null, "prepare-only", "typo") == 2, "unknown vector profile rejected");
         switchChecks();
         System.out.println("PASS " + checks + " initialization-argument checks; prepare-only, no image execution");
     }

@@ -22,11 +22,15 @@ public final class VectorFloatUnpack extends Expr {
     }
 
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
-        FloatVector value = RuntimeTypes.requireFloat(argument.execute(frame), FloatVector.SPECIES_128);
+        FloatVector value = vector(argument.execute(frame));
         FrameAccess.INSTANCE.writeFloat(frame, slots[offset], value.lane(0));
         FrameAccess.INSTANCE.writeFloat(frame, slots[offset + 1], value.lane(1));
         FrameAccess.INSTANCE.writeFloat(frame, slots[offset + 2], value.lane(2));
         FrameAccess.INSTANCE.writeFloat(frame, slots[offset + 3], value.lane(3));
         return null;
+    }
+
+    private static FloatVector vector(Object value) {
+        return RuntimeTypes.requireFloat(value, FloatVector.SPECIES_128);
     }
 }

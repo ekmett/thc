@@ -22,7 +22,7 @@ public final class VectorWord8Unpack extends Expr {
     }
 
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
-        ByteVector value = RuntimeTypes.requireByte(argument.execute(frame), ByteVector.SPECIES_128);
+        ByteVector value = vector(argument.execute(frame));
         FrameAccess.INSTANCE.writeInt(frame, slots[offset], value.lane(0) & 0xff);
         FrameAccess.INSTANCE.writeInt(frame, slots[offset + 1], value.lane(1) & 0xff);
         FrameAccess.INSTANCE.writeInt(frame, slots[offset + 2], value.lane(2) & 0xff);
@@ -40,5 +40,9 @@ public final class VectorWord8Unpack extends Expr {
         FrameAccess.INSTANCE.writeInt(frame, slots[offset + 14], value.lane(14) & 0xff);
         FrameAccess.INSTANCE.writeInt(frame, slots[offset + 15], value.lane(15) & 0xff);
         return null;
+    }
+
+    private static ByteVector vector(Object value) {
+        return RuntimeTypes.requireByte(value, ByteVector.SPECIES_128);
     }
 }

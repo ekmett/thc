@@ -20,7 +20,7 @@ public final class VectorOperation extends Expr {
 
     @Override public LongVector execute(VirtualFrame frame) {
         return switch (operation) {
-            case "broadcastInt64X2#" -> LongVector.broadcast(LongVector.SPECIES_128, arguments[0].executeRequiredLong(frame));
+            case "broadcastInt64X2#" -> broadcast(arguments[0].executeRequiredLong(frame));
             case "plusInt64X2#" -> vector(arguments[0].execute(frame)).add(vector(arguments[1].execute(frame)));
             case "minusInt64X2#" -> vector(arguments[0].execute(frame)).sub(vector(arguments[1].execute(frame)));
             case "negateInt64X2#" -> vector(arguments[0].execute(frame)).neg();
@@ -29,6 +29,10 @@ public final class VectorOperation extends Expr {
                 throw new RuntimeFault("Invalid vector operation");
             }
         };
+    }
+
+    private static LongVector broadcast(long value) {
+        return LongVector.broadcast(LongVector.SPECIES_128, value);
     }
 
     private static LongVector vector(Object value) {

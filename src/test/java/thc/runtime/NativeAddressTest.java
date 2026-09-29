@@ -48,6 +48,88 @@ public class NativeAddressTest {
     }
     private Map<String, Object> module() { return Map.of("schema", 1, "ghc", "9.14.1", "module", "SyntheticAddressConsumers", "instrument", true,
         "constructors", List.of(), "bindings", List.of(binding("toBits", "addr2Int#", address, integer), binding("fromBits", "int2Addr#", integer, address))); }
+    @Test public void preparedAddressOperationsUseTheInvokingNativeRegistry() throws Exception {
+        var argument = List.of("var", "arg", Map.of("rep", address));
+        var one = List.of("lit", "int", "1", Map.of("rep", integer));
+        var shifted = List.of("app", List.of("prim", "plusAddr#"), List.of(argument, one),
+            List.of(false, false), false, false, Map.of("rep", address));
+        List<Object> score = List.of("app", List.of("prim", "remAddr#"), List.of(argument, one),
+            List.of(false, false), false, false, Map.of("rep", integer));
+        for (String op : List.of("eqAddr#", "neAddr#", "ltAddr#", "leAddr#", "gtAddr#", "geAddr#", "minusAddr#")) {
+            boolean equal = Set.of("eqAddr#", "leAddr#", "geAddr#").contains(op);
+            boolean reverse = Set.of("gtAddr#", "minusAddr#").contains(op);
+            var value = List.of("app", List.of("prim", op), List.of(reverse ? shifted : argument, equal || reverse ? argument : shifted),
+                List.of(false, false), false, false, Map.of("rep", integer));
+            score = List.of("app", List.of("prim", "+#"), List.of(score, value), List.of(false, false), false, false, Map.of("rep", integer));
+        }
+        var module = new LinkedHashMap<>(module());
+        var bindings = new ArrayList<>((List<Map<String,Object>>)module.get("bindings"));
+        var relations = new LinkedHashMap<>(binding("relations", "addr2Int#", address, integer));
+        var lambda = new ArrayList<>((List<Object>)relations.get("expr")); lambda.set(2, score); relations.put("expr", lambda);
+        bindings.add(relations); module.put("bindings", bindings);
+        try (var engine = org.graalvm.polyglot.Engine.newBuilder().allowExperimentalOptions(true)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("engine.CompilationFailureAction", "Throw").build()) {
+            Program.PreparedCode code;
+            try (var preparation = Context.newBuilder("thc").engine(engine).build()) {
+                preparation.initialize("thc"); preparation.enter();
+                try { code = Program.prepareCode(TruffleLanguage.LanguageReference.create(Language.class).get(null), module, List.of("toBits", "fromBits", "relations")); }
+                finally { preparation.leave(); }
+            }
+            var field = Program.PreparedCode.class.getDeclaredField("targets"); field.setAccessible(true);
+            for (var target : (List<com.oracle.truffle.runtime.OptimizedCallTarget>)field.get(code)) {
+                assertFalse(target.wasExecuted()); assertTrue(target.prepareForAOT()); target.compile(true); assertFalse(target.wasExecuted());
+            }
+            String previous = System.getProperty("thc.requireCompiledCode"); System.setProperty("thc.requireCompiledCode", "true");
+            long previousBits = 0;
+            ManagedAddress previousAddress = null;
+            try {
+                for (int load = 0; load < 2; load++) try (var context = Context.newBuilder("thc").engine(engine).allowNativeAccess(true).build()) {
+                    context.initialize("thc"); context.enter();
+                    try {
+                        var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                        for (int instance = 0; instance < 2; instance++) {
+                            var program = code.newInstance(language);
+                            var to = (Closure)program.entryValue("toBits"); var from = (Closure)program.entryValue("fromBits");
+                            var relation = (Closure)program.entryValue("relations");
+                            if (load == 1 && instance == 0) {
+                                var stale = (ManagedAddress)Calls.target(program.hostEntryTarget(1), new Object[]{from, new Object[]{previousBits}});
+                                assertThrows(RuntimeFault.class, () -> stale.readWord8(0), "A new context must not recover an old context's native image");
+                                var foreign = previousAddress;
+                                assertThrows(RuntimeFault.class, () -> foreign.compareWithinAllocation(foreign), "Returned pointers retain their originating context");
+                            }
+                            var bytes = ManagedAddress.fromHex("616263");
+                            long bits = (Long)Calls.target(program.hostEntryTarget(1), new Object[]{to, new Object[]{bytes}});
+                            var recovered = (ManagedAddress)Calls.target(program.hostEntryTarget(1), new Object[]{from, new Object[]{bits + 1}});
+                            assertTrue(recovered.sameLocation(bytes.plus(1))); assertEquals(98L, recovered.readWord8(0));
+                            var innerLifetime = Truffle.getRuntime().createAssumption("inner returned pointer");
+                            var inner = ManagedAddress.fromReturnedAddress(new PackageReturnedAddress(Language.currentState(), innerLifetime, new Object(), bytes));
+                            var wrapped = ManagedAddress.fromReturnedAddress(new PackageReturnedAddress(Language.currentState(),
+                                Truffle.getRuntime().createAssumption("outer returned pointer"), new Object(), inner));
+                            assertEquals(7L, Calls.target(program.hostEntryTarget(1), new Object[]{relation, new Object[]{wrapped}}));
+                            assertEquals(7L, Calls.target(program.hostEntryTarget(1), new Object[]{relation, new Object[]{bytes}}));
+                            assertEquals(0, program.diagnostics().get("loweredRootCount")); code.requireInstalledCode(); previousBits = bits;
+                            innerLifetime.invalidate();
+                            assertThrows(RuntimeFault.class, () -> wrapped.compareWithinAllocation(bytes), "Every backing level must retain its lifetime check");
+                            assertThrows(RuntimeFault.class, () -> bytes.compareWithinAllocation(wrapped)); previousAddress = wrapped;
+                        }
+                    } finally { context.leave(); }
+                }
+                try (var denied = Context.newBuilder("thc").engine(engine).build()) {
+                    denied.initialize("thc"); denied.enter();
+                    try {
+                        var program = code.newInstance(TruffleLanguage.LanguageReference.create(Language.class).get(null));
+                        var to = (Closure)program.entryValue("toBits");
+                        var failure = assertThrows(RuntimeFault.class, () -> Calls.target(program.hostEntryTarget(1),
+                            new Object[]{to, new Object[]{ManagedAddress.fromHex("61")}}));
+                        assertTrue(failure.getMessage().contains("requires native access"), failure.getMessage());
+                    } finally { denied.leave(); }
+                }
+            } finally {
+                if (previous == null) System.clearProperty("thc.requireCompiledCode"); else System.setProperty("thc.requireCompiledCode", previous);
+            }
+        }
+    }
     private Context context() { return context(true, false); }
     private Context context(boolean nativeAccess, boolean inlining) {
         return Context.newBuilder("thc").allowNativeAccess(nativeAccess).allowExperimentalOptions(true).option("compiler.Inlining", Boolean.toString(inlining))

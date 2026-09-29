@@ -572,7 +572,7 @@ public class PinnedAddressTest {
                     case READ -> new Expr[] {operand(events, "address", address), operand(events, "offset", 1L), state};
                     default ->
                         new Expr[] {operand(events, "address", address), operand(events, "offset", 1L),
-                            operand(events, "value", 511L), state};
+                            operand(events, "value", 511), state};
                 };
                 var expression =
                     new PinnedMemoryExpression(operation, CoreRepresentation.UNKNOWN, operands, false);
@@ -591,7 +591,7 @@ public class PinnedAddressTest {
                     switch (operation) {
                         case NEW, NEW_ALIGNED ->
                             assertEquals(2L, ((ManagedAllocation) FrameAccess.read(frame, 0)).getSize());
-                        case READ -> assertEquals(22L, FrameAccess.read(frame, 0));
+                        case READ -> assertEquals(22, FrameAccess.read(frame, 0));
                         default -> assertArrayEquals(new byte[] {11, -1}, array);
                     }
                 }

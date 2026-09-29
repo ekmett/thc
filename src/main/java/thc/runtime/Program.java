@@ -36,6 +36,8 @@ public final class Program implements ExecutableProgram {
     private final RubbishLiterals rubbishLiterals;
     private final List<thc.ForeignBitcode> foreignLinks;
     private final List<thc.PackageScalarLink> packageScalarLinks;
+    private final List<PackageScalarCall> packageCalls;
+    private final PackageScalarFunction[] packageFunctions;
     private final Map<String,thc.ManagedCallbackSignature> nativeCallbacks;
     private final Object stackTargetLayout;
     private final boolean callDemandsEnabled = Boolean.getBoolean(CALL_DEMANDS_PROPERTY);
@@ -108,6 +110,8 @@ public final class Program implements ExecutableProgram {
         rubbishLiterals = new RubbishLiterals(language);
         foreignLinks = moduleData.get("foreignLinks") instanceof List<?> found ? (List<thc.ForeignBitcode>) found : List.of();
         packageScalarLinks = moduleData.get("packageScalarLinks") instanceof List<?> found ? (List<thc.PackageScalarLink>) found : List.of();
+        packageCalls = prepared != null ? prepared.packageCalls : reusableCode ? new ArrayList<>() : List.of();
+        packageFunctions = prepared == null ? null : new PackageScalarFunction[prepared.packageCalls.size()];
         nativeCallbacks = moduleData.get("nativeCallbacks") instanceof Map<?,?> found ? (Map<String,thc.ManagedCallbackSignature>) found : Map.of();
         stackTargetLayout = moduleData.get("targetLayout");
         metrics = demand != null ? demand.getMetrics() : new Metrics(!Boolean.FALSE.equals(moduleData.get("instrument")));
@@ -164,12 +168,28 @@ public final class Program implements ExecutableProgram {
             validateInputs = CoreInputCalls.validator(bindings, constructors, demand);
         }
         if (prepared != null) {
+            List<String> pending = new ArrayList<>();
             for (Map<String, Object> binding : bindings) {
                 String id = (String) binding.get("id");
                 CodeValue code = prepared.values.get(id);
                 if (code == null) required(globals, id).defer(preparationLock,
                     () -> { throw new UnsupportedCore("Binding was not prepared for reusable execution: " + id); });
-                else { required(globals, id).initialize(code.instantiate(this)); initializedBindingCount++; }
+                else if (nativeStartup) {
+                    required(globals, id).defer(preparationLock, () -> {
+                        Object value = code.instantiate(this);
+                        initializedBindingCount++;
+                        return value;
+                    });
+                    pending.add(id);
+                } else { required(globals, id).initialize(code.instantiate(this)); initializedBindingCount++; }
+            }
+            if (nativeStartup) { pendingInitializers = List.copyOf(pending); return; }
+            // The loader has linked these declarations in the current State.
+            // Resolve receivers only for this instance, never in shared nodes
+            // or while preparing the code. Resolution invokes no guest call.
+            for (int i = 0; i < packageFunctions.length; i++) {
+                PackageScalarCall call = prepared.packageCalls.get(i);
+                packageFunctions[i] = contextOwner.getPackageCbits().resolve(call.getLink(), call.getSignature());
             }
             return;
         }
@@ -221,24 +241,54 @@ public final class Program implements ExecutableProgram {
     @Override public void initializeGlobals() {
         for (String id : pendingInitializers) required(globals, id).read();
         pendingInitializers = List.of();
+        if (packageFunctions != null) for (int i = 0; i < packageFunctions.length; i++) {
+            PackageScalarCall call = packageCalls.get(i);
+            packageFunctions[i] = contextOwner.getPackageCbits().resolve(call.getLink(), call.getSignature());
+        }
     }
 
     /** Explicit experimental admission using the ordinary AST lowerer, without executing guest bodies.
      * Unselected definitions stay unprepared. Context sharing and AOT preparation remain separate. */
     public static PreparedCode prepareCode(TruffleLanguage<?> language, Map<String, Object> module, List<String> entries) {
         if (language != LANGUAGES.get(null)) throw new UnsupportedCore("Reusable AST preparation requires the current language");
-        if (module.containsKey("demandBindings") || !absentOrEmpty(module.get("foreignLinks")) || !absentOrEmpty(module.get("packageScalarLinks")) ||
-                !absentOrEmpty(module.get("nativeCallbacks")) || module.get("selectedForeignExceptionBridge") != null)
-            throw new UnsupportedCore("Reusable AST admission currently requires a foreign-free, non-demand-loaded module");
+        if (module.containsKey("demandBindings") || !absentOrEmpty(module.get("nativeCallbacks")))
+            throw new UnsupportedCore("Reusable AST admission requires detached modules without native callback labels");
         // Validate with the real module descriptors, retaining only storage
         // metadata for constructors actually reached during selected lowering.
         Program builder = new Program(language, module, false, false, false, true, null);
         Map<String, CodeValue> values = new LinkedHashMap<>();
         ArrayDeque<String> pending = new ArrayDeque<>(entries);
+        if (module.get("selectedForeignExceptionBridge") instanceof Map<?,?> bridge) {
+            for (String helper : List.of("box", "project")) {
+                if (!(bridge.get(helper) instanceof String id) || !builder.globals.containsKey(id))
+                    throw new UnsupportedCore("Reusable foreign exception helper is absent: " + helper);
+                pending.add(id);
+            }
+        }
+        List<thc.ManagedExportAdmission> registrations = module.get("managedRegistrations") instanceof List<?> found
+            ? List.copyOf((List<thc.ManagedExportAdmission>) found) : List.of();
+        var exports = new ArrayList<thc.ManagedExportSignature>();
+        for (var registration : registrations) for (var export : registration.getExports()) {
+            pending.add(export.getBinder()); exports.add(export);
+        }
+        var checkedExports = thc.ManagedExportPlan.checked(exports, ignored -> builder.bindings);
+        for (var export : checkedExports) {
+            for (var type : export.arguments())
+                ManagedExportScalar.fromNormalizedType(type, ManagedExportScalar.Role.ARGUMENT, export.wordBits(), builder::dataLayout);
+            ManagedExportScalar.fromNormalizedType(export.result(), ManagedExportScalar.Role.RESULT, export.wordBits(), builder::dataLayout);
+        }
         while (!pending.isEmpty()) {
             Map<String,Object> binding = builder.bindings.get(builder.bindingIndex(pending.removeFirst()));
             String id = (String) binding.get("id");
             if (values.containsKey(id)) continue;
+            List<Object> expression = (List<Object>) binding.get("expr");
+            if (expression.size() >= 3 && expression.getFirst().equals("lit") && expression.get(1).equals("function-addr")) {
+                // Never resolve a native label while preparing the source. The
+                // descriptor has no provider or context; each load resolves its own.
+                values.put(id, new CodeValue(null, null, 0, new CFinalizerLabels((String) expression.get(2),
+                    CoreRepresentations.expression(expression)), -1));
+                continue;
+            }
             Object value = builder.entryValue(id);
             values.put(id, CodeValue.from(value, builder, (List<?>) binding.get("expr")));
             pending.addAll(builder.codeDependencies);
@@ -250,9 +300,16 @@ public final class Program implements ExecutableProgram {
             headers.add(Map.of("id", binding.get("id"), "name", binding.get("name"),
                 "lifted", builder.representation(binding), "expr", List.of("void")));
         }
-        return new PreparedCode(Map.of("bindings", List.copyOf(headers), "constructors", List.of(),
-            "instrument", builder.metrics.getEnabled()), Map.copyOf(values), List.copyOf(builder.codeTargets),
-            builder.dataLayouts.values().stream().map(DataLayout::reusableStorage).toList(), builder.codeIdentity, language);
+        Map<String,Object> declarations = new LinkedHashMap<>();
+        declarations.put("bindings", List.copyOf(headers)); declarations.put("constructors", List.of());
+        declarations.put("instrument", builder.metrics.getEnabled());
+        declarations.put("foreignLinks", List.copyOf(builder.foreignLinks));
+        declarations.put("packageScalarLinks", List.copyOf(builder.packageScalarLinks));
+        if (module.get("selectedForeignExceptionBridge") instanceof Map<?,?> bridge)
+            declarations.put("selectedForeignExceptionBridge", Map.copyOf(bridge));
+        return new PreparedCode(Map.copyOf(declarations), Map.copyOf(values), List.copyOf(builder.codeTargets),
+            builder.dataLayouts.values().stream().map(DataLayout::reusableStorage).toList(),
+            List.copyOf(builder.packageCalls), registrations, List.copyOf(checkedExports), builder.codeIdentity, language);
     }
     private static boolean absentOrEmpty(Object value) { return value == null || value instanceof List<?> list && list.isEmpty() || value instanceof Map<?,?> map && map.isEmpty(); }
     public static final class PreparedCode {
@@ -260,16 +317,32 @@ public final class Program implements ExecutableProgram {
         private final Map<String, CodeValue> values;
         private final List<RootCallTarget> targets;
         private final List<DataLayout.Reusable> layouts;
+        private final List<PackageScalarCall> packageCalls;
+        private final List<thc.ManagedExportAdmission> managedRegistrations;
+        private final List<thc.ManagedExportSignature> managedExports;
         private final Object identity;
         private final TruffleLanguage<?> language;
         private PreparedCode(Map<String, Object> module, Map<String, CodeValue> values, List<RootCallTarget> targets, List<DataLayout.Reusable> layouts,
+                             List<PackageScalarCall> packageCalls, List<thc.ManagedExportAdmission> managedRegistrations,
+                             List<thc.ManagedExportSignature> managedExports,
                              Object identity, TruffleLanguage<?> language) {
             this.module = module; this.values = values; this.targets = targets; this.layouts = layouts; this.identity = identity; this.language = language;
+            this.packageCalls = packageCalls; this.managedRegistrations = managedRegistrations; this.managedExports = managedExports;
         }
+        public List<thc.ForeignBitcode> getForeignLinks() { return (List<thc.ForeignBitcode>) module.get("foreignLinks"); }
+        public List<thc.PackageScalarLink> getPackageScalarLinks() { return (List<thc.PackageScalarLink>) module.get("packageScalarLinks"); }
+        public List<thc.ManagedExportAdmission> getManagedRegistrations() { return managedRegistrations; }
+        public List<thc.ManagedExportSignature> getManagedExports() { return managedExports; }
         public Program newInstance(TruffleLanguage<?> language) {
+            return newInstance(language, false);
+        }
+        public Program newInstanceForNativeStartup(TruffleLanguage<?> language) {
+            return newInstance(language, true);
+        }
+        private Program newInstance(TruffleLanguage<?> language, boolean nativeStartup) {
             if (language != this.language || language != LANGUAGES.get(null))
                 throw new UnsupportedCore("Reusable AST instance requires its prepared and current language");
-            return new Program(language, module, false, false, false, true, this);
+            return new Program(language, module, false, false, false, true, this, nativeStartup);
         }
         /** Observe existing installation only: no binding demand, execution or compilation. */
         public void requireInstalledCode() {
@@ -289,10 +362,13 @@ public final class Program implements ExecutableProgram {
                 return new CodeValue(thunk.getTarget(), thunk.getEnvironment().getLayout(), -1, null, -1);
             if (value instanceof Integer || value instanceof Long || value instanceof Float || value instanceof Double || value == Unit.INSTANCE)
                 return new CodeValue(null, null, 0, value, -1);
-            // Only the actual static-byte literal owns context-free immutable
+            // Only static bytes and canonical null own context-free address
             // storage. Other Addr# values may carry native or context authority.
             if (value instanceof ManagedAddress && expression.size() >= 3 &&
-                    expression.getFirst().equals("lit") && expression.get(1).equals("string-bytes"))
+                    expression.getFirst().equals("lit") && (expression.get(1).equals("string-bytes") ||
+                    expression.get(1).equals("null-addr") && value == ManagedAddress.nullAddress()))
+                return new CodeValue(null, null, 0, value, -1);
+            if (value instanceof byte[] && expression.size() >= 3 && expression.getFirst().equals("lit") && expression.get(1).equals("bignat"))
                 return new CodeValue(null, null, 0, value, -1);
             // Store an immutable constructor index, never the preparation load's
             // nullary value or its allocation key/cache.
@@ -301,7 +377,11 @@ public final class Program implements ExecutableProgram {
             throw new UnsupportedCore("Reusable AST binding requires closed code, nullary data or an admitted literal");
         }
         Object instantiate(Program instance) {
-            if (target == null) return constructorIndex >= 0 ? instance.constructorLayout(constructorIndex).allocate() : literal;
+            if (target == null) {
+                if (literal instanceof CFinalizerLabels label) return label.resolve();
+                if (literal instanceof byte[] bytes) return bytes.clone();
+                return constructorIndex >= 0 ? instance.constructorLayout(constructorIndex).allocate() : literal;
+            }
             CapturedFrame environment = captures.captureValues(new Object[0], instance);
             return arity < 0 ? new Thunk(target, environment) : new Closure(environment, arity, target);
         }
@@ -327,14 +407,20 @@ public final class Program implements ExecutableProgram {
                 List<Object> function = (List<Object>) expression.get(1);
                 if ("prim".equals(function.getFirst())) {
                     String name = (String) function.get(1);
-                    if (Primitive.arity(name) < 0 && NarrowScalarOp.named(name) == null && ByteArrayOp.named(name) == null &&
-                            !CoreVectors.operations.contains(name) && !Set.of("plusAddr#", "indexCharOffAddr#",
+                    if (Primitive.arity(name) < 0 && NarrowScalarOp.named(name) == null && ByteArrayOp.named(name) == null && MutVarOp.named(name) == null &&
+                            StablePointerOp.named(name) == null && WeakOp.named(name) == null && ArrayOp.named(name) == null &&
+                            PinnedMemoryOp.named(name) == null && TupleArithmeticOp.named(name) == null &&
+                            CoreArithmeticExceptions.payload(name) == null &&
+                            !CoreVectors.operations.contains(name) && !Set.of("plusAddr#", "minusAddr#", "remAddr#", "addr2Int#", "int2Addr#",
+                            "eqAddr#", "neAddr#", "ltAddr#", "leAddr#", "gtAddr#", "geAddr#", "indexCharOffAddr#", "tagToEnum#",
+                            "raise#", "raiseIO#", "catch#", "getMaskingState#", "unmaskAsyncExceptions#",
+                            "maskAsyncExceptions#", "maskUninterruptible#", "noDuplicate#", "touch#", "keepAlive#", "getCurrentCCS#",
                             "plusFloat#", "minusFloat#", "timesFloat#", "divideFloat#", "negateFloat#",
                             "+##", "-##", "*##", "/##", "negateDouble#",
                             "eqFloat#", "neFloat#", "ltFloat#", "leFloat#", "gtFloat#", "geFloat#",
                             "==##", "/=##", "<##", "<=##", ">##", ">=##",
                             "int2Float#", "int2Double#", "float2Int#", "double2Int#", "float2Double#", "double2Float#").contains(name))
-                        throw new UnsupportedCore("Reusable AST primitive is outside the admitted pure families");
+                        throw new UnsupportedCore("Reusable AST primitive is outside the admitted families: " + name);
                 } else requireReusableBody(function);
                 for (List<Object> argument : (List<List<Object>>) expression.get(2)) requireReusableBody(argument);
             }
@@ -354,7 +440,7 @@ public final class Program implements ExecutableProgram {
             }
             case "case" -> {
                 CoreRepresentation binder = CoreRepresentations.caseBinder(expression);
-                CoreRepresentation result = CoreRepresentations.expression(expression);
+                CoreRepresentation result = CoreRepresentations.caseResult(expression);
                 if (!reusableValue(binder) || !reusableValue(result))
                     throw new UnsupportedCore("Reusable AST case binder and result require exact supported representations");
                 requireReusableBody((List<Object>) expression.get(1));
@@ -379,7 +465,7 @@ public final class Program implements ExecutableProgram {
     private static boolean reusableLiteral(String kind) {
         return switch (kind) {
             case "int", "word", "char", "int8", "word8", "int16", "word16", "int32", "word32",
-                 "int64", "word64", "float", "double", "string-bytes" -> true;
+                 "int64", "word64", "float", "double", "string-bytes", "null-addr", "function-addr", "bignat" -> true;
             default -> false;
         };
     }
@@ -389,6 +475,15 @@ public final class Program implements ExecutableProgram {
     }
     private Metrics codeMetrics() { return reusableCode ? null : metrics; }
     Metrics instanceMetrics() { return metrics; }
+    PackageScalarFunction packageFunction(int index) {
+        var function = packageFunctions[index];
+        if (function != null) return function;
+        // A constructor callback may use its component's already initialized
+        // symbols. Do not cache that early receiver: after successful startup,
+        // initializeGlobals installs the completed library's canonical handles.
+        PackageScalarCall call = packageCalls.get(index);
+        return contextOwner.getPackageCbits().resolve(call.getLink(), call.getSignature());
+    }
     Object readGlobal(int index) { return indexedGlobals[index].read(); }
     ForeignExceptionBridge foreignExceptionBridge() { return foreignExceptionBridge; }
     DataLayout constructorLayout(int index) { return indexedLayouts[index]; }
@@ -992,6 +1087,7 @@ public final class Program implements ExecutableProgram {
             Expr lowered = compileSupported(expr, scope, tail);
             CoreRepresentation metadata = diagnosticUnsupported && lowered instanceof GlobalRead ? CoreRepresentation.UNKNOWN :
                 CoreRepresentations.expression(expr);
+            if ("case".equals(expr.getFirst())) metadata = CoreRepresentations.caseResult(expr).refine(metadata);
             return lowered.proven(lowered.getRepresentation().refine(evaluated(metadata, false)));
         } catch (UnsupportedCore gap) {
             if (!diagnosticUnsupported) throw gap;
@@ -1073,7 +1169,7 @@ public final class Program implements ExecutableProgram {
                 }
             }
         }
-        CoreRepresentation result = arms[0].getRepresentation().refine(CoreRepresentations.expression(expr));
+        CoreRepresentation result = arms[0].getRepresentation().refine(CoreRepresentations.caseResult(expr));
         for (Expr arm : arms) result.refine(arm.getRepresentation());
         List<CoreRepresentation> armProofs = new ArrayList<>();
         boolean allEvaluated = true;
@@ -1115,7 +1211,7 @@ public final class Program implements ExecutableProgram {
             FrameLayout.carrierKind(shape.getLeaves()[i]));
         local.bindTuple((String) expr.get(2), proof, slots);
         List<List<Object>> alternatives = (List<List<Object>>) expr.get(3);
-        if (alternatives.isEmpty()) return new TupleCase(scrutinee, slots, new EmptyCaseResult(CoreRepresentations.expression(expr)));
+        if (alternatives.isEmpty()) return new TupleCase(scrutinee, slots, new EmptyCaseResult(CoreRepresentations.caseResult(expr)));
         if (alternatives.size() != 1) throw new RuntimeFault("Tuple case requires at most one alternative");
         List<Object> alt = alternatives.getFirst();
         List<String> ids = (List<String>) alt.get(2);
@@ -1391,7 +1487,9 @@ public final class Program implements ExecutableProgram {
             }
             case "lit" -> {
                 String tag = (String) expr.get(1);
-                Literal value = new Literal(literal(tag, expr.get(2), CoreRepresentations.expression(expr)));
+                if (reusableCode && tag.equals("function-addr"))
+                    yield new CFinalizerLabels((String) expr.get(2), CoreRepresentations.expression(expr));
+                Literal value = new Literal(literal(tag, expr.get(2), CoreRepresentations.expression(expr)), reusableCode && tag.equals("bignat"));
                 if (Arrays.asList("int8", "word8", "int16", "word16", "int32", "word32").contains(tag))
                     yield value.proven(CoreRepresentations.narrowLiteralProof(expr));
                 if (tag.equals("bignat")) yield value.proven(BigNatLiterals.proof(expr));
@@ -1567,7 +1665,7 @@ public final class Program implements ExecutableProgram {
             anyAggregate |= body.getRepresentation().isAggregate();
             anyScalar |= !body.getRepresentation().isAggregate();
         }
-        CoreRepresentation declared = CoreRepresentations.expression(expr);
+        CoreRepresentation declared = CoreRepresentations.caseResult(expr);
         if (!declared.isAggregate() && anyAggregate && anyScalar) throw new RuntimeFault("Missing exact aggregate case result proof");
         CoreRepresentations.validateDeclaredCaseResult(declared, results);
         CoreRepresentations.validateAggregateCaseResult(declared, results);
@@ -1705,7 +1803,7 @@ public final class Program implements ExecutableProgram {
                 throw fault("Java vector array access requires a linked genuine THC.Exception runtime bundle");
             Expr[] lowered = compileOperands(args, scope);
             return (stringOp != null ? new TruffleStringExpression(stringOp, lowered, reusableCode ? scope.programSlot : -1) :
-                new VectorApiExpression(vectorApi, lowered)).proven(evaluated(tupleProof, true));
+                new VectorApiExpression(vectorApi, lowered, reusableCode ? scope.programSlot : -1)).proven(evaluated(tupleProof, true));
         }
         PolyglotOp polyglot;
         try {
@@ -1716,6 +1814,8 @@ public final class Program implements ExecutableProgram {
             deferredUnsupported.add(unavailable.getMessage());
             return new UnsupportedForeignCall(unavailable.getMessage(), metrics);
         }
+        if (reusableCode && (javascript != null || polyglot != null))
+            throw new UnsupportedCore("Reusable AST foreign language receivers and exception bridges are not prepared");
         if ((packageScalar != null && packageScalar.executesForeign() || javascript != null || polyglot != null || runtimeService == RuntimeServiceCall.EXCEPTION_TEXT) &&
             foreignExceptionBridge == null) throw fault("Foreign execution requires a linked genuine THC.Exception runtime bundle");
         if (runtimeService != null) {
@@ -1728,7 +1828,7 @@ public final class Program implements ExecutableProgram {
                 case QUERY -> new RuntimeQueryExpression(1, operands[0], operands[1], operands[2], operands[3]);
                 case CONTROL -> new RuntimeControlExpression(operands[0], operands[1], operands[2]);
                 case TRACE -> new RuntimeTraceExpression(operands[0], operands[1], operands[2], operands[3], operands[4]);
-                case EXCEPTION_TEXT -> new ExceptionTextExpression(operands[0], operands[1], operands[2], operands[3]);
+                case EXCEPTION_TEXT -> new ExceptionTextExpression(operands[0], operands[1], operands[2], operands[3], reusableCode ? scope.programSlot : -1);
             };
             return result.proven(evaluated(tupleProof, true));
         }
@@ -1781,6 +1881,12 @@ public final class Program implements ExecutableProgram {
             for (int i = 0; i < operands.length; i++) {
                 operands[i] = compile(args.get(i), scope, false);
                 CorePackageScalarForeign.validateOperand(packageScalar, i, operands[i].getRepresentation(), bindingProof(args.get(i), scope));
+            }
+            if (reusableCode) {
+                if (packageScalar.getKind() != PackageScalarCall.Kind.STATIC)
+                    throw new UnsupportedCore("Reusable AST native callback/dynamic labels are not prepared");
+                int index = packageCalls.size(); packageCalls.add(packageScalar);
+                return new PackageScalarExpression(packageScalar, operands, tupleProof, scope.programSlot, index);
             }
             return new PackageScalarExpression(packageScalar, operands, tupleProof);
         }
@@ -1942,6 +2048,14 @@ public final class Program implements ExecutableProgram {
             if (args.size() != 1) throw new RuntimeFault("tagToEnum#: Exactly one operand required");
             Expr operand = compile(args.get(0), scope, false);
             var ids = CoreEnums.validate(expr, operand.getRepresentation(), constructors);
+            if (reusableCode) {
+                int[] indices = new int[ids.size()];
+                for (int i = 0; i < indices.length; i++) {
+                    dataLayout(ids.get(i));
+                    indices[i] = required(constructorIndices, ids.get(i));
+                }
+                return new TagToEnum(scope.programSlot, indices, operand);
+            }
             DataValue[] values = new DataValue[ids.size()];
             for (int i = 0; i < values.length; i++) values[i] = dataLayout(ids.get(i)).allocate();
             return new TagToEnum(new EnumFamily(values), operand);
@@ -2004,7 +2118,9 @@ public final class Program implements ExecutableProgram {
             String id = Objects.requireNonNull(CoreArithmeticExceptions.payload(name));
             GlobalBinding payload = globals.get(id);
             if (payload == null) throw new UnsupportedCore("Unresolved implicit exception binding " + id);
-            return new RaiseArithmeticException(operand, new RaiseException(new GlobalRead(payload), true));
+            if (reusableCode) codeDependencies.add(id);
+            Expr value = reusableCode ? new GlobalRead(required(indices, id), scope.programSlot) : new GlobalRead(payload);
+            return new RaiseArithmeticException(operand, new RaiseException(value, true));
         }
         if (primitive && Set.of("raiseIO#", "catch#", "getMaskingState#", "unmaskAsyncExceptions#", "maskAsyncExceptions#", "maskUninterruptible#").contains(fn.get(1))) {
             String name = (String) fn.get(1);
@@ -2013,14 +2129,14 @@ public final class Program implements ExecutableProgram {
             if (name.equals("raiseIO#")) return new RaiseIOException(operands[0], operands[1], tupleProof, CoreExceptionPayload.validate(expr));
             if (delimited && !name.equals("getMaskingState#")) return new DelimitedIOBoundary(name, new TupleShape(tupleProof, (thc.Language) language),
                 operands, (thc.Language) language, metrics);
-            if (name.equals("catch#")) return new CatchException(new TupleShape(tupleProof, (thc.Language) language), operands[0], operands[1], operands[2], metrics);
+            if (name.equals("catch#")) return new CatchException(new TupleShape(tupleProof, (thc.Language) language), operands[0], operands[1], operands[2], codeMetrics());
             if (name.equals("getMaskingState#")) return new GetMaskingState(operands[0], tupleProof);
             MaskingState state = switch (name) {
                 case "maskAsyncExceptions#" -> MaskingState.MASKED_INTERRUPTIBLE;
                 case "maskUninterruptible#" -> MaskingState.MASKED_UNINTERRUPTIBLE;
                 default -> MaskingState.UNMASKED;
             };
-            return new MaskAction(new TupleShape(tupleProof, (thc.Language) language), state, operands[0], operands[1], metrics);
+            return new MaskAction(new TupleShape(tupleProof, (thc.Language) language), state, operands[0], operands[1], codeMetrics());
         }
         if (primitive && "noDuplicate#".equals(fn.get(1))) {
             CoreNoDuplicate.validate(argumentProofs(args), flags, tupleProof);
@@ -2153,6 +2269,11 @@ public final class Program implements ExecutableProgram {
         if (primitive && MutVarOp.named((String) fn.get(1)) != null) {
             var operation = Objects.requireNonNull(MutVarOp.named((String) fn.get(1)));
             operation.validate(argumentProofs(args), flags, tupleProof);
+            if (reusableCode) {
+                MutVarModifySite site = operation == MutVarOp.MODIFY || operation == MutVarOp.MODIFY2
+                    ? new MutVarModifySite((thc.Language) language, codeIdentity, codeTargets, operation == MutVarOp.MODIFY2) : null;
+                return MutVarOp.expression(operation, tupleProof, argumentOperands(args, scope, flags), site, scope.programSlot);
+            }
             return MutVarOp.expression(operation, tupleProof, argumentOperands(args, scope, flags), language, metrics, enableAsync);
         }
         if (primitive && WeakOp.named((String) fn.get(1)) != null) {
@@ -2234,8 +2355,8 @@ public final class Program implements ExecutableProgram {
             if (tupleProof.isTypedTransport()) {
                 var shape = new TupleShape(tupleProof, (thc.Language) language);
                 int[] slots = tupleProof.isVector() ? vectorSlots(scope, shape.getWidth(), "<keepAlive vector result ") : null;
-                action = new TupleApplication((thc.Language) language, shape, function, stateArgument, false, metrics, slots);
-            } else action = new Application(function, stateArgument, false, metrics);
+                action = new TupleApplication((thc.Language) language, shape, function, stateArgument, false, codeMetrics(), slots);
+            } else action = new Application(function, stateArgument, false, codeMetrics());
             return new KeepAliveExpression(kept, state, action, tupleProof);
         }
         if (primitive && AtomicAddressOp.named((String) fn.get(1)) != null) {

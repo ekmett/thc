@@ -24,6 +24,31 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @SuppressWarnings("unchecked")
 class SimdFamiliesTest {
+    @Test void frameEntriesDoNotInitializeVectorLibrary() throws Exception {
+        // With shared arenas, Native Image excludes vector-library static
+        // initialization from runtime graphs. Such work may remain in native
+        // helpers, but a residual call must never receive the guest frame.
+        for (var type : List.of(Vector16Pack.class, Vector16Operation.class, Vector16Unpack.class,
+                GeneratedInt16X16Pack.class, GeneratedInt16X16Operation.class,
+                GeneratedInt16X16Unpack.class, GeneratedInt16X16Shuffle.class)) {
+            try (var bytes = type.getResourceAsStream(type.getSimpleName() + ".class")) {
+                var model = java.lang.classfile.ClassFile.of().parse(Objects.requireNonNull(bytes).readAllBytes());
+                for (var method : model.methods()) {
+                    if (!method.methodType().stringValue().contains("Lcom/oracle/truffle/api/frame/VirtualFrame;")) continue;
+                    for (var element : method.code().orElseThrow()) {
+                        if (element instanceof java.lang.classfile.instruction.FieldInstruction field
+                                && field.opcode() == java.lang.classfile.Opcode.GETSTATIC)
+                            assertFalse(field.owner().asInternalName().startsWith("jdk/incubator/vector/"),
+                                type.getSimpleName() + "." + method.methodName() + " must keep species access outside its frame entry");
+                        if (element instanceof java.lang.classfile.instruction.InvokeInstruction call
+                                && call.opcode() == java.lang.classfile.Opcode.INVOKESTATIC)
+                            assertFalse(call.owner().asInternalName().startsWith("jdk/incubator/vector/"),
+                                type.getSimpleName() + "." + method.methodName() + " must keep vector initialization outside its frame entry");
+                    }
+                }
+            }
+        }
+    }
     private final File root = new File(System.getProperty("thc.projectRoot")), directory = new File(root, "build/simd-families");
     private Context context(boolean inlining) { return Context.newBuilder("thc").allowExperimentalOptions(true).option("compiler.Inlining", Boolean.toString(inlining))
         .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build(); }
@@ -54,9 +79,8 @@ class SimdFamiliesTest {
         var classes = java.lang.classfile.ClassFile.of();
         String owner;
         try (var bytes = Vector16Unpack.class.getResourceAsStream("Vector16Unpack.class")) {
-            var method = classes.parse(Objects.requireNonNull(bytes).readAllBytes()).methods().stream()
-                .filter(m -> m.methodName().equalsString("executeTuple")).findFirst().orElseThrow();
-            var calls = method.code().orElseThrow().elementStream()
+            var calls = classes.parse(Objects.requireNonNull(bytes).readAllBytes()).methods().stream()
+                .flatMap(m -> m.code().stream()).flatMap(java.lang.classfile.CodeModel::elementStream)
                 .filter(java.lang.classfile.instruction.InvokeInstruction.class::isInstance)
                 .map(java.lang.classfile.instruction.InvokeInstruction.class::cast)
                 .filter(call -> call.name().equalsString("requireShort")).toList();

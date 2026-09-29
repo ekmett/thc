@@ -27,7 +27,8 @@ public final class TupleDispatch extends Node {
     public TupleDispatch(TupleDestination destination, Metrics metrics, int argsSize, boolean tail, ArgumentLayout inputLayout) {
         this.destination = destination; this.metrics = metrics; this.argsSize = argsSize;
         this.tail = tail; this.inputLayout = inputLayout;
-        generic = new GenericTupleCaller(destination, metrics, tail, argsSize, inputLayout);
+        if (metrics == null) typed = new InputDispatch(new ScalarArrayInputSource(inputLayout), argsSize, tail, null, destination);
+        else generic = new GenericTupleCaller(destination, metrics, tail, argsSize, inputLayout);
     }
     public void execute(VirtualFrame frame, Closure function, Object[] arguments) {
         try { executeCall(frame, function, arguments); }
@@ -38,6 +39,7 @@ public final class TupleDispatch extends Node {
         }
     }
     @ExplodeLoop private void executeCall(VirtualFrame frame, Closure function, Object[] arguments) {
+        if (metrics == null) { typed.execute(frame, function, arguments); return; }
         if (function.target.getRootNode() instanceof GuestRoot root && root.getTypedInput() != null) {
             InputDispatch child = typed;
             if (child == null) {

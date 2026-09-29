@@ -21,7 +21,11 @@ public final class VectorPack extends Expr {
 
     @Override public LongVector execute(VirtualFrame frame) {
         argument.executeTuple(frame, slots, 0);
-        return LongVector.broadcast(LongVector.SPECIES_128, frame.getLong(slots[0]))
-            .withLane(1, frame.getLong(slots[1]));
+        return pack(frame.getLong(slots[0]), frame.getLong(slots[1]));
+    }
+
+    private static LongVector pack(long lane0, long lane1) {
+        return LongVector.broadcast(LongVector.SPECIES_128, lane0)
+            .withLane(1, lane1);
     }
 }

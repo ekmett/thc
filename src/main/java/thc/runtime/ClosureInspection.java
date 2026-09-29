@@ -75,7 +75,7 @@ public final class ClosureInspection {
             if (item instanceof Long number) words.putLong(number);
             else if (item instanceof Float number) { words.putInt(Float.floatToRawIntBits(number)); words.putInt(0); }
             else if (item instanceof Double number) words.putLong(Double.doubleToRawLongBits(number));
-            else if (item instanceof Vector<?> vector) words.put(vector.reinterpretAsBytes().toArray());
+            else if (item instanceof Vector<?> vector) words.put(VectorMemory.asBytes(vector).toArray());
             else throw RuntimeFault.fault("Invalid primitive closure field");
         }
         return new ClosureImage(descriptor, bytes, pointers.toArray());

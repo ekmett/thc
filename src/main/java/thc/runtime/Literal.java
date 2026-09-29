@@ -6,8 +6,11 @@ import com.oracle.truffle.api.nodes.UnexpectedResultException;
 
 final class Literal extends Expr {
     private final Object value;
-    Literal(Object value) {
+    private final boolean copyBytes;
+    Literal(Object value) { this(value, false); }
+    Literal(Object value, boolean copyBytes) {
         this.value = value;
+        this.copyBytes = copyBytes;
         CoreKind kind = switch (value) {
             case Integer ignored -> CoreKind.LONG;
             case Long ignored -> CoreKind.LONG;
@@ -18,7 +21,7 @@ final class Literal extends Expr {
         };
         setRepresentation(new CoreRepresentation(kind, true, false, null, null, null, null, null, null));
     }
-    @Override public Object execute(VirtualFrame frame) { return value; }
+    @Override public Object execute(VirtualFrame frame) { return copyBytes ? ((byte[]) value).clone() : value; }
     @Override public int executeInt(VirtualFrame frame) throws UnexpectedResultException { return RuntimeTypesGen.expectInteger(value); }
     @Override public long executeLong(VirtualFrame frame) throws UnexpectedResultException { return RuntimeTypesGen.expectLong(value); }
     @Override public float executeFloat(VirtualFrame frame) throws UnexpectedResultException { return RuntimeTypesGen.expectFloat(value); }

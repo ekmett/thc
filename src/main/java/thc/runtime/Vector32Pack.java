@@ -21,9 +21,13 @@ public final class Vector32Pack extends Expr {
 
     @Override public IntVector execute(VirtualFrame frame) {
         argument.executeTuple(frame, slots, 0);
-        return IntVector.broadcast(IntVector.SPECIES_128, frame.getInt(slots[0]))
-            .withLane(1, frame.getInt(slots[1]))
-            .withLane(2, frame.getInt(slots[2]))
-            .withLane(3, frame.getInt(slots[3]));
+        return pack(frame.getInt(slots[0]), frame.getInt(slots[1]), frame.getInt(slots[2]), frame.getInt(slots[3]));
+    }
+
+    private static IntVector pack(int lane0, int lane1, int lane2, int lane3) {
+        return IntVector.broadcast(IntVector.SPECIES_128, lane0)
+            .withLane(1, lane1)
+            .withLane(2, lane2)
+            .withLane(3, lane3);
     }
 }
