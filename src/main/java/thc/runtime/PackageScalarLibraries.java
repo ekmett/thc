@@ -14,6 +14,7 @@ import com.oracle.truffle.llvm.runtime.NativeContextExtension;
 import org.graalvm.polyglot.io.ByteSequence;
 import thc.Language;
 import thc.PackageScalarLink;
+import thc.PackageNativeComponent;
 import thc.PackageScalarSignature;
 import java.util.HashMap;
 import java.util.Map;
@@ -26,14 +27,16 @@ import static thc.runtime.RuntimeFault.fault;
 
 /** Component C globals and entrypoints belong to one Truffle context. */
 public final class PackageScalarLibraries {
-    private record Loaded(PackageScalarLink link, FutureTask<Map<String, PackageScalarFunction>> task) {}
+    private record Loaded(PackageNativeComponent component, FutureTask<Object> task, Map<String, PackageScalarFunction> functions) {}
     private final TruffleLanguage.Env env;
     private final HashMap<String, Loaded> libraries = new HashMap<>();
+    private final HashMap<String, PackageScalarLink> declarations = new HashMap<>();
     private final PackageFinalizerRegistry finalizers = new PackageFinalizerRegistry();
     private final Assumption alive = Assumption.create("THC package C libraries are open");
     private boolean closed;
     private boolean callbacksRegistered;
-    private final ThreadLocal<ArrayDeque<PackageScalarLink>> initializing = ThreadLocal.withInitial(ArrayDeque::new);
+    private final ThreadLocal<ArrayDeque<PackageNativeComponent>> initializing = ThreadLocal.withInitial(ArrayDeque::new);
+    private final ThreadLocal<ArrayDeque<String>> awaitingDependencies = ThreadLocal.withInitial(ArrayDeque::new);
     private final InteropLibrary interop = InteropLibrary.getUncached();
     private final FutureTask<Map<String, Object>> pointerOperations;
     public PackageScalarLibraries(TruffleLanguage.Env env) {
@@ -61,69 +64,107 @@ public final class PackageScalarLibraries {
     /** Reserve exact component metadata without running native constructors. */
     @TruffleBoundary public void declare(PackageScalarLink link) { declaration(link); }
     private Loaded declaration(PackageScalarLink link) {
-        var owner = current();
-        Loaded selected;
+        current();
+        var graph = new java.util.LinkedHashMap<String, PackageNativeComponent>();
+        collect(link.getComponent(), graph, new java.util.HashSet<>());
         synchronized (this) {
             if (closed) throw fault("Package C library registry is closed");
-            for (var entry : libraries.values())
-                if (!entry.link().getUnit().equals(link.getUnit()) && entry.link().getComponentSha256().equals(link.getComponentSha256()))
-                    throw fault("Package C entry namespace belongs to another unit: " + link.getComponentSha256());
-            selected = libraries.get(link.getUnit());
-            if (selected != null) {
-                if (!selected.link().same(link)) throw fault("Conflicting package C component identity: " + link.getUnit());
-            } else {
-                selected = new Loaded(link, new FutureTask<>(() -> {
-                    // Constructors may call their declared Haskell exports.
-                    // Keep callback entry on this native origin, also in Loom;
-                    // Sulong holds its reentrant context monitor during loading.
-                    var previous = owner.getThreads().enterForeign(ForeignSafety.SAFE);
-                    var stack = initializing.get(); stack.push(link);
-                    try {
-                        registerCallbacks(owner);
-                        if (link.getNativeLibrary().length != 0) {
-                            var file = Files.createTempFile("thc-package-native-", link.getFormat().equals("llvm-embedded-mach-o") ? ".dylib" : ".so");
-                            try {
-                                Files.write(file, link.getNativeLibrary());
-                                // Keep ordinary unresolved native functions lazy: an
-                                // archive member can also contain unused RTS wrappers.
-                                // Register LOCAL handles in Sulong's existing context
-                                // registry, never in the process-global namespace.
-                                env.initializeLanguage(env.getInternalLanguages().get("llvm"));
-                                var nativeContext = LLVMContext.get(null).getContextExtensionOrNull(NativeContextExtension.class);
-                                if (nativeContext == null) throw fault("Sulong native library loading is unavailable");
-                                String path = file.toString().replace("\\", "\\\\").replace("\"", "\\\"");
-                                Object handle = env.parseInternal(Source.newBuilder("nfi",
-                                    "load(RTLD_LAZY|RTLD_LOCAL) \"" + path + "\"", "package-native").build()).call();
-                                nativeContext.addLibraryHandles(handle);
-                            } finally { Files.deleteIfExists(file); }
-                        }
-                        Object library = env.parseInternal(Source.newBuilder("llvm", ByteSequence.create(link.getBytes()),
-                            link.getComponentSha256() + switch (link.getFormat()) {
-                                case "llvm-embedded-elf" -> ".so";
-                                case "llvm-embedded-mach-o" -> ".dylib";
-                                default -> ".bc";
-                            }).build()).call();
-                        var functions = new HashMap<String, PackageScalarFunction>();
-                        for (var signature : link.getAbi()) {
-                            if (!interop.isMemberReadable(library, signature.getEntry())) throw fault("Missing package C entry: " + signature.getEntry());
-                            Object function = interop.readMember(library, signature.getEntry());
-                            if (!interop.isExecutable(function)) throw fault("Package C entry is not executable");
-                            functions.put(signature.getEntry(), new PackageScalarFunction(owner, signature, function, alive));
-                        }
-                        if (!link.getFinalizers().isEmpty()) finalizers.register(link, functions, owner.cbits());
-                        return functions;
-                    } finally { stack.pop(); owner.getThreads().leaveForeign(previous); }
-                }));
-                libraries.put(link.getUnit(), selected);
+            var old = declarations.get(link.getUnit());
+            if (old != null && !old.same(link)) throw fault("Conflicting package C component ABI: " + link.getUnit());
+            var identities = new HashMap<String, String>();
+            for (var entry : libraries.values()) identities.put(entry.component().componentSha256(), entry.component().unit());
+            for (var component : graph.values()) {
+                var owner = identities.putIfAbsent(component.componentSha256(), component.unit());
+                if (owner != null && !owner.equals(component.unit()))
+                    throw fault("Package C entry namespace belongs to another unit: " + component.componentSha256());
+                var selected = libraries.get(component.unit());
+                if (selected != null && !selected.component().same(component))
+                    throw fault("Conflicting package C component identity: " + component.unit());
             }
+            for (var component : graph.values()) libraries.computeIfAbsent(component.unit(), ignored ->
+                new Loaded(component, new FutureTask<>(() -> initialize(component)), new HashMap<>()));
+            declarations.putIfAbsent(link.getUnit(), link);
+            return libraries.get(link.getUnit());
         }
-        return selected;
+    }
+    private static void collect(PackageNativeComponent component, Map<String, PackageNativeComponent> graph, java.util.Set<String> path) {
+        if (!path.add(component.unit())) throw fault("Cyclic package C dependency: " + component.unit());
+        var old = graph.putIfAbsent(component.unit(), component);
+        if (old != null && !old.same(component)) throw fault("Conflicting package C dependency: " + component.unit());
+        if (old == null) for (var dependency : component.dependencies()) {
+            if (!dependency.target().equals(component.target())) throw fault("Package C dependency target differs");
+            collect(dependency, graph, path);
+        }
+        path.remove(component.unit());
+    }
+    private Object initialize(PackageNativeComponent component) throws Exception {
+        // Dependency components have their own context-owned state,
+        // not another copy embedded in each consumer's LLVM module.
+        var pending = awaitingDependencies.get(); pending.push(component.unit());
+        try { for (var dependency : component.dependencies()) load(dependency); }
+        finally { pending.pop(); }
+        var owner = current();
+        // Constructors may call their declared Haskell exports.
+        // Keep callback entry on this native origin, also in Loom;
+        // Sulong holds its reentrant context monitor during loading.
+        var previous = owner.getThreads().enterForeign(ForeignSafety.SAFE);
+        var stack = initializing.get(); stack.push(component);
+        try {
+            registerCallbacks(owner);
+            if (component.nativeLibrary().length != 0) {
+                var file = Files.createTempFile("thc-package-native-", component.format().equals("llvm-embedded-mach-o") ? ".dylib" : ".so");
+                try {
+                    Files.write(file, component.nativeLibrary());
+                    // Keep ordinary unresolved native functions lazy: an
+                    // archive member can also contain unused RTS wrappers.
+                    // Register LOCAL handles in Sulong's existing context
+                    // registry, never in the process-global namespace.
+                    env.initializeLanguage(env.getInternalLanguages().get("llvm"));
+                    var nativeContext = LLVMContext.get(null).getContextExtensionOrNull(NativeContextExtension.class);
+                    if (nativeContext == null) throw fault("Sulong native library loading is unavailable");
+                    String path = file.toString().replace("\\", "\\\\").replace("\"", "\\\"");
+                    Object handle = env.parseInternal(Source.newBuilder("nfi",
+                        "load(RTLD_LAZY|RTLD_LOCAL) \"" + path + "\"", "package-native").build()).call();
+                    nativeContext.addLibraryHandles(handle);
+                } finally { Files.deleteIfExists(file); }
+            }
+            Object library = env.parseInternal(Source.newBuilder("llvm", ByteSequence.create(component.bytes()),
+                component.componentSha256() + switch (component.format()) {
+                    case "llvm-embedded-elf" -> ".so";
+                    case "llvm-embedded-mach-o" -> ".dylib";
+                    default -> ".bc";
+                }).build()).call();
+            for (String symbol : component.exports()) if (!interop.isMemberReadable(library, symbol))
+                throw fault("Missing package C provider export: " + symbol);
+            return library;
+        } finally { stack.pop(); owner.getThreads().leaveForeign(previous); }
     }
     @TruffleBoundary public void link(PackageScalarLink link) {
         var selected = declaration(link);
-        if (initializing.get().contains(selected.link())) return;
+        if (initializing(link.getUnit())) return;
+        load(selected.component());
+        var entries = new HashMap<String, PackageScalarFunction>();
+        for (var signature : link.getAbi()) entries.put(signature.getEntry(), resolve(link, signature));
+        if (!link.getFinalizers().isEmpty()) finalizers.register(link, entries, current().cbits());
+    }
+    private Object load(PackageNativeComponent component) {
+        // A provider constructor can call Haskell, which can ask for its still
+        // pending consumer. That consumer has no initialized native symbols;
+        // waiting for its own FutureTask would deadlock this native origin.
+        if (awaitingDependencies.get().contains(component.unit()))
+            throw fault("Package C component is awaiting native dependencies: " + component.unit());
+        Loaded selected;
+        synchronized (this) {
+            if (closed) throw fault("Package C library registry is closed");
+            selected = libraries.get(component.unit());
+        }
+        if (selected == null || !selected.component().same(component)) throw fault("Undeclared package C dependency: " + component.unit());
         selected.task().run();
-        await(selected.task());
+        return await(selected.task());
+    }
+    private boolean initializing(String unit) {
+        for (var component : initializing.get()) if (component.unit().equals(unit)) return true;
+        return false;
     }
     private void registerCallbacks(Language.State owner) {
         synchronized (this) { if (callbacksRegistered) return; }
@@ -237,10 +278,12 @@ public final class PackageScalarLibraries {
             if (closed) throw fault("Package C library registry is closed");
             selected = libraries.get(link.getUnit());
             if (selected == null) throw fault("Unlinked package C component: " + link.getUnit());
-            if (!selected.link().same(link) || !selected.link().getAbi().contains(signature))
+            var declared = declarations.get(link.getUnit());
+            if (declared == null || !declared.same(link) || !declared.getAbi().contains(signature))
                 throw fault("Package C call differs from its registered component ABI");
+            signature = declared.getAbi().get(declared.getAbi().indexOf(signature));
         }
-        if (initializing.get().contains(selected.link())) {
+        if (initializing(link.getUnit())) {
             // BUILD_SCOPES/SYMBOLS precede INIT_MODULE. Only this loader's
             // synchronous callback can use those already initialized symbols;
             // unrelated threads must await the completed component instead.
@@ -251,30 +294,38 @@ public final class PackageScalarLibraries {
                 return new PackageScalarFunction(owner, signature, function, alive);
             } catch (com.oracle.truffle.api.interop.InteropException failure) { throw rethrow(failure); }
         }
-        selected.task().run();
-        var function = await(selected.task()).get(signature.getEntry());
-        if (function == null) throw new java.util.NoSuchElementException("Key " + signature.getEntry() + " is missing in the map.");
-        return function;
+        Object library = load(selected.component());
+        synchronized (this) {
+            var functions = selected.functions();
+            var function = functions.get(signature.getEntry());
+            if (function != null) return function;
+            try {
+                Object receiver = interop.readMember(library, signature.getEntry());
+                if (!interop.isExecutable(receiver)) throw fault("Package C entry is not executable");
+                function = new PackageScalarFunction(owner, signature, receiver, alive);
+                functions.put(signature.getEntry(), function);
+                return function;
+            } catch (com.oracle.truffle.api.interop.InteropException failure) { throw rethrow(failure); }
+        }
     }
     @TruffleBoundary public CFinalizerFunction finalizer(String symbol) {
         var owner = current();
-        Loaded[] declared;
+        PackageScalarLink[] declared;
         synchronized (this) {
             if (closed) throw fault("Package C library registry is closed");
-            declared = libraries.values().toArray(Loaded[]::new);
+            declared = declarations.values().toArray(PackageScalarLink[]::new);
         }
         var existing = finalizers.resolve(symbol);
         // Only the loader's synchronous callback may see a component before
         // INIT_MODULE returns. Its function symbols are already initialized.
-        for (var selected : declared) {
-            var link = selected.link();
+        for (var link : declared) {
             // A canonical label retains its exact declaration, not a failed
             // competing component that happened to declare the same symbol.
             boolean matches = link.getAbi().stream().anyMatch(signature -> existing != null
                 ? signature == existing.getPackageFunction().getSignature()
                 : link.getFinalizers().contains(signature.getEntry()) && signature.getSymbol().equals(symbol));
             if (!matches) continue;
-            if (initializing.get().contains(link)) {
+            if (initializing(link.getUnit())) {
                 var functions = new HashMap<String, PackageScalarFunction>();
                 for (var signature : link.getAbi()) if (link.getFinalizers().contains(signature.getEntry()))
                     functions.put(signature.getEntry(), resolve(link, signature));
@@ -296,8 +347,7 @@ public final class PackageScalarLibraries {
         PackageScalarCall selected = null;
         synchronized (this) {
             if (closed) throw fault("Package C library registry is closed");
-            for (var library : libraries.values()) {
-                var link = library.link();
+            for (var link : declarations.values()) {
                 if (unit != null && !unit.equals(link.getUnit())) continue;
                 for (var signature : link.getAbi()) if (link.getDataSymbols().contains(signature.getEntry()) && signature.getSymbol().equals(symbol)) {
                     if (selected != null) throw fault("Ambiguous native data label: " + symbol);
@@ -320,6 +370,6 @@ public final class PackageScalarLibraries {
         } catch (Exception failure) { throw rethrow(failure); }
         finally { owner.getThreads().leaveForeign(previous); }
     }
-    public synchronized void close() { closed = true; alive.invalidate(); finalizers.close(); libraries.clear(); }
+    public synchronized void close() { closed = true; alive.invalidate(); finalizers.close(); libraries.clear(); declarations.clear(); }
     @SuppressWarnings("unchecked") private static <E extends Throwable> RuntimeException rethrow(Throwable failure) throws E { throw (E) failure; }
 }

@@ -21,6 +21,13 @@ import static org.junit.jupiter.api.Assertions.*;
 @SuppressWarnings("unchecked")
 public class ForeignExceptionTest {
     private Map<String, Object> source(String stage) throws Exception { return ForeignExceptionFixtureSupport.source(stage); }
+    private Map<String, Object> linked(Map<String, Object> source, String id) {
+        var linked = CoreModules.reachable(source, id, true);
+        // Direct test programs need the native-owner linkage normally done by Language.instantiate.
+        for (var link : (List<PackageScalarLink>) linked.get("packageScalarLinks"))
+            Language.currentState().getPackageCbits().link(link);
+        return linked;
+    }
     private Context context() { return Context.newBuilder("thc", "js").allowExperimentalOptions(true).allowNativeAccess(true).allowPolyglotAccess(PolyglotAccess.ALL)
         .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.SingleTierCompilationThreshold", "10000000").option("engine.CompilationFailureAction", "Throw").build(); }
     private Map<String, Object> with(Map<String, Object> source, String key, Object value) { var result = new LinkedHashMap<>(source); result.put(key, value); return result; }
@@ -55,7 +62,7 @@ public class ForeignExceptionTest {
                 try {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                     for (var entry : cases.entrySet()) {
-                        String id = "main:ForeignExceptionAudit." + entry.getKey(); var linked = with(CoreModules.reachable(source, id, true), "instrument", true);
+                        String id = "main:ForeignExceptionAudit." + entry.getKey(); var linked = with(linked(source, id), "instrument", true);
                         ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked); var function = context.asValue(new EntryValue(program, id, 1));
                         for (int i = 0; i < 2; i++) assertEquals(entry.getValue().longValue(), function.execute(0L).asLong(), stage + "/" + backend + "/" + entry.getKey());
                         assertTrue(function.invokeMember("compile").asBoolean()); assertEquals(entry.getValue().longValue(), function.execute(0L).asLong(), stage + "/" + backend + "/" + entry.getKey() + " installed");
@@ -73,7 +80,7 @@ public class ForeignExceptionTest {
                 try {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var original = context.eval("js", "globalThis.thcFailure = new Error('identity retained')");
                     for (String entry : List.of("rethrowNow", "rethrowLater")) {
-                        var linked = CoreModules.reachable(source, entry, true); ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
+                        var linked = linked(source, entry); ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
                         var function = context.asValue(new EntryValue(program, entry, 1)); assertEquals(8L, function.execute(1L).asLong()); assertTrue(function.invokeMember("compile").asBoolean());
                         var failure = assertThrows(PolyglotException.class, () -> function.execute(0L)); assertTrue(failure.isGuestException());
                         assertEquals(original, failure.getGuestObject(), stage + "/" + backend + "/" + entry + " exact identity: " + failure + " / " + stack(failure, 12));
@@ -90,7 +97,7 @@ public class ForeignExceptionTest {
         for (String backend : List.of("ast", "bytecode")) try (Context context = context()) {
             context.initialize("thc"); context.initialize("js"); context.enter();
             try {
-                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var linked = CoreModules.reachable(source, "main:ForeignExceptionAudit.caught", true);
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var linked = linked(source, "main:ForeignExceptionAudit.caught");
                 ExecutableProgram registered = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
                 assertEquals(42L, context.asValue(new EntryValue(registered, "main:ForeignExceptionAudit.caught", 1)).execute(0L).asLong()); assertFalse(Language.currentState(null).getForeignExceptionRegistry().snapshot().isEmpty());
                 for (boolean bottom : new boolean[] {false, true}) {
@@ -109,7 +116,7 @@ public class ForeignExceptionTest {
         }
     }
     private Value entry(String name, String backend, Map<String, Object> source, Context context, Language language) {
-        String id = "main:ForeignExceptionAudit." + name; var linked = CoreModules.reachable(source, id, true);
+        String id = "main:ForeignExceptionAudit." + name; var linked = linked(source, id);
         ExecutableProgram program = backend.equals("ast") ? new Program(language, linked, true) : new BytecodeProgram(language, linked, true); return context.asValue(new EntryValue(program, id, 1));
     }
     @Test public void explicitMetadataSupportsReverseEntryAndNewFailureCleanup() throws Exception {

@@ -68,6 +68,8 @@ public abstract class Dispatch extends Node {
             catch (AstCapture cut) {
                 Object[] remaining = Arrays.copyOfRange(arguments, ArgumentLayout.offset(argumentLayout, arity), arguments.length);
                 throw cut.append((saved, input) -> resumeOverapplication(saved, input, remaining, rest, force));
+            } catch (DelimitedCut cut) {
+                throw captureOverapplication(frame, cut, arguments, arity, rest, force);
             }
             Object[] remaining = Arrays.copyOfRange(arguments, ArgumentLayout.offset(argumentLayout, arity), arguments.length);
             return resumeOverapplication(frame, result, remaining, rest, force);
@@ -80,18 +82,20 @@ public abstract class Dispatch extends Node {
                 DelimitedControl.captureBytecode(answer, null);
                 result = force.execute(frame, answer);
             } catch (DelimitedCut cut) {
-                Object[] remaining = Arrays.copyOfRange(arguments, ArgumentLayout.offset(argumentLayout, arity), arguments.length);
-                throw cut.append(frame, new DelimitedStep() {
-                    @Override public Object resume(MaterializedFrame saved, DelimitedResume input, MaskingState ambient, DelimitedStep outerMask) {
-                        Object answer = rest.execute(saved, requireClosure(force.execute(saved, input.get())), remaining.clone());
-                        DelimitedControl.captureBytecode(answer, null);
-                        return answer;
-                    }
-                    @Override public Object finish(Object result, DelimitedActionSite site) { return result; }
-                });
+                throw captureOverapplication(frame, cut, arguments, arity, rest, force);
             }
         }
         return rest.execute(frame, requireClosure(result), Arrays.copyOfRange(arguments, ArgumentLayout.offset(argumentLayout, arity), arguments.length));
+    }
+    private DelimitedCut captureOverapplication(VirtualFrame frame, DelimitedCut cut, Object[] arguments, int arity, Dispatch rest, Force force) {
+        Object[] remaining = Arrays.copyOfRange(arguments, ArgumentLayout.offset(argumentLayout, arity), arguments.length);
+        return cut.append(frame, new DelimitedStep() {
+            @Override public Object resume(MaterializedFrame saved, DelimitedResume input, MaskingState ambient, DelimitedStep outerMask) {
+                Object answer = resumeOverapplication(saved, input.get(), remaining.clone(), rest, force);
+                DelimitedControl.captureBytecode(answer, null);
+                return answer;
+            }
+        });
     }
     private Object resumeOverapplication(VirtualFrame frame, Object value, Object[] remaining, Dispatch rest, Force force) {
         Object result;

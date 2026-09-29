@@ -61,6 +61,8 @@ final class GenericTupleCaller extends Node {
                         throw cut.append(new AstResumeStep() {
                             @Override public Object resume(VirtualFrame resumed, Object input) { return resumeOverapplication(resumed, input, savedArguments, next); }
                         });
+                    } catch (DelimitedCut cut) {
+                        throw captureOverapplication(frame, cut, arguments, next);
                     }
                     Closure closure;
                     try { closure = Applications.requireClosure(AstControl.force(frame, this, force, result)); }
@@ -84,24 +86,7 @@ final class GenericTupleCaller extends Node {
                     DelimitedControl.captureBytecode(answer, null);
                     result = force.execute(frame, answer);
                 } catch (DelimitedCut cut) {
-                    CompilerDirectives.transferToInterpreter();
-                    Object[] savedArguments = arguments.clone();
-                    int next = offset + count;
-                    throw cut.append(frame, new DelimitedPendingApplication() {
-                        @Override public TupleDestination getDestination() { return destination; }
-                        @Override public Object resume(MaterializedFrame resumed, DelimitedResume input, MaskingState ambient, DelimitedStep outerMask) {
-                            try { execute(resumed, Applications.requireClosure(force.execute(resumed, input.get())), savedArguments.clone(), next); }
-                            catch (DelimitedCut nested) {
-                                var frames = nested.getFrames();
-                                DelimitedStep last = frames.isEmpty() ? null : frames.get(frames.size() - 1).getStep();
-                                if (destination instanceof AstTupleDestination &&
-                                    (!(last instanceof DelimitedPendingApplication pending) || pending.getDestination() != destination))
-                                    nested.append(resumed, new DelimitedTupleStep(destination, GenericTupleCaller.this));
-                                throw nested;
-                            }
-                            return destination.delimitedResult(resumed, GenericTupleCaller.this);
-                        }
-                    });
+                    throw captureOverapplication(frame, cut, arguments, offset + count);
                 }
                 function = Applications.requireClosure(result);
                 offset += count;
@@ -119,6 +104,25 @@ final class GenericTupleCaller extends Node {
             }
             return;
         }
+    }
+    private DelimitedCut captureOverapplication(VirtualFrame frame, DelimitedCut cut, Object[] arguments, int next) {
+        CompilerDirectives.transferToInterpreter();
+        Object[] savedArguments = arguments.clone();
+        return cut.append(frame, new DelimitedPendingApplication() {
+            @Override public TupleDestination getDestination() { return destination; }
+            @Override public Object resume(MaterializedFrame resumed, DelimitedResume input, MaskingState ambient, DelimitedStep outerMask) {
+                try { resumeOverapplication(resumed, input.get(), savedArguments.clone(), next); }
+                catch (DelimitedCut nested) {
+                    var frames = nested.getFrames();
+                    DelimitedStep last = frames.isEmpty() ? null : frames.get(frames.size() - 1).getStep();
+                    if (destination instanceof AstTupleDestination &&
+                        (!(last instanceof DelimitedPendingApplication pending) || pending.getDestination() != destination))
+                        nested.append(resumed, new DelimitedTupleStep(destination, GenericTupleCaller.this));
+                    throw nested;
+                }
+                return destination.delimitedResult(resumed, GenericTupleCaller.this);
+            }
+        });
     }
     private Object resumeOverapplication(VirtualFrame frame, Object value, Object[] arguments, int next) {
         Closure closure;

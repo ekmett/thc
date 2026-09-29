@@ -10,11 +10,11 @@
 -- Stability   : experimental
 -- Portability : Cabal registrations and native ar
 --
--- Select C-only dependency products from the resolved Cabal registration and
+-- Select captured C/C++ products from the resolved Cabal registration and
 -- exact native archive membership, never from an unresolved symbol spelling.
 module THC.Driver.NativeDependencies
-  ( COnlyProduct, cOnlyProductProof, cOnlyProductPieces, readCOnlyProduct
-  , selectCOnlyPieces, nativeLinkInputs, nativeSymbolArchives, configuredNativeArchive
+  ( NativeProduct, nativeProductProof, nativeProductPieces, readNativeProduct
+  , selectNativePieces, nativeLinkInputs, nativeSymbolArchives, configuredNativeArchive
   ) where
 
 import Control.Exception (evaluate)
@@ -243,26 +243,27 @@ configuredNativeArchive source destination compilerIdentity registration = do
         renameFile temporary output
         pure (Just (output,before))
 
--- The constructor stays private: callers cannot supply arbitrary extra bitcode
--- through the dependency seam without an actual resolved C-only registration.
-data COnlyProduct = COnlyProduct
-  { cOnlyProductProof :: Value, cOnlyProductPieces :: [Value] }
+-- The constructor stays private: only captured C/C++ products with exact
+-- membership in the resolved package archive may become native providers.
+data NativeProduct = NativeProduct
+  { nativeProductProof :: Value, nativeProductPieces :: [Value] }
 
--- | Match every registered archive member exactly once. The basename is only
--- an additional check; native object content is the membership authority.
--- Ambiguous captures fail closed instead of picking one compiler recipe.
-selectCOnlyPieces :: [(FilePath, String)] -> [Value] -> Either String [Value]
-selectCOnlyPieces members pieces = do
+-- | Match captured C/C++ members by content, with the basename as an additional
+-- check. Moduleless C-only registrations require complete archive coverage;
+-- mixed archives omit uncaptured native Haskell objects. Ambiguity fails closed.
+selectNativePieces :: Bool -> [(FilePath, String)] -> [Value] -> Either String [Value]
+selectNativePieces complete members pieces = do
   require (not (null members) && length members == length (nub (map fst members)))
-    "C-only archive has empty or duplicate member inventory"
-  forM members $ \(name,expected) -> do
+    "native archive has empty or duplicate member inventory"
+  fmap concat $ forM members $ \(name,expected) -> do
     require (archiveMember name)
-      "C-only archive member is not a basename"
+      "native archive member is not a basename"
     matches <- filterM (matchesMember name expected) pieces
     case nub matches of
-      [piece] -> Right piece
-      [] -> Left ("C-only archive member has no captured compiler product: " ++ name)
-      _ -> Left ("C-only archive member has ambiguous compiler products: " ++ name)
+      [piece] -> Right [piece]
+      [] | not complete -> Right []
+         | otherwise -> Left ("C-only archive member has no captured compiler product: " ++ name)
+      _ -> Left ("native archive member has ambiguous compiler products: " ++ name)
   where
     matchesMember name expected piece = do
       path <- field piece "object"
@@ -272,54 +273,64 @@ selectCOnlyPieces members pieces = do
 -- | Read one exact resolved Cabal plan row and its matching registration.
 -- Dependencies are the caller's resolved library closure: Custom Setup plans
 -- nest them under components.lib rather than the row's top-level depends.
--- Haskell-bearing packages and reexport facades are not C-only providers.
-readCOnlyProduct :: Value -> [String] -> FilePath -> FilePath -> IO (Maybe COnlyProduct)
-readCOnlyProduct unit dependencies registration pieces = do
+-- Haskell-bearing archives contribute only their captured C/C++ members;
+-- never replay their native Haskell objects or native RTS registration.
+readNativeProduct :: Value -> [String] -> FilePath -> FilePath -> IO (Maybe NativeProduct)
+readNativeProduct unit dependencies registration pieces = do
   identifier <- get unit "id"
   bytes <- BS.readFile registration
-  if not (emptyRegistration identifier dependencies bytes) then pure Nothing else do
-    (_, info) <- either (fail . show) pure (parseInstalledPackageInfo bytes)
+  (_, info) <- either (fail . show) pure (parseInstalledPackageInfo bytes)
+  check (prettyShow (Package.installedUnitId info) == identifier &&
+    sort (map prettyShow (Package.depends info)) == sort dependencies)
+    "native archive registration differs from resolved unit/dependencies"
+  do
     let libraries = Package.hsLibraries info
     if null libraries then pure Nothing else do
       kind <- get unit "type" :: IO String
       style <- get unit "style" :: IO String
       source <- get unit "pkg-src-sha256" :: IO String
       check (kind == "configured" && style `elem` ["global","inplace"] && validHash source)
-        "C-only dependency lacks a resolved source identity"
+        "native dependency lacks a resolved source identity"
+      paths <- filter ((== "piece.json") . takeFileName) <$> files pieces
+      candidates <- mapM readJson paths
+      candidateNames <- mapM (fmap takeFileName . (`get` "object")) candidates
+      let complete = emptyRegistration identifier dependencies bytes
       archiveProducts <- forM libraries $ \library -> do
         check (takeFileName library == library && library `notElem` [".",".."])
-          "C-only registration library is not a basename"
+          "native registration library is not a basename"
         let directories = nub (Package.libraryDirsStatic info ++ Package.libraryDirs info)
         found <- filterM doesFileExist [directory </> "lib" ++ library ++ ".a" | directory <- directories]
         archive <- case nub found of
           [path] -> pure path
-          _ -> fail ("C-only registration lacks a unique native archive: " ++ identifier)
+          _ -> fail ("native registration lacks a unique native archive: " ++ identifier)
         before <- digest <$> BS.readFile archive
         ar <- maybe "ar" id <$> lookupEnv "THC_AR"
         (status, listing, diagnostic) <- readProcessWithExitCode ar ["t",archive] ""
-        check (status == ExitSuccess) ("Cannot read C-only archive: " ++ diagnostic)
-        let names = lines listing
-        check (not (null names) && length names == length (nub names) &&
-          all archiveMember names) "Unsupported C-only archive inventory"
+        check (status == ExitSuccess) ("Cannot read native archive: " ++ diagnostic)
+        -- Do not extract native Haskell members. Repeated Haskell basenames
+        -- are legal in a mixed archive; only selected C membership must be
+        -- unambiguous. C-only registrations still require every member.
+        let names = [name | name <- lines listing, complete || name `elem` candidateNames]
+        check ((not complete || not (null names)) && length names == length (nub names) &&
+          all archiveMember names) "Unsupported native archive inventory"
         members <- forM names $ \name -> do
           contents <- withCreateProcess (proc ar ["p",archive,name]) {std_out=CreatePipe} $ \_ output _ handle -> do
             stream <- maybe (fail "Missing archive output pipe") pure output
             payload <- BS.hGetContents stream
             _ <- evaluate (BS.length payload)
             result <- waitForProcess handle
-            check (result == ExitSuccess) "Cannot read C-only archive member"
+            check (result == ExitSuccess) "Cannot read native archive member"
             pure payload
           pure (name,digest contents)
         after <- digest <$> BS.readFile archive
-        check (before == after) "C-only archive changed during selection"
+        check (before == after) "native archive changed during selection"
         pure (archive,before,members)
-      paths <- filter ((== "piece.json") . takeFileName) <$> files pieces
-      candidates <- mapM readJson paths
       let members = concat [entries | (_,_,entries) <- archiveProducts]
-      selected <- either fail pure (selectCOnlyPieces members candidates)
+      selected <- if null members && not complete then pure [] else
+        either fail pure (selectNativePieces complete members candidates)
       -- One dependency cannot silently collect same-named sibling components.
       roots <- mapM (`get` "root") selected :: IO [String]
-      check (length (nub roots) == 1) "C-only archive combines different captured source roots"
+      check (length (nub roots) <= 1) "native archive combines different captured source roots"
       products <- forM selected $ \piece -> do
         path <- get piece "bitcode"
         hash <- digest <$> BS.readFile path
@@ -328,13 +339,13 @@ readCOnlyProduct unit dependencies registration pieces = do
             [Key.fromString key .= maybe Null id (member unit key) |
             key <- ["id","type","style","pkg-name","pkg-version","flags",
                     "component-name","pkg-src-sha256","pkg-cabal-sha256"]])
-          proof = object ["profile" .= ("resolved-c-only-archive-products-v1" :: String),
+          proof = object ["profile" .= ("resolved-native-archive-products-v1" :: String),
             "unit" .= identifier,"sourceIdentity" .= identity,
             "registration" .= T.decodeUtf8 bytes,"registrationSha256" .= digest bytes,
             "archives" .= [object ["path" .= path,"sha256" .= hash,
                 "members" .= [object ["name" .= name,"sha256" .= value] | (name,value) <- entries]] |
               (path,hash,entries) <- archiveProducts],"translationUnits" .= products]
-      pure (Just (COnlyProduct proof selected))
+      pure (if null selected then Nothing else Just (NativeProduct proof selected))
 
 member :: Value -> String -> Maybe Value
 member (Object fields) key = KM.lookup (Key.fromString key) fields

@@ -66,6 +66,8 @@ final class DirectTupleCaller extends Node {
                     throw cut.append(new AstResumeStep() {
                         @Override public Object resume(VirtualFrame resumed, Object input) { return resumeOverapplication(resumed, input, remaining); }
                     });
+                } catch (DelimitedCut cut) {
+                    throw captureOverapplication(frame, cut, arguments, physicalCount);
                 }
                 resumeOverapplication(frame, result, Arrays.copyOfRange(arguments, physicalCount, arguments.length));
                 return;
@@ -77,16 +79,7 @@ final class DirectTupleCaller extends Node {
                 DelimitedControl.captureBytecode(answer, null);
                 result = force.execute(frame, answer);
             } catch (DelimitedCut cut) {
-                Object[] remaining = Arrays.copyOfRange(arguments, physicalCount, arguments.length);
-                throw cut.append(frame, new DelimitedPendingApplication() {
-                    @Override public TupleDestination getDestination() { return destination; }
-                    @Override public Object resume(MaterializedFrame resumed, DelimitedResume input, MaskingState ambient, DelimitedStep outerMask) {
-                        TupleDispatch remainingCall = rest;
-                        if (remainingCall == null) throw fault("Missing tuple overapplication remainder");
-                        remainingCall.execute(resumed, Applications.requireClosure(force.execute(resumed, input.get())), remaining.clone());
-                        return destination.delimitedResult(resumed, DirectTupleCaller.this);
-                    }
-                });
+                throw captureOverapplication(frame, cut, arguments, physicalCount);
             }
             Closure closure = Applications.requireClosure(result);
             TupleDispatch remainingCall = rest;
@@ -103,6 +96,16 @@ final class DirectTupleCaller extends Node {
             try { destination.consume(frame, this, Calls.direct(call, packet), resultShape); }
             catch (TailCall transfer) { bounce.execute(frame, transfer); }
         }
+    }
+    private DelimitedCut captureOverapplication(VirtualFrame frame, DelimitedCut cut, Object[] arguments, int physicalCount) {
+        Object[] remaining = Arrays.copyOfRange(arguments, physicalCount, arguments.length);
+        return cut.append(frame, new DelimitedPendingApplication() {
+            @Override public TupleDestination getDestination() { return destination; }
+            @Override public Object resume(MaterializedFrame resumed, DelimitedResume input, MaskingState ambient, DelimitedStep outerMask) {
+                resumeOverapplication(resumed, input.get(), remaining.clone());
+                return destination.delimitedResult(resumed, DirectTupleCaller.this);
+            }
+        });
     }
     private Object resumeOverapplication(VirtualFrame frame, Object value, Object[] remaining) {
         Closure closure;

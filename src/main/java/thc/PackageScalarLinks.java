@@ -62,6 +62,49 @@ public final class PackageScalarLinks {
     }
     private static String pointerAbi(String rep) { return in(rep, "ByteArray#", "MutableByteArray#") ? "AddrRep" : rep; }
     private static String integerAbi(String rep) { return in(rep, "IntRep", "Int8Rep", "Int16Rep", "Int32Rep", "Int64Rep") ? "Word" + rep.substring(3) : rep; }
+    private static Set<String> nativeExports(Object raw) {
+        var result = new LinkedHashSet<String>();
+        for (Object value : list(raw)) {
+            String name = text(value);
+            check(SYMBOL.matcher(name).matches() && result.add(name), "unique C provider export");
+        }
+        return result;
+    }
+    private static List<PackageNativeComponent> nativeDependencies(Object raw, String target, Set<String> path,
+            Map<String,PackageNativeComponent> components, Map<String,String> namespaces) {
+        var result = new ArrayList<PackageNativeComponent>(); var owners = new HashSet<String>();
+        for (Object value : list(raw)) {
+            boolean companion = value instanceof Map<?,?> m && m.containsKey("nativeLibrary");
+            var fields = record(value, "schema profile unit target componentSha256 bitcodeSha256 bitcodeHex format exports dependencies" +
+                (companion ? " nativeLibrary" : ""));
+            check(version(fields.get("schema"), 1) && Objects.equals(fields.get("profile"), "thc-package-native-component-v1"), "native component profile");
+            String unit = text(fields.get("unit"));
+            check(owners.add(unit) && path.add(unit), "duplicate or cyclic native dependency");
+            check(target.equals(fields.get("target")), "native dependency target");
+            String componentHash = text(fields.get("componentSha256")), bitcodeHash = text(fields.get("bitcodeSha256"));
+            check(HASH.matcher(componentHash).matches() && HASH.matcher(bitcodeHash).matches(), "native dependency digest");
+            String namespace = namespaces.putIfAbsent(componentHash, unit);
+            check(namespace == null || namespace.equals(unit), "native dependency namespace owner");
+            String format = text(fields.get("format"));
+            check(format.equals("llvm-bitcode") || format.equals("llvm-embedded-elf") && System.getProperty("os.name").equals("Linux") ||
+                format.equals("llvm-embedded-mach-o") && System.getProperty("os.name").startsWith("Mac"), "native dependency format");
+            String encoded = text(fields.get("bitcodeHex")); byte[] bytes = HexFormat.of().parseHex(encoded);
+            check(bytes.length != 0 && HexFormat.of().formatHex(bytes).equals(encoded) && digest(bytes).equals(bitcodeHash), "native dependency bitcode");
+            byte[] nativeLibrary = new byte[0];
+            if (companion) {
+                var library = record(fields.get("nativeLibrary"), "sha256 hex");
+                String hex = text(library.get("hex")); nativeLibrary = HexFormat.of().parseHex(hex);
+                check(nativeLibrary.length != 0 && HexFormat.of().formatHex(nativeLibrary).equals(hex) &&
+                    digest(nativeLibrary).equals(text(library.get("sha256"))), "native dependency companion");
+            }
+            var component = new PackageNativeComponent(unit, target, componentHash, bitcodeHash, format, bytes, nativeLibrary,
+                nativeExports(fields.get("exports")), nativeDependencies(fields.get("dependencies"), target, path, components, namespaces));
+            var prior = components.putIfAbsent(unit, component);
+            check(prior == null || prior.same(component), "conflicting native dependency identity");
+            result.add(prior == null ? component : prior); path.remove(unit);
+        }
+        return result;
+    }
     public static PackageScalarAdmission read(Map<?,?> module) { return read(module, true, true); }
     public static PackageScalarAdmission read(Map<?,?> module, boolean validateArchive) { return read(module, validateArchive, true); }
     public static PackageScalarAdmission read(Map<?,?> module, boolean validateArchive, boolean completeBindings) {
@@ -78,7 +121,8 @@ public final class PackageScalarLinks {
         boolean callbacks = nativeLink && raw instanceof Map<?,?> m && version(m.get("schema"), 2);
         boolean companion = nativeLink && raw instanceof Map<?,?> m && m.containsKey("nativeLibrary");
         boolean data = nativeLink && raw instanceof Map<?,?> m && m.containsKey("dataSymbols");
-        var fields = record(raw, "schema format profile unit target componentSha256 bitcodeSha256 bitcodeHex abi" + (inputs ? " buildInputs" : "") + (callbacks ? " finalizers" : "") + (companion ? " nativeLibrary" : "") + (data ? " dataSymbols" : ""));
+        boolean components = nativeLink && raw instanceof Map<?,?> m && m.containsKey("dependencies");
+        var fields = record(raw, "schema format profile unit target componentSha256 bitcodeSha256 bitcodeHex abi" + (inputs ? " buildInputs" : "") + (callbacks ? " finalizers" : "") + (companion ? " nativeLibrary" : "") + (data ? " dataSymbols" : "") + (components ? " exports dependencies" : ""));
         if (inputs) check(fields.get("buildInputs") instanceof Map<?,?>, "build inputs record");
         String format = text(fields.get("format"));
         check((version(fields.get("schema"), 1) || callbacks) && (format.equals("llvm-bitcode") || nativeLink &&
@@ -168,7 +212,10 @@ public final class PackageScalarLinks {
                 signature.result().equals("AddrRep") && signature.convention().equals("ccall") && signature.safety().equals("unsafe")), "symbol address ABI");
         }
         var selectedAbi = abi;
-        var link = new PackageScalarLink(unit, target, componentHash, bitcodeHash, bytes, Collections.unmodifiableList(selectedAbi), format, finalizers, nativeLibrary, dataSymbols);
+        var exports = components ? nativeExports(fields.get("exports")) : Set.<String>of();
+        var dependencies = components ? nativeDependencies(fields.get("dependencies"), target, new HashSet<>(Set.of(unit)),
+            new HashMap<>(), new HashMap<>(Map.of(componentHash, unit))) : List.<PackageNativeComponent>of();
+        var link = new PackageScalarLink(unit, target, componentHash, bitcodeHash, bytes, Collections.unmodifiableList(selectedAbi), format, finalizers, nativeLibrary, dataSymbols, exports, dependencies);
         if (nativeLink && !module.containsKey("staticForeignImports")) {
             check(!module.containsKey("staticForeignImportStubs"), "unproved retained import obligations");
             if (module.containsKey("foreign")) {

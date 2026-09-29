@@ -680,9 +680,11 @@ def package_scalar_link(module, validate_archive=True):
     callbacks = native and isinstance(raw_link, dict) and raw_link.get('schema') == 2
     companion = native and isinstance(raw_link, dict) and 'nativeLibrary' in raw_link
     data_symbols = native and isinstance(raw_link, dict) and 'dataSymbols' in raw_link
+    components = native and isinstance(raw_link, dict) and 'dependencies' in raw_link
     link = record(raw_link, 'schema format profile unit target componentSha256 bitcodeSha256 bitcodeHex abi' +
                   (' buildInputs' if inputs else '') + (' finalizers' if callbacks else '') +
-                  (' nativeLibrary' if companion else '') + (' dataSymbols' if data_symbols else ''))
+                  (' nativeLibrary' if companion else '') + (' dataSymbols' if data_symbols else '') +
+                  (' exports dependencies' if components else ''))
     if inputs: require(isinstance(link['buildInputs'], dict), 'build inputs record')
     require(type(link['schema']) is int and (link['schema'] == 1 or callbacks) and (link['format'] == 'llvm-bitcode' or
             native and (link['format'] == 'llvm-embedded-elf' and platform.system() == 'Linux' or
@@ -707,6 +709,42 @@ def package_scalar_link(module, validate_archive=True):
         except ValueError as error: raise ValueError('Invalid native dependency encoding') from error
         require(native_bytes and native_bytes.hex() == encoded and
                 hashlib.sha256(native_bytes).hexdigest() == text(dependency['sha256']), 'native dependency digest')
+    if components:
+        def exports(values):
+            require(isinstance(values, list) and all(isinstance(v, str) and re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', v)
+                    for v in values) and len(values) == len(set(values)), 'unique C provider export')
+        observed, namespaces = {}, {link['componentSha256']: unit}
+        def dependencies(values, path):
+            require(isinstance(values, list), 'native dependency list')
+            owners = set()
+            for component in values:
+                has_companion = isinstance(component, dict) and 'nativeLibrary' in component
+                record(component, 'schema profile unit target componentSha256 bitcodeSha256 bitcodeHex format exports dependencies' +
+                       (' nativeLibrary' if has_companion else ''))
+                require(type(component['schema']) is int and component['schema'] == 1 and
+                        component['profile'] == 'thc-package-native-component-v1', 'native component profile')
+                owner = text(component['unit'])
+                require(owner not in owners and owner not in path, 'duplicate or cyclic native dependency')
+                owners.add(owner)
+                require(component['target'] == target, 'native dependency target')
+                require(SHA256.fullmatch(text(component['componentSha256'])) and
+                        SHA256.fullmatch(text(component['bitcodeSha256'])), 'native dependency digest')
+                require(namespaces.setdefault(component['componentSha256'], owner) == owner, 'native dependency namespace owner')
+                require(component['format'] == 'llvm-bitcode' or component['format'] == 'llvm-embedded-elf' and platform.system() == 'Linux' or
+                        component['format'] == 'llvm-embedded-mach-o' and platform.system() == 'Darwin', 'native dependency format')
+                encoded = text(component['bitcodeHex']); payload = bytes.fromhex(encoded)
+                require(payload and payload.hex() == encoded and hashlib.sha256(payload).hexdigest() == component['bitcodeSha256'],
+                        'native dependency bitcode')
+                if has_companion:
+                    companion = record(component['nativeLibrary'], 'sha256 hex')
+                    encoded = text(companion['hex']); payload = bytes.fromhex(encoded)
+                    require(payload and payload.hex() == encoded and hashlib.sha256(payload).hexdigest() == text(companion['sha256']),
+                            'native dependency companion')
+                exports(component['exports'])
+                dependencies(component['dependencies'], path | {owner})
+                require(exact(observed.setdefault(owner, component), component), 'conflicting native dependency identity')
+        exports(link['exports'])
+        dependencies(link['dependencies'], {unit})
     require(isinstance(link['abi'], list) and link['abi'], 'empty ABI')
     reps = ('Int32Rep', 'Int64Rep', 'FloatRep', 'DoubleRep')
     if native:

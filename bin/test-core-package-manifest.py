@@ -300,6 +300,25 @@ class PackageNativeVariantsTest(unittest.TestCase):
         return dict(schema=1, ghc='9.14.1', unit=unit, module=name, bindings=[], constructors=[],
                     packageNativeLink=link, staticForeignImports=proof)
 
+    def test_native_providers_keep_exact_closure_without_inventing_haskell_abis(self):
+        module = self.module(['WordRep'])
+        link = module['packageNativeLink']
+        provider = dict(schema=1, profile='thc-package-native-component-v1', unit='provider',
+            target=link['target'], componentSha256='b' * 64, bitcodeSha256=hashlib.sha256(b'provider').hexdigest(),
+            bitcodeHex=b'provider'.hex(), format='llvm-bitcode', exports=['provider_next'], dependencies=[])
+        link.update(exports=['read_bytes'], dependencies=[provider])
+        admitted, proved = core_package_manifest.package_scalar_link(module)
+        self.assertEqual({link['abi'][0]['entry']}, proved)
+        self.assertEqual([provider], admitted['dependencies'])
+        for bad in (dict(provider, bitcodeHex=b'changed'.hex()), dict(provider, target='other-target'),
+                    dict(provider, exports=['provider_next', 'provider_next']), dict(provider, abi=[]),
+                    dict(provider, unit=module['unit']), dict(provider, dependencies=[provider])):
+            with self.subTest(provider=bad), self.assertRaises(ValueError):
+                core_package_manifest.package_scalar_link(dict(module, packageNativeLink=dict(link, dependencies=[bad])))
+        for changes in (dict(dependencies=[provider, provider]), dict(abi=[])):
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                core_package_manifest.package_scalar_link(dict(module, packageNativeLink=dict(link, **changes)))
+
     def test_javascript_descriptor_leaves_real_native_adapter_obligations(self):
         import copy
         module = self.module(['WordRep'])
