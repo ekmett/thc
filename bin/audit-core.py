@@ -684,9 +684,6 @@ class Audit:
                 self.issue('module-format', None, source, 'Invalid provided-module interface closure')
             else:
                 self.provided_modules.update(supplied)
-        if self.store is not None:
-            self.store.put_record('modules', source,
-                {key: value for key, value in module.items() if key not in ('bindings', 'constructors')})
         bridge = module.get('foreignExceptionBridge')
         if bridge is not None:
             unit = module.get('unit')

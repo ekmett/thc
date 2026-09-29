@@ -649,6 +649,26 @@ class PackageManifestTest(unittest.TestCase):
                     core_package_manifest._check_unit_summaries('deep-core',
                         summary | dict(containsDelimitedControl=not expected), module)
 
+    def test_direct_unit_delivers_the_same_once_decoded_original_module(self):
+        unit = self.direct_unit()
+        original_bytes = Path(unit['json']['path']).read_bytes()
+        originals = {original_bytes[item['start']:item['end']].decode('utf-8'): item['name']
+                     for item in unit['modules']}
+        parse, decoded = core_package_manifest.strict_json, {}
+        def tracked(data):
+            value = parse(data)
+            if data in originals:
+                name = originals[data]
+                self.assertNotIn(name, decoded, 'original module decoded more than once')
+                decoded[name] = value
+            return value
+        with patch.object(core_package_manifest, 'strict_json', side_effect=tracked):
+            modules = core_package_manifest.load_for_audit(self.manifest([unit]))
+        self.assertEqual({'Zulu', 'Alpha'}, decoded.keys())
+        for _, module in modules:
+            self.assertIs(decoded[module['module']], module)
+        self.assertEqual(original_bytes, Path(unit['json']['path']).read_bytes())
+
     def test_direct_unit_fixed_md5_records(self):
         self.assertEqual('201ac5924113112a846d82b090d8458a', hashlib.md5(b'main:Main.main').hexdigest())
         self.assertEqual('23415231b60de428eeaf32979e1cb8ce', hashlib.md5('main:M.é😀'.encode()).hexdigest())

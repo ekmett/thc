@@ -1258,7 +1258,7 @@ def _verified_stream(path, stream, ref):
     stream.seek(0)
 
 
-def _iter_unit_modules(path, unit, records):
+def _iter_unit_modules(path, unit, records, audit_archives):
     """Explicit audit only: verify the pair and all selected original modules.
 
     Unlike runtime demand loading, this reader exhaustively checks the symbol
@@ -1305,7 +1305,7 @@ def _iter_unit_modules(path, unit, records):
                 if not _same_json_value(selected, {key: value for key, value in original.items() if key in keys}):
                     raise ValueError(f'{path}: unit metadata projection differs from original Core')
                 previous_end = finish
-            del original, selected
+            del selected
             text = data[a:b].decode('utf-8')
             at, offset = 1, first + 1
             while True:
@@ -1333,7 +1333,10 @@ def _iter_unit_modules(path, unit, records):
                     offset += 1; at += 1
                 elif text[at] != ']':
                     raise ValueError(f'{path}: invalid unit binding separator')
-            yield item, source['path'] + '@' + str(start), data
+            module = _validated_module(path, unit['id'], item, data, audit_archives, module=original)
+            del original, data, text
+            yield item, source['path'] + '@' + str(start), module
+            del module
         previous_key = None
         rows = iter(lambda: directory.read(24), b'') if fixed else directory
         for row in rows:
@@ -1494,12 +1497,12 @@ def _iter_load(path, audit_archives, manifest_read=None):
                         raise ValueError(f'{path}: duplicate JSON path: {member!r}')
                     loose_paths.add(artifact)
             records.append(item)
-        artifacts = (_iter_unit_modules(path, unit, records) if direct else
+        artifacts = (_iter_unit_modules(path, unit, records, audit_archives) if direct else
                      _iter_bundle_modules(path, unit, records) if 'bundle' in unit else
                      _iter_loose_modules(path, root, records))
         with closing(artifacts):
             for item, artifact, data in artifacts:
-                module = _validated_module(path, unit_id, item, data, audit_archives)
+                module = data if direct else _validated_module(path, unit_id, item, data, audit_archives)
                 if direct:
                     _check_unit_summaries(path, item, module)
                 del data
@@ -1511,12 +1514,13 @@ def _iter_load(path, audit_archives, manifest_read=None):
         raise ValueError(f'{path}: no Core modules')
 
 
-def _validated_module(path, unit_id, item, data, audit_archives):
+def _validated_module(path, unit_id, item, data, audit_archives, *, module=None):
     name, boundary = item['name'], item['boundary']
     relative, expected = item['path'], item['sha256']
     if hashlib.sha256(data).hexdigest() != expected:
         raise ValueError(f'{path}: content hash mismatch: {relative!r}')
-    module = strict_json(data.decode('utf-8'))
+    if module is None:
+        module = strict_json(data.decode('utf-8'))
     if (not isinstance(module, dict) or module.get('unit') != unit_id or
             module.get('module') != name or module.get('boundary') != boundary):
         raise ValueError(f'{path}: unit/module/boundary mismatch: {relative!r}')

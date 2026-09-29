@@ -4602,6 +4602,20 @@ class AuditStoreTest(unittest.TestCase):
     def binding(self, key, **fields):
         return dict(id=key, name='shared', lifted=True, expr=['var', key], **fields)
 
+    def test_ingestion_does_not_copy_unused_module_payload(self):
+        module = dict(schema=1, ghc='9.14.1', sourceCore='diagnostic source text',
+                      bindings=[self.binding('root')], constructors=[])
+        store = self.store()
+        with patch.object(store, 'put_record', wraps=store.put_record) as put:
+            auditor = audit_core.Audit([('original.json', module)], CAP, store=store)
+        self.assertNotIn('modules', [call.args[0] for call in put.call_args_list])
+        self.assertEqual('original.json', store.sources['root'])
+        self.assertEqual(module['bindings'][0], dict(auditor.bindings['root']))
+        expected = audit_core.Audit([('original.json', module)], CAP).run(['root'])
+        actual = io.StringIO()
+        audit_core.write_report(auditor.run(['root']), actual)
+        self.assertEqual(json.dumps(expected, indent=2) + '\n', actual.getvalue())
+
     def test_exact_binding_roundtrip_and_header_lookup_never_decode_expression(self):
         store = self.store()
         original = self.binding('unit:Module.f', future={'nested': [None, False, 2**100]}, rep={'kind': 'object'})
