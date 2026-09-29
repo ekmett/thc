@@ -27,6 +27,7 @@ import GHC.Driver.Hooks (runPhaseHook)
 import GHC.Driver.Pipeline.Phases (PhaseHook(..))
 import GHC.Driver.Pipeline.Execute (runPhase)
 import GHC.Runtime.Loader (initializePlugins)
+import GHC.Platform.Ways (hostIsDynamic)
 import System.Directory (createDirectoryIfMissing)
 import System.Environment (lookupEnv, getEnvironment)
 import System.Exit (ExitCode(..), die)
@@ -135,7 +136,7 @@ checkBackendHookProvenance root output libdir packageDb =
       initial <- getSessionDynFlags
       environment <- getSession
       (flags,leftovers,_) <- parseDynamicFlags (hsc_logger environment) initial (map noLoc
-        ["-dynamic", "-O0", "-fforce-recomp", "-fwrite-if-simplified-core",
+        [if hostIsDynamic then "-dynamic" else "-static", "-O0", "-fforce-recomp", "-fwrite-if-simplified-core",
          "-package-db", packageDb, "-fplugin=THC.Plugin",
          "-fplugin-opt=THC.Plugin:" ++ (directory </> "core"),
          "-fplugin-opt=THC.Plugin:post-tidy", "-fplugin-opt=THC.Plugin:unit-qualified",
@@ -154,8 +155,8 @@ checkBackendHookProvenance root output libdir packageDb =
         _ -> initialized
       target <- guessTarget source Nothing Nothing
       setTargets [target]
-      succeeded <- load LoadAllTargets
-      case succeeded of
+      loaded <- load LoadAllTargets
+      case loaded of
         Succeeded -> pure ()
         Failed -> liftIO (die "Foreign hook fixture did not compile")
       final <- getSession
