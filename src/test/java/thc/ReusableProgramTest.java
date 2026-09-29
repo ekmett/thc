@@ -1052,6 +1052,49 @@ class ReusableProgramTest {
         }
     }
 
+    @Test void preparationRejectsUnpreparedForeignLanguageReceivers() {
+        var closure = map("kind", "closure", "primReps", list("BoxedRep (Just Lifted)"), "evaluated", true);
+        var state = map("kind", "void", "primReps", list(), "evaluated", true);
+        var address = map("kind", "address", "primReps", list("AddrRep"), "evaluated", true);
+        var word = map("kind", "long", "primReps", list("IntRep"), "evaluated", true);
+        var object = map("kind", "object", "primReps", list("BoxedRep (Just Lifted)"), "evaluated", false);
+        try (var context = Context.newBuilder("thc").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                for (boolean javascript : new boolean[]{true, false}) {
+                    var proofs = javascript ? list(state) : list(address, address, address, state);
+                    var result = map("kind", "unknown", "aggregate", "unboxed-tuple", "evaluated", false,
+                        "primReps", javascript ? list("IntRep") : list("BoxedRep (Just Lifted)"),
+                        "components", list(state, javascript ? word : object));
+                    var arguments = new ArrayList<List<Object>>(); var formals = new ArrayList<Map<String,Object>>();
+                    for (int i = 0; i < proofs.size(); i++) {
+                        String id = "arg" + i;
+                        arguments.add(list("var", id, map("rep", proofs.get(i))));
+                        formals.add(map("id", id, "lifted", false, "rep", proofs.get(i)));
+                    }
+                    String script = "(() => 42)";
+                    String symbol = javascript ? "thc_javascript_v1_" + HexFormat.of().formatHex(script.getBytes(java.nio.charset.StandardCharsets.UTF_8)) : PolyglotOp.EVAL.getSymbol();
+                    var declaration = map("schema", 1, "target", map("kind", "static", "symbol", symbol, "isFunction", true),
+                        "convention", javascript ? "ccall" : "prim", "safety", "safe", "arity", proofs.size(), "suppliedArity", proofs.size(),
+                        "argumentReps", proofs, "resultRep", result);
+                    if (javascript) { declaration.put("intrinsic", "javascript-v1"); declaration.put("javascriptSource", script); }
+                    var call = list("app", list("var", "foreign", map("rep", closure)), arguments,
+                        Collections.nCopies(proofs.size(), false), false, false, map("rep", result, "foreignCall", declaration));
+                    if (javascript) assertNotNull(CoreJavaScript.validate(call, false)); else assertEquals(PolyglotOp.EVAL, CorePolyglot.validate(call, false));
+                    var entry = binding("read", list("lam", formals, call, map("rep", closure, "resultRep", result)), true);
+                    entry.put("rep", closure); entry.put("arity", proofs.size());
+                    // Internal lowering control only; no synthetic exception payload is executed.
+                    var input = module(list(entry, binding("box", lambda(variable("x")), true), binding("project", lambda(variable("x")), true)));
+                    input.put("selectedForeignExceptionBridge", map("unit", "test", "box", "box", "project", "project"));
+                    assertDoesNotThrow(() -> new Program(language, input).entryValue("read"));
+                    var failure = assertThrows(UnsupportedCore.class, () -> Program.prepareCode(language, input, List.of("read")));
+                    assertTrue(failure.getMessage().contains("foreign language"), failure.getMessage());
+                }
+            } finally { context.leave(); }
+        }
+    }
+
     @Test void installedSharedRootUsesFreshOwnersCafAndMetricsOnItsFirstCall() throws Exception {
         try (var context = Main.executionContext(false)) {
             context.initialize("thc"); context.enter();

@@ -1781,6 +1781,8 @@ public final class Program implements ExecutableProgram {
             deferredUnsupported.add(unavailable.getMessage());
             return new UnsupportedForeignCall(unavailable.getMessage(), metrics);
         }
+        if (reusableCode && (javascript != null || polyglot != null))
+            throw new UnsupportedCore("Reusable AST foreign language receivers and exception bridges are not prepared");
         if ((packageScalar != null && packageScalar.executesForeign() || javascript != null || polyglot != null || runtimeService == RuntimeServiceCall.EXCEPTION_TEXT) &&
             foreignExceptionBridge == null) throw fault("Foreign execution requires a linked genuine THC.Exception runtime bundle");
         if (runtimeService != null) {
@@ -1793,7 +1795,7 @@ public final class Program implements ExecutableProgram {
                 case QUERY -> new RuntimeQueryExpression(1, operands[0], operands[1], operands[2], operands[3]);
                 case CONTROL -> new RuntimeControlExpression(operands[0], operands[1], operands[2]);
                 case TRACE -> new RuntimeTraceExpression(operands[0], operands[1], operands[2], operands[3], operands[4]);
-                case EXCEPTION_TEXT -> new ExceptionTextExpression(operands[0], operands[1], operands[2], operands[3]);
+                case EXCEPTION_TEXT -> new ExceptionTextExpression(operands[0], operands[1], operands[2], operands[3], reusableCode ? scope.programSlot : -1);
             };
             return result.proven(evaluated(tupleProof, true));
         }

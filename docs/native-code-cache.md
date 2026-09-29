@@ -17,6 +17,15 @@ The command line accepts numeric arguments and results. Functions may use typed
 aggregates internally, but direct tuple/sum/vector host arguments require the
 [JVM embedding API](site/embedding.md), not this CLI.
 
+Native IO/package-FFI preparation is under development: the source loader retains
+immutable declarations and resolves native functions and exception projectors for
+each invoking instance. The experimental `--io-main`/`--shutdown-entry` CLI path
+is not yet qualified by a successful provider store and fresh load. JavaScript,
+Polyglot and explicit interop calls are rejected during reusable preparation until
+their receivers and exception paths are instance-aware; ordinary runtime support
+is unchanged. Exception-text inspection uses the invoking instance's genuine
+Haskell bridge when the foreign metadata accessor itself fails.
+
 ## Build and select a program
 
 Requirements: **Linux AMD64, GraalVM 25.3.4.1 / JDK 25 with its auxiliary-engine
