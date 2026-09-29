@@ -890,6 +890,7 @@ public final class Program implements ExecutableProgram {
         // Keep their frame identity even before any graph-budget extraction occurs.
         root.configureInitialFrameCopy(!delimited &&
             com.oracle.truffle.api.nodes.NodeUtil.findFirstNodeInstance(body, AstSameFrameArm.class) == null);
+        root.configureInitialClears(scope.layout.initialClears());
         root.configureInputProofs(inputProofs);
         root.configureEagerAsyncPolls(eagerAsyncPolls);
         if (reusableCode) root.configureProgramSlot(scope.programSlot, codeIdentity);
@@ -1774,6 +1775,7 @@ public final class Program implements ExecutableProgram {
         };
         for (List<Object> alt : rawAlternatives)
             if (coreFreeVariables((List<Object>) alt.get(3)).contains(expr.get(2))) return selection;
+        scope.layout.clearInitially(binder);
         return selection.discardUnusedBinder();
     }
 
@@ -2639,8 +2641,11 @@ public final class Program implements ExecutableProgram {
         AstSelfLayout self = scope.self;
         boolean emptyTuple = false;
         for (Expr node : nodes) if (node.getRepresentation().isEmptyTuple()) { emptyTuple = true; break; }
-        if (!reusableCode && tail && !capturesContinuations && self != null && self.getInputLayout() == null && !emptyTuple && self.getArity() > 0 && nodes.length <= self.getArity())
-            return new AstTailApplication(function, nodes, self, vectorSlots(scope, self.getArity(), "<self argument "), metrics);
+        if (!reusableCode && tail && !capturesContinuations && self != null && self.getInputLayout() == null && !emptyTuple && self.getArity() > 0 && nodes.length <= self.getArity()) {
+            int[] temporaries = vectorSlots(scope, self.getArity(), "<self argument ");
+            scope.layout.clearInitially(temporaries);
+            return new AstTailApplication(function, nodes, self, temporaries, metrics);
+        }
         return new Application(function, nodes, tail, codeMetrics());
     }
 
