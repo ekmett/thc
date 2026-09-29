@@ -77,6 +77,15 @@ semanticTests = TestList
       withEncoded (\_ encoder -> encodeBinding encoder completeBinding) $ \bytes strings offset ->
         assertEqual "all fields" (Right (completeBinding,fromIntegral (BS.length bytes)))
           (decodeBindingAt bytes strings offset)
+  , TestLabel "explicit unsupported nodes preserve their diagnostic and representation" $ TestCase $ do
+      let metadata = emptyMeta {metaRep=Known (Rep (scalar ObjectKind [BoxedLifted]) (Evaluation (Known False) []))}
+      forM_ [Lit metadata (LitUnsupported "RUBBISH(LiftedRep)"),Unsupported metadata "type-as-value"] $ \expression -> do
+        let value = completeBinding {bindingExpr=expression}
+        assertEqual "inspection preserves unsupported identity, not supported rubbish"
+          (Right (completeFacts,[value])) (parseModuleWithoutDebug (moduleJSON completeFacts [value]))
+        withEncoded (\_ encoder -> encodeBinding encoder value) $ \bytes strings offset ->
+          assertEqual "selected binary record retains exact original metadata"
+            (Right value) (fst <$> decodeBindingAt bytes strings offset)
   , TestLabel "optional declared host signature preserves old binding records" $ TestCase $ do
       let raw = HostType (Rep (scalar ObjectKind [BoxedUnlifted]) (Evaluation (Known True) [])) [HostObject]
           library = case raw of HostType proof _ -> HostType proof [HostInteropLibrary]
