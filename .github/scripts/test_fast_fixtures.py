@@ -82,7 +82,14 @@ class FixturePreparationTest(unittest.TestCase):
             "t/fixtures/compiler/" + name + ".hs" for name in (
                 "StrictFields", "SpeculationAudit", "RepresentationAudit", "SourceNotes",
                 "CBVAudit", "CBVJoinAudit", "CBVCoercionAudit", "ConstructorFieldAudit", "DemandAudit")]
-        self.assertEqual([["bin/export-core.sh", option, *inputs]], commands)
+        self.assertEqual([
+            ["bin/export-core.sh", option, *inputs],
+            ["bin/export-core.sh", option, "-fplugin-opt=THC.Plugin:post-tidy",
+             *["t/fixtures/compiler/" + name + ".hs" for name in
+               ("CBVAudit", "CBVJoinAudit", "CBVCoercionAudit")]],
+            ["bin/export-core.sh", option, "t/fixtures/compiler/SourceNotes.hs",
+             "t/fixtures/compiler/RepresentationAudit.hs"],
+        ], commands)
         self.assertIn("build/core", fast_fixtures.FULL_OUTPUT_ROOTS)
         for path in inputs:
             self.assertTrue((project / path).is_file(), path)
