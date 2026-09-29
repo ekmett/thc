@@ -35,7 +35,7 @@ import System.IO (hClose, openTempFile)
 import System.IO.Error (tryIOError)
 import System.Process (readProcessWithExitCode)
 import Test.HUnit (Test(..), assertBool, assertEqual)
-import THC.Driver.NativeDependencies (nativeLinkInputs, readNativeProduct, nativeProductPieces)
+import THC.Driver.NativeDependencies (nativeLinkInputs, readNativeProduct, nativeProductPieces, nativeProductProof)
 import THC.Driver.PackageNative (captureNativeObject, finishPackageNativeWithDependencies, nativeWrapperSource)
 import THC.Driver.NativeRecipe
 import THC.Driver.Installed (boundedInterfaceProcessInput)
@@ -85,6 +85,20 @@ tests = TestLabel "actual native compiler receipts" $ TestList
         provider <- prepare "nativeprovider" []
           "int shared_state=40; int next(void){return ++shared_state;} int unimported(void){return shared_state;}\n"
         assertEqual "only actual C membership, not native Haskell code" 1 (length (nativeProductPieces provider))
+        let localSource = object ["type" .= ("local"::String),"path" .= root]
+            localPlan style source = object ["id" .= ("nativeprovider"::String),"type" .= ("configured"::String),
+              "style" .= (style::String),"pkg-src" .= source]
+        forM_ ["local","inplace"] $ \style -> do
+          localProvider <- readNativeProduct (localPlan style localSource) [] (root </> "nativeprovider.conf") pieces
+            >>= maybe (fail "local source lost captured native products") pure
+          assertEqual "local source uses the same exact registered C membership"
+            (nativeProductPieces provider) (nativeProductPieces localProvider)
+          identity <- field "sourceIdentity" (nativeProductProof localProvider)
+          assertEqual "local source provenance is retained, not a fabricated tarball hash" localSource =<< field "pkg-src" identity
+          assertEqual "local source has no fabricated tarball hash" Null =<< field "pkg-src-sha256" identity
+        forM_ [localPlan "global" localSource,localPlan "local" (object ["type" .= ("local"::String)])] $ \invalid ->
+          assertBool "global tarball hash and actual local source path remain required" . isLeft =<<
+            tryIOError (readNativeProduct invalid [] (root </> "nativeprovider.conf") pieces)
         (_,Just descriptor) <- finish "nativeprovider" provider []
         exports <- field "exports" descriptor
         assertBool "unimported public definition remains rooted" (String "unimported" `elem` case exports of Array names -> foldr (:) [] names; _ -> [])
