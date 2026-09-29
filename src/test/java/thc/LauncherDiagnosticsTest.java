@@ -122,7 +122,7 @@ public class LauncherDiagnosticsTest {
         Files.createDirectories(child.getParent());
         Files.writeString(child, "#!/bin/sh\nprintf '%s\\n' \"$@\"\n");
         assertTrue(child.toFile().setExecutable(true));
-        var arguments = List.of("path with spaces/core.json", "entry", "", "--", "guest", "--compile");
+        var arguments = List.of("path with spaces/core.cbd", "entry", "", "--", "guest", "--compile");
         var command = new ArrayList<>(List.of("sh", script.toString())); command.addAll(arguments);
         var process = new ProcessBuilder(command).redirectErrorStream(true).start();
         assertTrue(process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS));
@@ -131,11 +131,13 @@ public class LauncherDiagnosticsTest {
         assertEquals(arguments, output.lines().toList());
     }
     @Test public void scalarCompileChecksTheImmediateCallWithoutAdditionalTraining() throws Exception {
-        var body = List.of("app", List.of("prim", "+#"), List.of(List.of("var", "input"), List.of("lit", "int", "1")), List.of(false, false));
-        var expression = List.of("lam", List.of(Map.of("id", "input", "name", "input", "lifted", false)), body);
-        var module = Map.of("schema", 1, "ghc", "9.14.1", "module", "Synthetic.LauncherCompilation", "constructors", List.of(),
+        var body = List.of("app", List.of("prim", "+#", Map.of()),
+            List.of(List.of("var", "input", Map.of()), List.of("lit", "int", "1", Map.of())), List.of(false, false), false, false, Map.of());
+        var expression = List.of("lam", List.of(Map.of("id", "input", "name", "input", "lifted", false)), body, Map.of());
+        var module = Map.of("schema", 1, "ghc", "9.14.1", "unit", "synthetic", "module", "Synthetic.LauncherCompilation",
+            "boundary", "synthetic", "constructors", List.of(),
             "bindings", List.of(Map.of("id", "entry", "name", "entry", "arity", 1, "lifted", true, "expr", expression)));
-        var source = directory.resolve("scalar.json"); Files.writeString(source, Json.stringify(module));
+        var source = CoreCbdTestSupport.writeModel(directory.resolve("scalar.cbd"), module);
         var oldBackend = System.getProperty("thc.backend"); var oldOut = System.out; var oldErr = System.err;
         try {
             for (var backend : List.of("ast", "bytecode")) for (boolean compiled : new boolean[] {false, true}) {
@@ -174,12 +176,16 @@ public class LauncherDiagnosticsTest {
         var closure = new LinkedHashMap<String, Object>(unit); closure.put("kind", "closure");
         var result = Map.of("kind", "unknown", "aggregate", "unboxed-tuple", "components", List.of(state, unit), "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", true);
         var unitId = "ghc-internal:GHC.Internal.Tuple.()";
-        var body = List.of("app", List.of("con", "StateUnit", 2), List.of(List.of("void", Map.of("rep", state)), List.of("con", unitId, 0, Map.of("rep", unit))), List.of(false, true), true, true, Map.of("rep", result));
+        var body = List.of("app", List.of("con", "StateUnit", 2, Map.of()), List.of(List.of("void", Map.of("rep", state)), List.of("con", unitId, 0, Map.of("rep", unit))), List.of(false, true), true, true, Map.of("rep", result));
         var worker = binding("worker", List.of("lam", List.of(Map.of("id", "s", "name", "s", "type", "State# RealWorld", "lifted", false, "rep", state)), body, Map.of("rep", closure, "resultRep", result)), closure);
-        return Map.of("schema", 1, "ghc", "9.14.1", "bindings", List.of(worker, binding("main", List.of("var", "worker", Map.of("rep", closure)), closure),
+        return Map.of("schema", 1, "ghc", "9.14.1", "unit", "synthetic", "module", "Synthetic.LauncherIO", "boundary", "synthetic",
+            "bindings", List.of(worker, binding("main", List.of("var", "worker", Map.of("rep", closure)), closure),
             binding("shutdown", List.of("var", "worker", Map.of("rep", closure)), closure)), "constructors", List.of(
-            Map.of("id", "StateUnit", "name", "StateUnit", "kind", "unboxed-tuple", "arity", 2),
-            Map.of("id", unitId, "name", "()", "kind", "boxed", "arity", 0, "strictFields", List.of(), "fieldLifted", List.of(), "fieldReps", List.of())));
+            Map.of("id", "StateUnit", "name", "StateUnit", "kind", "unboxed-tuple", "arity", 2, "tag", 1,
+                "strictFields", List.of(false, false), "fieldLifted", List.of(false, true),
+                "fieldReps", List.of(List.of(), List.of("BoxedRep (Just Lifted)")), "fieldTypes", List.of(state, unit)),
+            Map.of("id", unitId, "name", "()", "kind", "boxed", "arity", 0, "tag", 1,
+                "strictFields", List.of(), "fieldLifted", List.of(), "fieldReps", List.of(), "fieldTypes", List.of())));
     }
     private Map<String, Object> binding(String id, Object expression, Map<String, Object> closure) {
         return Map.of("id", id, "name", id, "type", "IO ()", "arity", 0, "lifted", true, "rep", closure, "expr", expression);
@@ -187,7 +193,7 @@ public class LauncherDiagnosticsTest {
     private void property(String key, String value) { if (value == null) System.clearProperty(key); else System.setProperty(key, value); }
     private String launch(String mode, String backend, String diagnostics) throws Throwable { return launch(mode, backend, diagnostics, List.of(), null); }
     private String launch(String mode, String backend, String diagnostics, List<String> guest, String async) throws Throwable {
-        var source = directory.resolve("io.json"); Files.writeString(source, Json.stringify(module()));
+        var source = CoreCbdTestSupport.writeModel(directory.resolve("io.cbd"), module());
         var old = new LinkedHashMap<String, String>(); for (var key : List.of("thc.backend", "thc.diagnostics", "thc.asyncExceptions")) old.put(key, System.getProperty(key));
         var stderr = System.err; var bytes = new ByteArrayOutputStream();
         try (var stream = new PrintStream(bytes, true, StandardCharsets.UTF_8)) {
