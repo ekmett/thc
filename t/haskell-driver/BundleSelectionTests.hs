@@ -30,7 +30,9 @@ import System.IO.Error (tryIOError)
 import Test.HUnit (Test(..), assertBool, assertEqual)
 import THC.Driver.CoreSymbols (publishCoreUnit)
 import THC.Driver.Project (Bundle(..), BundleReceipt(..), readGlobalBundle, readBundle,
-  exceptionBridgeModules, projectWindowsWiredBundle, readCapturedStoreBundles)
+  exceptionBridgeModules, projectWindowsWiredBundle, readCapturedStoreBundles,
+  InstalledBundle(..), readCapturedInstalledBundles)
+import THC.Driver.Installed (InstalledUnit(InstalledUnit, registeredId, installedDepends, installedInterfaces))
 import THC.Driver.Zip (encodeZip)
 import THC.Driver.NativeDependencies (readNativeProduct)
 import TestSupport (Env, withFixtureNamed)
@@ -83,6 +85,53 @@ tests env = TestLabel "upstream successful Core selections" $ TestList
       BS.writeFile manifest (encoded (supplied [row]))
       BS.appendFile path "changed"
       assertBool "supplied digest is checked against the validated archive" . isLeft =<< tryIOError (load request)
+  , TestCase $ scratch "captured installed" $ \directory -> do
+      let path = directory </> "installed.zip"
+          manifest = directory </> "captured.json"
+          probe = directory </> "original-probe.json"
+          compiler = object ["id" .= ("ghc-9.14.1" :: String), "abi" .= ("inplace" :: String),
+            "platform" .= ("x86_64-linux" :: String), "way" .= ("dynamic-nonprofiling" :: String)]
+          unit = InstalledUnit "registered-unit" "current registration" [] [("A","current/A.dyn_hi")] []
+          provenance = object ["registeredUnit" .= registeredId unit, "compiler" .= compiler,
+            "interfaces" .= [object ["module" .= ("A" :: String), "path" .= ("original/A.dyn_hi" :: String)]],
+            "reexports" .= ([] :: [(String,String,String)]), "depends" .= ([] :: [String])]
+          inputs = object ["format" .= ("thc-core-build-inputs" :: String), "schema" .= (1 :: Int),
+            "unit" .= ("core-owner" :: String), "compiler" .= compiler,
+            "component" .= object ["kind" .= ("installed-interface" :: String), "registration" .= provenance],
+            "dependencies" .= ([] :: [String]), "buildKey" .= ("build" :: String), "exportKey" .= ("export" :: String)]
+          withLayout (Object fields) = Object (KM.insert "targetLayout" layout fields)
+          withLayout _ = error "object expected"
+          load verify selected = readCapturedInstalledBundles verify compiler selected manifest
+      bundle <- archive path "core-owner" [("A",core "core-owner" "A")]
+        (Just (withLayout inputs)) [("targetLayout",layout)]
+      let record = object ["identity" .= object ["registration" .= provenance],
+            "inputs" .= inputs, "bundleSha256" .= bundleHash bundle]
+          envelope = object ["record" .= record, "sha256" .= digest (encoded record)]
+          row = object ["unit" .= registeredId unit, "path" .= path, "probe" .= probe]
+          supplied rows = object ["format" .= ("thc-captured-store-bundles" :: String),
+            "schema" .= (1 :: Int), "installed" .= (rows :: [Value])]
+      BS.writeFile probe (encoded envelope)
+      BS.writeFile manifest (encoded (supplied [row]))
+      selected <- load False [unit]
+      assertEqual "retained Core owner may differ from its registered alias"
+        (Just ("core-owner", snapshot bundle))
+        ((\(_,item) -> (installedOwner item,snapshot (installedBundle item))) <$> Map.lookup "registered-unit" selected)
+      assertBool "wrong compiler fails before reusing installed inputs" . isLeft =<< tryIOError
+        (readCapturedInstalledBundles False (object []) [unit] manifest)
+      assertBool "changed dependencies reject original receipt" . isLeft =<< tryIOError
+        (load False [unit {installedDepends=["new-dependency"]}])
+      assertBool "changed inventory rejects original receipt" . isLeft =<< tryIOError
+        (load False [unit {installedInterfaces=[("B","current/B.dyn_hi")]}])
+      BS.writeFile manifest (encoded (supplied [row,row]))
+      assertBool "duplicate installed rows are rejected" . isLeft =<< tryIOError (load False [unit])
+      BS.writeFile manifest (encoded (supplied []))
+      assertBool "missing installed row cannot trigger acquisition" . isLeft =<< tryIOError (load False [unit])
+      BS.writeFile manifest (encoded (supplied [row]))
+      corruptUnobserved path
+      _ <- load False [unit]
+      assertBool "explicit verification still consumes and rejects corrupt payload" . isLeft =<< tryIOError (load True [unit])
+      BS.writeFile probe (encoded (object ["record" .= record, "sha256" .= ("corrupt" :: String)]))
+      assertBool "corrupt original probe is not a valid supplied selection" . isLeft =<< tryIOError (load False [unit])
   , TestCase $ scratch "setup library dependencies" $ \directory -> do
       let path = directory </> "registered.conf"
           unit = object ["id" .= ("empty-1-inplace" :: String),
@@ -177,6 +226,22 @@ core unit name = object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
 
 boundary :: String
 boundary = "optimized-Core-after-Tidy-before-CorePrep"
+
+-- Closed reader control; no claim of a real compiler/native layout probe.
+layout :: Value
+layout = object $ ["schema" .= (1::Int), "profiled" .= False, "tablesNextToCode" .= True,
+  "targetPlatform" .= ("x86_64-linux" :: String), "endianness" .= ("little" :: String), "wordBytes" .= (8::Int)] ++
+  [Key.fromString name .= (0::Int) | name <-
+    ["infoTableBytes","infoTablePtrsOffset","infoTablePtrsBytes","infoTableNptrsOffset","infoTableNptrsBytes",
+     "infoTableTypeOffset","infoTableTypeBytes","infoTableSrtOffset","infoTableSrtBytes","infoProvEntBytes",
+     "infoProvBytes","infoProvDescBytes","infoProvEntInfoOffset","infoProvEntProvOffset","infoProvNameOffset",
+     "infoProvDescOffset","infoProvTyDescOffset","infoProvLabelOffset","infoProvUnitOffset","infoProvModuleOffset",
+     "infoProvFileOffset","infoProvSpanOffset","stackHeaderBytes","stackCatchHandlerBytes","stackCatchFrameBytes",
+     "stackUpdateeBytes","stackUpdateFrameBytes","stackAnnPayloadBytes","stackAnnFrameBytes","stackRetFunSizeBytes",
+     "stackRetFunFunBytes","stackRetFunPayloadBytes","stackRetFunFrameBytes"]] ++
+  [Key.fromString name .= (ordinal::Int) | (name,ordinal) <-
+    [("closureRetBco",29),("closureRetSmall",30),("closureRetBig",31),("closureRetFun",32),
+     ("closureStopFrame",36),("closureStack",53),("closureAnnFrame",65)]]
 
 archive :: FilePath -> String -> [(String, Value)] -> Maybe Value -> [(String, Value)] -> IO Bundle
 archive path owner values inputs extra = do

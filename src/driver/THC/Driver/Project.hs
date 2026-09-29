@@ -16,7 +16,7 @@ module THC.Driver.Project
   ( runProject, acquireProject, prepareWindowsRuntime, Bundle(..), InstalledBundle(..)
   , prepareInstalledBundle, installedRecords
   , BundleReceipt(..), readGlobalBundle, readBundle, exceptionBridgeModules, projectWindowsWiredBundle
-  , publishCapturedStoreUnit, readCapturedStoreBundles
+  , publishCapturedStoreUnit, readCapturedStoreBundles, readCapturedInstalledBundles
   ) where
 
 import Control.Exception (evaluate, finally, onException)
@@ -484,25 +484,40 @@ runBuiltProject action project working thcRoot runtime output native target proj
     let installedUnits = [unit | unit <- ordered,
               jsonField (unitValue unit) "type" == Just ("pre-existing" :: String)]
     originalRegistrations <- mapM (discoverInstalled originalContext . unitId) installedUnits
-    helperContext <- case ghcSource of
-      Nothing -> pure originalContext
-      Just source -> prepareForeignInterfaces
-        (ForeignCompiler ghc pluginDb pluginUnit pluginLibrary registeredLibrary driverHash)
-        cacheRoot source originalContext originalRegistrations
-    registrations <- mapM (discoverInstalled helperContext . unitId) installedUnits
-    validateReexports registrations
-    bundles <- forM registrations $ \registrationUnit -> do
-      planned <- maybe (fail "installed registration not in Cabal plan") pure
-        (Map.lookup (registeredId registrationUnit) byId)
+    validateReexports originalRegistrations
+    forM_ originalRegistrations $ \registrationUnit -> do
+      planned <- maybe (fail "installed registration not in Cabal plan") pure (Map.lookup (registeredId registrationUnit) byId)
       require (sort (unitDepends planned) == sort (installedDepends registrationUnit))
         ("installed dependencies differ from Cabal plan for " ++ registeredId registrationUnit)
-      result <- prepareInstalledBundleWithVerification verifyArtifacts cacheRoot (native </> "cache/thc/staging")
-        (thcRoot </> "src/driver/cbits/target-layout.c") driverHash helperContext registrationUnit
-      bundle <- either (\missing -> fail
-        ("complete-interface-core unavailable for " ++ missingUnit missing ++ ":" ++ missingModule missing ++
-         " (dynamic interface " ++ missingInterface missing ++ "). Select a full-Core GHC; " ++
-         "--installed-core pinned explicitly selects the limited legacy source provider.")) pure result
-      pure (registeredId registrationUnit, (registrationUnit, bundle))
+    retained <- case capturedPath of
+      Nothing -> pure Nothing
+      Just path -> do
+        supplied <- readJson path
+        case jsonField supplied "installed" :: Maybe Value of
+          Nothing -> pure Nothing
+          Just _ -> Just <$> readCapturedInstalledBundles verifyArtifacts (installedCompiler originalContext) originalRegistrations path
+    bundles <- case retained of
+      Just selectedInstalled -> pure (Map.toList selectedInstalled)
+      Nothing -> do
+        helperContext <- case ghcSource of
+          Nothing -> pure originalContext
+          Just source -> prepareForeignInterfaces
+            (ForeignCompiler ghc pluginDb pluginUnit pluginLibrary registeredLibrary driverHash)
+            cacheRoot source originalContext originalRegistrations
+        registrations <- mapM (discoverInstalled helperContext . unitId) installedUnits
+        validateReexports registrations
+        forM registrations $ \registrationUnit -> do
+          planned <- maybe (fail "installed registration not in Cabal plan") pure
+            (Map.lookup (registeredId registrationUnit) byId)
+          require (sort (unitDepends planned) == sort (installedDepends registrationUnit))
+            ("installed dependencies differ from Cabal plan for " ++ registeredId registrationUnit)
+          result <- prepareInstalledBundleWithVerification verifyArtifacts cacheRoot (native </> "cache/thc/staging")
+            (thcRoot </> "src/driver/cbits/target-layout.c") driverHash helperContext registrationUnit
+          bundle <- either (\missing -> fail
+            ("complete-interface-core unavailable for " ++ missingUnit missing ++ ":" ++ missingModule missing ++
+             " (dynamic interface " ++ missingInterface missing ++ "). Select a full-Core GHC; " ++
+             "--installed-core pinned explicitly selects the limited legacy source provider.")) pure result
+          pure (registeredId registrationUnit, (registrationUnit, bundle))
     let owners = map (installedOwner . snd . snd) bundles
         registered = map fst bundles
     require (length owners == length (nub owners)) "multiple installed registrations claim one Core owner"
@@ -1427,6 +1442,55 @@ readCapturedStoreBundles verify request requested path = do
     bundle <- maybe (fail ("invalid captured store bundle: " ++ owner)) pure selected
     require (bundleHash bundle == expectedHash) ("captured store bundle digest differs: " ++ owner)
     pure (owner, bundle)
+  pure (Map.fromList pairs)
+
+-- | Explicit installed-artifact selection, not a current-producer cache hit.
+-- Keep the original successful probe and build inputs; validate its archive
+-- through the same reader and receipt path as ordinary installed acquisition.
+readCapturedInstalledBundles :: Bool -> Value -> [InstalledUnit] -> FilePath -> IO (Map.Map String (InstalledUnit, InstalledBundle))
+readCapturedInstalledBundles verify compiler requested path = do
+  manifest <- readJson path
+  require (jsonField manifest "format" == Just ("thc-captured-store-bundles" :: String) &&
+           jsonField manifest "schema" == Just (1 :: Int)) "invalid captured installed manifest"
+  rows <- field manifest "installed" :: IO [Value]
+  owners <- mapM (`field` "unit") rows
+  require (length owners == length (nub owners) && sort owners == sort (map registeredId requested))
+    "captured installed inventory differs from requested closure"
+  let registrations = Map.fromList [(registeredId unit, unit) | unit <- requested]
+  pairs <- forM (zip owners rows) $ \(identifier, row) -> do
+    archive <- field row "path"
+    probePath <- field row "probe"
+    require (isAbsolute archive && isAbsolute probePath) "captured installed paths must be absolute"
+    envelope <- readJson probePath
+    record <- field envelope "record"
+    require (jsonField envelope "sha256" == Just (shaHex (BL.toStrict (encode record))))
+      "corrupt captured installed probe"
+    identity <- field record "identity"
+    provenance <- field identity "registration"
+    inputs <- field record "inputs"
+    component <- field inputs "component"
+    interfaces <- field provenance "interfaces" :: IO [Value]
+    names <- mapM (`field` "module") interfaces
+    let unit = registrations Map.! identifier
+    require (jsonField provenance "registeredUnit" == Just identifier &&
+      jsonField provenance "compiler" == Just compiler && jsonField inputs "compiler" == Just compiler &&
+      jsonField inputs "format" == Just ("thc-core-build-inputs" :: String) &&
+      jsonField inputs "schema" == Just (1 :: Int) &&
+      jsonField component "kind" == Just ("installed-interface" :: String) &&
+      jsonField component "registration" == Just provenance &&
+      length names == length (nub names) && sort names == sort (map fst (installedInterfaces unit)) &&
+      fmap sort (jsonField provenance "depends") == Just (sort (installedDepends unit)) &&
+      fmap sort (jsonField inputs "dependencies") == Just (sort (installedDepends unit)) &&
+      fmap sort (jsonField provenance "reexports") == Just (sort (installedReexports unit)))
+      ("captured installed compiler, registration or inventory differs: " ++ identifier)
+    owner <- field inputs "unit"
+    buildKey <- field inputs "buildKey"
+    exportKey <- field inputs "exportKey"
+    selected <- readBundle verify TargetLayoutBundle archive owner buildKey exportKey inputs (sort names)
+    bundle <- maybe (fail ("invalid captured installed bundle: " ++ identifier)) pure selected
+    require (jsonField record "bundleSha256" == Just (bundleHash bundle))
+      ("captured installed bundle digest differs: " ++ identifier)
+    pure (identifier, (unit, InstalledBundle owner bundle))
   pure (Map.fromList pairs)
 
 captureGlobalUnits :: ExportContext -> FilePath -> String -> Map.Map String Unit -> [Unit] ->
