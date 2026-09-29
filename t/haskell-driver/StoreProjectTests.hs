@@ -10,7 +10,7 @@
 -- Portability : Native GHC; host filesystem/process services
 --
 -- Tests for store project.
-module StoreProjectTests (tests, inplaceTests, concurrentTests, exportSafetyTests, proxyOptionsTest) where
+module StoreProjectTests (tests, inplaceTests, concurrentTests, exportSafetyTests, proxyOptionsTest, captureLifetimeTests) where
 
 import Control.Concurrent (forkFinally, killThread, newEmptyMVar, putMVar, readMVar)
 import Control.Exception (bracket, throwIO)
@@ -31,8 +31,48 @@ import THC.Driver.GhcProxy (ghcProxyCommand, directPlugin)
 import THC.Driver.Lock (withLock)
 
 tests :: Env -> Test
-tests env = TestList [proxyOptionsTest env, storeProjectTest env, customStoreProjectTest env,
+tests env = TestList [proxyOptionsTest env, captureLifetimeTests env, storeProjectTest env, customStoreProjectTest env,
   inplaceTests env, concurrentTests env, exportSafetyTests env, nativeVariantsTest env False, nativeVariantsTest env True]
+
+captureLifetimeTests :: Env -> Test
+captureLifetimeTests env = TestLabel "isolated capture retains failures and cleans successes" $ TestCase $
+  withFixtureNamed env "t/fixtures/run-store-project" "capture lifetime" $ \project ->
+  withCache (takeDirectory project </> "cache") $ do
+    let base = takeDirectory project
+        output = base </> "output"
+        staging = output </> "native/cache/thc/staging"
+        marker = base </> "fail-isolated-capture"
+        wrapper = base </> "ghc-lifetime.sh"
+        quote value = "'" ++ concatMap (\c -> if c == '\'' then "'\\''" else [c]) value ++ "'"
+    compiler <- maybe "ghc" id <$> lookupEnv "GHC"
+    ghcPkg <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
+    writeText marker ""
+    writeText wrapper $ unlines
+      ["#!/bin/sh", "if [ -n \"$THC_PROXY_GLOBAL_UNITS\" ] && [ -f " ++ quote marker ++ " ]; then",
+       "  echo 'intentional isolated capture failure' >&2", "  exit 1", "fi",
+       "exec " ++ quote compiler ++ " \"$@\""]
+    permissions <- getPermissions wrapper
+    setPermissions wrapper permissions { Directory.executable = True }
+    let dependency = base </> "dependency-source"
+    copyTree (project </> "dep-data") dependency
+    sourceDist env dependency project
+    let acquire = run env base Nothing 240
+          ["acquire", "completed", "--project-dir", project, "--thc-root", thcRoot env,
+           "--dist-dir", output, "--with-ghc", wrapper, "--with-ghc-pkg", ghcPkg]
+    rejected <- acquire
+    assertFailure rejected
+    retained <- Directory.listDirectory staging
+    assertEqual "exactly the failed replay remains" 1 (length retained)
+    forM_ retained $ \name -> do
+      let path = staging </> name
+      assertContains ("Cabal store capture retained after failure: " ++ path) (err rejected)
+      requireFile (path </> "ghc-proxy.sh")
+    removeFile marker
+    completed <- acquire
+    assertSuccess completed
+    assertNoStdout completed
+    assertEqual "successful replay cleans itself without deleting earlier evidence"
+      (sort retained) . sort =<< Directory.listDirectory staging
 
 exportSafetyTests :: Env -> Test
 exportSafetyTests env = TestLabel "local export preserves inferred safety and rejects Unsafe imports" $ TestCase $
