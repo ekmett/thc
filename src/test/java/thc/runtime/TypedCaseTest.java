@@ -3,8 +3,14 @@
 package thc.runtime;
 
 import com.oracle.truffle.api.RootCallTarget;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.frame.FrameDescriptor;
+import com.oracle.truffle.api.frame.FrameSlotKind;
+import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.nodes.NodeUtil;
 import java.math.BigInteger;
@@ -91,6 +97,95 @@ class TypedCaseTest {
         });
     }
     private record Expected(String entry, long value) {}
+    @Test void numericLiteralFallbackKeepsExactCarriersAndActivationTagFailures() {
+        for (Object literal : new Object[]{Integer.MIN_VALUE, Long.MIN_VALUE}) {
+            var original = new Alternative(Alternative.LITERAL_ALTERNATIVE, literal, new int[0], new Literal(7L));
+            for (var alternative : List.of(original, NodeUtil.cloneNode(original))) {
+                var builder = FrameDescriptor.newBuilder();
+                builder.addSlot(FrameSlotKind.Illegal, null, null);
+                var descriptor = builder.build();
+                var frame = Truffle.getRuntime().createMaterializedFrame(new Object[0], descriptor);
+                frame.clear(0);
+                assertEquals("Unsupported runtime frame slot tag", assertThrows(RuntimeFault.class,
+                    () -> alternative.matches(frame, 0)).getMessage());
+                frame.setByte(0, (byte) 0);
+                assertEquals("Unsupported runtime frame slot tag", assertThrows(RuntimeFault.class,
+                    () -> alternative.matches(frame, 0)).getMessage());
+                frame.setInt(0, Integer.MIN_VALUE);
+                assertEquals(literal instanceof Integer, alternative.matches(frame, 0));
+                frame.setLong(0, Long.MIN_VALUE);
+                assertEquals(literal instanceof Long, alternative.matches(frame, 0));
+                for (Object mismatch : new Object[]{0, 0L, 0.0f, 0.0, false}) {
+                    switch (mismatch) {
+                        case Integer value -> frame.setInt(0, value);
+                        case Long value -> frame.setLong(0, value);
+                        case Float value -> frame.setFloat(0, value);
+                        case Double value -> frame.setDouble(0, value);
+                        case Boolean value -> frame.setBoolean(0, value);
+                        default -> throw new AssertionError(mismatch);
+                    }
+                    assertFalse(alternative.matches(frame, 0));
+                }
+                // A sibling can widen the descriptor without rewriting older activation tags.
+                var sibling = Truffle.getRuntime().createMaterializedFrame(new Object[0], descriptor);
+                if (literal instanceof Integer value) frame.setInt(0, value);
+                else frame.setLong(0, (Long) literal);
+                FrameAccess.writeObject(sibling, 0, literal);
+                assertEquals(FrameSlotKind.Object, descriptor.getSlotKind(0));
+                assertTrue(alternative.matches(frame, 0));
+                assertTrue(alternative.matches(sibling, 0));
+                FrameAccess.writeObject(sibling, 0, null);
+                assertFalse(alternative.matches(sibling, 0));
+                var staticBuilder = FrameDescriptor.newBuilder();
+                staticBuilder.addSlot(FrameSlotKind.Static, null, null);
+                var staticFrame = Truffle.getRuntime().createMaterializedFrame(new Object[0], staticBuilder.build());
+                assertThrows(AssertionError.class, () -> alternative.matches(staticFrame, 0),
+                    "Truffle rejects non-static tag queries on static slots with assertions enabled");
+            }
+        }
+    }
+    private static final class NumericLiteralDispatch extends RootNode {
+        @Children private Alternative[] alternatives = new Alternative[400];
+        int compiled;
+        NumericLiteralDispatch() {
+            super(null);
+            for (int i = 0; i < alternatives.length; i++)
+                alternatives[i] = new Alternative(Alternative.LITERAL_ALTERNATIVE, (long) i,
+                    new int[0], new Literal((long) i), new int[0][], false);
+        }
+        @Override public String getName() { return "numeric literal saved-frame dispatch"; }
+        @ExplodeLoop @Override public Object execute(VirtualFrame frame) {
+            if (CompilerDirectives.inCompiledCode()) compiled++;
+            var saved = (MaterializedFrame) frame.getArguments()[0];
+            for (var alternative : alternatives)
+                if (alternative.matches(saved, 0)) return alternative.getBody().execute(saved);
+            return -1L;
+        }
+    }
+    @Test void numericLiteralDispatchCompilesWithDynamicSavedFrameTags() throws Exception {
+        try (var context = Main.executionContext(false)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var builder = FrameDescriptor.newBuilder();
+                builder.addSlot(FrameSlotKind.Long, null, null);
+                var frame = Truffle.getRuntime().createMaterializedFrame(new Object[0], builder.build());
+                frame.setLong(0, 399L);
+                var root = new NumericLiteralDispatch();
+                var target = root.getCallTarget();
+                compile(target);
+                var runtime = Truffle.getRuntime();
+                runtime.getClass().getMethod("bypassedInstalledCode", Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"))
+                    .invoke(runtime, target);
+                assertEquals(0, root.compiled);
+                assertEquals(399L, Calls.target(target, new Object[]{frame}));
+                assertEquals(1, root.compiled, "first call enters installed code without guest training");
+                FrameAccess.writeObject(frame, 0, 399L);
+                assertEquals(399L, Calls.target(target, new Object[]{frame}));
+                FrameAccess.writeObject(frame, 0, 399);
+                assertEquals(-1L, Calls.target(target, new Object[]{frame}));
+            } finally { context.leave(); }
+        }
+    }
     @Test void genericLiteralCasesDoNotInvokeHostEqualityOnColdObjectCarriers() throws Exception {
         each((enabled, backend, p) -> {
             var hostile = new Object() {

@@ -6,6 +6,7 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.profiles.CountingConditionProfile;
+import static thc.runtime.RuntimeFault.fault;
 
 final class Alternative extends Node {
     static final int DEFAULT_ALTERNATIVE = 0;
@@ -70,15 +71,22 @@ final class Alternative extends Node {
     private boolean matchesLiteral(VirtualFrame frame, int slot) {
         if (value instanceof Integer literal) {
             if (frame.isInt(slot)) return frame.getInt(slot) == literal;
-            Object scrutinee = FrameAccess.INSTANCE.read(frame, slot);
+            Object scrutinee = numericObject(frame, slot);
             return scrutinee instanceof Integer number && number.intValue() == literal.intValue();
         }
         if (value instanceof Long literal) {
             if (frame.isLong(slot)) return frame.getLong(slot) == literal;
-            Object scrutinee = FrameAccess.INSTANCE.read(frame, slot);
+            Object scrutinee = numericObject(frame, slot);
             return scrutinee instanceof Long number && number.longValue() == literal.longValue();
         }
         // Remaining literal Addr# carriers compare by identity, never guest equals.
         return FrameAccess.INSTANCE.read(frame, slot) == value;
+    }
+    private static Object numericObject(VirtualFrame frame, int slot) {
+        if (frame.isObject(slot)) return frame.getObject(slot);
+        // Other primitive carriers cannot match; do not box them just to reject them.
+        if (frame.isInt(slot) || frame.isLong(slot) || frame.isFloat(slot) ||
+            frame.isDouble(slot) || frame.isBoolean(slot)) return null;
+        throw fault("Unsupported runtime frame slot tag");
     }
 }
