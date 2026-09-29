@@ -73,14 +73,14 @@ class ReusableBytesTest {
     }
     private static List<Object> lifecycle() {
         var original = variable("original", BYTES); var grown = variable("grown", BYTES);
-        var frozenOriginal = variable("frozenOriginal", BYTES); var frozenGrown = variable("frozenGrown", BYTES);
+        var snapshot = variable("snapshot", BYTES);
+        var frozenSnapshot = variable("frozenSnapshot", BYTES); var frozenGrown = variable("frozenGrown", BYTES);
         var body = primitive("+#", INT, variable("word", INT), primitive("+#", INT, variable("size", INT),
-            primitive("+#", INT, primitive("sizeofByteArray#", INT, frozenOriginal),
+            primitive("+#", INT, primitive("sizeofByteArray#", INT, frozenSnapshot),
                 primitive("+#", INT, primitive("float2Int#", INT, variable("single", FLOAT)),
                     primitive("+#", INT, primitive("double2Int#", INT, variable("double", DOUBLE)),
-                        primitive("compareByteArrays#", INT, frozenOriginal, integer(0), frozenGrown, integer(0), integer(8)))))));
+                        primitive("compareByteArrays#", INT, frozenSnapshot, integer(0), frozenGrown, integer(0), integer(8)))))));
         body = tupleCase(primitive("unsafeFreezeByteArray#", PAIR, grown, state()), "frozenGrown", body, INT);
-        body = tupleCase(primitive("unsafeFreezeByteArray#", PAIR, original, state()), "frozenOriginal", body, INT);
         body = tupleCase(primitive("readDoubleArray#", pair(DOUBLE), grown, integer(2), state()), "double", DOUBLE, body, INT);
         body = tupleCase(primitive("readFloatArray#", pair(FLOAT), grown, integer(2), state()), "single", FLOAT, body, INT);
         body = tupleCase(primitive("readIntArray#", pair(INT), grown, integer(0), state()), "word", INT, body, INT);
@@ -91,6 +91,10 @@ class ReusableBytesTest {
         body = effect(primitive("writeDoubleArray#", VOID, grown, integer(2), list("lit", "double", "4.5", map("rep", DOUBLE)), state()), "doubleWritten", body, INT);
         body = effect(primitive("writeFloatArray#", VOID, grown, integer(2), list("lit", "float", "1.5", map("rep", FLOAT)), state()), "singleWritten", body, INT);
         body = tupleCase(primitive("resizeMutableByteArray#", PAIR, original, integer(32), state()), "grown", body, INT);
+        // GHC forbids accessing the old array after resize, whether or not it moved.
+        body = tupleCase(primitive("unsafeFreezeByteArray#", PAIR, snapshot, state()), "frozenSnapshot", body, INT);
+        body = effect(primitive("copyMutableByteArray#", VOID, original, integer(0), snapshot, integer(0), integer(16), state()), "snapshotCopied", body, INT);
+        body = tupleCase(primitive("newByteArray#", PAIR, integer(16), state()), "snapshot", body, INT);
         body = effect(primitive("writeIntArray#", VOID, original, integer(0), variable("seed", INT), state()), "wordWritten", body, INT);
         body = effect(primitive("setByteArray#", VOID, original, integer(0), integer(16), integer(170), state()), "filled", body, INT);
         return tupleCase(primitive("newByteArray#", PAIR, integer(16), state()), "original", body, INT);
@@ -164,7 +168,7 @@ class ReusableBytesTest {
                         assertEquals(11, ManagedByteArray.readGuest(first, 1, true));
                         assertEquals(255, ManagedByteArray.readGuest(first, 2, true));
                         assertEquals(20, ManagedByteArray.readGuest(second, 1, true));
-                        // Original size 16 + shrunken size 24 + truncated floats 1 and 4;
+                        // Snapshot size 16 + shrunken size 24 + truncated floats 1 and 4;
                         // the copied integer is unchanged and the prefix comparison is equal.
                         assertEquals(55L, call(program, "lifecycle", 10));
                         assertEquals(26L, call(sibling, "lifecycle", -19));
