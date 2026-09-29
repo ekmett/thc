@@ -1670,6 +1670,12 @@ public final class Program implements ExecutableProgram {
         var memmove = override == CoreForeignOverride.MEMMOVE && CoreMemoryCopyForeign.MEMMOVE.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr));
         var memcpy = override == CoreForeignOverride.MEMCPY && CoreMemoryCopyForeign.MEMCPY.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr));
 
+        var vectorApi = VectorApiOp.validate(expr, defined);
+        if (vectorApi != null) {
+            Expr[] operands = new Expr[args.size()];
+            for (int index = 0; index < operands.length; index++) operands[index] = compile(args.get(index), scope, false);
+            return new VectorApiExpression(vectorApi, operands).proven(evaluated(tupleProof, true));
+        }
         PolyglotOp polyglot;
         try {
             polyglot = override == null && cpuAffinity == null && runtimeService == null &&

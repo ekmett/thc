@@ -2,7 +2,7 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE DataKinds, GHCForeignImportPrim, KindSignatures, MagicHash #-}
 {-# LANGUAGE RoleAnnotations, StandaloneKindSignatures, UnboxedTuples #-}
-{-# LANGUAGE UnliftedFFITypes, UnliftedNewtypes, Unsafe #-}
+{-# LANGUAGE UnliftedFFITypes, UnliftedNewtypes, PolyKinds, ExplicitForAll, Unsafe #-}
 
 -- |
 -- Module      : THC.Prim
@@ -17,30 +17,485 @@
 -- acquired dispatcher, not a receiver or a pair. It must accept the receiver
 -- supplied to each operation. External mutable objects belong to 'RealWorld';
 -- the state index alone does not establish confinement or thread safety.
+--
+-- Runtime-shaped Vector API values are raw JDK references too. Their lane
+-- types and operations are described under 'VecSpecies#'.
 module THC.Prim
   ( Object#, InteropLibrary#, getInteropLibrary#, importPolyglotValue#
   , hasBufferElements#, isBufferWritable#, getBufferSize#
   , readBufferByte#, writeBufferByte#
   , hasArrayElements#, getArraySize#, readArrayElement#, writeArrayElement#
   , asLong#
+    -- * Runtime-shaped Vector API
+  , Vec#, VecMask#, VecShuffle#, VecSpecies#
+  , int8Species#
+  , broadcastInt8#
+  , vecInt8Lane#
+  , vecInt8WithLane#
+  , vecInt8ReduceAdd#
+  , indexInt8Vector#
+  , readInt8Vector#
+  , writeInt8Vector#
+  , int16Species#
+  , broadcastInt16#
+  , vecInt16Lane#
+  , vecInt16WithLane#
+  , vecInt16ReduceAdd#
+  , indexInt16Vector#
+  , readInt16Vector#
+  , writeInt16Vector#
+  , int32Species#
+  , broadcastInt32#
+  , vecInt32Lane#
+  , vecInt32WithLane#
+  , vecInt32ReduceAdd#
+  , indexInt32Vector#
+  , readInt32Vector#
+  , writeInt32Vector#
+  , int64Species#
+  , broadcastInt64#
+  , vecInt64Lane#
+  , vecInt64WithLane#
+  , vecInt64ReduceAdd#
+  , indexInt64Vector#
+  , readInt64Vector#
+  , writeInt64Vector#
+  , floatSpecies#
+  , broadcastFloat#
+  , vecFloatLane#
+  , vecFloatWithLane#
+  , vecFloatReduceAdd#
+  , indexFloatVector#
+  , readFloatVector#
+  , writeFloatVector#
+  , doubleSpecies#
+  , broadcastDouble#
+  , vecDoubleLane#
+  , vecDoubleWithLane#
+  , vecDoubleReduceAdd#
+  , indexDoubleVector#
+  , readDoubleVector#
+  , writeDoubleVector#
+  , speciesWithShape#
+  , speciesLength#
+  , speciesElementBits#
+  , speciesVectorBits#
+  , speciesVectorBytes#
+  , speciesLoopBound#
+  , speciesPartLimit#
+  , speciesIndexInRange#
+  , speciesMaskAll#
+  , speciesZero#
+  , vecSpecies#
+  , maskSpecies#
+  , shuffleSpecies#
+  , maskFromBits#
+  , maskToBits#
+  , maskTrueCount#
+  , maskFirstTrue#
+  , maskLastTrue#
+  , maskAnyTrue#
+  , maskAllTrue#
+  , maskLane#
+  , maskAnd#
+  , maskOr#
+  , maskXor#
+  , maskAndNot#
+  , maskNot#
+  , maskCast#
+  , shuffleIota#
+  , shuffleLane#
+  , shuffleValid#
+  , shuffleWrap#
+  , shuffleCast#
+  , vecToShuffle#
+  , vecAdd#
+  , vecSub#
+  , vecMul#
+  , vecDiv#
+  , vecMin#
+  , vecMax#
+  , vecAddMasked#
+  , vecSubMasked#
+  , vecMulMasked#
+  , vecDivMasked#
+  , vecAbs#
+  , vecNeg#
+  , vecEq#
+  , vecNe#
+  , vecLt#
+  , vecLe#
+  , vecGt#
+  , vecGe#
+  , vecUnsignedLt#
+  , vecBlend#
+  , vecRearrange#
+  , vecRearrangeMasked#
+  , vecCompress#
+  , vecExpand#
+  , vecConvert#
+  , vecReinterpret#
   ) where
 
 import Data.Kind (Type)
 import GHC.Exts
 
--- TODO: Expose the remaining JDK Vector API operations through THC.Prim.
--- Add element-indexed Vec# e, VecMask# e, VecShuffle# e and VecSpecies# e,
--- each of kind UnliftedType, carrying raw Vector<E>, VectorMask<E>,
--- VectorShuffle<E> and VectorSpecies<E> references without extra THC wrappers.
--- Include SPECIES_* constants (including preferred species), species queries,
--- masked operations, shuffles, conversions, reductions and memory operations,
--- so Haskell code can compose the Java SIMD intrinsics and let the JIT lower
--- them. Preserve effects for memory operations and exact element/species/signedness
--- semantics at the boundary.
--- Build fixed-shape types such as Int32X8# as unlifted newtypes over Vec# e,
--- fixing the element mapping and species without another allocated carrier.
--- Specify the lane mapping explicitly: GHC Int# is machine-sized, whereas
--- IntVector lanes are 32-bit.
+-- | A raw JDK vector. The lane parameter is nominal: 'Int8#', 'Int16#',
+-- 'Int32#', 'Int64#', 'Float#' and 'Double#' map to Java byte, short, int,
+-- long, float and double. In particular, machine-sized 'Int#' is not Int32.
+type Vec# :: TYPE r -> UnliftedType
+type role Vec# nominal
+newtype Vec# e = Vec# (Any :: UnliftedType)
+
+-- | A raw JDK lane mask; its species must agree with the vector it selects.
+type VecMask# :: TYPE r -> UnliftedType
+type role VecMask# nominal
+newtype VecMask# e = VecMask# (Any :: UnliftedType)
+
+-- | A raw JDK lane permutation.
+type VecShuffle# :: TYPE r -> UnliftedType
+type role VecShuffle# nominal
+newtype VecShuffle# e = VecShuffle# (Any :: UnliftedType)
+
+-- | A raw JDK element/shape descriptor. Species functions take a bit width:
+-- 0 selects SPECIES_PREFERRED, -1 SPECIES_MAX, and 64/128/256/512 select an
+-- explicit shape. Widths and masks may be computed at run time. Keep species
+-- loop-invariant where possible so Graal can specialize the vector intrinsics.
+--
+-- Masked memory operations use native byte order and /element/ offsets.
+-- Inactive lanes do not read or write memory; inactive loaded lanes are zero.
+-- Mutable reads and writes thread 'State#'. Conversion uses Java numeric cast
+-- semantics; reinterpretation preserves bits. Signed comparisons use Java's
+-- lane types; 'vecUnsignedLt#' compares integer lane bits as unsigned.
+--
+-- The JDK may scalarize a shape unsupported by the host. It also rejects
+-- mismatched species, invalid shuffle indices and out-of-range active lanes.
+-- 'maskToBits#' represents at most 64 lanes, as in VectorMask.toLong.
+type VecSpecies# :: TYPE r -> UnliftedType
+type role VecSpecies# nominal
+newtype VecSpecies# e = VecSpecies# (Any :: UnliftedType)
+
+foreign import prim "thc_vector_v1_int8_species"
+  int8Species# :: Int# -> VecSpecies# Int8#
+
+foreign import prim "thc_vector_v1_broadcast_int8"
+  broadcastInt8# :: (VecSpecies# Int8#) -> Int8# -> Vec# Int8#
+
+foreign import prim "thc_vector_v1_vec_int8_lane"
+  vecInt8Lane# :: (Vec# Int8#) -> Int# -> Int8#
+
+foreign import prim "thc_vector_v1_vec_int8_with_lane"
+  vecInt8WithLane# :: (Vec# Int8#) -> Int# -> Int8# -> Vec# Int8#
+
+foreign import prim "thc_vector_v1_vec_int8_reduce_add"
+  vecInt8ReduceAdd# :: (Vec# Int8#) -> (VecMask# Int8#) -> Int8#
+
+foreign import prim "thc_vector_v1_index_int8_vector"
+  indexInt8Vector# :: (VecSpecies# Int8#) -> ByteArray# -> Int# -> (VecMask# Int8#) -> Vec# Int8#
+
+foreign import prim "thc_vector_v1_read_int8_vector"
+  readInt8Vector# :: (VecSpecies# Int8#) -> (MutableByteArray# s) -> Int# -> (VecMask# Int8#) -> (State# s) -> (# State# s, Vec# Int8# #)
+
+foreign import prim "thc_vector_v1_write_int8_vector"
+  writeInt8Vector# :: (MutableByteArray# s) -> Int# -> (Vec# Int8#) -> (VecMask# Int8#) -> (State# s) -> State# s
+
+foreign import prim "thc_vector_v1_int16_species"
+  int16Species# :: Int# -> VecSpecies# Int16#
+
+foreign import prim "thc_vector_v1_broadcast_int16"
+  broadcastInt16# :: (VecSpecies# Int16#) -> Int16# -> Vec# Int16#
+
+foreign import prim "thc_vector_v1_vec_int16_lane"
+  vecInt16Lane# :: (Vec# Int16#) -> Int# -> Int16#
+
+foreign import prim "thc_vector_v1_vec_int16_with_lane"
+  vecInt16WithLane# :: (Vec# Int16#) -> Int# -> Int16# -> Vec# Int16#
+
+foreign import prim "thc_vector_v1_vec_int16_reduce_add"
+  vecInt16ReduceAdd# :: (Vec# Int16#) -> (VecMask# Int16#) -> Int16#
+
+foreign import prim "thc_vector_v1_index_int16_vector"
+  indexInt16Vector# :: (VecSpecies# Int16#) -> ByteArray# -> Int# -> (VecMask# Int16#) -> Vec# Int16#
+
+foreign import prim "thc_vector_v1_read_int16_vector"
+  readInt16Vector# :: (VecSpecies# Int16#) -> (MutableByteArray# s) -> Int# -> (VecMask# Int16#) -> (State# s) -> (# State# s, Vec# Int16# #)
+
+foreign import prim "thc_vector_v1_write_int16_vector"
+  writeInt16Vector# :: (MutableByteArray# s) -> Int# -> (Vec# Int16#) -> (VecMask# Int16#) -> (State# s) -> State# s
+
+foreign import prim "thc_vector_v1_int32_species"
+  int32Species# :: Int# -> VecSpecies# Int32#
+
+foreign import prim "thc_vector_v1_broadcast_int32"
+  broadcastInt32# :: (VecSpecies# Int32#) -> Int32# -> Vec# Int32#
+
+foreign import prim "thc_vector_v1_vec_int32_lane"
+  vecInt32Lane# :: (Vec# Int32#) -> Int# -> Int32#
+
+foreign import prim "thc_vector_v1_vec_int32_with_lane"
+  vecInt32WithLane# :: (Vec# Int32#) -> Int# -> Int32# -> Vec# Int32#
+
+foreign import prim "thc_vector_v1_vec_int32_reduce_add"
+  vecInt32ReduceAdd# :: (Vec# Int32#) -> (VecMask# Int32#) -> Int32#
+
+foreign import prim "thc_vector_v1_index_int32_vector"
+  indexInt32Vector# :: (VecSpecies# Int32#) -> ByteArray# -> Int# -> (VecMask# Int32#) -> Vec# Int32#
+
+foreign import prim "thc_vector_v1_read_int32_vector"
+  readInt32Vector# :: (VecSpecies# Int32#) -> (MutableByteArray# s) -> Int# -> (VecMask# Int32#) -> (State# s) -> (# State# s, Vec# Int32# #)
+
+foreign import prim "thc_vector_v1_write_int32_vector"
+  writeInt32Vector# :: (MutableByteArray# s) -> Int# -> (Vec# Int32#) -> (VecMask# Int32#) -> (State# s) -> State# s
+
+foreign import prim "thc_vector_v1_int64_species"
+  int64Species# :: Int# -> VecSpecies# Int64#
+
+foreign import prim "thc_vector_v1_broadcast_int64"
+  broadcastInt64# :: (VecSpecies# Int64#) -> Int64# -> Vec# Int64#
+
+foreign import prim "thc_vector_v1_vec_int64_lane"
+  vecInt64Lane# :: (Vec# Int64#) -> Int# -> Int64#
+
+foreign import prim "thc_vector_v1_vec_int64_with_lane"
+  vecInt64WithLane# :: (Vec# Int64#) -> Int# -> Int64# -> Vec# Int64#
+
+foreign import prim "thc_vector_v1_vec_int64_reduce_add"
+  vecInt64ReduceAdd# :: (Vec# Int64#) -> (VecMask# Int64#) -> Int64#
+
+foreign import prim "thc_vector_v1_index_int64_vector"
+  indexInt64Vector# :: (VecSpecies# Int64#) -> ByteArray# -> Int# -> (VecMask# Int64#) -> Vec# Int64#
+
+foreign import prim "thc_vector_v1_read_int64_vector"
+  readInt64Vector# :: (VecSpecies# Int64#) -> (MutableByteArray# s) -> Int# -> (VecMask# Int64#) -> (State# s) -> (# State# s, Vec# Int64# #)
+
+foreign import prim "thc_vector_v1_write_int64_vector"
+  writeInt64Vector# :: (MutableByteArray# s) -> Int# -> (Vec# Int64#) -> (VecMask# Int64#) -> (State# s) -> State# s
+
+foreign import prim "thc_vector_v1_float_species"
+  floatSpecies# :: Int# -> VecSpecies# Float#
+
+foreign import prim "thc_vector_v1_broadcast_float"
+  broadcastFloat# :: (VecSpecies# Float#) -> Float# -> Vec# Float#
+
+foreign import prim "thc_vector_v1_vec_float_lane"
+  vecFloatLane# :: (Vec# Float#) -> Int# -> Float#
+
+foreign import prim "thc_vector_v1_vec_float_with_lane"
+  vecFloatWithLane# :: (Vec# Float#) -> Int# -> Float# -> Vec# Float#
+
+foreign import prim "thc_vector_v1_vec_float_reduce_add"
+  vecFloatReduceAdd# :: (Vec# Float#) -> (VecMask# Float#) -> Float#
+
+foreign import prim "thc_vector_v1_index_float_vector"
+  indexFloatVector# :: (VecSpecies# Float#) -> ByteArray# -> Int# -> (VecMask# Float#) -> Vec# Float#
+
+foreign import prim "thc_vector_v1_read_float_vector"
+  readFloatVector# :: (VecSpecies# Float#) -> (MutableByteArray# s) -> Int# -> (VecMask# Float#) -> (State# s) -> (# State# s, Vec# Float# #)
+
+foreign import prim "thc_vector_v1_write_float_vector"
+  writeFloatVector# :: (MutableByteArray# s) -> Int# -> (Vec# Float#) -> (VecMask# Float#) -> (State# s) -> State# s
+
+foreign import prim "thc_vector_v1_double_species"
+  doubleSpecies# :: Int# -> VecSpecies# Double#
+
+foreign import prim "thc_vector_v1_broadcast_double"
+  broadcastDouble# :: (VecSpecies# Double#) -> Double# -> Vec# Double#
+
+foreign import prim "thc_vector_v1_vec_double_lane"
+  vecDoubleLane# :: (Vec# Double#) -> Int# -> Double#
+
+foreign import prim "thc_vector_v1_vec_double_with_lane"
+  vecDoubleWithLane# :: (Vec# Double#) -> Int# -> Double# -> Vec# Double#
+
+foreign import prim "thc_vector_v1_vec_double_reduce_add"
+  vecDoubleReduceAdd# :: (Vec# Double#) -> (VecMask# Double#) -> Double#
+
+foreign import prim "thc_vector_v1_index_double_vector"
+  indexDoubleVector# :: (VecSpecies# Double#) -> ByteArray# -> Int# -> (VecMask# Double#) -> Vec# Double#
+
+foreign import prim "thc_vector_v1_read_double_vector"
+  readDoubleVector# :: (VecSpecies# Double#) -> (MutableByteArray# s) -> Int# -> (VecMask# Double#) -> (State# s) -> (# State# s, Vec# Double# #)
+
+foreign import prim "thc_vector_v1_write_double_vector"
+  writeDoubleVector# :: (MutableByteArray# s) -> Int# -> (Vec# Double#) -> (VecMask# Double#) -> (State# s) -> State# s
+
+foreign import prim "thc_vector_v1_species_with_shape"
+  speciesWithShape# :: forall r (e :: TYPE r). (VecSpecies# e) -> Int# -> VecSpecies# e
+
+foreign import prim "thc_vector_v1_species_length"
+  speciesLength# :: forall r (e :: TYPE r). (VecSpecies# e) -> Int#
+
+foreign import prim "thc_vector_v1_species_element_bits"
+  speciesElementBits# :: forall r (e :: TYPE r). (VecSpecies# e) -> Int#
+
+foreign import prim "thc_vector_v1_species_vector_bits"
+  speciesVectorBits# :: forall r (e :: TYPE r). (VecSpecies# e) -> Int#
+
+foreign import prim "thc_vector_v1_species_vector_bytes"
+  speciesVectorBytes# :: forall r (e :: TYPE r). (VecSpecies# e) -> Int#
+
+foreign import prim "thc_vector_v1_species_loop_bound"
+  speciesLoopBound# :: forall r (e :: TYPE r). (VecSpecies# e) -> Int# -> Int#
+
+foreign import prim "thc_vector_v1_species_part_limit"
+  speciesPartLimit# :: forall r (e :: TYPE r) q (f :: TYPE q). (VecSpecies# e) -> (VecSpecies# f) -> Int# -> Int#
+
+foreign import prim "thc_vector_v1_species_index_in_range"
+  speciesIndexInRange# :: forall r (e :: TYPE r). (VecSpecies# e) -> Int# -> Int# -> VecMask# e
+
+foreign import prim "thc_vector_v1_species_mask_all"
+  speciesMaskAll# :: forall r (e :: TYPE r). (VecSpecies# e) -> Int# -> VecMask# e
+
+foreign import prim "thc_vector_v1_species_zero"
+  speciesZero# :: forall r (e :: TYPE r). (VecSpecies# e) -> Vec# e
+
+foreign import prim "thc_vector_v1_vec_species"
+  vecSpecies# :: forall r (e :: TYPE r). (Vec# e) -> VecSpecies# e
+
+foreign import prim "thc_vector_v1_mask_species"
+  maskSpecies# :: forall r (e :: TYPE r). (VecMask# e) -> VecSpecies# e
+
+foreign import prim "thc_vector_v1_shuffle_species"
+  shuffleSpecies# :: forall r (e :: TYPE r). (VecShuffle# e) -> VecSpecies# e
+
+foreign import prim "thc_vector_v1_mask_from_bits"
+  maskFromBits# :: forall r (e :: TYPE r). (VecSpecies# e) -> Word# -> VecMask# e
+
+foreign import prim "thc_vector_v1_mask_to_bits"
+  maskToBits# :: forall r (e :: TYPE r). (VecMask# e) -> Word#
+
+foreign import prim "thc_vector_v1_mask_true_count"
+  maskTrueCount# :: forall r (e :: TYPE r). (VecMask# e) -> Int#
+
+foreign import prim "thc_vector_v1_mask_first_true"
+  maskFirstTrue# :: forall r (e :: TYPE r). (VecMask# e) -> Int#
+
+foreign import prim "thc_vector_v1_mask_last_true"
+  maskLastTrue# :: forall r (e :: TYPE r). (VecMask# e) -> Int#
+
+foreign import prim "thc_vector_v1_mask_any_true"
+  maskAnyTrue# :: forall r (e :: TYPE r). (VecMask# e) -> Int#
+
+foreign import prim "thc_vector_v1_mask_all_true"
+  maskAllTrue# :: forall r (e :: TYPE r). (VecMask# e) -> Int#
+
+foreign import prim "thc_vector_v1_mask_lane"
+  maskLane# :: forall r (e :: TYPE r). (VecMask# e) -> Int# -> Int#
+
+foreign import prim "thc_vector_v1_mask_and"
+  maskAnd# :: forall r (e :: TYPE r). (VecMask# e) -> (VecMask# e) -> VecMask# e
+
+foreign import prim "thc_vector_v1_mask_or"
+  maskOr# :: forall r (e :: TYPE r). (VecMask# e) -> (VecMask# e) -> VecMask# e
+
+foreign import prim "thc_vector_v1_mask_xor"
+  maskXor# :: forall r (e :: TYPE r). (VecMask# e) -> (VecMask# e) -> VecMask# e
+
+foreign import prim "thc_vector_v1_mask_and_not"
+  maskAndNot# :: forall r (e :: TYPE r). (VecMask# e) -> (VecMask# e) -> VecMask# e
+
+foreign import prim "thc_vector_v1_mask_not"
+  maskNot# :: forall r (e :: TYPE r). (VecMask# e) -> VecMask# e
+
+foreign import prim "thc_vector_v1_mask_cast"
+  maskCast# :: forall r (e :: TYPE r) q (f :: TYPE q). (VecMask# e) -> (VecSpecies# f) -> VecMask# f
+
+foreign import prim "thc_vector_v1_shuffle_iota"
+  shuffleIota# :: forall r (e :: TYPE r). (VecSpecies# e) -> Int# -> Int# -> Int# -> VecShuffle# e
+
+foreign import prim "thc_vector_v1_shuffle_lane"
+  shuffleLane# :: forall r (e :: TYPE r). (VecShuffle# e) -> Int# -> Int#
+
+foreign import prim "thc_vector_v1_shuffle_valid"
+  shuffleValid# :: forall r (e :: TYPE r). (VecShuffle# e) -> VecMask# e
+
+foreign import prim "thc_vector_v1_shuffle_wrap"
+  shuffleWrap# :: forall r (e :: TYPE r). (VecShuffle# e) -> VecShuffle# e
+
+foreign import prim "thc_vector_v1_shuffle_cast"
+  shuffleCast# :: forall r (e :: TYPE r) q (f :: TYPE q). (VecShuffle# e) -> (VecSpecies# f) -> VecShuffle# f
+
+foreign import prim "thc_vector_v1_vec_to_shuffle"
+  vecToShuffle# :: forall r (e :: TYPE r). (Vec# e) -> VecShuffle# e
+
+foreign import prim "thc_vector_v1_vec_add"
+  vecAdd# :: forall r (e :: TYPE r). (Vec# e) -> (Vec# e) -> Vec# e
+
+foreign import prim "thc_vector_v1_vec_sub"
+  vecSub# :: forall r (e :: TYPE r). (Vec# e) -> (Vec# e) -> Vec# e
+
+foreign import prim "thc_vector_v1_vec_mul"
+  vecMul# :: forall r (e :: TYPE r). (Vec# e) -> (Vec# e) -> Vec# e
+
+foreign import prim "thc_vector_v1_vec_div"
+  vecDiv# :: forall r (e :: TYPE r). (Vec# e) -> (Vec# e) -> Vec# e
+
+foreign import prim "thc_vector_v1_vec_min"
+  vecMin# :: forall r (e :: TYPE r). (Vec# e) -> (Vec# e) -> Vec# e
+
+foreign import prim "thc_vector_v1_vec_max"
+  vecMax# :: forall r (e :: TYPE r). (Vec# e) -> (Vec# e) -> Vec# e
+
+foreign import prim "thc_vector_v1_vec_add_masked"
+  vecAddMasked# :: forall r (e :: TYPE r). (Vec# e) -> (Vec# e) -> (VecMask# e) -> Vec# e
+
+foreign import prim "thc_vector_v1_vec_sub_masked"
+  vecSubMasked# :: forall r (e :: TYPE r). (Vec# e) -> (Vec# e) -> (VecMask# e) -> Vec# e
+
+foreign import prim "thc_vector_v1_vec_mul_masked"
+  vecMulMasked# :: forall r (e :: TYPE r). (Vec# e) -> (Vec# e) -> (VecMask# e) -> Vec# e
+
+foreign import prim "thc_vector_v1_vec_div_masked"
+  vecDivMasked# :: forall r (e :: TYPE r). (Vec# e) -> (Vec# e) -> (VecMask# e) -> Vec# e
+
+foreign import prim "thc_vector_v1_vec_abs"
+  vecAbs# :: forall r (e :: TYPE r). (Vec# e) -> Vec# e
+
+foreign import prim "thc_vector_v1_vec_neg"
+  vecNeg# :: forall r (e :: TYPE r). (Vec# e) -> Vec# e
+
+foreign import prim "thc_vector_v1_vec_eq"
+  vecEq# :: forall r (e :: TYPE r). (Vec# e) -> (Vec# e) -> VecMask# e
+
+foreign import prim "thc_vector_v1_vec_ne"
+  vecNe# :: forall r (e :: TYPE r). (Vec# e) -> (Vec# e) -> VecMask# e
+
+foreign import prim "thc_vector_v1_vec_lt"
+  vecLt# :: forall r (e :: TYPE r). (Vec# e) -> (Vec# e) -> VecMask# e
+
+foreign import prim "thc_vector_v1_vec_le"
+  vecLe# :: forall r (e :: TYPE r). (Vec# e) -> (Vec# e) -> VecMask# e
+
+foreign import prim "thc_vector_v1_vec_gt"
+  vecGt# :: forall r (e :: TYPE r). (Vec# e) -> (Vec# e) -> VecMask# e
+
+foreign import prim "thc_vector_v1_vec_ge"
+  vecGe# :: forall r (e :: TYPE r). (Vec# e) -> (Vec# e) -> VecMask# e
+
+foreign import prim "thc_vector_v1_vec_unsigned_lt"
+  vecUnsignedLt# :: forall r (e :: TYPE r). (Vec# e) -> (Vec# e) -> VecMask# e
+
+foreign import prim "thc_vector_v1_vec_blend"
+  vecBlend# :: forall r (e :: TYPE r). (Vec# e) -> (Vec# e) -> (VecMask# e) -> Vec# e
+
+foreign import prim "thc_vector_v1_vec_rearrange"
+  vecRearrange# :: forall r (e :: TYPE r). (Vec# e) -> (VecShuffle# e) -> Vec# e
+
+foreign import prim "thc_vector_v1_vec_rearrange_masked"
+  vecRearrangeMasked# :: forall r (e :: TYPE r). (Vec# e) -> (VecShuffle# e) -> (VecMask# e) -> Vec# e
+
+foreign import prim "thc_vector_v1_vec_compress"
+  vecCompress# :: forall r (e :: TYPE r). (Vec# e) -> (VecMask# e) -> Vec# e
+
+foreign import prim "thc_vector_v1_vec_expand"
+  vecExpand# :: forall r (e :: TYPE r). (Vec# e) -> (VecMask# e) -> Vec# e
+
+foreign import prim "thc_vector_v1_vec_convert"
+  vecConvert# :: forall r (e :: TYPE r) q (f :: TYPE q). (Vec# e) -> (VecSpecies# f) -> Int# -> Vec# f
+
+foreign import prim "thc_vector_v1_vec_reinterpret"
+  vecReinterpret# :: forall r (e :: TYPE r) q (f :: TYPE q). (Vec# e) -> (VecSpecies# f) -> Int# -> Vec# f
+
 
 -- | An arbitrary raw Java reference. Not every object is an interop receiver.
 type Object# :: Type -> TYPE UnliftedRep

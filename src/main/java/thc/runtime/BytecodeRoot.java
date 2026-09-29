@@ -321,6 +321,16 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation
+    @ConstantOperand(type = VectorApiOp.class, name = "operation")
+    public static final class VectorApi {
+        @Specialization public static Object apply(VectorApiOp operation, @Variadic Object[] arguments,
+                @Cached(value = "createSite(operation)", neverDefault = true) VectorApiOp.Site site) {
+            return site.execute(arguments);
+        }
+        public static VectorApiOp.Site createSite(VectorApiOp operation) { return new VectorApiOp.Site(operation); }
+    }
+
+    @Operation
     @ConstantOperand(type = PolyglotOp.class, name = "operation")
     public static final class InteropMessage {
         @Specialization public static Object apply(PolyglotOp operation, @Variadic Object[] arguments,

@@ -214,6 +214,7 @@ tasks.withType(Test).configureEach {
     // are unchanged. Source inputs also make stale corpus fingerprints observable.
     inputs.files(fileTree(layout.buildDirectory) {
         include(["core/**/*.json", "source-core/**/*.json", "cbv-post-core/**/*.json",
+            "vector-api/core/**/*.json", "vector-api/*.tsv",
             "floating/core/**/*.json", "floating/checks.json", "floating/oracle.tsv",
             "word-floating/**/*.json", "word-floating/oracle.tsv",
             "fused-floating/**/*.json", "fused-floating/oracle.tsv",
