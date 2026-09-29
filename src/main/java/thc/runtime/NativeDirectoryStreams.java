@@ -123,7 +123,7 @@ public final class NativeDirectoryStreams implements Closeable {
                 ManagedAddress entryAddress;
                 if (name == null) entryAddress = ManagedAddress.nullAddress();
                 else {
-                    var bytes = ManagedAllocation.mutable(name.length, 8);
+                    var bytes = ManagedByteArray.allocateGuest(name.length, context.getNativeByteArrays());
                     for (int i = 0; i < name.length; i++) bytes.writeByte(i, name[i]);
                     var entry = new Entry(stream, token, bytes);
                     entries.put(key(token), entry);

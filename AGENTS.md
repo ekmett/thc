@@ -41,6 +41,7 @@ state or a required runtime boundary; document that reason at the override.
 Do not add supported-symbol lists or replacement implementations of ordinary
 library functions. Validate the ABI and transport at the FFI boundary, and let
 the native linker resolve symbols and report missing libraries.
+Do not add generic copy-in/copy-out or implicit heap-to-native promotion at foreign calls; allocate addressable storage when the guest object is created.
 
 Changes to calls, loops or lowering must preserve thunk sharing, PAPs, tail-call
 handoffs, exception masking, resumable continuations and foreign-call safety.

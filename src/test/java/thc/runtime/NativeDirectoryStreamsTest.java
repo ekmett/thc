@@ -9,6 +9,13 @@ import org.junit.jupiter.api.io.TempDir;
 import thc.Language;
 import thc.NativeIO;
 import java.nio.charset.StandardCharsets;
+import java.lang.foreign.*;
+import java.lang.ref.Reference;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.api.parallel.ResourceLock;
+import org.junit.jupiter.api.parallel.Resources;
+import thc.ContextProfile;
 import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.Callable;
@@ -39,6 +46,47 @@ class NativeDirectoryStreamsTest {
             }
             assertEquals(0L, status); var entry = output.readAddressElementIndex(0);
             names.add(bytes(service.name(entry))); service.freeEntry(entry);
+        }
+    }
+    @ParameterizedTest @ValueSource(strings = {"heap", "native"})
+    @ResourceLock(Resources.SYSTEM_PROPERTIES)
+    void filenameCreationPolicyPreservesNativeContentsAndEntryExpiry(String policy) throws Exception {
+        String previous = System.getProperty("thc.byteArrayStorage");
+        System.setProperty("thc.byteArrayStorage", policy);
+        try (var context = NativeFileProvider.createContext(Set.of(), ContextProfile.LAUNCHER)) {
+            entered(context, () -> {
+                var service = NativeFileProvider.current().getDirectoryStreams();
+                var stream = Language.currentState().getStdio().openDirectory(path(root));
+                var output = cell();
+                try {
+                    assertEquals(0L, service.read(stream, output));
+                    var entry = output.readAddressElementIndex(0);
+                    var name = service.name(entry); var alias = service.name(entry).plus(1);
+                    assertTrue(Set.of(List.of(46), List.of(46, 46)).contains(bytes(name)));
+                    long length = name.cStringLength();
+                    if (policy.equals("native")) {
+                        var linker = Linker.nativeLinker();
+                        var strlen = linker.downcallHandle(linker.defaultLookup().find("strlen").orElseThrow(),
+                            FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
+                        long bits = name.toNativeBits();
+                        assertEquals(bits + 1, alias.toNativeBits());
+                        assertEquals(length, (long) assertDoesNotThrow(() -> (long) strlen.invokeExact(MemorySegment.ofAddress(bits))));
+                        assertEquals(46, MemorySegment.ofAddress(bits).reinterpret(length + 1).get(ValueLayout.JAVA_BYTE, 0));
+                        Reference.reachabilityFence(name);
+                    } else assertThrows(RuntimeFault.class, name::toNativeBits);
+                    service.freeEntry(entry); assertEquals(length, name.cStringLength());
+                    assertEquals(0L, service.read(stream, output));
+                    assertThrows(RuntimeFault.class, () -> name.readWord8(0));
+                    assertThrows(RuntimeFault.class, () -> alias.readWord8(0));
+                    var lastName = service.name(output.readAddressElementIndex(0));
+                    assertEquals(0L, service.closeStream(stream));
+                    assertThrows(RuntimeFault.class, () -> lastName.readWord8(0));
+                    assertThrows(RuntimeFault.class, ManagedAddress.fromByteArray(new byte[]{46, 0})::toNativeBits);
+                } finally { service.abandon(stream); }
+                return null;
+            });
+        } finally {
+            if (previous == null) System.clearProperty("thc.byteArrayStorage"); else System.setProperty("thc.byteArrayStorage", previous);
         }
     }
     @Test void rawNamesEofAndEntryLifetimesFollowTheOriginalGlibcProtocol() throws Exception {

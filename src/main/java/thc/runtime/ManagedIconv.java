@@ -81,7 +81,7 @@ public final class ManagedIconv {
                 var bytes = new byte[(int) size];
                 call("thc_iconv_locale_copy", locale, new CbitsBuffer(bytes, true));
                 if (bytes[bytes.length - 1] != 0) throw fault("Unterminated native locale encoding name");
-                name = ManagedAddress.fromAllocation(ManagedAllocation.immutable(bytes, 8));
+                name = ManagedAddress.fromAllocation(ManagedAllocation.immutableGuest(bytes, 8));
                 return name;
             } catch (InteropException failure) { throw propagate(failure); }
         }

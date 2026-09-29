@@ -4,11 +4,16 @@ package thc.runtime;
 
 import com.oracle.truffle.api.TruffleLanguage;
 import java.util.*;
+import java.lang.foreign.*;
+import java.lang.ref.Reference;
+import org.graalvm.polyglot.io.IOAccess;
+import org.junit.jupiter.api.condition.*;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.ResourceLock;
 import org.junit.jupiter.api.parallel.Resources;
-import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import thc.Language;
 import static org.junit.jupiter.api.Assertions.*;
@@ -158,6 +163,38 @@ class NativeByteArrayPolicyTest {
         } finally {
             if (previous == null) System.clearProperty("thc.byteArrayStorage");
             else System.setProperty("thc.byteArrayStorage", previous);
+        }
+    }
+    @ParameterizedTest @ValueSource(strings = {"heap", "native"})
+    @EnabledOnOs(OS.LINUX)
+    @EnabledIfSystemProperty(named = "os.arch", matches = "amd64|x86_64")
+    void localeNameCreationPolicyPreservesNativeContentsAndCachedIdentity(String policy) {
+        try (var context = Context.newBuilder("thc", "llvm").allowIO(IOAccess.ALL).allowNativeAccess(true)
+                .allowExperimentalOptions(true).option("thc.ByteArrayStorage", policy).build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var service = Language.currentState().getIconv();
+                var name = service.localeEncoding();
+                assertSame(name, service.localeEncoding());
+                long length = name.cStringLength(); assertTrue(length > 0);
+                var alias = name.plus(1);
+                assertEquals(0L, name.readWord8(length));
+                assertThrows(RuntimeFault.class, () -> name.writeWord8(0, 0));
+                if (policy.equals("native")) {
+                    var linker = Linker.nativeLinker();
+                    var strlen = linker.downcallHandle(linker.defaultLookup().find("strlen").orElseThrow(),
+                        FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
+                    long bits = name.toNativeBits();
+                    assertEquals(bits, service.localeEncoding().toNativeBits());
+                    assertEquals(bits + 1, alias.toNativeBits());
+                    assertEquals(length, (long) assertDoesNotThrow(() -> (long) strlen.invokeExact(MemorySegment.ofAddress(bits))));
+                    var nativeBytes = MemorySegment.ofAddress(bits).reinterpret(length + 1);
+                    for (long i = 0; i <= length; i++) assertEquals(name.readWord8(i), Byte.toUnsignedLong(nativeBytes.get(ValueLayout.JAVA_BYTE, i)));
+                    Reference.reachabilityFence(name);
+                } else assertThrows(RuntimeFault.class, name::toNativeBits);
+                assertSame(name, service.localeEncoding());
+                assertThrows(RuntimeFault.class, ManagedAddress.fromByteArray(new byte[]{65, 0})::toNativeBits);
+            } finally { context.leave(); }
         }
     }
     @Test void nativeStorageRequiresNativeAuthorityAtContextCreation() {
