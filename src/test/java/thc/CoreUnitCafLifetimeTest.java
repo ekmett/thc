@@ -107,7 +107,7 @@ class CoreUnitCafLifetimeTest {
         for (var backend : List.of("ast", "bytecode")) for (boolean async : new boolean[]{false, true}) {
             var output = new ByteArrayOutputStream();
             try (var context = Context.newBuilder("thc").err(output).build()) {
-                var entry = context.eval("thc", request(List.of("@" + manifest), "uA:A.entry", backend, false, async, false, false));
+                var entry = context.eval("thc", request(List.of("@" + manifest), "uA:A.entry", backend, false, async, false));
                 assertEquals(7L, entry.execute(0).asLong()); context.enter();
                 try {
                     var programs = Language.currentState(null).getCoreUnitPrograms(); assertEquals(1, programs.size()); var program = programs.getFirst();

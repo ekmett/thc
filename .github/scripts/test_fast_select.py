@@ -283,17 +283,6 @@ class FastSelectionTest(unittest.TestCase):
                     junit.append("thc.CoreCompactGoldenTest")
                 self.assertEqual(junit, selected["junit"]["classes"])
 
-    def test_retained_attribution_retains_only_smoke(self):
-        for path in ("nih/licenses/succinctly-MIT.txt",):
-            with self.subTest(path=path):
-                before = self.git("rev-parse", "HEAD")
-                self.write(path, "Documentation or license update\n")
-                self.commit()
-                selected = self.plan(base=before)
-                self.assertEqual("narrow", selected["mode"], selected)
-                self.assertEqual([], selected["haskell"]["suites"])
-                self.assertEqual(["example.SmokeTest"], selected["junit"]["classes"])
-
     def test_full_selection_includes_current_haskell_suites(self):
         self.write("src/core-symbols/THC/NewSymbols.hs", "unreviewed production dependency\n")
         self.commit()

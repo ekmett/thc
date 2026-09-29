@@ -47,7 +47,6 @@ public final class Program implements ExecutableProgram {
     private final thc.Language.State contextOwner;
     private final Set<String> codeDependencies = new LinkedHashSet<>();
     private final List<RootCallTarget> codeTargets;
-    private final Supplier<Map<String, Object>> loadingStatistics;
     private final boolean delimited;
     private final boolean containsDelimited;
     private final CoreSources sources;
@@ -115,7 +114,6 @@ public final class Program implements ExecutableProgram {
         nativeCallbacks = moduleData.get("nativeCallbacks") instanceof Map<?,?> found ? (Map<String,thc.ManagedCallbackSignature>) found : Map.of();
         stackTargetLayout = moduleData.get("targetLayout");
         metrics = demand != null ? demand.getMetrics() : new Metrics(!Boolean.FALSE.equals(moduleData.get("instrument")));
-        loadingStatistics = moduleData.get("coreLoadingStatistics") instanceof Supplier<?> found ? (Supplier<Map<String, Object>>) found : null;
         boolean containsDelimited = false;
         if (moduleData.get("bindings") instanceof List<?> values) {
             for (Object binding : values) {
@@ -704,7 +702,6 @@ public final class Program implements ExecutableProgram {
             "tail-safe; non-tail calls and nested thunk forcing use host stack");
         result.put("threadPolicy", enableAsync ? "context-owned Java threads; captured asynchronous delivery" :
             "context-owned Java threads; external asynchronous delivery disabled");
-        if (loadingStatistics != null) result.putAll(loadingStatistics.get());
         return result;
     }
     private boolean representation(Map<String, Object> binding) {

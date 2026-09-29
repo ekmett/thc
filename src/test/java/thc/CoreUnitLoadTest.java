@@ -137,7 +137,7 @@ class CoreUnitLoadTest {
         Files.writeString(manifest, Json.stringify(map("format", "thc-core-packages", "schema", 1, "ghc", "9.14.1", "units", list(a, b, c)))); return manifest;
     }
     private String request(Path path, String backend) { return request(path, backend, false); }
-    private String request(Path path, String backend, boolean async) { return CoreModules.request(List.of("@" + path), "uA:A.entry", true, false, backend, false, false, null, async, false, false); }
+    private String request(Path path, String backend, boolean async) { return CoreModules.request(List.of("@" + path), "uA:A.entry", true, false, backend, false, false, null, async, false); }
     private long count(Value value, String field) { return ((Number) ((Map<?, ?>) Json.parse(value.getMember("diagnostics").asString())).get(field)).longValue(); }
     private Context executionContext() { return Main.executionContext(false); }
 
@@ -157,24 +157,17 @@ class CoreUnitLoadTest {
     }
     @Test void explicitLooseConsumersKeepPairedDependenciesCold() throws Exception {
         var manifest = fixture(); var plain = directory.resolve("Main.json"); Files.writeString(plain, Json.stringify(map("schema", 1, "ghc", "9.14.1", "unit", "main", "module", "Main", "boundary", boundary, "constructors", List.of(), "bindings", list(binding("main:Main.entry", choice(literal(41), call("uB:B.entry", list("var", "x"))))))));
-        var nativeJson = directory.resolve("native.json");
-        try (var in = Objects.requireNonNull(getClass().getResourceAsStream("/core/lazy-json-module.json"))) { Files.copy(in, nativeJson); }
         for (var backend : List.of("ast", "bytecode")) for (boolean async : new boolean[]{false, true}) {
             for (var order : List.of(List.of(plain.toString(), "@" + manifest), List.of("@" + manifest, plain.toString()))) try (var context = executionContext()) {
-                var entry = context.eval("thc", CoreModules.request(order, "main:Main.entry", true, false, backend, false, false, null, async, false, false));
+                var entry = context.eval("thc", CoreModules.request(order, "main:Main.entry", true, false, backend, false, false, null, async, false));
                 assertEquals(0L, count(entry, "coreUnitSourceOpens")); assertEquals(41L, entry.execute(0).asLong()); assertEquals(0L, count(entry, "coreUnitSourceOpens")); assertEquals(2L, entry.execute(1).asLong()); assertEquals(1L, count(entry, "coreUnitDecodedBindings")); long reads = count(entry, "coreUnitSourceByteReads"); assertEquals(3L, entry.execute(2).asLong()); assertEquals(reads, count(entry, "coreUnitSourceByteReads"));
-            }
-            try (var context = executionContext()) {
-                // Plain JSON navigation preserves demand loading without a serialized sidecar.
-                var entry = context.eval("thc", CoreModules.request(List.of(nativeJson.toString(), "@" + manifest), "synthetic:LazyJson.entry", true, false, backend, false, false, null, async, true, false));
-                assertEquals(0L, count(entry, "coreUnitSourceOpens")); assertEquals(1L, count(entry, "jsonBodyMaterializations")); assertEquals(7L, entry.execute(5).asLong()); assertEquals(2L, count(entry, "jsonBodyMaterializations")); assertEquals(1L, entry.execute(0).asLong()); assertEquals(3L, count(entry, "jsonBodyMaterializations")); assertEquals(0L, count(entry, "coreUnitSourceOpens"));
             }
         }
     }
     @Test void looseModuleCollisionsFailWithoutOpeningPackageSources() throws Exception {
         var manifest = fixture(); var loose = directory.resolve("duplicate.json"); Files.writeString(loose, Json.stringify(map("schema", 1, "ghc", "9.14.1", "unit", "uA", "module", "A", "boundary", boundary, "bindings", list(binding("uA:A.entry", literal(99)))))); Files.delete(directory.resolve("A.jsons"));
         for (var backend : List.of("ast", "bytecode")) try (var context = executionContext()) {
-            var failure = assertThrows(PolyglotException.class, () -> context.eval("thc", CoreFormatTestSupport.request(List.of(loose.toString(), "@" + manifest), "uA:A.entry", backend, true, null, false, false)));
+            var failure = assertThrows(PolyglotException.class, () -> context.eval("thc", CoreFormatTestSupport.request(List.of(loose.toString(), "@" + manifest), "uA:A.entry", backend, true, null, false)));
             assertTrue(Objects.toString(failure.getMessage(), "").contains("Duplicate GHC module"), failure.getMessage()); context.enter(); try { assertTrue(Language.currentState(null).getCoreUnitPrograms().isEmpty()); } finally { context.leave(); }
         }
     }
@@ -257,7 +250,7 @@ class CoreUnitLoadTest {
         for (String backend : List.of("ast", "bytecode")) {
             com.oracle.truffle.api.source.SourceSection previous = null;
             for (boolean notes : new boolean[]{true, true, false}) try (var context = executionContext()) {
-                var request = CoreModules.request(List.of(loose.toString(), other.toString(), "@" + manifest), "main:Main.entry", true, false, backend, notes, false, null, true, true, false);
+                var request = CoreModules.request(List.of(loose.toString(), other.toString(), "@" + manifest), "main:Main.entry", true, false, backend, notes, false, null, true, false);
                 @SuppressWarnings("unchecked") var input = (Map<String,Object>) Json.parse(request);
                 context.initialize("thc"); context.enter(); var owner = Language.currentState(null); owner.getThreads().enterCurrent(null, false, true, null);
                 try {

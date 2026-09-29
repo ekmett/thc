@@ -20,7 +20,7 @@ class CoreRequestTest {
             var path = directory.resolve("module" + i + ".json");
             Files.writeString(path, documents.get(i)); paths.add(path.toString());
         }
-        var request = CoreModules.request(paths, "entry\"\\\nλ", false, true, "bytecode", false, false, null, null, false, false);
+        var request = CoreModules.request(paths, "entry\"\\\nλ", false, true, "bytecode", false, false, null, null, false);
         assertEquals(map("modules", documents.stream().map(Json::parse).toList(), "entry", "entry\"\\\nλ",
             "instrument", false, "diagnosticUnsupported", true, "backend", "bytecode", "sourceNotesEnabled", false, "verifyArtifacts", false), Json.parse(request));
         // Every field survives, including unreachable definitions and decoded text.
@@ -35,7 +35,7 @@ class CoreRequestTest {
         for (String document : malformed) {
             Files.writeString(path, document);
             assertThrows(RuntimeException.class, () -> request(List.of(path.toString()), "entry",
-                Main.defaultBackend(), true, null, false, false), document);
+                Main.defaultBackend(), true, null, false), document);
         }
     }
     @Test void validationMatchesTheMaterializingReaderForNestedDocuments() {

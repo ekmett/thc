@@ -36,24 +36,20 @@ class NarrowPublicEntryTest {
         var metadata = map("schema", 1, "ghc", "9.14.1", "unit", "uN", "module", "N", "boundary", "optimized-Core-after-Tidy-before-CorePrep", "constructors", list());
         var module = with(metadata, "bindings", bindings);
         if (!indexed) return Json.stringify(map("backend", backend, "entry", "uN:N.entry", "asyncExceptions", false, "modules", list(module)));
-        var original = Json.stringify(module).getBytes(StandardCharsets.UTF_8); var admitted = Json.stringify(metadata).getBytes(StandardCharsets.UTF_8);
+        var fixture = CoreFormatTestSupport.symbolFixture(module); var original = fixture.bytes(); var admitted = Json.stringify(metadata).getBytes(StandardCharsets.UTF_8);
         var bytes = Arrays.copyOf(original, original.length + 1 + admitted.length); bytes[original.length] = 10;
         System.arraycopy(admitted, 0, bytes, original.length + 1, admitted.length);
         var json = directory.resolve("N.jsons"); var symbols = directory.resolve("N.symbols"); Files.write(json, bytes);
         Map<String, Object> record;
-        try (var index = CoreJsonIndex.fromBytes(original)) {
-            var bodies = Objects.requireNonNull(index.getRoot().member("bindings")); var rows = new TreeMap<String, Integer>();
-            for (var body : bodies.elements()) rows.put((String) Objects.requireNonNull(body.member("id")).decode(), body.getStart());
-            var text = new StringBuilder(); rows.forEach((id, offset) -> text.append(id).append(' ').append(offset).append('\n')); Files.writeString(symbols, text);
-            record = map("name", "N", "path", "N.json", "sha256", hash(original), "boundary", metadata.get("boundary"), "start", 0, "end", original.length,
-                "bindingsStart", bodies.getStart(), "bindingsEnd", bodies.getEndExclusive(), "metadataStart", original.length + 1, "metadataEnd", bytes.length,
-                "containsDelimitedControl", false, "registrationObligations", false, "mainAlias", false, "packageScalarDeclarations", false);
-        }
+        Files.writeString(symbols, fixture.symbols());
+        record = map("name", "N", "path", "N.json", "sha256", hash(original), "boundary", metadata.get("boundary"), "start", 0, "end", original.length,
+            "bindingsStart", fixture.bindingsStart(), "bindingsEnd", fixture.bindingsEnd(), "metadataStart", original.length + 1, "metadataEnd", bytes.length,
+            "containsDelimitedControl", false, "registrationObligations", false, "mainAlias", false, "packageScalarDeclarations", false);
         var unit = map("id", "uN", "depends", list(), "json", map("path", json.toString(), "sha256", hash(bytes)),
             "symbols", map("path", symbols.toString(), "sha256", hash(Files.readAllBytes(symbols))), "modules", list(record));
         var manifest = directory.resolve("packages.json");
         Files.writeString(manifest, Json.stringify(map("format", "thc-core-packages", "schema", 1, "ghc", "9.14.1", "units", list(unit))));
-        return CoreModules.request(list("@" + manifest), "uN:N.entry", true, false, backend, false, false, null, false, false, true);
+        return CoreModules.request(list("@" + manifest), "uN:N.entry", true, false, backend, false, false, null, false, true);
     }
     private void check(List<Map<String, Object>> bindings, String backend, boolean indexed, Consumer<Value> body) throws Exception {
         try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false")

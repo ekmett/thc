@@ -65,12 +65,11 @@ public final class Main {
     public static Value loadEntry(Context context, List<String> modules, String entry, boolean instrument, String backend, boolean ioMain) { return loadEntry(context, modules, entry, instrument, backend, ioMain, null); }
     public static Value loadEntry(Context context, List<String> modules, String entry, boolean instrument, String backend, boolean ioMain, String shutdownEntry) { return loadEntry(context, modules, entry, instrument, backend, ioMain, shutdownEntry, configuredAsyncExceptions()); }
     public static Value loadEntry(Context context, List<String> modules, String entry, boolean instrument, String backend, boolean ioMain, String shutdownEntry, Boolean asyncExceptions) { return loadEntry(context, modules, entry, instrument, backend, ioMain, shutdownEntry, asyncExceptions, false); }
-    public static Value loadEntry(Context context, List<String> modules, String entry, boolean instrument, String backend, boolean ioMain, String shutdownEntry, Boolean asyncExceptions, boolean indexed) { return loadEntry(context, modules, entry, instrument, backend, ioMain, shutdownEntry, asyncExceptions, indexed, false); }
-    public static Value loadEntry(Context context, List<String> modules, String entry, boolean instrument, String backend, boolean ioMain, String shutdownEntry, Boolean asyncExceptions, boolean indexed, boolean verifyArtifacts) {
+    public static Value loadEntry(Context context, List<String> modules, String entry, boolean instrument, String backend, boolean ioMain, String shutdownEntry, Boolean asyncExceptions, boolean verifyArtifacts) {
         return context.eval("thc", CoreModules.request(modules, entry, instrument,
             !ioMain && Boolean.getBoolean("thc.diagnosticUnsupported"), backend,
             strictBoolean(System.getProperty("thc.sourceNotesEnabled", "true")), ioMain,
-            shutdownEntry, asyncExceptions, indexed, verifyArtifacts));
+            shutdownEntry, asyncExceptions, verifyArtifacts));
     }
     public static Boolean configuredAsyncExceptions() {
         String configured = System.getProperty("thc.asyncExceptions");
@@ -144,7 +143,7 @@ public final class Main {
             try (Context context = executionContext(true)) {
                 initializeArguments(context, guest);
                 Boolean async = configuredAsyncExceptions();
-                var action = loadEntry(context, modules(args[1]), args[2], true, defaultBackend(), true, args[3], async == null ? true : async, true, verifyArtifacts);
+                var action = loadEntry(context, modules(args[1]), args[2], true, defaultBackend(), true, args[3], async == null ? true : async, verifyArtifacts);
                 check(action.invokeMember("runIO").asBoolean(), "Executable IO did not complete");
                 if (Boolean.getBoolean("thc.diagnostics")) System.err.println(action.getMember("diagnostics").asString());
             }
@@ -155,7 +154,7 @@ public final class Main {
             var guest = launcherArguments(args, 3);
             try (Context context = executionContext(true)) {
                 initializeArguments(context, guest);
-                var action = loadEntry(context, modules(args[1]), args[2], true, defaultBackend(), true, null, configuredAsyncExceptions(), true, verifyArtifacts);
+                var action = loadEntry(context, modules(args[1]), args[2], true, defaultBackend(), true, null, configuredAsyncExceptions(), verifyArtifacts);
                 check(action.invokeMember("runIO").asBoolean(), "IO main did not complete");
                 if (Boolean.getBoolean("thc.diagnostics")) System.err.println(action.getMember("diagnostics").asString());
             }
@@ -164,7 +163,7 @@ public final class Main {
         require(args.length >= 3, "Usage: thc MODULE.json[,MODULE.json...] ENTRY INTEGER [--compile]");
         long input = Long.parseLong(args[2]);
         try (Context context = executionContext(false)) {
-            var function = loadEntry(context, modules(args[0]), args[1], true, defaultBackend(), false, null, configuredAsyncExceptions(), true, verifyArtifacts);
+            var function = loadEntry(context, modules(args[0]), args[1], true, defaultBackend(), false, null, configuredAsyncExceptions(), verifyArtifacts);
             Long before = null;
             if (Arrays.asList(args).subList(3, args.length).contains("--compile")) {
                 // Training precedes installation; never settle or retry the first installed call.

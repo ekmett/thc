@@ -281,25 +281,24 @@ public final class CoreModules {
     }
 
     /** Serialize a load request. Deferred file reads require process-local capabilities. */
-    public static String request(List<String> paths, String entry) { return request(paths, entry, true, false, Main.defaultBackend(), true, false, null, null, false, false); }
-    public static String request(List<String> paths, String entry, boolean instrument) { return request(paths, entry, instrument, false, Main.defaultBackend(), true, false, null, null, false, false); }
-    public static String request(List<String> paths, String entry, boolean instrument, boolean diagnosticUnsupported) { return request(paths, entry, instrument, diagnosticUnsupported, Main.defaultBackend(), true, false, null, null, false, false); }
-    public static String request(List<String> paths, String entry, boolean instrument, boolean diagnosticUnsupported, String backend) { return request(paths, entry, instrument, diagnosticUnsupported, backend, true, false, null, null, false, false); }
-    public static String request(List<String> paths, String entry, boolean instrument, boolean diagnosticUnsupported, String backend, boolean sourceNotesEnabled) { return request(paths, entry, instrument, diagnosticUnsupported, backend, sourceNotesEnabled, false, null, null, false, false); }
-    public static String request(List<String> paths, String entry, boolean instrument, boolean diagnosticUnsupported, String backend, boolean sourceNotesEnabled, boolean ioMain) { return request(paths, entry, instrument, diagnosticUnsupported, backend, sourceNotesEnabled, ioMain, null, null, false, false); }
-    public static String request(List<String> paths, String entry, boolean instrument, boolean diagnosticUnsupported, String backend, boolean sourceNotesEnabled, boolean ioMain, String shutdownEntry) { return request(paths, entry, instrument, diagnosticUnsupported, backend, sourceNotesEnabled, ioMain, shutdownEntry, null, false, false); }
-    public static String request(List<String> paths, String entry, boolean instrument, boolean diagnosticUnsupported, String backend, boolean sourceNotesEnabled, boolean ioMain, String shutdownEntry, Boolean asyncExceptions) { return request(paths, entry, instrument, diagnosticUnsupported, backend, sourceNotesEnabled, ioMain, shutdownEntry, asyncExceptions, false, false); }
-    public static String request(List<String> paths, String entry, boolean instrument, boolean diagnosticUnsupported, String backend, boolean sourceNotesEnabled, boolean ioMain, String shutdownEntry, Boolean asyncExceptions, boolean indexed) { return request(paths, entry, instrument, diagnosticUnsupported, backend, sourceNotesEnabled, ioMain, shutdownEntry, asyncExceptions, indexed, false); }
+    public static String request(List<String> paths, String entry) { return request(paths, entry, true, false, Main.defaultBackend(), true, false, null, null, false); }
+    public static String request(List<String> paths, String entry, boolean instrument) { return request(paths, entry, instrument, false, Main.defaultBackend(), true, false, null, null, false); }
+    public static String request(List<String> paths, String entry, boolean instrument, boolean diagnosticUnsupported) { return request(paths, entry, instrument, diagnosticUnsupported, Main.defaultBackend(), true, false, null, null, false); }
+    public static String request(List<String> paths, String entry, boolean instrument, boolean diagnosticUnsupported, String backend) { return request(paths, entry, instrument, diagnosticUnsupported, backend, true, false, null, null, false); }
+    public static String request(List<String> paths, String entry, boolean instrument, boolean diagnosticUnsupported, String backend, boolean sourceNotesEnabled) { return request(paths, entry, instrument, diagnosticUnsupported, backend, sourceNotesEnabled, false, null, null, false); }
+    public static String request(List<String> paths, String entry, boolean instrument, boolean diagnosticUnsupported, String backend, boolean sourceNotesEnabled, boolean ioMain) { return request(paths, entry, instrument, diagnosticUnsupported, backend, sourceNotesEnabled, ioMain, null, null, false); }
+    public static String request(List<String> paths, String entry, boolean instrument, boolean diagnosticUnsupported, String backend, boolean sourceNotesEnabled, boolean ioMain, String shutdownEntry) { return request(paths, entry, instrument, diagnosticUnsupported, backend, sourceNotesEnabled, ioMain, shutdownEntry, null, false); }
+    public static String request(List<String> paths, String entry, boolean instrument, boolean diagnosticUnsupported, String backend, boolean sourceNotesEnabled, boolean ioMain, String shutdownEntry, Boolean asyncExceptions) { return request(paths, entry, instrument, diagnosticUnsupported, backend, sourceNotesEnabled, ioMain, shutdownEntry, asyncExceptions, false); }
     public static String request(List<String> paths, String entry, boolean instrument, boolean diagnosticUnsupported,
             String backend, boolean sourceNotesEnabled, boolean ioMain, String shutdownEntry, Boolean asyncExceptions,
-            boolean indexed, boolean verifyArtifacts) {
+            boolean verifyArtifacts) {
         require(shutdownEntry == null || ioMain && !blank(shutdownEntry) && !shutdownEntry.equals(entry), "Executable shutdown requires a distinct IO entry");
         var settings = new LinkedHashMap<String,Object>();
         settings.put("entry", entry); settings.put("instrument", instrument); settings.put("diagnosticUnsupported", diagnosticUnsupported); settings.put("backend", backend);
         settings.put("sourceNotesEnabled", sourceNotesEnabled); settings.put("verifyArtifacts", verifyArtifacts);
         for (String path : paths) if (path.startsWith("@")) { settings.put("strictLink", true); break; }
         if (ioMain) settings.put("ioMain", true); if (shutdownEntry != null) settings.put("shutdownEntry", shutdownEntry); if (asyncExceptions != null) settings.put("asyncExceptions", asyncExceptions);
-        try { return indexed ? indexedRequestDocument(paths, settings) : requestDocument(paths, settings); }
+        try { return requestDocument(paths, settings); }
         catch (Exception failure) { throw rethrow(failure); }
     }
     public static String managedExportRequest(List<String> paths, String backend, boolean instrument) { return managedExportRequest(paths, backend, instrument, false); }
@@ -307,39 +306,16 @@ public final class CoreModules {
         var settings = new LinkedHashMap<String,Object>(); settings.put("mode", "managed-exports"); settings.put("backend", backend); settings.put("instrument", instrument); settings.put("strictLink", true); settings.put("verifyArtifacts", verifyArtifacts);
         try { return requestDocument(paths, settings); } catch (Exception failure) { throw rethrow(failure); }
     }
-    public static TargetLayout visitRequestModules(Map<String,Object> input, Consumer<Map<String,Object>> accept) { return visitRequestModules(input, (source, adapter) -> {}, accept); }
-    public static TargetLayout visitRequestModules(Map<String,Object> input, BiConsumer<CoreJsonIndex,CoreJsonBindings> indexed, Consumer<Map<String,Object>> accept) {
-        try { return visitRequestModulesChecked(input, indexed, accept); } catch (Exception failure) { throw rethrow(failure); }
+    public static TargetLayout visitRequestModules(Map<String,Object> input, Consumer<Map<String,Object>> accept) {
+        try { return visitRequestModulesChecked(input, accept); } catch (Exception failure) { throw rethrow(failure); }
     }
-    private static TargetLayout visitRequestModulesChecked(Map<String,Object> input, BiConsumer<CoreJsonIndex,CoreJsonBindings> indexed, Consumer<Map<String,Object>> accept) throws java.io.IOException {
+    private static TargetLayout visitRequestModulesChecked(Map<String,Object> input, Consumer<Map<String,Object>> accept) throws java.io.IOException {
         require(input.get("verifyArtifacts") == null || input.get("verifyArtifacts") instanceof Boolean, "verifyArtifacts must be a Boolean");
         require(input.get("detachedBindings") == null || input.get("detachedBindings") instanceof Boolean, "detachedBindings must be a Boolean");
         require(!Boolean.TRUE.equals(input.get("detachedBindings")) || input.get("modules") instanceof List<?> &&
-            input.get("packageManifest") == null && input.get("indexedModuleFiles") == null && input.get("consumerModules") == null,
+            input.get("packageManifest") == null && input.get("consumerModules") == null,
             "Detached bindings require inline selected modules");
-        boolean verify = Objects.equals(input.get("verifyArtifacts"), true); Object files = input.get("indexedModuleFiles");
-        if (files != null) {
-            require(files instanceof List<?> list && !list.isEmpty() && input.get("modules") == null && input.get("consumerModules") == null && input.get("targetLayout") == null, "Indexed module request must not mix input protocols");
-            require(input.get("packageManifest") != null || input.get("packageManifestSha256") == null && input.get("packageCapability") == null, "Orphan package manifest identity");
-            var adapter = new CoreJsonBindings(!Objects.equals(input.get("sourceNotesEnabled"), false)); var opened = new ArrayList<CoreJsonIndex>();
-            try {
-                var layout = input.get("packageManifest") == null ? null : visitRequestModules(without(input, "indexedModuleFiles"), (source, projection) -> { opened.add(source); indexed.accept(source, projection); }, accept);
-                var seenPaths = new HashSet<String>();
-                for (Object raw : (List<?>) files) {
-                    if (!(raw instanceof Map<?,?> file)) throw new IllegalStateException("Invalid indexed Core descriptor");
-                    require(file.keySet().equals(Set.of("path", "sha256", "capability")), "Invalid indexed Core descriptor fields");
-                    String path = text(file.get("path"), "Missing indexed Core path"); require(seenPaths.add(path), "Duplicate indexed Core path: " + path);
-                    String sha = text(file.get("sha256"), "Missing indexed Core identity"), capability = text(file.get("capability"), "Missing indexed Core capability");
-                    require((verify ? sha.matches("[0-9a-f]{64}") : sha.isEmpty()) && sameCapability(capability, indexedCapability(path, sha, verify)), "Invalid indexed Core capability");
-                    CoreJsonIndex source = CoreJsonIndex.read(Path.of(path));
-                    opened.add(source); if (verify) require(source.sha256().equals(sha), "Core JSON changed after request: " + path);
-                    accept.accept(with(adapter.module(source.getRoot()), "foreignExceptionBridgeUnit", input.get("foreignExceptionBridgeUnit"))); indexed.accept(source, adapter);
-                }
-                // Immutable byte snapshots belong to parsed Engine roots, not a
-                // single Context; closing one Context must not invalidate peers.
-                return layout;
-            } catch (Throwable failure) { opened.forEach(CoreJsonIndex::close); throw failure; }
-        }
+        boolean verify = Objects.equals(input.get("verifyArtifacts"), true);
         Object manifest = input.get("packageManifest");
         if (manifest != null) {
             require(manifest instanceof String && input.get("modules") == null && input.get("targetLayout") == null, "Package request must not mix manifest and inline modules");
@@ -349,8 +325,8 @@ public final class CoreModules {
             boolean validConsumers = consumers == null || consumers instanceof List<?>;
             if (validConsumers && consumers != null) for (Object value : (List<?>) consumers) if (!(value instanceof Map<?,?>)) { validConsumers = false; break; }
             require(validConsumers, "Invalid loose package consumers");
-            var result = CorePackageManifest.visitRuntimeModules((String) manifest, expected, !Objects.equals(input.get("sourceNotesEnabled"), false), verify, indexed,
-                    module -> accept.accept(with(module, "foreignExceptionBridgeUnit", input.get("foreignExceptionBridgeUnit"))));
+            var result = CorePackageManifest.visitModules((String) manifest, expected, verify,
+                    (module, text) -> accept.accept(with(module, "foreignExceptionBridgeUnit", input.get("foreignExceptionBridgeUnit"))));
             require(Objects.equals(input.get("foreignExceptionBridgeUnit"), result.getForeignExceptionBridgeUnit()), "Package bridge selection changed after request");
             if (consumers != null) for (var consumer : (List<Map<String,Object>>) consumers) accept.accept(with(consumer, "foreignExceptionBridgeUnit", result.getForeignExceptionBridgeUnit()));
             return result.getTargetLayout();
@@ -363,14 +339,6 @@ public final class CoreModules {
     private static boolean sameCapability(String supplied, String expected) { return MessageDigest.isEqual(supplied.getBytes(StandardCharsets.US_ASCII), expected.getBytes(StandardCharsets.US_ASCII)); }
     private static MessageDigest digest() { try { return MessageDigest.getInstance("SHA-256"); } catch (NoSuchAlgorithmException failure) { throw new IllegalStateException(failure); } }
     private static String sha256(byte[] bytes) { return HexFormat.of().formatHex(digest().digest(bytes)); }
-    private static String sha256(Path path) throws java.io.IOException {
-        try (var stream = Files.newInputStream(path)) {
-            var digest = digest(); byte[] buffer = new byte[8192];
-            while (true) { int size = stream.read(buffer); if (size < 0) break; digest.update(buffer, 0, size); }
-            return HexFormat.of().formatHex(digest.digest());
-        }
-    }
-    private static String indexedCapability(String path, String sha, boolean verify) { return packageCapability("indexed-json:" + path, sha, verify); }
     public static CoreUnitDirectory unitDirectory(Map<String,Object> input) {
         if (!(input.get("packageManifest") instanceof String manifest)) return null;
         require(input.get("modules") == null && input.get("targetLayout") == null, "Package request must not mix input protocols");
@@ -393,7 +361,6 @@ public final class CoreModules {
             require(input.containsKey("modules"), "Cached preparation requires inline modules or a package directory");
             return Json.stringify(detachedValue(input));
         }
-        var consumerSources = new ArrayList<CoreJsonIndex>();
         try (var sources = directory.open(Boolean.TRUE.equals(input.get("verifyArtifacts")), false)) {
             var selected = new LinkedHashMap<CoreModuleAdmission,List<Map<String,Object>>>();
             var admissions = new LinkedHashMap<CoreUnitDirectory.ModuleRecord,CoreModuleAdmission>();
@@ -403,7 +370,7 @@ public final class CoreModules {
             var consumerOwners = new LinkedHashMap<String,Map<String,Object>>();
             var moduleNames = new HashSet<String>();
             for (var module : directory.getModules()) moduleNames.add(module.unit() + ":" + module.name());
-            visitUnitConsumers(with(input, "sourceNotesEnabled", false), (source, adapter) -> consumerSources.add(source), module -> {
+            visitUnitConsumers(with(input, "sourceNotesEnabled", false), module -> {
                 String unit = text(module.get("unit"), "Missing loose consumer unit"), name = text(module.get("module"), "Missing loose consumer module");
                 boolean fragment = unit.equals("dependency-closure") && name.equals("THC.InterfaceClosure") && Objects.equals(module.get("boundary"), "actual-interface-unfoldings");
                 require(fragment || moduleNames.add(unit + ":" + name), "Duplicate GHC module: " + unit + ":" + name);
@@ -511,12 +478,12 @@ public final class CoreModules {
             // Selection collects dependencies, not permission to execute them.
             // The ordinary linker still validates every selected original body.
             reachable(merger.finish(), entries, true);
-            var result = without(input, "packageManifest", "packageManifestSha256", "packageCapability", "consumerModules", "indexedModuleFiles");
+            var result = without(input, "packageManifest", "packageManifestSha256", "packageCapability", "consumerModules");
             result.put("modules", modules);
             result.put("detachedBindings", true);
             if (directory.getTargetLayout() != null) result.put("targetLayout", directory.getTargetLayout().document());
             return Json.stringify(detachedValue(result));
-        } finally { consumerSources.forEach(CoreJsonIndex::close); }
+        }
     }
     private static Object detachedValue(Object value) {
         if (value instanceof thc.runtime.CoreFloatingLiteral floating) return floating.document();
@@ -537,38 +504,19 @@ public final class CoreModules {
         return value;
     }
     /** Replay only explicit consumers; package definitions stay in their directory. */
-    public static void visitUnitConsumers(Map<String,Object> input, BiConsumer<CoreJsonIndex,CoreJsonBindings> indexed, Consumer<Map<String,Object>> accept) {
-        Object files = input.get("indexedModuleFiles"), consumers = input.get("consumerModules");
-        require(files == null || consumers == null, "Mixed loose consumer protocols");
+    public static void visitUnitConsumers(Map<String,Object> input, Consumer<Map<String,Object>> accept) {
+        Object consumers = input.get("consumerModules");
         var loose = without(input, "packageManifest", "packageManifestSha256", "packageCapability", "consumerModules");
-        if (files != null) visitRequestModules(loose, indexed, accept);
-        else if (consumers != null) {
+        if (consumers != null) {
             boolean validConsumers = consumers instanceof List<?>;
             if (validConsumers) for (Object value : (List<?>) consumers) if (!(value instanceof Map<?,?>)) { validConsumers = false; break; }
             require(validConsumers, "Invalid loose package consumers");
-            visitRequestModules(with(loose, "modules", consumers), indexed, accept);
+            visitRequestModules(with(loose, "modules", consumers), accept);
         }
     }
     private static Map<String,Object> manifestSettings(Map<String,Object> settings, CorePackageManifest.VisitResult identity, boolean verify) {
         var document = new LinkedHashMap<>(settings); document.put("packageManifest", identity.getManifestPath()); document.put("packageManifestSha256", identity.getManifestSha256());
         document.put("packageCapability", packageCapability(identity.getManifestPath(), identity.getManifestSha256(), verify)); document.put("foreignExceptionBridgeUnit", identity.getForeignExceptionBridgeUnit()); return document;
-    }
-    private static String indexedRequestDocument(List<String> paths, Map<String,Object> settings) throws java.io.IOException {
-        boolean verify = Objects.equals(settings.get("verifyArtifacts"), true);
-        var manifests = new ArrayList<String>();
-        for (String path : paths) if (path.startsWith("@")) manifests.add(path);
-        var loose = new ArrayList<String>();
-        for (String path : paths) if (!path.startsWith("@")) loose.add(path);
-        require(manifests.size() <= 1 && new HashSet<>(paths).size() == paths.size() && !paths.isEmpty(), "Indexed JSON requires distinct inputs and at most one package manifest");
-        var seenPaths = new HashSet<String>(); var files = new ArrayList<Map<String,Object>>();
-        for (String raw : loose) {
-            String path = Path.of(raw).toRealPath().toString(); require(seenPaths.add(path), "Duplicate indexed Core path: " + path);
-            String sha = verify ? sha256(Path.of(path)) : "";
-            var file = new LinkedHashMap<String,Object>(); file.put("path", path); file.put("sha256", sha); file.put("capability", indexedCapability(path, sha, verify)); files.add(file);
-        }
-        CorePackageManifest.VisitResult identity = null;
-        if (!manifests.isEmpty()) { identity = CorePackageManifest.indexedRequestIdentity(manifests.getFirst().substring(1), true, verify); if (identity == null) throw new IllegalStateException("Required value was null."); }
-        var document = files.isEmpty() ? settings : with(settings, "indexedModuleFiles", files); if (identity != null) document = manifestSettings(document, identity, verify); return Json.stringify(document);
     }
     private static String requestDocument(List<String> paths, Map<String,Object> settings) throws java.io.IOException {
         boolean verify = Objects.equals(settings.get("verifyArtifacts"), true);
@@ -579,7 +527,7 @@ public final class CoreModules {
         var options = new StringBuilder(); Json.appendObjectDocument(options, Json.stringify(settings));
         if (manifest != null) {
             var consumers = new ArrayList<String>(); for (String path : paths) if (!path.startsWith("@")) consumers.add(readText(path));
-            var identity = CorePackageManifest.indexedRequestIdentity(manifest, false, verify);
+            var identity = CorePackageManifest.indexedRequestIdentity(manifest, verify);
             if (identity != null) return manifestDocument(settings, identity, verify, consumers);
             class Inline { StringBuilder text = new StringBuilder(); int count; }
             var inline = new Inline(); int limit = 2 * 1024 * 1024;

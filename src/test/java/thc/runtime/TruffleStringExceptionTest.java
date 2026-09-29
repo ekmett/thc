@@ -39,7 +39,7 @@ class TruffleStringExceptionTest {
     }
     private static Value entry(Context context, List<String> inputs, String name, String backend) {
         return Main.loadEntry(context, inputs, "main:TruffleStringExceptions." + name, true, backend,
-            false, null, false, true, true);
+            false, null, false, true);
     }
     @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
     void genuineCatchInspectsNativeTypeAndCleanupRunsOnce(String backend) throws Exception {
@@ -87,7 +87,7 @@ class TruffleStringExceptionTest {
                 .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
                 .option("engine.Splitting", "false").option("engine.CompilationFailureAction", "Throw").build()) {
             var function = Main.loadEntry(context, inputs(), "main:StringPrimitives.numericRoundTrip", true, backend,
-                false, null, false, true, true);
+                false, null, false, true);
             for (long value : new long[]{Long.MIN_VALUE, -1, 0, 42, Long.MAX_VALUE})
                 assertEquals(value, function.execute(value).asLong());
             assertTrue(function.invokeMember("compile").asBoolean());

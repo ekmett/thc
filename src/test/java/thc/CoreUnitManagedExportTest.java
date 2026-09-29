@@ -26,10 +26,10 @@ class CoreUnitManagedExportTest {
         var file = fixtures.resolve(relative); var receipt = document(Files.readString(fixtures.resolve("manifest.json"))); var bytes = Files.readAllBytes(file);
         assertEquals(((Map<?, ?>) receipt.get("artifactHashes")).get(root.relativize(file).toString()), hash(bytes)); return bytes;
     }
-    private record Row(String id, long offset) {}
-    /** Test-only packaging of unchanged genuine GHC output; the runtime consumes only the text directory. */
+    /** Test-only re-encoding of verified genuine GHC bindings into the symbol-offset format. */
     private Path manifest(String label, boolean corrupt) throws Exception {
-        var original = verified("typed-foreign-exports/managed.json"); var source = document(new String(original, StandardCharsets.UTF_8));
+        var source = document(new String(verified("typed-foreign-exports/managed.json"), StandardCharsets.UTF_8));
+        var fixture = symbolFixture(source); var original = fixture.bytes();
         var fields = Set.of("schema", "ghc", "unit", "module", "boundary", "providedModules", "constructors", "foreign", "foreignLink",
             "staticForeignImportStubs", "staticForeignImports", "staticForeignExports", "staticForeignExportRegistration", "packageScalarLink",
             "packageNativeLink", "packageNativeArchive", "foreignExceptionBridge", "foreignExceptionBridgeUnit");
@@ -41,22 +41,17 @@ class CoreUnitManagedExportTest {
         var out = new ByteArrayOutputStream(); out.writeBytes(original); out.write(10); out.writeBytes(encoded);
         if (!notes.isEmpty()) { out.write(10); out.writeBytes(encodedNotes); } var bytes = out.toByteArray();
         var json = directory.resolve(label + ".jsons"); var symbols = directory.resolve(label + ".symbols"); Map<String, Object> record;
-        try (var index = CoreJsonIndex.fromBytes(original)) {
-            var bindings = Objects.requireNonNull(index.getRoot().member("bindings")); var rows = new ArrayList<Row>();
-            for (var span : bindings.elements()) rows.add(new Row((String) Objects.requireNonNull(span.member("id")).decode(), span.getStart()));
-            rows.sort((a, b) -> Arrays.compareUnsigned(bytes(a.id()), bytes(b.id()))); var text = new StringBuilder();
-            for (var row : rows) text.append(row.id()).append(' ').append(row.offset()).append('\n'); Files.writeString(symbols, text);
-            boolean mainAlias = false;
-            for (var binding : (List<?>) source.get("bindings")) if (Objects.equals(((Map<?, ?>) binding).get("id"), CoreUnitDirectory.MAIN_ALIAS)) mainAlias = true;
-            var imports = source.get("staticForeignImports") instanceof Map<?, ?> proof ? proof.get("imports") : null;
-            record = map("name", module, "path", "core/" + module + ".json", "sha256", hash(original), "boundary", source.get("boundary"),
-                "start", 0, "end", original.length, "bindingsStart", bindings.getStart(), "bindingsEnd", bindings.getEndExclusive(),
-                "metadataStart", original.length + 1, "metadataEnd", original.length + 1 + encoded.length,
-                "containsDelimitedControl", thc.runtime.DelimitedControl.INSTANCE.contains(source.get("bindings")),
-                "registrationObligations", CoreForeignArtifacts.hasRegistrationObligations(source), "mainAlias", mainAlias,
-                "packageScalarDeclarations", imports instanceof List<?> values && !values.isEmpty());
-            if (!notes.isEmpty()) record.putAll(map("sourceMetadataStart", original.length + encoded.length + 2, "sourceMetadataEnd", bytes.length));
-        }
+        Files.writeString(symbols, fixture.symbols());
+        boolean mainAlias = false;
+        for (var binding : (List<?>) source.get("bindings")) if (Objects.equals(((Map<?, ?>) binding).get("id"), CoreUnitDirectory.MAIN_ALIAS)) mainAlias = true;
+        var imports = source.get("staticForeignImports") instanceof Map<?, ?> proof ? proof.get("imports") : null;
+        record = map("name", module, "path", "core/" + module + ".json", "sha256", hash(original), "boundary", source.get("boundary"),
+            "start", 0, "end", original.length, "bindingsStart", fixture.bindingsStart(), "bindingsEnd", fixture.bindingsEnd(),
+            "metadataStart", original.length + 1, "metadataEnd", original.length + 1 + encoded.length,
+            "containsDelimitedControl", thc.runtime.DelimitedControl.INSTANCE.contains(source.get("bindings")),
+            "registrationObligations", CoreForeignArtifacts.hasRegistrationObligations(source), "mainAlias", mainAlias,
+            "packageScalarDeclarations", imports instanceof List<?> values && !values.isEmpty());
+        if (!notes.isEmpty()) record.putAll(map("sourceMetadataStart", original.length + encoded.length + 2, "sourceMetadataEnd", bytes.length));
         Files.write(json, bytes);
         var active = map("id", unit, "depends", List.of(), "json", map("path", json.toString(), "sha256", hash(bytes)),
             "symbols", map("path", symbols.toString(), "sha256", hash(Files.readAllBytes(symbols))), "modules", list(record));

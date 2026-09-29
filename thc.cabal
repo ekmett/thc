@@ -6,8 +6,7 @@ name: thc
 version: 0.1.0.0
 synopsis: Haskell on Truffle/Graal
 license: UPL-1.0 AND BSD-3-Clause
-license-files: LICENSE, LICENSE.txt,
-  nih/licenses/succinctly-MIT.txt, nih/licenses/everett-BSD-2-Clause.txt
+license-files: LICENSE, LICENSE.txt
 author: Edward Kmett
 maintainer: Edward Kmett
 category: Development
@@ -312,9 +311,6 @@ extra-source-files:
   t/compact-core/golden/*.json
   t/compact-core/golden/*.hex
   t/compact-core/golden/*.cbd
-  nih/licenses/succinctly-MIT.txt
-  nih/licenses/everett-LICENSE.txt
-  nih/licenses/everett-BSD-2-Clause.txt
   docs/foreign-exceptions.md
   t/fixtures/compiler/ForeignExceptionNative.hs
   t/fixtures/compiler/ForeignExceptionSafe.hs

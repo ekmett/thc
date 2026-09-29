@@ -11,7 +11,7 @@ class CoreRequestWhitespaceTest {
         for (String whitespace : List.of("\u00a0", "\u2007", "\u202f", " \t\u00a0\n")) {
             assertThrows(IllegalArgumentException.class, () -> CoreModules.request(
                     List.of(), "entry", true, false, "ast", true, true,
-                    whitespace, null, false, false));
+                    whitespace, null, false));
         }
     }
 }

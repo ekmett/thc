@@ -109,7 +109,7 @@ public final class PhaseProbe {
         try {
             phases.memoryCheckpoint("preLoad");
             var request = phases.measure("request", () -> CoreModules.request(List.of(args[1]), args[2],
-                true, false, backend, notes, false, null, async, true, false));
+                true, false, backend, notes, false, null, async, false));
             var function = phases.measure("eval", () -> context.eval("thc", request));
             System.out.println(function.getMember("diagnostics").asString());
             phases.memoryCheckpoint("postLoadPreEntry");

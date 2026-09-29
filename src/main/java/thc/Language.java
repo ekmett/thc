@@ -347,8 +347,7 @@ public final class Language extends TruffleLanguage<Language.State> {
             "Executable shutdown requires a distinct IO entry");
         require(!Boolean.TRUE.equals(input.get("ioMain")) || !Boolean.TRUE.equals(input.get("diagnosticUnsupported")),
             "IO main requires strict unsupported-Core rejection");
-        var loadingStatistics = new CoreJsonLoadingStatistics();
-        var layout = CoreModules.visitRequestModules(input, loadingStatistics::include,
+        var layout = CoreModules.visitRequestModules(input,
             Boolean.TRUE.equals(input.get("detachedBindings")) ? merger::addDetached : merger::add);
         var linked = new LinkedHashMap<String, Object>(CoreModules.reachable(merger.finish(),
             shutdownEntry == null ? List.of(entry) : List.of(entry, shutdownEntry), Boolean.TRUE.equals(input.get("strictLink"))));
@@ -356,7 +355,6 @@ public final class Language extends TruffleLanguage<Language.State> {
         linked.put("diagnosticUnsupported", Boolean.TRUE.equals(input.get("diagnosticUnsupported")));
         linked.put("sourceNotesEnabled", !Boolean.FALSE.equals(input.get("sourceNotesEnabled")));
         if (layout != null) linked.put("targetLayout", layout);
-        if (!loadingStatistics.isEmpty()) linked.put("coreLoadingStatistics", loadingStatistics);
         var bindings = (List<Map<String, Object>>) linked.get("bindings");
         var byId = singleOrNull(bindings, binding -> entry.equals(binding.get("id")));
         var selected = byId == null ? single(bindings, binding -> entry.equals(binding.get("name"))) : byId;

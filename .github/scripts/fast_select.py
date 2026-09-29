@@ -30,7 +30,6 @@ SIMD_ADDITIVE = {CAPABILITIES, BYTECODE_PROGRAM, BYTECODE_ROOT, SIMD_SPEC}
 POLYGLOT_TEST_ROOT = "src/polyglotTest/"
 HASKELL_TESTS = {"driver-tests": "t/haskell-driver/Main.hs", "primop-tools": "t/primop-tools/Main.hs",
                  "compact-core-tests": "t/compact-core/Main.hs"}
-DOCUMENTATION_PATHS = {"nih/licenses/succinctly-MIT.txt"}
 POLYGLOT_EXACT_INPUTS = {
     "build.gradle", "settings.gradle", "gradle.properties", "gradlew",
     "nih/gradle/wrapper/gradle-wrapper.jar", "nih/gradle/wrapper/gradle-wrapper.properties",
@@ -786,7 +785,7 @@ def select(repo, base_ref, head_ref):
                             affected_haskell.update(group.get("haskell", []))
                 except (SelectionError, UnicodeError, ValueError, TypeError):
                     widen("shared-primop-registry-change", path)
-            elif path in DOCUMENTATION_PATHS or (path.endswith(".md") and (path.startswith("docs/") or "/" not in path)):
+            elif (path.endswith(".md") and (path.startswith("docs/") or "/" not in path)):
                 pass  # Explicit documentation-only lane still executes all smoke.
             else:
                 widen("unmapped-source-or-configuration", path)

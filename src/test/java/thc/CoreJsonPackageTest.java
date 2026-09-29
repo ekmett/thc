@@ -25,7 +25,6 @@ class CoreJsonPackageTest {
     private Map<String, Object> module() throws Exception {
         return map("name", "LazyJson", "path", "LazyJson.json", "boundary", boundary, "sha256", digest(resource("lazy-json-package.json")));
     }
-    private Path manifest() throws Exception { return manifest(module(), null); }
     private Path manifest(Map<String, Object> module, List<String> order) throws Exception {
         byte[] json = resource("lazy-json-package.json");
         var unit = map("id", "synthetic", "depends", List.of(), "modules", List.of(module));
@@ -49,7 +48,7 @@ class CoreJsonPackageTest {
         return path;
     }
     private String request(Path path, String backend, boolean verify) {
-        return CoreFormatTestSupport.request(List.of("@" + path), "synthetic:LazyJson.entry", backend, false, null, true, verify);
+        return CoreFormatTestSupport.request(List.of("@" + path), "synthetic:LazyJson.entry", backend, false, null, verify);
     }
     private String request(Path path, boolean verify) { return request(path, "bytecode", verify); }
     private long count(Value value, String name) { return ((Number) document(value.getMember("diagnostics").asString()).get(name)).longValue(); }
@@ -57,29 +56,17 @@ class CoreJsonPackageTest {
     private List<List<String>> orders() {
         return Arrays.asList(null, List.of("manifest.json", "LazyJson.json"), List.of("LazyJson.json", "manifest.json"));
     }
-    @Test void jsonWorksInLooseOrderedAndReorderedPackagesWithoutEagerBodyLowering() throws Exception {
+    @Test void jsonWorksInLooseOrderedAndReorderedPackagesWithoutPreparingUnreachableBindings() throws Exception {
         for (var order : orders()) for (String backend : List.of("ast", "bytecode")) {
             var path = manifest(module(), order); var serialized = request(path, backend, false);
-            assertFalse(serialized.contains("unused body is deliberately")); assertFalse(document(serialized).containsKey("modules"));
+            assertTrue(document(serialized).containsKey("modules"));
             try (var context = Main.executionContext(false)) {
                 var value = context.eval("thc", serialized);
-                assertEquals(1L, count(value, "jsonBodyMaterializations")); assertEquals(1L, count(value, "loweredRootCount"));
-                assertEquals(4L, count(value, "jsonBindingHeaders")); assertEquals(0L, count(value, "jsonSourceHashBytesScanned"));
-                assertEquals(resource("lazy-json-package.json").length, count(value, "jsonStructuralBytesScanned")); assertEquals(2L * resource("lazy-json-package.json").length, count(value, "jsonIndexSourceBytesScanned"));
-                assertEquals(1L, value.execute(0L).asLong()); assertEquals(2L, count(value, "jsonBodyMaterializations"));
-                assertEquals(2L, count(value, "loweredRootCount")); assertEquals(7L, value.execute(5L).asLong());
-                assertEquals(3L, count(value, "jsonBodyMaterializations"));
+                assertEquals(3L, count(value, "initializedBindingCount"));
+                assertEquals(1L, value.execute(0L).asLong());
+                assertEquals(3L, count(value, "initializedBindingCount")); assertEquals(7L, value.execute(5L).asLong());
             }
         }
-    }
-    @Test void requestCreationReadsOnlyDirectoryAndReplayChecksManifestAndArtifacts() throws Exception {
-        var path = manifest(); Files.delete(directory.resolve("LazyJson.json"));
-        var serialized = request(path, true); // Module JSON is not opened here.
-        assertThrows(NoSuchFileException.class, () -> visit(serialized));
-        manifest(); Files.writeString(directory.resolve("LazyJson.json"), "{}");
-        assertTrue(Objects.toString(assertThrows(IllegalArgumentException.class, () -> visit(serialized)).getMessage(), "").contains("artifact hash mismatch"));
-        manifest(); Files.writeString(path, Files.readString(path) + " ");
-        assertTrue(Objects.toString(assertThrows(IllegalArgumentException.class, () -> visit(serialized)).getMessage(), "").contains("manifest changed"));
     }
     @Test void normalLoadingTrustsDeclaredDigestsButVerificationRejectsMismatch() throws Exception {
         var wrong = with(module(), "sha256", "0".repeat(64));
@@ -93,8 +80,7 @@ class CoreJsonPackageTest {
             for (String backend : List.of("ast", "bytecode")) try (var context = Main.executionContext(false)) {
                 var serialized = request(path, backend, false); Files.writeString(path, Files.readString(path) + " ");
                 var entry = context.eval("thc", serialized);
-                assertEquals(7L, entry.execute(5L).asLong()); assertEquals(0L, count(entry, "jsonSourceHashBytesScanned"));
-                assertEquals(resource("lazy-json-package.json").length, count(entry, "jsonStructuralBytesScanned")); assertEquals(2L * resource("lazy-json-package.json").length, count(entry, "jsonIndexSourceBytesScanned"));
+                assertEquals(7L, entry.execute(5L).asLong());
             }
             assertThrows(IllegalArgumentException.class, () -> visit(request(path, true)));
         }
