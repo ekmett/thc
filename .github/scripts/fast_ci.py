@@ -362,13 +362,11 @@ def execute(recorder, base, head, identity_path):
     polyglot_summary = None
     if polyglot is not None:
         try:
+            for demo in ("polyglot", "javascript"):
+                recorder.command(f"{demo}-demo", [f"bin/{demo}-demo.sh"])
             polyglot_summary = run_polyglot(recorder, selection)
         except (RuntimeError, ValueError, ET.ParseError) as error:
             failures.append(f"polyglot: {error}")
-        try:
-            recorder.command("javascript-demo", ["bin/javascript-demo.sh"])
-        except RuntimeError as error:
-            failures.append(f"javascript-demo: {error}")
     recorder.data.update(testSummaries=summaries, polyglotSummary=polyglot_summary,
                          failures=failures, passed=not failures)
     recorder.save()

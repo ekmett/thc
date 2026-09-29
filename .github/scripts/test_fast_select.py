@@ -342,6 +342,17 @@ class FastSelectionTest(unittest.TestCase):
         self.commit()
         self.assertFalse(self.plan()["polyglot"]["required"])
 
+    def test_acquired_demo_inputs_and_js_admission_select_polyglot(self):
+        for path in ("bin/acquire-polyglot-demo.sh", "bin/core_package_manifest.py",
+                     "src/main/java/thc/PackageScalarLinks.java",
+                     "src/examples/cabal.project", "src/examples/thc-examples.cabal",
+                     "src/examples/javascript/Main.hs", "src/examples/polyglot/Main.hs"):
+            with self.subTest(path=path):
+                self.write(path, "changed\n")
+                self.commit()
+                self.assertTrue(self.plan()["polyglot"]["required"])
+                self.base = self.git("rev-parse", "HEAD")
+
     def test_full_core_source_set_is_not_an_optional_language_test_inventory(self):
         # Protocol helpers cannot safely enter the portable optional inventory.
         # The dedicated source set must neither block Fast checks nor claim they ran.

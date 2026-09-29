@@ -586,21 +586,59 @@ class FastRunnerTest(unittest.TestCase):
                 self.assertEqual(recorder.data["passed"], not failed)
 
 
-    def test_required_polyglot_lane_runs_real_demo_after_normal_tests(self):
+    def test_required_polyglot_lane_acquires_both_demos_before_junit(self):
         selection = self.selection() | {"reasons": [], "python": {"commands": []},
                                         "polyglot": {"required": True, "classes": ["example.PolyglotTest"]}}
         identity_path = self.root / "identity.json"
         identity_path.write_text(json.dumps({"platform": "linux", "toolchain": {}}))
         with patch.object(ci, "git", return_value="a" * 40):
             recorder = ci.Recorder(self.root, self.root / "receipts")
-        with patch.object(recorder, "command", side_effect=[(0, json.dumps(selection)), (0, ""), (0, "")]) as run, \
+        acquired = []
+        def command(name, argv, **kwargs):
+            if name == "select":
+                return 0, json.dumps(selection)
+            if name.endswith("-demo"):
+                demo = name.removesuffix("-demo")
+                self.assertEqual(argv, [f"bin/{demo}-demo.sh"])
+                manifest = self.root / "build" / demo / "packages.json"
+                manifest.parent.mkdir(parents=True)
+                manifest.write_text("{}")
+                acquired.append(demo)
+            return 0, ""
+        def run_polyglot(*args):
+            for demo in ("polyglot", "javascript"):
+                self.assertTrue((self.root / "build" / demo / "packages.json").is_file(), demo)
+            return {"classes": ["example.PolyglotTest"]}
+        with patch.object(recorder, "command", side_effect=command), \
+                patch.object(ci.fixtures, "prepare", return_value={"mode": "selected"}), \
+                patch.object(ci, "run_modes", return_value=({}, [])), \
+                patch.object(ci, "run_polyglot", side_effect=run_polyglot) as optional:
+            ci.execute(recorder, "HEAD", "HEAD", identity_path)
+        optional.assert_called_once_with(recorder, selection)
+        self.assertEqual(acquired, ["polyglot", "javascript"])
+        self.assertTrue(recorder.data["passed"])
+
+    def test_failed_demo_acquisition_prevents_polyglot_junit(self):
+        selection = self.selection() | {"reasons": [], "python": {"commands": []},
+                                        "polyglot": {"required": True, "classes": ["example.PolyglotTest"]}}
+        identity_path = self.root / "identity.json"
+        identity_path.write_text(json.dumps({"platform": "linux", "toolchain": {}}))
+        with patch.object(ci, "git", return_value="a" * 40):
+            recorder = ci.Recorder(self.root, self.root / "receipts")
+        def command(name, argv, **kwargs):
+            if name == "select":
+                return 0, json.dumps(selection)
+            if name == "javascript-demo":
+                raise RuntimeError("javascript acquisition failed")
+            return 0, ""
+        with patch.object(recorder, "command", side_effect=command), \
                 patch.object(ci.fixtures, "prepare", return_value={"mode": "selected"}), \
                 patch.object(ci, "run_modes", return_value=({}, [])), \
                 patch.object(ci, "run_polyglot", return_value={"classes": ["example.PolyglotTest"]}) as optional:
-            ci.execute(recorder, "HEAD", "HEAD", identity_path)
-        optional.assert_called_once_with(recorder, selection)
-        self.assertEqual(run.call_args_list[2].args, ("javascript-demo", ["bin/javascript-demo.sh"]))
-        self.assertTrue(recorder.data["passed"])
+            with self.assertRaisesRegex(RuntimeError, "javascript acquisition failed"):
+                ci.execute(recorder, "HEAD", "HEAD", identity_path)
+        optional.assert_not_called()
+        self.assertFalse(recorder.data["passed"])
 
     def test_native_oracle_stdout_excludes_diagnostics(self):
         with patch.object(ci, "git", return_value="a" * 40):
