@@ -212,9 +212,13 @@ public final class CoreCompactFile implements AutoCloseable {
 
     /** Exhaustive verification only. Ordinary lookup never walks this table. */
     public void verifyBindingOffsets(OffsetVisitor visit) throws Throwable {
+        if (!verifyArtifacts) throw new IllegalStateException("Complete compact binding inspection requires explicit verification");
+        visitBindingOffsets(visit);
+    }
+    /** Explicit loose modules enumerate their definitions; package demand still uses lookup. */
+    void visitBindingOffsets(OffsetVisitor visit) throws Throwable {
         Objects.requireNonNull(visit);
         synchronized (counters) {
-            if (!verifyArtifacts) throw new IllegalStateException("Complete compact binding inspection requires explicit verification");
             Mapped current = mapping();
             CoreCompactFormat.Span span = current.header.get(CoreCompactFormat.Segment.SYMBOLS);
             CoreCompactCursor cursor = new CoreCompactCursor(CoreCompactCursor.slice(member(current, "symbols"), span.offset(), span.length()));

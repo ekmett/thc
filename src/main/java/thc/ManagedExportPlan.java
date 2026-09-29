@@ -17,7 +17,7 @@ public final class ManagedExportPlan {
     public String getBackend() { return backend; }
     private static void require(boolean value, String message) { if (!value) throw new IllegalArgumentException(message); }
     public static String backend(Map<String,Object> input) {
-        var keys = Set.of("mode", "modules", "consumerModules", "backend", "instrument", "sourceNotesEnabled", "strictLink", "targetLayout", "verifyArtifacts", "packageManifest", "packageManifestSha256", "packageCapability", "foreignExceptionBridgeUnit");
+        var keys = Set.of("mode", "modules", "moduleFiles", "backend", "instrument", "sourceNotesEnabled", "strictLink", "targetLayout", "verifyArtifacts", "packageManifest", "packageManifestSha256", "packageCapability", "foreignExceptionBridgeUnit");
         require(keys.containsAll(input.keySet()) && Objects.equals(input.get("mode"), "managed-exports") && Objects.equals(input.get("strictLink"), true), "Managed export loading requires its explicit strict request");
         require(input.get("verifyArtifacts") == null || input.get("verifyArtifacts") instanceof Boolean, "verifyArtifacts must be a Boolean");
         String backend = input.get("backend") instanceof String text ? text : Main.defaultBackend();
@@ -27,7 +27,7 @@ public final class ManagedExportPlan {
     public static ManagedExportPlan read(Map<String,Object> input) {
         String backend = backend(input);
         var merger = new CoreModules.Merger(); var admissions = new ArrayList<ManagedExportAdmission>();
-        var layout = CoreModules.visitRequestModules(input, original -> {
+        var layout = CoreModules.visitDecodedModules(input, original -> {
             var module = (Map<String,Object>) immutable(original);
             require(!module.containsKey("foreignLink"), "Native linked products are not managed export registration");
             var admission = Objects.equals(module.get("schema"), 2L) ? ManagedExportAdmission.read(module) : null;

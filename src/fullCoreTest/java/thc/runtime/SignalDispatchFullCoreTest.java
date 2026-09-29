@@ -45,7 +45,7 @@ public class SignalDispatchFullCoreTest {
     @SuppressWarnings("unchecked") private static <E extends Throwable, T> T rethrow(Throwable failure) throws E { throw (E) failure; }
     private void dispatch(String backend, boolean loom) throws Exception {
         var manifest = fixture(); var originals = new ArrayList<Map<String, Object>>();
-        var layout = Objects.requireNonNull(CorePackageManifest.visitModules(new File(root, (String) manifest.get("packageManifest")).getPath(), (module, path) -> originals.add(module)).getTargetLayout());
+        var layout = Objects.requireNonNull(CoreCbdFixtures.visitModules(new File(root, (String) manifest.get("packageManifest")).getPath(), (module, path) -> originals.add(module)).getTargetLayout());
         var lines = Files.readAllLines(new File(directory, "oracle.txt").toPath(), StandardCharsets.UTF_8); var nativeRows = new LinkedHashMap<Long, Long>();
         for (int i = 0; i < lines.size(); i += 2) nativeRows.put(Long.parseLong(lines.get(i)), Long.parseLong(lines.get(i + 1)));
         for (var stage : ((Map<String, List<String>>) manifest.get("stages")).entrySet()) {

@@ -39,8 +39,8 @@ class RawInteropBoundaryTest {
                 assertEquals(0L, file.getCounters().statistics().debugBytesRead());
                 // Use the ordinary snapshot path while the reader is open;
                 // deferred debug origins must not outlive this test's mapping.
-                var detached = object(Json.parse(CoreModules.detachedRequest(
-                    map("modules", list(with(original, "bindings", new ArrayList<>(replacements.values())))), PREFIX + "getLibrary")));
+                var detached = object(CoreCbdFixtures.snapshot(
+                    map("modules", list(with(original, "bindings", new ArrayList<>(replacements.values()))))));
                 replacements.clear();
                 for (var binding : objects(objects(detached.get("modules")).getFirst().get("bindings")))
                     replacements.put((String) binding.get("id"), binding);

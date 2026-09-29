@@ -29,7 +29,7 @@ public final class NativeCache {
 
     public static void main(String[] args) throws Exception {
         if (args.length == 1 && args[0].equals("--help")) {
-            System.out.println("store CACHE MODULE.json[,MODULE.json...]|@PACKAGES.json ENTRY [--io-main] [--shutdown-entry=ID] [--verify-artifacts]\nrun CACHE [INTEGER|f:FLOAT|d:DOUBLE...]");
+            System.out.println("store CACHE MODULE.cbd[,MODULE.cbd...]|@PACKAGES.json ENTRY [--io-main] [--shutdown-entry=ID] [--verify-artifacts]\nrun CACHE [INTEGER|f:FLOAT|d:DOUBLE...]");
             return;
         }
         if (args.length < 2 || !(args[0].equals("store") && args.length >= 4 || args[0].equals("run")))
@@ -79,7 +79,7 @@ public final class NativeCache {
         var request = new LinkedHashMap<>((Map<String, Object>) Json.parse(CoreModules.request(
             modules, entry, true, false, "ast", true, ioMain, shutdownEntry, false, verifyArtifacts)));
         request.put("prepareCode", true);
-        return CoreModules.detachedRequest(request, entry);
+        return Json.stringify(request);
     }
 
     static String sourceName(String request) {

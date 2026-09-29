@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
 
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
@@ -22,10 +23,11 @@ public final class KeepAliveExpression extends Expr {
         return cut.enclose(steps -> new KeptScope(value, steps));
     }
     private record KeptScope(Object value, List<AstResumeStep> steps) implements AstResumeStep, DelimitedStep {
+        @TruffleBoundary KeptScope(Object value) { this(value, List.of()); }
         @Override public Object resume(VirtualFrame frame, Object input) {
             try { return AstContinuations.resumeAstSteps(frame, steps, input); }
             catch (AstCapture cut) { throw enclose(cut, value); }
-            catch (DelimitedCut cut) { throw cut.append(frame, new KeptScope(value, List.of())); }
+            catch (DelimitedCut cut) { throw cut.append(frame, new KeptScope(value)); }
             finally { Reference.reachabilityFence(value); }
         }
         @Override public Object resume(MaterializedFrame frame, DelimitedResume input, MaskingState ambient, DelimitedStep outerMask) {
@@ -39,7 +41,7 @@ public final class KeepAliveExpression extends Expr {
                 node.loadState(frame, route, slots, offset);
                 return node.resumeAction(frame, route, slots, offset);
             } catch (AstCapture cut) { throw enclose(cut, input); }
-            catch (DelimitedCut cut) { throw cut.append(frame, new KeptScope(input, List.of())); }
+            catch (DelimitedCut cut) { throw cut.append(frame, new KeptScope(input)); }
             finally { Reference.reachabilityFence(input); }
         }
         @Override public Object resume(MaterializedFrame frame, DelimitedResume input, MaskingState ambient, DelimitedStep outerMask) {
@@ -91,7 +93,7 @@ public final class KeepAliveExpression extends Expr {
             loadState(frame, Route.GENERIC, null, 0);
             return action.execute(frame);
         } catch (AstCapture cut) { throw enclose(cut, value); }
-        catch (DelimitedCut cut) { throw cut.append(frame, new KeptScope(value, List.of())); }
+        catch (DelimitedCut cut) { throw cut.append(frame, new KeptScope(value)); }
         finally { Reference.reachabilityFence(value); }
     }
     @Override public int executeInt(VirtualFrame frame) throws UnexpectedResultException {
@@ -100,7 +102,7 @@ public final class KeepAliveExpression extends Expr {
             loadState(frame, Route.INT, null, 0);
             return action.executeInt(frame);
         } catch (AstCapture cut) { throw enclose(cut, value); }
-        catch (DelimitedCut cut) { throw cut.append(frame, new KeptScope(value, List.of())); }
+        catch (DelimitedCut cut) { throw cut.append(frame, new KeptScope(value)); }
         finally { Reference.reachabilityFence(value); }
     }
     @Override public long executeLong(VirtualFrame frame) throws UnexpectedResultException {
@@ -109,7 +111,7 @@ public final class KeepAliveExpression extends Expr {
             loadState(frame, Route.LONG, null, 0);
             return action.executeLong(frame);
         } catch (AstCapture cut) { throw enclose(cut, value); }
-        catch (DelimitedCut cut) { throw cut.append(frame, new KeptScope(value, List.of())); }
+        catch (DelimitedCut cut) { throw cut.append(frame, new KeptScope(value)); }
         finally { Reference.reachabilityFence(value); }
     }
     @Override public float executeFloat(VirtualFrame frame) throws UnexpectedResultException {
@@ -118,7 +120,7 @@ public final class KeepAliveExpression extends Expr {
             loadState(frame, Route.FLOAT, null, 0);
             return action.executeFloat(frame);
         } catch (AstCapture cut) { throw enclose(cut, value); }
-        catch (DelimitedCut cut) { throw cut.append(frame, new KeptScope(value, List.of())); }
+        catch (DelimitedCut cut) { throw cut.append(frame, new KeptScope(value)); }
         finally { Reference.reachabilityFence(value); }
     }
     @Override public double executeDouble(VirtualFrame frame) throws UnexpectedResultException {
@@ -127,7 +129,7 @@ public final class KeepAliveExpression extends Expr {
             loadState(frame, Route.DOUBLE, null, 0);
             return action.executeDouble(frame);
         } catch (AstCapture cut) { throw enclose(cut, value); }
-        catch (DelimitedCut cut) { throw cut.append(frame, new KeptScope(value, List.of())); }
+        catch (DelimitedCut cut) { throw cut.append(frame, new KeptScope(value)); }
         finally { Reference.reachabilityFence(value); }
     }
     @Override public ManagedAddress executeAddress(VirtualFrame frame) throws UnexpectedResultException {
@@ -136,7 +138,7 @@ public final class KeepAliveExpression extends Expr {
             loadState(frame, Route.ADDRESS, null, 0);
             return action.executeAddress(frame);
         } catch (AstCapture cut) { throw enclose(cut, value); }
-        catch (DelimitedCut cut) { throw cut.append(frame, new KeptScope(value, List.of())); }
+        catch (DelimitedCut cut) { throw cut.append(frame, new KeptScope(value)); }
         finally { Reference.reachabilityFence(value); }
     }
     @Override public DataValue executeDataValue(VirtualFrame frame) throws UnexpectedResultException {
@@ -145,7 +147,7 @@ public final class KeepAliveExpression extends Expr {
             loadState(frame, Route.DATA, null, 0);
             return action.executeDataValue(frame);
         } catch (AstCapture cut) { throw enclose(cut, value); }
-        catch (DelimitedCut cut) { throw cut.append(frame, new KeptScope(value, List.of())); }
+        catch (DelimitedCut cut) { throw cut.append(frame, new KeptScope(value)); }
         finally { Reference.reachabilityFence(value); }
     }
     @Override public Closure executeClosure(VirtualFrame frame) throws UnexpectedResultException {
@@ -154,7 +156,7 @@ public final class KeepAliveExpression extends Expr {
             loadState(frame, Route.CLOSURE, null, 0);
             return action.executeClosure(frame);
         } catch (AstCapture cut) { throw enclose(cut, value); }
-        catch (DelimitedCut cut) { throw cut.append(frame, new KeptScope(value, List.of())); }
+        catch (DelimitedCut cut) { throw cut.append(frame, new KeptScope(value)); }
         finally { Reference.reachabilityFence(value); }
     }
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
@@ -163,7 +165,7 @@ public final class KeepAliveExpression extends Expr {
             loadState(frame, Route.TUPLE, slots, offset);
             return action.executeTuple(frame, slots, offset);
         } catch (AstCapture cut) { throw enclose(cut, value); }
-        catch (DelimitedCut cut) { throw cut.append(frame, new KeptScope(value, List.of())); }
+        catch (DelimitedCut cut) { throw cut.append(frame, new KeptScope(value)); }
         finally { Reference.reachabilityFence(value); }
     }
 }

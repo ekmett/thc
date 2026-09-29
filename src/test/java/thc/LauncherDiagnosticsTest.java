@@ -21,6 +21,95 @@ import static thc.Main.launcherArtifactVerification;
 @ResourceLock(Resources.SYSTEM_PROPERTIES)
 public class LauncherDiagnosticsTest {
     @TempDir public Path directory;
+    @Test public void nativeImageIncludesDynamicallySelectedOriginalCResources() throws Exception {
+        Map<?, ?> configuration, manifest;
+        try (var input = getClass().getResourceAsStream("/META-INF/native-image/thc/runtime/resource-config.json")) {
+            configuration = (Map<?, ?>) Json.parse(new String(Objects.requireNonNull(input).readAllBytes(), StandardCharsets.UTF_8));
+        }
+        try (var input = getClass().getResourceAsStream("/thc/cbits/manifest.json")) {
+            manifest = (Map<?, ?>) Json.parse(new String(Objects.requireNonNull(input).readAllBytes(), StandardCharsets.UTF_8));
+        }
+        var patterns = ((List<?>) ((Map<?, ?>) configuration.get("resources")).get("includes")).stream()
+            .map(raw -> java.util.regex.Pattern.compile((String) ((Map<?, ?>) raw).get("pattern"))).toList();
+        var resources = new ArrayList<String>();
+        for (var raw : (List<?>) manifest.get("artifacts")) {
+            var name = Path.of((String) ((Map<?, ?>) raw).get("path")).getFileName().toString();
+            if (name.endsWith(".bc")) resources.add("thc/cbits/" + name);
+        }
+        assertTrue(resources.contains("thc/cbits/package-pointer.bc"));
+        if (manifest.get("system").equals("Linux"))
+            assertTrue(resources.contains("thc/cbits/iconv.bc")); // Actual ELF stdout initialization failure.
+        if (resources.contains("thc/cbits/text.bc")) resources.addAll(List.of("thc/cbits/text-LICENSE", "thc/cbits/text-memchr-LICENSE"));
+        if (resources.contains("thc/cbits/bytestring-utf8.bc")) resources.add("thc/cbits/bytestring-utf8-LICENSE");
+        for (var resource : resources) {
+            assertNotNull(getClass().getResource("/" + resource), resource);
+            assertTrue(patterns.stream().anyMatch(pattern -> pattern.matcher(resource).matches()), resource);
+        }
+        assertFalse(patterns.stream().anyMatch(pattern -> pattern.matcher("unrelated/example.bc").matches()));
+    }
+    @Test public void nativeImageIoMetadataCoversDeclaredUnixAbisAndCaptureOptions() throws Exception {
+        var path = Path.of(System.getProperty("thc.projectRoot"),
+            "research/native-image-preparation/native-io/reachability-metadata.json");
+        var document = (Map<?, ?>) Json.parse(Files.readString(path));
+        var foreign = (Map<?, ?>) document.get("foreign");
+        assertEquals(Set.of("downcalls"), foreign.keySet());
+        var calls = (List<?>) foreign.get("downcalls");
+        assertEquals(calls.size(), new HashSet<>(calls).size());
+        for (var raw : calls) {
+            var call = (Map<?, ?>) raw;
+            assertTrue(Set.of("jint", "jlong", "void*", "void").contains(call.get("returnType")));
+            for (var parameter : (List<?>) call.get("parameterTypes"))
+                assertTrue(Set.of("jint", "jlong", "void*").contains(parameter));
+            var options = (Map<?, ?>) call.get("options");
+            if (options != null) {
+                assertEquals(true, options.get("captureCallState"));
+                assertTrue(Set.of("captureCallState", "firstVariadicArg").containsAll(options.keySet()));
+            }
+        }
+        assertTrue(calls.contains(Map.of("returnType", "jint", "parameterTypes", List.of("jint"),
+            "options", Map.of("captureCallState", true)))); // NativeFileLease.close, actual ELF startup failure.
+        assertTrue(calls.contains(Map.of("returnType", "jint", "parameterTypes", List.of("jint", "jint", "jint"),
+            "options", Map.of("captureCallState", true, "firstVariadicArg", 2L)))); // fcntl readiness duplicate.
+        for (var operation : thc.runtime.OriginalStdioOp.values()) if (operation.getUnixNative()) {
+            var parameters = operation.getArguments().stream().filter(Objects::nonNull).map(LauncherDiagnosticsTest::foreignType).toList();
+            assertTrue(calls.contains(Map.of("returnType", foreignType(operation.getResult()), "parameterTypes", parameters,
+                "options", Map.of("captureCallState", true))), operation.name());
+        }
+    }
+    private static String foreignType(String representation) {
+        return switch (representation) {
+            case "AddrRep" -> "void*";
+            case "Int32Rep", "Word32Rep" -> "jint";
+            case "Int64Rep", "Word64Rep", "IntRep", "WordRep" -> "jlong";
+            default -> throw new AssertionError(representation);
+        };
+    }
+    @Test public void nativeExecutableProfileIsSeparateFromGuestCppOptions() {
+        var configuration = Json.stringify(Map.of("arguments", List.of("--run-executable", "main.cbd",
+            "u:Main.main", "base:Top.flush", "--", "ghc"), "properties", Map.of("thc.byteArrayStorage", "native")));
+        var old = System.getProperty("thc.byteArrayStorage");
+        try {
+            NativeExecutable.initializeProperties(configuration);
+            assertEquals("native", System.getProperty("thc.byteArrayStorage"));
+            assertArrayEquals(new String[]{"--run-executable", "main.cbd", "u:Main.main", "base:Top.flush", "--", "ghc",
+                "-DDEBUG", "-DVALUE=42"}, NativeExecutable.launcherArguments(configuration, new String[]{"-DDEBUG", "-DVALUE=42"}));
+        } finally { property("thc.byteArrayStorage", old); }
+    }
+    @Test public void nativeExecutableBindsMainAndShutdownWithoutParsingGuestOptions() {
+        var binding = List.of("--run-executable", "@packages.json,main.cbd", "u:Main.main",
+            "base:Top.flush", "--", "ghc", "-B/lib with spaces");
+        var guest = new String[] {"--verify-artifacts", "--run-io", "", "--", "a b.hs"};
+        var actual = NativeExecutable.launcherArguments(Json.stringify(binding), guest);
+        assertArrayEquals(new String[] {"--run-executable", "@packages.json,main.cbd", "u:Main.main",
+            "base:Top.flush", "--", "ghc", "-B/lib with spaces", "--verify-artifacts",
+            "--run-io", "", "--", "a b.hs"}, actual);
+        assertFalse(Main.launcherArtifactVerification(actual).verifyArtifacts());
+        assertEquals("ghc", Main.launcherArguments(actual, 4).programName());
+        assertArrayEquals(new String[] {"--verify-artifacts", "--run-io", "", "--", "a b.hs"}, guest);
+        for (String invalid : List.of("{}", "[]", "[1]", "[null,1,2,3,4,5]", "[\"--run-io\",\"modules\",\"entry\"]",
+                Json.stringify(List.of("--run-executable", "modules", "entry", "", "--", "ghc"))))
+            assertThrows(IllegalArgumentException.class, () -> NativeExecutable.launcherArguments(invalid, guest));
+    }
     @Test
     @org.junit.jupiter.api.condition.EnabledOnOs({org.junit.jupiter.api.condition.OS.LINUX, org.junit.jupiter.api.condition.OS.MAC})
     public void shellWrapperPreservesExplicitModulesAndEveryArgument() throws Exception {

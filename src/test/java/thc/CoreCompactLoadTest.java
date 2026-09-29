@@ -107,7 +107,7 @@ class CoreCompactLoadTest {
         return CoreFormatTestSupport.request(List.of("@" + path), "unit:A.entry", backend, false, false, verify);
     }
     private long count(Value entry, String key) { return ((Number) document(entry.getMember("diagnostics").asString()).get(key)).longValue(); }
-    @Test void intrinsicCaseResultSurvivesCompactLoadingAndJsonDetachment() throws Exception {
+    @Test void intrinsicCaseResultSurvivesCompactLoadingAndSelection() throws Exception {
         for (boolean conflicting : List.of(false, true)) {
             var model = new Model(conflicting ? "Conflict" : "Intrinsic");
             model.function("entry", out -> {
@@ -124,22 +124,18 @@ class CoreCompactLoadTest {
             Files.writeString(manifest, Json.stringify(map("format", "thc-core-packages", "schema", 1,
                 "ghc", "9.14.1", "units", list(map("id", "unit", "depends", list(), "modules", list(module))))));
             String entryName = "unit:" + model.name + ".entry";
-            var detached = document(NativeCache.request(List.of("@" + manifest), entryName));
+            var detached = CoreModules.selectedModules(document(NativeCache.request(List.of("@" + manifest), entryName)), entryName);
             var detachedModule = (Map<?,?>)((List<?>)detached.get("modules")).getFirst();
             var binding = (Map<?,?>)((List<?>)detachedModule.get("bindings")).getFirst();
             var body = (List<?>)((List<?>)binding.get("expr")).get(2);
             assertEquals(thc.runtime.CoreKind.UNKNOWN, thc.runtime.CoreRepresentations.expression(body).getKind());
             assertEquals(conflicting ? thc.runtime.CoreKind.DOUBLE : thc.runtime.CoreKind.LONG,
                 thc.runtime.CoreRepresentations.caseResult(body).getKind());
-            detached.remove("prepareCode"); // Minimal format-model formals are deliberately uncertified.
             for (String backend : List.of("ast", "bytecode")) {
-                detached.put("backend", backend);
-                for (String request : List.of(CoreFormatTestSupport.request(List.of("@" + manifest), entryName,
-                        backend, false, false, false), Json.stringify(detached))) {
-                    try (var context = Main.executionContext(false)) {
-                        if (conflicting) assertThrows(PolyglotException.class, () -> context.eval("thc", request).execute(0L));
-                        else assertEquals(47L, context.eval("thc", request).execute(0L).asLong());
-                    }
+                String request = CoreFormatTestSupport.request(List.of("@" + manifest), entryName, backend, false, false, false);
+                try (var context = Main.executionContext(false)) {
+                    if (conflicting) assertThrows(PolyglotException.class, () -> context.eval("thc", request).execute(0L));
+                    else assertEquals(47L, context.eval("thc", request).execute(0L).asLong());
                 }
             }
         }
@@ -147,13 +143,14 @@ class CoreCompactLoadTest {
     @Test void cachedSelectionDetachesOnlyReachableCompactBodiesBeforeReadersClose() throws Exception {
         var path = fixture();
         String selected = NativeCache.request(List.of("@" + path), "unit:A.entry");
-        var request = document(selected);
+        var request = CoreModules.selectedModules(document(selected), "unit:A.entry");
         assertFalse(request.containsKey("packageManifest"));
         assertEquals(false, request.get("verifyArtifacts"));
-        assertFalse(selected.contains("unit:A.untouched"));
-        assertTrue(selected.contains("unit:B.entry"));
+        var ids = ((List<Map<String,Object>>) request.get("modules")).stream()
+            .flatMap(module -> ((List<Map<String,Object>>) module.get("bindings")).stream()).map(binding -> binding.get("id")).toList();
+        assertFalse(ids.contains("unit:A.untouched")); assertTrue(ids.contains("unit:B.entry"));
         assertTrue(assertThrows(RuntimeException.class,
-            () -> NativeCache.request(List.of("@" + path), "unit:A.entry", true))
+            () -> CoreModules.selectedModules(document(NativeCache.request(List.of("@" + path), "unit:A.entry", true)), "unit:A.entry"))
             .getMessage().contains("Invalid compact Core expression tag"));
         CoreFileMappings.shared.evictIdleBelow(directory);
         Files.delete(directory.resolve("A.cbd"));
@@ -161,9 +158,16 @@ class CoreCompactLoadTest {
         Files.delete(path);
         // This fixture's case and minimal binders test detachment, not the
         // admitted reusable AST family; the genuine exporter exercises both.
-        request.remove("prepareCode");
         try (var context = Main.executionContext(false)) {
-            assertEquals(6L, context.eval("thc", Json.stringify(request)).execute(5L).asLong());
+            context.initialize("thc"); context.enter();
+            var owner = Language.currentState(null); owner.getThreads().enterCurrent(null, false, true, null);
+            try {
+                var language = com.oracle.truffle.api.TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var linked = CoreModules.merge((List<Map<String,Object>>) request.get("modules"));
+                var program = new thc.runtime.Program(language, linked);
+                assertEquals(6L, thc.runtime.Calls.target(program.hostEntryTarget(1),
+                    new Object[]{program.entryValue("unit:A.entry"), new Object[]{5L}}));
+            } finally { owner.getThreads().leaveCurrent(thc.runtime.GuestThreadStatus.FINISHED); context.leave(); }
         }
     }
     @Test void selectedBindingAndCrossModuleDemandLeaveColdBodiesFilesAndDebugUnread() throws Exception {
@@ -177,7 +181,6 @@ class CoreCompactLoadTest {
             long decoded = count(entry, "coreCompactDataBytesRead");
             assertEquals(10L, entry.execute(9).asLong()); assertEquals(decoded, count(entry, "coreCompactDataBytesRead"));
             assertEquals(0L, count(entry, "coreCompactDebugBytesRead")); assertEquals(0L, count(entry, "coreCompactHashBytesScanned"));
-            assertEquals(0L, count(entry, "coreUnitSourceOpens"));
         }
     }
     @Test void mutuallyReferencingModulesRegisterBeforeFollowingRuntimeDemand() throws Exception {

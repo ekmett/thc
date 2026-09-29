@@ -42,7 +42,7 @@ public final class ForeignExceptionFixtureSupport {
     private static synchronized List<Map<String, Object>> originals() throws Exception {
         if (originals == null) {
             var modules = new ArrayList<Map<String, Object>>();
-            var layout = CorePackageManifest.visitModules(new File(root, (String) manifest().get("packageManifest")).getPath(),
+            var layout = CoreCbdFixtures.visitModules(new File(root, (String) manifest().get("packageManifest")).getPath(),
                 (module, text) -> modules.add(module)).getTargetLayout();
             if (layout == null) throw new IllegalStateException("Required value was null.");
             target = layout;

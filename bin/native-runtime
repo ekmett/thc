@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+set -euo pipefail
+repo_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+export THC_NATIVE_IMAGE_VECTOR_PROFILE=${THC_NATIVE_IMAGE_VECTOR_PROFILE:-resource-copy}
+case "$THC_NATIVE_IMAGE_VECTOR_PROFILE" in
+    intrinsics) image_suffix= ;;
+    resource-copy) image_suffix=-resource-copy ;;
+    *) echo 'THC_NATIVE_IMAGE_VECTOR_PROFILE must be intrinsics or resource-copy' >&2; exit 2 ;;
+esac
+image=${THC_NATIVE_RUNTIME_IMAGE:-$repo_dir/build/native-image/thc-reproduced-prepared$image_suffix}
+command=${1:---help}
+(( $# == 0 )) || shift
+case "$command" in
+    build)
+        [[ $# == 0 ]] || exit 2
+        export THC_NATIVE_IMAGE_DEOPT_LOOP_STAMPS=1 THC_NATIVE_IMAGE_RUNTIME_SNIPPETS=1 THC_NATIVE_IMAGE_RUNTIME_SIMULATED_FOLDS=1 THC_NATIVE_IMAGE_PROCESS_IDENTITY=1
+        exec bash "$repo_dir/research/native-image-preparation/prepared-image.sh" "$repo_dir" build ;;
+    run)
+        exec "$image" "$@" ;;
+    check)
+        [[ $# == 5 ]] || { echo 'Usage: bin/native-runtime check OUTPUT MODULES ENTRY INTEGER EXPECTED' >&2; exit 2; }
+        output=$1
+        # Require a new directory: never overwrite evidence from an earlier run.
+        mkdir -- "$output"
+        printf '%s\n' "$5" > "$output/expected"
+        sha256sum -- "$image" > "$output/image.sha256"
+        printf 'THC_BACKEND=%q %q %q %q %q --compile\n' "${THC_BACKEND-bytecode}" "$image" "$2" "$3" "$4" > "$output/command"
+        status=0
+        "$image" "$2" "$3" "$4" --compile > "$output/stdout" 2> "$output/stderr" || status=$?
+        printf '%s\n' "$status" > "$output/status"
+        printf 'Native execution status %s; evidence: %s\n' "$status" "$output" >&2
+        (( status == 0 )) || exit "$status"
+        # Main --compile itself checks the immediate first installed entry and
+        # exact target identity/validity. Do not replace those checks or retry.
+        cmp -- "$output/expected" "$output/stdout" ;;
+    -h|--help)
+        echo 'Experimental GraalVM 25.3.4.1 runtime-compiled THC; build installDist first'
+        echo 'bin/native-runtime build | run MAIN_ARGS... | check OUTPUT MODULES ENTRY INTEGER EXPECTED'
+        echo 'THC_BACKEND=ast|bytecode selects the backend at execution time'
+        echo 'Default resource-copy profile preserves shared arenas with copying vector memory access'
+        echo 'Use CBD inputs; the small runtime image excludes LLVM/NFI package FFI' ;;
+    *) echo 'Unknown native-runtime command; use --help' >&2; exit 2 ;;
+esac

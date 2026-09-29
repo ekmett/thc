@@ -7,12 +7,73 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 import java.util.zip.*;
 
-/** Independent standard ZIP writer; payload bytes remain the existing test models. */
-final class CoreCbdTestSupport {
+/** CBD test models use the real encoder; malformed container controls use an independent ZIP writer. */
+public final class CoreCbdTestSupport {
     private CoreCbdTestSupport() {}
+    private static String fixtureExecutable;
+
+    /** Encode a synthetic test model explicitly; runtime JSON paths are never rewritten. */
+    public static Path writeModel(Path output, Map<String, Object> model) throws IOException {
+        var input = Files.createTempFile("thc-core-model-", ".json");
+        try {
+            Files.writeString(input, Json.stringify(model));
+            run(List.of(fixtures(), "compact-model", input.toString(), output.toAbsolutePath().toString()));
+            return output;
+        } finally {
+            Files.deleteIfExists(input);
+        }
+    }
+
+    private static synchronized String fixtures() throws IOException {
+        if (fixtureExecutable == null) {
+            var configured = System.getenv("THC_FIXTURES");
+            var prepared = Path.of("build/thc-fixtures.path");
+            String executable;
+            if (configured != null && !configured.isBlank()) executable = configured;
+            else if (Files.isRegularFile(prepared)) executable = Files.readString(prepared).strip();
+            else {
+                var cabal = System.getenv().getOrDefault("CABAL", "cabal");
+                executable = run(List.of(cabal, "list-bin", "exe:thc-fixtures", "--offline")).strip();
+            }
+            if (executable.isBlank() || !Files.isRegularFile(Path.of(executable)))
+                throw new IOException("Build thc-fixtures first or set THC_FIXTURES to its executable: " + executable);
+            fixtureExecutable = executable;
+        }
+        return fixtureExecutable;
+    }
+
+    private static String run(List<String> command) throws IOException {
+        var log = Files.createTempFile("thc-core-model-", ".log");
+        var errors = Files.createTempFile("thc-core-model-", ".err");
+        try {
+            var process = new ProcessBuilder(command).redirectOutput(log.toFile()).redirectError(errors.toFile()).start();
+            try {
+                if (!process.waitFor(60, TimeUnit.SECONDS)) {
+                    process.destroyForcibly();
+                    process.waitFor(5, TimeUnit.SECONDS);
+                    throw new IOException("CBD fixture command timed out: " + command + "\n" + Files.readString(errors));
+                }
+            } catch (InterruptedException interrupted) {
+                process.destroyForcibly();
+                Thread.currentThread().interrupt();
+                throw new IOException("CBD fixture command interrupted", interrupted);
+            }
+            var text = Files.readString(log);
+            if (process.exitValue() != 0)
+                throw new IOException("CBD fixture command failed: " + command + "\n" + text + Files.readString(errors));
+            return text;
+        } finally {
+            Files.deleteIfExists(log);
+            Files.deleteIfExists(errors);
+        }
+    }
+
     static byte[] header(byte[] facts, long count, int summaries, int debug) {
         return ByteBuffer.allocate(32 + facts.length).order(ByteOrder.LITTLE_ENDIAN)
             .put("THCCBD1\0".getBytes(StandardCharsets.UTF_8)).putShort((short) 1).putShort((short) 0)

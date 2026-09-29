@@ -5,13 +5,13 @@
 # Retain normal compiler checks; separate from the pure-interpreter recipe.
 set -euo pipefail
 if (( $# < 1 || $# > 2 )); then
-    echo 'Usage: JAVA_HOME=PINNED_JDK bash prepared-image.sh REPO [prepare-only|build|cache|cache-prepare-only]' >&2
+    echo 'Usage: JAVA_HOME=PINNED_JDK bash prepared-image.sh REPO [prepare-only|build|cache|cache-prepare-only|executable|executable-prepare-only]' >&2
     exit 2
 fi
 recipe_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_dir=$(cd -- "$1" && pwd)
 mode=${2:-build}
-case "$mode" in prepare-only|build|cache|cache-prepare-only) ;; *) exit 2 ;; esac
+case "$mode" in prepare-only|build|cache|cache-prepare-only|executable|executable-prepare-only) ;; *) exit 2 ;; esac
 vector_options=()
 vector_profile=${THC_NATIVE_IMAGE_VECTOR_PROFILE:-intrinsics}
 case "$vector_profile" in
@@ -31,7 +31,7 @@ classpath=
 for jar in build/install/thc/lib/*.jar; do
     # Cached package FFI uses the distribution's existing Sulong/NFI providers
     # at load time; preparation itself does not open or execute a guest library.
-    if [[ "$mode" != cache* ]]; then
+    if [[ "$mode" != cache* && "$mode" != executable* ]]; then
         case "${jar##*/}" in llvm-*|thc-llvm-language-*|antlr4-*|truffle-nfi-*) continue ;; esac
     fi
     classpath="${classpath:+$classpath:}$repo_dir/$jar"
@@ -65,7 +65,7 @@ done < "$recipe_dir/prepared-initialization.txt"
 cache_options=()
 main_class=thc.Main
 image_path="$repo_dir/build/native-image/thc-reproduced-prepared"
-if [[ "$mode" == cache* ]]; then
+if [[ "$mode" == cache* || "$mode" == executable* ]]; then
     # This configuration is qualified only for the pinned Linux AMD64 provider.
     [[ "$(uname -s)" == Linux && "$(uname -m)" == x86_64 ]] || {
         echo 'Experimental cached code currently requires Linux AMD64' >&2; exit 2;
@@ -82,10 +82,48 @@ if [[ "$mode" == cache* ]]; then
     image_path="$repo_dir/build/native-image/thc-native-cache"
 fi
 [[ "$vector_profile" != resource-copy ]] || image_path+=-resource-copy
+executable_options=()
+builder_heap=8g
+if [[ "$mode" == executable* ]]; then
+    # Bind the ordinary loader, argv and shutdown to one application. External
+    # Core resources remain external; this does NOT prepare a guest code cache.
+    : "${THC_NATIVE_IMAGE_EXECUTABLE_CONFIG:?Supply a fixed Main executable argument JSON array}"
+    : "${THC_NATIVE_IMAGE_EXECUTABLE_NAME:?Supply the ELF output basename}"
+    [[ "$THC_NATIVE_IMAGE_EXECUTABLE_NAME" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ ]] || exit 2
+    test -f "$THC_NATIVE_IMAGE_EXECUTABLE_CONFIG"
+    binding_dir=$(mktemp -d "$repo_dir/build/native-image/executable.XXXXXX")
+    cp -- "$THC_NATIVE_IMAGE_EXECUTABLE_CONFIG" "$binding_dir/thc-native-executable.json"
+    "$JAVA_HOME/bin/jar" --create --file "$binding_dir/binding.jar" -C "$binding_dir" thc-native-executable.json
+    classpath="$classpath:$binding_dir/binding.jar"
+    # Dedicated guest executables must not consume GHC's -D/-X options as VM
+    # arguments. Keep VM bounds in the image, separate from opaque guest argv.
+    # Original GHC owns HUP/INT/QUIT/TERM in this standalone process. The runtime
+    # checks the effective option; do not substitute a trusted-looking property.
+    executable_options=(-H:IncludeResources=thc-native-executable.json -H:-ParseRuntimeOptions -R:-EnableSignalHandling
+        -H:MaxHeapSize=17179869184 -H:ActiveProcessorCount=2)
+    # The full ordinary-loader image needs room for frame metadata after codegen.
+    builder_heap=16g
+    cache_options=(-march=x86-64-v3 -H:CPUFeatures=HT)
+    main_class=thc.NativeExecutable
+    image_path="$repo_dir/build/native-image/$THC_NATIVE_IMAGE_EXECUTABLE_NAME"
+fi
+# Builder memory is separate from the produced executable's runtime limits.
+# Keep overrides within the two resource budgets qualified by this recipe.
+builder_heap=${THC_NATIVE_IMAGE_BUILDER_HEAP:-$builder_heap}
+case "$builder_heap" in
+    8g|16g) ;;
+    *) echo 'THC_NATIVE_IMAGE_BUILDER_HEAP must be 8g or 16g' >&2; exit 2 ;;
+esac
+printf '%s\n' "-J-Xmx$builder_heap" > "$inventory_dir/builder-heap.args"
 # Switch tables depend only on enums ALREADY selected above. This final category
 # proves the complete synthetic initializer; it never adds an enum dependency.
+# Keep the exact inventory out of a single OS argument (Linux caps one argument
+# independently of the total command-line size).
+approved_initialization_args="$inventory_dir/approved-initialization.args"
+printf '%s\n%s\n%s\n"%s"\n' ClassInitializationInventory build/install/thc/lib/thc-0.1-experiment.jar switches \
+    "$initialization" > "$approved_initialization_args"
 "$JAVA_HOME/bin/java" -Xmx512m -XX:-UseJVMCICompiler -cp "$probe_dir:$classpath" \
-    ClassInitializationInventory build/install/thc/lib/thc-0.1-experiment.jar switches "$initialization" \
+    "@$approved_initialization_args" \
     > "$inventory_dir/switches.txt"
 generated=$(<"$inventory_dir/switches.txt")
 [[ -z "$generated" ]] || initialization="${initialization:+$initialization,}$generated"
@@ -102,12 +140,24 @@ vector_args="$inventory_dir/vector-profile.args"
 if (( ${#vector_options[@]} )); then printf '%s\n' "${vector_options[@]}" > "$vector_args"; fi
 foreign_args="$inventory_dir/foreign.args"
 : > "$foreign_args"
+foreign_configuration=
 if [[ -n "${THC_NATIVE_IMAGE_PROCESS_IDENTITY:-}" ]]; then
     [[ "$THC_NATIVE_IMAGE_PROCESS_IDENTITY" == 1 ]] || exit 2
     test -f "$recipe_dir/process-identity/reachability-metadata.json"
-    printf '"-H:ConfigurationFileDirectories=%s"\n' "$recipe_dir/process-identity" > "$foreign_args"
+    foreign_configuration="$recipe_dir/process-identity"
+fi
+if [[ "$mode" == executable* ]]; then
+    foreign_configuration="${foreign_configuration:+$foreign_configuration,}$recipe_dir/native-io"
+fi
+if [[ -n "$foreign_configuration" ]]; then
+    printf '"-H:ConfigurationFileDirectories=%s"\n' "$foreign_configuration" > "$foreign_args"
 fi
 [[ "$mode" == *prepare-only ]] && exit 0
+# CLI eager initialization can create LanguageCache entries before Truffle's
+# optional resource registry is populated. Apply the SAME finite class policy
+# during setup, after all features' registration hooks have completed.
+"$JAVA_HOME/bin/javac" -cp "$classpath" -d "$probe_dir" "$recipe_dir/PreparedInitializationFeature.java"
+classpath="$probe_dir:$classpath"
 builder_overlays=
 if [[ -n "${THC_NATIVE_IMAGE_DEOPT_LOOP_STAMPS:-}" ]]; then
     [[ "$THC_NATIVE_IMAGE_DEOPT_LOOP_STAMPS" == 1 ]] || exit 2
@@ -138,13 +188,13 @@ diagnostics=()
 if [[ -n "${THC_NATIVE_IMAGE_METHOD_FILTER:-}" ]]; then
     diagnostics=(-H:Dump=:2 -H:MethodFilter="$THC_NATIVE_IMAGE_METHOD_FILTER")
 fi
-exec "$JAVA_HOME/bin/native-image" -Ob -J-Xmx8g -J-XX:ActiveProcessorCount=2 --parallelism=2 \
+exec "$JAVA_HOME/bin/native-image" -Ob "-J-Xmx$builder_heap" -J-XX:ActiveProcessorCount=2 --parallelism=2 \
     "${builder_patch[@]}" \
     --add-modules=jdk.incubator.vector \
     --enable-native-access=ALL-UNNAMED,org.graalvm.truffle \
     --add-exports=org.graalvm.truffle.runtime/com.oracle.truffle.runtime=ALL-UNNAMED \
-    "@$initialization_args" "@$foreign_args" \
-    -H:+UnlockExperimentalVMOptions "@$vector_args" "${cache_options[@]}" -H:+PrintCanonicalGraphStrings \
+    --features=PreparedInitializationFeature "-J-Dthc.nativeImage.initialization=$initialization_args" "@$foreign_args" \
+    -H:+UnlockExperimentalVMOptions "@$vector_args" "${cache_options[@]}" "${executable_options[@]}" -H:+PrintCanonicalGraphStrings \
     -H:DumpPath="${THC_NATIVE_IMAGE_DUMP_PATH:-$repo_dir/build/native-image/graphs/reproduction}" \
     "${diagnostics[@]}" -H:-UnlockExperimentalVMOptions \
     -cp "$classpath" "$main_class" "$image_path"

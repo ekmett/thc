@@ -13,6 +13,8 @@ public final class CoreCompactDebug {
     public CoreCompactDebug(CoreCompactFile file) { this.file = file; }
     private record Directory(long start, long count) {}
     private record Selection(Directory directory, long payload) {}
+    private record Location(Selection filenames, Selection positions) {}
+    private final Map<Location, CoreSourceLocation> locations = new HashMap<>();
     private record Notes(int primary, List<Map<String,Object>> values) {}
     private Directory directory(Segment segment, int width) throws Throwable {
         long length = file.header().get(segment).length();
@@ -63,10 +65,13 @@ public final class CoreCompactDebug {
         };
     }
     /** Null is explicit absence, never permission to search into another binding. */
-    public CoreSourceLocation location(long offset) {
+    public synchronized CoreSourceLocation location(long offset) {
         try {
             require(offset >= 0 && offset < file.header().get(Segment.DATA).length(), "Invalid compact Core source position");
-            List<Map<String,Object>> files = payload(Segment.FILENAMES, source(Segment.FILENAMES, offset), cursor -> {
+            var selected = new Location(source(Segment.FILENAMES, offset), source(Segment.LINE_COLUMNS, offset));
+            var known = locations.get(selected);
+            if (known != null) return known;
+            List<Map<String,Object>> files = payload(Segment.FILENAMES, selected.filenames, cursor -> {
                 int count = cursor.count();
                 var result = new ArrayList<Map<String,Object>>(count);
                 for (int i = 0; i < count; i++) {
@@ -77,7 +82,7 @@ public final class CoreCompactDebug {
                 }
                 return result;
             });
-            Notes notes = payload(Segment.LINE_COLUMNS, source(Segment.LINE_COLUMNS, offset), cursor -> {
+            Notes notes = payload(Segment.LINE_COLUMNS, selected.positions, cursor -> {
                 long primary = cursor.unsigned();
                 int count = cursor.count();
                 var values = new ArrayList<Map<String,Object>>(count);
@@ -111,7 +116,9 @@ public final class CoreCompactDebug {
             Object primary = spans.get(notes.primary).get("id");
             var sourceNotes = new ArrayList<Object>();
             for (var span : spans) sourceNotes.add(span.get("id"));
-            return sources.binding(Map.of("source", primary, "sourceNotes", Collections.unmodifiableList(sourceNotes)), null);
+            var location = sources.binding(Map.of("source", primary, "sourceNotes", Collections.unmodifiableList(sourceNotes)), null);
+            locations.put(selected, location);
+            return location;
         } catch (Throwable failure) { return rethrow(failure); }
     }
     public String name(long bindingOffset, long slot) {
