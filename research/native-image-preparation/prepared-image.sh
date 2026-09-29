@@ -101,8 +101,13 @@ if [[ "$mode" == executable* ]]; then
 fi
 # Switch tables depend only on enums ALREADY selected above. This final category
 # proves the complete synthetic initializer; it never adds an enum dependency.
+# Keep the exact inventory out of a single OS argument (Linux caps one argument
+# independently of the total command-line size).
+approved_initialization_args="$inventory_dir/approved-initialization.args"
+printf '%s\n' ClassInitializationInventory build/install/thc/lib/thc-0.1-experiment.jar switches \
+    "$initialization" > "$approved_initialization_args"
 "$JAVA_HOME/bin/java" -Xmx512m -XX:-UseJVMCICompiler -cp "$probe_dir:$classpath" \
-    ClassInitializationInventory build/install/thc/lib/thc-0.1-experiment.jar switches "$initialization" \
+    "@$approved_initialization_args" \
     > "$inventory_dir/switches.txt"
 generated=$(<"$inventory_dir/switches.txt")
 [[ -z "$generated" ]] || initialization="${initialization:+$initialization,}$generated"
