@@ -25,7 +25,7 @@
 -- Neither a lifted wrapper nor a read-only reference implies thread safety.
 module THC.Interop.Java
   ( Object, fromObject#, toObject#
-  , lookupHostSymbol, asGuestValue, asHostObject, javaNull, javaStringUtf8
+  , lookupHostSymbol, asGuestValue, asBoxedGuestValue, asHostObject, javaNull, javaStringUtf8
   , execute, instantiate, readMember, writeMember, invokeMember
     -- * Java scalar values
   , boxJavaBoolean, unboxJavaBoolean
@@ -102,6 +102,12 @@ lookupHostSymbol (Object name) = objectIO (Prim.lookupHostSymbol# name)
 -- | Adapt a raw Java reference for interop without copying it.
 asGuestValue :: Object -> IO Object
 asGuestValue (Object object) = objectIO (Prim.asGuestValue# object)
+
+-- | Expose a scalar's Java wrapper identity and members. Host overload
+-- selection still applies normal interop conversions: a one-code-unit
+-- string can select a @Character@ overload even when explicitly boxed.
+asBoxedGuestValue :: Object -> IO Object
+asBoxedGuestValue (Object object) = objectIO (Prim.asBoxedGuestValue# object)
 
 -- | Recover the raw host reference. Non-host interop values are rejected.
 asHostObject :: Object -> IO Object

@@ -2,7 +2,14 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE MagicHash, Safe #-}
 
--- | Small lifted Java calls. Run under THC with host lookup and member access
+-- |
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : THC runtime
+--
+-- Small lifted Java calls. Run under THC with host lookup and member access
 -- enabled for these classes; native GHC can compile but cannot execute the
 -- THC-owned intrinsics. No Java String or array is a native address.
 module JavaInterop (addExact, builderLength, arrayLengthViaJava) where

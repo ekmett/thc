@@ -25,7 +25,8 @@ prepareJavaArrays root = do
   let output = root </> "build/java-arrays"
   createDirectoryIfMissing True output
   _ <- run root [("THC_CORE_OUT", output </> "core"), ("THC_GHC_OUT", output </> "ghc")]
-    "bin/export-core.sh" ["-fplugin-opt=THC.Plugin:post-tidy", "src/runtime/THC/Exception.hs", "t/fixtures/compiler/JavaArrays.hs"] ""
+    "bin/export-core.sh" ["-fplugin-opt=THC.Plugin:post-tidy", "-isrc/examples", "-it/fixtures/compiler",
+      "src/runtime/THC/Exception.hs", "t/fixtures/compiler/JavaArrays.hs"] ""
   packages <- maybe (root </> "build/foreign-exceptions/installed/packages.json") id
     <$> lookupEnv "THC_FOREIGN_EXCEPTION_INSTALLED"
   manifest <- readJson packages

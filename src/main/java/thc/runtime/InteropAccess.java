@@ -88,7 +88,7 @@ public final class InteropAccess extends Node {
             catch (AbstractTruffleException failure) { throw exceptions.raise(failure); }
             catch (RuntimeException failure) { throw exceptions.raiseHost(failure); }
         }
-        var library = operation == PolyglotOp.LOOKUP_HOST_SYMBOL || operation == PolyglotOp.AS_GUEST_VALUE || operation == PolyglotOp.JAVA_NULL || operation == PolyglotOp.JAVA_STRING_UTF8 ? null : identity.profile((InteropLibrary) arguments[1]);
+        var library = operation == PolyglotOp.LOOKUP_HOST_SYMBOL || operation == PolyglotOp.AS_GUEST_VALUE || operation == PolyglotOp.AS_BOXED_GUEST_VALUE || operation == PolyglotOp.JAVA_NULL || operation == PolyglotOp.JAVA_STRING_UTF8 ? null : identity.profile((InteropLibrary) arguments[1]);
         var threads = owner.getThreads();
         var previous = threads.enterForeign(ForeignSafety.SAFE);
         try {
@@ -98,6 +98,7 @@ public final class InteropAccess extends Node {
                     return switch (operation) {
                         case LOOKUP_HOST_SYMBOL -> owner.getEnv().lookupHostSymbol(names.asString(receiver));
                         case AS_GUEST_VALUE -> owner.getEnv().asGuestValue(receiver);
+                        case AS_BOXED_GUEST_VALUE -> owner.getEnv().asBoxedGuestValue(receiver);
                         case JAVA_NULL -> owner.getEnv().asGuestValue(null);
                         case JAVA_STRING_UTF8 -> ((ManagedAddress) receiver).utf8();
                         case HAS_BUFFER_ELEMENTS -> library.hasBufferElements(receiver) ? 1L : 0L;

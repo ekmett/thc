@@ -36,6 +36,7 @@ public enum PolyglotOp {
     AS_LONG("thc_interop_v1_as_long", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "State# RealWorld"), "Int64Rep"),
     LOOKUP_HOST_SYMBOL("thc_interop_v1_lookup_host_symbol", List.of("BoxedRep (Just Unlifted)", "State# RealWorld"), "BoxedRep (Just Unlifted)"),
     AS_GUEST_VALUE("thc_interop_v1_as_guest_value", List.of("BoxedRep (Just Unlifted)", "State# RealWorld"), "BoxedRep (Just Unlifted)"),
+    AS_BOXED_GUEST_VALUE("thc_interop_v1_as_boxed_guest_value", List.of("BoxedRep (Just Unlifted)", "State# RealWorld"), "BoxedRep (Just Unlifted)"),
     JAVA_NULL("thc_interop_v1_java_null", List.of("State# RealWorld"), "BoxedRep (Just Unlifted)"),
     JAVA_STRING_UTF8("thc_interop_v1_java_string_utf8", List.of("AddrRep", "State# RealWorld"), "BoxedRep (Just Unlifted)"),
     AS_HOST_OBJECT("thc_interop_v1_as_host_object", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "State# RealWorld"), "BoxedRep (Just Unlifted)"),

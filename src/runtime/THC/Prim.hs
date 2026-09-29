@@ -29,6 +29,7 @@ module THC.Prim
     -- * Java host access and raw primitive arrays
   , lookupHostSymbol#
   , asGuestValue#
+  , asBoxedGuestValue#
   , javaNull#
   , javaStringUtf8#
   , asHostObject#
@@ -784,6 +785,12 @@ foreign import prim "thc_interop_v1_lookup_host_symbol"
 -- | Adapt an existing raw Java object for interop without copying it. HostAccess controls exposed members.
 foreign import prim "thc_interop_v1_as_guest_value"
   asGuestValue# :: Object# s -> State# s -> (# State# s, Object# s #)
+
+-- | Expose a primitive interop value as its Java wrapper object, preserving
+-- wrapper identity and making its members available. Host overload selection
+-- still applies normal interop conversions.
+foreign import prim "thc_interop_v1_as_boxed_guest_value"
+  asBoxedGuestValue# :: Object# s -> State# s -> (# State# s, Object# s #)
 
 -- | The interop null value, usable as a Java argument.
 foreign import prim "thc_interop_v1_java_null"

@@ -13,9 +13,33 @@
 module JavaArrays where
 import GHC.Exts
 import GHC.IO (IO(..))
+import GHC.Int (Int32(I32#))
 import Control.Exception (catch)
 import THC.Exception (ForeignException)
 import THC.Prim
+import qualified THC.Interop.Java as Java
+import qualified JavaInterop as Example
+import qualified JavaInteropSafe as Safe
+
+hostControls :: Object# RealWorld -> State# RealWorld -> (# State# RealWorld, Int# #)
+hostControls receiver state = case Safe.hostControls (Java.fromObject# receiver) of
+  IO action -> case action state of (# next, I# answer #) -> (# next, answer #)
+
+hostClassPolicy :: State# RealWorld -> (# State# RealWorld, Int# #)
+hostClassPolicy = booleanResult Safe.deniedLookup
+
+hostMemberPolicy :: Object# RealWorld -> State# RealWorld -> (# State# RealWorld, Int# #)
+hostMemberPolicy receiver = booleanResult (Safe.deniedMember (Java.fromObject# receiver))
+
+booleanResult :: IO Bool -> State# RealWorld -> (# State# RealWorld, Int# #)
+booleanResult (IO action) state = case action state of
+  (# next, False #) -> (# next, 0# #)
+  (# next, True #) -> (# next, 1# #)
+
+hostAddExact :: Int32# -> Int32# -> State# RealWorld -> (# State# RealWorld, Int32# #)
+hostAddExact x y state = case Example.addExact (I32# x) (I32# y) of
+  IO action -> case action state of
+    (# next, I32# answer #) -> (# next, answer #)
 
 -- This function has no scalar-array or ordinary interop operation which could
 -- accidentally select the exception bridge for the vector-only path.

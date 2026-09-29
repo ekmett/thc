@@ -22,7 +22,7 @@ import thc.Language;
 import static org.junit.jupiter.api.Assertions.*;
 
 @SuppressWarnings({"rawtypes", "unchecked"})
-class JavaArrayTest {
+public class JavaArrayTest {
     private static final String PREFIX = "main:JavaArrays.";
     private static Map<String, Object> source;
     private static Context context() {
@@ -35,7 +35,8 @@ class JavaArrayTest {
         if (source != null) return source;
         var root = Path.of(System.getProperty("thc.projectRoot"), "build/java-arrays/core");
         var paths = new ArrayList<String>(List.of("@" + root.getParent().resolve("packages.json")));
-        for (String file : List.of("THC.Prim.json", "JavaArrays.json", "THC.Exception.json", "THC.Internal.Exception.json"))
+        for (String file : List.of("THC.Prim.json", "JavaArrays.json", "THC.Exception.json", "THC.Internal.Exception.json",
+                "THC.Interop.Java.json", "JavaInterop.json", "JavaInteropSafe.json"))
             paths.add(root.resolve(file).toString());
         source = (Map<String, Object>) Json.parse(CoreModules.request(paths, PREFIX + "multiply", true, false, "ast", false));
         return source;
@@ -62,6 +63,43 @@ class JavaArrayTest {
         var target = p.entryTarget(PREFIX + name);
         target.getClass().getMethod("compile", boolean.class).invoke(target, true);
         assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
+    }
+
+    public static final class HostControl {
+        public int value;
+        public boolean isCharacter(Object object) { return object instanceof Character; }
+        public int choose(Character value) { return 1; }
+        public int choose(String value) { return 2; }
+        public double mixed(boolean a, byte b, short c, char d, int e, long f, float g, double h) {
+            return (a ? 1.0 : 0.0) + b + c + d + e + f + g + h;
+        }
+    }
+
+    @ParameterizedTest @Tag("foreign-exceptions-full-core") @ValueSource(strings = {"ast", "bytecode"})
+    void safeHaskellFacadeUsesConstructorsMembersAndMixedArgumentArrays(String backend) throws Exception {
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try (var p = program(backend, "hostControls"); var add = program(backend, "hostAddExact")) {
+                var receiver = new HostControl();
+                Object wrapped = Language.currentState().getEnv().asGuestValue(receiver);
+                assertEquals(255L, call(p, "hostControls", wrapped, Unit.INSTANCE));
+                assertEquals(41, receiver.value);
+                assertEquals(42, call(add, "hostAddExact", 20, 22, Unit.INSTANCE));
+                compile(add, "hostAddExact");
+                assertEquals(21, call(add, "hostAddExact", 20, 1, Unit.INSTANCE));
+                try (var denied = program(backend, "hostClassPolicy")) {
+                    assertEquals(1L, call(denied, "hostClassPolicy", Unit.INSTANCE));
+                }
+            } finally { context.leave(); }
+        }
+        try (var context = Context.newBuilder("thc").allowHostAccess(HostAccess.NONE).allowNativeAccess(true).build()) {
+            context.initialize("thc"); context.enter();
+            try (var denied = program(backend, "hostMemberPolicy")) {
+                var receiver = new HostControl();
+                assertEquals(1L, call(denied, "hostMemberPolicy", Language.currentState().getEnv().asGuestValue(receiver), Unit.INSTANCE));
+                assertEquals(0, receiver.value);
+            } finally { context.leave(); }
+        }
     }
 
     @ParameterizedTest @Tag("foreign-exceptions-full-core") @ValueSource(strings = {"ast", "bytecode"})
@@ -180,6 +218,22 @@ class JavaArrayTest {
                 Object character = target.call(PolyglotOp.BOX_JAVA_CHAR, new Object[]{65535, Unit.INSTANCE});
                 assertEquals(Character.valueOf('\uffff'), character);
                 assertEquals(65535, target.call(PolyglotOp.UNBOX_JAVA_CHAR, new Object[]{character, com.oracle.truffle.api.interop.InteropLibrary.getUncached(character), Unit.INSTANCE}));
+                var host = owner.getEnv().asGuestValue(new HostControl());
+                var interop = com.oracle.truffle.api.interop.InteropLibrary.getUncached(host);
+                try {
+                    Object rawIdentity = interop.invokeMember(host, "isCharacter", 'x');
+                    Object rawChoice = interop.invokeMember(host, "choose", 'x');
+                    Object stringIdentity = interop.invokeMember(host, "isCharacter", "x");
+                    Object stringChoice = interop.invokeMember(host, "choose", "x");
+                    Object boxed = target.call(PolyglotOp.AS_BOXED_GUEST_VALUE, new Object[]{'x', Unit.INSTANCE});
+                    Object boxedIdentity = interop.invokeMember(host, "isCharacter", boxed);
+                    Object boxedChoice = interop.invokeMember(host, "choose", boxed);
+                    Object boxedString = target.call(PolyglotOp.AS_BOXED_GUEST_VALUE, new Object[]{"x", Unit.INSTANCE});
+                    assertEquals(List.of(true, 1, false, 1, true, 1, false, 1), List.of(rawIdentity, rawChoice,
+                        stringIdentity, stringChoice, boxedIdentity, boxedChoice,
+                        interop.invokeMember(host, "isCharacter", boxedString), interop.invokeMember(host, "choose", boxedString)));
+                    assertEquals(2, interop.invokeMember(host, "choose", "xy"));
+                } catch (com.oracle.truffle.api.interop.InteropException failure) { throw new AssertionError(failure); }
                 int[] array = {7, 9};
                 assertSame(array, target.call(PolyglotOp.OBJECT_AS_JAVA_INT_ARRAY, new Object[]{array, Unit.INSTANCE}));
                 for (Object[] args : new Object[][]{{array, -1L, Unit.INSTANCE}, {array, Long.MAX_VALUE, Unit.INSTANCE}}) {
