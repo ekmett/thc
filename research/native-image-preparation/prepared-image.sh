@@ -83,6 +83,7 @@ if [[ "$mode" == cache* || "$mode" == executable* ]]; then
 fi
 [[ "$vector_profile" != resource-copy ]] || image_path+=-resource-copy
 executable_options=()
+builder_heap=8g
 if [[ "$mode" == executable* ]]; then
     # Bind the ordinary loader, argv and shutdown to one application. External
     # Core resources remain external; this does NOT prepare a guest code cache.
@@ -98,6 +99,8 @@ if [[ "$mode" == executable* ]]; then
     # arguments. Keep VM bounds in the image, separate from opaque guest argv.
     executable_options=(-H:IncludeResources=thc-native-executable.json -H:-ParseRuntimeOptions
         -H:MaxHeapSize=17179869184 -H:ActiveProcessorCount=2)
+    # The full ordinary-loader image needs room for frame metadata after codegen.
+    builder_heap=12g
     cache_options=(-march=x86-64-v3 -H:CPUFeatures=HT)
     main_class=thc.NativeExecutable
     image_path="$repo_dir/build/native-image/$THC_NATIVE_IMAGE_EXECUTABLE_NAME"
@@ -163,7 +166,7 @@ diagnostics=()
 if [[ -n "${THC_NATIVE_IMAGE_METHOD_FILTER:-}" ]]; then
     diagnostics=(-H:Dump=:2 -H:MethodFilter="$THC_NATIVE_IMAGE_METHOD_FILTER")
 fi
-exec "$JAVA_HOME/bin/native-image" -Ob -J-Xmx8g -J-XX:ActiveProcessorCount=2 --parallelism=2 \
+exec "$JAVA_HOME/bin/native-image" -Ob "-J-Xmx$builder_heap" -J-XX:ActiveProcessorCount=2 --parallelism=2 \
     "${builder_patch[@]}" \
     --add-modules=jdk.incubator.vector \
     --enable-native-access=ALL-UNNAMED,org.graalvm.truffle \
