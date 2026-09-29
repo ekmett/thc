@@ -48,15 +48,15 @@ prepareThreadAsync root = do
   unless (lines version == ["9.14.1"]) (die "Public thread fixture requires GHC 9.14.1")
   forM_ stages $ \stage -> do
     let core = directory </> stage </> "core"
-        options = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"]
+        options = "-fplugin-opt=THC.Plugin:pretty-diagnostics" : ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"]
     _ <- run root [("THC_CORE_OUT", root </> core),
       ("THC_GHC_OUT", output </> stage </> "ghc")]
       "bin/export-core.sh" (options ++ [source]) ""
     forM_ entries $ \entry -> do
       let report = directory </> stage </> (entry ++ "-audit.json")
       (status, _, errors) <- readCreateProcessWithExitCode
-        ((proc "python3" ["bin/audit-core.py", "--entry", entry,
-          "--output", report, core </> "ThreadAsyncAudit.json"]) { cwd = Just root }) ""
+        ((proc "python3" ["bin/audit-core.py", "--entry", "main:ThreadAsyncAudit." ++ entry,
+          "--output", report, core </> "ThreadAsyncAudit.cbd"]) { cwd = Just root }) ""
       unless (status == ExitSuccess)
         (die ("Public thread Core audit failed: " ++ errors))
       bytes <- BS.readFile (root </> report)
@@ -68,8 +68,8 @@ prepareThreadAsync root = do
       "bin/export-core.sh" (options ++ [lazySource]) ""
     let lazyReport = directory </> stage </> "lazyFork-audit.json"
     (lazyStatus, _, lazyErrors) <- readCreateProcessWithExitCode
-      ((proc "python3" ["bin/audit-core.py", "--entry", "lazyFork",
-        "--output", lazyReport, core </> "LazyForkAudit.json"]) { cwd = Just root }) ""
+      ((proc "python3" ["bin/audit-core.py", "--entry", "main:LazyForkAudit.lazyFork",
+        "--output", lazyReport, core </> "LazyForkAudit.cbd"]) { cwd = Just root }) ""
     unless (lazyStatus == ExitSuccess)
       (die ("Lazy fork Core audit failed: " ++ lazyErrors))
     lazyBytes <- BS.readFile (root </> lazyReport)
@@ -127,7 +127,7 @@ prepareThreadAsync root = do
         directory </> "yield-oracle.txt", directory </> "lazy-oracle.txt", directory </> "saved-oracle.txt",
         directory </> "external-saved-oracle.txt", directory </> "scheduled-saved-oracle.txt"] ++
         [directory </> stage </> suffix | stage <- stages,
-          suffix <- ["core/ThreadAsyncAudit.json", "core/LazyForkAudit.json", "lazyFork-audit.json"] ++
+          suffix <- ["core/ThreadAsyncAudit.cbd", "core/ThreadAsyncAudit.json", "core/LazyForkAudit.cbd", "core/LazyForkAudit.json", "lazyFork-audit.json"] ++
                     [entry ++ "-audit.json" | entry <- entries]]
   sourceHashes <- hashes root sources
   artifactHashes <- hashes root artifacts
