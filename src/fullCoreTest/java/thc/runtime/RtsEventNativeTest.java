@@ -107,20 +107,24 @@ public class RtsEventNativeTest {
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var program = program(language, "ast", "capabilities", "post");
                 var root = (GuestRoot) program.entryTarget(entryId("originalCapabilities")).getRootNode(); var leaves = NodeUtil.findAllNodeInstances(root, RtsEventForeignExpression.class); assertEquals(1, leaves.size()); var leaf = leaves.getFirst(); int[] evaluations = {0};
-                // Isolate this genuine lowered safe-return cut from entry polls.
-                // Replacing its input lets us observe evaluation/replay separately.
-                ((Expr) leaf.getChildren().iterator().next()).replace(new Expr() { @Override public Object execute(VirtualFrame frame) { evaluations[0]++; return 3; } });
+                // Keep the genuine operand sequence: it initializes the state
+                // carrier's lexical slot before the safe call and cleans it up
+                // after completion. Observe the count before that sequencing.
+                var sequence = assertInstanceOf(AstOperands.class, leaf.getParent());
+                var countBinding = assertInstanceOf(LocalBinding.class, sequence.getChildren().iterator().next());
+                var countInput = (Expr) countBinding.getChildren().iterator().next();
+                countInput.replace(new Expr() { @Override public Object execute(VirtualFrame frame) { evaluations[0]++; return 3; } }.proven(countInput.getRepresentation()));
                 var threads = Language.currentState().getThreads(); threads.enterCurrent(null, false, true, null);
                 try {
                     SynchronousMasking.set(root, mask); var self = threads.currentIdentity(); var incoming = CompletableFuture.supplyAsync(() -> threads.send(self, "after setter")).get(5, TimeUnit.SECONDS);
                     var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], root.getFrameDescriptor());
                     if (mask == MaskingState.UNMASKED) {
-                        var cut = assertThrows(AstCapture.class, () -> leaf.executeTuple(frame, new int[0], 0)); assertSame(incoming, cut.getYielded()); assertEquals(3L, threads.capabilityCount());
+                        var cut = assertThrows(AstCapture.class, () -> sequence.executeTuple(frame, new int[0], 0)); assertSame(incoming, cut.getYielded()); assertEquals(3L, threads.capabilityCount());
                         incoming.acknowledge(); var saved = cut.freeze(root, frame.materialize()); threads.setCapabilityCount(5);
                         assertNull(saved.continueWith(thc.runtime.Unit.INSTANCE)); assertEquals(5L, threads.capabilityCount(), "Resumption must not replay the completed setter");
                         assertThrows(RuntimeFault.class, () -> saved.continueWith(thc.runtime.Unit.INSTANCE));
                     } else {
-                        assertNull(leaf.executeTuple(frame, new int[0], 0)); assertEquals(3L, threads.capabilityCount()); assertEquals(AsyncRequestState.PENDING, incoming.getState());
+                        assertNull(sequence.executeTuple(frame, new int[0], 0)); assertEquals(3L, threads.capabilityCount()); assertEquals(AsyncRequestState.PENDING, incoming.getState());
                         SynchronousMasking.set(root, MaskingState.UNMASKED); assertSame(incoming, threads.poll(root, false)); incoming.acknowledge();
                     }
                     assertEquals(1, evaluations[0]); assertEquals(AsyncRequestState.ACKNOWLEDGED, incoming.getState());
