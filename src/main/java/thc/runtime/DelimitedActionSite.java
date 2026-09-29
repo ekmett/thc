@@ -103,14 +103,17 @@ public final class DelimitedActionSite extends Node {
             throw cut.append(frame, new DelimitedPromptStep(identity, this, shape));
         }
     }
+    @TruffleBoundary private void validateDelivery(AsyncRequest request) {
+        if (request.getTarget() != Thread.currentThread() || request.getTargetId() != GuestThreads.current(this).currentId() ||
+            request.getState() != AsyncRequestState.CLAIMED)
+            throw new IllegalStateException("Delimited catch delivery left its target or was already consumed");
+    }
     public Object handleException(VirtualFrame frame, Object handler, AbstractTruffleException failure, TupleShape shape) {
         Object payload;
         if (failure instanceof GuestException guest) payload = guest.getPayload();
         else if (failure instanceof AsyncDelivery delivered) {
             AsyncRequest request = delivered.getRequest();
-            if (request.getTarget() != Thread.currentThread() || request.getTargetId() != GuestThreads.current(this).currentId() ||
-                request.getState() != AsyncRequestState.CLAIMED)
-                throw new IllegalStateException("Delimited catch delivery left its target or was already consumed");
+            validateDelivery(request);
             request.acknowledge(); payload = request.getPayload();
         } else throw failure;
         MaskingState prior = SynchronousMasking.current(this);
