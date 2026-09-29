@@ -73,7 +73,10 @@ data ScalarLink = ScalarLink !LinkPayload ![ScalarABI] deriving (Eq, Show)
 data NativeABI = NativeABI !BS.ByteString !BS.ByteString !Convention !Safety
   ![BS.ByteString] !BS.ByteString deriving (Eq, Show)
 data NativeLink = NativeLink !LinkPayload ![NativeABI] !(Presence NativeBuildInputs)
-  !(Presence (BS.ByteString,BS.ByteString)) !(Presence [BS.ByteString]) ![BS.ByteString] deriving (Eq, Show)
+  !(Presence (BS.ByteString,BS.ByteString)) !(Presence [BS.ByteString]) ![BS.ByteString]
+  !(Maybe ([BS.ByteString],[NativeComponent])) deriving (Eq, Show)
+data NativeComponent = NativeComponent !LinkPayload ![BS.ByteString] ![NativeComponent]
+  !(Presence (BS.ByteString,BS.ByteString)) deriving (Eq, Show)
 data NativeBuildInputs = NativeBuildInputs ![CompileGroup] ![NativeProvider]
   !(Presence [NativeDependency]) ![NativeLibrary] ![BS.ByteString] ![ArgumentBridge]
   deriving (Eq, Show)
