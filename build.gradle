@@ -206,6 +206,8 @@ tasks.named("run", JavaExec) {
 }
 tasks.withType(Test).configureEach {
     useJUnitPlatform()
+    // JUnit may inspect compiler-typed helpers before Truffle installs its exports.
+    jvmArgs("--add-exports=org.graalvm.truffle.compiler/com.oracle.truffle.compiler=ALL-UNNAMED")
     dependsOn(tasks.startScripts)
     // Isolated native-signal controls need a child JVM with the actual test
     // classpath; modern Gradle workers need not use URLClassLoader.
