@@ -937,9 +937,16 @@ finishPackageNativeWithDependencies ownedProduct dependencyPaths publishedDataba
         linkedIR = directory </> "native/linked.ll"
         final = directory </> "native/package.bc"
     _ <- command directory link (wrapper ++ bitcodes ++ ["-o",linked])
-    public <- sort . nub . concat <$> forM bitcodes (\path -> do
+    defined <- sort . nub . concat <$> forM bitcodes (\path -> do
       output <- command directory nm ["--defined-only","--extern-only","--format=posix",path]
       pure [name | line <- lines output, name:_ <- [words line], not ("llvm." `isPrefixOf` name)])
+    -- External linkage alone includes hidden helpers. LLVM's Darwin-style
+    -- output exposes bitcode visibility on every target: hidden definitions
+    -- are "private external", unlike default/protected exports. Inspect the
+    -- linked component, since other translation units can narrow visibility.
+    symbols <- command directory nm ["--defined-only","--extern-only","--format=darwin",linked]
+    let public = sort . nub $ [name | line <- lines symbols, name:attributes <- [reverse (words line)],
+          name `elem` defined, "external" `elem` attributes, "private" `notElem` attributes]
     _ <- command directory opt ["-S","-passes=verify",linked,"-o",linkedIR]
     linkedSource <- readFile linkedIR
     -- A typed Haskell address is not a C definition proof. Require the actual
@@ -981,7 +988,9 @@ finishPackageNativeWithDependencies ownedProduct dependencyPaths publishedDataba
       pure (bridged,[object ["profile" .= (profile::String),
         "source" .= source,"sourceSha256" .= sha (T.encodeUtf8 (T.pack source)),
         "inputBitcodeSha256" .= inputHash,"definitions" .= [witnesses | (_,_,witnesses) <- bridges]]])
-    let trim input = command directory opt ["-passes=internalize,globaldce",
+    -- Publish ordinary LLVM operations rather than intrinsics normally lowered
+    -- by a machine backend (for example relative string-table loads).
+    let trim input = command directory opt ["-passes=pre-isel-intrinsic-lowering,internalize,globaldce",
           "-internalize-public-api-list=" ++ join "," (entries ++ public),input,"-o",final]
         unresolved = do
           output <- command directory nm ["--undefined-only","--format=posix",final]

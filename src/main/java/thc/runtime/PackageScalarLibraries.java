@@ -11,6 +11,7 @@ import com.oracle.truffle.api.exception.AbstractTruffleException;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.NativeContextExtension;
+import com.oracle.truffle.llvm.runtime.SulongLibrary;
 import org.graalvm.polyglot.io.ByteSequence;
 import thc.Language;
 import thc.PackageScalarLink;
@@ -134,8 +135,17 @@ public final class PackageScalarLibraries {
                     case "llvm-embedded-mach-o" -> ".dylib";
                     default -> ".bc";
                 }).build()).call();
-            for (String symbol : component.exports()) if (!interop.isMemberReadable(library, symbol))
-                throw fault("Missing package C provider export: " + symbol);
+            if (!component.exports().isEmpty()) {
+                if (!(library instanceof SulongLibrary loaded)) throw fault("Missing package C provider scope");
+                var scope = LLVMContext.get(null).getGlobalScopeChain();
+                while (scope != null && !scope.getId().equals(loaded.getBitcodeID())) scope = scope.getNext();
+                if (scope == null) throw fault("Missing package C provider scope: " + component.unit());
+                // SulongLibrary's interop view exposes only functions. The
+                // module's public scope includes its defined data and aliases,
+                // without borrowing an imported name from another provider.
+                for (String symbol : component.exports()) if (!scope.getScope().contains(symbol))
+                    throw fault("Missing package C provider export: " + symbol);
+            }
             return library;
         } finally { stack.pop(); owner.getThreads().leaveForeign(previous); }
     }

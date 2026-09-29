@@ -272,6 +272,87 @@ public class PackageNativeLifecycleTest {
             } finally { context.leave(); }
         }
     }
+    @Test public void declaredDataExportsRetainTheirProvidersStorageAcrossConsumers() throws Exception {
+        assumeTrue(System.getProperty("os.name").equals("Linux") && System.getProperty("os.arch").equals("amd64"));
+        var provider = component("provider", """
+            long provider_value;
+            const char provider_ident[] = "real";
+            __attribute__((constructor)) static void initialize(void) { provider_value = 40; }
+            long provider_next(void) { return ++provider_value; }
+            """, "provider_next", Set.of("provider_value", "provider_ident", "provider_next"), List.of());
+        var consumer = component("consumer", """
+            extern long provider_value;
+            extern const char provider_ident[];
+            long consumer_entry(void) { return 100 * provider_value + provider_ident[0]; }
+            """, "consumer_entry", Set.of("consumer_entry"), List.of(provider.getComponent()));
+        for (int i = 0; i < 2; i++) try (var context = Context.newBuilder("thc").allowNativeAccess(true).build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                assertEquals(4114L, invoke(consumer));
+                assertEquals(41L, invoke(provider));
+                assertEquals(4214L, invoke(consumer), "consumer and typed provider share the same mutable global");
+            } finally { context.leave(); }
+        }
+    }
+    @Test public void declaredExportsCannotBeBorrowedFromAnotherLoadedProvider() throws Exception {
+        assumeTrue(System.getProperty("os.name").equals("Linux") && System.getProperty("os.arch").equals("amd64"));
+        var provider = component("provider", "long missing_export = 7; long provider_entry(void) { return missing_export; }",
+            "provider_entry", Set.of("provider_entry"), List.of());
+        var claimant = component("claimant", "extern long missing_export; long claimant_entry(void) { return missing_export; }",
+            "claimant_entry", Set.of("claimant_entry", "missing_export"), List.of(provider.getComponent()));
+        try (var context = Context.newBuilder("thc").allowNativeAccess(true).build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                assertEquals(7L, invoke(provider));
+                var failure = assertThrows(RuntimeFault.class, () -> invoke(claimant));
+                assertTrue(failure.getMessage().contains("Missing package C provider export: missing_export"), failure.toString());
+                assertSame(failure, assertThrows(RuntimeFault.class, () -> invoke(claimant)), "failed publication is not retried");
+                assertEquals(7L, invoke(provider));
+            } finally { context.leave(); }
+        }
+    }
+    @Test public void standardLoweringExecutesRealCRelativeStringTables() throws Exception {
+        assumeTrue(System.getProperty("os.name").equals("Linux") && System.getProperty("os.arch").equals("amd64"));
+        var original = companion(new byte[0], """
+            static const char *const names[] = {"zero", "one", "two", "three", "four", "five"};
+            static unsigned index;
+            long entry(void) { return names[index++ % 6][0]; }
+            #ifdef NATIVE_ORACLE
+            #include <stdio.h>
+            int main(void) { for (int i = 0; i < 7; ++i) printf("%ld\\n", entry()); }
+            #endif
+            """);
+        var compiler = System.getenv().getOrDefault("THC_CLANG", "clang");
+        var nativeProgram = directory.resolve("native-relative-table");
+        command(List.of(compiler, "-O1", "-DNATIVE_ORACLE", directory.resolve("companion.c").toString(), "-o", nativeProgram.toString()));
+        assertEquals("122\n111\n116\n116\n102\n102\n122\n", command(List.of(nativeProgram.toString())));
+        var opt = System.getenv().getOrDefault("THC_LLVM_OPT", "opt");
+        var input = directory.resolve("companion.bc");
+        assertTrue(command(List.of(opt, "-S", "-passes=verify", input.toString(), "-o", "-")).contains("call ptr @llvm.load.relative"),
+            "the genuine compiler input must exercise a relative table");
+        // Characterize the pinned Sulong gap independently of the standard LLVM
+        // expansion. The producer's native test checks that its final pipeline
+        // applies this pass; this control checks actual guest execution.
+        try (var context = Context.newBuilder("thc").allowNativeAccess(true).build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var failure = assertThrows(com.oracle.truffle.api.exception.AbstractTruffleException.class, () -> invoke(original));
+                assertTrue(failure.getMessage().contains("missing LLVM builtin: llvm.load.relative"), failure.toString());
+            } finally { context.leave(); }
+        }
+        var output = directory.resolve("relative-lowered.bc");
+        command(List.of(opt, "-passes=pre-isel-intrinsic-lowering,globaldce", input.toString(), "-o", output.toString()));
+        var bytes = Files.readAllBytes(output);
+        var hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
+        var lowered = new PackageScalarLink("relative-lowered", original.getTarget(), hash, hash, bytes,
+            original.getAbi(), "llvm-bitcode", Set.of(), new byte[0]);
+        for (int i = 0; i < 2; i++) try (var context = Context.newBuilder("thc").allowNativeAccess(true).build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                for (long expected : new long[]{122, 111, 116, 116, 102, 102, 122}) assertEquals(expected, invoke(lowered));
+            } finally { context.leave(); }
+        }
+    }
     @Test public void failedProviderInitializationIsNotRetriedByAnotherConsumer() throws Exception {
         assumeTrue(System.getProperty("os.name").equals("Linux") && System.getProperty("os.arch").equals("amd64"));
         var provider = component("provider", """

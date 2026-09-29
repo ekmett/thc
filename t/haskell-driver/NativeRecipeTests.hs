@@ -14,7 +14,7 @@
 module NativeRecipeTests (tests, interfaceTests) where
 
 import Control.Exception (bracket)
-import Control.Monad (forM_)
+import Control.Monad (forM_, when)
 import qualified Crypto.Hash.SHA256 as SHA
 import Data.Aeson (Value(..), object, (.=), encode, eitherDecodeStrict', toJSON)
 import qualified Data.Aeson.KeyMap as KeyMap
@@ -53,6 +53,8 @@ tests = TestLabel "actual native compiler receipts" $ TestList
         compiler <- maybe (fail "GHC is required") canonicalizePath =<< findExecutable ghc
         ar <- maybe "ar" id <$> lookupEnv "THC_AR"
         nm <- maybe "llvm-nm" id <$> lookupEnv "THC_LLVM_NM"
+        clang <- maybe "clang" id <$> lookupEnv "THC_CLANG"
+        opt <- maybe "opt" id <$> lookupEnv "THC_LLVM_OPT"
         let pieces = root </> "pieces"
             command program arguments = do
               (status,output,diagnostic) <- readProcessWithExitCode program arguments ""
@@ -82,8 +84,19 @@ tests = TestLabel "actual native compiler receipts" $ TestList
             field _ _ = fail "component descriptor must be an object"
         writeFile "Owner.hs" "{-# LANGUAGE NoImplicitPrelude #-}\nmodule Owner where\ndata Sentinel = Sentinel\n"
         _ <- command compiler ["-c","Owner.hs","-fPIC"]
-        provider <- prepare "nativeprovider" []
-          "int shared_state=40; int next(void){return ++shared_state;} int unimported(void){return shared_state;}\n"
+        provider <- prepare "nativeprovider" [] (unlines
+          [ "__attribute__((visibility(\"hidden\"))) volatile int hidden_state=0;"
+          , "__attribute__((visibility(\"hidden\"),noinline)) int hidden_helper(void){return hidden_state;}"
+          , "int shared_state=40; const int public_constant=7; int private(void){return 0;}"
+          , "int next(void){return ++shared_state+hidden_helper();} int unimported(void){return shared_state;}"
+          -- Mach-O C does not support GNU alias attributes. Exercise aliases
+          -- where the actual compiler emits them, not invented native products.
+          , "#ifdef __ELF__"
+          , "extern int public_alias(void) __attribute__((alias(\"next\")));"
+          , "extern int public_state_alias __attribute__((alias(\"shared_state\")));"
+          , "__attribute__((visibility(\"protected\"))) int protected_function(void){return public_constant;}"
+          , "#endif"
+          ])
         assertEqual "only actual C membership, not native Haskell code" 1 (length (nativeProductPieces provider))
         let localSource = object ["type" .= ("local"::String),"path" .= root]
             localPlan style source = object ["id" .= ("nativeprovider"::String),"type" .= ("configured"::String),
@@ -101,7 +114,21 @@ tests = TestLabel "actual native compiler receipts" $ TestList
             tryIOError (readNativeProduct invalid [] (root </> "nativeprovider.conf") pieces)
         (_,Just descriptor) <- finish "nativeprovider" provider []
         exports <- field "exports" descriptor
-        assertBool "unimported public definition remains rooted" (String "unimported" `elem` case exports of Array names -> foldr (:) [] names; _ -> [])
+        let advertised = case exports of Array names -> foldr (:) [] names; _ -> []
+        assertBool "public functions, data and constants remain rooted"
+          (all ((`elem` advertised) . String) ["next","unimported","shared_state","public_constant","private"])
+        assertBool "hidden helpers and data are not cross-component exports"
+          (all ((`notElem` advertised) . String) ["hidden_helper","hidden_state"])
+        providerDefinitions <- command nm ["--defined-only","--format=posix",root </> "linked/nativeprovider/native/package.bc"]
+        assertBool "referenced hidden helper and data remain in the component"
+          (all (`isInfixOf` providerDefinitions) ["hidden_helper ","hidden_state "])
+        [providerPiece] <- pure (nativeProductPieces provider)
+        String providerBitcode <- field "bitcode" providerPiece
+        originalDefinitions <- command nm ["--defined-only","--format=posix",Text.unpack providerBitcode]
+        forM_ ["public_alias","public_state_alias","protected_function"] $ \alias ->
+          when ((alias ++ " ") `isInfixOf` originalDefinitions) $
+            assertBool "compiler-emitted public aliases and protected definitions remain rooted and advertised"
+              (String (Text.pack alias) `elem` advertised && (alias ++ " ") `isInfixOf` providerDefinitions)
         (_,Just repeated) <- finish "nativeprovider" provider []
         assertEqual "direct/dependency use keeps one exact component payload" descriptor repeated
         consumer <- prepare "nativeconsumer" ["nativeprovider"]
@@ -136,6 +163,32 @@ tests = TestLabel "actual native compiler receipts" $ TestList
         assertBool "a declared peer exemption never hides another missing symbol" $ case failure of
           Left reason -> "unrelated_missing" `isInfixOf` show reason
           Right _ -> False
+        table <- prepare "nativestrings" [] (unlines
+          [ "const char *relative_name(unsigned index) {"
+          , "  static const char *const names[] = {\"alpha\",\"beta\",\"gamma\",\"delta\"};"
+          , "  return names[index & 3];"
+          , "}"
+          ])
+        [tablePiece] <- pure (nativeProductPieces table)
+        String tableBitcode <- field "bitcode" tablePiece
+        tableIR <- command opt ["-S","-passes=verify",Text.unpack tableBitcode,"-o","-"]
+        assertBool "actual optimized C string table emits a relative-load intrinsic"
+          ("call ptr @llvm.load.relative." `isInfixOf` tableIR)
+        let oracleSource = root </> "string-oracle.c"
+            originalOracle = root </> "string-original.exe"
+            loweredOracle = root </> "string-lowered.exe"
+            finalTable = root </> "linked/nativestrings/native/package.bc"
+        writeFile oracleSource (unlines ["#include <stdio.h>","extern const char *relative_name(unsigned);",
+          "int main(void){for(unsigned i=0;i<5;++i) puts(relative_name(i));return 0;}"])
+        _ <- command clang ["-O1","-fPIC",oracleSource,root </> "nativestrings.c","-o",originalOracle]
+        expected <- command originalOracle []
+        assertEqual "native string-table semantics" "alpha\nbeta\ngamma\ndelta\nalpha\n" expected
+        _ <- finish "nativestrings" table []
+        loweredIR <- command opt ["-S","-passes=verify",finalTable,"-o","-"]
+        assertBool "package publication lowers backend-only relative loads to ordinary LLVM"
+          (not ("llvm.load.relative." `isInfixOf` loweredIR))
+        _ <- command clang ["-O1","-fPIC",oracleSource,finalTable,"-o",loweredOracle]
+        assertEqual "standard intrinsic lowering preserves native string-table semantics" expected =<< command loweredOracle []
   , TestLabel "published native dependencies survive removed Cabal package DBs" $ TestCase $ withScratch $ \root -> do
       ghc <- maybe "ghc" id <$> lookupEnv "GHC"
       compiler <- maybe (fail "GHC is required") canonicalizePath =<< findExecutable ghc
