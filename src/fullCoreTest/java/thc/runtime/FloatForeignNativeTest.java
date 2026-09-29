@@ -15,6 +15,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @SuppressWarnings("unchecked")
 public class FloatForeignNativeTest {
+    private Map<String, Object> cbd(File file) throws Exception { return CoreCbdFixtures.read(file.toPath()); }
+    private String entryId(String name) { return "main:FloatForeignAudit." + name; }
     private final File root = new File(System.getProperty("thc.projectRoot"));
     private final File directory = new File(root, "build/float-foreign");
     private Map<String, Object> json(File file) throws Exception { return (Map<String, Object>) Json.parse(Files.readString(file.toPath(), StandardCharsets.UTF_8)); }
@@ -34,7 +36,7 @@ public class FloatForeignNativeTest {
     }
     @Test public void originalFloatingDeclarationsRejectForgedAbiAndDefinedHeads() throws Exception {
         var seen = new LinkedHashSet<String>();
-        for (var call : calls(json(new File(directory, "post.json")))) {
+        for (var call : calls(cbd(new File(directory, "post.cbd")))) {
             var metadata = (Map<String, Object>) call.getLast(); var descriptor = (Map<String, Object>) metadata.get("foreignCall");
             var target = (Map<String, Object>) descriptor.get("target"); seen.add((String) target.get("symbol"));
             var operands = new ArrayList<Object>();
@@ -65,16 +67,16 @@ public class FloatForeignNativeTest {
         }
         assertEquals(12, rows.size()); assertEquals(384, count);
         for (String stage : List.of("pre", "post")) {
-            var module = json(new File(directory, stage + ".json"));
+            var module = cbd(new File(directory, stage + ".cbd"));
             for (var group : rows.entrySet()) {
                 String entry = group.getKey(); var cases = group.getValue(); assertEquals(true, json(new File(directory, stage + "-" + entry + ".audit.json")).get("accepted"));
                 for (String backend : List.of("ast", "bytecode")) try (Context context = context()) {
                     context.initialize("thc"); context.enter();
                     try {
                         var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                        var linked = CoreModules.reachable(CoreModules.merge(List.of(module)), entry, true);
+                        var linked = CoreModules.reachable(CoreModules.merge(List.of(module)),entryId(entry), true);
                         ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
-                        var callable = context.asValue(new EntryValue(program, entry, 1));
+                        var callable = context.asValue(new EntryValue(program,entryId(entry), 1));
                         for (var row : cases) assertEquals(Long.parseLong(row.get(2)), callable.execute(Long.parseLong(row.get(1))).asLong(), stage + "/" + backend + "/" + entry + "/" + row.get(1));
                         assertTrue(callable.invokeMember("compile").asBoolean());
                         for (var row : cases.reversed()) {

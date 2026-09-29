@@ -62,7 +62,7 @@ import System.Environment (getExecutablePath, lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>), takeDirectory)
 import qualified THC.Interface as Interface
-import THC.Plugin (serializeOptimizedCore, serializePostTidyCore)
+import THC.Plugin (serializeOptimizedCoreCBD, serializePostTidyCoreCBD)
 import Unsafe.Coerce (unsafeCoerce)
 
 operations :: [(String, String)]
@@ -207,10 +207,10 @@ prepareCurrentDirectoryChild root = do
         adapted = optimized { mg_binds = [NonRec value body | (value, body) <- guests],
           mg_exports = filter (\available -> availName available `elem` map (varName . fst) guests) (mg_exports optimized) }
     liftIO $ do
-      serializeOptimizedCore flags ["unit-qualified"] adapted >>= writeFile (root </> directory </> "pre.json")
+      serializeOptimizedCoreCBD flags ["unit-qualified"] adapted >>= BS.writeFile (root </> directory </> "pre.cbd")
       (tidied, _) <- hscTidy current adapted
-      serializePostTidyCore flags ["unit-qualified"] (cg_module tidied) (cg_tycons tidied)
-        (cg_binds tidied) emptyIfaceForeign >>= writeFile (root </> directory </> "post.json")
+      serializePostTidyCoreCBD flags ["unit-qualified"] (cg_module tidied) (cg_tycons tidied)
+        (cg_binds tidied) emptyIfaceForeign >>= BS.writeFile (root </> directory </> "post.cbd")
     natives <- forM operations $ \(name, targetName) -> liftIO $ do
       let nativeName = case name of
             first : rest -> "native" ++ toUpper first : rest
@@ -225,8 +225,8 @@ prepareCurrentDirectoryChild root = do
       _ -> die "Expected two original current-directory native functions"
   writeJson (root </> directory </> "oracle.json") oracle
   audits <- fmap concat $ forM ["pre", "post"] $ \stage -> forM entries $ \name ->
-    execute (stage ++ "-audit-" ++ name) [] "python3" ["bin/audit-core.py", "--entry", name,
-      "--output", directory </> stage ++ "-" ++ name ++ ".audit.json", directory </> stage ++ ".json"]
+    execute (stage ++ "-audit-" ++ name) [] "python3" ["bin/audit-core.py", "--entry", "main:OriginalCurrentDirectoryAudit." ++ name,
+      "--output", directory </> stage ++ "-" ++ name ++ ".audit.json", directory </> stage ++ ".cbd"]
   interfaceHashes <- hashes root interfaces
   registrationHash <- hashFile (packageDb </> oneLine owner ++ ".conf")
   writeJson (root </> directory </> "unix-source.json") $ object
@@ -239,7 +239,7 @@ prepareCurrentDirectoryChild root = do
     "t/haskell-fixtures/OriginalCurrentDirectoryFixtures.hs",
     "src/compiler/THC/Plugin.hs", "src/compiler/THC/Interface.hs", "bin/core_original_foreign.py",
     "bin/audit-core.py", "bin/core-capabilities.json", "src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java"]
-  artifactHashes <- hashes root ([directory </> file | file <- ["pre.json", "post.json", "oracle.json", "unix.project", "unix-source.json"]] ++
+  artifactHashes <- hashes root ([directory </> file | file <- ["pre.cbd", "post.cbd", "oracle.json", "unix.project", "unix-source.json"]] ++
     [directory </> stage ++ "-" ++ name ++ ".audit.json" | stage <- ["pre","post"], name <- entries] ++
     concatMap commandArtifacts commands)
   writeJson manifest $ object

@@ -47,7 +47,7 @@ import System.Directory (createDirectoryIfMissing, doesFileExist, removeFile)
 import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>))
-import THC.Plugin (serializeOptimizedCore, serializePostTidyCore)
+import THC.Plugin (serializeOptimizedCoreCBD, serializePostTidyCoreCBD)
 import Unsafe.Coerce (unsafeCoerce)
 
 operations :: [(String, String)]
@@ -157,10 +157,10 @@ prepareByteStringDecimal root = do
         adapted = optimized { mg_binds = [NonRec value body | (value, body) <- guests],
           mg_exports = filter (\available -> availName available `elem` map (varName . fst) guests) (mg_exports optimized) }
     liftIO $ do
-      serializeOptimizedCore flags ["unit-qualified"] adapted >>= writeFile (root </> directory </> "pre.json")
+      serializeOptimizedCoreCBD flags ["unit-qualified"] adapted >>= BS.writeFile (root </> directory </> "pre.cbd")
       (tidied, _) <- hscTidy current adapted
-      serializePostTidyCore flags ["unit-qualified"] (cg_module tidied) (cg_tycons tidied)
-        (cg_binds tidied) emptyIfaceForeign >>= writeFile (root </> directory </> "post.json")
+      serializePostTidyCoreCBD flags ["unit-qualified"] (cg_module tidied) (cg_tycons tidied)
+        (cg_binds tidied) emptyIfaceForeign >>= BS.writeFile (root </> directory </> "post.cbd")
     natives <- forM operations $ \(name, targetName) -> liftIO $ do
       let nativeName = case name of
             first : rest -> "native" ++ toUpper first : rest
@@ -186,8 +186,8 @@ prepareByteStringDecimal root = do
       _ -> die "Missing compiled original decimal consumers"
   writeJson (root </> directory </> "oracle.json") (toJSON oracle)
   audits <- fmap concat $ forM ["pre", "post"] $ \stage -> forM entries $ \name ->
-    execute (stage ++ "-audit-" ++ name) [] "python3" ["bin/audit-core.py", "--entry", name,
-      "--output", directory </> stage ++ "-" ++ name ++ ".audit.json", directory </> stage ++ ".json"]
+    execute (stage ++ "-audit-" ++ name) [] "python3" ["bin/audit-core.py", "--entry", "main:ByteStringDecimalAudit." ++ name,
+      "--output", directory </> stage ++ "-" ++ name ++ ".audit.json", directory </> stage ++ ".cbd"]
   let commands = [version, library, imports, owner] ++ audits
   inputHashes <- hashes root [source, "thc.cabal", "t/haskell-fixtures/Main.hs", "t/haskell-fixtures/FixtureSupport.hs",
     "src/test/resources/core/original-bytestring-decimal-descriptors.json", "t/haskell-fixtures/ByteStringDecimalFixtures.hs",
@@ -195,7 +195,7 @@ prepareByteStringDecimal root = do
     "bin/audit-core.py", "bin/core-capabilities.json", "src/main/java/thc/runtime/CoreByteStringDecimal.java",
     "src/main/java/thc/runtime/ByteStringDecimal.java", "src/main/java/thc/runtime/ByteStringDecimalOp.java",
     "src/main/java/thc/runtime/ByteStringDecimalExpression.java"]
-  artifactHashes <- hashes root ([directory </> file | file <- ["pre.json", "post.json", "oracle.json"]] ++
+  artifactHashes <- hashes root ([directory </> file | file <- ["pre.cbd", "post.cbd", "oracle.json"]] ++
     [directory </> stage ++ "-" ++ name ++ ".audit.json" | stage <- ["pre","post"], name <- entries] ++
     concatMap commandArtifacts commands)
   writeJson manifest $ object

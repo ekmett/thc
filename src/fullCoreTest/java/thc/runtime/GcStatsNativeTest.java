@@ -15,13 +15,15 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @SuppressWarnings("unchecked")
 public class GcStatsNativeTest {
+    private Map<String, Object> cbd(File file) throws Exception { return CoreCbdFixtures.read(file.toPath()); }
+    private String entryId(String name) { return "main:GcStatsAudit." + name; }
     private final File root = new File(System.getProperty("thc.projectRoot"));
     private final File directory = new File(root, "build/gc-stats");
     private Map<String, Object> json(File file) throws Exception { return (Map<String, Object>) Json.parse(Files.readString(file.toPath(), StandardCharsets.UTF_8)); }
     private Context context() { return Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false")
         .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build(); }
     private ExecutableProgram program(Language language, String backend, String entry, String stage) throws Exception {
-        var module = CoreModules.merge(List.of(json(new File(directory, entry + "-" + stage + ".json"))));
+        var module = CoreModules.merge(List.of(cbd(new File(directory, entry + "-" + stage + ".cbd"))));
         // Exercise the safe-return poll on both backends, with AST's explicit opt-in.
         return backend.equals("ast") ? new Program(language, module, true) : new BytecodeProgram(language, module);
     }
@@ -42,7 +44,7 @@ public class GcStatsNativeTest {
     @Test public void originalDeclarationsKeepTheirUnitSafetyStateAndResultAbi() throws Exception {
         var entries = (List<List<String>>) json(new File(directory, "manifest.json")).get("entries"); var seen = new LinkedHashSet<String>();
         for (var pair : entries) for (String stage : List.of("pre", "post")) {
-            String entry = pair.getFirst(); var actual = calls(json(new File(directory, entry + "-" + stage + ".json"))); assertEquals(entry.equals("clock") ? 2 : 1, actual.size());
+            String entry = pair.getFirst(); var actual = calls(cbd(new File(directory, entry + "-" + stage + ".cbd"))); assertEquals(entry.equals("clock") ? 2 : 1, actual.size());
             for (var call : actual) {
                 var metadata = (Map<String, Object>) call.getLast(); var descriptor = (Map<String, Object>) metadata.get("foreignCall");
                 var target = (Map<String, Object>) descriptor.get("target"); seen.add((String) target.get("symbol")); var operands = new ArrayList<Object>();
@@ -74,12 +76,12 @@ public class GcStatsNativeTest {
             try {
                 assertEquals(true, json(new File(directory, entry + "-" + stage + ".audit.json")).get("accepted"));
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var program = program(language, backend, entry, stage);
-                String name = entries.get(entry); var callable = context.asValue(new EntryValue(program, name, 1));
+                String name = entries.get(entry); var callable = context.asValue(new EntryValue(program,entryId(name), 1));
                 for (var row : cases) {
                     long input = ((Number) row.get(1)).longValue(), answer = ((Number) row.get(2)).longValue();
                     assertEquals(input + (entry.equals("enabled") ? 0L : 1L), answer); assertEquals(answer, callable.execute(input).asLong()); released(language);
                 }
-                assertTrue(callable.invokeMember("compile").asBoolean()); var target = program.entryTarget(name);
+                assertTrue(callable.invokeMember("compile").asBoolean()); var target = program.entryTarget(entryId(name));
                 for (var row : cases.reversed()) {
                     long before = (Long) program.diagnostics().get("compiledEntries");
                     assertEquals(((Number) row.get(2)).longValue(), callable.execute(((Number) row.get(1)).longValue()).asLong(), stage + "/" + backend + "/" + entry);
@@ -95,7 +97,7 @@ public class GcStatsNativeTest {
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var program = program(language, backend, "stats", stage);
                 var address = ManagedAddress.fromByteArray(new byte[] {11, 22, 33, 44});
-                var failure = assertThrows(RuntimeFault.class, () -> Calls.target(program.hostEntryTarget(2), new Object[] {program.entryValue("originalStats"), new Object[] {address, 1L}}));
+                var failure = assertThrows(RuntimeFault.class, () -> Calls.target(program.hostEntryTarget(2), new Object[] {program.entryValue(entryId("originalStats")), new Object[] {address, 1L}}));
                 assertEquals("GHC RTS statistics are unavailable on the JVM; getRTSStatsEnabled is false", failure.getMessage());
                 var actual = new ArrayList<Long>(); for (long i = 0; i <= 3; i++) actual.add(address.readWord8(i)); assertEquals(List.of(11L, 22L, 33L, 44L), actual); released(language);
             } finally { context.leave(); }

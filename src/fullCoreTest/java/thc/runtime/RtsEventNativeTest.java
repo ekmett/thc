@@ -24,13 +24,15 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @SuppressWarnings("unchecked")
 public class RtsEventNativeTest {
+    private Map<String, Object> cbd(File file) throws Exception { return CoreCbdFixtures.read(file.toPath()); }
+    private String entryId(String name) { return "main:RtsEventAudit." + name; }
     private final File root = new File(System.getProperty("thc.projectRoot"));
     private final File directory = new File(root, "build/rts-event");
     private Map<String, Object> json(File file) throws Exception { return (Map<String, Object>) Json.parse(Files.readString(file.toPath(), StandardCharsets.UTF_8)); }
     private Context context() { return Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false")
         .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build(); }
     private ExecutableProgram program(Language language, String backend, String entry, String stage) throws Exception {
-        var module = CoreModules.merge(List.of(json(new File(directory, entry + "-" + stage + ".json")))); return backend.equals("ast") ? new Program(language, module, true) : new BytecodeProgram(language, module);
+        var module = CoreModules.merge(List.of(cbd(new File(directory, entry + "-" + stage + ".cbd")))); return backend.equals("ast") ? new Program(language, module, true) : new BytecodeProgram(language, module);
     }
     private List<List<?>> calls(Object value) {
         var result = new ArrayList<List<?>>();
@@ -72,7 +74,7 @@ public class RtsEventNativeTest {
                 String entry = group.getKey(), label = stage + "/" + backend + "/" + entry; var cases = group.getValue(); context.enter();
                 try {
                     assertEquals(true, json(new File(directory, entry + "-" + stage + ".audit.json")).get("accepted")); var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                    var module = json(new File(directory, entry + "-" + stage + ".json"));
+                    var module = cbd(new File(directory, entry + "-" + stage + ".cbd"));
                     for (var call : calls(module)) {
                         var meta = (Map<String, Object>) call.getLast(); var descriptor = (Map<String, Object>) meta.get("foreignCall"); var target = (Map<String, Object>) descriptor.get("target"); var operands = operands(call);
                         assertNotNull(CoreOriginalStdio.validate(meta, operands, (List<?>) call.get(3), meta.get("rep")));
@@ -85,9 +87,9 @@ public class RtsEventNativeTest {
                             assertThrows(RuntimeFault.class, () -> CoreOriginalStdio.validate(meta, wrong, (List<?>) call.get(3), meta.get("rep")));
                         }
                     }
-                    var program = program(language, backend, entry, stage); var callable = context.asValue(new EntryValue(program, entries.get(entry), 1));
+                    var program = program(language, backend, entry, stage); var callable = context.asValue(new EntryValue(program,entryId(entries.get(entry)), 1));
                     for (var row : cases) invokeDescriptor(row, entry, callable, language, label); assertTrue(callable.invokeMember("compile").asBoolean());
-                    var host = program.hostEntryTarget(1); var original = program.entryTarget(entries.get(entry)); var installed = new ArrayList<RootCallTarget>();
+                    var host = program.hostEntryTarget(1); var original = program.entryTarget(entryId(entries.get(entry))); var installed = new ArrayList<RootCallTarget>();
                     // Public compilation follows the active split, not merely
                     // the closure's original call-target identity.
                     for (var call : NodeUtil.findAllNodeInstances(host.getRootNode(), DirectCallNode.class)) if (call.getCallTarget() == original) installed.add((RootCallTarget) call.getCurrentCallTarget());
@@ -104,7 +106,7 @@ public class RtsEventNativeTest {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var program = program(language, "ast", "capabilities", "post");
-                var root = (GuestRoot) program.entryTarget("originalCapabilities").getRootNode(); var leaves = NodeUtil.findAllNodeInstances(root, RtsEventForeignExpression.class); assertEquals(1, leaves.size()); var leaf = leaves.getFirst(); int[] evaluations = {0};
+                var root = (GuestRoot) program.entryTarget(entryId("originalCapabilities")).getRootNode(); var leaves = NodeUtil.findAllNodeInstances(root, RtsEventForeignExpression.class); assertEquals(1, leaves.size()); var leaf = leaves.getFirst(); int[] evaluations = {0};
                 // Isolate this genuine lowered safe-return cut from entry polls.
                 // Replacing its input lets us observe evaluation/replay separately.
                 ((Expr) leaf.getChildren().iterator().next()).replace(new Expr() { @Override public Object execute(VirtualFrame frame) { evaluations[0]++; return 3; } });
@@ -134,7 +136,7 @@ public class RtsEventNativeTest {
     @Test public void originalInstalledDeclarationsRetainExactAbiAndUnresolvedIdentity() throws Exception {
         var entries = (List<List<String>>) json(new File(directory, "manifest.json")).get("entries"); var seen = new LinkedHashSet<String>();
         for (var pair : entries) for (String stage : List.of("pre", "post")) {
-            var actual = calls(json(new File(directory, pair.getFirst() + "-" + stage + ".json"))); assertFalse(actual.isEmpty());
+            var actual = calls(cbd(new File(directory, pair.getFirst() + "-" + stage + ".cbd"))); assertFalse(actual.isEmpty());
             for (var call : actual) {
                 var metadata = (Map<String, Object>) call.getLast(); var descriptor = (Map<String, Object>) metadata.get("foreignCall"); var target = (Map<String, Object>) descriptor.get("target");
                 String symbol = (String) target.get("symbol"); seen.add(symbol); var operands = operands(call); assertNotNull(validate(metadata, operands, (List<?>) call.get(3)), symbol);
@@ -170,8 +172,8 @@ public class RtsEventNativeTest {
             try {
                 assertEquals(true, json(new File(directory, entry + "-" + stage + ".audit.json")).get("accepted")); var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 var threads = Language.currentState().getThreads(); long physicalCount = threads.getCpuAffinity().getCount(); var program = program(language, backend, entry, stage); String name = entries.get(entry);
-                var callable = context.asValue(new EntryValue(program, name, 1)); for (var row : cases) invokeEvent(row, entry, physicalCount, callable, threads, language, label);
-                assertTrue(callable.invokeMember("compile").asBoolean()); var target = program.entryTarget(name);
+                var callable = context.asValue(new EntryValue(program,entryId(name), 1)); for (var row : cases) invokeEvent(row, entry, physicalCount, callable, threads, language, label);
+                assertTrue(callable.invokeMember("compile").asBoolean()); var target = program.entryTarget(entryId(name));
                 for (var row : cases.reversed()) {
                     long before = (Long) program.diagnostics().get("compiledEntries"); invokeEvent(row, entry, physicalCount, callable, threads, language, label);
                     assertEquals(before + 1, program.diagnostics().get("compiledEntries"), label + " exact entry"); assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));

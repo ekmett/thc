@@ -41,7 +41,7 @@ import System.Directory (createDirectoryIfMissing, doesFileExist, removeFile)
 import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>))
-import THC.Plugin (serializeOptimizedCore, serializePostTidyCore)
+import THC.Plugin (serializeOptimizedCoreCBD, serializePostTidyCoreCBD)
 import Unsafe.Coerce (unsafeCoerce)
 
 operations :: String -> [(String, String)]
@@ -157,10 +157,10 @@ prepareUnixWaitStatus root = do
         adapted = optimized { mg_binds = [NonRec value body | (value, body) <- guests],
           mg_exports = filter (\available -> availName available `elem` map (varName . fst) guests) (mg_exports optimized) }
     liftIO $ do
-      serializeOptimizedCore flags ["unit-qualified"] adapted >>= writeFile (root </> directory </> "pre.json")
+      serializeOptimizedCoreCBD flags ["unit-qualified"] adapted >>= BS.writeFile (root </> directory </> "pre.cbd")
       (tidied, _) <- hscTidy current adapted
-      serializePostTidyCore flags ["unit-qualified"] (cg_module tidied) (cg_tycons tidied)
-        (cg_binds tidied) emptyIfaceForeign >>= writeFile (root </> directory </> "post.json")
+      serializePostTidyCoreCBD flags ["unit-qualified"] (cg_module tidied) (cg_tycons tidied)
+        (cg_binds tidied) emptyIfaceForeign >>= BS.writeFile (root </> directory </> "post.cbd")
     fmap concat $ forM selected $ \(name, targetName) -> liftIO $ do
       let nativeName = case name of
             first : rest -> "native" ++ toUpper first : rest
@@ -174,13 +174,13 @@ prepareUnixWaitStatus root = do
         answer `seq` pure (name ++ "\t" ++ show bits ++ "\t" ++ show answer)
   writeFile (root </> directory </> "oracle.tsv") (unlines rows)
   audits <- fmap concat $ forM ["pre", "post"] $ \stage -> forM entries $ \name ->
-    execute (stage ++ "-audit-" ++ name) [] "python3" ["bin/audit-core.py", "--entry", name,
-      "--output", directory </> stage ++ "-" ++ name ++ ".audit.json", directory </> stage ++ ".json"]
+    execute (stage ++ "-audit-" ++ name) [] "python3" ["bin/audit-core.py", "--entry", "main:UnixWaitStatusAudit." ++ name,
+      "--output", directory </> stage ++ "-" ++ name ++ ".audit.json", directory </> stage ++ ".cbd"]
   let commands = [version, library, imports, owner] ++ audits
   inputHashes <- hashes root [source, "t/haskell-fixtures/UnixWaitStatusFixtures.hs",
     "src/compiler/THC/Plugin.hs", "t/haskell-fixtures/FixtureSupport.hs", "bin/core_original_foreign.py",
     "bin/audit-core.py", "bin/core-capabilities.json", "src/main/c/wait-status-api.c", "bin/build-cbits.py"]
-  artifactHashes <- hashes root ([directory </> file | file <- ["pre.json", "post.json", "oracle.tsv"]] ++
+  artifactHashes <- hashes root ([directory </> file | file <- ["pre.cbd", "post.cbd", "oracle.tsv"]] ++
     [directory </> stage ++ "-" ++ name ++ ".audit.json" | stage <- ["pre", "post"], name <- entries] ++
     concatMap commandArtifacts commands)
   interfaceHashes <- hashes root interfaces
