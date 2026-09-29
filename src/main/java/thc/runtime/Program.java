@@ -110,7 +110,7 @@ public final class Program implements ExecutableProgram {
         rubbishLiterals = new RubbishLiterals(language);
         foreignLinks = moduleData.get("foreignLinks") instanceof List<?> found ? (List<thc.ForeignBitcode>) found : List.of();
         packageScalarLinks = moduleData.get("packageScalarLinks") instanceof List<?> found ? (List<thc.PackageScalarLink>) found : List.of();
-        packageCalls = reusableCode && prepared == null ? new ArrayList<>() : List.of();
+        packageCalls = prepared != null ? prepared.packageCalls : reusableCode ? new ArrayList<>() : List.of();
         packageFunctions = prepared == null ? null : new PackageScalarFunction[prepared.packageCalls.size()];
         nativeCallbacks = moduleData.get("nativeCallbacks") instanceof Map<?,?> found ? (Map<String,thc.ManagedCallbackSignature>) found : Map.of();
         stackTargetLayout = moduleData.get("targetLayout");
@@ -168,13 +168,22 @@ public final class Program implements ExecutableProgram {
             validateInputs = CoreInputCalls.validator(bindings, constructors, demand);
         }
         if (prepared != null) {
+            List<String> pending = new ArrayList<>();
             for (Map<String, Object> binding : bindings) {
                 String id = (String) binding.get("id");
                 CodeValue code = prepared.values.get(id);
                 if (code == null) required(globals, id).defer(preparationLock,
                     () -> { throw new UnsupportedCore("Binding was not prepared for reusable execution: " + id); });
-                else { required(globals, id).initialize(code.instantiate(this)); initializedBindingCount++; }
+                else if (nativeStartup) {
+                    required(globals, id).defer(preparationLock, () -> {
+                        Object value = code.instantiate(this);
+                        initializedBindingCount++;
+                        return value;
+                    });
+                    pending.add(id);
+                } else { required(globals, id).initialize(code.instantiate(this)); initializedBindingCount++; }
             }
+            if (nativeStartup) { pendingInitializers = List.copyOf(pending); return; }
             // The loader has linked these declarations in the current State.
             // Resolve receivers only for this instance, never in shared nodes
             // or while preparing the code. Resolution invokes no guest call.
@@ -232,6 +241,10 @@ public final class Program implements ExecutableProgram {
     @Override public void initializeGlobals() {
         for (String id : pendingInitializers) required(globals, id).read();
         pendingInitializers = List.of();
+        if (packageFunctions != null) for (int i = 0; i < packageFunctions.length; i++) {
+            PackageScalarCall call = packageCalls.get(i);
+            packageFunctions[i] = contextOwner.getPackageCbits().resolve(call.getLink(), call.getSignature());
+        }
     }
 
     /** Explicit experimental admission using the ordinary AST lowerer, without executing guest bodies.
@@ -254,7 +267,16 @@ public final class Program implements ExecutableProgram {
         }
         List<thc.ManagedExportAdmission> registrations = module.get("managedRegistrations") instanceof List<?> found
             ? List.copyOf((List<thc.ManagedExportAdmission>) found) : List.of();
-        for (var registration : registrations) for (var export : registration.getExports()) pending.add(export.getBinder());
+        var exports = new ArrayList<thc.ManagedExportSignature>();
+        for (var registration : registrations) for (var export : registration.getExports()) {
+            pending.add(export.getBinder()); exports.add(export);
+        }
+        var checkedExports = thc.ManagedExportPlan.checked(exports, ignored -> builder.bindings);
+        for (var export : checkedExports) {
+            for (var type : export.arguments())
+                ManagedExportScalar.fromNormalizedType(type, ManagedExportScalar.Role.ARGUMENT, export.wordBits(), builder::dataLayout);
+            ManagedExportScalar.fromNormalizedType(export.result(), ManagedExportScalar.Role.RESULT, export.wordBits(), builder::dataLayout);
+        }
         while (!pending.isEmpty()) {
             Map<String,Object> binding = builder.bindings.get(builder.bindingIndex(pending.removeFirst()));
             String id = (String) binding.get("id");
@@ -287,7 +309,7 @@ public final class Program implements ExecutableProgram {
             declarations.put("selectedForeignExceptionBridge", Map.copyOf(bridge));
         return new PreparedCode(Map.copyOf(declarations), Map.copyOf(values), List.copyOf(builder.codeTargets),
             builder.dataLayouts.values().stream().map(DataLayout::reusableStorage).toList(),
-            List.copyOf(builder.packageCalls), registrations, builder.codeIdentity, language);
+            List.copyOf(builder.packageCalls), registrations, List.copyOf(checkedExports), builder.codeIdentity, language);
     }
     private static boolean absentOrEmpty(Object value) { return value == null || value instanceof List<?> list && list.isEmpty() || value instanceof Map<?,?> map && map.isEmpty(); }
     public static final class PreparedCode {
@@ -297,21 +319,30 @@ public final class Program implements ExecutableProgram {
         private final List<DataLayout.Reusable> layouts;
         private final List<PackageScalarCall> packageCalls;
         private final List<thc.ManagedExportAdmission> managedRegistrations;
+        private final List<thc.ManagedExportSignature> managedExports;
         private final Object identity;
         private final TruffleLanguage<?> language;
         private PreparedCode(Map<String, Object> module, Map<String, CodeValue> values, List<RootCallTarget> targets, List<DataLayout.Reusable> layouts,
                              List<PackageScalarCall> packageCalls, List<thc.ManagedExportAdmission> managedRegistrations,
+                             List<thc.ManagedExportSignature> managedExports,
                              Object identity, TruffleLanguage<?> language) {
             this.module = module; this.values = values; this.targets = targets; this.layouts = layouts; this.identity = identity; this.language = language;
-            this.packageCalls = packageCalls; this.managedRegistrations = managedRegistrations;
+            this.packageCalls = packageCalls; this.managedRegistrations = managedRegistrations; this.managedExports = managedExports;
         }
         public List<thc.ForeignBitcode> getForeignLinks() { return (List<thc.ForeignBitcode>) module.get("foreignLinks"); }
         public List<thc.PackageScalarLink> getPackageScalarLinks() { return (List<thc.PackageScalarLink>) module.get("packageScalarLinks"); }
         public List<thc.ManagedExportAdmission> getManagedRegistrations() { return managedRegistrations; }
+        public List<thc.ManagedExportSignature> getManagedExports() { return managedExports; }
         public Program newInstance(TruffleLanguage<?> language) {
+            return newInstance(language, false);
+        }
+        public Program newInstanceForNativeStartup(TruffleLanguage<?> language) {
+            return newInstance(language, true);
+        }
+        private Program newInstance(TruffleLanguage<?> language, boolean nativeStartup) {
             if (language != this.language || language != LANGUAGES.get(null))
                 throw new UnsupportedCore("Reusable AST instance requires its prepared and current language");
-            return new Program(language, module, false, false, false, true, this);
+            return new Program(language, module, false, false, false, true, this, nativeStartup);
         }
         /** Observe existing installation only: no binding demand, execution or compilation. */
         public void requireInstalledCode() {
@@ -444,7 +475,15 @@ public final class Program implements ExecutableProgram {
     }
     private Metrics codeMetrics() { return reusableCode ? null : metrics; }
     Metrics instanceMetrics() { return metrics; }
-    PackageScalarFunction packageFunction(int index) { return packageFunctions[index]; }
+    PackageScalarFunction packageFunction(int index) {
+        var function = packageFunctions[index];
+        if (function != null) return function;
+        // A constructor callback may use its component's already initialized
+        // symbols. Do not cache that early receiver: after successful startup,
+        // initializeGlobals installs the completed library's canonical handles.
+        PackageScalarCall call = packageCalls.get(index);
+        return contextOwner.getPackageCbits().resolve(call.getLink(), call.getSignature());
+    }
     Object readGlobal(int index) { return indexedGlobals[index].read(); }
     ForeignExceptionBridge foreignExceptionBridge() { return foreignExceptionBridge; }
     DataLayout constructorLayout(int index) { return indexedLayouts[index]; }

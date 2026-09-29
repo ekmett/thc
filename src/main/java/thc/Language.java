@@ -466,12 +466,14 @@ public final class Language extends TruffleLanguage<Language.State> {
             // native functions, CAFs, bridge projectors or registration lifetimes.
             var owner = currentState(this);
             for (var link : code.getForeignLinks()) owner.cbits().link(link);
-            for (var link : code.getPackageScalarLinks()) owner.packageCbits.link(link);
-            var program = code.newInstance(language);
-            var value = new EntryValue(program, entry, arity, null, ioResult, language,
-                shutdownEntry, shutdownResult, processSignals, inputs, result, code);
-            owner.foreignRoots.retain(program, code.getManagedRegistrations());
-            return value;
+            for (var link : code.getPackageScalarLinks()) owner.packageCbits.declare(link);
+            var program = code.newInstanceForNativeStartup(language);
+            try {
+                owner.foreignRoots.register(program, language, code.getManagedRegistrations(), code.getManagedExports(),
+                    () -> { for (var link : code.getPackageScalarLinks()) owner.packageCbits.link(link); });
+                return new EntryValue(program, entry, arity, null, ioResult, language,
+                    shutdownEntry, shutdownResult, processSignals, inputs, result, code);
+            } catch (Throwable failure) { owner.foreignRoots.release(program); throw failure; }
         }
         @Override protected ExecutionSignature prepareForAOT() {
             return ExecutionSignature.create(EntryValue.class, new Class<?>[0]);
