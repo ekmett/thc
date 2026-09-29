@@ -27,7 +27,9 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertIn("build/selector-proof", fast_fixtures.FULL_OUTPUT_ROOTS)
         expected = {"build/selector-proof/" + name for name in (
-            "manifest.json", "pre/core/SelectorProofAudit.json", "post/core/SelectorProofAudit.json",
+            "manifest.json",
+            *[f"{stage}/{name}.cbd" for stage in ("pre", "post")
+              for name in ("core/SelectorProofAudit", "SelectorProofAudit.roundtrip")],
             "api/predicate",
             *[f"commands/{command}.{suffix}"
               for command in ("pre-export", "post-export", "predicate-build", "libdir", "predicate-run")

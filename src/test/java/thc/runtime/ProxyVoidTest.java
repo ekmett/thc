@@ -20,11 +20,11 @@ class ProxyVoidTest {
     private final Map<String, Object> empty = map("kind", "unknown", "primReps", list(), "evaluated", true,
         "aggregate", "unboxed-tuple", "components", list());
     private Map<String, Object> module(String stage) throws Exception {
-        return object(Json.parse(Files.readString(root.resolve("build/proxy-void/" + stage + "/core/ProxyVoidAudit.json"))));
+        return CoreCbdFixtures.read(root.resolve("build/proxy-void/" + stage + "/core/ProxyVoidAudit.cbd"));
     }
     private List<Map<String, Object>> bindings(Map<String, Object> module) { return objects(module.get("bindings")); }
     private Map<String, Object> binding(Map<String, Object> module, String name) {
-        var selected = bindings(module).stream().filter(value -> name.equals(value.get("name"))).toList();
+        var selected = bindings(module).stream().filter(value -> ("main:ProxyVoidAudit." + name).equals(value.get("id"))).toList();
         assertEquals(1, selected.size()); return selected.getFirst();
     }
     private List<Object> lambda(Map<String, Object> module, String name) { return expression(binding(module, name).get("expr")); }
@@ -76,13 +76,13 @@ class ProxyVoidTest {
         }
         for (var stage : list("pre", "post")) for (var backend : list("ast", "bytecode"))
             for (var group : rows.entrySet()) try (var context = context(inlining)) {
-                var name = group.getKey(); var selected = group.getValue();
+                var name = group.getKey(); var entry = "main:ProxyVoidAudit." + name; var selected = group.getValue();
                 context.initialize("thc"); context.enter();
                 try {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                    var program = program(language, with(CoreModules.reachable(module(stage), name), "instrument", true), backend);
-                    var function = context.asValue(new EntryValue(program, name, 1));
-                    var host = program.hostEntryTarget(1); var original = program.entryTarget(name);
+                    var program = program(language, with(CoreModules.reachable(module(stage), entry), "instrument", true), backend);
+                    var function = context.asValue(new EntryValue(program, entry, 1));
+                    var host = program.hostEntryTarget(1); var original = program.entryTarget(entry);
                     var label = stage + "/" + backend + "/" + name + "/inlining=" + inlining;
                     CheckedConsumer<List<String>> check = row -> assertEquals(Long.parseLong(row.get(2)), function.execute(Long.parseLong(row.get(1))).asLong(), label);
                     for (var row : selected) check.accept(row);
@@ -97,7 +97,7 @@ class ProxyVoidTest {
                         valid(original, label); for (var target : targets) valid(target, label); released(language);
                     }
                     if (name.equals("effect")) {
-                        var thrown = assertThrows(GuestException.class, () -> Calls.target(host, new Object[]{program.entryValue(name), new Object[]{-1L}}));
+                        var thrown = assertThrows(GuestException.class, () -> Calls.target(host, new Object[]{program.entryValue(entry), new Object[]{-1L}}));
                         assertEquals("main:ProxyVoidAudit.Failure", ((DataValue) thrown.getPayload()).getLayout().getId()); released(language);
                     }
                     assertEquals(0L, ((Number) program.diagnostics().get("unsupportedTraps")).longValue());
@@ -109,7 +109,8 @@ class ProxyVoidTest {
         for (var stage : list("pre", "post")) {
             var module = module(stage);
             assertEquals(stage.equals("pre") ? "optimized-Core-before-Tidy" : "optimized-Core-after-Tidy-before-CorePrep", module.get("boundary"));
-            assertTrue(((String) module.get("sourceCore")).contains("proxy#"));
+            var inspection = object(Json.parse(Files.readString(root.resolve("build/proxy-void/" + stage + "/core/ProxyVoidAudit.json"))));
+            assertTrue(((String) inspection.get("sourceCore")).contains("proxy#"));
             var token = lambda(module, "token"); var arguments = objects(token.get(1));
             assertEquals(1, arguments.size()); assertEquals(empty, arguments.getFirst().get("rep"));
             assertEquals(voidProof, object(token.get(3)).get("resultRep")); assertEquals("void", expression(token.get(2)).getFirst());
@@ -132,8 +133,8 @@ class ProxyVoidTest {
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 var module = module(stage); var proof = object(object(lambda(module, "pair").get(3)).get("resultRep"));
-                expression(proof.get("components")).set(0, empty);
-                assertThrows(RuntimeFault.class, () -> program(language, CoreModules.reachable(module, "tupleCase"), backend));
+                var components = new ArrayList<>(expression(proof.get("components"))); components.set(0, empty); proof.put("components", components);
+                assertThrows(RuntimeFault.class, () -> program(language, CoreModules.reachable(module, "main:ProxyVoidAudit.tupleCase"), backend));
             } finally { context.leave(); }
         }
     }

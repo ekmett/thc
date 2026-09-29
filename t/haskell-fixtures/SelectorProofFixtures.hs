@@ -6,7 +6,7 @@
 module SelectorProofFixtures (prepareSelectorProof) where
 
 import Control.Monad (forM, unless)
-import Data.Aeson (Value(..), eitherDecodeFileStrict, object, (.=))
+import Data.Aeson (Value(..), object, (.=))
 import Data.Aeson.Key (Key)
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString.Char8 as BSC
@@ -19,7 +19,7 @@ import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>), takeExtension)
 import THC.Compact.JSON (parseModuleWithoutDebug)
-import THC.Compact.Module (writeModule)
+import THC.Compact.Module (readModuleValue, writeModule)
 import THC.Compact.Inspect (inspectContainer)
 
 prepareSelectorProof :: FilePath -> IO ()
@@ -30,13 +30,13 @@ prepareSelectorProof root = do
   createDirectoryIfMissing True (root </> directory)
   artifacts <- forM ["pre", "post"] $ \stage -> do
     let core = directory </> stage </> "core"
-        path = core </> "SelectorProofAudit.json"
+        path = core </> "SelectorProofAudit.cbd"
     exported <- runLogged 300 root (directory </> "commands") (stage ++ "-export")
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> directory </> stage </> "ghc")]
       "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source])
-    value <- either die pure =<< eitherDecodeFileStrict (root </> path)
+    value <- BSC.readFile (root </> path) >>= either die pure . readModuleValue
     let bindings = array (field "bindings" value)
-        entry name = case filter ((== String name) . field "name") bindings of
+        entry name = case filter ((== String ("main:SelectorProofAudit." <> name)) . field "id") bindings of
           [binding] -> pure (field "expr" binding)
           _ -> die ("Missing genuine selector fixture entry " ++ show name)
     method <- entry "method"
@@ -55,7 +55,7 @@ prepareSelectorProof root = do
     checkImplicitCase implicitSupply
     -- The same distinction must survive the existing compact metadata codec.
     (facts, records) <- either die pure (parseModuleWithoutDebug value)
-    let compact = core </> "SelectorProofAudit.cbd"
+    let compact = directory </> stage </> "SelectorProofAudit.roundtrip.cbd"
     _ <- writeModule (root </> compact) facts records
     decoded <- BSC.readFile (root </> compact) >>= either die pure . inspectContainer
     let decodedBindings = array (field "bindings" decoded)

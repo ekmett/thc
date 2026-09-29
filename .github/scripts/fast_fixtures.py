@@ -66,7 +66,8 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/truffle-strings/oracle.json",
     "build/truffle-strings/manifest.json", "build/truffle-strings/native/oracle",
     "build/selector-proof/manifest.json", "build/selector-proof/api/predicate",
-    *[f"build/selector-proof/{stage}/core/SelectorProofAudit.json" for stage in ("pre", "post")],
+    *[f"build/selector-proof/{stage}/{name}.cbd" for stage in ("pre", "post")
+      for name in ("core/SelectorProofAudit", "SelectorProofAudit.roundtrip")],
     *[f"build/selector-proof/commands/{command}.{suffix}"
       for command in ("pre-export", "post-export", "predicate-build", "libdir", "predicate-run")
       for suffix in ("stdout", "stderr", "command.json")],
