@@ -13,6 +13,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.Value;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -31,9 +32,15 @@ class PreparedAdmissionCompatibilityTest {
                 list("var", "x", map("rep", proof)), map("resultRep", proof)))));
     }
     private static Context context(String hosting) {
-        return Context.newBuilder("thc").allowCreateThread(true).allowExperimentalOptions(true)
-            .option("thc.ThreadHosting", hosting).option("engine.BackgroundCompilation", "false")
-            .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build();
+        return context(hosting, null);
+    }
+    private static Context context(String hosting, Engine engine) {
+        var builder = Context.newBuilder("thc").allowCreateThread(true).allowExperimentalOptions(true)
+            .option("thc.ThreadHosting", hosting);
+        if (engine == null) builder.option("engine.BackgroundCompilation", "false")
+            .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw");
+        else builder.engine(engine);
+        return builder.build();
     }
     private static Language language() { return TruffleLanguage.LanguageReference.create(Language.class).get(null); }
     @SuppressWarnings("unchecked") private static List<OptimizedCallTarget> targets(Program.PreparedCode code) throws Exception {
@@ -68,8 +75,10 @@ class PreparedAdmissionCompatibilityTest {
     }
     @ParameterizedTest @ValueSource(strings = {"platform", "loom"})
     void coldPreparedCallerCapturesAdmissionWithoutRetiringTargetsOrReplayingEffects(String hosting) throws Exception {
-        try (var context = context(hosting)) {
-            context.initialize("thc"); context.enter();
+        try (var engine = Engine.newBuilder().allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false")
+                .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build();
+                var context = context(hosting, engine); var other = context(hosting, engine)) {
+            context.initialize("thc"); other.initialize("thc"); context.enter();
             try {
                 var owner = Language.currentState(); var language = language(); var threads = owner.getThreads();
                 var code = Program.prepareCode(language, activeModule(), List.of("parent"));
@@ -112,6 +121,12 @@ class PreparedAdmissionCompatibilityTest {
                                 new Object[]{0L, parent.environment, new Closure(null, 1, before), new Closure(null, 1, after)})));
                             code.requireInstalledCode();
                             assertTrue(GuestThreads.ordinaryPollEnabled(parent.target.getRootNode()));
+                            other.enter();
+                            try {
+                                var failure = assertThrows(RuntimeFault.class, () -> saved.continueWith(Unit.INSTANCE));
+                                assertTrue(failure.getMessage().contains("Prepared continuation belongs to another program context"),
+                                    failure::getMessage);
+                            } finally { other.leave(); }
                             saved.asyncRequest().acknowledge();
                             Object result = new RootNode(language) {
                                 @Child private Force force = new Force(new Metrics(false), true);
