@@ -667,6 +667,7 @@ literal (String kind) (String payload) = case kind of
   "double-bits" -> LitDoubleBits <$> boundedNumber
   "null-addr" | payload == "0" -> pure LitNullAddr
   "rubbish" -> LitRubbish <$> primRep (String payload)
+  "unsupported" -> pure (LitUnsupported (Text.encodeUtf8 payload))
   "function-addr" -> pure (LitFunctionAddr (Text.encodeUtf8 payload))
   "data-addr" -> pure (LitDataAddr (Text.encodeUtf8 payload))
   _ -> fail ("Unsupported Core literal: " ++ show kind)
