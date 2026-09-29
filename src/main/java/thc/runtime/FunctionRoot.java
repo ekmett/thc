@@ -458,7 +458,7 @@ public final class FunctionRoot extends GuestRoot {
                 else {
                     Object value = entry.getArguments().getObject(input, position);
                     Class<?> reference = i < argumentReferences.length ? argumentReferences[i] : null;
-                    FrameAccess.INSTANCE.write(frame, argumentSlots[i], reference == null ? value : requireReferenceCarrier(value, reference));
+                    FrameAccess.INSTANCE.write(frame, argumentSlots[i], reference == null || strictArguments[i] ? value : requireReferenceCarrier(value, reference));
                 }
             }
             if (captureLayout != null) {
@@ -556,6 +556,14 @@ public final class FunctionRoot extends GuestRoot {
         if (!enableDelimited) return executeBody(frame);
         try { return executeBody(frame); }
         catch (DelimitedCut cut) { throw cut.append(frame, new DelimitedRootStep(this)); }
+    }
+    /** Called only after a saved self transfer unwound its lexical scopes. */
+    Object resumeSelf(VirtualFrame frame) {
+        if (role != FunctionRootRole.FUNCTION) throw fault("Saved self transfer has no owning function");
+        Metrics invocation = invocationMetrics(frame);
+        if (invocation.getEnabled()) invocation.incrementSelfTailReentries();
+        if (handoff != null) handoff.initializeOrdinary(frame);
+        return executeCapturableBody(frame);
     }
     public Object resumeDelimited(VirtualFrame frame, ControlFlowException transfer, DelimitedActionSite site) {
         if (role == FunctionRootRole.PASS_THROUGH) throw transfer;
