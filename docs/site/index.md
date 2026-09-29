@@ -95,11 +95,23 @@ multi-package `cabal.project` path. Use `cabal run thc -- --help` for current
 options, `make test` for the test suite, and `make clean` to remove build products.
 `make distclean` also removes this checkout's Gradle caches.
 
-For installed libraries, THC needs more Core than a stock GHC installation
-usually retains. `make check-ghc-core` checks the selected compiler; the
-[GHC build guide](../ghc-core.md) supplies the Hadrian configuration and source
-build instructions. Project runs can request those complete installed libraries
-with `--installed-core required`.
+THC executes Core, GHC's intermediate representation, for your program and the
+Haskell libraries it calls. Standard GHC installations usually omit complete
+Core for bundled libraries such as `base` and `ghc-internal`. Building those
+libraries with
+[`-fwrite-if-simplified-core`](https://downloads.haskell.org/ghc/9.14.1/docs/users_guide/phases.html#ghc-flag-fwrite-if-simplified-core)
+retains every binding in their `.hi` interface files. The flag belongs on the
+library build; adding it only to your program cannot recover missing library
+Core.
+
+THC includes pinned sources from **GHC 9.14.1** and compiles a supported subset
+of its library modules itself. This default runs THC's small examples with a
+standard GHC 9.14.1 installation, without rebuilding GHC. For applications that
+need more library Core, build GHC's libraries with the flag above, then select
+them with `thc run TARGET --installed-core required`.
+
+`make check-ghc-core GHC=/path/to/ghc` checks for the retained Core. The
+[GHC build guide](../ghc-core.md) gives the build instructions.
 
 ## Runtime scope
 

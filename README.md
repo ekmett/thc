@@ -42,13 +42,25 @@ incremental. `make runtime` and `make haskell` build either part separately.
 `make` keeps Gradle's cache in `.gradle-user-home`; set `GRADLE_USER_HOME` to
 share a cache across checkouts.
 
-`make check-ghc-core GHC=/path/to/ghc` checks whether an installation carries
-complete Core for `ghc-internal`, `base`, and their package dependencies. The
-[compiler build guide](docs/ghc-core.md) includes a Hadrian settings file and
-source-build instructions. Project runs can select complete installed Core
-with `--installed-core required`; the default `pinned` provider remains a
-separate, explicit choice. Exporter API support is limited to the GHC version
-above.
+THC needs Core, GHC's intermediate representation, for both your program and
+the Haskell libraries it calls. Standard GHC installations usually omit the
+complete Core for their bundled libraries, including `base` and `ghc-internal`.
+Compiling those libraries with
+[`-fwrite-if-simplified-core`](https://downloads.haskell.org/ghc/9.14.1/docs/users_guide/phases.html#ghc-flag-fwrite-if-simplified-core)
+keeps every binding in their `.hi` interface files so THC can load it. The flag
+must be used when building the libraries; adding it only to your program
+cannot recover Core from libraries already installed without it.
+
+To get started with a standard **GHC 9.14.1** installation, THC includes pinned
+sources from that release and compiles a supported subset of its library
+modules itself. This default is enough for THC's small examples without
+rebuilding GHC; general applications need more library Core.
+
+For dependencies beyond that subset, build GHC's libraries with the flag above
+and select them with `thc run TARGET --installed-core required`.
+`make check-ghc-core GHC=/path/to/ghc` checks whether the installed libraries
+contain the needed Core. The [GHC build guide](docs/ghc-core.md) shows how to
+apply the flag when building GHC 9.14.1, the version THC currently supports.
 
 Use `make test` for the test suite and `make clean` to remove build products.
 `make test-modes` runs both handoff modes in separate JVMs from one shared build.
