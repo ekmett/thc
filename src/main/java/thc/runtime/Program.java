@@ -98,7 +98,9 @@ public final class Program implements ExecutableProgram {
                     boolean outlineCaseArms, boolean deferDefaultArm, boolean reusableCode, PreparedCode prepared, boolean nativeStartup) {
         if (prepared == null && Boolean.getBoolean("thc.requireCachedCode"))
             throw new UnsupportedCore("Runtime THC lowering is disabled; prepared code is required");
-        this.language = language; this.enableAsync = !reusableCode || enableAsync; this.outlineCaseArms = outlineCaseArms;
+        // Capture is a first-lowering capability, including reusable AOT code.
+        // The public option controls only ordinary poll eagerness.
+        this.language = language; this.enableAsync = true; this.outlineCaseArms = outlineCaseArms;
         eagerAsyncPolls = enableAsync;
         this.reusableCode = reusableCode;
         this.codeTargets = reusableCode && prepared == null ? new ArrayList<>() : List.of();
@@ -360,7 +362,6 @@ public final class Program implements ExecutableProgram {
         private Program newInstance(TruffleLanguage<?> language, boolean nativeStartup) {
             if (language != this.language || language != LANGUAGES.get(null))
                 throw new UnsupportedCore("Reusable AST instance requires its prepared and current language");
-            thc.Language.currentState().admitPreparedGuestCode();
             return new Program(language, module, false, false, false, true, this, nativeStartup);
         }
         /** Observe existing installation only: no binding demand, execution or compilation. */
@@ -610,6 +611,9 @@ public final class Program implements ExecutableProgram {
                 return proof.isVector() ? new VectorLocalRead(shape, slots) : new TupleLocalRead(shape, slots);
             }
             FrameSlotKind kind = FrameLayout.carrierKind(proof);
+            // Unknown proof still has an owned boxed carrier. Prepared code
+            // must not discover its frame kind from the first guest operand.
+            if (reusableCode && kind == FrameSlotKind.Illegal) kind = FrameSlotKind.Object;
             int slot = layout.bind("<async operand " + bindings.size() + ">", kind);
             temporaries.add(slot);
             bindings.add(new LocalBinding(slot, value, proof.isLong()));

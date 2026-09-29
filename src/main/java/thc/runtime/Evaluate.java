@@ -42,7 +42,10 @@ public final class Evaluate extends Expr {
         Object original;
         try {
             CoreRepresentation proof = value.getRepresentation();
-            if (proof.isInt()) original = value.executeRequiredInt(frame);
+            // A representation certificate is not a WHNF certificate. Cold
+            // prepared operands may still be thunks of the declared scalar.
+            if (!proof.getEvaluated()) original = value.execute(frame);
+            else if (proof.isInt()) original = value.executeRequiredInt(frame);
             else if (proof.isLong()) original = value.executeRequiredLong(frame);
             else if (proof.isFloat()) original = value.executeRequiredFloat(frame);
             else if (proof.isDouble()) original = value.executeRequiredDouble(frame);

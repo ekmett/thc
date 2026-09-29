@@ -562,8 +562,10 @@ public final class GuestThreads {
     }
     /** Only ordinary polls speculate. Calls and their capture handlers never do. */
     public static boolean ordinaryPollEnabled(Node node) {
-        return node == null || !(node.getRootNode() instanceof GuestRoot root) || root.getEagerAsyncPolls() ||
-            !Language.currentState(node).getSingleGuestOriginAssumption().isValid();
+        if (node == null || !(node.getRootNode() instanceof GuestRoot root) || root.getEagerAsyncPolls()) return true;
+        var owner = Language.currentState(node);
+        return root instanceof FunctionRoot function && function.usesRuntimeAsyncAdmission() ?
+            owner.isGuestConcurrencyAdmitted() : !owner.getSingleGuestOriginAssumption().isValid();
     }
     /** Self throwTo is synchronous even while the single-origin assumption is valid. */
     public static AsyncRequest pollMandatoryCurrent(Node node, boolean interruptible) {

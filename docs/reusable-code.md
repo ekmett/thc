@@ -60,15 +60,20 @@ Reusable boxed constructors accept exact scalar, tuple, sum and vector field
 proofs, with fresh per-load allocation ownership. Immutable static byte literals
 and admitted managed byte-array operations are available to pure code. Nonliteral
 strict globals cannot execute during preparation. Global aggregate storage and
-recursive or lifted aggregate lets retain their ordinary rejection. Bytecode,
-asynchronous delivery, IO, foreign calls, diagnostic execution and managed exports
-remain outside reusable admission.
+recursive or lifted aggregate lets retain their ordinary rejection. Bytecode and
+diagnostic execution remain outside reusable admission; selected IO, foreign and
+managed-export forms retain their existing explicit admission requirements.
 
-Instantiating prepared code requires the context's single guest admission origin
-assumption to remain valid. Once it contains prepared code, the context rejects
-guest fork/signal publication and a different-origin public entry before effects.
-Prepared code is not silently upgraded to ordinary adaptive continuations, nor
-allowed to invalidate strict cached code that has no interpreter fallback.
+Reusable AST roots are capture-capable from first lowering. AOT preparation
+declares materializable frames and polymorphic completion before any guest
+execution, preserving owned typed transport and unfinished caller operands.
+Default-off ordinary polls use the context's irreversible volatile guest-admission
+bit instead of an invalidatable assumption, so admitting a fork or another
+public caller does not retire prepared installed targets. Prepared instantiation
+also remains available after an ordinary origin transition. The transition still
+precedes guest effects, and nested nonresumable activations remain nonresumable.
+These contracts have JVM cold AOT controls; persisted Native Image cache execution
+requires separate pinned-provider verification, without interpreter fallback.
 
 The public host ABI accepts logical tuple arrays, tagged sum payloads, exact
 vector species and null State#/Void# values. The

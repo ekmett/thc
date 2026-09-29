@@ -93,7 +93,9 @@ public final class Language extends TruffleLanguage<Language.State> {
         private Thread firstThread;
         private final Assumption singleGuestOriginAssumption = Truffle.getRuntime().createAssumption("THC single guest admission origin");
         private Thread firstGuestOrigin;
-        private boolean preparedGuestCode;
+        // Prepared AOT targets cannot depend on invalidatable context assumptions:
+        // they read this irreversible runtime admission state instead.
+        private volatile boolean guestConcurrencyAdmitted;
         private final AtomicReference<FutureTask<SulongCbits>> nativeCbits;
         private final AtomicReference<FutureTask<LimbProvider>> nativeLimbs;
         public State(Env env, Language language) {
@@ -218,6 +220,7 @@ public final class Language extends TruffleLanguage<Language.State> {
         public void markMultithreaded() { singleThreadedAssumption.invalidate("A second guest thread entered the context"); }
 
         public Assumption getSingleGuestOriginAssumption() { return singleGuestOriginAssumption; }
+        public boolean isGuestConcurrencyAdmitted() { return guestConcurrencyAdmitted; }
         /** The public Context builder's creator is not exposed by Truffle. Pin the first
          * public guest admission, before any internal hosting changes its carrier. */
         @TruffleBoundary public synchronized void admitGuestOrigin() {
@@ -228,13 +231,8 @@ public final class Language extends TruffleLanguage<Language.State> {
         }
         /** Must precede child construction/publication or another origin's guest effects. */
         @TruffleBoundary public synchronized void admitGuestConcurrency() {
-            if (preparedGuestCode) throw new UnsupportedCore("Prepared synchronous code cannot admit another guest thread or admission origin");
+            guestConcurrencyAdmitted = true;
             singleGuestOriginAssumption.invalidate("Another guest thread or admission origin was admitted");
-        }
-        @TruffleBoundary public synchronized void admitPreparedGuestCode() {
-            if (!singleGuestOriginAssumption.isValid())
-                throw new UnsupportedCore("Prepared synchronous code requires a single guest admission origin");
-            preparedGuestCode = true;
         }
 
         @TruffleBoundary public LimbProvider limbs() {
@@ -456,7 +454,6 @@ public final class Language extends TruffleLanguage<Language.State> {
             // The saved factory owns declarations, never the preparation Context's
             // native functions, CAFs, bridge projectors or registration lifetimes.
             var owner = currentState(this);
-            owner.admitPreparedGuestCode();
             for (var link : code.getForeignLinks()) owner.cbits().declare(link);
             for (var link : code.getPackageScalarLinks()) owner.packageCbits.declare(link);
             var program = code.newInstanceForNativeStartup(language);

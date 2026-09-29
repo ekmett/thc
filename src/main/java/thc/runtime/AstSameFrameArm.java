@@ -129,6 +129,7 @@ final class AstSameFrameArm extends Expr implements ReplaceObserver {
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
         return targets == null ? body.executeTuple(frame, slots, offset) : invoke(frame, TUPLE, slots, offset);
     }
+    @Override public void prepareTuple(int[] slots, int offset) { body.prepareTuple(slots, offset); }
 
     /** Non-adopted reference, as with Truffle partial blocks. No frame or guest
      * arguments are retained and no control-flow exception is intercepted. */

@@ -45,13 +45,16 @@ from the physical Java entrant assumption, which Loom itself can invalidate.
 Generic thread construction and Truffle thread initialization do not admit guest
 concurrency. Other contexts retain independent assumptions.
 
-Prepared reusable AST code currently lacks these resumable activations. A context
-containing a prepared instance rejects another guest thread or admission origin
-before publication/entry; an already transitioned context rejects prepared
-instantiation. This also protects strict Native Image cached-code execution,
-which cannot silently fall back to interpretation. Ordinary runtime images retain
-their normal deoptimization path. Nested entries cannot upgrade an enclosing
-activation that actually lacks capture capability.
+Prepared reusable AST roots also retain capture from first lowering, including
+their declared materializable-frame and polymorphic-completion AOT contracts.
+Their default-off ordinary polls read an irreversible volatile admission bit,
+not the invalidatable origin assumption. Admission sets that bit before
+invalidating ordinary code or publishing guest effects, so prepared installed
+targets need not retire or fall back to interpretation. Sequential public caller
+changes and instantiation after a transition remain supported. Nested entries
+still cannot upgrade an enclosing activation that actually lacks capture
+capability. Persisted Native Image acceptance requires the pinned provider and
+is separate from JVM cold AOT verification.
 
 Self-delivery remains mandatory even while the assumption is valid, including
 under either masking mode, and also reaches live and saved delimited `catch#`

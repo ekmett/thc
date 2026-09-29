@@ -18,6 +18,7 @@ public final class AstOperands extends Expr {
         this.operands = operands; this.temporaries = temporaries; this.body = body;
         setRepresentation(body.getRepresentation());
     }
+    @Override public void prepareTuple(int[] slots, int offset) { body.prepareTuple(slots, offset); }
     @ExplodeLoop private void prepare(VirtualFrame frame, int start) {
         for (int index = start; index < operands.length; index++) {
             try { operands[index].write(frame); }

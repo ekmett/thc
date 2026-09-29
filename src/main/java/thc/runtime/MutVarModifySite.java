@@ -61,7 +61,10 @@ public final class MutVarModifySite {
         // Both primops return lifted values, not a speculative Long. Preserve
         // the force obligation while preparing the existing generic return.
         body.proven(new CoreRepresentation(CoreKind.OBJECT, false, true, List.of("BoxedRep (Just Lifted)")));
-        var root = new FunctionRoot(language, frame.build(), name, captures, captureSlots, new int[0], new int[0], body, null);
+        var root = new FunctionRoot(language, frame.build(), name, captures, captureSlots, new int[0], new int[0], body, null,
+            new CoreRepresentation[0], body.getRepresentation(), body.getCoreSourceLocation(), new boolean[0], null,
+            null, new int[0], null, true, new int[0][], false, FunctionRootRole.FUNCTION, false);
+        root.configureEagerAsyncPolls(false);
         root.configureInputProofs(List.of()); root.configureProgramSlot(program, identity);
         var target = root.getCallTarget(); targets.add(target); return target;
     }
