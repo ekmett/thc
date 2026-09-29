@@ -988,7 +988,9 @@ finishPackageNativeWithDependencies ownedProduct dependencyPaths publishedDataba
       pure (bridged,[object ["profile" .= (profile::String),
         "source" .= source,"sourceSha256" .= sha (T.encodeUtf8 (T.pack source)),
         "inputBitcodeSha256" .= inputHash,"definitions" .= [witnesses | (_,_,witnesses) <- bridges]]])
-    let trim input = command directory opt ["-passes=internalize,globaldce",
+    -- Publish ordinary LLVM operations rather than intrinsics normally lowered
+    -- by a machine backend (for example relative string-table loads).
+    let trim input = command directory opt ["-passes=pre-isel-intrinsic-lowering,internalize,globaldce",
           "-internalize-public-api-list=" ++ join "," (entries ++ public),input,"-o",final]
         unresolved = do
           output <- command directory nm ["--undefined-only","--format=posix",final]

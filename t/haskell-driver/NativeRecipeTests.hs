@@ -53,6 +53,8 @@ tests = TestLabel "actual native compiler receipts" $ TestList
         compiler <- maybe (fail "GHC is required") canonicalizePath =<< findExecutable ghc
         ar <- maybe "ar" id <$> lookupEnv "THC_AR"
         nm <- maybe "llvm-nm" id <$> lookupEnv "THC_LLVM_NM"
+        clang <- maybe "clang" id <$> lookupEnv "THC_CLANG"
+        opt <- maybe "opt" id <$> lookupEnv "THC_LLVM_OPT"
         let pieces = root </> "pieces"
             command program arguments = do
               (status,output,diagnostic) <- readProcessWithExitCode program arguments ""
@@ -161,6 +163,32 @@ tests = TestLabel "actual native compiler receipts" $ TestList
         assertBool "a declared peer exemption never hides another missing symbol" $ case failure of
           Left reason -> "unrelated_missing" `isInfixOf` show reason
           Right _ -> False
+        table <- prepare "nativestrings" [] (unlines
+          [ "const char *relative_name(unsigned index) {"
+          , "  static const char *const names[] = {\"alpha\",\"beta\",\"gamma\",\"delta\"};"
+          , "  return names[index & 3];"
+          , "}"
+          ])
+        [tablePiece] <- pure (nativeProductPieces table)
+        String tableBitcode <- field "bitcode" tablePiece
+        tableIR <- command opt ["-S","-passes=verify",Text.unpack tableBitcode,"-o","-"]
+        assertBool "actual optimized C string table emits a relative-load intrinsic"
+          ("call ptr @llvm.load.relative." `isInfixOf` tableIR)
+        let oracleSource = root </> "string-oracle.c"
+            originalOracle = root </> "string-original.exe"
+            loweredOracle = root </> "string-lowered.exe"
+            finalTable = root </> "linked/nativestrings/native/package.bc"
+        writeFile oracleSource (unlines ["#include <stdio.h>","extern const char *relative_name(unsigned);",
+          "int main(void){for(unsigned i=0;i<5;++i) puts(relative_name(i));return 0;}"])
+        _ <- command clang ["-O1","-fPIC",oracleSource,root </> "nativestrings.c","-o",originalOracle]
+        expected <- command originalOracle []
+        assertEqual "native string-table semantics" "alpha\nbeta\ngamma\ndelta\nalpha\n" expected
+        _ <- finish "nativestrings" table []
+        loweredIR <- command opt ["-S","-passes=verify",finalTable,"-o","-"]
+        assertBool "package publication lowers backend-only relative loads to ordinary LLVM"
+          (not ("llvm.load.relative." `isInfixOf` loweredIR))
+        _ <- command clang ["-O1","-fPIC",oracleSource,finalTable,"-o",loweredOracle]
+        assertEqual "standard intrinsic lowering preserves native string-table semantics" expected =<< command loweredOracle []
   , TestLabel "published native dependencies survive removed Cabal package DBs" $ TestCase $ withScratch $ \root -> do
       ghc <- maybe "ghc" id <$> lookupEnv "GHC"
       compiler <- maybe (fail "GHC is required") canonicalizePath =<< findExecutable ghc
