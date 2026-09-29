@@ -146,8 +146,9 @@ nativeLink decoder = do
   inputs <- getWord8 >>= \kind -> case kind of
     0 -> pure Missing
     1 -> pure Unknown
-    2 -> Known <$> nativeBuildInputs decoder False
-    3 -> Known <$> nativeBuildInputs decoder True
+    2 -> Known <$> nativeBuildInputs decoder False False
+    3 -> Known <$> nativeBuildInputs decoder True False
+    4 -> Known <$> nativeBuildInputs decoder True True
     _ -> fail "Invalid compact native build-input tag"
   (companion,dataSymbols,components) <- getWord8 >>= \kind -> case kind of
     0 -> pure (Missing,Missing,Nothing)
@@ -165,11 +166,23 @@ nativeComponent :: Decoder -> Get NativeComponent
 nativeComponent decoder = NativeComponent <$> linkPayload decoder <*> list decoder (string decoder)
   <*> list decoder (nativeComponent decoder) <*> present ((,) <$> string decoder <*> blob decoder)
 
-nativeBuildInputs :: Decoder -> Bool -> Get NativeBuildInputs
-nativeBuildInputs decoder extended = NativeBuildInputs <$> list decoder group <*> list decoder provider
-  <*> present (list decoder (nativeDependency decoder)) <*> list decoder library <*> strings <*> list decoder bridge
+nativeBuildInputs :: Decoder -> Bool -> Bool -> Get NativeBuildInputs
+nativeBuildInputs decoder extended current = do
+  units <- list decoder group
+  providers <- list decoder provider
+  dependencies <- if current
+    then ComponentBuildDependencies <$> present (list decoder dependencyRef) <*> pure Missing
+    else ArchiveBuildDependencies <$> present (list decoder (nativeDependency decoder False))
+  libraries <- list decoder library
+  unresolved <- strings
+  bridges <- list decoder bridge
+  completed <- case dependencies of
+    ComponentBuildDependencies records _ -> ComponentBuildDependencies records <$> present (nativeDependency decoder True)
+    _ -> pure dependencies
+  pure (NativeBuildInputs units providers completed libraries unresolved bridges)
   where
     strings = list decoder (string decoder)
+    dependencyRef = NativeDependencyRef <$> strings <*> string decoder <*> string decoder <*> string decoder
     group = getWord8 >>= \kind -> case kind of
       0 -> SingleCompile <$> compileInput decoder
       1 -> GroupCompile <$> list decoder (compileInput decoder)
@@ -187,8 +200,8 @@ compileInput decoder = CompileInput <$> string decoder <*> string decoder <*> li
   <*> present (string decoder) <*> string decoder <*> string decoder
   <*> list decoder ((,) <$> string decoder <*> string decoder)
 
-nativeDependency :: Decoder -> Get NativeDependency
-nativeDependency decoder = NativeDependency <$> string decoder <*> string decoder <*> sourceIdentity decoder
+nativeDependency :: Decoder -> Bool -> Get NativeDependency
+nativeDependency decoder current = NativeDependency <$> string decoder <*> string decoder <*> sourceIdentity decoder current
   <*> string decoder <*> string decoder <*> list decoder archive <*> list decoder productRecord
   where
     archive = ArchiveProduct <$> string decoder <*> string decoder
@@ -196,12 +209,15 @@ nativeDependency decoder = NativeDependency <$> string decoder <*> string decode
     productRecord = NativeProduct <$> (NativePiece <$> string decoder <*> string decoder <*> string decoder
       <*> string decoder <*> string decoder <*> compileInput decoder) <*> string decoder
 
-sourceIdentity :: Decoder -> Get SourceIdentity
-sourceIdentity decoder = SourceIdentity <$> optionalString <*> present (list decoder (string decoder))
+sourceIdentity :: Decoder -> Bool -> Get SourceIdentity
+sourceIdentity decoder current = SourceIdentity <$> optionalString <*> present (list decoder (string decoder))
   <*> optionalString <*> optionalString <*> optionalString <*> optionalString
   <*> present (list decoder ((,) <$> string decoder <*> boolean))
   <*> optionalString <*> optionalString <*> optionalString
-  where optionalString = present (string decoder)
+  <*> (if current then present location else pure Missing)
+  where
+    optionalString = present (string decoder)
+    location = NativeSource <$> string decoder <*> optionalString <*> present ((,) <$> string decoder <*> string decoder)
 
 nativeArchive :: Decoder -> Get NativeArchive
 nativeArchive decoder = NativeArchive <$> getUVar <*> string decoder <*> string decoder <*> string decoder

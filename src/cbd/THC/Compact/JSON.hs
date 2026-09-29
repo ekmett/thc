@@ -521,13 +521,21 @@ nativeComponent = withObject "declared native component" $ \fields -> do
 
 nativeBuildInputs :: Value -> Parser NativeBuildInputs
 nativeBuildInputs = withObject "native build inputs" $ \fields -> do
-  checked fields ["translationUnits","providers","dependencies","nativeLibraries","unresolved","argumentBridges"]
+  checked fields ["translationUnits","providers","dependencies","nativeLibraries","unresolved","argumentBridges","nativeProduct"]
+  dependencies <- if KM.member "nativeProduct" fields
+    then ComponentBuildDependencies <$> optional fields "dependencies" (array dependencyRef)
+      <*> optional fields "nativeProduct" (nativeDependency True)
+    else ArchiveBuildDependencies <$> optional fields "dependencies" (array (nativeDependency False))
   NativeBuildInputs <$> (fields .: "translationUnits" >>= array group) <*> (fields .: "providers" >>= array provider)
-    <*> optional fields "dependencies" (array nativeDependency) <*> (fields .: "nativeLibraries" >>= array library)
+    <*> pure dependencies <*> (fields .: "nativeLibraries" >>= array library)
     <*> (fields .: "unresolved" >>= array bytes) <*> (fields .: "argumentBridges" >>= array bridge)
   where
     group value@(Array _) = GroupCompile <$> array compileInput value
     group value = SingleCompile <$> compileInput value
+    dependencyRef = withObject "declared native component dependency" $ \fields -> do
+      checked fields ["declaredPath","unit","componentSha256","bitcodeSha256"]
+      NativeDependencyRef <$> (fields .: "declaredPath" >>= array bytes) <*> bytesAt fields "unit"
+        <*> bytesAt fields "componentSha256" <*> bytesAt fields "bitcodeSha256"
     provider = withObject "native source provider" $ \fields -> do
       checked fields ["provider","symbols","bitcode","bitcodeSha256","target","inputs"]
       NativeProvider <$> bytesAt fields "provider" <*> (fields .: "symbols" >>= array bytes)
@@ -552,10 +560,10 @@ compileInput = withObject "native compilation inputs" $ \fields -> do
     <*> optional fields "language" bytes <*> bytesAt fields "nativeTarget" <*> bytesAt fields "target"
     <*> (fields .: "files" >>= array (stringPair "path" "sha256"))
 
-nativeDependency :: Value -> Parser NativeDependency
-nativeDependency = withObject "resolved native dependency" $ \fields -> do
+nativeDependency :: Bool -> Value -> Parser NativeDependency
+nativeDependency current = withObject "resolved native dependency" $ \fields -> do
   checked fields ["profile","unit","sourceIdentity","registration","registrationSha256","archives","translationUnits"]
-  NativeDependency <$> bytesAt fields "profile" <*> bytesAt fields "unit" <*> (fields .: "sourceIdentity" >>= sourceIdentity)
+  NativeDependency <$> bytesAt fields "profile" <*> bytesAt fields "unit" <*> (fields .: "sourceIdentity" >>= sourceIdentity current)
     <*> bytesAt fields "registration" <*> bytesAt fields "registrationSha256"
     <*> (fields .: "archives" >>= array archive) <*> (fields .: "translationUnits" >>= array productRecord)
   where
@@ -571,15 +579,24 @@ nativeDependency = withObject "resolved native dependency" $ \fields -> do
       NativePiece <$> bytesAt fields "root" <*> bytesAt fields "object" <*> bytesAt fields "objectSha256"
         <*> bytesAt fields "bitcode" <*> bytesAt fields "target" <*> (fields .: "inputs" >>= compileInput)
 
-sourceIdentity :: Value -> Parser SourceIdentity
-sourceIdentity = withObject "resolved native source identity" $ \fields -> do
-  checked fields ["id","depends","type","style","pkg-name","pkg-version","flags","component-name","pkg-src-sha256","pkg-cabal-sha256"]
+sourceIdentity :: Bool -> Value -> Parser SourceIdentity
+sourceIdentity current = withObject "resolved native source identity" $ \fields -> do
+  checked fields (["id","depends","type","style","pkg-name","pkg-version","flags","component-name","pkg-src-sha256","pkg-cabal-sha256"] ++ ["pkg-src" | current])
   SourceIdentity <$> optional fields "id" bytes <*> optional fields "depends" (array bytes)
     <*> optional fields "type" bytes <*> optional fields "style" bytes <*> optional fields "pkg-name" bytes
     <*> optional fields "pkg-version" bytes <*> optional fields "flags" flags
     <*> optional fields "component-name" bytes <*> optional fields "pkg-src-sha256" bytes <*> optional fields "pkg-cabal-sha256" bytes
+    <*> optional fields "pkg-src" nativeSource
   where flags = withObject "Cabal configuration flags" $ \values ->
           mapM (\(key,value) -> (,) (Text.encodeUtf8 (Key.toText key)) <$> parseJSON value) (KM.toAscList values)
+
+nativeSource :: Value -> Parser NativeSource
+nativeSource = withObject "Cabal native source location" $ \fields -> do
+  checked fields ["type","path","repo"]
+  NativeSource <$> bytesAt fields "type" <*> optional fields "path" bytes
+    <*> optional fields "repo" (withObject "Cabal source repository" $ \repo -> do
+      checked repo ["type","uri"]
+      (,) <$> bytesAt repo "type" <*> bytesAt repo "uri")
 
 nativeArchive :: Value -> Parser NativeArchive
 nativeArchive = withObject "unlinked native archive" $ \fields -> do

@@ -89,7 +89,12 @@ data NativeLink = NativeLink !LinkPayload ![NativeABI] !(Presence NativeBuildInp
 data NativeComponent = NativeComponent !LinkPayload ![BS.ByteString] ![NativeComponent]
   !(Presence (BS.ByteString,BS.ByteString)) deriving (Eq, Show)
 data NativeBuildInputs = NativeBuildInputs ![CompileGroup] ![NativeProvider]
-  !(Presence [NativeDependency]) ![NativeLibrary] ![BS.ByteString] ![ArgumentBridge]
+  !NativeBuildDependencies ![NativeLibrary] ![BS.ByteString] ![ArgumentBridge]
+  deriving (Eq, Show)
+data NativeBuildDependencies = ArchiveBuildDependencies !(Presence [NativeDependency])
+  | ComponentBuildDependencies !(Presence [NativeDependencyRef]) !(Presence NativeDependency)
+  deriving (Eq, Show)
+data NativeDependencyRef = NativeDependencyRef ![BS.ByteString] !BS.ByteString !BS.ByteString !BS.ByteString
   deriving (Eq, Show)
 data CompileGroup = SingleCompile !CompileInput | GroupCompile ![CompileInput] deriving (Eq, Show)
 data CompileInput = CompileInput !BS.ByteString !BS.ByteString ![BS.ByteString]
@@ -107,7 +112,9 @@ data NativeDependency = NativeDependency !BS.ByteString !BS.ByteString !SourceId
 data SourceIdentity = SourceIdentity !(Presence BS.ByteString) !(Presence [BS.ByteString])
   !(Presence BS.ByteString) !(Presence BS.ByteString) !(Presence BS.ByteString)
   !(Presence BS.ByteString) !(Presence [(BS.ByteString,Bool)]) !(Presence BS.ByteString)
-  !(Presence BS.ByteString) !(Presence BS.ByteString) deriving (Eq, Show)
+  !(Presence BS.ByteString) !(Presence BS.ByteString) !(Presence NativeSource) deriving (Eq, Show)
+data NativeSource = NativeSource !BS.ByteString !(Presence BS.ByteString)
+  !(Presence (BS.ByteString,BS.ByteString)) deriving (Eq, Show)
 data ArchiveProduct = ArchiveProduct !BS.ByteString !BS.ByteString ![(BS.ByteString,BS.ByteString)] deriving (Eq, Show)
 data NativeProduct = NativeProduct !NativePiece !BS.ByteString deriving (Eq, Show)
 data NativePiece = NativePiece !BS.ByteString !BS.ByteString !BS.ByteString

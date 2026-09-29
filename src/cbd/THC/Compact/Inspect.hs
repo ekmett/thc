@@ -343,8 +343,13 @@ nativeBuildInputs :: NativeBuildInputs -> Value
 nativeBuildInputs (NativeBuildInputs units providers dependencies libraries unresolved bridges) = object $
   ["translationUnits" .= arr group units,"providers" .= arr provider providers,
    "nativeLibraries" .= arr library libraries,"unresolved" .= arr str unresolved,"argumentBridges" .= arr bridge bridges]
-  ++ p "dependencies" (arr nativeDependency) dependencies
+  ++ case dependencies of
+    ArchiveBuildDependencies records -> p "dependencies" (arr nativeDependency) records
+    ComponentBuildDependencies records productRecord ->
+      p "dependencies" (arr dependencyRef) records ++ p "nativeProduct" nativeDependency productRecord
   where
+    dependencyRef (NativeDependencyRef path unit component bitcode) = object
+      ["declaredPath" .= arr str path,"unit" .= str unit,"componentSha256" .= str component,"bitcodeSha256" .= str bitcode]
     group (SingleCompile input) = compileInput input
     group (GroupCompile inputs) = arr compileInput inputs
     provider (NativeProvider name symbols path digest target input) = object
@@ -378,11 +383,16 @@ nativeDependency (NativeDependency profile unit source registrationText digest a
          "bitcode" .= str bitcode,"target" .= str target,"inputs" .= compileInput input],"bitcodeSha256" .= str bitcodeSha]
 
 sourceIdentity :: SourceIdentity -> Value
-sourceIdentity (SourceIdentity unit depends kind style name version flags component sourceSha cabalSha) = object $
+sourceIdentity (SourceIdentity unit depends kind style name version flags component sourceSha cabalSha source) = object $
   p "id" str unit ++ p "depends" (arr str) depends ++ p "type" str kind ++ p "style" str style
   ++ p "pkg-name" str name ++ p "pkg-version" str version
   ++ p "flags" (object . map (\(key,value) -> Key.fromText (Text.decodeUtf8 key) .= value)) flags
   ++ p "component-name" str component ++ p "pkg-src-sha256" str sourceSha ++ p "pkg-cabal-sha256" str cabalSha
+  ++ p "pkg-src" nativeSource source
+
+nativeSource :: NativeSource -> Value
+nativeSource (NativeSource kind path repo) = object $ ["type" .= str kind] ++ p "path" str path
+  ++ p "repo" (\(scheme,uri) -> object ["type" .= str scheme,"uri" .= str uri]) repo
 
 nativeArchive :: NativeArchive -> Value
 nativeArchive (NativeArchive schema profile execution unit moduleName unsupported reason unresolved artifact conflicts) = object $
