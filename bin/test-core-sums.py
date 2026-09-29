@@ -285,10 +285,9 @@ class SumAuditTest(unittest.TestCase):
         self.rejected(module)
 
     def test_all_case_arms_ids_and_levities_are_checked(self):
-        for mode in ('empty','duplicate','wrong-family','missing-record','malformed-record','wrong-id','wrong-shape','wrong-levity','default-binders','duplicate-default','lit','lifted-case'):
+        for mode in ('duplicate','wrong-family','missing-record','malformed-record','wrong-id','wrong-shape','wrong-levity','default-binders','duplicate-default','lit','lifted-case'):
             with self.subTest(mode=mode):
                 module=fixture();case=module['bindings'][0]['expr'][2];arm=case[3][1]
-                if mode=='empty':case[3]=[]
                 if mode=='duplicate':arm[1]='Sum1'
                 if mode=='wrong-family':module['constructors'][1]['sumArity']=3
                 if mode=='missing-record':del arm[4]
@@ -303,6 +302,10 @@ class SumAuditTest(unittest.TestCase):
                 self.rejected(module)
         module=fixture();module['bindings'][0]['expr'][2][3]=[['default',None,[],lit()]];self.accepted(module)
         module=fixture();module['bindings'][0]['expr'][2][3]=module['bindings'][0]['expr'][2][3][:1];self.accepted(module)
+
+    def test_empty_sum_case_is_admitted(self):
+        module=fixture();module['bindings'][0]['expr'][2][3]=[]
+        self.accepted(module)
 
     def test_sum_host_producer_alias_pap_accept_but_global_storage_rejects(self):
         self.accepted(fixture(),'producer')

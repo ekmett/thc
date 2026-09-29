@@ -961,15 +961,18 @@ public final class BytecodeProgram implements ExecutableProgram {
         // The pinned API has no structured encoding reason. Match its exact
         // allocation path, not a message shared by argument/constant encodings.
         var trace = failure.getStackTrace();
-        return trace.length >= 4
+        // Native Image can omit the exception factory, but not the identifying
+        // allocator sequence. Do not search past an unrecognized leading frame.
+        int first = trace.length > 0
                 && trace[0].getClassName().equals(BytecodeEncodingException.class.getName())
-                && trace[0].getMethodName().equals("create")
-                && trace[1].getClassName().equals("thc.runtime.BytecodeRootGen$Builder")
-                && trace[1].getMethodName().equals("safeCastUnsignedShort")
-                && trace[2].getClassName().equals("thc.runtime.BytecodeRootGen$Builder$RootStackElement")
-                && trace[2].getMethodName().equals("allocateBytecodeLocal")
-                && trace[3].getClassName().equals("thc.runtime.BytecodeRootGen$Builder")
-                && trace[3].getMethodName().equals("createLocal");
+                && trace[0].getMethodName().equals("create") ? 1 : 0;
+        return trace.length >= first + 3
+                && trace[first].getClassName().equals("thc.runtime.BytecodeRootGen$Builder")
+                && trace[first].getMethodName().equals("safeCastUnsignedShort")
+                && trace[first + 1].getClassName().equals("thc.runtime.BytecodeRootGen$Builder$RootStackElement")
+                && trace[first + 1].getMethodName().equals("allocateBytecodeLocal")
+                && trace[first + 2].getClassName().equals("thc.runtime.BytecodeRootGen$Builder")
+                && trace[first + 2].getMethodName().equals("createLocal");
     }
 
     private RootCallTarget buildEncoded(String label, FunctionContext context, Expression body, boolean forceResult) {
@@ -3985,7 +3988,41 @@ public final class BytecodeProgram implements ExecutableProgram {
                 }
             }
             region.compilingIndex = i;
-            var body = compile(definition.getBody(), bodyScope.withSource(sources.binding(definition.getBinding(), scope.source)), tail);
+            bodyScope = bodyScope.withSource(sources.binding(definition.getBinding(), scope.source));
+            var context = scope.function;
+            boolean outlined = !recursive && !context.preparingCaseRegion
+                    && context.caseRegions.size() < BytecodeCaseRegion.MAX_REGIONS
+                    && joinRegionWork(definition.getBody(), 64) >= 64
+                    && CoreFreeVariables.coreFreeVariables(definition.getBody()).stream().noneMatch(bodyScope.joins::containsKey);
+            // Preserve normal case preparation first: an optional whole-body
+            // side can itself exceed local capacity. Existing nested plans take
+            // precedence; never wrap one in another region in this activation.
+            int regionMark = context.caseRegions.size();
+            Expression body = compile(definition.getBody(), bodyScope, tail);
+            if (outlined && context.caseRegions.size() == regionMark) {
+                context.preparingCaseRegion = true;
+                try {
+                    // The existing join transfer has already bound and demanded
+                    // its arguments. Capture those exact locals, not a new call
+                    // to the join or a restart of an already-saved activation.
+                    int rootMark = roots.size(), joinMark = localJoinCount;
+                    try {
+                        var side = function("join body " + definition.getId(), List.of(), definition.getBody(), bodyScope,
+                                body.proof(), new boolean[0], tail, true, false);
+                        if (context.caseEmission == null) context.caseEmission = new CaseRegionEmission();
+                        int index = context.caseRegions.size();
+                        context.caseRegions.add(new BytecodeCaseRegion(side.target, side.captureLayout, tail));
+                        body = preparedRegion(body, List.of(side), bodyScope, tail, index,
+                                new ProvenExpression(e -> e.builder.emitLoadConstant(thc.runtime.Unit.INSTANCE), UNKNOWN));
+                    } catch (BytecodeEncodingException failure) {
+                        if (!localIndexOverflow(failure)) throw failure;
+                        roots.subList(rootMark, roots.size()).clear();
+                        localJoinCount = joinMark;
+                    }
+                } finally {
+                    context.preparingCaseRegion = false;
+                }
+            }
             var proven = new ProvenExpression(body, body.proof().refine(evaluatedProof(definition.getResult(), false)));
             bodies.add(proven); region.owner.bodies.set(targets.get(i).selectorIndex, proven);
         }
