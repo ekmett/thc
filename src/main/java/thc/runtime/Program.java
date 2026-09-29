@@ -217,10 +217,11 @@ public final class Program implements ExecutableProgram {
         Map<String, CodeValue> values = new LinkedHashMap<>();
         ArrayDeque<String> pending = new ArrayDeque<>(entries);
         while (!pending.isEmpty()) {
-            String id = (String) builder.bindings.get(builder.bindingIndex(pending.removeFirst())).get("id");
+            Map<String,Object> binding = builder.bindings.get(builder.bindingIndex(pending.removeFirst()));
+            String id = (String) binding.get("id");
             if (values.containsKey(id)) continue;
             Object value = builder.entryValue(id);
-            values.put(id, CodeValue.from(value, builder));
+            values.put(id, CodeValue.from(value, builder, (List<?>) binding.get("expr")));
             pending.addAll(builder.codeDependencies);
             builder.codeDependencies.clear();
         }
@@ -260,7 +261,7 @@ public final class Program implements ExecutableProgram {
         }
     }
     private record CodeValue(RootCallTarget target, CaptureLayout captures, int arity, Object literal, int constructorIndex) {
-        static CodeValue from(Object value, Program builder) {
+        static CodeValue from(Object value, Program builder, List<?> expression) {
             if (value instanceof Closure closure && closure.suppliedCount == 0 && closure.environment != null &&
                     closure.environment.getLayout().getStorageSize() == 0)
                 return new CodeValue(closure.target, closure.environment.getLayout(), closure.arity, null, -1);
@@ -269,11 +270,16 @@ public final class Program implements ExecutableProgram {
                 return new CodeValue(thunk.getTarget(), thunk.getEnvironment().getLayout(), -1, null, -1);
             if (value instanceof Integer || value instanceof Long || value instanceof Float || value instanceof Double || value == Unit.INSTANCE)
                 return new CodeValue(null, null, 0, value, -1);
+            // Only the actual static-byte literal owns context-free immutable
+            // storage. Other Addr# values may carry native or context authority.
+            if (value instanceof ManagedAddress && expression.size() >= 3 &&
+                    expression.getFirst().equals("lit") && expression.get(1).equals("string-bytes"))
+                return new CodeValue(null, null, 0, value, -1);
             // Store an immutable constructor index, never the preparation load's
             // nullary value or its allocation key/cache.
             if (value instanceof DataValue data && data.getLayout().getArity() == 0 && data.getLayout().reusableStorage() != null)
                 return new CodeValue(null, null, 0, null, required(builder.constructorIndices, data.getLayout().getId()));
-            throw new UnsupportedCore("Reusable AST binding requires closed code, nullary data or a numeric scalar literal");
+            throw new UnsupportedCore("Reusable AST binding requires closed code, nullary data or an admitted literal");
         }
         Object instantiate(Program instance) {
             if (target == null) return constructorIndex >= 0 ? instance.constructorLayout(constructorIndex).allocate() : literal;
@@ -288,7 +294,7 @@ public final class Program implements ExecutableProgram {
             case "var", "void" -> { }
             case "con" -> { }
             case "lit" -> {
-                if (!reusableLiteral((String) expression.get(1))) throw new UnsupportedCore("Reusable AST literal is not a numeric scalar");
+                if (!reusableLiteral((String) expression.get(1))) throw new UnsupportedCore("Reusable AST literal is not admitted");
             }
             case "lam" -> {
                 for (Map<String, Object> argument : (List<Map<String, Object>>) expression.get(1)) {
@@ -303,12 +309,14 @@ public final class Program implements ExecutableProgram {
                 if ("prim".equals(function.getFirst())) {
                     String name = (String) function.get(1);
                     if (Primitive.arity(name) < 0 && NarrowScalarOp.named(name) == null && !CoreVectors.operations.contains(name) && !Set.of(
+                            "plusAddr#", "indexCharOffAddr#", "newByteArray#", "writeWord8Array#", "indexWord8Array#",
+                            "sizeofByteArray#", "unsafeFreezeByteArray#", "copyByteArray#",
                             "plusFloat#", "minusFloat#", "timesFloat#", "divideFloat#", "negateFloat#",
                             "+##", "-##", "*##", "/##", "negateDouble#",
                             "eqFloat#", "neFloat#", "ltFloat#", "leFloat#", "gtFloat#", "geFloat#",
                             "==##", "/=##", "<##", "<=##", ">##", ">=##",
                             "int2Float#", "int2Double#", "float2Int#", "double2Int#", "float2Double#", "double2Float#").contains(name))
-                        throw new UnsupportedCore("Reusable AST primitive is outside the admitted arithmetic family");
+                        throw new UnsupportedCore("Reusable AST primitive is outside the admitted pure families");
                 } else requireReusableBody(function);
                 for (List<Object> argument : (List<List<Object>>) expression.get(2)) requireReusableBody(argument);
             }
@@ -353,7 +361,7 @@ public final class Program implements ExecutableProgram {
     private static boolean reusableLiteral(String kind) {
         return switch (kind) {
             case "int", "word", "char", "int8", "word8", "int16", "word16", "int32", "word32",
-                 "int64", "word64", "float", "double" -> true;
+                 "int64", "word64", "float", "double", "string-bytes" -> true;
             default -> false;
         };
     }

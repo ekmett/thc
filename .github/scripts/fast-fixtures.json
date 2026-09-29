@@ -13,6 +13,7 @@
     "thc.ReusableProgramTest",
     "thc.ReusableHigherOrderTest",
     "thc.ReusableHeapTest",
+    "thc.ReusableBytesTest",
     "thc.runtime.CapturedProgramInstanceTest",
     "thc.PackageFinalizersTest",
     "thc.runtime.PackageFinalizerTest",
