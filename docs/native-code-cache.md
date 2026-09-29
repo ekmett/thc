@@ -33,6 +33,15 @@ falling back to runtime lowering. Nonliteral strict globals remain rejected;
 global aggregate storage and recursive/lifted aggregate lets retain their ordinary
 limits. Bytecode, async delivery, IO and FFI remain outside this workflow.
 
+Immutable `string-bytes` literals, inline or top-level, retain their original
+bytes and terminating NUL through the existing managed address representation.
+Only that literal origin may be persisted, not arbitrary native/context addresses.
+The admitted byte operations are `plusAddr#`, `indexCharOffAddr#`, `newByteArray#`,
+`writeWord8Array#`, `indexWord8Array#`, `sizeofByteArray#`, `unsafeFreezeByteArray#`
+and `copyByteArray#`. Guest allocations and shared byte-array CAFs remain fresh
+per load; unsafe freezing keeps its ordinary aliasing contract. This covers the
+selected pure ShortByteString example below, not general Text, IO or FFI.
+
 The CLI accepts numeric arguments and results only. Reusable AST code and the
 public host ABI support tuple/sum/vector/unit transport; the CLI's parser and
 printer have not acquired those representations. Selected typed AST code can be
@@ -220,6 +229,31 @@ bin/native-cache run build/heap.cache 6 -7 1
 The count must be nonnegative. Constructor fields, partial-application prefixes
 and recursive cells belong to each load, not to the persisted code. This example
 uses only numeric public arguments; it does not add a typed-host cache codec.
+
+`src/examples/THC/CachedBytes.hs` uses the original GHC CString decoders and
+installed ShortByteString `pack`, `take`/`drop` and `unpack`, including embedded
+NULs, high bytes, UTF-8 and a shared byte-array CAF. Export its installed-interface
+closure and supply the two original boot modules it references:
+
+```sh
+THC_CORE_OUT="$PWD/build/cached-bytes-core" \
+  bin/export-core.sh -fplugin-opt=THC.Plugin:post-tidy \
+  -fplugin-opt=THC.Plugin:unit-qualified -fplugin-opt=THC.Plugin:closure=calculate \
+  src/examples/THC/CachedBytes.hs
+bin/export-boot.py --frontier cstring --build-dir build/cached-bytes-cstring
+bin/export-boot.py --frontier lists --build-dir build/cached-bytes-lists
+bin/native-cache store build/bytes.cache \
+  build/cached-bytes-core/units/u-main/THC.CachedBytes.json,build/cached-bytes-core/units/u-dependency-closure/THC.InterfaceClosure.json,build/cached-bytes-cstring/core/GHC.Internal.CString.json,build/cached-bytes-lists/core/GHC.Internal.List.json \
+  main:THC.CachedBytes.calculate
+bin/native-cache run build/bytes.cache 5 3 1
+# 767725
+bin/native-cache run build/bytes.cache 6 2 4
+# 172804058273
+```
+
+Arguments are a dynamic seed, slice count and decoder/slice selector; the result
+is a numeric checksum. Byte storage is allocated only when guest code runs,
+never as a preparation or training step.
 
 `src/examples/THC/CachedTyped.hs` provides a numeric `calculate count seed selector`
 entry that composes ordinary tuple/sum/vector/unit calls, a typed local join,
