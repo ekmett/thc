@@ -30,8 +30,10 @@ class TextCbitsTest {
     }
     private final File root = new File(System.getProperty("thc.projectRoot"));
     private final File directory = new File(root, "build/text-cbits");
+    private Map<String, Object> cbd(String name) throws Exception { return thc.CoreCbdFixtures.read(new File(directory, name).toPath()); }
+    private static String entryId(String name) { return "main:TextCbitsAudit." + name; }
     private Map<String, Object> json(String name) throws Exception { return object(Json.parse(Files.readString(new File(directory, name).toPath()))); }
-    private Map<String, Object> module(String stage) throws Exception { return json(stage + "-core/TextCbitsAudit.json"); }
+    private Map<String, Object> module(String stage) throws Exception { return cbd(stage + "-core/TextCbitsAudit.cbd"); }
     private record Row(String name, byte[] bytes, long offset, long length, long count, String result) {}
     private List<Row> rows() throws Exception {
         var inputs = Files.readAllLines(new File(directory, "inputs.tsv").toPath()); var lines = Files.readAllLines(new File(directory, "oracle.tsv").toPath());
@@ -80,8 +82,8 @@ class TextCbitsTest {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 for (var group : rows.entrySet()) {
                     var name = group.getKey(); var corpus = group.getValue(); var entryName = switch (name) { case "memchr" -> "textMemchr"; case "reverse" -> "textReverse"; default -> "textMeasure"; };
-                    var source = with(CoreModules.reachable(module(stage), entryName), "instrument", true); var program = program(language, source, backend);
-                    var entry = program.entryValue(entryName); var host = program.hostEntryTarget(name.equals("reverse") ? 3 : 4);
+                    var source = with(CoreModules.reachable(module(stage), entryId(entryName)), "instrument", true); var program = program(language, source, backend);
+                    var entry = program.entryValue(entryId(entryName)); var host = program.hostEntryTarget(name.equals("reverse") ? 3 : 4);
                     var targets = objects(source.get("bindings")).stream().map(binding -> program.entryTarget((String) binding.get("id"))).toList();
                     CheckedConsumer<Row> call = row -> {
                         var input = ManagedAllocation.immutableGuest(row.bytes, 8);
@@ -140,7 +142,7 @@ class TextCbitsTest {
         for (var backend : list("ast", "bytecode")) for (var name : list("textMeasure", "textReverse")) for (var variant : list("arity", "array", "result")) try (var context = context()) {
             context.initialize("thc"); context.enter();
             try {
-                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var source = CoreModules.reachable(module("post"), name);
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var source = CoreModules.reachable(module("post"), entryId(name));
                 var apps = foreignApps(source); assertEquals(1, apps.size()); var call = object(object(apps.getFirst().get(6)).get("foreignCall"));
                 switch (variant) {
                     case "arity" -> call.put("suppliedArity", 4L);

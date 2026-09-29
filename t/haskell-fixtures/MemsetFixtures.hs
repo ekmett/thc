@@ -58,7 +58,7 @@ prepareMemset root = do
   writeJson (root </> oracle) (toJSON (map rowJSON rows))
   stages <- forM ["pre","post"] $ \stage -> do
     let core = directory </> stage </> "core"
-        modules = [core </> "OriginalMemsetAudit.json",core </> "THC.InterfaceClosure.json"]
+        modules = [core </> "OriginalMemsetAudit.cbd",core </> "THC.InterfaceClosure.cbd"]
         options = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
           ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries]
     exported <- execute (stage ++ "-export")
@@ -67,7 +67,7 @@ prepareMemset root = do
     audits <- forM entries $ \entry -> do
       let path = directory </> stage </> entry ++ ".audit.json"
       command <- execute (stage ++ "-audit-" ++ entry) [] "python3"
-        (["bin/audit-core.py","--entry",entry,"--output",path] ++ modules)
+        (["bin/audit-core.py","--entry", "main:OriginalMemsetAudit." ++ entry,"--output",path] ++ modules)
       report <- either die pure . eitherDecodeStrict' =<< BS.readFile (root </> path)
       case report of
         Object fields | KeyMap.lookup "accepted" fields == Just (Bool True) -> pure ()

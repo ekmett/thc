@@ -91,7 +91,7 @@ prepareOriginalStdioClose root = do
   exports <- forM ["pre", "post"] $ \stage -> do
     let stageDir = directory </> stage
         core = stageDir </> "core"
-        modules = [core </> "OriginalStdioCloseAudit.json", core </> "THC.InterfaceClosure.json"]
+        modules = [core </> "OriginalStdioCloseAudit.cbd", core </> "THC.InterfaceClosure.cbd"]
         postTidy = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"]
         roots = ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries]
     exported <- execute (stage ++ "-export")
@@ -104,7 +104,7 @@ prepareOriginalStdioClose root = do
     audits <- forM entries $ \entry -> do
       let path = stageDir </> entry ++ ".audit.json"
       audited <- execute (stage ++ "-audit-" ++ entry) [] "python3"
-        (["bin/audit-core.py", "--entry", entry, "--output", path] ++ modules)
+        (["bin/audit-core.py", "--entry", "main:OriginalStdioCloseAudit." ++ entry, "--output", path] ++ modules)
       pure (entry, path, audited)
     pure (stage, object ["modules" .= modules], Map.fromList [(entry, path) | (entry, path, _) <- audits],
           exported : [command | (_, _, command) <- audits], modules ++ [path | (_, path, _) <- audits])

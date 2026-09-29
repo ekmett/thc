@@ -111,7 +111,7 @@ prepareOriginalStdio root options = do
   exports <- if nativeOnly then pure [] else forM ["pre","post"] $ \stage -> do
     let stageDir = directory </> stage
         core = stageDir </> "core"
-        modules = [core </> "OriginalStdioAudit.json",core </> "THC.InterfaceClosure.json"]
+        modules = [core </> "OriginalStdioAudit.cbd",core </> "THC.InterfaceClosure.cbd"]
         postTidy = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"]
         roots = ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries]
     exported <- execute (stage ++ "-export")
@@ -123,7 +123,7 @@ prepareOriginalStdio root options = do
     audits <- if not requireSupported then pure [] else forM entries $ \entry -> do
       let path = stageDir </> entry ++ ".audit.json"
       command <- execute (stage ++ "-audit-" ++ entry) [] "python3"
-        (["bin/audit-core.py","--entry",entry,"--output",path] ++ modules)
+        (["bin/audit-core.py","--entry", "main:OriginalStdioAudit." ++ entry,"--output",path] ++ modules)
       pure (entry,path,command)
     pure (stage,object ["modules" .= modules],Map.fromList [(entry,path) | (entry,path,_) <- audits],
           exported : [command | (_,_,command) <- audits],modules ++ [path | (_,path,_) <- audits])
@@ -211,7 +211,7 @@ prepareOriginalStdioRead root = do
   exports <- forM ["pre","post"] $ \stage -> do
     let stageDir = dir </> stage
         core = stageDir </> "core"
-        modules = [core </> "OriginalStdioReadAudit.json",core </> "THC.InterfaceClosure.json"]
+        modules = [core </> "OriginalStdioReadAudit.cbd",core </> "THC.InterfaceClosure.cbd"]
         postTidy = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"]
         roots = ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- readEntries]
     exported <- execute (stage ++ "-export")
@@ -224,7 +224,7 @@ prepareOriginalStdioRead root = do
     audits <- forM readEntries $ \entry -> do
       let path = stageDir </> entry ++ ".audit.json"
       command <- execute (stage ++ "-audit-" ++ entry) [] "python3"
-        (["bin/audit-core.py","--entry",entry,"--output",path] ++ modules)
+        (["bin/audit-core.py","--entry", "main:OriginalStdioReadAudit." ++ entry,"--output",path] ++ modules)
       pure (entry,path,command)
     pure (stage,modules,Map.fromList [(entry,path) | (entry,path,_) <- audits],
           exported : [command | (_,_,command) <- audits],
@@ -313,7 +313,7 @@ prepareNativeFcntl root = do
   writeJson (root </> oracle) $ object ["constants" .= constants, "rows" .= rows, "invalid" .= invalid]
   exports <- forM ["pre", "post"] $ \stage -> do
     let core = output </> stage </> "core"
-        modules = [core </> "OriginalFcntlAudit.json", core </> "THC.InterfaceClosure.json"]
+        modules = [core </> "OriginalFcntlAudit.cbd", core </> "THC.InterfaceClosure.cbd"]
         options = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
           ["-fplugin-opt=THC.Plugin:closure=" ++ name | name <- names]
     exported <- execute (stage ++ "-export")
@@ -322,7 +322,7 @@ prepareNativeFcntl root = do
     audits <- forM names $ \name -> do
       let path = output </> stage </> name ++ ".audit.json"
       audited <- execute (stage ++ "-audit-" ++ name) [] "python3"
-        (["bin/audit-core.py", "--entry", name, "--output", path] ++ modules)
+        (["bin/audit-core.py", "--entry", "main:OriginalFcntlAudit." ++ name, "--output", path] ++ modules)
       pure (path, audited)
     pure (exported : map snd audits, modules ++ map fst audits)
   let commands = [version, info, compiled, observed] ++ concatMap fst exports
@@ -398,7 +398,7 @@ prepareOriginalErrno root = do
       writeJson (root </> oracle) (toJSON [object (zipWith (.=) fields row) | row <- rows])
       exports <- forM ["pre", "post"] $ \stage -> do
         let core = output </> stage </> "core"
-            modules = [core </> "OriginalErrnoAudit.json", core </> "THC.InterfaceClosure.json"]
+            modules = [core </> "OriginalErrnoAudit.cbd", core </> "THC.InterfaceClosure.cbd"]
             options = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
               ["-fplugin-opt=THC.Plugin:closure=" ++ name | name <- names]
         exported <- execute (stage ++ "-export")
@@ -408,7 +408,7 @@ prepareOriginalErrno root = do
         audits <- forM names $ \name -> do
           let path = output </> stage </> name ++ ".audit.json"
           audited <- execute (stage ++ "-audit-" ++ name) [] "python3"
-            (["bin/audit-core.py", "--entry", name, "--output", path] ++ modules)
+            (["bin/audit-core.py", "--entry", "main:OriginalErrnoAudit." ++ name, "--output", path] ++ modules)
           pure (name, path, audited)
         pure (stage, modules, Map.fromList [(name, path) | (name, path, _) <- audits],
               exported : [command | (_, _, command) <- audits], modules ++ [path | (_, path, _) <- audits])
@@ -494,7 +494,7 @@ prepareOriginalProcessIdentity root = do
       writeJson (root </> oracle) (object (zipWith (.=) fields values))
       exports <- forM ["pre", "post"] $ \stage -> do
         let core = output </> stage </> "core"
-            modules = [core </> "OriginalProcessIdentityAudit.json", core </> "THC.InterfaceClosure.json"]
+            modules = [core </> "OriginalProcessIdentityAudit.cbd", core </> "THC.InterfaceClosure.cbd"]
             options = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
               ["-fplugin-opt=THC.Plugin:closure=" ++ name | name <- names]
         exported <- execute (stage ++ "-export")
@@ -504,7 +504,7 @@ prepareOriginalProcessIdentity root = do
         audits <- forM names $ \name -> do
           let path = output </> stage </> name ++ ".audit.json"
           audited <- execute (stage ++ "-audit-" ++ name) [] "python3"
-            (["bin/audit-core.py", "--entry", name, "--output", path] ++ modules)
+            (["bin/audit-core.py", "--entry", "main:OriginalProcessIdentityAudit." ++ name, "--output", path] ++ modules)
           pure (name, path, audited)
         pure (stage, modules, Map.fromList [(name, path) | (name, path, _) <- audits],
               exported : [command | (_, _, command) <- audits], modules ++ [path | (_, path, _) <- audits])

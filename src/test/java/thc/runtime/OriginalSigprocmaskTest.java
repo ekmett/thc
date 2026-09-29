@@ -43,9 +43,11 @@ import static org.junit.jupiter.api.Assertions.*;
 public class OriginalSigprocmaskTest {
     private final File root = new File(System.getProperty("thc.projectRoot")); private final String prefix = "build/original-sigprocmask";
     private ManagedAddress nil() { return ManagedAddress.nullAddress(); }
+    private Map<String, Object> cbd(String path) throws Exception { return thc.CoreCbdFixtures.read(new File(root, path).toPath()); }
+    private static String entryId(String name) { return "main:OriginalSigprocmaskAudit." + name; }
     private Map<String, Object> json(String path) throws Exception { return (Map<String, Object>) Json.parse(Files.readString(new File(root, path).toPath())); }
     private Map<String, Object> module(String stage) throws Exception {
-        var modules = new ArrayList<Map<String, Object>>(); for (var name : List.of("OriginalSigprocmaskAudit", "THC.InterfaceClosure")) modules.add(json(prefix + "/" + stage + "/core/" + name + ".json")); return CoreModules.merge(modules);
+        var modules = new ArrayList<Map<String, Object>>(); for (var name : List.of("OriginalSigprocmaskAudit", "THC.InterfaceClosure")) modules.add(cbd(prefix + "/" + stage + "/core/" + name + ".cbd")); return CoreModules.merge(modules);
     }
     private Context context() { return Main.withContextProfile(Context.newBuilder("thc").allowNativeAccess(true), ContextProfile.SYNCHRONOUS_TEST).build(); }
     private int size() { return (int) TermiosImage.scalar(OriginalStdioOp.SIZEOF_SIGSET, nil(), 0); }
@@ -98,8 +100,8 @@ public class OriginalSigprocmaskTest {
                 var service = Language.currentState().getSignalMask(); var baseline = snapshot(service); var bit = token(constant(OriginalStdioOp.SIGTTOU)); var normal = baseline.clone();
                 for (int i = 0; i < normal.length; i++) normal[i] = (byte) (normal[i] & ~bit[i]);
                 long setmask = constant(OriginalStdioOp.SIG_SETMASK), block = constant(OriginalStdioOp.SIG_BLOCK);
-                var source = new LinkedHashMap<>(CoreModules.reachable(module(stage), "originalSigprocmask", true)); source.put("instrument", true);
-                var program = load(language, backend, source); var entry = program.entryTarget("originalSigprocmask");
+                var source = new LinkedHashMap<>(CoreModules.reachable(module(stage), entryId("originalSigprocmask"), true)); source.put("instrument", true);
+                var program = load(language, backend, source); var entry = program.entryTarget(entryId("originalSigprocmask"));
                 try {
                     class Runner { void exercise(boolean compiled) {
                         assertEquals(0L, service.call(setmask, address(normal), nil())); var changed = normal.clone(); toggle(changed, bit);

@@ -26,8 +26,10 @@ class OriginalTcgetattrTest {
     @TempDir Path directory;
     private final File root = new File(System.getProperty("thc.projectRoot"));
     private final String prefix = "build/original-tcgetattr";
+    private Map<String, Object> cbd(String path) throws Exception { return thc.CoreCbdFixtures.read(new File(root, path).toPath()); }
+    private static String entryId(String name) { return "main:OriginalTcgetattrAudit." + name; }
     private Map<String,Object> json(String path) throws Exception { return (Map<String,Object>) Json.parse(Files.readString(new File(root,path).toPath())); }
-    private Map<String,Object> module(String stage) throws Exception { var modules = new ArrayList<Map<String,Object>>(); for (var part : List.of("OriginalTcgetattrAudit","THC.InterfaceClosure")) modules.add(json(prefix + "/" + stage + "/core/" + part + ".json")); return CoreModules.merge(modules); }
+    private Map<String,Object> module(String stage) throws Exception { var modules = new ArrayList<Map<String,Object>>(); for (var part : List.of("OriginalTcgetattrAudit","THC.InterfaceClosure")) modules.add(cbd(prefix + "/" + stage + "/core/" + part + ".cbd")); return CoreModules.merge(modules); }
     private Context context() { return NativeFileProvider.createContext(Set.of(),ContextProfile.SYNCHRONOUS_TEST); }
     private ManagedAddress address(String path) { return ManagedAddress.fromByteArray((path + "\0").getBytes(StandardCharsets.UTF_8)); }
     private int size() { return (int) TermiosImage.scalar(OriginalStdioOp.SIZEOF_TERMIOS,ManagedAddress.nullAddress(),0); }
@@ -70,7 +72,7 @@ class OriginalTcgetattrTest {
                     try {
                         var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var io = Language.currentState().getStdio(); long fd = io.open(address(oracle.path),2L | 0x100L,0); assertTrue(fd >= 3);
                         var plain = directory.resolve("plain-" + stage + "-" + backend); Files.writeString(plain,"data"); long regular = io.open(address(plain.toString()),0,0); assertTrue(regular >= 3);
-                        var program = load(language,backend,with(CoreModules.reachable(source,"originalTcgetattr",true),"instrument",true)); var entry = program.entryTarget("originalTcgetattr");
+                        var program = load(language,backend,with(CoreModules.reachable(source, entryId("originalTcgetattr"),true),"instrument",true)); var entry = program.entryTarget(entryId("originalTcgetattr"));
                         class Exercise { void run(boolean compiled) throws Exception {
                             for (int fill : new int[]{0,90,165,255}) for (long descriptor : new long[]{fd,regular,-1L}) {
                                 var nativeImage = descriptor == fd ? oracle.observe(fill) : null; var bytes = image(fill); assertEquals(-1L,io.close(-1)); long sticky = io.errno(); long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();

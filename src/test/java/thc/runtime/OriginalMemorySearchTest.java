@@ -25,13 +25,15 @@ import static thc.runtime.ScalarTestCalls.callScalarTestTarget;
 class OriginalMemorySearchTest {
     private final File root = new File(System.getProperty("thc.projectRoot"));
     private final String prefix = "build/original-memory-search";
+    private Map<String, Object> cbd(String path) throws Exception { return thc.CoreCbdFixtures.read(new File(root, path).toPath()); }
+    private static String entryId(String name) { return "main:OriginalMemorySearchAudit." + name; }
     private Object json(String path) throws Exception {
         return Json.parse(Files.readString(new File(root, path).toPath()));
     }
     private Map<String, Object> module(String stage) throws Exception {
         var modules = new ArrayList<Map<String, Object>>();
         for (var name : List.of("OriginalMemorySearchAudit", "THC.InterfaceClosure"))
-            modules.add((Map<String, Object>) json(prefix + "/" + stage + "/core/" + name + ".json"));
+            modules.add((Map<String, Object>) cbd(prefix + "/" + stage + "/core/" + name + ".cbd"));
         return CoreModules.merge(modules);
     }
     private List<Map<String, Object>> rows() throws Exception {
@@ -46,8 +48,8 @@ class OriginalMemorySearchTest {
         var required = new HashSet<String>();
         required.add(prefix + "/oracle.json");
         for (var stage : List.of("pre", "post")) {
-            required.add(prefix + "/" + stage + "/core/OriginalMemorySearchAudit.json");
-            required.add(prefix + "/" + stage + "/core/THC.InterfaceClosure.json");
+            required.add(prefix + "/" + stage + "/core/OriginalMemorySearchAudit.cbd");
+            required.add(prefix + "/" + stage + "/core/THC.InterfaceClosure.cbd");
         }
         OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"), required, prefix + "/");
         var rows = (List<Map<String, Object>>) json(prefix + "/oracle.json");
@@ -176,10 +178,10 @@ class OriginalMemorySearchTest {
                         grouped.computeIfAbsent((String) row.get("entry"), key -> new ArrayList<>()).add(row);
                     for (var group : grouped.entrySet()) {
                         var entry = group.getKey();
-                        var linked = new LinkedHashMap<>(CoreModules.reachable(source, entry));
+                        var linked = new LinkedHashMap<>(CoreModules.reachable(source, entryId(entry)));
                         linked.put("instrument", true);
                         var program = load(language, backend, linked);
-                        var target = program.entryTarget(entry);
+                        var target = program.entryTarget(entryId(entry));
                         exercise(false, group.getValue(), entry, program, target, language, stage, backend);
                         compile(target);
                         exercise(true, group.getValue(), entry, program, target, language, stage, backend);

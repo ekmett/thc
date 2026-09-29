@@ -702,7 +702,7 @@ class FixturePreparationTest(unittest.TestCase):
                         dict(receipt, nativeRows=True), dict(receipt, runtimeVerified=True),
                         dict(receipt, artifactHashes={}), dict(receipt, artifactHashes=dict(artifacts, **{'build/original-tcsetattr/extra.json': '0'*64}))):
                 with self.assertRaises(cache.CacheMiss): cache.tcsetattr_artifact_hashes(bad)
-            artifact = self.root / 'build/original-tcsetattr/pre/core/OriginalTcsetattrAudit.json'
+            artifact = self.root / 'build/original-tcsetattr/pre/core/OriginalTcsetattrAudit.cbd'
             artifact.write_text('mutated')
             with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
             artifact.unlink(); artifact.symlink_to(self.root / 'build/original-tcsetattr/oracle.json')
@@ -733,7 +733,7 @@ class FixturePreparationTest(unittest.TestCase):
                         dict(receipt, nativeRows=True), dict(receipt, runtimeVerified=True),
                         dict(receipt, artifactHashes={}), dict(receipt, artifactHashes=dict(artifacts, **{'build/original-tcgetattr/extra.json': '0'*64}))):
                 with self.assertRaises(cache.CacheMiss): cache.tcgetattr_artifact_hashes(bad)
-            artifact = self.root / 'build/original-tcgetattr/pre/core/OriginalTcgetattrAudit.json'
+            artifact = self.root / 'build/original-tcgetattr/pre/core/OriginalTcgetattrAudit.cbd'
             artifact.write_text('mutated')
             with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
             artifact.unlink(); artifact.symlink_to(self.root / 'build/original-tcgetattr/oracle.json')
@@ -764,7 +764,7 @@ class FixturePreparationTest(unittest.TestCase):
                         dict(receipt, nativeRows=True), dict(receipt, runtimeVerified=True),
                         dict(receipt, artifactHashes={}), dict(receipt, artifactHashes=dict(artifacts, **{'build/original-sigprocmask/extra.json': '0'*64}))):
                 with self.assertRaises(cache.CacheMiss): cache.sigprocmask_artifact_hashes(bad)
-            artifact = self.root / 'build/original-sigprocmask/pre/core/OriginalSigprocmaskAudit.json'
+            artifact = self.root / 'build/original-sigprocmask/pre/core/OriginalSigprocmaskAudit.cbd'
             artifact.write_text('mutated')
             with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
             artifact.unlink(); artifact.symlink_to(self.root / 'build/original-sigprocmask/oracle.json')
@@ -795,7 +795,7 @@ class FixturePreparationTest(unittest.TestCase):
                         dict(receipt, nativeRows=True), dict(receipt, runtimeVerified=True),
                         dict(receipt, artifactHashes={}), dict(receipt, artifactHashes=dict(artifacts, **{'build/original-sigset/extra.json': '0'*64}))):
                 with self.assertRaises(cache.CacheMiss): cache.sigset_artifact_hashes(bad)
-            artifact = self.root / 'build/original-sigset/pre/core/OriginalSigsetAudit.json'
+            artifact = self.root / 'build/original-sigset/pre/core/OriginalSigsetAudit.cbd'
             artifact.write_text('mutated')
             with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
             artifact.unlink(); artifact.symlink_to(self.root / 'build/original-sigset/oracle.json')
@@ -1026,7 +1026,7 @@ class FixturePreparationTest(unittest.TestCase):
                            entries=list(cache.ORIGINAL_FCNTL_ENTRIES), artifactHashes=artifacts)
             path = self.root / name; path.write_text(json.dumps(receipt))
             self.assertEqual(cache.ORIGINAL_FCNTL_OUTPUTS, set(fast_fixtures._output_hashes(self.root, group)))
-            for missing in ('native/oracle', 'pre/core/OriginalFcntlAudit.json',
+            for missing in ('native/oracle', 'pre/core/OriginalFcntlAudit.cbd',
                             'post/originalSetFlags.audit.json', 'logs/native-run.stdout'):
                 item = 'build/original-fcntl/' + missing
                 incomplete = dict(artifacts); del incomplete[item]
@@ -1072,7 +1072,7 @@ class FixturePreparationTest(unittest.TestCase):
                             dict(artifactHashes=dict(artifacts, unknown='a' * 64))):
                 with self.assertRaises(cache.CacheMiss):
                     cache.errno_artifact_hashes(dict(receipt, **changes))
-            for missing in ('native/observations.txt', 'native/oracle', 'pre/core/OriginalErrnoAudit.json',
+            for missing in ('native/observations.txt', 'native/oracle', 'pre/core/OriginalErrnoAudit.cbd',
                             'post/originalResetErrno.audit.json', 'logs/native-run.stdout'):
                 item = 'build/original-errno/' + missing
                 incomplete = dict(artifacts); del incomplete[item]
@@ -1118,7 +1118,7 @@ class FixturePreparationTest(unittest.TestCase):
                             dict(artifactHashes=dict(artifacts, unknown='a' * 64))):
                 with self.assertRaises(cache.CacheMiss):
                     cache.process_identity_artifact_hashes(dict(receipt, **changes))
-            for missing in ('native/observations.txt', 'native/oracle', 'pre/core/OriginalProcessIdentityAudit.json',
+            for missing in ('native/observations.txt', 'native/oracle', 'pre/core/OriginalProcessIdentityAudit.cbd',
                             'post/originalGetEuid.audit.json', 'logs/native-run.stdout'):
                 item = 'build/original-process-identity/' + missing
                 incomplete = dict(artifacts); del incomplete[item]
@@ -1162,12 +1162,12 @@ class FixturePreparationTest(unittest.TestCase):
             for bad in (dict(receipt, schema=True), dict(receipt, entries=[]),
                         dict(receipt, artifactHashes={}), dict(receipt, artifactHashes=dict(artifacts, **{'build/original-termios/extra.json': '0'*64}))):
                 with self.assertRaises(cache.CacheMiss): cache.termios_artifact_hashes(bad)
-            for missing in ('saved/native/oracle', 'saved/pre/core/OriginalSavedTermiosAudit.json',
+            for missing in ('saved/native/oracle', 'saved/pre/core/OriginalSavedTermiosAudit.cbd',
                             'saved/post/originalSetSavedTermios.audit.json', 'logs/saved-native-run.stdout'):
                 incomplete = dict(artifacts); del incomplete['build/original-termios/' + missing]
                 with self.assertRaises(cache.CacheMiss):
                     cache.termios_artifact_hashes(dict(receipt, artifactHashes=incomplete))
-            for relative in ('pre/core/OriginalTermiosAudit.json', 'saved/pre/core/OriginalSavedTermiosAudit.json',
+            for relative in ('pre/core/OriginalTermiosAudit.cbd', 'saved/pre/core/OriginalSavedTermiosAudit.cbd',
                              'saved/native/oracle', 'logs/saved-native-run.stdout'):
                 artifact = self.root / 'build/original-termios' / relative
                 artifact.write_text('mutated')
@@ -1852,7 +1852,7 @@ class FixturePreparationTest(unittest.TestCase):
                 with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
             for change in ('unknown', 'missing', 'changed', 'symlink'):
                 path.write_text(json.dumps(receipt))
-                artifact = self.root / 'build/original-open/pre/core/OriginalOpenAudit.json'
+                artifact = self.root / 'build/original-open/pre/core/OriginalOpenAudit.cbd'
                 if artifact.is_symlink(): artifact.unlink()
                 artifact.write_text('{}\n')
                 if change == 'unknown':

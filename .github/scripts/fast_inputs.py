@@ -640,7 +640,7 @@ ORIGINAL_STDIO_OUTPUTS = frozenset("build/original-stdio/" + name for name in (
                       ("originalWrite", "originalSafeWrite", "originalWriteErrno", "originalSafeWriteErrno")))
       for suffix in ("stdout", "stderr", "command.json")),
     *(f"{stage}/{name}" for stage in ("pre", "post")
-      for name in ("core/OriginalStdioAudit.json", "core/THC.InterfaceClosure.json",
+      for name in ("core/OriginalStdioAudit.cbd", "core/THC.InterfaceClosure.cbd",
                    "originalWrite.audit.json", "originalSafeWrite.audit.json",
                    "originalWriteErrno.audit.json", "originalSafeWriteErrno.audit.json")),
 ))
@@ -654,7 +654,7 @@ ORIGINAL_STDIO_READ_OUTPUTS = frozenset("build/original-stdio-read/" + name for 
                       ("originalRead", "originalSafeRead", "originalReadErrno", "originalSafeReadErrno")))
       for suffix in ("stdout", "stderr", "command.json")),
     *(f"{stage}/{name}" for stage in ("pre", "post")
-      for name in ("core/OriginalStdioReadAudit.json", "core/THC.InterfaceClosure.json",
+      for name in ("core/OriginalStdioReadAudit.cbd", "core/THC.InterfaceClosure.cbd",
                    "originalRead.audit.json", "originalSafeRead.audit.json",
                    "originalReadErrno.audit.json", "originalSafeReadErrno.audit.json")),
 ))
@@ -669,7 +669,7 @@ ORIGINAL_HANDLE_READINESS_OUTPUTS = frozenset("build/original-handle-readiness/"
     *(f"logs/{label}.{suffix}" for label in ORIGINAL_HANDLE_READINESS_LOGS
       for suffix in ("stdout", "stderr", "command.json")),
     *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
-        "core/OriginalHandleReadinessAudit.json", "core/THC.InterfaceClosure.json",
+        "core/OriginalHandleReadinessAudit.cbd", "core/THC.InterfaceClosure.cbd",
         "originalIsTerminal.audit.json", "originalIsTerminalErrno.audit.json")),
 ))
 
@@ -688,14 +688,14 @@ ORIGINAL_GMP_OUTPUTS = frozenset("build/original-gmp/" + name for name in (
         *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_GMP_ENTRIES))
       for suffix in ("stdout", "stderr", "command.json")),
     *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
-        "core/OriginalGmpAudit.json", "core/THC.InterfaceClosure.json",
+        "core/OriginalGmpAudit.cbd", "core/THC.InterfaceClosure.cbd",
         *(f"{entry}.audit.json" for entry in ORIGINAL_GMP_ENTRIES))),
 ))
 
 BYTESTRING_UTF8_OUTPUTS = frozenset("build/bytestring-utf8/" + name for name in (
     "manifest.json", "oracle.json", "native/oracle", "exposed-bytestring.conf",
     *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
-        "core/ByteStringUtf8Audit.json", "core/THC.InterfaceClosure.json",
+        "core/ByteStringUtf8Audit.cbd", "core/THC.InterfaceClosure.cbd",
         "validateUnsafe.audit.json", "validateSafe.audit.json")),
     *(f"logs/{label}.{suffix}" for label in (
         "version", "original-registration", "package-init", "package-register", "native-build", "native-observations", "pre-export", "post-export",
@@ -705,7 +705,7 @@ BYTESTRING_UTF8_OUTPUTS = frozenset("build/bytestring-utf8/" + name for name in 
 MEMSET_OUTPUTS = frozenset("build/original-memset/" + name for name in (
     "manifest.json", "oracle.json", "native/oracle",
     *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
-        "core/OriginalMemsetAudit.json", "core/THC.InterfaceClosure.json",
+        "core/OriginalMemsetAudit.cbd", "core/THC.InterfaceClosure.cbd",
         "originalFill.audit.json")),
     *(f"logs/{label}.{suffix}" for label in (
         "version", "native-build", "native-observations", "pre-export", "post-export",
@@ -715,7 +715,7 @@ MEMSET_OUTPUTS = frozenset("build/original-memset/" + name for name in (
 MEMORY_SEARCH_OUTPUTS = frozenset("build/original-memory-search/" + name for name in (
     "manifest.json", "oracle.json", "native/oracle",
     *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
-        "core/OriginalMemorySearchAudit.json", "core/THC.InterfaceClosure.json",
+        "core/OriginalMemorySearchAudit.cbd", "core/THC.InterfaceClosure.cbd",
         "originalCompare.audit.json", "originalFind.audit.json")),
     *(f"logs/{label}.{suffix}" for label in (
         "version", "native-build", "native-observations", "pre-export", "post-export",
@@ -746,7 +746,7 @@ ORIGINAL_OPEN_OUTPUTS = frozenset("build/original-open/" + name for name in (
         *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_OPEN_ENTRIES))
       for suffix in ("stdout", "stderr", "command.json")),
     *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
-        "core/OriginalOpenAudit.json", "core/THC.InterfaceClosure.json", *(f"{entry}.audit.json" for entry in ORIGINAL_OPEN_ENTRIES))),
+        "core/OriginalOpenAudit.cbd", "core/THC.InterfaceClosure.cbd", *(f"{entry}.audit.json" for entry in ORIGINAL_OPEN_ENTRIES))),
 ))
 ORIGINAL_RTS_LOCK_OUTPUTS = frozenset("build/original-rts-locks/" + name for name in (
     "manifest.json", "oracle.json", "declarations.json", "template-pre.json", "pre.json", "post.json",
@@ -767,7 +767,7 @@ ORIGINAL_TERMIOS_OUTPUTS = frozenset("build/original-termios/" + name for name i
         *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_TERMIOS_ENTRIES))
       for suffix in ("stdout", "stderr", "command.json")),
     *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
-        "core/OriginalTermiosAudit.json", "core/THC.InterfaceClosure.json",
+        "core/OriginalTermiosAudit.cbd", "core/OriginalTermiosAudit.json", "core/THC.InterfaceClosure.cbd",
         *(f"{entry}.audit.json" for entry in ORIGINAL_TERMIOS_ENTRIES))),
     "saved/oracle.json", "saved/native/oracle",
     *(f"logs/{label}.{suffix}" for label in (
@@ -775,7 +775,7 @@ ORIGINAL_TERMIOS_OUTPUTS = frozenset("build/original-termios/" + name for name i
         *(f"saved-{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_SAVED_TERMIOS_ENTRIES))
       for suffix in ("stdout", "stderr", "command.json")),
     *(f"saved/{stage}/{name}" for stage in ("pre", "post") for name in (
-        "core/OriginalSavedTermiosAudit.json", "core/THC.InterfaceClosure.json",
+        "core/OriginalSavedTermiosAudit.cbd", "core/THC.InterfaceClosure.cbd",
         *(f"{entry}.audit.json" for entry in ORIGINAL_SAVED_TERMIOS_ENTRIES))),
 ))
 
@@ -788,7 +788,7 @@ ORIGINAL_FCNTL_OUTPUTS = frozenset("build/original-fcntl/" + name for name in (
         *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_FCNTL_ENTRIES))
       for suffix in ("stdout", "stderr", "command.json")),
     *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
-        "core/OriginalFcntlAudit.json", "core/THC.InterfaceClosure.json",
+        "core/OriginalFcntlAudit.cbd", "core/THC.InterfaceClosure.cbd",
         *(f"{entry}.audit.json" for entry in ORIGINAL_FCNTL_ENTRIES))),
 ))
 
@@ -800,7 +800,7 @@ ORIGINAL_ERRNO_OUTPUTS = frozenset("build/original-errno/" + name for name in (
         *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_ERRNO_ENTRIES))
       for suffix in ("stdout", "stderr", "command.json")),
     *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
-        "core/OriginalErrnoAudit.json", "core/THC.InterfaceClosure.json",
+        "core/OriginalErrnoAudit.cbd", "core/THC.InterfaceClosure.cbd",
         *(f"{entry}.audit.json" for entry in ORIGINAL_ERRNO_ENTRIES))),
 ))
 
@@ -812,7 +812,7 @@ ORIGINAL_PROCESS_IDENTITY_OUTPUTS = frozenset("build/original-process-identity/"
         *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_PROCESS_IDENTITY_ENTRIES))
       for suffix in ("stdout", "stderr", "command.json")),
     *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
-        "core/OriginalProcessIdentityAudit.json", "core/THC.InterfaceClosure.json",
+        "core/OriginalProcessIdentityAudit.cbd", "core/THC.InterfaceClosure.cbd",
         *(f"{entry}.audit.json" for entry in ORIGINAL_PROCESS_IDENTITY_ENTRIES))),
 ))
 
@@ -824,7 +824,7 @@ ORIGINAL_TCSETATTR_OUTPUTS = frozenset("build/original-tcsetattr/" + name for na
         *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_TCSETATTR_ENTRIES))
       for suffix in ("stdout", "stderr", "command.json")),
     *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
-        "core/OriginalTcsetattrAudit.json", "core/THC.InterfaceClosure.json",
+        "core/OriginalTcsetattrAudit.cbd", "core/THC.InterfaceClosure.cbd",
         *(f"{entry}.audit.json" for entry in ORIGINAL_TCSETATTR_ENTRIES))),
 ))
 
@@ -836,7 +836,7 @@ ORIGINAL_TCGETATTR_OUTPUTS = frozenset("build/original-tcgetattr/" + name for na
         *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_TCGETATTR_ENTRIES))
       for suffix in ("stdout", "stderr", "command.json")),
     *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
-        "core/OriginalTcgetattrAudit.json", "core/THC.InterfaceClosure.json",
+        "core/OriginalTcgetattrAudit.cbd", "core/THC.InterfaceClosure.cbd",
         *(f"{entry}.audit.json" for entry in ORIGINAL_TCGETATTR_ENTRIES))),
 ))
 
@@ -848,7 +848,7 @@ ORIGINAL_SIGPROCMASK_OUTPUTS = frozenset("build/original-sigprocmask/" + name fo
         *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_SIGPROCMASK_ENTRIES))
       for suffix in ("stdout", "stderr", "command.json")),
     *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
-        "core/OriginalSigprocmaskAudit.json", "core/THC.InterfaceClosure.json",
+        "core/OriginalSigprocmaskAudit.cbd", "core/THC.InterfaceClosure.cbd",
         *(f"{entry}.audit.json" for entry in ORIGINAL_SIGPROCMASK_ENTRIES))),
 ))
 
@@ -860,7 +860,7 @@ ORIGINAL_SIGSET_OUTPUTS = frozenset("build/original-sigset/" + name for name in 
         *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_SIGSET_ENTRIES))
       for suffix in ("stdout", "stderr", "command.json")),
     *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
-        "core/OriginalSigsetAudit.json", "core/THC.InterfaceClosure.json",
+        "core/OriginalSigsetAudit.cbd", "core/THC.InterfaceClosure.cbd",
         *(f"{entry}.audit.json" for entry in ORIGINAL_SIGSET_ENTRIES))),
 ))
 
@@ -873,7 +873,7 @@ ORIGINAL_POSIX_STAT_OUTPUTS = frozenset("build/original-posix-stat/" + name for 
         *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_POSIX_STAT_ENTRIES))
       for suffix in ("stdout", "stderr", "command.json")),
     *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
-        "core/OriginalPosixStatAudit.json", "core/THC.InterfaceClosure.json",
+        "core/OriginalPosixStatAudit.cbd", "core/THC.InterfaceClosure.cbd",
         *(f"{entry}.audit.json" for entry in ORIGINAL_POSIX_STAT_ENTRIES))),
 ))
 
@@ -886,7 +886,7 @@ ORIGINAL_POSIX_DUP_OUTPUTS = frozenset("build/original-posix-dup/" + name for na
     *(f"results/{index}.{suffix}" for index in range(19) for suffix in ("txt", "private", "other")),
     *(f"logs/{label}.{suffix}" for label in ORIGINAL_POSIX_DUP_LOGS for suffix in ("stdout", "stderr", "command.json")),
     *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
-        "core/OriginalPosixDupAudit.json", "core/THC.InterfaceClosure.json",
+        "core/OriginalPosixDupAudit.cbd", "core/THC.InterfaceClosure.cbd",
         *(f"{entry}.audit.json" for entry in ORIGINAL_POSIX_DUP_ENTRIES))),
 ))
 
@@ -902,7 +902,7 @@ ORIGINAL_STDIO_CLOSE_OUTPUTS = frozenset("build/original-stdio-close/" + name fo
     *(f"logs/{label}.{suffix}" for label in ORIGINAL_STDIO_CLOSE_LOGS
       for suffix in ("stdout", "stderr", "command.json")),
     *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
-        "core/OriginalStdioCloseAudit.json", "core/THC.InterfaceClosure.json",
+        "core/OriginalStdioCloseAudit.cbd", "core/THC.InterfaceClosure.cbd",
         "originalClose.audit.json", "originalCloseErrno.audit.json")),
 ))
 
@@ -918,7 +918,7 @@ ORIGINAL_STDIO_SEEK_OUTPUTS = frozenset("build/original-stdio-seek/" + name for 
     *(f"logs/{label}.{suffix}" for label in ORIGINAL_STDIO_SEEK_LOGS
       for suffix in ("stdout", "stderr", "command.json")),
     *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
-        "core/OriginalStdioSeekAudit.json", "core/THC.InterfaceClosure.json",
+        "core/OriginalStdioSeekAudit.cbd", "core/THC.InterfaceClosure.cbd",
         "originalSeek.audit.json", "originalSeekErrno.audit.json")),
 ))
 
@@ -934,7 +934,7 @@ ORIGINAL_STDIO_TRUNCATE_OUTPUTS = frozenset("build/original-stdio-truncate/" + n
     *(f"logs/{label}.{suffix}" for label in ORIGINAL_STDIO_TRUNCATE_LOGS
       for suffix in ("stdout", "stderr", "command.json")),
     *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
-        "core/OriginalStdioTruncateAudit.json", "core/THC.InterfaceClosure.json",
+        "core/OriginalStdioTruncateAudit.cbd", "core/THC.InterfaceClosure.cbd",
         "originalTruncate.audit.json", "originalTruncateErrno.audit.json")),
 ))
 

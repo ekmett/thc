@@ -26,8 +26,10 @@ class OriginalTcsetattrTest {
     @TempDir Path directory;
     private final File root = new File(System.getProperty("thc.projectRoot"));
     private final String prefix = "build/original-tcsetattr";
+    private Map<String, Object> cbd(String path) throws Exception { return thc.CoreCbdFixtures.read(new File(root, path).toPath()); }
+    private static String entryId(String name) { return "main:OriginalTcsetattrAudit." + name; }
     private Map<String,Object> json(String path) throws Exception { return (Map<String,Object>) Json.parse(Files.readString(new File(root,path).toPath())); }
-    private Map<String,Object> module(String stage) throws Exception { var modules = new ArrayList<Map<String,Object>>(); for (var part : List.of("OriginalTcsetattrAudit","THC.InterfaceClosure")) modules.add(json(prefix + "/" + stage + "/core/" + part + ".json")); return CoreModules.merge(modules); }
+    private Map<String,Object> module(String stage) throws Exception { var modules = new ArrayList<Map<String,Object>>(); for (var part : List.of("OriginalTcsetattrAudit","THC.InterfaceClosure")) modules.add(cbd(prefix + "/" + stage + "/core/" + part + ".cbd")); return CoreModules.merge(modules); }
     private Context context() { return NativeFileProvider.createContext(Set.of(),ContextProfile.SYNCHRONOUS_TEST); }
     private ManagedAddress address(String path) { return ManagedAddress.fromByteArray((path + "\0").getBytes(StandardCharsets.UTF_8)); }
     private int size() { return (int) TermiosImage.scalar(OriginalStdioOp.SIZEOF_TERMIOS,ManagedAddress.nullAddress(),0); }
@@ -76,7 +78,7 @@ class OriginalTcsetattrTest {
                     try {
                         var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var io = Language.currentState().getStdio(); long terminal = io.open(address(oracle.path),2L | 0x100L,0); assertTrue(terminal >= 3);
                         var plain = directory.resolve("plain-" + stage + "-" + backend); Files.writeString(plain,"data"); long regular = io.open(address(plain.toString()),0,0); assertTrue(regular >= 3);
-                        var program = load(language,backend,with(CoreModules.reachable(source,"originalTcsetattr",true),"instrument",true)); var entry = program.entryTarget("originalTcsetattr");
+                        var program = load(language,backend,with(CoreModules.reachable(source, entryId("originalTcsetattr"),true),"instrument",true)); var entry = program.entryTarget(entryId("originalTcsetattr"));
                         class Exercise { void run(boolean compiled) throws Exception {
                             for (var row : rows) {
                                 long kind = (Long) row.get(0), action = (Long) row.get(1), echo = (Long) row.get(2); var expected = oracle.observe(kind == 0 ? action : -1L,echo); var supplied = bytes(expected.subList(2,2 + size() + 16)); var original = supplied.clone(); long descriptor = kind == 0 ? terminal : kind == 1 ? regular : -1L;

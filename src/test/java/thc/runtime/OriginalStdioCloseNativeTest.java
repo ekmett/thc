@@ -25,6 +25,8 @@ class OriginalStdioCloseNativeTest {
     private final File root = new File(System.getProperty("thc.projectRoot"));
     private final File fixture = new File(root, "build/original-stdio-close");
     private final List<String> names = List.of("originalClose", "originalCloseErrno");
+    private Map<String, Object> cbd(File path) throws Exception { return thc.CoreCbdFixtures.read(path.toPath()); }
+    private static String entryId(String name) { return "main:OriginalStdioCloseAudit." + name; }
     private Map<String, Object> json(File path) throws IOException { return (Map<String, Object>) Json.parse(Files.readString(path.toPath())); }
     private void valid(RootCallTarget target) throws Exception { assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target)); }
     private void exercise(boolean compiled, String stage, String backend, String name, ExecutableProgram program,
@@ -47,8 +49,8 @@ class OriginalStdioCloseNativeTest {
         assertEquals(names, manifest.get("entries")); assertEquals(4L, manifest.get("nativeRows"));
         hashes(root, manifest.get("inputHashes"), Set.of("t/fixtures/compiler/OriginalStdioCloseAudit.hs", "t/fixtures/compiler/OriginalStdioCloseAuditNative.hs",
             "t/haskell-fixtures/OriginalStdioCloseFixtures.hs", "bin/core_original_foreign.py"));
-        hashes(root, manifest.get("artifactHashes"), Set.of("build/original-stdio-close/oracle.json", "build/original-stdio-close/pre/core/OriginalStdioCloseAudit.json",
-            "build/original-stdio-close/post/core/OriginalStdioCloseAudit.json"), "build/original-stdio-close/");
+        hashes(root, manifest.get("artifactHashes"), Set.of("build/original-stdio-close/oracle.json", "build/original-stdio-close/pre/core/OriginalStdioCloseAudit.cbd",
+            "build/original-stdio-close/post/core/OriginalStdioCloseAudit.cbd"), "build/original-stdio-close/");
         var oracle = (List<Map<String, Object>>) Json.parse(Files.readString(new File(fixture, "oracle.json").toPath()));
         var expectedOrder = new ArrayList<List<String>>(); for (var name : names) for (var scenario : List.of("valid", "invalid")) expectedOrder.add(List.of(name, scenario));
         var actualOrder = new ArrayList<List<Object>>(); for (var row : oracle) actualOrder.add(list(row.get("entry"), row.get("scenario"))); assertEquals(expectedOrder, actualOrder);
@@ -62,7 +64,7 @@ class OriginalStdioCloseNativeTest {
             assertEquals(expected, row.get("result")); assertEquals("", row.get("stdoutHex")); assertEquals("", row.get("stderrHex"));
         }
         for (var stage : List.of("pre", "post")) {
-            var modules = new ArrayList<Map<String, Object>>(); for (var part : List.of("OriginalStdioCloseAudit", "THC.InterfaceClosure")) modules.add(json(new File(fixture, stage + "/core/" + part + ".json")));
+            var modules = new ArrayList<Map<String, Object>>(); for (var part : List.of("OriginalStdioCloseAudit", "THC.InterfaceClosure")) modules.add(cbd(new File(fixture, stage + "/core/" + part + ".cbd")));
             var module = CoreModules.merge(modules); var bindings = (List<Map<String, Object>>) module.get("bindings");
             for (var name : names) {
                 var binding = single(bindings, item -> Objects.equals(item.get("id"), "main:OriginalStdioCloseAudit." + name)); var calls = foreignCalls(binding.get("expr"));
@@ -85,8 +87,8 @@ class OriginalStdioCloseNativeTest {
                     try {
                         var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                         for (var name : names) {
-                            var linked = with(CoreModules.reachable(module, name), "instrument", true);
-                            ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked); var entry = program.entryTarget(name);
+                            var linked = with(CoreModules.reachable(module, entryId(name)), "instrument", true);
+                            ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked); var entry = program.entryTarget(entryId(name));
                             exercise(false, stage, backend, name, program, entry, oracle); var active = targets(entry);
                             assertEquals(1, active.size(), "entry contains the inlined runRW State body");
                             for (var target : active) { target.getClass().getMethod("compile", boolean.class).invoke(target, true); valid(target); }

@@ -27,8 +27,10 @@ class OriginalFcntlTest {
     private final String prefix = "build/original-fcntl";
     private final List<String> names = List.of("originalAppend","originalCreat","originalNoctty","originalNonblock","originalRdonly","originalRdwr","originalWronly","originalGetfl","originalSetfl","originalExcl","originalBinary","originalTrunc","originalGetFlags","originalSetFlags");
     private final List<OriginalStdioOp> constants = List.of(OriginalStdioOp.O_APPEND,OriginalStdioOp.O_CREAT,OriginalStdioOp.O_NOCTTY,OriginalStdioOp.O_NONBLOCK,OriginalStdioOp.O_RDONLY,OriginalStdioOp.O_RDWR,OriginalStdioOp.O_WRONLY,OriginalStdioOp.F_GETFL,OriginalStdioOp.F_SETFL,OriginalStdioOp.O_EXCL,OriginalStdioOp.O_BINARY,OriginalStdioOp.O_TRUNC);
+    private Map<String, Object> cbd(String path) throws Exception { return thc.CoreCbdFixtures.read(new File(root, path).toPath()); }
+    private static String entryId(String name) { return "main:OriginalFcntlAudit." + name; }
     private Map<String,Object> json(String path) throws Exception { return (Map<String,Object>) Json.parse(Files.readString(new File(root,path).toPath())); }
-    private Map<String,Object> source(String stage) throws Exception { var modules = new ArrayList<Map<String,Object>>(); for (var part : List.of("OriginalFcntlAudit","THC.InterfaceClosure")) modules.add(json(prefix + "/" + stage + "/core/" + part + ".json")); return CoreModules.merge(modules); }
+    private Map<String,Object> source(String stage) throws Exception { var modules = new ArrayList<Map<String,Object>>(); for (var part : List.of("OriginalFcntlAudit","THC.InterfaceClosure")) modules.add(cbd(prefix + "/" + stage + "/core/" + part + ".cbd")); return CoreModules.merge(modules); }
     private Context context() { return NativeFileProvider.createContext(Set.of(),ContextProfile.SYNCHRONOUS_TEST); }
     private void valid(RootCallTarget target) throws Exception { valid(target,target.getRootNode().getName()); }
     private void valid(RootCallTarget target,String label) throws Exception { assertEquals(true,target.getClass().getMethod("isValidLastTier").invoke(target),label); }
@@ -41,7 +43,7 @@ class OriginalFcntlTest {
     @Test @Tag("foreign-exceptions-full-core") void genuineOriginalCallsMatchNativeFlagsAndAliasesInBothCompiledBackends() throws Exception {
         var manifest = json(prefix + "/manifest.json"); assertEquals(true,manifest.get("supported")); assertEquals("linux",manifest.get("platform")); assertEquals(names,manifest.get("entries")); assertEquals(true,manifest.get("strictAccepted")); assertEquals(false,manifest.get("runtimeVerified")); assertEquals(4L,manifest.get("nativeRows"));
         hashes(root,manifest.get("inputHashes"),Set.of("t/fixtures/compiler/OriginalFcntlAudit.hs","t/fixtures/compiler/OriginalFcntlNative.hs","t/haskell-fixtures/OriginalStdioFixtures.hs","bin/core_original_foreign.py","bin/core-capabilities.json"));
-        var artifacts = new HashSet<>(Set.of(prefix + "/oracle.json",prefix + "/native/oracle")); for (var stage : List.of("pre","post")) { for (var name : names) artifacts.add(prefix + "/" + stage + "/" + name + ".audit.json"); for (var part : List.of("OriginalFcntlAudit","THC.InterfaceClosure")) artifacts.add(prefix + "/" + stage + "/core/" + part + ".json"); } hashes(root,manifest.get("artifactHashes"),artifacts,prefix + "/");
+        var artifacts = new HashSet<>(Set.of(prefix + "/oracle.json",prefix + "/native/oracle")); for (var stage : List.of("pre","post")) { for (var name : names) artifacts.add(prefix + "/" + stage + "/" + name + ".audit.json"); for (var part : List.of("OriginalFcntlAudit","THC.InterfaceClosure")) artifacts.add(prefix + "/" + stage + "/core/" + part + ".cbd"); } hashes(root,manifest.get("artifactHashes"),artifacts,prefix + "/");
         var oracle = json(prefix + "/oracle.json"); var expected = (List<Long>) oracle.get("constants"); var rows = (List<List<Long>>) oracle.get("rows"); var abi = StdioHostAbi.load(); var actual = new ArrayList<Long>(); for (var constant : constants) actual.add(abi.flagConstant(constant)); assertEquals(actual,expected); assertEquals(List.of(-1L,abi.error(4)),oracle.get("invalid"));
         for (var stage : List.of("pre","post")) {
             var module = source(stage); var expectedOps = new HashSet<>(constants); expectedOps.addAll(List.of(OriginalStdioOp.FCNTL_READ,OriginalStdioOp.FCNTL_WRITE)); var actualOps = new HashSet<OriginalStdioOp>(); for (var call : foreignCalls(module)) actualOps.add(Objects.requireNonNull(validate(call))); assertEquals(expectedOps,actualOps);
@@ -49,7 +51,7 @@ class OriginalFcntlTest {
             for (var backend : List.of("ast","bytecode")) try (var context = context()) {
                 context.initialize("thc"); context.enter();
                 try {
-                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var executable = program(backend,language,with(module,"instrument",true)); var entries = new LinkedHashMap<String,RootCallTarget>(); for (var name : names) entries.put(name,executable.entryTarget(name));
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var executable = program(backend,language,with(module,"instrument",true)); var entries = new LinkedHashMap<String,RootCallTarget>(); for (var name : names) entries.put(name,executable.entryTarget(entryId(name)));
                     var state = Language.currentState(); var file = directory.resolve(stage + "-" + backend); Files.writeString(file,"abc"); var path = ManagedAddress.fromByteArray((file + "\0").getBytes(StandardCharsets.UTF_8)); long fd = state.getStdio().open(path,abi.flagConstant(OriginalStdioOp.O_RDWR),0); assertTrue(fd >= 3); long alias = state.getStdio().duplicate(fd);
                     class Exercise {
                         boolean compiled; List<RootCallTarget> installed = List.of();

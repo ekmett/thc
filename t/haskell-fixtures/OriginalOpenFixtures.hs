@@ -63,7 +63,7 @@ prepareOriginalOpen root = do
       writeJson (root </> oracle) (toJSON rows)
       exports <- forM ["pre","post"] $ \stage -> do
         let core = directory </> stage </> "core"
-            modules = [core </> "OriginalOpenAudit.json", core </> "THC.InterfaceClosure.json"]
+            modules = [core </> "OriginalOpenAudit.cbd", core </> "THC.InterfaceClosure.cbd"]
             entries = ["originalOpen", "originalOpenSafe", "originalOpenInterruptible"]
             options = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
               ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries]
@@ -74,7 +74,7 @@ prepareOriginalOpen root = do
           let output = directory </> stage </> entry ++ ".audit.json"
           command <- runLoggedExpect 0 180 root (directory </> "logs")
             (stage ++ "-audit-" ++ entry) [] "python3"
-            (["bin/audit-core.py", "--entry", entry, "--output", output] ++ modules)
+            (["bin/audit-core.py", "--entry", "main:OriginalOpenAudit." ++ entry, "--output", output] ++ modules)
           pure (output,command)
         pure (modules,exported,audits)
       plugin <- listDirectory (root </> "src/compiler/THC")

@@ -95,8 +95,8 @@ prepareTextCbits root = do
     (fail "native text row inventory differs")
   BS.writeFile (output </> "oracle.tsv") (commandStdout oracle)
   forM_ ["pre","post"] $ \stage -> do
-    _ <- execute ("audit-" ++ stage) [] "python3" ["bin/audit-core.py","--entry","textMemchr","--entry","textMeasure","--entry","textReverse",
-      "--output",output </> stage ++ "-audit.json",output </> stage ++ "-core/TextCbitsAudit.json"]
+    _ <- execute ("audit-" ++ stage) [] "python3" ["bin/audit-core.py","--entry","main:TextCbitsAudit.textMemchr","--entry","main:TextCbitsAudit.textMeasure","--entry","main:TextCbitsAudit.textReverse",
+      "--output",output </> stage ++ "-audit.json",output </> stage ++ "-core/TextCbitsAudit.cbd"]
     pure ()
   inputs <- hashes root [source,nativeSource,"t/haskell-fixtures/TextCbitsFixtures.hs",
     "bin/core_original_foreign.py","bin/audit-core.py","bin/core-capabilities.json",
@@ -104,7 +104,7 @@ prepareTextCbits root = do
     "nih/pinned/text-2.1.3/LICENSE","nih/pinned/openbsd-memchr-1.8.c",
     "src/main/c/text-api.c","bin/build-cbits.py"]
   artifacts <- hashes root [directory </> file | file <- ["inputs.tsv","oracle.tsv",
-    "pre-core/TextCbitsAudit.json","post-core/TextCbitsAudit.json","pre-audit.json","post-audit.json","exposed-text.conf",
+    "pre-core/TextCbitsAudit.cbd","post-core/TextCbitsAudit.cbd","pre-audit.json","post-audit.json","exposed-text.conf",
     "logs/original-registration.stdout","logs/native-oracle.command.json","logs/native-build.command.json",
     "native/text-cbits-oracle"]]
   writeJson (output </> "manifest.json") (object ["schema" .= (1::Int),"nativeRows" .= length cases,

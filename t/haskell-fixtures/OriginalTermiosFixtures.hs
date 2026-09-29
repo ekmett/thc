@@ -83,22 +83,23 @@ prepareLinux root = do
   writeJson (root </> oracle) $ object ["constants" .= constants, "rows" .= rows]
   exports <- forM ["pre","post"] $ \stage -> do
     let core = directory </> stage </> "core"
-        modules = [core </> "OriginalTermiosAudit.json", core </> "THC.InterfaceClosure.json"]
+        modules = [core </> "OriginalTermiosAudit.cbd", core </> "THC.InterfaceClosure.cbd"]
         options = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
           ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries]
     exported <- execute (stage ++ "-export")
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> directory </> stage </> "ghc")]
-      "bin/export-core.sh" (["-package", "ghc-internal"] ++ options ++ ["t/fixtures/compiler/OriginalTermiosAudit.hs"])
+      "bin/export-core.sh" (["-package", "ghc-internal", "-fplugin-opt=THC.Plugin:pretty-diagnostics"] ++ options ++ ["t/fixtures/compiler/OriginalTermiosAudit.hs"])
     mapM_ (\path -> doesFileExist (root </> path) >>= \present -> unless present (die ("Missing original Core: " ++ path))) modules
     audits <- forM entries $ \entry -> do
       let path = directory </> stage </> entry ++ ".audit.json"
       command <- execute (stage ++ "-audit-" ++ entry) [] "python3"
-        (["bin/audit-core.py", "--entry", entry, "--output", path] ++ modules)
+        (["bin/audit-core.py", "--entry", "main:OriginalTermiosAudit." ++ entry, "--output", path] ++ modules)
       pure (path,command)
     pure (modules,exported,audits)
   (savedCommands, savedArtifacts) <- prepareSavedTermios root ghc
   let commands = [version,info,compiled,observed] ++ concat [exported : map snd audits | (_,exported,audits) <- exports] ++ savedCommands
       artifacts = [binary,oracle] ++ concat [modules ++ map fst audits | (modules,_,audits) <- exports] ++
+        [directory </> stage </> "core/OriginalTermiosAudit.json" | stage <- ["pre", "post"]] ++
         savedArtifacts ++ concatMap commandArtifacts commands
   inputHashes <- fixtureSources root >>= hashes root
   artifactHashes <- hashes root artifacts
@@ -129,7 +130,7 @@ prepareSavedTermios root ghc = do
   writeJson (root </> oracle) $ object ["rows" .= rows]
   exports <- forM ["pre", "post"] $ \stage -> do
     let core = saved </> stage </> "core"
-        modules = [core </> "OriginalSavedTermiosAudit.json", core </> "THC.InterfaceClosure.json"]
+        modules = [core </> "OriginalSavedTermiosAudit.cbd", core </> "THC.InterfaceClosure.cbd"]
         options = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
           ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries]
     exported <- execute ("saved-" ++ stage ++ "-export")
@@ -138,7 +139,7 @@ prepareSavedTermios root ghc = do
     audits <- forM entries $ \entry -> do
       let path = saved </> stage </> entry ++ ".audit.json"
       audited <- execute ("saved-" ++ stage ++ "-audit-" ++ entry) [] "python3"
-        (["bin/audit-core.py", "--entry", entry, "--output", path] ++ modules)
+        (["bin/audit-core.py", "--entry", "main:OriginalSavedTermiosAudit." ++ entry, "--output", path] ++ modules)
       pure (path, audited)
     pure (exported : map snd audits, modules ++ map fst audits)
   pure ([compiled, observed] ++ concatMap fst exports, [binary, oracle] ++ concatMap snd exports)

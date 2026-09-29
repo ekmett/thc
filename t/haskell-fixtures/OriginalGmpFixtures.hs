@@ -121,7 +121,7 @@ prepareOriginalGmp root requireSupported = do
   writeJson (root </> oracle) (toJSON (map rowJSON rows))
   stages <- forM ["pre","post"] $ \stage -> do
     let core = directory </> stage </> "core"
-        modules = [core </> "OriginalGmpAudit.json",core </> "THC.InterfaceClosure.json"]
+        modules = [core </> "OriginalGmpAudit.cbd",core </> "THC.InterfaceClosure.cbd"]
         options = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
           ["-fplugin-opt=THC.Plugin:closure=" ++ entry | (entry,_) <- entries]
     exported <- execute (stage ++ "-export")
@@ -134,7 +134,7 @@ prepareOriginalGmp root requireSupported = do
       let path = directory </> stage </> entry ++ ".audit.json"
       command <- runLoggedExpect (if requireSupported then 0 else 1) 180 root (directory </> "logs")
         (stage ++ "-audit-" ++ entry) [] "python3"
-        (["bin/audit-core.py","--entry",entry,"--output",path] ++ modules)
+        (["bin/audit-core.py","--entry", "main:OriginalGmpAudit." ++ entry,"--output",path] ++ modules)
       report <- either die pure . eitherDecodeStrict' =<< BS.readFile (root </> path)
       case report of
         Object fields | KeyMap.lookup "accepted" fields == Just (Bool requireSupported) -> pure ()
