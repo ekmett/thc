@@ -1254,6 +1254,7 @@ executable thc-fixtures
     ThreadLabelFixtures
     ThreadStatusFixtures
     CompactRegionsFixtures
+    CompactModelFixtures
     ThreadInventoryFixtures
     ThreadSchedulingFixtures
     ScalarMemoryUtilitiesFixtures
