@@ -16,18 +16,19 @@ provider proof.
 
 ## Explicit authority
 
-The original GHC `__hscore_o_*` getters for append, create, no-controlling-terminal,
-nonblocking and the three access modes, plus `__hscore_f_getfl`/`__hscore_f_setfl`,
-use the generated host C ABI constants. The exact original Posix CAPI `fcntl`
-wrappers support `F_GETFL`, `F_SETFL` and `F_SETFD` through a context-owned native lease.
-The setter retains its `CLong` argument; the kernel determines which status bits
-can change. Guest `dup` aliases observe the same open-description flags, and
-success preserves the guest's sticky errno. `F_SETFD` changes the owned native
-resource's descriptor flags; logical aliases do not provide a separate fork/exec
-inheritance model. Other commands are explicitly
-unsupported; a guest integer never names an arbitrary host descriptor. Ordinary
-embedding streams have no native flag capability. These calls retain the
-original unsafe FFI contract and do not add interruptible byte transfers.
+The exact original Posix CAPI `fcntl` wrappers forward their integer commands and optional `CLong` argument to libc
+through a context-owned native lease. Both supplied calling forms retain native
+command behavior, including ignored third arguments and kernel errors. Signed
+successful results remain distinct from errno; success preserves the guest's
+sticky errno. `F_DUPFD` and `F_DUPFD_CLOEXEC` acquire owned native duplicates and
+return the lowest available guest descriptor at or above the requested bound.
+The bound belongs to the guest namespace, independently of native fd allocation.
+These duplicates have independent descriptor flags and native lease lifetimes,
+while sharing kernel open-file and epoll state. Existing logical `dup` aliases still share their original
+native resource, including its descriptor flags. A guest integer never names an
+arbitrary host descriptor. Ordinary embedding streams have no native flag
+capability. These calls retain the original unsafe FFI contract and do not add
+interruptible byte transfers.
 
 `NativeIO.createContext` chooses native access and the host filesystem together.
 It installs the exact final internal `NativeFileSystem`, constructs the context,

@@ -124,4 +124,48 @@ class NativeEventDescriptorsTest {
         } finally { stdio.close(alias); }
         assertEquals(-1L, stdio.eventfdWrite(alias, 1)); assertEquals(9L, stdio.errno());
     }); }
+    @Test void integerFcntlFormsUseNativeCommandsAndErrors() { nativeContext(stdio -> {
+        var descriptors = ManagedAddress.fromByteArray(new byte[8]); assertEquals(0L, stdio.pipe(descriptors));
+        long reader = integer(descriptors, 0, 4), writer = integer(descriptors, 4, 4);
+        try {
+            // Linux F_GETFD=1/F_SETFD=2; the third argument to GET is ignored by libc.
+            assertEquals(0L, stdio.fcntl(reader, 2, 0, true));
+            stdio.setErrno(55);
+            assertEquals(0L, stdio.fcntl(reader, 1, 0, false));
+            assertEquals(55L, stdio.errno(), "Successful fcntl preserves guest errno");
+            assertEquals(0L, stdio.fcntl(reader, 2, 1, true));
+            assertEquals(1L, stdio.fcntl(reader, 1, -123, true));
+            assertEquals(1L, stdio.fcntl(reader, 1, 0, false));
+            assertEquals(-1L, stdio.fcntl(reader, -7, 0, false));
+            assertEquals(22L, stdio.errno(), "Unknown command reaches the kernel's EINVAL");
+            assertEquals(-1L, stdio.fcntl(reader, -7, 17, true));
+            assertEquals(22L, stdio.errno());
+        } finally { stdio.close(reader); stdio.close(writer); }
+        assertEquals(-1L, stdio.fcntl(reader, 1, 0, false));
+        assertEquals(9L, stdio.errno());
+    }); }
+    @Test void fcntlDuplicatesOwnLogicalNumbersFlagsAndLifetime() { nativeContext(stdio -> {
+        var descriptors = ManagedAddress.fromByteArray(new byte[8]); assertEquals(0L, stdio.pipe(descriptors));
+        long reader = integer(descriptors, 0, 4), writer = integer(descriptors, 4, 4);
+        try {
+            assertEquals(0L, stdio.fcntl(writer, 2, 1, true));
+            assertEquals(70L, stdio.fcntl(writer, 0, 70, true), "F_DUPFD lower bound is a guest number");
+            assertEquals(71L, stdio.fcntl(writer, 1030, 70, true), "F_DUPFD_CLOEXEC chooses the next guest number");
+            assertEquals(0L, stdio.fcntl(70, 1, 0, false));
+            assertEquals(1L, stdio.fcntl(71, 1, 0, false));
+            assertEquals(1L, stdio.fcntl(writer, 1, 0, false), "Descriptor flags are independent");
+            assertEquals(-1L, stdio.fcntl(writer, 0, -1, true));
+            assertEquals(22L, stdio.errno());
+            long distant = 1L << 30;
+            assertEquals(distant, stdio.fcntl(writer, 0, distant, true), "Guest minimum must not constrain the private host fd");
+            assertEquals(0L, stdio.close(distant));
+            assertEquals(0L, stdio.close(71)); assertEquals(0L, stdio.close(writer));
+            assertEquals(1L, stdio.write(70, ManagedAddress.fromByteArray(new byte[]{42}), 1));
+            var output = ManagedAddress.fromByteArray(new byte[1]);
+            assertEquals(1L, stdio.read(reader, output, 1)); assertEquals(42L, output.readWord8(0));
+            assertEquals(0L, stdio.close(70)); assertEquals(0L, stdio.read(reader, output, 1));
+            assertEquals(-1L, stdio.fcntl(70, 1, 0, false)); assertEquals(9L, stdio.errno());
+        } finally { stdio.close(70); stdio.close(71); stdio.close(writer); stdio.close(reader); }
+    }); }
+
 }

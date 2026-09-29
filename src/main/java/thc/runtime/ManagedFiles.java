@@ -52,6 +52,11 @@ public final class ManagedFiles {
             this.identity = identity; this.writable = writable; this.reserved = reserved;
         }
     }
+    // Registry protects this shared epoll lifetime, independently of each native lease.
+    private static final class EpollLifetime {
+        long owners = 1;
+        final LinkedHashSet<NativeEpoll.Registration> registrations = new LinkedHashSet<>();
+    }
     private static final class OpenDescription {
         final InputStream input;
         final OutputStream output;
@@ -66,7 +71,7 @@ public final class ManagedFiles {
         // object's monitor. The registry never waits for that monitor while held.
         long references = 1;
         boolean closed;
-        final LinkedHashSet<NativeEpoll.Registration> epollRegistrations = new LinkedHashSet<>();
+        final EpollLifetime epollLifetime;
         OpenDescription(InputStream input, OutputStream output, SeekableByteChannel channel,
             NativeFileResource nativeResource, NativeEpoll epoll, AnonymousKind anonymousKind, FileIdentity identity,
             boolean readable, boolean writable, boolean append, boolean canExtend, Readiness readiness) {
@@ -74,6 +79,14 @@ public final class ManagedFiles {
             this.epoll = epoll; this.anonymousKind = anonymousKind; this.identity = identity;
             this.readable = readable; this.writable = writable; this.append = append; this.canExtend = canExtend;
             this.readiness = readiness;
+            epollLifetime = new EpollLifetime();
+        }
+        OpenDescription(OpenDescription source, NativeFileResource resource) {
+            input = null; output = null; channel = resource; nativeResource = resource;
+            epoll = source.epoll; anonymousKind = source.anonymousKind; identity = source.identity;
+            readable = source.readable; writable = source.writable; append = source.append; canExtend = source.canExtend;
+            readiness = source.readiness;
+            epollLifetime = source.epollLifetime;
         }
         static OpenDescription input(InputStream input) {
             return new OpenDescription(input, null, null, null, null, null, null, true, false, false, true, Readiness.UNAVAILABLE);
@@ -194,22 +207,26 @@ public final class ManagedFiles {
         return fd;
     }
     private void retire(OpenDescription owner) {
+        Throwable failure = null;
         synchronized (owner) {
             if (owner.closed) return;
             owner.closed = true;
-            Throwable failure = null;
             try {
-                List<NativeEpoll.Registration> registrations;
-                synchronized (this) { registrations = new ArrayList<>(owner.epollRegistrations); }
-                for (var registration : registrations) {
-                    try { registration.close(); } catch (Throwable error) { failure = combineFailures(failure, error); }
+                List<NativeEpoll.Registration> registrations = null;
+                synchronized (this) {
+                    if (--owner.epollLifetime.owners == 0) registrations = new ArrayList<>(owner.epollLifetime.registrations);
                 }
-                try { if (owner.epoll != null) owner.epoll.close(); } catch (Throwable error) { failure = combineFailures(failure, error); }
+                if (registrations != null) {
+                    for (var registration : registrations) {
+                        try { registration.close(); } catch (Throwable error) { failure = combineFailures(failure, error); }
+                    }
+                    try { if (owner.epoll != null) owner.epoll.close(); } catch (Throwable error) { failure = combineFailures(failure, error); }
+                }
                 try { if (owner.channel != null) owner.channel.close(); } catch (Throwable error) { failure = combineFailures(failure, error); }
                 try { if (owner.output != null) owner.output.flush(); } catch (Throwable error) { failure = combineFailures(failure, error); }
             } finally { synchronized (this) { owners.remove(owner); } }
-            if (failure != null) throw propagate(failure);
         }
+        if (failure != null) throw propagate(failure);
     }
     private FileIdentity identity(TruffleFile file, String name) throws IOException {
         var attributes = file.getAttributes(List.of(TruffleFile.IS_REGULAR_FILE, TruffleFile.IS_DIRECTORY, TruffleFile.UNIX_DEV, TruffleFile.UNIX_INODE));
@@ -828,10 +845,10 @@ public final class ManagedFiles {
             epoll.control(operation, target, nativeResource, bytes, registration -> {
                 synchronized (this) {
                     if (disposed || target.owner.references == 0) throw propagate(new NativeFileException("epoll_ctl", 9));
-                    target.owner.epollRegistrations.add(registration);
+                    target.owner.epollLifetime.registrations.add(registration);
                 }
             }, registration -> {
-                synchronized (this) { target.owner.epollRegistrations.remove(registration); }
+                synchronized (this) { target.owner.epollLifetime.registrations.remove(registration); }
             });
             return 0;
         });
@@ -1131,14 +1148,60 @@ public final class ManagedFiles {
             return (long) n;
         }));
     }
-    public long fcntl(long fd, long argument, boolean write) { return fcntl(fd, argument, write, false); }
-    @TruffleBoundary public long fcntl(long fd, long argument, boolean write, boolean descriptorFlags) {
-        return result(() -> withDescriptor(fd, entry -> {
-            var resource = entry.nativeResource;
+    @TruffleBoundary public SulongCbits.CapiResult fcntl(long fd, int command, long argument, boolean hasArgument) {
+        long[] value = {-1};
+        long status = result(() -> withDescriptor(fd, owner -> {
+            var resource = owner.nativeResource;
             if (resource == null) throw fail(7, "THC descriptor has no native fcntl capability: " + fd);
-            if (descriptorFlags) return resource.setDescriptorFlags(argument);
-            return write ? resource.setStatusFlags(argument) : resource.statusFlags();
+            if (resource.fcntlCreatesDescriptor(command)) {
+                if (!hasArgument) throw fail(5, "Descriptor duplication requires its minimum argument");
+                value[0] = duplicateFcntl(owner, command, argument);
+            } else value[0] = resource.fcntl(command, argument, hasArgument);
+            return 0L;
         }));
+        return status == 0 ? new SulongCbits.CapiResult(value[0], 0) : new SulongCbits.CapiResult(-1,
+            nativeErrno() != 0 ? nativeErrno() : nativeAbi().error(errorKind()));
+    }
+    private long duplicateFcntl(OpenDescription source, int command, long argument) throws Throwable {
+        OpenClaim claim;
+        synchronized (this) {
+            // The original CLong reaches an operation whose lower bound is a C int.
+            long minimum = (int) argument;
+            if (minimum < 0 || minimum >= descriptorLimit) throw fail(5, "Invalid descriptor lower bound");
+            if (disposed || source.references == 0) throw fail(4, "THC file descriptor is closed");
+            claim = new OpenClaim(null, source.writable, unusedDescriptor(minimum));
+            opening.add(claim);
+            // The owner monitor pins the native lease; reserve shared epoll lifetime before close can retire it.
+            source.epollLifetime.owners++;
+        }
+        NativeFileResource resource = null;
+        boolean published = false;
+        Throwable primary = null;
+        try {
+            resource = source.nativeResource.fcntlDuplicate(command, 0);
+            var owner = new OpenDescription(source, resource);
+            synchronized (this) {
+                if (disposed) throw fail(4, "THC file context is closed");
+                owners.add(owner); descriptors.put(claim.reserved, new Descriptor(owner));
+                published = true;
+            }
+            return claim.reserved;
+        } catch (Throwable failure) {
+            primary = failure;
+            throw failure;
+        } finally {
+            Throwable cleanup = null;
+            if (!published) try { if (resource != null) resource.close(); }
+            catch (Throwable failure) { cleanup = combineFailures(cleanup, failure); }
+            synchronized (this) {
+                if (!published) source.epollLifetime.owners--;
+                opening.remove(claim); claim.finished.countDown();
+            }
+            if (cleanup != null) {
+                if (primary == null) throw cleanup;
+                primary.addSuppressed(cleanup);
+            }
+        }
     }
     /** Binds a logical descriptor once. No native fd survives an async cut and
      * retries never resolve a reused number to a new descriptor. */

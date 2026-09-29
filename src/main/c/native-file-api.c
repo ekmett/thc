@@ -226,23 +226,30 @@ int64_t thc_file_isatty(const int *lease, int64_t *error) {
 }
 
 // The original CAPI write wrapper passes CLong to fcntl's variadic argument.
-// Commands are fixed here: no numeric guest fd or unsupported fcntl operation
-// can escape the context's authenticated lease protocol.
+// The lease supplies the real descriptor; libc owns command and argument semantics.
 _Static_assert(sizeof(long) == 8, "original fcntl requires LP64 CLong");
+int64_t thc_file_fcntl(const int *lease, int command, int64_t argument, int has_argument, int64_t *error) {
+  errno = 0; // F_GETOWN can return a negative process group on success.
+  int result = has_argument ? fcntl(*lease, command, (long)argument) : fcntl(*lease, command);
+  *error = result == -1 ? errno : 0;
+  return result;
+}
+
+// Descriptor results must be published into owned leases, not returned as guest integers.
+int64_t thc_file_fcntl_duplicate_command(int command, int64_t *error) {
+  *error = 0;
+  return command == F_DUPFD || command == F_DUPFD_CLOEXEC;
+}
+
+int64_t thc_file_fcntl_duplicate(int *target, const int *source, int command, int64_t minimum, int64_t *error) {
+  int fd = fcntl(*source, command, (long)minimum);
+  *error = fd < 0 ? errno : 0;
+  if (fd >= 0) *target = fd;
+  return fd < 0 ? -1 : 0;
+}
+
 int64_t thc_file_getfl(const int *lease, int64_t *error) {
   int result = fcntl(*lease, F_GETFL);
-  *error = result < 0 ? errno : 0;
-  return result;
-}
-
-int64_t thc_file_setfl(const int *lease, int64_t flags, int64_t *error) {
-  int result = fcntl(*lease, F_SETFL, (long)flags);
-  *error = result < 0 ? errno : 0;
-  return result;
-}
-
-int64_t thc_file_setfd(const int *lease, int64_t flags, int64_t *error) {
-  int result = fcntl(*lease, F_SETFD, (long)flags);
   *error = result < 0 ? errno : 0;
   return result;
 }

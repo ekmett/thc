@@ -6,6 +6,7 @@ import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.TruffleLanguage;
 import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.condition.*;
 import org.junit.jupiter.api.io.TempDir;
 import thc.*;
@@ -35,9 +36,9 @@ class OriginalFcntlTest {
     private void compile(RootCallTarget target,String label) throws Exception { target.getClass().getMethod("compile",boolean.class).invoke(target,true); valid(target,label + " immediately after compilation"); }
     private void released(Language language) { var handoff = language.getHandoffState().get(); assertEquals(0,handoff.getArguments().getDepth()); assertEquals(0,handoff.getResults().getDepth()); assertEquals(0,handoff.getArguments().retainedReferences()); assertEquals(0,handoff.getResults().retainedReferences()); }
     private OriginalStdioOp validate(List<Object> call) { var reps = new ArrayList<Object>(); for (var arg : (List<List<Object>>) call.get(2)) { var metadata = CoreRepresentations.metadata(arg); reps.add(metadata == null ? null : metadata.get("rep")); } return CoreOriginalStdio.validate(call.get(6),reps,(List<?>) call.get(3),((Map<?,?>) call.get(6)).get("rep")); }
-    private ExecutableProgram program(String backend,Language language,Map<String,Object> module) { return backend.equals("ast") ? new Program(language,module) : new BytecodeProgram(language,module); }
+    private ExecutableProgram program(String backend,Language language,Map<String,Object> module) throws Exception { module = ForeignExceptionFixtureSupport.nativeModules(List.of(module)); return backend.equals("ast") ? new Program(language,module) : new BytecodeProgram(language,module); }
     private Object[] packet(Object[] args) { var values = new Object[args.length + 1]; values[0] = 0L; System.arraycopy(args,0,values,1,args.length); return values; }
-    @Test void genuineOriginalCallsMatchNativeFlagsAndAliasesInBothCompiledBackends() throws Exception {
+    @Test @Tag("foreign-exceptions-full-core") void genuineOriginalCallsMatchNativeFlagsAndAliasesInBothCompiledBackends() throws Exception {
         var manifest = json(prefix + "/manifest.json"); assertEquals(true,manifest.get("supported")); assertEquals("linux",manifest.get("platform")); assertEquals(names,manifest.get("entries")); assertEquals(true,manifest.get("strictAccepted")); assertEquals(false,manifest.get("runtimeVerified")); assertEquals(4L,manifest.get("nativeRows"));
         hashes(root,manifest.get("inputHashes"),Set.of("t/fixtures/compiler/OriginalFcntlAudit.hs","t/fixtures/compiler/OriginalFcntlNative.hs","t/haskell-fixtures/OriginalStdioFixtures.hs","bin/core_original_foreign.py","bin/core-capabilities.json"));
         var artifacts = new HashSet<>(Set.of(prefix + "/oracle.json",prefix + "/native/oracle")); for (var stage : List.of("pre","post")) { for (var name : names) artifacts.add(prefix + "/" + stage + "/" + name + ".audit.json"); for (var part : List.of("OriginalFcntlAudit","THC.InterfaceClosure")) artifacts.add(prefix + "/" + stage + "/core/" + part + ".json"); } hashes(root,manifest.get("artifactHashes"),artifacts,prefix + "/");
@@ -65,7 +66,7 @@ class OriginalFcntlTest {
             }
         }
     }
-    @Test void exactWidthsStateAndCommandBoundariesRejectBeforeEffects() throws Exception {
+    @Test @Tag("foreign-exceptions-full-core") void exactWidthsStateAndCommandBoundariesRejectBeforeEffects() throws Exception {
         var module = source("post"); var calls = new ArrayList<List<Object>>(); var seen = new HashSet<OriginalStdioOp>(); for (var call : foreignCalls(module)) if (seen.add(validate(call))) calls.add(call);
         for (var call : calls) {
             var original = Objects.requireNonNull(validate(call));
@@ -82,7 +83,7 @@ class OriginalFcntlTest {
                     long count = ((Number) executable.diagnostics().get("compiledEntries")).longValue(); var result = callScalarTestTarget(target,packet(args)); assertEquals(count + 1,((Number) executable.diagnostics().get("compiledEntries")).longValue(),label + " first installed invocation must enter compiled code"); valid(target,label + " after first installed invocation (result=" + result + ")"); released(language);
                     assertEquals(switch (original) { case FCNTL_READ -> (int) before; case FCNTL_WRITE -> 0; case FD_CLOEXEC -> (Object) abi.flagConstant(original); default -> (int) abi.flagConstant(original); },result);
                     long stable = state.getStdio().fcntl(fd,abi.flagConstant(OriginalStdioOp.F_GETFL),0,false); var badState = args.clone(); badState[badState.length - 1] = 9L; assertThrows(RuntimeFault.class,() -> Calls.target(target,packet(badState))); assertThrows(RuntimeFault.class,() -> callScalarTestTarget(target,packet(badState)));
-                    if (original.getFcntl()) { var badWidth = args.clone(); badWidth[0] = 1L << 32; assertThrows(RuntimeFault.class,() -> callScalarTestTarget(target,packet(badWidth))); var wrongCommand = args.clone(); wrongCommand[1] = -7; assertThrows(RuntimeFault.class,() -> callScalarTestTarget(target,packet(wrongCommand))); }
+                    if (original.getFcntl()) { var badWidth = args.clone(); badWidth[0] = 1L << 32; assertThrows(RuntimeFault.class,() -> callScalarTestTarget(target,packet(badWidth))); var wrongCommand = args.clone(); wrongCommand[1] = -7; assertEquals(-1,callScalarTestTarget(target,packet(wrongCommand))); assertEquals(abi.error(5),state.getStdio().errno()); }
                     for (int i = 0; i < original.getArguments().size(); i++) { int index = i; assertThrows(RuntimeFault.class,() -> program(backend,language,rawModule(call,module,index))); }
                     assertEquals(stable,state.getStdio().fcntl(fd,abi.flagConstant(OriginalStdioOp.F_GETFL),0,false)); assertEquals("abc",Files.readString(path)); released(language); assertEquals(0L,state.getStdio().close(fd));
                 } finally { context.leave(); }

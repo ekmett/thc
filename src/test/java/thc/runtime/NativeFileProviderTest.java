@@ -229,6 +229,19 @@ class NativeFileProviderTest {
             assertEquals("replacement", Files.readString(original)); return null;
         }); }
     }
+    @Test void fcntlDuplicateClosesEachNativeLeaseIndependently() throws Exception {
+        var file = directory.resolve("fcntl-lifetime"); Files.writeString(file, "abc");
+        try (var context = nativeContext()) { entered(context, () -> {
+            var stdio = Language.currentState(null).getStdio();
+            long fd = stdio.open(path(file), StdioHostAbi.load().flagConstant(OriginalStdioOp.O_RDWR), 0);
+            assertTrue(fd >= 3); assertEquals(70L, stdio.fcntl(fd, 0, 70, true));
+            assertEquals(2L, nativeDescriptors(file));
+            assertEquals(0L, stdio.close(fd));
+            assertEquals(1L, nativeDescriptors(file), "Closing the source must close its native fd even while F_DUPFD survives");
+            assertEquals(1L, stdio.write(70, ManagedAddress.fromByteArray(new byte[]{42}), 1));
+            assertEquals(0L, stdio.close(70)); assertEquals(0L, nativeDescriptors(file)); return null;
+        }); }
+    }
     @Test void managedReplacementMovesCapabilityAndLastOwnerClosesExactlyOnce() throws Exception {
         var a = directory.resolve("owner-a"); var b = directory.resolve("owner-b"); var context = nativeContext(); var files = new ManagedFiles[1];
         entered(context, () -> {
