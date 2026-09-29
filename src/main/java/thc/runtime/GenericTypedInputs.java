@@ -131,6 +131,50 @@ public final class GenericTypedInputs {
         forceActuals(frame, node, function, source, values, maximum, offset, count, strict, force);
         return packGenericInput(frame, node, function, input, source, values, maximum, offset, count, strict, overrides);
     }
+    static Object[] forceGenericInputCaptured(VirtualFrame frame, Node node, Closure function, TypedInputLayout input,
+            InputSource source, Object[] values, int maximum, int offset, int[] strict, Force force) {
+        Object[] overrides = function.suppliedCount == 0 ? null : new Object[input.getLogical().offset(function.suppliedCount)];
+        return forcePrefixFrom(frame, node, function, input, source, values, maximum, offset, strict, force, overrides, 0);
+    }
+    private static Object[] forcePrefixFrom(VirtualFrame frame, Node node, Closure function, TypedInputLayout input,
+            InputSource source, Object[] values, int maximum, int offset, int[] strict, Force force, Object[] overrides, int start) {
+        for (int index = start; index < strict.length; index++) if (strict[index] < function.suppliedCount) {
+            int physical = input.getLogical().offset(strict[index]);
+            Object answer;
+            try { answer = AstControl.forceCallback(frame, node, force, prefixValue(function, input, physical)); }
+            catch (AstCapture cut) {
+                int next = index + 1;
+                throw cut.append((saved, value) -> {
+                    overrides[physical] = value;
+                    return forcePrefixFrom(saved, node, function, input, source, values, maximum, offset, strict, force, overrides, next);
+                });
+            }
+            overrides[physical] = answer;
+        }
+        return forceActualsFrom(frame, node, function, source, values, maximum, offset, strict, force, overrides, 0);
+    }
+    // The source slots, unlike a generic target's strict positions, are PE constants.
+    @ExplodeLoop private static Object[] forceActualsFrom(VirtualFrame frame, Node node, Closure function, InputSource source,
+            Object[] values, int maximum, int offset, int[] strict, Force force, Object[] overrides, int start) {
+        for (int i = 0; i < maximum; i++) if (i >= start && i >= offset && i < offset + function.arity) {
+            CoreRepresentation proof = source.getLayout() == null ? null : source.getLayout().proof(i);
+            if (proof != null && (proof.isTypedTransport() || proof.isInt() || proof.isLong() || proof.isFloat() || proof.isDouble())) continue;
+            if (containsStrictPosition(strict, function.suppliedCount + i - offset)) {
+                int physical = ArgumentLayout.offset(source.getLayout(), i);
+                Object answer;
+                try { answer = AstControl.forceCallback(frame, node, force, source.reference(frame, node, values, physical)); }
+                catch (AstCapture cut) {
+                    int next = i + 1;
+                    throw cut.append((saved, value) -> {
+                        source.setReference(saved, node, values, physical, value);
+                        return forceActualsFrom(saved, node, function, source, values, maximum, offset, strict, force, overrides, next);
+                    });
+                }
+                source.setReference(frame, node, values, physical, answer);
+            }
+        }
+        return overrides;
+    }
     static HandoffStorage packGenericInput(VirtualFrame frame, Node node, Closure function, TypedInputLayout input,
             InputSource source, Object[] values, int maximum, int offset, int count, int[] strict, Object[] overrides) {
         int prefixCount = function.suppliedCount, prefixWidth = input.getLogical().offset(prefixCount);

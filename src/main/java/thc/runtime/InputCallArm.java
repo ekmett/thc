@@ -54,7 +54,7 @@ final class InputCallArm extends Node {
         }
         if (input != null && strictPositions.length != 0 && capturesInput(this)) {
             Object[] overrides;
-            try { overrides = forceInputCaptured(frame, this, function, input, source, values, start, strictPositions, force); }
+            try { overrides = forceInputCaptured(frame, this, function, input, source, values, start, strictPositions, force, prefixCount); }
             catch (AstCapture cut) {
                 throw cut.append((saved, value) -> callEntered(saved, function, values, (Object[]) value, true));
             }

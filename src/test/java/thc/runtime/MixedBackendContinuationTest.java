@@ -304,29 +304,40 @@ class MixedBackendContinuationTest {
                     runtime.getClass().getMethod("bypassedInstalledCode", Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")).invoke(runtime, target);
                 }
             } finally { context.leave(); }
-            for (int i = 0; i < targets.length; i++) {
+            for (int i = 0; i < targets.length + (compiled ? 1 : 0); i++) {
+                int targetIndex = Math.min(i, targets.length - 1);
                 var left = new Object(); var right = new Object(); var marker = new Object();
                 var entered = new ManagedMVar(); var observed = new ManagedMVar(); var suffix = new ManagedMVar();
                 var first = new ManagedMVar(); var second = new ManagedMVar();
                 var prefixes = new ManagedMVar[]{new ManagedMVar(), new ManagedMVar()};
                 for (var prefix : prefixes) assertTrue(prefix.tryPut(marker));
                 Object a = left, b = right; Closure target;
+                long compiledBefore = 0;
                 boolean interrupt = i == 0 || i == 3; // Same call site reaches direct and megamorphic dispatch.
                 context.enter();
                 try {
+                    if (compiled && i == targets.length) {
+                        // The cold-entry control above does not prove the observed generic path compiles.
+                        var callTarget = caller.entryTarget("run");
+                        assertEquals(true, callTarget.getClass().getMethod("compile", boolean.class).invoke(callTarget, true));
+                        assertEquals(true, callTarget.getClass().getMethod("isValidLastTier").invoke(callTarget));
+                        var runtime = Truffle.getRuntime();
+                        runtime.getClass().getMethod("bypassedInstalledCode", Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")).invoke(runtime, callTarget);
+                        compiledBefore = (Long) caller.diagnostics().get("compiledEntries");
+                    }
                     if (interrupt) {
                         var box1 = (DataValue) Calls.target(maker.entryTarget("make"), new Object[]{0L, prefixes[0], first});
                         var box2 = (DataValue) Calls.target(maker.entryTarget("make"), new Object[]{0L, prefixes[1], second});
                         a = assertInstanceOf(Thunk.class, box1.getLayout().read(box1, 0));
                         b = assertInstanceOf(Thunk.class, box2.getLayout().read(box2, 0));
                     }
-                    target = mode.equals("bounce") ? new Closure(null, 5, bounced[i]) : (Closure) targets[i].entryValue("run");
+                    target = mode.equals("bounce") ? new Closure(null, 5, bounced[i]) : (Closure) targets[targetIndex].entryValue("run");
                     if (mode.equals("bounce")) {
                         assertTrue(leafPrefixes[i].tryPut(marker));
                         if (!interrupt) assertTrue(leafBlocked[i].tryPut(marker));
                     }
                     if (pap) {
-                        target = (Closure) Calls.target(targets[i].hostEntryTarget(2), new Object[]{target, new Object[]{a, b}});
+                        target = (Closure) Calls.target(targets[targetIndex].hostEntryTarget(2), new Object[]{target, new Object[]{a, b}});
                         assertNotNull(target.typedSupplied);
                     }
                 } finally { context.leave(); }
@@ -357,6 +368,7 @@ class MixedBackendContinuationTest {
                 try {
                     SynchronousMasking.set(null, MaskingState.MASKED_INTERRUPTIBLE);
                     Object output = cut == null ? Calls.target(caller.entryTarget("run"), packet) : Calls.target(resume, new Object[]{parked});
+                    if (compiled && i == targets.length) assertEquals(compiledBefore + 1, caller.diagnostics().get("compiledEntries"));
                     if (mode.equals("scalar")) assertEquals(37L, output);
                     else {
                         var value = TupleResults.ownedTupleResult(output, shape);

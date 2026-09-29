@@ -50,14 +50,14 @@ public final class GenericInputCall extends Node {
                     legacyGenericPap(frame, this, function, source, values, count + start, offset, remaining);
             }
             int[] strict = input != null && capturesInput(this) ? strictInputPositions(root, input) : null;
-            if (strict != null && strict.length != 0) {
+            boolean prepared = strict != null && strict.length != 0;
+            Object[] overrides = null;
+            if (prepared) {
                 Closure current = function; int currentOffset = offset;
-                Object[] overrides;
-                try { overrides = forceInputCaptured(frame, this, current, input, source, values, currentOffset, strict, force); }
+                try { overrides = forceGenericInputCaptured(frame, this, current, input, source, values, count + start, currentOffset, strict, force); }
                 catch (AstCapture cut) {
                     throw cut.append((saved, value) -> callPrepared(saved, current, values, currentOffset, input, strict, (Object[]) value, metrics));
                 }
-                return callPrepared(frame, current, values, currentOffset, input, strict, overrides, metrics);
             }
             boolean exact = function.arity == remaining, isTail = tail && exact;
             TupleShape resultShape = exact && destination != null ? root.getTupleResult() : null;
@@ -68,7 +68,7 @@ public final class GenericInputCall extends Node {
                 try {
                     if (input == null) answer = legacy.call(frame, target, scalarPacket(frame, this, function, source, values, offset, function.arity, count + start), isTail, resultShape);
                     else {
-                        answer = invokeTyped(frame, function, values, offset, input, null, null, false, isTail, metrics);
+                        answer = invokeTyped(frame, function, values, offset, input, strict, overrides, prepared, isTail, metrics);
                     }
                 } catch (TailCall transfer) {
                     if (isTail || exact && tupleBounce != null) throw transfer;

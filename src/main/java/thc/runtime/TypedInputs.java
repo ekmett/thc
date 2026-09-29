@@ -128,23 +128,23 @@ public final class TypedInputs {
     }
     /** Complete strict demands before acquiring a packet or entering the callee. */
     static Object[] forceInputCaptured(VirtualFrame frame, Node node, Closure function, TypedInputLayout input,
-            InputSource source, Object[] values, int logicalOffset, int[] strict, Force force) {
-        Object[] overrides = function.suppliedCount == 0 ? null : new Object[input.getLogical().offset(function.suppliedCount)];
-        return forceInputFrom(frame, node, function, input, source, values, logicalOffset, strict, force, overrides, 0);
+            InputSource source, Object[] values, int logicalOffset, int[] strict, Force force, int prefixCount) {
+        Object[] overrides = prefixCount == 0 ? null : new Object[input.getLogical().offset(prefixCount)];
+        return forceInputFrom(frame, node, function, input, source, values, logicalOffset, strict, force, prefixCount, overrides, 0);
     }
-    private static Object[] forceInputFrom(VirtualFrame frame, Node node, Closure function, TypedInputLayout input,
-            InputSource source, Object[] values, int logicalOffset, int[] strict, Force force, Object[] overrides, int start) {
+    @ExplodeLoop private static Object[] forceInputFrom(VirtualFrame frame, Node node, Closure function, TypedInputLayout input,
+            InputSource source, Object[] values, int logicalOffset, int[] strict, Force force, int prefixCount, Object[] overrides, int start) {
         for (int index = start; index < strict.length; index++) {
             int formal = strict[index];
-            boolean prefix = formal < function.suppliedCount;
+            boolean prefix = formal < prefixCount;
             int position = prefix ? input.getLogical().offset(formal)
-                : ArgumentLayout.offset(source.getLayout(), logicalOffset + formal - function.suppliedCount);
+                : ArgumentLayout.offset(source.getLayout(), logicalOffset + formal - prefixCount);
             if (!prefix) {
                 CoreRepresentation proof = source.getPhysicalProofs() == null ? null : source.getPhysicalProofs()[position];
                 if (proof != null && (proof.isInt() || proof.isLong() || proof.isFloat() || proof.isDouble())) continue;
             }
             Object raw = prefix ? function.typedSupplied != null
-                ? input.prefix(function.suppliedCount).getObject(function.typedSupplied, position) : function.supplied[position]
+                ? input.prefix(prefixCount).getObject(function.typedSupplied, position) : function.supplied[position]
                 : source.reference(frame, node, values, position);
             Object answer;
             try { answer = AstControl.forceCallback(frame, node, force, raw); }
@@ -153,7 +153,7 @@ public final class TypedInputs {
                 throw cut.append((saved, value) -> {
                     if (prefix) overrides[position] = value;
                     else source.setReference(saved, node, values, position, value);
-                    return forceInputFrom(saved, node, function, input, source, values, logicalOffset, strict, force, overrides, next);
+                    return forceInputFrom(saved, node, function, input, source, values, logicalOffset, strict, force, prefixCount, overrides, next);
                 });
             }
             if (prefix) overrides[position] = answer;
