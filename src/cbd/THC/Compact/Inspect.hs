@@ -18,6 +18,7 @@ module THC.Compact.Inspect (inspectContainer, inspectName, inspectSource, unpack
 
 import Data.Aeson
 import qualified Data.Aeson.Key as Key
+import qualified Data.Aeson.KeyMap as KM
 import Data.Binary.Get (getByteString, getWord64le)
 import Data.Bits ((.&.))
 import qualified Data.ByteString as BS
@@ -263,12 +264,23 @@ constructor value = object $ ["id" .= str (constructorId value),"name" .= str (c
 moduleJSON :: Facts -> [Binding] -> Value
 moduleJSON facts bindings = object $ ["schema" .= factsSchema facts,"ghc" .= str (factsGhc facts),
   "unit" .= str (factsUnit facts),"module" .= str (factsModule facts),"boundary" .= str (factsBoundary facts),
-  "constructors" .= arr constructor (factsConstructors facts),"bindings" .= arr binding bindings]
+  "constructors" .= arr constructor (factsConstructors facts),"bindings" .= arr originalBinding bindings]
   ++ p "providedModules" (arr str) (factsProvidedModules facts) ++ p "targetLayout" targetLayout (factsTargetLayout facts)
   ++ p "foreign" foreignArtifacts (factsForeign facts) ++ p "foreignExceptionBridge" exceptionBridge (factsExceptionBridge facts)
   ++ p "foreignExceptionBridgeUnit" str (factsExceptionBridgeUnit facts)
   ++ concat (zipWith (\key -> p (Key.fromText (Text.decodeUtf8 key)) provenance)
        pendingProvenanceNames (factsPendingProvenance facts))
+  ++ maybe [] closureFields (factsClosureProvenance facts)
+  where
+    closureFields (ClosureProvenance roots modules missing _) =
+      p "roots" (arr str) roots ++ p "sourceModules" (arr str) modules ++
+      p "missingDefinitions" (arr (\(MissingDefinition key ty reason) -> object
+        ["id" .= str key,"type" .= str ty,"reason" .= str reason])) missing
+    originalBinding value = case (bindingIdentity value,binding value,factsClosureProvenance facts) of
+      (Global key,Object fields,Just (ClosureProvenance _ _ _ origins)) -> Object $
+        foldr (\(BindingOrigin owner origin ownerModule) result -> if key /= owner then result else
+          foldr (uncurry KM.insert) result (p "origin" str origin ++ p "originModule" str ownerModule)) fields origins
+      (_,result,_) -> result
 
 provenance :: ModuleProvenance -> Value
 provenance (ImportsRecord proof) = importProof proof

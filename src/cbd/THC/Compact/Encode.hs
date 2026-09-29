@@ -78,6 +78,15 @@ encodeFacts (Encoder streams strings shapes _ found observer) facts = do
     (fail "Compact header requires eight provenance-presence slots")
   mapM_ (\(slot,value) -> present encoder (provenance encoder slot) value)
     (zip [0..] (factsPendingProvenance facts))
+  forM_ (factsClosureProvenance facts) $ \(ClosureProvenance roots modules missing origins) -> do
+    tag encoder 1
+    present encoder (list encoder (string encoder)) roots
+    present encoder (list encoder (string encoder)) modules
+    present encoder (list encoder (\(MissingDefinition key ty reason) -> mapM_ (string encoder) [key,ty,reason])) missing
+    list encoder (\(BindingOrigin key origin owner) -> do
+      string encoder key
+      present encoder (string encoder) origin
+      present encoder (string encoder) owner) origins
   BL.toStrict . Builder.toLazyByteString <$> readIORef output
 
 targetLayout :: Encoder -> TargetLayout -> IO ()

@@ -53,6 +53,31 @@ debugTests = TestList
         (case readModuleValue changed of Right (Object fields) -> KM.lookup "foreignExceptionBridgeUnit" fields; _ -> Nothing)
       assertEqual "unchanged amendment retains exact container" original =<< rewriteModuleFacts original value
       assertBool "JSON is not an accepted module payload" (isLeft (readModuleValue "{\"bindings\":[]}"))
+  , TestLabel "interface closure provenance survives direct publication and native header amendment" $ TestCase $ do
+      let provenance = KM.fromList [("roots",toJSON ["main:Original.root" :: String]),
+            ("sourceModules",toJSON ["main:Original" :: String]),
+            ("missingDefinitions",toJSON [object ["id" .= ("base:Missing.body" :: String),
+              "type" .= ("Int" :: String),"reason" .= ("source export required" :: String)]])]
+          origin = KM.fromList [("origin",String "interface-core-unfolding"),("originModule",String "base:Original")]
+          addOrigin (Object fields) = Object (KM.union origin fields)
+          addOrigin value = value
+          input = case originalModule of
+            Object fields -> Object (KM.union provenance (KM.mapWithKey (\key value -> case value of
+              Array values | key == "bindings" -> Array (fmap addOrigin values); _ -> value) fields))
+            _ -> error "Expected module"
+      bytes <- encodeModuleValue input
+      value <- either fail pure (readModuleValue bytes)
+      let selected (Object fields) = (map (`KM.lookup` fields) (KM.keys provenance),
+            case KM.lookup "bindings" fields of
+              Just (Array values) -> fmap (\entry -> case entry of
+                Object record -> map (`KM.lookup` record) (KM.keys origin); _ -> []) values
+              _ -> mempty)
+          selected _ = error "Expected module"
+      assertEqual "required frontier and original binding owners are retained" (selected input) (selected value)
+      let amended = case value of Object fields -> Object (KM.insert "foreignExceptionBridgeUnit" (String "runtime") fields); _ -> value
+      changed <- rewriteModuleFacts bytes amended
+      after <- either fail pure (readModuleValue changed)
+      assertEqual "header amendment does not discard origin ledger" (selected value) (selected after)
   , TestLabel "exact scoped debug names never use predecessor or common strings" $ TestCase $
       withTables $ \_ names _ _ -> do
         assertEqual "UTF8 original name" (Right (Just unicodeName)) (nameAt names 0 0)
