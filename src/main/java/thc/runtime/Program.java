@@ -1764,7 +1764,7 @@ public final class Program implements ExecutableProgram {
                 throw fault("Java vector array access requires a linked genuine THC.Exception runtime bundle");
             Expr[] lowered = compileOperands(args, scope);
             return (stringOp != null ? new TruffleStringExpression(stringOp, lowered, reusableCode ? scope.programSlot : -1) :
-                new VectorApiExpression(vectorApi, lowered)).proven(evaluated(tupleProof, true));
+                new VectorApiExpression(vectorApi, lowered, reusableCode ? scope.programSlot : -1)).proven(evaluated(tupleProof, true));
         }
         PolyglotOp polyglot;
         try {
