@@ -2064,7 +2064,7 @@
       "python": []
     },
     "src/test/java/thc/runtime/ManagedStackInfoImageTest.java": {
-      "junit": ["thc.runtime.ManagedStackInfoImageTest", "thc.runtime.OriginalStackInfoCallTest", "thc.runtime.OriginalStackDecoderCallTest", "thc.runtime.RtsFlagsTest", "thc.runtime.ReturnedForeignPointerTest"],
+      "junit": ["thc.runtime.ManagedStackInfoImageTest", "thc.runtime.OriginalStackInfoCallTest", "thc.runtime.OriginalStackDecoderCallTest", "thc.runtime.RtsFlagsTest", "thc.runtime.ReturnedForeignPointerTest", "thc.runtime.OriginalStringRtsTest"],
       "python": []
     },
     "t/fixtures/compiler/BoxedArrayExtensionsAudit.hs": {

@@ -1279,7 +1279,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                 consumers.update(select.junit_info(source)[0])
         self.assertEqual({"thc.runtime.ManagedStackInfoImageTest", "thc.runtime.OriginalStackInfoCallTest",
                           "thc.runtime.OriginalStackDecoderCallTest", "thc.runtime.RtsFlagsTest",
-                          "thc.runtime.ReturnedForeignPointerTest"}, consumers)
+                          "thc.runtime.ReturnedForeignPointerTest", "thc.runtime.OriginalStringRtsTest"}, consumers)
         self.assertEqual(consumers, set(group["junit"]))
         self.assertEqual([], group["python"])
 
