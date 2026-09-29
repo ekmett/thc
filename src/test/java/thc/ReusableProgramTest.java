@@ -15,6 +15,95 @@ import static thc.CoreExecutionTestSupport.*;
 
 /** Real lowerer ownership checks; auxiliary-cache persistence remains a separate acceptance. */
 class ReusableProgramTest {
+    private Map<String,Object> intrinsicCaseModule(Map<String,Object> metadata) {
+        var data = map("kind", "data", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)"));
+        var word = map("kind", "long", "evaluated", true, "primReps", list("IntRep"));
+        var closure = map("kind", "closure", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)"));
+        var selected = list("case", variable("x"), "input", list(
+            list("lit", list("int", "0"), list(), list("con", "Zero", 0, map("rep", data))),
+            list("default", null, list(), list("con", "One", 0, map("rep", data)))),
+            with(metadata, "binder", wordParameter("input")));
+        var body = list("case", selected, "selected", list(
+            list("data", "Zero", list(), literal(47)), list("data", "One", list(), literal(-25))),
+            map("rep", word, "binder", map("id", "selected", "rep", data)));
+        var entry = binding("read", list("lam", list(wordParameter("x")), body,
+            map("rep", closure, "resultRep", word)), true);
+        entry.put("rep", closure); entry.put("arity", 1);
+        var module = module(list(entry));
+        var constructors = new ArrayList<Map<String,Object>>();
+        for (String name : List.of("Zero", "One")) constructors.add(map("id", name, "name", name,
+            "kind", "boxed", "arity", 0, "tag", constructors.size() + 1, "fieldReps", list(),
+            "fieldTypes", list(), "fieldLifted", list(), "strictFields", list()));
+        module.put("constructors", constructors);
+        return module;
+    }
+
+    @Test @SuppressWarnings("unchecked")
+    void intrinsicCaseResultSurvivesErasedOuterProofWithoutGuestTraining() throws Exception {
+        var unknown = map("kind", "unknown", "evaluated", false);
+        var data = map("kind", "data", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)"));
+        var module = intrinsicCaseModule(map("rep", unknown, "resultRep", data));
+        for (String backend : List.of("ast", "bytecode")) try (var context = Context.newBuilder("thc").build()) {
+            var entry = context.eval("thc", Json.stringify(map("modules", list(module), "entry", "read", "backend", backend)));
+            assertEquals(47L, entry.execute(0L).asLong()); assertEquals(-25L, entry.execute(1L).asLong());
+        }
+        try (var engine = Engine.newBuilder().allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false")
+                .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build()) {
+            Program.PreparedCode code;
+            try (var preparation = Context.newBuilder("thc").engine(engine).build()) {
+                preparation.initialize("thc"); preparation.enter();
+                try { code = Program.prepareCode(TruffleLanguage.LanguageReference.create(Language.class).get(null), module, List.of("read")); }
+                finally { preparation.leave(); }
+            }
+            var field = Program.PreparedCode.class.getDeclaredField("targets"); field.setAccessible(true);
+            for (var target : (List<com.oracle.truffle.runtime.OptimizedCallTarget>)field.get(code)) {
+                assertFalse(target.wasExecuted()); assertTrue(target.prepareForAOT()); target.compile(true); assertFalse(target.wasExecuted());
+            }
+            String previous = System.getProperty("thc.requireCompiledCode"); System.setProperty("thc.requireCompiledCode", "true");
+            try {
+                for (int load = 0; load < 2; load++) try (var context = Context.newBuilder("thc").engine(engine).build()) {
+                    context.initialize("thc"); context.enter();
+                    try {
+                        for (int instance = 0; instance < 2; instance++) {
+                            var program = code.newInstance(TruffleLanguage.LanguageReference.create(Language.class).get(null));
+                            var entry = (Closure)program.entryValue("read");
+                            assertEquals(47L, Calls.target(entry.target, new Object[]{0L, entry.environment, 0L}));
+                            assertEquals(-25L, Calls.target(entry.target, new Object[]{0L, entry.environment, 1L}));
+                            assertEquals(0, count(program, "loweredRootCount")); assertEquals(2, count(program, "compiledEntries"));
+                            code.requireInstalledCode();
+                        }
+                    } finally { context.leave(); }
+                }
+            } finally {
+                if (previous == null) System.clearProperty("thc.requireCompiledCode"); else System.setProperty("thc.requireCompiledCode", previous);
+            }
+        }
+        assertEquals("unknown", unknown.get("kind"), "Preparation must not rewrite the outer expression certificate");
+    }
+
+    @Test void intrinsicCaseProofCannotHideMissingOrConflictingRepresentations() {
+        var unknown = map("kind", "unknown", "evaluated", false);
+        var data = map("kind", "data", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)"));
+        var word = map("kind", "long", "evaluated", true, "primReps", list("IntRep"));
+        try (var context = Context.newBuilder("thc").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                // Old documents still use rep; an explicit UNKNOWN resultRep must not fall back to it.
+                assertDoesNotThrow(() -> Program.prepareCode(language, intrinsicCaseModule(map("rep", data)), List.of("read")));
+                for (var metadata : List.of(map("rep", unknown), map("rep", data, "resultRep", unknown)))
+                    assertThrows(UnsupportedCore.class, () -> Program.prepareCode(language, intrinsicCaseModule(metadata), List.of("read")));
+                for (var metadata : List.of(map("rep", unknown, "resultRep", word), map("rep", word, "resultRep", data))) {
+                    var module = intrinsicCaseModule(metadata);
+                    assertThrows(RuntimeFault.class, () -> Program.prepareCode(language, module, List.of("read")));
+                    for (String backend : List.of("ast", "bytecode"))
+                        assertThrows(org.graalvm.polyglot.PolyglotException.class, () -> context.eval("thc", Json.stringify(
+                            map("modules", list(module), "entry", "read", "backend", backend))).execute(0L));
+                }
+            } finally { context.leave(); }
+        }
+    }
+
     @Test @SuppressWarnings("unchecked")
     void preparedNativeLabelsAndBigNatLiteralsBelongToTheInvokingLoad() throws Exception {
         var address = map("kind", "address", "evaluated", true, "primReps", list("AddrRep"));

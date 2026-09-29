@@ -408,7 +408,7 @@ public final class Program implements ExecutableProgram {
             }
             case "case" -> {
                 CoreRepresentation binder = CoreRepresentations.caseBinder(expression);
-                CoreRepresentation result = CoreRepresentations.expression(expression);
+                CoreRepresentation result = CoreRepresentations.caseResult(expression);
                 if (!reusableValue(binder) || !reusableValue(result))
                     throw new UnsupportedCore("Reusable AST case binder and result require exact supported representations");
                 requireReusableBody((List<Object>) expression.get(1));
@@ -1044,6 +1044,7 @@ public final class Program implements ExecutableProgram {
             Expr lowered = compileSupported(expr, scope, tail);
             CoreRepresentation metadata = diagnosticUnsupported && lowered instanceof GlobalRead ? CoreRepresentation.UNKNOWN :
                 CoreRepresentations.expression(expr);
+            if ("case".equals(expr.getFirst())) metadata = CoreRepresentations.caseResult(expr).refine(metadata);
             return lowered.proven(lowered.getRepresentation().refine(evaluated(metadata, false)));
         } catch (UnsupportedCore gap) {
             if (!diagnosticUnsupported) throw gap;
@@ -1125,7 +1126,7 @@ public final class Program implements ExecutableProgram {
                 }
             }
         }
-        CoreRepresentation result = arms[0].getRepresentation().refine(CoreRepresentations.expression(expr));
+        CoreRepresentation result = arms[0].getRepresentation().refine(CoreRepresentations.caseResult(expr));
         for (Expr arm : arms) result.refine(arm.getRepresentation());
         List<CoreRepresentation> armProofs = new ArrayList<>();
         boolean allEvaluated = true;
@@ -1167,7 +1168,7 @@ public final class Program implements ExecutableProgram {
             FrameLayout.carrierKind(shape.getLeaves()[i]));
         local.bindTuple((String) expr.get(2), proof, slots);
         List<List<Object>> alternatives = (List<List<Object>>) expr.get(3);
-        if (alternatives.isEmpty()) return new TupleCase(scrutinee, slots, new EmptyCaseResult(CoreRepresentations.expression(expr)));
+        if (alternatives.isEmpty()) return new TupleCase(scrutinee, slots, new EmptyCaseResult(CoreRepresentations.caseResult(expr)));
         if (alternatives.size() != 1) throw new RuntimeFault("Tuple case requires at most one alternative");
         List<Object> alt = alternatives.getFirst();
         List<String> ids = (List<String>) alt.get(2);
@@ -1621,7 +1622,7 @@ public final class Program implements ExecutableProgram {
             anyAggregate |= body.getRepresentation().isAggregate();
             anyScalar |= !body.getRepresentation().isAggregate();
         }
-        CoreRepresentation declared = CoreRepresentations.expression(expr);
+        CoreRepresentation declared = CoreRepresentations.caseResult(expr);
         if (!declared.isAggregate() && anyAggregate && anyScalar) throw new RuntimeFault("Missing exact aggregate case result proof");
         CoreRepresentations.validateDeclaredCaseResult(declared, results);
         CoreRepresentations.validateAggregateCaseResult(declared, results);

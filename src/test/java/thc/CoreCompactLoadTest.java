@@ -107,6 +107,43 @@ class CoreCompactLoadTest {
         return CoreFormatTestSupport.request(List.of("@" + path), "unit:A.entry", backend, false, false, false, verify);
     }
     private long count(Value entry, String key) { return ((Number) document(entry.getMember("diagnostics").asString()).get(key)).longValue(); }
+    @Test void intrinsicCaseResultSurvivesCompactLoadingAndJsonDetachment() throws Exception {
+        for (boolean conflicting : List.of(false, true)) {
+            var model = new Model(conflicting ? "Conflict" : "Intrinsic");
+            model.function("entry", out -> {
+                out.write(7); // Case: UNKNOWN outer rep, separate exact intrinsic resultRep.
+                out.writeBytes(new byte[]{2, 0, 9, 1, 0, 0, 0, 0, 0, 0, 2, 0});
+                out.writeBytes(new byte[]{2, 0, (byte)(conflicting ? 2 : 0), 2, 1,
+                    (byte)(conflicting ? 11 : 0), 0, 0, 0, 0, 0, 0, 2, 1});
+                out.writeBytes(new byte[8]);
+                out.variable(); out.u(1); out.write(2); out.binder(1); out.u(1);
+                out.write(0); out.u(0); out.literal(47);
+            });
+            var module = model.write(model.name, false);
+            var manifest = directory.resolve(model.name + ".json");
+            Files.writeString(manifest, Json.stringify(map("format", "thc-core-packages", "schema", 1,
+                "ghc", "9.14.1", "units", list(map("id", "unit", "depends", list(), "modules", list(module))))));
+            String entryName = "unit:" + model.name + ".entry";
+            var detached = document(NativeCache.request(List.of("@" + manifest), entryName));
+            var detachedModule = (Map<?,?>)((List<?>)detached.get("modules")).getFirst();
+            var binding = (Map<?,?>)((List<?>)detachedModule.get("bindings")).getFirst();
+            var body = (List<?>)((List<?>)binding.get("expr")).get(2);
+            assertEquals(thc.runtime.CoreKind.UNKNOWN, thc.runtime.CoreRepresentations.expression(body).getKind());
+            assertEquals(conflicting ? thc.runtime.CoreKind.DOUBLE : thc.runtime.CoreKind.LONG,
+                thc.runtime.CoreRepresentations.caseResult(body).getKind());
+            detached.remove("prepareCode"); // Minimal format-model formals are deliberately uncertified.
+            for (String backend : List.of("ast", "bytecode")) {
+                detached.put("backend", backend);
+                for (String request : List.of(CoreFormatTestSupport.request(List.of("@" + manifest), entryName,
+                        backend, false, false, false, false), Json.stringify(detached))) {
+                    try (var context = Main.executionContext(false)) {
+                        if (conflicting) assertThrows(PolyglotException.class, () -> context.eval("thc", request).execute(0L));
+                        else assertEquals(47L, context.eval("thc", request).execute(0L).asLong());
+                    }
+                }
+            }
+        }
+    }
     @Test void cachedSelectionDetachesOnlyReachableCompactBodiesBeforeReadersClose() throws Exception {
         var path = fixture();
         String selected = NativeCache.request(List.of("@" + path), "unit:A.entry");
