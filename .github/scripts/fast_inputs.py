@@ -570,8 +570,8 @@ FLOAT_DECODE_COMMANDS = ("native-build", "native-oracle", "boot-export",
                           (f"{stage}-export", *(f"{stage}-{name}-audit" for name in FLOAT_DECODE_ENTRIES))))
 FLOAT_DECODE_OUTPUTS = frozenset("build/float-decode/" + name for name in (
     "manifest.json", "inputs.tsv", "oracle.tsv", "native/oracle",
-    "original/GHC.Internal.Bignum.Integer.json", "original/boot-provenance.json",
-    *(f"{stage}-core/{module}.json" for stage in ("pre", "post") for module in ("FloatDecodeAudit", "FloatDecode")),
+    "original/GHC.Internal.Bignum.Integer.cbd", "original/boot-provenance.json",
+    *(f"{stage}-core/{module}.cbd" for stage in ("pre", "post") for module in ("FloatDecodeAudit", "FloatDecode")),
     *(f"{stage}-{entry}-audit.json" for stage in ("pre", "post") for entry in FLOAT_DECODE_ENTRIES),
     *(f"commands/{command}.{suffix}" for command in FLOAT_DECODE_COMMANDS for suffix in ("stdout", "stderr", "command.json"))))
 FLOATING_REMAINDER_ENTRIES = (*(op + kind for kind in ("Float", "Double") for op in ("asinh", "acosh", "atanh", "min", "max")),
@@ -581,7 +581,7 @@ FLOATING_REMAINDER_COMMANDS = ("native-build", "native-oracle",
                                 (f"{stage}-export", *(f"{stage}-{name}-audit" for name in FLOATING_REMAINDER_ENTRIES))))
 FLOATING_REMAINDER_OUTPUTS = frozenset("build/floating-remainder/" + name for name in (
     "manifest.json", "inputs.tsv", "oracle.tsv", "native/oracle",
-    *(f"{stage}-core/{module}.json" for stage in ("pre", "post") for module in ("FloatingRemainderAudit", "InverseHyperbolic")),
+    *(f"{stage}-core/{module}.cbd" for stage in ("pre", "post") for module in ("FloatingRemainderAudit", "InverseHyperbolic")),
     *(f"{stage}-{entry}-audit.json" for stage in ("pre", "post") for entry in FLOATING_REMAINDER_ENTRIES),
     *(f"commands/{command}.{suffix}" for command in FLOATING_REMAINDER_COMMANDS for suffix in ("stdout", "stderr", "command.json"))))
 MAX_FILES = 30000
@@ -1901,6 +1901,12 @@ def allowed_payload(name):
         return name in FLOAT_DECODE_OUTPUTS
     if parts[1] == "floating-remainder":
         return name in FLOATING_REMAINDER_OUTPUTS
+    if name in {f"build/{family}/{stage}-core/{module}.cbd"
+                for family, module in (("word-floating", "WordFloatingAudit"),
+                                       ("scalar-bitcasts", "ScalarBitCastAudit"),
+                                       ("fused-floating", "FloatingAudit"), ("sqrt", "SqrtAudit"))
+                for stage in ("pre", "post")}:
+        return True
     if parts[1] == "simd-capability-smoke":
         return name in SIMD_SMOKE_OUTPUTS
     if parts[1] == "simd-floatx4-fma":
