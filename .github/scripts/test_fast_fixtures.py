@@ -2231,6 +2231,25 @@ class FixturePreparationTest(unittest.TestCase):
             self.assertIsNone(owners[name])
             self.assertTrue((project / "src/test/java/thc/runtime" / (simple_name + ".java")).is_file())
 
+    def test_java_array_direct_controls_need_no_full_core_fixture(self):
+        project = Path(__file__).resolve().parents[2]
+        _, owners = fast_fixtures._manifest(project)
+        name = "thc.runtime.JavaArrayTest"
+        self.assertIn(name, owners)
+        self.assertIsNone(owners[name])
+        self.manifest["fixtureFreeJunit"].append(name)
+        (self.root / fast_fixtures.MANIFEST).write_text(json.dumps(self.manifest))
+        self.assertEqual(self.prepare(name), {"mode": "selected", "rebuilt": [], "reused": []})
+        self.assertEqual([], self.calls)
+        policy = json.loads((project / ".github/scripts/fast-tests.json").read_text())
+        for source in ("src/test/java/thc/runtime/JavaArrayTest.java", "t/haskell-fixtures/JavaArrayFixtures.hs",
+                       "t/fixtures/compiler/JavaArrays.hs", "t/fixtures/compiler/JavaInteropSafe.hs"):
+            self.assertEqual([name], policy["owners"][source]["junit"])
+        build = (project / "build.gradle").read_text()
+        self.assertIn('includeTestsMatching("thc.runtime.JavaArrayTest")', build)
+        self.assertIn('checkBuild(file("build/java-arrays/packages.json").isFile())', build)
+        self.assertNotIn('"$fixture_bin" java-arrays', (project / 'bin/prepare-tests.sh').read_text())
+
     def test_unrelated_source_does_not_invalidate_group(self):
         self.prepare("thc.AlphaTest")
         self.calls.clear()
