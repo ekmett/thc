@@ -14,7 +14,7 @@ from pathlib import Path
 import unittest
 import core_original_foreign
 import core_package_manifest
-from collections import deque
+from collections import ChainMap, deque
 from contextlib import closing
 import gc
 import os
@@ -3441,15 +3441,15 @@ class OriginalDupAuditTest(unittest.TestCase):
                 self.assertFalse(self.audit(module)['accepted'], (symbol, unit))
 
     def test_process_identity_keeps_exact_owner_and_signedness(self):
-        for unit in ('unix-2.8.8.0-inplace', 'unix-2.8.8.0-460b', 'unix-2.8.8.0-deadbeef'):
-            module = self.fixture('geteuid')
-            self.call(module)[6]['foreignCall']['target']['unit'] = unit
-            self.assertTrue(self.audit(module)['accepted'], unit)
         for symbol, expected in (('getpid', 'Int32Rep'), ('geteuid', 'Word32Rep')):
+            for unit in ('unix-2.8.8.0-inplace', 'unix-2.8.8.0-460b', 'unix-2.8.8.0-deadbeef'):
+                module = self.fixture(symbol)
+                self.call(module)[6]['foreignCall']['target']['unit'] = unit
+                self.assertTrue(self.audit(module)['accepted'], (symbol, unit))
             for unit in ('main', 'unix-2.8.7.0-inplace', 'ghc-internal-9.1401.0-inplace',
                          'unix-2.8.8.0-', 'unix-2.8.8.0-ABCD', 'unix-2.8.8.0-xyz',
                          'unix-2.8.8.0-inplace\n', 'unix-2.8.8.0-460b:forged',
-                         'ghc-internal' if symbol == 'geteuid' else 'unix-2.8.8.0-inplace'):
+                         *(['ghc-internal'] if symbol == 'geteuid' else [])):
                 module = self.fixture(symbol)
                 self.call(module)[6]['foreignCall']['target']['unit'] = unit
                 self.assertFalse(self.audit(module)['accepted'], (symbol, unit))
@@ -5120,6 +5120,7 @@ class BoundedAuditIntegrationTest(unittest.TestCase):
             def __init__(self, modules, capabilities, foreign_exception_bridge_unit=None, *, store=None):
                 self.test_modules = list(modules)
                 super().__init__(self.test_modules, capabilities, foreign_exception_bridge_unit, store=store)
+                self.test_package_scalar_links = copy.deepcopy(dict(self.package_scalar_links))
             def run(self, entries, io_main=False):
                 nonlocal runs
                 if self.store is not None:
@@ -5137,6 +5138,12 @@ class BoundedAuditIntegrationTest(unittest.TestCase):
                         AuditStore(outer.root / ('case-' + str(runs) + '.sqlite'), {}, cache_entries=runs % 3) as store:
                     indexed = original(iter(self.test_modules), self.cap, self.exception_bridge_unit, store=store)
                     indexed.retained_exports = self.retained_exports
+                    outer.assertEqual(self.test_package_scalar_links, dict(indexed.package_scalar_links))
+                    # Mirror only post-construction fixture injections, leaving
+                    # the sealed indexed catalogue and its normal reads intact.
+                    injected_links = {unit: link for unit, link in self.package_scalar_links.items()
+                                      if link != self.test_package_scalar_links.get(unit)}
+                    indexed.package_scalar_links = ChainMap(injected_links, indexed.package_scalar_links)
                     report = indexed.run(entries, io_main=io_main)
                     output = io.StringIO()
                     audit_core.write_report(report, output)

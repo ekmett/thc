@@ -1276,10 +1276,16 @@ def _bindings_span(text):
 
 
 def _contains_delimited_control(value):
-    if isinstance(value, list):
-        return (len(value) >= 2 and value[:2] in (['prim', 'prompt#'], ['prim', 'control0#']) or
-                any(_contains_delimited_control(item) for item in value))
-    return isinstance(value, dict) and any(_contains_delimited_control(item) for item in value.values())
+    pending = [value]
+    while pending:
+        value = pending.pop()
+        if isinstance(value, list):
+            if len(value) >= 2 and value[:2] in (['prim', 'prompt#'], ['prim', 'control0#']):
+                return True
+            pending.extend(value)
+        elif isinstance(value, dict):
+            pending.extend(value.values())
+    return False
 
 
 def _check_unit_summaries(path, item, module):
