@@ -1494,7 +1494,8 @@ class Audit:
                 self.issue('foreign-call', owner, path, str(error))
             return True
         package_link = self.package_scalar_links.get(target.get('unit')) if isinstance(target, dict) else None
-        if package_link is not None and call.get('convention') in ('ccall', 'capi'):
+        # JavaScript in a mixed native unit uses its full descriptor check below.
+        if package_link is not None and call.get('convention') in ('ccall', 'capi') and call.get('intrinsic') != 'javascript-v1':
             try:
                 head = self.expression_rep(function)
                 if (len(function) != 3 or function[0] != 'var' or not isinstance(function[1], str) or not function[1] or

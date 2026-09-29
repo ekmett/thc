@@ -45,6 +45,9 @@ public final class CorePackageScalarForeign {
     public static PackageScalarCall validate(Object metadata, List<?> arguments, List<?> flags, Object output, List<PackageScalarLink> links) {
         if (!(metadata instanceof Map<?, ?> meta) || !(meta.get("foreignCall") instanceof Map<?, ?> descriptor)
             || !(descriptor.get("target") instanceof Map<?, ?> target)) return null;
+        // A unit may own both native adapters and JavaScript declarations.
+        // The latter retain their full proof check in CoreJavaScript.
+        if ("javascript-v1".equals(descriptor.get("intrinsic"))) return null;
         var dynamic = CoreDynamicForeign.validate(meta, descriptor, target, arguments, flags, output);
         if (dynamic != null) return dynamic;
         PackageScalarLink link = null;

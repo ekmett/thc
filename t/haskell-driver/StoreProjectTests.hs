@@ -365,8 +365,21 @@ proxyOptionsTest env = TestLabel "compiler proxy preserves arguments and replay 
       calls <- splitArguments <$> readText arguments
       let (native, replay) = break (== "BEGIN") (drop 1 calls)
           externalPrefix = "-fplugin-library=" ++ project </> "plugin café.so" ++ ";thc-plugin;THC.Plugin;"
-      assertEqual "native arguments change only for the selected guest-only unit"
-        (supplied ++ ["-no-link" | noLink]) native
+      assertEqual "native arguments retain the original response files and RTS flags"
+        supplied (take (length supplied) native)
+      let additions = drop (length supplied) native
+      if noLink then do
+        assertEqual "guest-only compilation omits linking and loads the exact plugin database"
+          ["-no-link", "-package-db", project </> "plugin-db", "-fplugin-trustworthy"] (take 4 additions)
+        assertEqual "guest-only compilation loads one actual plugin" 5 (length additions)
+        specification <- maybe (fail "missing guest-only plugin") pure
+          (stripPrefix externalPrefix (last additions))
+        let pluginOptions = read specification :: [String]
+            wanted = if supplied == ["@" ++ response] then ["closure=response"]
+              else if "-fplugin-opt" `elem` supplied then ["closure=first", "closure=second"] else []
+        assertEqual "guest-only parser rewrite preserves caller plugin options"
+          ([project </> "capture/guest-core", "post-tidy", "unit-qualified", "foreign-import-provenance"] ++ wanted) pluginOptions
+      else assertEqual "ordinary compiler calls stay unchanged" [] additions
       assertEqual "only selected Core compilations replay" (if replays then 2 else 1)
         (length $ filter (== "BEGIN") calls)
       if replays then do

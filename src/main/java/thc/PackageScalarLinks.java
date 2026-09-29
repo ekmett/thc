@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc;
 
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
@@ -204,6 +205,18 @@ public final class PackageScalarLinks {
             check(!nativeLink || module.containsKey("foreign") || Objects.equals(stubs.get("source"), ""), "missing retained C stubs");
         }
         var imports = list(proof.get("imports")); check(nativeLink || !imports.isEmpty(), "empty import inventory");
+        // Explicit JavaScript descriptors select Truffle, not a native adapter.
+        // Their declarations and complete call inventory are still validated.
+        var javascript = new HashSet<String>();
+        for (Object value : list(proof.get("expectedCalls"))) {
+            if (value instanceof Map<?,?> call && Objects.equals(call.get("intrinsic"), "javascript-v1") &&
+                version(call.get("schema"), 1) && Objects.equals(call.get("convention"), "ccall") && in(call.get("safety"), "safe", "unsafe") &&
+                call.get("javascriptSource") instanceof String source && !source.isEmpty() && call.get("target") instanceof Map<?,?> callTarget &&
+                Objects.equals(callTarget.get("unit"), unit) && Objects.equals(callTarget.get("kind"), "static") && Boolean.TRUE.equals(callTarget.get("isFunction"))) {
+                String symbol = "thc_javascript_v1_" + HexFormat.of().formatHex(source.getBytes(StandardCharsets.UTF_8));
+                if (Objects.equals(callTarget.get("symbol"), symbol)) javascript.add(symbol);
+            }
+        }
         var binders = new HashSet<Map<?,?>>(); var proved = new HashSet<String>();
         proved.addAll(dataSymbols);
         proved.addAll(PackageFinalizers.proved(module, link));
@@ -215,6 +228,16 @@ public final class PackageScalarLinks {
             check((header == null || nativeLink && header instanceof String s && !s.isEmpty() && s.indexOf(0) < 0) && (item.get("unit") == null || Objects.equals(item.get("unit"), unit)) && (Objects.equals(item.get("isFunction"), true) || nativeLink && Objects.equals(convention, "capi") && Objects.equals(item.get("isFunction"), false)) && (nativeLink ? in(convention, "ccall", "capi") : Objects.equals(convention, "ccall")) && (nativeLink ? in(item.get("safety"), "unsafe", "safe", "interruptible") : Objects.equals(item.get("safety"), "unsafe")) && Objects.equals(item.get("normalizationRole"), "representational"), "static supported C import");
             archiveType(item.get("declaredType")); archiveType(item.get("normalizedType")); text(item.get("symbol"));
             var emitted = record(item.get("emitted"), "symbol unit convention safety arguments result");
+            if (nativeLink && javascript.contains(emitted.get("symbol"))) {
+                var arguments = list(emitted.get("arguments")); var result = list(emitted.get("result"));
+                check(Objects.equals(item.get("symbol"), emitted.get("symbol")) && Objects.equals(emitted.get("unit"), unit) &&
+                    Objects.equals(emitted.get("convention"), convention) && Objects.equals(convention, "ccall") &&
+                    Objects.equals(emitted.get("safety"), item.get("safety")) && in(item.get("safety"), "safe", "unsafe") &&
+                    !arguments.isEmpty() && Objects.equals(arguments.getLast(), "void") && arguments.subList(0, arguments.size() - 1).stream().allMatch(rep -> admitted(NATIVE_REPS, rep)) &&
+                    (result.equals(List.of("void")) || result.size() == 2 && Objects.equals(result.getFirst(), "void") && admitted(NATIVE_REPS, result.get(1)) &&
+                     !in(result.get(1), "ByteArray#", "MutableByteArray#")), "JavaScript declaration differs from emitted ABI");
+                continue;
+            }
             if (nativeLink && Objects.equals(item.get("safety"), "interruptible")) {
                 // Retain the original obligation, not an executable adapter.
                 // A reached call still needs its actual scheduling boundary.

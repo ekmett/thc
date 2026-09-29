@@ -54,7 +54,7 @@ installedNativeSignatures unit value
       imports <- nativeImports unit value
       sort . nub . filter supportedSignature <$> mapM (nativeSignature unit) imports
   | otherwise = pure . sort . nub $
-      [signature | call <- calls value, owned unit call,
+      [signature | call <- calls value, owned unit call, javascriptSymbol call == Nothing,
         Just signature <- [direct call], supportedSignature signature]
   where
     direct call = do
@@ -260,8 +260,30 @@ nativeImports unit value = do
           binder <- field entry "binder"
           require (member binder "unit" == Just (toJSON unit) && member binder "module" == member value "module")
             "package native import binder owner differs"
+          _ <- nativeSignature unit entry
+          pure ()
         _ <- nativeAddresses unit value
-        pure imports
+        let javascript = [symbol | call <- calls value, owned unit call,
+              Just symbol <- [javascriptSymbol call]]
+        pure [entry | entry <- imports,
+          (member entry "emitted" >>= (`member` "symbol")) `notElem` map Just javascript]
+
+-- JavaScript declarations lower to reserved ccall markers, but their explicit
+-- Core descriptor selects Truffle, not a native adapter. A symbol prefix alone
+-- never changes linkage; keep ordinary C imports in the same module.
+javascriptSymbol :: Value -> Maybe Value
+javascriptSymbol call
+  | member call "intrinsic" == Just "javascript-v1"
+  , member call "schema" == Just (toJSON (1::Int))
+  , member call "convention" == Just "ccall"
+  , member call "safety" `elem` [Just "safe", Just "unsafe"]
+  , Just (String source) <- member call "javascriptSource"
+  , not (T.null source)
+  , Just target <- member call "target"
+  , member target "kind" == Just "static", member target "isFunction" == Just (Bool True)
+  , let symbol = toJSON ("thc_javascript_v1_" ++ hex (T.encodeUtf8 source))
+  , member target "symbol" == Just symbol = Just symbol
+  | otherwise = Nothing
 
 -- Address declarations carry their own nominal type and stock-emitter evidence.
 -- They never become synthetic expectedCalls. Only the concrete one-pointer,

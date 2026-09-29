@@ -443,6 +443,30 @@ class RuntimeServicesQueryTest(unittest.TestCase):
                 self.assertTrue(self.inspect(expression, dict(bound, **{key: LONG})).issues, key)
 
 
+class JavaScriptPackageTest(unittest.TestCase):
+    def test_mixed_native_unit_keeps_javascript_proof_and_c_adapter_checks(self):
+        state = dict(kind='void', primReps=[], evaluated=True)
+        result = dict(kind='unknown', primReps=['IntRep'], evaluated=True,
+                      aggregate='unboxed-tuple', components=[state, LONG])
+        source = '() => 7'
+        call = dict(schema=1, intrinsic='javascript-v1', javascriptSource=source,
+                    target=dict(kind='static', symbol='thc_javascript_v1_' + source.encode().hex(), unit='main', isFunction=True),
+                    convention='ccall', safety='unsafe', arity=1, suppliedArity=1,
+                    argumentReps=[dict(state, evaluated=False)], resultRep=dict(result, evaluated=False))
+        ordinary = {key: value for key, value in call.items() if key not in ('intrinsic', 'javascriptSource')}
+        for descriptor, accepted in ((call, True), (dict(call, javascriptSource='() => 8'), False),
+                                     (dict(call, arity=2), False), (ordinary, False)):
+            audit = audit_core.Audit([], CAP)
+            audit.package_scalar_links['main'] = dict(unit='main', abi=[])
+            expression = ['app', ['var', 'foreign', dict(rep=CLOSURE)],
+                          [['var', 'state', dict(rep=state)]], [False], False, False,
+                          dict(rep=result, foreignCall=descriptor)]
+            audit.polyglot_call(expression, {'state': state}, 'root', 'root')
+            self.assertEqual(['foreign-exception-bridge'] if accepted else ['foreign-call'],
+                             [issue['code'] for issue in audit.issues])
+            self.assertEqual(1 if accepted else 0, len(audit.foreign_calls))
+
+
 class PackageScalarOperandTest(unittest.TestCase):
     """Call-proof controls only. Valid calls still require a genuine runtime bridge;
     no invented dictionary, component or bitcode is executed."""
