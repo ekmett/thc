@@ -465,6 +465,7 @@ literal decoder = do
     16 -> LitRubbish <$> primRep
     17 -> LitFunctionAddr <$> string decoder
     18 -> LitDataAddr <$> string decoder
+    19 -> LitUnsupported <$> string decoder
     _ -> fail "Unknown compact literal tag"
   where
     raw = count decoder >>= getByteString
