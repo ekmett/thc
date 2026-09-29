@@ -33,14 +33,14 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import Numeric (showHex)
 import System.Directory
-import System.Environment (getEnvironment, lookupEnv)
+import System.Environment (getEnvironment, getExecutablePath, lookupEnv)
 import System.Exit (ExitCode(..))
 import System.FilePath
 import System.Process (CreateProcess(..), proc, readCreateProcessWithExitCode)
 import THC.Driver.ScalarBitcode (parseDependencies, sulongScalarTarget)
 import THC.Driver.NativeLibrarySources (zlibChecksumSources)
 import THC.Driver.NativeArgumentBridge (nativeArgumentBridge)
-import THC.Driver.NativeDependencies (COnlyProduct, cOnlyProductProof, cOnlyProductPieces, nativeLinkInputs, nativeSymbolArchives)
+import THC.Driver.NativeDependencies (NativeProduct, nativeProductProof, nativeProductPieces, nativeLinkInputs, nativeSymbolArchives)
 
 -- (original emitted symbol, convention, safety, semantic carriers, result)
 type Signature = (String, String, String, [String], String)
@@ -825,62 +825,103 @@ nativeStaticExports value = case member value "staticForeignExports" of
     pure exports
 
 finishPackageNative :: FilePath -> FilePath -> String -> Maybe [FilePath] -> [(String,BS.ByteString)] -> IO [(String,BS.ByteString)]
-finishPackageNative = finishPackageNativeWithDependencies [] []
+finishPackageNative pieces directory unit objects modules =
+  fst <$> finishPackageNativeWithDependencies Nothing [] [] pieces directory directory unit objects modules
 
--- | Additional products must belong to exact resolved C-only dependencies;
--- ordinary component/root selection remains unchanged for the requesting unit.
-finishPackageNativeWithDependencies :: [COnlyProduct] -> [FilePath] -> FilePath -> FilePath -> String -> Maybe [FilePath] ->
-  [(String,BS.ByteString)] -> IO [(String,BS.ByteString)]
-finishPackageNativeWithDependencies cOnlyProducts publishedDatabases pieces directory unit currentObjects modules = do
-  let receipt = directory </> "native.json"
+-- | Declared dependency paths refer to separately linked components. Never
+-- embed another unit's C globals/constructors in this component's LLVM.
+finishPackageNativeWithDependencies :: Maybe NativeProduct -> [([String],Value)] -> [FilePath] -> FilePath -> FilePath -> FilePath ->
+  String -> Maybe [FilePath] -> [(String,BS.ByteString)] -> IO ([(String,BS.ByteString)],Maybe Value)
+finishPackageNativeWithDependencies ownedProduct dependencyPaths publishedDatabases pieces sourceDirectory directory unit currentObjects modules = do
+  let receipt = sourceDirectory </> "native.json"
   exists <- doesFileExist receipt
-  if not exists then pure modules else do
+  if not exists then bare else do
     record <- readJson receipt
     check (member record "unit" == Just (toJSON unit)) "package native receipt owner differs"
     if member record "archiveOnly" == Just (Bool True) then do
       check (case record of Object fields -> KM.size fields == 2; _ -> False) "invalid archive-only native receipt"
-      pure modules
+      bare
     else finish record
   where
+   dependencies = nub (map snd dependencyPaths)
+   bare = case ownedProduct of
+    Nothing -> pure (modules,Nothing)
+    Just captured -> case nativeProductPieces captured of
+      [] -> pure (modules,Nothing)
+      first:_ -> do
+        root <- get first "root" :: IO String
+        target <- get first "target" :: IO String
+        inputs <- get first "inputs"
+        compiler <- get inputs "compiler" :: IO String
+        arguments <- get inputs "arguments" :: IO [String]
+        let proof = nativeProductProof captured
+        finish (object ["unit" .= unit,"root" .= root,"target" .= target,
+          "objectRoots" .= ([]::[String]),"inputs" .= ([]::[Value]),"abi" .= ([]::[Value]),
+          "componentSha256" .= sha (BL.toStrict (encode proof)),
+          "sourceIdentity" .= object ["compiler" .= compiler,"arguments" .= arguments,"nativeProduct" .= proof]])
    finish record = do
     roots <- get record "objectRoots" :: IO [FilePath]
     root <- get record "root"
     target <- get record "target"
-    wrapper <- get record "bitcode"
     components <- mapM readJson =<< files (pieces </> "components")
     allRoots <- concat <$> mapM (\value -> get value "roots")
       [value | value <- components, member value "root" == Just (toJSON (root::String))]
     candidates <- filter ((== "piece.json") . takeFileName) <$> files pieces
-    ownedNative <- filterM (\value -> do
+    discovered <- filterM (\value -> do
       objectPath <- get value "object"
       pure (member value "root" == Just (toJSON (root::String)) &&
         maybe (nativeObjectOwned roots allRoots objectPath) (objectPath `elem`) currentObjects)) =<< mapM readJson candidates
     -- Local receipts survive runs; exact current Cabal membership excludes
     -- deleted/renamed C sources and sibling components. Private store receipts
     -- instead belong to this fresh acquisition, after unpacked objects vanish.
+    let native = maybe discovered nativeProductPieces ownedProduct
     case currentObjects of
       Nothing -> pure ()
-      Just _ -> forM_ ownedNative $ \value -> do
+      Just _ -> forM_ native $ \value -> do
         path <- get value "object"
         digest <- sha <$> BS.readFile path
         check (member value "objectSha256" == Just (toJSON digest)) "package native object receipt is stale"
-    compilerArguments <- if null cOnlyProducts then pure [] else
-      get record "sourceIdentity" >>= (`get` "arguments") :: IO [String]
-    let declaredDependencies = [dependency | (flag,dependency) <- zip compilerArguments (drop 1 compilerArguments), flag == "-package-id"]
-    forM_ cOnlyProducts $ \dependency -> do
-      let proof = cOnlyProductProof dependency
+    forM_ ownedProduct $ \capturedProduct -> do
+      let proof = nativeProductProof capturedProduct
       owner <- get proof "unit"
-      check (owner /= unit && owner `elem` declaredDependencies)
-        "native C-only product is not a declared direct dependency"
+      check (owner == unit) "native product is not owned by this component"
       products <- get proof "translationUnits" :: IO [Value]
       forM_ products $ \captured -> do
         piece <- get captured "receipt"
         path <- get piece "bitcode"
         observed <- sha <$> BS.readFile path
         check (member captured "bitcodeSha256" == Just (toJSON observed))
-          "native C-only dependency bitcode changed after selection"
-    let native = ownedNative ++ concatMap cOnlyProductPieces cOnlyProducts
+          "native component bitcode changed after selection"
     forM_ native $ \value -> check (member value "target" == Just (toJSON (target::String))) "package C object target differs"
+    forM_ dependencyPaths $ \(path,dependency) -> do
+      owner <- get dependency "unit"
+      check (not (null path) && last path == owner && owner /= unit && unit `notElem` path &&
+        member dependency "target" == Just (toJSON (target::String))) "native dependency path/target differs"
+    bitcodePaths <- mapM (`get` "bitcode") native
+    wrapper <- maybe (pure []) (fmap (:[]) . either fail pure . parseValue) (member record "bitcode")
+    inputHashes <- mapM (fmap sha . BS.readFile) (wrapper ++ bitcodePaths)
+    producer <- sha <$> (BS.readFile =<< getExecutablePath)
+    let inputHash = sha (BL.toStrict (encode (producer,record,inputHashes,dependencyPaths,
+          nativeProductProof <$> ownedProduct,map (sha . snd) modules)))
+        cached = directory </> "native/component-link.json"
+    present <- doesFileExist cached
+    previous <- if present then Just <$> readJson cached else pure Nothing
+    proof <- case previous of
+      Just value | member value "inputSha256" == Just (toJSON inputHash) -> get value "link"
+      _ -> do
+        value <- materialize record native
+        writeJson cached (object ["inputSha256" .= inputHash,"link" .= value])
+        pure value
+    linkedModules <- attach record proof
+    let descriptor = object $ ["schema" .= (1::Int),"profile" .= ("thc-package-native-component-v1"::String)] ++
+          [Key.fromString key .= value | key <- ["unit","target","componentSha256","bitcodeSha256","bitcodeHex",
+            "format","exports","dependencies","nativeLibrary"], Just value <- [member proof key]]
+    pure (linkedModules,Just descriptor)
+   materialize record native = do
+    root <- get record "root"
+    target <- get record "target"
+    wrapper <- maybe (pure []) (fmap (:[]) . either fail pure . parseValue) (member record "bitcode")
+    createDirectoryIfMissing True (directory </> "native")
     wrapperInputs <- get record "inputs" :: IO [Value]
     nativeInputs <- mapM (\value -> get value "inputs" :: IO Value) native
     let sourceInputs = wrapperInputs ++ nativeInputs
@@ -895,7 +936,10 @@ finishPackageNativeWithDependencies cOnlyProducts publishedDatabases pieces dire
     let linked = directory </> "native/linked.bc"
         linkedIR = directory </> "native/linked.ll"
         final = directory </> "native/package.bc"
-    _ <- command directory link (wrapper : bitcodes ++ ["-o",linked])
+    _ <- command directory link (wrapper ++ bitcodes ++ ["-o",linked])
+    public <- sort . nub . concat <$> forM bitcodes (\path -> do
+      output <- command directory nm ["--defined-only","--extern-only","--format=posix",path]
+      pure [name | line <- lines output, name:_ <- [words line], not ("llvm." `isPrefixOf` name)])
     _ <- command directory opt ["-S","-passes=verify",linked,"-o",linkedIR]
     linkedSource <- readFile linkedIR
     -- A typed Haskell address is not a C definition proof. Require the actual
@@ -938,7 +982,7 @@ finishPackageNativeWithDependencies cOnlyProducts publishedDatabases pieces dire
         "source" .= source,"sourceSha256" .= sha (T.encodeUtf8 (T.pack source)),
         "inputBitcodeSha256" .= inputHash,"definitions" .= [witnesses | (_,_,witnesses) <- bridges]]])
     let trim input = command directory opt ["-passes=internalize,globaldce",
-          "-internalize-public-api-list=" ++ join "," entries,input,"-o",final]
+          "-internalize-public-api-list=" ++ join "," (entries ++ public),input,"-o",final]
         unresolved = do
           output <- command directory nm ["--undefined-only","--format=posix",final]
           pure [name | line <- lines output, name:_ <- [words line]]
@@ -962,10 +1006,19 @@ finishPackageNativeWithDependencies cOnlyProducts publishedDatabases pieces dire
       value <- either fail pure (eitherDecodeStrict' bytes')
       either fail pure (nativeStaticExports value)
     exportNames <- mapM (`get` "symbol") declarations :: IO [String]
-    -- These references belong to this context's managed callback namespace,
-    -- not to an ELF/RTS implementation. Keep them in verified LLVM unchanged.
-    let managedExternals = filter (`elem` ("hs_free_stable_ptr" : exportNames)) externals
-        nativeExternals = filter (\name -> name `notElem` managedExternals && not ("llvm." `isPrefixOf` name)) externals
+    peers <- nub . concat <$> mapM dependencyClosure dependencies
+    peerExternals <- filterM (\symbol -> do
+      owners <- fmap nub . fmap concat $ forM peers $ \peer -> do
+        names <- get peer "exports" :: IO [String]
+        pure [(member peer "unit",member peer "componentSha256",member peer "bitcodeSha256") | symbol `elem` names]
+      check (length owners <= 1) ("ambiguous declared native providers for " ++ symbol)
+      pure (not (null owners))) externals
+    -- Stable pointers, exported callbacks and bound-thread support belong to
+    -- this context. A native RTS would describe its scheduler, not THC's.
+    -- Keep their calls and declared ABI in verified LLVM unchanged.
+    let managedExternals = filter (`elem` (["hs_free_stable_ptr","rtsSupportsBoundThreads"] ++ exportNames)) externals
+        deferredExternals = nub (managedExternals ++ peerExternals)
+        nativeExternals = filter (\name -> name `notElem` deferredExternals && not ("llvm." `isPrefixOf` name)) externals
     -- The configured C compiler and linker own native symbol resolution.
     -- Sulong consumes the embedded LLVM and native dependency list; there is
     -- no tested-symbol inventory or inferred library/ABI here.
@@ -989,19 +1042,19 @@ finishPackageNativeWithDependencies cOnlyProducts publishedDatabases pieces dire
               then ["-Wl,-undefined,dynamic_lookup" | darwin]
               else [if darwin then "-Wl,-undefined,error" else "-Wl,--no-undefined"]
             container = directory </> if darwin then "native/final.dylib" else "native/final.so"
-            artifact = if null managedExternals then container else final
-            format = if not (null managedExternals) then "llvm-bitcode"
+            artifact = if null deferredExternals then container else final
+            format = if not (null deferredExternals) then "llvm-bitcode"
               else if darwin then "llvm-embedded-mach-o" else "llvm-embedded-elf"
             -- Current Apple ld ignores -fembed-bitcode's legacy bundle flag.
             -- Sulong accepts raw bitcode in the Mach-O __LLVM,__bundle section.
             embedding = if darwin
               then concatMap (\argument -> ["-Xlinker",argument]) ["-sectcreate","__LLVM","__bundle",final]
               else ["-fembed-bitcode"]
+            exclusions = concatMap (\symbol -> if darwin then ["-Xlinker","-U","-Xlinker",'_' : symbol]
+              else ["-Xlinker","--ignore-unresolved-symbol=" ++ symbol]) deferredExternals
             arguments = ["--target=" ++ target,"-shared","-fPIC",final] ++ embedding ++
-              linkArguments ++ resolution ++ ["-o",container]
-        when (null managedExternals) $ do
-          _ <- command directory clang arguments
-          pure ()
+              linkArguments ++ resolution ++ exclusions ++ ["-o",container]
+        _ <- command directory clang arguments
         -- A container's machine code is not executed by Sulong. Materialize
         -- native dependencies separately, rooting archive extraction with the
         -- actual unresolved symbols. Never include the component here: its
@@ -1010,7 +1063,7 @@ finishPackageNativeWithDependencies cOnlyProducts publishedDatabases pieces dire
             nativeRoots = concatMap (\symbol -> ["-Xlinker","-u","-Xlinker",if darwin then '_' : symbol else symbol])
               nativeExternals
             dependencyArguments = ["--target=" ++ target,"-shared","-fPIC"] ++ nativeRoots ++ linkArguments ++
-              resolution ++ ["-o",dependency]
+              resolution ++ exclusions ++ ["-o",dependency]
         _ <- command directory clang dependencyArguments
         -- Native archives can themselves carry compiler-embedded LLVM. Keep
         -- their companion native-only, and the ELF component's LLVM section
@@ -1020,7 +1073,7 @@ finishPackageNativeWithDependencies cOnlyProducts publishedDatabases pieces dire
               (if darwin then ["__LLVM,__bundle","__LLVM,__bitcode","__LLVM,__cmdline"] else [".llvmbc",".llvmcmd"]) ++ [dependency]
             componentArguments = ["--update-section=.llvmbc=" ++ final,artifact]
         _ <- command directory objcopy stripArguments
-        unless (darwin || not (null managedExternals)) $ do
+        unless (darwin || not (null deferredExternals)) $ do
           _ <- command directory objcopy componentArguments
           pure ()
         dependencyBytes <- BS.readFile dependency
@@ -1028,9 +1081,9 @@ finishPackageNativeWithDependencies cOnlyProducts publishedDatabases pieces dire
         compilerHash <- sha <$> BS.readFile clang
         pure (artifact,format,[object ["provider" .= ("package-declared-native-libraries-v1"::String),
           "symbols" .= nativeExternals,"compiler" .= clang,"compilerSha256" .= compilerHash,
-          "arguments" .= [argument | null managedExternals, argument <- arguments],
+          "arguments" .= arguments,
           "dependencyArguments" .= dependencyArguments,"objcopy" .= objcopy,"objcopySha256" .= objcopyHash,
-          "objcopyArguments" .= (stripArguments : [componentArguments | not darwin && null managedExternals])]],
+          "objcopyArguments" .= (stripArguments : [componentArguments | not darwin && null deferredExternals])]],
           Just (object ["sha256" .= sha dependencyBytes,"hex" .= hex dependencyBytes]))
     bytes <- BS.readFile artifact
     component <- get record "componentSha256" :: IO String
@@ -1039,8 +1092,12 @@ finishPackageNativeWithDependencies cOnlyProducts publishedDatabases pieces dire
     let proof = object $ ["schema" .= (if null finalizers then 1 else 2::Int),"format" .= (format::String),
           "profile" .= ("thc-package-c-ffi-v1"::String),"unit" .= unit,"target" .= target,
           "componentSha256" .= component,"bitcodeSha256" .= sha bytes,"bitcodeHex" .= hex bytes,"abi" .= abi,
+          "exports" .= public,"dependencies" .= dependencies,
           "buildInputs" .= object ["translationUnits" .= inputs,"providers" .= providers,
-            "dependencies" .= map cOnlyProductProof cOnlyProducts,
+            "nativeProduct" .= (nativeProductProof <$> ownedProduct),
+            "dependencies" .= [object ["declaredPath" .= path,"unit" .= member peer "unit",
+              "componentSha256" .= member peer "componentSha256","bitcodeSha256" .= member peer "bitcodeSha256"] |
+              (path,peer) <- dependencyPaths],
             "nativeLibraries" .= libraries,"unresolved" .= externals,"argumentBridges" .= bridgeInputs]] ++
           ["finalizers" .= finalizers | not (null finalizers)] ++
           ["dataSymbols" .= dataSymbols | not (null dataSymbols)] ++
@@ -1051,6 +1108,14 @@ finishPackageNativeWithDependencies cOnlyProducts publishedDatabases pieces dire
     archiveInputs <- maybe (pure []) (either fail pure . parseValue) (member identity "dataLibraries") :: IO [Value]
     writeJson (directory </> "native/inputs.json") (object
       ["sources" .= (inputs ++ [object ["files" .= archiveInputs] | not (null archiveInputs)]),"unresolved" .= externals])
+    pure proof
+   dependencyClosure :: Value -> IO [Value]
+   dependencyClosure value = do
+    nested <- get value "dependencies" :: IO [Value]
+    rest <- concat <$> mapM dependencyClosure nested
+    pure (value:rest)
+   attach record proof = do
+    abi <- get proof "abi" :: IO [Value]
     forM modules $ \(name,bytes') -> do
       value <- either fail pure (eitherDecodeStrict' bytes')
       case value of
@@ -1058,7 +1123,7 @@ finishPackageNativeWithDependencies cOnlyProducts publishedDatabases pieces dire
           let prior = member value "packageNativeArchive"
               unclassified = prior >>= (`member` "unclassifiedReason")
               ownsCalls = any (owned unit) (calls value) || hasFunctionAddress value || not (null (addressLabels value))
-          let next = if not ownsCalls || maybe False (/= Null) unclassified then value
+          let next = if null abi || not ownsCalls || maybe False (/= Null) unclassified then value
                 else Object (KM.insert "packageNativeLink" proof
                   (if member record "installed" == Just (Bool True) then KM.delete "foreignLink" fields else fields))
           pure (name, BL.toStrict (encode next))

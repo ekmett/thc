@@ -67,7 +67,7 @@ import THC.Driver.ScalarBitcode (ScalarBitcode, scalarBuildInputs, linkScalarBit
 import THC.Driver.RuntimeShim (RuntimeShim, withRuntimeShim, runtimeShimInputs, validateRuntimeShimModules, foreignExceptionBridgeUnit)
 import THC.Driver.PackageNative (captureNativeObject, capturePackageNative, finishPackageNative,
   finishPackageNativeWithDependencies, linkInstalledNative)
-import THC.Driver.NativeDependencies (readCOnlyProduct, configuredNativeArchive)
+import THC.Driver.NativeDependencies (readNativeProduct, configuredNativeArchive)
 import THC.Driver.NativeCache (nativeToolIdentity, nativePieceIdentity)
 import THC.Driver.Installed
 import THC.Driver.InstalledForeign
@@ -1576,18 +1576,6 @@ packGlobalBundle store dist capture planned unit buildKey exportKey destination 
     bytes <- BS.readFile path
     pure (name, bytes)
   let pieces = takeDirectory capture </> "native-pieces"
-  dependencies <- fmap concat $ forM (unitDepends unit) $ \identifier -> do
-    dependency <- maybe (fail "native dependency is absent from resolved plan") pure (Map.lookup identifier planned)
-    -- Only registrations in this acquisition's private store can add products.
-    -- Installed boot libraries and Haskell-bearing dependencies remain outside
-    -- this C-only path; their runtime/provider contracts are separate.
-    partitions <- listDirectory store
-    registrations <- filterM doesFileExist
-      [store </> partition </> "package.db" </> identifier <.> "conf" | partition <- partitions]
-    case registrations of
-      [] -> pure []
-      [path] -> maybe [] (:[]) <$> readCOnlyProduct (unitValue dependency) (unitDepends dependency) path pieces
-      _ -> fail "C-only dependency has ambiguous private-store registration"
   -- Cabal has installed these units and may have deleted their temporary
   -- intra-package DBs. Keep the recorded compiler recipe unchanged, but resolve
   -- its native dependency closure against this completed private build.
@@ -1598,8 +1586,38 @@ packGlobalBundle store dist capture planned unit buildKey exportKey destination 
           filterM doesDirectoryExist [directory </> partition </> suffix | partition <- partitions]
   storeDatabases <- databases store "package.db"
   inplaceDatabases <- databases (dist </> "packagedb") ""
-  linked <- finishPackageNativeWithDependencies dependencies (storeDatabases ++ inplaceDatabases)
-    pieces (capture </> unitId unit) (unitId unit) Nothing checked
+  closure <- dependencyClosure planned (unitId unit)
+  (_,linked) <- foldlM (\(providers,selected) dependency -> do
+    let owner = unitId dependency
+        sourceDirectory = capture </> owner
+        direct = nub [(identifier:path,component) | identifier <- unitDepends dependency,
+          (path,component) <- Map.findWithDefault [] identifier providers]
+        -- Providers without C/FFI of their own forward only graph edges. The
+        -- resolved Cabal path remains in the consuming component's receipt.
+        forwarded = direct
+    kind <- optionalField (unitValue dependency) "type" ("" :: String)
+    if kind /= "configured" then pure (Map.insert owner forwarded providers,selected) else do
+      registrations <- filterM doesFileExist
+        [database </> owner <.> "conf" | database <- storeDatabases ++ inplaceDatabases]
+      capturedNative <- case registrations of
+        [] -> pure Nothing
+        [path] -> readNativeProduct (unitValue dependency) (unitDepends dependency) path pieces
+        _ -> fail "native dependency has ambiguous private-store registration"
+      nativeReceipt <- doesFileExist (sourceDirectory </> "native.json")
+      bodies <- if owner == unitId unit then pure checked else if not nativeReceipt then pure [] else do
+        paths <- filter ((== ".json") . takeExtension) <$> recursiveFiles (sourceDirectory </> "core")
+        forM paths $ \path -> do
+          bytes <- BS.readFile path
+          value <- either fail pure (eitherDecodeStrict' bytes)
+          require (jsonField value "unit" == Just owner && jsonField value "boundary" == Just boundary)
+            "native dependency Core owner/boundary differs"
+          name <- field value "module"
+          pure (name,bytes)
+      (prepared,component) <- finishPackageNativeWithDependencies capturedNative direct (storeDatabases ++ inplaceDatabases)
+        pieces sourceDirectory (takeDirectory destination </> "native-components" </> owner) owner Nothing bodies
+      let available = maybe forwarded (\value -> [([],value)]) component
+      pure (Map.insert owner available providers,if owner == unitId unit then prepared else selected)
+    ) (Map.empty,checked) closure
   let sorted = sortOn fst linked
       names = map fst sorted
   require (length names == length (nub names))

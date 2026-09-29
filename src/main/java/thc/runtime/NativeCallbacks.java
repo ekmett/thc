@@ -30,7 +30,7 @@ public final class NativeCallbacks {
     private final HashMap<PackageScalarSignature, PackageScalarFunction> dynamic = new HashMap<>();
     private final HashMap<Long, Callback> callbacks = new HashMap<>();
     private final Namespace namespace = new Namespace(this);
-    private Object stableRelease;
+    private Object stableRelease, boundThreadSupport;
     private final LinkedHashMap<String, StaticExport> exports = new LinkedHashMap<>();
     // A failed load can already have handed pointers to C constructors. Keep
     // their NFI closures alive, but invalid, until the owning context closes.
@@ -55,7 +55,7 @@ public final class NativeCallbacks {
         var pending = new LinkedHashMap<String, StaticExport>();
         for (var declaration : declarations) {
             var existing = exports.get(declaration.symbol());
-            if (declaration.symbol().equals("hs_free_stable_ptr") || pending.containsKey(declaration.symbol()) ||
+            if (declaration.symbol().equals("hs_free_stable_ptr") || declaration.symbol().equals("rtsSupportsBoundThreads") || pending.containsKey(declaration.symbol()) ||
                 existing != null && (existing.program != program || !existing.declaration.equals(declaration)))
                 throw fault("Conflicting native static export: " + declaration.symbol());
             if (existing == null) pending.put(declaration.symbol(), new StaticExport(this, program, language, declaration));
@@ -143,6 +143,16 @@ public final class NativeCallbacks {
         }
         return stableRelease;
     }
+    @TruffleBoundary private synchronized Object boundThreadSupport() {
+        checkOwner();
+        if (boundThreadSupport == null) {
+            try {
+                boundThreadSupport = InteropLibrary.getUncached().invokeMember(signature(List.of(), "IntRep"),
+                    "createClosure", new BoundThreadQuery(this));
+            } catch (InteropException failure) { throw rethrow(failure); }
+        }
+        return boundThreadSupport;
+    }
     @ExportLibrary(InteropLibrary.class)
     static final class Namespace implements TruffleObject {
         private final NativeCallbacks registry;
@@ -151,19 +161,33 @@ public final class NativeCallbacks {
         @ExportMessage @TruffleBoundary Object getMembers(boolean includeInternal) {
             registry.checkOwner();
             synchronized (registry) {
-                var names = new ArrayList<>(registry.exports.keySet()); names.add("hs_free_stable_ptr");
+                var names = new ArrayList<>(registry.exports.keySet()); names.add("hs_free_stable_ptr"); names.add("rtsSupportsBoundThreads");
                 return new MemberNames(names.toArray(String[]::new));
             }
         }
         @ExportMessage boolean isMemberReadable(String name) {
-            registry.checkOwner(); synchronized (registry) { return name.equals("hs_free_stable_ptr") || registry.exports.containsKey(name); }
+            registry.checkOwner(); synchronized (registry) { return name.equals("hs_free_stable_ptr") || name.equals("rtsSupportsBoundThreads") || registry.exports.containsKey(name); }
         }
         @ExportMessage Object readMember(String name) throws UnknownIdentifierException {
             registry.checkOwner();
             if (name.equals("hs_free_stable_ptr")) return registry.stableRelease();
+            if (name.equals("rtsSupportsBoundThreads")) return registry.boundThreadSupport();
             StaticExport export; synchronized (registry) { export = registry.exports.get(name); }
             if (export != null) return export.pointer();
             throw UnknownIdentifierException.create(name);
+        }
+    }
+    @ExportLibrary(InteropLibrary.class)
+    static final class BoundThreadQuery implements TruffleObject {
+        private final NativeCallbacks registry;
+        BoundThreadQuery(NativeCallbacks registry) { this.registry = registry; }
+        @ExportMessage boolean isExecutable() { registry.checkOwner(); return true; }
+        @ExportMessage Object execute(Object[] arguments) throws ArityException {
+            registry.checkOwner();
+            if (arguments.length != 0) throw ArityException.create(0, 0, arguments.length);
+            // HsBool is StgInt. Match BoundThreadSupport: native GHC's RTS
+            // cannot report the bound-thread semantics of this THC context.
+            return 0L;
         }
     }
     @ExportLibrary(InteropLibrary.class)
@@ -310,7 +334,7 @@ public final class NativeCallbacks {
         }
     }
     public synchronized void close() {
-        alive.invalidate(); dynamic.clear(); stableRelease = null;
+        alive.invalidate(); dynamic.clear(); stableRelease = null; boundThreadSupport = null;
         for (var callback : callbacks.values()) callback.release();
         callbacks.clear(); // StablePointers owns final context disposal of its entries.
         exports.clear(); retiredExports.clear();
