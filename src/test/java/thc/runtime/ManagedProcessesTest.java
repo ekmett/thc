@@ -128,6 +128,68 @@ public class ManagedProcessesTest {
             assertThrows(IllegalArgumentException.class, () -> processes.spawn(List.of(new byte[]{47, 0, 98}), List.of())); assertEquals(before, fdCount());
         });
     }
+    @Test void nativeInheritedDescriptorCyclesPreserveBothSources() throws Throwable {
+        var firstPath = directory.resolve("first"); var secondPath = directory.resolve("second");
+        Files.write(firstPath, new byte[]{42}); Files.write(secondPath, new byte[]{73});
+        try (var owner = new NativeDirectoryOwner(directory);
+             var context = NativeFileProvider.createContext(Set.of(), thc.ContextProfile.NATIVE, thc.FfiMode.NATIVE, true)) {
+            entered(context, () -> {
+                var provider = NativeFileProvider.current();
+                try (var first = provider.open(firstPath.toString(), 0); var second = provider.open(secondPath.toString(), 0);
+                     var anchor = owner.borrow(); var arena = Arena.ofConfined()) {
+                    int a = first.duplicateDescriptor(), b = -1;
+                    var result = arena.allocate(24, 4); result.fill((byte) -1);
+                    try {
+                        b = second.duplicateDescriptor();
+                        int[] targets = {Math.min(a, b), Math.max(a, b)}, sources = {Math.max(a, b), Math.min(a, b)};
+                        assertEquals(0, NativeProcessApi.spawn(childArgs("descriptors", Integer.toString(a), Integer.toString(b)),
+                            List.of(), anchor.getDescriptor(), null, new int[]{-2, -1, -2}, targets, sources, 0, null, result));
+                        int pidfd = result.get(ValueLayout.JAVA_INT, 4);
+                        var poll = arena.allocate(8, 4); poll.set(ValueLayout.JAVA_INT, 0, pidfd); poll.set(ValueLayout.JAVA_SHORT, 4, (short) 1);
+                        assertEquals(1, NativePollApi.poll(poll, 5000, 1));
+                        assertEquals(new ProcessResult(1, 0, 0), NativeProcessApi.poll(pidfd));
+                        var output = arena.allocate(32);
+                        long size = (long) ReadWrite.read.invokeExact(result.get(ValueLayout.JAVA_INT, 12), output, 32L);
+                        assertTrue(size >= 0 && size <= 32);
+                        assertEquals("[73,42]\n", new String(output.asSlice(0, size).toArray(ValueLayout.JAVA_BYTE), StandardCharsets.UTF_8));
+                    } finally {
+                        try { disposeSpawn(result); }
+                        finally { NativePollApi.close(a); if (b >= 0) NativePollApi.close(b); }
+                    }
+                }
+                return null;
+            });
+        }
+    }
+    @Test void impossibleNativeInheritanceTargetsReleaseEveryStagedOwner() throws Throwable {
+        try (var owner = new NativeDirectoryOwner(directory); var anchor = owner.borrow(); var arena = Arena.ofConfined()) {
+            var limit = arena.allocate(16, 8);
+            assertEquals(0, (int) ReadWrite.getrlimit.invokeExact(7, limit)); // Linux RLIMIT_NOFILE.
+            long soft = limit.get(ValueLayout.JAVA_LONG, 0);
+            org.junit.jupiter.api.Assumptions.assumeTrue(soft > 3 && soft < Integer.MAX_VALUE, "finite CInt descriptor limit");
+            var result = arena.allocate(24, 4); result.fill((byte) -1);
+            try {
+                // Resolve the native API before counting descriptor owners.
+                assertEquals(9, NativeProcessApi.spawn(childArgs("exit", "99"), List.of(), anchor.getDescriptor(), null,
+                    new int[]{-1, -1, -1}, new int[]{(int) soft}, new int[]{anchor.getDescriptor()}, 0, null, result));
+                long before = fdCount();
+                for (int target : new int[]{(int) soft, (int) soft - 1}) {
+                    assertEquals(target == soft ? 9 : 22, NativeProcessApi.spawn(childArgs("exit", "99"), List.of(),
+                        anchor.getDescriptor(), null, new int[]{-1, -1, -1}, new int[]{target},
+                        new int[]{anchor.getDescriptor()}, 0, null, result));
+                    for (int index = 0; index < 5; index++) assertEquals(-1, result.getAtIndex(ValueLayout.JAVA_INT, index));
+                    assertEquals(before, fdCount(), "Rejected target must not retain a staged native descriptor");
+                }
+            } finally { disposeSpawn(result); }
+        }
+    }
+    private static void disposeSpawn(MemorySegment result) {
+        int pidfd = result.get(ValueLayout.JAVA_INT, 4);
+        try { if (pidfd >= 0) NativeProcessApi.dispose(pidfd); }
+        finally { for (int index = 1; index < 5; index++) {
+            int fd = result.getAtIndex(ValueLayout.JAVA_INT, index); if (fd >= 0) NativePollApi.close(fd);
+        } }
+    }
     @Test void creationFailureStagesMatchOriginalNativeImports() throws Throwable {
         service((processes, context, owner) -> {
             var process = new ProcessBuilder(oracle.toString(), "creation-oracle").redirectErrorStream(true).start();
@@ -260,6 +322,8 @@ public class ManagedProcessesTest {
     private static final class ReadWrite {
         private static final Linker linker = Linker.nativeLinker();
         private static final FunctionDescriptor signature = FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG);
+        static final MethodHandle getrlimit = linker.downcallHandle(linker.defaultLookup().find("getrlimit").orElseThrow(),
+            FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
         static final MethodHandle read = linker.downcallHandle(linker.defaultLookup().find("read").orElseThrow(), signature);
         static final MethodHandle write = linker.downcallHandle(linker.defaultLookup().find("write").orElseThrow(), signature);
     }

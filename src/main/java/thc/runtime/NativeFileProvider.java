@@ -498,6 +498,12 @@ public final class NativeFileProvider implements Closeable {
             }
         }
         @Override public int duplicateDescriptor() { return lease.duplicateForWait(); }
+        @Override public int duplicateInheritableDescriptor() {
+            synchronized (lease) {
+                requireCurrent(); lease.requireOpen();
+                return (int) result(true, "duplicate_inheritable", lease);
+            }
+        }
         @Override public int read(ByteBuffer destination) {
             synchronized (lease) {
                 requireCurrent(); lease.requireOpen();

@@ -85,6 +85,62 @@ public class ManagedProcessForeignTest {
         assertEquals("child:" + pid + ":cwd-data", content.toString()); var code = cell();
         assertEquals(0L, status(ProcessOp.WAIT, pid, code)); assertEquals(0L, integer(code)); assertEquals(0L, state.getFiles().close(fd));
     }); }
+    private String readAll(long descriptor) {
+        var buffer = cell(64); var result = new StringBuilder();
+        for (;;) {
+            long size = Language.currentState().getStdio().read(descriptor, buffer, 64);
+            assertTrue(size >= 0); if (size == 0) return result.toString();
+            for (long index = 0; index < size; index++) result.append((char) buffer.readWord8(index));
+        }
+    }
+    private List<byte[]> arguments(String... values) {
+        var result = new ArrayList<byte[]>();
+        for (var value : values) result.add(value.getBytes(StandardCharsets.UTF_8));
+        return result;
+    }
+    private long inheritedPipe() {
+        var stdio = Language.currentState().getStdio(); var pair = cell(8);
+        assertEquals(0L, stdio.pipe(pair));
+        long reader = integer(pair), writer = ManagedAddressRead.INT32.readInt(pair, 1);
+        assertEquals(70L, stdio.fcntl(reader, 0, 70, true)); // Linux F_DUPFD.
+        assertEquals(0L, stdio.close(reader));
+        assertEquals(1L, stdio.write(writer, ManagedAddress.fromByteArray(new byte[]{42}), 1));
+        assertEquals(0L, stdio.close(writer));
+        return 70;
+    }
+    @Test public void guestDescriptorNumbersAndClosePoliciesReachTheRealChild() throws Exception { inside(() -> {
+        var state = Language.currentState(); var files = state.getFiles(); var stdio = state.getStdio();
+        var oracle = Path.of(System.getProperty("thc.projectRoot"), "build/process-lifecycle/native/process-oracle");
+        for (String policy : List.of("inherit", "close-on-exec", "close-fds")) {
+            long descriptor = inheritedPipe(); int[] output = {-1};
+            try {
+                assertEquals(0L, stdio.fcntl(descriptor, 1, 0, false)); // F_GETFD: F_DUPFD clears FD_CLOEXEC.
+                if (policy.equals("close-on-exec")) assertEquals(0L, stdio.fcntl(descriptor, 2, 1, true));
+                boolean inherit = policy.equals("inherit");
+                int pid = files.launchProcess(arguments(oracle.toString(), inherit ? "descriptor" : "closed-descriptor", "70"),
+                    List.of(), null, new int[]{-2, -1, -2}, policy.equals("close-fds") ? 1 : 0, null, null, null,
+                    (child, returned) -> output[0] = returned[1]);
+                assertEquals(inherit ? "42\n" : "closed\n", readAll(output[0]), policy);
+                assertEquals(new ProcessResult(0, 0, 0), files.processOperation(ProcessOp.WAIT, pid), policy);
+            } finally { if (output[0] >= 0) stdio.close(output[0]); stdio.close(descriptor); }
+        }
+    }); }
+    @Test public void failedLaunchReleasesInheritedDuplicatesWithoutClosingGuestDescriptors() throws Exception { inside(() -> {
+        var state = Language.currentState(); var files = state.getFiles(); var stdio = state.getStdio();
+        long descriptor = inheritedPipe();
+        try {
+            var warm = create(vector("/bin/true")); assertTrue(warm > 0); assertEquals(0L, status(ProcessOp.WAIT, warm));
+            long before; try (var descriptors = Files.list(Path.of("/proc/self/fd"))) { before = descriptors.count(); }
+            for (int attempt = 0; attempt < 8; attempt++) {
+                var failure = assertThrows(ProcessSpawnException.class, () -> files.launchProcess(
+                    arguments("/definitely-missing-thc-command"), List.of(), null, new int[]{-1, -1, -1}, 0,
+                    null, null, null, (child, returned) -> fail("Failed launch published a child")));
+                assertEquals(2, failure.getErrno());
+            }
+            try (var descriptors = Files.list(Path.of("/proc/self/fd"))) { assertEquals(before, descriptors.count()); }
+            var value = cell(1); assertEquals(1L, stdio.read(descriptor, value, 1)); assertEquals(42L, value.readWord8(0));
+        } finally { assertEquals(0L, stdio.close(descriptor)); }
+    }); }
     @Test public void failureAndBadOutputsHaveNoLaunchedChildOrPublishedDescriptors() throws Exception { inside(() -> {
         var state = Language.currentState(); var outputs = outputs(true); var failure = cell(8);
         assertEquals(-1L, create(vector("/definitely-missing-thc-command"), new long[]{-1, -1, -1}, outputs, failure));

@@ -18,6 +18,8 @@ public interface NativeFileResource extends SeekableByteChannel {
     long writeEvent(long value);
     /** Private owned duplicate; never a guest descriptor number. */
     int duplicateDescriptor();
+    /** Private owned duplicate, or -1 when FD_CLOEXEC excludes inheritance. */
+    int duplicateInheritableDescriptor();
     void requireLive();
     NativeFdWait readinessWait();
 }

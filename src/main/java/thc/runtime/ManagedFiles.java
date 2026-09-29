@@ -597,6 +597,7 @@ public final class ManagedFiles {
         if (streams.length != 3) throw new IllegalArgumentException("Failed requirement.");
         var claims = new OpenClaim[3];
         var pins = new ArrayList<OpenDescription>();
+        var inherited = new LinkedHashMap<Integer, NativeFileResource>();
         var endpoints = new ManagedProcesses.Stream[] { ManagedProcesses.Stream.Endpoint.CLOSED, ManagedProcesses.Stream.Endpoint.CLOSED, ManagedProcesses.Stream.Endpoint.CLOSED };
         var acquired = new ArrayList<NativeFileResource>();
         ManagedProcesses.Launch launch = null;
@@ -626,9 +627,17 @@ public final class ManagedFiles {
                         endpoints[i] = new ManagedProcesses.Stream.Descriptor(resource);
                     } else throw fail(4, "Invalid inherited process descriptor");
                 }
+                if ((flags & 1) == 0) for (var entry : descriptors.entrySet()) {
+                    if (entry.getKey() < 3) continue;
+                    var owner = entry.getValue().owner;
+                    if (owner.nativeResource == null) continue;
+                    if (owner.references == Long.MAX_VALUE) throw fail(10, "Native descriptor reference limit");
+                    pins.add(owner); owner.references++;
+                    inherited.put(Math.toIntExact(entry.getKey()), owner.nativeResource);
+                }
             }
             processes = provider.getProcesses();
-            launch = processes.spawn(arguments, environment, cwd, endpoints[0], endpoints[1], endpoints[2], flags, childGroup, childUser, searchPath);
+            launch = processes.spawn(arguments, environment, cwd, endpoints[0], endpoints[1], endpoints[2], inherited, flags, childGroup, childUser, searchPath);
             var pipes = new ManagedProcesses.Pipe[] { launch.getInput(), launch.getOutput(), launch.getError() };
             var opened = new OpenDescription[3];
             int[] returned = {-1, -1, -1};

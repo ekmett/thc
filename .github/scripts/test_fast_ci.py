@@ -482,7 +482,7 @@ class FastRunnerTest(unittest.TestCase):
                        "src/main/java/thc/runtime/NativeFileResource.java",
                        "src/main/java/thc/runtime/OpenedNativeFile.java"):
             with self.subTest(source=source):
-                self.assertTrue({"thc.runtime.OriginalFcntlTest", "thc.runtime.NativeEventDescriptorsTest",
+                self.assertTrue({"thc.runtime.ManagedProcessForeignTest", "thc.runtime.OriginalFcntlTest", "thc.runtime.NativeEventDescriptorsTest",
                                  "thc.runtime.NativeEpollTest"}.issubset(groups[source]["junit"]))
 
     def test_previous_revision_or_driver_error_cannot_publish(self):

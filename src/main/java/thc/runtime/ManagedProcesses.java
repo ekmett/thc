@@ -10,11 +10,14 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.channels.ClosedChannelException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.TreeMap;
 import thc.Language;
 import thc.NativeIO;
 import static thc.runtime.RuntimeServiceStatus.fault;
@@ -125,6 +128,13 @@ public final class ManagedProcesses implements Closeable {
     @TruffleBoundary
     public synchronized Launch spawn(List<byte[]> arguments, List<byte[]> environment, byte[] cwd,
         Stream input, Stream output, Stream error, int flags, Long childGroup, Long childUser, byte[] searchPath) {
+        return spawn(arguments, environment, cwd, input, output, error, Map.of(), flags, childGroup, childUser, searchPath);
+    }
+
+    @TruffleBoundary
+    public synchronized Launch spawn(List<byte[]> arguments, List<byte[]> environment, byte[] cwd,
+        Stream input, Stream output, Stream error, Map<Integer, NativeFileResource> inherited,
+        int flags, Long childGroup, Long childUser, byte[] searchPath) {
         current();
         if (arguments.isEmpty() || arguments.getFirst().length == 0) throw new IllegalArgumentException("Empty process command");
         for (byte[] bytes : arguments) requireString(bytes);
@@ -143,7 +153,10 @@ public final class ManagedProcesses implements Closeable {
         var ownedPipes = new ArrayList<Pipe>();
         for (var pipe : pipes) if (pipe != null) ownedPipes.add(pipe);
         var child = new Child(pidfd, ownedPipes);
-        int[] duplicates = {-1, -1, -1};
+        var inheritedResources = (flags & 1) == 0 ? new TreeMap<>(inherited) : new TreeMap<Integer, NativeFileResource>();
+        int[] duplicates = new int[3 + inheritedResources.size()];
+        Arrays.fill(duplicates, -1);
+        int[] targets = new int[inheritedResources.size()], sources = new int[inheritedResources.size()];
         boolean published = false;
         Throwable failure = null;
         try {
@@ -163,10 +176,19 @@ public final class ManagedProcesses implements Closeable {
                     }
                 };
             }
+            int inheritedCount = 0;
+            for (var entry : inheritedResources.entrySet()) {
+                if (entry.getKey() < 3) throw new IllegalArgumentException("Invalid inherited descriptor target");
+                int duplicate = entry.getValue().duplicateInheritableDescriptor();
+                if (duplicate < 0) continue;
+                duplicates[3 + inheritedCount] = duplicate;
+                targets[inheritedCount] = entry.getKey(); sources[inheritedCount++] = duplicate;
+            }
             try (var anchor = directory.borrow(); var arena = Arena.ofConfined()) {
                 var slots = arena.allocate(24, 4);
                 int errno = NativeProcessApi.spawn(arguments, environment, anchor.getDescriptor(),
-                    cwd, descriptors, flags, searchPath, slots);
+                    cwd, descriptors, Arrays.copyOf(targets, inheritedCount), Arrays.copyOf(sources, inheritedCount),
+                    flags, searchPath, slots);
                 if (errno != 0) {
                     int ordinal = slots.get(ValueLayout.JAVA_INT, 20);
                     var stages = ProcessFailureStage.values();
