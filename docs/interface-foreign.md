@@ -67,6 +67,14 @@ have process-wide state. THC supplies special adapters where a call must act on
 its own scheduler, managed files, environment or memory; ordinary package C is
 not automatically virtualized.
 
+Concrete lifted or unlifted GC-boxed declarations can retain verified stock
+import provenance, including boxed results. That evidence is not a native ABI:
+GC-boxed imports remain excluded from package-native adapters, and are never
+rewritten to `AddrRep` or passed as native heap pointers. The narrow owned-thread
+operations described in [managed thread status](thread-status.md) use exact
+nominal declaration and call-inventory admission plus context/lifetime checks.
+Ordinary library imports still use their declared Sulong linkage.
+
 ## Pass buffers and pointers
 
 A managed Haskell buffer is not a native machine address. Choose storage that

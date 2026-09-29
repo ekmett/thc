@@ -37,6 +37,7 @@ public final class Program implements ExecutableProgram {
     private final RubbishLiterals rubbishLiterals;
     private final List<thc.ForeignBitcode> foreignLinks;
     private final List<thc.PackageScalarLink> packageScalarLinks;
+    private final List<CoreBoxedForeignDeclarations> boxedForeignDeclarations;
     private final List<PackageScalarCall> packageCalls;
     private final PackageScalarFunction[] packageFunctions;
     private final Map<String,thc.ManagedCallbackSignature> nativeCallbacks;
@@ -109,6 +110,7 @@ public final class Program implements ExecutableProgram {
         this.deferDefaultArm = deferDefaultArm;
         capturesContinuations = this.enableAsync || outlineCaseArms || deferDefaultArm;
         thc.CoreForeignArtifacts.INSTANCE.requireExecutableInput(moduleData);
+        boxedForeignDeclarations = CoreBoxedForeignDeclarations.admissions(moduleData);
         demand = moduleData.get("demandBindings") instanceof CoreDemandBindings found ? found : null;
         foreignExceptionBridge = ForeignExceptionBridge.bind(moduleData, this::entryValue, this::dataLayout);
         rubbishLiterals = new RubbishLiterals(language);
@@ -325,6 +327,7 @@ public final class Program implements ExecutableProgram {
         declarations.put("instrument", builder.metrics.getEnabled());
         declarations.put("foreignLinks", List.copyOf(builder.foreignLinks));
         declarations.put("packageScalarLinks", List.copyOf(builder.packageScalarLinks));
+        declarations.put("boxedForeignDeclarations", builder.boxedForeignDeclarations);
         if (module.get("selectedForeignExceptionBridge") instanceof Map<?,?> bridge)
             declarations.put("selectedForeignExceptionBridge", Map.copyOf(bridge));
         return new PreparedCode(Map.copyOf(declarations), Map.copyOf(values), List.copyOf(builder.codeTargets),
@@ -1878,7 +1881,10 @@ public final class Program implements ExecutableProgram {
         var allocationCounterForeign = override == CoreForeignOverride.ALLOCATION_COUNTER && CoreBoundThreadForeign.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr), true);
         var stringRts = override == CoreForeignOverride.STRING_RTS ? CoreStringRtsForeign.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr)) : null;
         var environment = override == CoreForeignOverride.ENVIRONMENT ? CoreEnvironmentForeign.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr)) : null;
+        var threadIdForeign = override == CoreForeignOverride.THREAD_ID ? CoreThreadIdForeign.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr)) : null;
         var rtsDiagnostic = override == CoreForeignOverride.RTS_DIAGNOSTIC ? CoreRtsDiagnosticForeign.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr)) : null;
+        if (threadIdForeign != null || mainThreadForeign || rtsDiagnostic == RtsDiagnosticOp.STACK)
+            CoreBoxedForeignDeclarations.requireCall(boxedForeignDeclarations, metadata);
         var rtsArguments = override == CoreForeignOverride.RTS_ARGUMENTS ? CoreRtsArgumentsForeign.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr)) : null;
         var managedFile = override == CoreForeignOverride.MANAGED_FILE ? CoreManagedFiles.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr)) : null;
 
@@ -2004,6 +2010,15 @@ public final class Program implements ExecutableProgram {
                 CoreRtsArgumentsForeign.validateOperand(rtsArguments, i, operands[i].getRepresentation(), bindingProof(args.get(i), scope));
             }
             return new RtsArgumentsExpression(rtsArguments, operands, tupleProof);
+        }
+        if (threadIdForeign != null) {
+            CoreThreadIdForeign.validateHead(fn, defined);
+            Expr[] operands = new Expr[args.size()];
+            for (int i = 0; i < operands.length; i++) {
+                operands[i] = compile(args.get(i), scope, false);
+                CoreThreadIdForeign.validateOperand(threadIdForeign, i, operands[i].getRepresentation(), bindingProof(args.get(i), scope));
+            }
+            return new ThreadIdForeignExpression(threadIdForeign, operands, tupleProof);
         }
         if (rtsDiagnostic != null) {
             CoreRtsDiagnosticForeign.validateHead(fn, defined);

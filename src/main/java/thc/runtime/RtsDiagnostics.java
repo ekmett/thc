@@ -47,13 +47,12 @@ public final class RtsDiagnostics {
     }
     @TruffleBoundary public static void report(Node node, RtsDiagnosticOp operation, Object first, Object second) {
         var context = Language.currentState(node);
+        var stackThread = operation == RtsDiagnosticOp.STACK ? context.getThreads().requireIdentity(first) : null;
         var previous = context.getThreads().enterForeign(ForeignSafety.UNSAFE);
         try {
             byte[] message;
             if (operation == RtsDiagnosticOp.STACK) {
-                if (!(first instanceof GuestThreadId thread)) throw RuntimeFault.fault("Stack overflow report requires ThreadId#");
-                if (thread.getOwner() != context.getThreads()) throw RuntimeFault.fault("ThreadId# belongs to another guest context");
-                message = ("Stack space overflow (THC guest Java thread " + thread.getJavaId() + "; JVM stack limit unavailable).").getBytes(StandardCharsets.US_ASCII);
+                message = ("Stack space overflow (THC guest Java thread " + stackThread.getJavaId() + "; JVM stack limit unavailable).").getBytes(StandardCharsets.US_ASCII);
             } else if (operation == RtsDiagnosticOp.HEAP) {
                 message = ("Heap exhausted; JVM maximum heap size is " + Runtime.getRuntime().maxMemory() + " bytes.").getBytes(StandardCharsets.US_ASCII);
             } else {

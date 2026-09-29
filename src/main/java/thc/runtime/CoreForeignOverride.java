@@ -9,7 +9,7 @@ import java.util.List;
  * Identity selection is nonthrowing; the selected existing validator checks the ABI. */
 public enum CoreForeignOverride {
     STACK, STACK_INFO, STDIO, PROCESS, STABLE_FREE, SHARED_CAF, SHUTDOWN, MAIN_THREAD,
-    BOUND_THREAD, GC, RTS_EVENT, ALLOCATION_COUNTER, STRING_RTS, ENVIRONMENT,
+    BOUND_THREAD, THREAD_ID, GC, RTS_EVENT, ALLOCATION_COUNTER, STRING_RTS, ENVIRONMENT,
     RTS_DIAGNOSTIC, RTS_ARGUMENTS, MANAGED_FILE, SIGNAL, ALLOCATION, MEMMOVE, MEMCPY;
 
     static void validateHeads(Object value) {
@@ -31,6 +31,7 @@ public enum CoreForeignOverride {
                         case SHUTDOWN -> CoreRtsShutdown.validateHead(head, false);
                         case MAIN_THREAD -> CoreMainThreadForeign.validateHead(head, false);
                         case BOUND_THREAD, ALLOCATION_COUNTER -> CoreBoundThreadForeign.validateHead(head, false);
+                        case THREAD_ID -> CoreThreadIdForeign.validateHead(head, false);
                         case GC -> CoreGcForeign.validateHead(head, false);
                         case RTS_EVENT -> CoreRtsEventForeign.validateHead(head, false);
                         case STRING_RTS -> CoreStringRtsForeign.validateHead(head, false);
@@ -64,6 +65,7 @@ public enum CoreForeignOverride {
             if ("rts_setMainThread".equals(symbol)) return MAIN_THREAD;
             if ("rtsSupportsBoundThreads".equals(symbol)) return BOUND_THREAD;
             if ("stg_getThreadAllocationCounterzh".equals(symbol)) return ALLOCATION_COUNTER;
+            if (ThreadIdForeignOp.named(symbol) != null) return THREAD_ID;
             for (var operation : OriginalStackInfoOp.values()) if (operation.getSymbol().equals(symbol)) return STACK_INFO;
             for (var operation : RtsShutdownOp.values()) if (operation.getSymbol().equals(symbol)) return SHUTDOWN;
             for (var operation : RtsDiagnosticOp.values()) if (operation.getSymbol().equals(symbol)) return RTS_DIAGNOSTIC;

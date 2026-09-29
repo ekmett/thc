@@ -31,6 +31,23 @@ See [scheduling and affinity](thread-scheduling.md) for platform support and
 `fork#`'s inherited-affinity reset. Masking, Java-thread binding, capability
 locking, and physical CPU affinity remain separate concepts.
 
+Original `rts_getThreadId`, `eq_thread`, and `cmp_thread` operate on these
+context-owned identities, not native GHC TSO pointers. They return the logical
+Word64 identity, a Word8 equality result, and an Int32 unsigned-identity ordering
+result respectively. A retained completed identity remains comparable until its
+context closes. A matching numeric ID does not admit a fabricated identity;
+foreign-context and expired carriers fail before the operation.
+
+These boxed imports retain their exact declared and normalized GHC nominal
+types and concrete levity. The admission is associated with the original call
+inventory and survives lazy module assembly; a symbol name and `BoxedRep` alone
+do not grant an override. `rts_setMainThread` similarly consumes a live owned
+`Weak# ThreadId` whose key is a canonical `ThreadId#`. Finalization or context
+close expires its liveness capability without retaining a permanent Java-thread
+snapshot. `reportStackOverflow` validates that identity before diagnostic output.
+Allocation-limit enable/disable imports remain archive-only: passive JVM
+allocation accounting does not implement GHC's allocation-limit enforcement.
+
 In platform hosting, a live host carrier outside all guest entries is in foreign
 execution, and subsequent host calls reuse its logical identity and capability.
 Nested callbacks temporarily restore running status and restore the enclosing

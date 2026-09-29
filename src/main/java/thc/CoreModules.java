@@ -55,6 +55,7 @@ public final class CoreModules {
         private final Set<String> availableModules;
         private int count;
         private final List<ManagedExportAdmission> admissions = new ArrayList<>();
+        private final List<CoreBoxedForeignDeclarations> boxedImports = new ArrayList<>();
         private final Map<String,Map<String,Object>> bindings = new LinkedHashMap<>(), constructors = new LinkedHashMap<>(), sourceFiles = new LinkedHashMap<>(), sourceSpans = new LinkedHashMap<>();
         private final Map<String,Map<String,String>> bindingOrigins = new LinkedHashMap<>();
         private final Map<ModuleKey,ForeignBitcode> foreignLinks = new LinkedHashMap<>();
@@ -84,6 +85,7 @@ public final class CoreModules {
         }
         /** Declaration-only modules contribute typed ABI provenance, not roots. */
         public void addPackageProvenance(PackageScalarAdmission admission) { packageProvenance(admission); }
+        public void addBoxedProvenance(CoreBoxedForeignDeclarations admission) { boxedImports.add(admission); }
         private void packageProvenance(PackageScalarAdmission admission) {
             var link = admission.link();
             boolean unique = true;
@@ -105,6 +107,8 @@ public final class CoreModules {
             if (admission != null && prepared == null) admissions.add(admission);
             if (prepared == null) CoreForeignArtifacts.validateArchive(module);
             var nativeArchive = prepared == null ? PackageNativeArchives.read(module) : prepared.getArchive();
+            var boxed = prepared == null ? CoreBoxedForeignDeclarations.read(module, true) : prepared.getBoxedImports();
+            if (boxed != null) boxedImports.add(boxed);
             var packageLink = prepared == null ? PackageScalarLinks.read(module) : prepared.getPackageLink();
             if (packageLink != null) packageProvenance(packageLink);
             var link = prepared == null ? CoreForeignArtifacts.linked(module) : prepared.getForeignLink();
@@ -164,6 +168,7 @@ public final class CoreModules {
             result.put("bindings", new ArrayList<>(bindings.values())); result.put("constructors", new ArrayList<>(constructors.values())); result.put("bindingOrigins", bindingOrigins);
             result.put("foreignExceptionBridges", new ArrayList<>(exceptionBridges.values())); result.put("foreignExceptionBridgeUnit", exceptionBridgeUnit);
             result.put("archiveBindings", archiveBindings); result.put("managedRegistrations", new ArrayList<>(admissions)); result.put("foreignLinks", new ArrayList<>(foreignLinks.values()));
+            result.put("boxedForeignDeclarations", List.copyOf(boxedImports));
             result.put("nativeCallbacks", Map.copyOf(nativeCallbacks));
             result.put("packageScalarLinks", new ArrayList<>(packageScalarLinks.values())); result.put("sourceFiles", new ArrayList<>(sourceFiles.values())); result.put("sourceSpans", new ArrayList<>(sourceSpans.values())); return result;
         }

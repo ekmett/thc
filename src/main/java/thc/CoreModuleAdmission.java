@@ -5,6 +5,7 @@ package thc;
 import java.util.*;
 import java.util.function.Function;
 import thc.runtime.CoreForeignExceptionBridge;
+import thc.runtime.CoreBoxedForeignDeclarations;
 
 /** Original module metadata is admitted once. A selected binding is not a
  * replacement for the original module's complete foreign-call inventory. */
@@ -15,12 +16,14 @@ public final class CoreModuleAdmission {
     private final PackageScalarAdmission packageLink;
     private final ForeignBitcode foreignLink;
     private final ManagedImportAdmission imports;
+    private final CoreBoxedForeignDeclarations boxedImports;
     private final List<Map<Object,Integer>> inventories = new ArrayList<>();
     public CoreModuleAdmission(Map<String,Object> module, Function<String,Map<String,Object>> binding) {
         this.module = module;
         exports = CoreModules.admission(module, binding::apply);
         CoreForeignArtifacts.validateArchive(module, false);
         archive = PackageNativeArchives.read(module, false);
+        boxedImports = CoreBoxedForeignDeclarations.read(module, false);
         packageLink = PackageScalarLinks.read(module, true, false);
         foreignLink = CoreForeignArtifacts.linked(module, false);
         imports = packageLink == null ? ManagedImportAdmission.read(module, false) : null;
@@ -44,6 +47,7 @@ public final class CoreModuleAdmission {
     public PackageScalarAdmission getPackageLink() { return packageLink; }
     public ForeignBitcode getForeignLink() { return foreignLink; }
     public ManagedImportAdmission getImports() { return imports; }
+    public CoreBoxedForeignDeclarations getBoxedImports() { return boxedImports; }
     private static Map<Object,Integer> counts(List<?> calls) { var counts = new LinkedHashMap<Object,Integer>(); for (Object call : calls) counts.merge(call, 1, Integer::sum); return counts; }
     public Map<String,Object> selected(List<Map<String,Object>> bindings) {
         var actual = PackageNativeArchive.calls(bindings); var counts = counts(actual);

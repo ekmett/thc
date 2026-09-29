@@ -22,6 +22,7 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
     private final Map<CoreUnitDirectory.ModuleRecord,Map<String,Object>> admittedModules = new HashMap<>();
     private final Map<CoreUnitDirectory.ModuleRecord,CoreModuleAdmission> admissions = new HashMap<>();
     private final Map<String,List<PackageScalarAdmission>> packageProvenance = new HashMap<>();
+    private final Map<String,List<CoreBoxedForeignDeclarations>> boxedProvenance = new HashMap<>();
     private final Map<String,PackageScalarLink> startupLinks = new LinkedHashMap<>();
     private final List<Map<String,Object>> consumers = new ArrayList<>();
     private final Map<String,Map<String,Object>> consumerBindings = new HashMap<>(), consumerOwners = new HashMap<>();
@@ -134,12 +135,16 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
         var provenance = packageProvenance.get(unit);
         if (provenance == null) {
             provenance = new ArrayList<>();
+            var boxed = new ArrayList<CoreBoxedForeignDeclarations>();
             for (var module : directory.getModules()) if (module.unit().equals(unit) && module.packageScalarDeclarations()) {
-                var link = admission(module).getPackageLink(); if (link != null) provenance.add(link);
+                var admitted = admission(module); var link = admitted.getPackageLink(); if (link != null) provenance.add(link);
+                if (admitted.getBoxedImports() != null) boxed.add(admitted.getBoxedImports());
             }
             for (var module : consumers) if (Objects.equals(module.get("unit"), unit) && PackageFinalizers.hasDeclarations(module)) {
-                var link = consumerAdmission(module).getPackageLink(); if (link != null) provenance.add(link);
+                var admitted = consumerAdmission(module); var link = admitted.getPackageLink(); if (link != null) provenance.add(link);
+                if (admitted.getBoxedImports() != null) boxed.add(admitted.getBoxedImports());
             }
+            boxedProvenance.put(unit, List.copyOf(boxed));
             packageProvenance.put(unit, provenance);
         }
         return provenance;
@@ -210,7 +215,10 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
                     && target.get("unit") instanceof String unit) foreignUnits.add(unit);
         }
         foreignUnits.addAll(addressProvenance((String) admitted.getModule().get("unit"), binding));
-        for (String unit : foreignUnits) packageProvenance(unit).forEach(merger::addPackageProvenance);
+        for (String unit : foreignUnits) {
+            packageProvenance(unit).forEach(merger::addPackageProvenance);
+            boxedProvenance.get(unit).forEach(merger::addBoxedProvenance);
+        }
         var provenance = CoreCapiProvenance.supplement(merger.finish(), binding, this::capiProvenance);
         var linked = new LinkedHashMap<>(CoreModules.demanded(provenance, id, demand, this::bridge));
         linked.put("instrument", !Objects.equals(input.get("instrument"), false)); linked.put("diagnosticUnsupported", Objects.equals(input.get("diagnosticUnsupported"), true));

@@ -3,6 +3,7 @@
 package thc;
 
 import java.util.*;
+import thc.runtime.CoreBoxedForeignDeclarations;
 
 /** Retained wrappers need separately validated managed call adapters. This token
  * grants no native symbol or callback capability. */
@@ -37,7 +38,8 @@ public final class ManagedImportAdmission {
         return fields;
     }
     private static final Set<String> PRIMITIVES = Set.of("void", "IntRep", "WordRep", "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep",
-            "Int32Rep", "Word32Rep", "Int64Rep", "Word64Rep", "AddrRep", "FloatRep", "DoubleRep");
+            "Int32Rep", "Word32Rep", "Int64Rep", "Word64Rep", "AddrRep", "FloatRep", "DoubleRep",
+            "BoxedRep (Just Unlifted)", "BoxedRep (Just Lifted)");
     private static List<?> scalars(Object value) {
         boolean valid = value instanceof List<?> fields && !fields.isEmpty();
         if (valid) for (Object item : (List<?>) value) if (!(item instanceof String text) || !PRIMITIVES.contains(text)) { valid = false; break; }
@@ -126,6 +128,7 @@ public final class ManagedImportAdmission {
         requireProof(!imports.isEmpty() || !callbacks.isEmpty(), "empty import inventory");
         var binders = new HashSet<Map<?,?>>();
         var generated = new LinkedHashMap<Target,Map<String,Object>>();
+        boolean allExcluded = !imports.isEmpty();
         for (Object entry : imports) {
             var item = record(entry, "binder header symbol unit isFunction convention safety declaredType normalizedType normalizationRole emitted");
             var binder = identity(item.get("binder"));
@@ -146,6 +149,13 @@ public final class ManagedImportAdmission {
             validState = validState && Objects.equals(result.getFirst(), "void") && result.size() <= 2;
             if (validState) for (Object primitive : result.subList(1, result.size())) if ("void".equals(primitive)) { validState = false; break; }
             requireProof(validState, "State/result shape");
+            CoreBoxedForeignDeclarations.validate(item);
+            boolean excluded = PackageNativeArchives.excluded(module).contains(emitted);
+            allExcluded &= excluded;
+            boolean boxed = arguments.stream().anyMatch(rep -> rep instanceof String text && text.startsWith("BoxedRep")) ||
+                result.stream().anyMatch(rep -> rep instanceof String text && text.startsWith("BoxedRep"));
+            requireProof(!boxed || excluded, "GC-boxed import requires an archive obligation");
+            if (excluded) continue;
             if (Objects.equals(item.get("convention"), "ccall")) requireProof(Objects.equals(emitted.get("symbol"), item.get("symbol")), "direct C symbol changed");
             else requireProof(generated.put(new Target(emitted.get("unit"), emitted.get("symbol")), descriptor(emitted)) == null, "duplicate generated CAPI target");
         }
@@ -155,8 +165,9 @@ public final class ManagedImportAdmission {
             adjustor.put("arguments", List.of("AddrRep", "AddrRep", "AddrRep", "void")); adjustor.put("result", List.of("void", "AddrRep"));
             generated.put(new Target(null, "createAdjustor"), descriptor(adjustor));
         }
-        requireProof(!generated.isEmpty(), "no generated CAPI or callback products");
         var actual = calls(module.get("bindings")); CoreCallInventory.check(proof.get("expectedCalls"), actual, completeBindings);
+        if (generated.isEmpty() && allExcluded) return null;
+        requireProof(!generated.isEmpty(), "no generated CAPI or callback products");
         var admission = new ManagedImportAdmission(module, generated); admission.validateCalls(actual); return admission;
     }
 }

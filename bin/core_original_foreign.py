@@ -230,6 +230,10 @@ OPERATIONS = {
     **{symbol: ('capi', 'unsafe', arguments, output)
        for symbol, (arguments, output) in SIGSET_OPERATIONS.items()},
     'rtsSupportsBoundThreads': ('ccall', 'unsafe', (None,), (None, 'IntRep')),
+    # These observe THC-owned guest lifetimes; no native TSO pointer ABI is admitted.
+    'rts_getThreadId': ('ccall', 'unsafe', ('BoxedRep (Just Unlifted)', None), (None, 'Word64Rep')),
+    'eq_thread': ('ccall', 'unsafe', ('BoxedRep (Just Unlifted)', 'BoxedRep (Just Unlifted)', None), (None, 'Word8Rep')),
+    'cmp_thread': ('ccall', 'unsafe', ('BoxedRep (Just Unlifted)', 'BoxedRep (Just Unlifted)', None), (None, 'Int32Rep')),
     'getRTSStatsEnabled': ('ccall', 'safe', (None,), (None, 'IntRep')),
     'getRTSStats': ('ccall', 'safe', ('AddrRep', None), (None,)),
     **{symbol: ('ccall', 'safe', (None,), (None,))

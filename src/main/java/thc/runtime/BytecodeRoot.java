@@ -4461,6 +4461,19 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             throw fail("Expected exact CInt/CInt/Addr#/State# signal operands");
         }
     }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    @ConstantOperand(type = ThreadIdForeignOp.class, name = "operation")
+    public static final class ThreadIdForeign {
+        @Specialization public static void query(VirtualFrame frame, LocalAccessor destination, ThreadIdForeignOp operation,
+                Object first, Object second, Object state, @Bind("$node") Node node) {
+            TupleResults.requireVoidCarrier(state);
+            long value = operation.execute(node, first, second);
+            var bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            if (operation == ThreadIdForeignOp.ID) destination.setLong(bytecode, frame, value);
+            else destination.setInt(bytecode, frame, (int) value);
+        }
+    }
     @Operation public static final class RegisterMainThread {
         @Specialization public static void register(Object weak, Object state, @Bind("$node") Node node) {
             TupleResults.requireVoidCarrier(state);
