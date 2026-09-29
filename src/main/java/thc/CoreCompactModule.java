@@ -19,7 +19,7 @@ public final class CoreCompactModule implements AutoCloseable {
     private boolean verified;
     public CoreCompactModule(CoreUnitDirectory.ModuleRecord module, TargetLayout targetLayout, boolean verifyArtifacts) {
         this.module = module; this.targetLayout = targetLayout; this.verifyArtifacts = verifyArtifacts;
-        var artifact = ((CoreUnitDirectory.CompactStorage) module.storage()).artifact();
+        var artifact = module.artifact();
         file = new CoreCompactFile(artifact.path(), artifact.sha256(), verifyArtifacts);
         records = new CoreCompactRecords(file, artifact.sha256());
     }

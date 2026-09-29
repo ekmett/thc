@@ -13,7 +13,7 @@ import org.graalvm.polyglot.PolyglotException;
 import org.junit.jupiter.api.Test;
 import thc.CoreForeignArtifacts;
 import thc.CoreModules;
-import thc.CorePackageManifest;
+import thc.CoreCbdFixtures;
 import thc.Json;
 import thc.Language;
 import java.nio.ByteBuffer;
@@ -55,7 +55,7 @@ class InterfaceCoreNativeTest {
     }
     private Map<String, Object> source(String entry) throws Exception {
         var modules = new StringBuilder("[");
-        var layout = CorePackageManifest.appendModules(modules, directory.resolve("packages.json").toAbsolutePath().toString());
+        var layout = CoreCbdFixtures.appendModules(modules, directory.resolve("packages.json").toAbsolutePath().toString());
         assertNotNull(layout, "selected installed Core carries the target-derived layout"); assertEquals("fixture", Objects.requireNonNull(layout).getCompilerAbi());
         modules.append(']'); var name = entry.equals("coercionEntry") ? "CBVCoercionAudit" : "InterfaceLibrary";
         return select((List<Map<String, Object>>) Json.parse(modules.toString()), "module", name);
@@ -83,7 +83,7 @@ class InterfaceCoreNativeTest {
     }
     @Test void realForeignArtifactsSurviveCheckedArchiveButCannotExecute() throws Exception {
         oracle(); var direct = read("InterfaceForeign.json"); var modules = new StringBuilder("[");
-        var layout = CorePackageManifest.appendModules(modules, directory.resolve("foreign-packages.json").toAbsolutePath().toString());
+        var layout = CoreCbdFixtures.appendModules(modules, directory.resolve("foreign-packages.json").toAbsolutePath().toString());
         assertNotNull(layout, "archiving foreign code preserves the selected target layout"); assertEquals("fixture", Objects.requireNonNull(layout).getCompilerAbi()); modules.append(']');
         var archived = single((List<Map<String, Object>>) Json.parse(modules.toString()));
         assertEquals(2L, archived.get("schema")); assertEquals(direct.get("foreign"), archived.get("foreign"));

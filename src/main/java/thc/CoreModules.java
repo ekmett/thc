@@ -306,33 +306,9 @@ public final class CoreModules {
         var settings = new LinkedHashMap<String,Object>(); settings.put("mode", "managed-exports"); settings.put("backend", backend); settings.put("instrument", instrument); settings.put("strictLink", true); settings.put("verifyArtifacts", verifyArtifacts);
         try { return requestDocument(paths, settings); } catch (Exception failure) { throw rethrow(failure); }
     }
-    public static TargetLayout visitRequestModules(Map<String,Object> input, Consumer<Map<String,Object>> accept) {
-        try { return visitRequestModulesChecked(input, accept); } catch (Exception failure) { throw rethrow(failure); }
-    }
-    private static TargetLayout visitRequestModulesChecked(Map<String,Object> input, Consumer<Map<String,Object>> accept) throws java.io.IOException {
-        require(input.get("verifyArtifacts") == null || input.get("verifyArtifacts") instanceof Boolean, "verifyArtifacts must be a Boolean");
-        require(input.get("detachedBindings") == null || input.get("detachedBindings") instanceof Boolean, "detachedBindings must be a Boolean");
-        require(!Boolean.TRUE.equals(input.get("detachedBindings")) || input.get("modules") instanceof List<?> &&
-            input.get("packageManifest") == null && input.get("consumerModules") == null,
-            "Detached bindings require inline selected modules");
-        boolean verify = Objects.equals(input.get("verifyArtifacts"), true);
-        Object manifest = input.get("packageManifest");
-        if (manifest != null) {
-            require(manifest instanceof String && input.get("modules") == null && input.get("targetLayout") == null, "Package request must not mix manifest and inline modules");
-            String expected = text(input.get("packageManifestSha256"), "Missing package manifest identity"), supplied = text(input.get("packageCapability"), "Missing package request capability");
-            require(sameCapability(supplied, packageCapability((String) manifest, expected, verify)), "Invalid package request capability");
-            Object consumers = input.get("consumerModules");
-            boolean validConsumers = consumers == null || consumers instanceof List<?>;
-            if (validConsumers && consumers != null) for (Object value : (List<?>) consumers) if (!(value instanceof Map<?,?>)) { validConsumers = false; break; }
-            require(validConsumers, "Invalid loose package consumers");
-            var result = CorePackageManifest.visitModules((String) manifest, expected, verify,
-                    (module, text) -> accept.accept(with(module, "foreignExceptionBridgeUnit", input.get("foreignExceptionBridgeUnit"))));
-            require(Objects.equals(input.get("foreignExceptionBridgeUnit"), result.getForeignExceptionBridgeUnit()), "Package bridge selection changed after request");
-            if (consumers != null) for (var consumer : (List<Map<String,Object>>) consumers) accept.accept(with(consumer, "foreignExceptionBridgeUnit", result.getForeignExceptionBridgeUnit()));
-            return result.getTargetLayout();
-        }
-        require(input.get("packageManifestSha256") == null && input.get("packageCapability") == null && input.get("consumerModules") == null, "Orphan package manifest identity");
-        if (!(input.get("modules") instanceof List<?> modules)) throw new IllegalStateException("Expected modules array");
+    /** Internal decoded Core values, never a serialized runtime input protocol. */
+    static TargetLayout visitDecodedModules(Map<String,Object> input, Consumer<Map<String,Object>> accept) {
+        if (!(input.get("modules") instanceof List<?> modules)) throw new IllegalStateException("Expected decoded modules");
         for (Object module : modules) accept.accept(with((Map<String,Object>) module, "foreignExceptionBridgeUnit", input.get("foreignExceptionBridgeUnit")));
         return input.get("targetLayout") == null ? null : TargetLayout.fromDocument(input.get("targetLayout"));
     }
@@ -340,27 +316,30 @@ public final class CoreModules {
     private static MessageDigest digest() { try { return MessageDigest.getInstance("SHA-256"); } catch (NoSuchAlgorithmException failure) { throw new IllegalStateException(failure); } }
     private static String sha256(byte[] bytes) { return HexFormat.of().formatHex(digest().digest(bytes)); }
     public static CoreUnitDirectory unitDirectory(Map<String,Object> input) {
-        if (!(input.get("packageManifest") instanceof String manifest)) return null;
-        require(input.get("modules") == null && input.get("targetLayout") == null, "Package request must not mix input protocols");
+        require(Collections.disjoint(input.keySet(), Set.of("modules", "consumerModules", "detachedBindings", "targetLayout")),
+                "Core runtime inputs must be CBD artifacts, not inline Core");
         require(input.get("verifyArtifacts") == null || input.get("verifyArtifacts") instanceof Boolean, "verifyArtifacts must be a Boolean");
+        if (!input.containsKey("packageManifest")) {
+            require(input.get("packageManifestSha256") == null && input.get("packageCapability") == null,
+                    "Orphan package manifest identity");
+            require(input.get("moduleFiles") instanceof List<?>, "Expected CBD module files or package manifest");
+            return CoreUnitDirectory.read(Map.of("format", "thc-core-packages", "schema", 1L, "ghc", "9.14.1", "units", List.of()));
+        }
+        String manifest = text(input.get("packageManifest"), "Invalid package manifest path");
         boolean verify = Objects.equals(input.get("verifyArtifacts"), true);
         String expected = text(input.get("packageManifestSha256"), "Missing package manifest identity"), supplied = text(input.get("packageCapability"), "Missing package request capability");
         require(sameCapability(supplied, packageCapability(manifest, expected, verify)), "Invalid package request capability");
         try {
             byte[] bytes = Files.readAllBytes(Path.of(manifest)); if (verify) require(sha256(bytes).equals(expected), "Core package manifest changed after request: " + manifest);
             if (!(Json.parse(new String(bytes, StandardCharsets.UTF_8)) instanceof Map<?,?> document)) throw new IllegalStateException("Invalid Core package manifest");
-            var directory = CoreUnitDirectory.read(document); if (directory == null) return null;
+            var directory = CoreUnitDirectory.read(document);
             require(Objects.equals(input.get("foreignExceptionBridgeUnit"), directory.getForeignExceptionBridgeUnit()), "Package bridge selection changed after request"); return directory;
         } catch (Exception failure) { throw rethrow(failure); }
     }
-    /** Store-time selection through the normal lazy readers. Serialize while the
-     * readers are open; no path, capability, mapping or deferred body survives. */
-    static String detachedRequest(Map<String,Object> input, String entry) {
+    /** Prepare from CBD through the normal lazy readers. Detach only the selected
+     * in-memory values; no JSON Core, mapping or deferred body survives. */
+    static Map<String,Object> selectedModules(Map<String,Object> input, String entry) {
         var directory = unitDirectory(input);
-        if (directory == null) {
-            require(input.containsKey("modules"), "Cached preparation requires inline modules or a package directory");
-            return Json.stringify(detachedValue(input));
-        }
         try (var sources = directory.open(Boolean.TRUE.equals(input.get("verifyArtifacts")), false)) {
             var selected = new LinkedHashMap<CoreModuleAdmission,List<Map<String,Object>>>();
             var admissions = new LinkedHashMap<CoreUnitDirectory.ModuleRecord,CoreModuleAdmission>();
@@ -370,7 +349,7 @@ public final class CoreModules {
             var consumerOwners = new LinkedHashMap<String,Map<String,Object>>();
             var moduleNames = new HashSet<String>();
             for (var module : directory.getModules()) moduleNames.add(module.unit() + ":" + module.name());
-            visitUnitConsumers(with(input, "sourceNotesEnabled", false), module -> {
+            visitUnitConsumers(with(input, "sourceNotesEnabled", false), sources, module -> {
                 String unit = text(module.get("unit"), "Missing loose consumer unit"), name = text(module.get("module"), "Missing loose consumer module");
                 boolean fragment = unit.equals("dependency-closure") && name.equals("THC.InterfaceClosure") && Objects.equals(module.get("boundary"), "actual-interface-unfoldings");
                 require(fragment || moduleNames.add(unit + ":" + name), "Duplicate GHC module: " + unit + ":" + name);
@@ -478,15 +457,13 @@ public final class CoreModules {
             // Selection collects dependencies, not permission to execute them.
             // The ordinary linker still validates every selected original body.
             reachable(merger.finish(), entries, true);
-            var result = without(input, "packageManifest", "packageManifestSha256", "packageCapability", "consumerModules");
+            var result = without(input, "packageManifest", "packageManifestSha256", "packageCapability", "moduleFiles");
             result.put("modules", modules);
-            result.put("detachedBindings", true);
-            if (directory.getTargetLayout() != null) result.put("targetLayout", directory.getTargetLayout().document());
-            return Json.stringify(detachedValue(result));
+            if (sources.getTargetLayout() != null) result.put("targetLayout", sources.getTargetLayout().document());
+            return (Map<String,Object>) detachedValue(result);
         }
     }
     private static Object detachedValue(Object value) {
-        if (value instanceof thc.runtime.CoreFloatingLiteral floating) return floating.document();
         if (value instanceof Map<?,?> fields) {
             var result = new LinkedHashMap<String,Object>();
             fields.forEach((key, field) -> {
@@ -503,61 +480,49 @@ public final class CoreModules {
         }
         return value;
     }
-    /** Replay only explicit consumers; package definitions stay in their directory. */
-    public static void visitUnitConsumers(Map<String,Object> input, Consumer<Map<String,Object>> accept) {
-        Object consumers = input.get("consumerModules");
-        var loose = without(input, "packageManifest", "packageManifestSha256", "packageCapability", "consumerModules");
-        if (consumers != null) {
-            boolean validConsumers = consumers instanceof List<?>;
-            if (validConsumers) for (Object value : (List<?>) consumers) if (!(value instanceof Map<?,?>)) { validConsumers = false; break; }
-            require(validConsumers, "Invalid loose package consumers");
-            visitRequestModules(with(loose, "modules", consumers), accept);
+    /** Explicit CBD consumers share the same context-owned reader lifetime. */
+    public static void visitUnitConsumers(Map<String,Object> input, CoreUnitDirectory.Sources sources,
+            Consumer<Map<String,Object>> accept) {
+        Object files = input.get("moduleFiles");
+        if (files == null) return;
+        require(files instanceof List<?>, "Invalid CBD module files");
+        boolean verify = Boolean.TRUE.equals(input.get("verifyArtifacts"));
+        for (Object raw : (List<?>) files) {
+            require(raw instanceof Map<?,?>, "Invalid CBD artifact reference");
+            var artifact = (Map<?,?>) raw;
+            require(artifact.keySet().equals(Set.of("path", "sha256", "capability")), "Invalid CBD artifact fields");
+            String path = text(artifact.get("path"), "Missing CBD path");
+            String hash = text(artifact.get("sha256"), "Missing CBD identity");
+            String capability = text(artifact.get("capability"), "Missing CBD capability");
+            require(sameCapability(capability, packageCapability("CBD:" + path, hash, verify)), "Invalid CBD request capability");
+            accept.accept(with(sources.consumer(Path.of(path), hash), "foreignExceptionBridgeUnit", input.get("foreignExceptionBridgeUnit")));
         }
-    }
-    private static Map<String,Object> manifestSettings(Map<String,Object> settings, CorePackageManifest.VisitResult identity, boolean verify) {
-        var document = new LinkedHashMap<>(settings); document.put("packageManifest", identity.getManifestPath()); document.put("packageManifestSha256", identity.getManifestSha256());
-        document.put("packageCapability", packageCapability(identity.getManifestPath(), identity.getManifestSha256(), verify)); document.put("foreignExceptionBridgeUnit", identity.getForeignExceptionBridgeUnit()); return document;
     }
     private static String requestDocument(List<String> paths, Map<String,Object> settings) throws java.io.IOException {
-        boolean verify = Objects.equals(settings.get("verifyArtifacts"), true);
-        var manifests = new ArrayList<String>();
-        for (String path : paths) if (path.startsWith("@")) manifests.add(path);
-        require(manifests.size() <= 1, "A Core request accepts at most one package manifest");
-        String manifest = manifests.isEmpty() ? null : manifests.getFirst().substring(1);
-        var options = new StringBuilder(); Json.appendObjectDocument(options, Json.stringify(settings));
-        if (manifest != null) {
-            var consumers = new ArrayList<String>(); for (String path : paths) if (!path.startsWith("@")) consumers.add(readText(path));
-            var identity = CorePackageManifest.indexedRequestIdentity(manifest, verify);
-            if (identity != null) return manifestDocument(settings, identity, verify, consumers);
-            class Inline { StringBuilder text = new StringBuilder(); int count; }
-            var inline = new Inline(); int limit = 2 * 1024 * 1024;
-            var result = CorePackageManifest.visitModules(manifest, null, verify, (module, source) -> {
-                var destination = inline.text;
-                if (destination != null) {
-                    if (destination.length() + source.length() > limit) inline.text = null;
-                    else { if (inline.count++ != 0) destination.append(','); Json.appendObjectDocument(destination, source); }
-                }
-            });
-            if (inline.text == null) return manifestDocument(settings, result, verify, consumers);
-            var document = new StringBuilder().append(options, 0, options.length() - 1).append(",\"modules\":[").append(inline.text);
-            for (String source : consumers) { if (inline.count++ != 0) document.append(','); Json.appendObjectDocument(document, source); }
-            document.append(']'); if (result.getTargetLayout() != null) document.append(",\"targetLayout\":").append(Json.stringify(result.getTargetLayout().document()));
-            if (result.getForeignExceptionBridgeUnit() != null) document.append(",\"foreignExceptionBridgeUnit\":").append(Json.stringify(result.getForeignExceptionBridgeUnit()));
-            return document.append('}').toString();
+        boolean verify = Boolean.TRUE.equals(settings.get("verifyArtifacts"));
+        var document = new LinkedHashMap<>(settings);
+        var files = new ArrayList<Object>();
+        String manifest = null;
+        for (String requested : paths) {
+            if (requested.startsWith("@")) {
+                require(manifest == null, "A Core request accepts at most one package manifest");
+                manifest = Path.of(requested.substring(1)).toRealPath().toString();
+            } else {
+                String path = Path.of(requested).toRealPath().toString();
+                String hash = sha256(Files.readAllBytes(Path.of(path)));
+                files.add(Map.of("path", path, "sha256", hash, "capability", packageCapability("CBD:" + path, hash, verify)));
+            }
         }
-        var document = new StringBuilder().append(options, 0, options.length() - 1).append(",\"modules\":[");
-        for (int index = 0; index < paths.size(); index++) { if (index != 0) document.append(','); Json.appendObjectDocument(document, readText(paths.get(index))); }
-        return document.append("]}").toString();
-    }
-    private static String manifestDocument(Map<String,Object> settings, CorePackageManifest.VisitResult identity, boolean verify, List<String> consumers) {
-        var document = manifestSettings(settings, identity, verify);
-        if (!consumers.isEmpty()) {
-            var modules = new ArrayList<Object>();
-            for (String consumer : consumers) modules.add(Json.parse(consumer));
-            document.put("consumerModules", Collections.unmodifiableList(modules));
+        if (!files.isEmpty() || manifest == null) document.put("moduleFiles", files);
+        if (manifest != null) {
+            byte[] bytes = Files.readAllBytes(Path.of(manifest));
+            var directory = CoreUnitDirectory.read((Map<?,?>) Json.parse(new String(bytes, StandardCharsets.UTF_8)));
+            String hash = verify ? sha256(bytes) : "";
+            document.put("packageManifest", manifest); document.put("packageManifestSha256", hash);
+            document.put("packageCapability", packageCapability(manifest, hash, verify));
+            document.put("foreignExceptionBridgeUnit", directory.getForeignExceptionBridgeUnit());
         }
         return Json.stringify(document);
     }
-    private static String readText(String path) throws java.io.IOException { return new String(Files.readAllBytes(Path.of(path)), StandardCharsets.UTF_8); }
     @SuppressWarnings("unchecked") private static <E extends Throwable> RuntimeException rethrow(Throwable failure) throws E { throw (E) failure; }
 }

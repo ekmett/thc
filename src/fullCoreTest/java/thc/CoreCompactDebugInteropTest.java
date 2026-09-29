@@ -100,7 +100,7 @@ public class CoreCompactDebugInteropTest {
     }
     @Test public void selectedGenuineOccurrencesKeepOriginalOrderedNotesAndDisplayNames() throws Exception {
         var compact = directory(manifest); var reference = directory(Path.of(System.getProperty("thc.compactInteropReference")));
-        var artifact = ((CoreUnitDirectory.CompactStorage) sourceNotes(compact).getStorage()).getArtifact();
+        var artifact = sourceNotes(compact).getArtifact();
         try (var originals = reference.open(false); var file = new CoreCompactFile(artifact.getPath(), artifact.getSha256())) {
             var compare = new Compare(new CoreSources(originals.metadata(sourceNotes(reference))));
             var records = new CoreCompactRecords(file, artifact.getSha256());

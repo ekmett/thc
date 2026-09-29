@@ -61,7 +61,7 @@ public class OriginalStackDecoderTest {
         for (String token : Files.readString(new File(root, (String) manifest.get("nativeOutput")).toPath(), StandardCharsets.UTF_8).trim().split(" ", -1)) nativeRows.add(Long.parseLong(token));
         assertEquals(6, nativeRows.size()); assertTrue(nativeRows.getFirst() > 0); assertEquals(1L, nativeRows.get(1)); assertEquals(1L, nativeRows.get(5));
         assertTrue(nativeRows.get(2) >= 0 && nativeRows.get(2) <= nativeRows.getFirst()); assertTrue(nativeRows.get(3) >= 0 && nativeRows.get(3) <= nativeRows.getFirst()); assertTrue(nativeRows.get(4) >= 0);
-        var originalsText = new StringBuilder(); var targetLayout = CorePackageManifest.appendModules(originalsText, new File(root, (String) manifest.get("packageManifest")).getPath());
+        var originalsText = new StringBuilder(); var targetLayout = CoreCbdFixtures.appendModules(originalsText, new File(root, (String) manifest.get("packageManifest")).getPath());
         assertNotNull(targetLayout, "Original selected-toolchain target layout required");
         var originals = (List<Map<String, Object>>) Json.parse("[" + originalsText + "]"); var stages = (Map<String, String>) manifest.get("stages"); assertEquals(Set.of("pre", "post"), stages.keySet());
         for (var stage : stages.entrySet()) for (String backend : List.of("ast", "bytecode")) for (boolean inlining : new boolean[] {false, true}) try (Context context = context(inlining)) {

@@ -84,6 +84,7 @@ class CoreCompactDebugTest {
             assertEquals(after, file.getCounters().statistics().debugBytesRead());
             assertNull(debug.location(30));
             assertEquals("first", Objects.requireNonNull(Objects.requireNonNull(debug.location(40)).getSection()).getCharacters().toString());
+            assertSame(debug.location(0).getSection(), debug.location(40).getSection(), "Interned payloads share a context-owned section");
             assertNull(debug.location(60)); assertNull(debug.location(99));
             assertEquals("outer", debug.name(0, 0)); assertEquals("λlocal", debug.name(0, 1));
             assertNull(debug.name(0, 2)); assertNull(debug.name(1, 0));

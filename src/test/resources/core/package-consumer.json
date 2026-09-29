@@ -4,7 +4,7 @@
   "bindings": [{
     "id": "main:Main.entry", "name": "entry", "type": "Int# -> Int#", "lifted": true, "arity": 1,
     "expr": ["lam", [{"id": "x", "name": "x", "type": "Int#", "lifted": false, "coercion": false}],
-      ["app", ["var", "dependency:Hidden.cold"], [["var", "x"]], [false]]]
+      ["app", ["var", "dependency:Hidden.cold", {}], [["var", "x", {}]], [false], false, false, {}], {}]
   }],
   "constructors": [],
   "sourceCore": "Synthetic consumer ownership control; not a GHC export or native performance oracle."

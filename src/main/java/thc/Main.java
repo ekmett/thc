@@ -138,7 +138,7 @@ public final class Main {
         String[] args = withVerification.arguments();
         boolean verifyArtifacts = withVerification.verifyArtifacts();
         if (args.length > 0 && args[0].equals("--run-executable")) {
-            require(args.length >= 4, "Usage: thc --run-executable MODULE.json[,MODULE.json...] ENTRY SHUTDOWN_ENTRY [-- PROGRAM_NAME ARG...]");
+            require(args.length >= 4, "Usage: thc --run-executable MODULE.cbd[,MODULE.cbd...] ENTRY SHUTDOWN_ENTRY [-- PROGRAM_NAME ARG...]");
             var guest = launcherArguments(args, 4);
             try (Context context = executionContext(true)) {
                 initializeArguments(context, guest);
@@ -150,7 +150,7 @@ public final class Main {
             return;
         }
         if (args.length > 0 && args[0].equals("--run-io")) {
-            require(args.length >= 3, "Usage: thc --run-io MODULE.json[,MODULE.json...] ENTRY [-- PROGRAM_NAME ARG...]");
+            require(args.length >= 3, "Usage: thc --run-io MODULE.cbd[,MODULE.cbd...] ENTRY [-- PROGRAM_NAME ARG...]");
             var guest = launcherArguments(args, 3);
             try (Context context = executionContext(true)) {
                 initializeArguments(context, guest);
@@ -160,7 +160,7 @@ public final class Main {
             }
             return;
         }
-        require(args.length >= 3, "Usage: thc MODULE.json[,MODULE.json...] ENTRY INTEGER [--compile]");
+        require(args.length >= 3, "Usage: thc MODULE.cbd[,MODULE.cbd...] ENTRY INTEGER [--compile]");
         long input = Long.parseLong(args[2]);
         try (Context context = executionContext(false)) {
             var function = loadEntry(context, modules(args[0]), args[1], true, defaultBackend(), false, null, configuredAsyncExceptions(), verifyArtifacts);

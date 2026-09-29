@@ -36,7 +36,7 @@ public class STMFullCoreTest {
         return manifest;
     }
     private TargetLayout targetLayout;
-    private TargetLayout targetLayout() throws Exception { if (targetLayout == null) targetLayout = Objects.requireNonNull(CorePackageManifest.visitModules(new File(root, "build/stm/installed/packages.json").getPath(), (module, origin) -> {}).getTargetLayout()); return targetLayout; }
+    private TargetLayout targetLayout() throws Exception { if (targetLayout == null) targetLayout = Objects.requireNonNull(CoreCbdFixtures.visitModules(new File(root, "build/stm/installed/packages.json").getPath(), (module, origin) -> {}).getTargetLayout()); return targetLayout; }
     private Map<String, Object> module(List<String> paths) throws Exception { var modules = new ArrayList<Map<String, Object>>(); for (var path : paths) modules.add(read(path)); var result = new LinkedHashMap<>(CoreModules.merge(modules)); result.put("targetLayout", targetLayout()); return result; }
     private long model(String name, long x) { return switch (name) { case "basic" -> (18 * x + 3) * 31 + x + 3; case "rollback" -> (18 * x + 19) * 31 + 2 * x + 3; case "alternative" -> 32 * x + 7; case "lazyPayload" -> x + 42; case "nestedAtomic" -> x + 31; case "unliftedPayload" -> x + 9; case "newtypeField" -> x + 11; case "newtypeAlternative" -> x + 13; case "newtypeCatch" -> x + 17; default -> throw new IllegalStateException(name); }; }
     private void valid(RootCallTarget target, String label) throws Exception { assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), label); }

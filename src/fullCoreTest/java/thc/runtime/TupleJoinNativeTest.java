@@ -33,7 +33,7 @@ public class TupleJoinNativeTest {
         assertEquals(new LinkedHashSet<>(entries), rows.keySet()); var originals = new ArrayList<Map<String, Object>>(); Object layout = null;
         if (Boolean.TRUE.equals(manifest.get("originalLibrary"))) {
             assertTrue(entries.contains("originalRoundTo"));
-            layout = CorePackageManifest.visitModules(new File(root, (String) manifest.get("packageManifest")).getPath(), (module, ignored) -> originals.add(module)).getTargetLayout(); assertNotNull(layout);
+            layout = CoreCbdFixtures.visitModules(new File(root, (String) manifest.get("packageManifest")).getPath(), (module, ignored) -> originals.add(module)).getTargetLayout(); assertNotNull(layout);
             Map<String, Object> roundTo = null;
             for (var module : originals) if (module.get("bindings") instanceof List<?> bindings) for (var raw : bindings) {
                 var binding = (Map<String, Object>) raw;

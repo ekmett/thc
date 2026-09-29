@@ -41,7 +41,7 @@ final class CompactLibraryFixture {
                 assertArrayEquals(input.readAllBytes(), Files.readAllBytes(new File(root, selection.getKey()).toPath()), "Original library module changed: " + selection.getKey());
             }
         }
-        var targetLayout = Objects.requireNonNull(CorePackageManifest.visitModules(new File(root, directory + "/installed/packages.json").getPath(), (module, path) -> {}).getTargetLayout());
+        var targetLayout = Objects.requireNonNull(CoreCbdFixtures.visitModules(new File(root, directory + "/installed/packages.json").getPath(), (module, path) -> {}).getTargetLayout());
         for (var stage : stages.entrySet()) for (String backend : List.of("ast", "bytecode")) {
             var modules = new ArrayList<Map<String, Object>>(); for (String path : stage.getValue()) modules.add(read(path));
             var module = new LinkedHashMap<>(CoreModules.merge(modules)); module.put("targetLayout", targetLayout);

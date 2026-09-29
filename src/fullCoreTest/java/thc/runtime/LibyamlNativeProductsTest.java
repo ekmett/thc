@@ -29,18 +29,20 @@ public class LibyamlNativeProductsTest {
     /** Decode the original two modules and their exact original binding order. */
     private List<Map<String, Object>> selectedModules(List<Original> originals) throws Exception {
         String path = System.getProperty("thc.libyamlPackages"); var originalModules = new ArrayList<Map<String, Object>>(); for (var original : originals) originalModules.add(original.module); if (path == null) return originalModules;
-        String format = System.getProperty("thc.libyamlFormat"); if (!Objects.equals(format, "json") && !Objects.equals(format, "compact")) throw new IllegalArgumentException();
         var directory = Objects.requireNonNull(CoreUnitDirectory.read((Map<?, ?>) Json.parse(Files.readString(Path.of(path))))); var units = new LinkedHashSet<Object>(); var names = new HashSet<Object>(); for (var original : originals) { units.add(original.module.get("unit")); names.add(original.module.get("module")); } assertEquals(1, units.size()); var unit = units.getFirst(); var selected = new ArrayList<CoreUnitDirectory.ModuleRecord>(); var selectedNames = new HashSet<String>();
         for (var record : directory.getModules()) if (Objects.equals(record.getUnit(), unit)) { selected.add(record); selectedNames.add(record.getName()); } assertEquals(names, selectedNames);
         try (var sources = directory.open(false, false)) {
             var decoded = new ArrayList<Map<String, Object>>(); long count = 0;
             for (var original : originals) {
                 CoreUnitDirectory.ModuleRecord record = null; for (var candidate : selected) if (Objects.equals(candidate.getName(), original.module.get("module"))) { assertNull(record); record = candidate; } Objects.requireNonNull(record);
-                assertEquals(original.hash, record.getSha256(), "selected module must be the exact native fixture capture"); assertEquals(format.equals("compact"), record.getStorage() instanceof CoreUnitDirectory.CompactStorage); var ids = new ArrayList<String>(); var bindings = new ArrayList<Map<String, Object>>(); var observedIds = new ArrayList<Object>();
+                assertEquals(original.hash, record.getSha256(), "selected module must be the exact native fixture capture"); assertNotNull(record.getArtifact()); var ids = new ArrayList<String>(); var bindings = new ArrayList<Map<String, Object>>(); var observedIds = new ArrayList<Object>();
                 for (var binding : (List<Map<String, Object>>) original.module.get("bindings")) ids.add((String) binding.get("id")); for (var id : ids) { var binding = Objects.requireNonNull(sources.binding(id), "Missing original binding " + id); bindings.add(binding); observedIds.add(binding.get("id")); } assertEquals(ids, observedIds); var module = new LinkedHashMap<>(sources.metadata(record)); module.put("bindings", bindings); decoded.add(module); count += bindings.size();
             }
-            if (format.equals("compact")) { assertEquals(0, sources.counters().size(), "compact execution must not fall back to JSON"); var counters = sources.compactCounters(); assertEquals(2, counters.size(), "unrelated package modules stay unopened"); long bindings = 0, bytes = 0; for (var counter : counters) { var statistics = counter.statistics(); bindings += statistics.decodedBindings(); bytes += statistics.debugBytesRead() + statistics.hashBytesRead(); } assertEquals(count, bindings); assertEquals(0L, bytes); }
-            else { assertEquals(0, sources.compactCounters().size()); var counters = sources.counters(); assertEquals(1, counters.size(), "unrelated package units stay unopened"); long bindings = 0, bytes = 0; for (var counter : counters) { var statistics = counter.statistics(); bindings += statistics.decodedBindings(); bytes += statistics.hashBytesScanned(); } assertEquals(count, bindings); assertEquals(0L, bytes); }
+            var counters = sources.compactCounters();
+            assertEquals(2, counters.size(), "unrelated package modules stay unopened");
+            long bindings = 0, bytes = 0;
+            for (var counter : counters) { var statistics = counter.statistics(); bindings += statistics.decodedBindings(); bytes += statistics.debugBytesRead() + statistics.hashBytesRead(); }
+            assertEquals(count, bindings); assertEquals(0L, bytes);
             return decoded;
         }
     }

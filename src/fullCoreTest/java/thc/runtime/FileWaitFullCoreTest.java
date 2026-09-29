@@ -37,7 +37,7 @@ public class FileWaitFullCoreTest {
             "t/haskell-fixtures/FileWaitFixtures.hs", "bin/core-capabilities.json"), null);
         OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"), Set.of("build/file-wait/oracle.txt", "build/file-wait/pre/core/FileWaitAudit.json", "build/file-wait/post/core/FileWaitAudit.json"), null);
         assertEquals("read-ready\nwrite-ready\noriginal-bad-fd\n", Files.readString(new File(root, (String) manifest.get("oracle")).toPath(), StandardCharsets.UTF_8));
-        var originals = new ArrayList<Map<String, Object>>(); var targetLayout = CorePackageManifest.visitModules(new File(root, (String) manifest.get("packageManifest")).getPath(), (module, path) -> originals.add(module)).getTargetLayout(); assertNotNull(targetLayout);
+        var originals = new ArrayList<Map<String, Object>>(); var targetLayout = CoreCbdFixtures.visitModules(new File(root, (String) manifest.get("packageManifest")).getPath(), (module, path) -> originals.add(module)).getTargetLayout(); assertNotNull(targetLayout);
         var stages = (Map<String, String>) manifest.get("stages"); assertEquals(Set.of("pre", "post"), stages.keySet());
         for (var stage : stages.entrySet()) {
             var modules = new ArrayList<>(originals); modules.add((Map<String, Object>) Json.parse(Files.readString(new File(root, stage.getValue()).toPath(), StandardCharsets.UTF_8)));

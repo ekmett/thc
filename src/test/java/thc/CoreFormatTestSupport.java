@@ -31,7 +31,7 @@ final class CoreFormatTestSupport {
             false, null, async, verify);
     }
     static void visit(Map<String, Object> input, Consumer<Map<String, Object>> consumer) {
-        CoreModules.visitRequestModules(input, consumer);
+        CoreCbdFixtures.visitRequest(input, consumer);
     }
     /** Test writer for the separate symbol-offset format; offsets are recorded while emitting. */
     record SymbolFixture(byte[] bytes, int bindingsStart, int bindingsEnd, String symbols) {}

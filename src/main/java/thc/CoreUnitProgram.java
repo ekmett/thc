@@ -16,7 +16,6 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
     private final String entry, backend;
     private final boolean async;
     private final Language.State owner;
-    private final List<CoreJsonSymbols.Counters> totals = new ArrayList<>();
     private final List<CoreCompactFile.Counters> compactTotals = new ArrayList<>();
     private final CoreUnitDirectory.Sources sources;
     private final Map<String,Map<String,Object>> constructors = new HashMap<>();
@@ -35,11 +34,11 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
     public CoreUnitProgram(Language language, CoreUnitDirectory directory, Map<String,Object> input, String entry, String backend, boolean async, Language.State owner) {
         this.language = language; this.directory = directory; this.input = input; this.entry = entry;
         this.backend = backend; this.async = async; this.owner = owner;
-        sources = directory.open(Objects.equals(input.get("verifyArtifacts"), true), !Objects.equals(input.get("sourceNotesEnabled"), false), totals::add, compactTotals::add);
+        sources = directory.open(Objects.equals(input.get("verifyArtifacts"), true), !Objects.equals(input.get("sourceNotesEnabled"), false), compactTotals::add);
         for (var module : directory.getModules()) availableModules.add(module.unit() + ":" + module.name());
         var modules = new HashSet<String>();
         try {
-            CoreModules.visitUnitConsumers(input, rawModule -> {
+            CoreModules.visitUnitConsumers(input, sources, rawModule -> {
                 var module = (Map<String,Object>) rawModule;
                 String unit = requiredText(module.get("unit"), "Missing loose consumer unit"), name = requiredText(module.get("module"), "Missing loose consumer module");
                 boolean fragment = unit.equals("dependency-closure") && name.equals("THC.InterfaceClosure") && Objects.equals(module.get("boundary"), "actual-interface-unfoldings");
@@ -75,6 +74,7 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
     private static void require(boolean value, String message) { if (!value) throw new IllegalArgumentException(message); }
     private static String requiredText(Object value, String message) { if (value instanceof String text) return text; throw new IllegalStateException(message); }
     @Override public boolean getAsynchronousExceptions() { return async; }
+    public TargetLayout getTargetLayout() { return sources.getTargetLayout(); }
     @Override public boolean getHasBytecode() { return backend.equals("bytecode"); }
     @Override public String bytecodeDump() {
         var dumps = new ArrayList<String>();
@@ -214,7 +214,7 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
         var linked = new LinkedHashMap<>(CoreModules.demanded(provenance, id, demand, this::bridge));
         linked.put("instrument", !Objects.equals(input.get("instrument"), false)); linked.put("diagnosticUnsupported", Objects.equals(input.get("diagnosticUnsupported"), true));
         linked.put("sourceNotesEnabled", !Objects.equals(input.get("sourceNotesEnabled"), false)); linked.put("demandBindings", demand); linked.put("captureDelimited", captureDelimited);
-        if (directory.getTargetLayout() != null) linked.put("targetLayout", directory.getTargetLayout());
+        if (getTargetLayout() != null) linked.put("targetLayout", getTargetLayout());
         // Every demanded binding keeps the same immutable source notes for its
         // admitted module, rather than retaining another complete source table.
         synchronized (moduleSources) {
@@ -284,53 +284,9 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
         // All demanded programs share Metrics; copy its label snapshot once.
         var result = new LinkedHashMap<>(demand.preparedPrograms().getFirst().diagnostics());
         result.putAll(rootCounts());
-        var counters = new ArrayList<CoreJsonSymbols.Statistics>();
-        for (var counter : totals) counters.add(counter.statistics());
         result.put("unsupportedPolicy", "reject-at-binding-admission");
         var compact = new ArrayList<CoreCompactFile.Statistics>();
         for (var counter : compactTotals) compact.add(counter.statistics());
-        long coreUnitSourceOpens = 0;
-        for (var item : counters) coreUnitSourceOpens += item.sourceOpens();
-        result.put("coreUnitSourceOpens", coreUnitSourceOpens);
-        long coreUnitDirectoryOpens = 0;
-        for (var item : counters) coreUnitDirectoryOpens += item.directoryOpens();
-        result.put("coreUnitDirectoryOpens", coreUnitDirectoryOpens);
-        long coreUnitSourceMappedBytes = 0;
-        for (var item : counters) coreUnitSourceMappedBytes += item.sourceMappedBytes();
-        result.put("coreUnitSourceMappedBytes", coreUnitSourceMappedBytes);
-        long coreUnitDirectoryMappedBytes = 0;
-        for (var item : counters) coreUnitDirectoryMappedBytes += item.directoryMappedBytes();
-        result.put("coreUnitDirectoryMappedBytes", coreUnitDirectoryMappedBytes);
-        long coreUnitSourceByteReads = 0;
-        for (var item : counters) coreUnitSourceByteReads += item.sourceByteReads();
-        result.put("coreUnitSourceByteReads", coreUnitSourceByteReads);
-        long coreUnitDirectoryByteReads = 0;
-        for (var item : counters) coreUnitDirectoryByteReads += item.directoryByteReads();
-        result.put("coreUnitDirectoryByteReads", coreUnitDirectoryByteReads);
-        long coreUnitHashBytesScanned = 0;
-        for (var item : counters) coreUnitHashBytesScanned += item.hashBytesScanned();
-        result.put("coreUnitHashBytesScanned", coreUnitHashBytesScanned);
-        long coreUnitDecodedBindings = 0;
-        for (var item : counters) coreUnitDecodedBindings += item.decodedBindings();
-        result.put("coreUnitDecodedBindings", coreUnitDecodedBindings);
-        long coreUnitDecodedModules = 0;
-        for (var item : counters) coreUnitDecodedModules += item.decodedModules();
-        result.put("coreUnitDecodedModules", coreUnitDecodedModules);
-        long coreUnitDecodedBytes = 0;
-        for (var item : counters) coreUnitDecodedBytes += item.decodedBytes();
-        result.put("coreUnitDecodedBytes", coreUnitDecodedBytes);
-        long coreUnitMetadataBytes = 0;
-        for (var item : counters) coreUnitMetadataBytes += item.metadataBytes();
-        result.put("coreUnitMetadataBytes", coreUnitMetadataBytes);
-        long coreUnitVerifiedModuleBytes = 0;
-        for (var item : counters) coreUnitVerifiedModuleBytes += item.verifiedModuleBytes();
-        result.put("coreUnitVerifiedModuleBytes", coreUnitVerifiedModuleBytes);
-        long coreUnitPhysicalMappingOpens = 0;
-        for (var item : counters) coreUnitPhysicalMappingOpens += item.physicalMappingOpens();
-        result.put("coreUnitPhysicalMappingOpens", coreUnitPhysicalMappingOpens);
-        long coreUnitMappingCacheHits = 0;
-        for (var item : counters) coreUnitMappingCacheHits += item.mappingCacheHits();
-        result.put("coreUnitMappingCacheHits", coreUnitMappingCacheHits);
         long coreCompactModuleOpens = 0;
         for (var item : compact) coreCompactModuleOpens += item.acquisitions();
         result.put("coreCompactModuleOpens", coreCompactModuleOpens);

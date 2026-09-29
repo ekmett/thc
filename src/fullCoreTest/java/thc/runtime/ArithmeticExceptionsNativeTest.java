@@ -50,7 +50,7 @@ public class ArithmeticExceptionsNativeTest {
             String[] row = line.split("\t", -1); rows.computeIfAbsent(row[0], ignored -> new ArrayList<>()).add(new Row(Long.parseLong(row[1]), Long.parseLong(row[2]))); count++;
         }
         assertEquals(42, count); var stages = (Map<String, String>) manifest.get("stages"); var installedText = new StringBuilder();
-        var targetLayout = CorePackageManifest.appendModules(installedText, new File(root, (String) manifest.get("packageManifest")).getPath()); assertNotNull(targetLayout, "Original installed RTS target layout is required");
+        var targetLayout = CoreCbdFixtures.appendModules(installedText, new File(root, (String) manifest.get("packageManifest")).getPath()); assertNotNull(targetLayout, "Original installed RTS target layout is required");
         var originals = (List<Map<String, Object>>) Json.parse("[" + installedText + "]");
         for (var stage : stages.entrySet()) {
             var modules = new ArrayList<>(originals); modules.add(json(new File(root, stage.getValue()))); var module = new LinkedHashMap<>(CoreModules.merge(modules)); module.put("targetLayout", targetLayout);

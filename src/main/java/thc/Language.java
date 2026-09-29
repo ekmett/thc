@@ -323,23 +323,16 @@ public final class Language extends TruffleLanguage<Language.State> {
         var input = (Map<String, Object>) Json.parse(request.getSource().getCharacters().toString());
         require(!input.containsKey("prepareCode") || input.get("prepareCode") instanceof Boolean, "prepareCode must be a Boolean");
         boolean prepareCode = Boolean.TRUE.equals(input.get("prepareCode"));
+        var directory = CoreModules.unitDirectory(input);
         if ("managed-exports".equals(input.get("mode"))) {
             require(!prepareCode, "Reusable code does not yet admit managed exports");
             String backend = ManagedExportPlan.backend(input);
-            var directory = CoreModules.unitDirectory(input);
-            if (directory != null) return new RootNode(this) {
+            return new RootNode(this) {
                 @Override public Object execute(VirtualFrame frame) { return currentState(this).managedExports.load(input, directory, backend); }
                 @Override public String getName() { return "THC load managed exports from unit directory"; }
             }.getCallTarget();
-            var plan = ManagedExportPlan.read(input);
-            return new RootNode(this) {
-                @Override public Object execute(VirtualFrame frame) { return currentState(this).managedExports.load(plan); }
-                @Override public String getName() { return "THC load managed exports"; }
-            }.getCallTarget();
         }
-        var directory = CoreModules.unitDirectory(input);
-        require(!prepareCode || directory == null, "Reusable code does not yet admit unit-directory loading");
-        if (directory != null) return unitRoot(input, directory);
+        if (!prepareCode) return unitRoot(input, directory);
         var merger = new CoreModules.Merger();
         if (!(input.get("entry") instanceof String entry)) throw new IllegalStateException("Expected entry name");
         String shutdownEntry = input.get("shutdownEntry") instanceof String value ? value : null;
@@ -347,8 +340,8 @@ public final class Language extends TruffleLanguage<Language.State> {
             "Executable shutdown requires a distinct IO entry");
         require(!Boolean.TRUE.equals(input.get("ioMain")) || !Boolean.TRUE.equals(input.get("diagnosticUnsupported")),
             "IO main requires strict unsupported-Core rejection");
-        var layout = CoreModules.visitRequestModules(input,
-            Boolean.TRUE.equals(input.get("detachedBindings")) ? merger::addDetached : merger::add);
+        var selectedModules = CoreModules.selectedModules(input, entry);
+        var layout = CoreModules.visitDecodedModules(selectedModules, merger::addDetached);
         var linked = new LinkedHashMap<String, Object>(CoreModules.reachable(merger.finish(),
             shutdownEntry == null ? List.of(entry) : List.of(entry, shutdownEntry), Boolean.TRUE.equals(input.get("strictLink"))));
         linked.put("instrument", !Boolean.FALSE.equals(input.get("instrument")));
@@ -397,46 +390,13 @@ public final class Language extends TruffleLanguage<Language.State> {
         String backend = (String) backendValue;
         require(!input.containsKey("asyncExceptions") || input.get("asyncExceptions") instanceof Boolean, "asyncExceptions must be a Boolean");
         boolean async = input.get("asyncExceptions") instanceof Boolean value ? value : backend.equals("bytecode");
-        var registrations = (List<ManagedExportAdmission>) linked.get("managedRegistrations");
-        var acceptedInputs = hostInputs;
-        var acceptedResult = hostResult;
-        var resultFault = hostResultFault;
-        var shutdownProof = shutdownResult;
         boolean processSignals = bindings.stream().anyMatch(binding -> CoreSignalForeign.dispatcher.equals(binding.get("id")));
-        if (prepareCode) {
-            require(backend.equals("ast") && !async && !Boolean.TRUE.equals(input.get("diagnosticUnsupported")),
-                "Reusable code currently requires synchronous, strict AST preparation");
-            var entries = shutdownEntry == null ? List.of(entry) : List.of(entry, shutdownEntry);
-            return new PreparedRoot(this, Program.prepareCode(this, linked, entries), entry,
-                ((Number) selected.get("arity")).intValue(), acceptedInputs, acceptedResult,
-                ioResult, shutdownEntry, shutdownProof, processSignals).getCallTarget();
-        }
-        return new RootNode(this) {
-            @Override public Object execute(VirtualFrame frame) { return instantiate(); }
-            @TruffleBoundary private EntryValue instantiate() {
-                // Parsed roots may be Engine-shared; programs, CAFs and registrations are context-owned.
-                var owner = currentState(this);
-                for (var link : (List<ForeignBitcode>) linked.get("foreignLinks")) owner.cbits().declare(link);
-                for (var link : (List<PackageScalarLink>) linked.get("packageScalarLinks")) owner.packageCbits.declare(link);
-                ExecutableProgram program = backend.equals("ast") ? Program.forNativeStartup(Language.this, linked, async)
-                    : BytecodeProgram.forNativeStartup(Language.this, linked, async);
-                try {
-                    var exports = new ArrayList<ManagedExportSignature>();
-                    for (var registration : registrations) exports.addAll(registration.getExports());
-                    owner.foreignRoots.register(program, Language.this, registrations, ManagedExportPlan.checked(exports, ignored -> bindings),
-                        () -> {
-                            for (var link : (List<ForeignBitcode>) linked.get("foreignLinks")) owner.cbits().link(link);
-                            for (var link : (List<PackageScalarLink>) linked.get("packageScalarLinks")) owner.packageCbits.link(link);
-                        });
-                    int argumentCount = ((Number) selected.get("arity")).intValue();
-                    var value = new EntryValue(program, entry, argumentCount, resultFault,
-                        ioResult, Language.this, shutdownEntry, shutdownProof,
-                        processSignals, acceptedInputs, acceptedResult);
-                    return value;
-                } catch (Throwable failure) { owner.foreignRoots.release(program); throw failure; }
-            }
-            @Override public String getName() { return "THC load " + entry; }
-        }.getCallTarget();
+        require(backend.equals("ast") && !async && !Boolean.TRUE.equals(input.get("diagnosticUnsupported")),
+            "Reusable code currently requires synchronous, strict AST preparation");
+        var entries = shutdownEntry == null ? List.of(entry) : List.of(entry, shutdownEntry);
+        return new PreparedRoot(this, Program.prepareCode(this, linked, entries), entry,
+            ((Number) selected.get("arity")).intValue(), hostInputs, hostResult,
+            ioResult, shutdownEntry, shutdownResult, processSignals).getCallTarget();
     }
 
     /** Cached load factory: code is shared, while every execution creates fresh ordinary runtime state. */
