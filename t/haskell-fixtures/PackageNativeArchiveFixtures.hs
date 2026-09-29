@@ -18,7 +18,7 @@ import Data.Aeson (eitherDecodeStrict', Value(..), object, toJSON, (.=))
 import qualified Data.Aeson.KeyMap as KM
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC
-import Data.List (sort)
+import Data.List (sort, isSuffixOf)
 import FixtureSupport
 import InstalledCoreFixtures (field, readJson)
 import System.Directory
@@ -80,10 +80,90 @@ preparePackageNativeGcCarriers root = do
   inputs <- hashes root [source,"t/haskell-fixtures/PackageNativeArchiveFixtures.hs",
     "src/compiler/THC/ForeignImportProvenance.hs","src/driver/THC/Driver/PackageNative.hs"]
   artifacts <- hashes root [relative </> "PackageNativeGcCarriers.cbd",relative </> "oracle.txt"]
+  originals <- prepareOriginalGcCarriers root ghc helper libdir
   writeJson (output </> "manifest.json") (object ["schema" .= (1::Int),"inputHashes" .= inputs,
     "artifactHashes" .= artifacts,"nativeRows" .= (6::Int),"gcImports" .= (7::Int),
+    "originalModules" .= originals,
     "commands" .= map commandRecord [exported,hydrated,validated,compiled,oracle]])
   putStrLn "package-native-gc-carriers: exact GC imports archived; scalar adapter retained; six native relational observations"
+
+-- Optional original-unit qualification uses explicitly supplied genuine source
+-- and home interfaces. Copies isolate GHC's one-shot -hidir lookup and writes;
+-- dynamic interface contents are unchanged, only their private lookup suffix is
+-- selected to match the existing dynamic external-plugin acquisition.
+prepareOriginalGcCarriers :: FilePath -> FilePath -> FilePath -> FilePath -> IO [Value]
+prepareOriginalGcCarriers root ghc helper libdir = do
+  sourceInput <- lookupEnv "THC_GC_CARRIER_GHC_SOURCE"
+  homeInput <- lookupEnv "THC_GC_CARRIER_HOME_INTERFACES"
+  case (sourceInput,homeInput) of
+    (Nothing,Nothing) -> pure []
+    (Just suppliedSource,Just suppliedHome) -> do
+      sourceRoot <- canonicalizePath suppliedSource
+      home <- canonicalizePath suppliedHome
+      let relative = "build/package-native-gc-carriers/original"
+          output = root </> relative
+          objects = output </> "objects"
+          execute = runLogged 180 root (relative </> "logs")
+          line result = case BSC.lines (commandStdout result) of
+            [value] -> pure (BSC.unpack value)
+            _ -> fail "expected one original GC tool result"
+          copyInterfaces directory = do
+            names <- listDirectory (home </> directory)
+            concat <$> forM names (\name -> do
+              let path = directory </> name
+              isDirectory <- doesDirectoryExist (home </> path)
+              if isDirectory then copyInterfaces path else
+                forM [suffix | suffix <- [".dyn_hi",".dyn_hi-boot"], suffix `isSuffixOf` name] $ \suffix -> do
+                  let target = objects </> directory </> take (length name - length suffix) name
+                        ++ if suffix == ".dyn_hi" then ".hi" else ".hi-boot"
+                  createDirectoryIfMissing True (takeDirectory target)
+                  copyFile (home </> path) target
+                  pure target)
+      createDirectoryIfMissing True output
+      homeHashes <- hashes root =<< copyInterfaces "GHC"
+      pluginDb <- execute "plugin-db" [] "python3" ["bin/plugin.py","--field","packageDb"] >>= line
+      plugin <- execute "plugin" [] "python3" ["bin/plugin.py","--external-plugin",output </> "source-core",
+        "-fplugin-opt=THC.Plugin:foreign-import-provenance","-fplugin-opt=THC.Plugin:post-tidy",
+        "-fplugin-opt=THC.Plugin:unit-qualified"] >>= line
+      forM [("GHC.Internal.Conc.Sync",["rts_getThreadId","eq_thread","cmp_thread",
+                "rts_enableThreadAllocationLimit","rts_disableThreadAllocationLimit","reportStackOverflow"]),
+            ("GHC.Internal.TopHandler",["rts_setMainThread"])] $ \(name,expectedGc) -> do
+        let modulePath = map (\character -> if character == '.' then pathSeparator else character) name
+            source = sourceRoot </> "libraries/ghc-internal/src" </> modulePath <.> "hs"
+            core = output </> name <.> "cbd"
+        compiled <- execute (name ++ "-compile") [] ghc ["-c","-dynamic","-O2","-fforce-recomp",
+          "-fwrite-if-simplified-core","-dcore-lint","-this-unit-id","ghc-internal",
+          "-this-package-name","ghc-internal","-hide-all-packages","-package","rts",
+          "-i","-i" ++ objects,"-I" ++ (home </> "include"),"-package-db",pluginDb,plugin,
+          "-odir",objects,"-hidir",objects,source]
+        hydrated <- execute (name ++ "-hydrate") [] helper ["--libdir",libdir,"--unit","ghc-internal",
+          "--module",name,"--way","dynamic","--home-interfaces",objects,
+          "--interface",objects </> modulePath <.> "hi"]
+        BS.writeFile core (commandStdout hydrated)
+        original <- either fail pure (readModuleValue (commandStdout hydrated))
+        actualUnit <- field original "unit" :: IO String
+        actualModule <- field original "module" :: IO String
+        unless (actualUnit == "ghc-internal" && actualModule == name)
+          (fail "original GC module identity differs")
+        proof <- field original "staticForeignImports" :: IO Value
+        status <- field proof "status" :: IO String
+        unless (status == "verified") (fail "original GC import inventory is not verified")
+        archived <- either fail pure (archiveNativeModule "ghc-internal" original)
+        marker <- field archived "packageNativeArchive" :: IO Value
+        excluded <- field marker "unsupportedImports" :: IO [Value]
+        symbols <- sort <$> mapM (\entry -> field entry "symbol" :: IO String) excluded
+        unless (symbols == sort expectedGc) (fail "original GC archive exclusion inventory differs")
+        signatures <- either fail pure (nativeSignatures "ghc-internal" [archived])
+        finalizeModuleMetadata core archived
+        validated <- execute (name ++ "-validate") [("PYTHONPATH",root </> "bin")] "python3"
+          ["-c","import pathlib,sys,core_package_manifest as c; c.package_native_archive(c.inspect_cbd(pathlib.Path(sys.argv[1]).read_bytes()))",core]
+        inputs <- hashes root [source]
+        artifacts <- hashes root [core,objects </> modulePath <.> "hi"]
+        pure (object ["unit" .= ("ghc-internal"::String),"module" .= name,"inputHashes" .= inputs,
+          "homeInterfaceHashes" .= homeHashes,
+          "artifactHashes" .= artifacts,"nativeSignatures" .= signatures,
+          "commands" .= map commandRecord [compiled,hydrated,validated]])
+    _ -> fail "Set both THC_GC_CARRIER_GHC_SOURCE and THC_GC_CARRIER_HOME_INTERFACES, or neither"
 
 -- Real Cabal/GHC acquisition: ordinary native dependencies link by default,
 -- while unsupported calling conventions retain their declaration obligations.
