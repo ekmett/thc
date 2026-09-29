@@ -98,6 +98,11 @@ which access policy to use; that ambiguous form is unsupported.
 See [pinned memory](pinned-memory.md) and [native addresses](native-addresses.md)
 for the storage contracts.
 
+When GHC inlines a native function or data address into another package, lazy
+loading finds its original address declaration in that package's declared
+dependency closure. It checks the component's normal provenance without
+evaluating the original Haskell wrapper; ambiguous declarations remain errors.
+
 ## Call Haskell from native code or Java
 
 For C callbacks, use a genuine `foreign import ccall "wrapper"` declaration and

@@ -147,6 +147,45 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
         }
         return provenance;
     }
+    private static void addressLabels(Object value, Set<String> labels) {
+        if (value instanceof List<?> fields) {
+            if (fields.size() >= 3 && Objects.equals(fields.getFirst(), "lit") &&
+                    (Objects.equals(fields.get(1), "function-addr") || Objects.equals(fields.get(1), "data-addr")) && fields.get(2) instanceof String symbol)
+                labels.add(symbol);
+            else for (Object field : fields) addressLabels(field, labels);
+        } else if (value instanceof Map<?,?> fields) for (Object field : fields.values()) addressLabels(field, labels);
+    }
+    private static void addressOwners(Map<String,Object> module, Set<String> labels, Map<String,String> owners) {
+        if (!(module.get("packageNativeLink") instanceof Map<?,?> link) || !(link.get("abi") instanceof List<?> abi)) return;
+        var addresses = new HashSet<Object>();
+        if (link.get("dataSymbols") instanceof List<?> entries) addresses.addAll(entries);
+        if (link.get("finalizers") instanceof List<?> entries) addresses.addAll(entries);
+        for (Object raw : abi) if (raw instanceof Map<?,?> signature && addresses.contains(signature.get("entry")) &&
+                signature.get("symbol") instanceof String symbol && labels.contains(symbol)) {
+            String unit = requiredText(module.get("unit"), "Missing native label owner");
+            var previous = owners.putIfAbsent(symbol, unit);
+            require(previous == null || previous.equals(unit), "Ambiguous native address declaration: " + symbol);
+        }
+    }
+    private Set<String> addressProvenance(String unit, Object binding) {
+        var labels = new HashSet<String>(); addressLabels(binding, labels);
+        if (labels.isEmpty()) return Set.of();
+        // GHC inlines CLabels without retaining their source unit in the
+        // literal. Consult only declared dependency metadata, never unrelated
+        // units or the original Haskell wrapper's body. Full component/type
+        // admission below remains authoritative; this only selects candidates.
+        var dependencies = new HashSet<String>(); var pending = new ArrayDeque<String>(); pending.add(unit);
+        while (!pending.isEmpty()) {
+            String next = pending.removeFirst();
+            if (dependencies.add(next)) for (var record : directory.getUnits())
+                if (record.id().equals(next)) pending.addAll(record.depends());
+        }
+        var owners = new LinkedHashMap<String,String>();
+        for (var module : directory.getModules()) if (dependencies.contains(module.unit()) && module.packageScalarDeclarations())
+            addressOwners(metadata(module), labels, owners);
+        for (var module : consumers) if (dependencies.contains(module.get("unit"))) addressOwners(module, labels, owners);
+        return new LinkedHashSet<>(owners.values());
+    }
     private Map<String,Object> bridge() {
         if (selectedBridge != null) return selectedBridge;
         String unit = directory.getForeignExceptionBridgeUnit();
@@ -173,6 +212,7 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
             if (call.get("target") instanceof Map<?, ?> target && "static".equals(target.get("kind"))
                     && target.get("unit") instanceof String unit) foreignUnits.add(unit);
         }
+        foreignUnits.addAll(addressProvenance((String) admitted.getModule().get("unit"), binding));
         for (String unit : foreignUnits) packageProvenance(unit).forEach(merger::addPackageProvenance);
         var provenance = CoreCapiProvenance.supplement(merger.finish(), binding, this::capiProvenance);
         var linked = new LinkedHashMap<>(CoreModules.demanded(provenance, id, demand, this::bridge));
