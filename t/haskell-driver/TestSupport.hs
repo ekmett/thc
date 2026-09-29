@@ -12,7 +12,7 @@
 -- Temporary-project, subprocess and bundle-inspection helpers for driver tests.
 module TestSupport
   ( Env(..), Result(..), setup, withFixture, withFixtureNamed, copyTree, run, runExe, checked, json, readJson, readCore
-  , readSourceManifest, readPublishedCore
+  , readSourceManifest, readPublishedCore, readCoreBytes, readPublishedCoreBytes
   , field, array, string, strings, bool, number, objects, named
   , assertContains, assertSuccess, assertFailure, assertNoStdout
   , writeText, readText, replaceText, findFiles, requireFile
@@ -198,14 +198,18 @@ readJson path = BS.readFile path >>= \bytes -> case eitherDecodeStrict' bytes of
 
 readCore :: FilePath -> FilePath -> IO Value
 readCore bundle member = do
+  payload <- readCoreBytes bundle member
+  either fail pure (if takeExtension member == ".cbd" then readModuleValue payload else eitherDecodeStrict' payload)
+
+readCoreBytes :: FilePath -> FilePath -> IO BS.ByteString
+readCoreBytes bundle member = do
   -- The caller may replace the archive after inspecting one member. Do not
   -- retain a lazy read handle for uninspected ZIP members until a later GC.
   bytes <- BL.fromStrict <$> BS.readFile bundle
   archive <- either fail pure (toArchiveOrFail bytes)
   entry <- maybe (fail ("missing ZIP member " ++ member)) pure
            (findEntryByPath member archive)
-  let payload = BL.toStrict (fromEntry entry)
-  either fail pure (if takeExtension member == ".cbd" then readModuleValue payload else eitherDecodeStrict' payload)
+  pure (BL.toStrict (fromEntry entry))
 
 -- | Inspect acquisition provenance, not a runtime manifest. Cache tests need
 -- the original ZIP build receipts behind per-module CBD publication. This
@@ -230,9 +234,12 @@ readSourceManifest path = do
 -- | Read one published CBD, or its original acquisition member when a test
 -- explicitly selected the source provenance projection above.
 readPublishedCore :: Value -> Value -> IO Value
-readPublishedCore unit ref = case field ref "compact" of
-  Null -> readCore (string (field (field unit "bundle") "path")) (string (field ref "path"))
-  compact -> BS.readFile (string (field compact "path")) >>= either fail pure . readModuleValue
+readPublishedCore unit ref = readPublishedCoreBytes unit ref >>= either fail pure . readModuleValue
+
+readPublishedCoreBytes :: Value -> Value -> IO BS.ByteString
+readPublishedCoreBytes unit ref = case field ref "compact" of
+  Null -> readCoreBytes (string (field (field unit "bundle") "path")) (string (field ref "path"))
+  compact -> BS.readFile (string (field compact "path"))
 
 field :: Value -> String -> Value
 field (Object object) name = maybe Null id (KeyMap.lookup (Key.fromString name) object)

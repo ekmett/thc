@@ -16,6 +16,11 @@ import Control.Exception (bracket)
 import Control.Monad (forM, forM_)
 import Data.Aeson (Value)
 import qualified Data.ByteString as BS
+import qualified Data.Text as Text
+import qualified Data.Text.Encoding as Text
+import THC.Compact.Core (Presence(..))
+import THC.Compact.Debug (SourceFile(..))
+import THC.Compact.Module (readModuleSources, readModuleValue)
 import qualified THC.Driver.CoreIndex as CoreIndex
 import THC.Driver.Zip (decodeZip)
 import Data.List (isInfixOf, isPrefixOf, sort)
@@ -64,12 +69,6 @@ interopTests env = TestLabel "interop acquisition skips only the selected native
       ("javascript-v1" `isInfixOf` show mainCore)
     assertBool "mixed JavaScript and C retains the native adapter"
       ("packageNativeLink" `isInfixOf` show mainCore && "abs" `isInfixOf` show mainCore)
-    let apiRecord = one (any ((== "InteropApi") . string . (`field` "name")) . (`objects` "modules"))
-          (objects manifest "units")
-        apiModule = one ((== "InteropApi") . string . (`field` "name")) (objects apiRecord "modules")
-    apiCore <- readPublishedCore apiRecord apiModule
-    assertBool "local component response-file plugin options survive direct loading"
-      (not (null (string $ field apiCore "sourceCore")))
     let support = one ((== "interop-support") . string . (`field` "pkg-name")) (objects plan "install-plan")
         supportRecord = one ((== field support "id") . (`field` "id")) (objects manifest "units")
     assertEqual "source distribution exercises cold store capture" "global" (string $ field support "style")
@@ -87,7 +86,8 @@ interopTests env = TestLabel "interop acquisition skips only the selected native
       \(name, notes, extra) -> do
         let exported = scratch env </> takeFileName (takeDirectory project) </> ("interop-helper-" ++ name)
             options = ["-fplugin-opt=THC.Plugin:post-tidy", "-fplugin-opt=THC.Plugin:closure=snapshot",
-                       "-fplugin-opt=THC.Plugin:foreign-import-provenance"] ++ extra
+                       "-fplugin-opt=THC.Plugin:foreign-import-provenance",
+                       "-fplugin-opt=THC.Plugin:pretty-diagnostics"] ++ extra
             response = project </> "helper-options"
         writeText response (unlines options)
         result <- runExe env project Nothing 120 "env"
@@ -96,12 +96,17 @@ interopTests env = TestLabel "interop acquisition skips only the selected native
             "-i", "-package-db", packageDb, "-package-id", interopId, "-fplugin-trustworthy"] ++
             (if name == "explicit" then ["@" ++ response] else options) ++ [project </> "lib/InteropApi.hs"])
         assertSuccess result
-        core <- readJson (exported </> "InteropApi.json")
+        -- Explicit diagnostics are separate from executable CBD. The response
+        -- file must reach the plugin just as direct options do.
+        requireFile (exported </> "InteropApi.json")
+        bytes <- BS.readFile (exported </> "InteropApi.cbd")
+        core <- either fail pure (readModuleValue bytes)
+        sources <- either fail pure (readModuleSources bytes)
         assertEqual "caller post-tidy option survives direct loading"
           "optimized-Core-after-Tidy-before-CorePrep" (string $ field core "boundary")
         assertEqual "source-note default, opt-out, and explicit caller opt-in survive"
-          (name /= "off") (not (null (objects core "sourceFiles")))
-        requireFile (exported </> "THC.InterfaceClosure.json")
+          (name /= "off") (not (null sources))
+        requireFile (exported </> "THC.InterfaceClosure.cbd")
     forM_ ["exe:generator", "exe:ordinary"] $ \name -> do
       -- The build-tool executable is built by the interop app; the ordinary
       -- consumer uses the same driver/native directory after that policy ends.
@@ -573,13 +578,14 @@ forBackends env invoke output project entryOf unit bundleRef modulePath = go Not
         Just (before, beforeTimes) -> do
           assertEqual "Core cache reused" before bundles
           assertEqual "cached ZIP files were not rewritten" beforeTimes times
-      core <- readCore (fst $ bundleRef manifest entryId) (modulePath manifest entryId)
+      sources <- either fail pure . readModuleSources =<<
+        readCoreBytes (fst $ bundleRef manifest entryId) (modulePath manifest entryId)
       expected <- canonicalizePath (project </> "app-run/app/Main.hs")
       assertBool "source path and content" =<< anyM
-        (\file -> do
-          path <- canonicalizePath (string $ field file "path")
-          pure (path == expected && string (field file "content") /= ""))
-        (objects core "sourceFiles")
+        (\(SourceFile _ file content) -> do
+          path <- canonicalizePath (Text.unpack (Text.decodeUtf8 file))
+          pure (path == expected && case content of Known bytes -> not (BS.null bytes); _ -> False))
+        sources
       go (Just (bundles, times)) remaining
 
 moduleNames :: Value -> [String]
