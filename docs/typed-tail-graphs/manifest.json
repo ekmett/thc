@@ -237,19 +237,9 @@
   },
   "artifacts": [
     {
-      "path": "README.md",
-      "bytes": 2010,
-      "sha256": "dcaad33571d34b1dd0130db9680e1c532186bbb3459d85259c32d8b2969fc109"
-    },
-    {
       "path": "application-graph-proof.json",
       "bytes": 18410,
       "sha256": "87c9b62d0236902e6d86c639a9613d25d0a094407e711522f4241513923b1481"
-    },
-    {
-      "path": "application-review.md",
-      "bytes": 3097,
-      "sha256": "950099d3a9ee4f53b25c618ee03a5d176a91697b3ad3a3b24454d33e36efbe7c"
     },
     {
       "path": "applications/typedDirect/packet-audit.json",
@@ -382,11 +372,6 @@
       "sha256": "3e7263e1eb08e021afb3787bed398aa4dacecc0e5361d4f69fc5a719593af739"
     },
     {
-      "path": "cycle-design-audit.md",
-      "bytes": 3965,
-      "sha256": "0d13aa0eb14f692ca7a3525396a47d96b7e4f50dc770346680023b886198f656"
-    },
-    {
       "path": "cycle-fixture.json",
       "bytes": 28539,
       "sha256": "d437565c11a184f26de7e016881abb6410de5973af18be3c70ab78384cb71925"
@@ -400,11 +385,6 @@
       "path": "cycle-prove-cycles.py",
       "bytes": 6146,
       "sha256": "db5609258188b57713bf09b6eac1898d265be1f5b2d239bc5eb9f91164754be0"
-    },
-    {
-      "path": "cycle-review.md",
-      "bytes": 4196,
-      "sha256": "31e1993b5c115f11a49f9a07179a08a0e7f1f5cc75b8d67b2a5abde4f9ef72d8"
     },
     {
       "path": "cycles/new-ast/C-graphs/graph-00000.json",
@@ -580,11 +560,6 @@
       "path": "map-graph-comparison.json",
       "bytes": 284515,
       "sha256": "7db9e52512227af55a875cd3d884c5dedf5f478f911c7eff057c6d9f65f751f6"
-    },
-    {
-      "path": "map-graph-comparison.md",
-      "bytes": 2145,
-      "sha256": "3dfda94e3ca28c32b122ad919a7d87f32ec551b649d982d8c8584bc3301a237f"
     },
     {
       "path": "new-ast-cycle-C-cfg.dot",

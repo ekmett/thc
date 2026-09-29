@@ -59,10 +59,3 @@ The [residual call ABI](call-boundaries.md) remains `Object[] → Object`.
 Typed local storage does not by itself eliminate argument arrays or primitive
 boxing at a call that does not inline. Compiler graphs and measurements must
 establish those outcomes separately.
-
-`RealCoreEntryContractTest`, `EntryContractTest` and `EntrySelfCallTest` exercise
-genuine export evidence and runtime entry routes. They retain separate checks
-for PAP laziness, strict failures, sharing and self-call restoration.
-
-The [performance questions](../research/open-questions.md#residual-calls-and-allocation) cover how to
-evaluate residual costs without confusing stronger proofs with a measured gain.

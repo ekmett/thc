@@ -12,11 +12,9 @@ foreign import javascript "(x) => x * 0.5"
   half :: Double -> IO Double
 ```
 
-Run `bin/javascript-demo.sh` for the complete example. It checks unary,
-binary, floating-point, zero-argument, and unit-returning calls using real GHC
-exports before and after Tidy, on both THC backends with explicit compilation.
+Run `bin/javascript-demo.sh` for the complete example.
 
-The initial declaration syntax accepts `Int` and `Double` arguments and
+The declaration syntax accepts `Int` and `Double` arguments and
 `IO Int`, `IO Double`, or `IO ()` results. Both `safe` and `unsafe` synchronous
 imports are accepted. Pure imports, `interruptible`, and the
 `dynamic`/`wrapper` declaration forms are rejected. The quoted JavaScript must denote an
@@ -76,50 +74,15 @@ source set and runs both THC backends. Example classes are not included in the
 runtime JAR, production distribution, or JVM API reference. The normal
 test runtime does not need JavaScript.
 
-The demo checks `42` in each of these configurations, first interpreted and then
-after explicit guest compilation:
-
-```text
-pre-core / ast: Haskell -> JavaScript -> Haskell = 42 (interpreted and compiled)
-pre-core / bytecode: Haskell -> JavaScript -> Haskell = 42 (interpreted and compiled)
-post-core / ast: Haskell -> JavaScript -> Haskell = 42 (interpreted and compiled)
-post-core / bytecode: Haskell -> JavaScript -> Haskell = 42 (interpreted and compiled)
-```
-
-`./gradlew polyglotTestDefault polyglotTestDense` checks the declaration contract, context ownership,
-access permissions, numeric conversion, missing members, foreign exceptions,
-callback safety and first-compiled completed-result delivery without replay.
-`polyglotTest` remains available for a single default invocation.
 The host must permit the requested language through `PolyglotAccess`; the demo
 does so explicitly. THC uses `Env.parsePublic`, so the bridge obeys that policy.
 
-The lower-level module and storage APIs use versioned `foreign import prim`
-symbols, beginning with `thc_polyglot_v1_eval`,
-`thc_polyglot_v1_read_member`, and `thc_polyglot_v1_execute_int`.
-GHC retains their `State# RealWorld` input and
-unboxed state/result tuple output, so optimized Core still represents the
-effects in order. The exporter records GHC's actual foreign-call declaration,
-including its target, convention, safety, saturation, and machine
-representations. THC links only the audited v1 signatures. These symbols are
-THC intrinsics, not a native C ABI: compiling the module with GHC does not
-provide a native implementation of them.
-
-For example, `executeInt` wraps this declaration:
-
-```haskell
-foreign import prim "thc_polyglot_v1_execute_int"
-  executeInt# :: Any -> Int# -> State# RealWorld
-              -> (# State# RealWorld, Int# #)
-```
-
-The symbol names the bridge operation. The first argument selects the foreign
-function at runtime. THC lowers the call to a cached `InteropLibrary.execute`
-message and writes its checked integer result into a primitive result slot.
-GHC needs no patch or new calling convention for this route.
+These APIs are THC intrinsics, not a native C ABI. Compiling the module with GHC
+does not provide native implementations; use `thc:interop` as described below.
 
 `Value` is opaque to Haskell. THC stores a managed guest reference together
 with its owning context; it does not turn a JavaScript object into a raw
-pointer or integer handle. For now, source text, language IDs, source names,
+pointer or integer handle. Source text, language IDs, source names,
 and member names must be NUL-terminated UTF-8 `Addr#` literals. `executeInt`
 accepts an input within JavaScript Number's exact integer range,
 ±(2^53 − 1), and requires a result that fits exactly in a signed 64-bit
@@ -182,7 +145,7 @@ blindly forcing their contents would change Haskell evaluation and space behavio
 references. Both are genuinely unlifted boxed values. The latter holds the
 actual dispatcher acquired by `getInteropLibrary#`, not a receiver wrapper.
 Raw messages take both references and a `State# s`; their unboxed results keep
-the declared primitive widths. The first operation group covers buffer byte
+the declared primitive widths. The operations cover buffer byte
 access, array element access, their capability/size queries, and signed 64-bit
 conversion.
 

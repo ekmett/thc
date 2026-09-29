@@ -56,21 +56,3 @@ An existing scalar operand without an exact primitive proof can generalize its
 bytecode local to Object when one higher-order site changes numeric targets.
 That scalar position uses a generic local read and a checked target-kind cast;
 exact tuple leaves continue to use primitive accessors.
-
-`TupleInputAudit.hs` supplies genuine pre/post-Tidy boundaries and 139 unary plus
-seven independent-pair native rows. Its preparer checks separate wraparound
-formulas, retained PAP/overapplication paths, recursive shapes and strict audits.
-Instrumented JVM tests require exact source-derived compiled guest-entry counts
-for every measured row, unchanged active targets, valid host/original/active
-compilations, and empty input/result pools. The matrix covers both backends,
-inlining enabled/disabled, and default/dense-handoff modes. Additional protocol
-controls cover three-target and prefixed cycles, cyclic overapplication returning
-an intermediate closure, zero-width effects, cold failures and reusable lazy PAPs.
-
-These tests establish execution and lifetime correctness. Graph controls separately
-account for carrier/packet allocation and field traffic; typed fields alone are
-not a hardware register-passing claim. A scalar Object-return box can remain at
-the public Truffle boundary even when all tuple transport disappears.
-
-Separate ownership tests force an actual deoptimization after partial input
-restore, including a throw, and require immediate reference cleanup before recovery.

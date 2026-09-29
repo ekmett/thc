@@ -137,7 +137,7 @@ coverageTests = map (uncurry (~:))
       field "contract" (indexed Map.! "mkWeak#") @?= Right ("Weak-pointer operation" :: T.Text)
       count "implemented" result @?= Right 1
       field "limitations" result @?= Right [limitation]
-      ok (checklist result cap) >>= contains limitation)
+      ok (checklist result cap) >>= contains "[primop behavior reference](primop-behavior.md)")
   , ("registered implementations change coverage without a scalar gate", do
       let cap = delete "tagToEnum" capability
           changed = modifyPrimitives (\p -> setFields p [("tagToEnum#", toJSON (1 :: Int))]) cap
@@ -190,7 +190,7 @@ coverageTests = map (uncurry (~:))
       contains "- [x] `+#`" original
       contains "- [x] `packInt64X2#`" original
       contains "- [ ] `packInt64X2#`" expected
-      contains "It does not require formal proof or exhaustive input testing." original)
+      contains "An implemented primitive does not establish whole-program compatibility." original)
   , ("input order and immutable contracts", do
       expected <- ok (derive capability scalars >>= \r -> checklist r capability)
       actual <- ok (declaredPrimitives capability >>= report (reverse rows) >>= \r -> classify r capability scalars >>= \c -> checklist c capability)

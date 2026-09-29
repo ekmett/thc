@@ -6,15 +6,15 @@
 {-# OPTIONS_GHC -fno-do-lambda-eta-expansion #-}
 
 -- |
--- Module      : THC.CachedReferenceJoins
+-- Module      : ReferenceJoinsWorkload
 -- Copyright   : (C) 2026 Edward Kmett
 -- License     : UPL-1.0 AND BSD-3-Clause
 -- Maintainer  : Edward Kmett <ekmett@gmail.com>
 -- Stability   : experimental
 -- Portability : GHC primitive integers
 --
--- Ordinary data- and function-returning local joins for the selected code cache.
-module THC.CachedReferenceJoins (calculate) where
+-- Ordinary data- and function-returning local joins for code-cache tests.
+module ReferenceJoinsWorkload (calculate) where
 
 import GHC.Exts (Int#, (+#), (-#))
 

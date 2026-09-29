@@ -104,7 +104,7 @@ wakes waiters, kills only still-owned children, reaps them, and releases leases;
 it remains valid after LLVM disposal. Shutdown waits for kernel reaping after
 SIGKILL and does not promise a deadline for an uninterruptible kernel task.
 
-## Limits and verification
+## Platform and host requirements
 
 This transport requires Linux pidfd creation, signalling and wait support and
 glibc's `posix_spawn` directory/closefrom actions. It probes pidfd waiting before
@@ -122,43 +122,3 @@ the documented [Linux pidfd acquisition conditions](https://man7.org/linux/man-p
 The policy check observes current state; it does not lock out concurrent host
 changes or establish isolation from a hostile host. Once acquired, the owned pidfd
 prevents later PID reuse from redirecting signalling.
-
-The pinned build host has glibc 2.35, without the atomic `pidfd_spawn` interface
-introduced in [glibc 2.39](https://sourceware.org/pipermail/glibc-cvs/2024q1/084106.html).
-Supporting hosts that cannot maintain the creation invariant requires a separate
-atomic creation transport; this implementation does not claim that support.
-
-The focused JVM tests compare raw result/status/errno tuples with a Haskell
-executable linked against the genuine native process package. The fixture keeps
-the original unsafe/interruptible declarations. Other controls exercise pipe
-transport, guest descriptor numbers, close-on-exec and close-fds exclusion,
-environment and renamed-CWD isolation, denied permissions, foreign handles,
-creation failures, cancellation, and context cleanup. Failed launches preserve
-existing guest descriptors and release all temporary inherited duplicates.
-Standalone C subprocess controls establish real kernel auto-reaping under `SIG_IGN` and both
-default/handler `SA_NOCLDWAIT` dispositions, then verify transport rejection before
-any libc launch. A forwarding linker wrapper counts real `posix_spawn` calls;
-it does not replace their behavior. The default-policy positive control launches
-and reaps a real child. These controls never alter the JVM's signal policy.
-
-With the pinned GHC and GraalVM selected, run both handoff modes from one build:
-
-```sh
-cabal run exe:thc-fixtures --offline -- process-lifecycle
-./gradlew --continue \
-  testDefault --tests thc.runtime.ManagedProcessesTest --tests thc.runtime.ManagedProcessForeignTest \
-              --tests thc.runtime.CoreProcessForeignTest --tests thc.runtime.ProcessLifecycleCoreTest \
-  testDense --tests thc.runtime.ManagedProcessesTest --tests thc.runtime.ManagedProcessForeignTest \
-            --tests thc.runtime.CoreProcessForeignTest --tests thc.runtime.ProcessLifecycleCoreTest
-```
-
-The Haskell producer rebuilds only the SHA256-pinned, unmodified process 1.6.26.1
-source package in a private database, retaining complete Core. Its narrow
-`--allow-newer=process:base` relaxes the archive's Cabal bound for the pinned
-GHC 9.14.1 base 4.22 without editing any package source. Real FCallIds are read
-from those interfaces and specialized into typed consumers; no target metadata
-is forged. Pre/post-tidy audits and AST/bytecode tests cover interpreted and first
-installed execution, native lifecycle/creation observations, pipe/environment/CWD
-transport, actual PID observability, all masking states, interrupted and completed
-waits with queued delivery, saved errno and no replay. The service and declaration
-tests retain negative provenance, permission, cancellation and resource controls.

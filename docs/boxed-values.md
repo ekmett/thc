@@ -32,13 +32,7 @@ the primitive field expression once. Lazy lifted fields and thunk forcing are
 unchanged. This is Haskell `I#`/`C#` value reuse, not a change to the
 [`Object[] → Object` call ABI](call-boundaries.md) or to JVM `Long` boxing.
 
-## Checks and cost model
-
-[`BoxedValueCacheTest`](../src/test/java/thc/runtime/BoxedValueCacheTest.java)
-checks genuine exported constructor identities, inclusive boundaries, full-width
-payloads, lookalike rejection, default-off behavior, layout/context isolation,
-field-based and array-based storage, and compiled transitions between cached
-and uncached construction on both backends.
+## Cost
 
 A dynamic cache hit can avoid a constructor allocation, but the range check and
 table load have their own cost. Source inspection alone does not establish that

@@ -44,7 +44,7 @@ and graph backreferences. Import creates fresh objects and preserves sharing
 and cycles. Corrupt or incompatible images return the API's `Nothing` result.
 This is not a GHC heap image or a byte-compatible GHC serialization format.
 
-The first image version works **within its originating context**. Constructor
+Images work **within their originating context**. Constructor
 metadata is resolved there; importing into another context or process is not
 yet supported. Portable constructor identifiers and receiving-program resolution
 remain follow-up work. External opaque addresses embedded inside constructors
@@ -58,28 +58,3 @@ without retaining the referent. As GHC requires, the caller must supply an
 evaluated value and keep it alive; stale or foreign dereferences are rejected.
 An opaque heap address supports equality but not raw byte access or native
 pointer projection. The public serialization bracket supplies the lifetime hold.
-
-Ordinary graph, cycle, array-mutability and context tests run in the standard
-JVM suite. Original-library validation uses the existing opt-in complete-Core
-fixture infrastructure, including original installed `ghc-compact` modules and
-the original exception dictionaries:
-
-```sh
-cabal run exe:thc-fixtures --offline -- compact-regions
-cabal run exe:thc-fixtures --offline -- compact-serialization
-./gradlew --continue compactRegionsFullCoreDefault compactRegionsFullCoreDense
-./gradlew --continue compactSerializedFullCoreDefault compactSerializedFullCoreDense
-```
-
-This requires the pinned GHC 9.14.1 installation with complete Core; a stock thin
-interface installation is an explicit missing prerequisite, not a reason to
-rewrite the library or skip its native result comparison. The native examples
-exercise creation, addition, membership, growth, sharing, cycles, frozen arrays,
-and the public exception handler in both pre- and post-Tidy exports. Handshaked
-interruption controls resume a shared compaction with a once-only source prefix
-and an unforced delivery payload. JVM controls separately retain the original
-installed caller through its first real compiled child capture, completion and
-failure cleanup without target warmup, on both backends. Serialization
-examples perform real block copies and imports of shared trees, cycles, an empty
-root, and multiple blocks; ordinary JVM tests also cover corrupt images, exact
-scalar/vector bits, one-shot fixup and weak-address preconditions.

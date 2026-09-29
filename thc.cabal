@@ -333,7 +333,6 @@ extra-source-files:
   t/fixtures/run-native-archive/provider/Provider.hs
   t/fixtures/compiler/OriginalMemsetAudit.hs
   t/fixtures/compiler/OriginalMemsetNative.hs
-  docs/original-memset.md
   t/fixtures/compiler/ByteStringUtf8Audit.hs
   t/fixtures/compiler/ByteStringUtf8Native.hs
   nih/pinned/bytestring-0.12.2.0/cbits/is-valid-utf8.c

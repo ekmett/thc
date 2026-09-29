@@ -15,7 +15,7 @@ that information around long enough to use it.
 ## Build and run
 
 For native Windows, use the [PowerShell build and test guide](docs/windows.md).
-It records the pinned tools, tested runtime/exporter slice, and remaining platform limits.
+It lists the required tools and current platform limits.
 
 You need **GHC 9.14.1** (including `ghc-pkg` and `runghc`), **cabal-install 3.16**,
 **GraalVM 25.3.4.1 / JDK 25**, and Python 3.12+. Put GHC on your `PATH` and
@@ -56,15 +56,21 @@ Use `make test` for the test suite and `make clean` to remove build products.
 `make run ARGS='--help'` builds and runs the driver; the equivalent Cabal command
 is `cabal run thc -- --help`.
 
-Then run the included Cabal executable through THC:
+Run the included smoke test through THC:
 
 ```sh
 cabal run thc -- run completed --project-dir t/fixtures/run-pure \
   --thc-root "$PWD" --dist-dir "$PWD/build/run-package"
 ```
 
-This example checks a mutable reference and returns `()` without printing.
+This fixture checks a mutable reference and returns `()` without printing.
 Inside your package, use `thc run [TARGET]`, following `cabal run` target syntax.
+For an installed driver in your own project:
+
+```sh
+thc run my-package:exe:my-program --thc-root /path/to/thc
+```
+
 Omitting the target selects the current package's sole buildable executable,
 otherwise its sole buildable runnable component. Explicit `PACKAGE:exe:NAME`,
 `PACKAGE:test:NAME` and `PACKAGE:bench:NAME` targets work; tests must use the
@@ -76,9 +82,9 @@ has the options and integration check. `thc acquire [TARGET] [FLAGS]` uses the
 same acquisition path but stops before auditing or executing the guest; a
 produced manifest is not a claim that the program is runnable.
 
-A directory containing `cabal.project` also works for a bounded multi-package
-build. For example, the included project has a data library, a native Template
-Haskell helper, an internal library and an executable:
+A directory containing `cabal.project` also works for a multi-package build.
+The integration fixture includes a data library, a native Template Haskell
+helper, an internal library and an executable:
 
 ```sh
 cabal run thc -- run app-run:exe:completed \
@@ -90,111 +96,43 @@ Cabal builds the native dependencies needed for the helper, and THC runs the
 executable's accepted Core. The driver uses Cabal's resolved unit IDs and
 per-component build information for the export.
 
-On Linux x86_64, with complete installed Core and matching configured GHC sources, the bytecode
-backend runs ordinary `putStrLn`, including GHC's original startup and Handle
-shutdown. Select `--installed-core required --ghc-source /path/to/ghc-source`
-on the project-directory path; the [driver guide](docs/driver.md) describes the
-current Linux configuration and cache. A file-lifecycle test also matches native
-GHC on UTF-8 reads and writes, append, seeking, EOF, caught missing-file errors,
-and shutdown flushing. Binary `hPutBuf`/`hGetBuf` tests match native GHC on
-offset buffers, short reads, EOF, and cleanup after exceptions. General file IO
-remains incomplete. [STM/TVar transactions](docs/stm.md) work in both backends
-with buffered writes, atomic commit and real retry wakeups. Asynchronous
-interruption aborts the attempt and saves a fresh transaction restart;
-delimited transaction capture and GC deadlock detection remain explicit limits.
-The Windows simple-package backend retains its existing restriction against
-internal library and build-tool dependencies, behind the same Cabal-shaped
-target interface. `thc build` and `thc repl` are future commands.
+For native imports, installed-library IO and callbacks, follow the
+[foreign-code setup](docs/interface-foreign.md). Platform permissions and
+resource lifetimes are explicit; see [Windows limits](docs/windows.md) for the
+native Windows path. `thc build` and `thc repl` are not implemented.
 
-## What works
+## Runtime capabilities
 
-The runtime follows [Cadenza](https://github.com/ekmett/cadenza): indexed frames,
-selective captures, partial applications and tail calls. Haskell adds laziness,
-sharing, thunk updates and blackholes. Constructors have their own layouts, with
-primitive fields where GHC's representation permits them.
+Both the bytecode and AST backends execute lazy Core with sharing, closures,
+recursive bindings, typed constructor fields, local joins, unboxed tuples and
+sums, [SIMD](docs/simd.md), arrays and mutable references. The bytecode backend
+is the default. [Architecture](docs/architecture.md) explains the shared value
+model and the two execution paths.
 
-Both the bytecode and AST backends run lazy Core with closures, recursive
-bindings, typed constructor fields, local joins, and unboxed tuple inputs and
-results. There is also bounded support for unboxed sum results, scalar arithmetic,
-SIMD calls and operations for [supported shapes](docs/simd-families.md), and
-managed arrays and mutable references.
-[Narrow integer carriers](docs/narrow-integer-carriers.md) use JVM Int computation
-with byte/short/int stored fields; machine integers and explicit 64-bit integers
-remain Long.
-All prefetch hints and the three user trace primops have
-[JVM target implementations](docs/hints-and-tracing.md): hints are no-ops,
-and trace records use the context's stderr diagnostic stream.
+[Asynchronous exceptions](docs/async-exceptions.md), [MVars](docs/managed-mvars.md)
+and [STM](docs/stm.md) support concurrent Haskell programs. Interrupted shared
+thunks retain their unfinished work. Async-enabled evaluation bounds nested calls
+and forcing through saved continuations. Raw load requests default to async off
+for AST and on for bytecode; the standalone executable launcher enables it on
+both. Delimited capture across STM, automatic weak finalization and GC-driven
+deadlock detection remain unsupported.
 
-Both backends support [asynchronous exceptions](docs/async-exceptions.md)
-between Haskell threads. Public load requests accept a Boolean `asyncExceptions`:
-`true` enables resumable delivery; when omitted, it defaults to `false` for AST
-and `true` for bytecode. AST capture covers ordinary calls, cases, lets, local
-joins, mask/catch scopes and shared-thunk updates. An interrupted shared thunk
-keeps its continuation, so another thread can resume it without repeating
-completed work. Thread identities name logical guest lifetimes within their
-THC context, independently of Java thread IDs. Distinct callback guest lifetimes
-can share one Java carrier thread.
+The public [`thc:runtime` API](docs/runtime-services.md) exposes permissions,
+thread and affinity observations, memory/GC statistics and structured tracing.
+Availability and measurement scope are explicit. `THC.Internal.JIT` supplies
+separate unstable diagnostics. [Polyglot calls](docs/polyglot.md) and the
+[JVM embedding API](docs/site/embedding.md) support JavaScript and host callers;
+[foreign code](docs/interface-foreign.md) describes native imports and exports.
 
-`forkOn#` requests best-effort CPU affinity; ordinary `fork#` clears an inherited
-pin. The logical capability count initially matches eligible CPU capacity and can
-be changed per context by original `setNumCapabilities`; it is not a guest-thread
-count or JVM pool size. See [RTS capabilities](docs/rts-event-capabilities.md).
-The base-only public [`THC` module](docs/cpu-affinity-api.md) exposes support
-and per-fork acceptance queries. See [scheduling](docs/thread-scheduling.md) for
-Linux/Windows behavior and the local Graal compiler-worker affinity reset.
+THC remains experimental. The [behavior reference](docs/primop-behavior.md) lists
+current semantic and platform limits, and the generated
+[primop checklist](docs/primops.md) inventories operations. Package support also
+requires complete dependencies, including cold error paths. Use
+`--verify-artifacts` for the driver's pre-launch audit and artifact checks.
+Diagnostic mode leaves explicit traps at unsupported sites; completing one path
+in that mode does not establish support for its whole closure.
 
-The base-only [`thc:runtime` services](docs/runtime-services.md) also expose
-runtime permissions/backend, thread accounting and CPU eligibility, JVM memory
-and collector statistics, context-owned native allocation accounting, and
-structured stderr/JFR events and spans. Availability and scope are explicit;
-native GHC reports unavailable JVM services honestly. Opt-in JIT telemetry is
-separate in `THC.Internal.JIT`, explicitly `Unsafe`; the public `THC` facade is
-`Safe` and does not re-export hazardous internal controls.
-
-The [polyglot example](docs/polyglot.md) calls JavaScript from Haskell with
-`foreign import javascript`. GHC checks the declarations; THC implements them
-with Truffle interop. Run `bin/javascript-demo.sh` to try it. A lower-level
-`THC.Polyglot` module also exposes language evaluation and opaque foreign values.
-
-The tests include ordinary list, `STRef`, array, `ShortByteString`, `IntMap`,
-`IntSet` and `Sequence` programs. They compare native GHC results with both
-interpreters and compiled guest code. The [coverage guide](docs/README.md) links
-the individual contracts, native checks and remaining gaps; the generated
-[primop checklist](docs/primops.md) counts implemented and missing operations,
-with [known behavior differences and limits](docs/primop-behavior.md) documented
-primop by primop. Tuple, vector and pointer
-representations do not make an implementation incomplete.
-
-An explicit [full-Core locale/iconv proof group](docs/original-iconv.md) exercises
-the four original imports through native glibc/Sulong, with context-owned handles
-and checked buffer copies. It requires full installed GHC library Core and is
-separate from stock-toolchain tests; it does not establish complete Handle/IO.
-
-The [GMP provider](docs/gmp-limb-provider.md) implements twenty-four original GHC
-foreign calls, including GCD, bitwise operations, shifts and floating conversions, through Sulong/native
-GMP and a direct JVM translation of the scalar RTS encoding call. Native comparisons cover interpreted
-and compiled calls on both backends; full `Integer` and `Natural` coverage is
-still separate work.
-
-This is still an experiment, not a replacement for GHC. General `Main`/IO, the
-complete boot-library closure and full FFI coverage remain unfinished.
-[Async-enabled AST and bytecode evaluation](docs/async-exceptions.md) bounds
-nested calls and thunk forcing with saved continuations. Private autonomous
-stack cuts retain the same active STM attempt without replaying prefixes or
-publishing buffered writes; explicit checkpoint/delimited capture across STM
-transactions remains unsupported. The command-line scalar runner accepts integer
-arguments; `thc run` uses the `IO ()` path described above. The
-[Core embedding API](docs/site/embedding.md#load-a-core-entry) transports exact
-numeric, vector, tuple and sum values, plus context-owned references and
-functions. The declared C-export path separately exposes supported scalar
-functions and IO actions. Recursive or lifted aggregate lets and global
-aggregate storage remain unsupported.
-
-In particular, Map and Set still have cold runtime paths that strict loading
-rejects. Diagnostic mode leaves explicit traps at those gaps. A successful
-workload in that mode does not establish support for its whole call graph.
-
-## Development examples
+## Runtime checks
 
 The test script prepares native GHC fixtures and builds the runtime. The scalar
 runner then calls one exported entry; `--compile` requests guest compilation and
@@ -217,7 +155,7 @@ this alongside `installDist`. Direct Java launches add that JAR to the runtime
 classpath. The production distribution and JVM API reference exclude these tools
 and the embedding/polyglot examples in `src/examples/`.
 
-For the native-checked library suite and the diagnostic Map example:
+For the native-checked library suite and diagnostic Map workload:
 
 ```sh
 bin/try-libraries.sh
@@ -245,7 +183,7 @@ inputs, consume the results, warm the JVM and compare against native GHC. Graph 
 separate run. Diagnostic Map execution does not establish strict support for
 its entire dependency closure.
 
-The [current runtime guides](docs/README.md#performance-and-runtime-design)
+The [current runtime guides](docs/README.md#compiler-and-contributor-references)
 describe implemented protocols and opt-in experiments.
 
 ## Finding your way around
@@ -262,17 +200,16 @@ describe implemented protocols and opt-in experiments.
 * [`src/examples/`](src/examples/) contains Haskell programs and the native oracle.
 * [`bin/`](bin/) contains build, audit, benchmark and graph drivers.
 * [The architecture guide](docs/architecture.md) describes the current system
-  and planned work. [The documentation index](docs/README.md) groups coverage
-  and design reports; [open design questions](research/open-questions.md)
-  identify the next design decisions and relevant background.
+  and its boundaries. [The documentation index](docs/README.md) groups user
+  guides and implementation references.
 * [The documentation site](https://ekmett.github.io/thc/) combines selected
   guides, the Java reference and the Haskell library API.
   [Build it locally](docs/documentation.md) with `make docs` (also needs Pandoc).
-* [Development](docs/contributing.md) covers local checks, build batching and manual
-  integration of reviewed PRs. Update the [primop checklist](docs/primops.md#updating-the-list) when
-  adding a primitive.
+* [Development](docs/contributing.md) covers building, testing and contributing.
+  [Generated references](docs/contributing.md#generated-references) explain how to
+  update the primitive inventory.
 * [Cabal integration](docs/cabal.md) describes the working `thc acquire` and
-  limited `thc run` paths, and the planned `thc build` and `thc repl` commands.
+  `thc run` paths and their current limits.
 
 The older runtime experiments live on the
 [legacy branch](https://github.com/ekmett/thc/tree/legacy).

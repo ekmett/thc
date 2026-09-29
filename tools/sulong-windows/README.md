@@ -44,9 +44,3 @@ offline. Focused native Windows validation:
 ```powershell
 ./gradlew.bat --no-daemon --max-workers=2 --continue testDefault --tests thc.runtime.NarrowReturnedPointerTest --tests thc.runtime.WindowsSulongLibraryLookupTest testDense --tests thc.runtime.NarrowReturnedPointerTest --tests thc.runtime.WindowsSulongLibraryLookupTest
 ```
-
-The existing parameterized test retains both backends and first compiled-entry
-assertions on real C-owned, unknown-bound storage. Windows-specific controls
-also require guest cwd/file denial before and after loading, native authority,
-independent C globals and context ownership. These are runtime transport models,
-not GHC full-Core export evidence.

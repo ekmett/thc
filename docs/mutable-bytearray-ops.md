@@ -36,40 +36,7 @@ scalar State, arity and physical carriers. Integral annotations share `Long`;
 the fill operation stores its low eight bits. Strict exporter auditing checks the
 original `Int#` source signature separately.
 
-`MutableByteArrayAudit` contains five primitive workloads and one genuine public
-`ShortByteString.replicate`/`foldl'` consumer, including the empty-string branch.
-Both Core stages retain each declared primitive and strictly accept every root,
-including the installed bytestring `empty` dependency. No source bodies or cold
-branches are replaced or removed. Fresh native values are compared with an
-independent byte-list model over full-width fill carriers, every small contained
-move range, both overlap directions, disjoint adjacent regions and independent
-source/destination storage. A source write after copying checks snapshot behavior.
-
-The focused suite checks the same native rows on AST/bytecode, pre/post Core and
-inlined/residual paths, with per-row compiled activity and stable valid host,
-original and active guest targets. Separate exact-byte tests exhaust small
-contained ranges, verify identities and bytes outside the mutation, reject
-full-width bounds and overlap violations, and require State failure to leave
-storage unchanged. Result pools must remain empty and reference-clean.
-
-```sh
-cabal run exe:thc-fixtures --offline -- mutable-bytearrays
-python3 bin/test-core-bytearrays.py
-./gradlew --max-workers=2 --continue \
-  testDefault --tests thc.runtime.MutableByteArrayTest --tests thc.runtime.ByteArrayTest \
-  testDense --tests thc.runtime.MutableByteArrayTest --tests thc.runtime.ByteArrayTest
-```
-
-[Resize/shrink](resize-bytearrays.md), [pinned/address operations](pinned-memory.md)
-and [atomic integer access](atomic-int-arrays.md) have separate contracts and
-fixtures. Owner locking protects the storage invariants; this ordinary fill/copy
-fixture is not a general concurrent or atomic-access test. Undefined native ranges
-and overlapping calls to the disjoint primitive are excluded from its native oracle.
-
-The five related byte-array fixture producers share the Haskell
-`ByteArrayFixtures` module. `MutableByteArrayTest` independently checks the
-complete ordered native corpus, all contained ranges, overlap snapshots and
-distinct-storage copy equivalence. Missing, duplicate, reordered and wrong rows,
-missing source/artifact hashes and corrupt receipts are rejected. The existing
-Python Core auditor, original-source exporter and primop inventory remain shared
-dependencies.
+See [resize/shrink](resize-bytearrays.md), [pinned memory](pinned-memory.md)
+and [atomic integer access](atomic-int-arrays.md) for their separate contracts.
+Owner locking protects storage invariants; it does not make arbitrary native
+accesses atomic with managed copies.

@@ -25,7 +25,7 @@ for the inverse functions, min/max operand rules and four-field decomposition.
 
 [`THC.FloatDecode`](THC/FloatDecode.hs) exposes the ordinary `Float` and `Double`
 `exponent` methods through integer-bit-pattern inputs, matching THC's scalar CLI.
-The [floating guide](../../docs/floating-primitives.md#integer-decomposition-and-public-exponent)
+The [floating guide](../../docs/floating-primitives.md#integer-decomposition)
 describes the native-backed corpus, decomposition primops and exact scope.
 
 ```sh
@@ -80,8 +80,7 @@ values. Lifted arguments and fields must remain lazy.
 | `localMutualClosures` | 2*n + 40 | Escaping mutually recursive closures retain cells and lexical values |
 | `nestedCaptureThunk` | n*n + 23 | Thunks retain captures after their creating frames return |
 
-All integer results use machine-`Int#` wraparound. GHC native `Int#` and JVM
-`long` are both 64 bits on the tested AArch64 host. `blackhole` is an additional
+All integer results use machine-`Int#` wraparound. The supported GHC targets and JVM `long` use 64 bits. `blackhole` is an additional
 nonterminating entry excluded from the native numerical matrix: forcing its
 self-referential CAF should make THC report a blackhole. `fibonacciBox` is an
 additional lifted recursive function for later experiments.
@@ -104,40 +103,6 @@ inputs -3, 0, 1, 2, 7, 10, and 20, for 133 rows. A fresh checkout needs
 `mkdir -p build/native` before shell redirection to that directory; without
 redirection the script creates it itself.
 
-Native compilation and all 133 evaluations completed on GHC 9.14.1. The runtime regression suite checks all 133 rows both before and after guest compilation. Numerical
-agreement cannot by itself prove single evaluation of a shared thunk; runtime
-instrumentation or an independent evaluation-count check is needed for that.
-
-## What survived GHC optimization
-
-The inspected `build/native/THC/*.dump-simpl` files contain:
-
-- A captured lambda inside `captured`, with n free in its body.
-- `applyBox (addBox (Box n)) ...` in `under`: an actual arity-two function
-  supplied one argument.
-- `chooseFunction = \n -> case pickFunction n of { Function f -> f }` and
-  `chooseFunction n ... ...` in `over`: arity one followed by two extra
-  arguments. The initial direct conditional chooser was eta-expanded to arity
-  three. The opaque wrapped-function producer preserves the intended test
-  without disabling GHC optimization passes.
-- `let x = costlyBox (Box n) in ... addBox x x` in `shared`.
-- References to `diverge` in both laziness tests, and `diverge = diverge`.
-- `ones = Cons ... ones`, including its back edge, and recursive `buildList`.
-- A genuine cross-module call/alias for `multiModule`.
-- Five separate unary increment functions selected at thresholds 0, 1, 2, and 7
-  for `cacheSaturation`, so the default inputs cover all five targets.
-- A two-member recursive group for `mutualEven`/`mutualOdd`, each tail-calling
-  the other; the native `mutualTail 100000` result is 100000.
-- The adversarial `selfMutualA`/`selfMutualB` group keeps both self calls and
-  cross calls. Each function self-calls once before calling its peer, exercising
-  preservation of ancestor masks across self loops; native 100000 returns 100000.
-
-`OPAQUE` annotations intentionally stop GHC from replacing the application and
-laziness experiments with simpler arithmetic. These are semantic/runtime
-fixtures, not representative application-wide optimization benchmarks. The
-strict sum loop is floated to a recursive top-level helper by GHC; it does not
-exercise a surviving Core join point. There is no fusion claim here.
-
 ## Exploratory native timing
 
 ```sh
@@ -156,14 +121,9 @@ nanoseconds and prints TSV:
 entry    repetitions    inputBase    checksum    elapsedNs
 ```
 
-There is no header in the actual output. The three commands above produced
-checksums 5839044, 114500000, and 5166 respectively. The inspected native Core
-contains a strict counter/accumulator loop, a call through the selected function,
-and clock reads enclosing that computation. The driver excludes build, process
-startup, argument parsing, and result printing from its reported time. These
-small runs are smoke comparisons; JVM warmup, proven Graal compilation,
-allocation, repeated independent runs, and representative applications remain
-necessary before making performance claims.
+There is no header in the actual output. The timer excludes build, process
+startup, argument parsing and result printing. Use the [benchmark recipes](../../README.md#performance)
+for controlled comparisons with JVM warmup and compiler inspection.
 
 ## Opaque pointers and wide characters
 

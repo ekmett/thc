@@ -15,8 +15,7 @@ cabal run ad-kahn
 This is `ad` 4.5.6. Its default `ffi` flag is disabled; the library's optional
 native tape implementation must not be treated as an active C dependency.
 `ad-regression` wraps the exact upstream `Regression.hs` and `AdditionalTests.hs`
-as an executable without editing them. The native baseline is 89 passing
-upstream tests plus the ten checks in `ADKahn.hs`.
+as an executable without editing them.
 
 `ADKahn.hs` exercises differentiation, gradients, Jacobians and Hessians through
 the public Kahn API, including its specialized Double mode. The five shared DAG
@@ -36,23 +35,3 @@ thc run ad-thc-check:exe:ad-regression \
   --installed-core required --ghc-source /path/to/ghc-9.14.1 \
   -- --quickcheck-replay=20260926 --num-threads=1
 ```
-
-The original `ADKahn.hs` passes all ten checks as a THC guest on both AST and
-bytecode, with both default and dense handoffs. Both the earlier cached manifest
-and a fresh acquisition of the unchanged application pass. The fresh
-hash-checked full-Core package manifest's strict audit accepts all 2,259 reachable bindings
-without missing globals or unsupported operations. It uses the executable
-lifecycle, including original `runMainIO` initialization and `flushStdHandles`,
-and explicitly enables `-Dthc.asyncExceptions=true` for AST signal delivery.
-Both backends report zero blackholes and zero unsupported traps. This short
-application does not reach JIT compilation; separate focused sum-join and GMP
-tests cover compiled execution.
-
-That guest result is distinct from the native 89-test upstream baseline.
-Fresh acquisition and guest execution of the unchanged `ad-regression` suite
-remain under investigation. Disabled conditional C sources and the original
-safe `erf` imports no longer block acquisition. The original `splitmix`
-initializer's `getentropy` dependency now has a tested native-libc provider,
-including actual original Core execution on both backends. The complete
-upstream guest suite still needs a fresh run; no upstream tests or strict
-audits have been bypassed.

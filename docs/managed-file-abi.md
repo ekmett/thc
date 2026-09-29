@@ -73,22 +73,3 @@ effects, erase only State, and store the payload in a typed long/address slot.
 foreign-import closure check; this does not authorize recognition of arbitrary
 symbols under the prefix. The auditor additionally requires each supported
 symbol in `bin/core-capabilities.json`'s `managedForeignCalls` list.
-
-The focused controls are `CoreManagedFilesTest`, `ManagedFileCallTest`, and
-`python3 bin/test-core-managed-files.py`. They cover all eleven contracts,
-mutated descriptors and bound heads, normal and explicitly installed compiled
-AST/bytecode calls, binary buffers, EOF, seeking, resizing, append, typed error
-messages, and invalid State before effects. These synthetic ABI controls are
-separate from native comparisons and exported public `System.IO` Handle tests;
-they do not by themselves establish those higher-level APIs' support.
-Replacing a higher-level source adapter alone does not cover old GHC unfoldings
-already inlined into precompiled consumers: those require a future bridge at the
-original foreign/C-bitcode boundary, or rebuilding all consumers against the
-backend's interfaces.
-
-The AST dispatch uses direct comparisons against its constant operation. A
-previous enum switch used a synthetic mutable mapping array and retained all
-operation branches in the captured Graal graph and triggered a frame-accessor
-guard on the first compiled `size` call. Direct comparisons remove the unrelated
-paths. The regression requires the first installed targets to stay valid after
-every operation, without recompilation or relaxed assertions.

@@ -1,196 +1,62 @@
-# Original GHC stdio foreign boundary
+# GHC file and errno boundary
 
-This bounded LP64 bridge consumes the original GHC 9.14.1 foreign-call
-descriptors, including copies inlined into otherwise unchanged consumers. It
-does not replace `GHC.Internal.IO.FD` or require new `thc_io_v1` imports.
+Original GHC and Unix library calls use THC's context-owned descriptor table for
+file effects. A guest descriptor is not a host process fd: descriptor 1 names
+the context's output, which may be an embedding stream or an explicitly granted
+native endpoint. The Haskell library still implements Handle buffering and
+higher-level error handling.
 
-The initial contracts are the exact `ghc-internal` static function targets:
+Reads and writes preserve offsets, binary bytes, partial counts and errno.
+Invalid storage, out-of-range requests and malformed CInt carriers fail before
+effects. A nonempty write making no progress reports EIO, preventing the original
+Haskell retry loop from spinning indefinitely. Safe calls save their result
+before a post-call async poll; they do not replay a completed native transfer.
+General interruptible read/write transport remains unsupported.
 
-| Target | Convention / safety | Arguments before State | Result after State |
-| --- | --- | --- | --- |
-| `ghczuwrapperZC20ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite` | capi / safe | Int32Rep, AddrRep, Word64Rep | Int64Rep |
-| `ghczuwrapperZC21ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite` | capi / unsafe | Int32Rep, AddrRep, Word64Rep | Int64Rep |
-| `getpid` | ccall / unsafe | none | Int32Rep |
-| `__hscore_get_errno` | ccall / unsafe | none | Int32Rep |
-| `__hscore_set_errno` | ccall / unsafe | Int32Rep | none (singleton State tuple) |
-| `fdReady` | ccall / safe or unsafe | Int32Rep, Word8Rep, Int64Rep, Word8Rep | Int32Rep |
-| `ghczuwrapperZC1ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuSET` | capi / unsafe | none | Int32Rep |
-| `ghczuwrapperZC2ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuCUR` | capi / unsafe | none | Int32Rep |
-| `ghczuwrapperZC0ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuEND` | capi / unsafe | none | Int32Rep |
+## Descriptors and metadata
 
-Matching is independent of the consuming binding's name. These are exact pinned
-symbols, not a rule accepting arbitrary generated wrapper names. CInt, size_t,
-ssize_t, and machine Int retain their distinct representation proofs even though
-the JVM stores their supported forms in longs. State is checked before effects.
+The [native file provider](native-file-provider.md) supplies actual opened-resource
+metadata, duplication, fcntl, directories and selected pathname operations on
+Linux x86_64. It keeps resource identity through rename and unlink. Ordinary
+embedding streams lack native stat, descriptor flags and readiness capabilities;
+those requests return ENOTSUP rather than inferring metadata from a path.
 
-The implementation routes writes to context-owned descriptors and the embedding's
-streams; descriptor1 is not process fd1. It preserves offsets, binary bytes,
-zero-length calls, partial counts, and sticky errno across successful operations.
-Operational errors use actual host C errno constants. Invalid managed addresses,
-out-of-range memory requests, and noncanonical CInt values remain runtime faults.
-A nonempty zero-progress transport result is reported as EIO, so the original
-Haskell write loop cannot spin indefinitely on an unsupported transport behavior.
+Seek constants come from the build host's C ABI. Guest operations do not assume
+SEEK_SET/CUR/END are 0/1/2. Supported stat and terminal-image accessors validate
+complete caller-owned byte regions using the selected platform layout. See
+[terminal images](original-termios.md) and [signal-set images](original-sigset.md).
 
-`generateStdioAbi` compiles and executes a small C probe using the selected host
-clang and C headers. It records actual errno/SEEK values and checks byte, pointer,
-CInt, CBool, size_t and ssize_t widths. The runtime checks the generated resource's
-platform and LP64 widths before foreign effects. This probe does not read or hash
-installed GHC files, mutate the process locale, or require native access when
-executing the managed writes. Supported build targets are the existing Linux GNU
-and Darwin x86_64/aarch64 host targets; cross-target resources are rejected.
+Logical [dup/dup2 aliases](original-posix-dup.md) share an open description.
+GHC's [RTS lock table](original-rts-file-locks.md) is separate bookkeeping;
+closing a descriptor does not implicitly release an RTS key.
 
-The errno slot belongs to a context and Java thread, preserving the existing guest
-thread identity. Supporting safe/unsafe descriptors does not make these foreign
-operations asynchronously interruptible or establish migratable IO scheduling.
-The exact `__hscore_set_errno` declaration overwrites that same slot with any
-canonical signed CInt, including negative values and zero. Zero explicitly
-clears errno; successful IO still preserves it, while failed IO replaces it with
-the captured host error. Invalid carriers and State proofs reject before mutation.
-The slot survives context reentry and remains isolated across contexts and Java
-carriers. Future carrier migration must move the shared getter/setter slot with
-guest-thread state.
+## Errno and readiness
 
-The separate exact `base_strerror_r` safe ccall runs the unchanged GHC C wrapper
-against a checked native copy of the caller's whole buffer. It copies every byte
-back on ordinary C returns, including error returns. A native thread-local scope
-sets only `LC_MESSAGES` to C and restores the previous locale in `finally`;
-guest async delivery is deferred across that foreign extent. Forced host
-cancellation or LLVM context termination can prevent native restoration because
-the cleanup must re-enter LLVM; this path is not host-cancellation safe.
+The errno slot belongs to the current context and Java carrier. The original
+getter/setter share it; the setter accepts any canonical signed CInt, including
+zero. Native failures publish their captured errno. Successful managed file
+operations preserve the previous value. Generic package calls instead preserve
+the actual native call's resulting errno, including zero.
 
-## Original Unix native declarations
+`fdReady` uses direction-sensitive native polling for supported resources.
+Regular files are ready even at EOF. Closed or unknown nonnegative descriptors
+also report ready, matching GHC's treatment of POLLNVAL; the following IO call
+reports the descriptor error. Negative descriptors support zero-timeout probes
+only. Opaque embedding streams have no readiness contract and return ENOTSUP.
+Readiness does not consume bytes or change file position.
 
-The installed Unix 2.8.8.0 declarations also use ordinary native libc linking
-for pathname ownership, truncation, node creation and timestamps; descriptor
-ownership, permissions, timestamps, synchronization, allocation and advice;
-terminal operations; host identity/configuration/time/resource queries; and
-caller-owned signal-set and termios images. `OriginalStdioOp` and the auditor
-record the exact original declaration widths, safety and package owner.
-String, ByteString and PosixString wrapper variants share the same transport.
+[Descriptor waits](managed-fd-waits.md) retain resource identity across close,
+dup2 and context cancellation. The [waitRead#/waitWrite# primitives](file-wait.md)
+have a separate resumable exception contract.
 
-On Linux x86_64, `NativeUnix` uses the existing FFM downcall pattern to call the
-native symbol directly. It copies bounded caller-owned images and captures errno
-at the call. Native header assertions check the transported image sizes.
-Pathname calls hold the context's directory lease; relative names use its
-`/proc/self/fd` anchor without decoding pathname bytes or changing process cwd.
-Descriptor calls borrow an owned duplicate under the context descriptor's lock.
-The native library supplies POSIX behavior; Java handles the THC boundary only.
-Safe calls keep the declared foreign extent, save the result, and then poll for
-guest delivery. They are synchronous, not interruptible native calls.
+## Other native operations
 
-The Unix `read`/`write` declarations reuse the existing managed descriptor
-transfers, with declared safety passed through to callback/scheduling authority
-and a completion poll after safe calls. `setenv`, `clearenv`, `unsetenv` wrappers and `__hsunix_get_environ`
-use the existing context environment: `setenv` copies bytes, `putenv` retains
-them, and neither changes the JVM process environment. Representative transport
-checks cover both backends, first compiled effects, bounded images, errno,
-descriptor retirement, and context cwd/environment isolation.
+Ordinary host identity, configuration, time and resource queries use their
+[declared native linkage](interface-foreign.md). Selected Unix pathname and
+descriptor operations adapt context-owned resources before calling libc. These
+retain raw pathname bytes and do not change the JVM process working directory.
 
-Process replacement/fork, credential and global process changes, native signal
-delivery, dynamic loading, passwd/group pointer graphs, named semaphores/shared
-memory, and temporary-file/PTY acquisition need their own ownership or lifetime
-integration. These families remain unsupported. General `openat`, `statx`,
-`utimensat`, directory cursor manipulation and group-list queries also remain
-outside this batch; existing support for directory streams and basic file IO is
-unchanged. This batch does not establish complete Unix package execution.
-
-## Original process identity
-
-The exact `ghc-internal` `getpid` declaration returns signed Int32. The separate
-`unix-2.8.8.0` `geteuid` declaration returns unsigned Word32; it queries the
-effective user ID, not the real user ID or a username. Both are unsafe ccalls
-with only State as input and an unboxed State/result tuple. Both backends validate
-State before a live libc query and preserve the context's sticky errno.
-
-The reviewed Unix pathname and effective-UID declarations retain their original
-installed unit, with either an `inplace` or lowercase hexadecimal suffix. The
-`lstat` CAPI wrapper must encode that same owner, wrapper index, module and function;
-other package versions, wrapper identities and foreign signatures remain rejected.
-
-These read-only queries use the existing FFM downcall pattern with explicit native
-access, independently of filesystem permission. The supported Linux GNU and Darwin
-x86_64/aarch64 LP64 host probe checks signed 32-bit `pid_t` and unsigned 32-bit
-`uid_t`. Handles may be cached; returned identities are queried on every call.
-The native fixture runs in a different process, so its PID is provenance rather
-than a constant expected JVM PID. Runtime checks use same-process controls.
-
-## Original seek constants
-
-The three exact original capi wrappers consume State and return State/Int32;
-they are not raw numeric literals, symbol-pattern aliases, or arbitrary native
-constant imports. The C probe supplies SEEK_SET/CUR/END, each a distinct signed
-CInt. ManagedStdio translates these values to the separate private managed
-absolute/relative/end modes before lseek; it does not assume native constants
-are 0/1/2. Queries and successful seeks preserve sticky errno, and State is
-checked before either operation. The same typed bytecode status instruction is
-specialized for the constant operation; no generic boxed foreign dispatcher is
-introduced.
-
-The existing `original-stdio-seek` Haskell fixture imports the genuine installed
-sEEK_SET/CUR/END declarations and c_lseek directly. Its private mode selectors
-exercise those original wrappers with 24 native observations, including tell,
-EOF, closed/bad descriptors, wide/negative offsets and a nonseekable pipe.
-Java compares both Core stages/backends, inlining modes and first installed
-compiled entries; synthetic ABI negatives remain separate from source proof.
-This does not establish original Handle execution, general native FFI, or
-foreign-stub linkage.
-
-## Bounded original file readiness
-
-The exact original `fdReady` signature uses signed CInt, unsigned one-byte CBool,
-signed Int64 milliseconds, CBool, and State. Lowered and stored operands must
-retain those proofs; scalar carrier sharing cannot relabel an address or State.
-Both boolean values must be canonical zero or one before any foreign effect.
-
-Context-owned regular files return one for read and write readiness, including
-EOF and an incompatible open mode. Closed or unknown nonnegative descriptors
-also return one: GHC's POSIX implementation treats any positive `poll` result as
-ready, including `POLLNVAL`; the subsequent IO operation reports the bad descriptor.
-Negative descriptors return zero only for a zero timeout. Other negative-descriptor
-waits fail explicitly until an interruptible waiting service exists. Readiness
-does not change the file position or clear sticky errno. POSIX ignores `isSock`.
-
-Embedding streams have no readiness contract and return minus one with host
-`ENOTSUP`. THC neither polls a process descriptor nor infers readiness from an
-InputStream's available-byte count. This bounded behavior is not general Handle,
-socket, pipe, scheduler, or asynchronous IO support.
-
-`cabal run exe:thc-fixtures -- original-fd-ready` prepares 168 native observations
-and an explicitly synthetic, GHC-typed scalar consumer of actual installed FD
-FCallIds. Replacement of a template foreign head requires GHC type equality and
-retains the original unit, symbol, convention, safety, and representation metadata.
-The fixture retains original declaration call records, template, and adapted
-exports; it does not claim unchanged original FD/Handle execution. GHC's ordinary
-typed declaration unfoldings supply the original foreign Ids even in stock thin
-interfaces. This is a fixture-only, non-executable declaration projection, not a
-production fallback for missing complete Core. Native comparison uses the actual
-linked GHC C symbol.
-
-This slice alone is not ordinary `putStrLn`/Handle support. Unchanged stdout
-initialization additionally needs terminal/locale capability calls, and the
-original write path queries readiness before choosing a safe or unsafe call.
-An arbitrary embedding OutputStream has no readiness protocol: never return
-unconditional readiness or poll process fd1 for it. Original error-string
-construction and standard-handle shutdown flushing are also separate work.
-
-The separate Linux GNU LP64 stat-image slice admits the exact original
-`__hscore_sizeof_stat`, `__hscore_st_dev`, `__hscore_st_ino`,
-`__hscore_st_mode`, `__hscore_st_size` and six pinned `S_IS*` CAPI wrappers.
-A fresh native C probe supplies the actual `struct stat` size, field offsets,
-widths and type masks. Accessors read checked managed bytes, retain mutable
-reads and reject pointer-cell reinterpretation; these are not native pointers.
-Haskell preparation captures real native stat images and type observations,
-while Java verifies original pre/post Core and both first-installed backends.
-Darwin is explicitly excluded pending authentic matching declaration proofs.
-
-The exact original `__hscore_fstat` declaration is supported only through the
-explicit Linux x86_64 [native provider](native-file-provider.md). Its shared
-opened-resource owner supplies bytes and authoritative metadata, including after
-chmod, rename, replacement and unlink. The complete writable managed destination
-is validated before observation and protected through copyback; errors preserve
-the destination and success preserves errno. Ungranted embedding streams and
-ordinary public Truffle channels remain unsupported (ENOTSUP), rather than
-fabricating metadata from paths or treating context descriptors as host fds.
-
-General original Handle open/locking, descriptors from other processes, arbitrary native
-pointer buffers, and generic Sulong symbol interposition are not established here.
+Process replacement/fork, credentials and global process changes, passwd/group
+pointer graphs, named semaphores/shared memory and arbitrary dynamic loading
+remain unsupported. Use the separate [owned process service](process-lifecycle.md)
+for its admitted creation/wait/termination operations.

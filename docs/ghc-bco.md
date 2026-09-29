@@ -116,38 +116,3 @@ unsupported, including the ordinary prohibition on capture across thunk updates.
 The instruction loop polls the guest scheduler and asynchronous request queue as
 well as Truffle safepoints; valid loops have no arbitrary instruction budget.
 No BCO JIT performance claim is made.
-
-## Checks
-
-```sh
-cabal run exe:thc-fixtures --offline -- ghc-bco
-./gradlew --continue testDefault --tests 'thc.runtime.GhcBCO*' \
-  testDense --tests 'thc.runtime.GhcBCO*'
-```
-
-The producer retains 105 native results, 70 strict audits, unmodified pre/post
-Core, command stdout/stderr and SHA-256 source/artifact provenance in
-`build/ghc-bco/`. Java's arithmetic/state model is independent of runtime
-execution. Native comparisons run in both backends; each first-installed check
-compiles exactly the genuine public Core root and requires exactly one compiled
-entry and no interpreted call to that root, with no intervening guest call.
-This does not claim compilation of the dynamically allocated BCO or all helper
-roots. Handoff pools must be balanced and free of retained references.
-
-Additional JVM cases cover malformed streams, odd-sized/truncated encodings,
-stack order, signed extremes, logical shifts, raw NaN bits, malformed case/tuple
-headers, exact tuple descriptors, external ABI rejection, uninitialized or twice-filled
-AP/PAPs, payload kind/bitmap checks, retained scalar PAP prefixes, lazy/shared thunk
-updates, released update targets, and foreign/closed-context use.
-
-The genuine corpus runs with synchronous and capturing callers. Separate JVM
-continuation checks use real MVar interruptions through both Core backends:
-repeated cuts, overapplication with an outer pending Apply frame, initial and
-returned thunk forcing, tail transfers, strict direct/megamorphic arguments,
-constructor operands, captured AP/PAP payloads with pending applications, nested P/T cases and instruction-loop interruption followed
-by completion. A packed-loop control interrupts while a live byte keeps the
-countdown stack unaligned, then widens that retained byte after resumption.
-A deep BCO chain checks bounded stack spilling and result completion. Foreign
-resumption rejects before claiming the continuation, leaving the owner able to
-resume it. These focused controls establish continuation behavior; they do not
-claim a compiled BCO interpreter or complete GHCi/Template Haskell execution.

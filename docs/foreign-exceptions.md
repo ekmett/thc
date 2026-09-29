@@ -19,7 +19,7 @@ managed export is restored to the original foreign object. This also applies to
 stored and thrown later. Each program retains its exact GHC runtime unit and
 dictionary identity. Normalization routes a proven `SomeException` to its
 authenticated program storage domain before invoking the genuine Haskell
-`fromException` projector. It does not try unrelated historical projectors.
+`fromException` projector. It does not try unrelated projectors.
 The context keeps weak projector references; a live foreign origin retains the
 projector it needs.
 
@@ -39,7 +39,7 @@ retain their ordinary `IOError` adapters. There is no exception transport across
 an arbitrary plain-C export ABI, and cause/stack inspection is not exposed yet.
 Native GHC's compatibility metadata call returns unavailable.
 
-## Linking and old captures
+## Linking and payload metadata
 
 The driver automatically supplies the genuine runtime component when needed,
 or reuses the application's existing exact runtime unit. Raw Core embedding must
@@ -56,29 +56,6 @@ and can be imported by a Safe client.
 The exporter records `exceptionPayload` on `raise#` and `raiseIO#` only when
 GHC identifies their payload as the pinned `SomeException` type. This preserves
 primitive exception laziness: raw values and raw bottoms remain opaque even
-after the context has handled a foreign exception. Old captures lacking the
-marker remain opaque at public exit; re-export the relevant original modules
-to obtain transparent rethrow normalization. No runtime representation guessing
-fills missing provenance.
-
-## Focused validation
-
-With a complete-Core GHC 9.14.1 provider and its configured original source tree:
-
-```sh
-export THC_FOREIGN_EXCEPTION_GHC_SOURCE=/path/to/configured/ghc-9.14.1
-make foreign-exception-test-modes
-```
-
-The producer retains native/API controls, Safe-Haskell acceptance and rejection,
-pre/post-Tidy Core, strict audits, and exact source/artifact hashes. The dedicated
-tests use real GHC dictionaries and original dependency modules on AST and
-bytecode backends, including explicit compilation, cleanup, stored rethrows,
-metadata reverse entry, and raw-bottom controls. Public package-call controls
-reuse the same genuine support. Isolated ABI/access-node tests remain in the
-ordinary test suites; the complete original-program fixture is an explicit
-prerequisite of these dedicated tasks. The required Build workflow runs this target
-on its provisioned Linux complete-Core runner, selected by the
-`THC_FULL_CORE_ENVIRONMENT` repository variable. Missing provider or configured
-source fails that job. Fast checks and the stock hosted suites retain the
-portable ABI tests; they do not claim to execute these complete-Core cases.
+after the context has handled a foreign exception. Without that marker, the payload stays opaque at public exit. Re-export the
+relevant modules when transparent rethrow normalization is required; the runtime
+does not guess missing provenance.

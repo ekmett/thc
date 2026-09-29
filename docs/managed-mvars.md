@@ -44,58 +44,8 @@ There is no GC-driven `BlockedIndefinitelyOnMVar` detection. A pending
 asynchronous interruption or embedding cancellation to terminate. See the
 [current primop behavior reference](primop-behavior.md#exceptions-blocking-and-transactions).
 
-The bytecode backend also uses these requests for
+Both backends use these requests for
 [asynchronous exception delivery](async-exceptions.md). Interruption cancels
-an uncommitted request and saves a retry at the guest continuation cut. The
-original cell protocol tests use external host operations; the public threading
-fixtures exercise concurrent guest admission and `killThread#`.
+an uncommitted request and saves a retry at the guest continuation cut.
 [Explicit weak registration/finalization](weak-explicit.md), other Handle
 dependencies and native IO are separate contracts; automatic weak GC is deferred.
-
-## Evidence and reproduction
-
-`t/fixtures/compiler/ManagedMVarAudit.hs` exports genuine pre- and post-Tidy
-Core for five integer-entry examples: state transitions, lifted bottoms,
-opaque aliases and snapshots, boxed-unlifted products, and closure payloads.
-All eight contracts appear in both stages; all six payload-bearing primitives
-appear at both boxed levities. An independent signed-64-bit model checks 845
-native rows over 169 edge and seeded inputs. The JVM tests compare every row in
-both interpreters with inlining enabled and disabled, then explicitly compile
-the observed call targets and repeat the comparisons with per-call compiled
-guest-entry and handoff-cleanup assertions. Normal compilation policy remains
-enabled during warmup; post-install host-driven calls are not a separate claim
-that the host bridge's entry counter was measured.
-
-Four separately listed context roots (`makeBox`, `waitTake`, `waitRead`,
-`waitPut`) are internal host-driven tests. Public context-owned reference
-transport is covered separately by the [Core host ABI](site/embedding.md#load-a-core-entry).
-Native ready-state adapters provide 507 oracle rows.
-Native-only thread/status handshakes also verify reader broadcast and queued
-take/put order under one and two GHC capabilities, 45 rows each. Their fork and
-exception dependencies are outside guest exports and do not establish guest
-thread support. Direct cell tests cover stable retries, commit/cancel ordering,
-lazy identity and queue cleanup.
-
-The context tests check every ready-state oracle row across pre/post Core,
-AST/bytecode and both handoff modes (4,056 comparisons). They also exercise 24
-real guest waits awakened by host cell operations, 24 terminal `Context.close`
-cancellations and 24 `Context.interrupt` cancellations followed by a fresh call
-in the same context. Each checks waiter removal and argument/result reference
-cleanup. Context reuse is not resumption of a cancelled guest thunk.
-
-```sh
-python3 bin/prepare-managed-mvars.py
-python3 bin/prepare-managed-mvars.py --check-only
-python3 bin/test-managed-mvars.py
-python3 bin/test-managed-mvar-fixtures.py
-./gradlew --no-daemon test --tests 'thc.runtime.ManagedMVar*' --rerun
-JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew --no-daemon test --tests 'thc.runtime.ManagedMVar*' --rerun
-```
-
-Use `--refresh` to rebuild stale generated output under `build/`. CI uses this
-option when source changes invalidate an existing fixture. Valid output is
-still reused; `--check-only` never changes it.
-
-The manifest records source/generated-artifact hashes and native/audit results;
-installed GHC files are not hashed. No performance claim is made for locking or
-allocation in this slice.

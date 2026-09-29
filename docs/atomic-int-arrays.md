@@ -39,29 +39,3 @@ there is no temporary pair. Lowering checks physical integer, reference and
 state carriers, arity, and tuple order. Exact GHC `RuntimeRep` spelling belongs
 to the strict exporter audit, so runtime operations do not recheck lexical
 distinctions between integer values already represented by `Long`.
-
-`t/fixtures/compiler/AtomicIntArrayAudit.hs` is a small executable example of
-each primitive. Its `casInt8Result` entry performs two comparisons on element
-one, returns a checksum of both old values and the final signed byte, and checks
-the two neighboring bytes. `atomicLoadStore` demonstrates state-threaded atomic
-publication through three writes and reads. The producer is Haskell:
-
-```sh
-cabal run exe:thc-fixtures --offline -- atomic-int-arrays
-./gradlew --no-daemon test --tests thc.runtime.AtomicIntArrayTest
-JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew --no-daemon test --tests thc.runtime.AtomicIntArrayTest --rerun
-```
-
-The producer exports genuine pre/post-tidy Core, requires strict audits, builds
-a separate native GHC oracle, and records input/artifact hashes and command logs.
-The Java test independently models every native row. It checks both backends,
-with inlining enabled and disabled, exact compiled-entry counts starting with
-the first call after installation, stable active call-target identities, and
-handoff cleanup. Direct typed-backend tests cover effects, state validation and
-bounds; concurrency controls check linearizable fetch histories, one CAS winner
-and retry loops at every width, and payload publication through atomic reads and
-writes. The prior fetch-add fixtures and operand-evaluation test remain active.
-
-The shared CI fixture registry owns the producer and Core source, and fingerprints
-their dependencies. Cached native/Core artifacts do not replace runtime tests.
-The generated [primop checklist](primops.md) retains the managed-storage limits.

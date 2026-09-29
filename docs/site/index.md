@@ -34,19 +34,18 @@ thc run my-program --thc-root /absolute/path/to/thc
 ```
 
 `thc acquire [TARGET] [FLAGS]` produces a package manifest without auditing or
-executing the guest. `thc run [TARGET] [FLAGS] [-- ARG...]` also audits the
-reachable program and executes an accepted `Main.main :: IO ()`.
+executing the guest. `thc run [TARGET] [FLAGS] [-- ARG...]` builds and executes
+`Main.main :: IO ()`. Add `--verify-artifacts` for artifact verification and the
+pre-launch dependency audit.
 Targets use Cabal's syntax, including `my-package:bench:my-benchmark` and
 `my-package:test:my-test`. With no target, Cabal selects the current package's
 sole buildable executable, otherwise its sole buildable runnable component.
 Use `--project-dir` or `--project-file` to select a different project.
 `--thc-root` names the built THC checkout, not the application directory; both
 commands require it.
-General `thc build` and interactive `thc repl` commands are planned, not
-implemented. The aim is to run complete programs, including their error paths;
-acquisition alone does not establish that a program is runnable. The
-[architecture guide](../architecture.md) describes the current pipeline and
-planned work.
+`thc build` and `thc repl` are not implemented. Acquisition alone does not
+establish that a program is runnable; the [architecture guide](../architecture.md)
+explains linking and runtime admission.
 
 You can already run real generators and utilities: see the
 [Happy, HsColour and Alex command lines](../driver.md#run-real-applications).
@@ -102,41 +101,23 @@ usually retains. `make check-ghc-core` checks the selected compiler; the
 build instructions. Project runs can request those complete installed libraries
 with `--installed-core required`.
 
-## Current limitations
+## Runtime scope
 
-This is still an experiment. Both backends execute substantial lazy Core, with
-closures, sharing, typed constructor fields, joins, unboxed tuples, arrays and
-mutable references. Tests compare native GHC results with interpreted and
-compiled guest execution. That does not yet amount to general Cabal package
-support.
+Both backends execute lazy Core with closures, sharing, typed constructor fields,
+joins, unboxed tuples and sums, arrays and mutable references. Native imports,
+callbacks and executable IO require the [foreign-code setup](../interface-foreign.md).
+Package dependencies must supply complete Core, including cold error paths.
 
-On Linux x86_64, with complete installed Core and matching configured GHC sources, the bytecode
-backend runs ordinary `putStrLn`, including GHC's original startup and Handle
-shutdown. A file-lifecycle test also matches native GHC on UTF-8 reads and writes,
-append, seeking, EOF, caught missing-file errors, and shutdown flushing.
-A binary-buffer test covers `hPutBuf` and `hGetBuf` with offset pointers, binary
-bytes, short reads, EOF and cleanup after an exception. These whole-program
-checks establish interpreted execution; they do not yet establish JIT compilation
-of the complete IO path.
-The [driver guide](../driver.md) covers the current Linux configuration
-and `--installed-core required --ghc-source DIR` options. The default provider
-remains limited. Complete boot-library loading and general file IO and FFI
-remain unfinished; arbitrary executables are not yet accepted. The exporter
-currently targets GHC 9.14.1.
+[Async-enabled execution](../async-exceptions.md) bounds nested calls and thunk
+forcing with saved continuations. [STM](../stm.md), [MVars](../managed-mvars.md)
+and [delimited continuations](../delimited-continuations.md) have explicit capture
+and ownership limits. Automatic weak finalization and GC deadlock detection
+remain unsupported.
 
-[Async-enabled AST and bytecode evaluation](../async-exceptions.md) bounds nested
-calls and thunk forcing with saved continuations. Private autonomous stack cuts
-retain the same active STM attempt without replaying prefixes or publishing
-buffered writes; explicit checkpoint/delimited capture across STM transactions
-remains unsupported.
-
-Unsupported reachable paths are reported before a normal run. Development
-benchmarks can explicitly use diagnostic traps, but success on one path does
-not establish support for the rest of the program. The
-[coverage index](../README.md) and [primop checklist](../primops.md) record the
-current contracts and gaps. The [primop behavior reference](../primop-behavior.md)
-names known differences, restrictions and intentional target choices primop by
-primop; implementation coverage is not a claim of identical GHC RTS behavior.
+THC is experimental. The [documentation index](../README.md),
+[primop checklist](../primops.md) and [behavior reference](../primop-behavior.md)
+provide the current contracts. A diagnostic run through a rejected dependency
+closure does not establish complete program support.
 
 ## Documentation
 

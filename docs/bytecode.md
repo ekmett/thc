@@ -44,18 +44,15 @@ order. Ordinary lets remain outside this transformation. Recursive prefixes and
 cases needing an outer join activation stay on the existing inline path.
 Preparation does not execute guest code or change published bytecode PCs.
 
-Async- or delimited-enabled roots compile handler selection without adaptive
-exception-history guards; resolving a first suspension does not mark an
-exception profile as observed. Blocking-request handlers use declared Object
-scratch carriers and stateless loads/stores, including the saved root mask.
-This is compiler metadata, not execution of a preparatory suspension. Ordinary
-roots retain their exception profiling, and ordinary local writes retain
-adaptive widening. The pinned generated-code normalization checks version and
-source shape before applying this policy.
+Suspending operations preserve their pending operands and caller state through
+Truffle continuation frames. Handler selection uses ordinary exception profiling;
+a first suspension may deoptimize before resuming correctly. Continuation-local
+storage restores the saved frame's actual tags, including frames retained before
+a local widened. Preparation does not run guest code or seed exception profiles.
 
-The implementation takes guidance from Cadenza's bytecode experiment while
-retaining THC's existing capture and constructor representation. The Bytecode DSL
-is experimental upstream; this implementation is pinned to Truffle 25.3.4.1.
+The Bytecode DSL is pinned to Truffle 25.3.4.1. See the
+[continuation contract](async-continuation-contract.md) when changing lowering or
+adding a suspending operation.
 
 ## Inspection
 
@@ -83,14 +80,7 @@ the backend in its configuration, and validates each JVM's diagnostics. It can
 compare both interpreters from the same immutable distribution against the same
 native GHC binary and exported modules.
 
-## Checks and limitations
-
-`BytecodeBackendTest` exercises the native-GHC corpus, sharing, lazy failures,
-strict constructors, partial and excess application, recursion and captured
-values. Tail-cycle and representation tests exercise their own explicit
-backend selections. The Gradle test JVM pins its default backend to AST;
-bytecode checks select their backend explicitly, so an inherited
-`THC_BACKEND` does not change the intended test path.
+## Limits
 
 Both backends share admission rules for supported representations and effects,
 but their lowering and continuation machinery are distinct. Selecting bytecode

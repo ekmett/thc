@@ -2,9 +2,9 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE MagicHash #-}
 
--- | A selected, genuinely exported Core entry for the experimental native cache.
+-- | A selected, genuinely exported Core entry for code-cache tests.
 -- Arguments remain dynamic; neither export nor cache preparation executes it.
-module THC.CachedScalar (affine) where
+module ScalarWorkload (affine) where
 
 import GHC.Exts (Int#, (+#), (*#))
 

@@ -39,7 +39,7 @@ guides =
   , Guide "docs/site/jvm.md" "jvm" "JVM implementation"
   , Guide "docs/ghc-core.md" "ghc-core" "GHC library Core"
   , Guide "docs/core-package-manifest.md" "core-packages" "Core packages"
-  , Guide "docs/interface-foreign.md" "interface-foreign" "Foreign artifacts"
+  , Guide "docs/interface-foreign.md" "interface-foreign" "Foreign code"
   , Guide "docs/polyglot.md" "polyglot" "Polyglot calls"
   , Guide "docs/runtime-services.md" "runtime-services" "Haskell runtime services"
   , Guide "docs/bytecode.md" "bytecode" "Bytecode backend"

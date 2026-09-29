@@ -30,34 +30,9 @@ Unlike `atomicModifyMutVar2#`, it does not install a first-field selector.
 Contended retries may allocate abandoned application thunks but never evaluate
 their modifiers. This is not an allocation-free claim.
 
-## Example and checks
+## Example
 
 [`THC.BoxedCasCounter`](../src/examples/THC/BoxedCasCounter.hs) is a small pure
 counter example. Its retry loop uses the observation returned by `casMutVar#`.
 The unary `boxedCasCounter` entry performs `n .&. 63` increments, including for
 negative inputs. For example, `boxedCasCounter 17` returns `17`.
-
-Generate the native/Core inputs with:
-
-```sh
-cabal run exe:thc-fixtures -- boxed-cas
-./gradlew test --tests thc.runtime.BoxedCasTest --rerun
-JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew test --tests thc.runtime.BoxedCasTest --rerun
-```
-
-The producer records genuine GHC 9.14.1 pre-/post-Tidy Core, twenty strict entry
-audits, 90 native observations and source/artifact hashes. The ten entries cover
-both boxed levities, failed-ticket retry, unforced bottom replacements, lazy
-modifiers and the example. Java checks independent arithmetic expectations on
-AST and bytecode, with and without inlining. Focused runtime controls cover
-reference identity, state/bounds failures before mutation, full-memory-order
-publication races and shared lazy modifier results/failures. Direct primitive
-roots have exact `+1` first-installed-entry checks; the public counter has
-data-dependent calls, not a universal constant call-count assertion.
-
-The recursive counter's bytecode call graph without inlining has shown target
-retirement after a correct compiled-active invocation. That JIT-retention result
-is recorded, not claimed to pass. The example still checks every native value
-and compiled activity from the first installed invocation, without settling or
-retrying a failed call. Direct primitive roots retain their exact count and
-target-validity assertions.

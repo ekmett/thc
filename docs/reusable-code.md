@@ -56,8 +56,9 @@ parsing and caches only prepared code and signature metadata. Executing that
 factory creates fresh program cells and resources. Ordinary cached sources
 continue to construct fresh AST or bytecode programs on every load.
 
-Reusable boxed-constructor fields still exclude aggregates and vectors; supported
-fields are numeric scalars, boxed data and ordinary guest closures. Nonliteral
+Reusable boxed constructors accept exact scalar, tuple, sum and vector field
+proofs, with fresh per-load allocation ownership. Immutable static byte literals
+and admitted managed byte-array operations are available to pure code. Nonliteral
 strict globals cannot execute during preparation. Global aggregate storage and
 recursive or lifted aggregate lets retain their ordinary rejection. Bytecode,
 asynchronous delivery, IO, foreign calls, diagnostic execution and managed exports
@@ -75,20 +76,7 @@ Shared executable roots retain no context compilation-owner token. Their
 compiler events are outside per-context JIT telemetry; ordinary roots and clones
 retain explicit ownership. This does not change per-instance guest metrics.
 
-`THC.CachedTyped` composes real out-of-line tuple/sum/vector/unit calls, a typed
-local loop, captures and a PAP behind a numeric entry. Its pre/post-Tidy Core matches
-135 native GHC oracle rows across default/dense handoffs, interpreted and compiled
-execution, inlining off/on, and two fresh contexts: 4,320 comparisons. All 18 prepared roots were
-untouched before compilation after the preparation context closed; compiled calls
-retain installed code, instances perform no lowering, and loans are released.
-GHC eliminates the candidate unlifted lets, so separate structural tests cover
-that form. Direct public-host tests additionally cover forced CAF/alias/PAP
-signatures, independently prepared and ordinary higher-order functions, all mixed
-leaf families and deterministic final-target bounces. Malformed result proofs
-are rejected in interpreted negative checks. Preparation contexts close before
-untouched compilation; lawful calls in two fresh contexts retain installed code
-without runtime lowering or retained loans. The Native Image cache workflow also
-supports this typed internal transport through a numeric public entry in fresh
-processes with guest JIT compilation disabled. Direct typed public-host transport
-remains JVM-validated; allocation freedom and emitted SIMD instructions require
-separate evidence.
+The [native-cache workflow](native-code-cache.md) persists selected compiled
+code and loads it in fresh processes with guest JIT compilation disabled. Its
+numeric CLI can call functions using typed internal transport. Direct typed
+public-host calls use the JVM embedding API; the CLI does not parse those values.

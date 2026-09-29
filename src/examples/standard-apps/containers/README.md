@@ -71,26 +71,3 @@ Acquisition publishes the actual Core closure but performs no strict audit or
 guest execution. The audit checks all syntactically reachable branches, not
 just the selected help or benchmark argument. A rejected closure must be
 resolved before claiming that the suite launches or runs under THC.
-
-## Recorded checks
-
-On Linux x86-64 with GHC 9.14.1, the unchanged native benchmark passes help,
-listing all 57 cases, and the one-measurement `minView` workload (`All 1 tests
-passed`). The latter is only a workload smoke, not a useful timing sample.
-
-At driver checkpoint `726de17e`, Cabal successfully resolved and built the
-original benchmark through the new positional target interface. Core
-acquisition subsequently rejected a safe foreign call with non-scalar inputs
-while capturing dependency `text-2.1.4`, after exporting its 55 modules. No
-package manifest was published, so that attempt produced neither a strict
-audit nor a THC guest execution. This is a dependency-admission failure, not a
-benchmark-selector failure.
-
-A second unchanged-project attempt at driver checkpoint `857808c9`, including
-the later safe-FFI policy, passed that text capture. It then failed the isolated
-build identity check for `binary-0.8.9.3-inplace`: Cabal legitimately builds this
-repository dependency in-place because it depends on the project-local
-containers library. That attempt also published no package manifest and ran no
-THC guest. Supporting this dependency style requires content-sensitive cache
-keys for the local dependency closure, not ignoring changed store identities;
-see the [driver's source-dependency rules](../../../../docs/driver.md).

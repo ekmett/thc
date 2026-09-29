@@ -62,8 +62,10 @@ retain their unsigned 64-bit counter value. Native failures retain actual errno,
 including eventfd overflow/invalid increments, and success preserves sticky errno.
 Ordinary contexts do not acquire this authority merely by allowing IO/native access.
 
-`F_SETFD` updates the owned native resource. Logical dup aliases share that
-resource; THC does not expose a separate fork/exec descriptor-inheritance model.
+`F_SETFD` updates descriptor flags on the owned native lease. Duplicates have
+independent descriptor flags and share the open-file description.
+[Process creation](process-lifecycle.md) preserves guest descriptor numbers and
+`FD_CLOEXEC` when selecting inherited resources.
 
 Original `epoll_create`, `epoll_ctl`, `epoll_wait` and `poll` use real Linux
 kernel sets/readiness. Both safe and unsafe installed wait declarations lower
@@ -88,17 +90,3 @@ the registrations. Ordinary embedding streams cannot acquire this authority.
 The existing original process-signal dispatcher remains the only signal delivery
 path, in either hosting mode. Capability count changes update Loom HEC
 routing but do not reconfigure event-manager threads automatically.
-
-`cabal run exe:thc-fixtures -- rts-event` recovers the prerequisite and descriptor declarations from
-installed full Core, specializes typed consumers, records the original interface
-and source hashes, executes independent native controls, and strictly audits
-pre/post exports. `rtsEventFullCoreTest` and `rtsEventFullCoreDenseTest` check both
-backends and first installed calls. Native controls query existing event slots
-without installing test objects into the host RTS.
-The producer runs complete original-import pipe/eventfd, poll/epoll and control
-registration lifecycles against native GHC: 45 native rows and 30 pre/post audits.
-Control setters execute in disposable native producer subprocesses because they
-alter global RTS slots. Both backends compare those results before and immediately
-after compilation, without a settling call or retry. Runtime controls additionally
-cover cancellation, close/reuse, aliases, real errno, one-shot rearming and the
-exact shutdown bytes.

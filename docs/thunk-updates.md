@@ -21,12 +21,3 @@ These changes remove references held by the thunk itself. Call caches, program
 roots, and exception locations may independently retain executable code. The
 memoized answer is still an Object field: an escaping thunk holding a machine
 integer can still retain a boxed Long.
-
-The implementation at `b778c0dbb2a776c4ec0b6f32a76db4660ebb82db` passes all 80 tests.
-The new tests exercise release on success and memoized failure, retry after host
-failure, CAF entry compilation, shared aliases, local updates, and recursive
-publication in both backends. Both backends also match the native Map oracle on
-18 inputs, before and after compilation, with no unsupported traps.
-
-The [typed-result and tail-cycle measurements](typed-tail.md) predate these thunk
-changes. They are not measurements of thunk release or binding writeback.

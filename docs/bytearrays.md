@@ -1,20 +1,9 @@
-# Managed ByteArray coverage
+# Byte arrays
 
-The foundation fixtures exercise the GHC 9.14.1 operations `newByteArray#`,
-`writeWord8Array#`, `unsafeFreezeByteArray#`, `sizeofByteArray#`,
-`indexWord8Array#`, `copyByteArray#`, and `compareByteArrays#` on AST and bytecode. The ordinary public
-`Data.ByteString.Short.pack`, `length`, `unpack`, and repeated `uncons` workloads execute the
-installed bytestring `$wpack`/`$wgo`/`uncons`/`$wuncons` bodies and the original, source-exported
-`GHC.Internal.List.$wlenAcc`. Preparation requires those exact dependencies and
-the pack/unpack primitives to remain reachable, plus `copyByteArray#` in both
-the uncons roundtrip and direct copy workload; it does not substitute library bodies.
-The [Int-array extension](int-arrays.md) adds `readIntArray#`, `writeIntArray#`,
-and `indexIntArray#` over the same backing storage, with element rather than
-byte offsets. This fixture scope is not the complete
-[implemented operation inventory](primops.md).
-The [Double-array extension](double-arrays.md) uses the same backing storage and
-typed Double result destinations for `readDoubleArray#`, `writeDoubleArray#`,
-and `indexDoubleArray#`.
+Both backends support managed byte arrays, scalar typed accesses and copies.
+The [primop checklist](primops.md) lists available operations; [Int](int-arrays.md),
+[Double](double-arrays.md) and [Float/Word](float-word-arrays.md) accesses share
+this storage with element indices of their respective widths.
 
 `ByteArray#` and `MutableByteArray# s` are each one unlifted boxed reference.
 Guest allocations use an owner containing ordinary heap storage or pinned
@@ -91,32 +80,6 @@ whose ByteArray documentation states that freeze does not copy and both variants
 share the same heap structure. `thc-primops coverage` also checks the advertised
 names and arities against the installed GHC API, and records its signatures.
 
-Run `cabal run exe:thc-fixtures --offline -- bytearray` and
-`./gradlew test --tests thc.runtime.ByteArrayTest`. Preparation exports
-pre/post-Tidy source fixtures, exports the pinned List source, and records hashes
-of sources, exporter, auditor, capability manifest, Core artifacts, and native
-oracle. The tests compare 4,116 real native rows against an independent unbounded
-integer byte/checksum model, then execute each row before and after compilation
-on both backends. Every checked compiled invocation must enter installed guest
-code and leave its warmed host/active entry valid. Unsupported traps and
-blackholes must remain zero. CI repeats the suite with dense handoff enabled.
-
-The inputs cover lengths 0–32, all byte values including NUL and bytes above 127,
-signed endpoints, and wrapping arithmetic. `orderedBytes` additionally checks
-separate allocations and repeated writes before freezing. `shortUncons` rebuilds
-a checksum by repeatedly calling the public operation until `Nothing`, including
-empty strings and embedded 0/255. `copiedBytes` checks distinct initialized arrays,
-dynamic source/destination offsets and counts, zero-length endpoint copies, source
-preservation, and unchanged destination bytes outside the copied range. Native
-results match independent unbounded integer/list models. Invalid ranges and alias
-misuse are managed rejection controls only, never native oracle inputs.
-
-Focused controls check storage identity, exact length, bounds, state-operand evaluation before effects,
-no writes/result publication on state failure, exhaustive small contained copy
-ranges, full-width invalid ranges, forbidden alias identity, exact proofs for
-all six copy operands and its State# result, and malformed or partial primitive
-applications. This is correctness evidence, not a throughput measurement.
-
 `compareByteArrays# :: ByteArray# -> Int# -> ByteArray# -> Int# -> Int# -> Int#`
 compares equal-length byte ranges using unsigned byte ordering. Only the sign of
 the result is contractual; THC does not promise GHC's particular nonzero magnitude.
@@ -141,16 +104,3 @@ including opposed operations. Mixed raw/owned comparisons retain the owner
 lock without changing the raw-array concurrency contract. The FFM path has a
 Truffle boundary to keep cold bounds/error formatting out of guest partial
 evaluation; the typed raw/raw path is unchanged.
-
-`cabal run exe:thc-fixtures --offline -- compare-byte-arrays` exports genuine pre/post-Tidy public
-ShortByteString `Ord`, `isPrefixOf`, and `isSuffixOf` workloads plus direct range
-and alias controls. The 3,027 native rows are checked against independent
-unsigned-list models; all ten entry audits must retain `compareByteArrays#` and
-the installed `$wpack` body with no missing globals or unsupported operations.
-`CompareByteArraysTest` runs every row on both backends with inlining enabled and
-disabled, requiring per-row compiled guest entry, valid original and observed
-active targets, and empty input/result loans. Synthetic controls cover every
-unsigned byte pair, contained small ranges, endpoint empties, operand failure,
-full-width invalid ranges, wrong storage carriers, and exact proof/saturation
-rejection. Invalid domains are tested only against THC, never by invoking native
-undefined behavior.

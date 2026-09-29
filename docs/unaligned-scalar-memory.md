@@ -44,29 +44,3 @@ are documented separately. Scalar reads cannot inspect managed pointer-cell bits
 fault, and complete writes or copies preserve the existing cell invalidation and
 ownership rules. A stored StablePtr retains its opaque handle; dereferencing it
 still checks the originating context and explicit free/disposal.
-
-## Example and checks
-
-[UnalignedScalarMemoryAudit.hs](../t/fixtures/compiler/UnalignedScalarMemoryAudit.hs)
-is an executable example for every scalar type. Each entry writes through the
-array alias, reads through both views, writes a distinct value through a
-one-past address with a negative displacement, and indexes both views. Sentinel
-bytes detect writes outside the intended range. Its native driver owns and frees
-the real StablePtr inputs.
-
-Run the Haskell producer once, then reuse those artifacts in both handoff modes:
-
-    cabal run exe:thc-fixtures --offline -- unaligned-scalar-memory
-    ./gradlew --no-daemon test --tests thc.runtime.UnalignedScalarMemoryTest
-    JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew --no-daemon test --rerun \
-      --tests thc.runtime.UnalignedScalarMemoryTest
-
-The producer verifies the complete inventory against installed GHC 9.14.1,
-exports unmodified pre/post-tidy Core, retains strict audits, and records native
-commands, exit status and source/artifact hashes. Java checks all native rows
-with a separate native-endian model, then exercises both interpreters and the
-first installed calls with exact compiled-entry increments and target identity
-checks. Storage tests cover boundary and overflowing offsets, empty inputs,
-unaligned pointers, aliases, raw exposure, stale handles and foreign contexts.
-The existing Float/Double, Int16/Word16 and Int32/Word32 byte-offset suites remain
-regression controls.

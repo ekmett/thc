@@ -14,7 +14,7 @@ Binder, binding and expression metadata can carry:
 
 | Kind | Evidence and current meaning |
 | --- | --- |
-| `long` | Exactly one supported signed or unsigned integer register, carried by a JVM `long`. |
+| `long` | One supported integral register; narrow values use JVM `int`, machine/64-bit values use `long`. |
 | `float` | Exactly `FloatRep`, with a JVM `float` carrier. |
 | `double` | Exactly `DoubleRep`, with a JVM `double` carrier. |
 | `vector` | One `VecRep`, with exact lane-count/element metadata and a fixed-species JDK Vector API value. |
@@ -25,18 +25,14 @@ Binder, binding and expression metadata can carry:
 | `object` | A boxed carrier without the more specific data/function evidence. |
 | `unknown` | No scalar carrier classification; exact aggregates use separate logical evidence below. Otherwise conservative lowering applies. |
 
-Newtypes, type families and unary class representations do not establish a data-object layout. Unboxed tuples and sums keep `kind: "unknown"`, including the empty unboxed tuple, while their separate aggregate metadata can establish an executable layout. An empty register list alone does not make an aggregate a scalar void token. The shared parser checks exact carriers for positive primitive/reference proofs. Older schema-1 trees without metadata remain accepted with unknown evidence; unsupported operations and unresolved required representations still fail explicitly.
+Newtypes, type families and unary class representations do not establish a data-object layout. Unboxed tuples and sums keep `kind: "unknown"`, including the empty unboxed tuple, while their separate aggregate metadata can establish an executable layout. An empty register list alone does not make an aggregate a scalar void token. The shared parser checks exact carriers for positive primitive/reference proofs. Absent metadata supplies no positive evidence; unsupported operations and unresolved required representations fail explicitly.
 
 The six narrow literal forms (`int8`/`word8`, `int16`/`word16`, and
 `int32`/`word32`) intrinsically establish their exact signed or unsigned
 representation. Shared expression lookup recovers that proof for absent or
 unconstrained metadata before strict primitive validation, just as literal
 lowering does. Contradictory or malformed retained proofs and invalid literal
-ranges still reject. `NarrowLiteralProofAudit` retains genuine direct ByteArray
-writes in both GHC stages; metadata-only projections preserve the original native
-oracle and exercise this distinction without loosening primitive signatures.
-
-Aggregate records additionally retain [recursive logical components and alternatives](aggregate-layout.md), independently of their physical register vector. GHC's representation view exposes aggregate newtype aliases without promoting scalar newtypes to data/closure proofs. Unresolved aggregate runtime representations stay `null`; lazy lifted children stay unevaluated. Supported tuple and sum layouts cover guest inputs, results, PAP prefixes, owned closure/thunk captures, local joins and saturated boxed-constructor fields. The [boundary map](aggregate-layout.md) links their distinct transport and storage contracts; empty tuples preserve logical arity without payload fields. Nonrecursive unlifted aggregate lets use typed frame locals; recursive/lifted aggregate lets, global aggregate storage and unresolved layouts still reject. The [Core host ABI](site/embedding.md#load-a-core-entry) transports supported aggregates as logical arrays. Exact vectors have a separate [transport contract](primops.md#current-aggregate-and-address-limits), including owned captures and boxed constructor fields.
+ranges still reject. Aggregate records additionally retain [recursive logical components and alternatives](aggregate-layout.md), independently of their physical register vector. GHC's representation view exposes aggregate newtype aliases without promoting scalar newtypes to data/closure proofs. Unresolved aggregate runtime representations stay `null`; lazy lifted children stay unevaluated. Supported tuple and sum layouts cover guest inputs, results, PAP prefixes, owned closure/thunk captures, local joins and saturated boxed-constructor fields. The [boundary map](aggregate-layout.md) links their distinct transport and storage contracts; empty tuples preserve logical arity without payload fields. Nonrecursive unlifted aggregate lets use typed frame locals; recursive/lifted aggregate lets, global aggregate storage and unresolved layouts still reject. The [Core host ABI](site/embedding.md#load-a-core-entry) transports supported aggregates as logical arrays. Exact vectors have a separate [transport contract](simd-families.md), including owned captures and boxed constructor fields.
 
 A successful case establishes WHNF for its binder and original scrutinee variable within the alternatives. Pattern fields gain the same fact only when they are unlifted or the saturated constructor worker requires them to be strict. Worker strictness marks must align exactly with worker fields, including coercions. Lazy lifted fields remain lazy. Lexical facts propagate by GHC variable identity, so shadowing does not leak them into another binding.
 
@@ -71,12 +67,9 @@ application executes. It does not strengthen the callee's entry convention or
 claim that its formal parameter was already evaluated.
 
 Both backends validate this optional evidence. Lowering is opt-in with
-`-Dthc.callDemands=true`, read once per program; the default remains off because
-of the measured inlining regression. [The compiler protocol](../docs/compiler.md)
-describes the exact rules, and [the demand experiment](demand-probe.md) records
-the results. Genuine GHC fixtures check precise-exception branch/scrutinee
-weakening as well as strict pure calls. Unsupported IO in those audit fixtures
-is inspected as metadata, never executed by THC.
+`-Dthc.callDemands=true`, read once per program; the default is off.
+[Caller-demand evaluation](demand-probe.md) describes the option and its
+limits; [the compiler protocol](compiler.md) specifies the metadata.
 
 ## Physical recursive cells
 
@@ -101,23 +94,10 @@ offsets and remain distinct from native pointers. Lazy neighboring fields
 remain untouched. An exact evaluated `AddrRep` leaf is also accepted in an
 unboxed tuple. Its physical result and typed-input field is a managed reference;
 tuple construction and consumption reject null, numeric, and foreign carriers.
-Unboxed sums and native pointers remain outside this capability.
+[Sum layouts](sum-results.md) also retain managed addresses as traced fields;
+native projection is a separate foreign-boundary operation.
 
-[AddressFieldAudit.hs](../t/fixtures/compiler/AddressFieldAudit.hs) and
-[its preparation](../bin/prepare-address-fields.py) retain opaque constructor
-calls, cases, returned records and captured addresses before and after Tidy.
-Two hundred twenty-five native rows agree with an independent bounded byte-index model,
-including high bytes, embedded/final NUL and negative offsets within the literal.
-Natural optimized examples are separate; GHC eta-expands the source constructor
-partial application, while a synthetic runtime control checks the actual PAP.
-Both backends check each compiled row's guest entry and host/original/active
-target validity with inlining enabled and disabled. Address aggregate frontiers
-now include an opaque `(# Addr#, Int# #)` producer and consumer; address sums
-remain rejected. This removes the `TrNameS` field obstacle in the genuine
-`arrEleBottom` source chain; its Typeable/unsafe-equality globals and `tagToEnum#`
-frontier still prevent strict acceptance.
-
-Closure environments apply the same rule to proven evaluated data, function and managed-address captures. Precise reference captures need neither an adaptive primitive arm nor a tag. Captures that can hold a recursive cell remain generic even if forcing has established WHNF for the cell's contents. Older exports without these proofs retain the previous storage layout.
+Closure environments apply the same rule to proven evaluated data, function and managed-address captures. Precise reference captures need neither an adaptive primitive arm nor a tag. Captures that can hold a recursive cell remain generic even if forcing has established WHNF for the cell's contents. Without those proofs, storage stays generic.
 
 This uses Truffle's supported `StaticShape` property types. With class-owned
 layouts enabled, an exclusively owned generated class identifies its constructor.
@@ -160,11 +140,9 @@ layout and nominal constructor identity remain distinct concepts.
 
 `-Dthc.staticShapeUnchecked=true` is an opt-in experiment that disables Truffle's storage-class and shape checks for THC-owned constructor and capture layouts. It defaults to false; checked storage remains the default. `engine.ForceStaticObjectSafetyChecks=true` overrides the experiment and restores Truffle's checks.
 
-Each layout owns a private allocation key and a private generated factory. Allocation passes that key to the storage superclass, which checks its identity before entering `ValidatedStorage` and ultimately `Object.<init>`. A failed check therefore cannot produce a finalizable object that a subclass could resurrect. The compiled constructors were inspected: validation precedes superclass initialization and the final layout assignment, with no alternate constructor bypass. The key is neither exposed nor retained in each value, and the common base adds no fields or finalizer.
+Each layout owns a private allocation key and a private generated factory. Allocation passes that key to the storage superclass, which checks its identity before entering `ValidatedStorage` and ultimately `Object.<init>`. A failed check therefore cannot produce a finalizable object that a subclass could resurrect. The key is neither exposed nor retained in each value, and the common base adds no fields or finalizer.
 
 Operations on existing storage retain explicit owning-layout and field-index checks. This identity test is essential for array-based storage, where different layouts can share a generated Java class. Fresh initialization uses only the owning factory's storage. Precise reference writes still perform `StaticProperty`'s assignability check independently of the storage-check flag; primitive and zero-width field validation also remain. Captured aliases and recursive cells keep their existing identities and representations.
-
-[StaticShapeSafetyTest](../src/test/java/thc/runtime/StaticShapeSafetyTest.java) covers checked and unchecked field-based and array-based storage, shared carrier classes, forged constructor/subclass/factory keys, wrong layouts and indices, invalid field values, and the engine override. This establishes the ownership and access invariants; the experimental flag itself makes no performance guarantee.
 
 `-Dthc.constructorClassIdentity=true` separately experiments with constructor
 matching through the generated Java class. It defaults to false. A class can
@@ -180,9 +158,7 @@ or contexts, and exposes no operation that can reset ownership history.
 This lets existing exact-class profiles eliminate a redundant constructor
 test when the proof holds. It does not put a tag in JVM references. In
 particular, array-based storage can share a carrier class between constructors
-and must retain the layout comparison. [ConstructorClassIdentityTest](../src/test/java/thc/runtime/ConstructorClassIdentityTest.java)
-checks both storage strategies, compiled-code invalidation, mixed option modes,
-cross-context registration and cold case alternatives on both backends.
+and must retain the layout comparison.
 
 ## Join points
 
@@ -199,14 +175,9 @@ runtime lowering and join validation reduce exactly that form to a state case,
 preserving the original binder, source metadata and tail context. It introduces
 no closure boundary and does not inline arbitrary lambdas or discard a
 state-producing argument. Ordinary captured joins and non-tail transfers remain
-rejected. `StateLambdaJoinTest` covers those negative controls and retained
-metadata; the genuine sum-join fixtures exercise forward and recursive outer
-jumps through `runRW#` on both backends, including each first installed compiled
-call after the independent interpreted/native comparison.
+rejected. Validated joins stay inside the current guest root. Nonrecursive groups use acyclic dispatch: the AST catches one lexical transfer and bytecode emits forward branches without a selector or loop. Recursive groups retain a local loop and backedges. Both evaluate operands into temporaries before replacing parameters, preserving swaps and mutually recursive transfers. A join region may itself appear within a larger non-tail expression: leaving that region resumes the outer continuation. Join transfers do not allocate closures or ordinary application packets.
 
-Validated joins stay inside the current guest root. Nonrecursive groups use acyclic dispatch: the AST catches one lexical transfer and bytecode emits forward branches without a selector or loop. Recursive groups retain a local loop and backedges. Both evaluate operands into temporaries before replacing parameters, preserving swaps and mutually recursive transfers. A join region may itself appear within a larger non-tail expression: leaving that region resumes the outer continuation. Join transfers do not allocate closures or ordinary application packets.
-
-Exact unboxed tuple and binary sum join results use typed locals in the same activation. The AST writes flattened result leaves or sum tag/payload slots into region slots and copies them to the enclosing destination; bytecode writes each returning branch directly into that destination. Nested logical tuples, singleton tuples and empty tuples retain their exact shape. No aggregate carrier, pool loan, or Truffle call boundary is introduced by the join. Lifted payloads remain lazy; copying reference slots does not force them. Scalar void components keep logical positions without payload slots, and their expressions still execute. Exact tuple and binary sum join inputs use parallel typed frame moves, including their tag/payload fields. Zero-width operands still execute before transfer. Local joins read enclosing tuple and sum captures through their existing typed slots. Logical alternatives and tuple nesting remain distinct from physical width; unresolved layouts remain rejected. Exact vector join arguments/results and captures follow the separate [vector transport contract](primops.md#current-aggregate-and-address-limits). See [tuple joins](tuple-joins.md), [empty tuple joins](empty-tuple-joins.md), [sum inputs](sum-inputs.md) and [sum results](sum-results.md) for their capabilities and evidence. The logical shape must agree across the join annotation, its retained RHS lambda result, body, applications and enclosing region.
+Exact unboxed tuple and sum join results use typed locals in the same activation. The AST writes flattened result leaves or sum tag/payload slots into region slots and copies them to the enclosing destination; bytecode writes each returning branch directly into that destination. Nested logical tuples, singleton tuples and empty tuples retain their exact shape. No aggregate carrier, pool loan, or Truffle call boundary is introduced by the join. Lifted payloads remain lazy; copying reference slots does not force them. Scalar void components keep logical positions without payload slots, and their expressions still execute. Exact tuple and sum join inputs use parallel typed frame moves, including their tag/payload fields. Zero-width operands still execute before transfer. Local joins read enclosing tuple and sum captures through their existing typed slots. Logical alternatives and tuple nesting remain distinct from physical width; unresolved layouts remain rejected. Exact vector join arguments/results and captures follow the separate [vector transport contract](simd-families.md). See [tuple joins](tuple-joins.md), [empty tuple joins](empty-tuple-joins.md), [sum inputs](sum-inputs.md) and [sum results](sum-results.md) for their capabilities and evidence. The logical shape must agree across the join annotation, its retained RHS lambda result, body, applications and enclosing region.
 
 A transfer has no returning value. Its result therefore cannot weaken the WHNF
 proof of the branches that actually leave a join region. An actual lazy return
@@ -214,39 +185,15 @@ still prevents that proof. Raising an exception or entering an unsupported-path
 trap is handled the same way: neither has a normal return. This result-path fact
 does not authorize speculative evaluation of the expression.
 
-## Checks and limits
-
-[RepresentationAudit.hs](../t/fixtures/compiler/RepresentationAudit.hs) exercises actual optimized GHC Core: integer/address carriers, boxed/newtype/family distinctions, strict versus lazy fields, empty unboxed tuples, recursive joins, erased type parameters, and function-returning joins. [check-representation-metadata.py](../bin/check-representation-metadata.py) checks those export facts. [check-speculation-metadata.py](../bin/check-speculation-metadata.py) separately checks safe arithmetic, rejected failing computations and recursive dictionary guards.
-
-[CoreProofJoinTest](../src/test/java/thc/runtime/CoreProofJoinTest.java) and [BytecodeCoreProofTest](../src/test/java/thc/BytecodeCoreProofTest.java) cover primitive captures, wide values, recursive/mutual transfers, parallel moves, outer continuations, malformed joins and introduced-thunk forcing. [RealCoreJoinTest](../src/test/java/thc/RealCoreJoinTest.java) executes genuine exported joins on both backends before and after compilation, including cold branches and full-width values. The fixture preparation script generates its input with source notes enabled regardless of the ordinary export setting; source attribution itself is described separately in [debug-locations.md](debug-locations.md).
-
-[TupleJoinAudit.hs](../t/fixtures/compiler/TupleJoinAudit.hs) retains genuine nonrecursive, recursive, mutual, nested-forwarding, empty and nested tuple-result joins before and after Tidy. Its native oracle has 54 rows, including depths above 20,000 and unused bottom-valued reference fields. [TupleJoinResultTest](../src/test/java/thc/runtime/TupleJoinResultTest.java) compares both backends before and after compilation with inlining enabled and disabled, and rejects forged layouts and unsupported tuple capture forms. The same result shape, `(# a, Set a #)`, occurs in the real `Data.Set.Internal` workers for `minViewSure` and `maxViewSure`; accepting their local joins does not remove the separate exception/backtrace frontier of the complete Set workload.
-
-[CBVAudit.hs](../t/fixtures/compiler/CBVAudit.hs), [CBVJoinAudit.hs](../t/fixtures/compiler/CBVJoinAudit.hs) and [CBVCoercionAudit.hs](../t/fixtures/compiler/CBVCoercionAudit.hs) exercise real workers, ordinary strict-function exclusion, type-erased join prefixes, returned lambda suffixes and a retained coercion before a marked boxed argument. [check-cbv-metadata.py](../bin/check-cbv-metadata.py) checks those contracts and compares the proposals with actual post-Tidy GHC Id marks. [RealCoreEntryContractTest](../src/test/java/thc/RealCoreEntryContractTest.java) covers their runtime entry points on both backends before and after compilation, including cold branches and full-width values. [EntryContractTest](../src/test/java/thc/runtime/EntryContractTest.java) separately checks lazy PAP prefixes, indirect entry, overapplication, sharing and malformed metadata; [BindingCellMetadataTest](../src/test/java/thc/runtime/BindingCellMetadataTest.java) checks ordinary values, recursive publication, escaping captures and fresh invocations.
-
-A corpus comparison must keep existing representation, WHNF, speculation, constructor strictness and join certificates, not merely compare expression tags. The strict [metadata-only comparison](../bin/compare-cbv-export.py) retains all old fields; rebuilt plugins can change GHC uniques, in which case [lexical alpha comparison](../bin/compare-executable-core.py) checks executable trees and their runtime certificates without relying on printed Core text. Entry contracts and constructor field types are included by default; comparing against an older export requires the explicit `--ignore-entry-contracts` or `--ignore-field-types` option for the newly added certificate. The frozen Map comparison using only `--ignore-entry-contracts` covers all 52 syntactically reachable globals and yields the same canonical SHA-256 before and after the new entry metadata: `c9530532240552bdde7203d16da97ccb6f240f67b30405aff0076a070c5dba38`. This establishes unchanged exported workload computation, not the speed or correctness of its new runtime lowering.
-
-These are bounded contracts for the supported Core subset. They do not add arbitrary unboxed aggregates, unrestricted vector ABIs, representation-polymorphic operations, or small/big `Integer` and `Natural` layouts. The [floating foundation](floating-primitives.md) supports concrete Float/Double values and exact tuple result leaves. These contracts also do not make every demand signature a calling-convention guarantee. New uses of evidence must preserve the distinction between the GHC value, THC's storage of that value, and the point where evaluation has actually occurred.
-
-The [compiled graph check](source-note-graphs/README.md) also guards the intended
-result specialization. The AST uses direct comparisons for the constant result
-kind: a synthetic enum-switch mapping array survived partial evaluation and kept
-irrelevant typed body paths alive in the first implementation. The final direct
-comparisons collapse those paths; the separate [measurement](debug-locations.md#graph-check-and-typed-dispatch-repair)
-records the effect with source notes enabled throughout.
-
-Exact GHC `VecRep` evidence now carries a separate `vector` lane/element record. [Bounded Int64X2 lowering](simd.md) consumes it without conflating a vector with an unboxed tuple of equal spill width.
-
-
 ## Lifted boxed Array# storage
 
 The five saturated operations `newArray#`, `readArray#`, `writeArray#`,
-`unsafeFreezeArray#`, and `indexArray#` support known lifted elements on both
+`unsafeFreezeArray#`, and `indexArray#` support boxed elements at either known levity on both
 backends. A managed JVM `Object[]` is the array's actual storage; `byte[]`
 remains the distinct numeric ByteArray# carrier. Initial values and writes
 preserve the same guest reference or thunk. A read loads that reference at the
 sequenced operation, so subsequent writes cannot change an earlier snapshot;
-neither reading nor indexing enters the element.
+lifted elements remain lazy, while unlifted elements retain their evaluated carrier.
 
 Exact GHC 9.14.1 proofs distinguish `(# State# s, a #)` from the singleton
 `(# a #)` returned by `indexArray#`. State is logically present but occupies no
@@ -260,19 +207,6 @@ contents are mutable and never marked compilation-final.
 The proof schema records representation, not nominal storage type:
 Array#/ByteArray#/MutVar# can all have `BoxedRep (Just Unlifted)`. Contradictory
 liftedness or logical layouts fail validation; a supplied byte[] masquerading
-as Array# additionally fails the runtime Object[] carrier guard. Unknown or
-unlifted element proofs, first-class/partial primitives, copying/thawing,
-small arrays and atomic operations remain unsupported.
-
-`prepare-boxed-arrays.py` compiles the genuine public fixed-bounds
-`runSTArray` example in `BoxedArrayAudit.hs`, retaining an unselected recursive
-bottom and an unused read of it. It also retains native snapshot, zero-length,
-and closure-element controls. Pre/post audits require every supported root to
-have no missing bindings or issues. The separate explicit-error and dynamic
-checked-index examples retain their missing Err/CString/Arr/Ix source bodies
-and remain strict-load failures; their native results do not count as guest
-coverage. The manifest pins source and artifact hashes, GHC/package provenance,
-independent wrapping-Int models, and expected public exceptions. JVM controls
-check both backends with and without inlining, per-row compiled guest entry,
-unchanged active target identity, and host/original/active validity; no recovery
-or settling calls are added.
+as Array# additionally fails the runtime Object[] carrier guard. Unknown element layouts and first-class/partial primitives remain unsupported.
+Copying, freeze/thaw slices, [small arrays](small-arrays.md) and
+[boxed atomic operations](boxed-cas.md) have separate contracts.

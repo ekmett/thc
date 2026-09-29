@@ -87,7 +87,7 @@ JVM/compiler/GC pools; see
 
 The lock bit is not evidence of a successful physical CPU pin. Acceptance is
 not a continuing guarantee against OS policy changes and does not establish
-bound foreign-thread TLS. The old `cpuAffinitySupport`, `affinityApplied` and
+bound foreign-thread TLS. `cpuAffinitySupport`, `affinityApplied` and
 `forkOnWithAffinity` remain available in both `THC.Thread` and `THC`.
 
 `currentThreadAccounting :: IO ThreadAccounting` reports cumulative CPU and
@@ -98,10 +98,9 @@ are not live heap usage, allocation budgets or guest-only profiler samples.
 Unsupported virtual-thread counters and disabled accounting are explicit; a
 query does not turn monitoring on.
 
-The older guest allocation-counter implementation separately enables JVM
-allocation accounting on first guest entry when supported. This batch does not
-change that existing policy; these new read-only accounting queries never call
-the management bean's enable/disable setters themselves.
+The guest allocation-counter implementation separately enables JVM allocation
+accounting on first guest entry when supported. These read-only queries never
+change the accounting setting.
 
 `eligibleCPUs :: IO (Available [CpuCoordinate])` returns the context's
 initial CPU eligibility in dense logical-capability order, capped by JVM CPU
@@ -200,42 +199,11 @@ that invalidation callback; observed code retirement can occur with neither an
 invalidation nor deoptimization callback. These are not exhaustive JVM-wide
 deopt counts, and zero does not establish code liveness or absence of deopts.
 
-## Native checks and ABI
+## Run the example
 
-```sh
-cabal test runtime-services-api cpu-affinity-api -fdevelopment
-bash t/haskell-runtime/check-safe-haskell.sh
-ghc --make -XHaskell2010 -threaded -Wall -Werror -isrc/runtime \
-  src/examples/THC/RuntimeServices.hs src/runtime/cpu-affinity.c src/runtime/runtime-services.c \
-  -main-is THC.RuntimeServices
-```
-
-The Safe Haskell check accepts imports of all stable modules and requires an
-actual unsafe-import rejection for `THC.Internal.JIT`. Native tests check honest
-fallbacks and mask/result/exception preservation, not pretend JVM measurements.
-
-The [multi-package smoke program](../t/fixtures/run-runtime-services/Main.hs)
-depends on the real `thc:runtime` library and checks runtime-specific invariants
-across all six modules, including explicit JIT opt-in and nested Unicode spans.
-It does not compare variable JVM counters against native-GHC zeroes. Its
-`cabal.project` uses relative paths; select it with `--project-dir` or
-`--project-file` when invoking `thc run`, with complete installed Core and the
-configured GHC source provider described in the
-[driver guide](driver.md). A successful native run alone does not establish
-that its entire original Core closure is accepted by THC.
-
-The complete fixture has also run successfully through `thc run` with the real
-runtime library, installed Core, original `:Main` startup and Handle shutdown,
-on the bytecode backend in both default and dense handoff modes. The strict
-audit reported zero missing globals and zero issues. Guest runs must produce
-`THC runtime services smoke: all APIs passed`; the deliberately different
-native compatibility marker is not guest success. The full AST attempt is
-currently rejected before the API actions because original process-signal
-delivery requires bytecode. This is distinct from the direct ABI tests of both
-backends.
-
-With the [pinned full-Core toolchain](driver.md) configured, reproduce acquisition
-and the bytecode run from the repository root:
+The [runtime-services example](../t/fixtures/run-runtime-services/Main.hs)
+depends on the real `thc:runtime` library. With complete installed Core and the
+matching GHC source checkout configured, run from the repository root:
 
 ```sh
 THC_BACKEND=bytecode thc run runtime-services-smoke:exe:completed \
@@ -245,20 +213,11 @@ THC_BACKEND=bytecode thc run runtime-services-smoke:exe:completed \
   --installed-core required --ghc-source "$THC_GHC_SOURCE"
 ```
 
-Here `THC_GHC_SOURCE` names the matching GHC source checkout. Set
-`JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true` for the dense handoff run. The smoke
-enables JIT telemetry explicitly but does not claim any entry was compiled or
-that callback counters prove resident compiled code.
+See the [driver guide](driver.md) for dependency setup. Native GHC reports
+unsupported JVM services explicitly; values such as heap usage and live thread
+counts naturally vary between runs.
 
-The private versioned ABI consists of three exact ordinary `ccall unsafe`
-declarations: `thc_runtime_v1_query`, `thc_runtime_v1_control` and
-`thc_runtime_v1_trace`. Both loaders reserve these before package-C dispatch and
-validate their real GHC descriptor shapes. Successful scalar results are
-nonnegative; `-1/-2/-3/-4` represent the four absence statuses. Text queries
-address Unicode codepoints. Raw selectors and trace pointers are deliberately
-not part of the stable Haskell interface.
-
-### Native compatibility shims in Cabal projects
+## Native compatibility shims in Cabal projects
 
 The runtime library explicitly declares `x-thc-runtime-shim: v1`. Its C files
 are native-GHC fallbacks, not providers to run through Sulong. The project driver

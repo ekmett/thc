@@ -1,240 +1,151 @@
-# Cabal library driver
+# Build and run Cabal programs
 
-`thc plan-package` configures an ordinary Cabal package and prints a JSON
-description of its selected components, unit IDs, dependencies, module
-declarations and native Cabal output layout. It links `Cabal` and `Cabal-syntax`
-directly. There is no subprocess call to the `cabal` command and no replacement
-dependency solver.
+THC uses Cabal to build a selected component, acquires its optimized GHC Core,
+and executes it on the JVM. Native GHC still runs Setup programs, preprocessors
+and Template Haskell. THC does not launch the application's native executable.
 
-`thc run [TARGET] [FLAGS] [-- ARG...]` follows `cabal run` target selection.
-The positional target can name a component or package, including
-`PACKAGE:exe:NAME`, `PACKAGE:test:NAME` and `PACKAGE:bench:NAME`; shorter
-`exe:NAME`, `test:NAME` and `bench:NAME` forms also work. With no target, Cabal
-selects the current package's sole buildable executable, otherwise its sole
-buildable executable-like component, and reports ambiguity when there is no
-unique choice. Tests must be `exitcode-stdio-1.0`; detailed-library tests are
-rejected explicitly. An executable or benchmark is never substituted for a
-different component kind.
+## Build the tools
 
-Use Cabal's `--project-dir DIR` and `--project-file FILE` options for project
-location, or run inside the package. Cabal resolves explicit and implicit
-projects, flags, disabled components and dependencies. There is no separate
-selector flag or positional project-directory argument. THC asks `cabal list-bin`
-to resolve the target, identifies its exact local unit from `plan.json`, and
-builds that component and its required closure. This does not run the native
-binary. The resolved build information drives `THC.Plugin` export and execution
-in the THC JVM runtime. Ordinary runs do not invoke the reachable-Core auditor.
-Use `thc run --verify-artifacts ...` to request a strict pre-launch audit and
-forward artifact verification to the JVM. The flag belongs before the guest
-`--` separator; it does not change FFI permissions or host access. Without it,
-an existing `audit.json` is neither refreshed nor evidence of the current run.
-
-If that actual dependency closure contains `thc`'s `lib:interop`, only the selected
-runnable unit's native final link is suppressed. Its source compilation and Cabal
-build information are retained. The same exact-unit policy applies during cold
-store capture; dependency libraries, build tools and unrelated executables keep
-their normal native builds. Core export loads the plugin directly so that loading
-it does not attempt to resolve THC-only prim symbols in guest libraries. This does
-not enable native execution or Template Haskell evaluation of those intrinsics.
-
-Project acquisition also acquires and selects the genuine
-`THC.Internal.Exception` dictionary. The
-[foreign-exception bridge](foreign-exceptions.md) automatically converts eligible
-foreign runtime and parse failures at admitted execution boundaries into
-`THC.Exception.ForeignException`. Ordinary `catch` with `SomeException`, `finally`
-and `bracket` work without an application import of `THC.Exception`. Compatible
-Polyglot and managed-export exits restore the original foreign object, including
-after a caught `SomeException` is stored and rethrown with `throwIO`.
-If the application's dependency closure already contains that API, THC reuses
-the exact runtime unit and its `Typeable` identity.
-Multiple bridge units, or an API without a matching typed bridge proof, are
-reported as link errors.
-
-Otherwise Cabal builds the original `thc:runtime` library from `--thc-root` in
-`DIST/native/runtime-sidecar`, using the selected compiler and native receipt
-proxy. Its own plan, build information, native objects and typed Core determine
-the exported unit; the application's project files are unchanged. Runtime
-source and native artifact changes invalidate the ordinary content-keyed export.
-The package manifest records the exact `foreignExceptionBridgeUnit`. The auditor
-and runtime retain its genuine compiled box/project helpers when reachable
-foreign execution needs them.
-
-Compiler-free embedding must supply the same genuine bridge bundle and its
-dependency closure. A sole bridge is unambiguous; otherwise select its exact unit
-with `foreignExceptionBridgeUnit`. Missing or ambiguous support for foreign
-execution is a load/link error. There is no process-global default dictionary or
-explicit lifting scope. The Windows simple-package backend also acquires this
-support through the selected compiler's vanilla interfaces and a checked runtime
-manifest; this does not expand its supported application dependency closure.
-
-Declared call safety still governs callback admission: unsafe calls cannot
-reenter Haskell. It does not provide raw C callback transport or interruption of
-arbitrary native blocking calls. Foreign metadata accessors run in `IO` through
-an explicitly `safe` import because inspection can execute foreign code; pure
-display remains inert. The public `THC.Exception` wrapper can be imported by Safe
-Haskell clients, while `THC.Internal.Exception` is `Unsafe`. Cancellation,
-internal control transfers, runtime invariant failures and fatal host errors are
-not converted.
-Native errno/error-code APIs retain their ordinary adapters, and arbitrary
-plain-C exception unwinding is unsupported. See the bridge guide for exact
-eligibility, rethrow provenance and focused validation.
-
-The default pinned provider runs a raw `Main.main :: IO ()` action.
-The complete installed-Core provider instead runs GHC's generated
-`main::Main.main` and, after normal completion, its original `flushStdHandles`
-using the same program and Handle CAFs. Standalone `build` and `repl` commands
-remain absent.
-
-`thc acquire [TARGET] --thc-root DIR [FLAGS]` uses the same target resolution, native
-build and complete dependency-closure export as `run`, but stops after atomically
-publishing `DIST/packages.json`. It does not invoke the reachable-Core auditor,
-the THC runtime, or the built native executable. This separates source acquisition
-from potentially expensive audit and execution for large application closures.
-Compiler/plugin setup, source and installed-Core provenance checks, typed native
-artifact admission, and manifest construction remain mandatory. A successful
-acquisition does **not** establish runtime support or an accepted reachable audit.
-An existing `audit.json` in a reused output directory is not refreshed or endorsed.
-Acquisition accepts the build/provider options shared with `run`, including
-`--project-dir`, `--project-file`, `--dist-dir`, `--installed-core` and
-`--ghc-source`. It rejects runtime-only `--runtime`, `--ffi`, and the guest `--`
-suffix. Acquisition is not equivalent to a successful application or benchmark
-run.
-
-`run` and `acquire` publish one uncompressed `core.jsons` and one fixed-record
-`core.symbols` per nonempty GHC unit. Publication uses the final linked module
-bytes from the acquisition cache, preserving each module and its hash. The
-directory maps MD5 digests of exact UTF-8 binding IDs to absolute byte offsets
-recorded while writing. Each 24-byte record contains the canonical 16-byte
-digest and an unsigned 64-bit little-endian offset; records sort by unsigned
-digest bytes. The manifest selects `symbols.format: "md5-utf8-u64le-v1"`.
-MD5 is assumed collision-free for these identifiers, with no stored name table.
-Small metadata and optional source-table projections have separate
-spans; they do not duplicate binding bodies or diagnostic pretty Core. See the
-[unit artifact contract](core-package-manifest.md#direct-unit-artifacts).
-
-The acquisition cache retains its original ZIPs and optional JSON navigation
-indexes as provenance, without rewriting immutable bundles. The runtime
-manifest explicitly selects the plain pair, not those ZIPs or indexes. A warm
-acquisition reuses a successful selection receipt only when the computed
-unit/build/export keys, complete expected inputs and module inventory, and
-artifact path/size/modification-time observations still match. This check runs
-before reopening the source ZIP, including exception-bridge selection and the
-Windows source projection. Missing or changed receipts take the original
-validated acquisition path. Source, native-tool and registration input checks
-remain in place; these local receipts are cache hints, not authentication.
-
-Warm publication checks the selected identity and pair file sizes.
-`--verify-artifacts` bypasses selection receipts, checks the original archives
-and cached pair hashes, and regenerates corrupt publications from the checked
-original ZIP. Older text symbol directories have no format marker and remain
-explicit legacy inputs. ZIP and loose JSON remain supported formats; serialized
-`.idx` sidecars have been retired. Regenerate artifacts that still declare them.
-
-Simple-package runs pass loose consumer JSON alongside the support package
-manifest. The [embedding guide](site/embedding.md#indexed-packages-and-loose-inputs)
-shows the mixed-input syntax and explicit in-memory JSON navigation API.
-
-Demand loading defers eligible binding-body decoding and backend preparation;
-it does not establish that every supplied binding is executable.
-`run --verify-artifacts` requests a pre-launch reachable-Core audit as well as
-runtime artifact verification. See the [package format](core-package-manifest.md#json-navigation-and-lazy-loading)
-for the validation and lazy-loading boundary.
-
-IO launchers (`--run-io` and `--run-executable`) do not append runtime metrics to
-stderr by default. Guest output and failure reports are unchanged. To append the runtime metrics JSON after a successful action, set
-`JAVA_OPTS="${JAVA_OPTS:-} -Dthc.diagnostics=true"` when invoking `thc run`.
-Embedded callers can still read the `diagnostics` member directly. This output
-setting does not change instrumentation, strict admission, or shutdown behavior.
-The low-level integer-kernel launcher retains its diagnostic report.
-
-Standalone `--run-executable` launches enable asynchronous exceptions on both
-backends by default. Set `JAVA_OPTS="${JAVA_OPTS:-} -Dthc.asyncExceptions=false"`
-to select synchronous execution explicitly; programs that install process signal
-handlers require asynchronous mode. Raw `--run-io` and embedding defaults remain
-backend-specific. See [asynchronous exceptions](async-exceptions.md).
-
-The driver and JVM launcher accept `--ffi native` or `--ffi managed`. Native is
-the default and preserves the current Sulong execution with native-library
-access; C bitcode still runs through Sulong. Managed execution is **not supported
-by the tested distribution**. The pinned `llvm-community` 25.3.4.1 runtime has no
-`llvm.managed` option. A managed request fails with that exact reason before
-native providers initialize or an entry executes. If another LLVM installation
-exposes the option, THC instead reports its remaining provider/artifact
-incompatibility: native file/GMP libraries and the packaged bitcode have not
-been ported and verified for managed execution. There is no native fallback.
-
-[GraalVM's LLVM options](https://www.graalvm.org/jdk25.4/reference-manual/llvm/Options/)
-describe managed availability and its potentially different LLVM toolchain.
-This selector does not claim managed execution merely because a guest buffer
-has a managed interop view, and it does not introduce another allocation arena.
-
-This is a runtime-only option: it
-does not change GHC flags, Core export, native build settings, or cache identities.
-When the option is omitted, the driver passes no override. The launcher selects
-the explicit option first, then `-Dthc.ffiMode`, then `THC_FFI_MODE`, then native.
-Values are exactly `native` or `managed`; malformed values fail. Selection is
-local to each launch and does not modify environment variables or JVM properties.
-The `executionContext` embedding factory follows the same property/environment
-defaults; the explicit `NativeIO` factory retains its native policy. Put a guest's
-own `--ffi` argument after the literal `--`, where it is preserved without
-interpretation. The low-level JVM launcher accepts this selector before its
-entry command and also supports `--ffi=native` / `--ffi=managed`.
-
-`thc run TARGET --help` (or `-h`) displays driver help without building; the
-same ordering works for `acquire`. To request the guest's help instead, use
-`thc run TARGET ... -- --help`.
-
-Pass guest command-line arguments after a literal `--`:
+Use GHC 9.14.1, its matching `ghc-pkg` and `runghc`, cabal-install 3.16, and the
+pinned GraalVM from the [README](../README.md). From a configured THC checkout:
 
 ```sh
-cabal run thc -- run arguments --project-dir t/fixtures/run-arguments \
-  --thc-root "$PWD" --installed-core required --ghc-source "$GHC_SOURCE" \
-  -- "two words" "" "lambda-λ" --help
+make
+cabal run thc -- --help
+cabal run thc -- run completed --project-dir t/fixtures/run-pure \
+  --thc-root "$PWD" --dist-dir "$PWD/build/run-package"
 ```
 
-The driver preserves the suffix as separate arguments, including empty strings
-and option-looking values. `getProgName` starts with the selected component's
-bare name, including when a qualified executable, test or benchmark selector
-was used; no host JVM arguments leak into the guest.
-The original GHC `getArgs`, `getProgName`, `withArgs` and `withProgName`
-implementations call the context-owned `getProgArgv`/`setProgArgv` adapter. On the
-existing Linux x86_64 native-allocation backend it owns a real NUL-terminated
-`char **` vector, including `argv[0]` and the terminal null pointer. Updating the
-arguments copies the input strings before retiring the old native image; context
-disposal releases the final image. CLI strings are UTF-8 and cannot contain NUL.
-This does not provide process-global RTS arguments or `getFullProgArgv`.
+The included example returns `()` without printing. It works with the limited
+installed-library provider. Ordinary console and file applications need the
+complete-Core setup below.
 
-The opt-in `cabal test arguments-full-core -ffull-core-tests` compares the actual
-ordinary program with native GHC, including nested overrides and exception
-restoration. It uses the complete installation variables described below and
-reuses the same exported package closure for AST/bytecode and default/dense
-runtime runs. Bytecode runs the generated executable entry and shutdown; AST
-runs the original raw `Main.main` with explicit flushing. That test retains its
-synchronous AST setup; [process signal dispatch](process-signals.md) now supports
-AST with `-Dthc.asyncExceptions=true`. The arguments test is not an AST
-generated executable-lifecycle claim.
-The low-level launchers retain their previous no-argument syntax;
-their optional suffix is `-- PROGRAM_NAME ARG...`.
+## Choose a target and pass arguments
 
-Reproducible [standard application inputs](../src/examples/standard-apps/README.md)
-cover Alex, Happy, HsColour and doctest, distinguishing native baselines from
-actual guest execution and reporting original-package closure blockers.
-`cabal test library-memory-full-core -ffull-core-tests` exercises the original
-`array` freeze/thaw and `bytestring` CString paths exposed by these applications,
-using the same full-Core environment and backend/startup distinction above.
+```sh
+thc run my-package:exe:my-program --thc-root /absolute/path/to/thc -- --help
+thc acquire my-package:exe:my-program --thc-root /absolute/path/to/thc
+```
+
+`run` accepts executables, `exitcode-stdio-1.0` test suites and benchmarks.
+Use `PACKAGE:exe:NAME`, `PACKAGE:test:NAME`, `PACKAGE:bench:NAME`, or a shorter
+unambiguous Cabal target. With no target, Cabal selects the current package's
+sole buildable executable, otherwise its sole runnable component. Disabled,
+missing and ambiguous targets fail explicitly.
+
+| Option | Purpose |
+| --- | --- |
+| `--project-dir DIR`, `--project-file FILE` | Select the application's Cabal project. Otherwise use the current directory. |
+| `--thc-root DIR` | Required path to the built THC checkout. |
+| `--dist-dir DIR` | Select the THC/Cabal build and publication directory. |
+| `--with-ghc PATH`, `--with-ghc-pkg PATH` | Select the matching compiler and package tool. |
+| `--installed-core required` | Acquire complete executable Core from the selected installation. |
+| `--ghc-source DIR` | Supply the matching configured GHC source tree for required foreign annotations. |
+| `--verify-artifacts` | On `run`, audit the reachable Core before launch and verify artifact hashes. |
+| `--runtime PATH` | Override `<thc-root>/build/install/thc/bin/thc`. |
+| `--ffi native` | Use native-enabled Sulong; this is the default. Managed FFI mode is unsupported. |
+
+`thc run TARGET --help` shows driver help without building. Put guest arguments
+after the literal `--`; `thc run TARGET ... -- --help` asks the guest for help.
+Arguments retain their boundaries, empty strings and option-looking values.
+`getProgName` starts with the selected component's bare name.
+
+`acquire` uses the same target and build options, then atomically publishes
+`DIST/packages.json`. It does not audit or execute the guest. Runtime-only
+options (`--runtime`, `--ffi`) and guest arguments are rejected. An existing
+`audit.json` is not refreshed by acquisition or by a run without
+`--verify-artifacts`.
+
+## Installed library Core
+
+The default `--installed-core pinned` provider supplies a limited boot-library
+subset. It is enough for small examples, not ordinary `putStrLn` or general
+application closures. Select `--installed-core required` for an installation
+built with complete simplified Core; thin interfaces fail without a fallback.
+See [GHC library Core](ghc-core.md) to check or build that installation.
+
+For the supported native x86_64/aarch64 Linux setup, `--ghc-source DIR` supplies
+the matching configured GHC 9.14.1 stage1 tree when selected `ghc-internal` or
+`unix` modules lack typed foreign annotations. Keep its built interfaces,
+Cabal configuration, generated sources and headers intact. Mismatches fail
+explicitly. The [foreign guide](interface-foreign.md#acquire-installed-foreign-declarations)
+explains this requirement. The Windows simple-package backend does not support
+this complete-interface provider.
+
+Cold hydration uses at most two helper processes. `THC_INSTALLED_CORE_JOBS`
+selects a bound from 1 to 64; higher values need more CPU and memory.
+
+## Runtime selection and host resources
+
+Bytecode is the default backend; `THC_BACKEND=ast` selects AST. Full executable
+launches enable asynchronous exceptions on both backends. Set
+`JAVA_OPTS="${JAVA_OPTS:-} -Dthc.asyncExceptions=false"` only when synchronous
+execution is intended; programs installing process signal handlers require
+async mode. Raw IO and embedding defaults are described in
+[asynchronous exceptions](async-exceptions.md).
+
+The complete installed-Core provider runs GHC's generated `main::Main.main`
+and, on normal completion, `flushStdHandles` in the same program. The limited
+pinned provider runs the raw IO action. Relative guest file paths use the launch
+working directory; `--project-dir` does not change it.
+
+The command-line context grants its native filesystem and standard streams.
+Guest environment changes and working-directory changes belong to the context,
+not the JVM process. [Process creation](process-lifecycle.md) has its own
+inheritance and platform contract. Custom embeddings choose their own authority;
+ordinary native access alone does not install the managed file provider.
+See [native files](native-file-provider.md) and [process signals](process-signals.md).
+
+Package C/C++ uses [declared native linkage](interface-foreign.md).
+`--ffi native` is the default. Mode selection uses the command-line option,
+then `-Dthc.ffiMode`, then `THC_FFI_MODE`. The bundled distribution rejects
+`managed` before initializing native providers; it does not silently fall back.
+
+The driver also supplies the genuine [foreign-exception bridge](foreign-exceptions.md),
+reusing the application's runtime unit when present. Ordinary Haskell `catch`,
+`finally` and `bracket` can then handle eligible foreign failures. Missing or
+ambiguous bridge identity is a link error; raw embedding must supply that support.
+
+To append runtime metrics after a successful IO launch, set
+`JAVA_OPTS="${JAVA_OPTS:-} -Dthc.diagnostics=true"`. Normal guest stderr contains
+no metrics report. Embedded callers can read the `diagnostics` member directly.
+
+## Caching and failures
+
+The driver exports only the selected component's dependency closure. Local
+component bundles live under `<dist-dir>/native/cache/thc/core-bundles/v1`.
+Dependency bundles use the OS application cache, overridden by `THC_CACHE_HOME`.
+The published manifest selects directly seekable unit artifacts; see
+[Core packages](core-package-manifest.md) for their format and explicit embedding.
+
+Cache keys include sources, compiler/exporter configuration, native products and
+dependency identities. Native packages also track LLVM tools and headers.
+Changing those inputs triggers acquisition again. `--verify-artifacts` bypasses
+selection shortcuts and checks source archives and published hashes. Do not edit
+cache metadata to bypass a mismatch.
+
+Missing store exports are captured in a private Cabal build while their sources
+and generated headers exist. Successful publication removes its temporary
+staging. A failed capture or publication retains the staging directory and prints
+its path for diagnosis. Preserve it when reporting the failure; remove it when
+no longer needed. Failed refreshes leave earlier complete bundles intact.
+`cabal clean --builddir <dist-dir>/native` removes the corresponding local build
+and bundles.
+
+| Failure | Next step |
+| --- | --- |
+| Missing complete Core | Select a complete-Core installation; ordinary unfoldings cannot replace missing bodies. |
+| Unsupported reachable operation | Consult [runtime limits](primop-behavior.md) and the named operation. Acquisition success is not execution support. |
+| Missing native library or rejected pointer | Check [foreign setup and diagnostics](interface-foreign.md#diagnose-a-rejected-import). |
+| Source, interface or header mismatch | Rebuild/reacquire with one matching compiler configuration. |
+| Ambiguous target | Use the fully qualified Cabal component name. |
 
 ## Run real applications
 
-The following Linux x86_64 examples run the original **Happy 2.2.1** parser
-generator, **HsColour 1.25** highlighter and **Alex 3.5.4.2** lexer generator
-inside THC. Their generated files
-have been compared byte-for-byte with native GHC in both backends and both
-handoff modes. These command lines select bytecode, which runs the complete
-executable startup/shutdown. Happy and HsColour also pass that full lifecycle
-on AST with explicit `-Dthc.asyncExceptions=true`; earlier synchronous AST
-checks used raw `Main.main`. This establishes these workloads, not arbitrary
-executable compatibility or whole-program JIT retention. See the
-[application results and pinned source hashes](../src/examples/standard-apps/README.md).
+These Linux x86_64 examples run **Happy 2.2.1**, **HsColour 1.25** and
+**Alex 3.5.4.2** inside THC using bytecode and the executable startup/shutdown
+protocol. The commands demonstrate these workloads; other applications may
+reach unsupported operations. See the [example collection](../src/examples/standard-apps/README.md).
 
 Start in a built THC checkout with the complete-Core GHC 9.14.1 installation
 and matching `ghc-pkg` on `PATH`. Set `GHC_SOURCE` to its matching configured
@@ -331,9 +242,7 @@ No package metadata overlay or source rewrite is required.
 
 ### Alex: generate a lexer
 
-Alex 3.5.4.2 uses its original packaged templates, without an application-source
-patch. The full-bytecode workload below passed both handoff modes on public
-runtime `981b360c`; the application notes retain the earlier failing checkpoint.
+Alex uses its packaged templates. Set `alex_datadir` before launching it:
 
 ```sh
 export alex_datadir="$THC_APPS/alex-3.5.4.2/data"
@@ -355,351 +264,15 @@ Doctest and Pandoc remain development targets, not demonstrated runnable command
 here. Native baselines, strict Core admission and actual THC execution are
 reported separately in the application notes.
 
-For library-based programs, the [lens example](../src/examples/standard-apps/lens/README.md)
-has 14 passing public-API checks, and the [ad Kahn example](../src/examples/standard-apps/ad/README.md)
-has ten passing differentiation and sharing checks. Both run their original
-libraries with full startup/shutdown in both backends and handoff modes; the
-linked recipes distinguish these guest successes from the larger upstream
-test suites still being brought up.
+For library-based examples, see [lens](../src/examples/standard-apps/lens/README.md),
+[automatic differentiation](../src/examples/standard-apps/ad/README.md), and
+[the GHC API](../src/examples/standard-apps/ghc-api/README.md).
 
-The [GHC library example](../src/examples/standard-apps/ghc-api/README.md) also runs
-the original compiler's FastString interning code on bytecode and matches native
-stdout. Its recipe needs complete Core for the `ghc` package itself; the first
-acquisition includes all 822 compiler interfaces. That result does not yet
-establish compiler sessions, module loading or GHCi support.
+## Inspect a package configuration
 
-## Build and exercise
-
-Use GHC 9.14.1 with its bundled Cabal/Cabal-syntax 3.16. The API bounds are narrow
-because Cabal's configuration and symbolic-path interfaces are version specific.
-Put that compiler and its matching `ghc-pkg`/`runghc` on `PATH`, together with
-cabal-install 3.16. The driver links the Cabal libraries bundled with GHC.
-
-From the repository root:
-
-```sh
-cabal build
-cabal run thc -- --help
-cabal run thc -- plan-package t/fixtures/tiny/tiny-fixture.cabal \
-  --dist-dir "$PWD/build/tiny-plan" --enable-tests --enable-benchmarks
-```
-
-The same Cabal build produces the `thc` library containing `THC.Plugin` and the
-driver executable. `thc run` locates the plugin through Cabal's build metadata.
-`make` builds both the JVM launcher and the Haskell components:
-
-```sh
-export JAVA_HOME=/path/to/graalvm-jdk-25
-make
-cabal run thc -- run completed --project-dir t/fixtures/run-pure \
-  --thc-root "$PWD" --dist-dir "$PWD/build/run-package"
-cabal test driver-tests --test-show-details=direct
-```
-
-The runtime-selection parser and argument-forwarding checks can run without
-building or exporting the application fixtures:
-
-```sh
-cabal test driver-tests --test-options=--run-options-only --test-show-details=direct
-```
-
-After `./gradlew installDist`, `--test-options=--run-ffi-only` also runs the
-ordinary executable fixture through both backends with explicit native
-selection and checks that a managed request fails without guest output.
-The JVM `FfiModeTest` and `LauncherDiagnosticsTest` cover both IO entry protocols,
-mode precedence, unchanged guest arguments, and rejection before entry loading.
-
-`run` requires a real Cabal runnable component and its `Main.main :: IO ()`.
-It builds using Cabal's resolved plan, then invokes GHC again with its selected
-source directories, language/CPP/GHC options and package IDs to export Core.
-The strict `--io-main` audit checks the erased
-`State# RealWorld -> (# State#, () #)` boundary and every reachable dependency.
-The runtime supplies the zero-width state carrier, executes the action, and
-verifies its boxed unit result. The successful fixture performs `newMutVar#`,
-`writeMutVar#`, and `readMutVar#`; the integration check also changes its expected
-read value and requires a guest failure. Under the default pinned provider,
-console IO such as `putStrLn` still fails strict audit. There is no diagnostic
-trap fallback or native execution.
-
-The internal Windows simple-package backend preserves its earlier restriction
-to an executable without internal library or build-tool dependencies; the public
-target syntax is the same. The driver expects a Haskell main source and a THC JVM launcher
-(`--runtime` overrides `<thc-root>/build/install/thc/bin/thc`). Native Cabal
-output is built but never launched by `thc run`. The runtime currently executes
-the IO action in the interpreter; it does not claim a compiled guest entry.
-
-For a multi-package project, use a package-qualified selector:
-
-```sh
-cabal run thc -- run app-run:exe:completed \
-  --project-dir t/fixtures/run-project --thc-root "$PWD" \
-  --dist-dir "$PWD/build/run-project"
-```
-
-The project path requires cabal-install 3.16 and GHC 9.14.1. Cabal performs the
-normal native build, including preprocessing and compile-time Haskell, for the
-selected runnable component and its dependency closure. Both this build and a cold
-store-Core acquisition target that component, not every sibling application,
-test or benchmark in the project. An unrelated unbuildable executable therefore
-does not block the selected workload. The driver
-reads `plan.json` and Cabal's `--enable-build-info` records, retaining exact
-unit IDs and GHC arguments for a separate post-Tidy export of local dependencies.
-When GHC discovers additional home modules, THC checks their binary interfaces'
-exact unit, module and compilation way using that compiler. Discovery is confined
-to canonical component output roots, excluding nested sibling components; a
-neighboring `.hi` file alone cannot exempt a native object. Native receipt
-collisions remain errors. The checked names complete the expected export inventory,
-while the original source targets and compiler arguments remain unchanged.
-For Cabal's grouped library records, including Custom Setup packages, the
-runtime closure follows `components.lib.depends`. The separate
-`components.setup.depends` graph belongs to native Setup execution, not the
-guest; it must neither hide transitive library dependencies nor pull host-only
-Setup packages into the Core manifest.
-It writes one compressed Core ZIP per local component under
-`<dist-dir>/native/cache/thc/core-bundles/v1`, inside Cabal's build directory,
-and publishes the unit's plain artifacts through `packages.json`.
-`cabal clean --builddir <dist-dir>/native`
-removes these in-place bundles along with the native build. The OS application
-cache (`THC_CACHE_HOME` overrides its location) holds content-keyed dependency
-bundles. Each local ZIP includes `manifest.json`, its Core modules, and
-`inplace-manifest.json` with hashes of that component's native `.o`/`.hi`
-artifacts and dependency build identities. Unchanged native artifacts reuse
-the ZIP without another GHC export; a changed artifact or exporter refreshes it.
-Local `-inplace` IDs are GHC linking names, so the native artifact hash supplies
-the immutable cache identity. Native files from a different build directory may
-have different bytes and then correctly produce a new ZIP. The THC loader and,
-when requested, the strict audit consume the manifest. Source-built store
-dependencies use their actual Cabal store ID as the ZIP basename in the OS cache, partitioned by GHC
-version, ABI and platform. On a missing ZIP, Cabal rebuilds the source package
-in a temporary private store. A transparent compiler wrapper first runs native
-GHC unchanged, then exports Core with the same Cabal arguments while its unpacked
-source still exists. Both compiler wrappers disable the THC driver's own RTS
-argument parsing with `--RTS`, preserving the compiler's `+RTS ... -RTS` options
-and response-file arguments for native compilation and Core replay. The
-replay also preserves Cabal's original debug-info settings: adding `-g` only to
-an export can change optimizer-generated binder names and leave consumers of
-the native interfaces with missing globals. Source-note export retains whatever
-notes those original compiler settings produced; it does not force a different
-debug level for either local components or store packages. The
-temporary store is removed after ZIP publication;
-matching store IDs skip that export on later runs. The fixture has a
-data library, a native Template Haskell helper, an internal library, CPP and an
-autogenerated Paths module. Its `main` forces an imported definition and uses a
-mutable reference; the test compares native execution with both THC backends,
-then changes the dependency source and verifies cache invalidation and failure.
-
-Cabal can also assign `style: inplace` to an archive or repository dependency
-when it depends on a project-local library. THC captures its unchanged source
-through the same private Cabal build, while preserving that style, the original
-unit ID, source hash, flags and complete dependency identities. Its cache key
-also includes the actual configured inputs, sources and native artifacts of
-every transitive local dependency. Each in-place archive's own Cabal
-configuration bytes and native products are also fingerprinted, so a
-package-specific project option cannot retain stale Core under the same ID.
-Configuration bytes are hashed, not parsed to reconstruct compiler commands.
-These inputs are rechecked after capture,
-before cache publication, and before reuse in the combined manifest;
-an unchanged `-inplace` ID cannot authorize stale Core after a local edit.
-`cabal test driver-tests --test-options=--inplace-store-only
---test-show-details=direct` exercises a local library through a reexport-only
-archive and an ordinary archive, warm reuse, package-option and local-source invalidation
-against independent native execution and both THC backends.
-
-Dependency capture uses a private Cabal build per project. Only identical
-missing export batches share a long-lived capture lock; unrelated projects can
-capture concurrently. Overlapping batches serialize publication per content-keyed
-bundle and retain the first valid ZIP unchanged, so an already-written manifest's
-hash stays valid. Cache reads and publication still validate the complete package
-identity and local dependency inputs. The `--concurrent-store-only` driver test
-exercises two overlapping projects while holding the obsolete global lock.
-
-Compiler-conditional compatibility libraries and C-only packages can legitimately
-contain no Core modules (for example `nats` on modern GHC and `libyaml-clib`).
-For these units, the driver checks the registration from the same private Cabal
-build: its unit and dependencies must
-match, with no exposed/hidden modules or reexports. Cabal can list a C-only
-archive in `hs-libraries`; that field alone does not imply a Haskell module.
-The empty Core bundle retains the complete registration, including native library
-metadata, and revalidates it on cache reads. Referenced foreign calls are included
-when `--verify-artifacts` requests the strict audit. A missing capture for a
-library with Haskell modules still fails; no replacement Core is invented.
-
-A reexport-only store library, such as the top-level `happy-lib` component,
-also owns no Core. Its bundle retains the original registration separately as
-`reexportRegistration`. The driver accepts only definite reexports, preserves
-their exposed names and original provider unit/module identities, and checks
-each provider against the resolved dependency closure and captured module
-inventory before writing the executable manifest. Renaming an exposed module
-does not rename or synthesize its provider's Core. Hidden or ordinary owned
-modules still require actual exports. `cabal test driver-tests
---test-options=--store-inventory-only --test-show-details=direct` exercises empty,
-C-only and renamed-reexport store dependencies, both backends, and cache reuse.
-
-This is a bounded executable path. Native code remains necessary for Template
-Haskell and build tools. THC still rejects unsupported runtime dependencies;
-the default pinned provider rejects ordinary `putStrLn`. This path does not
-claim general Hackage, C FFI or no-code-only package builds. Cabal project
-location, flags and test/benchmark enablement are retained in both the native
-build and cold store export. The independent `plan-package` command keeps its
-existing scope.
-Source-built store packages require a Cabal source hash and a successful Core
-capture; unsupported build modes fail before producing an incomplete manifest.
-Selected `ghc-internal` definitions come from exact, unmodified GHC 9.14.1
-sources pinned under `nih/pinned/ghc-9.14.1/libraries/ghc-internal`. The driver compiles them
-against installed dynamic interfaces in disposable staging under Cabal's build
-directory, then caches their post-Tidy Core in one checked ZIP under the OS
-cache. Other installed GHC/base units remain dependency identities without
-claimed Core exports. This supplies the actual `MonadFail IO`, `IOException`,
-Typeable and backtrace definitions, while the strict audit still rejects a
-real `catch (fail ...)` entry on unsupported RTS stack-snapshot operations.
-The original `.hsc` modules are preprocessed against the installed GHC target
-headers only when this ZIP is missing. Its hashed build-input receipt and
-module index retain a parsed target-layout summary, including word and stack
-frame sizes, InfoProv offsets and closure ordinals. The receipt identifies the
-nonprofiling dynamic way separately from the GHC version, ABI and platform.
-It is provenance for a future low-level snapshot adapter; source export alone
-does not make the original RTS stack primitives executable.
-Unit publication checks that layout against the hashed build receipt and copies
-the original layout/compiler document into the unit record. Legacy ZIP loading
-reads the same two receipts. The runtime checks host architecture, word size, endianness, nonprofiling way
-and field bounds, and carries the installed GHC tables-next-to-code choice into
-one immutable target-layout record for either
-backend. Bundles without the receipt have no target layout; stack/IPE operations
-must reject that absence instead of assuming offsets from a particular host.
-Generated-source receipts must name exactly the current seven original HSC
-sources, including `Heap/InfoTable/Types.hsc`, with unique paths and well-formed
-SHA-256 values. The index and hashed build-input receipts must agree; the old
-six-source inventory, missing or additional paths, and duplicates are rejected.
-
-### Installed complete-Core provider
-
-For a GHC 9.14.1 installation whose libraries carry full simplified Core,
-project runs can select `--installed-core required`. The default
-`--installed-core pinned` retains the limited source provider described above;
-these are separate choices, not an implicit fallback after an interface error.
-The internal Windows simple-package backend does not yet support this provider.
-
-Cold installed-Core acquisition hydrates at most two interfaces concurrently.
-`THC_INSTALLED_CORE_JOBS` selects a bound from 1 to 64 (1 is the serial control);
-raising it increases helper CPU and peak memory demand. Results and errors are
-consumed in registered module order, and failure cancels outstanding helpers.
-Only hydration overlaps. Source/provenance and registration input checks remain
-in place; unchanged archive selections use the receipt policy described above.
-Full-Core stdout stays in UTF-8 bytes through the subprocess boundary; stderr
-is drained concurrently and malformed UTF-8 remains a protocol failure.
-
-An optional `--ghc-source DIR` supplies the matching configured GHC 9.14.1
-source tree when original `Conc.Bound`, `System.Posix.Internals`, or Unix's
-`System.Posix.Files.PosixString`, `System.Posix.Process.Internals`, and
-`System.Posix.Signals` interfaces lack
-THC's typed foreign annotations. It requires `--installed-core required` and
-currently supports native x86_64/aarch64 Linux with the original
-`_build/stage1/libraries/{ghc-internal,unix}/setup-config`, built interfaces and generated
-sources/headers intact. The selected compiler remains the native compiler. Only missing
-annotations trigger genuine selected-module compilation into an acquisition-only
-cache; no installed compiler, native library or existing ZIP is changed.
-Source/interface mismatches and present but invalid provenance fail explicitly.
-See [the producer and cache contract](interface-foreign.md#typed-annotations-and-ordinary-acquisition).
-
-On Linux x86_64, this path has run an ordinary `putStrLn` executable through cold preparation
-and warm cache reuse, matching native GHC output with a clean strict audit.
-The bytecode backend executes GHC's generated `main::Main.main` and then its
-original `flushStdHandles` after successful completion, sharing one program's
-Handle CAFs. Relative file paths are resolved from the command's working directory,
-as with `cabal run`; project-location flags do not change guest working directory.
-The default `pinned` provider retains the limited raw-IO entry convention.
-
-General file IO is still incomplete. On Linux x86_64 with a complete GHC 9.14.1
-installation, the separate `file-lifecycle-full-core` fixture passed native GHC
-comparison through the ordinary production driver and bytecode backend. Its
-strict audit supplied 72,884 bindings, reached 2,207, and reported zero missing
-bindings, issues or unsupported traps. The fixture verified UTF-8 file reads and
-writes, append, absolute and end-relative seek, EOF, a caught missing-path
-`IOException`, and original shutdown flushing. Its exact output was `file
-lifecycle ok` without a newline. This run had `compiledEntries=0`, so it does
-not establish a JIT-compiled path. Enable the opt-in test with
-`cabal test file-lifecycle-full-core -ffull-core-tests`;
-`THC_INSTALLED_CORE_GHC`, `THC_INSTALLED_CORE_GHC_PKG`, and
-`THC_INSTALLED_CORE_GHC_SOURCE` select the complete installation and its configured
-source tree. The test is not part of the stock-GHC suite.
-
-The separate `binary-buffers-full-core` test uses the same configuration and
-ordinary driver to compare `hPutBuf` and `hGetBuf` with native GHC. It checks
-offset pointers, NUL and high-bit bytes, short reads, EOF, untouched buffer
-boundaries, cleanup after an exception, and original shutdown flushing. Its
-strict audit supplied 72,921 bindings, reached 2,217, and reported zero missing
-bindings or issues. This bytecode run also had `compiledEntries=0`.
-Run it with `cabal test binary-buffers-full-core -ffull-core-tests`.
-
-The driver builds the selected-compiler `thc-interface` helper, discovers exact
-pre-existing registrations in the selected global package database, and reads
-each declared owned module's dynamic interface. Hidden modules are included;
-native-only and reexport-only registrations do not acquire invented bodies.
-Reexports must have concrete providers in their dependency closure. Store-source
-and local component exports retain their existing paths. Missing complete Core
-reports the exact registration/module; wrong identity/way, malformed responses
-and process failures remain errors. Foreign stubs/files are retained in
-[schema 2](interface-foreign.md), without executing their native C. Supported
-managed execution additionally requires verified typed producer evidence;
-ordinary unannotated interfaces remain archival.
-Nothing substitutes ordinary
-unfoldings or adds a second pinned provider beside a wired interface owner.
-
-Generated Core preserves original unit identities, private workers, recursive
-groups and CBV evidence. Cabal registration IDs remain dependency/cache keys;
-the receipt records their mapping to original wired Core owners. Checked ZIPs
-use the existing schema and atomic publication, with registration/DB/compiler/
-way/inventory provenance and hashes of generated Core plus THC-owned exporter
-code. GHC remains version-gated; compiler executables and native library
-binaries are not hashed. An optional batch probe fingerprints GHC's full retained
-interface bytes across the registered dependency inventory, including complete
-Core, annotations and foreign products. Exact provider membership and current
-source-note contents must also agree before a checked ZIP can bypass hydration
-and JSON rendering. The driver revalidates after archive validation. Within
-one bundle transaction, byte-identical streamed SHA-256 hashes of every raw
-interface and the helper, plus freshly discovered registrations, permit reuse
-of the first validated exact-inventory probe. The initial probe is always
-fresh; nothing is shared between bundle transactions or differing inventories.
-Source-content and archive checks still run independently. Missing or
-inconsistent evidence falls back to ordinary acquisition;
-this is not a command-free cache or an ABI-only freshness claim. Failed refreshes
-leave prior complete bundles intact. Source-built package caching is unchanged.
-
-This provider derives its target-layout receipt from the selected GHC and RTS
-headers. The checked ZIP stores that receipt in both its index and hashed
-build inputs, with the selected RTS registration and layout recipe in its cache
-identity. It does not claim the pinned provider's seven HSC preprocessing
-products. Complete interfaces still do not establish foreign-export/RTS
-support or make ordinary Handle programs runnable.
-The existing source-deleted opaque/private/CBV fixture exercises discovery,
-process acquisition, cache reuse and strict ZIP admission, followed by native
-comparisons in first-installed AST and bytecode targets.
-
-`driver-tests` is an ordinary Cabal HUnit test suite. Cabal builds the driver
-first, then the tests copy fixtures into isolated temporary directories outside
-this repository's `cabal.project`. Set `THC_TEST_RUNTIME` and
-`THC_TEST_THC_ROOT` to use an existing JVM launcher and compiler artifacts from
-another checkout for the single-package case. The project case builds the plugin
-from a private source-only root, then checks its new manifest. Command output is
-retained in `build/driver-haskell-tests`.
-
-Project source export marks the known THC plugin trustworthy, preserving GHC
-safety inference for local modules imported by `Safe` clients. The flag is part
-of the export cache identity; explicitly `Unsafe` imports remain rejected. Run
-`cabal test driver-tests --test-options=--export-safety-only` for the focused
-native/export and cache controls.
-
-The printed evidence directory retains the fresh driver build, `commands.jsonl`
-(commands, working directories, stdout/stderr, exit statuses and timeout errors),
-and `tests.log`. Bootstrap errors additionally produce `failure.log` and a
-nonzero exit status; unavailable or mismatched tools are failures, not skips.
-These directories are retained for diagnosis and may be removed when no longer
-needed. Passing both `--driver` and `--scratch` keeps the prebuilt-binary workflow
-above, with command/test evidence retained under its scratch directory. Supplying
-only one of those two arguments is a usage error.
-
-The separate `plan-package` inspection command accepts an explicit `.cabal`
-path; `run` and `acquire` use the positional Cabal target interface above:
+`plan-package` configures one package against the selected compiler’s global
+installed package database and prints a JSON description. It does not solve a
+cabal-install project, acquire dependencies, build components or run guest code:
 
 ```sh
 thc plan-package path/to/example.cabal --flag fast --flag=-debug
@@ -713,159 +286,13 @@ default/manual/automatic flags and evaluates `flag`, `os`, `arch` and `impl`
 conditions. Unknown explicit flag names are errors. Repeated flag settings use
 the last value, following Cabal's flag-assignment behavior.
 
-## Guest environment
+Use an explicit `.cabal` path for independent configuration. Directory discovery
+requires one package file and rejects surrounding project files rather than
+ignoring their settings. The command writes `setup-config` under `--dist-dir`
+(default `dist-thc`), replacing any previous configuration there.
 
-The command-line context inherits its host-authorized environment. Original
-GHC 9.14.1 POSIX `getenv`, `putenv`, `__hsbase_unsetenv` and `__hscore_environ`
-operate on context-owned storage: guest `setEnv` and `unsetEnv` do not change
-the JVM process or another THC context. Custom embedding contexts retain
-Truffle's environment-access policy and explicit environment overrides.
-
-Initial host strings use the selected Linux UTF-8 filesystem encoding. Subsequent
-guest C strings retain their bytes. `putenv` retains its caller's buffer, so
-mutating that buffer changes the value returned by `getenv`; the caller must
-keep it live. Returned strings and null-terminated pointer vectors obey the
-existing owned-native allocation lifetime checks. Environment mutation may
-invalidate a previously returned vector. This is the current Linux x86_64
-native-allocation path, not Windows environment support or child-process launch.
-
-The original string encoder's `realloc` uses the same owned allocation registry.
-Successful resizing preserves the retained byte prefix and retires all old
-aliases; allocation failure leaves the original allocation live. Null input is
-`malloc`, while nonnull input with size zero follows Linux's free-and-null
-contract. Interior pointers, cross-context allocations and a synchronous resize
-of a currently borrowed allocation reject rather than bypass lifetime checks.
-
-`cabal test environment-full-core -ffull-core-tests` compares original
-`System.Environment` operations with native GHC through the installed-Core
-provider. It uses the same `THC_INSTALLED_CORE_GHC`,
-`THC_INSTALLED_CORE_GHC_PKG` and `THC_INSTALLED_CORE_GHC_SOURCE` settings as the
-other full-Core tests. The JVM controls additionally cover pointer aliasing,
-context isolation, ABI rejection and first-installed calls on both backends.
-
-## Original file removal
-
-The original Unix `unlink` import uses the explicitly authorized native file
-provider. Paths retain their raw bytes and resolve relative to the context's
-working directory; removal follows native symlink and open-file semantics.
-Failures expose the native errno, while success leaves the previous errno
-unchanged. Invalid or retired path storage rejects before any filesystem effect.
-An arbitrary embedding context does not acquire this authority merely by
-enabling native access or ordinary Truffle IO access.
-
-`cabal test unlink-full-core -ffull-core-tests` compares ordinary
-`System.Directory.removeFile` with native GHC, including a caught missing-file
-error, using the same installed-Core settings as the environment test. JVM
-controls cover byte-preserving relative names, symlinks, open descriptors,
-directory rejection, invalid arguments and both first-installed backend paths.
-This bounded operation is not general directory or process support.
-
-## What the plan means
-
-`Distribution.PackageDescription.Parsec.parseGenericPackageDescription` parses
-the original package file, including common stanzas. Then
-`Distribution.Simple.Configure.configure` elaborates and checks it against the
-chosen GHC compiler and that compiler's **global installed package database**.
-Cabal resolves installed dependencies and the package's internal libraries,
-assigns component/unit IDs, and supplies `LocalBuildInfo`. Missing dependencies
-are errors unless Cabal can choose an allowed automatic flag alternative.
-
-This is more than syntactic condition flattening, but it is **not** a solved
-cabal-install project/install plan. There is no Hackage index, acquisition,
-multi-package project solver, user package database, v2 store, or project
-configuration support. In particular, the returned IDs/layout belong to this
-Cabal package configuration and must not be mistaken for a future v2 project's
-store identities or THC export artifacts.
-
-Directory discovery requires exactly one `.cabal` file. It rejects a
-`cabal.project`, `cabal.project.local` or `cabal.project.freeze` in that directory
-or any ancestor, rather than dropping its settings. Passing an explicit `.cabal`
-file intentionally requests independent package configuration and ignores any
-surrounding project. The input package file and sources are never rewritten.
-
-The command does write Cabal's `setup-config` and configuration directories under
-`--dist-dir` (default `dist-thc`, relative to the package root). This is a
-configuration command, not a filesystem-free dry run. Reusing the directory
-replaces its previous Cabal configuration. Select an isolated build directory;
-the command does not create or install libraries. Cabal may probe GHC, ghc-pkg
-and native toolchain programs as part of configuration.
-
-The single JSON object on stdout has schema `thc.cabal-package-plan.v1`.
-Diagnostics go to stderr and failures exit nonzero without emitting a plan.
-
-| Field | Meaning |
-| --- | --- |
-| `stage` | `cabal-installed-package-configuration` |
-| `solvedProjectPlan`, `artifactsBuilt` | Both `false` |
-| `cabalVersion`, `compiler`, `platform` | Actual Cabal version and selected compiler/host platform |
-| `cabalFile`, `packageRoot`, `package` | Canonical package input and Cabal package ID |
-| `flags` | Cabal's final flag assignment |
-| `setupConfig` | Persisted Cabal configuration path |
-| `components[].name`, `componentId`, `unitId` | Real Cabal identifiers for enabled/buildable components |
-| `dependencies` | Cabal-selected library unit IDs and package IDs |
-| `internalDependencies`, `toolDependencies` | Cabal's internal and executable dependency unit IDs |
-| `declaredDependencies` | Finalized package dependency constraints |
-| `sourceDirectories`, `exposedModules`, `otherModules`, `autogenModules`, `virtualModules`, `mainSource` | Finalized source declarations |
-| `defaultLanguage`, `defaultExtensions`, `cppOptions`, `ghcOptions` | Selected build settings; not a complete compiler command line |
-| `buildDirectory`, `objectDirectory`, `autogenDirectory` | Cabal-computed per-component output roots |
-| `plannedArtifact` | Native vanilla library archive or native component executable path |
-
-All relative paths are relative to `packageRoot`; absolute paths remain absolute.
-The `components` array is not an execution schedule; use the dependency IDs for
-ordering. Module entries are declarations, not a preprocessed source inventory:
-this command does not run preprocessors, resolve generated sources, or inspect
-Haskell imports. Conventional `.o`/`.hi` paths are under `objectDirectory` using
-module-name path components. `mainSource` is searched through `sourceDirectories`
-by Cabal. Autogenerated Paths/PackageInfo modules use Cabal's reported autogen
-directories. Configuration success alone does not establish source buildability.
-
-The supported component kinds are ordinary libraries/internal libraries,
-executables, and `exitcode-stdio-1.0` tests/benchmarks. Only `build-type: Simple`
-is accepted; Custom, Configure, Make and Hooks builds are rejected without
-executing package Setup code. Foreign libraries, Backpack signatures, module
-reexports, and other test/benchmark interfaces are explicit errors. No claim is
-made that THC can execute any of the native components described by this plan.
-
-## Verification
-
-`t/fixtures/tiny` is an ordinary unchanged package with a library, internal
-library, executable, test and benchmark. Its common stanza, manual flag,
-automatic dependency-sensitive flag, OS condition and GHC condition are all
-handled by Cabal. Functional tests copy the fixture to a path with spaces,
-quotes and Unicode, configure it through `thc`, independently check the installed
-base unit ID, and then ask native Cabal to build the **same persisted
-configuration**. They check the reported archives, executables, module object
-paths and autogen directories against actual files, run the native executable
-and test, and verify that all input source hashes stayed unchanged.
-
-Additional cases exercise missing dependencies, unknown flags, disabled
-components, ambiguous/malformed/missing packages, project boundaries, custom
-Setup rejection, unsupported test interfaces and relative output paths. These
-are native Cabal planning checks; their test build is an independent oracle.
-The same suite checks the limited raw THC IO action on both backends and
-requires unsupported console IO under the pinned provider to fail before launch.
-
-`t/fixtures/run-benchmark` is a real Cabal benchmark component with a small
-strict numeric workload, not an executable renamed by the driver. The
-`driver-tests --runnable-targets-only` slice checks its acquisition without
-execution, strict audit and execution on both backends against native GHC. It
-also covers qualified and short benchmark targets, exitcode tests, default
-executable preference, sole-benchmark fallback, ambiguity, disabled and missing
-components, and explicit detailed-library test rejection. For example:
-
-```sh
-cabal run thc -- run run-benchmark:bench:measured \
-  --project-dir t/fixtures/run-benchmark --thc-root "$PWD" \
-  --dist-dir "$PWD/build/run-benchmark"
-```
-
-This proves component selection and execution for that fixture; it does not
-establish loadability or meaningful timing of an upstream benchmark suite.
-
-Future work should expand the tested project and runtime dependency closure,
-support no-code-only export where installed interface identities permit it, and
-expand strict IO capabilities. GHCi and Sulong integration are outside this
-package slice.
-
-Source and fixture licensing follow THC's `UPL-1.0 AND BSD-3-Clause` terms; the
-repository's license notices are included for standalone package distribution.
+Only `build-type: Simple` is supported. Foreign libraries, Backpack signatures,
+module reexports and non-exitcode test interfaces are rejected. The JSON reports
+actual component/unit IDs, dependencies, flags, source declarations and native
+output paths. Relative paths use `packageRoot`; component order is not a build
+schedule. Configuration success does not establish source buildability.

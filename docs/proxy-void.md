@@ -10,11 +10,3 @@ This supports original code such as containers' `Data.Map.Internal.$wbogus`,
 whose `(# #) -> Proxy# ()` worker returns `proxy#`. The empty tuple input and
 scalar void result remain distinct logical shapes, even though both have zero
 physical width. Calls that produce `Proxy#` still execute and can throw.
-
-Run `cabal run exe:thc-fixtures --offline -- proxy-void` to generate native
-results, exact GHC identity controls and strictly audited pre/post-Tidy Core.
-`ProxyVoidTest` compares both backends with the native results, checks the first
-compiled call with and without inlining, retains a throwing producer, and rejects
-replacement of a proxy field with an empty tuple. The ordinary `testDefault` and
-`testDense` tasks run these checks in both handoff modes. Existing bundle receipts
-remain immutable; the exporter change applies to newly exported Core.

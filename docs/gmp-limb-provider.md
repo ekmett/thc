@@ -1,11 +1,9 @@
 # Checked native GMP limb provider
 
-This implements twenty-four exact original GHC foreign calls: twenty-three through a
-checked native provider on Linux x86_64, plus the original RTS scalar
-`__int_encodeDouble` translated directly to JVM scaling. Genuine pre/post Core calls match a native GHC
-oracle in interpreted and first-installed compiled AST/bytecode execution,
-with inlining both enabled and disabled. No whole hello or lens load is
-established by these bounded tests.
+The GMP provider implements the original GHC limb operations on Linux x86_64
+LP64 with 64-bit, no-nails GMP. Clang and GMP development headers/libraries are
+required. Other platforms are rejected before native loading. The original RTS
+scalar `__int_encodeDouble` uses a JVM scaling implementation.
 
 `LimbRegion` describes the original guest allocation, limb count and writable
 status. Limbs are least-significant first, eight bytes each in native byte
@@ -13,26 +11,7 @@ order. `LimbProvider` is independent of GMP, Sulong and native allocation;
 another implementation can preserve the guest representation and operation
 contracts. No operation converts a multi-limb value to `BigInteger`.
 
-The first provider is Linux x86_64 LP64 with 64-bit, no-nails GMP. Clang and
-GMP development headers/library are build dependencies on this platform. Other
-platforms are rejected by the provider before loading native code. The ordinary
-MD5 build remains present on its previously supported platforms.
-
-## Contracts
-
-The extended original-call fixture has 464 native observations and twenty-four
-genuine imported declarations. Beyond the baseline arithmetic it covers `integer_gmp_mpn_rshift`,
-`integer_gmp_mpn_rshift_2c`, `integer_gmp_mpn_get_d` and `__int_encodeDouble`.
-Both backends retain typed Double result slots; no boxed numeric result packet
-or Java `BigInteger` conversion is introduced. Both handoff modes check every
-original entry before and on the first call after explicit compilation.
-
-The compiler-session tranche adds `integer_gmp_gcd_word`,
-`integer_gmp_mpn_gcd_1`, `integer_gmp_mpn_gcd`, `integer_gmp_mpn_lshift`,
-`integer_gmp_mpn_and_n`, `integer_gmp_mpn_andn_n`, `integer_gmp_mpn_ior_n`,
-`integer_gmp_mpn_xor_n` and `__gmpn_popcount`. These are the nine additional
-targets reached by the original GHC 9.14.1 session graph; admitting these
-calls alone does not establish a successful full compiler session.
+## Operation contracts
 
 Word GCD preserves unsigned 64-bit values and accepts zero on either side.
 Array/word GCD requires a positive limb count and a nonzero word for multi-limb
@@ -69,10 +48,6 @@ same positive result/sign as that original RTS wrapper, including underflow;
 the native oracle records this edge case rather than substituting mathematical
 signed conversion. These are original FFI contracts, not new primops.
 
-The baseline eleven-call contracts and their initial evidence follow.
-
-The eleven adapter entry points correspond to the nine native GMP operations
-and two GHC quotient/remainder wrappers reached by the current hello closure.
 The [GMP low-level contracts](https://gmplib.org/manual/Low_002dlevel-Functions)
 are checked per operation, not with one generic length/overlap rule:
 
@@ -128,44 +103,3 @@ the other adapters introduce no native allocation or free calls.
 Host try/finally closes all native memory even when LLVM calls/conversion fail
 or the LLVM context is cancelled. This does not promise interruption of an
 arbitrary in-flight native GMP call.
-
-## Evidence and boundaries
-
-The provider controls exercise the adapter entries using
-fixed arithmetic controls, unsigned carry/borrow, aliases, canaries, empty
-division cases, malformed shapes/divisors, pointer-cell rejection, immutable
-destinations, logical shrink and native-access denial. The GCD/bitwise tranche
-adds zero/high-bit word controls, prefix-only writes and native-pinned aliases.
-`OriginalGmpAudit.hs` imports the actual hidden installed GMP module through a
-fixture-local registration that exposes only that module; unit identity,
-dependencies and installed interface/library paths remain unchanged. No new
-FFI declarations, aliases, copied bodies or installed database mutations are
-used. Both stock and full-Core GHC 9.14.1 produced the same 92 native rows and
-all eleven genuine pre/post FCallIds. The native driver sequences original IO
-actions and records every buffer before and after each operation. Pure cmp/mod
-imports retain their genuine definitions in the interface closure.
-
-`OriginalGmpTest` compares every native result, input/output byte, permitted
-alias and canary across both Core stages, both backends and both inlining
-settings. It explicitly compiles each observed target once, then checks the
-first compiled entry count and retained target on every subsequent call.
-There is no compiled settling/retry or diagnostic-mode admission. Both modes
-also exercise malformed genuine metadata through both loaders, native-access
-denial and invalid counts without guest stores. `CoreGmpForeignTest` covers
-all exact descriptors, stored operand kinds and the load-time null-sentinel
-predicate; the auditor independently enforces those shapes before admission.
-
-The native fixture producer's `--require-supported` mode requires all 48
-strict entry audits to accept. Its `runtimeVerified:false` field correctly
-describes a producer that does not run JVM tests; those results are separate.
-CI includes the stock-compatible Linux fixture and a closed receipt allowlist,
-never a package DB or arbitrary native intermediates.
-
-Initial compiled tests exposed two partial-evaluation issues: a representation
-list comparison inside `LocalRead`, and a synthetic enum-switch table
-inside the new AST node. The exact predicate is now computed at load time,
-and direct enum comparisons preserve constant operand selection. Failures and
-Graal diagnostics were retained. A harness-only correction invokes genuine
-pure aliases through the normal host dispatcher; original Core is unchanged.
-The raw cmp discrepancy above was corrected at the runtime boundary, not by
-altering native expectations. Fresh whole-program integration remains separate.

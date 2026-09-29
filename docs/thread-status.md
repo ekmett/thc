@@ -44,18 +44,6 @@ become Haskell exceptions.
 
 The existing asynchronous mailbox remains scoped to active guest registration:
 an outer host return settles pending sends, and a send outside every guest entry
-is a completed no-op. This patch does not queue exceptions across unrelated
+is a completed no-op. The runtime does not queue exceptions across unrelated
 future host calls. Foreign calls nested inside an active guest entry retain their
 mailbox and defer delivery until a real guest continuation cut.
-
-The Haskell fixture checks native running, masked-running, finished, died,
-MVar-take, and MVar-read statuses. Its predicates consume all three result fields
-while allowing GHC's capability assignment to differ from THC's managed model.
-Java checks retained identity, context isolation, actual MVar waits, capability
-allocation, strict tuple rejection, and the first invocation after compilation of
-the actual guest call graph. Run:
-
-```
-cabal run exe:thc-fixtures --offline -- thread-status
-./gradlew --no-daemon test --tests thc.runtime.GuestThreadStatusTest --tests thc.runtime.ThreadStatusNativeTest --tests thc.runtime.GuestThreadsTest --tests thc.runtime.ThreadAsyncNativeTest
-```

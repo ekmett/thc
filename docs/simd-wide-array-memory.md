@@ -13,19 +13,3 @@ VecRep and exact public Vector API species. Owned storage retains its monitor,
 logical shrink bounds and pointer-cell protections for the full vector width.
 Raw byte arrays retain their physical bounds. Floating transfers preserve bits,
 including signed zero and NaN payloads; no floating arithmetic is performed.
-
-The ordinary Haskell fixture exports original vector Core for all 120 operations.
-An independent native GHC fixture implements the same transfers with scalar
-array primops, so verification does not require executable AVX-512 code on the
-host. Its 2,880 rows are also compared with a Java scalar-byte model. The
-manifest explicitly records scalar-lane native evidence, not native wide-vector
-execution. Tests check full buffers, aliases, tails, invalid ranges, metadata,
-first-installed calls, and handoff cleanup on both backends/storage modes.
-
-Run `cabal run exe:thc-fixtures --offline -- simd-wide-arrays`, then
-`./gradlew test --tests 'thc.runtime.SimdWideArray*'`. Repeat with
-`JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true` for dense handoffs.
-
-This array corpus makes no hardware-width or performance claim.
-Address operations have a separate corpus. The native corpus uses the pinned
-64-bit little-endian target.

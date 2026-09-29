@@ -17,7 +17,7 @@ cabal run ghc-session -- "$(ghc --print-libdir)"
 cabal run ghc-load -- "$(ghc --print-libdir)" subjects/Probe.hs
 ```
 
-All three native controls passed on 2026-09-26. Expected output is respectively
+Expected output is respectively
 `THC λ GHC API` followed by `True`, `GHC session ready; verbosity=0`, and
 `GHC module load/typecheck succeeded`.
 
@@ -53,39 +53,12 @@ cabal run exe:thc-fixtures -- ghc-api --audit faststring
 iteration without unnecessarily changing acquisition-tool identities. A failed
 probe retains its command logs under `build/ghc-api/guest-PROBE/logs` and does
 not publish a success manifest. Successful probes require byte-for-byte native
-stdout equality. The schema-2 manifest records `auditRequested: false` and
-`strictAccepted: null` by default, without reading or hashing any stale
-`audit.json`. With `--audit`, a current accepting production report is required
-and retained. The default runs all three probes in order. The bounded audit
-bookkeeping controls run with `cabal test ghc-api-fixture-policy`.
+stdout equality. With `--audit`, a current accepting production report is required and retained.
+The default runs all three probes in order. Keep the installed-Core cache between
+probes; unchanged compiler bundles can be reused.
 
-On 2026-09-26, `ghc-faststring` passed the complete ordinary THC workflow on
-Linux x86_64 with the bytecode runtime: all 822 compiler interfaces acquired,
-strict audit accepted, original compiler Core executed, stdout matched native
-byte for byte, and normal Handle shutdown completed. The accepted graph had
-370,612 supplied bindings, 2,098 reachable bindings, no missing globals, and no
-issues. The retained success receipt is `build/ghc-api/guest-faststring/manifest.json`.
-
-```text
-THC λ GHC API
-True
-```
-
-The preceding attempt exposed twelve record-selector identity collisions;
-preserving GHC's constructor-qualified field names resolved them. No compiler
-bodies were substituted and strict admission was not weakened. Preserve the
-installed-Core cache when resuming: acquisition is expensive, but unchanged
-compiler bundles can be reused by these probes and other compiler-library apps.
-
-This demonstrates FastString interning through the real compiler library, not
-general GHC API or GHCi/native object-loader support. The subsequent `runGhc`
-session probe acquired successfully, then failed strict admission before guest
-execution: 370,616 supplied bindings, 26,818 reachable bindings, 99 unresolved
-foreign identifiers and 186 issues. The unresolved identifiers are secondary to
-unimplemented foreign calls, not 99 missing Haskell modules. The frontier includes
-additional compiler-global CAF hooks, event/process calls, unsupported literals,
-and aggregate boundaries; the retained report is `build/ghc-api/guest-session/audit.json`.
-Module load/typecheck has not yet run in THC. Compiler RTS hook tests are
-separate lower-level coverage. `runGhc` temporarily installs process signal
-handlers; merely importing the `ghc` package does not. See the
-[standalone signal policy](../../../../docs/process-signals.md) before embedding.
+These probes do not establish general GHC API, GHCi or native object-loader
+support. `runGhc` temporarily installs process signal handlers; merely importing
+`ghc` does not. See the [standalone signal policy](../../../../docs/process-signals.md)
+before embedding. An explicit unsupported call or missing Core definition must
+be resolved for the actual selected closure before it can execute.
