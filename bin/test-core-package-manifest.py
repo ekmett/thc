@@ -892,7 +892,7 @@ class PackageManifestTest(unittest.TestCase):
             modules = core_package_manifest.load(self.manifest([unit]))
         self.assertEqual(1, len(inspected))
         self.assertIs(inspected[0], modules[0][1])
-        self.assertEqual(str(source), modules[0][0])
+        self.assertEqual(str(source.resolve()), modules[0][0])
         self.assertEqual(original, source.read_bytes())
 
     def test_published_cbd_hash_summary_reference_and_corruption_fail_closed(self):
