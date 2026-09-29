@@ -416,17 +416,22 @@ public final class Language extends TruffleLanguage<Language.State> {
                 // Parsed roots may be Engine-shared; programs, CAFs and registrations are context-owned.
                 var owner = currentState(this);
                 for (var link : (List<ForeignBitcode>) linked.get("foreignLinks")) owner.cbits().link(link);
-                for (var link : (List<PackageScalarLink>) linked.get("packageScalarLinks")) owner.packageCbits.link(link);
+                for (var link : (List<PackageScalarLink>) linked.get("packageScalarLinks")) owner.packageCbits.declare(link);
                 ExecutableProgram program = backend.equals("ast") ? new Program(Language.this, linked, async, false)
                     : new BytecodeProgram(Language.this, linked, async);
-                int argumentCount = ((Number) selected.get("arity")).intValue();
-                boolean processSignals = false;
-                for (var binding : bindings) if (CoreSignalForeign.dispatcher.equals(binding.get("id"))) { processSignals = true; break; }
-                var value = new EntryValue(program, entry, argumentCount, resultFault,
-                    ioResult, Language.this, shutdownEntry, shutdownProof,
-                    processSignals, acceptedInputs, acceptedResult);
-                owner.foreignRoots.retain(program, registrations);
-                return value;
+                try {
+                    var exports = new ArrayList<ManagedExportSignature>();
+                    for (var registration : registrations) exports.addAll(registration.getExports());
+                    owner.foreignRoots.register(program, Language.this, registrations, ManagedExportPlan.checked(exports, ignored -> bindings));
+                    int argumentCount = ((Number) selected.get("arity")).intValue();
+                    boolean processSignals = false;
+                    for (var binding : bindings) if (CoreSignalForeign.dispatcher.equals(binding.get("id"))) { processSignals = true; break; }
+                    var value = new EntryValue(program, entry, argumentCount, resultFault,
+                        ioResult, Language.this, shutdownEntry, shutdownProof,
+                        processSignals, acceptedInputs, acceptedResult);
+                    for (var link : (List<PackageScalarLink>) linked.get("packageScalarLinks")) owner.packageCbits.link(link);
+                    return value;
+                } catch (Throwable failure) { owner.foreignRoots.release(program); throw failure; }
             }
             @Override public String getName() { return "THC load " + entry; }
         }.getCallTarget();
@@ -502,12 +507,15 @@ public final class Language extends TruffleLanguage<Language.State> {
                         HostAbi.require(hostResult);
                     }
                     var registrations = program.registerStartup();
+                    var exports = new ArrayList<ManagedExportSignature>();
+                    for (var registration : registrations) exports.addAll(registration.getExports());
+                    owner.foreignRoots.register(program, Language.this, registrations, ManagedExportPlan.checked(exports, program::signatureBindings));
                     var value = new EntryValue(program, entry, ((Number) selected.get("arity")).intValue(), null,
                         io, Language.this, shutdown, shutdownResult, async && program.contains(CoreSignalForeign.dispatcher), hostInputs, hostResult);
+                    program.linkStartup();
                     owner.coreUnitPrograms.add(program);
-                    owner.foreignRoots.retain(program, registrations);
                     return value;
-                } catch (Throwable failure) { program.close(); throw failure; }
+                } catch (Throwable failure) { owner.foreignRoots.release(program); program.close(); throw failure; }
             }
             @Override public String getName() { return "THC load " + entry + " from unit directory"; }
         }.getCallTarget();

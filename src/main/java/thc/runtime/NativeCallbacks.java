@@ -12,10 +12,14 @@ import java.util.Arrays;
 import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.StringJoiner;
 import thc.Language;
 import thc.ManagedCallbackSignature;
 import thc.ManagedExportValue;
+import thc.MemberNames;
+import thc.ManagedExportSignature;
 import thc.PackageScalarSignature;
 import static thc.runtime.RuntimeFault.fault;
 
@@ -25,11 +29,88 @@ public final class NativeCallbacks {
     private final Assumption alive = Assumption.create("THC native callbacks are open");
     private final HashMap<PackageScalarSignature, PackageScalarFunction> dynamic = new HashMap<>();
     private final HashMap<Long, Callback> callbacks = new HashMap<>();
+    private final Namespace namespace = new Namespace(this);
+    private Object stableRelease;
+    private final LinkedHashMap<String, StaticExport> exports = new LinkedHashMap<>();
+    // A failed load can already have handed pointers to C constructors. Keep
+    // their NFI closures alive, but invalid, until the owning context closes.
+    private final ArrayList<StaticExport> retiredExports = new ArrayList<>();
     private final ThreadLocal<ArrayDeque<PackagePointerCells>> pointerCalls = ThreadLocal.withInitial(ArrayDeque::new);
     public NativeCallbacks(Language.State owner) { this.owner = owner; }
     public void checkOwner() {
-        if (Language.currentState(null) != owner || !alive.isValid()) throw fault("Native callback belongs to another or closed context");
+        checkContext();
         if (!owner.getEnv().isNativeAccessAllowed()) throw fault("Native callback requires native access");
+    }
+    private void checkContext() {
+        if (Language.currentState(null) != owner || !alive.isValid()) throw fault("Native callback belongs to another or closed context");
+    }
+    private void checkEntry() {
+        checkOwner();
+        for (var projection : pointerCalls.get()) if (projection.holdsAllocationMonitors())
+            throw fault("Native callback cannot enter during a pointer-cell projection");
+    }
+    /** Checked declarations publish names without evaluating their Haskell roots. */
+    @TruffleBoundary public synchronized void registerStaticExports(ExecutableProgram program, Language language, List<ManagedExportSignature> declarations) {
+        checkContext();
+        var pending = new LinkedHashMap<String, StaticExport>();
+        for (var declaration : declarations) {
+            var existing = exports.get(declaration.symbol());
+            if (declaration.symbol().equals("hs_free_stable_ptr") || pending.containsKey(declaration.symbol()) ||
+                existing != null && (existing.program != program || !existing.declaration.equals(declaration)))
+                throw fault("Conflicting native static export: " + declaration.symbol());
+            if (existing == null) pending.put(declaration.symbol(), new StaticExport(this, program, language, declaration));
+        }
+        exports.putAll(pending);
+    }
+    @TruffleBoundary public synchronized void unregisterStaticExports(ExecutableProgram program) {
+        checkContext();
+        var iterator = exports.values().iterator();
+        while (iterator.hasNext()) {
+            var export = iterator.next();
+            if (export.program == program) { export.open.invalidate(); retiredExports.add(export); iterator.remove(); }
+        }
+    }
+    @ExportLibrary(InteropLibrary.class)
+    static final class StaticExport implements TruffleObject {
+        final NativeCallbacks registry;
+        final ExecutableProgram program;
+        final Language language;
+        final ManagedExportSignature declaration;
+        final List<String> arguments;
+        final String result;
+        final Assumption open = Assumption.create("THC static export is registered");
+        private Object closure;
+        private volatile ManagedExportValue executable;
+        StaticExport(NativeCallbacks registry, ExecutableProgram program, Language language, ManagedExportSignature declaration) {
+            this.registry = registry; this.program = program; this.language = language; this.declaration = declaration;
+            if (declaration.io() && declaration.ioResult() == null) throw fault("Static IO export lacks its checked Core result signature");
+            arguments = declaration.arguments().stream().map(type -> ManagedExportScalar.nativeRepresentation(type,
+                ManagedExportScalar.Role.ARGUMENT, declaration.wordBits())).toList();
+            result = ManagedExportScalar.nativeRepresentation(declaration.result(), ManagedExportScalar.Role.RESULT, declaration.wordBits());
+        }
+        void check() { registry.checkEntry(); if (!open.isValid()) throw fault("Native static export has been unregistered"); }
+        synchronized Object pointer() {
+            registry.checkOwner();
+            if (!open.isValid()) throw fault("Native static export has been unregistered");
+            if (closure == null) {
+                try { closure = InteropLibrary.getUncached().invokeMember(registry.signature(arguments, result), "createClosure", this); }
+                catch (InteropException failure) { throw rethrow(failure); }
+            }
+            return closure;
+        }
+        @TruffleBoundary ManagedExportValue executable() {
+            var selected = executable;
+            if (selected == null) {
+                selected = new ManagedExportValue(registry, this::check, registry.owner, language, program, declaration,
+                    program.entryValue(declaration.binder()));
+                synchronized (this) { if (executable == null) executable = selected; else selected = executable; }
+            }
+            return selected;
+        }
+        @ExportMessage boolean isExecutable() { check(); return true; }
+        @ExportMessage Object execute(Object[] values) throws ArityException, UnsupportedTypeException, UnsupportedMessageException {
+            check(); return InteropLibrary.getUncached().execute(executable(), values);
+        }
     }
     static String nfiType(String rep) {
         // Signed transport preserves each primitive's raw bits; GHC owns signedness.
@@ -50,6 +131,60 @@ public final class NativeCallbacks {
         String text = "(" + parameters + "):" + nfiType(result);
         return owner.getEnv().parseInternal(Source.newBuilder("nfi", text, "THC foreign signature").build()).call();
     }
+    /** Sulong searches this context-owned namespace before entering original C. */
+    public Object namespace() { checkOwner(); return namespace; }
+    @TruffleBoundary private synchronized Object stableRelease() {
+        checkOwner();
+        if (stableRelease == null) {
+            try {
+                stableRelease = InteropLibrary.getUncached().invokeMember(signature(List.of("AddrRep"), "void"),
+                    "createClosure", new StableRelease(this));
+            } catch (InteropException failure) { throw rethrow(failure); }
+        }
+        return stableRelease;
+    }
+    @ExportLibrary(InteropLibrary.class)
+    static final class Namespace implements TruffleObject {
+        private final NativeCallbacks registry;
+        Namespace(NativeCallbacks registry) { this.registry = registry; }
+        @ExportMessage boolean hasMembers() { registry.checkOwner(); return true; }
+        @ExportMessage @TruffleBoundary Object getMembers(boolean includeInternal) {
+            registry.checkOwner();
+            synchronized (registry) {
+                var names = new ArrayList<>(registry.exports.keySet()); names.add("hs_free_stable_ptr");
+                return new MemberNames(names.toArray(String[]::new));
+            }
+        }
+        @ExportMessage boolean isMemberReadable(String name) {
+            registry.checkOwner(); synchronized (registry) { return name.equals("hs_free_stable_ptr") || registry.exports.containsKey(name); }
+        }
+        @ExportMessage Object readMember(String name) throws UnknownIdentifierException {
+            registry.checkOwner();
+            if (name.equals("hs_free_stable_ptr")) return registry.stableRelease();
+            StaticExport export; synchronized (registry) { export = registry.exports.get(name); }
+            if (export != null) return export.pointer();
+            throw UnknownIdentifierException.create(name);
+        }
+    }
+    @ExportLibrary(InteropLibrary.class)
+    static final class StableRelease implements TruffleObject {
+        private final NativeCallbacks registry;
+        StableRelease(NativeCallbacks registry) { this.registry = registry; }
+        @ExportMessage boolean isExecutable() { registry.checkOwner(); return true; }
+        @ExportMessage @TruffleBoundary Object execute(Object[] arguments) throws ArityException, UnsupportedTypeException {
+            registry.checkOwner();
+            if (arguments.length != 1) throw ArityException.create(1, 1, arguments.length);
+            try {
+                var stable = registry.owner.getStablePointers();
+                var address = stable.recoverToken(InteropLibrary.getUncached().asPointer(arguments[0]));
+                if (address == null) throw fault("hs_free_stable_ptr requires a live StablePtr from this context");
+                stable.free(address);
+                return 0;
+            } catch (UnsupportedMessageException failure) {
+                throw UnsupportedTypeException.create(arguments, "hs_free_stable_ptr requires a native StablePtr token");
+            }
+        }
+    }
     private record Helper(ManagedCallbackSignature declaration, ExecutableProgram program, Language language) implements TruffleObject {}
     @TruffleBoundary public ManagedAddress helper(ManagedCallbackSignature declaration, ExecutableProgram program, Language language) {
         checkOwner();
@@ -65,8 +200,7 @@ public final class NativeCallbacks {
         void check() { checkOwner(); if (!open.isValid()) throw fault("Native callback has been freed"); }
         void checkEntry() {
             check();
-            for (var projection : pointerCalls.get()) if (projection.holdsAllocationMonitors())
-                throw fault("Native callback cannot enter during a pointer-cell projection");
+            NativeCallbacks.this.checkEntry();
         }
         void release() { open.invalidate(); closure = null; }
     }
@@ -176,9 +310,10 @@ public final class NativeCallbacks {
         }
     }
     public synchronized void close() {
-        alive.invalidate(); dynamic.clear();
+        alive.invalidate(); dynamic.clear(); stableRelease = null;
         for (var callback : callbacks.values()) callback.release();
         callbacks.clear(); // StablePointers owns final context disposal of its entries.
+        exports.clear(); retiredExports.clear();
     }
     @SuppressWarnings("unchecked") private static <E extends Throwable> RuntimeException rethrow(Throwable failure) throws E { throw (E) failure; }
 }

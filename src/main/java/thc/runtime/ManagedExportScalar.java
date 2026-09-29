@@ -14,7 +14,7 @@ import static thc.runtime.RuntimeFault.fault;
 /** The boxed scalar portion of a verified static foreign-export signature. */
 public final class ManagedExportScalar {
     public enum Role { ARGUMENT, RESULT }
-    private enum Kind { SIGNED, UNSIGNED, FLOAT, DOUBLE, CHAR, BOOL, UNIT, ADDRESS }
+    private enum Kind { SIGNED, UNSIGNED, FLOAT, DOUBLE, CHAR, BOOL, UNIT, ADDRESS, STABLE_POINTER }
     private final Kind kind;
     private final int bits;
     private final DataLayout layout;
@@ -49,20 +49,7 @@ public final class ManagedExportScalar {
     /** layoutById must resolve constructors from the same executable as the exported binder. */
     public static ManagedExportScalar fromNormalizedType(Map<String, ?> type, Role role, int wordBits,
                                                         Function<String, DataLayout> layoutById) {
-        if (wordBits != 32 && wordBits != 64) throw fault("Unsupported foreign-export target word width");
-        if (!type.keySet().equals(Set.of("kind", "name", "arguments")) || !"tycon".equals(type.get("kind")) ||
-            !(type.get("arguments") instanceof List<?> typeArguments)) throw fault("Unsupported foreign-export scalar type");
-        if (!(type.get("name") instanceof Map<?, ?> name)) throw fault("Missing foreign-export type identity");
-        if (!name.keySet().equals(Set.of("unit", "module", "occurrence", "namespace")) ||
-            !"ghc-internal".equals(name.get("unit")) || !"type".equals(name.get("namespace")))
-            throw fault("Unsupported foreign-export type identity");
-        if (!(name.get("occurrence") instanceof String occurrence)) throw fault("Missing foreign-export type occurrence");
-        var spec = "GHC.Internal.Ptr".equals(name.get("module")) && Set.of("Ptr", "FunPtr").contains(occurrence) && typeArguments.size() == 1
-            ? new Specification("GHC.Internal.Ptr", occurrence, "AddrRep", Kind.ADDRESS, wordBits) : SPECIFICATIONS.get(occurrence);
-        if (spec == null) throw fault("Unsupported foreign-export scalar: " + occurrence);
-        if (spec.kind != Kind.ADDRESS && !typeArguments.isEmpty()) throw fault("Unsupported foreign-export scalar type arguments");
-        if (!spec.owner.equals(name.get("module"))) throw fault("Foreign-export scalar owner mismatch: " + occurrence);
-        if (spec.kind == Kind.UNIT && role == Role.ARGUMENT) throw fault("GHC does not marshal a unit foreign-export argument");
+        var spec = specification(type, role, wordBits);
         var id = "ghc-internal:" + spec.owner + "." + spec.constructor;
         var layout = layoutById.apply(id);
         if (!layout.getId().equals(id) || !layout.getName().equals(spec.constructor) ||
@@ -74,6 +61,25 @@ public final class ManagedExportScalar {
             !falseLayout.getName().equals("False") || falseLayout.getArity() != 0))
             throw fault("Foreign-export Bool constructor layout mismatch");
         return new ManagedExportScalar(spec.kind, spec.bits == 0 ? wordBits : spec.bits, layout, falseLayout);
+    }
+    private static Specification specification(Map<String, ?> type, Role role, int wordBits) {
+        if (wordBits != 32 && wordBits != 64) throw fault("Unsupported foreign-export target word width");
+        if (!type.keySet().equals(Set.of("kind", "name", "arguments")) || !"tycon".equals(type.get("kind")) ||
+            !(type.get("arguments") instanceof List<?> typeArguments)) throw fault("Unsupported foreign-export scalar type");
+        if (!(type.get("name") instanceof Map<?, ?> name)) throw fault("Missing foreign-export type identity");
+        if (!name.keySet().equals(Set.of("unit", "module", "occurrence", "namespace")) ||
+            !"ghc-internal".equals(name.get("unit")) || !"type".equals(name.get("namespace")))
+            throw fault("Unsupported foreign-export type identity");
+        if (!(name.get("occurrence") instanceof String occurrence)) throw fault("Missing foreign-export type occurrence");
+        var spec = "GHC.Internal.Ptr".equals(name.get("module")) && Set.of("Ptr", "FunPtr").contains(occurrence) && typeArguments.size() == 1
+            ? new Specification("GHC.Internal.Ptr", occurrence, "AddrRep", Kind.ADDRESS, wordBits)
+            : "GHC.Internal.Stable".equals(name.get("module")) && occurrence.equals("StablePtr") && typeArguments.size() == 1
+                ? new Specification("GHC.Internal.Stable", "StablePtr", "AddrRep", Kind.STABLE_POINTER, wordBits) : SPECIFICATIONS.get(occurrence);
+        if (spec == null) throw fault("Unsupported foreign-export scalar: " + occurrence);
+        if (spec.kind != Kind.ADDRESS && spec.kind != Kind.STABLE_POINTER && !typeArguments.isEmpty()) throw fault("Unsupported foreign-export scalar type arguments");
+        if (!spec.owner.equals(name.get("module"))) throw fault("Foreign-export scalar owner mismatch: " + occurrence);
+        if (spec.kind == Kind.UNIT && role == Role.ARGUMENT) throw fault("GHC does not marshal a unit foreign-export argument");
+        return spec;
     }
     private long checkedLong(long number) {
         if (number < minimum || number > maximum) throw fault("Foreign-export integral argument is out of range");
@@ -113,8 +119,9 @@ public final class ManagedExportScalar {
     public DataValue fromHost(Object value) { return fromHost(value, InteropLibrary.getUncached()); }
     public DataValue fromHost(Object value, InteropLibrary interop) {
         return switch (kind) {
-            case ADDRESS -> {
+            case ADDRESS, STABLE_POINTER -> {
                 if (!(value instanceof ManagedAddress address)) throw fault("Expected a checked foreign-export address");
+                if (kind == Kind.STABLE_POINTER) thc.Language.currentState(null).getStablePointers().validate(address);
                 var result = layout.allocate(); layout.initialize(result, 0, address); yield result;
             }
             case SIGNED, UNSIGNED -> {
@@ -167,21 +174,33 @@ public final class ManagedExportScalar {
             case DOUBLE -> layout.readDouble(value, 0);
             case UNIT -> ForeignExportUnit.INSTANCE;
             case ADDRESS -> layout.read(value, 0);
+            case STABLE_POINTER -> {
+                var address = (ManagedAddress) layout.read(value, 0);
+                thc.Language.currentState(null).getStablePointers().validate(address); yield address;
+            }
             case BOOL -> throw new IllegalStateException("handled above");
         };
     }
     public String nativeRepresentation() {
+        return nativeRepresentation(kind, bits);
+    }
+    /** Signature selection does not prepare/evaluate the exported Haskell closure. */
+    public static String nativeRepresentation(Map<String, ?> type, Role role, int wordBits) {
+        var spec = specification(type, role, wordBits);
+        return nativeRepresentation(spec.kind, spec.bits == 0 ? wordBits : spec.bits);
+    }
+    private static String nativeRepresentation(Kind kind, int bits) {
         return switch (kind) {
             case SIGNED -> "Int" + bits + "Rep";
             case UNSIGNED -> "Word" + bits + "Rep";
-            case FLOAT -> "FloatRep"; case DOUBLE -> "DoubleRep"; case ADDRESS -> "AddrRep";
+            case FLOAT -> "FloatRep"; case DOUBLE -> "DoubleRep"; case ADDRESS, STABLE_POINTER -> "AddrRep";
             case CHAR -> "Word32Rep"; case BOOL -> "Int" + bits + "Rep"; case UNIT -> "void";
         };
     }
     /** NFI's signed carriers transport unsigned values by preserving their bits. */
     public DataValue fromNative(Object value, NativeCallbacks callbacks) {
         try {
-            if (kind == Kind.ADDRESS) return fromHost(callbacks.incoming(value));
+            if (kind == Kind.ADDRESS || kind == Kind.STABLE_POINTER) return fromHost(callbacks.incoming(value));
             var interop = InteropLibrary.getUncached();
             if (kind == Kind.UNSIGNED) {
                 long raw = interop.asLong(value);
@@ -194,7 +213,7 @@ public final class ManagedExportScalar {
     }
     public Object toNative(Object value, NativeCallbacks callbacks) {
         Object result = toHost(value); // Retain the exact constructor/range checks.
-        if (kind == Kind.ADDRESS) return callbacks.outgoing((ManagedAddress) result);
+        if (kind == Kind.ADDRESS || kind == Kind.STABLE_POINTER) return callbacks.outgoing((ManagedAddress) result);
         if (kind == Kind.BOOL) return Boolean.TRUE.equals(result) ? 1L : 0L;
         if (kind == Kind.UNIT) return 0;
         if (kind == Kind.CHAR) return ((String) result).codePointAt(0);

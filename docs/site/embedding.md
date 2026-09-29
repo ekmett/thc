@@ -65,12 +65,17 @@ These are the signatures admitted by the declared C-export path. The lower-level
 Core entry path below also transports guest references, functions and raw SIMD
 values; that does not expand the native C calling convention of an export.
 
-This is an experimental managed entrypoint, not a native C callback address.
+The namespace values are managed entrypoints, not host-visible native addresses.
+Original package C can resolve the same declared exports through the context's
+native callback namespace when native access is enabled. `Ptr`, `FunPtr` and
+context-owned `StablePtr` arguments/results use their checked address codecs;
+they never reinterpret an arbitrary Java reference as a native address.
 The loader requires the typed declarations and verified retained registration
 products produced with THC's `foreign-export-associations` and
 `foreign-export-registration` plugin options. The current producer profile is
 for GHC 9.14.1 static `ccall` exports; an old interface containing only C stubs
-does not supply that evidence. Other foreign products and unclassified
+does not supply that evidence. Mixed C imports retain their independently
+verified import-only products; unclassified
 registration remain unsupported. One managed bundle can be loaded per context;
 its members are read-only and live only as long as that context.
 

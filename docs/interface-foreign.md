@@ -542,11 +542,11 @@ are not a universal FFI policy. Opaque guest objects need handles and a
 separate re-entry contract, not pointer reinterpretation.
 
 Managed package-C buffer views, native-backed pinned byte arrays and separately
-owned native `malloc` addresses are implemented; general retained-buffer lifetime
-contracts and native callbacks remain work.
-The package-C acquisition path must eventually carry declared external native
-dependencies as well as bitcode. This design direction is not a claim that
-arbitrary mixed native packages already run.
+owned native `malloc` addresses are implemented. Declared static exports and
+dynamic wrappers use context-owned native callbacks; general retained-buffer
+lifetime contracts remain separate work. Package-C acquisition carries verified
+native companions alongside bitcode, without claiming that arbitrary mixed
+native packages already run.
 
 ## Package C/CAPI calls
 
@@ -660,6 +660,23 @@ or `hs_free_stable_ptr` remains raw verified bitcode, with any native dependenci
 in the separately linked companion. Those managed references remain unresolved
 until context linkage; producing this artifact alone does not establish callback
 execution or supply a native GHC RTS ABI.
+
+Ordinary AST and bytecode loaders register the checked static exports in the
+context's native namespace before running package C constructors. C may retain
+the resulting callback pointer. Entry uses the existing managed export codecs,
+guest-thread admission and exception path, including safe callbacks on the
+original native thread in Loom mode. Same-component calls from a constructor
+use its already published LLVM symbols instead of waiting on their own load.
+Other threads still wait for component initialization to finish.
+
+`StablePtr` arguments preserve THC's opaque, context-owned handles. Original C
+`hs_free_stable_ptr` releases only a live token belonging to that context; null,
+fabricated, foreign and previously freed tokens are rejected. It does not accept
+GHC RTS heap pointers. Failed initialization withdraws the new export names and
+roots; any callback pointers already handed to C remain allocated but invalid
+until context close. Failed native component initialization is not rolled back
+or retried in place. Reusable/native-image construction remains a separate
+preparation contract.
 
 For an ordinary full-Core installation lacking these annotations, project runs
 can explicitly supply `--installed-core required --ghc-source DIR`. This bounded

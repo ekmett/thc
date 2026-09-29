@@ -26,13 +26,14 @@ public final class ManagedExportRegistry {
     @TruffleBoundary @SuppressWarnings("unchecked")
     public ManagedExportNamespace load(ManagedExportPlan plan) {
         return load(() -> {
-            for (var link : (List<PackageScalarLink>) plan.getLinked().get("packageScalarLinks")) owner.getPackageCbits().link(link);
+            for (var link : (List<PackageScalarLink>) plan.getLinked().get("packageScalarLinks")) owner.getPackageCbits().declare(link);
             ExecutableProgram program = switch (plan.getBackend()) {
                 case "ast" -> new Program(language, plan.getLinked(), false, false);
                 case "bytecode" -> new BytecodeProgram(language, plan.getLinked(), true);
                 default -> throw new IllegalStateException("Invalid managed backend");
             };
-            return new Loaded(program, plan.getExports(), (List<ManagedExportAdmission>) plan.getLinked().get("managedRegistrations"));
+            return new Loaded(program, plan.getExports(), (List<ManagedExportAdmission>) plan.getLinked().get("managedRegistrations"),
+                (List<PackageScalarLink>) plan.getLinked().get("packageScalarLinks"));
         });
     }
     @TruffleBoundary
@@ -45,11 +46,12 @@ public final class ManagedExportRegistry {
                 var exports = new ArrayList<ManagedExportSignature>();
                 for (var admission : registrations) exports.addAll(admission.getExports());
                 if (exports.isEmpty()) throw new IllegalArgumentException("No verified static foreign exports supplied");
-                return new Loaded(program, ManagedExportPlan.checked(exports, program::signatureBindings), registrations);
+                return new Loaded(program, ManagedExportPlan.checked(exports, program::signatureBindings), registrations, List.of());
             } catch (Throwable failure) { program.close(); throw failure; }
         });
     }
-    private record Loaded(ExecutableProgram program, List<ManagedExportSignature> exports, List<ManagedExportAdmission> registrations) {}
+    private record Loaded(ExecutableProgram program, List<ManagedExportSignature> exports, List<ManagedExportAdmission> registrations,
+            List<PackageScalarLink> links) {}
     private ManagedExportNamespace load(Supplier<Loaded> prepare) {
         checkOwner();
         synchronized (this) {
@@ -60,6 +62,7 @@ public final class ManagedExportRegistry {
         try {
             var bundle = prepare.get(); prepared = bundle;
             var program = bundle.program();
+            owner.getForeignRoots().register(program, language, bundle.registrations(), bundle.exports());
             var grouped = new LinkedHashMap<String,Map<String,List<ManagedExportSignature>>>();
             for (var signature : bundle.exports()) grouped.computeIfAbsent(signature.unit(), ignored -> new LinkedHashMap<>()).computeIfAbsent(signature.module(), ignored -> new ArrayList<>()).add(signature);
             var namespace = new LinkedHashMap<String,ManagedExportNamespace>();
@@ -72,14 +75,19 @@ public final class ManagedExportRegistry {
                 }
                 namespace.put(unit.getKey(), new ManagedExportNamespace(this, unit.getKey(), () -> modules));
             }
+            if (program instanceof CoreUnitProgram unitProgram) unitProgram.linkStartup();
+            for (var link : bundle.links()) owner.getPackageCbits().link(link);
             synchronized (this) {
-                checkOwner(); owner.getForeignRoots().retain(program, bundle.registrations());
+                checkOwner();
                 if (program instanceof CoreUnitProgram unitProgram) owner.getCoreUnitPrograms().add(unitProgram);
                 units = namespace; loaded = true;
             }
             return scope;
         } catch (Throwable failure) {
-            if (prepared != null && prepared.program() instanceof CoreUnitProgram unitProgram) unitProgram.close();
+            if (prepared != null) {
+                owner.getForeignRoots().release(prepared.program());
+                if (prepared.program() instanceof CoreUnitProgram unitProgram) unitProgram.close();
+            }
             throw failure;
         } finally { synchronized (this) { loading = false; } }
     }

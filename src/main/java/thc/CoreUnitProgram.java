@@ -23,6 +23,7 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
     private final Map<CoreUnitDirectory.ModuleRecord,Map<String,Object>> admittedModules = new HashMap<>();
     private final Map<CoreUnitDirectory.ModuleRecord,CoreModuleAdmission> admissions = new HashMap<>();
     private final Map<String,List<PackageScalarAdmission>> packageProvenance = new HashMap<>();
+    private final Map<String,PackageScalarLink> startupLinks = new LinkedHashMap<>();
     private final List<CoreJsonIndex> consumerSources = new ArrayList<>();
     private final CoreJsonLoadingStatistics consumerStatistics = new CoreJsonLoadingStatistics();
     private final List<Map<String,Object>> consumers = new ArrayList<>();
@@ -186,7 +187,10 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
         // Another binding may demand a new original CAPI owner. The context
         // registry checks exact identity and links the component only once.
         for (var link : (List<ForeignBitcode>) linked.get("foreignLinks")) owner.cbits().link(link);
-        for (var link : (List<PackageScalarLink>) linked.get("packageScalarLinks")) owner.getPackageCbits().link(link);
+        for (var link : (List<PackageScalarLink>) linked.get("packageScalarLinks")) {
+            owner.getPackageCbits().declare(link);
+            synchronized (startupLinks) { startupLinks.put(link.getUnit(), link); }
+        }
         return backend.equals("ast") ? new Program(language, linked, async, false) : new BytecodeProgram(language, linked, async);
     }
     public List<ManagedExportAdmission> registerStartup() {
@@ -196,9 +200,15 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
         for (var admitted : pending) {
             var merger = new CoreModules.Merger(availableModules); merger.addSelected(admitted, List.of()); merger.finish();
             var exports = admitted.getExports();
-            if (exports != null) { registrations.add(exports); for (var exported : exports.getExports()) entryValue(exported.binder()); }
+            if (exports != null) registrations.add(exports);
         }
         return registrations;
+    }
+    /** Called after registration/root preparation, outside the demand-cell lock. */
+    public void linkStartup() {
+        List<PackageScalarLink> links;
+        synchronized (startupLinks) { links = new ArrayList<>(startupLinks.values()); }
+        for (var link : links) owner.getPackageCbits().link(link);
     }
     /** Follow only the selected alias/PAP spine, never unrelated body references. */
     public List<Map<String,Object>> signatureBindings(String id) {

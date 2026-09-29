@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.CsvSource;
 import thc.runtime.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static thc.runtime.OriginalStdioChecks.with;
@@ -21,6 +22,63 @@ import static thc.runtime.OriginalStdioChecks.with;
 @SuppressWarnings("unchecked")
 class NativeCallbacksTest {
     @TempDir Path directory;
+    @ParameterizedTest @CsvSource({"ast,false", "bytecode,false", "ast,true", "bytecode,true"})
+    void originalStaticExportReturnsThroughPackageCAndReleasesStablePointer(String backend, boolean compiled) throws Exception {
+        var root = Path.of(System.getProperty("thc.projectRoot"));
+        sources(root, "ast"); // Validate the complete actual producer receipt.
+        assertEquals("43", Files.readString(root.resolve("build/dynamic-callback/static-oracle.txt")).trim());
+        var inputs = List.of("@" + root.resolve("build/dynamic-callback/runtime-support.json"),
+            root.resolve("build/dynamic-callback/NativeExport.json").toString());
+        String entry = "static-export-fixture:NativeExport.probe";
+        for (String hosting : List.of("platform", "loom")) try (var context = Main.withContextProfile(Context.newBuilder("thc")
+                .allowNativeAccess(true).allowCreateThread(true).allowExperimentalOptions(true).option("thc.ThreadHosting", hosting), ContextProfile.SYNCHRONOUS_TEST).build()) {
+            Main.loadEntry(context, inputs, entry, true, backend, false, null, true);
+            context.enter();
+            try {
+                var owner = Language.currentState(); var program = owner.getCoreUnitPrograms().getFirst();
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var bindings = program.signatureBindings(entry);
+                var selected = bindings.stream().filter(it -> entry.equals(it.get("id"))).findFirst().orElseThrow();
+                var signature = CoreRepresentations.knownFunctionSignature((List<Object>) selected.get("expr"), bindings);
+                assertNotNull(signature, "Use the original IO state/result proof");
+                var io = new ManagedExportIoRoot(language, signature.getResult()).getCallTarget();
+                var target = new RootNode(language) {
+                    @Child private HostDispatch dispatch = HostDispatch.create();
+                    @Override public Object execute(VirtualFrame frame) {
+                        return dispatch.executePublic(io, new Object[]{program.entryValue(entry)});
+                    }
+                }.getCallTarget();
+                String worker = (String) bindings.stream().filter(it -> ((List<?>) it.get("expr")).getFirst().equals("lam"))
+                    .findFirst().orElseThrow().get("id");
+                // The public IO binder is an unforced alias thunk. Compile its
+                // original state-transformer body, not that alias's updater.
+                var action = assertInstanceOf(Closure.class, program.entryValue(worker));
+                var original = action.target;
+                if (compiled) {
+                    var optimized = (com.oracle.truffle.runtime.OptimizedCallTarget) original;
+                    optimized.compile(true); assertTrue(optimized.isValidLastTier());
+                    ((com.oracle.truffle.runtime.OptimizedTruffleRuntime) com.oracle.truffle.api.Truffle.getRuntime()).bypassedInstalledCode(optimized);
+                }
+                long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
+                Runnable invoke = () -> {
+                    owner.getThreads().enterCurrent(null, false, true, null);
+                    try {
+                        var result = (DataValue) Calls.target(target, new Object[0]);
+                        assertEquals(43L, result.getLayout().readLong(result, 0), hosting);
+                        assertSame(original, program.entryTarget(worker));
+                        assertEquals(0, language.getHandoffState().get().getArguments().getDepth());
+                        assertEquals(0, language.getHandoffState().get().getResults().getDepth());
+                    } finally { owner.getThreads().leaveCurrent(GuestThreadStatus.FINISHED); }
+                };
+                if (owner.getThreads().needsHosting()) owner.getThreads().hostEntry(null, () -> { invoke.run(); return null; });
+                else invoke.run();
+                // Cold async handler/return profiling may deoptimize, but the
+                // original installed target must receive the very first call.
+                if (compiled) assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > before);
+                assertEquals(0L, program.diagnostics().get("unsupportedTraps"));
+            } finally { context.leave(); }
+        }
+    }
     static Map<String,Object> original() throws Exception {
         var response = (Map<String,Object>) Json.parse(Files.readString(Path.of("build/dynamic-callback/interface-response.json")));
         assertEquals("loaded", response.get("status"));
@@ -101,6 +159,9 @@ class NativeCallbacksTest {
     private List<String> sources(Path root, String backend) throws Exception {
         var manifest = (Map<String,Object>) Json.parse(Files.readString(root.resolve("build/dynamic-callback/manifest.json")));
         thc.runtime.OriginalStdioChecks.hashes(root.toFile(), manifest.get("inputHashes"), java.util.Set.of(
+            "t/fixtures/run-static-exports/NativeExport.hs", "t/fixtures/run-static-exports/Main.hs",
+            "t/fixtures/run-static-exports/cbits/callbacks.c", "t/fixtures/run-static-exports/cbits/callbacks.h",
+            "src/compiler/THC/ForeignExportProvenance.hs",
             "t/fixtures/compiler/DynamicCallback.hs", "t/fixtures/compiler/DynamicCallbackNative.hs",
             "t/fixtures/compiler/dynamic-callback.c", "t/haskell-fixtures/DynamicCallbackFixtures.hs",
             "src/compiler/THC/ForeignImportProvenance.hs", "src/compiler/THC/Plugin.hs",
@@ -108,7 +169,8 @@ class NativeCallbacksTest {
         thc.runtime.OriginalStdioChecks.hashes(root.toFile(), manifest.get("artifactHashes"), java.util.Set.of(
             "build/dynamic-callback/DynamicCallback.json", "build/dynamic-callback/DynamicCallback.cbd",
             "build/dynamic-callback/runtime-support.json", "build/dynamic-callback/interface-response.json",
-            "build/dynamic-callback/oracle.txt", "build/dynamic-callback/audit.json"), "build/dynamic-callback/");
+            "build/dynamic-callback/oracle.txt", "build/dynamic-callback/audit.json", "build/dynamic-callback/NativeExport.json",
+            "build/dynamic-callback/static-oracle.txt", "build/dynamic-callback/static-audit.json"), "build/dynamic-callback/");
         var support = root.resolve("build/dynamic-callback/runtime-support.json");
         if (backend.equals("ast")) return List.of("@" + support, root.resolve("build/dynamic-callback/DynamicCallback.json").toString());
         // Compact inputs use the package directory, not the loose JSON input path.
