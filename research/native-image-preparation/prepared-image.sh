@@ -12,7 +12,13 @@ recipe_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_dir=$(cd -- "$1" && pwd)
 mode=${2:-build}
 case "$mode" in prepare-only|build|cache|cache-prepare-only|executable|executable-prepare-only) ;; *) exit 2 ;; esac
-vector_options=()
+# Automatic vectorization is a process-wide compiler policy, independent of
+# explicit Vector API intrinsics. Apply it to image code and the runtime JIT.
+case "${THC_NATIVE_IMAGE_AUTOVECTORIZE:-false}" in
+    false) vector_options=(-H:-Vectorization -R:-Vectorization) ;;
+    true) vector_options=(-H:+Vectorization -R:+Vectorization) ;;
+    *) echo 'THC_NATIVE_IMAGE_AUTOVECTORIZE must be true or false' >&2; exit 2 ;;
+esac
 vector_profile=${THC_NATIVE_IMAGE_VECTOR_PROFILE:-intrinsics}
 case "$vector_profile" in
     intrinsics) ;;
@@ -20,7 +26,7 @@ case "$vector_profile" in
         # This pinned JDK cannot combine Vector API intrinsics with shared
         # arenas. Keep Vector API semantics using its array fallback and THC's
         # scalar bulk-copy memory boundary, without changing resource lifetime.
-        vector_options=(-H:-VectorAPISupport -H:+SharedArenaSupport -Dthc.nativeImage.resourceCopies=true) ;;
+        vector_options+=(-H:-VectorAPISupport -H:+SharedArenaSupport -Dthc.nativeImage.resourceCopies=true) ;;
     *) echo 'THC_NATIVE_IMAGE_VECTOR_PROFILE must be intrinsics or resource-copy' >&2; exit 2 ;;
 esac
 : "${JAVA_HOME:?Select GraalVM 25.3.4.1}"

@@ -161,6 +161,13 @@ The [bytecode backend](docs/bytecode.md) is the default. To use the AST backend:
 THC_BACKEND=ast bin/run.sh build/core/THC.Prim.Test.json,build/core/Fixtures.json sumLoop 100000 --compile
 ```
 
+THC launchers disable Graal's automatic vectorization by default. Explicit JDK
+Vector API operations remain enabled. To enable automatic vectorization for a
+run, set `JAVA_OPTS=-Djdk.graal.Vectorization=true`. This is a JVM-wide compiler
+setting, so it applies to both backends. Gradle application and test JVMs use the
+same default and respect explicit JVM properties; embedders choose their own JVM
+options.
+
 Development checks and benchmarks live in `src/diagnostics/`. Build their separate
 `build/diagnostics/thc-tools.jar` with `./gradlew toolsJar`; the `try` scripts do
 this alongside `installDist`. Direct Java launches add that JAR to the runtime

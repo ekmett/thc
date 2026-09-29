@@ -163,15 +163,20 @@ application {
 // Defer to opaque @argument files too, without opening or parsing them here.
 def inheritedJvmOptions = ["JAVA_TOOL_OPTIONS", "JDK_JAVA_OPTIONS", "_JAVA_OPTIONS"]
 def memoryOptionNames = ["UseCompressedOops", "MaxRAM", "MinRAM", "InitialRAM", "@"]
-def defaultCompressedOops = { JavaForkOptions options ->
+def defaultRuntimeOptions = { JavaForkOptions options ->
     def explicit = (options.jvmArgs ?: []) + inheritedJvmOptions.collect { options.environment[it]?.toString() ?: "" }
-    return explicit.any { option -> memoryOptionNames.any { option.contains(it) } } ? [] : ["-XX:+UseCompressedOops"]
+    def defaults = explicit.any { option -> memoryOptionNames.any { option.contains(it) } } ? [] : ["-XX:+UseCompressedOops"]
+    if (!options.systemProperties.containsKey("jdk.graal.Vectorization") &&
+        !explicit.any { it.contains("jdk.graal.Vectorization=") || it.contains("@") }) {
+        defaults.add("-Djdk.graal.Vectorization=false")
+    }
+    return defaults
 }
 tasks.withType(JavaExec).configureEach { task ->
-    jvmArgumentProviders.add({ defaultCompressedOops(task) } as CommandLineArgumentProvider)
+    jvmArgumentProviders.add({ defaultRuntimeOptions(task) } as CommandLineArgumentProvider)
 }
 tasks.withType(Test).configureEach { task ->
-    jvmArgumentProviders.add({ defaultCompressedOops(task) } as CommandLineArgumentProvider)
+    jvmArgumentProviders.add({ defaultRuntimeOptions(task) } as CommandLineArgumentProvider)
 }
 tasks.startScripts {
     // This must happen before Java starts. HotSpot's suspend handler cannot be
@@ -183,18 +188,22 @@ tasks.startScripts {
     // Query these variables rather than expanding their contents into cmd syntax:
     // an otherwise valid quoted -D property can contain shell metacharacters.
     def windowsMemoryPolicy = "(set JAVA_TOOL_OPTIONS & set JDK_JAVA_OPTIONS & set _JAVA_OPTIONS & set JAVA_OPTS & set THC_OPTS) 2>nul | \"%SystemRoot%\\System32\\findstr.exe\" /L /C:\"UseCompressedOops\" /C:\"MaxRAM\" /C:\"MinRAM\" /C:\"InitialRAM\" /C:\"@\" >nul\nif errorlevel 1 set DEFAULT_JVM_OPTS=%DEFAULT_JVM_OPTS% \"-XX:+UseCompressedOops\""
+    def unixVectorPolicy = 'case "${JAVA_TOOL_OPTIONS-} ${JDK_JAVA_OPTIONS-} ${_JAVA_OPTIONS-} ${JAVA_OPTS-} ${THC_OPTS-}" in\n  *jdk.graal.Vectorization=*|*@*) ;;\n  *) DEFAULT_JVM_OPTS="$DEFAULT_JVM_OPTS \\"-Djdk.graal.Vectorization=false\\"" ;;\nesac'
+    def windowsVectorPolicy = '(set JAVA_TOOL_OPTIONS & set JDK_JAVA_OPTIONS & set _JAVA_OPTIONS & set JAVA_OPTS & set THC_OPTS) 2>nul | "%SystemRoot%\\System32\\findstr.exe" /L /C:"jdk.graal.Vectorization=" /C:"@" >nul\nif errorlevel 1 set DEFAULT_JVM_OPTS=%DEFAULT_JVM_OPTS% "-Djdk.graal.Vectorization=false"'
     inputs.property("linuxSignalPolicy", policy)
     inputs.property("unixMemoryPolicy", unixMemoryPolicy)
     inputs.property("windowsMemoryPolicy", windowsMemoryPolicy)
+    inputs.property("unixVectorPolicy", unixVectorPolicy)
+    inputs.property("windowsVectorPolicy", windowsVectorPolicy)
     doLast {
         def unixMarker = "# Collect all arguments for the java command:"
         def unix = unixScript.getText("UTF-8")
         checkBuild(unix.contains(unixMarker)) { "Missing Gradle Unix launcher insertion point" }
-        unixScript.setText(unix.replace(unixMarker, policy + "\n" + unixMemoryPolicy + "\n\n" + unixMarker), "UTF-8")
+        unixScript.setText(unix.replace(unixMarker, policy + "\n" + unixMemoryPolicy + "\n" + unixVectorPolicy + "\n\n" + unixMarker), "UTF-8")
         def windowsMarker = "@rem Execute thc"
         def windows = windowsScript.getText("UTF-8")
         checkBuild(windows.contains(windowsMarker)) { "Missing Gradle Windows launcher insertion point" }
-        windowsScript.setText(windows.replace(windowsMarker, windowsMemoryPolicy.replace("\n", "\r\n") + "\r\n\r\n" + windowsMarker), "UTF-8")
+        windowsScript.setText(windows.replace(windowsMarker, (windowsMemoryPolicy + "\n" + windowsVectorPolicy).replace("\n", "\r\n") + "\r\n\r\n" + windowsMarker), "UTF-8")
     }
 }
 tasks.named("run", JavaExec) {
