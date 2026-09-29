@@ -34,6 +34,7 @@ import thc.ForeignExceptionFixtureSupport;
 import thc.Json;
 import thc.Language;
 import static org.junit.jupiter.api.Assertions.*;
+import static thc.runtime.ScalarTestCalls.callScalarTestTarget;
 
 /** Genuine installed declarations and native observations; no replacement FFI. */
 @EnabledOnOs(OS.LINUX)
@@ -208,11 +209,11 @@ public class OriginalGmpTest {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 var output = new byte[24]; Arrays.fill(output, (byte) 0x5a); var before = output.clone(); var input = new byte[24]; Arrays.fill(input, (byte) 0x33);
                 if (!nativeAccess) {
-                    assertThrows(RuntimeFault.class, () -> Calls.target(load(language, backend, source).entryTarget("originalAddWord"),
+                    assertThrows(RuntimeFault.class, () -> callScalarTestTarget(load(language, backend, source).entryTarget("originalAddWord"),
                         new Object[]{0L, output, input, 1L, 1L}));
                 } else {
                     var entry = load(language, backend, source).entryTarget("originalAddWord");
-                    assertThrows(RuntimeFault.class, () -> Calls.target(entry, new Object[]{0L, output, ManagedAddress.fromByteArray(input), 1L, 1L}));
+                    assertThrows(RuntimeFault.class, () -> callScalarTestTarget(entry, new Object[]{0L, output, ManagedAddress.fromByteArray(input), 1L, 1L}));
                 }
                 assertArrayEquals(before, output);
             } finally { context.leave(); }

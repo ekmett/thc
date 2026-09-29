@@ -125,7 +125,7 @@ class OriginalMemorySearchTest {
                     ? address(row.get("right"), kind).plus((Long) row.get("rightOffset"))
                     : row.get("needle");
                 long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
-                var returned = Calls.target(target, new Object[] {0L, left, second, row.get("count")});
+                var returned = callScalarTestTarget(target, new Object[] {0L, left, second, row.get("count")});
                 var label =
                     stage + "/" + backend + "/" + entry + "/storage=" + kind + "/" + index + "/compiled=" + compiled;
                 if (entry.equals("originalCompare"))
@@ -259,7 +259,7 @@ class OriginalMemorySearchTest {
                     var bytes = ManagedAddress.fromByteArray(new byte[] {1, 2});
                     Object second = "memcmp".equals(symbol) ? bytes : 1L;
                     assertThrows(
-                        RuntimeFault.class, () -> Calls.target(target, new Object[] {0L, bytes, second, 2L, 17L}));
+                        RuntimeFault.class, () -> callScalarTestTarget(target, new Object[] {0L, bytes, second, 2L, 17L}));
                     assertThrows(RuntimeFault.class,
                         ()
                             -> callScalarTestTarget(
