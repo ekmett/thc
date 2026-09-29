@@ -110,7 +110,7 @@ fi
 # Keep the exact inventory out of a single OS argument (Linux caps one argument
 # independently of the total command-line size).
 approved_initialization_args="$inventory_dir/approved-initialization.args"
-printf '%s\n' ClassInitializationInventory build/install/thc/lib/thc-0.1-experiment.jar switches \
+printf '%s\n%s\n%s\n"%s"\n' ClassInitializationInventory build/install/thc/lib/thc-0.1-experiment.jar switches \
     "$initialization" > "$approved_initialization_args"
 "$JAVA_HOME/bin/java" -Xmx512m -XX:-UseJVMCICompiler -cp "$probe_dir:$classpath" \
     "@$approved_initialization_args" \
@@ -143,6 +143,11 @@ if [[ -n "$foreign_configuration" ]]; then
     printf '"-H:ConfigurationFileDirectories=%s"\n' "$foreign_configuration" > "$foreign_args"
 fi
 [[ "$mode" == *prepare-only ]] && exit 0
+# CLI eager initialization can create LanguageCache entries before Truffle's
+# optional resource registry is populated. Apply the SAME finite class policy
+# during setup, after all features' registration hooks have completed.
+"$JAVA_HOME/bin/javac" -cp "$classpath" -d "$probe_dir" "$recipe_dir/PreparedInitializationFeature.java"
+classpath="$probe_dir:$classpath"
 builder_overlays=
 if [[ -n "${THC_NATIVE_IMAGE_DEOPT_LOOP_STAMPS:-}" ]]; then
     [[ "$THC_NATIVE_IMAGE_DEOPT_LOOP_STAMPS" == 1 ]] || exit 2
@@ -178,7 +183,7 @@ exec "$JAVA_HOME/bin/native-image" -Ob "-J-Xmx$builder_heap" -J-XX:ActiveProcess
     --add-modules=jdk.incubator.vector \
     --enable-native-access=ALL-UNNAMED,org.graalvm.truffle \
     --add-exports=org.graalvm.truffle.runtime/com.oracle.truffle.runtime=ALL-UNNAMED \
-    "@$initialization_args" "@$foreign_args" \
+    --features=PreparedInitializationFeature "-J-Dthc.nativeImage.initialization=$initialization_args" "@$foreign_args" \
     -H:+UnlockExperimentalVMOptions "@$vector_args" "${cache_options[@]}" "${executable_options[@]}" -H:+PrintCanonicalGraphStrings \
     -H:DumpPath="${THC_NATIVE_IMAGE_DUMP_PATH:-$repo_dir/build/native-image/graphs/reproduction}" \
     "${diagnostics[@]}" -H:-UnlockExperimentalVMOptions \
