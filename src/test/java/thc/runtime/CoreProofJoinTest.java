@@ -86,6 +86,85 @@ class CoreProofJoinTest {
             } finally { if (worker.isAlive()) context.close(true); }
         }
     }
+    @Test void savedRecursiveJoinEntryCompilesWithPendingOperandAndBothCycleEntries() throws Exception {
+        var state = map("kind", "void", "primReps", list(), "evaluated", true);
+        var pause = list("app", list("prim", "noDuplicate#"), list(list("void", meta(state))),
+                list(false), false, false, meta(state));
+        var afterPause = list("case", pause,
+                "paused", list(list("default", null, list(), n(2))), with(meta(), "binder",
+                        map("id", "paused", "name", "paused", "lifted", false, "rep", state)));
+        // Initial entry takes B, then A, before the third iteration captures a real
+        // pending operand. A transfers forward to B; B transfers backward to A.
+        var a = call("b", v("cycles"), prim("+#", prim("*#", v("traceA"), n(10)), n(1)));
+        var bTrace = prim("+#", prim("*#", v("traceB"), n(10)), n(2));
+        var b = choose(prim("==#", v("cyclesB"), n(1)), bTrace,
+                call("a", prim("+#", v("cyclesB"), n(1)), bTrace));
+        var pending = prim("+#", n(40), afterPause);
+        var selected = choose(prim("==#", pending, n(42)),
+                choose(prim("==#", prim("remInt#", v("iteration"), n(2)), n(0)),
+                        call("a", n(0), v("trace")), call("b", n(0), v("trace"))), n(-1));
+        var entry = list("case", call("arm", v("iteration")), "armed",
+                list(list("default", null, list(), selected)), with(meta(), "binder", arg("armed")));
+        var inner = let(true, List.of(bind("a", lam(List.of("cycles", "traceA"), a), 2),
+                bind("b", lam(List.of("cyclesB", "traceB"), b), 2)), entry);
+        var next = list("case", inner, "nextTrace", list(list("default", null, list(),
+                call("outer", prim("+#", v("iteration"), n(1)), v("nextTrace")))),
+                with(meta(), "binder", arg("nextTrace")));
+        var outer = choose(prim("==#", v("iteration"), n(5)), v("trace"), next);
+        var body = let(true, List.of(bind("outer", lam(List.of("iteration", "trace"), outer), 2)),
+                call("outer", n(1), n(0)));
+        try (var context = org.graalvm.polyglot.Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("engine.CompilationFailureAction", "Throw")
+                .option("compiler.CompilationTimeout", "30").option("compiler.MaximumGraalGraphSize", "100000").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var checkpoint = new BytecodeCheckpoint();
+                var effects = new java.util.concurrent.atomic.AtomicInteger();
+                // Earlier real iterations take the same checkpoint's ordinary false path.
+                var arm = new Closure(null, 1, new RootNode(language) {
+                    @Override public Object execute(VirtualFrame frame) {
+                        effects.incrementAndGet();
+                        checkpoint.setArmed((Long) frame.getArguments()[1] == 3L);
+                        return 0L;
+                    }
+                }.getCallTarget());
+                var function = list("lam", list(map("id", "arm", "name", "arm", "lifted", true, "rep", closure)),
+                        body, map("rep", closure, "resultRep", longProof));
+                var program = new BytecodeProgram(language,
+                        map("bindings", list(bind("entry", function)), "instrument", true), checkpoint, true);
+                var root = (BytecodeRoot) program.entryTarget("entry").getRootNode();
+                assertTrue(root.prepareForCompilation(true, 2, true));
+                root.getBytecodeNode().ensureSourceInformation();
+                var first = assertInstanceOf(ContinuationResult.class, Calls.target(root.getCallTarget(), new Object[]{0L, arm}));
+                assertSame(Unit.INSTANCE, first.getResult());
+                assertEquals(1, checkpoint.getVisits().get()); assertEquals(3, effects.get());
+                assertEquals(10L, program.diagnostics().get("localJoinTransfers"), "both entry paths precede capture exactly once");
+                var frame = first.getFrame(); var continuation = first.getContinuationRootNode();
+                int pc = continuation.getLocation().getBytecodeIndex();
+                root.getRootNodes().ensureSourceInformation();
+                var location = continuation.getLocation();
+                assertEquals(com.oracle.truffle.api.bytecode.BytecodeTier.CACHED, location.getBytecodeNode().getTier());
+                assertEquals(pc, location.getBytecodeIndex());
+                var target = (com.oracle.truffle.runtime.OptimizedCallTarget) first.getContinuationCallTarget();
+                assertTrue(target.compile(true)); assertTrue(target.isValidLastTier());
+                assertEquals(1, checkpoint.getVisits().get(), "compilation must not execute a guest prefix");
+                assertEquals(0, checkpoint.getCompiledVisits().get()); assertEquals(3, effects.get());
+                ((com.oracle.truffle.runtime.OptimizedTruffleRuntime) com.oracle.truffle.api.Truffle.getRuntime()).bypassedInstalledCode(target);
+                assertEquals(21212122121212L, first.continueWith(Unit.INSTANCE));
+                assertSame(frame, first.getFrame()); assertEquals(4, effects.get());
+                assertEquals(1, checkpoint.getVisits().get());
+                assertEquals(1, checkpoint.getCompiledVisits().get(), "first installed resume executes the fourth iteration checkpoint");
+                assertEquals(19L, program.diagnostics().get("localJoinTransfers"), "all recursive transfers execute once");
+                assertSame(continuation, first.getContinuationRootNode()); assertSame(target, first.getContinuationCallTarget());
+                assertSame(root, continuation.getSourceRootNode());
+                assertSame(location.getBytecodeNode(), continuation.getLocation().getBytecodeNode());
+                assertEquals(pc, continuation.getLocation().getBytecodeIndex());
+            } finally { context.leave(); }
+        }
+    }
+
     @Test void deeplyNestedNonrecursiveJoinsAreBranchesIncludingInClonedCompiledTargets() throws ReflectiveOperationException {
         var region = let(false, List.of(bind("positive", lam(List.of("value"), prim("+#", v("value"), n(17))), 1), bind("negative", lam(List.of("value"), prim("-#", n(0), v("value"))), 1)), choose(prim("<#", v("input"), n(0)), call("negative", v("input")), choose(prim("==#", v("input"), n(0)), n(4096), call("positive", v("input")))));
         // Exercise zero-arity, multiple targets, direct return and a non-tail continuation without multiplying loop nesting.

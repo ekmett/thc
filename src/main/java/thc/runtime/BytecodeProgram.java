@@ -257,10 +257,11 @@ public final class BytecodeProgram implements ExecutableProgram {
     private static final class JoinEmission {
         final BytecodeLocal selector;
         final BytecodeLabel next;
+        final BytecodeLabel dispatch;
         final List<BytecodeLabel> labels;
         int emittedIndex = -1;
-        JoinEmission(BytecodeLocal selector, BytecodeLabel next, List<BytecodeLabel> labels) {
-            this.selector = selector; this.next = next; this.labels = labels;
+        JoinEmission(BytecodeLocal selector, BytecodeLabel next, BytecodeLabel dispatch, List<BytecodeLabel> labels) {
+            this.selector = selector; this.next = next; this.dispatch = dispatch; this.labels = labels;
         }
     }
     private static final class Emission {
@@ -3747,12 +3748,15 @@ public final class BytecodeProgram implements ExecutableProgram {
             }
             // Failed operands are not transfers. Count only after all parallel moves succeed.
             b.emitJoinTransfer(metrics);
-            if (target.index > region.emittedIndex) b.emitBranch(region.labels.get(target.index));
-            else {
-                if (region.selector == null) throw new RuntimeFault("Backward transfer into a nonrecursive join group");
-                if (region.next == null) throw new RuntimeFault("Missing recursive join continuation");
+            if (region.selector == null) {
+                if (target.index <= region.emittedIndex) throw new RuntimeFault("Backward transfer into a nonrecursive join group");
+                b.emitBranch(region.labels.get(target.index));
+            } else {
+                if (region.next == null || region.dispatch == null) throw new RuntimeFault("Missing recursive join continuation");
+                // One dispatcher keeps recursive cycles reducible from a saved continuation.
+                // Forward transfers retain their original behavior of skipping the async poll.
                 b.beginStoreLocal(region.selector); b.emitLoadConstant((long) target.index); b.endStoreLocal();
-                b.emitBranch(region.next);
+                b.emitBranch(target.index > region.emittedIndex ? region.dispatch : region.next);
             }
             if (destination == null) b.emitLoadConstant(thc.runtime.Unit.INSTANCE);
             b.endBlock();
@@ -3857,9 +3861,10 @@ public final class BytecodeProgram implements ExecutableProgram {
                 b.beginWhile(); b.emitLoadConstant(true); b.beginBlock();
             }
             var next = recursive ? b.createLabel() : null;
+            var dispatch = recursive ? b.createLabel() : null;
             var labels = new ArrayList<BytecodeLabel>();
             for (var ignored : targets) labels.add(b.createLabel());
-            var active = new JoinEmission(selector, next, labels);
+            var active = new JoinEmission(selector, next, dispatch, labels);
             e.joins.put(region, active);
             if (selector != null) for (int i = 0; i < targets.size(); ++i) {
                 b.beginIfThen();
@@ -3879,6 +3884,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             if (next != null) {
                 b.emitLabel(next);
                 if (enableAsync) emitAsyncPoll(e);
+                b.emitLabel(Objects.requireNonNull(dispatch));
                 b.endBlock(); b.endWhile();
             }
             b.emitLabel(exit);
