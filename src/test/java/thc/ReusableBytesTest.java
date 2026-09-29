@@ -19,6 +19,7 @@ class ReusableBytesTest {
     }
     private static final Map<String,Object> INT = proof("long", "IntRep"), WORD = proof("long", "WordRep"),
         BYTE = proof("long", "Word8Rep"), ADDRESS = proof("address", "AddrRep"), VOID = proof("void", null),
+        FLOAT = proof("float", "FloatRep"), DOUBLE = proof("double", "DoubleRep"),
         BYTES = proof("object", "BoxedRep (Just Unlifted)"), DATA = proof("data", "BoxedRep (Just Lifted)"),
         CLOSURE = proof("closure", "BoxedRep (Just Lifted)"),
         PAIR = map("kind", "unknown", "evaluated", true, "primReps", list("BoxedRep (Just Unlifted)"),
@@ -38,9 +39,16 @@ class ReusableBytesTest {
             "expr", list("lam", args, body, map("resultRep", result)));
     }
     private static List<Object> tupleCase(List<Object> value, String id, List<Object> body, Map<String,Object> result) {
+        return tupleCase(value, id, BYTES, body, result);
+    }
+    private static Map<String,Object> pair(Map<String,Object> payload) {
+        return map("kind", "unknown", "evaluated", true, "primReps", payload.get("primReps"),
+            "aggregate", "unboxed-tuple", "components", list(VOID, payload));
+    }
+    private static List<Object> tupleCase(List<Object> value, String id, Map<String,Object> payload, List<Object> body, Map<String,Object> result) {
         return list("case", value, id + "Pair", list(list("data", "pair", list(id + "State", id), body,
-            map("binders", list(parameter(id + "State", VOID), parameter(id, BYTES))))),
-            map("binder", parameter(id + "Pair", PAIR), "rep", result));
+            map("binders", list(parameter(id + "State", VOID), parameter(id, payload))))),
+            map("binder", parameter(id + "Pair", pair(payload)), "rep", result));
     }
     private static List<Object> effect(List<Object> value, String id, List<Object> body, Map<String,Object> result) {
         return list("case", value, id, list(list("default", null, list(), body)), map("binder", parameter(id, VOID), "rep", result));
@@ -63,6 +71,34 @@ class ReusableBytesTest {
         body = effect(primitive("writeWord8Array#", VOID, a, integer(0), byteValue(seed), state()), "firstWrite", body, BYTES);
         return tupleCase(primitive("newByteArray#", PAIR, integer(2), state()), "a", body, BYTES);
     }
+    private static List<Object> lifecycle() {
+        var original = variable("original", BYTES); var grown = variable("grown", BYTES);
+        var snapshot = variable("snapshot", BYTES);
+        var frozenSnapshot = variable("frozenSnapshot", BYTES); var frozenGrown = variable("frozenGrown", BYTES);
+        var body = primitive("+#", INT, variable("word", INT), primitive("+#", INT, variable("size", INT),
+            primitive("+#", INT, primitive("sizeofByteArray#", INT, frozenSnapshot),
+                primitive("+#", INT, primitive("float2Int#", INT, variable("single", FLOAT)),
+                    primitive("+#", INT, primitive("double2Int#", INT, variable("double", DOUBLE)),
+                        primitive("compareByteArrays#", INT, frozenSnapshot, integer(0), frozenGrown, integer(0), integer(8)))))));
+        body = tupleCase(primitive("unsafeFreezeByteArray#", PAIR, grown, state()), "frozenGrown", body, INT);
+        body = tupleCase(primitive("readDoubleArray#", pair(DOUBLE), grown, integer(2), state()), "double", DOUBLE, body, INT);
+        body = tupleCase(primitive("readFloatArray#", pair(FLOAT), grown, integer(2), state()), "single", FLOAT, body, INT);
+        body = tupleCase(primitive("readIntArray#", pair(INT), grown, integer(0), state()), "word", INT, body, INT);
+        body = tupleCase(primitive("getSizeofMutableByteArray#", pair(INT), grown, state()), "size", INT, body, INT);
+        body = effect(primitive("shrinkMutableByteArray#", VOID, grown, integer(24), state()), "shrunk", body, INT);
+        body = effect(primitive("copyMutableByteArrayNonOverlapping#", VOID, grown, integer(24), grown, integer(0), integer(8), state()), "copiedBack", body, INT);
+        body = effect(primitive("copyMutableByteArray#", VOID, grown, integer(0), grown, integer(24), integer(8), state()), "copiedOut", body, INT);
+        body = effect(primitive("writeDoubleArray#", VOID, grown, integer(2), list("lit", "double", "4.5", map("rep", DOUBLE)), state()), "doubleWritten", body, INT);
+        body = effect(primitive("writeFloatArray#", VOID, grown, integer(2), list("lit", "float", "1.5", map("rep", FLOAT)), state()), "singleWritten", body, INT);
+        body = tupleCase(primitive("resizeMutableByteArray#", PAIR, original, integer(32), state()), "grown", body, INT);
+        // GHC forbids accessing the old array after resize, whether or not it moved.
+        body = tupleCase(primitive("unsafeFreezeByteArray#", PAIR, snapshot, state()), "frozenSnapshot", body, INT);
+        body = effect(primitive("copyMutableByteArray#", VOID, original, integer(0), snapshot, integer(0), integer(16), state()), "snapshotCopied", body, INT);
+        body = tupleCase(primitive("newByteArray#", PAIR, integer(16), state()), "snapshot", body, INT);
+        body = effect(primitive("writeIntArray#", VOID, original, integer(0), variable("seed", INT), state()), "wordWritten", body, INT);
+        body = effect(primitive("setByteArray#", VOID, original, integer(0), integer(16), integer(170), state()), "filled", body, INT);
+        return tupleCase(primitive("newByteArray#", PAIR, integer(16), state()), "original", body, INT);
+    }
     private static Map<String,Object> module() {
         var field = parameter("bytes", BYTES);
         var boxed = list("case", buffer(integer(40)), "built", list(list("default", null, list(),
@@ -84,6 +120,7 @@ class ReusableBytesTest {
                     primitive("plusAddr#", ADDRESS, variable("text", ADDRESS), variable("offset", INT)), integer(0)), WORD),
                 function("inline", list(parameter("offset", INT)), primitive("indexCharOffAddr#", WORD, literal("ff800041"), variable("offset", INT)), WORD),
                 function("make", list(parameter("seed", INT)), buffer(variable("seed", INT)), BYTES),
+                function("lifecycle", list(parameter("seed", INT)), lifecycle(), INT),
                 map("id", "shared", "name", "shared", "lifted", true, "rep", DATA, "expr", boxed),
                 function("read", list(parameter("unused", INT)), reader, INT)));
     }
@@ -100,7 +137,7 @@ class ReusableBytesTest {
             Program.PreparedCode code;
             try (var preparation = Context.newBuilder("thc").engine(engine).build()) {
                 preparation.initialize("thc"); preparation.enter();
-                try { code = Program.prepareCode(TruffleLanguage.LanguageReference.create(Language.class).get(null), module(), List.of("literal", "inline", "make", "read")); }
+                try { code = Program.prepareCode(TruffleLanguage.LanguageReference.create(Language.class).get(null), module(), List.of("literal", "inline", "make", "lifecycle", "read")); }
                 finally { preparation.leave(); }
             }
             var field = Program.PreparedCode.class.getDeclaredField("targets"); field.setAccessible(true);
@@ -131,6 +168,10 @@ class ReusableBytesTest {
                         assertEquals(11, ManagedByteArray.readGuest(first, 1, true));
                         assertEquals(255, ManagedByteArray.readGuest(first, 2, true));
                         assertEquals(20, ManagedByteArray.readGuest(second, 1, true));
+                        // Snapshot size 16 + shrunken size 24 + truncated floats 1 and 4;
+                        // the copied integer is unchanged and the prefix comparison is equal.
+                        assertEquals(55L, call(program, "lifecycle", 10));
+                        assertEquals(26L, call(sibling, "lifecycle", -19));
                         assertEquals(16722482L, call(program, "read", 0));
                         assertEquals(2, caf.getState()); assertEquals(0, other.getState());
                         assertEquals(1L, program.diagnostics().get("thunkEvaluations"));

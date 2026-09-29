@@ -308,9 +308,8 @@ public final class Program implements ExecutableProgram {
                 List<Object> function = (List<Object>) expression.get(1);
                 if ("prim".equals(function.getFirst())) {
                     String name = (String) function.get(1);
-                    if (Primitive.arity(name) < 0 && NarrowScalarOp.named(name) == null && !CoreVectors.operations.contains(name) && !Set.of(
-                            "plusAddr#", "indexCharOffAddr#", "newByteArray#", "writeWord8Array#", "indexWord8Array#",
-                            "sizeofByteArray#", "unsafeFreezeByteArray#", "copyByteArray#",
+                    if (Primitive.arity(name) < 0 && NarrowScalarOp.named(name) == null && ByteArrayOp.named(name) == null &&
+                            !CoreVectors.operations.contains(name) && !Set.of("plusAddr#", "indexCharOffAddr#",
                             "plusFloat#", "minusFloat#", "timesFloat#", "divideFloat#", "negateFloat#",
                             "+##", "-##", "*##", "/##", "negateDouble#",
                             "eqFloat#", "neFloat#", "ltFloat#", "leFloat#", "gtFloat#", "geFloat#",

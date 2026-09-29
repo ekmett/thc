@@ -36,11 +36,14 @@ limits. Bytecode, async delivery, IO and FFI remain outside this workflow.
 Immutable `string-bytes` literals, inline or top-level, retain their original
 bytes and terminating NUL through the existing managed address representation.
 Only that literal origin may be persisted, not arbitrary native/context addresses.
-The admitted byte operations are `plusAddr#`, `indexCharOffAddr#`, `newByteArray#`,
-`writeWord8Array#`, `indexWord8Array#`, `sizeofByteArray#`, `unsafeFreezeByteArray#`
-and `copyByteArray#`. Guest allocations and shared byte-array CAFs remain fresh
-per load; unsafe freezing keeps its ordinary aliasing contract. This covers the
-selected pure ShortByteString example below, not general Text, IO or FFI.
+The admitted managed byte-array family uses the existing `ByteArrayOp` registry:
+allocation, resizing, shrinking, sizes/pinning queries, fill/copy/compare,
+freeze/thaw and typed scalar indexing/reads/writes, with their ordinary operand
+proofs and bounds checks. `plusAddr#` and `indexCharOffAddr#` retain the literal
+address path. Guest allocations and shared byte-array CAFs remain fresh per load;
+unsafe freezing keeps its ordinary aliasing contract. This does not admit the
+separate pinned-allocation, address-exposure, vector-memory or atomic families,
+nor general Text, IO or FFI.
 
 The CLI accepts numeric arguments and results only. Reusable AST code and the
 public host ABI support tuple/sum/vector/unit transport; the CLI's parser and
@@ -254,6 +257,22 @@ bin/native-cache run build/bytes.cache 6 2 4
 Arguments are a dynamic seed, slice count and decoder/slice selector; the result
 is a numeric checksum. Byte storage is allocated only when guest code runs,
 never as a preparation or training step.
+
+`src/examples/THC/CachedText.hs` uses installed Text's pure `pack`, `map`, `filter`
+and `foldl'` paths. Its dynamic count and selector exercise UTF-8 buffer growth,
+shrinking, embedded NULs and Text's replacement of surrogate characters. A shared
+Text CAF remains local to each load. Export with the same post-Tidy/unit-qualified
+options and `-fplugin-opt=THC.Plugin:closure=calculate`.
+
+For this example, interface unfoldings alone are incomplete: supply the genuine
+matching `Data.Text.Internal` and `Data.Text.Array` Core modules from ordinary
+package acquisition alongside `THC.CachedText.json`. Do not also supply the
+interface-closure copy of `Data.Text.Internal.pack`; it duplicates the source
+definition. Select `main:THC.CachedText.calculate` with the existing comma-separated
+module argument to `store`. Keep the original package configuration and complete
+selected cold dependency closure; do not prune branches to remove foreign calls.
+This selected pipeline does not establish support for Text operations whose
+closure includes C routines or other excluded primitives.
 
 `src/examples/THC/CachedTyped.hs` provides a numeric `calculate count seed selector`
 entry that composes ordinary tuple/sum/vector/unit calls, a typed local join,
