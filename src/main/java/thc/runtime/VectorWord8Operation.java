@@ -26,7 +26,7 @@ public final class VectorWord8Operation extends Expr {
 
     @Override public ByteVector execute(VirtualFrame frame) {
         return switch (operation) {
-            case 0 -> ByteVector.broadcast(ByteVector.SPECIES_128, (byte) arguments[0].executeRequiredInt(frame));
+            case 0 -> broadcast((byte) arguments[0].executeRequiredInt(frame));
             case 1 -> vector(arguments[0].execute(frame)).add(vector(arguments[1].execute(frame)));
             case 2 -> vector(arguments[0].execute(frame)).sub(vector(arguments[1].execute(frame)));
             case 3 -> vector(arguments[0].execute(frame)).mul(vector(arguments[1].execute(frame)));
@@ -35,6 +35,10 @@ public final class VectorWord8Operation extends Expr {
                 throw new RuntimeFault("Invalid Word8X16 operation");
             }
         };
+    }
+
+    private static ByteVector broadcast(byte value) {
+        return ByteVector.broadcast(ByteVector.SPECIES_128, value);
     }
 
     private static ByteVector vector(Object value) {

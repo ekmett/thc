@@ -22,9 +22,13 @@ public final class VectorUnpack extends Expr {
     }
 
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
-        LongVector value = RuntimeTypes.requireLong(argument.execute(frame), LongVector.SPECIES_128);
+        LongVector value = vector(argument.execute(frame));
         FrameAccess.INSTANCE.writeLong(frame, slots[offset], value.lane(0));
         FrameAccess.INSTANCE.writeLong(frame, slots[offset + 1], value.lane(1));
         return null;
+    }
+
+    private static LongVector vector(Object value) {
+        return RuntimeTypes.requireLong(value, LongVector.SPECIES_128);
     }
 }

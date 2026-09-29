@@ -77,14 +77,18 @@ public enum MutVarOp {
             if (metrics == null) throw fault("Missing atomic MutVar metrics");
             site = new MutVarModifySite(guest, metrics, async, operation == MODIFY2);
         }
-        return new MutVarExpression(operation, proof, operands, site);
+        return expression(operation, proof, operands, site, -1);
+    }
+    static Expr expression(MutVarOp operation, CoreRepresentation proof, Expr[] operands, MutVarModifySite site, int programSlot) {
+        return new MutVarExpression(operation, proof, operands, site, programSlot);
     }
     private static final class MutVarExpression extends Expr {
         private final MutVarOp operation;
         private final MutVarModifySite site;
+        private final int programSlot;
         @Children private Expr[] operands;
-        MutVarExpression(MutVarOp operation, CoreRepresentation proof, Expr[] operands, MutVarModifySite site) {
-            this.operation = operation; this.operands = operands; this.site = site;
+        MutVarExpression(MutVarOp operation, CoreRepresentation proof, Expr[] operands, MutVarModifySite site, int programSlot) {
+            this.operation = operation; this.operands = operands; this.site = site; this.programSlot = programSlot;
             setRepresentation(new CoreRepresentation(proof.getKind(), true, proof.getPresent(), proof.getPrimReps(),
                 proof.getComponents(), proof.getVector(), proof.getAlternatives(), proof.getTagSlot(), proof.getAlternativeSlots()));
         }
@@ -122,7 +126,7 @@ public enum MutVarOp {
                 case MODIFY, MODIFY2: {
                     var function = operands[1].execute(frame);
                     TupleResults.requireVoidCarrier(operands[2].execute(frame));
-                    var modified = cell.modify(function, site);
+                    var modified = cell.modify(function, site, programSlot < 0 ? null : Program.instance(frame, programSlot));
                     FrameAccess.INSTANCE.write(frame, slots[offset], modified.getOld());
                     FrameAccess.INSTANCE.write(frame, slots[offset + 1], modified.getResult()); break;
                 }

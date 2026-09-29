@@ -34,43 +34,43 @@ public final class VectorAddressExpression extends Expr {
                 var vector = RuntimeTypes.requireByte(arguments[2].execute(frame), ByteVector.SPECIES_128.withShape(shape));
                 var bits = vector;
 
-                bytes = bits.reinterpretAsBytes();
+                bytes = VectorMemory.asBytes(bits);
             }
             else if (family == VectorMemoryFamily.INT16 || family == VectorMemoryFamily.WORD16) {
                 var vector = RuntimeTypes.requireShort(arguments[2].execute(frame), ShortVector.SPECIES_128.withShape(shape));
                 var bits = vector;
                 if (ByteOrder.nativeOrder() != ByteOrder.LITTLE_ENDIAN) bits = bits.lanewise(VectorOperators.REVERSE_BYTES);
-                bytes = bits.reinterpretAsBytes();
+                bytes = VectorMemory.asBytes(bits);
             }
             else if (family == VectorMemoryFamily.INT64 || family == VectorMemoryFamily.WORD64) {
                 var vector = RuntimeTypes.requireLong(arguments[2].execute(frame), LongVector.SPECIES_128.withShape(shape));
                 var bits = vector;
                 if (ByteOrder.nativeOrder() != ByteOrder.LITTLE_ENDIAN) bits = bits.lanewise(VectorOperators.REVERSE_BYTES);
-                bytes = bits.reinterpretAsBytes();
+                bytes = VectorMemory.asBytes(bits);
             }
             else if (family == VectorMemoryFamily.INT32) {
                 var vector = RuntimeTypes.requireInt(arguments[2].execute(frame), IntVector.SPECIES_128.withShape(shape));
                 var bits = vector;
                 if (ByteOrder.nativeOrder() != ByteOrder.LITTLE_ENDIAN) bits = bits.lanewise(VectorOperators.REVERSE_BYTES);
-                bytes = bits.reinterpretAsBytes();
+                bytes = VectorMemory.asBytes(bits);
             }
             else if (family == VectorMemoryFamily.WORD32) {
                 var vector = RuntimeTypes.requireInt(arguments[2].execute(frame), IntVector.SPECIES_128.withShape(shape));
                 var bits = vector;
                 if (ByteOrder.nativeOrder() != ByteOrder.LITTLE_ENDIAN) bits = bits.lanewise(VectorOperators.REVERSE_BYTES);
-                bytes = bits.reinterpretAsBytes();
+                bytes = VectorMemory.asBytes(bits);
             }
             else if (family == VectorMemoryFamily.FLOAT32) {
                 var vector = RuntimeTypes.requireFloat(arguments[2].execute(frame), FloatVector.SPECIES_128.withShape(shape));
-                var bits = vector.reinterpretAsInts();
+                var bits = VectorMemory.asInts(vector);
                 if (ByteOrder.nativeOrder() != ByteOrder.LITTLE_ENDIAN) bits = bits.lanewise(VectorOperators.REVERSE_BYTES);
-                bytes = bits.reinterpretAsBytes();
+                bytes = VectorMemory.asBytes(bits);
             }
             else if (family == VectorMemoryFamily.DOUBLE64) {
                 var vector = RuntimeTypes.requireDouble(arguments[2].execute(frame), DoubleVector.SPECIES_128.withShape(shape));
-                var bits = vector.reinterpretAsLongs();
+                var bits = VectorMemory.asLongs(vector);
                 if (ByteOrder.nativeOrder() != ByteOrder.LITTLE_ENDIAN) bits = bits.lanewise(VectorOperators.REVERSE_BYTES);
-                bytes = bits.reinterpretAsBytes();
+                bytes = VectorMemory.asBytes(bits);
             }
             else throw RuntimeFault.fault("Unsupported local vector memory family");
             ManagedByteArray.requireState(arguments[3].execute(frame));
@@ -85,34 +85,34 @@ public final class VectorAddressExpression extends Expr {
             return bits;
         }
         if (family == VectorMemoryFamily.INT16 || family == VectorMemoryFamily.WORD16) {
-            var bits = bytes.reinterpretAsShorts();
+            var bits = VectorMemory.asShorts(bytes);
             if (ByteOrder.nativeOrder() != ByteOrder.LITTLE_ENDIAN) bits = bits.lanewise(VectorOperators.REVERSE_BYTES);
             return bits;
         }
         if (family == VectorMemoryFamily.INT64 || family == VectorMemoryFamily.WORD64) {
-            var bits = bytes.reinterpretAsLongs();
+            var bits = VectorMemory.asLongs(bytes);
             if (ByteOrder.nativeOrder() != ByteOrder.LITTLE_ENDIAN) bits = bits.lanewise(VectorOperators.REVERSE_BYTES);
             return bits;
         }
         if (family == VectorMemoryFamily.INT32) {
-            var bits = bytes.reinterpretAsInts();
+            var bits = VectorMemory.asInts(bytes);
             if (ByteOrder.nativeOrder() != ByteOrder.LITTLE_ENDIAN) bits = bits.lanewise(VectorOperators.REVERSE_BYTES);
             return bits;
         }
         if (family == VectorMemoryFamily.WORD32) {
-            var bits = bytes.reinterpretAsInts();
+            var bits = VectorMemory.asInts(bytes);
             if (ByteOrder.nativeOrder() != ByteOrder.LITTLE_ENDIAN) bits = bits.lanewise(VectorOperators.REVERSE_BYTES);
             return bits;
         }
         if (family == VectorMemoryFamily.FLOAT32) {
-            var bits = bytes.reinterpretAsInts();
+            var bits = VectorMemory.asInts(bytes);
             if (ByteOrder.nativeOrder() != ByteOrder.LITTLE_ENDIAN) bits = bits.lanewise(VectorOperators.REVERSE_BYTES);
-            return bits.reinterpretAsFloats();
+            return VectorMemory.asFloats(bits);
         }
         if (family == VectorMemoryFamily.DOUBLE64) {
-            var bits = bytes.reinterpretAsLongs();
+            var bits = VectorMemory.asLongs(bytes);
             if (ByteOrder.nativeOrder() != ByteOrder.LITTLE_ENDIAN) bits = bits.lanewise(VectorOperators.REVERSE_BYTES);
-            return bits.reinterpretAsDoubles();
+            return VectorMemory.asDoubles(bits);
         }
         throw RuntimeFault.fault("Unsupported local vector memory family");
     }

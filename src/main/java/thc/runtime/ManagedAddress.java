@@ -291,14 +291,22 @@ public final class ManagedAddress {
     }
 
     public int compareWithinAllocation(ManagedAddress other) {
-        if (foreign != null) foreign.requireCurrent(); if (other.foreign != null) other.foreign.requireCurrent();
-        if (rtsFlags != null || other.rtsFlags != null) {
-            if (rtsFlags != null) rtsFlags.requireCurrent(); if (other.rtsFlags != null) other.rtsFlags.requireCurrent();
-            throw fault("RtsFlags has no address ordering");
+        var address = this;
+        // As with difference, traverse backing chains without recursive partial evaluation.
+        while (true) {
+            if (address.foreign != null) address.foreign.requireCurrent(); if (other.foreign != null) other.foreign.requireCurrent();
+            if (address.rtsFlags != null || other.rtsFlags != null) {
+                if (address.rtsFlags != null) address.rtsFlags.requireCurrent(); if (other.rtsFlags != null) other.rtsFlags.requireCurrent();
+                throw fault("RtsFlags has no address ordering");
+            }
+            var backing = address.foreign == null ? null : address.foreign.getBacking();
+            var otherBacking = other.foreign == null ? null : other.foreign.getBacking();
+            if (backing == null && otherBacking == null) return address.compareUnwrapped(other);
+            if (backing != null) address = backing;
+            if (otherBacking != null) other = otherBacking;
         }
-        if (foreign != null && foreign.getBacking() != null || other.foreign != null && other.foreign.getBacking() != null)
-            return (foreign != null && foreign.getBacking() != null ? foreign.getBacking() : this)
-                .compareWithinAllocation(other.foreign != null && other.foreign.getBacking() != null ? other.foreign.getBacking() : other);
+    }
+    private int compareUnwrapped(ManagedAddress other) {
         if (foreign != null) return (int) foreign.compare(other, "compare");
         if (other.foreign != null) return -(int) other.foreign.compare(this, "compare");
         if (heap != null || other.heap != null) throw fault("Opaque guest heap addresses have no ordering");
@@ -514,7 +522,7 @@ public final class ManagedAddress {
         long start = offset + displacement;
         if (owner != null) synchronized (owner) {
             var segment = owner.vectorSegment(start, true, 1, false, vectorBytes);
-            return ByteVector.fromMemorySegment(species, segment, start, ByteOrder.nativeOrder());
+            return (ByteVector) VectorMemory.read(species, segment, start, ByteOrder.nativeOrder());
         }
         byte[] bytes = literalBytes != null ? literalBytes : mutableBytes;
         if (bytes == null) throw fault("Null Addr# has no backing storage");
@@ -533,7 +541,7 @@ public final class ManagedAddress {
         if (owner != null) {
             synchronized (owner) {
                 var segment = owner.vectorSegment(start, true, 1, true, vectorBytes);
-                vector.intoMemorySegment(segment, start, ByteOrder.nativeOrder());
+                VectorMemory.write(vector, segment, start, ByteOrder.nativeOrder());
             }
             return;
         }
@@ -543,13 +551,13 @@ public final class ManagedAddress {
     @TruffleBoundary private ByteVector readOwnedNativeVector(long displacement, int vectorBytes, VectorSpecies<Byte> species) {
         try (var loan = nativeOwner.borrow()) {
             requireRange(displacement, vectorBytes);
-            return ByteVector.fromMemorySegment(species, loan.segment(), offset + displacement, ByteOrder.nativeOrder());
+            return (ByteVector) VectorMemory.read(species, loan.segment(), offset + displacement, ByteOrder.nativeOrder());
         }
     }
     @TruffleBoundary private void writeOwnedNativeVector(long displacement, int vectorBytes, ByteVector vector) {
         try (var loan = nativeOwner.borrow()) {
             requireRange(displacement, vectorBytes, true);
-            vector.intoMemorySegment(loan.segment(), offset + displacement, ByteOrder.nativeOrder());
+            VectorMemory.write(vector, loan.segment(), offset + displacement, ByteOrder.nativeOrder());
         }
     }
     private long vectorDisplacement(long elementOffset, int stride) {

@@ -126,6 +126,10 @@ public final class ForeignExceptionAccess extends Node {
     }
 
     @TruffleBoundary public long text(ManagedAddress handle, long selector, long index, Object state) {
+        var bridge = getRootNode() instanceof GuestRoot root ? root.getForeignExceptionBridge() : null;
+        return text(handle, selector, index, state, bridge);
+    }
+    @TruffleBoundary public long text(ManagedAddress handle, long selector, long index, Object state, ForeignExceptionBridge bridge) {
         TupleResults.requireVoidCarrier(state);
         var owner = Language.currentState(this);
         var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], descriptor);
@@ -156,7 +160,7 @@ public final class ForeignExceptionAccess extends Node {
                     owner.getThreads().leaveForeign(previous);
                 }
             } catch (AbstractTruffleException error) {
-                throw raise(error);
+                throw raise(error, bridge);
             } catch (InteropException error) {
                 throw propagate(error);
             }

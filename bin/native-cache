@@ -3,14 +3,19 @@
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 set -euo pipefail
 repo_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-image=${THC_NATIVE_CACHE_IMAGE:-$repo_dir/build/native-image/thc-native-cache}
+case "${THC_NATIVE_IMAGE_VECTOR_PROFILE:-intrinsics}" in
+    intrinsics) image_suffix= ;;
+    resource-copy) image_suffix=-resource-copy ;;
+    *) echo 'THC_NATIVE_IMAGE_VECTOR_PROFILE must be intrinsics or resource-copy' >&2; exit 2 ;;
+esac
+image=${THC_NATIVE_CACHE_IMAGE:-$repo_dir/build/native-image/thc-native-cache$image_suffix}
 case "${1:---help}" in
     build)
         [[ $# == 1 ]] || exit 2
         export THC_NATIVE_IMAGE_DEOPT_LOOP_STAMPS=1 THC_NATIVE_IMAGE_RUNTIME_SNIPPETS=1 THC_NATIVE_IMAGE_RUNTIME_SIMULATED_FOLDS=1 THC_NATIVE_IMAGE_PROCESS_IDENTITY=1
         exec bash "$repo_dir/research/native-image-preparation/prepared-image.sh" "$repo_dir" cache ;;
     store)
-        [[ $# == 4 || $# == 5 && $5 == --verify-artifacts ]] || { echo 'Usage: bin/native-cache store CACHE MODULES ENTRY [--verify-artifacts]' >&2; exit 2; }
+        [[ $# -ge 4 ]] || { echo 'Usage: bin/native-cache store CACHE MODULES ENTRY [--io-main] [--shutdown-entry=ID] [--verify-artifacts]' >&2; exit 2; }
         exec "$image" "$@" ;;
     run)
         [[ $# -ge 2 ]] || { echo 'Usage: bin/native-cache run CACHE [INTEGER|f:FLOAT|d:DOUBLE...]' >&2; exit 2; }
@@ -22,6 +27,7 @@ case "${1:---help}" in
         exec "$image" "-XX:AuxiliaryImageBytes=$reserved_bytes" "$@" ;;
     -h|--help)
         echo 'Experimental Linux AMD64 / GraalVM 25.3.4.1 cached AST code'
-        echo 'bin/native-cache build | store CACHE MODULES ENTRY [--verify-artifacts] | run CACHE [INTEGER|f:FLOAT|d:DOUBLE...]' ;;
+        echo 'THC_NATIVE_IMAGE_VECTOR_PROFILE=resource-copy selects shared arenas with copying vector memory access'
+        echo 'bin/native-cache build | store CACHE MODULES ENTRY [--io-main] [--shutdown-entry=ID] [--verify-artifacts] | run CACHE [INTEGER|f:FLOAT|d:DOUBLE...]' ;;
     *) echo 'Unknown native-cache command; use --help' >&2; exit 2 ;;
 esac

@@ -441,11 +441,11 @@ public final class ManagedByteArray {
         if (value instanceof ManagedAllocation owner) {
             synchronized (owner) {
                 MemorySegment segment = owner.vectorSegment(index, scalarOffset, 1, false, vectorBytes);
-                return ByteVector.fromMemorySegment(ByteVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)), segment, offset, ByteOrder.nativeOrder());
+                return (ByteVector) VectorMemory.read(ByteVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)), segment, offset, ByteOrder.nativeOrder());
             }
         }
         MemorySegment segment = vectorSegment(require(value), index, stride, vectorBytes);
-        return ByteVector.fromMemorySegment(ByteVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)), segment, offset, ByteOrder.nativeOrder());
+        return (ByteVector) VectorMemory.read(ByteVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)), segment, offset, ByteOrder.nativeOrder());
     }
     public static void writeByteVectorGuest(Object value, long index, ByteVector vector, boolean scalarOffset) { writeByteVectorGuest(value, index, vector, scalarOffset, 16); }
     public static void writeByteVectorGuest(Object value, long index, ByteVector vector, boolean scalarOffset, int vectorBytes) {
@@ -454,11 +454,11 @@ public final class ManagedByteArray {
         if (value instanceof ManagedAllocation owner) {
             synchronized (owner) {
                 MemorySegment segment = owner.vectorSegment(index, scalarOffset, 1, true, vectorBytes);
-                RuntimeTypes.requireByte(vector, ByteVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8))).intoMemorySegment(segment, offset, ByteOrder.nativeOrder());
+                VectorMemory.write(RuntimeTypes.requireByte(vector, ByteVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8))), segment, offset, ByteOrder.nativeOrder());
             }
         } else {
             MemorySegment segment = vectorSegment(require(value), index, stride, vectorBytes);
-            RuntimeTypes.requireByte(vector, ByteVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8))).intoMemorySegment(segment, offset, ByteOrder.nativeOrder());
+            VectorMemory.write(RuntimeTypes.requireByte(vector, ByteVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8))), segment, offset, ByteOrder.nativeOrder());
         }
     }
     public static ShortVector readShortVectorGuest(Object value, long index, boolean scalarOffset) { return readShortVectorGuest(value, index, scalarOffset, 16); }
@@ -468,11 +468,11 @@ public final class ManagedByteArray {
         if (value instanceof ManagedAllocation owner) {
             synchronized (owner) {
                 MemorySegment segment = owner.vectorSegment(index, scalarOffset, 2, false, vectorBytes);
-                return ShortVector.fromMemorySegment(ShortVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)), segment, offset, ByteOrder.nativeOrder());
+                return (ShortVector) VectorMemory.read(ShortVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)), segment, offset, ByteOrder.nativeOrder());
             }
         }
         MemorySegment segment = vectorSegment(require(value), index, stride, vectorBytes);
-        return ShortVector.fromMemorySegment(ShortVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)), segment, offset, ByteOrder.nativeOrder());
+        return (ShortVector) VectorMemory.read(ShortVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)), segment, offset, ByteOrder.nativeOrder());
     }
     public static void writeShortVectorGuest(Object value, long index, ShortVector vector, boolean scalarOffset) { writeShortVectorGuest(value, index, vector, scalarOffset, 16); }
     public static void writeShortVectorGuest(Object value, long index, ShortVector vector, boolean scalarOffset, int vectorBytes) {
@@ -481,11 +481,11 @@ public final class ManagedByteArray {
         if (value instanceof ManagedAllocation owner) {
             synchronized (owner) {
                 MemorySegment segment = owner.vectorSegment(index, scalarOffset, 2, true, vectorBytes);
-                RuntimeTypes.requireShort(vector, ShortVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8))).intoMemorySegment(segment, offset, ByteOrder.nativeOrder());
+                VectorMemory.write(RuntimeTypes.requireShort(vector, ShortVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8))), segment, offset, ByteOrder.nativeOrder());
             }
         } else {
             MemorySegment segment = vectorSegment(require(value), index, stride, vectorBytes);
-            RuntimeTypes.requireShort(vector, ShortVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8))).intoMemorySegment(segment, offset, ByteOrder.nativeOrder());
+            VectorMemory.write(RuntimeTypes.requireShort(vector, ShortVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8))), segment, offset, ByteOrder.nativeOrder());
         }
     }
     public static LongVector readLongVectorGuest(Object value, long index, boolean scalarOffset) { return readLongVectorGuest(value, index, scalarOffset, 16); }
@@ -495,11 +495,11 @@ public final class ManagedByteArray {
         if (value instanceof ManagedAllocation owner) {
             synchronized (owner) {
                 MemorySegment segment = owner.vectorSegment(index, scalarOffset, 8, false, vectorBytes);
-                return LongVector.fromMemorySegment(LongVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)), segment, offset, ByteOrder.nativeOrder());
+                return (LongVector) VectorMemory.read(LongVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)), segment, offset, ByteOrder.nativeOrder());
             }
         }
         MemorySegment segment = vectorSegment(require(value), index, stride, vectorBytes);
-        return LongVector.fromMemorySegment(LongVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)), segment, offset, ByteOrder.nativeOrder());
+        return (LongVector) VectorMemory.read(LongVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)), segment, offset, ByteOrder.nativeOrder());
     }
     public static void writeLongVectorGuest(Object value, long index, LongVector vector, boolean scalarOffset) { writeLongVectorGuest(value, index, vector, scalarOffset, 16); }
     public static void writeLongVectorGuest(Object value, long index, LongVector vector, boolean scalarOffset, int vectorBytes) {
@@ -508,11 +508,11 @@ public final class ManagedByteArray {
         if (value instanceof ManagedAllocation owner) {
             synchronized (owner) {
                 MemorySegment segment = owner.vectorSegment(index, scalarOffset, 8, true, vectorBytes);
-                RuntimeTypes.requireLong(vector, LongVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8))).intoMemorySegment(segment, offset, ByteOrder.nativeOrder());
+                VectorMemory.write(RuntimeTypes.requireLong(vector, LongVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8))), segment, offset, ByteOrder.nativeOrder());
             }
         } else {
             MemorySegment segment = vectorSegment(require(value), index, stride, vectorBytes);
-            RuntimeTypes.requireLong(vector, LongVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8))).intoMemorySegment(segment, offset, ByteOrder.nativeOrder());
+            VectorMemory.write(RuntimeTypes.requireLong(vector, LongVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8))), segment, offset, ByteOrder.nativeOrder());
         }
     }
     public static IntVector readInt32VectorGuest(Object value, long index, boolean scalarOffset) { return readInt32VectorGuest(value, index, scalarOffset, 16); }
@@ -522,11 +522,11 @@ public final class ManagedByteArray {
         if (value instanceof ManagedAllocation owner) {
             synchronized (owner) {
                 MemorySegment segment = owner.vectorSegment(index, scalarOffset, 4, false, vectorBytes);
-                return IntVector.fromMemorySegment(IntVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)), segment, offset, ByteOrder.nativeOrder());
+                return (IntVector) VectorMemory.read(IntVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)), segment, offset, ByteOrder.nativeOrder());
             }
         }
         MemorySegment segment = vectorSegment(require(value), index, stride, vectorBytes);
-        return IntVector.fromMemorySegment(IntVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)), segment, offset, ByteOrder.nativeOrder());
+        return (IntVector) VectorMemory.read(IntVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)), segment, offset, ByteOrder.nativeOrder());
     }
     public static void writeInt32VectorGuest(Object value, long index, IntVector vector, boolean scalarOffset) { writeInt32VectorGuest(value, index, vector, scalarOffset, 16); }
     public static void writeInt32VectorGuest(Object value, long index, IntVector vector, boolean scalarOffset, int vectorBytes) {
@@ -535,11 +535,11 @@ public final class ManagedByteArray {
         if (value instanceof ManagedAllocation owner) {
             synchronized (owner) {
                 MemorySegment segment = owner.vectorSegment(index, scalarOffset, 4, true, vectorBytes);
-                RuntimeTypes.requireInt(vector, IntVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8))).intoMemorySegment(segment, offset, ByteOrder.nativeOrder());
+                VectorMemory.write(RuntimeTypes.requireInt(vector, IntVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8))), segment, offset, ByteOrder.nativeOrder());
             }
         } else {
             MemorySegment segment = vectorSegment(require(value), index, stride, vectorBytes);
-            RuntimeTypes.requireInt(vector, IntVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8))).intoMemorySegment(segment, offset, ByteOrder.nativeOrder());
+            VectorMemory.write(RuntimeTypes.requireInt(vector, IntVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8))), segment, offset, ByteOrder.nativeOrder());
         }
     }
     public static IntVector readWord32VectorGuest(Object value, long index, boolean scalarOffset) { return readWord32VectorGuest(value, index, scalarOffset, 16); }
@@ -549,11 +549,11 @@ public final class ManagedByteArray {
         if (value instanceof ManagedAllocation owner) {
             synchronized (owner) {
                 MemorySegment segment = owner.vectorSegment(index, scalarOffset, 4, false, vectorBytes);
-                return IntVector.fromMemorySegment(IntVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)), segment, offset, ByteOrder.nativeOrder());
+                return (IntVector) VectorMemory.read(IntVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)), segment, offset, ByteOrder.nativeOrder());
             }
         }
         MemorySegment segment = vectorSegment(require(value), index, stride, vectorBytes);
-        return IntVector.fromMemorySegment(IntVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)), segment, offset, ByteOrder.nativeOrder());
+        return (IntVector) VectorMemory.read(IntVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)), segment, offset, ByteOrder.nativeOrder());
     }
     public static void writeWord32VectorGuest(Object value, long index, IntVector vector, boolean scalarOffset) { writeWord32VectorGuest(value, index, vector, scalarOffset, 16); }
     public static void writeWord32VectorGuest(Object value, long index, IntVector vector, boolean scalarOffset, int vectorBytes) {
@@ -562,11 +562,11 @@ public final class ManagedByteArray {
         if (value instanceof ManagedAllocation owner) {
             synchronized (owner) {
                 MemorySegment segment = owner.vectorSegment(index, scalarOffset, 4, true, vectorBytes);
-                RuntimeTypes.requireInt(vector, IntVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8))).intoMemorySegment(segment, offset, ByteOrder.nativeOrder());
+                VectorMemory.write(RuntimeTypes.requireInt(vector, IntVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8))), segment, offset, ByteOrder.nativeOrder());
             }
         } else {
             MemorySegment segment = vectorSegment(require(value), index, stride, vectorBytes);
-            RuntimeTypes.requireInt(vector, IntVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8))).intoMemorySegment(segment, offset, ByteOrder.nativeOrder());
+            VectorMemory.write(RuntimeTypes.requireInt(vector, IntVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8))), segment, offset, ByteOrder.nativeOrder());
         }
     }
     public static FloatVector readFloatVectorGuest(Object value, long index, boolean scalarOffset) { return readFloatVectorGuest(value, index, scalarOffset, 16); }
@@ -576,11 +576,11 @@ public final class ManagedByteArray {
         if (value instanceof ManagedAllocation owner) {
             synchronized (owner) {
                 MemorySegment segment = owner.vectorSegment(index, scalarOffset, 4, false, vectorBytes);
-                return FloatVector.fromMemorySegment(FloatVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)), segment, offset, ByteOrder.nativeOrder());
+                return (FloatVector) VectorMemory.read(FloatVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)), segment, offset, ByteOrder.nativeOrder());
             }
         }
         MemorySegment segment = vectorSegment(require(value), index, stride, vectorBytes);
-        return FloatVector.fromMemorySegment(FloatVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)), segment, offset, ByteOrder.nativeOrder());
+        return (FloatVector) VectorMemory.read(FloatVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)), segment, offset, ByteOrder.nativeOrder());
     }
     public static void writeFloatVectorGuest(Object value, long index, FloatVector vector, boolean scalarOffset) { writeFloatVectorGuest(value, index, vector, scalarOffset, 16); }
     public static void writeFloatVectorGuest(Object value, long index, FloatVector vector, boolean scalarOffset, int vectorBytes) {
@@ -589,11 +589,11 @@ public final class ManagedByteArray {
         if (value instanceof ManagedAllocation owner) {
             synchronized (owner) {
                 MemorySegment segment = owner.vectorSegment(index, scalarOffset, 4, true, vectorBytes);
-                RuntimeTypes.requireFloat(vector, FloatVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8))).intoMemorySegment(segment, offset, ByteOrder.nativeOrder());
+                VectorMemory.write(RuntimeTypes.requireFloat(vector, FloatVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8))), segment, offset, ByteOrder.nativeOrder());
             }
         } else {
             MemorySegment segment = vectorSegment(require(value), index, stride, vectorBytes);
-            RuntimeTypes.requireFloat(vector, FloatVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8))).intoMemorySegment(segment, offset, ByteOrder.nativeOrder());
+            VectorMemory.write(RuntimeTypes.requireFloat(vector, FloatVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8))), segment, offset, ByteOrder.nativeOrder());
         }
     }
     public static DoubleVector readDoubleVectorGuest(Object value, long index, boolean scalarOffset) { return readDoubleVectorGuest(value, index, scalarOffset, 16); }
@@ -603,11 +603,11 @@ public final class ManagedByteArray {
         if (value instanceof ManagedAllocation owner) {
             synchronized (owner) {
                 MemorySegment segment = owner.vectorSegment(index, scalarOffset, 8, false, vectorBytes);
-                return DoubleVector.fromMemorySegment(DoubleVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)), segment, offset, ByteOrder.nativeOrder());
+                return (DoubleVector) VectorMemory.read(DoubleVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)), segment, offset, ByteOrder.nativeOrder());
             }
         }
         MemorySegment segment = vectorSegment(require(value), index, stride, vectorBytes);
-        return DoubleVector.fromMemorySegment(DoubleVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)), segment, offset, ByteOrder.nativeOrder());
+        return (DoubleVector) VectorMemory.read(DoubleVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)), segment, offset, ByteOrder.nativeOrder());
     }
     public static void writeDoubleVectorGuest(Object value, long index, DoubleVector vector, boolean scalarOffset) { writeDoubleVectorGuest(value, index, vector, scalarOffset, 16); }
     public static void writeDoubleVectorGuest(Object value, long index, DoubleVector vector, boolean scalarOffset, int vectorBytes) {
@@ -616,11 +616,11 @@ public final class ManagedByteArray {
         if (value instanceof ManagedAllocation owner) {
             synchronized (owner) {
                 MemorySegment segment = owner.vectorSegment(index, scalarOffset, 8, true, vectorBytes);
-                RuntimeTypes.requireDouble(vector, DoubleVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8))).intoMemorySegment(segment, offset, ByteOrder.nativeOrder());
+                VectorMemory.write(RuntimeTypes.requireDouble(vector, DoubleVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8))), segment, offset, ByteOrder.nativeOrder());
             }
         } else {
             MemorySegment segment = vectorSegment(require(value), index, stride, vectorBytes);
-            RuntimeTypes.requireDouble(vector, DoubleVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8))).intoMemorySegment(segment, offset, ByteOrder.nativeOrder());
+            VectorMemory.write(RuntimeTypes.requireDouble(vector, DoubleVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8))), segment, offset, ByteOrder.nativeOrder());
         }
     }
     public static byte[] require(Object value) {

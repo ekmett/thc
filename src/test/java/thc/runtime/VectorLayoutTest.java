@@ -42,6 +42,54 @@ class VectorLayoutTest {
     }
     private void fill(VectorLayout layout, Slots slots) { layout.write(slots.frame, slots.slots, 0, rawVectorTestValue(layout.getProof())); }
     private void same(VectorLayout layout, Slots expected, Slots actual) { assertSame(layout.read(expected.frame, expected.slots, 0), layout.read(actual.frame, actual.slots, 0)); }
+    @Test void preparedLayoutsDoNotRetainRuntimeVectorMetadata() throws Exception {
+        for (var proof : vectors()) {
+            var layout = new VectorLayout(proof);
+            // The auxiliary cache rejects runtime-initialized species/shape objects,
+            // including species captured as constants by an otherwise valid check.
+            for (var field : VectorLayout.class.getDeclaredFields()) {
+                if (java.lang.reflect.Modifier.isStatic(field.getModifiers())) continue;
+                field.setAccessible(true);
+                Object retained = field.get(layout);
+                assertFalse(retained instanceof jdk.incubator.vector.VectorSpecies<?> ||
+                    retained instanceof jdk.incubator.vector.VectorShape || retained instanceof jdk.incubator.vector.Vector<?>,
+                    "Prepared layout retains runtime vector metadata: " + field.getName());
+            }
+            var raw = rawVectorTestValue(proof);
+            assertSame(raw, layout.require(raw));
+            assertEquals(raw.species(), layout.getSpecies());
+        }
+    }
+    @Test void preparedInactiveSumZerosAreCreatedAtExecution() throws Exception {
+        withLanguage(language -> {
+            var proof = SumShape.relayout(new CoreRepresentation(CoreKind.UNKNOWN, true, true, null,
+                null, null, list(integer, CoreVectors.proof16), 0, null));
+            var shape = new TupleShape(proof, language);
+            var slots = new Slots(3);
+            var failure = new RuntimeFault("payload identity");
+            var payload = new Expr() {
+                @Override public Object execute(VirtualFrame frame) { return executeLong(frame); }
+                @Override public long executeLong(VirtualFrame frame) {
+                    var zero = (jdk.incubator.vector.ShortVector) frame.getObject(slots.slots[2]);
+                    assertEquals(jdk.incubator.vector.ShortVector.SPECIES_128, zero.species());
+                    for (int i = 0; i < 8; i++) assertEquals(0, zero.lane(i));
+                    throw failure;
+                }
+            };
+            payload.setRepresentation(integer);
+            var constructor = new SumConstruct(shape, 1, payload);
+            constructor.prepareTuple(slots.slots, 0);
+            var empty = SumConstruct.class.getDeclaredField("emptyReferences");
+            empty.setAccessible(true);
+            for (Object retained : (Object[]) empty.get(constructor))
+                assertFalse(retained instanceof jdk.incubator.vector.Vector<?>, "Prepared sum retains a runtime vector zero");
+            FrameAccess.writeObject(slots.frame, slots.slots[2], rawVectorTestValue(CoreVectors.proof16));
+            assertSame(failure, assertThrows(RuntimeFault.class, () -> constructor.executeTuple(slots.frame, slots.slots, 0)));
+            assertNull(language.getHandoffState().get().getPending());
+            assertEquals(0, language.getHandoffState().get().getResults().getDepth());
+            assertEquals(0, language.getHandoffState().get().getResults().retainedReferences());
+        });
+    }
     @Test void allShapesPreserveBitsAcrossCarriersDenseStorageAndCompletion() throws Exception {
         withLanguage(language -> {
             for (var proof : vectors()) {

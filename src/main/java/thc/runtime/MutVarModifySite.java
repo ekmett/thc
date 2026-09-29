@@ -7,6 +7,8 @@ import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.bytecode.ContinuationResult;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.frame.FrameSlotKind;
+import java.util.List;
 import thc.Language;
 import static thc.runtime.RuntimeServiceStatus.fault;
 
@@ -22,13 +24,55 @@ public final class MutVarModifySite {
         selectorTarget = selectorLayout == null ? null : new ModifySelectorRoot(language, selectorLayout, metrics, async).getCallTarget();
     }
     public Thunk application(Object function, Object old) {
-        return new Thunk(applicationTarget, applicationLayout.captureValues(new Object[]{function, old}));
+        return application(function, old, null);
+    }
+    Thunk application(Object function, Object old, Program program) {
+        return new Thunk(applicationTarget, applicationLayout.captureValues(new Object[]{function, old}, program));
     }
     public Thunk selector(Thunk result) {
+        return selector(result, null);
+    }
+    private Thunk selector(Thunk result, Program program) {
         return new Thunk(java.util.Objects.requireNonNull(selectorTarget),
-            java.util.Objects.requireNonNull(selectorLayout).captureValues(new Object[]{result}));
+            java.util.Objects.requireNonNull(selectorLayout).captureValues(new Object[]{result}, program));
     }
     public Thunk stored(Thunk result) { return selectorTarget == null ? result : selector(result); }
+    Thunk stored(Thunk result, Program program) { return selectorTarget == null ? result : selector(result, program); }
+    /** Reusable helpers use the ordinary function owner/metrics/entry protocol. */
+    MutVarModifySite(Language language, Object identity, List<RootCallTarget> targets, boolean selectFirst) {
+        applicationLayout = new CaptureLayout(language, new boolean[]{false, false});
+        selectorLayout = selectFirst ? new CaptureLayout(language, new boolean[]{false}, new boolean[]{false}, new Class<?>[]{Thunk.class}) : null;
+        var applicationFrame = new FrameLayout();
+        int function = applicationFrame.bind("modifier", FrameSlotKind.Object);
+        int old = applicationFrame.bind("old", FrameSlotKind.Object);
+        applicationTarget = prepared(language, "atomic MutVar application", applicationFrame, applicationLayout,
+            new int[]{function, old}, new Application(new LocalRead(function, false), new Expr[]{new LocalRead(old, false)}, false, null), identity, targets);
+        if (selectorLayout == null) selectorTarget = null;
+        else {
+            var selectorFrame = new FrameLayout();
+            int result = selectorFrame.bind("result", FrameSlotKind.Object);
+            selectorTarget = prepared(language, "atomic MutVar selector", selectorFrame, selectorLayout,
+                new int[]{result}, new Evaluate(new FirstField(new Evaluate(new LocalRead(result, false), null)), null), identity, targets);
+        }
+    }
+    private static RootCallTarget prepared(Language language, String name, FrameLayout frame, CaptureLayout captures,
+            int[] captureSlots, Expr body, Object identity, List<RootCallTarget> targets) {
+        int program = frame.bind("<program instance>", FrameSlotKind.Object);
+        // Both primops return lifted values, not a speculative Long. Preserve
+        // the force obligation while preparing the existing generic return.
+        body.proven(new CoreRepresentation(CoreKind.OBJECT, false, true, List.of("BoxedRep (Just Lifted)")));
+        var root = new FunctionRoot(language, frame.build(), name, captures, captureSlots, new int[0], new int[0], body, null);
+        root.configureInputProofs(List.of()); root.configureProgramSlot(program, identity);
+        var target = root.getCallTarget(); targets.add(target); return target;
+    }
+    private static final class FirstField extends Expr {
+        @Child private Expr record;
+        FirstField(Expr record) { this.record = record; }
+        @Override public Object execute(VirtualFrame frame) {
+            if (!(record.execute(frame) instanceof DataValue data)) throw fault("atomicModifyMutVar2# modifier did not return a data record");
+            return data.getLayout().readFirstLifted(data);
+        }
+    }
     public static MutVarModifySite create(Language language, Metrics metrics, boolean async, boolean selectFirst) {
         return new MutVarModifySite(language, metrics, async, selectFirst);
     }

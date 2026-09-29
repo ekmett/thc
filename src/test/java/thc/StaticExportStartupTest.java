@@ -11,6 +11,7 @@ import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.*;
 import static thc.CoreFormatTestSupport.*;
@@ -79,7 +80,9 @@ class StaticExportStartupTest {
             "expr", list("lam", list(map("id", "x", "lifted", true, "coercion", false, "rep", data)), list("var", "x", map("rep", data)), map("rep", closure, "resultRep", data)));
         var result = map("schema", 2L, "ghc", "9.14.1", "unit", unit, "module", name, "boundary", "optimized-Core-after-Tidy-before-CorePrep",
             "bindings", list(binding), "constructors", list(map("id", "ghc-internal:GHC.Internal.Int.I32#", "name", "I32#", "kind", "boxed",
-                "arity", 1L, "fieldReps", list(list("Int32Rep")), "strictFields", list(false), "fieldLifted", list(false))),
+                "arity", 1L, "fieldReps", list(list("Int32Rep")),
+                "fieldTypes", list(map("kind", "long", "primReps", list("Int32Rep"), "evaluated", true)),
+                "strictFields", list(false), "fieldLifted", list(false))),
             "foreign", product, "staticForeignImports", proof, "staticForeignExports", inventory, "staticForeignExportRegistration", registration, "packageNativeLink", link);
         if (labelKind != null) {
             boolean finalizer = labelKind.equals("function-addr");
@@ -130,6 +133,66 @@ class StaticExportStartupTest {
                 "symbols", map("path", symbols.toString(), "sha256", hash(Files.readAllBytes(symbols))), "modules", list(record))))));
     }
     @AfterEach void releaseMappings() { CoreFileMappings.shared.evictIdleBelow(directory); }
+    @ParameterizedTest @ValueSource(booleans = {false, true}) @Timeout(30)
+    @SuppressWarnings("unchecked")
+    void preparedLoadRegistersBeforeOriginalConstructorCallsBack(boolean earlyFinalizer) throws Exception {
+        var module = module(false, earlyFinalizer ? "function-addr" : null);
+        var file = Files.writeString(directory.resolve("module.json"), Json.stringify(module));
+        var request = (Map<String,Object>) Json.parse(CoreModules.request(List.of(file.toString()), id, true, false, "ast", false));
+        request.put("prepareCode", true); request.put("detachedBindings", true); request.put("asyncExceptions", false);
+        for (String hosting : List.of("platform", "loom")) try (var context = Context.newBuilder("thc").allowNativeAccess(true).allowCreateThread(true)
+                .allowExperimentalOptions(true).option("thc.ThreadHosting", hosting).build()) {
+            context.eval("thc", Json.stringify(request));
+            context.enter();
+            try {
+                var owner = Language.currentState(); var link = Objects.requireNonNull(PackageScalarLinks.read(module)).getLink();
+                var function = owner.getPackageCbits().resolve(link, link.getAbi().getFirst()).getReceiver();
+                var interop = com.oracle.truffle.api.interop.InteropLibrary.getUncached();
+                assertEquals(49, interop.asInt(interop.execute(function, 42)), hosting);
+                assertEquals(50, interop.asInt(interop.execute(function, 43)), "constructor executes once");
+                assertEquals(1, owner.getForeignRoots().size());
+                assertEquals(0, owner.getForeignRoots().programs().getFirst().diagnostics().get("loweredRootCount"));
+                if (earlyFinalizer) {
+                    byte[] bytes = {40};
+                    owner.getPackageCbits().finalizer("startup_label").invoke(thc.runtime.ManagedAddress.fromByteArray(bytes));
+                    assertArrayEquals(new byte[]{41}, bytes);
+                }
+            } finally { context.leave(); }
+        }
+    }
+
+    @ParameterizedTest @ValueSource(booleans = {false, true}) @Timeout(30)
+    @SuppressWarnings("unchecked")
+    void failedPreparedConstructorKeepsItsFailureAndPublishesNoExport(boolean earlyFinalizer) throws Exception {
+        var module = module(true, earlyFinalizer ? "function-addr" : null);
+        var file = Files.writeString(directory.resolve("module.json"), Json.stringify(module));
+        var request = (Map<String,Object>) Json.parse(CoreModules.request(List.of(file.toString()), id, true, false, "ast", false));
+        request.put("prepareCode", true); request.put("detachedBindings", true); request.put("asyncExceptions", false);
+        try (var context = Context.newBuilder("thc").allowNativeAccess(true).build()) {
+            var failure = assertThrows(RuntimeException.class, () -> context.eval("thc", Json.stringify(request)));
+            assertTrue(failure.getMessage().contains("missing_initializer_dependency"), failure.toString());
+            context.enter();
+            try {
+                var owner = Language.currentState(); var link = Objects.requireNonNull(PackageScalarLinks.read(module)).getLink();
+                var first = assertThrows(RuntimeException.class, () -> owner.getPackageCbits().resolve(link, link.getAbi().getFirst()));
+                assertTrue(first.getMessage().contains("missing_initializer_dependency"), first.toString());
+                assertSame(first, assertThrows(RuntimeException.class, () -> owner.getPackageCbits().resolve(link, link.getAbi().getFirst())));
+                assertEquals(0, owner.getForeignRoots().size());
+                assertFalse(com.oracle.truffle.api.interop.InteropLibrary.getUncached().isMemberReadable(
+                    owner.getNativeCallbacks().namespace(), "declared_identity"));
+                if (earlyFinalizer) {
+                    assertSame(first, assertThrows(RuntimeException.class, () -> owner.getPackageCbits().finalizer("startup_label")));
+                    var field = thc.runtime.PackageScalarLibraries.class.getDeclaredField("finalizers"); field.setAccessible(true);
+                    var retained = ((thc.runtime.PackageFinalizerRegistry) field.get(owner.getPackageCbits())).resolve("startup_label");
+                    assertNotNull(retained);
+                    byte[] bytes = {40};
+                    assertSame(first, assertThrows(RuntimeException.class, () -> retained.invoke(thc.runtime.ManagedAddress.fromByteArray(bytes))));
+                    assertArrayEquals(new byte[]{40}, bytes);
+                }
+            } finally { context.leave(); }
+        }
+    }
+
     @Timeout(20)
     @ParameterizedTest @CsvSource({"ast,false,function-addr", "bytecode,false,function-addr", "ast,true,function-addr", "bytecode,true,function-addr",
         "ast,false,data-addr", "bytecode,false,data-addr", "ast,true,data-addr", "bytecode,true,data-addr"})

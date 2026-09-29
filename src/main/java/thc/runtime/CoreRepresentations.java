@@ -263,6 +263,11 @@ public final class CoreRepresentations {
     public static CoreRepresentation lambdaResult(List<?> expr) {
         var metadata = metadata(expr); return parse(metadata == null ? null : metadata.get("resultRep"));
     }
+    /** The case operation's result, distinct from an enclosing erased dictionary's ABI proof. */
+    public static CoreRepresentation caseResult(List<?> expr) {
+        var metadata = metadata(expr);
+        return metadata != null && metadata.containsKey("resultRep") ? parse(metadata.get("resultRep")) : expression(expr);
+    }
     public static CoreRepresentation caseBinder(List<?> expr) {
         var metadata = metadata(expr);
         return metadata != null && metadata.get("binder") instanceof Map<?, ?> map ? binder((Map<String, Object>) map) : CoreRepresentation.UNKNOWN;

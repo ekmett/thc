@@ -22,7 +22,7 @@ public final class Vector16Unpack extends Expr {
     }
 
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
-        ShortVector value = RuntimeTypes.requireShort(argument.execute(frame), ShortVector.SPECIES_128);
+        ShortVector value = vector(argument.execute(frame));
         FrameAccess.INSTANCE.writeInt(frame, slots[offset], value.lane(0));
         FrameAccess.INSTANCE.writeInt(frame, slots[offset + 1], value.lane(1));
         FrameAccess.INSTANCE.writeInt(frame, slots[offset + 2], value.lane(2));
@@ -32,5 +32,9 @@ public final class Vector16Unpack extends Expr {
         FrameAccess.INSTANCE.writeInt(frame, slots[offset + 6], value.lane(6));
         FrameAccess.INSTANCE.writeInt(frame, slots[offset + 7], value.lane(7));
         return null;
+    }
+
+    private static ShortVector vector(Object value) {
+        return RuntimeTypes.requireShort(value, ShortVector.SPECIES_128);
     }
 }

@@ -7,6 +7,7 @@ import java.nio.ByteOrder;
 import java.util.List;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.profiles.ValueProfile;
 import com.oracle.truffle.api.profiles.ConditionProfile;
@@ -201,6 +202,7 @@ public enum VectorApiOp {
     /** Profiles belong to the primitive site, never to a wrapper around a value. */
     static final class Site extends Node {
         private final VectorApiOp operation;
+        private final int programSlot;
         @Child private ForeignExceptionAccess exceptions;
         @CompilationFinal(dimensions = 1) private final ValueProfile[] identities;
         @CompilationFinal(dimensions = 1) private final ValueProfile[] classes;
@@ -208,8 +210,10 @@ public enum VectorApiOp {
         // Keep unobserved masked fallbacks out of full-block vector graphs.
         private final ConditionProfile fullMask = ConditionProfile.create();
 
-        Site(VectorApiOp operation) {
+        Site(VectorApiOp operation) { this(operation, -1); }
+        Site(VectorApiOp operation, int programSlot) {
             this.operation = operation;
+            this.programSlot = programSlot;
             if (operation.javaArray()) exceptions = new ForeignExceptionAccess();
             identities = new ValueProfile[operation.arguments.size()];
             classes = new ValueProfile[identities.length];
@@ -223,10 +227,15 @@ public enum VectorApiOp {
             Object value = values[index];
             return value instanceof VectorSpecies<?> ? identities[index].profile(value) : classes[index].profile(value);
         }
-        Object execute(Object[] values) {
+        Object execute(Object[] values) { return execute(null, values); }
+        Object execute(VirtualFrame frame, Object[] values) {
             Object result;
             try { result = operation.execute(profile(0, values), profile(1, values), profile(2, values), profile(3, values), profile(4, values), profile(5, values), profile(6, values), fullMask); }
-            catch (RuntimeException failure) { if (exceptions != null) throw exceptions.raiseHost(failure); throw failure; }
+            catch (RuntimeException failure) {
+                if (exceptions != null) throw programSlot < 0 ? exceptions.raiseHost(failure) :
+                    exceptions.raiseHost(failure, Program.instance(frame, programSlot).foreignExceptionBridge());
+                throw failure;
+            }
             return result instanceof VectorSpecies<?> ? resultSpecies.profile(result) : result;
         }
     }

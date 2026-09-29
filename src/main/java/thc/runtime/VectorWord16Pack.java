@@ -21,13 +21,17 @@ public final class VectorWord16Pack extends Expr {
 
     @Override public ShortVector execute(VirtualFrame frame) {
         argument.executeTuple(frame, slots, 0);
-        return ShortVector.broadcast(ShortVector.SPECIES_128, (short) frame.getInt(slots[0]))
-            .withLane(1, (short) frame.getInt(slots[1]))
-            .withLane(2, (short) frame.getInt(slots[2]))
-            .withLane(3, (short) frame.getInt(slots[3]))
-            .withLane(4, (short) frame.getInt(slots[4]))
-            .withLane(5, (short) frame.getInt(slots[5]))
-            .withLane(6, (short) frame.getInt(slots[6]))
-            .withLane(7, (short) frame.getInt(slots[7]));
+        return pack((short) frame.getInt(slots[0]), (short) frame.getInt(slots[1]), (short) frame.getInt(slots[2]), (short) frame.getInt(slots[3]), (short) frame.getInt(slots[4]), (short) frame.getInt(slots[5]), (short) frame.getInt(slots[6]), (short) frame.getInt(slots[7]));
+    }
+
+    private static ShortVector pack(short lane0, short lane1, short lane2, short lane3, short lane4, short lane5, short lane6, short lane7) {
+        return ShortVector.broadcast(ShortVector.SPECIES_128, lane0)
+            .withLane(1, lane1)
+            .withLane(2, lane2)
+            .withLane(3, lane3)
+            .withLane(4, lane4)
+            .withLane(5, lane5)
+            .withLane(6, lane6)
+            .withLane(7, lane7);
     }
 }

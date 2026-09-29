@@ -15,6 +15,417 @@ import static thc.CoreExecutionTestSupport.*;
 
 /** Real lowerer ownership checks; auxiliary-cache persistence remains a separate acceptance. */
 class ReusableProgramTest {
+    private Map<String,Object> intrinsicCaseModule(Map<String,Object> metadata) {
+        var data = map("kind", "data", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)"));
+        var word = map("kind", "long", "evaluated", true, "primReps", list("IntRep"));
+        var closure = map("kind", "closure", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)"));
+        var selected = list("case", variable("x"), "input", list(
+            list("lit", list("int", "0"), list(), list("con", "Zero", 0, map("rep", data))),
+            list("default", null, list(), list("con", "One", 0, map("rep", data)))),
+            with(metadata, "binder", wordParameter("input")));
+        var body = list("case", selected, "selected", list(
+            list("data", "Zero", list(), literal(47)), list("data", "One", list(), literal(-25))),
+            map("rep", word, "binder", map("id", "selected", "rep", data)));
+        var entry = binding("read", list("lam", list(wordParameter("x")), body,
+            map("rep", closure, "resultRep", word)), true);
+        entry.put("rep", closure); entry.put("arity", 1);
+        var module = module(list(entry));
+        var constructors = new ArrayList<Map<String,Object>>();
+        for (String name : List.of("Zero", "One")) constructors.add(map("id", name, "name", name,
+            "kind", "boxed", "arity", 0, "tag", constructors.size() + 1, "fieldReps", list(),
+            "fieldTypes", list(), "fieldLifted", list(), "strictFields", list()));
+        module.put("constructors", constructors);
+        return module;
+    }
+
+    @Test @SuppressWarnings("unchecked")
+    void intrinsicCaseResultSurvivesErasedOuterProofWithoutGuestTraining() throws Exception {
+        var unknown = map("kind", "unknown", "evaluated", false);
+        var data = map("kind", "data", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)"));
+        var module = intrinsicCaseModule(map("rep", unknown, "resultRep", data));
+        for (String backend : List.of("ast", "bytecode")) try (var context = Context.newBuilder("thc").build()) {
+            var entry = context.eval("thc", Json.stringify(map("modules", list(module), "entry", "read", "backend", backend)));
+            assertEquals(47L, entry.execute(0L).asLong()); assertEquals(-25L, entry.execute(1L).asLong());
+        }
+        try (var engine = Engine.newBuilder().allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false")
+                .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build()) {
+            Program.PreparedCode code;
+            try (var preparation = Context.newBuilder("thc").engine(engine).build()) {
+                preparation.initialize("thc"); preparation.enter();
+                try { code = Program.prepareCode(TruffleLanguage.LanguageReference.create(Language.class).get(null), module, List.of("read")); }
+                finally { preparation.leave(); }
+            }
+            var field = Program.PreparedCode.class.getDeclaredField("targets"); field.setAccessible(true);
+            for (var target : (List<com.oracle.truffle.runtime.OptimizedCallTarget>)field.get(code)) {
+                assertFalse(target.wasExecuted()); assertTrue(target.prepareForAOT()); target.compile(true); assertFalse(target.wasExecuted());
+            }
+            String previous = System.getProperty("thc.requireCompiledCode"); System.setProperty("thc.requireCompiledCode", "true");
+            try {
+                for (int load = 0; load < 2; load++) try (var context = Context.newBuilder("thc").engine(engine).build()) {
+                    context.initialize("thc"); context.enter();
+                    try {
+                        for (int instance = 0; instance < 2; instance++) {
+                            var program = code.newInstance(TruffleLanguage.LanguageReference.create(Language.class).get(null));
+                            var entry = (Closure)program.entryValue("read");
+                            assertEquals(47L, Calls.target(entry.target, new Object[]{0L, entry.environment, 0L}));
+                            assertEquals(-25L, Calls.target(entry.target, new Object[]{0L, entry.environment, 1L}));
+                            assertEquals(0, count(program, "loweredRootCount")); assertEquals(2, count(program, "compiledEntries"));
+                            code.requireInstalledCode();
+                        }
+                    } finally { context.leave(); }
+                }
+            } finally {
+                if (previous == null) System.clearProperty("thc.requireCompiledCode"); else System.setProperty("thc.requireCompiledCode", previous);
+            }
+        }
+        assertEquals("unknown", unknown.get("kind"), "Preparation must not rewrite the outer expression certificate");
+    }
+
+    @Test void intrinsicCaseProofCannotHideMissingOrConflictingRepresentations() {
+        var unknown = map("kind", "unknown", "evaluated", false);
+        var data = map("kind", "data", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)"));
+        var word = map("kind", "long", "evaluated", true, "primReps", list("IntRep"));
+        try (var context = Context.newBuilder("thc").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                // Old documents still use rep; an explicit UNKNOWN resultRep must not fall back to it.
+                assertDoesNotThrow(() -> Program.prepareCode(language, intrinsicCaseModule(map("rep", data)), List.of("read")));
+                for (var metadata : List.of(map("rep", unknown), map("rep", data, "resultRep", unknown)))
+                    assertThrows(UnsupportedCore.class, () -> Program.prepareCode(language, intrinsicCaseModule(metadata), List.of("read")));
+                for (var metadata : List.of(map("rep", unknown, "resultRep", word), map("rep", word, "resultRep", data))) {
+                    var module = intrinsicCaseModule(metadata);
+                    assertThrows(RuntimeFault.class, () -> Program.prepareCode(language, module, List.of("read")));
+                    for (String backend : List.of("ast", "bytecode"))
+                        assertThrows(org.graalvm.polyglot.PolyglotException.class, () -> context.eval("thc", Json.stringify(
+                            map("modules", list(module), "entry", "read", "backend", backend))).execute(0L));
+                }
+            } finally { context.leave(); }
+        }
+    }
+
+    @Test @SuppressWarnings("unchecked")
+    void preparedNativeLabelsAndBigNatLiteralsBelongToTheInvokingLoad() throws Exception {
+        var address = map("kind", "address", "evaluated", true, "primReps", list("AddrRep"));
+        var bytes = map("kind", "object", "evaluated", true, "primReps", list("BoxedRep (Just Unlifted)"));
+        var closure = map("kind", "closure", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)"));
+        var label = list("lit", "function-addr", "free", map("rep", address));
+        var big = list("lit", "bignat", "18446744073709551617", map("rep", bytes));
+        var bindings = new ArrayList<Map<String,Object>>();
+        var labelBinding = binding("label", label, false); labelBinding.put("rep", address); bindings.add(labelBinding);
+        var bigBinding = binding("big", big, false); bigBinding.put("rep", bytes); bindings.add(bigBinding);
+        for (String name : List.of("globalLabel", "inlineLabel", "globalBig", "inlineBig", "nullAddress")) {
+            boolean byteResult = name.endsWith("Big");
+            Object body = switch (name) {
+                case "globalLabel" -> list("var", "label", map("rep", address));
+                case "inlineLabel" -> label;
+                case "globalBig" -> list("var", "big", map("rep", bytes));
+                case "inlineBig" -> big;
+                default -> list("lit", "null-addr", "0", map("rep", address));
+            };
+            var binding = binding(name, list("lam", list(wordParameter("unused")), body,
+                map("rep", closure, "resultRep", byteResult ? bytes : address)), true);
+            binding.put("rep", closure); binding.put("arity", 1); bindings.add(binding);
+        }
+        try (var engine = Engine.newBuilder().allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false")
+                .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build()) {
+            Program.PreparedCode code;
+            try (var preparation = Context.newBuilder("thc").engine(engine).build()) {
+                preparation.initialize("thc"); preparation.enter();
+                try { code = Program.prepareCode(TruffleLanguage.LanguageReference.create(Language.class).get(null), module(bindings),
+                    List.of("globalLabel", "inlineLabel", "globalBig", "inlineBig", "nullAddress")); }
+                finally { preparation.leave(); }
+            }
+            var field = Program.PreparedCode.class.getDeclaredField("targets"); field.setAccessible(true);
+            for (var target : (List<com.oracle.truffle.runtime.OptimizedCallTarget>)field.get(code)) {
+                assertFalse(target.wasExecuted()); assertTrue(target.prepareForAOT()); target.compile(true); assertFalse(target.wasExecuted());
+            }
+            code.requireInstalledCode();
+            String previous = System.getProperty("thc.requireCompiledCode"); System.setProperty("thc.requireCompiledCode", "true");
+            ManagedAddress previousLabel = null;
+            byte[] previousBytes = null;
+            try {
+                for (int load = 0; load < 2; load++) try (var context = Context.newBuilder("thc").engine(engine).allowNativeAccess(true).build()) {
+                    context.initialize("thc"); context.enter();
+                    try {
+                        var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                        for (int instance = 0; instance < 2; instance++) {
+                            var program = code.newInstance(language);
+                            var results = new LinkedHashMap<String,Object>();
+                            for (String name : List.of("globalLabel", "inlineLabel", "globalBig", "inlineBig", "nullAddress")) {
+                                var function = (Closure)program.entryValue(name);
+                                results.put(name, Calls.target(function.target, new Object[]{0L, function.environment, 0L}));
+                            }
+                            var currentLabel = (ManagedAddress)results.get("globalLabel");
+                            currentLabel.finalizerFunction().requireOwner(Language.currentState().cbits());
+                            assertTrue(currentLabel.sameLocation((ManagedAddress)results.get("inlineLabel")));
+                            assertSame(ManagedAddress.nullAddress(), results.get("nullAddress"));
+                            if (load != 0 && instance == 0) {
+                                var oldLabel = previousLabel;
+                                assertThrows(RuntimeFault.class, () -> oldLabel.finalizerFunction().requireOwner(Language.currentState().cbits()));
+                            }
+                            previousLabel = currentLabel;
+                            var currentBytes = (byte[])results.get("globalBig");
+                            assertNotSame(previousBytes, currentBytes); assertNotSame(currentBytes, results.get("inlineBig"));
+                            for (String name : List.of("globalBig", "inlineBig")) {
+                                byte[] value = (byte[])results.get(name);
+                                assertEquals(16, value.length); assertEquals(1L, ManagedByteArray.readInt(value, 0));
+                                assertEquals(1L, ManagedByteArray.readInt(value, 1));
+                            }
+                            ManagedByteArray.writeInt(currentBytes, 0, 7L);
+                            assertEquals(1L, ManagedByteArray.readInt((byte[])results.get("inlineBig"), 0));
+                            previousBytes = currentBytes;
+                            assertEquals(0, count(program, "loweredRootCount")); assertTrue(count(program, "compiledEntries") >= 5);
+                            code.requireInstalledCode();
+                        }
+                    } finally { context.leave(); }
+                }
+            } finally {
+                if (previous == null) System.clearProperty("thc.requireCompiledCode"); else System.setProperty("thc.requireCompiledCode", previous);
+            }
+        }
+    }
+
+    @Test @SuppressWarnings("unchecked")
+    void preparedEnumsAndArithmeticPayloadsUseTheInvokingInstance() throws Exception {
+        var data = map("kind", "data", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)"));
+        var closure = map("kind", "closure", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)"));
+        var empty = map("kind", "unknown", "evaluated", true, "primReps", list(),
+            "aggregate", "unboxed-tuple", "components", list());
+        var family = map("typeConstructor", "Choice", "constructors", list("Zero", "One"));
+        var constructors = new ArrayList<Map<String,Object>>();
+        for (int i = 0; i < 2; i++) {
+            String name = i == 0 ? "Zero" : "One";
+            constructors.add(map("id", name, "name", name, "kind", "boxed", "arity", 0, "tag", i + 1,
+                "enumFamily", family, "fieldReps", list(), "fieldTypes", list(), "fieldLifted", list(), "strictFields", list()));
+        }
+        constructors.add(map("id", "Tuple0", "name", "Tuple0", "kind", "unboxed-tuple", "arity", 0));
+        String payload = "ghc-internal:GHC.Internal.Exception.Type.divZeroException";
+        var selected = list("app", list("prim", "tagToEnum#"), list(variable("x")), list(false), false, false,
+            map("rep", data, "enumFamily", family));
+        var raised = list("app", list("prim", "raiseDivZero#"),
+            list(list("con", "Tuple0", 0, map("rep", empty))), list(false), false, false, map("rep", data));
+        var bindings = new ArrayList<Map<String,Object>>();
+        bindings.add(binding(payload, list("con", "Zero", 0, map("rep", data)), true));
+        for (var name : List.of("select", "raise")) {
+            var entry = binding(name, list("lam", list(wordParameter("x")), name.equals("select") ? selected : raised,
+                map("rep", closure, "resultRep", data)), true);
+            entry.put("rep", closure); entry.put("arity", 1); bindings.add(entry);
+        }
+        var module = module(bindings); module.put("constructors", constructors);
+        try (var engine = Engine.newBuilder().allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false")
+                .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build()) {
+            Program.PreparedCode code;
+            try (var preparation = Context.newBuilder("thc").engine(engine).build()) {
+                preparation.initialize("thc"); preparation.enter();
+                try { code = Program.prepareCode(TruffleLanguage.LanguageReference.create(Language.class).get(null), module, List.of("select", "raise")); }
+                finally { preparation.leave(); }
+            }
+            var field = Program.PreparedCode.class.getDeclaredField("targets"); field.setAccessible(true);
+            for (var target : (List<com.oracle.truffle.runtime.OptimizedCallTarget>)field.get(code)) {
+                assertFalse(target.wasExecuted()); assertTrue(target.prepareForAOT()); target.compile(true); assertFalse(target.wasExecuted());
+            }
+            code.requireInstalledCode();
+            String previous = System.getProperty("thc.requireCompiledCode");
+            var owners = new ArrayList<Object>();
+            try {
+                for (int load = 0; load < 2; load++) try (var context = Context.newBuilder("thc").engine(engine).build()) {
+                    context.initialize("thc"); context.enter();
+                    try {
+                        var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                        var first = code.newInstance(language); var second = code.newInstance(language);
+                        for (var program : List.of(first, second)) {
+                            System.setProperty("thc.requireCompiledCode", "true");
+                            var select = (Closure)program.entryValue("select");
+                            Object zero = Calls.target(select.target, new Object[]{0L, select.environment, 0L});
+                            assertSame(zero, Calls.target(select.target, new Object[]{0L, select.environment, 0L}));
+                            assertNotSame(zero, Calls.target(select.target, new Object[]{0L, select.environment, 1L}));
+                            for (var owner : owners) assertNotSame(owner, zero);
+                            owners.add(zero); assertSame(program.entryValue(payload), zero);
+                            assertTrue(count(program, "compiledEntries") >= 3);
+                            assertEquals(0, count(program, "loweredRootCount"));
+                            // Stock exception deoptimization is allowed. Ownership
+                            // must still hold for every later invocation.
+                            System.setProperty("thc.requireCompiledCode", "false");
+                            var raise = (Closure)program.entryValue("raise");
+                            var failure = assertThrows(GuestException.class,
+                                () -> Calls.target(raise.target, new Object[]{0L, raise.environment, 0L}));
+                            assertSame(zero, failure.getPayload()); assertTrue(failure.getSomeException());
+                            if (program == first) assertEquals(0, count(second, "compiledEntries"));
+                        }
+                    } finally { context.leave(); }
+                }
+            } finally {
+                if (previous == null) System.clearProperty("thc.requireCompiledCode"); else System.setProperty("thc.requireCompiledCode", previous);
+            }
+        }
+    }
+
+    @Test @SuppressWarnings("unchecked")
+    void preparedAtomicModifierKeepsLazyCapturesAndMetricsPerInstance() throws Exception {
+        var state = map("kind", "void", "evaluated", true, "primReps", list());
+        var word = map("kind", "long", "evaluated", true, "primReps", list("IntRep"));
+        var data = map("kind", "data", "evaluated", false, "primReps", list("BoxedRep (Just Lifted)"));
+        var closure = map("kind", "closure", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)"));
+        var mutvar = map("kind", "object", "evaluated", true, "primReps", list("BoxedRep (Just Unlifted)"));
+        var stateBinder = map("id", "s", "name", "s", "lifted", false, "rep", state);
+        var oldBinder = map("id", "old", "name", "old", "lifted", true, "rep", data);
+        var cellBinder = map("id", "cell", "name", "cell", "lifted", false, "rep", mutvar);
+        var old = list("var", "old", map("rep", data));
+        var cell = list("var", "cell", map("rep", mutvar));
+        var token = list("void", map("rep", state));
+        var shared = binding("shared", list("app", list("con", "Box", 1), list(literal(42)), list(false),
+            false, false, map("rep", data)), true);
+        shared.put("rep", data);
+        var modifier = binding("modifier", list("lam", list(oldBinder),
+            list("app", list("con", "Pair", 2), list(list("var", "shared", map("rep", data)), old),
+                list(true, true), false, false, map("rep", data)), map("rep", closure, "resultRep", data)), true);
+        modifier.put("rep", closure); modifier.put("arity", 1);
+        var modified = map("kind", "unknown", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)", "BoxedRep (Just Lifted)"),
+            "aggregate", "unboxed-tuple", "components", list(state, data, data));
+        var read = map("kind", "unknown", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)"),
+            "aggregate", "unboxed-tuple", "components", list(state, data));
+        var modification = list("app", list("prim", "atomicModifyMutVar2#"),
+            list(cell, list("var", "modifier", map("rep", closure)), token), list(false, true, false), false, false, map("rep", modified));
+        var modificationBody = list("case", modification, "triple", list(list("data", "Triple", list("s", "old", "result"), old,
+            map("binders", list(stateBinder, oldBinder, map("id", "result", "name", "result", "lifted", true, "rep", data))))),
+            map("binder", map("id", "triple", "name", "triple", "lifted", false, "rep", modified), "rep", data));
+        var readBody = list("case", list("app", list("prim", "readMutVar#"), list(cell, token), list(false, false), false, false, map("rep", read)),
+            "readPair", list(list("data", "ReadPair", list("s", "old"),
+                list("case", old, "boxed", list(list("data", "Box", list("value"), variable("value"),
+                    map("binders", list(wordParameter("value"))))),
+                    map("binder", map("id", "boxed", "name", "boxed", "lifted", true, "rep", data), "rep", word)),
+                map("binders", list(stateBinder, oldBinder)))),
+            map("binder", map("id", "readPair", "name", "readPair", "lifted", false, "rep", read), "rep", word));
+        var bindings = list(shared, modifier);
+        var all = new ArrayList<Map<String,Object>>(bindings);
+        for (String name : List.of("modify", "read")) {
+            var result = name.equals("modify") ? data : word;
+            var entry = binding(name, list("lam", list(cellBinder), name.equals("modify") ? modificationBody : readBody,
+                map("rep", closure, "resultRep", result)), true);
+            entry.put("rep", closure); entry.put("arity", 1); all.add(entry);
+        }
+        var module = module(all);
+        module.put("constructors", list(
+            map("id", "Box", "name", "Box", "arity", 1, "kind", "boxed", "tag", 1,
+                "strictFields", list(true), "fieldLifted", list(false), "fieldReps", list(list("IntRep")), "fieldTypes", list(word)),
+            map("id", "Pair", "name", "Pair", "arity", 2, "kind", "boxed", "tag", 1,
+                "strictFields", list(false, false), "fieldLifted", list(true, true),
+                "fieldReps", list(list("BoxedRep (Just Lifted)"), list("BoxedRep (Just Lifted)")), "fieldTypes", list(data, data)),
+            map("id", "Triple", "name", "Triple", "arity", 3, "kind", "unboxed-tuple"),
+            map("id", "ReadPair", "name", "ReadPair", "arity", 2, "kind", "unboxed-tuple")));
+        try (var engine = Engine.newBuilder().allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false")
+                .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build()) {
+            Program.PreparedCode code;
+            try (var preparation = Context.newBuilder("thc").engine(engine).build()) {
+                preparation.initialize("thc"); preparation.enter();
+                try { code = Program.prepareCode(TruffleLanguage.LanguageReference.create(Language.class).get(null), module, List.of("modify", "read")); }
+                finally { preparation.leave(); }
+            }
+            var field = Program.PreparedCode.class.getDeclaredField("targets"); field.setAccessible(true);
+            for (var target : (List<com.oracle.truffle.runtime.OptimizedCallTarget>)field.get(code)) {
+                assertFalse(target.wasExecuted()); assertTrue(target.prepareForAOT()); target.compile(true); assertFalse(target.wasExecuted());
+            }
+            code.requireInstalledCode();
+            String previous = System.getProperty("thc.requireCompiledCode"); System.setProperty("thc.requireCompiledCode", "true");
+            try {
+                for (int load = 0; load < 2; load++) try (var context = Context.newBuilder("thc").engine(engine).build()) {
+                    context.initialize("thc"); context.enter();
+                    try {
+                        var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                        var first = code.newInstance(language); var second = code.newInstance(language);
+                        for (var program : List.of(first, second)) {
+                            Object original = new DataLayout(language, "old", "old", new String[0]).allocate();
+                            var storage = new ManagedMutVar(original);
+                            var modifyEntry = (Closure)program.entryValue("modify");
+                            assertSame(original, Calls.target(modifyEntry.target, new Object[]{0L, modifyEntry.environment, storage}));
+                            assertInstanceOf(Thunk.class, storage.getValue()); assertEquals(0, count(program, "thunkEvaluations"));
+                            var readEntry = (Closure)program.entryValue("read");
+                            assertEquals(42L, Calls.target(readEntry.target, new Object[]{0L, readEntry.environment, storage}));
+                            long evaluated = count(program, "thunkEvaluations"); assertEquals(3, evaluated);
+                            assertEquals(42L, Calls.target(readEntry.target, new Object[]{0L, readEntry.environment, storage}));
+                            assertEquals(evaluated, count(program, "thunkEvaluations"));
+                            assertEquals(0, count(program, "loweredRootCount")); code.requireInstalledCode();
+                            if (program == first) assertEquals(0, count(second, "compiledEntries"));
+                        }
+                    } finally { context.leave(); }
+                }
+            } finally {
+                if (previous == null) System.clearProperty("thc.requireCompiledCode"); else System.setProperty("thc.requireCompiledCode", previous);
+            }
+        }
+    }
+
+    @Test @SuppressWarnings("unchecked")
+    void preparedSynchronousHandlersAndMaskingNeedNoTraining() throws Exception {
+        var state = map("kind", "void", "evaluated", true, "primReps", list());
+        var word = map("kind", "long", "evaluated", true, "primReps", list("IntRep"));
+        var closure = map("kind", "closure", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)"));
+        var data = map("kind", "data", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)"));
+        var io = map("kind", "unknown", "evaluated", true, "primReps", list("IntRep"),
+            "aggregate", "unboxed-tuple", "components", list(state, word));
+        var token = list("void", map("rep", state));
+        var stateBinder = map("id", "s", "name", "s", "lifted", false, "rep", state);
+        var getMask = list("app", list("prim", "getMaskingState#"), list(token), list(false), false, false, map("rep", io));
+        var action = list("lam", list(stateBinder), getMask, map("rep", closure, "resultRep", io));
+        var payload = list("con", "Payload", 0, map("rep", data));
+        var raising = list("lam", list(stateBinder), list("app", list("prim", "raiseIO#"),
+            list(payload, token), list(true, false), false, false, map("rep", io)), map("rep", closure, "resultRep", io));
+        var handler = list("lam", list(map("id", "error", "name", "error", "lifted", true, "rep", data), stateBinder),
+            getMask, map("rep", closure, "resultRep", io));
+        var masked = list("app", list("prim", "maskAsyncExceptions#"), list(action, token), list(true, false), false, false, map("rep", io));
+        var caught = list("app", list("prim", "catch#"), list(raising, handler, token), list(true, true, false), false, false, map("rep", io));
+        var alive = list("app", list("prim", "keepAlive#"), list(payload, token, action), list(true, false, true), false, false, map("rep", io));
+        var bindings = new ArrayList<Map<String,Object>>();
+        for (var name : List.of("mask", "catch", "alive")) {
+            var body = list("case", name.equals("mask") ? masked : name.equals("catch") ? caught : alive, "pair", list(list("data", "Pair", list("s", "mask"),
+                list("var", "mask", map("rep", word)), map("binders", list(stateBinder, wordParameter("mask"))))),
+                map("binder", map("id", "pair", "name", "pair", "lifted", false, "rep", io), "rep", word));
+            var binding = binding(name, list("lam", list(wordParameter("unused")), body, map("rep", closure, "resultRep", word)), true);
+            binding.put("arity", 1); binding.put("rep", closure); bindings.add(binding);
+        }
+        var module = module(bindings);
+        module.put("constructors", list(map("id", "Pair", "name", "Pair", "arity", 2, "kind", "unboxed-tuple"),
+            map("id", "Payload", "name", "Payload", "arity", 0, "kind", "boxed", "tag", 1,
+                "strictFields", list(), "fieldLifted", list(), "fieldReps", list())));
+        try (var engine = Engine.newBuilder().allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false")
+                .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build()) {
+            Program.PreparedCode code;
+            try (var preparation = Context.newBuilder("thc").engine(engine).build()) {
+                preparation.initialize("thc"); preparation.enter();
+                try { code = Program.prepareCode(TruffleLanguage.LanguageReference.create(Language.class).get(null), module, List.of("mask", "catch", "alive")); }
+                finally { preparation.leave(); }
+            }
+            var field = Program.PreparedCode.class.getDeclaredField("targets"); field.setAccessible(true);
+            for (var target : (List<com.oracle.truffle.runtime.OptimizedCallTarget>)field.get(code)) {
+                assertFalse(target.wasExecuted()); assertTrue(target.prepareForAOT()); target.compile(true); assertFalse(target.wasExecuted());
+            }
+            code.requireInstalledCode();
+            String previous = System.getProperty("thc.requireCompiledCode"); System.setProperty("thc.requireCompiledCode", "true");
+            try {
+                for (int load = 0; load < 2; load++) try (var context = Context.newBuilder("thc").engine(engine).build()) {
+                    context.initialize("thc"); context.enter();
+                    try {
+                        var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                        var program = code.newInstance(language); var sibling = code.newInstance(language);
+                        for (var name : List.of("mask", "catch", "alive")) {
+                            var function = (Closure)program.entryValue(name);
+                            assertEquals(name.equals("alive") ? 0L : 2L, Calls.target(function.target, new Object[]{0L, function.environment, 0L}), "GHC masking tag");
+                            assertEquals(MaskingState.UNMASKED, Language.currentState().getMaskingState().get());
+                        }
+                        assertTrue(count(program, "compiledEntries") >= 5); assertEquals(0, count(sibling, "compiledEntries"));
+                        assertEquals(0, count(program, "loweredRootCount")); code.requireInstalledCode();
+                        var handoff = language.getHandoffState().get();
+                        assertNull(handoff.getPending()); assertEquals(0, handoff.getArguments().getDepth());
+                        assertEquals(0, handoff.getResults().getDepth());
+                    } finally { context.leave(); }
+                }
+            } finally {
+                if (previous == null) System.clearProperty("thc.requireCompiledCode"); else System.setProperty("thc.requireCompiledCode", previous);
+            }
+        }
+    }
+
     private Map<String,Object> ordinaryClosureModule() {
         var longRep = map("kind", "long", "evaluated", true, "primReps", list("IntRep"));
         var closureRep = map("kind", "closure", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)"));
@@ -601,6 +1012,29 @@ class ReusableProgramTest {
         }
     }
 
+    @Test void preparationRetainsDeclarationsWithoutOpeningLibraries() {
+        // Deliberately unusable code: unused immutable declarations must not
+        // parse a native library or require native access during preparation.
+        var declaration = new PackageScalarLink("unused-component", "unused-target", "", "", new byte[0], List.of());
+        var data = module(list(binding("read", lambda(variable("x")), true)));
+        data.put("packageScalarLinks", List.of(declaration));
+        try (var context = Main.executionContext(false)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var code = Program.prepareCode(language, data, List.of("read"));
+                assertEquals(List.of(declaration), code.getPackageScalarLinks());
+                assertTrue(code.getForeignLinks().isEmpty());
+                assertTrue(code.getManagedRegistrations().isEmpty());
+                var first = code.newInstance(language);
+                var second = code.newInstance(language);
+                assertEquals(47L, call(first, first.entryValue("read"), 47L));
+                assertEquals(-25L, call(second, second.entryValue("read"), -25L));
+                assertEquals(0L, count(first, "loweredRootCount"));
+            } finally { context.leave(); }
+        }
+    }
+
     @Test void admissionRejectsForeignOwnershipAndUnknownInputs() {
         try (var context = Main.executionContext(false)) {
             context.initialize("thc"); context.enter();
@@ -614,6 +1048,49 @@ class ReusableProgramTest {
                 assertAll(
                     () -> assertThrows(UnsupportedCore.class, () -> Program.prepareCode(language, foreign, List.of("read"))),
                     () -> assertThrows(UnsupportedCore.class, () -> Program.prepareCode(language, unsupported, List.of("read"))));
+            } finally { context.leave(); }
+        }
+    }
+
+    @Test void preparationRejectsUnpreparedForeignLanguageReceivers() {
+        var closure = map("kind", "closure", "primReps", list("BoxedRep (Just Lifted)"), "evaluated", true);
+        var state = map("kind", "void", "primReps", list(), "evaluated", true);
+        var address = map("kind", "address", "primReps", list("AddrRep"), "evaluated", true);
+        var word = map("kind", "long", "primReps", list("IntRep"), "evaluated", true);
+        var object = map("kind", "object", "primReps", list("BoxedRep (Just Lifted)"), "evaluated", false);
+        try (var context = Context.newBuilder("thc").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                for (boolean javascript : new boolean[]{true, false}) {
+                    var proofs = javascript ? list(state) : list(address, address, address, state);
+                    var result = map("kind", "unknown", "aggregate", "unboxed-tuple", "evaluated", false,
+                        "primReps", javascript ? list("IntRep") : list("BoxedRep (Just Lifted)"),
+                        "components", list(state, javascript ? word : object));
+                    var arguments = new ArrayList<List<Object>>(); var formals = new ArrayList<Map<String,Object>>();
+                    for (int i = 0; i < proofs.size(); i++) {
+                        String id = "arg" + i;
+                        arguments.add(list("var", id, map("rep", proofs.get(i))));
+                        formals.add(map("id", id, "lifted", false, "rep", proofs.get(i)));
+                    }
+                    String script = "(() => 42)";
+                    String symbol = javascript ? "thc_javascript_v1_" + HexFormat.of().formatHex(script.getBytes(java.nio.charset.StandardCharsets.UTF_8)) : PolyglotOp.EVAL.getSymbol();
+                    var declaration = map("schema", 1, "target", map("kind", "static", "symbol", symbol, "isFunction", true),
+                        "convention", javascript ? "ccall" : "prim", "safety", "safe", "arity", proofs.size(), "suppliedArity", proofs.size(),
+                        "argumentReps", proofs, "resultRep", result);
+                    if (javascript) { declaration.put("intrinsic", "javascript-v1"); declaration.put("javascriptSource", script); }
+                    var call = list("app", list("var", "foreign", map("rep", closure)), arguments,
+                        Collections.nCopies(proofs.size(), false), false, false, map("rep", result, "foreignCall", declaration));
+                    if (javascript) assertNotNull(CoreJavaScript.validate(call, false)); else assertEquals(PolyglotOp.EVAL, CorePolyglot.validate(call, false));
+                    var entry = binding("read", list("lam", formals, call, map("rep", closure, "resultRep", result)), true);
+                    entry.put("rep", closure); entry.put("arity", proofs.size());
+                    // Internal lowering control only; no synthetic exception payload is executed.
+                    var input = module(list(entry, binding("box", lambda(variable("x")), true), binding("project", lambda(variable("x")), true)));
+                    input.put("selectedForeignExceptionBridge", map("unit", "test", "box", "box", "project", "project"));
+                    assertDoesNotThrow(() -> new Program(language, input).entryValue("read"));
+                    var failure = assertThrows(UnsupportedCore.class, () -> Program.prepareCode(language, input, List.of("read")));
+                    assertTrue(failure.getMessage().contains("foreign language"), failure.getMessage());
+                }
             } finally { context.leave(); }
         }
     }

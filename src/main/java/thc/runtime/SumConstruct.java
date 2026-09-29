@@ -38,7 +38,7 @@ public final class SumConstruct extends Expr {
         for (int i = 0; i < emptyReferences.length; i++) {
             CoreRepresentation field = shape.getLeaves()[i];
             emptyReferences[i] = field.getKind() == CoreKind.ADDRESS ? ManagedAddress.nullAddress() :
-                field.isVector() ? new VectorLayout(field).getSpecies().zero() : null;
+                field.isVector() ? new VectorLayout(field) : null;
         }
         if (proof.isTypedTransport()) for (int i = 0; i < integers.length; i++) if (integers[i] != null && (intSlots.length != integers.length || intSlots[i] < 0))
             throw fault("Missing narrow sum payload scratch slots");
@@ -76,7 +76,10 @@ public final class SumConstruct extends Expr {
             if (shape.getLayout().isLong(i)) FrameAccess.writeLong(frame, target, 0L);
             else if (shape.getLayout().isFloat(i)) FrameAccess.writeFloat(frame, target, 0.0f);
             else if (shape.getLayout().isDouble(i)) FrameAccess.writeDouble(frame, target, 0.0);
-            else FrameAccess.write(frame, target, emptyReferences[i]);
+            else {
+                Object empty = emptyReferences[i];
+                FrameAccess.write(frame, target, empty instanceof VectorLayout vector ? vector.getSpecies().zero() : empty);
+            }
         }
         int[] fields = selected.fields;
         if (proof.isTypedTransport()) payload.executeTuple(frame, fields, 0);

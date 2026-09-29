@@ -10,13 +10,13 @@ final class VectorApiExpression extends Expr {
     @Child private VectorApiOp.Site site;
     @Children private Expr[] arguments;
 
-    VectorApiExpression(VectorApiOp operation, Expr[] arguments) {
-        this.site = new VectorApiOp.Site(operation); this.arguments = arguments;
+    VectorApiExpression(VectorApiOp operation, Expr[] arguments, int programSlot) {
+        this.site = new VectorApiOp.Site(operation, programSlot); this.arguments = arguments;
     }
     @ExplodeLoop @Override public Object execute(VirtualFrame frame) {
         Object[] values = new Object[arguments.length];
         for (int index = 0; index < values.length; index++) values[index] = arguments[index].execute(frame);
-        return site.execute(values);
+        return site.execute(frame, values);
     }
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
         FrameAccess.write(frame, slots[offset], execute(frame));

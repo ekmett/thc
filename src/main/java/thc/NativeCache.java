@@ -20,6 +20,7 @@ import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.Value;
+import org.graalvm.polyglot.io.IOAccess;
 
 /** Experimental selected-Core auxiliary cache launcher; not the ordinary THC launcher. */
 public final class NativeCache {
@@ -28,15 +29,27 @@ public final class NativeCache {
 
     public static void main(String[] args) throws Exception {
         if (args.length == 1 && args[0].equals("--help")) {
-            System.out.println("store CACHE MODULE.json[,MODULE.json...]|@PACKAGES.json ENTRY [--verify-artifacts]\nrun CACHE [INTEGER|f:FLOAT|d:DOUBLE...]");
+            System.out.println("store CACHE MODULE.json[,MODULE.json...]|@PACKAGES.json ENTRY [--io-main] [--shutdown-entry=ID] [--verify-artifacts]\nrun CACHE [INTEGER|f:FLOAT|d:DOUBLE...]");
             return;
         }
-        if (args.length < 2 || !(args[0].equals("store") && (args.length == 4 ||
-                args.length == 5 && args[4].equals("--verify-artifacts")) || args[0].equals("run")))
+        if (args.length < 2 || !(args[0].equals("store") && args.length >= 4 || args[0].equals("run")))
             throw new IllegalArgumentException("Expected store CACHE MODULES ENTRY or run CACHE [INTEGER|f:FLOAT|d:DOUBLE...]");
+        boolean ioMain = false, verifyArtifacts = false;
+        String shutdown = null;
+        if (args[0].equals("store")) {
+            for (int i = 4; i < args.length; i++) {
+                if (args[i].equals("--io-main") && !ioMain) ioMain = true;
+                else if (args[i].equals("--verify-artifacts") && !verifyArtifacts) verifyArtifacts = true;
+                else if (args[i].startsWith("--shutdown-entry=") && shutdown == null)
+                    shutdown = args[i].substring("--shutdown-entry=".length());
+                else throw new IllegalArgumentException("Unknown or repeated store option: " + args[i]);
+            }
+            if (shutdown != null && (!ioMain || shutdown.isBlank() || shutdown.equals(args[3])))
+                throw new IllegalArgumentException("Shutdown requires --io-main and a distinct nonempty entry");
+        }
         if (!ImageInfo.inImageRuntimeCode()) throw new IllegalStateException("Use the experimental native-cache image, not the JVM launcher");
         Path cache = Path.of(args[1]).toAbsolutePath();
-        if (args[0].equals("store")) store(cache, request(Arrays.asList(args[2].split(",", -1)), args[3], args.length == 5));
+        if (args[0].equals("store")) store(cache, request(Arrays.asList(args[2].split(",", -1)), args[3], verifyArtifacts, ioMain, shutdown));
         else {
             Object[] arguments = new Object[args.length - 2];
             for (int i = 2; i < args.length; i++) arguments[i - 2] = argument(args[i]);
@@ -56,10 +69,15 @@ public final class NativeCache {
 
     @SuppressWarnings("unchecked")
     static String request(List<String> modules, String entry, boolean verifyArtifacts) {
+        return request(modules, entry, verifyArtifacts, false, null);
+    }
+
+    @SuppressWarnings("unchecked")
+    static String request(List<String> modules, String entry, boolean verifyArtifacts, boolean ioMain, String shutdownEntry) {
         if (modules.isEmpty() || modules.stream().anyMatch(String::isBlank) || entry.isBlank())
             throw new IllegalArgumentException("Core modules and selected entry are required");
         var request = new LinkedHashMap<>((Map<String, Object>) Json.parse(CoreModules.request(
-            modules, entry, true, false, "ast", true, false, null, false, false, verifyArtifacts)));
+            modules, entry, true, false, "ast", true, ioMain, shutdownEntry, false, false, verifyArtifacts)));
         request.put("prepareCode", true);
         return CoreModules.detachedRequest(request, entry);
     }
@@ -109,15 +127,19 @@ public final class NativeCache {
         runtime.addListener(listener);
         try (Engine engine = engine().option("engine.CacheLoad", cache.toString()).option("engine.Compilation", "false").build()) {
             Source source = selectedSource(engine);
-            try (Context context = Context.newBuilder("thc").engine(engine).build()) {
+            try (Context context = Context.newBuilder("thc").engine(engine).allowNativeAccess(true)
+                    .allowIO(IOAccess.ALL).allowCreateThread(true).build()) {
                 Value entry = context.parse(source).execute(); // Actual cached factory validates its own targets.
-                Value result = entry.execute(arguments);
-                if (!result.isNumber()) throw new IllegalStateException("Cached entry must return a numeric scalar");
+                boolean io = entry.canInvokeMember("runIO");
+                if (io && arguments.length != 0) throw new IllegalArgumentException("Cached IO main takes no arguments");
+                Value result = io ? entry.invokeMember("runIO") : entry.execute(arguments);
+                if (io ? !result.isBoolean() || !result.asBoolean() : !result.isNumber())
+                    throw new IllegalStateException("Cached entry must complete IO main or return a numeric scalar");
                 Map<?, ?> diagnostics = (Map<?, ?>) Json.parse(entry.getMember("diagnostics").asString());
                 if (((Number) diagnostics.get("loweredRootCount")).longValue() != 0 ||
                         ((Number) diagnostics.get("compiledEntries")).longValue() == 0 || submissions.get() != 0)
                     throw new IllegalStateException("Cached guest execution contract failed");
-                System.out.println(result);
+                if (!io) System.out.println(result);
                 System.err.println("Executed " + source.getName() + " with cached code and fresh program state");
             }
         } finally { runtime.removeListener(listener); }

@@ -11,12 +11,14 @@ final class ExceptionTextExpression extends Expr {
     @Child private Expr selector;
     @Child private Expr index;
     @Child private Expr state;
+    private final int programSlot;
 
-    ExceptionTextExpression(Expr handle, Expr selector, Expr index, Expr state) {
+    ExceptionTextExpression(Expr handle, Expr selector, Expr index, Expr state, int programSlot) {
         this.handle = handle;
         this.selector = selector;
         this.index = index;
         this.state = state;
+        this.programSlot = programSlot;
     }
 
     @Override public Object execute(VirtualFrame frame) {
@@ -33,7 +35,9 @@ final class ExceptionTextExpression extends Expr {
         } catch (com.oracle.truffle.api.nodes.UnexpectedResultException failure) {
             throw propagate(failure);
         }
-        long value = access.text(address, key, item, state.execute(frame));
+        Object token = state.execute(frame);
+        long value = programSlot < 0 ? access.text(address, key, item, token)
+            : access.text(address, key, item, token, Program.instance(frame, programSlot).foreignExceptionBridge());
         FrameAccess.INSTANCE.writeLong(frame, slots[offset], value);
         AstForeignCompleted.poll(this);
         return null;

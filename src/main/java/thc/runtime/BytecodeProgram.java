@@ -1549,6 +1549,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         try {
             var lowered = compileSupported(expr, scope.withSource(source), tail);
             var proof = CoreRepresentations.expression(expr);
+            if ("case".equals(expr.getFirst())) proof = CoreRepresentations.caseResult(expr).refine(proof);
             // The denoted value's Core proof cannot assert that a lowered thunk is WHNF.
             boolean diagnosticGlobal = diagnosticUnsupported && "var".equals(expr.getFirst())
                 && !scope.locals.containsKey(expr.get(1)) && !scope.joins.containsKey(expr.get(1))
@@ -4991,7 +4992,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             arms.add(new Arm(tag, compile((List<Object>) alt.get(3), child, tail), conversions));
         }
         if (arms.isEmpty()) throw new RuntimeFault("Empty sum case");
-        var result = arms.getFirst().body.proof().refine(CoreRepresentations.expression(expr));
+        var result = arms.getFirst().body.proof().refine(CoreRepresentations.caseResult(expr));
         for (var arm : arms) result.refine(arm.body.proof());
         var armProofs = new ArrayList<CoreRepresentation>(arms.size());
         for (var arm : arms) armProofs.add(arm.body.proof());
@@ -5083,7 +5084,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             if (destination != null) b.beginStoreLocal(b.createLocal("non-returning empty case", null));
             b.emitFailCase();
             if (destination != null) b.endStoreLocal(); b.endBlock();
-        }), CoreRepresentations.expression(expr));
+        }), CoreRepresentations.caseResult(expr));
         if (alternatives.size() != 1) throw new RuntimeFault("Tuple or vector case requires one alternative");
         var alt = alternatives.getFirst();
         var ids = (List<String>) alt.get(2);
@@ -5702,7 +5703,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
         var ordered = orderLiterals ? new ArrayList<>(explicit) : null;
         if (ordered != null) ordered.sort(java.util.Comparator.comparingLong(a -> (Long) a.value));
-        var resultProof = CoreRepresentations.expression(expr);
+        var resultProof = CoreRepresentations.caseResult(expr);
         var results = new ArrayList<CoreRepresentation>(alternatives.size());
         for (var alt : alternatives) results.add(alt.body.proof());
         CoreRepresentations.validateDeclaredCaseResult(resultProof, results);
