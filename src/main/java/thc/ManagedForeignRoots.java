@@ -7,7 +7,7 @@ import thc.runtime.ExecutableProgram;
 import thc.runtime.RuntimeFault;
 
 /** Context-owned GHC ForeignExports.c roots and their declared C entrypoints.
- * Registration prepares closures, but never evaluates an export. */
+ * Publication precedes native constructors; root retention never evaluates an export. */
 public final class ManagedForeignRoots {
     private final Language.State owner;
     private final IdentityHashMap<ExecutableProgram,Map<String,Object>> programs = new IdentityHashMap<>();
@@ -17,10 +17,10 @@ public final class ManagedForeignRoots {
         if (closed || Language.currentState(null) != owner) throw new RuntimeFault("Foreign export roots belong to another or closed THC context");
     }
     public void register(ExecutableProgram program, Language language, List<ManagedExportAdmission> registrations,
-            List<ManagedExportSignature> checked) {
+            List<ManagedExportSignature> checked, Runnable initializeNative) {
         checkOwner();
         owner.getNativeCallbacks().registerStaticExports(program, language, checked);
-        try { retain(program, registrations); }
+        try { initializeNative.run(); program.initializeGlobals(); retain(program, registrations); }
         catch (Throwable failure) { release(program); throw failure; }
     }
     public void retain(ExecutableProgram program, List<ManagedExportAdmission> registrations) {

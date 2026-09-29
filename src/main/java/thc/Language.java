@@ -417,19 +417,19 @@ public final class Language extends TruffleLanguage<Language.State> {
                 var owner = currentState(this);
                 for (var link : (List<ForeignBitcode>) linked.get("foreignLinks")) owner.cbits().link(link);
                 for (var link : (List<PackageScalarLink>) linked.get("packageScalarLinks")) owner.packageCbits.declare(link);
-                ExecutableProgram program = backend.equals("ast") ? new Program(Language.this, linked, async, false)
-                    : new BytecodeProgram(Language.this, linked, async);
+                ExecutableProgram program = backend.equals("ast") ? Program.forNativeStartup(Language.this, linked, async)
+                    : BytecodeProgram.forNativeStartup(Language.this, linked, async);
                 try {
                     var exports = new ArrayList<ManagedExportSignature>();
                     for (var registration : registrations) exports.addAll(registration.getExports());
-                    owner.foreignRoots.register(program, Language.this, registrations, ManagedExportPlan.checked(exports, ignored -> bindings));
+                    owner.foreignRoots.register(program, Language.this, registrations, ManagedExportPlan.checked(exports, ignored -> bindings),
+                        () -> { for (var link : (List<PackageScalarLink>) linked.get("packageScalarLinks")) owner.packageCbits.link(link); });
                     int argumentCount = ((Number) selected.get("arity")).intValue();
                     boolean processSignals = false;
                     for (var binding : bindings) if (CoreSignalForeign.dispatcher.equals(binding.get("id"))) { processSignals = true; break; }
                     var value = new EntryValue(program, entry, argumentCount, resultFault,
                         ioResult, Language.this, shutdownEntry, shutdownProof,
                         processSignals, acceptedInputs, acceptedResult);
-                    for (var link : (List<PackageScalarLink>) linked.get("packageScalarLinks")) owner.packageCbits.link(link);
                     return value;
                 } catch (Throwable failure) { owner.foreignRoots.release(program); throw failure; }
             }
@@ -509,10 +509,9 @@ public final class Language extends TruffleLanguage<Language.State> {
                     var registrations = program.registerStartup();
                     var exports = new ArrayList<ManagedExportSignature>();
                     for (var registration : registrations) exports.addAll(registration.getExports());
-                    owner.foreignRoots.register(program, Language.this, registrations, ManagedExportPlan.checked(exports, program::signatureBindings));
+                    owner.foreignRoots.register(program, Language.this, registrations, ManagedExportPlan.checked(exports, program::signatureBindings), program::linkStartup);
                     var value = new EntryValue(program, entry, ((Number) selected.get("arity")).intValue(), null,
                         io, Language.this, shutdown, shutdownResult, async && program.contains(CoreSignalForeign.dispatcher), hostInputs, hostResult);
-                    program.linkStartup();
                     owner.coreUnitPrograms.add(program);
                     return value;
                 } catch (Throwable failure) { owner.foreignRoots.release(program); program.close(); throw failure; }

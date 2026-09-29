@@ -77,6 +77,12 @@ public final class BytecodeProgram implements ExecutableProgram {
     private final Object preparationLock = new Object();
     private int nextLocal;
     private int localJoinCount;
+    private List<String> pendingInitializers = List.of();
+
+    public static BytecodeProgram forNativeStartup(Language language, Map<String,Object> module, boolean async) {
+        return new BytecodeProgram(language, module, null, async,
+            module.get("packageScalarLinks") instanceof List<?> links && !links.isEmpty());
+    }
 
     public BytecodeProgram(Language language, Map<String, Object> moduleData) {
         this(language, moduleData, null, false);
@@ -92,6 +98,10 @@ public final class BytecodeProgram implements ExecutableProgram {
 
     public BytecodeProgram(Language language, Map<String, Object> moduleData,
             BytecodeCheckpoint checkpoint, boolean enableAsync) {
+        this(language, moduleData, checkpoint, enableAsync, false);
+    }
+    private BytecodeProgram(Language language, Map<String, Object> moduleData,
+            BytecodeCheckpoint checkpoint, boolean enableAsync, boolean nativeStartup) {
         this.language = language;
         this.checkpoint = checkpoint;
         this.enableAsync = enableAsync;
@@ -153,7 +163,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         globals = demand == null ? localGlobals : demand.globals(localGlobals);
         if (diagnosticUnsupported) validateInputs = null;
         else validateInputs = CoreInputCalls.validator(bindings, constructors, demand);
-        initialize(moduleData);
+        initialize(moduleData, nativeStartup);
     }
 
     @Override public boolean getAsynchronousExceptions() { return enableAsync; }
@@ -464,21 +474,22 @@ public final class BytecodeProgram implements ExecutableProgram {
         builder.endSource();
     }
 
-    private void initialize(Map<String, Object> moduleData) {
+    private void initialize(Map<String, Object> moduleData, boolean nativeStartup) {
         var eager = new ArrayList<Map<String, Object>>();
         for (var binding : bindings) {
             var source = binding.get("expr") instanceof thc.CoreBindingBody body ? body : null;
             // Keep strict and inert-value initialization on the original path.
             // Deferred functions/CAFs are published without executing guest initializers.
-            if (demand == null && (source == null || !representation(binding)
-                    || Set.of("lit", "con", "void").contains(source.getHeader().getTag()))) {
+            boolean initializeGlobal = demand == null && (source == null || !representation(binding)
+                    || Set.of("lit", "con", "void").contains(source.getHeader().getTag()));
+            if (initializeGlobal) {
                 eager.add(binding);
-                continue;
+                if (!nativeStartup) continue;
             }
             Objects.requireNonNull(globals.get((String) binding.get("id"))).defer(preparationLock, () -> {
                 try {
                     validateBindings(List.of(binding));
-                    Object value = prepareClosedBinding(binding);
+                    Object value = prepareClosedBinding(binding, nativeStartup && initializeGlobal);
                     CoreFunctionIdentity.install(moduleData, binding, value, globalArityCertificates);
                     ++initializedBindingCount;
                     return value;
@@ -488,6 +499,10 @@ public final class BytecodeProgram implements ExecutableProgram {
                     throw failure;
                 }
             });
+        }
+        if (nativeStartup) {
+            pendingInitializers = eager.stream().map(binding -> (String) binding.get("id")).toList();
+            return;
         }
         validateBindings(eager);
         if (!eager.isEmpty() || bindings.isEmpty()) {
@@ -524,6 +539,11 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
     }
 
+    @Override public void initializeGlobals() {
+        for (String id : pendingInitializers) Objects.requireNonNull(globals.get(id)).read();
+        pendingInitializers = List.of();
+    }
+
     private void validateBindings(List<Map<String, Object>> requested) {
         if (requested.isEmpty()) return;
         ArrayOp.validateApplications(requested);
@@ -534,7 +554,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
     }
 
-    private Object prepareClosedBinding(Map<String, Object> binding) {
+    private Object prepareClosedBinding(Map<String, Object> binding, boolean initializeGlobal) {
         CoreRepresentations.requireNoSum(CoreRepresentations.binder(binding), "global binding");
         var expr = (List<Object>) binding.get("expr");
         CoreRepresentations.requireNoSum(CoreRepresentations.expression(expr), "global binding");
@@ -544,6 +564,12 @@ public final class BytecodeProgram implements ExecutableProgram {
             default -> throw new UnsupportedCore("Demand loading does not yet support effectful strict global initialization");
         };
         var scope = new Scope(new FunctionContext(0), sources.binding(binding, null));
+        if (initializeGlobal) {
+            String label = (String) binding.get("name");
+            var value = representation(binding) && !Set.of("lam", "lit", "con", "void").contains(expr.getFirst())
+                ? delay(expr, scope, label) : argument(expr, scope, representation(binding), label);
+            return Calls.target(build("Core global initialization", scope.function, value, false), new Object[]{0L});
+        }
         if ("lam".equals(expr.getFirst())) {
             CoreRepresentations.requireScalar(CoreRepresentations.expression(expr), "argument");
             var args = (List<Map<String, Object>>) expr.get(1);

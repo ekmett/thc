@@ -28,8 +28,8 @@ public final class ManagedExportRegistry {
         return load(() -> {
             for (var link : (List<PackageScalarLink>) plan.getLinked().get("packageScalarLinks")) owner.getPackageCbits().declare(link);
             ExecutableProgram program = switch (plan.getBackend()) {
-                case "ast" -> new Program(language, plan.getLinked(), false, false);
-                case "bytecode" -> new BytecodeProgram(language, plan.getLinked(), true);
+                case "ast" -> Program.forNativeStartup(language, plan.getLinked(), false);
+                case "bytecode" -> BytecodeProgram.forNativeStartup(language, plan.getLinked(), true);
                 default -> throw new IllegalStateException("Invalid managed backend");
             };
             return new Loaded(program, plan.getExports(), (List<ManagedExportAdmission>) plan.getLinked().get("managedRegistrations"),
@@ -62,7 +62,10 @@ public final class ManagedExportRegistry {
         try {
             var bundle = prepare.get(); prepared = bundle;
             var program = bundle.program();
-            owner.getForeignRoots().register(program, language, bundle.registrations(), bundle.exports());
+            owner.getForeignRoots().register(program, language, bundle.registrations(), bundle.exports(), () -> {
+                if (program instanceof CoreUnitProgram unitProgram) unitProgram.linkStartup();
+                for (var link : bundle.links()) owner.getPackageCbits().link(link);
+            });
             var grouped = new LinkedHashMap<String,Map<String,List<ManagedExportSignature>>>();
             for (var signature : bundle.exports()) grouped.computeIfAbsent(signature.unit(), ignored -> new LinkedHashMap<>()).computeIfAbsent(signature.module(), ignored -> new ArrayList<>()).add(signature);
             var namespace = new LinkedHashMap<String,ManagedExportNamespace>();
@@ -75,8 +78,6 @@ public final class ManagedExportRegistry {
                 }
                 namespace.put(unit.getKey(), new ManagedExportNamespace(this, unit.getKey(), () -> modules));
             }
-            if (program instanceof CoreUnitProgram unitProgram) unitProgram.linkStartup();
-            for (var link : bundle.links()) owner.getPackageCbits().link(link);
             synchronized (this) {
                 checkOwner();
                 if (program instanceof CoreUnitProgram unitProgram) owner.getCoreUnitPrograms().add(unitProgram);

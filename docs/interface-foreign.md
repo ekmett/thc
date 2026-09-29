@@ -668,6 +668,11 @@ guest-thread admission and exception path, including safe callbacks on the
 original native thread in Loom mode. Same-component calls from a constructor
 use its already published LLVM symbols instead of waiting on their own load.
 Other threads still wait for component initialization to finish.
+Ordinary global cells are published before this phase, so a constructor callback
+can demand a data or finalizer address from its own component. Finalizer labels
+retain one canonical identity across constructor reentry and completed loading.
+The loaders then complete their original eager global initialization; lazy
+package loading still leaves unrelated binding bodies unopened.
 
 `StablePtr` arguments preserve THC's opaque, context-owned handles. Original C
 `hs_free_stable_ptr` releases only a live token belonging to that context; null,

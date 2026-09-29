@@ -13,6 +13,8 @@ public interface ExecutableProgram {
     RootCallTarget hostEntryTarget(int arity);
     default RootCallTarget hostEntryTarget() { return hostEntryTarget(0); }
     Object entryValue(String name);
+    /** Complete staged ordinary global initialization after native constructors. */
+    default void initializeGlobals() {}
     RootCallTarget entryTarget(String name);
     DataLayout constructorLayout(String id);
     /** Per-program counts, without copying context-wide metric snapshots. */

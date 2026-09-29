@@ -25,7 +25,9 @@ class StaticExportStartupTest {
     private final String component = "a".repeat(64), nativeEntry = "thc_native_" + component + "_0";
     private String hash(byte[] bytes) throws Exception { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes)); }
     private Map<String,Object> module() throws Exception { return module(false); }
-    private Map<String,Object> module(boolean failInitialization) throws Exception {
+    private Map<String,Object> module(boolean failInitialization) throws Exception { return module(failInitialization, null); }
+    private Map<String,Object> module(boolean failInitialization, String labelKind) throws Exception {
+        String labelEntry = "thc_native_" + component + "_1";
         var c = directory.resolve("startup.c"); var bc = directory.resolve("startup.bc");
         Files.writeString(c, """
             extern int declared_identity(int);
@@ -37,8 +39,12 @@ class StaticExportStartupTest {
                 %s
             }
             int %s(int value) { return initial + retained(value); }
+            %s
             """.formatted(failInitialization ? "extern void missing_initializer_dependency(void);" : "",
-                failInitialization ? "missing_initializer_dependency();" : "", nativeEntry));
+                failInitialization ? "missing_initializer_dependency();" : "", nativeEntry,
+                labelKind == null ? "" : labelKind.equals("function-addr")
+                    ? "void " + labelEntry + "(unsigned char *p) { if (p) ++*p; }"
+                    : "static unsigned char payload = 29; void *" + labelEntry + "(void) { return &payload; }"));
         var process = new ProcessBuilder(System.getenv().getOrDefault("THC_CLANG", "clang"),
             "--target=x86_64-unknown-linux-gnu", "-O1", "-emit-llvm", "-c", c.toString(), "-o", bc.toString()).redirectErrorStream(true).start();
         var output = new String(process.getInputStream().readAllBytes(), UTF_8); assertEquals(0, process.waitFor(), output);
@@ -71,10 +77,38 @@ class StaticExportStartupTest {
         var closure = map("kind", "closure", "primReps", list("BoxedRep (Just Lifted)"), "evaluated", true);
         var binding = map("id", id, "name", "identity", "lifted", true, "arity", 1L, "rep", closure,
             "expr", list("lam", list(map("id", "x", "lifted", true, "coercion", false, "rep", data)), list("var", "x", map("rep", data)), map("rep", closure, "resultRep", data)));
-        return map("schema", 2L, "ghc", "9.14.1", "unit", unit, "module", name, "boundary", "optimized-Core-after-Tidy-before-CorePrep",
+        var result = map("schema", 2L, "ghc", "9.14.1", "unit", unit, "module", name, "boundary", "optimized-Core-after-Tidy-before-CorePrep",
             "bindings", list(binding), "constructors", list(map("id", "ghc-internal:GHC.Internal.Int.I32#", "name", "I32#", "kind", "boxed",
                 "arity", 1L, "fieldReps", list(list("Int32Rep")), "strictFields", list(false), "fieldLifted", list(false))),
             "foreign", product, "staticForeignImports", proof, "staticForeignExports", inventory, "staticForeignExportRegistration", registration, "packageNativeLink", link);
+        if (labelKind != null) {
+            boolean finalizer = labelKind.equals("function-addr");
+            var address = map("kind", "address", "primReps", list("AddrRep"), "evaluated", true);
+            var unitType = map("kind", "tycon", "name", map("unit", "ghc-internal", "module", "GHC.Internal.Tuple", "occurrence", "Unit", "namespace", "type"), "arguments", List.of());
+            var pointer = map("kind", "tycon", "name", map("unit", "ghc-internal", "module", "GHC.Internal.Ptr", "occurrence", "Ptr", "namespace", "type"), "arguments", list(unitType));
+            var io = map("kind", "tycon", "name", map("unit", "ghc-internal", "module", "GHC.Internal.Types", "occurrence", "IO", "namespace", "type"), "arguments", list(unitType));
+            var type = finalizer ? map("kind", "tycon", "name", map("unit", "ghc-internal", "module", "GHC.Internal.Ptr", "occurrence", "FunPtr", "namespace", "type"),
+                "arguments", list(map("kind", "function", "multiplicity", many, "argument", pointer, "result", io))) : pointer;
+            var declared = map("binder", with(binder, "occurrence", "label"), "header", null, "symbol", "startup_label", "isFunction", finalizer,
+                "convention", "ccall", "declaredType", type, "normalizedType", type, "normalizationRole", "representational",
+                "callback", finalizer ? map("arguments", list("AddrRep"), "result", "void") : null);
+            var abi = new ArrayList<Object>((List<?>) link.get("abi"));
+            abi.add(map("symbol", "startup_label", "entry", labelEntry, "arguments", finalizer ? list("AddrRep") : List.of(),
+                "result", finalizer ? "void" : "AddrRep", "convention", "ccall", "safety", "unsafe"));
+            var labelLink = with(link, "abi", abi);
+            labelLink = finalizer ? with(labelLink, "schema", 2L, "finalizers", list(labelEntry)) : with(labelLink, "dataSymbols", list(labelEntry));
+            var labelBinding = map("id", unit + ":" + name + ".label", "name", "label", "arity", 0L, "lifted", false, "rep", address,
+                "expr", list("lit", labelKind, "startup_label", map("rep", address)));
+            // The original C constructor enters Haskell before native loading
+            // completes, and that callback demands this same component's label.
+            var body = list("case", list("var", unit + ":" + name + ".label", map("rep", address)), "address",
+                list(list("default", null, List.of(), list("var", "x", map("rep", data)))),
+                map("rep", data, "binder", map("id", "address", "lifted", false, "rep", address)));
+            binding = with(binding, "expr", list("lam", list(map("id", "x", "lifted", true, "coercion", false, "rep", data)), body,
+                map("rep", closure, "resultRep", data)));
+            result = with(result, "bindings", list(binding, labelBinding), "staticForeignImports", with(proof, "addresses", list(declared)), "packageNativeLink", labelLink);
+        }
+        return result;
     }
     private Path paired(Map<String,Object> module) throws Exception {
         var original = Json.stringify(module).getBytes(UTF_8); var metadata = Json.stringify(without(module, "bindings")).getBytes(UTF_8);
@@ -83,7 +117,10 @@ class StaticExportStartupTest {
         Map<String,Object> record;
         try (var index = CoreJsonIndex.fromBytes(original)) {
             var bindings = Objects.requireNonNull(index.getRoot().member("bindings"));
-            Files.writeString(symbols, id + " " + bindings.elements().getFirst().getStart() + "\n");
+            var rows = new StringBuilder();
+            for (int i = 0; i < bindings.elements().size(); ++i)
+                rows.append(((Map<?,?>) ((List<?>) module.get("bindings")).get(i)).get("id")).append(' ').append(bindings.elements().get(i).getStart()).append('\n');
+            Files.writeString(symbols, rows);
             record = map("name", name, "path", "Exports.json", "sha256", hash(original), "boundary", module.get("boundary"), "start", 0L, "end", original.length,
                 "bindingsStart", bindings.getStart(), "bindingsEnd", bindings.getEndExclusive(), "metadataStart", original.length + 1, "metadataEnd", bytes.length,
                 "containsDelimitedControl", false, "registrationObligations", true, "mainAlias", false, "packageScalarDeclarations", true);
@@ -93,6 +130,32 @@ class StaticExportStartupTest {
                 "symbols", map("path", symbols.toString(), "sha256", hash(Files.readAllBytes(symbols))), "modules", list(record))))));
     }
     @AfterEach void releaseMappings() { CoreFileMappings.shared.evictIdleBelow(directory); }
+    @Timeout(20)
+    @ParameterizedTest @CsvSource({"ast,false,function-addr", "bytecode,false,function-addr", "ast,true,function-addr", "bytecode,true,function-addr",
+        "ast,false,data-addr", "bytecode,false,data-addr", "ast,true,data-addr", "bytecode,true,data-addr"})
+    void originalAddressAndFinalizerLiteralsLoadBeforeConstructorCallbacks(String backend, boolean lazy, String kind) throws Exception {
+        var module = module(false, kind); var file = Files.writeString(directory.resolve("module.json"), Json.stringify(module));
+        var paths = List.of(lazy ? "@" + paired(module) : file.toString());
+        for (String hosting : List.of("platform", "loom")) try (var context = Context.newBuilder("thc").allowNativeAccess(true).allowCreateThread(true)
+                .allowExperimentalOptions(true).option("thc.ThreadHosting", hosting).build()) {
+            context.eval("thc", CoreModules.request(paths, unit + ":" + name + ".label", true, false, backend, false));
+            context.enter();
+            try {
+                var owner = Language.currentState(); var program = owner.getForeignRoots().programs().getFirst();
+                var label = assertInstanceOf(thc.runtime.ManagedAddress.class, program.entryValue(unit + ":" + name + ".label"));
+                if (kind.equals("function-addr")) {
+                    byte[] bytes = {40}; label.finalizerFunction().invoke(thc.runtime.ManagedAddress.fromByteArray(bytes));
+                    assertArrayEquals(new byte[]{41}, bytes);
+                    assertSame(label.finalizerFunction(), owner.getPackageCbits().finalizer("startup_label"),
+                        "constructor and completed library retain one canonical finalizer");
+                } else assertEquals(29, label.readWord8(0));
+                var link = Objects.requireNonNull(PackageScalarLinks.read(module)).getLink();
+                var receiver = owner.getPackageCbits().resolve(link, link.getAbi().getFirst()).getReceiver();
+                var interop = com.oracle.truffle.api.interop.InteropLibrary.getUncached();
+                assertEquals(49, interop.asInt(interop.execute(receiver, 42)));
+            } finally { context.leave(); }
+        }
+    }
     @ParameterizedTest @CsvSource({"ast,false", "bytecode,false", "ast,true", "bytecode,true"})
     void failedNativeInitializationDoesNotPublishRootsOrCallableExports(String backend, boolean lazy) throws Exception {
         var module = module(true); var file = Files.writeString(directory.resolve("module.json"), Json.stringify(module));

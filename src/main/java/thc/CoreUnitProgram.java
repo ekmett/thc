@@ -188,8 +188,7 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
         // registry checks exact identity and links the component only once.
         for (var link : (List<ForeignBitcode>) linked.get("foreignLinks")) owner.cbits().link(link);
         for (var link : (List<PackageScalarLink>) linked.get("packageScalarLinks")) {
-            owner.getPackageCbits().declare(link);
-            synchronized (startupLinks) { startupLinks.put(link.getUnit(), link); }
+            owner.getPackageCbits().link(link);
         }
         return backend.equals("ast") ? new Program(language, linked, async, false) : new BytecodeProgram(language, linked, async);
     }
@@ -198,13 +197,18 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
         for (var module : directory.getModules()) if (module.registrationObligations()) pending.add(admission(module));
         for (var module : consumers) if (CoreForeignArtifacts.hasRegistrationObligations(module)) pending.add(consumerAdmission(module));
         for (var admitted : pending) {
-            var merger = new CoreModules.Merger(availableModules); merger.addSelected(admitted, List.of()); merger.finish();
+            var merger = new CoreModules.Merger(availableModules); merger.addSelected(admitted, List.of());
+            if (admitted.getPackageLink() != null) packageProvenance((String) admitted.getModule().get("unit")).forEach(merger::addPackageProvenance);
+            for (var link : (List<PackageScalarLink>) merger.finish().get("packageScalarLinks")) {
+                owner.getPackageCbits().declare(link);
+                synchronized (startupLinks) { startupLinks.put(link.getUnit(), link); }
+            }
             var exports = admitted.getExports();
             if (exports != null) registrations.add(exports);
         }
         return registrations;
     }
-    /** Called after registration/root preparation, outside the demand-cell lock. */
+    /** Called after callback publication, before any root preparation. */
     public void linkStartup() {
         List<PackageScalarLink> links;
         synchronized (startupLinks) { links = new ArrayList<>(startupLinks.values()); }
@@ -223,8 +227,12 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
         } else if (Objects.equals(expression.getFirst(), "app")) follow((List<Object>) expression.get(1), selected);
     }
     private ExecutableProgram hostProgram() {
+        // A native constructor can call an export before the public entry is
+        // prepared. Host roots/layouts use the same shared demand state.
+        var programs = demand.preparedPrograms();
+        if (!programs.isEmpty()) return programs.getFirst();
         if (entry != null) return demand.program(entry);
-        var programs = demand.preparedPrograms(); if (programs.isEmpty()) throw new IllegalStateException("No admitted managed export"); return programs.getFirst();
+        throw new IllegalStateException("No admitted managed export");
     }
     @Override public RootCallTarget hostEntryTarget(int arity) { return hostProgram().hostEntryTarget(arity); }
     @Override public Object entryValue(String name) { var cell = demand.cell(name); if (cell == null) throw new UnsupportedCore("Unresolved external binding " + name); return cell.read(); }

@@ -256,7 +256,33 @@ public final class PackageScalarLibraries {
         if (function == null) throw new java.util.NoSuchElementException("Key " + signature.getEntry() + " is missing in the map.");
         return function;
     }
-    @TruffleBoundary public CFinalizerFunction finalizer(String symbol) { current(); return finalizers.resolve(symbol); }
+    @TruffleBoundary public CFinalizerFunction finalizer(String symbol) {
+        var owner = current();
+        Loaded[] declared;
+        synchronized (this) {
+            if (closed) throw fault("Package C library registry is closed");
+            declared = libraries.values().toArray(Loaded[]::new);
+        }
+        // Only the loader's synchronous callback may see a component before
+        // INIT_MODULE returns. Its function symbols are already initialized.
+        for (var selected : declared) {
+            var link = selected.link();
+            boolean matches = link.getAbi().stream().anyMatch(signature ->
+                link.getFinalizers().contains(signature.getEntry()) && signature.getSymbol().equals(symbol));
+            if (!matches) continue;
+            if (initializing.get().contains(link)) {
+                var functions = new HashMap<String, PackageScalarFunction>();
+                for (var signature : link.getAbi()) if (link.getFinalizers().contains(signature.getEntry()))
+                    functions.put(signature.getEntry(), resolve(link, signature));
+                finalizers.register(link, functions, owner.cbits());
+            } else if (!selected.task().isDone()) {
+                // A constructor may demand a different declared component.
+                // Use normal loading/awaiting; never retry a failed component.
+                link(link);
+            }
+        }
+        return finalizers.resolve(symbol);
+    }
     /** Resolve an original declaration owner, or an unambiguous old C label.
      * The address thunk takes no arguments and returns the genuine LLVM/native
      * global, without inventing extent, writable storage or deallocation rights. */
