@@ -2829,6 +2829,7 @@
     "t/haskell-fixtures/Main.hs": {
       "junit": [
         "thc.CoreCbdModelTest", "thc.CoreCbdConsumersTest", "thc.CoreCompactLoadTest",
+        "thc.CoreBackendPolicyTest",
         "thc.CoreUnitLoadTest", "thc.ReusableLoaderTest", "thc.NativeCacheTest",
         "thc.NarrowPublicEntryTest", "thc.LauncherDiagnosticsTest", "thc.CoreRequestTest",
         "thc.CoreUnitManagedExportTest", "thc.CoreCbdArchiveTest", "thc.CoreCbdSlabsTest",
