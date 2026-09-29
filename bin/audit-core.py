@@ -644,6 +644,8 @@ class Audit:
         self.package_scalar_links = _InputRecords(store, 'package-links') if store is not None else {}
         self.package_scalar_proofs = _ProofSets(store) if store is not None else {}
         self.native_callback_helpers = set()
+        self.boxed_foreign_calls = _InputRecords(store, 'boxed-foreign-calls', compound=True) if store is not None else {}
+        self.original_boxed_bindings = _InputRecords(store, 'original-boxed-bindings') if store is not None else {}
         self.archive_bindings = _InputRecords(store, 'archive-bindings') if store is not None else {}
         self.retained_exports = _EventList(store, 'retained-exports') if store is not None else []
         self.exception_bridges = _InputRecords(store, 'exception-bridges') if store is not None else {}
@@ -707,6 +709,15 @@ class Audit:
                 if previous != link:
                     raise ValueError('Conflicting package C component identity: ' + link['unit'])
                 self.package_scalar_proofs.setdefault(link['unit'], set()).update(proved)
+            proof = module.get('staticForeignImports', {})
+            if native_archive and proof.get('status') == 'verified':
+                for declaration in proof['imports']:
+                    emitted = declaration['emitted']
+                    for call in proof['expectedCalls']:
+                        if (core_original_foreign.boxed_owned_call(call) and call['target']['unit'] == emitted['unit'] and
+                                call['target']['symbol'] == emitted['symbol']):
+                            key = (emitted['unit'], emitted['symbol'])
+                            self.boxed_foreign_calls[key] = self.boxed_foreign_calls.get(key, []) + [call]
         except (ValueError, KeyError, TypeError) as error:
             self.issue('module-format', None, source, str(error))
         foreign = module.get('foreign')
@@ -764,6 +775,7 @@ class Audit:
             if key in self.bindings:
                 self.issue('duplicate-binding', key, source, 'Also supplied by ' + self.sources[key])
             else:
+                if module.get('schema') == 2: self.original_boxed_bindings[key] = True
                 if self.store is None:
                     self.bindings[key] = binding
                     self.sources[key] = source
@@ -1487,7 +1499,8 @@ class Audit:
             return True
         package_link = self.package_scalar_links.get(target.get('unit')) if isinstance(target, dict) else None
         # JavaScript in a mixed native unit uses its full descriptor check below.
-        if package_link is not None and call.get('convention') in ('ccall', 'capi') and call.get('intrinsic') != 'javascript-v1':
+        if (package_link is not None and call.get('convention') in ('ccall', 'capi') and
+                call.get('intrinsic') != 'javascript-v1' and not core_original_foreign.context_owned_rts_call(call)):
             try:
                 head = self.expression_rep(function)
                 if (len(function) != 3 or function[0] != 'var' or not isinstance(function[1], str) or not function[1] or
@@ -1547,6 +1560,9 @@ class Audit:
 
         if isinstance(symbol, str) and core_original_foreign.operation_symbol(target) in core_original_foreign.OPERATIONS:
             try:
+                if owner in self.original_boxed_bindings and core_original_foreign.boxed_owned_call(call):
+                    core_original_foreign.require(call in self.boxed_foreign_calls.get((target['unit'], symbol), []),
+                        'boxed RTS call lacks exact nominal stock-import admission')
                 core_original_foreign.validate(metadata, [core_original_foreign.raw_rep(arg) for arg in arguments],
                                                expr[3], core_original_foreign.raw_rep(expr))
                 head_id = function[1] if isinstance(function, list) and len(function) > 1 else None

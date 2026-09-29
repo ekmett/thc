@@ -237,7 +237,8 @@ nativeImports unit value = do
     Just proof -> do
       require (member proof "schema" `elem` map (Just . toJSON) ([1,2,3,4]::[Int]) && member proof "unit" == Just (toJSON unit) &&
         member proof "module" == member value "module" && member proof "scope" == Just "retained-static-import-products" &&
-        member proof "execution" == Just "not-linked" && member proof "profile" == Just "ghc-9.14.1-thc-only-static-c-imports-v1")
+        member proof "execution" == Just "not-linked" && member proof "profile" `elem`
+          [Just "ghc-9.14.1-thc-only-static-c-imports-v1",Just "ghc-9.14.1-thc-stock-static-foreign-imports-v2"])
         "package native imports lack typed provenance identity"
       require (maybe True (== proof) (member value "staticForeignImportStubs"))
         "package native retained stub provenance differs"
@@ -260,11 +261,17 @@ nativeImports unit value = do
           "package native Core calls differ from typed import provenance"
         _ <- nativeImportForeign value
         imports <- field proof "imports"
+        require ((member proof "profile" == Just "ghc-9.14.1-thc-stock-static-foreign-imports-v2") ==
+          any (\entry -> member entry "convention" == Just "prim") imports)
+          "package primitive producer profile inventory differs"
         forM_ imports $ \entry -> do
           binder <- field entry "binder"
           require (member binder "unit" == Just (toJSON unit) && member binder "module" == member value "module")
             "package native import binder owner differs"
           _ <- nativeSignature unit entry
+          require (member entry "convention" /= Just "prim" ||
+            member proof "profile" == Just "ghc-9.14.1-thc-stock-static-foreign-imports-v2")
+            "primitive import requires the stock foreign v2 profile"
           pure ()
         _ <- nativeAddresses unit value
         let javascript = [symbol | call <- calls value, owned unit call,
@@ -366,18 +373,28 @@ nativeSignature unit entry = do
     member entry "unit" `elem` [Just Null,Just (toJSON unit)] &&
     member entry "convention" == Just (toJSON convention) && member entry "safety" == Just (toJSON safety) &&
     (member entry "isFunction" == Just (Bool True) || convention == "capi" && member entry "isFunction" == Just (Bool False)) &&
-    (convention /= "ccall" || declaredSymbol == symbol) &&
+    (convention `notElem` ["ccall","prim"] || declaredSymbol == symbol) &&
     (case member entry "header" of Just Null -> True; Just (String header) -> validHeader (T.unpack header); _ -> False))
     "package native declaration differs from emitted ABI"
-  require (identifier symbol && member emitted "unit" == Just (toJSON unit) &&
-    convention `elem` ["ccall", "capi"] && safety `elem` ["unsafe","safe","interruptible"] &&
-    not (null arguments) && last arguments == "void" && all (\rep -> inputCarrier rep || gcCarrier rep) (init arguments))
-    "package native call has malformed static C/CAPI metadata"
-  result <- case results of
-    ["void"] -> Right "void"
-    ["void", result] | scalarCarrier result || gcCarrier result -> Right result
-    _ -> Left "package native call requires State with zero or one concrete result"
-  pure (symbol,convention,safety,init arguments,result)
+  if convention == "prim" then do
+    require (identifier symbol && member emitted "unit" == Just (toJSON unit) && safety == "safe" &&
+      member entry "header" == Just Null && member entry "isFunction" == Just (Bool True) &&
+      all (\rep -> inputCarrier rep || gcCarrier rep || rep == "void") arguments &&
+      all (\rep -> scalarCarrier rep || gcCarrier rep || rep == "void") results)
+      "package primitive import has non-concrete stock carriers"
+    -- This exact list is a retained exclusion signature, never a native ABI.
+    -- The normalized nominal tree and recursive expectedCalls retain tuple shape.
+    pure (symbol,convention,safety,arguments,show results)
+  else do
+    require (identifier symbol && member emitted "unit" == Just (toJSON unit) &&
+      convention `elem` ["ccall", "capi"] && safety `elem` ["unsafe","safe","interruptible"] &&
+      not (null arguments) && last arguments == "void" && all (\rep -> inputCarrier rep || gcCarrier rep) (init arguments))
+      "package native call has malformed static C/CAPI metadata"
+    result <- case results of
+      ["void"] -> Right "void"
+      ["void", result] | scalarCarrier result || gcCarrier result -> Right result
+      _ -> Left "package native call requires State with zero or one concrete result"
+    pure (symbol,convention,safety,init arguments,result)
 
 requireKeys :: Value -> [String] -> Either String ()
 requireKeys (Object value) keys = require (sort (map Key.toString (KM.keys value)) == sort keys)
@@ -419,7 +436,7 @@ supportedSignature :: Signature -> Bool
 -- Interruptible native transport requires separate support.
 -- Exact GC-carrier provenance is archival, not permission to pass a managed
 -- object to C. Keep native ABI eligibility separate from proof validation.
-supportedSignature (_,_,safety,arguments,result) = safety `elem` ["unsafe","safe"] &&
+supportedSignature (_,convention,safety,arguments,result) = convention `elem` ["ccall","capi"] && safety `elem` ["unsafe","safe"] &&
   all inputCarrier arguments && (result == "void" || scalarCarrier result)
 
 setMember :: String -> Value -> Value -> Value

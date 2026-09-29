@@ -4198,6 +4198,12 @@ class OriginalShutdownAuditTest(unittest.TestCase):
             report = audit(module)
             self.assertTrue(report['accepted'], report)
             self.assertEqual([symbol], [item['symbol'] for item in report['foreignCalls']])
+            # The unit's ordinary native component must not capture an RTS
+            # override merely because both use ccall. An empty test ABI makes
+            # accidental package selection fail deterministically.
+            mixed = audit_core.Audit([('shutdown.json', module)], CAP)
+            mixed.package_scalar_links['ghc-internal'] = dict(unit='ghc-internal', abi=[])
+            self.assertTrue(mixed.run(['root'])['accepted'])
             for key, value in (('safety', 'unsafe'), ('arity', 0), ('resultRep', state)):
                 malformed = copy.deepcopy(module)
                 malformed['bindings'][0]['expr'][2][1][6]['foreignCall'][key] = value
@@ -4284,6 +4290,48 @@ class OriginalMainThreadRegistrationTest(unittest.TestCase):
     @staticmethod
     def audit(module, capabilities=CAP):
         return audit_core.Audit([('main-thread-call.json', module)], capabilities).run(['root'])
+
+    def test_original_capture_requires_exact_nominal_admission_in_both_auditors(self):
+        def ty(module, name, *arguments, namespace='type'):
+            return dict(kind='tycon', name=dict(unit='ghc-internal', module=module,
+                occurrence=name, namespace=namespace), arguments=list(arguments))
+        nominal = dict(kind='function', multiplicity=ty('GHC.Internal.Types', 'Many', namespace='data'),
+            argument=ty('GHC.Internal.Prim', 'Weak#', ty('GHC.Internal.Types', 'Lifted', namespace='data'),
+                        ty('GHC.Internal.Conc.Sync', 'ThreadId')),
+            result=ty('GHC.Internal.Types', 'IO', ty('GHC.Internal.Tuple', 'Unit')))
+        module = self.fixture(); module.update(schema=2, unit='ghc-internal', module='Captured')
+        call = module['bindings'][0]['expr'][2][1][6]['foreignCall']
+        emitted = dict(symbol='rts_setMainThread', unit='ghc-internal', convention='ccall', safety='unsafe',
+            arguments=['BoxedRep (Just Unlifted)', 'void'], result=['void'])
+        declaration = dict(binder=dict(unit='ghc-internal', module='Captured', occurrence='setter', namespace='value'),
+            header=None, symbol='rts_setMainThread', unit='ghc-internal', isFunction=True, convention='ccall', safety='unsafe',
+            declaredType=nominal, normalizedType=nominal, normalizationRole='representational', emitted=emitted)
+        module['staticForeignImports'] = dict(schema=1, scope='retained-static-import-products', execution='not-linked',
+            profile='ghc-9.14.1-thc-only-static-c-imports-v1', unit='ghc-internal', module='Captured', status='verified',
+            wordBits=64, expectedForeign=dict(schema=1, execution='not-linked', files=[],
+                stubs=dict(header='', source='test-only retained C product', initializers=[], finalizers=[])),
+            imports=[declaration], expectedCalls=[call])
+        module['foreign'] = copy.deepcopy(module['staticForeignImports']['expectedForeign'])
+        module['packageNativeArchive'] = dict(schema=1, profile='thc-package-native-archive-v1', execution='not-linked',
+            unit='ghc-internal', module='Captured', unsupportedImports=[emitted], unclassifiedReason=None,
+            unresolvedSymbols=[], artifact=None)
+        for indexed in (False, True):
+            for mutation in (None, 'weak-payload', 'missing-call', 'missing-proof'):
+                value = copy.deepcopy(module)
+                if mutation == 'weak-payload':
+                    for field in ('declaredType', 'normalizedType'):
+                        value['staticForeignImports']['imports'][0][field]['argument']['arguments'][1] = ty('GHC.Internal.Types', 'Int')
+                elif mutation == 'missing-call': value['staticForeignImports']['expectedCalls'] = []
+                elif mutation == 'missing-proof':
+                    value.pop('staticForeignImports'); value.pop('packageNativeArchive')
+                with self.subTest(indexed=indexed, mutation=mutation), TemporaryDirectory() as temporary:
+                    if indexed:
+                        with audit_core.AuditStore(Path(temporary) / 'audit.sqlite', {}) as store:
+                            report = audit_core.Audit([('captured.cbd', value)], CAP, store=store).run(['root'])
+                            self.assertEqual(mutation is None, report['accepted'], list(report['issues']))
+                    else:
+                        report = self.audit(value)
+                        self.assertEqual(mutation is None, report['accepted'], report)
 
     def test_exact_weak_key_call_and_capability_boundary(self):
         module = self.fixture()
