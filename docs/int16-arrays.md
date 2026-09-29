@@ -28,6 +28,6 @@ the literal tag still determines range and signed interpretation. Incompatible
 carriers and malformed records fail. Strict exporter auditing separately checks
 GHC's exact type identities.
 
-See [Unboxed16Arrays.hs](../src/examples/THC/Unboxed16Arrays.hs) for public
+See [Unboxed16Arrays.hs](../t/fixtures/core/Unboxed16Arrays.hs) for public
 array examples. These operations use native byte order, not a portable wire
 format. Use separate atomic primitives for concurrent updates.

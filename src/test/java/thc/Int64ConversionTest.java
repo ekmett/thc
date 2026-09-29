@@ -25,7 +25,7 @@ public final class Int64ConversionTest {
     }
     @Test void realCorePreservesTypedLongArgumentsAndResults() throws Exception {
         var module = (Map<String, Object>) Json.INSTANCE.parse(Files.readString(root.resolve(
-            "build/corpus/groups/int64-conversions/core/THC.Int64Conversions.json")));
+            "build/corpus/groups/int64-conversions/core/Int64Conversions.json")));
         var bindings = (List<Map<String, Object>>) module.get("bindings");
         for (var conversion : List.of(List.of("toInt64", "IntRep", "Int64Rep"), List.of("fromInt64", "Int64Rep", "IntRep"))) {
             String name = conversion.get(0), argumentRep = conversion.get(1), resultRep = conversion.get(2);

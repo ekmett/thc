@@ -140,13 +140,13 @@ checks that code was installed:
 
 ```sh
 bin/try.sh
-bin/run.sh build/core/THC.Prim.Test.json,build/core/THC.Fixtures.json sumLoop 100000 --compile
+bin/run.sh build/core/THC.Prim.Test.json,build/core/Fixtures.json sumLoop 100000 --compile
 ```
 
 The [bytecode backend](docs/bytecode.md) is the default. To use the AST backend:
 
 ```sh
-THC_BACKEND=ast bin/run.sh build/core/THC.Prim.Test.json,build/core/THC.Fixtures.json sumLoop 100000 --compile
+THC_BACKEND=ast bin/run.sh build/core/THC.Prim.Test.json,build/core/Fixtures.json sumLoop 100000 --compile
 ```
 
 Development checks and benchmarks live in `src/diagnostics/`. Build their separate

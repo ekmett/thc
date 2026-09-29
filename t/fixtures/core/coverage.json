@@ -1,0 +1,705 @@
+{
+  "schema": 1,
+  "groups": [
+    {
+      "id": "int64-conversions",
+      "source": "t/fixtures/core/Int64Conversions.hs",
+      "module": "Int64Conversions",
+      "entries": [
+        {
+          "name": "int64Roundtrip",
+          "focus": "Int#/Int64# conversion across exact primitive argument and result boundaries on 64-bit targets",
+          "warmInputs": [0, 1, -1, 17],
+          "coldInputs": [-128, 127, -32768, 32767, -2147483648, 2147483647,
+            -2147483649, 2147483648, -4294967296, 4294967295,
+            -9223372036854775808, -9223372036854775807, 9223372036854775806, 9223372036854775807],
+          "requiredPrimitives": ["intToInt64#", "int64ToInt#"]
+        },
+        {
+          "name": "int64LiteralBoundary",
+          "focus": "Canonical Int64# literals retain both signed 64-bit endpoints",
+          "warmInputs": [0, 1],
+          "coldInputs": [-1, -9223372036854775808, 9223372036854775807],
+          "requiredPrimitives": ["int64ToInt#"],
+          "requiredLiteralKinds": ["int64"]
+        }
+      ]
+    },
+    {
+      "id": "lists",
+      "source": "t/fixtures/core/ListCoverage.hs",
+      "module": "ListCoverage",
+      "sourceLibraryFrontier": "lists",
+      "entries": [
+        {
+          "name": "listPipeline",
+          "focus": "ordinary list map/filter construction and recursive checksum consumption",
+          "warmInputs": [
+            2,
+            7,
+            10,
+            20
+          ],
+          "coldInputs": [
+            -3,
+            0,
+            1,
+            31,
+            32,
+            63,
+            64,
+            -3000000000,
+            3000000000,
+            -9223372036854775808,
+            9223372036854775807
+          ]
+        },
+        {
+          "name": "listAppendReverse",
+          "focus": "Prelude append and reverse with original ghc-internal source bodies and independently input-sized lists",
+          "warmInputs": [
+            2,
+            7,
+            10,
+            20
+          ],
+          "coldInputs": [
+            -3,
+            0,
+            1,
+            31,
+            32,
+            63,
+            64,
+            -3000000000,
+            3000000000,
+            -9223372036854775808,
+            9223372036854775807
+          ]
+        },
+        {
+          "name": "listSpineLazy",
+          "focus": "consume list spine without evaluating bottom-valued heads",
+          "warmInputs": [
+            2,
+            7,
+            10,
+            20
+          ],
+          "coldInputs": [
+            -3,
+            0,
+            1,
+            31,
+            32,
+            63,
+            64,
+            -3000000000,
+            3000000000,
+            -9223372036854775808,
+            9223372036854775807
+          ]
+        },
+        {
+          "name": "listTailLazy",
+          "focus": "consume exact finite prefix without forcing bottom tail",
+          "warmInputs": [
+            2,
+            7,
+            10,
+            20
+          ],
+          "coldInputs": [
+            -3,
+            0,
+            1,
+            31,
+            32,
+            63,
+            64,
+            -3000000000,
+            3000000000,
+            -9223372036854775808,
+            9223372036854775807
+          ]
+        },
+        {
+          "name": "streamPrefix",
+          "focus": "bounded consumption of input-dependent infinite productive stream",
+          "warmInputs": [
+            2,
+            7,
+            10,
+            20
+          ],
+          "coldInputs": [
+            -3,
+            0,
+            1,
+            31,
+            32,
+            63,
+            64,
+            -3000000000,
+            3000000000,
+            -9223372036854775808,
+            9223372036854775807
+          ]
+        },
+        {
+          "name": "streamKnot",
+          "focus": "bounded consumption of a local input-dependent cyclic list",
+          "warmInputs": [
+            2,
+            7,
+            10,
+            20
+          ],
+          "coldInputs": [
+            -3,
+            0,
+            1,
+            31,
+            32,
+            63,
+            64,
+            -3000000000,
+            3000000000,
+            -9223372036854775808,
+            9223372036854775807
+          ]
+        },
+        {
+          "name": "sharedListConsumers",
+          "focus": "two consumers reuse one input-dependent lazy spine",
+          "warmInputs": [
+            2,
+            7,
+            10,
+            20
+          ],
+          "coldInputs": [
+            -3,
+            0,
+            1,
+            31,
+            32,
+            63,
+            64,
+            -3000000000,
+            3000000000,
+            -9223372036854775808,
+            9223372036854775807
+          ],
+          "sharedBindings": [
+            "spine"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "functions",
+      "source": "t/fixtures/core/FunctionCoverage.hs",
+      "module": "FunctionCoverage",
+      "entries": [
+        {
+          "name": "closurePipeline",
+          "focus": "a list of captured closures transported and applied through an unknown function",
+          "warmInputs": [
+            2,
+            7,
+            10,
+            20
+          ],
+          "coldInputs": [
+            -3,
+            0,
+            1,
+            31,
+            32,
+            63,
+            64,
+            -3000000000,
+            3000000000,
+            -9223372036854775808,
+            9223372036854775807
+          ]
+        },
+        {
+          "name": "capturedOverapply",
+          "focus": "overapplication of an opaque one-argument function returning a captured function",
+          "warmInputs": [
+            2,
+            7,
+            10,
+            20
+          ],
+          "coldInputs": [
+            -3,
+            0,
+            1,
+            31,
+            32,
+            63,
+            64,
+            -3000000000,
+            3000000000,
+            -9223372036854775808,
+            9223372036854775807
+          ]
+        },
+        {
+          "name": "reusedLazyPAP",
+          "focus": "reused partial application retains an unused bottom argument lazily",
+          "warmInputs": [
+            2,
+            7,
+            10,
+            20
+          ],
+          "coldInputs": [
+            -3,
+            0,
+            1,
+            31,
+            32,
+            63,
+            64,
+            -3000000000,
+            3000000000,
+            -9223372036854775808,
+            9223372036854775807
+          ]
+        },
+        {
+          "name": "sharedCapturedThunk",
+          "focus": "an escaping closure retains an input-dependent shared thunk used by two calls",
+          "warmInputs": [
+            2,
+            7,
+            10,
+            20
+          ],
+          "coldInputs": [
+            -3,
+            0,
+            1,
+            31,
+            32,
+            63,
+            64,
+            -3000000000,
+            3000000000,
+            -9223372036854775808,
+            9223372036854775807
+          ],
+          "sharedBindings": [
+            "sharedValue"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "trees",
+      "source": "t/fixtures/core/TreeCoverage.hs",
+      "module": "TreeCoverage",
+      "entries": [
+        {
+          "name": "treeFold",
+          "focus": "recursive three-constructor ADT construction and exhaustive fold",
+          "warmInputs": [
+            2,
+            7,
+            10,
+            20
+          ],
+          "coldInputs": [
+            -3,
+            0,
+            1,
+            31,
+            32,
+            63,
+            64,
+            -3000000000,
+            3000000000,
+            -9223372036854775808,
+            9223372036854775807
+          ]
+        },
+        {
+          "name": "treeMapFold",
+          "focus": "higher-order map with captured input across mixed-layout recursive constructors",
+          "warmInputs": [
+            2,
+            7,
+            10,
+            20
+          ],
+          "coldInputs": [
+            -3,
+            0,
+            1,
+            31,
+            32,
+            63,
+            64,
+            -3000000000,
+            3000000000,
+            -9223372036854775808,
+            9223372036854775807
+          ]
+        },
+        {
+          "name": "treeSelective",
+          "focus": "nested pattern matching selects the sole terminating branch; unused subtree is bottom",
+          "warmInputs": [
+            2,
+            7,
+            10,
+            20
+          ],
+          "coldInputs": [
+            -3,
+            0,
+            1,
+            31,
+            32,
+            63,
+            64,
+            -3000000000,
+            3000000000,
+            -9223372036854775808,
+            9223372036854775807
+          ]
+        },
+        {
+          "name": "treeShared",
+          "focus": "two branches of a recursive ADT share one input-dependent subtree",
+          "warmInputs": [
+            2,
+            7,
+            10,
+            20
+          ],
+          "coldInputs": [
+            -3,
+            0,
+            1,
+            31,
+            32,
+            63,
+            64,
+            -3000000000,
+            3000000000,
+            -9223372036854775808,
+            9223372036854775807
+          ],
+          "sharedBindings": [
+            "tree"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "numeric",
+      "source": "t/fixtures/core/NumericCoverage.hs",
+      "module": "NumericCoverage",
+      "entries": [
+        {
+          "name": "wordMixer",
+          "focus": "Word# wraparound, variable rotations, shifts, masks and bit complements",
+          "warmInputs": [
+            0,
+            1,
+            7,
+            31,
+            127,
+            65535
+          ],
+          "coldInputs": [
+            -1,
+            -128,
+            128,
+            255,
+            2147483648,
+            -2147483648,
+            4294967295,
+            -9223372036854775808,
+            9223372036854775807
+          ],
+          "requiredPrimitives": [
+            "timesWord#",
+            "plusWord#",
+            "minusWord#",
+            "xor#",
+            "and#",
+            "or#",
+            "not#",
+            "uncheckedShiftL#",
+            "uncheckedShiftRL#"
+          ]
+        },
+        {
+          "name": "signedRadix",
+          "focus": "Signed quotient/remainder for both divisor signs, arithmetic versus logical shifts, Int# wraparound",
+          "warmInputs": [
+            0,
+            1,
+            7,
+            31,
+            127,
+            65535
+          ],
+          "coldInputs": [
+            -1,
+            -7,
+            -10,
+            -99,
+            -128,
+            -2147483648,
+            4294967295,
+            -9223372036854775808,
+            9223372036854775807
+          ],
+          "requiredPrimitives": [
+            "quotInt#",
+            "remInt#",
+            "uncheckedIShiftRA#",
+            "uncheckedIShiftRL#"
+          ]
+        },
+        {
+          "name": "packedSamples",
+          "focus": "Signed 8/16/32-bit narrowing, mixed primitive/reference fields, escaped mixed captures, Int# wraparound",
+          "warmInputs": [
+            0,
+            1,
+            7,
+            31,
+            127,
+            65535
+          ],
+          "coldInputs": [
+            -1,
+            -128,
+            128,
+            255,
+            8388607,
+            8388608,
+            140737488355327,
+            140737488355328,
+            -9223372036854775808,
+            9223372036854775807
+          ],
+          "requiredPrimitives": [
+            "narrow8Int#",
+            "narrow16Int#",
+            "narrow32Int#"
+          ]
+        },
+        {
+          "name": "unicodeChecksum",
+          "focus": "Unicode Char# constructors, chr#/ord#, literal cases, ASCII/Latin/BMP/supplementary comparisons",
+          "warmInputs": [
+            0,
+            8,
+            16,
+            24
+          ],
+          "coldInputs": [
+            -1,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            -9223372036854775808,
+            9223372036854775807
+          ],
+          "requiredPrimitives": [
+            "chr#",
+            "ord#",
+            "ltChar#",
+            "leChar#"
+          ],
+          "requiredLiteralKinds": [
+            "char"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "narrow-ints",
+      "source": "t/fixtures/core/NarrowIntCoverage.hs",
+      "module": "NarrowIntCoverage",
+      "entries": [
+        {
+          "name": "narrowRecordChecksum",
+          "focus": "Ordinary Data.Int Int8/16/32 conversion with truncation/sign extension and unpacked narrow representation fields",
+          "warmInputs": [
+            0,
+            1,
+            31,
+            63
+          ],
+          "coldInputs": [
+            127,
+            128,
+            129,
+            255,
+            256,
+            -128,
+            -129,
+            -255,
+            -256,
+            32767,
+            32768,
+            32769,
+            65535,
+            65536,
+            -32768,
+            -32769,
+            -65535,
+            -65536,
+            2147483647,
+            2147483648,
+            2147483649,
+            4294967295,
+            4294967296,
+            -2147483648,
+            -2147483649,
+            -4294967295,
+            -4294967296,
+            -9223372036854775808,
+            9223372036854775807
+          ],
+          "requiredPrimitives": [
+            "intToInt8#",
+            "int8ToInt#",
+            "intToInt16#",
+            "int16ToInt#",
+            "intToInt32#",
+            "int32ToInt#"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "narrow-words",
+      "source": "t/fixtures/core/NarrowWordCoverage.hs",
+      "module": "NarrowWordCoverage",
+      "entries": [
+        {
+          "name": "word8Arithmetic",
+          "focus": "Ordinary Word8 conversion, wrapping arithmetic and unsigned ordering",
+          "warmInputs": [0, 11, 127, 256],
+          "coldInputs": [-1, 1, 128, 129, 254, 255, 257, -128, -129,
+            32767, 32768, 32769, 65534, 65535, 65536, 65537, -32768, -32769,
+            2147483647, 2147483648, 2147483649, 4294967294, 4294967295,
+            4294967296, 4294967297, -2147483648, -2147483649, -4294967295,
+            -4294967296, -9223372036854775808, 9223372036854775807],
+          "requiredPrimitives": ["wordToWord8#", "word8ToWord#", "plusWord8#",
+            "subWord8#", "timesWord8#", "ltWord8#", "leWord8#", "eqWord#"],
+          "requiredLiteralKinds": ["word8"]
+        },
+        {
+          "name": "word16Arithmetic",
+          "focus": "Ordinary Word16 conversion, wrapping arithmetic and unsigned ordering",
+          "warmInputs": [0, 11, 127, 256],
+          "coldInputs": [-1, 1, 128, 129, 254, 255, 257, -128, -129,
+            32767, 32768, 32769, 65534, 65535, 65536, 65537, -32768, -32769,
+            2147483647, 2147483648, 2147483649, 4294967294, 4294967295,
+            4294967296, 4294967297, -2147483648, -2147483649, -4294967295,
+            -4294967296, -9223372036854775808, 9223372036854775807],
+          "requiredPrimitives": ["wordToWord16#", "word16ToWord#", "plusWord16#",
+            "subWord16#", "timesWord16#", "ltWord16#", "leWord16#", "eqWord#"],
+          "requiredLiteralKinds": ["word16"]
+        },
+        {
+          "name": "word32Arithmetic",
+          "focus": "Ordinary Word32 conversion, wrapping arithmetic and unsigned ordering",
+          "warmInputs": [0, 11, 127, 256],
+          "coldInputs": [-1, 1, 128, 129, 254, 255, 257, -128, -129,
+            32767, 32768, 32769, 65534, 65535, 65536, 65537, -32768, -32769,
+            2147483647, 2147483648, 2147483649, 4294967294, 4294967295,
+            4294967296, 4294967297, -2147483648, -2147483649, -4294967295,
+            -4294967296, -9223372036854775808, 9223372036854775807],
+          "requiredPrimitives": ["wordToWord32#", "word32ToWord#", "plusWord32#",
+            "subWord32#", "timesWord32#", "ltWord32#", "leWord32#", "eqWord#"],
+          "requiredLiteralKinds": ["word32"]
+        },
+        {
+          "name": "narrowWordRecordChecksum",
+          "focus": "Two consumers share records with unpacked Word8Rep/Word16Rep/Word32Rep fields and zero-extending conversions",
+          "warmInputs": [0, 11, 127, 256],
+          "coldInputs": [-1, 1, 128, 129, 254, 255, 257, -128, -129,
+            32767, 32768, 32769, 65534, 65535, 65536, 65537, -32768, -32769,
+            2147483647, 2147483648, 2147483649, 4294967294, 4294967295,
+            4294967296, 4294967297, -2147483648, -2147483649, -4294967295,
+            -4294967296, -9223372036854775808, 9223372036854775807],
+          "requiredPrimitives": ["wordToWord8#", "word8ToWord#", "wordToWord16#",
+            "word16ToWord#", "wordToWord32#", "word32ToWord#"],
+          "sharedBindings": ["records"]
+        }
+      ]
+    },
+    {
+      "id": "pointers",
+      "source": "t/fixtures/core/PointerCoverage.hs",
+      "module": "PointerCoverage",
+      "entries": [
+        {
+          "name": "pointerShortcut",
+          "focus": "Non-strict object identity shortcut with allocation-independent key equality fallback",
+          "warmInputs": [
+            2,
+            7,
+            10,
+            20
+          ],
+          "coldInputs": [
+            -3,
+            0,
+            1,
+            31,
+            32,
+            -3000000000,
+            3000000000,
+            -9223372036854775808,
+            9223372036854775807
+          ],
+          "requiredPrimitives": [
+            "reallyUnsafePtrEquality#"
+          ]
+        },
+        {
+          "name": "pointerLazyPayload",
+          "focus": "Pointer equality and key comparison leave irrelevant bottom-valued payloads untouched",
+          "warmInputs": [
+            2,
+            7,
+            10,
+            20
+          ],
+          "coldInputs": [
+            -3,
+            0,
+            1,
+            31,
+            32,
+            -3000000000,
+            3000000000,
+            -9223372036854775808,
+            9223372036854775807
+          ],
+          "requiredPrimitives": [
+            "reallyUnsafePtrEquality#"
+          ]
+        }
+      ]
+    }
+  ]
+}

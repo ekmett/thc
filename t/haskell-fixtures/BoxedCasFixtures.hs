@@ -32,7 +32,7 @@ prepareBoxedCas root = do
       manifest = root </> directory </> "manifest.json"
       source = "t/fixtures/compiler/BoxedCasAudit.hs"
       driver = "t/fixtures/compiler/BoxedCasNative.hs"
-      example = "src/examples/THC/BoxedCasCounter.hs"
+      example = "t/fixtures/core/BoxedCasCounter.hs"
       entries = ["arrayCas","arrayCasUnlifted","smallCas","smallCasUnlifted","varCas","varCasUnlifted","modifyValue","modifyLazy","modifyBottom","boxedCasCounter"] :: [String]
   createDirectoryIfMissing True (root </> directory)
   previous <- listDirectory (root </> directory)
@@ -70,7 +70,7 @@ prepareBoxedCas root = do
   createDirectoryIfMissing True (root </> native)
   compiled <- run "native-compile" [] ghc
     ["--make","-O2","-fforce-recomp","-dcore-lint","-dstg-lint",
-     "-i" ++ root </> "t/fixtures/compiler","-i" ++ root </> "src/examples","-odir",root </> native,"-hidir",root </> native,
+     "-i" ++ root </> "t/fixtures/compiler","-i" ++ root </> "t/fixtures/core","-odir",root </> native,"-hidir",root </> native,
      root </> driver,"-o",root </> executable]
   observed <- run "native-oracle" [] (root </> executable) []
   compilerSources <- map ("src/compiler/THC" </>) . filter ((== ".hs") . takeExtension) <$> listDirectory (root </> "src/compiler/THC")

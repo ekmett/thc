@@ -40,7 +40,7 @@ SET_FRONTIER_MISSING = {
 SEQUENCE_SHOW_MISSING = "ghc-internal:GHC.Internal.Show.$fShowCallStack_itos'"
 
 
-def sequence_entry_violations(entry, audit):
+def sequence_entry_violations(entry, audit, module):
     """Native agreement cannot silently change strict support for another API slice."""
     name = entry['name']
     if name not in SEQUENCE_ENTRIES:
@@ -51,7 +51,7 @@ def sequence_entry_violations(entry, audit):
         violations.append(name + ': unexpected support declaration')
     if audit['accepted'] != supported:
         violations.append(name + ': declared support disagrees with strict entry audit')
-    if audit['roots'] != ['main:THC.SequenceWorkload.' + name]:
+    if audit['roots'] != ['main:' + module + '.' + name]:
         violations.append(name + ': expected workload root changed')
     if audit['issues']:
         violations.append(name + ': unexpected capability issue; review coverage')
@@ -92,7 +92,7 @@ def audit_structure_violations(group, audit):
         missing = [item['id'] for item in audit['missingGlobals']]
         if set(missing) != SET_FRONTIER_MISSING or len(missing) != len(SET_FRONTIER_MISSING):
             violations.append('set: exception/backtrace missing-definition frontier changed; review coverage')
-        if audit['roots'] != ['main:THC.SetWorkload.setAggregate']:
+        if audit['roots'] != ['main:' + group['module'] + '.setAggregate']:
             violations.append('set: expected workload root changed; review coverage')
         if 'reallyUnsafePtrEquality#' not in primitives:
             violations.append('set: required pointer-identity primitive disappeared from reachable Core')
@@ -120,7 +120,7 @@ def check_existing(manifest):
                 violations.append('sequence: expected every declared entry exactly once')
             for entry in group['entries']:
                 entry_audit = auditor.Audit(modules, capabilities).run([entry['name']])
-                violations.extend(sequence_entry_violations(entry, entry_audit))
+                violations.extend(sequence_entry_violations(entry, entry_audit, group['module']))
                 print(json.dumps(dict(entry=entry['name'], execution=entry.get('execution'),
                                       accepted=entry_audit['accepted'], **entry_audit['summary'])))
     if violations:
@@ -285,22 +285,22 @@ def main():
     sequence_cold = sorted((set(range(18)) | {-3, -(1 << 63), (1 << 63) - 1,
         20, 21, 22, 24, 25, 26, 33, 34, 159, 160, 161, 255, 256, 257, 512, 1024}) - set(warm))
     groups = [
-        dict(id='set', module='THC.SetWorkload', source='src/examples/THC/SetWorkload.hs',
+        dict(id='set', module='SetWorkload', source='t/fixtures/core/SetWorkload.hs',
              execution='frontier', postTidy=True, names=['setAggregate'], warm=warm, cold=cold),
-        dict(id='intmap', module='THC.IntMapWorkload', source='src/examples/THC/IntMapWorkload.hs',
+        dict(id='intmap', module='IntMapWorkload', source='t/fixtures/core/IntMapWorkload.hs',
              execution='supported', postTidy=True, names=['intMapAggregate'], warm=warm, cold=cold),
-        dict(id='intmap-primops', module='THC.IntMapPrimops', source='src/examples/THC/IntMapPrimops.hs',
+        dict(id='intmap-primops', module='IntMapPrimops', source='t/fixtures/core/IntMapPrimops.hs',
              execution='supported', postTidy=False, names=['countLeadingZeros', 'unsignedLessThanZero', 'unsignedLessThanMaxSigned',
                                           'unsignedLessThanSignBit', 'unsignedLessThanAllOnes'],
              warm=primitive_warm, cold=primitive_cold),
-        dict(id='intset', module='THC.IntSetWorkload', source='src/examples/THC/IntSetWorkload.hs',
+        dict(id='intset', module='IntSetWorkload', source='t/fixtures/core/IntSetWorkload.hs',
              execution='supported', postTidy=True, names=['intSetAggregate'], warm=warm, cold=cold),
-        dict(id='intset-primops', module='THC.IntSetPrimops', source='src/examples/THC/IntSetPrimops.hs',
+        dict(id='intset-primops', module='IntSetPrimops', source='t/fixtures/core/IntSetPrimops.hs',
              execution='supported', postTidy=False, names=['populationCount', 'countTrailingZeros',
                  'unsignedLessEqualZero', 'unsignedLessEqualMaxSigned',
                  'unsignedLessEqualSignBit', 'unsignedLessEqualAllOnes'],
              warm=primitive_warm, cold=intset_primitive_cold),
-        dict(id='sequence', module='THC.SequenceWorkload', source='src/examples/THC/SequenceWorkload.hs',
+        dict(id='sequence', module='SequenceWorkload', source='t/fixtures/core/SequenceWorkload.hs',
              execution='frontier', postTidy=True, names=list(SEQUENCE_ENTRIES), warm=warm, cold=sequence_cold),
     ]
     violations = []
@@ -332,7 +332,7 @@ def main():
                 entry_audit = auditor.Audit(parsed, capabilities).run([name])
                 write_json(entry_path, entry_audit)
                 execution = 'supported' if name in SEQUENCE_SUPPORTED else 'frontier'
-                violations.extend(sequence_entry_violations(dict(name=name, execution=execution), entry_audit))
+                violations.extend(sequence_entry_violations(dict(name=name, execution=execution), entry_audit, group['module']))
                 group['entryAudits'][name] = dict(audit=str(entry_path), execution=execution)
             del parsed
         else:
@@ -360,8 +360,8 @@ def main():
     native = BUILD / 'native'
     native.mkdir(exist_ok=True)
     run([ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint', '-dstg-lint',
-         '-i' + str(ROOT / 'src/examples'), '-i' + str(containers / 'src'), '-I' + str(containers / 'include'),
-         '-odir', native, '-hidir', native, 'src/examples/LibraryOracle.hs', '-o', native / 'library-oracle'])
+         '-i' + str(ROOT / 't/fixtures/core'), '-i' + str(containers / 'src'), '-I' + str(containers / 'include'),
+         '-odir', native, '-hidir', native, 't/fixtures/core/LibraryOracle.hs', '-o', native / 'library-oracle'])
     rows = []
     for group in groups:
         group['entries'] = []
@@ -397,7 +397,7 @@ def main():
                                 if entry.get('execution', group['execution']) == 'frontier'),
                allNativeResultsMatchIndependentModels=True, staticSupportViolations=violations))
     inputs = {ROOT / group['source'] for group in groups} | {
-        ROOT / 'src/examples/LibraryOracle.hs', ROOT / 'src/examples/THC/GraphWorkload.hs',
+        ROOT / 't/fixtures/core/LibraryOracle.hs', ROOT / 't/fixtures/core/GraphWorkload.hs',
         ROOT / 'bin/prepare-library-tests.py',
         ROOT / 'bin/audit-core.py', ROOT / 'bin/core-capabilities.json',
         ROOT / 'src/main/resources/thc/scalar-primop-signatures.json',

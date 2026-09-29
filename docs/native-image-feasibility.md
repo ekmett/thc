@@ -28,10 +28,10 @@ pinned JDK and its `native-image` command. From a built THC checkout:
 
 ```sh
 ./gradlew --max-workers=2 installDist
-./bin/export-core.sh src/examples/THC/Fixtures.hs
+./bin/export-core.sh t/fixtures/core/Fixtures.hs
 bash bin/native-image-pure.sh
-build/native-image/thc-pure -Xmx2g build/core/THC.Prim.Test.json,build/core/THC.Fixtures.json sumLoop 100
-build/native-image/thc-pure -Xmx2g build/core/THC.Prim.Test.json,build/core/THC.Fixtures.json caseList 20
+build/native-image/thc-pure -Xmx2g build/core/THC.Prim.Test.json,build/core/Fixtures.json sumLoop 100
+build/native-image/thc-pure -Xmx2g build/core/THC.Prim.Test.json,build/core/Fixtures.json caseList 20
 ```
 
 These commands load the exported Core files at launch; the image contains no

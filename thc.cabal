@@ -13,6 +13,9 @@ maintainer: Edward Kmett
 category: Development
 description: A GHC Core plugin and Cabal driver for running Haskell on Truffle/Graal.
 extra-source-files:
+  t/fixtures/core/*.hs
+  t/fixtures/core/coverage.json
+  t/fixtures/core/README.md
   t/fixtures/retained-core/doublex2-bytearray/input-provenance.json.gz
   t/fixtures/retained-core/doublex2-bytearray/post-core.json.gz
   t/fixtures/retained-core/doublex2-bytearray/pre-core.json.gz
@@ -378,13 +381,9 @@ extra-source-files:
   t/fixtures/run-library-memory/cabal.project
   t/fixtures/run-library-memory/run-library-memory.cabal
   t/fixtures/run-library-memory/Main.hs
-  src/examples/THC/GraphWorkload.hs
-  src/examples/LibraryOracle.hs
   t/fixtures/compiler/ScalarMemoryUtilities.hs
   t/fixtures/compiler/ScalarMemoryUtilitiesNative.hs
   docs/scalar-memory-utilities.md
-  src/examples/ThreadInventory.hs
-  src/examples/ThreadScheduling.hs
   t/fixtures/compiler/ThreadSchedulingNative.hs
   docs/thread-scheduling.md
   t/fixtures/compiler/ThreadInventoryNative.hs
@@ -438,7 +437,6 @@ extra-source-files:
   t/fixtures/compiler/BoxedArrayExtensionsNative.hs
   t/fixtures/compiler/BoxedCasAudit.hs
   t/fixtures/compiler/BoxedCasNative.hs
-  src/examples/THC/BoxedCasCounter.hs
   t/fixtures/compiler/LazyIOCallbackAudit.hs
   t/fixtures/compiler/LazyIOCallbackNative.hs
   src/driver/cbits/target-layout.c
@@ -520,8 +518,8 @@ extra-source-files:
   docs/interface-foreign.md
   docs/cpu-affinity-api.md
   docs/runtime-services.md
-  src/examples/THC/CpuAffinity.hs
-  src/examples/THC/RuntimeServices.hs
+  src/examples/CpuAffinity.hs
+  src/examples/RuntimeServices.hs
   t/haskell-runtime/SafeClient.hs
   t/haskell-runtime/UnsafeClient.hs
   t/haskell-runtime/check-safe-haskell.sh

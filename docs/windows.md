@@ -46,8 +46,8 @@ real Cabal-registered plugin archive; it does not invent a Unix shared-library
 manifest or request an unavailable dynamic library way.
 
 ~~~powershell
-./bin/export-core.ps1 src/examples/THC/Fixtures.hs
-$modules = 'build/core/THC.Prim.Test.json,build/core/THC.Fixtures.json'
+./bin/export-core.ps1 t/fixtures/core/Fixtures.hs
+$modules = 'build/core/THC.Prim.Test.json,build/core/Fixtures.json'
 $env:THC_BACKEND = 'ast'
 ./build/install/thc/bin/thc.bat $modules sumLoop 100
 $env:THC_BACKEND = 'bytecode'

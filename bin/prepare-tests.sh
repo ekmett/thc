@@ -208,7 +208,7 @@ case "$(uname -m)" in
   *) "$fixture_bin" doublex2-bytearray ;;
 esac
 "$fixture_bin" explicit64
-bin/export-core.sh -fplugin-opt=THC.Plugin:pretty-diagnostics src/examples/THC/Fixtures.hs t/fixtures/compiler/StrictFields.hs t/fixtures/compiler/SpeculationAudit.hs t/fixtures/compiler/RepresentationAudit.hs t/fixtures/compiler/SourceNotes.hs t/fixtures/compiler/CBVAudit.hs t/fixtures/compiler/CBVJoinAudit.hs t/fixtures/compiler/CBVCoercionAudit.hs t/fixtures/compiler/ConstructorFieldAudit.hs t/fixtures/compiler/DemandAudit.hs
+bin/export-core.sh -fplugin-opt=THC.Plugin:pretty-diagnostics t/fixtures/core/Fixtures.hs t/fixtures/compiler/StrictFields.hs t/fixtures/compiler/SpeculationAudit.hs t/fixtures/compiler/RepresentationAudit.hs t/fixtures/compiler/SourceNotes.hs t/fixtures/compiler/CBVAudit.hs t/fixtures/compiler/CBVJoinAudit.hs t/fixtures/compiler/CBVCoercionAudit.hs t/fixtures/compiler/ConstructorFieldAudit.hs t/fixtures/compiler/DemandAudit.hs
 python3 bin/check-speculation-metadata.py
 python3 bin/check-representation-metadata.py
 python3 bin/check-demand-metadata.py --ghc-api

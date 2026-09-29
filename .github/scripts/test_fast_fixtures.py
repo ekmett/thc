@@ -41,7 +41,7 @@ class FixturePreparationTest(unittest.TestCase):
         source = (project / "bin/prepare-tests.sh").read_text()
         option = "-fplugin-opt=THC.Plugin:pretty-diagnostics"
         commands = [line.split() for line in source.splitlines() if option in line]
-        inputs = ["src/examples/THC/Fixtures.hs"] + [
+        inputs = ["t/fixtures/core/Fixtures.hs"] + [
             "t/fixtures/compiler/" + name + ".hs" for name in (
                 "StrictFields", "SpeculationAudit", "RepresentationAudit", "SourceNotes",
                 "CBVAudit", "CBVJoinAudit", "CBVCoercionAudit", "ConstructorFieldAudit", "DemandAudit")]
@@ -49,7 +49,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertIn("build/core", fast_fixtures.FULL_OUTPUT_ROOTS)
         for path in inputs:
             self.assertTrue((project / path).is_file(), path)
-            module = "THC.Fixtures" if path == inputs[0] else Path(path).stem
+            module = "Fixtures" if path == inputs[0] else Path(path).stem
             self.assertIn("build/core/" + module + ".json", fast_fixtures.FULL_REQUIRED)
         # The option changes existing JSON bytes, not the output inventory.
         # Removing it still invalidates the reviewed plan before any cache hit.
@@ -368,7 +368,7 @@ class FixturePreparationTest(unittest.TestCase):
         cache = fast_fixtures.fast_inputs
         self.assertEqual('boxed-cas', owners['thc.runtime.BoxedCasTest'])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'boxed-cas']}], group['commands'])
-        self.assertIn('src/examples/THC/BoxedCasCounter.hs', group['sources'])
+        self.assertIn('t/fixtures/core/BoxedCasCounter.hs', group['sources'])
         self.assertIn('"$fixture_bin" boxed-cas', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertIn('build/boxed-cas/manifest.json', fast_fixtures.FULL_REQUIRED)
         for suffix in cache.BOXED_CAS_FILES:
@@ -408,7 +408,7 @@ class FixturePreparationTest(unittest.TestCase):
         cache = fast_fixtures.fast_inputs
         group = manifest['groups']['ghc-bco']
         self.assertEqual('ghc-bco', owners['thc.runtime.GhcBCOTest'])
-        self.assertIn('src/examples/GhcBCO.hs', group['sources'])
+        self.assertIn('t/fixtures/core/GhcBCO.hs', group['sources'])
         self.assertIn('"$fixture_bin" ghc-bco', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertEqual(82, len(cache.BCO_OUTPUTS))
         self.assertTrue(cache.BCO_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
@@ -435,7 +435,7 @@ class FixturePreparationTest(unittest.TestCase):
         cache = fast_fixtures.fast_inputs
         group = manifest['groups']['delimited-continuations']
         self.assertEqual('delimited-continuations', owners['thc.runtime.DelimitedContinuationsTest'])
-        self.assertIn('src/examples/DelimitedContinuations.hs', group['sources'])
+        self.assertIn('t/fixtures/core/DelimitedContinuations.hs', group['sources'])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'delimited-continuations']}], group['commands'])
         self.assertIn('"$fixture_bin" delimited-continuations', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertEqual(154, len(cache.DELIMITED_OUTPUTS))
@@ -489,7 +489,7 @@ class FixturePreparationTest(unittest.TestCase):
         group = manifest['groups']['thread-inventory']
         self.assertEqual('thread-inventory', owners['thc.runtime.ThreadInventoryNativeTest'])
         self.assertIn('thc.runtime.GuestThreadInventoryTest', manifest['fixtureFreeJunit'])
-        self.assertIn('src/examples/ThreadInventory.hs', group['sources'])
+        self.assertIn('t/fixtures/core/ThreadInventory.hs', group['sources'])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'thread-inventory']}], group['commands'])
         self.assertIn('"$fixture_bin" thread-inventory', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertIn('build/thread-inventory', fast_fixtures.FULL_OUTPUT_ROOTS)
@@ -2555,12 +2555,12 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(["build/floating-remainder"], group["outputs"])
         self.assertEqual({"t/haskell-fixtures/FloatingRemainderFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
                           "t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/FloatingRemainderAudit.hs",
-                          "t/fixtures/compiler/FloatingRemainderNative.hs", "src/examples/THC/InverseHyperbolic.hs"}, set(group["sources"]))
+                          "t/fixtures/compiler/FloatingRemainderNative.hs", "t/fixtures/core/InverseHyperbolic.hs"}, set(group["sources"]))
         self.assertTrue(all((project / path).is_file() for path in group["sources"]))
         self.assertIn('"$fixture_bin" floating-remainder', (project / "bin/prepare-tests.sh").read_text().splitlines())
         self.assertIn('"floating-remainder/commands/**"', (project / "build.gradle").read_text())
         policy = json.loads((project / ".github/scripts/fast-tests.json").read_text())
-        for path in ("src/examples/THC/InverseHyperbolic.hs", "t/haskell-fixtures/FloatingRemainderFixtures.hs"):
+        for path in ("t/fixtures/core/InverseHyperbolic.hs", "t/haskell-fixtures/FloatingRemainderFixtures.hs"):
             self.assertEqual(["thc.runtime.FloatingRemainderTest"], policy["owners"][path]["junit"])
         for path in ("src/main/java/thc/runtime/FloatingPrimitives.java", "src/main/java/thc/runtime/FloatDecodeExpression.java"):
             self.assertIn("thc.runtime.FloatingRemainderTest", policy["leafSources"][path]["junit"])
@@ -2575,12 +2575,12 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual({"build/float-decode"}, set(group["outputs"]))
         self.assertEqual({"t/haskell-fixtures/FloatDecodeFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
                           "t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/FloatDecodeAudit.hs",
-                          "t/fixtures/compiler/FloatDecodeNative.hs", "bin/export-boot.py", "src/examples/THC/FloatDecode.hs"} | fast_fixtures.fast_inputs.BIGNAT_SOURCES, set(group["sources"]))
+                          "t/fixtures/compiler/FloatDecodeNative.hs", "bin/export-boot.py", "t/fixtures/core/FloatDecode.hs"} | fast_fixtures.fast_inputs.BIGNAT_SOURCES, set(group["sources"]))
         self.assertTrue(all((project / path).is_file() for path in group["sources"]))
         self.assertIn('"$fixture_bin" float-decode', (project / "bin/prepare-tests.sh").read_text().splitlines())
         self.assertIn('"float-decode/commands/**"', (project / "build.gradle").read_text())
         policy = json.loads((project / ".github/scripts/fast-tests.json").read_text())
-        self.assertEqual(["thc.runtime.FloatDecodeTest"], policy["owners"]["src/examples/THC/FloatDecode.hs"]["junit"])
+        self.assertEqual(["thc.runtime.FloatDecodeTest"], policy["owners"]["t/fixtures/core/FloatDecode.hs"]["junit"])
 
     def test_float_decode_tracks_upstream_sources_without_bundling_them(self):
         cache = fast_fixtures.fast_inputs

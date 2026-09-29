@@ -35,9 +35,9 @@ public final class PolyglotDemo {
 
     public static void main(String[] arguments) throws Exception {
         File directory = new File(arguments.length > 0 ? arguments[0] : "build/polyglot");
-        String entry = arguments.length > 1 ? arguments[1] : "main:THC.PolyglotDemo.main";
+        String entry = arguments.length > 1 ? arguments[1] : "main:PolyglotDemo.main";
         List<String> moduleNames = arguments.length > 2 ? Arrays.asList(arguments).subList(2, arguments.length)
-            : List.of("THC.Polyglot.json", "THC.Internal.Polyglot.json", "THC.PolyglotDemo.json", "THC.InterfaceClosure.json");
+            : List.of("THC.Polyglot.json", "THC.Internal.Polyglot.json", "PolyglotDemo.json", "THC.InterfaceClosure.json");
         for (String stage : List.of("pre-core", "post-core")) for (String backend : List.of("ast", "bytecode")) {
             List<Map<String, Object>> modules = new ArrayList<>();
             for (String name : moduleNames) {

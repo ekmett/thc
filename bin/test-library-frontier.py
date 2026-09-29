@@ -18,7 +18,7 @@ spec.loader.exec_module(prepare)
 class LibraryFrontierTest(unittest.TestCase):
     def setUp(self):
         self.audit = json.loads((ROOT / 'testdata/set-frontier-audit.json').read_text())
-        self.group = dict(id='set', execution='frontier', entries=[dict(name='setAggregate', warm=[[1, 334]], cold=[[8, 128985]])])
+        self.group = dict(id='set', module='THC.SetWorkload', execution='frontier', entries=[dict(name='setAggregate', warm=[[1, 334]], cold=[[8, 128985]])])
 
     def violations(self):
         return prepare.audit_structure_violations(self.group, self.audit)
@@ -84,7 +84,7 @@ class SequenceFrontierTest(unittest.TestCase):
         if execution is None:
             execution = 'supported' if name in prepare.SEQUENCE_SUPPORTED else 'frontier'
         return prepare.sequence_entry_violations(
-            dict(name=name, execution=execution), audit if audit is not None else self.audits[name])
+            dict(name=name, execution=execution), audit if audit is not None else self.audits[name], 'THC.SequenceWorkload')
 
     def test_genuine_entry_audits_keep_four_positives_and_three_missing_definition_frontiers(self):
         self.assertEqual(set(prepare.SEQUENCE_ENTRIES), set(self.audits))

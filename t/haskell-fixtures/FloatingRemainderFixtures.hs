@@ -75,7 +75,7 @@ prepareFloatingRemainder root = do
   let dir = "build/floating-remainder"
       source = "t/fixtures/compiler/FloatingRemainderAudit.hs"
       driver = "t/fixtures/compiler/FloatingRemainderNative.hs"
-      example = "src/examples/THC/InverseHyperbolic.hs"
+      example = "t/fixtures/core/InverseHyperbolic.hs"
       binary = dir </> "native/oracle"
       logs = dir </> "commands"
       input = dir </> "inputs.tsv"
@@ -95,7 +95,7 @@ prepareFloatingRemainder root = do
     _ -> die "Floating remainder requires native 64-bit GHC"
   writeFile (root </> input) (unlines [unwords [name,show a,show b] | (name,a,b) <- requests])
   compiled <- runLogged 300 root logs "native-build" [] ghc
-    ["--make","-O2","-fforce-recomp","-dcore-lint","-dstg-lint","-it/fixtures/compiler","-isrc/examples",
+    ["--make","-O2","-fforce-recomp","-dcore-lint","-dstg-lint","-it/fixtures/compiler","-it/fixtures/core",
      "-odir",root </> dir </> "native","-hidir",root </> dir </> "native",driver,"-o",root </> binary]
   executed <- runLoggedWithInput input 120 root logs "native-oracle" [] (root </> binary) []
   let parse line = case words line of
@@ -109,7 +109,7 @@ prepareFloatingRemainder root = do
     exported <- runLogged 300 root logs (stage ++ "-export")
       [("THC_CORE_OUT",root </> dir </> stage ++ "-core"),("THC_GHC_OUT",root </> dir </> stage ++ "-ghc")]
       "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source,example])
-    let cores = [dir </> stage ++ "-core" </> name ++ ".json" | name <- ["FloatingRemainderAudit","THC.InverseHyperbolic"]]
+    let cores = [dir </> stage ++ "-core" </> name ++ ".json" | name <- ["FloatingRemainderAudit","InverseHyperbolic"]]
     audits <- forM entries $ \name -> do
       let path = dir </> stage ++ "-" ++ name ++ "-audit.json"
       audited <- runLogged 120 root logs (stage ++ "-" ++ name ++ "-audit") [] "python3"

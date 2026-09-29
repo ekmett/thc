@@ -18,7 +18,7 @@ OUT="$(cd "$OUT" && pwd)"
   -Djdk.graal.Dump=Truffle:1 -Djdk.graal.PrintGraph=File \
   -Djdk.graal.PrintGraphWithSchedule=true -Djdk.graal.PrintBackendCFG=true \
   "-Djdk.graal.DumpPath=$OUT" -cp 'build/install/thc/lib/*:build/diagnostics/thc-tools.jar' thc.Probe \
-  "${THC_GRAPH_MODULES:-build/core/THC.Prim.Test.json,build/core/THC.Fixtures.json}" "$ENTRY" --steady 10 0.01 1 "$BASE" \
+  "${THC_GRAPH_MODULES:-build/core/THC.Prim.Test.json,build/core/Fixtures.json}" "$ENTRY" --steady 10 0.01 1 "$BASE" \
   > "$OUT/run.tsv" 2> "$OUT/run.log"
 EXPORTS=(--add-modules jdk.graal.compiler \
   --add-exports jdk.graal.compiler/jdk.graal.compiler.graphio.parsing=ALL-UNNAMED \

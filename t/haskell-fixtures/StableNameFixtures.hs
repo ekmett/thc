@@ -28,7 +28,7 @@ prepareStableNames :: FilePath -> IO ()
 prepareStableNames root = do
   let directory = "build/stable-names"
       output = root </> directory
-      source = "src/examples/StableNames.hs"
+      source = "t/fixtures/core/StableNames.hs"
       driver = "t/fixtures/compiler/StableNamesNative.hs"
       entries = ["sameLifted", "sameUnlifted", "differentUnlifted", "unevaluatedName"]
       stages = ["pre", "post"]
@@ -39,7 +39,7 @@ prepareStableNames root = do
   version <- runLogged 30 root logs "ghc-version" [] ghc ["--numeric-version"]
   unless (commandStdout version == "9.14.1\n") (die "Stable names require GHC 9.14.1")
   compiled <- runLogged 120 root logs "native-build" [] ghc
-    ["--make", "-O2", "-dynamic", "-fforce-recomp", "-dcore-lint", "-dstg-lint", "-isrc/examples",
+    ["--make", "-O2", "-dynamic", "-fforce-recomp", "-dcore-lint", "-dstg-lint", "-it/fixtures/core",
      "-odir", native, "-hidir", native, driver, "-o", native </> "oracle"]
   observations <- runLogged 30 root logs "native-run" [] (output </> "native/oracle") []
   let values = map (read . BSC.unpack) (BSC.lines (commandStdout observations)) :: [Integer]

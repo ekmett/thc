@@ -549,7 +549,7 @@ REQUIRED = tuple(sorted({
     "build/scalar-signatures/provenance.json", "build/aggregate-frontier.json",
     "build/aggregate-native/oracle.tsv", "build/native/oracle.tsv",
     "build/map/boot-provenance.json", "build/corpus/corpus.json",
-    "build/core/THC.Prim.Test.json", "build/core/THC.Fixtures.json",
+    "build/core/THC.Prim.Test.json", "build/core/Fixtures.json",
     "build/aggregate-core/AggregateFrontier.json",
     "build/aggregate-post-core/AggregateFrontier.json",
     "build/map/core/GHC.InterfaceClosure.json",
@@ -571,7 +571,7 @@ FLOAT_DECODE_COMMANDS = ("native-build", "native-oracle", "boot-export",
 FLOAT_DECODE_OUTPUTS = frozenset("build/float-decode/" + name for name in (
     "manifest.json", "inputs.tsv", "oracle.tsv", "native/oracle",
     "original/GHC.Internal.Bignum.Integer.json", "original/boot-provenance.json",
-    *(f"{stage}-core/{module}.json" for stage in ("pre", "post") for module in ("FloatDecodeAudit", "THC.FloatDecode")),
+    *(f"{stage}-core/{module}.json" for stage in ("pre", "post") for module in ("FloatDecodeAudit", "FloatDecode")),
     *(f"{stage}-{entry}-audit.json" for stage in ("pre", "post") for entry in FLOAT_DECODE_ENTRIES),
     *(f"commands/{command}.{suffix}" for command in FLOAT_DECODE_COMMANDS for suffix in ("stdout", "stderr", "command.json"))))
 FLOATING_REMAINDER_ENTRIES = (*(op + kind for kind in ("Float", "Double") for op in ("asinh", "acosh", "atanh", "min", "max")),
@@ -581,7 +581,7 @@ FLOATING_REMAINDER_COMMANDS = ("native-build", "native-oracle",
                                 (f"{stage}-export", *(f"{stage}-{name}-audit" for name in FLOATING_REMAINDER_ENTRIES))))
 FLOATING_REMAINDER_OUTPUTS = frozenset("build/floating-remainder/" + name for name in (
     "manifest.json", "inputs.tsv", "oracle.tsv", "native/oracle",
-    *(f"{stage}-core/{module}.json" for stage in ("pre", "post") for module in ("FloatingRemainderAudit", "THC.InverseHyperbolic")),
+    *(f"{stage}-core/{module}.json" for stage in ("pre", "post") for module in ("FloatingRemainderAudit", "InverseHyperbolic")),
     *(f"{stage}-{entry}-audit.json" for stage in ("pre", "post") for entry in FLOATING_REMAINDER_ENTRIES),
     *(f"commands/{command}.{suffix}" for command in FLOATING_REMAINDER_COMMANDS for suffix in ("stdout", "stderr", "command.json"))))
 MAX_FILES = 30000
@@ -1009,7 +1009,7 @@ BOXED_CAS_ENTRIES = ("arrayCas", "arrayCasUnlifted", "smallCas", "smallCasUnlift
 BOXED_CAS_FILES = frozenset((
     "native/boxed-cas-oracle",
     *(f"{stage}-core/{module}.json" for stage in ("pre", "post")
-      for module in ("BoxedCasAudit", "THC.BoxedCasCounter", "THC.InterfaceClosure")),
+      for module in ("BoxedCasAudit", "BoxedCasCounter", "THC.InterfaceClosure")),
     *(f"{stage}-{entry}.audit.json" for stage in ("pre", "post") for entry in BOXED_CAS_ENTRIES),
     *(f"logs/{label}.{suffix}" for label in (
         "ghc-version", "ghc-info", "pre-export", "post-export", "native-compile", "native-oracle",
@@ -1619,7 +1619,7 @@ def toolchain(root):
 
 def identity(root):
     tracked = tracked_files(root)
-    sources = {name for name in tracked if name.startswith(("src/compiler/", "src/cbd/", "t/fixtures/compiler/", "t/fixtures/retained-core/", "t/fixtures/package-roots/", "t/fixtures/putstrln/", "nih/pinned/", "etc/", "src/core-symbols/", "bin/", "src/examples/", "src/main/resources/", "t/haskell-fixtures/", "src/driver/THC/Driver/", "src/tools/primops/"))}
+    sources = {name for name in tracked if name.startswith(("src/compiler/", "src/cbd/", "t/fixtures/compiler/", "t/fixtures/core/", "t/fixtures/retained-core/", "t/fixtures/package-roots/", "t/fixtures/putstrln/", "nih/pinned/", "etc/", "src/core-symbols/", "bin/", "src/examples/", "src/main/resources/", "t/haskell-fixtures/", "src/driver/THC/Driver/", "src/tools/primops/"))}
     sources.update((SELF, WIRED_SOURCE, *RUNTIME_INPUTS, *COMPILER_BUILD_INPUTS, *SIMD_BYTEARRAY_RETAINED,
                     "src/test/resources/core/original-unix-libc-descriptors.json",
                     "src/test/resources/core/original-bytestring-sort-descriptor.json",
@@ -1628,7 +1628,7 @@ def identity(root):
         sources.add(".gitmodules")
     require(all(name in tracked for name in sources), "Cache helper/runtime inputs must be tracked")
     require("bin/prepare-tests.sh" in sources and "bin/export-boot.py" in sources
-            and "src/examples/coverage.json" in sources, "Incomplete authoritative source set")
+            and "t/fixtures/core/coverage.json" in sources, "Incomplete authoritative source set")
     hashes = {name: digest(file_path(root, name)) for name in sorted(sources)}
     for name, expected in ghc_source_pins(root).items():
         require(hashes.get(name) == expected, "Pinned GHC source missing or changed: " + name)

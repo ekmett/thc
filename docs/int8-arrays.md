@@ -26,6 +26,6 @@ no endian conversion or alignment scaling. State is evaluated and validated
 before access or result publication. Unsafe freeze preserves the array's
 identity; mutating an immutable alias remains unsafe.
 
-See [Unboxed8Arrays.hs](../src/examples/THC/Unboxed8Arrays.hs) for public array
+See [Unboxed8Arrays.hs](../t/fixtures/core/Unboxed8Arrays.hs) for public array
 examples. Use atomic primitives for concurrent updates; ordinary reads and
 writes do not provide that guarantee.

@@ -19,7 +19,7 @@ The first prepares and checks the Core corpus, including lists, productive
 streams, shared thunks, captured functions, partial and excess application,
 trees, and numeric representations. The second checks ordinary library
 consumers; see [library examples](library-coverage.md). The entry/input inventory
-is in [coverage.json](../src/examples/coverage.json).
+is in [coverage.json](../t/fixtures/core/coverage.json).
 
 Preparation exports Core, audits each complete reachable dependency closure,
 and runs a native GHC oracle. A strict audit includes cold alternatives and lazy

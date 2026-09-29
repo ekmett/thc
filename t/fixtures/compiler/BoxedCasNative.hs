@@ -14,7 +14,7 @@
 module Main (main) where
 import GHC.Exts (Int(I#))
 import qualified BoxedCasAudit as P
-import qualified THC.BoxedCasCounter as C
+import qualified BoxedCasCounter as C
 
 call :: String -> Int -> Int
 call name (I# n) = I# (case name of

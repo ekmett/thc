@@ -59,7 +59,7 @@ prepareGraph :: FilePath -> IO ()
 prepareGraph root = do
   let directory = "build/graph-bfs"
       manifest = root </> directory </> "manifest.json"
-      source = "src/examples/THC/GraphWorkload.hs"
+      source = "t/fixtures/core/GraphWorkload.hs"
       logs = directory </> "logs"
       execute = runLogged 600 root logs
       commandFiles label = [logs </> label <.> suffix | suffix <- ["stdout","stderr","command.json"]]
@@ -97,7 +97,7 @@ prepareGraph root = do
   writeFile (root </> inputs) (unlines [entry ++ "\t" ++ show n | (entry,n) <- requests])
   createDirectoryIfMissing True (root </> native)
   _ <- execute "native-build" [] ghc (["--make","-O2","-fforce-recomp","-dcore-lint","-dstg-lint",
-    "-isrc/examples","-odir",native,"-hidir",native,"src/examples/LibraryOracle.hs","-o",binary] ++ include)
+    "-it/fixtures/core","-odir",native,"-hidir",native,"t/fixtures/core/LibraryOracle.hs","-o",binary] ++ include)
   observed <- runLoggedWithInput inputs 120 root logs "native-oracle" [] (root </> binary) ["--batch"]
   let parse row = case splitTab row of
         [entry,n,result] -> do argument <- readInteger n; value <- readInteger result; pure (entry,argument,value)
@@ -171,7 +171,7 @@ prepareGraph root = do
         ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries] ++ [source])
     closure <- readJson (root </> closurePath)
     modules <- field closure "sourceModules" :: IO [String]
-    unless (all ("main:" `isPrefixOf`) modules && "main:THC.GraphWorkload" `elem` modules)
+    unless (all ("main:" `isPrefixOf`) modules && "main:GraphWorkload" `elem` modules)
       (die "Graph export changed its source-module unit policy")
     fragments <- field closure "bindings" :: IO [Value]
     fragmentIds <- mapM (\value -> field value "id") fragments :: IO [String]
@@ -193,7 +193,7 @@ prepareGraph root = do
       report <- readJson (root </> reportPath)
       accepted <- field report "accepted" :: IO Bool
       roots <- field report "roots" :: IO [String]
-      unless (accepted == (status == 0) && roots == ["main:THC.GraphWorkload." ++ entry])
+      unless (accepted == (status == 0) && roots == ["main:GraphWorkload." ++ entry])
         (die ("Contradictory graph audit: " ++ label))
       case attempted of
         Left ExitSuccess -> die "Unexpected successful ExitCode exception"
@@ -207,13 +207,13 @@ prepareGraph root = do
       paths ++ [moduleList,closurePath] ++ commandFiles exportLabel ++ concat [[path] ++ commands | (_,path,_,commands) <- audits])
   plugin <- listDirectory (root </> "src/compiler/THC")
   scripts <- listDirectory (root </> "bin")
-  let sources = [source,"src/examples/LibraryOracle.hs","thc.cabal","t/haskell-fixtures/Main.hs",
+  let sources = [source,"t/fixtures/core/LibraryOracle.hs","thc.cabal","t/haskell-fixtures/Main.hs",
         "t/haskell-fixtures/GraphFixtures.hs","t/haskell-fixtures/FixtureSupport.hs",
         "t/haskell-fixtures/InstalledCoreFixtures.hs","bin/export-core.sh","bin/build-compiler.sh",
         "bin/toolchain.sh","bin/plugin.py","bin/export-boot.py","t/fixtures/package-roots/InterfaceRoots.hs",
         "bin/audit-core.py","bin/core-capabilities.json", "src/main/resources/thc/scalar-primop-signatures.json",
         "src/driver/THC/Driver/Installed.hs","src/compiler/interface/Main.hs"] ++
-        ["src/examples/THC" </> name <.> "hs" | name <- ["SetWorkload","IntMapWorkload","IntMapPrimops","IntSetWorkload","IntSetPrimops","SequenceWorkload"]] ++
+        ["t/fixtures/core" </> name <.> "hs" | name <- ["SetWorkload","IntMapWorkload","IntMapPrimops","IntSetWorkload","IntSetPrimops","SequenceWorkload"]] ++
         ["src/compiler/THC" </> name | name <- plugin,takeExtension name == ".hs"] ++
         ["bin" </> name | name <- scripts,"core_" `isPrefixOf` name,takeExtension name == ".py"] ++ bootSourcePaths
       labels = ["ghc-version","containers-version","containers-extract","native-build","native-oracle","boot-export",

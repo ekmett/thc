@@ -2,7 +2,7 @@
 
 `newBCO#` and `mkApUpd0#` execute a GHC 9.14.1 BCO subset on both THC
 Core backends. This is GHC's bytecode format, not the Truffle Bytecode DSL's
-format. [GhcBCO.hs](../src/examples/GhcBCO.hs) constructs actual instruction,
+format. [GhcBCO.hs](../t/fixtures/core/GhcBCO.hs) constructs actual instruction,
 literal, bitmap and pointer arrays with primops and runs them under both GHC
 and THC. It includes boxed one-/two-argument calls, a positive-arity BCO,
 unboxed arithmetic, branches, large operands, shared updates, nested scalar cases,

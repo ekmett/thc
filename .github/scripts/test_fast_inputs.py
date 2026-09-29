@@ -1470,7 +1470,7 @@ class FastInputTests(unittest.TestCase):
         self.put("bin/export-boot.py", "exception_sources = " + repr({
             "GHC/Internal/CString.hs": cache.sha(self.pinned_source)}) + "\n")
         for name in (cache.SELF, cache.WIRED_SOURCE, *cache.RUNTIME_INPUTS, *cache.COMPILER_BUILD_INPUTS, *cache.SIMD_BYTEARRAY_RETAINED,
-                     "bin/prepare-tests.sh", "src/examples/coverage.json",
+                     "bin/prepare-tests.sh", "t/fixtures/core/coverage.json",
                      "src/test/resources/core/original-unix-libc-descriptors.json",
                      "src/test/resources/core/original-bytestring-sort-descriptor.json",
                      "src/test/resources/core/original-bytestring-decimal-descriptors.json",
@@ -1582,7 +1582,7 @@ class FastInputTests(unittest.TestCase):
     def test_authoritative_inputs_cannot_be_omitted_by_producer(self):
         self.manifest["inputHashes"] = {}
         self.write_manifest(); manifest = self.pack(); self.remove_payload(manifest)
-        self.put("src/examples/coverage.json", "changed but omitted by producer")
+        self.put("t/fixtures/core/coverage.json", "changed but omitted by producer")
         current = cache.identity(self.root)
         self.assertNotEqual(cache.cache_key(current), cache.cache_key(self.current))
         with self.assertRaises(cache.CacheMiss):

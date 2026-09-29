@@ -65,7 +65,7 @@ main = do
     pure ()
 ```
 
-The complete example is [PolyglotDemo.hs](../src/examples/THC/PolyglotDemo.hs).
+The complete example is [PolyglotDemo.hs](../src/examples/PolyglotDemo.hs).
 Run `bin/polyglot-demo.sh` from the repository root. The script builds the
 pinned GHC plugin, exports optimized Core before and after Tidy, audits the
 reachable `IO ()` entry, and runs the demo with the optional GraalVM JavaScript

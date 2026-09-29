@@ -32,7 +32,7 @@ their modifiers. This is not an allocation-free claim.
 
 ## Example
 
-[`THC.BoxedCasCounter`](../src/examples/THC/BoxedCasCounter.hs) is a small pure
+[`BoxedCasCounter`](../t/fixtures/core/BoxedCasCounter.hs) is a small pure
 counter example. Its retry loop uses the observation returned by `casMutVar#`.
 The unary `boxedCasCounter` entry performs `n .&. 63` increments, including for
 negative inputs. For example, `boxedCasCounter 17` returns `17`.

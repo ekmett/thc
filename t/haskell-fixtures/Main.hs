@@ -610,7 +610,7 @@ basicArray name groups driver oracle inputs = ArraySpec name groups driver oracl
 
 arraySpec :: String -> Maybe ArraySpec
 arraySpec "int-arrays" = Just $ basicArray "int-arrays"
-  [ArrayGroup "src/examples/THC/UnboxedArrays.hs" "THC.UnboxedArrays" "U"
+  [ArrayGroup "t/fixtures/core/UnboxedArrays.hs" "UnboxedArrays" "U"
     ["unboxedAccum", "unboxedST", "unboxedEmpty"],
    ArrayGroup "t/fixtures/compiler/IntArrayAudit.hs" "IntArrayAudit" "P"
     ["orderedInts", "aliasIntBytes"]]
@@ -618,7 +618,7 @@ arraySpec "int-arrays" = Just $ basicArray "int-arrays"
     [0x5555555555555555, 0xaaaaaaaaaaaaaaaa, 0x55aa55aa55aa55aa,
      0xaa55aa55aa55aa55, 0x0123456789abcdef, 0xfedcba9876543210])
 arraySpec "int8-arrays" = Just $ (basicArray "int8-arrays"
-  [ArrayGroup "src/examples/THC/Unboxed8Arrays.hs" "THC.Unboxed8Arrays" "U"
+  [ArrayGroup "t/fixtures/core/Unboxed8Arrays.hs" "Unboxed8Arrays" "U"
     ["unboxedInt8Accum", "unboxedInt8ST", "unboxedWord8Accum", "unboxedWord8ST"],
    ArrayGroup "t/fixtures/compiler/Int8ArrayAudit.hs" "Int8ArrayAudit" "P"
     ["aliasBytes", "emptyBytes", "rawSignedRead", "rawUnsignedRead", "rawSignedIndex"]]
@@ -626,7 +626,7 @@ arraySpec "int8-arrays" = Just $ (basicArray "int8-arrays"
     [0x5555555555555555, 0xaaaaaaaaaaaaaaaa, 0x0123456789abcdef, 0xfedcba9876543210]))
   {arrayElementBits = Just 8}
 arraySpec "int16-arrays" = Just $ (basicArray "int16-arrays"
-  [ArrayGroup "src/examples/THC/Unboxed16Arrays.hs" "THC.Unboxed16Arrays" "U"
+  [ArrayGroup "t/fixtures/core/Unboxed16Arrays.hs" "Unboxed16Arrays" "U"
     ["unboxedInt16Accum", "unboxedInt16ST", "unboxedWord16Accum", "unboxedWord16ST"],
    ArrayGroup "t/fixtures/compiler/Int16ArrayAudit.hs" "Int16ArrayAudit" "P"
     ["aliasInt16Bytes", "aliasWord16Bytes"]]
@@ -641,7 +641,7 @@ arraySpec "int16-arrays" = Just $ (basicArray "int16-arrays"
    arrayLiterals = ["noinlineInt16Literal", "noinlineWord16Literal"],
    arrayLiteralInputs = [-pow2 63, -32768, -1, 0, 1, 32767, pow2 63 - 1]}
 arraySpec "int32-arrays" = Just $ (basicArray "int32-arrays"
-  [ArrayGroup "src/examples/THC/Unboxed32Arrays.hs" "THC.Unboxed32Arrays" "U"
+  [ArrayGroup "t/fixtures/core/Unboxed32Arrays.hs" "Unboxed32Arrays" "U"
     ["unboxedInt32Accum", "unboxedInt32ST", "unboxedWord32Accum", "unboxedWord32ST"],
    ArrayGroup "t/fixtures/compiler/Int32ArrayAudit.hs" "Int32ArrayAudit" "P"
     ["aliasInt32Bytes", "aliasWord32Bytes"]]
@@ -655,16 +655,16 @@ arraySpec "int32-arrays" = Just $ (basicArray "int32-arrays"
    arrayLiterals = ["noinlineInt32Literal", "noinlineWord32Literal"],
    arrayLiteralInputs = [-pow2 63, -2147483648, -1, 0, 1, 2147483647, pow2 63 - 1]}
 arraySpec "double-arrays" = Just $ (basicArray "double-arrays"
-  [ArrayGroup "src/examples/THC/UnboxedDoubleArrays.hs" "THC.UnboxedDoubleArrays" "U"
+  [ArrayGroup "t/fixtures/core/UnboxedDoubleArrays.hs" "UnboxedDoubleArrays" "U"
     ["unboxedDoubleAccum", "unboxedDoubleST"],
    ArrayGroup "t/fixtures/compiler/DoubleArrayAudit.hs" "DoubleArrayAudit" "P"
     ["moveDoubleBits", "indexDoubleBits"]]
   "NativeDoubleArray.hs" "double-array-oracle" (SharedInputs doubleArrayInputs))
   {arrayNaNHelpers = ["moveDoubleBits", "indexDoubleBits"]}
 arraySpec "float-word-arrays" = Just $ (basicArray "float-word-arrays"
-  [ArrayGroup "src/examples/THC/UnboxedFloatArrays.hs" "THC.UnboxedFloatArrays" "F"
+  [ArrayGroup "t/fixtures/core/UnboxedFloatArrays.hs" "UnboxedFloatArrays" "F"
     ["unboxedFloatAccum", "unboxedFloatST"],
-   ArrayGroup "src/examples/THC/UnboxedWordArrays.hs" "THC.UnboxedWordArrays" "W"
+   ArrayGroup "t/fixtures/core/UnboxedWordArrays.hs" "UnboxedWordArrays" "W"
     ["unboxedWordAccum", "unboxedWordST"],
    ArrayGroup "t/fixtures/compiler/FloatArrayAudit.hs" "FloatArrayAudit" "P"
     ["moveFloatBits", "indexFloatBits"],
@@ -836,7 +836,7 @@ prepareArray root spec = do
   writeFile (root </> driver) (arrayDriverSource spec)
   createDirectoryIfMissing True (root </> directory </> "native")
   _ <- run root [] ghc ["--make", "-O2", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
-    "-i" ++ root </> "src/examples", "-i" ++ root </> "t/fixtures/compiler",
+    "-i" ++ root </> "t/fixtures/core", "-i" ++ root </> "t/fixtures/compiler",
     "-odir", root </> directory </> "native", "-hidir", root </> directory </> "native",
     root </> driver, "-o", root </> binary] ""
   actual <- run root [] (root </> binary) [] arrayRequestText

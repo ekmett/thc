@@ -29,7 +29,7 @@ prepareThreadInventory root = do
   let directory = "build/thread-inventory"
       output = root </> directory
       manifest = output </> "manifest.json"
-      source = "src/examples/ThreadInventory.hs"
+      source = "t/fixtures/core/ThreadInventory.hs"
       driver = "t/fixtures/compiler/ThreadInventoryNative.hs"
       callbackDriver = "t/fixtures/compiler/CallbackIdentityNative.hs"
       callbackC = "t/fixtures/compiler/callback-identity.c"
@@ -59,13 +59,13 @@ prepareThreadInventory root = do
   let native = output </> "native"
   createDirectoryIfMissing True native
   _ <- run root [] ghc ["--make", "-O2", "-dynamic", "-threaded", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
-    "-i" ++ (root </> "src/examples"), "-odir", native, "-hidir", native,
+    "-i" ++ (root </> "t/fixtures/core"), "-odir", native, "-hidir", native,
     root </> driver, "-o", native </> "oracle"] ""
   observations <- runWithTimeout (Just 30000000) root [] (native </> "oracle") ["+RTS", "-N2", "-RTS"] ""
   unless (observations == "10\n0\n111\n1\n42\n210\n17\n1\n") (die "Native thread inventory disagreed")
   writeFile (output </> "oracle.txt") observations
   _ <- run root [] ghc ["--make", "-O2", "-dynamic", "-threaded", "-fforce-recomp", "-Wall", "-Werror",
-    "-dcore-lint", "-dstg-lint", "-i" ++ (root </> "src/examples"), "-odir", native, "-hidir", native,
+    "-dcore-lint", "-dstg-lint", "-i" ++ (root </> "t/fixtures/core"), "-odir", native, "-hidir", native,
     "-stubdir", native, root </> callbackDriver, root </> callbackC, "-o", native </> "callback-oracle"] ""
   callbacks <- runWithTimeout (Just 30000000) root [] (native </> "callback-oracle") ["+RTS", "-N2", "-RTS"] ""
   let expectedCallbacks = concatMap (\mask -> "(" ++ mask ++
