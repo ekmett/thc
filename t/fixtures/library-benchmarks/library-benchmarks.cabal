@@ -61,3 +61,12 @@ executable aeson-core
                 aeson ==2.3.2.0, deepseq, vector
   default-language: GHC2021
   ghc-options: -O2
+
+test-suite aeson-content-checks
+  type: exitcode-stdio-1.0
+  main-is: CheckAesonContent.hs
+  other-modules: AesonBenchmarks
+  build-depends: base >=4.22 && <4.23, bytestring ==0.12.2.0,
+                aeson ==2.3.2.0, deepseq, vector
+  default-language: GHC2021
+  ghc-options: -O2

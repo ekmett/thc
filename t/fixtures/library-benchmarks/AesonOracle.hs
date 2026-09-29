@@ -5,4 +5,4 @@ module Main (main) where
 import NativeTiming (mainFor)
 import qualified AesonBenchmarks as A
 main :: IO ()
-main = mainFor [("aesonDecodeValue", A.aesonDecodeValue)]
+main = mainFor [("aesonDecodeValue", A.aesonDecodeValue), ("aesonContentFingerprint", A.aesonContentFingerprint)]

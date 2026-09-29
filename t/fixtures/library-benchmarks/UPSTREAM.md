@@ -52,3 +52,19 @@ Oracle values for selector n: bytestring -128 - 256*n; UTF-8 length
 2771535+n; search count 1398; JSON root size 11 after full evaluation.
 These are tied to the exact referenced corpora; changing data requires a new
 independent native oracle. Performance results remain private.
+
+## Aeson content admission
+
+Before timing aesonDecodeValue, run aesonContentFingerprint for each of the
+sixteen inputs using both the native oracle and THC. Require exact agreement
+with the independently executed native oracle for every input. The preflight
+sorts object members recursively, preserves array order, encodes every scalar
+with aeson's existing encoding API, and computes a 64-bit FNV-1a fingerprint.
+It detects nested content differences that the timed root-size observer cannot
+detect. Like any finite checksum it is not a collision-free equality proof.
+
+The separate aeson-content-checks test rejects nested value/key changes and
+array reordering while accepting object-member reordering. Record native
+fingerprints privately beside the corpus provenance; no large golden JSON
+fixture is needed. Canonical encoding and hashing belong only to preflight,
+never to the decodeStrict plus normal-form timed operation.
