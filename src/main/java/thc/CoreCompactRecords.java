@@ -247,7 +247,7 @@ public final class CoreCompactRecords {
     private List<Object> expression(CoreCompactCursor cursor) throws Throwable {
         var origin = origin(cursor.getPosition());
         int tag = cursor.readByte();
-        require(tag <= 8, "Invalid compact Core expression tag: " + tag);
+        require(tag <= 9, "Invalid compact Core expression tag: " + tag);
         var metadata = meta(cursor, origin);
         List<Object> fields = switch (tag) {
             case 0 -> values("var", id(cursor));
@@ -269,6 +269,7 @@ public final class CoreCompactRecords {
                 yield values("case", scrutinee, binderId, list(cursor, () -> alternative(cursor)));
             }
             case 8 -> values("void");
+            case 9 -> values("unsupported", text(cursor));
             default -> throw error("Invalid compact Core expression tag: " + tag);
         };
         fields.add(metadata);
@@ -316,7 +317,7 @@ public final class CoreCompactRecords {
             case 12 -> blob(cursor);
             case 13 -> new CoreFloatingLiteral.Single((int) cursor.u32());
             case 14 -> new CoreFloatingLiteral.Double(cursor.fixedBits());
-            case 15 -> "0"; case 16 -> primitive(cursor); case 17, 18 -> text(cursor);
+            case 15 -> "0"; case 16 -> primitive(cursor); case 17, 18, 19 -> text(cursor);
             default -> throw error("Unreachable compact literal tag");
         };
         return values(kind, value);
@@ -363,6 +364,18 @@ public final class CoreCompactRecords {
                 field(cursor, result, "packageScalarLink", () -> scalarLink(cursor));
                 field(cursor, result, "packageNativeLink", () -> nativeLink(cursor));
                 field(cursor, result, "packageNativeArchive", () -> nativeArchive(cursor));
+                if (cursor.getRemaining() != 0) {
+                    require(cursor.readByte() == 1, "Invalid compact Core provenance extension");
+                    field(cursor, result, "roots", () -> texts(cursor));
+                    field(cursor, result, "sourceModules", () -> texts(cursor));
+                    field(cursor, result, "missingDefinitions", () -> list(cursor, () -> strings(cursor, "id", "type", "reason")));
+                    result.put("bindingOrigins", list(cursor, () -> {
+                        var binding = map("id", text(cursor));
+                        field(cursor, binding, "origin", () -> text(cursor));
+                        field(cursor, binding, "originModule", () -> text(cursor));
+                        return binding;
+                    }));
+                }
                 cursor.expectEnd();
                 return result;
             });
@@ -505,15 +518,27 @@ public final class CoreCompactRecords {
             case 3 -> result.put("buildInputs", nativeBuildInputs(cursor, true));
             default -> throw error("Invalid compact native build-input tag");
         }
-        switch (cursor.readByte()) {
+        int extras = cursor.readByte();
+        switch (extras) {
             case 0 -> { }
-            case 3 -> {
+            case 3, 4 -> {
                 field(cursor, result, "nativeLibrary", () -> map("sha256", text(cursor), "hex", blob(cursor)));
                 field(cursor, result, "dataSymbols", () -> texts(cursor));
+                if (extras == 4) {
+                    result.put("exports", texts(cursor));
+                    result.put("dependencies", list(cursor, () -> nativeComponent(cursor)));
+                }
             }
             default -> throw error("Retired or invalid compact native entry metadata");
         }
         if (Objects.equals(result.get("schema"), 2L)) result.put("finalizers", texts(cursor));
+        return result;
+    }
+    private Map<String,Object> nativeComponent(CoreCompactCursor cursor) throws Throwable {
+        var result = linkPayload(cursor);
+        result.put("exports", texts(cursor));
+        result.put("dependencies", list(cursor, () -> nativeComponent(cursor)));
+        field(cursor, result, "nativeLibrary", () -> map("sha256", text(cursor), "hex", blob(cursor)));
         return result;
     }
     private Map<String,Object> compileInput(CoreCompactCursor cursor) throws Throwable {
@@ -618,5 +643,5 @@ public final class CoreCompactRecords {
     private static final List<String> PRIMITIVES = List.of("IntRep", "WordRep", "Int8Rep", "Int16Rep", "Int32Rep", "Int64Rep", "Word8Rep",
             "Word16Rep", "Word32Rep", "Word64Rep", "FloatRep", "DoubleRep", "AddrRep", "BoxedRep Nothing", "BoxedRep (Just Lifted)", "BoxedRep (Just Unlifted)");
     private static final List<String> LITERALS = List.of("int", "word", "int8", "int16", "int32", "int64", "word8", "word16", "word32",
-            "word64", "bignat", "char", "string-bytes", "float", "double", "null-addr", "rubbish", "function-addr", "data-addr");
+            "word64", "bignat", "char", "string-bytes", "float", "double", "null-addr", "rubbish", "function-addr", "data-addr", "unsupported");
 }
