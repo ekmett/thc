@@ -10,7 +10,7 @@ runtime permits thread creation; an embedding must enable
 `Context.Builder.allowCreateThread(true)`.
 
 The public request accepts an optional Boolean `asyncExceptions`. `true` enables
-saved asynchronous continuations on either backend; when omitted it defaults to
+ordinary asynchronous polling immediately; when omitted it defaults to
 `false` for AST and `true` for bytecode. A string such as `"true"` is rejected.
 `CoreModules.request(..., asyncExceptions = true)` exposes the same option.
 `loadEntry` also accepts a nullable `asyncExceptions` argument, defaulting to
@@ -19,22 +19,42 @@ neither set, the backend defaults above are unchanged.
 
 The standalone `--run-executable` launcher enables asynchronous exceptions on
 both backends by default, so original GHC startup can install its process signal
-handlers. An explicit `-Dthc.asyncExceptions=false` still selects synchronous
+handlers. An explicit `-Dthc.asyncExceptions=false` selects speculative single-thread
 execution. Raw `--run-io` and embedding requests retain the backend defaults
-above. Process signal dispatch requires the enabled mode with either hosting option; see
+above. Process signal dispatch admits concurrency with either hosting option; see
 [standalone process signals](process-signals.md).
 
-With async enabled, AST captures ordinary and typed calls, strict entry forcing,
+Ordinary programs always retain continuation capture from their first lowering.
+AST captures ordinary and typed calls, strict entry forcing,
 cases, lets, local joins, masks and handlers. Shared thunks retain unfinished
 work, and `killThread#` supports external delivery as well as self-delivery.
 Forked children inherit the parent's mask and evaluate lazy action heads on
-their own threads. With async disabled, both backends support self-delivery to
-the current logical guest and acknowledge it through `catch#`, but reject
-external sends and delivery to non-resumable children before enqueueing.
-Nested entry does not upgrade a thread lifetime
-that was registered without external delivery support.
+their own threads. With `false`, ordinary polls rely on an irreversible,
+per-context single guest admission origin assumption. A guest fork or signal
+worker invalidates it before child construction/publication; a different-origin
+public entry invalidates it before hosting or guest effects. Compiled code can
+deoptimize at that boundary and continue its original activation. No root is
+replaced and no completed effect is replayed. Capture handlers around child calls,
+strict operand saves, typed loans and saved PCs never depend on the assumption.
 
-Disabled-mode self-delivery also reaches live and saved delimited `catch#`
+The origin is the first public guest admission's Java thread. Truffle does not
+expose the public `Context.Builder` creator, so context construction/initialization
+does not establish this identity. Internal Loom dispatch forwards the original
+origin; same-origin safe reverse callbacks preserve it. This assumption is distinct
+from the physical Java entrant assumption, which Loom itself can invalidate.
+Generic thread construction and Truffle thread initialization do not admit guest
+concurrency. Other contexts retain independent assumptions.
+
+Prepared reusable AST code currently lacks these resumable activations. A context
+containing a prepared instance rejects another guest thread or admission origin
+before publication/entry; an already transitioned context rejects prepared
+instantiation. This also protects strict Native Image cached-code execution,
+which cannot silently fall back to interpretation. Ordinary runtime images retain
+their normal deoptimization path. Nested entries cannot upgrade an enclosing
+activation that actually lacks capture capability.
+
+Self-delivery remains mandatory even while the assumption is valid, including
+under either masking mode, and also reaches live and saved delimited `catch#`
 frames. Each resumption keeps its own one-shot request; the reusable frame image
 does not clone or acknowledge it. The reached handler acknowledges the original
 request without forcing its payload. With async enabled, external delivery from
@@ -102,7 +122,7 @@ the child and releases the sender. At a public host entry, an uncaught delivery
 becomes a guest exception with the original payload. A completed target is a successful no-op.
 Only one request is claimed at a time; queued requests retain their order.
 
-The ordinary async poll reads a Truffle context-thread-local cell and the
+After its optional assumption guard, an ordinary async poll reads a Truffle context-thread-local cell and the
 target's volatile pending flag. The cell follows nested guest entry and is
 cleared when the carrier leaves its final guest entry. Claiming remains a cold
 locked operation that rechecks ownership, foreign-call permission, masking and

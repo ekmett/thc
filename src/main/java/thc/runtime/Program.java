@@ -28,6 +28,7 @@ public final class Program implements ExecutableProgram {
         TruffleLanguage.LanguageReference.create(thc.Language.class);
     private final TruffleLanguage<?> language;
     private final boolean enableAsync;
+    private final boolean eagerAsyncPolls;
     private final boolean outlineCaseArms;
     private final boolean deferDefaultArm;
     private final boolean capturesContinuations;
@@ -97,13 +98,14 @@ public final class Program implements ExecutableProgram {
                     boolean outlineCaseArms, boolean deferDefaultArm, boolean reusableCode, PreparedCode prepared, boolean nativeStartup) {
         if (prepared == null && Boolean.getBoolean("thc.requireCachedCode"))
             throw new UnsupportedCore("Runtime THC lowering is disabled; prepared code is required");
-        this.language = language; this.enableAsync = enableAsync; this.outlineCaseArms = outlineCaseArms;
+        this.language = language; this.enableAsync = !reusableCode || enableAsync; this.outlineCaseArms = outlineCaseArms;
+        eagerAsyncPolls = enableAsync;
         this.reusableCode = reusableCode;
         this.codeTargets = reusableCode && prepared == null ? new ArrayList<>() : List.of();
         this.codeIdentity = prepared == null ? new Object() : prepared.identity;
         this.contextOwner = reusableCode ? thc.Language.currentState() : null;
         this.deferDefaultArm = deferDefaultArm;
-        capturesContinuations = enableAsync || outlineCaseArms || deferDefaultArm;
+        capturesContinuations = this.enableAsync || outlineCaseArms || deferDefaultArm;
         thc.CoreForeignArtifacts.INSTANCE.requireExecutableInput(moduleData);
         demand = moduleData.get("demandBindings") instanceof CoreDemandBindings found ? found : null;
         foreignExceptionBridge = ForeignExceptionBridge.bind(moduleData, this::entryValue, this::dataLayout);
@@ -358,6 +360,7 @@ public final class Program implements ExecutableProgram {
         private Program newInstance(TruffleLanguage<?> language, boolean nativeStartup) {
             if (language != this.language || language != LANGUAGES.get(null))
                 throw new UnsupportedCore("Reusable AST instance requires its prepared and current language");
+            thc.Language.currentState().admitPreparedGuestCode();
             return new Program(language, module, false, false, false, true, this, nativeStartup);
         }
         /** Observe existing installation only: no binding demand, execution or compilation. */
@@ -513,7 +516,8 @@ public final class Program implements ExecutableProgram {
             throw fault("Missing explicit program instance");
         return program;
     }
-    @Override public boolean getAsynchronousExceptions() { return enableAsync; }
+    @Override public boolean getAsynchronousExceptions() { return eagerAsyncPolls; }
+    @Override public boolean getCapturesContinuations() { return capturesContinuations; }
     public boolean getEnableAsync() { return enableAsync; }
 
     private static <K, V> V required(Map<K, V> values, K key) {
@@ -689,7 +693,7 @@ public final class Program implements ExecutableProgram {
     @Override public Map<String, Object> diagnostics() {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("backend", "ast");
-        result.put("asyncExceptions", enableAsync);
+        result.put("asyncExceptions", eagerAsyncPolls);
         result.put("sourceNotesEnabled", sources.getEnabled());
         result.put("sourceSpanCount", sources.getSpanCount());
         result.putAll(rootCounts());
@@ -858,7 +862,7 @@ public final class Program implements ExecutableProgram {
             allArgumentSlots, allArgumentProofs, entryStrict.clone(), inputLayout, environmentVectorSlots);
         Expr body = compile(expression, scope, bodyTail);
         HandoffEntry handoff = null;
-        if (!reusableCode && !capturesContinuations && (inputLayout == null || !inputLayout.getRequiresTyped())) {
+        if (!reusableCode && (inputLayout == null || !inputLayout.getRequiresTyped())) {
             List<CoreRepresentation> declared = new ArrayList<>();
             for (Map<String, Object> arg : args) declared.add(CoreRepresentations.binder(arg));
             handoff = HandoffEntry.create(language, scope.layout, declared, resultProof, captures != null);
@@ -880,6 +884,7 @@ public final class Program implements ExecutableProgram {
         root.configureInitialFrameCopy(!delimited &&
             com.oracle.truffle.api.nodes.NodeUtil.findFirstNodeInstance(body, AstSameFrameArm.class) == null);
         root.configureInputProofs(inputProofs);
+        root.configureEagerAsyncPolls(eagerAsyncPolls);
         if (reusableCode) root.configureProgramSlot(scope.programSlot, codeIdentity);
         if (scope.deferredArms != null) for (DeferredArm candidate : scope.deferredArms) {
             AstDeferredArm.PreparedBody prepared = new AstDeferredArm.PreparedBody(

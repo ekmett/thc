@@ -123,10 +123,11 @@ model and the two execution paths.
 
 [Asynchronous exceptions](docs/async-exceptions.md), [MVars](docs/managed-mvars.md)
 and [STM](docs/stm.md) support concurrent Haskell programs. Interrupted shared
-thunks retain their unfinished work. Async-enabled evaluation bounds nested calls
+thunks retain their unfinished work. Ordinary evaluation bounds nested calls
 and forcing through saved continuations. Raw load requests default to async off
-for AST and on for bytecode; the standalone executable launcher enables it on
-both. Delimited capture across STM, automatic weak finalization and GC-driven
+for AST and on for bytecode; off speculates on a single guest admission origin
+until guest concurrency is admitted. The standalone executable launcher enables
+polling immediately on both. Delimited capture across STM, automatic weak finalization and GC-driven
 deadlock detection remain unsupported.
 
 The public [`thc:runtime` API](docs/runtime-services.md) exposes permissions,

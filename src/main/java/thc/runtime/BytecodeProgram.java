@@ -45,6 +45,7 @@ public final class BytecodeProgram implements ExecutableProgram {
     private final Language language;
     private final BytecodeCheckpoint checkpoint;
     private final boolean enableAsync;
+    private final boolean eagerAsyncPolls;
     private final CoreDemandBindings demand;
     private final ForeignExceptionBridge foreignExceptionBridge;
     private final RubbishLiterals rubbishLiterals;
@@ -105,7 +106,8 @@ public final class BytecodeProgram implements ExecutableProgram {
             BytecodeCheckpoint checkpoint, boolean enableAsync, boolean nativeStartup) {
         this.language = language;
         this.checkpoint = checkpoint;
-        this.enableAsync = enableAsync;
+        this.enableAsync = true;
+        eagerAsyncPolls = enableAsync;
         thc.CoreForeignArtifacts.INSTANCE.requireExecutableInput(moduleData);
         demand = moduleData.get("demandBindings") instanceof CoreDemandBindings value ? value : null;
         foreignExceptionBridge = ForeignExceptionBridge.bind(moduleData, this::entryValue, this::dataLayout);
@@ -128,7 +130,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         } else containsDelimited = DelimitedControl.contains(moduleData.get("bindings"));
         this.containsDelimited = containsDelimited;
         delimited = containsDelimited || demand != null && Boolean.TRUE.equals(moduleData.get("captureDelimited"));
-        resumable = checkpoint != null || enableAsync || delimited;
+        resumable = true;
         stackTargetLayout = moduleData.get("targetLayout");
         sources = new CoreSources(moduleData);
         metrics = demand == null ? new Metrics(!Boolean.FALSE.equals(moduleData.get("instrument"))) : demand.getMetrics();
@@ -165,7 +167,8 @@ public final class BytecodeProgram implements ExecutableProgram {
         initialize(moduleData, nativeStartup);
     }
 
-    @Override public boolean getAsynchronousExceptions() { return enableAsync; }
+    @Override public boolean getAsynchronousExceptions() { return eagerAsyncPolls; }
+    @Override public boolean getCapturesContinuations() { return true; }
     @Override public boolean getHasBytecode() { return true; }
     public boolean getEnableAsync() { return enableAsync; }
 
@@ -669,7 +672,7 @@ public final class BytecodeProgram implements ExecutableProgram {
     @Override public Map<String, Object> diagnostics() {
         var result = new LinkedHashMap<String, Object>();
         result.put("backend", "bytecode");
-        result.put("asyncExceptions", enableAsync);
+        result.put("asyncExceptions", eagerAsyncPolls);
         result.putAll(rootCounts());
         result.put("sourceNotesEnabled", sources.getEnabled());
         result.put("sourceSpanCount", sources.getSpanCount());
@@ -1145,6 +1148,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         root.setLabel(label);
         root.configureForeignExceptionBridge(foreignExceptionBridge);
         root.configureAsync(enableAsync);
+        root.configureEagerAsyncPolls(eagerAsyncPolls);
         root.configureStackDriver(metrics);
         root.configureStackTransaction(stackTransaction[0]);
         root.configureDelimited(delimited);
@@ -1192,6 +1196,9 @@ public final class BytecodeProgram implements ExecutableProgram {
 
     /** The cold Yield carries the exact bytecode frame; ordinary polls allocate no packet. */
     private void emitAsyncPoll(Emission e, BytecodeLocal processResult, BytecodeLocal processErrno) {
+        emitAsyncPoll(e, processResult, processErrno, false);
+    }
+    private void emitAsyncPoll(Emission e, BytecodeLocal processResult, BytecodeLocal processErrno, boolean mandatory) {
         var b = e.builder;
         b.beginBlock();
         var request = b.createLocal("pending async request", FrameSlotKind.Object);
@@ -1202,7 +1209,8 @@ public final class BytecodeProgram implements ExecutableProgram {
             b.beginStaticStoreObject(local); b.emitLoadNull(); b.endStaticStoreObject();
         }
         b.beginIfThen();
-        if (processResult == null) b.emitPollAsync(request);
+        if (mandatory) b.emitPollMandatoryAsync(request);
+        else if (processResult == null) b.emitPollAsync(request);
         else {
             b.beginPollProcessCompleted(request);
             b.emitLoadLocal(processResult); b.emitLoadLocal(Objects.requireNonNull(processErrno));
@@ -7514,7 +7522,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                     b.emitLoadLocal(incoming); b.emitStaticLoadObject(Objects.requireNonNull(e.checkpointRootEntry)); b.endParkAsyncMask();
                     endAnnotationYield(e); b.emitLoadLocal(active); b.endReenterCallMask(); b.endStoreLocal(); b.endBlock();
                     b.endTryCatch(); b.endBlock(); b.endWhile();
-                    emitAsyncPoll(e); // Self-target delivery follows enqueue.
+                    emitAsyncPoll(e, null, null, true); // Self-target delivery follows enqueue regardless of ordinary policy.
                     b.emitLoadConstant(thc.runtime.Unit.INSTANCE); b.endBlock();
                 }, evaluatedProof(tupleProof, true));
             }

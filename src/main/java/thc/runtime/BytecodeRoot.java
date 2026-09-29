@@ -723,6 +723,20 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    /** The post-throwTo cut must claim self delivery under both masks and speculation. */
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "request")
+    public static final class PollMandatoryAsync {
+        @Specialization public static boolean poll(VirtualFrame frame, LocalAccessor request, @Bind Node node) {
+            boolean compiled = CompilerDirectives.inCompiledCode();
+            AsyncRequest pending = GuestThreads.pollMandatoryCurrent(node, false);
+            if (pending == null) return false;
+            pending.compiledCapture = compiled;
+            request.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, pending);
+            return true;
+        }
+    }
+
     /** A pending cut uses fixed object registers, never cold generic load/store quickening. */
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "request")

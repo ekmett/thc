@@ -47,9 +47,11 @@ public final class DirectCallerNode extends Node {
         Object result;
         if (tailCall) {
             if (handoff != null && getRootNode() instanceof FunctionRoot root && root.handoffDestination(frame) >= 0)
-                return handoff.call(frame, arguments, callNode, true);
-            tailCheck.check(frame, target, arguments);
-            result = Calls.direct(callNode, arguments);
+                result = handoff.call(frame, arguments, callNode, true);
+            else {
+                tailCheck.check(frame, target, arguments);
+                result = Calls.direct(callNode, arguments);
+            }
         } else {
             try {
                 arguments[0] = 0L;

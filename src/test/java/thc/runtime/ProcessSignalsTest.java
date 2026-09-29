@@ -167,11 +167,17 @@ public class ProcessSignalsTest {
             } finally { state.getThreads().leaveCurrent(GuestThreadStatus.FINISHED); }
         });
     }
-    @Test public void synchronousDispatchIsRejectedBeforeTransportAcquisition() throws Exception {
+    @Test public void adaptiveSignalPublicationInvalidatesBeforeTransportAcquisition() throws Exception {
         onBackends((language, backend) -> {
-            var service = new ManagedSignals(Language.currentState(), language, true, NativeSignalTransport::userSignalAvailable, () -> { throw new IllegalStateException("synchronous program must not acquire signal transport"); });
-            var failure = assertThrows(RuntimeFault.class, () -> service.bind(program(language, backend, false, false, descriptor)));
-            assertTrue(failure.getMessage().contains("asyncExceptions=true")); service.close();
+            var owner = Language.currentState(); var stopped = new RuntimeFault("transport boundary");
+            var service = new ManagedSignals(owner, language, true, () -> true, () -> {
+                assertFalse(owner.getSingleGuestOriginAssumption().isValid()); throw stopped;
+            });
+            try {
+                service.bind(program(language, backend, false, false, descriptor));
+                assertTrue(owner.getSingleGuestOriginAssumption().isValid()); service.authorizeLauncher();
+                assertSame(stopped, assertThrows(RuntimeFault.class, () -> service.install(2, -4, ManagedAddress.nullAddress())));
+            } finally { service.close(); }
         });
     }
     @Test public void malformedLauncherAsyncPropertyFailsExplicitly() {

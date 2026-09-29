@@ -56,7 +56,30 @@ public final class GuestThreads {
     @TruffleBoundary public <T> T hostEntry(Node node, Callable<T> action) {
         var foreign = foreignActivations.get();
         if (foreign != null && foreign.top() != null) throw new UnsupportedCore("Foreign callbacks must enter on their native origin thread");
-        return loom.invoke(node, action);
+        Thread origin = admissionOrigin();
+        return loom.invoke(node, () -> {
+            Thread previous = hostedOrigin.get();
+            hostedOrigin.set(origin);
+            try { return action.call(); }
+            finally { if (previous == null) hostedOrigin.remove(); else hostedOrigin.set(previous); }
+        });
+    }
+    // Attribution follows a hosted Java stack across safe cross-context callbacks;
+    // the assumptions and their first admitted owners remain per-context.
+    private static final ThreadLocal<Thread> hostedOrigin = new ThreadLocal<>();
+    public Thread admissionOrigin() {
+        Thread origin = hostedOrigin.get();
+        return origin == null ? Thread.currentThread() : origin;
+    }
+    @TruffleBoundary public void checkEntryAllowed() {
+        if (closed) throw fault("Guest context has closed");
+        var stack = foreignActivations.get();
+        var activation = stack == null ? null : stack.top();
+        var state = activation == null ? null : delivery.get();
+        if (activation != null && (state == null || state.permission != DeliveryPermission.GUEST || activation.caller == activeIdentity.get())) {
+            if (activation.owner.closed) throw fault("Foreign caller context has closed");
+            if (activation.safety == ForeignSafety.UNSAFE) throw fault("Unsafe foreign call cannot re-enter guest code");
+        }
     }
     @TruffleBoundary public Thread newThread(TruffleLanguage.Env env, Runnable task, Long capability, Node node) {
         return loom == null ? env.newTruffleThreadBuilder(task).virtual(false).build() : loom.newThread(task, capability, node);
@@ -70,6 +93,7 @@ public final class GuestThreads {
     public static final class GuestThread {
         final Thread thread;
         final GuestThreadId identity;
+        // Capture capability of every enclosing activation, not its ordinary poll policy.
         boolean externalAsync;
         final ArrayDeque<GuestEntry> entriesPrevious = new ArrayDeque<>();
         final ArrayDeque<AsyncRequest> queue = new ArrayDeque<>();
@@ -532,8 +556,19 @@ public final class GuestThreads {
     }
     /** Java-callable poll for bytecode roots; it never delivers from a wake action. */
     public static AsyncRequest pollCurrent(Node node, boolean interruptible) {
+        if (!ordinaryPollEnabled(node)) return null;
         checkpointCurrent(node);
-        return pollCurrentWithoutYield(node, interruptible);
+        return pollMandatoryCurrentWithoutYield(node, interruptible);
+    }
+    /** Only ordinary polls speculate. Calls and their capture handlers never do. */
+    public static boolean ordinaryPollEnabled(Node node) {
+        return node == null || !(node.getRootNode() instanceof GuestRoot root) || root.getEagerAsyncPolls() ||
+            !Language.currentState(node).getSingleGuestOriginAssumption().isValid();
+    }
+    /** Self throwTo is synchronous even while the single-origin assumption is valid. */
+    public static AsyncRequest pollMandatoryCurrent(Node node, boolean interruptible) {
+        checkpointCurrent(node);
+        return pollMandatoryCurrentWithoutYield(node, interruptible);
     }
     public static void checkpointCurrent(Node node) {
         var context = Language.currentState(node);
@@ -541,6 +576,10 @@ public final class GuestThreads {
     }
     /** Used under commit/owner locks; scheduling yield happens before acquiring them. */
     public static AsyncRequest pollCurrentWithoutYield(Node node, boolean interruptible) {
+        if (!ordinaryPollEnabled(node)) return null;
+        return pollMandatoryCurrentWithoutYield(node, interruptible);
+    }
+    private static AsyncRequest pollMandatoryCurrentWithoutYield(Node node, boolean interruptible) {
         var context = Language.currentState(node);
         var slot = context.getThreadPollState().get().current;
         return slot == null ? null : context.getThreads().poll(slot, node, interruptible);

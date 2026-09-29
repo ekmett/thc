@@ -89,6 +89,8 @@ public final class HandoffCaller extends Node {
                     Object result = trampolineDispatch.call(next.getTarget(), EMPTY_ARGUMENTS);
                     if (result == HandoffEntry.INT_COMPLETE) return state.getReturnInt();
                     if (result == HandoffEntry.COMPLETE) return state.getReturnLong();
+                    SavedGuestContinuation saved = SavedGuestContinuations.savedGuestContinuation(result);
+                    if (saved != null) return new AstTailYield(saved, next.getTarget());
                     return result;
                 } finally { state.setPending(oldPending); }
             } catch (HandoffTailCall tail) { transfer = tail; }

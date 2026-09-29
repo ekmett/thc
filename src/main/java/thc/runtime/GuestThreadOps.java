@@ -57,6 +57,7 @@ public final class GuestThreadOps {
         if (action instanceof Closure closure) shape = actionResult(closure, asyncEnabled);
         else if (action instanceof Thunk) shape = null;
         else throw RuntimeFault.fault("fork# requires a lazy state-transformer action");
+        state.admitGuestConcurrency();
         Language language = TruffleLanguage.LanguageReference.create(Language.class).get(node);
         var root = new ForkActionRoot(language, shape, asyncEnabled).getCallTarget();
         MaskingState inheritedMask = state.getMaskingState().get();
@@ -159,7 +160,7 @@ public final class GuestThreadOps {
         if (id != myThreadId(node)) throw new UnsupportedCore("Bytecode external killThread# requires a captured sender continuation");
         AsyncRequest sent = beginKill(node, id, payload);
         boolean compiled = CompilerDirectives.inCompiledCode();
-        AsyncRequest incoming = GuestThreads.pollCurrent(node, false);
+        AsyncRequest incoming = GuestThreads.pollMandatoryCurrent(node, false);
         if (!sent.getForceSelf() || incoming != sent) throw RuntimeFault.fault("Self-directed killThread# did not claim its own request");
         sent.compiledCapture = compiled;
         throw new AsyncDelivery(sent, node);

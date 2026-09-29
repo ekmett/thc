@@ -8,6 +8,8 @@ import java.util.Map;
 /** Program linkage and context-bound host entrypoints shared across Core backends. */
 public interface ExecutableProgram {
     boolean getAsynchronousExceptions();
+    /** Ordinary programs always retain continuations, including speculative single-thread execution. */
+    default boolean getCapturesContinuations() { return getAsynchronousExceptions(); }
     default boolean getHasBytecode() { return false; }
     default String bytecodeDump() { throw new UnsupportedOperationException("Program has no bytecode backend"); }
     RootCallTarget hostEntryTarget(int arity);

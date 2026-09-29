@@ -142,6 +142,7 @@ public final class HostReference implements TruffleObject {
             @Cached(value = "create()", uncached = "create()", neverDefault = true) HostDispatch dispatch) throws UnsupportedMessageException {
         if (Language.currentState(dispatch) != owner) throw new IllegalArgumentException("Host function belongs to another context");
         if (!isExecutable()) throw UnsupportedMessageException.create();
+        owner.admitGuestOrigin();
         var threads = owner.getThreads();
         if (threads.needsHosting()) return threads.hostEntry(dispatch, () -> execute(arguments, dispatch));
         threads.enterCurrent(null, false, asynchronous(value), null);

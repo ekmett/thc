@@ -91,6 +91,9 @@ public final class Language extends TruffleLanguage<Language.State> {
         private final ManagedWeaks weaks;
         private final Assumption singleThreadedAssumption;
         private Thread firstThread;
+        private final Assumption singleGuestOriginAssumption = Truffle.getRuntime().createAssumption("THC single guest admission origin");
+        private Thread firstGuestOrigin;
+        private boolean preparedGuestCode;
         private final AtomicReference<FutureTask<SulongCbits>> nativeCbits;
         private final AtomicReference<FutureTask<LimbProvider>> nativeLimbs;
         public State(Env env, Language language) {
@@ -213,6 +216,26 @@ public final class Language extends TruffleLanguage<Language.State> {
             else if (firstThread != thread) markMultithreaded();
         }
         public void markMultithreaded() { singleThreadedAssumption.invalidate("A second guest thread entered the context"); }
+
+        public Assumption getSingleGuestOriginAssumption() { return singleGuestOriginAssumption; }
+        /** The public Context builder's creator is not exposed by Truffle. Pin the first
+         * public guest admission, before any internal hosting changes its carrier. */
+        @TruffleBoundary public synchronized void admitGuestOrigin() {
+            threads.checkEntryAllowed();
+            Thread origin = threads.admissionOrigin();
+            if (firstGuestOrigin == null) firstGuestOrigin = origin;
+            else if (firstGuestOrigin != origin) admitGuestConcurrency();
+        }
+        /** Must precede child construction/publication or another origin's guest effects. */
+        @TruffleBoundary public synchronized void admitGuestConcurrency() {
+            if (preparedGuestCode) throw new UnsupportedCore("Prepared synchronous code cannot admit another guest thread or admission origin");
+            singleGuestOriginAssumption.invalidate("Another guest thread or admission origin was admitted");
+        }
+        @TruffleBoundary public synchronized void admitPreparedGuestCode() {
+            if (!singleGuestOriginAssumption.isValid())
+                throw new UnsupportedCore("Prepared synchronous code requires a single guest admission origin");
+            preparedGuestCode = true;
+        }
 
         @TruffleBoundary public LimbProvider limbs() {
             if (!env.isNativeAccessAllowed()) throw new RuntimeFault("Native GMP arithmetic requires native access");
@@ -426,6 +449,7 @@ public final class Language extends TruffleLanguage<Language.State> {
             // The saved factory owns declarations, never the preparation Context's
             // native functions, CAFs, bridge projectors or registration lifetimes.
             var owner = currentState(this);
+            owner.admitPreparedGuestCode();
             for (var link : code.getForeignLinks()) owner.cbits().declare(link);
             for (var link : code.getPackageScalarLinks()) owner.packageCbits.declare(link);
             var program = code.newInstanceForNativeStartup(language);
@@ -490,7 +514,7 @@ public final class Language extends TruffleLanguage<Language.State> {
                     for (var registration : registrations) exports.addAll(registration.getExports());
                     owner.foreignRoots.register(program, Language.this, registrations, ManagedExportPlan.checked(exports, program::signatureBindings), program::linkStartup);
                     var value = new EntryValue(program, entry, ((Number) selected.get("arity")).intValue(), null,
-                        io, Language.this, shutdown, shutdownResult, async && program.contains(CoreSignalForeign.dispatcher), hostInputs, hostResult);
+                        io, Language.this, shutdown, shutdownResult, program.getCapturesContinuations() && program.contains(CoreSignalForeign.dispatcher), hostInputs, hostResult);
                     owner.coreUnitPrograms.add(program);
                     return value;
                 } catch (Throwable failure) { owner.foreignRoots.release(program); program.close(); throw failure; }

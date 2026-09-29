@@ -89,7 +89,7 @@ still apply.
 | `maskAsyncExceptions#` | Implements interruptible masking/restoration with the same concrete typed result layouts as `catch#`; no exception-specific scalar whitelist. |
 | `maskUninterruptible#` | Implements uninterruptible masking/restoration, with the same supported result representations as `maskAsyncExceptions#`. |
 | `unmaskAsyncExceptions#` | Implements unmasking/restoration, with the same supported result representations as `maskAsyncExceptions#`. |
-| `killThread#` | With `asyncExceptions: true`, both backends support `throwTo` through saved guest continuations, including external delivery to a live or saved delimited catch. The reached handler acknowledges the original request without forcing its payload; the interrupted child's one-shot continuation is not cloned into the multi-shot image. Delimited invocations drain scheduling cuts and AST stack spills through separate one-shot owners; new `control0#` capture across those parked caller chains still rejects. With `false`, both support self-delivery to the current logical guest and its live or saved handler, but reject external sends before enqueue; external delivery to nonresumable forks is unsupported. Arbitrary Java/native foreign frames do not gain resumable interruption. Resumable sends to host carriers outside guest invocations are no-ops, not messages queued for a later unrelated host call. |
+| `killThread#` | Both ordinary backends support `throwTo` through saved guest continuations, including external delivery to a live or saved delimited catch. `asyncExceptions: false` suppresses ordinary polls while the per-context single guest admission origin assumption holds; fork/signal publication or different-origin public admission invalidates it before effects. Self-delivery remains mandatory under both masks. The reached handler acknowledges the original request without forcing its payload; the interrupted child's one-shot continuation is not cloned into the multi-shot image. Delimited invocations drain scheduling cuts and AST stack spills through separate one-shot owners; new `control0#` capture across those parked caller chains still rejects. Prepared synchronous code rejects concurrency admission. Arbitrary Java/native foreign frames do not gain resumable interruption. Resumable sends to host carriers outside guest invocations are no-ops, not messages queued for a later unrelated host call. |
 | `takeMVar#` | Blocking transfers and supported interruption work, but no GC-driven `BlockedIndefinitelyOnMVar` detection. A wait with no future producer needs supported interruption or embedding cancellation to end. |
 | `putMVar#` | Same missing deadlock exception for a blocked put; FIFO handoff and cancellation-before-commit are implemented. |
 | `readMVar#` | Same missing deadlock exception for a blocked read; reader broadcast is implemented. |
@@ -332,8 +332,8 @@ Haskell retains its disabled-statistics exception. `getMonotonicNSec` uses the
 JVM monotonic clock with an arbitrary process-local origin. See
 [GC/statistics/clock behavior](gc-stats-clock.md).
 Original `stg_sig_install` supports GHC's INT/QUIT/HUP/TERM handlers in the
-Linux x86_64 launcher with `-Xrs` and `asyncExceptions=true` on either backend
-(AST opt-in, bytecode default). Other signals, non-null masks and ordinary
+Linux x86_64 launcher with `-Xrs` on either ordinary backend; the first signal
+worker invalidates speculative single-origin polling. Other signals, non-null masks and ordinary
 embedding contexts remain outside that service. See
 [process signal ownership and JVM consequences](process-signals.md).
 
