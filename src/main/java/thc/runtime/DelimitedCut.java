@@ -3,6 +3,7 @@
 package thc.runtime;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.ControlFlowException;
 import com.oracle.truffle.api.exception.AbstractTruffleException;
@@ -25,5 +26,11 @@ public final class DelimitedCut extends AbstractTruffleException implements Inte
     public MaskingState getCapturedMask() { return capturedMask; }
     public StackAnnotationState getCapturedAnnotations() { return capturedAnnotations; }
     public ArrayList<DelimitedFrame> getFrames() { return frames; }
-    public DelimitedCut append(VirtualFrame frame, DelimitedStep step) { frames.add(new DelimitedFrame(frame.materialize(), step)); return this; }
+    public DelimitedCut append(VirtualFrame frame, DelimitedStep step) {
+        // Keep dormant capture handlers from materializing a compiled loop's frame.
+        // The actual cut owns the slow path; its saved frame and suffix are unchanged.
+        CompilerDirectives.transferToInterpreter();
+        frames.add(new DelimitedFrame(frame.materialize(), step));
+        return this;
+    }
 }
