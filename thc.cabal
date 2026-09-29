@@ -357,6 +357,8 @@ extra-source-files:
   docs/rts-event-capabilities.md
   docs/gc-stats-clock.md
   t/fixtures/compiler/RubbishLiteralAudit.hs
+  t/fixtures/compiler/SelectorProofAudit.hs
+  t/fixtures/compiler/SelectorProofPredicate.hs
   t/fixtures/compiler/OriginalDigestNative.hs
   t/fixtures/compiler/OriginalMemcpyNative.hs
   t/fixtures/compiler/OriginalErfNative.hs
@@ -1290,6 +1292,7 @@ executable thc-fixtures
     FloatDecodeFixtures
     FloatingRemainderFixtures
     ProxyVoidFixtures
+    SelectorProofFixtures
     UnsafeEqualityFixtures
     OriginalStdioFixtures
     OriginalStdioCloseFixtures
