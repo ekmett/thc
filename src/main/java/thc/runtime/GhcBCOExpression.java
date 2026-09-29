@@ -4,6 +4,7 @@ package thc.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.ExplodeLoop;
 import thc.Language;
 import static thc.runtime.RuntimeFault.fault;
 
@@ -23,8 +24,10 @@ public final class GhcBCOExpression extends Expr {
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
         return evaluate(frame, slots, offset, new Object[operands.length], 0);
     }
+    @ExplodeLoop
     private Object evaluate(VirtualFrame frame, int[] slots, int offset, Object[] values, int start) {
-        for (int i = start; i < operands.length; i++) {
+        for (int i = 0; i < operands.length; i++) {
+            if (i < start) continue;
             try { values[i] = i == 3 ? operands[i].executeRequiredLong(frame) : operands[i].execute(frame); }
             catch (AstCapture cut) {
                 int index = i;

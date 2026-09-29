@@ -19,4 +19,5 @@ main = mapM_ row [-2, 0, 7]
   where
     row (I# n) = mapM_ print
       [I# (bcoConstant n), I# (bcoApply n), I# (bcoApplyTwo n), I# (bcoFunction n),
-       I# (bcoArithmetic n), I# (bcoBranch n), I# (bcoLargeOperand n), I# (bcoSharing n)]
+       I# (bcoArithmetic n), I# (bcoBranch n), I# (bcoLargeOperand n), I# (bcoSharing n), I# (bcoCase n),
+       I# (bcoCaseNested n), I# (bcoCasePointer n), I# (bcoCaseFloat n), I# (bcoCaseDouble n), I# (bcoCaseLong n), I# (bcoCaseVoid n), I# (bcoPacked8 n), I# (bcoPacked16 n), I# (bcoPacked32 n), I# (bcoCaseTuple n), I# (bcoCaseTupleCall n), I# (bcoCaseTupleOverapply n)]

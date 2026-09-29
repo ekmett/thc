@@ -15,6 +15,8 @@ import thc.EntryValue;
 import thc.Json;
 import thc.Language;
 import java.io.File;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.file.Files;
 import java.security.MessageDigest;
 import java.util.*;
@@ -24,8 +26,13 @@ import static org.junit.jupiter.api.Assertions.*;
 @SuppressWarnings("unchecked")
 class GhcBCOTest {
     private final File root = new File(System.getProperty("thc.projectRoot"));
-    private final List<String> entries = List.of("bcoConstant", "bcoApply", "bcoApplyTwo", "bcoFunction", "bcoArithmetic", "bcoBranch", "bcoLargeOperand", "bcoSharing");
-    private long expected(String entry, long n) { return switch (entry) { case "bcoConstant", "bcoFunction", "bcoLargeOperand" -> n; case "bcoApply" -> n + 7; case "bcoApplyTwo" -> n * 10 + 3; case "bcoArithmetic" -> 100 - n; case "bcoBranch" -> n < 0 ? -1 : 1; case "bcoSharing" -> n * 2 + 1; default -> throw new IllegalStateException(entry); }; }
+    private final List<String> entries = List.of("bcoConstant", "bcoApply", "bcoApplyTwo", "bcoFunction", "bcoArithmetic", "bcoBranch", "bcoLargeOperand", "bcoSharing", "bcoCase", "bcoCaseNested", "bcoCasePointer", "bcoCaseFloat", "bcoCaseDouble", "bcoCaseLong", "bcoCaseVoid", "bcoPacked8", "bcoPacked16", "bcoPacked32", "bcoCaseTuple", "bcoCaseTupleCall", "bcoCaseTupleOverapply");
+    private long expected(String entry, long n) { return switch (entry) { case "bcoConstant", "bcoFunction", "bcoLargeOperand", "bcoCasePointer", "bcoCaseLong", "bcoCaseVoid", "bcoCaseTupleCall", "bcoCaseTupleOverapply" -> n; case "bcoApply", "bcoCase", "bcoCaseTuple" -> n + 7; case "bcoCaseNested" -> n + 10; case "bcoCaseFloat" -> paddedWord(2143294004L, 4); case "bcoCaseDouble" -> 9221120237041095220L; case "bcoPacked8" -> 3 * paddedWord(171, 1); case "bcoPacked16" -> 3 * paddedWord(52719, 2); case "bcoPacked32" -> 3 * paddedWord(2309737967L, 4); case "bcoApplyTwo" -> n * 10 + 3; case "bcoArithmetic" -> 100 - n; case "bcoBranch" -> n < 0 ? -1 : 1; case "bcoSharing" -> n * 2 + 1; default -> throw new IllegalStateException(entry); }; }
+    private static long paddedWord(long bits, int width) {
+        var bytes = ByteBuffer.allocate(8).order(ByteOrder.nativeOrder());
+        switch (width) { case 1 -> bytes.put((byte) bits); case 2 -> bytes.putShort((short) bits); case 4 -> bytes.putInt((int) bits); default -> throw new IllegalArgumentException(); }
+        return bytes.getLong(0);
+    }
     private Context context() { return Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.WarnInterpreterOnly", "false").option("compiler.Inlining", "false").option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.SingleTierCompilationThreshold", "10000000").option("engine.CompilationFailureAction", "Throw").build(); }
     @Test void nativeInstructionsExecuteThroughBothCoreBackends() throws Exception {
         nativeInstructions(false);
@@ -40,7 +47,7 @@ class GhcBCOTest {
         for (String stage : List.of("pre", "post")) for (String backend : List.of("ast", "bytecode")) for (String entry : entries) try (var context = context()) {
             context.initialize("thc"); context.enter(); try {
                 var module = (Map<String, Object>) Json.parse(Files.readString(new File(root, "build/ghc-bco/" + stage + "/core/GhcBCO.json").toPath())); var evidence = new ArrayCoreEvidence(module, entry);
-                assertEquals(1, evidence.getPrimitiveCounts().get("newBCO#"), "Actual primitive, not a synthetic BCO substitute"); assertEquals(List.of("bcoFunction", "bcoArithmetic").contains(entry) ? null : Integer.valueOf(1), evidence.getPrimitiveCounts().get("mkApUpd0#"));
+                assertEquals(entry.equals("bcoCase") ? 2 : 1, evidence.getPrimitiveCounts().get("newBCO#"), "Actual primitive, not a synthetic BCO substitute"); assertEquals(List.of("bcoConstant", "bcoApply", "bcoApplyTwo", "bcoBranch", "bcoLargeOperand", "bcoSharing", "bcoCasePointer", "bcoCaseTupleCall", "bcoCaseTupleOverapply").contains(entry) ? Integer.valueOf(1) : null, evidence.getPrimitiveCounts().get("mkApUpd0#"));
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var linked = CoreModules.reachable(module, entry); ExecutableProgram program = backend.equals("ast") ? new Program(language, linked, async) : new BytecodeProgram(language, linked, async); var function = context.asValue(new EntryValue(program, entry, 1));
                 long[] inputs = {-2, 0, 7}; for (int index = 0; index < inputs.length; index++) { long n = inputs[index]; assertEquals(nativeResults.get(index * entries.size() + entries.indexOf(entry)), function.execute(n).asLong(), stage + "/" + backend + "/" + entry + "/" + n); ThreadInventoryCoreEvidence.released(language); }
                 // Compile precisely the genuine public Core root. BCOs are
@@ -63,6 +70,62 @@ class GhcBCOTest {
             assertThrows(RuntimeFault.class, () -> create(language, code(60), -1, words(0))); assertThrows(RuntimeFault.class, () -> create(language, code(60), 1, words(1)));
             var underflow = create(language, code(2, 0, 60)); assertThrows(RuntimeFault.class, () -> underflow.target.call(0L)); var branchIntoOperand = code(25, 0, 1, 46, 0, 1, 61); assertThrows(RuntimeFault.class, () -> create(language, branchIntoOperand, 0, words(0), words(0)));
             var pointer = new Object(); var pointerAsWord = create(language, code(11, 0, 61), 0, words(0), words(), new Object[]{pointer}); assertThrows(RuntimeFault.class, () -> pointerAsWord.target.call(0L)); var function = create(language, code(58), 1, words(1, 0)); assertThrows(RuntimeFault.class, () -> GhcBCO.updating(new Node() {}, function));
+        } finally { context.leave(); } }
+    }
+    @Test void caseAndTupleFramesRejectForgedBitsShapesAndExternalAbi() {
+        Closure foreign;
+        try (var context = context()) { context.initialize("thc"); context.enter(); try {
+            var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+            var continuation = create(language, code(38,0,1,38,1,2,61), 0, words(1,1));
+            assertEquals(0, continuation.arity); // Logical arity is independent of the saved stack bitmap.
+            assertThrows(RuntimeFault.class, () -> continuation.target.call(0L));
+            assertThrows(RuntimeFault.class, () -> GhcBCO.updating(new Node() {}, continuation));
+            foreign = continuation;
+            var headerAsWord = create(language, code(14,0,61), 1, words(1,1), words(), new Object[]{continuation});
+            assertTrue(assertThrows(RuntimeFault.class, () -> headerAsWord.target.call(0L, 7L)).getMessage().contains("stack marker"));
+            var headerAsPointer = create(language, code(14,0,60), 1, words(1,1), words(), new Object[]{continuation});
+            assertTrue(assertThrows(RuntimeFault.class, () -> headerAsPointer.target.call(0L, 7L)).getMessage().contains("stack marker"));
+            var boxedWord = create(language, code(11,0,61), 0, words(0), words(), new Object[]{Long.valueOf(7)});
+            assertThrows(RuntimeFault.class, () -> boxedWord.target.call(0L));
+            var rawPointer = create(language, code(25,0,1,60), 0, words(0), words(7));
+            assertThrows(RuntimeFault.class, () -> rawPointer.target.call(0L));
+            var partialPointer = create(language, code(11,0,8,0,61), 0, words(0), words(), new Object[]{new Object()});
+            assertThrows(RuntimeFault.class, () -> partialPointer.target.call(0L));
+            var wrongKind = create(language, code(14,0,25,0,1,63), 1, words(1,1), words(7), new Object[]{continuation});
+            assertTrue(assertThrows(RuntimeFault.class, () -> wrongKind.target.call(0L, 7L)).getMessage().contains("return convention"));
+            var tuple = create(language, code(38,0,1,69), 0, words(3,7));
+            var cont = create(language, code(54), 0, words(2,1));
+            var external = create(language, code(25,0,3,11,0,69), 0, words(0), words(3,11,22), new Object[]{tuple});
+            assertTrue(assertThrows(RuntimeFault.class, () -> external.target.call(0L)).getMessage().contains("checked ABI adapter"));
+            // Same physical width is insufficient: the actual register mask must match too.
+            var wrongMask = create(language, code(70,0,0,1,25,1,3,11,1,69), 0, words(0), words(3,5,11,22), new Object[]{cont,tuple});
+            assertTrue(assertThrows(RuntimeFault.class, () -> wrongMask.target.call(0L)).getMessage().contains("does not match"));
+            var wrongWidth = create(language, code(70,0,0,1), 0, words(0), words(1), new Object[]{cont,tuple});
+            assertTrue(assertThrows(RuntimeFault.class, () -> wrongWidth.target.call(0L)).getMessage().contains("descriptor disagrees"));
+            var pointerTuple = create(language, code(38,0,1,69), 0, words(3,5));
+            var wrongPayload = create(language, code(70,0,0,1,25,0,3,11,1,69), 0, words(0), words(3,11,22), new Object[]{cont,pointerTuple});
+            assertTrue(assertThrows(RuntimeFault.class, () -> wrongPayload.target.call(0L)).getMessage().contains("pointer operation"));
+            ThreadInventoryCoreEvidence.released(language);
+        } finally { context.leave(); } }
+        try (var context = context()) { context.initialize("thc"); context.enter(); try {
+            var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+            var owner = create(language, code(14,0,25,0,1,61), 1, words(1,1), words(7), new Object[]{foreign});
+            assertTrue(assertThrows(RuntimeFault.class, () -> owner.target.call(0L,7L)).getMessage().contains("another context"));
+        } finally { context.leave(); } }
+    }
+    @Test void paddedFloatUsesTheFirstFourNativeBytesAtEntryAndReturn() {
+        try (var context = context()) { context.initialize("thc"); context.enter(); try {
+            var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+            int bits = 0x7fc00042;
+            // ByteBuffer independently states the GHC Float-at-Sp, padding-after rule.
+            long padded = paddedWord(bits, 4);
+            var enter = create(language, code(61), 1, words(1,1));
+            assertEquals(padded, enter.target.call(0L, Float.intBitsToFloat(bits)));
+            var leave = create(language, code(25,0,1,62), 0, words(0), words(padded));
+            assertEquals(bits, Float.floatToRawIntBits((Float) leave.target.call(0L)));
+            var cont = create(language, code(38,0,1,38,1,2,61), 0, words(0));
+            var receive = create(language, code(15,0,25,0,1,62), 0, words(0), words(padded), new Object[]{cont});
+            assertEquals(padded, receive.target.call(0L));
         } finally { context.leave(); } }
     }
     @Test void updatingWrapperIsLazySharedAndReleasesItsCodeAfterUpdate() {

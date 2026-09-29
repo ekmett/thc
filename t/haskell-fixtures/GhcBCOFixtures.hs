@@ -30,7 +30,7 @@ prepareGhcBCO root = do
       output = root </> directory
       source = "src/examples/GhcBCO.hs"
       driver = "t/fixtures/compiler/GhcBCONative.hs"
-      entries = ["bcoConstant", "bcoApply", "bcoApplyTwo", "bcoFunction", "bcoArithmetic", "bcoBranch", "bcoLargeOperand", "bcoSharing"]
+      entries = ["bcoConstant", "bcoApply", "bcoApplyTwo", "bcoFunction", "bcoArithmetic", "bcoBranch", "bcoLargeOperand", "bcoSharing", "bcoCase", "bcoCaseNested", "bcoCasePointer", "bcoCaseFloat", "bcoCaseDouble", "bcoCaseLong", "bcoCaseVoid", "bcoPacked8", "bcoPacked16", "bcoPacked32", "bcoCaseTuple", "bcoCaseTupleCall", "bcoCaseTupleOverapply"]
       stages = ["pre", "post"]
       logs = directory </> "commands"
       native = directory </> "native"
@@ -43,7 +43,7 @@ prepareGhcBCO root = do
      "-odir", native, "-hidir", native, driver, "-o", native </> "oracle"]
   observations <- runLogged 30 root logs "native-run" [] (output </> "native/oracle") []
   let values = map (read . BSC.unpack) (BSC.lines (commandStdout observations)) :: [Integer]
-  unless (length values == 24) (die "Unexpected BCO native row count")
+  unless (length values == 3 * length entries) (die "Unexpected BCO native row count")
   artifacts <- fmap concat $ forM stages $ \stage -> do
     let core = directory </> stage </> "core"
     exported <- runLogged 180 root logs (stage ++ "-export")
@@ -75,4 +75,4 @@ prepareGhcBCO root = do
     ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String), "entries" .= entries,
      "stages" .= stages, "arguments" .= ([-2,0,7] :: [Int]), "native" .= values,
      "inputHashes" .= sourceHashes, "artifactHashes" .= artifactHashes]
-  putStrLn "ghc-bco: 24 native observations and 16 original pre/post Core audits"
+  putStrLn ("ghc-bco: " ++ show (length values) ++ " native observations and " ++ show (2 * length entries) ++ " original pre/post Core audits")
