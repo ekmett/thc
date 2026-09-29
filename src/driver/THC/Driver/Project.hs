@@ -19,7 +19,7 @@ module THC.Driver.Project
   , publishCapturedStoreUnit
   ) where
 
-import Control.Exception (evaluate, finally)
+import Control.Exception (evaluate, finally, onException)
 import Control.Monad (filterM, forM, forM_, unless, when)
 import Data.Char (isAlphaNum, isHexDigit)
 import GHC.ResponseFile (expandResponse)
@@ -48,7 +48,7 @@ import System.Exit (ExitCode(..))
 import System.Environment (getEnvironment, getExecutablePath, lookupEnv)
 import System.FilePath ((</>), (<.>), pathSeparator, isAbsolute, makeRelative, normalise, splitDirectories,
                         takeDirectory, takeExtension, joinPath, replaceExtension)
-import System.IO (IOMode(ReadMode), hClose, hGetContents,
+import System.IO (IOMode(ReadMode), hClose, hGetContents, hPutStrLn,
                   hSetEncoding, openTempFile, stderr, utf8, withBinaryFile, withFile)
 import System.IO.Error (tryIOError)
 import qualified System.Info as Host
@@ -1464,7 +1464,10 @@ captureGlobalUnits context project target planned requested missing validateInpu
         case ready of
           Just _ -> pure ()
           Nothing -> packGlobalBundle store dist capture byId unit buildKey exportKey path
-    ) `finally` cleanup
+    ) `onException` do
+      _ <- tryIOError (hPutStrLn stderr ("Cabal store capture retained after failure: " ++ staging))
+      pure ()
+  cleanup
 
 -- | Publish exactly one already captured store unit using its genuine Cabal
 -- plan, interfaces/Core and native products. No package solve, compiler replay
@@ -1539,7 +1542,18 @@ packGlobalBundle store dist capture planned unit buildKey exportKey destination 
       [] -> pure []
       [path] -> maybe [] (:[]) <$> readCOnlyProduct (unitValue dependency) path pieces
       _ -> fail "C-only dependency has ambiguous private-store registration"
-  linked <- finishPackageNativeWithDependencies dependencies pieces (capture </> unitId unit) (unitId unit) Nothing checked
+  -- Cabal has installed these units and may have deleted their temporary
+  -- intra-package DBs. Keep the recorded compiler recipe unchanged, but resolve
+  -- its native dependency closure against this completed private build.
+  let databases directory suffix = do
+        exists <- doesDirectoryExist directory
+        if not exists then pure [] else do
+          partitions <- listDirectory directory
+          filterM doesDirectoryExist [directory </> partition </> suffix | partition <- partitions]
+  storeDatabases <- databases store "package.db"
+  inplaceDatabases <- databases (dist </> "packagedb") ""
+  linked <- finishPackageNativeWithDependencies dependencies (storeDatabases ++ inplaceDatabases)
+    pieces (capture </> unitId unit) (unitId unit) Nothing checked
   let sorted = sortOn fst linked
       names = map fst sorted
   require (length names == length (nub names))

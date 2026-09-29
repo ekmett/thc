@@ -32,6 +32,7 @@ import System.IO (hClose, openTempFile)
 import System.IO.Error (tryIOError)
 import System.Process (readProcessWithExitCode)
 import Test.HUnit (Test(..), assertBool, assertEqual)
+import THC.Driver.NativeDependencies (nativeLinkInputs)
 import THC.Driver.NativeRecipe
 import THC.Driver.Installed (boundedInterfaceProcessInput)
 import THC.Driver.ScalarBitcode (withScalarBitcode)
@@ -42,6 +43,47 @@ tests = TestLabel "actual native compiler receipts" $ TestList
   [ TestCase $ do
       let args = ["-c", "cbits/a café.c", "-I/a \"quoted\" path", "-DVALUE=\\x"]
       assertEqual "GHC response quoting preserves complete arguments" args (unescapeArgs (escapeArgs args))
+  , TestLabel "published native dependencies survive removed Cabal package DBs" $ TestCase $ withScratch $ \root -> do
+      ghc <- maybe "ghc" id <$> lookupEnv "GHC"
+      compiler <- maybe (fail "GHC is required") canonicalizePath =<< findExecutable ghc
+      let ghcPkg = takeDirectory compiler </> "ghc-pkg"
+          published = root </> "published.db"
+          retained = root </> "retained.db"
+          temporary = root </> "unpacked/dist/package.conf.inplace"
+          owner = "published-native-0.1-exact"
+          dependency = "retained-native-0.1-exact"
+          invoke options input = do
+            (status, output, diagnostic) <- readProcessWithExitCode ghcPkg options input
+            assertEqual diagnostic ExitSuccess status
+            pure output
+          register database name identifier libraries dependencies = do
+            _ <- invoke ["--package-db=" ++ database, "register", "--force", "-"] $ unlines
+              ["name: " ++ name, "version: 0.1", "id: " ++ identifier, "key: " ++ identifier,
+               "exposed: True", "extra-libraries: " ++ libraries, "depends: " ++ dependencies]
+            pure ()
+      forM_ [published, retained, temporary] $ \database -> do
+        createDirectoryIfMissing True (takeDirectory database)
+        _ <- invoke ["init", database] ""
+        pure ()
+      register retained "retained-native" dependency "dependency_native" ""
+      register published "published-native" owner "owner_native" dependency
+      removePathForcibly (root </> "unpacked")
+      (status, libdirText, diagnostic) <- readProcessWithExitCode compiler ["--print-libdir"] ""
+      assertEqual diagnostic ExitSuccess status
+      libdir <- case lines libdirText of
+        [path] -> pure path
+        _ -> fail "GHC must report one library directory"
+      let arguments = ["-clear-package-db", "-global-package-db", "-package-db", retained,
+            "-package-db", temporary, "-package-id", owner, "-optl-Wl,--as-needed"]
+          resolve databases extra = nativeLinkInputs compiler libdir (root </> "unpacked")
+            databases (Just owner) (arguments ++ extra)
+      actual <- resolve [published] []
+      assertEqual "published owner and retained dependency keep native link order"
+        ["-Wl,--as-needed", "-lowner_native", "-ldependency_native"] actual
+      missing <- tryIOError (resolve [published] ["-package-id", "unpublished-native-0.1-exact"])
+      assertBool "a missing exact selected unit still fails" (isLeft missing)
+      original <- tryIOError (resolve [] [])
+      assertBool "ordinary callers do not silently discard missing databases" (isLeft original)
   , TestCase $ withScratch $ \root -> do
       let source = root </> "source"
           dist = source </> "dist"

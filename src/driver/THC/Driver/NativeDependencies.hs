@@ -57,12 +57,21 @@ import THC.Driver.NativeLibrarySources (nativeLinkOptions, nativePackageOptions,
 -- Capture external native libraries from the actual selected registration
 -- closure. Haskell archives (and therefore the native GHC RTS) are not inputs:
 -- those bodies execute as Core, while captured C objects execute in Sulong.
-nativeLinkInputs :: FilePath -> FilePath -> FilePath -> Maybe String -> [String] -> IO [String]
-nativeLinkInputs compiler libdir root owner arguments = do
+nativeLinkInputs :: FilePath -> FilePath -> FilePath -> [FilePath] -> Maybe String -> [String] -> IO [String]
+nativeLinkInputs compiler libdir root publishedDatabases owner arguments = do
   let ghcPkg = takeDirectory compiler </> "ghc-pkg"
       absolute path = if isAbsolute path then path else root </> path
-      database option = if "--package-db=" `isPrefixOf` option
-        then "--package-db=" ++ absolute (drop 13 option) else option
+      database option = case stripPrefix "--package-db=" option of
+        Nothing -> pure [option]
+        Just path -> do
+          let selected = absolute path
+          exists <- doesDirectoryExist selected
+          -- Cabal removes temporary intra-package databases after installing
+          -- their units. Publication supplies that build's surviving databases;
+          -- retain every live entry and replace the removed entry in place.
+          -- Ordinary local/installed callers still require their original stack.
+          pure (map ("--package-db=" ++)
+            (if exists || null publishedDatabases then [selected] else publishedDatabases))
       -- Cabal may already have removed its unpack directory. Resolve search
       -- paths against that original cwd, without requiring it for absolute
       -- inputs or changing detached -optl argument boundaries.
@@ -71,7 +80,8 @@ nativeLinkInputs compiler libdir root owner arguments = do
         (['-',kind] ++ absolute path) : linkPaths rest
       linkPaths (flag:rest) = flag : linkPaths rest
       linkPaths [] = []
-      databaseOptions = ["--global-package-db=" ++ libdir </> "package.conf.d"] ++ map database (nativePackageOptions arguments)
+  selectedDatabases <- concat <$> mapM database (nativePackageOptions arguments)
+  let databaseOptions = ["--global-package-db=" ++ libdir </> "package.conf.d"] ++ selectedDatabases
       visit seen [] = pure (seen,[])
       visit seen (selected@(unitId,name):rest)
         | selected `elem` seen = visit seen rest
@@ -88,7 +98,7 @@ nativeLinkInputs compiler libdir root owner arguments = do
             pure (finished,dependencies ++ [info] ++ following)
   -- A library's own extra-libraries live in its registration, not necessarily
   -- its compile-only invocation. Executables have no registration. Query this
-  -- after Cabal finishes, while dependency flags still select the exact DBs.
+  -- after Cabal finishes, selecting exact units from the surviving DB stack.
   registered <- case owner of
     Nothing -> pure []
     Just unit -> do

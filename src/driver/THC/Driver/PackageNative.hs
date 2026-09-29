@@ -743,13 +743,13 @@ stubSource value = case member value "foreign" of
         get stubs "source"
 
 finishPackageNative :: FilePath -> FilePath -> String -> Maybe [FilePath] -> [(String,BS.ByteString)] -> IO [(String,BS.ByteString)]
-finishPackageNative = finishPackageNativeWithDependencies []
+finishPackageNative = finishPackageNativeWithDependencies [] []
 
 -- | Additional products must belong to exact resolved C-only dependencies;
 -- ordinary component/root selection remains unchanged for the requesting unit.
-finishPackageNativeWithDependencies :: [COnlyProduct] -> FilePath -> FilePath -> String -> Maybe [FilePath] ->
+finishPackageNativeWithDependencies :: [COnlyProduct] -> [FilePath] -> FilePath -> FilePath -> String -> Maybe [FilePath] ->
   [(String,BS.ByteString)] -> IO [(String,BS.ByteString)]
-finishPackageNativeWithDependencies cOnlyProducts pieces directory unit currentObjects modules = do
+finishPackageNativeWithDependencies cOnlyProducts publishedDatabases pieces directory unit currentObjects modules = do
   let receipt = directory </> "native.json"
   exists <- doesFileExist receipt
   if not exists then pure modules else do
@@ -885,7 +885,7 @@ finishPackageNativeWithDependencies cOnlyProducts pieces directory unit currentO
     libdir <- command directory compiler ["--print-libdir"] >>= \output -> case lines output of
       [path] -> pure path
       _ -> fail "native compiler did not report one library directory"
-    externalArguments <- nativeLinkInputs compiler libdir root (Just unit) originalArguments
+    externalArguments <- nativeLinkInputs compiler libdir root publishedDatabases (Just unit) originalArguments
     dataLibraries <- maybe (pure []) (either fail pure . parseValue) (member record "dataLibraries") :: IO [FilePath]
     let linkArguments = dataLibraries ++ externalArguments
     clang <- tool "THC_CLANG" "clang"
