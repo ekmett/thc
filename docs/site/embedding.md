@@ -22,9 +22,7 @@ foreign export ccall "thc_add_one" addOne :: Int32 -> Int32
 foreign export ccall "thc_next" next :: Int32 -> IO Int32
 ```
 
-The repository's `ForeignExportManaged` fixture includes these declarations.
-After preparing the `interface-core` fixtures, its retained Core can be loaded
-as follows:
+For exports in module `Exports` of unit `app-unit`, load the module's CBD artifact:
 
 ```java
 import java.util.List;
@@ -34,14 +32,11 @@ import static thc.Main.loadManagedExports;
 void main() {
     try (var context = executionContext()) {
         var units = loadManagedExports(context,
-            List.of("build/interface-core/typed-foreign-exports/managed.json"));
-        var exports = units.getMember("thc-interface-fixture-0.1")
-            .getMember("ForeignExportManaged");
+            List.of("/absolute/path/to/Exports.cbd"));
+        var exports = units.getMember("app-unit").getMember("Exports");
 
-        if (exports.getMember("thc_add_one").execute(41).asInt() != 42) throw new AssertionError();
-        if (exports.getMember("thc_float").execute(1.25f).asFloat() != 2.25f) throw new AssertionError();
-        if (exports.getMember("thc_next").execute(3).asInt() != 3) throw new AssertionError();
-        if (exports.getMember("thc_next_alias").execute(4).asInt() != 7) throw new AssertionError();
+        System.out.println(exports.getMember("thc_add_one").execute(41).asInt());
+        System.out.println(exports.getMember("thc_next").execute(3).asInt());
     }
 }
 ```
@@ -89,7 +84,7 @@ import static thc.Main.loadEntry;
 void main() {
     try (var context = executionContext()) {
         var function = loadEntry(context,
-            List.of("/absolute/path/to/Module.json"), "sumLoop", true, "bytecode");
+            List.of("/absolute/path/to/Module.cbd"), "sumLoop", true, "bytecode");
         long result = function.execute(100_000L).asLong();
         System.out.println(result);
     }
@@ -157,15 +152,16 @@ For a package closure, pass a singleton list containing
 `"@/absolute/path/to/packages.json"`. Artifact hashes are checked only with
 `verifyArtifacts = true`; identity, ownership and calling-convention checks
 still apply when code is admitted. See the [manifest guide](../core-package-manifest.md).
-Individual JSON paths are a lower-level development input; assembling a list
+Individual CBD paths are a lower-level development input; assembling a list
 does not establish package support.
 
-### Indexed packages and loose inputs
+### Lazy loading and dependencies
 
-The Cabal driver writes JSON and symbol directories. Serialized `.idx` sidecars
-have been retired. [JSON navigation](../core-package-manifest.md#json-navigation-and-lazy-loading)
-can build an in-memory index while leaving eligible binding bodies unmaterialized.
-Use the request builder's `indexed` flag for explicit loose JSON inputs:
+CBD artifacts contain a binding index for
+[typed lazy loading](../core-package-manifest.md#typed-lazy-loading).
+Eligible function and thunk bodies decode and lower on first use; source and
+name maps are read only when needed. No extra indexing flag is required.
+To load a module with dependencies supplied by a package manifest:
 
 ```java
 import java.util.List;
@@ -174,17 +170,17 @@ import static thc.Main.executionContext;
 
 void main() {
     try (var context = executionContext()) {
-        String json = "/absolute/path/to/Module.json";
+        String core = "/absolute/path/to/Module.cbd";
         var request = CoreModules.request(
-            List.of(json, "@/absolute/path/to/support.json"), "sumLoop",
-            true, false, "bytecode", true, false, null, null, true);
+            List.of(core, "@/absolute/path/to/support.json"), "sumLoop",
+            true, false, "bytecode");
         var function = context.eval("thc", request);
         System.out.println(function.execute(100_000L).asLong());
     }
 }
 ```
 
-The request accepts distinct loose JSON paths and at most one `@` package
+The request accepts distinct CBD paths and at most one `@` package
 manifest. The manifest supplies dependencies without also supplying the same
 consumer module. Omit that input when no support package is needed. Deferred
 file reads remain authorized by the host request builder; guest requests cannot
@@ -194,15 +190,15 @@ For an accepted standalone `IO ()` entry, the JVM launcher accepts:
 
 ```sh
 build/install/thc/bin/thc \
-  --run-io /absolute/path/to/Main.json,@/absolute/path/to/support.json \
+  --run-io /absolute/path/to/Main.cbd,@/absolute/path/to/support.json \
   app-unit:Main.main -- app --help
 ```
 
 The literal `--` introduces `PROGRAM_NAME ARG...`; all following arguments
-belong to the guest. Whole-source hashing requires explicit artifact verification.
-Source scanning, header indexing and dependency discovery still do work during
-loading. Loading an entry does not establish support for every cold binding;
-the separate execution audit checks that scope.
+belong to the guest. Add `--verify-artifacts` before that separator to request
+artifact hashing. Normal loading checks the artifact framing and accessed
+records without scanning every binding body. Loading an entry does not establish
+support for every cold binding; the separate execution audit checks that scope.
 
 ## Execute `IO ()`
 
