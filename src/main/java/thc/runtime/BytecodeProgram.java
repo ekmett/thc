@@ -223,6 +223,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         final Map<String, JoinTarget> joins;
         final CoreSourceLocation source;
         final Map<String, AggregateLocal> tuples;
+        JoinRegion joinRegion;
 
         Scope(FunctionContext function) { this(function, null); }
         Scope(FunctionContext function, CoreSourceLocation source) {
@@ -237,10 +238,16 @@ public final class BytecodeProgram implements ExecutableProgram {
             this.tuples = tuples;
         }
         Scope child() {
-            return new Scope(function, new LinkedHashMap<>(locals), new LinkedHashMap<>(joins), source,
+            var child = new Scope(function, new LinkedHashMap<>(locals), new LinkedHashMap<>(joins), source,
                 new LinkedHashMap<>(tuples));
+            child.joinRegion = joinRegion;
+            return child;
         }
-        Scope withSource(CoreSourceLocation source) { return new Scope(function, locals, joins, source, tuples); }
+        Scope withSource(CoreSourceLocation source) {
+            var child = new Scope(function, locals, joins, source, tuples);
+            child.joinRegion = joinRegion;
+            return child;
+        }
         void bindLocal(String name, Local value) { locals.put(name, value); joins.remove(name); tuples.remove(name); }
         void bindVoid(String name, CoreRepresentation proof) {
             bindLocal(name, new Local(-1, name, false, evaluatedProof(proof, true)));
@@ -251,9 +258,20 @@ public final class BytecodeProgram implements ExecutableProgram {
         void bindJoin(String name, JoinTarget value) { joins.put(name, value); locals.remove(name); tuples.remove(name); }
     }
 
-    private static final class JoinRegion {}
+    private static final class JoinRegion {
+        final boolean recursive;
+        final JoinRegion parent;
+        final JoinRegion owner;
+        final List<JoinTarget> targets = new ArrayList<>();
+        final List<Expression> bodies = new ArrayList<>();
+        int compilingIndex = -1;
+        JoinRegion(boolean recursive, JoinRegion parent, JoinRegion owner) {
+            this.recursive = recursive; this.parent = parent; this.owner = owner == null ? this : owner;
+        }
+    }
     private record JoinTarget(JoinRegion region, int index, List<Map<String, Object>> parameters,
-        List<List<Local>> locals, boolean[] entryStrict, CoreRepresentation result) {}
+        List<List<Local>> locals, boolean[] entryStrict, CoreRepresentation result,
+        List<CapturedLocal> captures, int selectorIndex) {}
     private static final class JoinEmission {
         final BytecodeLocal selector;
         final BytecodeLabel next;
@@ -3721,9 +3739,11 @@ public final class BytecodeProgram implements ExecutableProgram {
         for (int i = 0; i < arguments.size(); ++i)
             CoreRepresentations.requireJoinArgument(CoreRepresentations.binder(target.parameters.get(i)),
                 arguments.get(i).proof());
+        // Relocation must not change the original lexical forward/backward poll decision.
+        boolean poll = target.region.recursive && target.index <= target.region.compilingIndex;
         return new ProvenExpression(new ResultExpression((e, destination) -> {
             var b = e.builder;
-            var region = e.joins.get(target.region);
+            var region = e.joins.get(target.region.owner);
             if (region == null) throw new RuntimeFault("Local join escapes its owning activation");
             b.beginBlock();
             var temporaries = new ArrayList<List<BytecodeLocal>>();
@@ -3739,12 +3759,22 @@ public final class BytecodeProgram implements ExecutableProgram {
                 }
                 temporaries.add(slots);
             }
+            var captured = new ArrayList<BytecodeLocal>();
+            for (var capture : target.captures) {
+                var temporary = b.createLocal("join capture", null);
+                b.beginStoreLocal(temporary); read(capture.source, false).emit(e); b.endStoreLocal();
+                captured.add(temporary);
+            }
             for (int i = 0; i < target.locals.size(); ++i) {
                 var fields = target.locals.get(i);
                 for (int lane = 0; lane < fields.size(); ++lane) {
                     var temporary = temporaries.get(i).get(lane);
                     restoreArgument(e, fields.get(lane), () -> b.emitLoadLocal(temporary));
                 }
+            }
+            for (int i = 0; i < target.captures.size(); ++i) {
+                b.beginStoreLocal(Objects.requireNonNull(e.locals.get(target.captures.get(i).destination.id)));
+                b.emitLoadLocal(captured.get(i)); b.endStoreLocal();
             }
             // Failed operands are not transfers. Count only after all parallel moves succeed.
             b.emitJoinTransfer(metrics);
@@ -3755,12 +3785,43 @@ public final class BytecodeProgram implements ExecutableProgram {
                 if (region.next == null || region.dispatch == null) throw new RuntimeFault("Missing recursive join continuation");
                 // One dispatcher keeps recursive cycles reducible from a saved continuation.
                 // Forward transfers retain their original behavior of skipping the async poll.
-                b.beginStoreLocal(region.selector); b.emitLoadConstant((long) target.index); b.endStoreLocal();
-                b.emitBranch(target.index > region.emittedIndex ? region.dispatch : region.next);
+                b.beginStoreLocal(region.selector); b.emitLoadConstant((long) target.selectorIndex); b.endStoreLocal();
+                b.emitBranch(poll ? region.next : region.dispatch);
             }
             if (destination == null) b.emitLoadConstant(thc.runtime.Unit.INSTANCE);
             b.endBlock();
         }), evaluatedProof(target.result, true));
+    }
+
+    /** Only one available recursive owner can absorb a forward join without a new continuation. */
+    private static JoinRegion sharedJoinOwner(Set<JoinTarget> dependencies) {
+        JoinRegion owner = null;
+        for (var dependency : dependencies) {
+            var candidate = dependency.region.owner;
+            if (!candidate.recursive) continue;
+            if (owner != null && owner != candidate) return null;
+            owner = candidate;
+        }
+        if (owner == null) return null;
+        for (var dependency : dependencies) {
+            var available = owner;
+            while (available != null && available != dependency.region.owner) available = available.parent;
+            if (available == null) return null;
+        }
+        return owner;
+    }
+
+    /** Rebind physical identities, including another lifted join's original capture sources. */
+    private static Scope capturedJoinScope(Scope scope, Map<Integer, Local> copies) {
+        var result = scope.child();
+        result.locals.replaceAll((id, local) -> copies.getOrDefault(local.id, local));
+        result.tuples.replaceAll((id, tuple) -> new AggregateLocal(tuple.proof,
+            tuple.fields.stream().map(local -> copies.getOrDefault(local.id, local)).toList()));
+        result.joins.replaceAll((id, target) -> new JoinTarget(target.region, target.index, target.parameters,
+            target.locals, target.entryStrict, target.result, target.captures.stream()
+                .map(capture -> new CapturedLocal(copies.getOrDefault(capture.source.id, capture.source), capture.destination))
+                .toList(), target.selectorIndex));
+        return result;
     }
 
     private Expression joinRegion(List<Map<String, Object>> group, List<Object> expression, boolean recursive,
@@ -3771,6 +3832,8 @@ public final class BytecodeProgram implements ExecutableProgram {
         var shadowed = new LinkedHashSet<String>();
         if (recursive) for (var definition : definitions) shadowed.add(definition.getId());
         var capturedTupleFields = new LinkedHashMap<Integer, Local>();
+        var capturedLocals = new LinkedHashMap<Integer, Local>();
+        var dependencies = new LinkedHashSet<JoinTarget>();
         for (var definition : definitions) {
             var formals = new LinkedHashSet<String>();
             for (var parameter : definition.getParameters()) {
@@ -3781,6 +3844,13 @@ public final class BytecodeProgram implements ExecutableProgram {
             }
             for (String id : CoreFreeVariables.coreFreeVariables(definition.getBody())) {
                 if (formals.contains(id) || shadowed.contains(id)) continue;
+                var captured = scope.locals.get(id);
+                if (captured != null && captured.id >= 0) capturedLocals.put(captured.id, captured);
+                var dependency = scope.joins.get(id);
+                if (dependency != null) {
+                    dependencies.add(dependency);
+                    for (var capture : dependency.captures) capturedLocals.put(capture.source.id, capture.source);
+                }
                 var tuple = scope.tuples.get(id);
                 if (tuple == null) continue;
                 CoreRepresentations.requireInput(tuple.proof);
@@ -3794,11 +3864,24 @@ public final class BytecodeProgram implements ExecutableProgram {
                     if (previous != null && !TupleShape.compatible(previous.proof, field.proof))
                         throw new RuntimeFault("Tuple join captures disagree on a shared physical slot");
                     capturedTupleFields.put(field.id, field);
+                    capturedLocals.put(field.id, field);
                 }
             }
         }
-        var region = new JoinRegion();
+        // The enclosing Core validation requires all references to its joins to be
+        // tail calls. Such a NonRec shares that owner's return continuation, not
+        // merely its result representation. Ambiguous dependencies stay local.
+        var owner = recursive ? null : sharedJoinOwner(dependencies);
+        var region = new JoinRegion(recursive, scope.joinRegion, owner);
+        var captures = new ArrayList<CapturedLocal>();
+        var copies = new LinkedHashMap<Integer, Local>();
+        if (owner != null) for (var source : capturedLocals.values()) {
+            var copy = new Local(nextLocal++, source.name, source.primitive, source.proof,
+                source.cell, source.entry, source.arityCertificate);
+            copies.put(source.id, copy); captures.add(new CapturedLocal(source, copy));
+        }
         var local = scope.child();
+        local.joinRegion = region;
         var targets = new ArrayList<JoinTarget>();
         for (int i = 0; i < definitions.size(); ++i) {
             var definition = definitions.get(i);
@@ -3819,7 +3902,9 @@ public final class BytecodeProgram implements ExecutableProgram {
                     proof.getPresent() ? proof.isLong() : !representation(parameter) && !Boolean.TRUE.equals(parameter.get("coercion")), proof));
                 parameters.add(fields);
             }
-            var target = new JoinTarget(region, i, definition.getParameters(), parameters, entryStrict, definition.getResult());
+            var target = new JoinTarget(region, i, definition.getParameters(), parameters, entryStrict,
+                definition.getResult(), captures, region.owner.targets.size());
+            region.owner.targets.add(target); region.owner.bodies.add(null);
             targets.add(target);
             local.bindJoin(definition.getId(), target);
         }
@@ -3827,7 +3912,8 @@ public final class BytecodeProgram implements ExecutableProgram {
         var bodies = new ArrayList<Expression>();
         for (int i = 0; i < definitions.size(); ++i) {
             var definition = definitions.get(i);
-            var bodyScope = (recursive ? local : scope).child();
+            var bodyScope = owner == null ? (recursive ? local : scope).child() : capturedJoinScope(scope, copies);
+            bodyScope.joinRegion = region;
             var parameters = targets.get(i).locals;
             for (int index = 0; index < parameters.size(); ++index) {
                 var fields = parameters.get(index);
@@ -3839,9 +3925,12 @@ public final class BytecodeProgram implements ExecutableProgram {
                     bodyScope.bindLocal(fields.getFirst().name, fields.getFirst());
                 }
             }
+            region.compilingIndex = i;
             var body = compile(definition.getBody(), bodyScope.withSource(sources.binding(definition.getBinding(), scope.source)), tail);
-            bodies.add(new ProvenExpression(body, body.proof().refine(evaluatedProof(definition.getResult(), false))));
+            var proven = new ProvenExpression(body, body.proof().refine(evaluatedProof(definition.getResult(), false)));
+            bodies.add(proven); region.owner.bodies.set(targets.get(i).selectorIndex, proven);
         }
+        region.compilingIndex = -1;
         var entry = compile(expression, local, tail);
         var proof = entry.proof().refine(evaluatedProof(CoreRepresentations.expression(expression), false));
         for (var body : bodies) TupleShape.requireCompatible(proof, body.proof(), false);
@@ -3849,12 +3938,23 @@ public final class BytecodeProgram implements ExecutableProgram {
             if (proof.isTypedTransport() != (destination != null)) throw new RuntimeFault("Join result destination disagrees with its representation");
             for (var field : capturedTupleFields.values())
                 if (!e.locals.containsKey(field.id)) throw new RuntimeFault("Tuple join capture escaped its lexical slots");
+            if (owner != null) {
+                // Definitions are inert. Their entry stays at its original source
+                // position; only transfers enter the common owner's dispatcher.
+                emitResult(entry, e, destination);
+                return;
+            }
             var b = e.builder;
             b.beginBlock();
             var result = destination == null ? b.createLocal("join result", null) : null;
             var selector = recursive ? b.createLocal("join selector", "primitive") : null;
             var exit = b.createLabel();
-            for (var target : targets) for (var fields : target.locals) for (var field : fields)
+            var storage = new LinkedHashMap<Integer, Local>();
+            for (var target : region.targets) {
+                for (var fields : target.locals) for (var field : fields) storage.put(field.id, field);
+                for (var capture : target.captures) storage.put(capture.destination.id, capture.destination);
+            }
+            for (var field : storage.values())
                 e.locals.put(field.id, b.createLocal(field.name, field.primitive ? "primitive" : "object"));
             if (selector != null) {
                 b.beginStoreLocal(selector); b.emitLoadConstant(-1L); b.endStoreLocal();
@@ -3863,10 +3963,10 @@ public final class BytecodeProgram implements ExecutableProgram {
             var next = recursive ? b.createLabel() : null;
             var dispatch = recursive ? b.createLabel() : null;
             var labels = new ArrayList<BytecodeLabel>();
-            for (var ignored : targets) labels.add(b.createLabel());
+            for (var ignored : region.targets) labels.add(b.createLabel());
             var active = new JoinEmission(selector, next, dispatch, labels);
             e.joins.put(region, active);
-            if (selector != null) for (int i = 0; i < targets.size(); ++i) {
+            if (selector != null) for (int i = 0; i < region.targets.size(); ++i) {
                 b.beginIfThen();
                 b.beginMatchLiteral((long) i); b.emitLoadLocal(selector); b.endMatchLiteral();
                 b.emitBranch(labels.get(i));
@@ -3875,10 +3975,11 @@ public final class BytecodeProgram implements ExecutableProgram {
             if (result != null) { b.beginStoreLocal(result); entry.emit(e); b.endStoreLocal(); }
             else entry.emitTuple(e, Objects.requireNonNull(destination));
             b.emitBranch(exit);
-            for (int i = 0; i < targets.size(); ++i) {
+            for (int i = 0; i < region.targets.size(); ++i) {
                 b.emitLabel(labels.get(i)); active.emittedIndex = i;
-                if (result != null) { b.beginStoreLocal(result); bodies.get(i).emit(e); b.endStoreLocal(); }
-                else bodies.get(i).emitTuple(e, Objects.requireNonNull(destination));
+                TupleShape.requireCompatible(proof, region.bodies.get(i).proof(), false);
+                if (result != null) { b.beginStoreLocal(result); region.bodies.get(i).emit(e); b.endStoreLocal(); }
+                else region.bodies.get(i).emitTuple(e, Objects.requireNonNull(destination));
                 b.emitBranch(exit);
             }
             if (next != null) {
@@ -3891,7 +3992,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             if (result != null) b.emitLoadLocal(result);
             b.endBlock();
             e.joins.remove(region);
-            for (var target : targets) for (var fields : target.locals) for (var field : fields) e.locals.remove(field.id);
+            for (var field : storage.values()) e.locals.remove(field.id);
         }), evaluatedProof(proof, entry.proof().getEvaluated() && allEvaluated(bodies)));
     }
 

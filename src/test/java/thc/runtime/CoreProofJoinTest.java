@@ -113,6 +113,42 @@ class CoreProofJoinTest {
         var outer = choose(prim("==#", v("iteration"), n(5)), v("trace"), next);
         var body = let(true, List.of(bind("outer", lam(List.of("iteration", "trace"), outer), 2)),
                 call("outer", n(1), n(0)));
+        assertSavedJoinResume(body, 3, 10L, 21212122121212L, 19L);
+    }
+
+    @Test void savedNonrecursiveJoinsInsideRecursiveRegionCompileWithPendingOperand() throws Exception {
+        var state = map("kind", "void", "primReps", list(), "evaluated", true);
+        var pause = list("app", list("prim", "noDuplicate#"), list(list("void", meta(state))),
+                list(false), false, false, meta(state));
+        var afterPause = list("case", pause,
+                "paused", list(list("default", null, list(), n(2))), with(meta(), "binder",
+                        map("id", "paused", "name", "paused", "lifted", false, "rep", state)));
+        // Each NonRec has one binding. A can see its lexical ancestor B; B returns
+        // to the enclosing recursive loop, so both forward joins lie in its cycle.
+        var b = call("outer", prim("+#", v("lexicalIteration"), n(1)),
+                prim("+#", prim("*#", v("traceB"), n(10)), n(2)));
+        var a = call("b", prim("+#", prim("*#", v("traceA"), n(10)), n(1)));
+        var pausedEntry = choose(prim("==#", prim("+#", n(40), afterPause), n(42)),
+                choose(prim("==#", prim("remInt#", v("iteration"), n(2)), n(0)),
+                        call("a", v("trace")), call("b", v("trace"))), n(-1));
+        // The first two iterations take both post-pause arms; the third bypasses it.
+        var selected = choose(prim("==#", v("iteration"), n(3)), call("a", v("trace")), pausedEntry);
+        var entry = list("case", call("arm", v("iteration")), "armed",
+                list(list("default", null, list(), selected)), with(meta(), "binder", arg("armed")));
+        var inner = let(false, List.of(bind("b", lam(List.of("traceB"), b), 1)),
+                let(false, List.of(bind("a", lam(List.of("traceA"), a), 1)), entry));
+        // Only B names this case-bound local; A must retain B's original capture
+        // source by physical identity when its own body is lifted out of the case.
+        var captured = list("case", prim("+#", v("iteration"), n(0)), "lexicalIteration",
+                list(list("default", null, list(), inner)), with(meta(), "binder", arg("lexicalIteration")));
+        var outer = choose(prim("==#", v("iteration"), n(6)), v("trace"), captured);
+        var body = let(true, List.of(bind("outer", lam(List.of("iteration", "trace"), outer), 2)),
+                call("outer", n(1), n(0)));
+        assertSavedJoinResume(body, 4, 9L, 21212122L, 14L);
+    }
+
+    private void assertSavedJoinResume(List<Object> body, int captureIteration, long transfersBeforeResume,
+            long expectedTrace, long transfersAfterResume) throws Exception {
         try (var context = org.graalvm.polyglot.Context.newBuilder("thc").allowExperimentalOptions(true)
                 .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
                 .option("engine.CompilationFailureAction", "Throw")
@@ -126,7 +162,7 @@ class CoreProofJoinTest {
                 var arm = new Closure(null, 1, new RootNode(language) {
                     @Override public Object execute(VirtualFrame frame) {
                         effects.incrementAndGet();
-                        checkpoint.setArmed((Long) frame.getArguments()[1] == 3L);
+                        checkpoint.setArmed((Long) frame.getArguments()[1] == captureIteration);
                         return 0L;
                     }
                 }.getCallTarget());
@@ -139,8 +175,8 @@ class CoreProofJoinTest {
                 root.getBytecodeNode().ensureSourceInformation();
                 var first = assertInstanceOf(ContinuationResult.class, Calls.target(root.getCallTarget(), new Object[]{0L, arm}));
                 assertSame(Unit.INSTANCE, first.getResult());
-                assertEquals(1, checkpoint.getVisits().get()); assertEquals(3, effects.get());
-                assertEquals(10L, program.diagnostics().get("localJoinTransfers"), "both entry paths precede capture exactly once");
+                assertEquals(1, checkpoint.getVisits().get()); assertEquals(captureIteration, effects.get());
+                assertEquals(transfersBeforeResume, program.diagnostics().get("localJoinTransfers"), "both entry paths precede capture exactly once");
                 var frame = first.getFrame(); var continuation = first.getContinuationRootNode();
                 int pc = continuation.getLocation().getBytecodeIndex();
                 root.getRootNodes().ensureSourceInformation();
@@ -150,13 +186,13 @@ class CoreProofJoinTest {
                 var target = (com.oracle.truffle.runtime.OptimizedCallTarget) first.getContinuationCallTarget();
                 assertTrue(target.compile(true)); assertTrue(target.isValidLastTier());
                 assertEquals(1, checkpoint.getVisits().get(), "compilation must not execute a guest prefix");
-                assertEquals(0, checkpoint.getCompiledVisits().get()); assertEquals(3, effects.get());
+                assertEquals(0, checkpoint.getCompiledVisits().get()); assertEquals(captureIteration, effects.get());
                 ((com.oracle.truffle.runtime.OptimizedTruffleRuntime) com.oracle.truffle.api.Truffle.getRuntime()).bypassedInstalledCode(target);
-                assertEquals(21212122121212L, first.continueWith(Unit.INSTANCE));
-                assertSame(frame, first.getFrame()); assertEquals(4, effects.get());
+                assertEquals(expectedTrace, first.continueWith(Unit.INSTANCE));
+                assertSame(frame, first.getFrame()); assertEquals(captureIteration + 1, effects.get());
                 assertEquals(1, checkpoint.getVisits().get());
-                assertEquals(1, checkpoint.getCompiledVisits().get(), "first installed resume executes the fourth iteration checkpoint");
-                assertEquals(19L, program.diagnostics().get("localJoinTransfers"), "all recursive transfers execute once");
+                assertEquals(1, checkpoint.getCompiledVisits().get(), "first installed resume executes the next iteration checkpoint");
+                assertEquals(transfersAfterResume, program.diagnostics().get("localJoinTransfers"), "all join transfers execute once");
                 assertSame(continuation, first.getContinuationRootNode()); assertSame(target, first.getContinuationCallTarget());
                 assertSame(root, continuation.getSourceRootNode());
                 assertSame(location.getBytecodeNode(), continuation.getLocation().getBytecodeNode());
