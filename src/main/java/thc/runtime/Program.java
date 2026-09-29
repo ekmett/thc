@@ -36,6 +36,8 @@ public final class Program implements ExecutableProgram {
     private final RubbishLiterals rubbishLiterals;
     private final List<thc.ForeignBitcode> foreignLinks;
     private final List<thc.PackageScalarLink> packageScalarLinks;
+    private final List<PackageScalarCall> packageCalls;
+    private final PackageScalarFunction[] packageFunctions;
     private final Map<String,thc.ManagedCallbackSignature> nativeCallbacks;
     private final Object stackTargetLayout;
     private final boolean callDemandsEnabled = Boolean.getBoolean(CALL_DEMANDS_PROPERTY);
@@ -98,6 +100,8 @@ public final class Program implements ExecutableProgram {
         rubbishLiterals = new RubbishLiterals(language);
         foreignLinks = moduleData.get("foreignLinks") instanceof List<?> found ? (List<thc.ForeignBitcode>) found : List.of();
         packageScalarLinks = moduleData.get("packageScalarLinks") instanceof List<?> found ? (List<thc.PackageScalarLink>) found : List.of();
+        packageCalls = reusableCode && prepared == null ? new ArrayList<>() : List.of();
+        packageFunctions = prepared == null ? null : new PackageScalarFunction[prepared.packageCalls.size()];
         nativeCallbacks = moduleData.get("nativeCallbacks") instanceof Map<?,?> found ? (Map<String,thc.ManagedCallbackSignature>) found : Map.of();
         stackTargetLayout = moduleData.get("targetLayout");
         metrics = demand != null ? demand.getMetrics() : new Metrics(!Boolean.FALSE.equals(moduleData.get("instrument")));
@@ -161,6 +165,13 @@ public final class Program implements ExecutableProgram {
                     () -> { throw new UnsupportedCore("Binding was not prepared for reusable execution: " + id); });
                 else { required(globals, id).initialize(code.instantiate(this)); initializedBindingCount++; }
             }
+            // The loader has linked these declarations in the current State.
+            // Resolve receivers only for this instance, never in shared nodes
+            // or while preparing the code. Resolution invokes no guest call.
+            for (int i = 0; i < packageFunctions.length; i++) {
+                PackageScalarCall call = prepared.packageCalls.get(i);
+                packageFunctions[i] = contextOwner.getPackageCbits().resolve(call.getLink(), call.getSignature());
+            }
             return;
         }
         List<Map<String, Object>> eager = new ArrayList<>();
@@ -208,14 +219,23 @@ public final class Program implements ExecutableProgram {
      * Unselected definitions stay unprepared. Context sharing and AOT preparation remain separate. */
     public static PreparedCode prepareCode(TruffleLanguage<?> language, Map<String, Object> module, List<String> entries) {
         if (language != LANGUAGES.get(null)) throw new UnsupportedCore("Reusable AST preparation requires the current language");
-        if (module.containsKey("demandBindings") || !absentOrEmpty(module.get("foreignLinks")) || !absentOrEmpty(module.get("packageScalarLinks")) ||
-                !absentOrEmpty(module.get("nativeCallbacks")) || module.get("selectedForeignExceptionBridge") != null)
-            throw new UnsupportedCore("Reusable AST admission currently requires a foreign-free, non-demand-loaded module");
+        if (module.containsKey("demandBindings") || !absentOrEmpty(module.get("nativeCallbacks")))
+            throw new UnsupportedCore("Reusable AST admission requires detached modules without native callback labels");
         // Validate with the real module descriptors, retaining only storage
         // metadata for constructors actually reached during selected lowering.
         Program builder = new Program(language, module, false, false, false, true, null);
         Map<String, CodeValue> values = new LinkedHashMap<>();
         ArrayDeque<String> pending = new ArrayDeque<>(entries);
+        if (module.get("selectedForeignExceptionBridge") instanceof Map<?,?> bridge) {
+            for (String helper : List.of("box", "project")) {
+                if (!(bridge.get(helper) instanceof String id) || !builder.globals.containsKey(id))
+                    throw new UnsupportedCore("Reusable foreign exception helper is absent: " + helper);
+                pending.add(id);
+            }
+        }
+        List<thc.ManagedExportAdmission> registrations = module.get("managedRegistrations") instanceof List<?> found
+            ? List.copyOf((List<thc.ManagedExportAdmission>) found) : List.of();
+        for (var registration : registrations) for (var export : registration.getExports()) pending.add(export.getBinder());
         while (!pending.isEmpty()) {
             Map<String,Object> binding = builder.bindings.get(builder.bindingIndex(pending.removeFirst()));
             String id = (String) binding.get("id");
@@ -231,9 +251,16 @@ public final class Program implements ExecutableProgram {
             headers.add(Map.of("id", binding.get("id"), "name", binding.get("name"),
                 "lifted", builder.representation(binding), "expr", List.of("void")));
         }
-        return new PreparedCode(Map.of("bindings", List.copyOf(headers), "constructors", List.of(),
-            "instrument", builder.metrics.getEnabled()), Map.copyOf(values), List.copyOf(builder.codeTargets),
-            builder.dataLayouts.values().stream().map(DataLayout::reusableStorage).toList(), builder.codeIdentity, language);
+        Map<String,Object> declarations = new LinkedHashMap<>();
+        declarations.put("bindings", List.copyOf(headers)); declarations.put("constructors", List.of());
+        declarations.put("instrument", builder.metrics.getEnabled());
+        declarations.put("foreignLinks", List.copyOf(builder.foreignLinks));
+        declarations.put("packageScalarLinks", List.copyOf(builder.packageScalarLinks));
+        if (module.get("selectedForeignExceptionBridge") instanceof Map<?,?> bridge)
+            declarations.put("selectedForeignExceptionBridge", Map.copyOf(bridge));
+        return new PreparedCode(Map.copyOf(declarations), Map.copyOf(values), List.copyOf(builder.codeTargets),
+            builder.dataLayouts.values().stream().map(DataLayout::reusableStorage).toList(),
+            List.copyOf(builder.packageCalls), registrations, builder.codeIdentity, language);
     }
     private static boolean absentOrEmpty(Object value) { return value == null || value instanceof List<?> list && list.isEmpty() || value instanceof Map<?,?> map && map.isEmpty(); }
     public static final class PreparedCode {
@@ -241,12 +268,19 @@ public final class Program implements ExecutableProgram {
         private final Map<String, CodeValue> values;
         private final List<RootCallTarget> targets;
         private final List<DataLayout.Reusable> layouts;
+        private final List<PackageScalarCall> packageCalls;
+        private final List<thc.ManagedExportAdmission> managedRegistrations;
         private final Object identity;
         private final TruffleLanguage<?> language;
         private PreparedCode(Map<String, Object> module, Map<String, CodeValue> values, List<RootCallTarget> targets, List<DataLayout.Reusable> layouts,
+                             List<PackageScalarCall> packageCalls, List<thc.ManagedExportAdmission> managedRegistrations,
                              Object identity, TruffleLanguage<?> language) {
             this.module = module; this.values = values; this.targets = targets; this.layouts = layouts; this.identity = identity; this.language = language;
+            this.packageCalls = packageCalls; this.managedRegistrations = managedRegistrations;
         }
+        public List<thc.ForeignBitcode> getForeignLinks() { return (List<thc.ForeignBitcode>) module.get("foreignLinks"); }
+        public List<thc.PackageScalarLink> getPackageScalarLinks() { return (List<thc.PackageScalarLink>) module.get("packageScalarLinks"); }
+        public List<thc.ManagedExportAdmission> getManagedRegistrations() { return managedRegistrations; }
         public Program newInstance(TruffleLanguage<?> language) {
             if (language != this.language || language != LANGUAGES.get(null))
                 throw new UnsupportedCore("Reusable AST instance requires its prepared and current language");
@@ -371,6 +405,8 @@ public final class Program implements ExecutableProgram {
     }
     private Metrics codeMetrics() { return reusableCode ? null : metrics; }
     Metrics instanceMetrics() { return metrics; }
+    PackageScalarFunction packageFunction(int index) { return packageFunctions[index]; }
+    ForeignExceptionBridge foreignExceptionBridge() { return foreignExceptionBridge; }
     Object readGlobal(int index) { return indexedGlobals[index].read(); }
     DataLayout constructorLayout(int index) { return indexedLayouts[index]; }
     boolean usesCode(Object identity) { return codeIdentity == identity; }
@@ -1745,6 +1781,12 @@ public final class Program implements ExecutableProgram {
             for (int i = 0; i < operands.length; i++) {
                 operands[i] = compile(args.get(i), scope, false);
                 CorePackageScalarForeign.validateOperand(packageScalar, i, operands[i].getRepresentation(), bindingProof(args.get(i), scope));
+            }
+            if (reusableCode) {
+                if (packageScalar.getKind() != PackageScalarCall.Kind.STATIC)
+                    throw new UnsupportedCore("Reusable AST native callback/dynamic labels are not prepared");
+                int index = packageCalls.size(); packageCalls.add(packageScalar);
+                return new PackageScalarExpression(packageScalar, operands, tupleProof, scope.programSlot, index);
             }
             return new PackageScalarExpression(packageScalar, operands, tupleProof);
         }

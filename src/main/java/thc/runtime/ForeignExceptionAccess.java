@@ -48,8 +48,11 @@ public final class ForeignExceptionAccess extends Node {
     /** Called after carrier permission and pointer borrows have been restored,
      * before an opaque Throwable could pass through Force's failure memoization. */
     @TruffleBoundary public RuntimeException raise(AbstractTruffleException error) {
-        var owner = Language.currentState(this);
         var bridge = getRootNode() instanceof GuestRoot root ? root.getForeignExceptionBridge() : null;
+        return raise(error, bridge);
+    }
+    @TruffleBoundary public RuntimeException raise(AbstractTruffleException error, ForeignExceptionBridge bridge) {
+        var owner = Language.currentState(this);
         if (bridge == null || owner.getForeignExceptionNormalization().get() || !eligible(error)) throw error;
         var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], descriptor);
         var flag = Language.currentState(this).getForeignExceptionNormalization();

@@ -8,10 +8,15 @@ import static thc.runtime.RuntimeFault.fault;
 
 public final class PackageScalarExpression extends Expr {
     private final PackageScalarCall call;
+    private final int programSlot;
     @Children private Expr[] operands;
     @Child private PackageScalarAccess access;
     public PackageScalarExpression(PackageScalarCall call, Expr[] operands, CoreRepresentation proof) {
-        this.call = call; this.operands = operands; access = new PackageScalarAccess(call);
+        this(call, operands, proof, -1, -1);
+    }
+    public PackageScalarExpression(PackageScalarCall call, Expr[] operands, CoreRepresentation proof, int programSlot, int functionIndex) {
+        this.call = call; this.operands = operands; this.programSlot = programSlot;
+        access = new PackageScalarAccess(call, functionIndex);
         setRepresentation(new CoreRepresentation(proof.getKind(), true, proof.getPresent(), proof.getPrimReps(), proof.getComponents(),
             proof.getVector(), proof.getAlternatives(), proof.getTagSlot(), proof.getAlternativeSlots()));
     }
@@ -27,13 +32,14 @@ public final class PackageScalarExpression extends Expr {
             default -> throw fault("Invalid package C operand");
         };
         Object state = operands[operands.length - 1].execute(frame);
+        Program instance = programSlot < 0 ? null : Program.instance(frame, programSlot);
         switch (call.getResult()) {
-            case "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep", "Int32Rep", "Word32Rep" -> FrameAccess.writeInt(frame, slots[offset], access.executeInt(values, state));
-            case "IntRep", "WordRep", "Int64Rep", "Word64Rep" -> FrameAccess.writeLong(frame, slots[offset], access.executeLong(values, state));
-            case "FloatRep" -> FrameAccess.writeFloat(frame, slots[offset], access.executeFloat(values, state));
-            case "DoubleRep" -> FrameAccess.writeDouble(frame, slots[offset], access.executeDouble(values, state));
-            case "AddrRep" -> FrameAccess.write(frame, slots[offset], access.executeAddress(values, state));
-            case "void" -> access.executeVoid(values, state);
+            case "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep", "Int32Rep", "Word32Rep" -> FrameAccess.writeInt(frame, slots[offset], access.executeInt(values, state, instance));
+            case "IntRep", "WordRep", "Int64Rep", "Word64Rep" -> FrameAccess.writeLong(frame, slots[offset], access.executeLong(values, state, instance));
+            case "FloatRep" -> FrameAccess.writeFloat(frame, slots[offset], access.executeFloat(values, state, instance));
+            case "DoubleRep" -> FrameAccess.writeDouble(frame, slots[offset], access.executeDouble(values, state, instance));
+            case "AddrRep" -> FrameAccess.write(frame, slots[offset], access.executeAddress(values, state, instance));
+            case "void" -> access.executeVoid(values, state, instance);
             default -> throw fault("Invalid package C result");
         }
         if (call.getSafety() == ForeignSafety.SAFE) AstForeignCompleted.poll(this);
