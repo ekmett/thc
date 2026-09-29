@@ -125,6 +125,8 @@ public final class InteropAccess extends Node {
                         case UNBOX_JAVA_LONG -> library.asLong(receiver);
                         case UNBOX_JAVA_FLOAT -> library.asFloat(receiver);
                         case UNBOX_JAVA_DOUBLE -> library.asDouble(receiver);
+                        case IS_STRING -> library.isString(receiver) ? 1L : 0L;
+                        case AS_TRUFFLE_STRING -> library.asTruffleString(receiver);
                         default -> throw new AssertionError(operation);
                     };
                 } catch (InteropException failure) { throw InteropFailure.create(failure); }

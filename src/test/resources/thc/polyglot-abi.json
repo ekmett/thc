@@ -3,6 +3,127 @@
   "convention": "prim",
   "safety": "safe",
   "operations": {
+    "thc_string_v1_encoding": {
+      "arguments": ["IntRep"],
+      "scalar": true, "result": ["BoxedRep (Just Unlifted)"], "exceptionBridge": false
+    },
+    "thc_string_v1_from_bytes": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","IntRep","IntRep"],
+      "scalar": true, "result": ["BoxedRep (Just Unlifted)"], "exceptionBridge": false,
+      "argumentTypes": [null,"ByteArray#",null,null]
+    },
+    "thc_string_v1_to_bytes": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)"],
+      "scalar": true, "result": ["BoxedRep (Just Unlifted)"], "exceptionBridge": false
+    },
+    "thc_string_v1_from_code_point": {
+      "arguments": ["BoxedRep (Just Unlifted)","IntRep"],
+      "scalar": true, "result": ["BoxedRep (Just Unlifted)"], "exceptionBridge": false
+    },
+    "thc_string_v1_from_int64": {
+      "arguments": ["BoxedRep (Just Unlifted)","Int64Rep"],
+      "scalar": true, "result": ["BoxedRep (Just Unlifted)"], "exceptionBridge": false
+    },
+    "thc_string_v1_byte_length": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)"],
+      "scalar": true, "result": ["IntRep"], "exceptionBridge": false
+    },
+    "thc_string_v1_code_point_length": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)"],
+      "scalar": true, "result": ["IntRep"], "exceptionBridge": false
+    },
+    "thc_string_v1_is_valid": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)"],
+      "scalar": true, "result": ["IntRep"], "exceptionBridge": false
+    },
+    "thc_string_v1_read_byte": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","IntRep"],
+      "scalar": true, "result": ["IntRep"], "exceptionBridge": false
+    },
+    "thc_string_v1_code_point_at": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","IntRep"],
+      "scalar": true, "result": ["IntRep"], "exceptionBridge": false
+    },
+    "thc_string_v1_code_point_at_byte": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","IntRep"],
+      "scalar": true, "result": ["IntRep"], "exceptionBridge": false
+    },
+    "thc_string_v1_code_point_byte_length": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","IntRep"],
+      "scalar": true, "result": ["IntRep"], "exceptionBridge": false
+    },
+    "thc_string_v1_byte_to_code_point": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","IntRep","IntRep"],
+      "scalar": true, "result": ["IntRep"], "exceptionBridge": false
+    },
+    "thc_string_v1_code_point_to_byte": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","IntRep","IntRep"],
+      "scalar": true, "result": ["IntRep"], "exceptionBridge": false
+    },
+    "thc_string_v1_equal": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)"],
+      "scalar": true, "result": ["IntRep"], "exceptionBridge": false
+    },
+    "thc_string_v1_compare_bytes": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)"],
+      "scalar": true, "result": ["IntRep"], "exceptionBridge": false
+    },
+    "thc_string_v1_hash": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)"],
+      "scalar": true, "result": ["IntRep"], "exceptionBridge": false
+    },
+    "thc_string_v1_index_of_code_point": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","IntRep","IntRep","IntRep"],
+      "scalar": true, "result": ["IntRep"], "exceptionBridge": false
+    },
+    "thc_string_v1_byte_index_of_code_point": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","IntRep","IntRep","IntRep"],
+      "scalar": true, "result": ["IntRep"], "exceptionBridge": false
+    },
+    "thc_string_v1_index_of_string": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","IntRep","IntRep"],
+      "scalar": true, "result": ["IntRep"], "exceptionBridge": false
+    },
+    "thc_string_v1_byte_index_of_string": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","IntRep","IntRep"],
+      "scalar": true, "result": ["IntRep"], "exceptionBridge": false
+    },
+    "thc_string_v1_substring": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","IntRep","IntRep"],
+      "scalar": true, "result": ["BoxedRep (Just Unlifted)"], "exceptionBridge": false
+    },
+    "thc_string_v1_substring_bytes": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","IntRep","IntRep"],
+      "scalar": true, "result": ["BoxedRep (Just Unlifted)"], "exceptionBridge": false
+    },
+    "thc_string_v1_concat": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)"],
+      "scalar": true, "result": ["BoxedRep (Just Unlifted)"], "exceptionBridge": false
+    },
+    "thc_string_v1_repeat": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","IntRep"],
+      "scalar": true, "result": ["BoxedRep (Just Unlifted)"], "exceptionBridge": false
+    },
+    "thc_string_v1_switch_encoding": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)"],
+      "scalar": true, "result": ["BoxedRep (Just Unlifted)"], "exceptionBridge": false
+    },
+    "thc_string_v1_parse_int64": {
+      "arguments": ["BoxedRep (Just Unlifted)","IntRep"],
+      "scalar": true, "result": ["Int64Rep"], "exceptionBridge": false
+    },
+    "thc_string_v1_parse_double": {
+      "arguments": ["BoxedRep (Just Unlifted)"],
+      "scalar": true, "result": ["DoubleRep"], "exceptionBridge": false
+    },
+    "thc_interop_v1_is_string": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","State# RealWorld"],
+      "result": ["State# RealWorld","IntRep"]
+    },
+    "thc_interop_v1_as_truffle_string": {
+      "arguments": ["BoxedRep (Just Unlifted)","BoxedRep (Just Unlifted)","State# RealWorld"],
+      "result": ["State# RealWorld","BoxedRep (Just Unlifted)"]
+    },
     "thc_interop_v1_get_library": {
       "arguments": ["BoxedRep (Just Unlifted)"],
       "scalar": true, "result": ["BoxedRep (Just Unlifted)"]

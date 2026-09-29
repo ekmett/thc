@@ -215,6 +215,7 @@ tasks.withType(Test).configureEach {
     inputs.files(fileTree(layout.buildDirectory) {
         include(["core/**/*.json", "source-core/**/*.json", "cbv-post-core/**/*.json",
             "vector-api/core/**/*.json", "vector-api/*.tsv", "java-arrays/core/**/*.json", "java-arrays/packages.json",
+            "truffle-strings/core/**/*.json", "truffle-strings/oracle.json", "truffle-strings/manifest.json", "truffle-strings/native/oracle",
             "floating/core/**/*.json", "floating/checks.json", "floating/oracle.tsv",
             "word-floating/**/*.json", "word-floating/oracle.tsv",
             "fused-floating/**/*.json", "fused-floating/oracle.tsv",
@@ -478,7 +479,7 @@ tasks.withType(Test).configureEach {
     testLogging { events("failed", "skipped", "passed") }
 }
 tasks.test {
-    useJUnitPlatform { excludeTags("jit-stability", "simd-families-experiment", "foreign-exceptions-full-core") }
+    useJUnitPlatform { excludeTags("jit-stability", "simd-families-experiment", "foreign-exceptions-full-core", "truffle-strings-full-core") }
 }
 // Both forks consume the same testClasses/runtimeClasspath task graph. Native
 // compilation and ABI probes remain fresh, but execute only once per invocation.
@@ -489,7 +490,7 @@ def handoffModeTests = [["testDefault", false],[ "testDense", true]].collect { t
         description = "Runs the ordinary test inventory with ${dense ? "dense" : "default"} handoffs."
         testClassesDirs = sourceSets.test.output.classesDirs
         classpath = sourceSets.test.runtimeClasspath
-        useJUnitPlatform { excludeTags("jit-stability", "simd-families-experiment", "foreign-exceptions-full-core") }
+        useJUnitPlatform { excludeTags("jit-stability", "simd-families-experiment", "foreign-exceptions-full-core", "truffle-strings-full-core") }
         systemProperty("thc.handoffSlabs", dense.toString())
         systemProperty("thc.expectedHandoffSlabs", dense.toString())
         maxParallelForks = 1
@@ -1163,6 +1164,28 @@ foreignExceptionTests[1].configure { mustRunAfter(foreignExceptionTests[0]) }
         }
     }
 }
+// Genuine numeric catch needs installed Core, independently of thin string fixtures.
+def stringExceptionTests = [["truffleStringExceptionTest", false], ["truffleStringExceptionDenseTest", true]].collect { taskName, dense ->
+    tasks.register(taskName, Test) {
+        group = "verification"
+        description = "Tests native string parsing through genuine Haskell exception handlers."
+        testClassesDirs = sourceSets.test.output.classesDirs
+        classpath = sourceSets.test.runtimeClasspath
+        useJUnitPlatform { includeTags("truffle-strings-full-core") }
+        filter { includeTestsMatching("thc.runtime.TruffleStringExceptionTest") }
+        systemProperty("thc.handoffSlabs", dense.toString())
+        systemProperty("thc.expectedHandoffSlabs", dense.toString())
+        maxParallelForks = 1
+        outputs.upToDateWhen { false }
+        doFirst {
+            checkBuild(file("build/truffle-strings/manifest.json").isFile()) { "Run thc-fixtures truffle-strings" }
+            checkBuild(file(System.getenv("THC_FOREIGN_EXCEPTION_INSTALLED") ?: "build/foreign-exceptions/installed/packages.json").isFile()) {
+                "Set THC_FOREIGN_EXCEPTION_INSTALLED to an authenticated installed Core manifest"
+            }
+        }
+    }
+}
+stringExceptionTests[1].configure { mustRunAfter(stringExceptionTests[0]) }
 tasks.register("jitStabilityTest", Test) {
     group = "verification"
     description = "Runs advisory JIT code-retention checks; failures remain visible to local callers."

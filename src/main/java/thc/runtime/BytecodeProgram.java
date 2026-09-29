@@ -5958,6 +5958,24 @@ public final class BytecodeProgram implements ExecutableProgram {
         var nativeAllocation = override == CoreForeignOverride.ALLOCATION ? CoreNativeAllocationForeign.validate(metadata, representations, flags, resultRepresentation) : null;
         boolean memmove = override == CoreForeignOverride.MEMMOVE && CoreMemoryCopyForeign.MEMMOVE.validate(metadata, representations, flags, resultRepresentation);
         boolean memcpy = override == CoreForeignOverride.MEMCPY && CoreMemoryCopyForeign.MEMCPY.validate(metadata, representations, flags, resultRepresentation);
+        var stringOp = TruffleStringOp.validate(expr, defined);
+        if (stringOp != null) {
+            var operands = new ArrayList<Expression>();
+            for (var arg : args) operands.add(compile(arg, scope, false));
+            java.util.function.Consumer<Emission> operation = e -> {
+                e.builder.beginTruffleStringOperation(stringOp);
+                for (var operand : operands) operand.emit(e);
+                e.builder.endTruffleStringOperation();
+            };
+            return new ProvenExpression(e -> {
+                var b = e.builder;
+                switch (stringOp.result) {
+                    case "IntRep", "Int64Rep" -> { b.beginToLong(); operation.accept(e); b.endToLong(); }
+                    case "DoubleRep" -> { b.beginToDouble(); operation.accept(e); b.endToDouble(); }
+                    default -> operation.accept(e);
+                }
+            }, evaluatedProof(tupleProof, true));
+        }
         var vectorApi = VectorApiOp.validate(expr, defined);
         if (vectorApi != null) {
             if (vectorApi.javaArray() && foreignExceptionBridge == null)

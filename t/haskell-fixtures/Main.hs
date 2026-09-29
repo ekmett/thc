@@ -46,6 +46,7 @@ import FusedFloatingFixtures (prepareFusedFloating)
 import SimdCallFixtures (prepareSimdCalls)
 import VectorApiFixtures (prepareVectorApi)
 import JavaArrayFixtures (prepareJavaArrays)
+import TruffleStringFixtures (prepareTruffleStrings)
 import SimdFloatFmaFixtures (prepareSimdFloatFma)
 import SimdWideFloatFmaFixtures (prepareSimdWideFloatFma)
 import SqrtFixtures (prepareSqrt)
@@ -1007,6 +1008,7 @@ main = do
     ["simd-calls"] -> prepareSimdCalls root
     ["vector-api"] -> prepareVectorApi root
     ["java-arrays"] -> prepareJavaArrays root
+    ["truffle-strings"] -> prepareTruffleStrings root
     ["simd-floatx4-fma"] -> prepareSimdFloatFma root
     ["simd-wide-floating-fma"] -> prepareSimdWideFloatFma root
     ["sqrt"] -> prepareSqrt root

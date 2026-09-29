@@ -187,6 +187,36 @@ module THC.Prim
   , writeJavaMask#
   , readJavaShuffle#
   , writeJavaShuffle#
+  , isString#, asTruffleString#
+  , TruffleString#, TruffleStringEncoding#, truffleStringAsObject#
+  , truffleStringEncoding#
+  , truffleStringFromByteArray#
+  , truffleStringToByteArray#
+  , truffleStringFromCodePoint#
+  , truffleStringFromInt64#
+  , truffleStringByteLength#
+  , truffleStringCodePointLength#
+  , truffleStringIsValid#
+  , truffleStringReadByte#
+  , truffleStringCodePointAt#
+  , truffleStringCodePointAtByte#
+  , truffleStringCodePointByteLength#
+  , truffleStringByteToCodePointIndex#
+  , truffleStringCodePointToByteIndex#
+  , truffleStringEqual#
+  , truffleStringCompareBytes#
+  , truffleStringHash#
+  , truffleStringIndexOfCodePoint#
+  , truffleStringByteIndexOfCodePoint#
+  , truffleStringIndexOfString#
+  , truffleStringByteIndexOfString#
+  , truffleStringSubstring#
+  , truffleStringSubstringBytes#
+  , truffleStringConcat#
+  , truffleStringRepeat#
+  , truffleStringSwitchEncoding#
+  , truffleStringParseInt64#
+  , truffleStringParseDouble#
     -- * Runtime-shaped Vector API
   , Vec#, VecMask#, VecShuffle#, VecSpecies#
   , int8Species#
@@ -300,6 +330,118 @@ module THC.Prim
 
 import Data.Kind (Type)
 import GHC.Exts
+
+-- | Raw immutable Truffle carriers; neither type allocates a Haskell wrapper.
+type TruffleString# :: UnliftedType
+newtype TruffleString# = TruffleString# (Any :: UnliftedType)
+type TruffleStringEncoding# :: UnliftedType
+newtype TruffleStringEncoding# = TruffleStringEncoding# (Any :: UnliftedType)
+
+-- | Erased reference conversion for other raw interop primitives.
+-- Immutable strings carry no mutable context-owned storage.
+truffleStringAsObject# :: TruffleString# -> Object# s
+truffleStringAsObject# (TruffleString# value) = Object# value
+{-# INLINE truffleStringAsObject# #-}
+
+-- | Explicit encoding codes: 0 UTF-8, 1 native UTF-16, 2 native UTF-32,
+-- 3 ISO-8859-1, 4 US-ASCII, 5 BYTES, 6 UTF-16LE, 7 UTF-16BE,
+-- 8 UTF-32LE, 9 UTF-32BE. Unknown codes are errors, not enum ordinals.
+-- Byte-array creation always copies; returned byte arrays are fresh.
+-- CodePoint access returns -1 on malformed input. CodePointByteLength returns
+-- -1 for invalid code points, or -1 minus missing bytes for incomplete terminal sequences.
+-- Index conversions take a byte offset and a relative index. Substring/search
+-- units follow their names; search end offsets are exclusive.
+-- SwitchEncoding uses Truffle's default replacement policy for invalid input.
+-- Numeric parse failures use the automatic THC.Exception foreign-exception bridge.
+-- Invalid ranges are primitive errors. See docs/prim-strings.md.
+foreign import prim "thc_string_v1_encoding"
+  truffleStringEncoding# :: Int# -> TruffleStringEncoding#
+
+foreign import prim "thc_string_v1_from_bytes"
+  truffleStringFromByteArray# :: TruffleStringEncoding# -> ByteArray# -> Int# -> Int# -> TruffleString#
+
+foreign import prim "thc_string_v1_to_bytes"
+  truffleStringToByteArray# :: TruffleStringEncoding# -> TruffleString# -> ByteArray#
+
+foreign import prim "thc_string_v1_from_code_point"
+  truffleStringFromCodePoint# :: TruffleStringEncoding# -> Int# -> TruffleString#
+
+foreign import prim "thc_string_v1_from_int64"
+  truffleStringFromInt64# :: TruffleStringEncoding# -> Int64# -> TruffleString#
+
+foreign import prim "thc_string_v1_byte_length"
+  truffleStringByteLength# :: TruffleStringEncoding# -> TruffleString# -> Int#
+
+foreign import prim "thc_string_v1_code_point_length"
+  truffleStringCodePointLength# :: TruffleStringEncoding# -> TruffleString# -> Int#
+
+foreign import prim "thc_string_v1_is_valid"
+  truffleStringIsValid# :: TruffleStringEncoding# -> TruffleString# -> Int#
+
+foreign import prim "thc_string_v1_read_byte"
+  truffleStringReadByte# :: TruffleStringEncoding# -> TruffleString# -> Int# -> Int#
+
+foreign import prim "thc_string_v1_code_point_at"
+  truffleStringCodePointAt# :: TruffleStringEncoding# -> TruffleString# -> Int# -> Int#
+
+foreign import prim "thc_string_v1_code_point_at_byte"
+  truffleStringCodePointAtByte# :: TruffleStringEncoding# -> TruffleString# -> Int# -> Int#
+
+foreign import prim "thc_string_v1_code_point_byte_length"
+  truffleStringCodePointByteLength# :: TruffleStringEncoding# -> TruffleString# -> Int# -> Int#
+
+foreign import prim "thc_string_v1_byte_to_code_point"
+  truffleStringByteToCodePointIndex# :: TruffleStringEncoding# -> TruffleString# -> Int# -> Int# -> Int#
+
+foreign import prim "thc_string_v1_code_point_to_byte"
+  truffleStringCodePointToByteIndex# :: TruffleStringEncoding# -> TruffleString# -> Int# -> Int# -> Int#
+
+foreign import prim "thc_string_v1_equal"
+  truffleStringEqual# :: TruffleStringEncoding# -> TruffleString# -> TruffleString# -> Int#
+
+foreign import prim "thc_string_v1_compare_bytes"
+  truffleStringCompareBytes# :: TruffleStringEncoding# -> TruffleString# -> TruffleString# -> Int#
+
+foreign import prim "thc_string_v1_hash"
+  truffleStringHash# :: TruffleStringEncoding# -> TruffleString# -> Int#
+
+foreign import prim "thc_string_v1_index_of_code_point"
+  truffleStringIndexOfCodePoint# :: TruffleStringEncoding# -> TruffleString# -> Int# -> Int# -> Int# -> Int#
+
+foreign import prim "thc_string_v1_byte_index_of_code_point"
+  truffleStringByteIndexOfCodePoint# :: TruffleStringEncoding# -> TruffleString# -> Int# -> Int# -> Int# -> Int#
+
+foreign import prim "thc_string_v1_index_of_string"
+  truffleStringIndexOfString# :: TruffleStringEncoding# -> TruffleString# -> TruffleString# -> Int# -> Int# -> Int#
+
+foreign import prim "thc_string_v1_byte_index_of_string"
+  truffleStringByteIndexOfString# :: TruffleStringEncoding# -> TruffleString# -> TruffleString# -> Int# -> Int# -> Int#
+
+foreign import prim "thc_string_v1_substring"
+  truffleStringSubstring# :: TruffleStringEncoding# -> TruffleString# -> Int# -> Int# -> TruffleString#
+
+foreign import prim "thc_string_v1_substring_bytes"
+  truffleStringSubstringBytes# :: TruffleStringEncoding# -> TruffleString# -> Int# -> Int# -> TruffleString#
+
+foreign import prim "thc_string_v1_concat"
+  truffleStringConcat# :: TruffleStringEncoding# -> TruffleString# -> TruffleString# -> TruffleString#
+
+foreign import prim "thc_string_v1_repeat"
+  truffleStringRepeat# :: TruffleStringEncoding# -> TruffleString# -> Int# -> TruffleString#
+
+foreign import prim "thc_string_v1_switch_encoding"
+  truffleStringSwitchEncoding# :: TruffleStringEncoding# -> TruffleString# -> TruffleString#
+
+foreign import prim "thc_string_v1_parse_int64"
+  truffleStringParseInt64# :: TruffleString# -> Int# -> Int64#
+
+foreign import prim "thc_string_v1_parse_double"
+  truffleStringParseDouble# :: TruffleString# -> Double#
+
+foreign import prim "thc_interop_v1_is_string"
+  isString# :: Object# s -> InteropLibrary# s -> State# s -> (# State# s, Int# #)
+foreign import prim "thc_interop_v1_as_truffle_string"
+  asTruffleString# :: Object# s -> InteropLibrary# s -> State# s -> (# State# s, TruffleString# #)
 
 -- | A raw JDK vector. The lane parameter is nominal: 'Int8#', 'Int16#',
 -- 'Int32#', 'Int64#', 'Float#' and 'Double#' map to Java byte, short, int,

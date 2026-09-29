@@ -48,8 +48,12 @@ public final class ForeignExceptionAccess extends Node {
     /** Called after carrier permission and pointer borrows have been restored,
      * before an opaque Throwable could pass through Force's failure memoization. */
     @TruffleBoundary public RuntimeException raise(AbstractTruffleException error) {
-        var owner = Language.currentState(this);
         var bridge = getRootNode() instanceof GuestRoot root ? root.getForeignExceptionBridge() : null;
+        return raise(error, bridge);
+    }
+
+    @TruffleBoundary public RuntimeException raise(AbstractTruffleException error, ForeignExceptionBridge bridge) {
+        var owner = Language.currentState(this);
         if (bridge == null || owner.getForeignExceptionNormalization().get() || !eligible(error)) throw error;
         var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], descriptor);
         var flag = Language.currentState(this).getForeignExceptionNormalization();
@@ -68,13 +72,23 @@ public final class ForeignExceptionAccess extends Node {
         throw new GuestException(payload, this, true);
     }
 
-    /** Preserve ordinary Java failures from direct host-array operations. */
+    /** Native checked failures use the same host identity and genuine bridge as
+     * ordinary Java operations; no language-specific exception wrapper. */
     @TruffleBoundary public RuntimeException raiseHost(RuntimeException error) {
-        if (!ForeignExceptionPolicy.host(error)) throw error;
+        return raiseHost((Exception) error);
+    }
+
+    public RuntimeException raiseHost(Exception error) {
+        var bridge = getRootNode() instanceof GuestRoot root ? root.getForeignExceptionBridge() : null;
+        return raiseHost(error, bridge);
+    }
+
+    @TruffleBoundary public RuntimeException raiseHost(Exception error, ForeignExceptionBridge bridge) {
+        if (!ForeignExceptionPolicy.host(error)) throw propagate(error);
         Object value = Language.currentState(this).getEnv().asGuestValue(error);
         try { throw interop.throwException(value); }
-        catch (AbstractTruffleException foreign) { throw raise(foreign); }
-        catch (InteropException unavailable) { throw error; }
+        catch (AbstractTruffleException foreign) { throw raise(foreign, bridge); }
+        catch (InteropException unavailable) { throw propagate(error); }
     }
 
     /** Only a compatible public exit asks the real Haskell dictionary whether a

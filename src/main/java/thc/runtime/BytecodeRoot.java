@@ -321,6 +321,16 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation
+    @ConstantOperand(type = TruffleStringOp.class, name = "operation")
+    public static final class TruffleStringOperation {
+        @Specialization public static Object apply(VirtualFrame frame, TruffleStringOp operation, @Variadic Object[] arguments,
+                @Cached(value = "createSite(operation)", neverDefault = true) TruffleStringOp.Site site) {
+            return site.execute(frame, arguments);
+        }
+        public static TruffleStringOp.Site createSite(TruffleStringOp operation) { return new TruffleStringOp.Site(operation); }
+    }
+
+    @Operation
     @ConstantOperand(type = VectorApiOp.class, name = "operation")
     public static final class VectorApi {
         @Specialization public static Object apply(VectorApiOp operation, @Variadic Object[] arguments,

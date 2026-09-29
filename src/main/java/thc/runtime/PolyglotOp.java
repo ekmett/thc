@@ -108,7 +108,9 @@ public enum PolyglotOp {
     READ_JAVA_DOUBLE_ARRAY("thc_interop_v1_read_java_double_array", List.of("BoxedRep (Just Unlifted)", "IntRep", "State# RealWorld"), "DoubleRep"),
     WRITE_JAVA_DOUBLE_ARRAY("thc_interop_v1_write_java_double_array", List.of("BoxedRep (Just Unlifted)", "IntRep", "DoubleRep", "State# RealWorld"), "State# RealWorld"),
     COPY_JAVA_DOUBLE_ARRAY("thc_interop_v1_copy_java_double_array", List.of("BoxedRep (Just Unlifted)", "IntRep", "BoxedRep (Just Unlifted)", "IntRep", "IntRep", "State# RealWorld"), "State# RealWorld"),
-    OBJECT_AS_JAVA_DOUBLE_ARRAY("thc_interop_v1_object_as_java_double_array", List.of("BoxedRep (Just Unlifted)", "State# RealWorld"), "BoxedRep (Just Unlifted)");
+    OBJECT_AS_JAVA_DOUBLE_ARRAY("thc_interop_v1_object_as_java_double_array", List.of("BoxedRep (Just Unlifted)", "State# RealWorld"), "BoxedRep (Just Unlifted)"),
+    IS_STRING("thc_interop_v1_is_string", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "State# RealWorld"), "IntRep"),
+    AS_TRUFFLE_STRING("thc_interop_v1_as_truffle_string", List.of("BoxedRep (Just Unlifted)", "BoxedRep (Just Unlifted)", "State# RealWorld"), "BoxedRep (Just Unlifted)");
     private final String symbol;
     private final List<String> arguments;
     private final String result;
