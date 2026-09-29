@@ -20,8 +20,7 @@ module THC.Compact.Module
 
 import Control.Exception (bracket)
 import Control.Monad (foldM, forM_, unless, void)
-import Data.Aeson (Value(..))
-import qualified Data.Aeson.KeyMap as KM
+import Data.Aeson (Value)
 import Data.Bits ((.&.), (.|.), complement)
 import qualified Data.ByteString as BS
 import Data.IORef
@@ -37,7 +36,7 @@ import THC.Compact.Encode
 import THC.Compact.Facts
 import THC.Compact.Decode (decodeFacts)
 import THC.Compact.Inspect (inspectContainer, moduleJSON, unpackContainer)
-import THC.Compact.JSON (parseModuleWithDebug, parseModuleWithoutDebug)
+import THC.Compact.JSON (parseModuleWithDebug, parseModuleFacts)
 import THC.Compact.Wire
 import THC.Compact.Writer
 
@@ -69,9 +68,7 @@ rewriteModuleFacts :: BS.ByteString -> Value -> IO BS.ByteString
 rewriteModuleFacts original value = do
   (header,oldFactsBytes,segments) <- either fail pure (unpackContainer original)
   oldFacts <- either fail pure (decodeFacts oldFactsBytes (segments !! 1))
-  (facts,_) <- either fail pure (parseModuleWithoutDebug (case value of
-    Object fields -> Object (KM.insert "bindings" (Array mempty) fields)
-    _ -> value))
+  facts <- either fail pure (parseModuleFacts value)
   if oldFacts == facts then pure original else encoded $ \path -> do
     let prepare streams = do
           void (appendBytes streams CommonStrings (segments !! 1))

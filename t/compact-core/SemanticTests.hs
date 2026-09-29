@@ -513,7 +513,7 @@ completeFacts = Facts 2 "9.14.1" "main" "Typed" "optimized-Core-before-Tidy" (Kn
     [ForeignFile "C" "foreign source" ".c"]))
   (Known (ExceptionBridge 1 "main" "Typed" "main:Typed.box" "main:Typed.project"
     "main:Typed.Payload" "ghc-internal:GHC.Internal.Exception.Type.SomeException"))
-  (Known "main") [Missing,Unknown,Missing,Unknown,Missing,Missing,Missing,Missing]
+  (Known "main") [Missing,Unknown,Missing,Unknown,Missing,Missing,Missing,Missing] Nothing
 
 completeImports :: ImportProof
 completeImports = ImportProof 1 "retained-static-import-products" "not-linked"

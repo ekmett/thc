@@ -61,6 +61,18 @@ facts decoder = Facts <$> getUVar <*> string decoder <*> string decoder <*> stri
   <*> list decoder (constructor decoder) <*> present (foreignArtifacts decoder)
   <*> present (exceptionBridge decoder) <*> present (string decoder)
   <*> mapM (present . provenance decoder) [0..length pendingProvenanceNames-1]
+  <*> closureProvenance decoder
+
+closureProvenance :: Decoder -> Get (Maybe ClosureProvenance)
+closureProvenance decoder = do
+  empty <- isEmpty
+  if empty then pure Nothing else do
+    kind <- getWord8
+    unless (kind == 1) (fail "Unknown compact header provenance extension")
+    Just <$> (ClosureProvenance <$> present (list decoder (string decoder))
+      <*> present (list decoder (string decoder))
+      <*> present (list decoder (MissingDefinition <$> string decoder <*> string decoder <*> string decoder))
+      <*> list decoder (BindingOrigin <$> string decoder <*> present (string decoder) <*> present (string decoder)))
 
 targetLayout :: Decoder -> Get TargetLayout
 targetLayout decoder = TargetLayout <$> getUVar <*> string decoder <*> string decoder <*> string decoder <*> string decoder
