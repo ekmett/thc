@@ -66,9 +66,9 @@ resolveThcRoot supplied
       search executable (takeDirectory executable)
   where
     search executable directory = do
-      package <- doesFileExist (directory </> "thc.cabal")
-      compiler <- doesFileExist (directory </> "bin/build-compiler.sh")
-      if package && compiler then pure directory
+      hasPackage <- doesFileExist (directory </> "thc.cabal")
+      hasCompiler <- doesFileExist (directory </> "bin/build-compiler.sh")
+      if hasPackage && hasCompiler then pure directory
         else if takeDirectory directory == directory
           then fail ("Cannot locate THC source/build root from " ++ executable ++
                      "; use --thc-root DIR when the driver is installed separately")
