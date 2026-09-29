@@ -161,7 +161,7 @@ prepareWindowsSmoke root = do
   (cstringCommands, cstringArtifacts) <- prepareCString root logs ghc
   compiler <- listDirectory (root </> "src/compiler/THC")
   scripts <- listDirectory (root </> "bin")
-  let sources = ["t/fixtures/core/NativeOracle.hs", "t/fixtures/core/Fixtures.hs",
+  let sources = ["t/fixtures/core/NativeOracle.hs", "t/fixtures/core/NativeTiming.hs", "t/fixtures/core/Fixtures.hs",
         "t/fixtures/compiler/THC/Prim/Test.hs", "t/fixtures/core/MapWorkload.hs",
         "t/haskell-fixtures/WindowsSmokeFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
         "t/haskell-fixtures/Main.hs",
