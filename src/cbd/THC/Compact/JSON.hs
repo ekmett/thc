@@ -465,19 +465,34 @@ hexBytes = withText "original artifact hex" $ \value -> do
 nativeLink :: Value -> Parser NativeLink
 nativeLink = withObject "native linked artifact" $ \fields -> do
   schema <- fields .: "schema" :: Parser Word64
-  checked fields (linkPayloadKeys ++ ["abi","buildInputs","nativeLibrary","dataSymbols"] ++ ["finalizers" | schema == 2])
+  checked fields (linkPayloadKeys ++ ["abi","buildInputs","nativeLibrary","dataSymbols","exports","dependencies"] ++ ["finalizers" | schema == 2])
   NativeLink <$> linkPayload fields <*> (fields .: "abi" >>= array entry)
-    <*> optional fields "buildInputs" nativeBuildInputs <*> optional fields "nativeLibrary" companion
+    <*> optional fields "buildInputs" nativeBuildInputs <*> optional fields "nativeLibrary" nativeCompanion
     <*> optional fields "dataSymbols" (array bytes)
     <*> (if schema == 2 then fields .: "finalizers" >>= array bytes else pure [])
+    <*> (case (KM.lookup "exports" fields,KM.lookup "dependencies" fields) of
+      (Nothing,Nothing) -> pure Nothing
+      (Just publicSymbols,Just dependencies) -> Just <$> ((,) <$> array bytes publicSymbols <*> array nativeComponent dependencies)
+      _ -> fail "Native exports and dependencies must be present together")
   where entry = withObject "native linked ABI" $ \fields -> do
           checked fields ["symbol","entry","convention","safety","arguments","result"]
           NativeABI <$> bytesAt fields "symbol" <*> bytesAt fields "entry"
             <*> (fields .: "convention" >>= parseConvention) <*> (fields .: "safety" >>= parseSafety)
             <*> (fields .: "arguments" >>= array bytes) <*> bytesAt fields "result"
-        companion = withObject "native library companion" $ \fields -> do
-          checked fields ["sha256","hex"]
-          (,) <$> bytesAt fields "sha256" <*> (fields .: "hex" >>= hexBytes)
+
+nativeCompanion :: Value -> Parser (BS.ByteString,BS.ByteString)
+nativeCompanion = withObject "native library companion" $ \fields -> do
+  checked fields ["sha256","hex"]
+  (,) <$> bytesAt fields "sha256" <*> (fields .: "hex" >>= hexBytes)
+
+nativeComponent :: Value -> Parser NativeComponent
+nativeComponent = withObject "declared native component" $ \fields -> do
+  checked fields (linkPayloadKeys ++ ["exports","dependencies","nativeLibrary"])
+  unless (KM.lookup "schema" fields == Just (Number 1) &&
+          KM.lookup "profile" fields == Just (String "thc-package-native-component-v1"))
+    (fail "Unsupported native component descriptor")
+  NativeComponent <$> linkPayload fields <*> (fields .: "exports" >>= array bytes)
+    <*> (fields .: "dependencies" >>= array nativeComponent) <*> optional fields "nativeLibrary" nativeCompanion
 
 nativeBuildInputs :: Value -> Parser NativeBuildInputs
 nativeBuildInputs = withObject "native build inputs" $ \fields -> do
