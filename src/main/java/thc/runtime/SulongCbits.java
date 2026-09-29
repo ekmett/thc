@@ -3,6 +3,7 @@
 package thc.runtime;
 
 import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.TruffleSafepoint;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.nodes.Node;
@@ -56,7 +57,8 @@ public final class SulongCbits {
     private final ConcurrentHashMap<Key, Object> foreignErrno = new ConcurrentHashMap<>();
     private final HashMap<Key, ForeignLoad> linkedForeign = new HashMap<>();
     private final HashMap<Key, ForeignLoad> foreignOwners = new HashMap<>();
-    private final ThreadLocal<Set<Key>> initializingForeign = ThreadLocal.withInitial(java.util.HashSet::new);
+    private final ThreadLocal<Set<Key>> initializingForeign = ThreadLocal.withInitial(SulongCbits::newInitializingForeignSet);
+    @TruffleBoundary private static Set<Key> newInitializingForeignSet() { return new java.util.HashSet<>(); }
 
     public SulongCbits(TruffleLanguage.Env env) {
         this.env = env;
