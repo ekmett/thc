@@ -54,7 +54,7 @@ public final class ForeignExceptionFixtureSupport {
         var stages = (Map<String, List<String>>) manifest().get("stages");
         if (!stages.containsKey(stage)) throw new NoSuchElementException("Key " + stage + " is missing in the map.");
         var modules = new ArrayList<Map<String, Object>>();
-        for (var path : stages.get(stage)) modules.add((Map<String, Object>) Json.parse(Files.readString(new File(root, path).toPath())));
+        for (var path : stages.get(stage)) modules.add(CoreCbdFixtures.read(new File(root, path).toPath()));
         return modules;
     }
     public static Map<String, Object> source(String stage) throws Exception {
