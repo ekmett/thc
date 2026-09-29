@@ -371,6 +371,7 @@ public final class Program implements ExecutableProgram {
     private Metrics codeMetrics() { return reusableCode ? null : metrics; }
     Metrics instanceMetrics() { return metrics; }
     Object readGlobal(int index) { return indexedGlobals[index].read(); }
+    ForeignExceptionBridge foreignExceptionBridge() { return foreignExceptionBridge; }
     DataLayout constructorLayout(int index) { return indexedLayouts[index]; }
     boolean usesCode(Object identity) { return codeIdentity == identity; }
     boolean belongsToCurrentContext(com.oracle.truffle.api.nodes.Node node) {
@@ -1671,16 +1672,20 @@ public final class Program implements ExecutableProgram {
         var memcpy = override == CoreForeignOverride.MEMCPY && CoreMemoryCopyForeign.MEMCPY.validate(metadata, argumentMetadata(args), flags, metadataRepresentation(expr));
 
         var stringOp = TruffleStringOp.validate(expr, defined);
-        if (stringOp != null) {
-            Expr[] operands = new Expr[args.size()];
-            for (int index = 0; index < operands.length; index++) operands[index] = compile(args.get(index), scope, false);
-            return new TruffleStringExpression(stringOp, operands).proven(evaluated(tupleProof, true));
-        }
-        var vectorApi = VectorApiOp.validate(expr, defined);
-        if (vectorApi != null) {
-            Expr[] operands = new Expr[args.size()];
-            for (int index = 0; index < operands.length; index++) operands[index] = compile(args.get(index), scope, false);
-            return new VectorApiExpression(vectorApi, operands).proven(evaluated(tupleProof, true));
+        var vectorApi = stringOp == null ? VectorApiOp.validate(expr, defined) : null;
+        if (stringOp != null || vectorApi != null) {
+            // Unlifted is a carrier proof, not a guarantee that evaluating the
+            // operand cannot suspend. Foreign heads bypass compile's prim/con
+            // wrapper, so retain their completed operands in the same frame.
+            OperandBuilder outer = operandBuilder;
+            OperandBuilder operands = capturesContinuations ? new OperandBuilder(scope.layout) : null;
+            operandBuilder = operands;
+            try {
+                Expr[] lowered = compileOperands(args, scope);
+                Expr body = (stringOp != null ? new TruffleStringExpression(stringOp, lowered, reusableCode ? scope.programSlot : -1) :
+                    new VectorApiExpression(vectorApi, lowered)).proven(evaluated(tupleProof, true));
+                return operands == null ? body : operands.finish(body);
+            } finally { operandBuilder = outer; }
         }
         PolyglotOp polyglot;
         try {

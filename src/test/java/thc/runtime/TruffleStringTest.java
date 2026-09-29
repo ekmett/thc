@@ -79,7 +79,6 @@ class TruffleStringTest {
                 var stats = program(backend, "unicodeStats");
                 var roundTrip = program(backend, "roundTrip");
                 var slice = program(backend, "sliceRepeat");
-                var numeric = program(backend, "numericRoundTrip");
                 var raw = program(backend, "rawString");
                 var original = utf8(UTF8);
                 assertSame(original, call(raw, "rawString", original));
@@ -96,40 +95,32 @@ class TruffleStringTest {
                     var expectedSlice = TruffleString.fromJavaStringUncached("é😀é😀", encoding);
                     assertArrayEquals(expectedSlice.copyToByteArrayUncached(encoding), (byte[]) call(slice, "sliceRepeat", code));
                 }
-                for (long n : new long[]{Long.MIN_VALUE, -1, 0, 42, Long.MAX_VALUE})
-                    assertEquals(n, call(numeric, "numericRoundTrip", n));
             } finally { context.leave(); }
         }
     }
 
     @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
-    void genuineLoopAndNumericCallsExecuteCompiledCode(String backend) throws Exception {
+    void genuineLoopAndEncodingCallsExecuteCompiledCode(String backend) throws Exception {
         try (var context = context()) {
             context.initialize("thc"); context.enter();
             try {
                 var loop = program(backend, "codePointSum");
-                var number = program(backend, "numericRoundTrip");
                 var roundTrip = program(backend, "roundTrip");
                 TruffleString s = utf8(UTF8);
                 // Ordinary profile establishment is explicit; not a zero-training claim.
                 for (int i = 0; i < 4; i++) {
                     assertEquals(128810L, call(loop, "codePointSum", 0L, s));
-                    assertEquals(42L, call(number, "numericRoundTrip", 42L));
                     assertArrayEquals(UTF8, (byte[]) call(roundTrip, "roundTrip", 0L, 7L));
                 }
                 var originalLoop = loop.entryTarget(PREFIX + "codePointSum");
-                var originalNumber = number.entryTarget(PREFIX + "numericRoundTrip");
-                compile(originalLoop); compile(originalNumber);
+                compile(originalLoop);
                 compile(roundTrip.entryTarget(PREFIX + "roundTrip"));
                 long before = ((Number) loop.diagnostics().get("compiledEntries")).longValue();
                 assertEquals(128810L, call(loop, "codePointSum", 0L, s));
-                assertEquals(42L, call(number, "numericRoundTrip", 42L));
                 assertArrayEquals(UTF8, (byte[]) call(roundTrip, "roundTrip", 0L, 7L));
                 assertTrue(((Number) loop.diagnostics().get("compiledEntries")).longValue() > before);
-                assertTrue(((Number) number.diagnostics().get("compiledEntries")).longValue() > 0);
                 assertTrue(((Number) roundTrip.diagnostics().get("compiledEntries")).longValue() > 0);
                 assertSame(originalLoop, loop.entryTarget(PREFIX + "codePointSum"));
-                assertSame(originalNumber, number.entryTarget(PREFIX + "numericRoundTrip"));
                 var separate = program(backend, "codePointSum");
                 assertEquals(128810L, call(separate, "codePointSum", 0L, s));
                 var firstSites = sites(originalLoop.getRootNode());
@@ -242,6 +233,10 @@ class TruffleStringTest {
         assertEquals(0L, op(IS_VALID, Encoding.UTF_8, invalid));
         assertEquals(-1L, op(CODE_POINT_AT, Encoding.UTF_8, invalid, 0L));
         assertEquals(-1L, op(CODE_POINT_BYTE_LENGTH, Encoding.UTF_8, invalid, 0L));
+        var truncated = utf8(new byte[]{(byte) 0xf0, (byte) 0x9f});
+        assertEquals(0L, op(IS_VALID, Encoding.UTF_8, truncated));
+        assertEquals(-1L, op(CODE_POINT_AT, Encoding.UTF_8, truncated, 0L));
+        assertEquals(-3L, op(CODE_POINT_BYTE_LENGTH, Encoding.UTF_8, truncated, 0L));
         var replaced = op(SWITCH_ENCODING, Encoding.UTF_16, invalid);
         assertEquals(0xfffdL, op(CODE_POINT_AT, Encoding.UTF_16, replaced, 0L));
         var lossy = op(SWITCH_ENCODING, Encoding.US_ASCII, utf8(UTF8));
@@ -251,9 +246,23 @@ class TruffleStringTest {
         assertThrows(RuntimeFault.class, () -> op(ENCODING, 10L));
         assertEquals(255L, op(PARSE_INT64, utf8(new byte[]{102, 102}), 16L));
         assertEquals(1.25, op(PARSE_DOUBLE, utf8(new byte[]{49, 46, 50, 53})));
-        var failure = assertThrows(RuntimeFault.class, () -> op(PARSE_INT64, utf8(new byte[]{120}), 10L));
-        assertInstanceOf(TruffleString.NumberFormatException.class, failure.getCause());
-        assertThrows(RuntimeFault.class, () -> op(PARSE_INT64, utf8("9223372036854775808".getBytes(StandardCharsets.US_ASCII)), 10L));
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var parser = new RootNode(language) {
+                    @Child private Site site = new Site(PARSE_INT64);
+                    @Override public Object execute(VirtualFrame frame) { return site.execute(frame, frame.getArguments()); }
+                }.getCallTarget();
+                for (String text : List.of("x", "9223372036854775808")) {
+                    var failure = assertThrows(com.oracle.truffle.api.exception.AbstractTruffleException.class,
+                        () -> parser.call(utf8(text.getBytes(StandardCharsets.US_ASCII)), 10L));
+                    var env = Language.currentState().getEnv();
+                    assertTrue(env.isHostException(failure));
+                    assertInstanceOf(TruffleString.NumberFormatException.class, env.asHostException(failure));
+                }
+            } finally { context.leave(); }
+        }
     }
 
     @ExportLibrary(InteropLibrary.class)

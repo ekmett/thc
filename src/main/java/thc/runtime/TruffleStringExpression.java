@@ -9,13 +9,13 @@ final class TruffleStringExpression extends Expr {
     @Child private TruffleStringOp.Site site;
     @Children private Expr[] arguments;
 
-    TruffleStringExpression(TruffleStringOp operation, Expr[] arguments) {
-        this.site = new TruffleStringOp.Site(operation);
+    TruffleStringExpression(TruffleStringOp operation, Expr[] arguments, int programSlot) {
+        this.site = new TruffleStringOp.Site(operation, programSlot);
         this.arguments = arguments;
     }
     @ExplodeLoop @Override public Object execute(VirtualFrame frame) {
         Object[] values = new Object[arguments.length];
         for (int i = 0; i < values.length; i++) values[i] = arguments[i].execute(frame);
-        return site.execute(values);
+        return site.execute(frame, values);
     }
 }

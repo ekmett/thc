@@ -108,6 +108,8 @@ public final class CoreForeignExceptionBridge {
             CoreBoundThreadForeign.validateHead((List<?>) expr.get(1), defined);
             return scalar.executesForeign();
         }
+        var string = TruffleStringOp.validate((List<Object>) expr, defined);
+        if (string != null) return string.parsesNumber();
         if (CoreJavaScript.validate((List<Object>) expr, defined) != null) return true;
         for (var operation : PolyglotOp.values()) {
             if (operation.getSymbol().equals(symbol)) {

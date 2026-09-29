@@ -14,7 +14,8 @@ prepareTruffleStrings root = do
   let output = root </> "build/truffle-strings"
   createDirectoryIfMissing True (output </> "native")
   _ <- run root [("THC_CORE_OUT", output </> "core"), ("THC_GHC_OUT", output </> "ghc")]
-    "bin/export-core.sh" ["-fplugin-opt=THC.Plugin:post-tidy", "src/examples/StringPrimitives.hs"] ""
+    "bin/export-core.sh" ["-fplugin-opt=THC.Plugin:post-tidy", "src/examples/StringPrimitives.hs",
+      "t/fixtures/core/IntrinsicOperands.hs", "t/fixtures/compiler/TruffleStringExceptions.hs"] ""
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
   _ <- run root [] ghc ["--make", "-O2", "-fforce-recomp", "-outputdir", output </> "native",
     "t/fixtures/compiler/StringScalar.hs", "-o", output </> "native/oracle"] ""
@@ -22,12 +23,16 @@ prepareTruffleStrings root = do
   writeFile (output </> "oracle.json") result
   compiler <- listDirectory (root </> "src/compiler/THC")
   inputHashes <- hashes root (["src/runtime/THC/Prim.hs", "src/examples/StringPrimitives.hs",
-    "t/fixtures/compiler/StringScalar.hs", "t/haskell-fixtures/TruffleStringFixtures.hs",
+    "t/fixtures/compiler/StringScalar.hs", "t/fixtures/core/IntrinsicOperands.hs",
+    "t/fixtures/compiler/TruffleStringExceptions.hs", "src/runtime/THC/Exception.hs", "src/runtime/THC/Internal/Exception.hs",
+    "t/haskell-fixtures/TruffleStringFixtures.hs",
     "t/haskell-fixtures/FixtureSupport.hs", "bin/export-core.sh", "bin/build-compiler.sh",
     "bin/toolchain.sh", "bin/plugin.py", "thc.cabal"] ++
     ["src/compiler/THC" </> file | file <- compiler, takeExtension file == ".hs"])
   artifactHashes <- hashes root ["build/truffle-strings" </> file | file <-
-    ["core/THC.Prim.json", "core/StringPrimitives.json", "oracle.json", "native/oracle"]]
+    ["core/THC.Prim.json", "core/StringPrimitives.json", "core/IntrinsicOperands.json",
+     "core/TruffleStringExceptions.json", "core/THC.Exception.json", "core/THC.Internal.Exception.json",
+     "oracle.json", "native/oracle"]]
   writeJson (output </> "manifest.json") $ object
     ["schema" .= (1 :: Int), "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes]
   putStrLn "Prepared immutable TruffleString examples and native code-point oracle"

@@ -186,11 +186,13 @@ truffleStringAsObject# (TruffleString# value) = Object# value
 -- 3 ISO-8859-1, 4 US-ASCII, 5 BYTES, 6 UTF-16LE, 7 UTF-16BE,
 -- 8 UTF-32LE, 9 UTF-32BE. Unknown codes are errors, not enum ordinals.
 -- Byte-array creation always copies; returned byte arrays are fresh.
--- CodePoint access and per-code-point byte-length queries return -1 on malformed input.
+-- CodePoint access returns -1 on malformed input. CodePointByteLength returns
+-- -1 for invalid code points, or -1 minus missing bytes for incomplete terminal sequences.
 -- Index conversions take a byte offset and a relative index. Substring/search
 -- units follow their names; search end offsets are exclusive.
 -- SwitchEncoding uses Truffle's default replacement policy for invalid input.
--- Parse failures and invalid ranges are primitive errors. See docs/prim-strings.md.
+-- Numeric parse failures use the automatic THC.Exception foreign-exception bridge.
+-- Invalid ranges are primitive errors. See docs/prim-strings.md.
 foreign import prim "thc_string_v1_encoding"
   truffleStringEncoding# :: Int# -> TruffleStringEncoding#
 

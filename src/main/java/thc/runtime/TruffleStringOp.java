@@ -5,6 +5,7 @@ package thc.runtime;
 import java.util.List;
 import java.util.Map;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.profiles.ValueProfile;
 import com.oracle.truffle.api.strings.TruffleString;
@@ -52,6 +53,8 @@ public enum TruffleStringOp {
         this.result = result;
     }
 
+    boolean parsesNumber() { return this == PARSE_INT64 || this == PARSE_DOUBLE; }
+
     static TruffleStringOp validate(List<?> expression, boolean defined) {
         var metadata = CoreRepresentations.metadata(expression);
         if (metadata == null || !(metadata.get("foreignCall") instanceof Map<?, ?> call) ||
@@ -69,11 +72,16 @@ public enum TruffleStringOp {
     /** One native node per site; no mutable node or profile is shared by roots. */
     static final class Site extends Node {
         private final TruffleStringOp operation;
+        private final int programSlot;
         private final ValueProfile encodingProfile = ValueProfile.createIdentityProfile();
         @Child private Node node;
+        @Child private ForeignExceptionAccess exceptions;
 
-        Site(TruffleStringOp operation) {
+        Site(TruffleStringOp operation) { this(operation, -1); }
+        Site(TruffleStringOp operation, int programSlot) {
             this.operation = operation;
+            this.programSlot = programSlot;
+            exceptions = operation.parsesNumber() ? new ForeignExceptionAccess() : null;
             node = switch (operation) {
                 case FROM_BYTES -> TruffleString.FromByteArrayNode.create();
                 case TO_BYTES -> TruffleString.CopyToByteArrayNode.create();
@@ -105,13 +113,17 @@ public enum TruffleStringOp {
             };
         }
 
-        Object execute(Object[] a) {
+        Object execute(Object[] a) { return execute(null, a); }
+        Object execute(VirtualFrame frame, Object[] a) {
             if (operation == ENCODING) return encoding((Long) a[0]);
             try {
                 if (operation == PARSE_INT64) return ((TruffleString.ParseLongNode) node).execute((TruffleString) a[0], index(a[1]));
                 if (operation == PARSE_DOUBLE) return ((TruffleString.ParseDoubleNode) node).execute((TruffleString) a[0]);
             } catch (TruffleString.NumberFormatException failure) {
-                throw parseFailure(failure);
+                // Resolve only invocation ownership here; no VirtualFrame is
+                // passed into the cold translation boundary or retained.
+                throw programSlot < 0 ? exceptions.raiseHost(failure) :
+                    exceptions.raiseHost(failure, Program.instance(frame, programSlot).foreignExceptionBridge());
             }
             Encoding e = encodingProfile.profile((Encoding) a[0]);
             return switch (operation) {
@@ -171,10 +183,5 @@ public enum TruffleStringOp {
     private static TruffleString requireCodePoint(TruffleString result) {
         if (result == null) throw RuntimeFault.fault("Code point is not representable in this encoding");
         return result;
-    }
-    @TruffleBoundary private static RuntimeFault parseFailure(TruffleString.NumberFormatException cause) {
-        var failure = new RuntimeFault("Invalid TruffleString numeric representation");
-        failure.initCause(cause);
-        return failure;
     }
 }
