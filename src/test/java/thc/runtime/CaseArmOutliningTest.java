@@ -247,6 +247,62 @@ public class CaseArmOutliningTest {
             }
         });
     }
+    @Test @SuppressWarnings("unchecked")
+    public void reusableTypedTailArmTransfersTheSameLivePacketUntilReceiverEntry() throws Exception {
+        withLanguage(language -> {
+            Map<String, Object> narrow = Map.of("kind", "long", "primReps", List.of("Int8Rep"), "evaluated", true);
+            Map<String, Object> tuple = Map.of("kind", "unknown", "aggregate", "unboxed-tuple", "evaluated", true,
+                "primReps", List.of("Int8Rep", "BoxedRep (Just Lifted)"), "components", List.of(narrow, closure));
+            var construct = List.of("app", List.of("con", "Pair", 2),
+                List.of(variable("n", narrow), variable("marker", closure)), List.of(false, true), false, false, Map.of("rep", tuple));
+            var recurse = List.of("app", variable("entry", closure),
+                List.of(integer(0), variable("n", narrow), variable("marker", closure)),
+                List.of(false, false, true), false, false, Map.of("rep", tuple));
+            var alternatives = new ArrayList<List<?>>();
+            for (int i = 0; i < 33; i++) alternatives.add(List.of("lit", List.of("int", Integer.toString(i)), List.of(), i == 1 ? recurse : construct));
+            alternatives.add(fallback(construct));
+            var code = Program.prepareCode(language, Map.of("instrument", true,
+                "constructors", List.of(Map.of("id", "Pair", "kind", "unboxed-tuple", "arity", 2)),
+                "bindings", List.of(binding("entry", lambda(List.of(parameter("x"), parameter("n", narrow), parameter("marker", closure)),
+                    choice(tuple, variable("x"), "seen", alternatives.toArray(List<?>[]::new)), tuple)))), List.of("entry"));
+            var field = Program.PreparedCode.class.getDeclaredField("targets"); field.setAccessible(true);
+            for (var target : (List<RootCallTarget>) field.get(code)) {
+                assertEquals(false, target.getClass().getMethod("wasExecuted").invoke(target));
+                assertEquals(true, target.getClass().getMethod("prepareForAOT").invoke(target)); compile(target);
+            }
+            var program = code.newInstance(language); var entry = (Closure) program.entryValue("entry");
+            var root = (FunctionRoot) entry.target.getRootNode(); var typed = Objects.requireNonNull(root.getTypedInput());
+            var marker = new Closure(null, 0, new RootNode(language) {
+                @Override public Object execute(VirtualFrame frame) { throw new AssertionError("Tail reference was forced"); }
+            }.getCallTarget());
+            // Enter the genuine lowered arm with the same activation its owning case uses.
+            // Stopping at this boundary exposes the outstanding loan before any receiver.
+            var caller = Truffle.getRuntime().createVirtualFrame(new Object[0], root.getFrameDescriptor());
+            root.buildFrame(new Object[]{0L, entry.environment, 1L, -128, marker}, caller);
+            caller.setLong(FrameLayout.BLOOM_FILTER, root.mask);
+            var arm = NodeUtil.findAllNodeInstances(root, AstCaseArm.class).get(1);
+            var transfer = assertThrows(TailCall.class, () -> arm.execute(caller));
+            var input = Objects.requireNonNull(transfer.getInput()); var packet = typed.getPacket();
+            long generation = input.getGeneration();
+            try {
+                assertSame(entry.target, transfer.getTarget()); assertSame(Closure.NO_PAP_ARGUMENTS, transfer.getArgs()); assertSame(packet, input.getLayout());
+                assertTrue(input.getInputMode() == 1 || input.getInputMode() == 3);
+                assertEquals(input.getInputMode() == 1, input.getLive());
+                assertSame(entry.environment, packet.getObject(input, 1));
+                assertEquals(0L, packet.getLong(input, typed.getHeader()));
+                assertEquals(-128, packet.getInt(input, typed.getHeader() + 1));
+                assertSame(marker, packet.getObject(input, typed.getHeader() + 2));
+                assertEquals(1L, count(program, "compiledEntries")); code.requireInstalledCode();
+                var shape = Objects.requireNonNull(root.getTupleResult());
+                var result = TupleResults.ownedTupleResult(Calls.target(transfer.getTarget(), new Object[]{input}), shape);
+                assertEquals(-128, shape.getLayout().getInt(result, 0)); assertSame(marker, shape.getLayout().getObject(result, 1));
+                assertEquals(0, input.getInputMode()); assertFalse(input.getLive()); assertEquals(generation, input.getGeneration());
+                assertNull(packet.getObject(input, 1)); assertNull(packet.getObject(input, typed.getHeader() + 2));
+                assertEquals(3L, count(program, "compiledEntries")); code.requireInstalledCode(); released(language);
+                assertThrows(RuntimeFault.class, () -> typed.release(input));
+            } finally { typed.releaseChecked(input); }
+        });
+    }
     @Test public void scrutineeIsEvaluatedOnceAndReturningArmKeepsItsNontailSuffix() throws Exception {
         withLanguage(language -> { for (boolean async : new boolean[] {false, true}) {
             var effects = new int[1]; var tick = new Closure(null, 1, new RootNode(language) {
