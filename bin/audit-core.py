@@ -3098,11 +3098,11 @@ def _input_modules(package_manifest, files, store=None, manifest_identity=None):
             if store is not None:
                 store.put_record('input-completion', 'package-manifest', dict(complete=modules.complete))
     for index, path in enumerate(files):
-        data = path.read_bytes()
+        data = sys.stdin.buffer.read() if str(path) == '-' else path.read_bytes()
         module = core_package_manifest.json_loads(data.decode('utf-8'))
         if store is not None:
             store.put_record('input-provenance', 'loose:' + str(index),
-                dict(path=str(path.resolve()), sha256=hashlib.sha256(data).hexdigest()))
+                dict(path='-' if str(path) == '-' else str(path.resolve()), sha256=hashlib.sha256(data).hexdigest()))
         del data
         yield str(path), module
         del module
@@ -3151,7 +3151,7 @@ def _emit_report(report, output, store=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('modules', nargs='*', help='Exported JSON modules, or directories containing exported *.json modules')
+    parser.add_argument('modules', nargs='*', help='JSON inspection modules, directories containing *.json modules, or - for stdin')
     parser.add_argument('--module-list', action='append', type=Path, default=[], help='Read an exact newline-delimited module manifest; relative paths are relative to the manifest')
     parser.add_argument('--package-manifest', type=Path, help='Validate exact GHC-unit Core modules, including ZIP bundles, before combining with any loose consumer modules')
     parser.add_argument('--entry', action='append', required=True, help='Exact global id or unambiguous occurrence name; repeatable')

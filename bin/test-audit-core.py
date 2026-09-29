@@ -87,6 +87,22 @@ class DeepCoreTest(unittest.TestCase):
 
 
 class CommandLineEncodingTest(unittest.TestCase):
+    def test_inspection_stdin_preserves_utf8_in_both_audit_modes(self):
+        entry = 'root\u201d'
+        source = json.dumps(dict(schema=1, ghc='9.14.1',
+            bindings=[bind(entry, lit(42))], constructors=[]), ensure_ascii=False).encode('utf-8')
+        with tempfile.TemporaryDirectory() as directory:
+            for mode in ([], ['--eager']):
+                with self.subTest(mode=mode):
+                    report = Path(directory) / 'audit.json'
+                    result = subprocess.run([sys.executable, str(ROOT / 'audit-core.py'),
+                        *mode, '--entry', entry, '--output', str(report), '-'],
+                        input=source, capture_output=True, timeout=30)
+                    self.assertEqual(0, result.returncode, result.stderr.decode('utf-8'))
+                    result = json.loads(report.read_bytes())
+                    self.assertTrue(result['accepted'])
+                    self.assertEqual([entry], result['roots'])
+
     def test_utf8_core_and_module_paths_do_not_use_windows_ansi_encoding(self):
         # U+201D contains a UTF-8 byte undefined in cp1252. This is the real
         # failure reached when hydrating unchanged GHC sources on Windows.
