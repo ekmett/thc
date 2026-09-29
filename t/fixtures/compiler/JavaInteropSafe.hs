@@ -4,7 +4,10 @@
 
 -- A Safe client of the lifted facade. Java intrinsics execute under THC, not
 -- native GHC; the host-interop fixture runner supplies their execution checks.
-module JavaInteropSafe (addExact20, builderLength, arrayLengthViaJava, primitiveArrays) where
+module JavaInteropSafe
+  ( addExact20, builderLength, arrayLengthViaJava, primitiveArrays
+  , characterObjectAndOverload
+  ) where
 
 import Data.Int (Int32)
 import qualified JavaInterop as Example
@@ -64,3 +67,24 @@ primitiveArrays = do
         int == 22 && intLength == 3 && aliased == 42 && long == 10000000000 &&
         float == 1.5 && double == -2.25)
 {-# OPAQUE primitiveArrays #-}
+
+-- | Expected result: True. The host receiver supplies isCharacter(Object),
+-- choose(Character) = 1 and choose(String) = 2. Boxing a Java char must preserve
+-- Character identity even when passed through Object or an overloaded member.
+characterObjectAndOverload :: Java.Object -> IO Bool
+characterObjectAndOverload receiver = do
+  character <- Java.boxJavaChar 0x78
+  string <- Java.javaStringUtf8 "x"#
+  identityName <- Java.javaStringUtf8 "isCharacter"#
+  chooseName <- Java.javaStringUtf8 "choose"#
+  characterIdentity <- Java.invokeMember receiver identityName [character]
+    >>= Java.unboxJavaBoolean
+  stringIdentity <- Java.invokeMember receiver identityName [string]
+    >>= Java.unboxJavaBoolean
+  characterChoice <- Java.invokeMember receiver chooseName [character]
+    >>= Java.unboxJavaInt
+  stringChoice <- Java.invokeMember receiver chooseName [string]
+    >>= Java.unboxJavaInt
+  pure (characterIdentity && not stringIdentity &&
+        characterChoice == 1 && stringChoice == 2)
+{-# OPAQUE characterObjectAndOverload #-}
