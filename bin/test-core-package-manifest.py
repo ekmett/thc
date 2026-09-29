@@ -576,6 +576,21 @@ class PackageManifestTest(unittest.TestCase):
             unit['symbols']['format'] = 'md5-utf8-u64le-v1'
         return unit
 
+    def test_deep_core_control_summary_preserves_exact_primitive_detection(self):
+        for leaf, expected in ((['prim', 'prompt#'], True), (['prim', 'control0#'], True),
+                               (['lit', 'string', 'prompt#'], False), (['var', 'control0#'], False)):
+            with self.subTest(leaf=leaf):
+                expression = leaf
+                for _ in range(2000):
+                    expression = ['let', 'nonrec', [dict(expr=expression)], ['void']]
+                module = dict(module='Deep', bindings=[dict(id='unit:Deep.f', expr=expression)])
+                summary = dict(containsDelimitedControl=expected, registrationObligations=False,
+                               mainAlias=False, packageScalarDeclarations=False)
+                core_package_manifest._check_unit_summaries('deep-core', summary, module)
+                with self.assertRaisesRegex(ValueError, 'containsDelimitedControl summary'):
+                    core_package_manifest._check_unit_summaries('deep-core',
+                        summary | dict(containsDelimitedControl=not expected), module)
+
     def test_direct_unit_fixed_md5_records(self):
         self.assertEqual('201ac5924113112a846d82b090d8458a', hashlib.md5(b'main:Main.main').hexdigest())
         self.assertEqual('23415231b60de428eeaf32979e1cb8ce', hashlib.md5('main:M.é😀'.encode()).hexdigest())
