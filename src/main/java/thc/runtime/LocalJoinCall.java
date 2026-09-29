@@ -89,6 +89,9 @@ public final class LocalJoinCall extends Expr {
         }
         for (int temporary : temporaries) if (temporary >= 0) frame.clear(temporary);
         for (int[] fields : typedTemporaries) if (fields != null) for (int field : fields) frame.clear(field);
+        // All arguments have arrived, including after suspension. Old body locals
+        // are dead at the jump; retaining them would carry boxed values around a loop.
+        target.clearBodySlots(frame);
         Metrics invocation = metrics != null ? metrics : ((FunctionRoot) getRootNode()).invocationMetrics(frame);
         if (invocation.getEnabled()) invocation.incrementLocalJoinTransfers();
         throw target.getJump();

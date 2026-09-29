@@ -1213,6 +1213,9 @@ public final class Program implements ExecutableProgram {
             for (int j = 0; j < definitions.size(); j++) if (!parameters.contains(definitions.get(j).getId()))
                 bodyScopes.get(i).bindJoin(definitions.get(j).getId(), targets.get(j));
         }
+        // Formals and outer captures precede this range. Result/selector slots
+        // follow it, so a join transfer clears only completed entry/body locals.
+        int firstBodySlot = local.layout.nextSlot();
         Expr entry = compile((List<Object>) expr.get(3), local, tail);
         List<Expr> bodies = new ArrayList<>();
         for (int i = 0; i < definitions.size(); i++) {
@@ -1224,6 +1227,8 @@ public final class Program implements ExecutableProgram {
                 return node;
             }));
         }
+        int bodySlotLimit = local.layout.nextSlot();
+        for (LocalJoinTarget target : targets) target.setBodySlots(firstBodySlot, bodySlotLimit);
         CoreRepresentation result = entry.getRepresentation().refine(evaluated(CoreRepresentations.expression(expr), false));
         for (Expr body : bodies) TupleShape.requireCompatible(result, body.getRepresentation(), false);
         boolean allEvaluated = entry.getRepresentation().getEvaluated();

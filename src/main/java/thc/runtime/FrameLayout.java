@@ -43,5 +43,7 @@ public final class FrameLayout {
         if (slot != null) return slot;
         return bind(name);
     }
+    /** Return the allocation cursor without reserving a slot. */
+    int nextSlot() { return builder.addSlots(0); }
     public FrameDescriptor build() { return builder.build(); }
 }

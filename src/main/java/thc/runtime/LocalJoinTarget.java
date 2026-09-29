@@ -14,6 +14,7 @@ public final class LocalJoinTarget {
     @CompilerDirectives.CompilationFinal(dimensions = 1) private final boolean[] entryStrict;
     private final CoreRepresentation result;
     @CompilerDirectives.CompilationFinal(dimensions = 2) private final int[][] typedSlots;
+    @CompilerDirectives.CompilationFinal private int firstBodySlot, bodySlotLimit;
     private final LocalJoinJump jump;
     public LocalJoinTarget(Object group, int index, int[] slots, CoreRepresentation[] proofs) { this(group, index, slots, proofs, new boolean[slots.length], CoreRepresentation.UNKNOWN, new int[proofs.length][]); }
     public LocalJoinTarget(Object group, int index, int[] slots, CoreRepresentation[] proofs, boolean[] entryStrict, CoreRepresentation result) { this(group, index, slots, proofs, entryStrict, result, new int[proofs.length][]); }
@@ -25,4 +26,9 @@ public final class LocalJoinTarget {
     public int[] getSlots() { return slots; } public CoreRepresentation[] getProofs() { return proofs; }
     public boolean[] getEntryStrict() { return entryStrict; } public CoreRepresentation getResult() { return result; }
     public int[][] getTypedSlots() { return typedSlots; } public LocalJoinJump getJump() { return jump; }
+    /** Set once after lowering the group, before publishing its AST. */
+    void setBodySlots(int first, int limit) { firstBodySlot = first; bodySlotLimit = limit; }
+    @ExplodeLoop void clearBodySlots(VirtualFrame frame) {
+        for (int slot = firstBodySlot; slot < bodySlotLimit; slot++) frame.clear(slot);
+    }
 }
