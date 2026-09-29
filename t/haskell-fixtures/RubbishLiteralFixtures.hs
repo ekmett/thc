@@ -14,7 +14,8 @@
 module RubbishLiteralFixtures (prepareRubbishLiterals) where
 
 import Control.Monad (forM, unless)
-import Data.Aeson (object, (.=), encode)
+import Data.Aeson (Value(..), object, (.=), encode)
+import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.Text as Text
@@ -223,7 +224,11 @@ prepareRubbishLiterals root = do
 auditCBD :: FilePath -> Int -> String -> FilePath -> FilePath -> [String] -> IO CommandResult
 auditCBD root expected label input output entries = do
   value <- BS.readFile (root </> input) >>= either fail pure . readModuleValue
-  let args = ["bin/audit-core.py","--output",output] ++ concat [["--entry",name] | name <- entries] ++ ["-"]
+  prefix <- case value of
+    Object fields | Just (String unit) <- KeyMap.lookup "unit" fields,
+                    Just (String owner) <- KeyMap.lookup "module" fields -> pure (Text.unpack unit ++ ":" ++ Text.unpack owner ++ ".")
+    _ -> die "Rubbish CBD inspection lacks module identity"
+  let args = ["bin/audit-core.py","--output",output] ++ concat [["--entry",prefix ++ name] | name <- entries] ++ ["-"]
       logs = directory </> "logs"
       artifacts = [logs </> label ++ suffix | suffix <- [".stdout",".stderr",".command.json"]]
   completed <- timeout (180 * 1000000) $ readCreateProcessWithExitCode ((proc "python3" args) {cwd = Just root})

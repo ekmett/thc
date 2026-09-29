@@ -29,6 +29,7 @@ class RubbishLiteralTest {
     }
     private Map<String, Object> json(String file) throws Exception { return object(Json.parse(Files.readString(root.resolve(prefix + "/" + file)))); }
     private Map<String, Object> cbd(String file) throws Exception { return CoreCbdFixtures.read(root.resolve(prefix + "/" + file)); }
+    private String entry(Map<String, Object> module, String name) { return module.get("unit") + ":" + module.get("module") + "." + name; }
     private String hash(Path file) throws Exception { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(file))); }
     private void verifyEvidence() throws Exception {
         var manifest = json("manifest.json");
@@ -112,9 +113,10 @@ class RubbishLiteralTest {
         verifyEvidence(); var rows = expression(json("oracle.json").get("rows")); assertEquals(154, rows.size());
         for (var stage : list("pre", "post")) for (var backend : list("ast", "bytecode")) try (var context = context()) {
             entered(context, language -> {
-                var program = load(language, backend, with(cbd(stage + ".cbd"), "instrument", true));
+                var module = with(cbd(stage + ".cbd"), "instrument", true);
+                var program = load(language, backend, module);
                 for (var name : names) {
-                    var target = program.entryTarget(name);
+                    var target = program.entryTarget(entry(module, name));
                     var selected = rows.stream().map(ScalarValueTestSupport::expression).filter(row -> name.equals(row.get(0))).toList();
                     if (compiled) {
                         // Establish ordinary JIT specialization with checked interpreter
@@ -169,17 +171,19 @@ class RubbishLiteralTest {
     }
     private void auditRejected(Map<String, Object> module, Path directory, String label) throws Exception {
         var output = directory.resolve(label + ".audit.json");
-        var process = new ProcessBuilder("python3", root.resolve("bin/audit-core.py").toString(), "--entry", "scalarIntRep", "--output", output.toString(), "-")
+        var process = new ProcessBuilder("python3", root.resolve("bin/audit-core.py").toString(), "--entry", entry(module, "scalarIntRep"), "--output", output.toString(), "-")
             .directory(root.toFile()).redirectErrorStream(true).start();
         try (var input = process.getOutputStream()) { input.write(Json.stringify(module).getBytes(java.nio.charset.StandardCharsets.UTF_8)); }
         var text = new String(process.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
         assertTrue(process.waitFor(30, TimeUnit.SECONDS), text); assertNotEquals(0, process.exitValue(), text);
         var result = object(Json.parse(Files.readString(output))); assertEquals(false, result.get("accepted"));
         assertFalse(expression(result.get("issues")).isEmpty());
+        assertFalse(objects(result.get("issues")).stream().anyMatch(issue -> "entry-resolution".equals(issue.get("code"))));
     }
     private List<Object> replaceRep(List<Object> value, String rep) { var result = new ArrayList<>(value); result.set(2, rep); return result; }
     @Test void malformedRubbishProofsAndUnsupportedRepresentationsFailClosed(@TempDir Path directory) throws Exception {
-        var original = CoreModules.reachable(cbd("pre.cbd"), "scalarIntRep");
+        var decoded = cbd("pre.cbd");
+        var original = CoreModules.reachable(decoded, entry(decoded, "scalarIntRep"));
         var changes = new LinkedHashMap<String, UnaryOperator<List<Object>>>();
         changes.put("missing", value -> new ArrayList<>(value.subList(0, 3)));
         changes.put("wrong-rep", value -> replaceRep(value, "FloatRep"));
@@ -194,16 +198,17 @@ class RubbishLiteralTest {
         for (var change : changes.entrySet()) {
             var bad = object(changeLiterals(original, change.getValue())); auditRejected(bad, directory, change.getKey());
             for (var backend : list("ast", "bytecode")) try (var context = context()) { entered(context, language ->
-                assertThrows(RuntimeFault.class, () -> load(language, backend, bad).entryTarget("scalarIntRep"), backend + "/" + change.getKey())); }
+                assertThrows(RuntimeFault.class, () -> load(language, backend, bad).entryTarget(entry(bad, "scalarIntRep")), backend + "/" + change.getKey())); }
         }
     }
     @Test void genuineAggregateAndVectorRubbishRemainExplicitFrontiers() throws Exception {
         verifyEvidence(); var audit = json("frontiers.audit.json"); assertEquals(false, audit.get("accepted"));
         assertEquals(4L, objects(audit.get("issues")).stream().filter(issue -> "unsupported-literal".equals(issue.get("code"))).count());
         for (var name : list("emptyTuple", "singletonTuple", "sum", "vector")) {
-            var module = CoreModules.reachable(cbd("frontiers.cbd"), name);
+            var decoded = cbd("frontiers.cbd");
+            var module = CoreModules.reachable(decoded, entry(decoded, name));
             for (var backend : list("ast", "bytecode")) try (var context = context()) { entered(context, language ->
-                assertThrows(RuntimeFault.class, () -> load(language, backend, module).entryTarget(name), backend + "/" + name)); }
+                assertThrows(RuntimeFault.class, () -> load(language, backend, module).entryTarget(entry(module, name)), backend + "/" + name)); }
         }
     }
     private Object changeAlternative(Object value) {
@@ -219,9 +224,10 @@ class RubbishLiteralTest {
         return value;
     }
     @Test void rubbishCannotBecomeALiteralAlternative(@TempDir Path directory) throws Exception {
-        var original = CoreModules.reachable(cbd("pre.cbd"), "scalarIntRep"); var bad = object(changeAlternative(original));
+        var decoded = cbd("pre.cbd");
+        var original = CoreModules.reachable(decoded, entry(decoded, "scalarIntRep")); var bad = object(changeAlternative(original));
         auditRejected(bad, directory, "pattern");
         for (var backend : list("ast", "bytecode")) try (var context = context()) { entered(context, language ->
-            assertThrows(RuntimeFault.class, () -> load(language, backend, bad).entryTarget("scalarIntRep"))); }
+            assertThrows(RuntimeFault.class, () -> load(language, backend, bad).entryTarget(entry(bad, "scalarIntRep")))); }
     }
 }
