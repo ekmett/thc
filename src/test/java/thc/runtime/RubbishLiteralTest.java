@@ -25,13 +25,14 @@ class RubbishLiteralTest {
         var result = new ArrayList<String>();
         for (var name : list("Lifted", "Unlifted", "IntRep", "Int32Rep")) result.add("original" + name);
         for (var name : scalarNames) result.add("scalar" + name);
-        result.addAll(list("boxedData", "boxedClosure")); return result;
+        result.addAll(list("boxedData", "boxedClosure", "sequenceLifted")); return result;
     }
     private Map<String, Object> json(String file) throws Exception { return object(Json.parse(Files.readString(root.resolve(prefix + "/" + file)))); }
+    private Map<String, Object> cbd(String file) throws Exception { return CoreCbdFixtures.read(root.resolve(prefix + "/" + file)); }
     private String hash(Path file) throws Exception { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(file))); }
     private void verifyEvidence() throws Exception {
         var manifest = json("manifest.json");
-        assertEquals(1L, manifest.get("schema")); assertEquals(names, manifest.get("entries")); assertEquals(147L, manifest.get("nativeRows"));
+        assertEquals(1L, manifest.get("schema")); assertEquals(names, manifest.get("entries")); assertEquals(154L, manifest.get("nativeRows"));
         var inputs = object(manifest.get("inputHashes"));
         var expectedInputs = new HashSet<>(list("t/fixtures/compiler/RubbishLiteralAudit.hs", "t/haskell-fixtures/RubbishLiteralFixtures.hs",
             "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "bin/audit-core.py", "bin/core-capabilities.json"));
@@ -45,17 +46,17 @@ class RubbishLiteralTest {
         assertEquals(expectedInputs, inputs.keySet());
         var artifacts = object(manifest.get("artifactHashes"));
         var expectedArtifacts = new HashSet<String>();
-        for (var file : list("pre.json", "post.json", "oracle.json", "originals.json", "pre.audit.json", "post.audit.json", "frontiers.json", "frontiers.audit.json"))
+        for (var file : list("pre.cbd", "post.cbd", "Data.Sequence.Internal.cbd", "oracle.json", "originals.json", "pre.audit.json", "post.audit.json", "frontiers.cbd", "frontiers.audit.json"))
             expectedArtifacts.add(prefix + "/" + file);
-        for (var command : list("version", "info", "libdir", "imports-ghc-internal", "pre-audit", "post-audit", "frontiers-audit"))
+        for (var command : list("version", "info", "libdir", "imports-ghc-internal", "imports-containers", "containers-unit", "pre-audit", "post-audit", "frontiers-audit"))
             for (var suffix : list("stdout", "stderr", "command.json")) expectedArtifacts.add(prefix + "/logs/" + command + "." + suffix);
         assertEquals(expectedArtifacts, artifacts.keySet());
         var hashes = new LinkedHashMap<>(inputs); hashes.putAll(artifacts);
         for (var entry : hashes.entrySet()) assertEquals(entry.getValue(), hash(root.resolve(entry.getKey())), "Stale rubbish fixture: " + entry.getKey());
         var installed = new LinkedHashMap<String, Object>();
         for (var record : objects(manifest.get("installedInterfaces"))) installed.put((String) record.get("path"), record.get("sha256"));
-        assertEquals(1, installed.size());
-        assertEquals(Set.of("Manager.hi"), new HashSet<>(installed.keySet().stream().map(path -> Path.of(path).getFileName().toString()).toList()));
+        assertEquals(2, installed.size());
+        assertEquals(Set.of("Manager.hi", "Internal.hi"), new HashSet<>(installed.keySet().stream().map(path -> Path.of(path).getFileName().toString()).toList()));
         for (var entry : installed.entrySet()) {
             var path = Path.of(entry.getKey()); assertTrue(path.isAbsolute()); assertEquals(entry.getValue(), hash(path), "Changed original interface: " + path);
         }
@@ -68,8 +69,21 @@ class RubbishLiteralTest {
         for (var stage : list("pre", "post")) {
             var audit = json(stage + ".audit.json"); assertEquals(true, audit.get("accepted"));
             assertEquals(list(), audit.get("issues")); assertEquals(list(), audit.get("missingGlobals"));
-            assertEquals(names.size(), literals(json(stage + ".json")).size());
+            assertEquals(names.size(), literals(cbd(stage + ".cbd")).size());
         }
+    }
+    @Test void freshSequenceCaptureHasSupportedEvaluatedLiftedRubbish() throws Exception {
+        verifyEvidence();
+        var module = cbd("Data.Sequence.Internal.cbd");
+        assertEquals("Data.Sequence.Internal", module.get("module"));
+        var original = expression(json("originals.json").get("sequenceOccurrences"));
+        assertEquals(1, original.size());
+        assertEquals("BoxedRep (Just Lifted)", expression(original.getFirst()).get(1));
+        var values = literals(module);
+        assertEquals(1, values.size(), "The fresh installed Core literal must survive as rubbish, not an unsupported diagnostic");
+        var proof = RubbishLiterals.proof(values.getFirst());
+        assertTrue(proof.getEvaluated());
+        assertEquals(List.of("BoxedRep (Just Lifted)"), proof.getPrimReps());
     }
     private boolean rubbish(List<?> values) { return values.size() >= 2 && values.subList(0, 2).equals(list("lit", "rubbish")); }
     private List<List<Object>> literals(Object value) {
@@ -95,10 +109,10 @@ class RubbishLiteralTest {
     @Test void originalAndScalarNativeContinuationsMatchInterpreted() throws Exception { nativeValues(false); }
     @Test void originalAndScalarNativeContinuationsMatchFirstInstalledEntry() throws Exception { nativeValues(true); }
     private void nativeValues(boolean compiled) throws Exception {
-        verifyEvidence(); var rows = expression(json("oracle.json").get("rows")); assertEquals(147, rows.size());
+        verifyEvidence(); var rows = expression(json("oracle.json").get("rows")); assertEquals(154, rows.size());
         for (var stage : list("pre", "post")) for (var backend : list("ast", "bytecode")) try (var context = context()) {
             entered(context, language -> {
-                var program = load(language, backend, with(json(stage + ".json"), "instrument", true));
+                var program = load(language, backend, with(cbd(stage + ".cbd"), "instrument", true));
                 for (var name : names) {
                     var target = program.entryTarget(name);
                     var selected = rows.stream().map(ScalarValueTestSupport::expression).filter(row -> name.equals(row.get(0))).toList();
@@ -128,7 +142,7 @@ class RubbishLiteralTest {
     @Test void fillersUseNonBottomScalarAndCheckedBoxedCarriers() throws Exception {
         try (var context = context()) { entered(context, language -> {
             verifyEvidence(); var decoder = new RubbishLiterals(language);
-            for (var literal : literals(json("pre.json"))) {
+            for (var literal : literals(cbd("pre.cbd"))) {
                 var proof = RubbishLiterals.proof(literal); var value = decoder.decode(proof); assertFalse(value instanceof Thunk);
                 switch (proof.getKind()) {
                     case LONG -> { if (proof.isInt()) assertEquals(0, value); else assertEquals(0L, value); }
@@ -154,10 +168,10 @@ class RubbishLiteralTest {
         return value;
     }
     private void auditRejected(Map<String, Object> module, Path directory, String label) throws Exception {
-        var input = directory.resolve(label + ".json"); Files.writeString(input, Json.stringify(module));
         var output = directory.resolve(label + ".audit.json");
-        var process = new ProcessBuilder("python3", root.resolve("bin/audit-core.py").toString(), "--entry", "scalarIntRep", "--output", output.toString(), input.toString())
+        var process = new ProcessBuilder("python3", root.resolve("bin/audit-core.py").toString(), "--entry", "scalarIntRep", "--output", output.toString(), "-")
             .directory(root.toFile()).redirectErrorStream(true).start();
+        try (var input = process.getOutputStream()) { input.write(Json.stringify(module).getBytes(java.nio.charset.StandardCharsets.UTF_8)); }
         var text = new String(process.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
         assertTrue(process.waitFor(30, TimeUnit.SECONDS), text); assertNotEquals(0, process.exitValue(), text);
         var result = object(Json.parse(Files.readString(output))); assertEquals(false, result.get("accepted"));
@@ -165,7 +179,7 @@ class RubbishLiteralTest {
     }
     private List<Object> replaceRep(List<Object> value, String rep) { var result = new ArrayList<>(value); result.set(2, rep); return result; }
     @Test void malformedRubbishProofsAndUnsupportedRepresentationsFailClosed(@TempDir Path directory) throws Exception {
-        var original = CoreModules.reachable(json("pre.json"), "scalarIntRep");
+        var original = CoreModules.reachable(cbd("pre.cbd"), "scalarIntRep");
         var changes = new LinkedHashMap<String, UnaryOperator<List<Object>>>();
         changes.put("missing", value -> new ArrayList<>(value.subList(0, 3)));
         changes.put("wrong-rep", value -> replaceRep(value, "FloatRep"));
@@ -187,7 +201,7 @@ class RubbishLiteralTest {
         verifyEvidence(); var audit = json("frontiers.audit.json"); assertEquals(false, audit.get("accepted"));
         assertEquals(4L, objects(audit.get("issues")).stream().filter(issue -> "unsupported-literal".equals(issue.get("code"))).count());
         for (var name : list("emptyTuple", "singletonTuple", "sum", "vector")) {
-            var module = CoreModules.reachable(json("frontiers.json"), name);
+            var module = CoreModules.reachable(cbd("frontiers.cbd"), name);
             for (var backend : list("ast", "bytecode")) try (var context = context()) { entered(context, language ->
                 assertThrows(RuntimeFault.class, () -> load(language, backend, module).entryTarget(name), backend + "/" + name)); }
         }
@@ -205,7 +219,7 @@ class RubbishLiteralTest {
         return value;
     }
     @Test void rubbishCannotBecomeALiteralAlternative(@TempDir Path directory) throws Exception {
-        var original = CoreModules.reachable(json("pre.json"), "scalarIntRep"); var bad = object(changeAlternative(original));
+        var original = CoreModules.reachable(cbd("pre.cbd"), "scalarIntRep"); var bad = object(changeAlternative(original));
         auditRejected(bad, directory, "pattern");
         for (var backend : list("ast", "bytecode")) try (var context = context()) { entered(context, language ->
             assertThrows(RuntimeFault.class, () -> load(language, backend, bad).entryTarget("scalarIntRep"))); }

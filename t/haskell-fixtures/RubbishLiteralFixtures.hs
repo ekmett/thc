@@ -14,8 +14,11 @@
 module RubbishLiteralFixtures (prepareRubbishLiterals) where
 
 import Control.Monad (forM, unless)
-import Data.Aeson (object, (.=))
+import Data.Aeson (object, (.=), encode)
 import qualified Data.ByteString.Char8 as BS
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.Text as Text
+import qualified Data.Text.Encoding as Text
 import Data.IORef (newIORef, writeIORef)
 import Data.List (isPrefixOf, nub, sort, sortOn)
 import FixtureSupport
@@ -37,9 +40,13 @@ import GHC.Unit.Module.ModDetails (md_types)
 import GHC.Unit.Module.WholeCoreBindings (emptyIfaceForeign)
 import System.Directory (createDirectoryIfMissing, listDirectory)
 import System.Environment (lookupEnv)
-import System.Exit (die)
+import System.Exit (ExitCode(..), die)
 import System.FilePath ((</>), takeExtension)
-import THC.Plugin (serializeOptimizedCore, serializePostTidyCore)
+import System.Process (proc, readCreateProcessWithExitCode, cwd)
+import System.Timeout (timeout)
+import THC.Plugin (serializeOptimizedCoreCBD, serializePostTidyCoreCBD)
+import THC.Interface (loadInterfaceCore, interfaceBindings, interfaceCoreCBD)
+import THC.Compact.Module (readModuleValue)
 import Text.Read (readMaybe)
 import Unsafe.Coerce (unsafeCoerce)
 
@@ -62,8 +69,8 @@ representation :: Literal -> PrimRep
 representation (LitRubbish _ rep) | Just [r] <- runtimeRepPrimRep_maybe rep = r
 representation _ = error "Expected one original scalar rubbish representation"
 
--- This is not an invented JSON proof: the first four literals are extracted
--- unchanged from installed GHC interfaces. The wider matrix uses GHC's own
+-- Original literals are extracted unchanged from installed GHC interfaces.
+-- The wider matrix uses GHC's own
 -- mkLitRubbish at closed scalar types. Native GHC compiles every case; its
 -- observable oracle is the continuation, never an unspecified filler payload.
 prepareRubbishLiterals :: FilePath -> IO ()
@@ -83,19 +90,20 @@ prepareRubbishLiterals root = do
                   lookup "target word size" fields == Just "8" -> pure ()
     _ -> die "Rubbish literal native oracle requires native64 GHC"
   libdir <- execute "libdir" [] ghc ["--print-libdir"]
-  locations <- forM [("ghc-internal","GHC/Internal/Event/Manager.hi")] $ \(package,path) -> do
+  locations <- forM [("ghc-internal","GHC/Internal/Event/Manager.hi"),("containers","Data/Sequence/Internal.hi")] $ \(package,path) -> do
     result <- execute ("imports-" ++ package) [] pkg ["field",package,"import-dirs","--simple-output"]
     pure (oneLine result </> path, result)
-  (entries, originals, rows) <- runGhc (Just (oneLine libdir)) $ do
+  sequenceUnit <- execute "containers-unit" [] pkg ["field","containers","id","--simple-output"]
+  (entries, originals, sequenceOriginals, rows) <- runGhc (Just (oneLine libdir)) $ do
     initial <- getSessionDynFlags
     env0 <- getSession
     (configured, _, _) <- parseDynamicFlags (hsc_logger env0) initial (map noLoc
-      ["-O2", "-package", "ghc", "-package", "ghc-internal", "-fno-external-interpreter", "-dcore-lint",
+      ["-O2", "-package", "ghc", "-package", "ghc-internal", "-package", "containers", "-fno-external-interpreter", "-dcore-lint",
        "-odir", root </> directory </> "ghc", "-hidir", root </> directory </> "ghc"])
     _ <- setSessionDynFlags (gopt_unset configured Opt_IgnoreInterfacePragmas)
     flags <- getSessionDynFlags
     env <- getSession
-    original <- liftIO $ fmap concat $ forM (map fst locations) $ \installed -> do
+    original <- liftIO $ fmap concat $ forM (take 1 (map fst locations)) $ \installed -> do
       raw <- readBinIface (targetProfile flags) (hsc_NC env) CheckHiWay QuietBinIFace installed
       let owner = mi_module raw
           expected = [("GHC.Internal.Event.Manager","ghc-internal")]
@@ -114,6 +122,14 @@ prepareRubbishLiterals root = do
     liftIO $ unless (sort (nub (map (show . representation . snd) original)) ==
       sort ["BoxedRep (Just Lifted)","BoxedRep (Just Unlifted)","IntRep","Int32Rep"])
       (die ("Original rubbish representation inventory changed: " ++ show (map (show . representation . snd) original)))
+    sequenceCore <- liftIO $ loadInterfaceCore env
+      (mkModule (stringToUnit (oneLine sequenceUnit)) (mkModuleName "Data.Sequence.Internal")) (fst (locations !! 1)) >>=
+        maybe (die "Data.Sequence.Internal has no complete installed Core") pure
+    let sequenceRubbish = [(getOccString v,l) | (v,body) <- flattenBinds (interfaceBindings sequenceCore), l <- rubbish body]
+    liftIO $ unless (map (representation . snd) sequenceRubbish == [BoxedRep (Just Lifted)])
+      (die "Data.Sequence.Internal rubbish inventory changed")
+    liftIO $ interfaceCoreCBD ["unit-qualified","source-notes"] sequenceCore >>=
+      BS.writeFile (root </> directory </> "Data.Sequence.Internal.cbd")
     file <- guessTarget (root </> source) Nothing Nothing
     setTargets [file]
     graph <- depanal [] False
@@ -135,7 +151,8 @@ prepareRubbishLiterals root = do
           rep <- [BoxedRep (Just Lifted),BoxedRep (Just Unlifted),IntRep,Int32Rep]]
         samples = [("original" ++ label (representation l), App (Lit l) (Type (primRepToType (representation l)))) | (_,l) <- selected] ++
           [fromGhc ("scalar" ++ label r) (primRepToType r) | r <- scalars] ++
-          [fromGhc "boxedData" intTy, fromGhc "boxedClosure" (mkVisFunTyMany intTy intTy)]
+          [fromGhc "boxedData" intTy, fromGhc "boxedClosure" (mkVisFunTyMany intTy intTy)] ++
+          [("sequenceLifted",App (Lit l) (Type intTy)) | (_,l) <- sequenceRubbish]
         wrap value expression = let (args,body) = collectBinders expression in
           mkLams args (Case value (mkWildValBinder ManyTy (exprType value)) (exprType body) [Alt DEFAULT [] body])
         seeds = [-1000,-17,-1,0,1,42,1000] :: [Int]
@@ -151,14 +168,14 @@ prepareRubbishLiterals root = do
     frontiers <- liftIO $ mapM makeBinding
       [fromGhc "emptyTuple" (mkTupleTy Unboxed []), fromGhc "singletonTuple" (mkTupleTy Unboxed [intPrimTy]),
        fromGhc "sum" (mkSumTy [intPrimTy,intPrimTy]), fromGhc "vector" (primRepToType (VecRep 4 Int32ElemRep))]
-    liftIO $ serializeOptimizedCore flags ["unit-qualified"]
+    liftIO $ serializeOptimizedCoreCBD flags ["unit-qualified"]
       (optimized { mg_binds = [NonRec v body | (v,body) <- frontiers], mg_exports = [] }) >>=
-      writeFile (root </> directory </> "frontiers.json")
+      BS.writeFile (root </> directory </> "frontiers.cbd")
     let adapted = optimized { mg_binds = [NonRec v body | (v,body) <- guests], mg_exports = [] }
-    liftIO $ serializeOptimizedCore flags ["unit-qualified"] adapted >>= writeFile (root </> directory </> "pre.json")
+    liftIO $ serializeOptimizedCoreCBD flags ["unit-qualified"] adapted >>= BS.writeFile (root </> directory </> "pre.cbd")
     (tidied, _) <- liftIO $ hscTidy current adapted
-    liftIO $ serializePostTidyCore flags ["unit-qualified"] (cg_module tidied) (cg_tycons tidied)
-      (cg_binds tidied) emptyIfaceForeign >>= writeFile (root </> directory </> "post.json")
+    liftIO $ serializePostTidyCoreCBD flags ["unit-qualified"] (cg_module tidied) (cg_tycons tidied)
+      (cg_binds tidied) emptyIfaceForeign >>= BS.writeFile (root </> directory </> "post.cbd")
     observations <- liftIO $ fmap concat $ forM samples $ \(name,value) -> do
       let body = wrap value (template "nativeTemplate")
       case lintExpr (initLintConfig flags []) body of
@@ -171,18 +188,18 @@ prepareRubbishLiterals root = do
         let result = function seed
         unless (result == seed + 17) (die "GHC rubbish unexpectedly changed the continuation")
         pure (name,seed,result)
-    pure (map fst samples,[(owner,show (representation l)) | (owner,l) <- original],observations)
+    pure (map fst samples,[(owner,show (representation l)) | (owner,l) <- original],
+      [(owner,show (representation l)) | (owner,l) <- sequenceRubbish],observations)
   writeJson (root </> directory </> "oracle.json") $ object ["rows" .= rows]
   writeJson (root </> directory </> "originals.json") $ object ["occurrences" .= originals,
-    "scope" .= ("Rubbish literals in retained unfoldings of installed Event.Manager, not a full-module execution" :: String)]
+    "sequenceOccurrences" .= sequenceOriginals,
+    "scope" .= ("Original installed rubbish literals; native observations execute their unchanged fillers in closed continuations" :: String)]
   audits <- forM ["pre","post"] $ \stage -> do
     let output = directory </> stage ++ ".audit.json"
-    result <- execute (stage ++ "-audit") [] "python3" $ ["bin/audit-core.py", "--output", output] ++
-      concat [["--entry",name] | name <- entries] ++ [directory </> stage ++ ".json"]
+    result <- auditCBD root 0 (stage ++ "-audit") (directory </> stage ++ ".cbd") output entries
     pure (output,result)
-  frontierAudit <- runLoggedExpect 1 180 root (directory </> "logs") "frontiers-audit" [] "python3"
-    (["bin/audit-core.py", "--output", directory </> "frontiers.audit.json"] ++
-      concat [["--entry",name] | name <- ["emptyTuple","singletonTuple","sum","vector"]] ++ [directory </> "frontiers.json"])
+  frontierAudit <- auditCBD root 1 "frontiers-audit" (directory </> "frontiers.cbd")
+    (directory </> "frontiers.audit.json") ["emptyTuple","singletonTuple","sum","vector"]
   compilerFiles <- listDirectory (root </> "src/compiler/THC")
   scriptFiles <- listDirectory (root </> "bin")
   inputHashes <- hashes root $ sort $ [source,"t/haskell-fixtures/RubbishLiteralFixtures.hs",
@@ -193,10 +210,32 @@ prepareRubbishLiterals root = do
   installedInterfaces <- forM (map fst locations) $ \path -> do
     digest <- hashFile path
     pure (object ["path" .= path, "sha256" .= digest])
-  let commands = [version,info,libdir] ++ map snd locations ++ map snd audits ++ [frontierAudit]
-  artifactHashes <- hashes root $ map (directory </>) ["pre.json","post.json","oracle.json","originals.json","frontiers.json","frontiers.audit.json"] ++
+  let commands = [version,info,libdir,sequenceUnit] ++ map snd locations ++ map snd audits ++ [frontierAudit]
+  artifactHashes <- hashes root $ map (directory </>) ["pre.cbd","post.cbd","Data.Sequence.Internal.cbd","oracle.json","originals.json","frontiers.cbd","frontiers.audit.json"] ++
     map fst audits ++ concatMap commandArtifacts commands
   writeJson (root </> directory </> "manifest.json") $ object ["schema" .= (1::Int), "entries" .= entries,
     "nativeRows" .= length rows, "originalOccurrences" .= length originals, "inputHashes" .= inputHashes,
     "installedInterfaces" .= installedInterfaces, "artifactHashes" .= artifactHashes, "commands" .= map commandRecord commands]
   putStrLn "rubbish-literals: original installed literals and closed scalar GHC-native continuation matrix prepared"
+
+-- The auditor consumes explicit inspection through stdin. Executable fixtures
+-- remain CBD files, including deliberately unsupported representation controls.
+auditCBD :: FilePath -> Int -> String -> FilePath -> FilePath -> [String] -> IO CommandResult
+auditCBD root expected label input output entries = do
+  value <- BS.readFile (root </> input) >>= either fail pure . readModuleValue
+  let args = ["bin/audit-core.py","--output",output] ++ concat [["--entry",name] | name <- entries] ++ ["-"]
+      logs = directory </> "logs"
+      artifacts = [logs </> label ++ suffix | suffix <- [".stdout",".stderr",".command.json"]]
+  completed <- timeout (180 * 1000000) $ readCreateProcessWithExitCode ((proc "python3" args) {cwd = Just root})
+    (Text.unpack (Text.decodeUtf8 (BL.toStrict (encode value))))
+  (code,out,err) <- maybe (die "Rubbish CBD inspection audit timed out") pure completed
+  let actual = case code of ExitSuccess -> 0; ExitFailure n -> n
+      record = object ["argv" .= ("python3":args),"cwd" .= root,"exit" .= actual,"expectedExit" .= expected,
+        "inputCBD" .= input,"timeoutSeconds" .= (180::Int)]
+      stdoutBytes = Text.encodeUtf8 (Text.pack out)
+      stderrBytes = Text.encodeUtf8 (Text.pack err)
+  BS.writeFile (root </> (artifacts !! 0)) stdoutBytes
+  BS.writeFile (root </> (artifacts !! 1)) stderrBytes
+  writeJson (root </> (artifacts !! 2)) record
+  unless (actual == expected) (die ("Rubbish CBD audit failed: " ++ err))
+  pure (CommandResult stdoutBytes stderrBytes record artifacts)
