@@ -5,7 +5,7 @@
 
 When separate GHC units are linked into one THC program, each source component
 must be compiled with its actual GHC unit ID. The THC plugin's `unit-qualified`
-option writes each module below `units/u-<escaped-unit>/Module.json`; the flat
+option writes each module below `units/u-<escaped-unit>/Module.cbd`; the flat
 output layout is the default for single-unit exports.
 Package modules must use `post-tidy` with GHC code generation. This is the
 boundary that matches names in installed `.hi` files: a separately compiled
@@ -29,8 +29,17 @@ closure, using GHC unit IDs and dependencies from Cabal's plan. Its format is:
         {
           "name": "Example",
           "boundary": "optimized-Core-after-Tidy-before-CorePrep",
-          "path": "core/units/u-example-0.1-inplace/Example.json",
-          "sha256": "<lowercase SHA-256 of the complete module file>"
+          "path": "core/units/u-example-0.1-inplace/Example.cbd",
+          "sha256": "<lowercase SHA-256 of the complete module file>",
+          "compact": {
+            "path": "/absolute/cache/unit-core/v3/<bundle-hash>/0.cbd",
+            "sha256": "<same final CBD hash>",
+            "format": "thc-cbd-v1"
+          },
+          "containsDelimitedControl": false,
+          "registrationObligations": false,
+          "mainAlias": false,
+          "packageScalarDeclarations": false
         }
       ]
     }
@@ -38,7 +47,7 @@ closure, using GHC unit IDs and dependencies from Cabal's plan. Its format is:
 }
 ```
 
-Paths are relative to the manifest and cannot escape its directory. Installed
+Logical source paths remain relative; executable `compact.path` references are absolute. Installed
 or native-only dependency units may have no Core modules, but a reachable guest
 global must still have an exported definition. The JVM loader checks units,
 module names, boundaries and binding owners, and rejects missing reachable
@@ -50,81 +59,39 @@ The JVM `loadEntry` and `loadManagedExports` APIs expose `verifyArtifacts = fals
 
 ## Direct unit artifacts
 
-By default, the project driver publishes a nonempty unit as two absolute artifact references:
-`json: {path, sha256}` and `symbols: {path, sha256, format}`. Both must be present, and
-the unit must not also select `bundle`. `core.jsons` contains original module
-JSON bytes plus LF separators and small metadata projections. With
-`symbols.format: "md5-utf8-u64le-v1"`, `core.symbols` contains one fixed 24-byte
-record per original top-level binding: the 16 canonical MD5 digest bytes of its
-exact logical qualified ID encoded as UTF-8, followed by an unsigned 64-bit
-little-endian absolute JSON byte offset. Records are sorted by unsigned digest
-bytes, with no header, name table or auxiliary search index. MD5 collisions are
-assumed absent; lookup does not compare stored names or use collision buckets.
-For example, `main:M.é😀` has digest `23415231b60de428eeaf32979e1cb8ce`.
-
-An opt-in unit can instead select one [compact container](compact-core-format.md)
-per module. This route uses the container's fixed fingerprint table and decodes
-selected typed records directly, without a JSON or symbol-pair artifact.
-
-Omitting `symbols.format` selects the compatible text directory, not binary
-auto-detection. Its rows are:
-
-```text
-exact-unit:Module.binding decimal-byte-offset
-```
-
-IDs are decoded raw UTF-8, sorted by unsigned UTF-8 bytes; a row ends with LF.
-The last space separates the ID from the decimal offset, so IDs can contain
-spaces. Empty, duplicate, or line-breaking IDs are rejected. The offset points
-to the original binding object's opening `{`, not an escaped ID or a display
-name. Both formats record offsets from actual final bytes, after package-native
-amendments. Directory sort order does not change Core binding order, so a
-following record's offset is never a binding length. The reader maps the
-directory on first lookup and decodes only the selected JSON object; neither
-format requires a whole-source structural index or eager binding enumeration.
-
-Module records retain their original name, logical path, boundary and module
-hash. They add absolute byte positions, all end-exclusive: `start`/`end` select
-the unchanged original module, `bindingsStart`/`bindingsEnd` include the binding
-array's brackets, and `metadataStart`/`metadataEnd` select a separate object of
-existing identity, constructor, ABI and foreign-admission fields. This object
-excludes `bindings`, `groups` and `sourceCore`. When source tables exist,
-`sourceMetadataStart`/`sourceMetadataEnd` select an object containing the original
-`sourceFiles`/`sourceSpans`, independently of admission metadata. These projections
-are additional bytes in the same unit payload, not replacements for original
-Core or extra sidecar files.
+The project driver publishes one [CBD container](compact-core-format.md) per
+module under `unit-core/v3/<source-bundle-hash>`. Compiler exports are CBD from
+the start; native linkage amends typed header facts while retaining original
+executable/debug bytes. Publication copies final module bytes unchanged.
+The module record retains its original name, logical path, boundary and hash,
+and adds the absolute `compact` reference. No JSON extents, index, `.symbols`
+sidecar or executable bundle reference is emitted. Old JSON unit records and
+legacy JSON/ZIP execution inputs are rejected, not migrated or retried.
 
 Four Boolean module facts are derived from the original data:
 
 - `containsDelimitedControl`: an expression contains the actual `prompt#` or
   `control0#` primitive, not merely that spelling in a string.
 - `registrationObligations`: foreign files or stub initializers/finalizers exist.
-- `mainAlias`: the exact `main::<Module>.main` binding exists.
-- `packageScalarDeclarations`: `staticForeignImports.imports` is nonempty.
+- `mainAlias`: the exact GHC-generated `main::Main.main` binding exists.
+- `packageScalarDeclarations`: actual import/address declarations or a linked
+  package-native component are present.
 
 When available, the unit's `targetLayout` is the existing `thc-target-layout`
 schema-1 document with the original compiler and layout records, checked against
 the acquisition receipt. Missing layout is not replaced by a host assumption.
 Artifact hashes remain verification metadata, not a default whole-unit scan.
-The explicit auditor verifies both artifacts, exact symbol offsets, module
-hashes, metadata projections and derived facts before publishing a completed
-result. ZIP acquisition receipts remain in the producer cache; existing ZIP and
-loose-module manifests remain valid.
+The explicit auditor verifies module hashes and derived facts. ZIP acquisition
+receipts remain in the producer cache, not as runtime execution alternatives.
 
-## JSON navigation and lazy loading
+## Typed lazy loading
 
-JSON and `.symbols` directories provide direct binding lookup. Serialized `.idx`
-sidecars and module `index` references are not accepted.
-
-Loose module paths stay inside the manifest directory. ZIP bundles contain the
-exact declared JSON modules plus their required manifests; missing, duplicate
-and undeclared members are rejected. Explicit artifact verification checks the
-source and bundle hashes. Normal loading retains immutable JSON bytes and builds
-in-memory navigation, checking container grammar and quoted boundaries without
-decoding all scalar values or binding bodies. It still scans the JSON topology,
-reads ZIP members and enumerates binding headers. Control summaries and strict
-dependency discovery still visit expressions; foreign admission may inspect
-additional fields.
+CBD contains its own fixed fingerprint directory. Selected bindings decode from
+typed DATA records; source/name maps remain independent and demand-read. Normal
+loading checks framing and accessed records without a whole-body scan. Optional
+verification hashes the same immutable snapshot subsequently used for execution.
+JSON remains valid for manifests, launch controls and explicit inspection output,
+never for executable Core input.
 
 For both backends, eligible lifted top-level functions and thunks decode body
 fields and lower executable roots on demand. Entry selection prepares the entry;
@@ -136,34 +103,15 @@ with each Context. Runtime admission and lowering still reject unsupported code
 when preparing a binding (`reject-at-binding-admission`); the separate
 whole-program audit is unchanged.
 
-## Partially resolved package-native components
+## Package-native components
 
-An unresolved package-native artifact remains in `packageNativeArchive`, with
-its complete original bytes, ABI and unresolved-symbol inventory. Artifacts
-without a dependency proof block the entire module. Recognizing a managed symbol
-such as `memcpy` does not waive this obligation.
+Typed `packageNativeLink` metadata retains actual ABI entries, complete component
+bytes, declared dependency descriptors and optional native-library companions.
+The same component identity is shared by typed calls and native provider use;
+dependencies do not invent Haskell ABI authority or duplicate provider globals.
+These records are encoded in the CBD header and preserve the ordinary linking,
+ownership and native-access rules described by the binary format.
 
-For LLVM bitcode, the native producer may add `entryResolution` with schema 1 and
-profile `llvm-globaldce-adapter-closures-v1`. It binds the original artifact hash
-to one ordered row per original ABI entry, recording that entry's LLVM closure
-hash and unresolved symbols. Each closure is computed with LLVM internalization,
-global dead-code elimination and verification, retaining constructor/destructor,
-global and address-taken function dependencies. Entries whose closures reach an
-unsupported external remain unavailable, including indirect calls through globals.
-
-The producer then builds and verifies one union artifact for all available
-entries and independently inspects its unresolved symbols. Its hash and actual
-unresolved inventory are recorded in the proof. The accompanying `packageNativeLink`
-keeps the original component identity, full ABI, entry indices and source recipe,
-with an explicit `availableEntries` selection and the union's bytes/hash. This
-single loaded component preserves shared mutable globals and one-time native
-initializers; individual closures are evidence, not separately loaded libraries.
-This profile admits raw-bitcode dependencies only. A selected union that
-needs an embedded native provider container (libm, entropy, width or C++ library)
-remains archive-only until its container recipe can also be preserved.
-
-Both consumers validate complete ordered coverage, component and content identity,
-the exact available subset, and the final union's dependency inventory. Only the
-selected ABI entries become callable. Selecting an unavailable original call
-still fails before native execution. The retained original archive is never
-rewritten into an assertion that its unresolved dependencies were satisfied.
+Unresolved archived foreign products remain explicit failures, not executable
+claims. Retired `entryResolution` and `availableEntries` admission protocols are
+rejected; there is no per-symbol availability fallback.

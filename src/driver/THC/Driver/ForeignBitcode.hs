@@ -17,10 +17,9 @@ module THC.Driver.ForeignBitcode (linkClockGetTime, timeClockHeaders) where
 import Control.Exception (finally)
 import Control.Monad (filterM, forM, unless)
 import qualified Crypto.Hash.SHA256 as SHA
-import Data.Aeson (Value(..), eitherDecodeStrict', encode, object, (.=))
+import Data.Aeson (Value(..), object, (.=))
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString as BS
-import qualified Data.ByteString.Lazy as BL
 import Data.Char (intToDigit)
 import Data.List (isInfixOf, isSuffixOf, nub)
 import Data.Maybe (catMaybes, isJust)
@@ -35,6 +34,7 @@ import System.Exit (ExitCode(..))
 import System.FilePath ((</>), takeDirectory, takeFileName)
 import System.IO (hClose, openTempFile)
 import System.Process (readCreateProcessWithExitCode, proc)
+import THC.Compact.Module (readModuleValue, rewriteModuleFacts)
 
 -- A complete no-callback CAPI module is the first executable archive. The
 -- compiler recipe is reusable, but no other module gains execution permission
@@ -48,7 +48,7 @@ linkClockGetTime libdir includes staging platform unit name original
         case splitAt (length ("time-1.15-" :: String)) unit of
           ("time-1.15-", suffix) -> not (null suffix) && all (`elem` ("0123456789abcdef" :: String)) suffix
           _ -> False) (fail "CTimespec requires the original time-1.15 unit")
-      value <- either fail pure (eitherDecodeStrict' original)
+      value <- either fail pure (readModuleValue original)
       fields <- case value of
         Object objectFields -> pure objectFields
         _ -> fail "CAPI Core must be an object"
@@ -126,7 +126,7 @@ linkClockGetTime libdir includes staging platform unit name original
                            "abi" .= [object ["symbol" .= symbol, "kind" .= kind] | (symbol, kind) <- abi]] ++
                            ["headerHashes" .= [object ["name" .= takeFileName path, "sha256" .= digest] |
                              (path, digest) <- headers] | timeClock])
-      pure (BL.toStrict (encode (Object (KeyMap.insert "foreignLink" linked fields))))
+      rewriteModuleFacts original (Object (KeyMap.insert "foreignLink" linked fields))
   where
     sha = hex . SHA.hash
     timeClock = name == "Data.Time.Clock.Internal.CTimespec"

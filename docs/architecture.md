@@ -27,9 +27,10 @@ launches `Main.main :: IO ()`; acquisition alone does not establish runtime
 support. See [build and run](driver.md), [Cabal integration](cabal.md), and
 [GHC library Core](ghc-core.md) for setup and limits.
 
-The driver publishes directly seekable [JSON unit artifacts](core-package-manifest.md).
-Explicit [binary containers](compact-core-format.md) offer typed record decoding.
-Both retain executable representation facts separately from optional source and
+The compiler emits [CBD containers](compact-core-format.md) directly and the
+driver publishes them through [package manifests](core-package-manifest.md).
+There is no runtime JSON Core input or automatic conversion fallback. Typed
+records retain executable representation facts separately from optional source and
 pretty-printing data. A readable Core dump is not an executable interchange
 format. The [exporter reference](compiler.md) describes the retained GHC facts.
 
