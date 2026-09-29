@@ -206,6 +206,48 @@ class CoreCompactRecordsTest {
             assertNull(origin.get("originModule")); assertEquals(0L, file.getCounters().statistics().dataBytesRead());
         });
     }
+    @Test void nativeBuildInputsKeepProductProofSeparateFromDependencyReferences() throws Exception {
+        byte[] pool = concat(id, "localrepo-tarpathremoteuri".getBytes(StandardCharsets.UTF_8));
+        byte[] text = bytes(0, 8), local = bytes(8, 5), repo = bytes(13, 8), path = bytes(21, 4);
+        byte[] remote = bytes(25, 6), uri = bytes(31, 3);
+        byte[] payload = concat(bytes(1), text, text, text, text, text, text, bytes(0));
+        byte[] prefix = concat(bytes(1), text, text, text, text, new byte[12], bytes(2), payload, bytes(0, 4));
+        // New tag4 dependencies are linkage receipts, NOT full native product proofs.
+        byte[] inputs = concat(bytes(0, 0, 2, 1, 2), path, text, text, local, uri, bytes(0, 0, 0));
+        for (int presence : List.of(0, 1, 2)) {
+            var locations = presence == 2 ? List.of(bytes(0), bytes(1),
+                concat(bytes(2), local, bytes(2), path, bytes(0)),
+                concat(bytes(2), repo, bytes(0, 2), remote, uri)) : List.of(bytes(0));
+            for (byte[] location : locations) {
+                byte[] product = presence != 2 ? bytes(presence) : concat(bytes(2), text, text,
+                    new byte[10], location, text, uri, bytes(1), path, local, bytes(1), text, uri, bytes(0));
+                byte[] facts = concat(prefix, inputs, product, bytes(0, 0));
+                module(new byte[0], pool, facts, (records, file) -> {
+                    var link = (Map<?,?>) records.header().get("packageNativeLink");
+                    var build = (Map<?,?>) link.get("buildInputs");
+                    assertEquals(List.of(map("declaredPath", List.of("path", "unit:M.f"), "unit", "unit:M.f",
+                        "componentSha256", "local", "bitcodeSha256", "uri")), build.get("dependencies"));
+                    assertEquals(presence != 0, build.containsKey("nativeProduct"));
+                    if (presence != 2) assertNull(build.get("nativeProduct"));
+                    else {
+                        var proof = (Map<?,?>) build.get("nativeProduct");
+                        assertEquals("unit:M.f", proof.get("profile")); assertEquals("uri", proof.get("registrationSha256"));
+                        assertEquals(List.of(map("path", "path", "sha256", "local", "members",
+                            List.of(map("name", "unit:M.f", "sha256", "uri")))), proof.get("archives"));
+                        var source = (Map<?,?>) proof.get("sourceIdentity");
+                        assertEquals(location[0] != 0, source.containsKey("pkg-src"));
+                        if (location[0] == 2) assertEquals(location[2] == 5 ?
+                            map("type", "local", "path", "path") : map("type", "repo-tar", "repo", map("type", "remote", "uri", "uri")),
+                            source.get("pkg-src"));
+                        else assertNull(source.get("pkg-src"));
+                    }
+                    var counts = file.getCounters().statistics();
+                    assertEquals(0L, counts.dataBytesRead()); assertEquals(0L, counts.stringBytesRead());
+                    assertEquals(0L, counts.debugBytesRead());
+                });
+            }
+        }
+    }
     @Test void explicitLiteralRecordsPreserveRawBytesIntegersAndIeeeBits() throws Exception {
         var cases = List.of(
             new LiteralCase(0, bytes(83), "int", "-42"),

@@ -518,11 +518,11 @@ public final class CoreCompactRecords {
             var entry = strings(cursor, "symbol", "entry"); entry.put("convention", convention(cursor)); entry.put("safety", safety(cursor));
             entry.put("arguments", texts(cursor)); entry.put("result", text(cursor)); return entry;
         }));
-        switch (cursor.readByte()) {
+        int buildTag = cursor.readByte();
+        switch (buildTag) {
             case 0 -> { }
             case 1 -> result.put("buildInputs", null);
-            case 2 -> result.put("buildInputs", nativeBuildInputs(cursor, false));
-            case 3 -> result.put("buildInputs", nativeBuildInputs(cursor, true));
+            case 2, 3, 4 -> result.put("buildInputs", nativeBuildInputs(cursor, buildTag));
             default -> throw error("Invalid compact native build-input tag");
         }
         int extras = cursor.readByte();
@@ -555,7 +555,7 @@ public final class CoreCompactRecords {
         result.put("files", list(cursor, () -> strings(cursor, "path", "sha256")));
         return result;
     }
-    private Map<String,Object> nativeBuildInputs(CoreCompactCursor cursor, boolean extended) throws Throwable {
+    private Map<String,Object> nativeBuildInputs(CoreCompactCursor cursor, int version) throws Throwable {
         var result = map();
         result.put("translationUnits", list(cursor, () -> {
             int tag = cursor.readByte();
@@ -565,11 +565,15 @@ public final class CoreCompactRecords {
             var entry = strings(cursor, "provider"); entry.put("symbols", texts(cursor)); entry.putAll(strings(cursor, "bitcode", "bitcodeSha256", "target"));
             entry.put("inputs", compileInput(cursor)); return entry;
         }));
-        field(cursor, result, "dependencies", () -> list(cursor, () -> nativeDependency(cursor)));
+        field(cursor, result, "dependencies", () -> list(cursor, () -> {
+            if (version < 4) return nativeDependency(cursor, false);
+            var entry = map("declaredPath", texts(cursor));
+            entry.putAll(strings(cursor, "unit", "componentSha256", "bitcodeSha256")); return entry;
+        }));
         result.put("nativeLibraries", list(cursor, () -> {
             var entry = strings(cursor, "provider"); entry.put("symbols", texts(cursor)); entry.putAll(strings(cursor, "compiler", "compilerSha256"));
             entry.put("arguments", texts(cursor));
-            if (extended) {
+            if (version >= 3) {
                 field(cursor, entry, "dependencyArguments", () -> texts(cursor));
                 field(cursor, entry, "objcopy", () -> text(cursor));
                 field(cursor, entry, "objcopySha256", () -> text(cursor));
@@ -582,9 +586,10 @@ public final class CoreCompactRecords {
             var entry = strings(cursor, "profile", "source", "sourceSha256", "inputBitcodeSha256");
             entry.put("definitions", list(cursor, () -> texts(cursor))); return entry;
         }));
+        if (version == 4) field(cursor, result, "nativeProduct", () -> nativeDependency(cursor, true));
         return result;
     }
-    private Map<String,Object> sourceIdentity(CoreCompactCursor cursor) throws Throwable {
+    private Map<String,Object> sourceIdentity(CoreCompactCursor cursor, boolean location) throws Throwable {
         var result = map();
         field(cursor, result, "id", () -> text(cursor)); field(cursor, result, "depends", () -> texts(cursor));
         for (String key : List.of("type", "style", "pkg-name", "pkg-version")) field(cursor, result, key, () -> text(cursor));
@@ -598,11 +603,15 @@ public final class CoreCompactRecords {
             return flags;
         });
         for (String key : List.of("component-name", "pkg-src-sha256", "pkg-cabal-sha256")) field(cursor, result, key, () -> text(cursor));
+        if (location) field(cursor, result, "pkg-src", () -> {
+            var source = strings(cursor, "type"); field(cursor, source, "path", () -> text(cursor));
+            field(cursor, source, "repo", () -> strings(cursor, "type", "uri")); return source;
+        });
         return result;
     }
-    private Map<String,Object> nativeDependency(CoreCompactCursor cursor) throws Throwable {
+    private Map<String,Object> nativeDependency(CoreCompactCursor cursor, boolean location) throws Throwable {
         var result = strings(cursor, "profile", "unit");
-        result.put("sourceIdentity", sourceIdentity(cursor)); result.putAll(strings(cursor, "registration", "registrationSha256"));
+        result.put("sourceIdentity", sourceIdentity(cursor, location)); result.putAll(strings(cursor, "registration", "registrationSha256"));
         result.put("archives", list(cursor, () -> {
             var entry = strings(cursor, "path", "sha256"); entry.put("members", list(cursor, () -> strings(cursor, "name", "sha256"))); return entry;
         }));
