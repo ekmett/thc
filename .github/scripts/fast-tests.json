@@ -1519,6 +1519,9 @@
     "t/fixtures/compiler/OriginalMemcpyNative.hs": {
       "junit": ["thc.runtime.OriginalMemcpyTest"], "python": []
     },
+    "src/test/resources/core/original-ghc-host-ways-descriptors.json": {
+      "junit": ["thc.runtime.OriginalStringRtsTest"], "python": ["bin/test-audit-core.py"]
+    },
     "src/test/resources/core/original-bytestring-strlen-descriptor.json": {
       "junit": ["thc.runtime.OriginalStringRtsTest"], "python": ["bin/test-audit-core.py"]
     },

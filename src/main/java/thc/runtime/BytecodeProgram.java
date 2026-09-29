@@ -6258,10 +6258,11 @@ public final class BytecodeProgram implements ExecutableProgram {
                 CoreStringRtsForeign.validateOperand(stringRts, index, operand.proof(), lexicalProof(argument, scope));
                 operands.add(operand);
             }
+            long constantValue = stringRts.constantValue(stackTargetLayout);
             return tupleExpression(tupleProof, (e, destination) -> {
                 var b = e.builder;
                 if (stringRts.getArguments().size() == 2) b.beginOriginalCStringLength(destination.getFirst());
-                else b.beginOriginalRtsConstant(destination.getFirst(), stringRts == StringRtsOp.KEEP_CAFS ? 1L : 0L);
+                else b.beginOriginalRtsConstant(destination.getFirst(), constantValue);
                 for (var operand : operands) operand.emit(e);
                 if (stringRts.getArguments().size() == 2) b.endOriginalCStringLength(); else b.endOriginalRtsConstant();
             });

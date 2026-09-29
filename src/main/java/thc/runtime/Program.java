@@ -1819,7 +1819,7 @@ public final class Program implements ExecutableProgram {
                 operands[i] = compile(args.get(i), scope, false);
                 CoreStringRtsForeign.validateOperand(stringRts, i, operands[i].getRepresentation(), bindingProof(args.get(i), scope));
             }
-            return new StringRtsExpression(stringRts, operands, tupleProof);
+            return new StringRtsExpression(stringRts, operands, tupleProof, stringRts.constantValue(stackTargetLayout));
         }
         if (shutdown != null) {
             CoreRtsShutdown.validateHead(fn, defined);

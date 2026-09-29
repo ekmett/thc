@@ -1,0 +1,212 @@
+{
+  "rts_isDebugged": {
+    "argumentReps": [
+      {
+        "evaluated": false,
+        "kind": "void",
+        "primReps": []
+      }
+    ],
+    "arity": 1,
+    "convention": "ccall",
+    "resultRep": {
+      "aggregate": "unboxed-tuple",
+      "components": [
+        {
+          "evaluated": true,
+          "kind": "void",
+          "primReps": []
+        },
+        {
+          "evaluated": true,
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        }
+      ],
+      "evaluated": false,
+      "kind": "unknown",
+      "primReps": [
+        "IntRep"
+      ]
+    },
+    "safety": "unsafe",
+    "schema": 1,
+    "suppliedArity": 1,
+    "target": {
+      "isFunction": true,
+      "kind": "static",
+      "symbol": "rts_isDebugged",
+      "unit": "ghc-9.14.1-inplace"
+    }
+  },
+  "rts_isDynamic": {
+    "argumentReps": [
+      {
+        "evaluated": false,
+        "kind": "void",
+        "primReps": []
+      }
+    ],
+    "arity": 1,
+    "convention": "ccall",
+    "resultRep": {
+      "aggregate": "unboxed-tuple",
+      "components": [
+        {
+          "evaluated": true,
+          "kind": "void",
+          "primReps": []
+        },
+        {
+          "evaluated": true,
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        }
+      ],
+      "evaluated": false,
+      "kind": "unknown",
+      "primReps": [
+        "IntRep"
+      ]
+    },
+    "safety": "unsafe",
+    "schema": 1,
+    "suppliedArity": 1,
+    "target": {
+      "isFunction": true,
+      "kind": "static",
+      "symbol": "rts_isDynamic",
+      "unit": "ghc-9.14.1-inplace"
+    }
+  },
+  "rts_isProfiled": {
+    "argumentReps": [
+      {
+        "evaluated": false,
+        "kind": "void",
+        "primReps": []
+      }
+    ],
+    "arity": 1,
+    "convention": "ccall",
+    "resultRep": {
+      "aggregate": "unboxed-tuple",
+      "components": [
+        {
+          "evaluated": true,
+          "kind": "void",
+          "primReps": []
+        },
+        {
+          "evaluated": true,
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        }
+      ],
+      "evaluated": false,
+      "kind": "unknown",
+      "primReps": [
+        "IntRep"
+      ]
+    },
+    "safety": "unsafe",
+    "schema": 1,
+    "suppliedArity": 1,
+    "target": {
+      "isFunction": true,
+      "kind": "static",
+      "symbol": "rts_isProfiled",
+      "unit": "ghc-9.14.1-inplace"
+    }
+  },
+  "rts_isThreaded": {
+    "argumentReps": [
+      {
+        "evaluated": false,
+        "kind": "void",
+        "primReps": []
+      }
+    ],
+    "arity": 1,
+    "convention": "ccall",
+    "resultRep": {
+      "aggregate": "unboxed-tuple",
+      "components": [
+        {
+          "evaluated": true,
+          "kind": "void",
+          "primReps": []
+        },
+        {
+          "evaluated": true,
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        }
+      ],
+      "evaluated": false,
+      "kind": "unknown",
+      "primReps": [
+        "IntRep"
+      ]
+    },
+    "safety": "unsafe",
+    "schema": 1,
+    "suppliedArity": 1,
+    "target": {
+      "isFunction": true,
+      "kind": "static",
+      "symbol": "rts_isThreaded",
+      "unit": "ghc-9.14.1-inplace"
+    }
+  },
+  "rts_isTracing": {
+    "argumentReps": [
+      {
+        "evaluated": false,
+        "kind": "void",
+        "primReps": []
+      }
+    ],
+    "arity": 1,
+    "convention": "ccall",
+    "resultRep": {
+      "aggregate": "unboxed-tuple",
+      "components": [
+        {
+          "evaluated": true,
+          "kind": "void",
+          "primReps": []
+        },
+        {
+          "evaluated": true,
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        }
+      ],
+      "evaluated": false,
+      "kind": "unknown",
+      "primReps": [
+        "IntRep"
+      ]
+    },
+    "safety": "unsafe",
+    "schema": 1,
+    "suppliedArity": 1,
+    "target": {
+      "isFunction": true,
+      "kind": "static",
+      "symbol": "rts_isTracing",
+      "unit": "ghc-9.14.1-inplace"
+    }
+  }
+}
