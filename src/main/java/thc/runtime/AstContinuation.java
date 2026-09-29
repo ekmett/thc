@@ -60,6 +60,14 @@ public final class AstContinuation implements SavedGuestContinuation {
             try { return AstContinuations.resumeAstSteps(frame, steps, input); }
             catch (AstCapture cut) {
                 return sourceRoot instanceof FunctionRoot root ? root.finishCapture(cut, frame) : cut.freeze(sourceRoot, frame);
+            } catch (DelimitedCut cut) {
+                if (sourceRoot instanceof FunctionRoot root) {
+                    var last = cut.getFrames().isEmpty() ? null : cut.getFrames().getLast();
+                    if (last == null || last.getFrame() != frame ||
+                        !(last.getStep() instanceof DelimitedRootStep step) || step.root() != root)
+                        cut.append(frame, new DelimitedRootStep(root));
+                }
+                throw cut;
             }
         } finally {
             stack.setDepth(stack.getDepth() - 1);

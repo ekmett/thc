@@ -15,6 +15,7 @@ final class AstMaskScope implements AstResumeStep {
     @Override public Object resume(VirtualFrame frame, Object input) {
         try { return AstContinuations.resumeAstSteps(frame, steps, input); }
         catch (AstCapture cut) { throw cut.enclose(remaining -> new AstMaskScope(node, prior, remaining)); }
+        catch (DelimitedCut cut) { throw cut.append(frame, new DelimitedMaskStep(node, prior)); }
         finally { SynchronousMasking.set(node, prior); }
     }
 }

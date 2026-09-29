@@ -54,6 +54,7 @@ public final class LocalJoinRegion extends Expr {
                     else { FrameAccess.writeLong(frame, region.selector, jump.getTarget().getIndex()); region.loop.execute(frame); }
                 }
             } catch (AstCapture cut) { throw cut.enclose(remaining -> new ResumeAsyncRegion(region, remaining, slots, offset)); }
+            catch (DelimitedCut cut) { throw cut.append(frame, new ResumeRegion(region, slots, offset)); }
             return slots == null ? region.resultValue(frame) : region.finishTuple(frame, slots, offset);
         }
     }

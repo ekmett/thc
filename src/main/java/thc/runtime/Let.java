@@ -57,6 +57,10 @@ final class Let extends Expr {
                     return destination == null ? body.execute(frame) : body.executeTuple(frame, destination, offset);
                 }
             });
+        } catch (DelimitedCut cut) {
+            throw cut.append(frame, (saved, input, ambient, outer) -> {
+                input.get(); return destination == null ? body.execute(saved) : body.executeTuple(saved, destination, offset);
+            });
         }
     }
     @ExplodeLoop private void initializeFrom(VirtualFrame frame, int start) {
@@ -97,6 +101,9 @@ final class Let extends Expr {
                             return thc.runtime.Unit.INSTANCE;
                         }
                     });
+                } catch (DelimitedCut cut) {
+                    int next = i + 1;
+                    throw cut.append(frame, (saved, input, ambient, outer) -> { input.get(); initializeFrom(saved, next); return thc.runtime.Unit.INSTANCE; });
                 }
             }
         }
