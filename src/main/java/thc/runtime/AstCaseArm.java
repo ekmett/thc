@@ -59,9 +59,10 @@ public final class AstCaseArm extends Expr {
         Object[] arguments = captures == null ? new Object[]{bloom}
                 : new Object[]{bloom, captures.capture(frame, sourceSlots,
                     programSlot < 0 ? null : Program.instance(frame, programSlot))};
-        // Like other prepared residual calls, allow a first lawful TailCall
-        // without training DirectCallNode's separate exception profile.
         Object result = programSlot < 0 ? Calls.direct(call, arguments) : target.call(this, arguments);
+        // Reusable side roots transport the original transfer, including any
+        // typed input loan, back inside the caller that owns the tail loop.
+        if (programSlot >= 0 && result instanceof TailCall tail) throw tail;
         // Core tail position is only a candidate: complete also requires an exact
         // scalar identity return and an owned internal spill. Cleanup steps veto omission.
         return AstControl.INSTANCE.complete(this, result, target, shape, tailPosition);
