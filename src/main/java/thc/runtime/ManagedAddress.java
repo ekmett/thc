@@ -291,14 +291,22 @@ public final class ManagedAddress {
     }
 
     public int compareWithinAllocation(ManagedAddress other) {
-        if (foreign != null) foreign.requireCurrent(); if (other.foreign != null) other.foreign.requireCurrent();
-        if (rtsFlags != null || other.rtsFlags != null) {
-            if (rtsFlags != null) rtsFlags.requireCurrent(); if (other.rtsFlags != null) other.rtsFlags.requireCurrent();
-            throw fault("RtsFlags has no address ordering");
+        var address = this;
+        // As with difference, traverse backing chains without recursive partial evaluation.
+        while (true) {
+            if (address.foreign != null) address.foreign.requireCurrent(); if (other.foreign != null) other.foreign.requireCurrent();
+            if (address.rtsFlags != null || other.rtsFlags != null) {
+                if (address.rtsFlags != null) address.rtsFlags.requireCurrent(); if (other.rtsFlags != null) other.rtsFlags.requireCurrent();
+                throw fault("RtsFlags has no address ordering");
+            }
+            var backing = address.foreign == null ? null : address.foreign.getBacking();
+            var otherBacking = other.foreign == null ? null : other.foreign.getBacking();
+            if (backing == null && otherBacking == null) return address.compareUnwrapped(other);
+            if (backing != null) address = backing;
+            if (otherBacking != null) other = otherBacking;
         }
-        if (foreign != null && foreign.getBacking() != null || other.foreign != null && other.foreign.getBacking() != null)
-            return (foreign != null && foreign.getBacking() != null ? foreign.getBacking() : this)
-                .compareWithinAllocation(other.foreign != null && other.foreign.getBacking() != null ? other.foreign.getBacking() : other);
+    }
+    private int compareUnwrapped(ManagedAddress other) {
         if (foreign != null) return (int) foreign.compare(other, "compare");
         if (other.foreign != null) return -(int) other.foreign.compare(this, "compare");
         if (heap != null || other.heap != null) throw fault("Opaque guest heap addresses have no ordering");

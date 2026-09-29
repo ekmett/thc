@@ -380,7 +380,8 @@ public final class Program implements ExecutableProgram {
                             StablePointerOp.named(name) == null && WeakOp.named(name) == null && ArrayOp.named(name) == null &&
                             PinnedMemoryOp.named(name) == null && TupleArithmeticOp.named(name) == null &&
                             CoreArithmeticExceptions.payload(name) == null &&
-                            !CoreVectors.operations.contains(name) && !Set.of("plusAddr#", "indexCharOffAddr#", "tagToEnum#",
+                            !CoreVectors.operations.contains(name) && !Set.of("plusAddr#", "minusAddr#", "remAddr#", "addr2Int#", "int2Addr#",
+                            "eqAddr#", "neAddr#", "ltAddr#", "leAddr#", "gtAddr#", "geAddr#", "indexCharOffAddr#", "tagToEnum#",
                             "raise#", "raiseIO#", "catch#", "getMaskingState#", "unmaskAsyncExceptions#",
                             "maskAsyncExceptions#", "maskUninterruptible#", "noDuplicate#", "touch#", "keepAlive#", "getCurrentCCS#",
                             "plusFloat#", "minusFloat#", "timesFloat#", "divideFloat#", "negateFloat#",
