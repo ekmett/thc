@@ -228,11 +228,14 @@ public final class FunctionRoot extends GuestRoot {
         // Frame carriers were established structurally before target publication;
         // no context lookup, guest execution or observed-profile seeding is needed.
         if (programSlot < 0) return null;
+        // An outlined reusable arm also returns an internal TailCall for its
+        // owning caller to rethrow. This physical root result is not the guest ABI.
+        Class<?> resultClass = role == FunctionRootRole.PASS_THROUGH ? null : numericClass(getScalarResultProof());
         if (getTypedInput() != null) {
             // Narrow scalars already use the typed packet calling convention.
             // Its generated storage class varies; retain exact layout/owner checks.
             preparedForAOT = true;
-            return ExecutionSignature.create(numericClass(getScalarResultProof()), new Class<?>[]{null});
+            return ExecutionSignature.create(resultClass, new Class<?>[]{null});
         }
         List<CoreRepresentation> inputs = getInputProofs();
         ArgumentLayout input = getInputLayout();
@@ -252,7 +255,7 @@ public final class FunctionRoot extends GuestRoot {
             signature[getEntryArgumentOffset() + ArgumentLayout.offset(input, i)] = carrier;
         }
         preparedForAOT = true;
-        return ExecutionSignature.create(numericClass(getScalarResultProof()), signature);
+        return ExecutionSignature.create(resultClass, signature);
     }
     private static Class<?> numericClass(CoreRepresentation proof) {
         if (proof.isInt()) return Integer.class;
@@ -573,7 +576,13 @@ public final class FunctionRoot extends GuestRoot {
     private Object executeBody(VirtualFrame frame) {
         if (role == FunctionRootRole.PASS_THROUGH) {
             if (!(loop.getRepeatingNode() instanceof SelfRepeater repeating)) throw fault("Invalid function body node");
-            return repeating.once(frame);
+            try { return repeating.once(frame); }
+            catch (TailCall tail) {
+                if (programSlot < 0) throw tail;
+                // Keep the normal transfer inside the owning function's loop,
+                // without training this outlined root's cold exception profile.
+                return tail;
+            }
         }
         if (hasSelfTail) return loop.execute(frame);
         if (!(loop.getRepeatingNode() instanceof SelfRepeater repeating)) throw fault("Invalid function self-loop node");
