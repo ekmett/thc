@@ -429,6 +429,13 @@ public final class ManagedByteArray {
     public static ManagedAllocation allocateGuest(long size, boolean nativeBacking) {
         return nativeBacking ? ManagedAllocation.nativeMutable(size, (int) ValueLayout.ADDRESS.byteSize()) : allocateGuest(size);
     }
+    /** Publishes newly produced guest bytes, retaining ordinary unsafe-thaw semantics. */
+    public static Object fromFreshBytes(byte[] bytes) {
+        if (!thc.Language.currentState().getNativeByteArrays()) return bytes;
+        var allocation = allocateGuest(bytes.length, true);
+        allocation.copyBytesIn(bytes, 0, 0, bytes.length);
+        return allocation;
+    }
     private static MemorySegment vectorSegment(byte[] bytes, long index, int stride, int vectorBytes) {
         if (bytes.length < vectorBytes || index < 0 || index > (long) (bytes.length - vectorBytes) / stride)
             throw fault("Vector ByteArray# range outside its backing storage");

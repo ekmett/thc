@@ -25,6 +25,51 @@ import static org.junit.jupiter.api.Assertions.*;
 import static thc.runtime.ScalarValueTestSupport.*;
 
 class BigNatLiteralTest {
+    @Test void literalsUseTheInvokingStoragePolicy() {
+        for (String storage : List.of("heap", "native")) for (String backend : List.of("ast", "bytecode"))
+            try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).allowNativeAccess(true)
+                    .option("thc.ByteArrayStorage", storage).build()) {
+                context.initialize("thc"); context.enter();
+                try {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    for (String decimal : List.of("0", "18446744073709551617", "340282366920938463472597979468622987265")) {
+                        var body = literal(decimal, exact());
+                        var source = map("constructors", list(), "bindings", list(
+                            map("id", "value", "name", "value", "lifted", false, "rep", exact(), "expr", body),
+                            map("id", "inline", "name", "inline", "lifted", true, "arity", 1,
+                                "expr", list("lam", list(map("id", "unused", "lifted", false)), body))));
+                        ExecutableProgram program = backend.equals("ast") ? new Program(language, source) : new BytecodeProgram(language, source);
+                        Object global = program.entryValue("value");
+                        assertSame(global, program.entryValue("value"));
+                        Object inline = Calls.target(program.entryTarget("inline"), new Object[]{0L, 0L});
+                        assertNotSame(global, inline);
+                        for (Object value : List.of(global, inline)) {
+                            var number = new BigInteger(decimal);
+                            int length = (number.bitLength() + 63) / 64 * 8;
+                            assertEquals(length, ManagedByteArray.sizeGuest(value));
+                            for (int index = 0; index < length; index++) {
+                                int bit = (ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN ? index : index / 8 * 8 + 7 - index % 8) * 8;
+                                assertEquals(number.shiftRight(bit).and(BigInteger.valueOf(255)).intValue(), ManagedByteArray.readGuest(value, index, true));
+                            }
+                            var address = ManagedAddress.fromGuestByteArray(value);
+                            if (storage.equals("native")) {
+                                var allocation = assertInstanceOf(ManagedAllocation.class, value);
+                                assertTrue(allocation.hasNativeStorage()); assertFalse(allocation.isPinned());
+                                assertEquals(allocation.nativeSegment().address(), address.toNativeBits());
+                            } else {
+                                assertInstanceOf(byte[].class, value);
+                                assertThrows(RuntimeFault.class, address::toNativeBits);
+                            }
+                            assertSame(value, ManagedByteArray.freezeGuest(value));
+                            if (length != 0) {
+                                ManagedByteArray.writeGuest(ManagedByteArray.freezeGuest(value), 0, 91);
+                                assertEquals(91, address.readWord8(0));
+                            }
+                        }
+                    }
+                } finally { context.leave(); }
+            }
+    }
     private final File root = new File(System.getProperty("thc.projectRoot"));
     private static final List<String> ENTRIES = list("integerRoundTrip", "naturalRoundTrip", "integerLiteral", "naturalLiteral", "magnitudeSize", "magnitudeByte", "magnitudeWord", "magnitudeSign");
     private static final List<String> ARITHMETIC = list("integerAddFrontier", "naturalAddFrontier"), MODULES = list("BigNat", "Integer", "Natural");

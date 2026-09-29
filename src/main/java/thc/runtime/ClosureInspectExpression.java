@@ -26,7 +26,7 @@ public final class ClosureInspectExpression extends Expr {
         if (operation == ClosureInspectOp.UNPACK) {
             ClosureImage image = ClosureInspection.image(operands[0].execute(frame));
             FrameAccess.writeObject(frame, slots[offset], Language.currentState(this).closureInfo.address(image.getDescriptor()));
-            FrameAccess.writeObject(frame, slots[offset + 1], image.getBytes());
+            FrameAccess.writeObject(frame, slots[offset + 1], ManagedByteArray.fromFreshBytes(image.getBytes()));
             FrameAccess.writeObject(frame, slots[offset + 2], image.getPointers());
         } else if (operation == ClosureInspectOp.AP_STACK) {
             Object value = operands[0].execute(frame);

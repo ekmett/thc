@@ -276,7 +276,8 @@ class PolyglotStorageTest {
     }
     @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
     void bulkCopiesUseForeignBuffersWithoutNativeAddresses(String backend) throws Exception {
-        try (var context = context()) {
+        for (String policy : List.of("heap", "native")) try (var context = Context.newBuilder("thc", "js")
+                .allowExperimentalOptions(true).allowNativeAccess(true).option("thc.ByteArrayStorage", policy).build()) {
             context.initialize("thc"); context.enter();
             try {
                 var bytes = new byte[]{1,2,3,4,5,6,7,8};
@@ -286,12 +287,22 @@ class PolyglotStorageTest {
                 assertEquals(8L, call(backend, PolyglotOp.BUFFER_SIZE, value));
                 assertEquals(0x0807060504030201L, call(backend, PolyglotOp.BUFFER_READ_LONG, value, 0L, 0L));
                 assertEquals(0x0102030405060708L, call(backend, PolyglotOp.BUFFER_READ_LONG, value, 1L, 0L));
-                byte[] copy = (byte[]) call(backend, PolyglotOp.BUFFER_COPY, value, 2L, 4L);
-                assertArrayEquals(new byte[]{3,4,5,6}, copy); assertEquals(1, foreign.bulkReads);
-                bytes[2] = 99; assertEquals(3, copy[0]);
+                Object copy = call(backend, PolyglotOp.BUFFER_COPY, value, 2L, 4L);
+                assertEquals(4, ManagedByteArray.sizeGuest(copy)); assertEquals(1, foreign.bulkReads);
+                for (int i = 0; i < 4; i++) assertEquals(i + 3, ManagedByteArray.readGuest(copy, i, true));
+                if (policy.equals("native")) {
+                    var allocation = assertInstanceOf(ManagedAllocation.class, copy);
+                    assertTrue(allocation.hasNativeStorage()); assertFalse(allocation.isPinned());
+                    assertEquals(allocation.nativeSegment().address(), ManagedAddress.fromGuestByteArray(copy).toNativeBits());
+                } else assertInstanceOf(byte[].class, copy);
+                assertThrows(RuntimeFault.class, ManagedAddress.fromGuestByteArray(bytes)::toNativeBits);
+                bytes[2] = 99; assertEquals(3, ManagedByteArray.readGuest(copy, 0, true));
+                assertSame(copy, ManagedByteArray.freezeGuest(copy));
+                ManagedByteArray.writeGuest(ManagedByteArray.freezeGuest(copy), 0, 91);
+                assertEquals(91, ManagedByteArray.readGuest(copy, 0, true)); assertEquals(99, bytes[2]);
                 assertThrows(RuntimeFault.class, () -> call(backend, PolyglotOp.BUFFER_COPY, value, Long.MAX_VALUE, 1L));
                 assertThrows(RuntimeFault.class, () -> call(backend, PolyglotOp.BUFFER_COPY, value, 0L, -1L));
-                assertEquals(0, ((byte[]) call(backend, PolyglotOp.BUFFER_COPY, value, 8L, 0L)).length);
+                assertEquals(0, ManagedByteArray.sizeGuest(call(backend, PolyglotOp.BUFFER_COPY, value, 8L, 0L)));
                 assertThrows(RuntimeFault.class, () -> call(backend, PolyglotOp.BUFFER_WRITE_BYTE, value, 0L, 1L));
                 assertEquals(1, bytes[0]);
                 var destination = ManagedAllocation.mutable(8, 8, true);

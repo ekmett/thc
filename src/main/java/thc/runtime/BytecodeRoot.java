@@ -3631,7 +3631,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             ClosureImage image = ClosureInspection.image(value);
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
             info.setObject(bytecode, frame, thc.Language.currentState(node).closureInfo.address(image.getDescriptor()));
-            bytes.setObject(bytecode, frame, image.getBytes());
+            bytes.setObject(bytecode, frame, ManagedByteArray.fromFreshBytes(image.getBytes()));
             pointers.setObject(bytecode, frame, image.getPointers());
         }
     }

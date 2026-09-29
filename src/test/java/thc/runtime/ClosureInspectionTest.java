@@ -37,6 +37,62 @@ import static org.junit.jupiter.api.Assertions.*;
 @Timeout(90)
 @SuppressWarnings("unchecked")
 public class ClosureInspectionTest {
+    @Test public void unpackedGuestBytesHonorStoragePolicyWithoutEnteringPointers() {
+        for (String policy : List.of("heap", "native")) for (String backend : List.of("ast", "bytecode"))
+            try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).allowNativeAccess(true)
+                    .option("thc.ByteArrayStorage", policy).build()) {
+                context.initialize("thc"); context.enter();
+                try {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    var never = new GuestRoot(language, new FrameLayout().build()) {
+                        @Override public Object execute(VirtualFrame frame) { throw new AssertionError("inspection entered a field"); }
+                        @Override public long bloom(VirtualFrame frame) { return 0; }
+                    };
+                    var thunk = new Thunk(never.getCallTarget(), null);
+                    var data = new DataLayout(language, "test:NativeImage.Payload", "Payload", new String[]{"IntRep", "LiftedRep"})
+                        .create(new Object[]{73L, thunk});
+                    RootCallTarget target;
+                    if (backend.equals("bytecode")) target = BytecodeRootGen.create(language,
+                            com.oracle.truffle.api.bytecode.BytecodeConfig.DEFAULT, b -> {
+                        b.beginRoot(); var info = b.createLocal(); var bytes = b.createLocal(); var pointers = b.createLocal();
+                        b.beginUnpackClosure(info, bytes, pointers); b.emitLoadArgument(0); b.endUnpackClosure();
+                        b.beginReturn(); b.emitLoadLocal(bytes); b.endReturn(); b.endRoot();
+                    }).getNode(0).getCallTarget();
+                    else {
+                        var layout = new FrameLayout();
+                        int info = layout.bind("info", com.oracle.truffle.api.frame.FrameSlotKind.Object);
+                        int bytes = layout.bind("bytes", com.oracle.truffle.api.frame.FrameSlotKind.Object);
+                        int pointers = layout.bind("pointers", com.oracle.truffle.api.frame.FrameSlotKind.Object);
+                        target = new RootNode(language, layout.build()) {
+                            @Child ClosureInspectExpression expression = new ClosureInspectExpression(ClosureInspectOp.UNPACK,
+                                new Expr[]{new Expr() { @Override public Object execute(VirtualFrame frame) { return frame.getArguments()[0]; } }},
+                                CoreRepresentation.UNKNOWN);
+                            @Override public Object execute(VirtualFrame frame) {
+                                expression.executeTuple(frame, new int[]{info, bytes, pointers}, 0);
+                                assertArrayEquals(new Object[]{thunk}, (Object[]) frame.getValue(pointers));
+                                return frame.getValue(bytes);
+                            }
+                        }.getCallTarget();
+                    }
+                    Object first = Calls.target(target, new Object[]{data}), second = Calls.target(target, new Object[]{data});
+                    assertNotSame(first, second); assertEquals(0, thunk.getState());
+                    for (Object bytes : List.of(first, second)) {
+                        assertEquals(24, ManagedByteArray.sizeGuest(bytes));
+                        assertEquals(1, ManagedByteArray.readIntGuest(bytes, 0));
+                        assertEquals(73, ManagedByteArray.readIntGuest(bytes, 1));
+                        assertEquals(0, ManagedByteArray.readIntGuest(bytes, 2));
+                        if (policy.equals("native")) {
+                            var allocation = assertInstanceOf(ManagedAllocation.class, bytes);
+                            assertTrue(allocation.hasNativeStorage()); assertFalse(allocation.isPinned());
+                            assertEquals(allocation.nativeSegment().address(), ManagedAddress.fromGuestByteArray(bytes).toNativeBits());
+                        } else assertInstanceOf(byte[].class, bytes);
+                        assertSame(bytes, ManagedByteArray.freezeGuest(bytes));
+                        ManagedByteArray.writeIntGuest(ManagedByteArray.freezeGuest(bytes), 1, 91);
+                        assertEquals(91, ManagedByteArray.readIntGuest(bytes, 1));
+                    }
+                } finally { context.leave(); }
+            }
+    }
     @Test public void tupleOperationsRejectScalarEntryBeforeEvaluatingOperands() {
         var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], new FrameLayout().build()); var evaluations = new int[]{0};
         for (var operation : ClosureInspectOp.values()) if (operation != ClosureInspectOp.SIZE) {
