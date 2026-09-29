@@ -13,9 +13,16 @@
 module RunTests (tests) where
 
 import Control.Monad (forM_)
+import qualified Data.ByteString as BS
+import qualified Data.Text as Text
+import qualified Data.Text.Encoding as Text
 import System.Directory (canonicalizePath, doesDirectoryExist, doesFileExist, getModificationTime)
 import System.FilePath ((</>), takeDirectory)
 import Test.HUnit (Test(..), assertBool, assertEqual)
+import THC.Compact.Core (Presence(..))
+import THC.Compact.Debug (SourceFile(..))
+import THC.Compact.Inspect (unpackContainer)
+import THC.Compact.Module (readModuleSources)
 import TestSupport
 
 tests :: Env -> Test
@@ -65,16 +72,17 @@ tests env = TestLabel "implicit Cabal project native versus THC run" $ TestCase 
       forM_ ["Main", "Answer"] $ \moduleName -> do
         let moduleEntry = one ((== moduleName) . string . (`field` "name")) (objects entry "modules")
         core <- readPublishedCore entry moduleEntry
-        -- Project bundles use the post-Tidy schema, whose actual source tables
-        -- replace the older simplifier schema's lowering/ticks marker.
+        bytes <- readPublishedCoreBytes entry moduleEntry
+        sources <- either fail pure (readModuleSources bytes)
+        (_,_,segments) <- either fail pure (unpackContainer bytes)
         assertEqual "post-Tidy Core" "optimized-Core-after-Tidy-before-CorePrep"
           (string $ field core "boundary")
-        assertBool "source spans" (not $ null $ objects core "sourceSpans")
+        assertBool "source spans" (not (BS.null (segments !! 4)))
         sourcePath <- canonicalizePath (package </> "app" </> moduleName ++ ".hs")
-        hasSource <- anyM (\file -> do
-          path <- canonicalizePath (string $ field file "path")
-          pure (path == sourcePath && string (field file "content") /= ""))
-          (objects core "sourceFiles")
+        hasSource <- anyM (\(SourceFile _ file content) -> do
+          path <- canonicalizePath (Text.unpack (Text.decodeUtf8 file))
+          pure (path == sourcePath && case content of Known source -> not (BS.null source); _ -> False))
+          sources
         assertBool "source content" hasSource
         native <- executable
         requireFile (takeDirectory native </> "completed-tmp" </> moduleName ++ ".hi")

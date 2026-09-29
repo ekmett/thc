@@ -19,9 +19,9 @@ module THC.Driver.Project
   , publishCapturedStoreUnit, readCapturedStoreBundles, readCapturedInstalledBundles
   ) where
 
-import Control.Exception (evaluate, finally, onException)
+import Control.Exception (bracket, evaluate, finally, onException)
 import Control.Monad (filterM, forM, forM_, unless, when)
-import Data.Char (isAlphaNum, isHexDigit)
+import Data.Char (isAlphaNum, isHexDigit, isSpace)
 import GHC.ResponseFile (expandResponse)
 import Distribution.Types.Flag (mkFlagName, unFlagName)
 import qualified Distribution.InstalledPackageInfo as Package
@@ -38,6 +38,7 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
+import Data.Text.Encoding.Error (lenientDecode)
 import Numeric (showHex)
 import System.Directory (canonicalizePath, createDirectory, createDirectoryIfMissing,
                          doesDirectoryExist, doesFileExist, findExecutable, getPermissions,
@@ -73,6 +74,9 @@ import THC.Driver.Installed
 import THC.Driver.InstalledForeign
 import THC.Driver.Run (RunOptions(..), runtimeLaunchArguments, runResolvedPackage)
 import THC.Driver.Zip (decodeZip, encodeZip)
+import THC.Compact.Core (Presence(..))
+import THC.Compact.Debug (SourceFile(..))
+import THC.Compact.Module (readModuleMetadata, readModuleMetadataFile, readModuleSources)
 import THC.Driver.Wired (WiredArtifacts(..), moduleSources, sourceHashes, pinnedSourcePath,
                          exportPinnedCore, exportPinnedWindowsCore, probeTargetLayout)
 
@@ -439,7 +443,7 @@ runBuiltProject action project working thcRoot runtime output native target proj
   let context = ExportContext compilerId abi (arch ++ "-" ++ os) pluginDb pluginUnit
                               pluginLibrary native cacheRoot driverHash ghc ghcPkg driver thcRoot projectOptions nativeTools verifyArtifacts noLinkUnit
   records <- field plan "install-plan" :: IO [Value]
-  units <- mapM readUnit records
+  units <- mapM readUnit records >>= concreteProjectUnits context
   let byId = Map.fromList [(unitId unit, unit) | unit <- units]
   require (Map.size byId == length units) "Cabal plan has duplicate unit IDs"
   selected <- selectRunnable selection units
@@ -454,6 +458,7 @@ runBuiltProject action project working thcRoot runtime output native target proj
   builtComponents <- forM builtLocals $ \unit -> do
     component <- readComponentMetadata (unitId unit `elem` map unitId ordered) unit context
     pure (unit, component)
+  prepareBackpackSignatures context byId ordered builtComponents
   roots <- fmap (sort . nub . concat) $ forM builtComponents $ \(unit, component) -> do
     dist <- field (unitValue unit) "dist-dir"
     componentRoots dist (componentValue component)
@@ -606,7 +611,7 @@ exceptionBridgeModules verify units = fmap concat $ forM units $ \unit -> do
         digest <- field ref "sha256"
         body <- maybe (fail "exception runtime bundle lacks its declared module") pure (lookup member entries)
         require (shaHex body == digest) "exception runtime module hash mismatch"
-        value <- either fail pure (eitherDecodeStrict' body)
+        value <- either fail pure (snd <$> readModuleMetadata body)
         require (jsonField value "unit" == (jsonField unit "id" :: Maybe String) &&
           jsonField value "module" == (jsonField ref "name" :: Maybe String))
           "exception runtime module identity mismatch"
@@ -864,17 +869,19 @@ sourceObservation path contents = do
 installedSourceObservations :: [(String, BS.ByteString)] -> IO [Value]
 installedSourceObservations modules = do
   observations <- fmap concat $ forM modules $ \(_, bytes) -> do
-    core <- either fail pure (eitherDecodeStrict' bytes)
-    sources <- field core "sourceFiles" :: IO [Value]
-    forM sources $ \source -> do
-      path <- field source "path"
-      content <- field source "content"
+    sources <- either fail pure (readModuleSources bytes)
+    forM sources $ \(SourceFile _ pathBytes contents) -> do
+      path <- text pathBytes
+      content <- case contents of
+        Known value -> Just <$> text value
+        _ -> pure Nothing
       record <- sourceObservation path content
       pure (path, record)
   let unique = Map.fromList observations
   require (all (\(path, record) -> Map.lookup path unique == Just record) observations)
     "source changed between installed module exports"
   pure (Map.elems unique)
+  where text = either (fail . show) (pure . Text.unpack) . Text.decodeUtf8'
 
 validateSourceObservations :: [Value] -> IO ()
 validateSourceObservations sources = forM_ sources $ \expected -> do
@@ -927,8 +934,13 @@ acquireInstalledBundle verify cache staging recipe driverHash context registrati
             (installedCompiler context) (registration registrationUnit)
         let nativeArguments = maybe [] (\(archive,_) -> ["-optl" ++ archive]) configured ++ arguments
             configuredInputs = maybe [] snd configured
+        createDirectory (temporary </> "core")
+        staged <- forM (zip [0 :: Int ..] modules) $ \(index, (name, bytes)) -> do
+          let path = temporary </> "core" </> show index <.> "cbd"
+          BS.writeFile path bytes
+          pure (name, path)
         linked <- linkInstalledNative (installedGhc context) (installedLibdir context)
-          nativeArguments nativeDirectory unit modules
+          nativeArguments nativeDirectory unit staged
         forM_ configuredInputs $ \input -> do
           path <- field input "path"
           expected <- field input "sha256"
@@ -967,9 +979,7 @@ acquireInstalledBundle verify cache staging recipe driverHash context registrati
               require (validTargetLayout layout &&
                        jsonField layout "targetPlatform" == Just compilerPlatform)
                 "installed GHC target layout differs from selected compiler"
-              (refs, members) <- packageModules
-                [(name, "core/" ++ show index ++ ".json", bytes)
-                | (index, (name, bytes)) <- zip [0 :: Int ..] linked]
+              (refs, members) <- packageCoreFiles linked
               let receiptBytes = BL.toStrict (encode (object (inputFields ++
                     ["buildKey" .= buildKey, "exportKey" .= exportKey,
                      "exporter" .= exporter, "targetLayout" .= layout])))
@@ -1126,9 +1136,9 @@ wiredGhcInternal context thcRoot = do
             digest <- digestFile path
             pure (object ["path" .= map (\c -> if c == '\\' then '/' else c) name, "sha256" .= digest])
           originalMembers <- forM names $ \name -> do
-            let core = staging </> "core" </> (name ++ ".json")
-                member = "core/" ++ name ++ ".json"
-            artifact <- readJson core
+            let core = staging </> "core" </> (name ++ ".cbd")
+                member = "core/" ++ name ++ ".cbd"
+            artifact <- readCoreMetadata core
             foundUnit <- field artifact "unit"
             foundName <- field artifact "module"
             foundBoundary <- field artifact "boundary"
@@ -1214,7 +1224,7 @@ projectWindowsWiredBundleCold verify path full refs names excluded key source ex
       _ -> fail "Ambiguous archived module"
     member <- field ref "path"
     body <- maybe (fail "Missing archived module") pure (lookup member entries)
-    value <- either fail pure (eitherDecodeStrict' body)
+    value <- either fail pure (snd <$> readModuleMetadata body)
     foreignCode <- field value "foreign"
     stubs <- field foreignCode "stubs"
     initializers <- field stubs "initializers" :: IO [Value]
@@ -1262,6 +1272,78 @@ readUnit value = do
   kind <- optionalField value "type" ("" :: String)
   style <- optionalField value "style" ("" :: String)
   pure (Unit identifier value dependencies (kind == "configured" && style == "local"))
+
+-- Cabal's plan records component dependencies before Backpack instantiation.
+-- Built compiler inputs name the concrete units; an instantiated library's
+-- registration also carries providers used only to fill its signatures.
+concreteProjectUnits :: ExportContext -> [Unit] -> IO [Unit]
+concreteProjectUnits context units = do
+  let knownUnits = Set.fromList (map unitId units)
+  built <- filterM (\unit -> case jsonField (unitValue unit) "build-info" of
+    Just path | unitLocal unit -> doesFileExist path
+    _ -> pure False) units
+  components <- forM built $ \unit -> do
+    component <- readComponentMetadata False unit context
+    pure (unit, component)
+  if not (any (elem "-instantiated-with" . componentArguments . snd) components)
+    then pure units
+    else do
+      dependencies <- forM components $ \(unit, component) -> do
+        let arguments = componentArguments component
+            values flag = [value | (key,value) <- zip arguments (drop 1 arguments), key == flag]
+        actual <- if "-fno-code" `elem` arguments then pure (unitDepends unit)
+          else if "-instantiated-with" `elem` arguments then do
+            registered <- backpackRegistration (unitId unit) component
+            require (not (Package.indefinite registered))
+              ("Backpack registration is not concrete: " ++ unitId unit)
+            pure (map prettyShow (Package.depends registered))
+          else pure (map (takeWhile (not . isSpace)) (values "-package-id"))
+        require (all (`Set.member` knownUnits) actual)
+          ("compiled Backpack dependency absent from Cabal plan for " ++ unitId unit)
+        pure (unitId unit, nub actual)
+      let resolved = Map.fromList dependencies
+      pure [unit {unitDepends = Map.findWithDefault (unitDepends unit) (unitId unit) resolved} | unit <- units]
+
+-- Cabal typechecks indefinite libraries only in the vanilla way. The dynamic
+-- exporter needs their signature interfaces, but only for concrete instances
+-- in the selected runnable closure, never unrelated previously built targets.
+prepareBackpackSignatures :: ExportContext -> Map.Map String Unit -> [Unit] -> [(Unit, Component)] -> IO ()
+prepareBackpackSignatures context units selected components = when (Host.os /= "mingw32") $ do
+  let selectedIds = Set.fromList (map unitId selected)
+      indefinite = Map.fromList [(unitId unit, component) | (unit, component) <- components,
+                    "-fno-code" `elem` componentArguments component]
+      requiredSignatures = nub [identifier | (unit, component) <- components,
+        unitId unit `Set.member` selectedIds,
+        let arguments = componentArguments component, "-fno-code" `notElem` arguments,
+        (flag, identifier) <- zip arguments (drop 1 arguments), flag == "-this-component-id",
+        Map.member identifier indefinite]
+  ordered <- concat <$> mapM (dependencyClosure units) requiredSignatures
+  forM_ (nub (map unitId ordered)) $ \identifier ->
+    forM_ (Map.lookup identifier indefinite) $ \component -> do
+      registered <- backpackRegistration identifier component
+      require (Package.indefinite registered) ("Backpack signature unit is not indefinite: " ++ identifier)
+      directory <- case Package.importDirs registered of
+        [path] | within (contextNative context) path -> pure path
+        _ -> fail ("Backpack signature interfaces are not in the owned build: " ++ identifier)
+      source <- field (componentValue component) "src-dir"
+      targets <- sourcePaths (componentValue component) (componentArguments component)
+      runCommand True (contextGhc context)
+        (["--make", "-no-link"] ++ componentArguments component ++
+         ["-dynamic", "-hisuf", "dyn_hi", "-hidir", directory] ++ map snd targets) source
+
+backpackRegistration :: String -> Component -> IO Package.InstalledPackageInfo
+backpackRegistration identifier component = do
+  source <- field (componentValue component) "src-dir"
+  let arguments = componentArguments component
+  paths <- filterM doesFileExist [source </> database </> identifier <.> "conf" |
+    (flag,database) <- zip arguments (drop 1 arguments), flag == "-package-db"]
+  path <- case nub paths of
+    [value] -> pure value
+    _ -> fail ("no unique Backpack registration for " ++ identifier)
+  (_, registered) <- either (fail . show) pure . Package.parseInstalledPackageInfo =<< BS.readFile path
+  require (prettyShow (Package.installedUnitId registered) == identifier)
+    ("Backpack registration has a different unit ID: " ++ identifier)
+  pure registered
 
 selectRunnable :: (Maybe String, String) -> [Unit] -> IO Unit
 selectRunnable target@(wantedPackage, wantedComponent) units = do
@@ -1611,9 +1693,23 @@ publishCapturedStoreUnit planPath store dist capture identifier destination = do
   maybe (fail "new captured unit failed its ordinary bundle validation") pure result
 
 packGlobalBundle :: FilePath -> FilePath -> FilePath -> Map.Map String Unit -> Unit -> String -> String -> FilePath -> IO ()
-packGlobalBundle store dist capture planned unit buildKey exportKey destination = do
+packGlobalBundle store dist capture planned unit buildKey exportKey destination =
+  bracket temporary removePathForcibly $ \staging ->
+    packGlobalBundleStaged staging store dist capture planned unit buildKey exportKey destination
+  where
+    temporary = do
+      (path, handle) <- openTempFile (takeDirectory destination) "core-link-"
+      hClose handle
+      removeFile path
+      createDirectory path
+      pure path
+
+-- Retained captures are immutable inputs. Native linkage may amend only the
+-- private copies made here, including copied dependency modules.
+packGlobalBundleStaged :: FilePath -> FilePath -> FilePath -> FilePath -> Map.Map String Unit -> Unit -> String -> String -> FilePath -> IO ()
+packGlobalBundleStaged staging store dist capture planned unit buildKey exportKey destination = do
   let core = capture </> unitId unit </> "core"
-  exported <- filter ((== ".json") . takeExtension) <$> recursiveFiles core
+  exported <- filter ((== ".cbd") . takeExtension) <$> recursiveFiles core
   empty <- if not (null exported) then pure [] else do
     -- Inspect only this freshly rebuilt private store, never the original
     -- native store or a guessed empty module. Cabal owns the compiler partition.
@@ -1630,15 +1726,17 @@ packGlobalBundle store dist capture planned unit buildKey exportKey destination 
     reexports <- maybe (fail ("Cabal store build did not export Core for nonempty unit " ++ unitId unit)) pure
       (modulelessRegistration (unitId unit) (unitDepends unit) bytes)
     pure [(if null reexports then "emptyRegistration" else "reexportRegistration") .= Text.decodeUtf8 bytes]
-  checked <- forM exported $ \path -> do
-    value <- readJson path
-    foundUnit <- field value "unit"
-    foundBoundary <- field value "boundary" :: IO String
-    name <- field value "module" :: IO String
-    require (foundUnit == unitId unit && foundBoundary == boundary)
-      ("store Core artifact has wrong owner or boundary: " ++ path)
-    bytes <- BS.readFile path
-    pure (name, bytes)
+  let stageModules owner paths = do
+        createDirectoryIfMissing True (staging </> owner)
+        forM (zip [0 :: Int ..] paths) $ \(index, path) -> do
+          value <- readCoreMetadata path
+          require (jsonField value "unit" == Just owner && jsonField value "boundary" == Just boundary)
+            ("store Core artifact has wrong owner or boundary: " ++ path)
+          name <- field value "module"
+          let staged = staging </> owner </> show index <.> "cbd"
+          Directory.copyFile path staged
+          pure (name, staged)
+  checked <- stageModules (unitId unit) exported
   let pieces = takeDirectory capture </> "native-pieces"
   -- Cabal has installed these units and may have deleted their temporary
   -- intra-package DBs. Keep the recorded compiler recipe unchanged, but resolve
@@ -1669,14 +1767,8 @@ packGlobalBundle store dist capture planned unit buildKey exportKey destination 
         _ -> fail "native dependency has ambiguous private-store registration"
       nativeReceipt <- doesFileExist (sourceDirectory </> "native.json")
       bodies <- if owner == unitId unit then pure checked else if not nativeReceipt then pure [] else do
-        paths <- filter ((== ".json") . takeExtension) <$> recursiveFiles (sourceDirectory </> "core")
-        forM paths $ \path -> do
-          bytes <- BS.readFile path
-          value <- either fail pure (eitherDecodeStrict' bytes)
-          require (jsonField value "unit" == Just owner && jsonField value "boundary" == Just boundary)
-            "native dependency Core owner/boundary differs"
-          name <- field value "module"
-          pure (name,bytes)
+        paths <- filter ((== ".cbd") . takeExtension) <$> recursiveFiles (sourceDirectory </> "core")
+        stageModules owner paths
       (prepared,component) <- finishPackageNativeWithDependencies capturedNative direct (storeDatabases ++ inplaceDatabases)
         pieces sourceDirectory (takeDirectory destination </> "native-components" </> owner) owner Nothing bodies
       let available = maybe forwarded (\value -> [([],value)]) component
@@ -1686,9 +1778,7 @@ packGlobalBundle store dist capture planned unit buildKey exportKey destination 
       names = map fst sorted
   require (length names == length (nub names))
     ("duplicate exported store modules for " ++ unitId unit)
-  (modules, members) <- packageModules
-    [(name, "core/" ++ show index ++ ".json", bytes)
-    | (index, (name, bytes)) <- zip [0 :: Int ..] sorted]
+  (modules, members) <- packageCoreFiles sorted
   let inner = object (["format" .= ("thc-core-bundle" :: String), "schema" .= (1 :: Int),
                       "unit" .= unitId unit, "buildKey" .= buildKey,
                       "exportKey" .= exportKey, "modules" .= modules] ++ empty)
@@ -1731,7 +1821,7 @@ readGlobalBundleCold path unit dependencies buildKey exportKey = do
           foundBoundary <- jsonField item "boundary" :: Maybe String
           checkedPair <- moduleEntries item entries
           body <- lookup member checkedPair
-          artifact <- either (const Nothing) Just (eitherDecodeStrict' body)
+          artifact <- either (const Nothing) Just (snd <$> readModuleMetadata body)
           owner <- jsonField artifact "unit" :: Maybe String
           actual <- jsonField artifact "module" :: Maybe String
           artifactBoundary <- jsonField artifact "boundary" :: Maybe String
@@ -1887,16 +1977,15 @@ freshExport context component unit scalar runtimeShim helper nativeObjects build
           ["-fforce-recomp", "-dcore-lint", "-fwrite-if-simplified-core", "-hisuf", "hi"] ++
           map snd (componentSources component)
     runCommand True (componentCompiler component) arguments sourceDir
-    exported <- filter ((== ".json") . takeExtension) <$> recursiveFiles core
+    exported <- filter ((== ".cbd") . takeExtension) <$> recursiveFiles core
     checked <- forM exported $ \path -> do
-      value <- readJson path
+      value <- readCoreMetadata path
       foundUnit <- field value "unit"
       foundBoundary <- field value "boundary" :: IO String
       name <- field value "module"
       require (foundUnit == unitId unit && foundBoundary == boundary)
         ("Core artifact has wrong unit or boundary: " ++ path)
-      bytes <- BS.readFile path
-      pure (name, bytes)
+      pure (name, path)
     let actual = sort (map fst checked)
     require (length actual == length (nub actual) && actual == expected)
       ("Core module inventory differs from Cabal build-info for " ++ unitId unit ++ ": " ++ show actual)
@@ -1907,10 +1996,9 @@ freshExport context component unit scalar runtimeShim helper nativeObjects build
           capturePackageNative (contextRoot context) (installedHelper selectedHelper) (installedLibdir selectedHelper)
             (componentCompiler component) arguments (unitId unit) staging
         updated <- forM exported $ \path -> do
-          value <- readJson path
+          value <- readCoreMetadata path
           name <- field value "module"
-          bytes <- BS.readFile path
-          pure (name,bytes)
+          pure (name,path)
         sortOn fst <$> finishPackageNative (contextNative context </> "cache/thc/native-pieces-v1") staging (unitId unit) nativeObjects updated
       (Just recipe,Nothing,Just selectedHelper) -> do
         retained <- scalarInterfaceModules selectedHelper component unit objects expected
@@ -1919,9 +2007,7 @@ freshExport context component unit scalar runtimeShim helper nativeObjects build
         retained <- scalarInterfaceModules selectedHelper component unit objects expected
         validateRuntimeShimModules shim retained
       _ -> fail "scalar cbits interface helper missing"
-    (modules, members) <- packageModules
-      [(name, "core/" ++ show index ++ ".json", bytes)
-      | (index, (name, bytes)) <- zip [0 :: Int ..] sorted]
+    (modules, members) <- packageCoreFiles sorted
     let inputsBytes = BL.toStrict (encode buildInputs)
         inner = object ["format" .= ("thc-core-bundle" :: String), "schema" .= (1 :: Int),
                         "unit" .= unitId unit, "buildKey" .= buildKey,
@@ -1934,12 +2020,13 @@ freshExport context component unit scalar runtimeShim helper nativeObjects build
     rememberFreshBundle PlainBundle (unitId unit) exportKey buildInputs expected
       (Bundle destination (shaHex (BL.toStrict archive)) modules buildKey [])) `finally` cleanup
 
--- Source late-plugin JSON has no typed annotations. Recover the exact emitted
--- full-Core interfaces through the selected GHC helper and Cabal's actual
--- library registration; never graft an inferred proof onto that JSON.
-scalarInterfaceModules :: InstalledContext -> Component -> Unit -> FilePath -> [String] -> IO [(String,BS.ByteString)]
+-- Recover exact typed annotations from the emitted full-Core interfaces through
+-- the selected GHC helper and Cabal's actual library registration.
+scalarInterfaceModules :: InstalledContext -> Component -> Unit -> FilePath -> [String] -> IO [(String,FilePath)]
 scalarInterfaceModules helper component unit objects names = do
   sourceDir <- field (componentValue component) "src-dir"
+  let core = objects </> "interface-core"
+  createDirectoryIfMissing True core
   databases <- mapM (canonicalizePath . (sourceDir </>))
     [path | (flag,path) <- zip (componentArguments component) (drop 1 (componentArguments component)),
       flag == "-package-db"]
@@ -1949,17 +2036,16 @@ scalarInterfaceModules helper component unit objects names = do
           "--interface",interface,"--way",exportInterfaceWay,"--source-notes"] ++
           concatMap (\database -> ["--package-db",database]) databases
     requireFile interface
-    (status,output,diagnostic) <- readCreateProcessWithExitCode
-      (proc (installedHelper helper) arguments) {cwd=Just sourceDir} ""
-    require (status == ExitSuccess) ("scalar cbits interface acquisition failed: " ++ take 4096 (output ++ diagnostic))
-    response <- either fail pure (Aeson.eitherDecodeStrict' (Text.encodeUtf8 (Text.pack output)))
-    require (jsonField response "schema" == Just (1::Int) && jsonField response "status" == Just ("loaded"::String))
-      "scalar cbits interface helper did not return full Core"
-    value <- field response "core"
+    (status,output,diagnostic) <- boundedInterfaceProcessIn sourceDir (installedHelper helper) arguments
+    require (status == ExitSuccess) ("scalar cbits interface acquisition failed: " ++
+      take 4096 (Text.unpack (Text.decodeUtf8With lenientDecode (output <> diagnostic))))
+    value <- either fail pure (snd <$> readModuleMetadata output)
     require (jsonField value "unit" == Just (unitId unit) && jsonField value "module" == Just name &&
       jsonField value "boundary" == Just boundary && jsonField value "ghc" == Just ("9.14.1"::String))
       "scalar cbits interface identity or boundary mismatch"
-    pure (name,BL.toStrict (encode value))
+    let path = core </> name <.> "cbd"
+    BS.writeFile path output
+    pure (name,path)
 
 -- | Read a configured bundle under its complete expected inputs and inventory.
 -- True retains exhaustive archive, layout, provenance and module validation.
@@ -2013,7 +2099,7 @@ readBundleCold receipt path unit buildKey exportKey buildInputs expected = do
           foundBoundary <- jsonField item "boundary" :: Maybe String
           checkedPair <- moduleEntries item entries
           body <- lookup member checkedPair
-          artifact <- either (const Nothing) Just (eitherDecodeStrict' body)
+          artifact <- either (const Nothing) Just (snd <$> readModuleMetadata body)
           owner <- jsonField artifact "unit" :: Maybe String
           actual <- jsonField artifact "module" :: Maybe String
           artifactBoundary <- jsonField artifact "boundary" :: Maybe String
@@ -2101,11 +2187,12 @@ normalizePaths build value = case value of
 expectedModuleNames :: Value -> IO [String]
 expectedModuleNames component = do
   modules <- optionalField component "modules" ([] :: [String])
+  signatures <- optionalField component "thc-signatures" ([] :: [String])
   files <- optionalField component "src-files" ([] :: [String])
   mainModule <- componentMainModule component
   when (mainModule /= Nothing) $
     require (length files == 1) "project runnable component must have one Haskell main source"
-  pure (sort (modules ++ maybe [] pure mainModule))
+  pure (sort (filter (`notElem` signatures) modules ++ maybe [] pure mainModule))
 
 readComponent :: Unit -> ExportContext -> IO Component
 readComponent = readComponentMetadata True
@@ -2192,7 +2279,11 @@ readComponentMetadata selected unit context = do
         Object fields -> Object (KeyMap.insert "modules" (Aeson.toJSON modules) fields)
         _ -> configured
   sources <- if selected then sourcePaths completed arguments else pure []
-  pure (Component completed (contextGhc context) arguments sources)
+  let signatures = [name | (name,path) <- sources, takeExtension path `elem` [".hsig", ".lhsig"]]
+      described = case completed of
+        Object fields -> Object (KeyMap.insert "thc-signatures" (Aeson.toJSON signatures) fields)
+        _ -> completed
+  pure (Component described (contextGhc context) arguments sources)
 
 sourcePaths :: Value -> [String] -> IO [(String, FilePath)]
 sourcePaths component arguments = do
@@ -2204,8 +2295,16 @@ sourcePaths component arguments = do
                           [drop 2 flag | flag <- arguments, "-i" `isPrefix` flag, length flag > 2]]
   foundModules <- forM modules $ \name -> do
     let relative = joinPath (split '.' name)
-    path <- uniqueSource name [directory </> replaceExtension relative extension |
-                               directory <- directories, extension <- ["hs", "lhs"]]
+        candidates extensions = [directory </> replaceExtension relative extension |
+                                  directory <- directories, extension <- extensions]
+    implementations <- filterM doesFileExist (candidates ["hs", "lhs"])
+    path <- if not (null implementations) then uniqueSource name implementations else do
+      -- Preserve implementation-source ambiguity checks. Cabal also emits
+      -- signature stubs in autogen; for signatures, use directory search order.
+      signatures <- filterM doesFileExist (candidates ["hsig", "lhsig"])
+      case signatures of
+        signature:_ -> canonicalizePath signature
+        [] -> uniqueSource name []
     pure (name, path)
   foundFiles <- forM files $ \name -> do
     path <- uniqueSource name [directory </> name | directory <- directories]
@@ -2261,6 +2360,18 @@ optionalField value name fallback = case value of
     Nothing -> pure fallback
     Just _ -> field value name
   _ -> fail ("JSON object expected for field " ++ name)
+
+readCoreMetadata :: FilePath -> IO Value
+readCoreMetadata path = snd <$> readModuleMetadataFile path
+
+-- Linking owns staged files. Read their final bytes only when publishing the
+-- bundle that records their hashes and stores those exact bytes.
+packageCoreFiles :: [(String, FilePath)] -> IO ([Value], [(FilePath, BS.ByteString)])
+packageCoreFiles files = do
+  modules <- forM (zip [0 :: Int ..] files) $ \(index, (name, path)) -> do
+    bytes <- BS.readFile path
+    pure (name, "core/" ++ show index ++ ".cbd", bytes)
+  packageModules modules
 
 readJson :: FilePath -> IO Value
 readJson path = do

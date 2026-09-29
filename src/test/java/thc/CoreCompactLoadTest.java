@@ -70,7 +70,7 @@ class CoreCompactLoadTest {
             rows.sort((a, b) -> Arrays.compareUnsigned(a, 0, 16, b, 0, 16));
             var symbols = ByteBuffer.allocate(rows.size() * 24);
             for (var row : rows) symbols.put(row);
-            var bytes = CoreCbdTestSupport.archive(CoreCbdTestSupport.header(facts.toByteArray(), rows.size(), 0, 7),
+            var bytes = CoreCbdTestSupport.archive(CoreCbdTestSupport.header(facts.toByteArray(), strings.toByteArray(), rows.size(), 0, 7),
                 List.of(data.toByteArray(), strings.toByteArray(), new byte[]{-1}, new byte[]{-1}, new byte[]{-1}, symbols.array()), Set.of(), false);
             var path = directory.resolve(name + ".cbd"); Files.write(path, bytes);
             return map("name", name, "boundary", boundary, "sha256", "a".repeat(64),

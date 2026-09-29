@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc;
 
-import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.security.MessageDigest;
@@ -20,44 +19,22 @@ class CoreUnitManagedExportTest {
     private final Path root = Path.of(System.getProperty("thc.projectRoot"));
     private final Path fixtures = root.resolve("build/interface-core");
     private final String unit = "thc-interface-fixture-0.1", module = "ForeignExportManaged";
-    private byte[] bytes(String value) { return value.getBytes(StandardCharsets.UTF_8); }
     private String hash(byte[] bytes) throws Exception { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes)); }
     private byte[] verified(String relative) throws Exception {
         var file = fixtures.resolve(relative); var receipt = document(Files.readString(fixtures.resolve("manifest.json"))); var bytes = Files.readAllBytes(file);
         assertEquals(((Map<?, ?>) receipt.get("artifactHashes")).get(root.relativize(file).toString()), hash(bytes)); return bytes;
     }
-    /** Test-only re-encoding of verified genuine GHC bindings into the symbol-offset format. */
+    /** Test-only encoding of verified genuine GHC bindings into executable CBD. */
     private Path manifest(String label, boolean corrupt) throws Exception {
         var source = document(new String(verified("typed-foreign-exports/managed.json"), StandardCharsets.UTF_8));
-        var fixture = symbolFixture(source); var original = fixture.bytes();
-        var fields = Set.of("schema", "ghc", "unit", "module", "boundary", "providedModules", "constructors", "foreign", "foreignLink",
-            "staticForeignImportStubs", "staticForeignImports", "staticForeignExports", "staticForeignExportRegistration", "packageScalarLink",
-            "packageNativeLink", "packageNativeArchive", "foreignExceptionBridge", "foreignExceptionBridgeUnit");
-        var metadata = new LinkedHashMap<String, Object>(); source.forEach((key, value) -> { if (fields.contains(key)) metadata.put(key, value); });
-        var admitted = corrupt ? with(metadata, "staticForeignExportRegistration", with((Map<?, ?>) metadata.get("staticForeignExportRegistration"), "status", "unclassified")) : metadata;
-        var encoded = bytes(Json.stringify(admitted)); var notes = new LinkedHashMap<String, Object>();
-        source.forEach((key, value) -> { if (key.equals("sourceFiles") || key.equals("sourceSpans")) notes.put(key, value); });
-        var encodedNotes = notes.isEmpty() ? new byte[0] : bytes(Json.stringify(notes));
-        var out = new ByteArrayOutputStream(); out.writeBytes(original); out.write(10); out.writeBytes(encoded);
-        if (!notes.isEmpty()) { out.write(10); out.writeBytes(encodedNotes); } var bytes = out.toByteArray();
-        var json = directory.resolve(label + ".jsons"); var symbols = directory.resolve(label + ".symbols"); Map<String, Object> record;
-        Files.writeString(symbols, fixture.symbols());
-        boolean mainAlias = false;
-        for (var binding : (List<?>) source.get("bindings")) if (Objects.equals(((Map<?, ?>) binding).get("id"), CoreUnitDirectory.MAIN_ALIAS)) mainAlias = true;
-        var imports = source.get("staticForeignImports") instanceof Map<?, ?> proof ? proof.get("imports") : null;
-        record = map("name", module, "path", "core/" + module + ".json", "sha256", hash(original), "boundary", source.get("boundary"),
-            "start", 0, "end", original.length, "bindingsStart", fixture.bindingsStart(), "bindingsEnd", fixture.bindingsEnd(),
-            "metadataStart", original.length + 1, "metadataEnd", original.length + 1 + encoded.length,
-            "containsDelimitedControl", thc.runtime.DelimitedControl.INSTANCE.contains(source.get("bindings")),
-            "registrationObligations", CoreForeignArtifacts.hasRegistrationObligations(source), "mainAlias", mainAlias,
-            "packageScalarDeclarations", imports instanceof List<?> values && !values.isEmpty());
-        if (!notes.isEmpty()) record.putAll(map("sourceMetadataStart", original.length + encoded.length + 2, "sourceMetadataEnd", bytes.length));
-        Files.write(json, bytes);
-        var active = map("id", unit, "depends", List.of(), "json", map("path", json.toString(), "sha256", hash(bytes)),
-            "symbols", map("path", symbols.toString(), "sha256", hash(Files.readAllBytes(symbols))), "modules", list(record));
-        var cold = map("id", "cold", "depends", List.of(), "json", map("path", directory.resolve("absent.jsons").toString(), "sha256", "0".repeat(64)),
-            "symbols", map("path", directory.resolve("absent.symbols").toString(), "sha256", "0".repeat(64)),
-            "modules", list(with(record, "name", "Unused", "registrationObligations", false)));
+        var admitted = corrupt ? with(source, "staticForeignExportRegistration",
+            with(without((Map<?, ?>) source.get("staticForeignExportRegistration"), "roots", "wordBits", "expectedForeign", "expectedExports"),
+                "status", "unclassified", "reason", "Unclassified registration test")) : source;
+        var record = CoreCbdFixtures.module(directory.resolve(label + ".cbd"), admitted);
+        var active = map("id", unit, "depends", List.of(), "modules", list(record));
+        var cold = map("id", "cold", "depends", List.of(), "modules", list(with(record,
+            "name", "Unused", "registrationObligations", false,
+            "compact", map("path", directory.resolve("absent.cbd").toString(), "sha256", "0".repeat(64), "format", CoreCompactFormat.NAME))));
         return Files.writeString(directory.resolve(label + "-packages.json"), Json.stringify(map("format", "thc-core-packages", "schema", 1, "ghc", "9.14.1", "units", list(active, cold))));
     }
     private Value exports(Value value) { return value.getMember(unit).getMember(module); }
@@ -75,10 +52,11 @@ class CoreUnitManagedExportTest {
             assertEquals(Integer.parseInt(nativeRows.get(3)), symbols.getMember("thc_constant").execute().asInt());
             assertEquals(Integer.parseInt(nativeRows.get(4)), symbols.getMember("thc_next").execute(3).asInt());
             assertEquals(Integer.parseInt(nativeRows.get(5)), symbols.getMember("thc_next_alias").execute(4).asInt());
-            var counts = program(context).diagnostics(); assertEquals(1L, counts.get("coreUnitSourceOpens")); assertEquals(1L, counts.get("coreUnitDirectoryOpens"));
-            assertEquals(0L, counts.get("coreUnitHashBytesScanned")); assertEquals(0L, counts.get("unsupportedTraps"));
+            var counts = program(context).diagnostics(); assertEquals(1L, counts.get("coreCompactModuleOpens"));
+            assertTrue((Long) counts.get("coreCompactDirectoryBytesRead") > 0);
+            assertEquals(0L, counts.get("coreCompactHashBytesScanned")); assertEquals(0L, counts.get("unsupportedTraps"));
         }
-        assertFalse(Files.exists(directory.resolve("absent.jsons")));
+        assertFalse(Files.exists(directory.resolve("absent.cbd")));
     }
     @Test void failedRegistrationClosesSourcesAndDoesNotPublishOrPoisonRetry() throws Exception {
         var bad = manifest("bad", true); var good = manifest("good", false);
@@ -87,18 +65,19 @@ class CoreUnitManagedExportTest {
             assertTrue(context.getBindings("thc").getMemberKeys().isEmpty()); context.enter();
             try { assertTrue(Language.currentState(null).getCoreUnitPrograms().isEmpty()); assertEquals(0, Language.currentState(null).getForeignRoots().size()); }
             finally { context.leave(); }
-            assertEquals(1, CoreFileMappings.shared.evictIdleBelow(directory.resolve("bad.jsons")), "Failed registration must release its source lease before retry");
+            assertEquals(1, CoreFileMappings.shared.evictIdleBelow(directory.resolve("bad.cbd")), "Failed registration must release its source lease before retry");
             var symbols = exports(Main.loadManagedExports(context, List.of("@" + good), backend)); var next = symbols.getMember("thc_next");
             assertThrows(RuntimeException.class, () -> next.execute("bad")); assertEquals(1, next.execute(1).asInt());
             assertThrows(RuntimeException.class, () -> Main.loadManagedExports(context, List.of("@" + good), backend)); assertEquals(2, symbols.getMember("thc_next_alias").execute(1).asInt());
         }
     }
-    @Test void explicitVerificationStillChecksTheOriginalModuleAndProjectedMetadata() throws Exception {
+    @Test void explicitVerificationStillChecksTheOriginalModuleAndCbdMetadata() throws Exception {
         var good = manifest("verified", false);
         for (var backend : List.of("ast", "bytecode")) try (var context = Main.executionContext(false)) {
             var symbols = exports(Main.loadManagedExports(context, List.of("@" + good), backend, true, true));
             assertEquals(42, symbols.getMember("thc_add_one").execute(41).asInt()); var counts = program(context).diagnostics();
-            assertTrue((Long) counts.get("coreUnitHashBytesScanned") > 0); assertTrue((Long) counts.get("coreUnitVerifiedModuleBytes") > 0); assertEquals(1L, counts.get("coreUnitSourceOpens"));
+            assertTrue((Long) counts.get("coreCompactHashBytesScanned") > 0);
+            assertTrue((Long) counts.get("coreCompactVerifiedStoredBytes") > 0); assertEquals(1L, counts.get("coreCompactModuleOpens"));
         }
     }
     @Test void sharedEngineLoadKeepsRegistrationAndMemoizedStateContextOwned() throws Exception {

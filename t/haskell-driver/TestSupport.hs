@@ -12,7 +12,7 @@
 -- Temporary-project, subprocess and bundle-inspection helpers for driver tests.
 module TestSupport
   ( Env(..), Result(..), setup, withFixture, withFixtureNamed, copyTree, run, runExe, checked, json, readJson, readCore
-  , readSourceManifest, readPublishedCore
+  , readSourceManifest, readPublishedCore, readCoreBytes, readPublishedCoreBytes
   , field, array, string, strings, bool, number, objects, named
   , assertContains, assertSuccess, assertFailure, assertNoStdout
   , writeText, readText, replaceText, findFiles, requireFile
@@ -21,7 +21,7 @@ module TestSupport
 import Codec.Archive.Zip (findEntryByPath, fromEntry, toArchiveOrFail)
 import Control.Exception (bracket, onException)
 import Control.Monad (forM, forM_, void)
-import Data.Aeson (Value(..), eitherDecode', eitherDecodeStrict', toJSON)
+import Data.Aeson (Value(..), eitherDecodeStrict', toJSON)
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString as BS
@@ -37,7 +37,7 @@ import System.Directory
   )
 import System.Environment (getEnvironment, lookupEnv)
 import System.Exit (ExitCode(..))
-import System.FilePath ((</>), takeDirectory)
+import System.FilePath ((</>), takeDirectory, takeExtension)
 import System.IO (hClose, hPutStrLn, openTempFile)
 import qualified System.IO as IO
 import System.IO.Error (tryIOError)
@@ -45,6 +45,7 @@ import qualified System.Process as Process
 import System.Timeout (timeout)
 import Test.HUnit (assertBool, assertEqual)
 import qualified Test.HUnit as HUnit
+import THC.Compact.Module (readModuleValue)
 
 data Env = Env { root :: FilePath, thcRoot :: FilePath, driver :: FilePath
                , runtime :: FilePath, scratch :: FilePath }
@@ -197,47 +198,48 @@ readJson path = BS.readFile path >>= \bytes -> case eitherDecodeStrict' bytes of
 
 readCore :: FilePath -> FilePath -> IO Value
 readCore bundle member = do
+  payload <- readCoreBytes bundle member
+  either fail pure (if takeExtension member == ".cbd" then readModuleValue payload else eitherDecodeStrict' payload)
+
+readCoreBytes :: FilePath -> FilePath -> IO BS.ByteString
+readCoreBytes bundle member = do
   -- The caller may replace the archive after inspecting one member. Do not
   -- retain a lazy read handle for uninspected ZIP members until a later GC.
   bytes <- BL.fromStrict <$> BS.readFile bundle
   archive <- either fail pure (toArchiveOrFail bytes)
   entry <- maybe (fail ("missing ZIP member " ++ member)) pure
            (findEntryByPath member archive)
-  either fail pure (eitherDecode' $ fromEntry entry)
+  pure (BL.toStrict (fromEntry entry))
 
 -- | Inspect acquisition provenance, not a runtime manifest. Cache tests need
--- the original ZIP build receipts even when publication selects an uncompressed
--- pair. This projection is only returned to assertions; never written back or
+-- the original ZIP build receipts behind per-module CBD publication. This
+-- projection is only returned to assertions; never written back or
 -- supplied to the guest/auditor. Direct publication is tested separately.
 readSourceManifest :: FilePath -> IO Value
 readSourceManifest path = do
   manifest <- readJson path
-  units <- forM (objects manifest "units") $ \unit -> case field unit "json" of
-    Null -> pure unit
-    ref -> do
-      receipt <- readJson (takeDirectory (string (field ref "path")) </> "publication.json")
+  units <- forM (objects manifest "units") $ \unit -> case objects unit "modules" of
+    [] -> pure unit
+    ref : _ -> do
+      let compact = field ref "compact"
+      receipt <- readJson (takeDirectory (string (field compact "path")) </> "publication.json")
       let source = field receipt "source"
       inner <- readCore (string (field source "path")) "manifest.json"
-      pure (update "bundle" source $ update "modules" (field inner "modules") $
-        remove "json" $ remove "symbols" unit)
+      pure (update "bundle" source $ update "modules" (field inner "modules") unit)
   pure (update "units" (toJSON units) manifest)
   where
     update key value (Object fields) = Object (KeyMap.insert (Key.fromString key) value fields)
     update _ _ value = value
-    remove key (Object fields) = Object (KeyMap.delete (Key.fromString key) fields)
-    remove _ value = value
 
--- | Read exactly one published module through its byte span, or through the
--- legacy bundle when selected. This checks the artifact actually given to THC.
+-- | Read one published CBD, or its original acquisition member when a test
+-- explicitly selected the source provenance projection above.
 readPublishedCore :: Value -> Value -> IO Value
-readPublishedCore unit ref = case field unit "json" of
-  Null -> readCore (string (field (field unit "bundle") "path")) (string (field ref "path"))
-  direct -> IO.withBinaryFile (string (field direct "path")) IO.ReadMode $ \handle -> do
-    let start = number (field ref "start")
-        size = number (field ref "end") - start
-    IO.hSeek handle IO.AbsoluteSeek (fromIntegral start)
-    bytes <- BS.hGet handle size
-    either fail pure (eitherDecodeStrict' bytes)
+readPublishedCore unit ref = readPublishedCoreBytes unit ref >>= either fail pure . readModuleValue
+
+readPublishedCoreBytes :: Value -> Value -> IO BS.ByteString
+readPublishedCoreBytes unit ref = case field ref "compact" of
+  Null -> readCoreBytes (string (field (field unit "bundle") "path")) (string (field ref "path"))
+  compact -> BS.readFile (string (field compact "path"))
 
 field :: Value -> String -> Value
 field (Object object) name = maybe Null id (KeyMap.lookup (Key.fromString name) object)

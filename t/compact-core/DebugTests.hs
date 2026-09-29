@@ -19,7 +19,7 @@ import Control.Monad (foldM, forM, forM_, void)
 import qualified Codec.Archive.Zip as Zip
 import Data.Aeson (Value(..), object, toJSON, (.=))
 import qualified Data.Aeson.KeyMap as KM
-import Data.Binary.Get (getWord64le)
+import Data.Binary.Get (getWord32le, getWord64le)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import Data.Either (isLeft)
@@ -33,28 +33,71 @@ import THC.Compact.Compression
 import THC.Compact.Debug
 import THC.Compact.Encode (newEncoder, internString)
 import THC.Compact.JSON (parseModuleWithDebug, parseModuleWithoutDebug)
-import THC.Compact.Module (writeModuleWithDebug, writeModuleWithDebugCompressed, encodeModuleValue, readModuleValue, rewriteModuleFacts)
-import THC.Compact.Inspect (inspectContainer, unpackContainer)
+import THC.Compact.Module (writeModuleWithDebug, writeModuleWithDebugCompressed, encodeModuleValue, readModuleValue, readModuleMetadata, readModuleSources, finalizeModuleMetadata)
+import THC.Compact.Inspect (inspectContainer, inspectSource, unpackContainer)
 import THC.Compact.Wire
 import THC.Compact.Writer
 
 debugTests :: Test
 debugTests = TestList
-  [ TestLabel "direct CBD publication and metadata amendment preserve executable/debug bytes" $ TestCase $ do
+  [ TestLabel "module source observations preserve original path and unknown content" $ TestCase $ do
+      bytes <- encodeModuleValue originalModule
+      assertEqual "persisted file is distinct from an absent source catalog"
+        (Right [SourceFile "f0" "Original.hs" Unknown]) (readModuleSources bytes)
+  , TestLabel "source inventory reads only persisted filename records" $ TestCase $
+      withSystemTempDirectory "compact-source-inventory" $ \directory -> do
+        let destination = directory </> "sources.cbd"
+            files = [SourceFile "f0" "Absent.hs" Missing,
+              SourceFile "f1" "Unavailable.hs" Unknown,
+              SourceFile "f2" "Empty.hs" (Known ""),
+              SourceFile "f3" unicodeName (Known "original contents\n")]
+            location = SourceLocation 0 [(source,positionA) | source <- files]
+        _ <- writeContainer destination BS.empty 0 $ \streams -> do
+          encoder <- newEncoder streams
+          debug <- newDebugEncoder streams (internString encoder)
+          -- Neither malformed executable records nor unrelated debug tables
+          -- are a prerequisite for the acquisition source observations.
+          void (appendBytes streams ExecutableData (BS.replicate 24 255))
+          void (appendBytes streams RealNames "not a name table")
+          recordLocation debug 3 (Just location)
+          recordLocation debug 10 Nothing
+          recordLocation debug 12 (Just location)
+          finishDebug debug 24
+          void (appendBytes streams LineColumnIntervals "not a position table")
+          pure 0
+        bytes <- BS.readFile destination
+        assertBool "control: source-position inspection rejects the unrelated malformed table"
+          (isLeft (inspectSource bytes 3))
+        assertEqual "restorations deduplicate exact records without collapsing presence"
+          (Right files) (readModuleSources bytes)
+  , TestLabel "source inventory preserves absence and rejects malformed filename records" $ TestCase $
+      withSystemTempDirectory "compact-source-absence" $ \directory -> do
+        let destination = directory </> "sources.cbd"
+            emit filenames = do
+              _ <- writeContainer destination BS.empty 0 $ \streams -> do
+                void (appendBytes streams ExecutableData "unread executable")
+                void (appendBytes streams FilenameIntervals filenames)
+                pure 0
+              BS.readFile destination
+        absent <- emit BS.empty
+        assertEqual "no persisted source records means no observations" (Right []) (readModuleSources absent)
+        invalid <- emit "truncated"
+        assertBool "malformed source directory is not silent absence" (isLeft (readModuleSources invalid))
+  , TestLabel "direct CBD publication and metadata amendment preserve executable/debug bytes" $ TestCase $ do
       original <- encodeModuleValue originalModule
       value <- either fail pure (readModuleValue original)
       let amended = case value of
             Object fields -> Object (KM.insert "foreignExceptionBridgeUnit" (String "runtime-unit") fields)
             _ -> error "Expected module"
-      changed <- rewriteModuleFacts original amended
+      changed <- finalized original amended
       (_,_,before) <- either fail pure (unpackContainer original)
       (_,_,after) <- either fail pure (unpackContainer changed)
       assertEqual "DATA, debug maps and fingerprint positions survive metadata linking"
         (take 1 before ++ drop 2 before) (take 1 after ++ drop 2 after)
-      assertBool "original string offsets survive appended header strings" (before !! 1 `BS.isPrefixOf` (after !! 1))
+      assertEqual "metadata strings never change executable strings" (before !! 1) (after !! 1)
       assertEqual "new header fact" (Just (String "runtime-unit"))
         (case readModuleValue changed of Right (Object fields) -> KM.lookup "foreignExceptionBridgeUnit" fields; _ -> Nothing)
-      assertEqual "unchanged amendment retains exact container" original =<< rewriteModuleFacts original value
+      assertEqual "unchanged amendment retains exact container" original =<< finalized original value
       assertBool "JSON is not an accepted module payload" (isLeft (readModuleValue "{\"bindings\":[]}"))
   , TestLabel "metadata amendment preserves mixed ZIP member methods" $ TestCase $
       withSystemTempDirectory "compact-amend-methods" $ \directory -> do
@@ -67,9 +110,41 @@ debugTests = TestList
         let amended = case value of Object fields -> Object (KM.insert "foreignExceptionBridgeUnit" (String "runtime") fields); _ -> value
             methods bytes = map (\entry -> (Zip.eRelativePath entry,Zip.eCompressionMethod entry)) . Zip.zEntries
               <$> Zip.toArchiveOrFail (BL.fromStrict bytes)
-        changed <- rewriteModuleFacts original amended
+        finalizeModuleMetadata destination amended
+        changed <- BS.readFile destination
+        let centralStart bytes = either fail (pure . fromIntegral)
+              (decodeExact getWord32le (BS.take 4 (BS.drop (BS.length bytes-6) bytes)))
+        oldCentral <- centralStart original
+        newCentral <- centralStart changed
+        -- Six fixed CBD member names, no extras/comments for this small file.
+        let centralSize = sum [46+length name | name <- ["data","strings","names","filenames","line-columns","symbols"] :: [String]]
+        headerOffset <- either fail (pure . fromIntegral) (decodeExact getWord32le
+          (BS.take 4 (BS.drop (oldCentral+centralSize+42) original)))
+        assertEqual "complete local records retain original offsets and bytes"
+          (BS.take headerOffset original) (BS.take headerOffset changed)
+        assertEqual "payload central records are copied verbatim"
+          (BS.take centralSize (BS.drop oldCentral original)) (BS.take centralSize (BS.drop newCentral changed))
+        let payloads bytes = map (\entry -> (Zip.eRelativePath entry,Zip.eCompressedData entry)) .
+              filter ((/= "header") . Zip.eRelativePath) . Zip.zEntries
+              <$> Zip.toArchiveOrFail (BL.fromStrict bytes)
+        assertEqual "metadata finalization preserves exact compressed payload entries" (payloads original) (payloads changed)
+        assertEqual "final metadata is the last ZIP member"
+          (Right ["data","strings","names","filenames","line-columns","symbols","header"])
+          (map Zip.eRelativePath . Zip.zEntries <$> Zip.toArchiveOrFail (BL.fromStrict changed))
         assertEqual "metadata linking retains every actual ZIP method" (methods original) (methods changed)
-        assertEqual "unchanged metadata keeps compressed archive byte-for-byte" original =<< rewriteModuleFacts original value
+        assertEqual "unchanged metadata keeps compressed archive byte-for-byte" original =<< finalized original value
+        finalizeModuleMetadata destination value
+        shrunk <- BS.readFile destination
+        assertBool "removing linked metadata truncates the staging tail" (BS.length shrunk < BS.length changed)
+        assertEqual "shrinking keeps all six payload records intact" (BS.take headerOffset original) (BS.take headerOffset shrunk)
+        assertEqual "shrunk tail has no stale facts or end records" (Right value) (readModuleValue shrunk)
+        -- Break only the compressed DATA stream. Finalization must not inspect
+        -- it; ordinary executable inspection must still reject the corruption.
+        let bad = BS.take 34 original <> BS.singleton 255 <> BS.drop 35 original
+        assertBool "corrupt execution rejects when inspected" (isLeft (readModuleValue bad))
+        metadataOnly <- finalized bad amended
+        assertBool "metadata finalization never inflates DATA" (either (const False) (const True) (readModuleMetadata metadataOnly))
+        assertEqual "even unvisited payload bytes remain untouched" (BS.take headerOffset bad) (BS.take headerOffset metadataOnly)
   , TestLabel "interface closure provenance survives direct publication and native header amendment" $ TestCase $ do
       let provenance = KM.fromList [("roots",toJSON ["main:Original.root" :: String]),
             ("sourceModules",toJSON ["main:Original" :: String]),
@@ -92,7 +167,7 @@ debugTests = TestList
           selected _ = error "Expected module"
       assertEqual "required frontier and original binding owners are retained" (selected input) (selected value)
       let amended = case value of Object fields -> Object (KM.insert "foreignExceptionBridgeUnit" (String "runtime") fields); _ -> value
-      changed <- rewriteModuleFacts bytes amended
+      changed <- finalized bytes amended
       after <- either fail pure (readModuleValue changed)
       assertEqual "header amendment does not discard origin ledger" (selected value) (selected after)
   , TestLabel "exact scoped debug names never use predecessor or common strings" $ TestCase $
@@ -214,6 +289,14 @@ file = SourceFile "f0" "MissingOriginal.hs" Unknown
 
 positionA :: SourcePosition
 positionA = SourcePosition "spanA" (Known "original label") 2 3 3 1 (Known 0) (Known 5)
+
+-- Test-only byte comparison helper; production finalization is file-tail-only.
+finalized :: BS.ByteString -> Value -> IO BS.ByteString
+finalized bytes value = withSystemTempDirectory "compact-finalize" $ \directory -> do
+  let staging = directory </> "staging.cbd"
+  BS.writeFile staging bytes
+  finalizeModuleMetadata staging value
+  BS.readFile staging
 
 originalModule :: Value
 originalModule = object

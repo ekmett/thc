@@ -19,7 +19,7 @@ module THC.Driver.RuntimeShim
 
 import Control.Monad (forM, forM_, unless)
 import qualified Crypto.Hash.SHA256 as SHA
-import Data.Aeson (FromJSON, Value(..), eitherDecodeStrict', object, toJSON, (.=), fromJSON, Result(..))
+import Data.Aeson (FromJSON, Value(..), object, toJSON, (.=), fromJSON, Result(..))
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KM
 import qualified Data.ByteString as BS
@@ -29,6 +29,7 @@ import Numeric (showHex)
 import System.Directory (canonicalizePath)
 import System.FilePath
 import THC.Driver.NativeRecipe
+import THC.Compact.Module (readModuleValue)
 
 -- The selected dictionary belongs to the application's linked runtime unit.
 -- Merely finding a package called thc is not authority, and injecting a second
@@ -97,9 +98,9 @@ withRuntimeShim native dist roots compiler unit component action = do
     check (actual == expected) ("runtime shim input changed during acquisition: " ++ path)
   pure result
 
-validateRuntimeShimModules :: RuntimeShim -> [(String, BS.ByteString)] -> IO [(String, BS.ByteString)]
+validateRuntimeShimModules :: RuntimeShim -> [(String, FilePath)] -> IO [(String, FilePath)]
 validateRuntimeShimModules shim modules = do
-  values <- forM modules $ \(_, bytes) -> either fail pure (eitherDecodeStrict' bytes)
+  values <- forM modules $ \(_, path) -> BS.readFile path >>= either fail pure . readModuleValue
   either fail pure (validateRuntimeShimInventory (runtimeShimUnit shim) values)
   pure modules
 

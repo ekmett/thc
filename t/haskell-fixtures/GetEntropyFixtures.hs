@@ -84,14 +84,16 @@ prepareGetEntropy root = do
   planned <- field plan "install-plan" :: IO [Value]
   names <- mapM (\value -> field value "id") planned
   unless (unit `elem` (names :: [String])) (fail "original splitmix Cabal unit differs")
-  paths <- filter ((== ".json") . takeExtension) <$> files (capture </> unit </> "core")
-  modules <- forM paths $ \path -> (,) (takeFileName path) <$> BS.readFile path
-  unless (sort (map fst modules) == ["System.Random.SplitMix.Init.json","System.Random.SplitMix.json","System.Random.SplitMix32.json"])
+  paths <- filter ((== ".cbd") . takeExtension) <$> files (capture </> unit </> "core")
+  modules <- forM paths $ \path -> do
+    let destination = output </> takeFileName path
+    copyFile path destination
+    pure (takeFileName path,destination)
+  unless (sort (map fst modules) == ["System.Random.SplitMix.Init.cbd","System.Random.SplitMix.cbd","System.Random.SplitMix32.cbd"])
     (fail "splitmix retained module inventory differs")
   linked <- finishPackageNative pieces (capture </> unit) unit Nothing modules
-  forM_ linked $ \(name,value) -> BS.writeFile (output </> name) value
   let entryOutput = output </> "entry"
-      entryPath = entryOutput </> "units/u-original-splitmix-entry/OriginalSplitmixEntry.json"
+      entryPath = entryOutput </> "units/u-original-splitmix-entry/OriginalSplitmixEntry.cbd"
   createDirectoryIfMissing True entryOutput
   entryBuilt <- execute "entry-export" [] ghc
     ["-O1","-c","-fforce-recomp","-this-unit-id","original-splitmix-entry",
@@ -134,8 +136,8 @@ prepareGetEntropy root = do
     "src/compiler/THC/Plugin.hs","src/compiler/THC/ForeignImportProvenance.hs","src/compiler/THC/Interface.hs",
     "bin/audit-core.py","bin/core_package_manifest.py"]
   artifactHashes <- hashes root ([relative </> path | path <-
-    ["System.Random.SplitMix.Init.json","System.Random.SplitMix.json","System.Random.SplitMix32.json",
-     "entry/units/u-original-splitmix-entry/OriginalSplitmixEntry.json",
+    ["System.Random.SplitMix.Init.cbd","System.Random.SplitMix.cbd","System.Random.SplitMix32.cbd",
+     "entry/units/u-original-splitmix-entry/OriginalSplitmixEntry.cbd",
      "audit.json","native.tsv","splitmix-native.tsv","control.so","control.ll"]] ++
     concatMap commandArtifacts [built,acquired,entryBuilt,audited,splitmixBuilt,splitmixOracle,nativeBuilt,oracle,controlBuilt,irBuilt])
   writeJson (output </> "manifest.json") $ object

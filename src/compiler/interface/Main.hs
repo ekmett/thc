@@ -38,7 +38,7 @@ import GHC.Unit.Module.ModSummary (ms_mod_name, ms_hsc_src)
 import GHC.Unit.State (wireMap, lookupUnitId, unwireUnit)
 import System.Environment (getArgs)
 import System.Exit (ExitCode(..), exitWith)
-import System.IO (hSetEncoding, stdout, utf8)
+import System.IO (hSetBinaryMode, stdout)
 import System.FilePath ((</>))
 import THC.Interface
 
@@ -87,7 +87,7 @@ report code value = BL.putStrLn (encode value) >> exitWith (ExitFailure code)
 
 main :: IO ()
 main = do
-  hSetEncoding stdout utf8
+  hSetBinaryMode stdout True
   arguments <- getArgs
   case arguments of
     ["--home-interface-inventory",lib,owner,selectedWay] -> do
@@ -177,9 +177,9 @@ loadSelected options = withSelected options $ \environment -> do
   case loaded of
     Nothing -> pure Nothing
     Just core -> do
-      rendered <- interfaceCoreJSONBytes (["unit-qualified"] ++ ["source-notes" | sourceNotes options] ++
+      rendered <- interfaceCoreCBD (["unit-qualified"] ++ ["source-notes" | sourceNotes options] ++
         ["pretty-diagnostics" | prettyDiagnostics options]) core
-      output <- Exception.evaluate (BS.concat ["{\"schema\":1,\"status\":\"loaded\",\"core\":", rendered, "}\n"])
+      output <- Exception.evaluate rendered
       pure (Just output)
 
 -- Private, versioned batch protocol used by the installed-bundle cache. Each

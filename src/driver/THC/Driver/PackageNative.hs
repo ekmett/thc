@@ -41,6 +41,8 @@ import THC.Driver.ScalarBitcode (parseDependencies, sulongScalarTarget)
 import THC.Driver.NativeLibrarySources (zlibChecksumSources)
 import THC.Driver.NativeArgumentBridge (nativeArgumentBridge)
 import THC.Driver.NativeDependencies (NativeProduct, nativeProductProof, nativeProductPieces, nativeLinkInputs, nativeSymbolArchives)
+import THC.Driver.Installed (boundedInterfaceProcess)
+import THC.Compact.Module (readModuleValue, finalizeModuleMetadata)
 
 -- (original emitted symbol, convention, safety, semantic carriers, result)
 type Signature = (String, String, String, [String], String)
@@ -97,9 +99,9 @@ installedNativeSignatures unit value
 -- module. Source products are reused only when their ordinary C obligations can
 -- be linked; foreign exports/registration remain owned by the managed runtime.
 linkInstalledNative :: FilePath -> FilePath -> [String] -> FilePath -> String ->
-  [(String,BS.ByteString)] -> IO [(String,BS.ByteString)]
+  [(String,FilePath)] -> IO [(String,FilePath)]
 linkInstalledNative compiler libdir arguments directory unit modules = do
-  decoded <- mapM (either fail pure . eitherDecodeStrict' . snd) modules
+  decoded <- mapM (\(_,path) -> BS.readFile path >>= either fail pure . readModuleValue) modules
   -- Do not splice a second component into an already acquired unit.
   let acquired = any (\value -> member value "packageNativeLink" /= Nothing) decoded
       eligible value = not acquired && member value "unit" == Just (toJSON unit) &&
@@ -127,7 +129,7 @@ linkInstalledNative compiler libdir arguments directory unit modules = do
     sources <- mapM (stubSource . snd) selected
     writeNativeWrappers compiler root (('-':'B':libdir):arguments) (('-':'B':libdir):configured)
       unit root signatures [] sources perModule [] (const Nothing) addresses (map fst archives) True
-    let original = [(name,BL.toStrict (encode value)) | (name,value) <- selected]
+    let original = [(name,bytes) | (name,bytes) <- modules, name `elem` map fst selected]
     linked <- finishPackageNative (root </> "pieces") root unit (Just []) original
     pure [(name,maybe bytes id (lookup name linked)) | (name,bytes) <- modules]
 
@@ -533,14 +535,14 @@ captureNativeObject pieces compiler arguments = when ("-c" `elem` arguments && a
     _ -> pure ()
 
 -- Called while the package source and generated headers are still alive.
--- The JSON written by the late Core pass does not contain retained annotations;
+-- The CBD written by the late Core pass does not contain retained annotations;
 -- hydrate exactly those interfaces which contain this unit's foreign calls.
 capturePackageNative :: FilePath -> FilePath -> FilePath -> FilePath -> [String] -> String -> FilePath -> IO ()
 capturePackageNative repository helper libdir compiler arguments unit directory = do
   let core = directory </> "core"
       objects = directory </> "objects"
-  paths <- sort . filter ((== ".json") . takeExtension) <$> files core
-  sourceValues <- mapM readJson paths
+  paths <- sort . filter ((== ".cbd") . takeExtension) <$> files core
+  sourceValues <- mapM (\path -> BS.readFile path >>= either fail pure . readModuleValue) paths
   let needed = [(path,value) | (path,value) <- zip paths sourceValues,
         any (owned unit) (calls value) || hasFunctionAddress value || not (null (addressLabels value)) ||
         maybe False (\stubs -> stubs /= Null && member stubs "initializers" /= Just (toJSON ([]::[Value])))
@@ -553,17 +555,18 @@ capturePackageNative repository helper libdir compiler arguments unit directory 
       let interface = objects </> map (\c -> if c == '.' then pathSeparator else c) name <.> "hi"
           databases = [database | (flag,database) <- zip arguments (drop 1 arguments), flag == "-package-db"]
           way = if "-dynamic" `elem` arguments then "dynamic" else "vanilla"
-      output <- command root helper (["--libdir",libdir,"--unit",unit,"--module",name,
+      (status,output,diagnostic) <- boundedInterfaceProcess helper (["--libdir",libdir,"--unit",unit,"--module",name,
         "--interface",interface,"--way",way,"--source-notes","--home-interfaces",objects] ++
         concatMap (\database -> ["--package-db",database]) databases)
-      response <- either fail pure (eitherDecodeStrict' (T.encodeUtf8 (T.pack output)))
-      check (member response "status" == Just "loaded") "package native interface has no retained full Core"
-      value <- get response "core"
+      check (status == ExitSuccess) ("package native interface has no retained full Core: " ++ show diagnostic)
+      value <- either fail pure (readModuleValue output)
       check (member value "unit" == Just (toJSON unit) && member value "module" == Just (toJSON (name::String)))
         "package native retained interface identity differs"
-      pure value
-    retained <- either fail pure (archiveNativeModules unit hydrated)
-    forM_ (zip needed retained) $ \((path,_),value) -> writeJson path value
+      pure (output,value)
+    retained <- either fail pure (archiveNativeModules unit (map snd hydrated))
+    -- Archive classification is an in-memory input to wrapper selection. Keep
+    -- the original payload untouched until final native linkage is known.
+    forM_ (zip needed hydrated) $ \((path,_),(bytes,_)) -> BS.writeFile path bytes
     signatures <- either fail pure (nativeSignatures unit retained)
     addresses <- sort . nub . concat <$> mapM (either fail pure . nativeAddressDeclarations unit) retained
     finalizers <- either fail pure (nativeFinalizers unit retained)
@@ -824,30 +827,38 @@ nativeStaticExports value = case member value "staticForeignExports" of
         "static export declaration has no exact retained Core binder"
     pure exports
 
-finishPackageNative :: FilePath -> FilePath -> String -> Maybe [FilePath] -> [(String,BS.ByteString)] -> IO [(String,BS.ByteString)]
+finishPackageNative :: FilePath -> FilePath -> String -> Maybe [FilePath] -> [(String,FilePath)] -> IO [(String,FilePath)]
 finishPackageNative pieces directory unit objects modules =
   fst <$> finishPackageNativeWithDependencies Nothing [] [] pieces directory directory unit objects modules
 
 -- | Declared dependency paths refer to separately linked components. Never
 -- embed another unit's C globals/constructors in this component's LLVM.
 finishPackageNativeWithDependencies :: Maybe NativeProduct -> [([String],Value)] -> [FilePath] -> FilePath -> FilePath -> FilePath ->
-  String -> Maybe [FilePath] -> [(String,BS.ByteString)] -> IO ([(String,BS.ByteString)],Maybe Value)
+  String -> Maybe [FilePath] -> [(String,FilePath)] -> IO ([(String,FilePath)],Maybe Value)
 finishPackageNativeWithDependencies ownedProduct dependencyPaths publishedDatabases pieces sourceDirectory directory unit currentObjects modules = do
+  -- Validate retained call products against actual Core once, before linking.
+  -- Header-only values intentionally have no bindings and are not call proofs.
+  decoded <- forM modules $ \(_,path) -> do
+    bytes <- BS.readFile path
+    value <- either fail pure (readModuleValue bytes)
+    pure (sha bytes,value)
+  classified <- either fail pure (archiveNativeModules unit (map snd decoded))
+  let archived = zip3 modules (map fst decoded) classified
   let receipt = sourceDirectory </> "native.json"
   exists <- doesFileExist receipt
-  if not exists then bare else do
+  if not exists then bare archived else do
     record <- readJson receipt
     check (member record "unit" == Just (toJSON unit)) "package native receipt owner differs"
     if member record "archiveOnly" == Just (Bool True) then do
       check (case record of Object fields -> KM.size fields == 2; _ -> False) "invalid archive-only native receipt"
-      bare
-    else finish record
+      bare archived
+    else finish archived record
   where
    dependencies = nub (map snd dependencyPaths)
-   bare = case ownedProduct of
-    Nothing -> pure (modules,Nothing)
+   bare archived = case ownedProduct of
+    Nothing -> unlinked archived
     Just captured -> case nativeProductPieces captured of
-      [] -> pure (modules,Nothing)
+      [] -> unlinked archived
       first:_ -> do
         root <- get first "root" :: IO String
         target <- get first "target" :: IO String
@@ -855,11 +866,11 @@ finishPackageNativeWithDependencies ownedProduct dependencyPaths publishedDataba
         compiler <- get inputs "compiler" :: IO String
         arguments <- get inputs "arguments" :: IO [String]
         let proof = nativeProductProof captured
-        finish (object ["unit" .= unit,"root" .= root,"target" .= target,
+        finish archived (object ["unit" .= unit,"root" .= root,"target" .= target,
           "objectRoots" .= ([]::[String]),"inputs" .= ([]::[Value]),"abi" .= ([]::[Value]),
           "componentSha256" .= sha (BL.toStrict (encode proof)),
           "sourceIdentity" .= object ["compiler" .= compiler,"arguments" .= arguments,"nativeProduct" .= proof]])
-   finish record = do
+   finish archived record = do
     roots <- get record "objectRoots" :: IO [FilePath]
     root <- get record "root"
     target <- get record "target"
@@ -902,22 +913,22 @@ finishPackageNativeWithDependencies ownedProduct dependencyPaths publishedDataba
     inputHashes <- mapM (fmap sha . BS.readFile) (wrapper ++ bitcodePaths)
     producer <- sha <$> (BS.readFile =<< getExecutablePath)
     let inputHash = sha (BL.toStrict (encode (producer,record,inputHashes,dependencyPaths,
-          nativeProductProof <$> ownedProduct,map (sha . snd) modules)))
+          nativeProductProof <$> ownedProduct,[digest | (_,digest,_) <- archived])))
         cached = directory </> "native/component-link.json"
     present <- doesFileExist cached
     previous <- if present then Just <$> readJson cached else pure Nothing
     proof <- case previous of
       Just value | member value "inputSha256" == Just (toJSON inputHash) -> get value "link"
       _ -> do
-        value <- materialize record native
+        value <- materialize archived record native
         writeJson cached (object ["inputSha256" .= inputHash,"link" .= value])
         pure value
-    linkedModules <- attach record proof
+    linkedModules <- attach archived record proof
     let descriptor = object $ ["schema" .= (1::Int),"profile" .= ("thc-package-native-component-v1"::String)] ++
           [Key.fromString key .= value | key <- ["unit","target","componentSha256","bitcodeSha256","bitcodeHex",
             "format","exports","dependencies","nativeLibrary"], Just value <- [member proof key]]
     pure (linkedModules,Just descriptor)
-   materialize record native = do
+   materialize archived record native = do
     root <- get record "root"
     target <- get record "target"
     wrapper <- maybe (pure []) (fmap (:[]) . either fail pure . parseValue) (member record "bitcode")
@@ -1011,8 +1022,7 @@ finishPackageNativeWithDependencies ownedProduct dependencyPaths publishedDataba
       _ <- trim resolved
       pure ()
     externals <- unresolved
-    declarations <- fmap concat $ forM modules $ \(_,bytes') -> do
-      value <- either fail pure (eitherDecodeStrict' bytes')
+    declarations <- fmap concat $ forM archived $ \(_,_,value) -> do
       either fail pure (nativeStaticExports value)
     exportNames <- mapM (`get` "symbol") declarations :: IO [String]
     peers <- nub . concat <$> mapM dependencyClosure dependencies
@@ -1123,10 +1133,12 @@ finishPackageNativeWithDependencies ownedProduct dependencyPaths publishedDataba
     nested <- get value "dependencies" :: IO [Value]
     rest <- concat <$> mapM dependencyClosure nested
     pure (value:rest)
-   attach record proof = do
+   unlinked archived = do
+    forM_ archived $ \((_,path),_,value) -> finalizeModuleMetadata path value
+    pure (modules,Nothing)
+   attach archived record proof = do
     abi <- get proof "abi" :: IO [Value]
-    forM modules $ \(name,bytes') -> do
-      value <- either fail pure (eitherDecodeStrict' bytes')
+    forM archived $ \((name,bytes'),_,value) -> do
       case value of
         Object fields -> do
           let prior = member value "packageNativeArchive"
@@ -1135,7 +1147,8 @@ finishPackageNativeWithDependencies ownedProduct dependencyPaths publishedDataba
           let next = if null abi || not ownsCalls || maybe False (/= Null) unclassified then value
                 else Object (KM.insert "packageNativeLink" proof
                   (if member record "installed" == Just (Bool True) then KM.delete "foreignLink" fields else fields))
-          pure (name, BL.toStrict (encode next))
+          finalizeModuleMetadata bytes' next
+          pure (name, bytes')
         _ -> fail "package native Core module is not an object"
 
 compileC :: FilePath -> FilePath -> [String] -> FilePath -> Maybe String -> IO (FilePath,String,Value)

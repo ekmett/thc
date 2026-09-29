@@ -308,9 +308,11 @@ componentArtifacts dist allRoots component = do
   -- Compare canonical owners so an alias cannot masquerade as a nested sibling.
   owners <- nub <$> mapM canonicalizePath allRoots
   kind <- field component "type" :: IO String
+  arguments <- field component "compiler-args"
   -- Cabal 3.16 build-info reports the base build directory, but its GHC
   -- builder nests executable artifacts in <name>/<name>-tmp and named-library
-  -- artifacts in <name>. Derive only those exact parsed component layouts;
+  -- artifacts in <name> (or the concrete unit ID for Backpack instances).
+  -- Derive only those exact parsed component layouts;
   -- the paired-interface, native-receipt and component-ownership guards below
   -- still apply to every object.
   suffixes <- case kind of
@@ -334,12 +336,14 @@ componentArtifacts dist allRoots component = do
         _ -> fail "Cabal test build-info has an invalid component name"
     "lib" -> do
       name <- field component "name"
+      let componentIds = [value | (flag,value) <- zip arguments (drop 1 arguments), flag == "-this-component-id"]
+          unitIds = [value | (flag,value) <- zip arguments (drop 1 arguments), flag == "-this-unit-id"]
       case eitherParsec name of
+        Right (CLibName _) | [identifier] <- componentIds, [unit] <- unitIds, identifier /= unit -> pure [unit]
         Right (CLibName (LSubLibName value)) -> pure [unUnqualComponentName value]
         Right (CLibName LMainLibName) -> pure []
         _ -> fail "Cabal library build-info has an invalid component name"
     _ -> pure []
-  arguments <- field component "compiler-args"
   source <- field component "src-dir" >>= canonicalizePath
   artifacts <- mapM (canonicalizePath . resolveComponentPath source)
     [directory </> suffix | suffix <- suffixes,

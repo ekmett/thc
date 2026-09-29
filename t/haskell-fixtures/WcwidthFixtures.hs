@@ -13,7 +13,7 @@
 -- Fixture acquisition support for wcwidth.
 module WcwidthFixtures (prepareWcwidth) where
 
-import Control.Monad (forM, forM_, unless)
+import Control.Monad (forM, unless)
 import Data.Aeson (eitherDecodeStrict', Value(..), object, (.=))
 import qualified Data.Aeson.KeyMap as KM
 import qualified Data.ByteString as BS
@@ -85,20 +85,22 @@ prepareWcwidth root = do
     unless (length (BSC.lines (commandStdout oracle)) == 12) (fail "wcwidth native row inventory differs")
     BS.writeFile (output </> locale <.> "tsv") (commandStdout oracle)
     pure oracle
-  paths <- sort . filter ((== ".json") . takeExtension) <$> files (capture </> unit </> "core")
-  modules <- mapM (\path -> (,) (takeFileName path) <$> BS.readFile path) paths
-  unless (map fst modules == ["Width.json"]) (fail "wcwidth Core inventory differs")
-  linked <- finishPackageNative pieces (capture </> unit) unit Nothing modules
-  forM_ linked $ \(name,bytes) -> BS.writeFile (output </> name) bytes
+  paths <- sort . filter ((== ".cbd") . takeExtension) <$> files (capture </> unit </> "core")
+  unless (map takeFileName paths == ["Width.cbd"]) (fail "wcwidth Core inventory differs")
+  modules <- forM paths $ \path -> do
+    let destination = output </> takeFileName path
+    copyFile path destination
+    pure (takeFileName path,destination)
+  _ <- finishPackageNative pieces (capture </> unit) unit Nothing modules
   audits <- forM ["rawWidth","displayWidth"] $ \entry -> execute ("audit-" ++ entry) [] "python3"
     ["bin/audit-core.py","--entry",unit ++ ":Width." ++ entry,
-     "--output",output </> entry <.> "json",output </> "Width.json"]
+     "--output",output </> entry <.> "json",output </> "Width.cbd"]
   inputs <- hashes root ([fixture </> name | name <- ["cabal.project","wcwidth-ffi.cabal","src/Width.hs","app/Main.hs"]] ++
     ["t/haskell-fixtures/WcwidthFixtures.hs","bin/plugin.py","src/driver/THC/Driver/PackageNative.hs",
      "src/driver/THC/Driver/NativeArgumentBridge.hs","src/driver/THC/Driver/NativeLibrarySources.hs",
      "src/compiler/THC/ForeignImportProvenance.hs","bin/audit-core.py","bin/core_package_manifest.py"])
   artifacts <- hashes root ([relative </> name | name <-
-    ["Width.json","rawWidth.json","displayWidth.json","C.tsv","C.UTF-8.tsv","ConsoleReporter.hs","TASTY-LICENSE"]] ++
+    ["Width.cbd","rawWidth.json","displayWidth.json","C.tsv","C.UTF-8.tsv","ConsoleReporter.hs","TASTY-LICENSE"]] ++
     concatMap commandArtifacts ([built,acquired] ++ oracles ++ audits))
   writeJson (output </> "manifest.json") (object ["schema" .= (1::Int),"unit" .= unit,
     "driverSha256" .= driverHash,"inputHashes" .= inputs,"artifactHashes" .= artifacts,

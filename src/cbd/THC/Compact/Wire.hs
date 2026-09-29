@@ -38,7 +38,7 @@ data Segment = ExecutableData | CommonStrings | RealNames | FilenameIntervals
   | LineColumnIntervals | Fingerprints
   deriving (Eq, Ord, Enum, Bounded, Show)
 
--- | The header member's fixed prefix; unchanged typed module facts follow.
+-- | The header member's fixed prefix; private strings and typed facts follow.
 data Header = Header
   { headerMajor :: !Word16
   , headerMinor :: !Word16
@@ -116,7 +116,7 @@ getHeader = do
   unless (magic == "THCCBD1\0") (fail "Invalid CBD header magic")
   major <- getWord16le
   minor <- getWord16le
-  unless (major == 1 && minor == 0) (fail "Unsupported compact Core version")
+  unless (major == 1 && minor == 1) (fail "Unsupported compact Core version")
   summaries <- getWord32le
   count <- getWord64le
   debug <- getWord32le
@@ -130,7 +130,7 @@ getHeader = do
 -- scan or decode the executable payload or any debug segment.
 validateContainer :: Header -> [Word64] -> Either String ()
 validateContainer header lengths = do
-  unless (headerMajor header == 1 && headerMinor header == 0) (Left "Unsupported compact Core version")
+  unless (headerMajor header == 1 && headerMinor header == 1) (Left "Unsupported compact Core version")
   case lengths of
     [_,_,names,filenames,lineColumns,fingerprints] -> do
       unless (fingerprints `mod` 24 == 0 &&

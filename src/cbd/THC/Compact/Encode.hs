@@ -196,11 +196,12 @@ nativeLink encoder (NativeLink payload@(LinkPayload schema _ _ _ _ _ _ _) abi in
   case inputs of
     Missing -> tag encoder 0
     Unknown -> tag encoder 1
-    Known value@(NativeBuildInputs _ _ _ libraries _ _) -> do
+    Known value@(NativeBuildInputs _ _ dependencies libraries _ _) -> do
       let extended (NativeLibrary _ _ _ _ _ Missing Missing Missing Missing) = False
           extended _ = True
-          extra = any extended libraries
-      tag encoder (if extra then 3 else 2)
+          current = case dependencies of ComponentBuildDependencies {} -> True; _ -> False
+          extra = current || any extended libraries
+      tag encoder (if current then 4 else if extra then 3 else 2)
       nativeBuildInputs encoder extra value
   case (companion,dataSymbols,components) of
     (Missing,Missing,Nothing) -> tag encoder 0
@@ -231,12 +232,20 @@ nativeBuildInputs :: Encoder -> Bool -> NativeBuildInputs -> IO ()
 nativeBuildInputs encoder extended (NativeBuildInputs units providers dependencies libraries unresolved bridges) = do
   list encoder group units
   list encoder provider providers
-  present encoder (list encoder (nativeDependency encoder)) dependencies
+  case dependencies of
+    ArchiveBuildDependencies records -> present encoder (list encoder (nativeDependency encoder False)) records
+    ComponentBuildDependencies records _ -> present encoder (list encoder dependencyRef) records
   list encoder library libraries
   strings unresolved
   list encoder bridge bridges
+  case dependencies of
+    ArchiveBuildDependencies _ -> pure ()
+    ComponentBuildDependencies _ productRecord -> present encoder (nativeDependency encoder True) productRecord
   where
     strings = list encoder (string encoder)
+    dependencyRef (NativeDependencyRef path unit component bitcode) = do
+      strings path
+      mapM_ (string encoder) [unit,component,bitcode]
     group (SingleCompile input) = tag encoder 0 >> compileInput encoder input
     group (GroupCompile inputs) = tag encoder 1 >> list encoder (compileInput encoder) inputs
     provider (NativeProvider name symbols path digest target input) = do
@@ -269,11 +278,11 @@ compileInput encoder (CompileInput compiler clang arguments language nativeTarge
   string encoder target
   list encoder (\(path,digest) -> string encoder path >> string encoder digest) files
 
-nativeDependency :: Encoder -> NativeDependency -> IO ()
-nativeDependency encoder (NativeDependency profile unit source registrationText digest archives products) = do
+nativeDependency :: Encoder -> Bool -> NativeDependency -> IO ()
+nativeDependency encoder current (NativeDependency profile unit source registrationText digest archives products) = do
   string encoder profile
   string encoder unit
-  sourceIdentity encoder source
+  sourceIdentity encoder current source
   string encoder registrationText
   string encoder digest
   list encoder archive archives
@@ -288,14 +297,21 @@ nativeDependency encoder (NativeDependency profile unit source registrationText 
       compileInput encoder input
       string encoder bitcodeSha
 
-sourceIdentity :: Encoder -> SourceIdentity -> IO ()
-sourceIdentity encoder (SourceIdentity unit depends kind style name version flags component sourceSha cabalSha) = do
+sourceIdentity :: Encoder -> Bool -> SourceIdentity -> IO ()
+sourceIdentity encoder current (SourceIdentity unit depends kind style name version flags component sourceSha cabalSha source) = do
   optionalString unit
   present encoder (list encoder (string encoder)) depends
   mapM_ optionalString [kind,style,name,version]
   present encoder (list encoder (\(key,value) -> string encoder key >> boolean encoder value)) flags
   mapM_ optionalString [component,sourceSha,cabalSha]
-  where optionalString = present encoder (string encoder)
+  if current then present encoder location source
+    else unless (source == Missing) (fail "Legacy native source identity cannot contain a source location")
+  where
+    optionalString = present encoder (string encoder)
+    location (NativeSource sourceType path repo) = do
+      string encoder sourceType
+      optionalString path
+      present encoder (\(scheme,uri) -> string encoder scheme >> string encoder uri) repo
 
 nativeArchive :: Encoder -> NativeArchive -> IO ()
 nativeArchive encoder (NativeArchive schema profile execution unit moduleName unsupported reason unresolved artifact conflicts) = do

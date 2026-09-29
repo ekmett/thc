@@ -22,6 +22,7 @@ import qualified BundleSelectionTests
 import qualified RunTests
 import qualified RunOptionsTests
 import qualified BenchmarkTests
+import qualified BackpackTests
 import qualified ProjectTests
 import qualified StoreProjectTests
 import qualified EmptyStoreProjectTests
@@ -53,6 +54,7 @@ runTests arguments = do
     ["--bundle-selection-only"] -> pure [BundleSelectionTests.tests env]
     ["--runnable-targets-only"] -> pure [RunOptionsTests.tests env, BenchmarkTests.tests env]
     ["--acquire-project-only"] -> pure [ProjectTests.acquisitionTests env]
+    ["--backpack-full-core-only"] -> pure [BackpackTests.tests env]
     ["--interop-project-only"] -> pure
       [ProjectTests.interopTests env, StoreProjectTests.proxyOptionsTest env,
        StoreProjectTests.exportSafetyTests env, PackageNativeTests.tests]
@@ -92,6 +94,6 @@ runTests arguments = do
       , StoreProjectTests.tests env
       , EmptyStoreProjectTests.tests env
       ]
-    _ -> die "Usage: driver-tests [--core-index-only|--bundle-selection-only|--runnable-targets-only|--acquire-project-only|--interop-project-only|--ghc-proxy-only|--static-exports-only|--run-options-only|--run-ffi-only|--store-inventory-only|--store-projects-only|--store-capture-lifetime-only|--export-safety-only|--inplace-store-only|--concurrent-store-only|--installed-hydration-only|--installed-foreign-source-only|--package-native-only|--native-recipe-only]"
+    _ -> die "Usage: driver-tests [--core-index-only|--bundle-selection-only|--runnable-targets-only|--acquire-project-only|--backpack-full-core-only|--interop-project-only|--ghc-proxy-only|--static-exports-only|--run-options-only|--run-ffi-only|--store-inventory-only|--store-projects-only|--store-capture-lifetime-only|--export-safety-only|--inplace-store-only|--concurrent-store-only|--installed-hydration-only|--installed-foreign-source-only|--package-native-only|--native-recipe-only]"
   counts <- runTestTT $ TestList selected
   if errors counts + failures counts == 0 then pure () else exitFailure

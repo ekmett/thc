@@ -17,6 +17,7 @@ module THC.Driver.Wired
   , exportPinnedCore, exportPinnedWindowsCore, probeTargetLayout ) where
 
 import Control.Monad (forM, forM_, unless, when)
+import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy.Char8 as BL
 import Data.Aeson (Value(..), encode, eitherDecodeStrict', object, (.=))
 import qualified Data.Aeson as Aeson
@@ -33,6 +34,7 @@ import qualified System.Info as Host
 import System.FilePath ((</>), makeRelative, replaceExtension, takeDirectory, takeExtension)
 import System.Process (CreateProcess(..), createProcess, proc, readProcess, rawSystem, waitForProcess)
 import THC.Driver.Installed (boundedInterfaceProcess)
+import THC.Compact.Module (readModuleMetadata)
 
 -- These are the original GHC 9.14.1 sources. Boot interfaces are compiled
 -- first; the installed ghc-internal dynamic interfaces fill the remaining
@@ -261,9 +263,10 @@ exportPinnedWindowsCore upstream sourceFiles ghc ghcPkg helper expected layoutRe
       ["--libdir", libdir, "--unit", "ghc-internal", "--module", name,
        "--interface", overlay </> relative name ++ ".hi", "--way", "vanilla", "--source-notes",
        "--home-interfaces", overlay]
-    case eitherDecodeStrict' payload of
-      Right (Object fields) | code == ExitSuccess, KeyMap.lookup "status" fields == Just (String "loaded"),
-        Just value@(Object _) <- KeyMap.lookup "core" fields -> BL.writeFile (core </> name ++ ".json") (encode value)
+    case readModuleMetadata payload of
+      Right (_,Object fields) | code == ExitSuccess,
+        KeyMap.lookup "unit" fields == Just (String "ghc-internal"),
+        KeyMap.lookup "module" fields == Just (String (Text.pack name)) -> BS.writeFile (core </> name ++ ".cbd") payload
       _ -> fail ("Windows source interface lacks genuine complete Core: " ++ name ++ " " ++ show errors)
   layout <- probeTargetLayout includes layoutRecipe staging
   pure (WiredArtifacts generated layout (Just (object

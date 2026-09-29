@@ -36,7 +36,7 @@ import THC.Compact.Core
 import THC.Compact.Decode
 import THC.Compact.Encode
 import THC.Compact.Facts
-import THC.Compact.Module (writeModule)
+import THC.Compact.Module (writeModule, writeModuleValue, encodeModuleValue, readModuleValue, finalizeModuleMetadata)
 import THC.Compact.JSON (parseModuleWithoutDebug)
 import THC.Compact.Inspect (moduleJSON, inspectContainer, unpackContainer)
 import THC.CoreSymbols (symbolDigest)
@@ -162,24 +162,23 @@ semanticTests = TestList
           assertBool ("truncated at " ++ show size) (isLeft (decodeExprAt (BS.take size bytes) strings 0))
         assertBool "no full-string fallback" (isLeft (decodeExprAt bytes BS.empty 0))
         assertBool "invalid selected UTF8" (isLeft (decodeExprAt bytes (BS.replicate 7 255) 0))
-  , TestLabel "known-start facts need no executable bytes and share raw strings" $ TestCase $
+  , TestLabel "known-start facts have independent metadata and executable strings" $ TestCase $
       withSystemTempDirectory "compact-header" $ \directory -> do
-        encoderSlot <- newIORef Nothing
         let destination = directory </> "header.cbd"
             prepare streams = do
               encoder <- newEncoder streams
-              writeIORef encoderSlot (Just encoder)
               encodeFacts encoder completeFacts
-            produce _ = do
-              encoder <- readIORef encoderSlot >>= maybe (fail "Missing encoder") pure
+            produce streams = do
+              encoder <- newEncoder streams
               _ <- encodeBinding encoder completeBinding
               pure 0
         _ <- writeContainerPrepared destination prepare 0 produce
         file <- BS.readFile destination
         (_,factBytes,segments) <- either fail pure (unpackContainer file)
         case segments of
-          _ : strings : _ -> do
-            assertEqual "header-only decode" (Right completeFacts) (decodeFacts factBytes strings)
+          payload : strings : _ -> do
+            assertEqual "header-only decode" (Right completeFacts) (decodeMetadata factBytes)
+            assertEqual "execution has its own strings" (Right completeBinding) (fst <$> decodeBindingAt payload strings 0)
             assertBool "header includes inline constructor shape" (not (BS.null factBytes))
           _ -> assertFailure "Missing strings"
   , TestLabel "unmapped present provenance cannot disappear during preparation" $ TestCase $
@@ -239,10 +238,10 @@ semanticTests = TestList
         bytes <- BS.readFile destination
         (_,factBytes,segments) <- either fail pure (unpackContainer bytes)
         case segments of
-          payload:strings:_ -> do
+          payload:_:_ -> do
             assertEqual "header provenance has no executable shape references" BS.empty payload
             assertEqual "all scoped types, safety and original expected calls preserved"
-              (Right facts) (decodeFacts factBytes strings)
+              (Right facts) (decodeMetadata factBytes)
           _ -> assertFailure "Missing provenance container segments"
   , TestLabel "unclassified and rejected provenance remain non-verified records" $ TestCase $
       forM_ [(ImportsUnclassified "unknown original declaration",RegistrationUnclassified "unknown original product"),
@@ -320,6 +319,51 @@ semanticTests = TestList
       assertEqual "no companion bytes or data entry identity lost" expected (moduleJSON facts bindings)
       withEncoded (\_ encoder -> encodeFacts encoder facts) $ \_ strings payload ->
         assertEqual "native metadata survives typed wire encoding" (Right facts) (decodeFacts payload strings)
+  , TestLabel "actual native producer build inputs survive final metadata attachment" $ TestCase $
+      withSystemTempDirectory "compact-native-inputs" $ \directory -> do
+        let original = moduleJSON completeFacts {factsPendingProvenance =
+              [Missing,Missing,Missing,Missing,Missing,Missing,Known (NativeLinkRecord completeNativeLink),Missing]} [completeBinding]
+            at key (Object fields) = maybe Null id (KM.lookup key fields)
+            at _ _ = Null
+            set key value (Object fields) = Object (KM.insert key value fields)
+            set _ _ value = value
+            link = at "packageNativeLink" original
+            inputs = at "buildInputs" link
+            proof = case at "dependencies" inputs of
+              Array values -> case toList values of
+                [value] -> set "profile" (String "resolved-native-archive-products-v1") value
+                _ -> error "expected one native proof"
+              _ -> error "missing native proof"
+            edge = object ["declaredPath" .= (["facade","dependency"] :: [String]),"unit" .= ("dependency" :: String),
+              "componentSha256" .= ("component-hash" :: String),"bitcodeSha256" .= ("bitcode-hash" :: String)]
+            source kind fields = object ("type" .= (kind :: String) : fields)
+            products = [Null,proof] ++ [set "sourceIdentity" (set "pkg-src" location (at "sourceIdentity" proof)) proof |
+              location <- [Null,source "local" ["path" .= ("/actual/source" :: String)],
+                source "repo-tar" ["repo" .= object ["type" .= ("secure-repo" :: String),"uri" .= ("https://hackage.haskell.org/" :: String)]]]]
+            attach productRecord dependencies = set "packageNativeLink"
+              (set "buildInputs" (set "nativeProduct" productRecord (set "dependencies" (toJSON dependencies) inputs)) link) original
+        forM_ [(productRecord,dependencies) | productRecord <- products, dependencies <- [[],[edge]]] $ \(productRecord,dependencies) -> do
+          let expected = attach productRecord dependencies
+              staging = directory </> "module.cbd"
+          (facts,bindings) <- either fail pure (parseModuleWithoutDebug expected)
+          assertEqual "actual producer fields have exact typed representation" expected (moduleJSON facts bindings)
+          bytes <- encodeModuleValue expected
+          assertEqual "native product and declared dependency path survive wire" (Right expected) (readModuleValue bytes)
+          _ <- writeModuleValue staging original
+          before <- BS.readFile staging
+          finalizeModuleMetadata staging expected
+          after <- BS.readFile staging
+          assertEqual "native finalization retains complete new metadata" (Right expected) (readModuleValue after)
+          (_,_,oldSegments) <- either fail pure (unpackContainer before)
+          (_,_,newSegments) <- either fail pure (unpackContainer after)
+          assertEqual "native metadata does not change any execution/debug segment" oldSegments newSegments
+        assertBool "unmapped dependency fields still fail" (isLeft (parseModuleWithoutDebug
+          (attach Null [set "invented" (Bool True) edge])))
+        assertBool "unmapped native product fields still fail" (isLeft (parseModuleWithoutDebug
+          (attach (set "invented" (Bool True) proof) [edge])))
+        assertBool "unmapped Cabal source fields still fail" (isLeft (parseModuleWithoutDebug
+          (attach (set "sourceIdentity" (set "pkg-src" (source "local" ["invented" .= True])
+            (at "sourceIdentity" proof)) proof) [edge])))
   , TestLabel "retired partial native protocols cannot become executable metadata" $ TestCase $ do
       let original = moduleJSON completeFacts {factsPendingProvenance =
             [Missing,Missing,Missing,Missing,Missing,Missing,Known (NativeLinkRecord completeNativeLink),Missing]} []
@@ -563,12 +607,12 @@ nativeFactsWithFlags :: [(BS.ByteString,Bool)] -> Facts
 nativeFactsWithFlags flags = nativeProvenanceFacts
   {factsPendingProvenance=map replace (factsPendingProvenance nativeProvenanceFacts)}
   where
-    replace (Known (NativeLinkRecord (NativeLink payload abi (Known (NativeBuildInputs units providers (Known dependencies) libraries unresolved bridges)) companion dataSymbols finalizers components))) =
-      Known (NativeLinkRecord (NativeLink payload abi (Known (NativeBuildInputs units providers (Known (map dependency dependencies)) libraries unresolved bridges)) companion dataSymbols finalizers components))
+    replace (Known (NativeLinkRecord (NativeLink payload abi (Known (NativeBuildInputs units providers (ArchiveBuildDependencies (Known dependencies)) libraries unresolved bridges)) companion dataSymbols finalizers components))) =
+      Known (NativeLinkRecord (NativeLink payload abi (Known (NativeBuildInputs units providers (ArchiveBuildDependencies (Known (map dependency dependencies))) libraries unresolved bridges)) companion dataSymbols finalizers components))
     replace value = value
-    dependency (NativeDependency profile unit (SourceIdentity identifier depends kind style name version _ component sourceSha cabalSha)
+    dependency (NativeDependency profile unit (SourceIdentity identifier depends kind style name version _ component sourceSha cabalSha source)
         registrationText digest archives products) = NativeDependency profile unit
-          (SourceIdentity identifier depends kind style name version (Known flags) component sourceSha cabalSha)
+          (SourceIdentity identifier depends kind style name version (Known flags) component sourceSha cabalSha source)
           registrationText digest archives products
 
 completeLinkPayload :: LinkPayload
@@ -582,12 +626,12 @@ completeNativeLink :: NativeLink
 completeNativeLink = NativeLink completeLinkPayload [NativeABI "original" "adapter" CApi SafeCall ["AddrRep","IntRep"] "void"]
   (Known (NativeBuildInputs [GroupCompile [input],SingleCompile input]
     [NativeProvider "actual-provider" ["original"] "provider.bc" "provider-sha" "actual-target" input]
-    (Known [NativeDependency "resolved-c-only-archive-products-v1" "dependency"
+    (ArchiveBuildDependencies (Known [NativeDependency "resolved-c-only-archive-products-v1" "dependency"
       (SourceIdentity (Known "dependency") (Known []) (Known "configured") (Known "global")
         (Known "libyaml-clib") (Known "0.2.5") (Known [("external-libyaml",False)])
-        (Known "lib") (Known "source-sha") Unknown)
+        (Known "lib") (Known "source-sha") Unknown Missing)
       "actual registration\n" "registration-sha" [ArchiveProduct "lib.a" "archive-sha" [("api.o","object-sha")]]
-      [NativeProduct (NativePiece "/source" "api.o" "object-sha" "api.bc" "actual-target" input) "bitcode-sha"]])
+      [NativeProduct (NativePiece "/source" "api.o" "object-sha" "api.bc" "actual-target" input) "bitcode-sha"]]))
     [NativeLibrary "native-libc" ["free"] "clang" "compiler-sha" ["-lc"] Missing Missing Missing Missing] ["unknown"]
     [ArgumentBridge "actual-integer-width-bridge" "actual LLVM\n" "source-sha" "input-sha" [["define caller","define callee"]]]))
   Missing Missing [] Nothing

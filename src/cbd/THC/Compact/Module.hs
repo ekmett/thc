@@ -15,16 +15,17 @@
 -- are written; the existing canonical MD5 encoder sorts only lookup records.
 module THC.Compact.Module
   ( writeModule, writeModuleWithDebug, writeModuleCompressed, writeModuleWithDebugCompressed
-  , writeModuleValue, encodeModuleValue, readModuleValue, readModuleMetadata, rewriteModuleFacts
+  , writeModuleValue, encodeModuleValue, readModuleValue, readModuleMetadata, readModuleMetadataFile, readModuleSources, finalizeModuleMetadata
   ) where
 
 import Control.Exception (bracket)
 import Control.Monad (foldM, forM_, unless, void)
 import Data.Aeson (Value)
+import Data.Binary.Put (runPut)
 import Data.Bits ((.&.), (.|.), complement)
 import qualified Data.ByteString as BS
-import Data.IORef
-import Data.Word (Word32)
+import qualified Data.ByteString.Lazy as BL
+import Data.Word (Word32, Word64)
 import System.Directory (getTemporaryDirectory, removeFile)
 import System.IO (hClose, openBinaryTempFile)
 import THC.CoreSymbols (symbolDigest, encodeMd5Symbols)
@@ -34,11 +35,12 @@ import THC.Compact.Annotations
 import THC.Compact.Debug
 import THC.Compact.Encode
 import THC.Compact.Facts
-import THC.Compact.Decode (decodeFacts)
-import THC.Compact.Inspect (inspectContainer, moduleJSON, unpackContainer, unpackContainerWithMethods)
+import THC.Compact.Decode (decodeMetadata)
+import THC.Compact.Inspect (inspectContainer, moduleJSON, unpackContainer)
 import THC.Compact.JSON (parseModuleWithDebug, parseModuleFacts)
 import THC.Compact.Wire
 import THC.Compact.Writer
+import THC.Compact.Zip (readZipHeader, readZipHeaderFile, finalizeHeaderFile)
 
 -- | The compiler's in-memory module value enters the existing typed encoder
 -- directly. No JSON text, JSON file, or second binary codec is involved.
@@ -57,33 +59,58 @@ readModuleValue = inspectContainer
 -- | Read module facts without decoding any executable binding.
 readModuleMetadata :: BS.ByteString -> Either String (Header,Value)
 readModuleMetadata bytes = do
-  (header,factsBytes,segments) <- unpackContainer bytes
-  facts <- decodeFacts factsBytes (segments !! 1)
+  (header,facts) <- readFacts bytes
   pure (header,moduleJSON facts [])
 
--- | Native linkage changes header facts, not executable identities or debug
--- origins. Keep all DATA/debug/symbol bytes and original string offsets; append
--- strings needed by the new header. Unchanged facts retain the exact archive.
-rewriteModuleFacts :: BS.ByteString -> Value -> IO BS.ByteString
-rewriteModuleFacts original value = do
-  (header,oldFactsBytes,segments,methods) <- either fail pure (unpackContainerWithMethods original)
-  oldFacts <- either fail pure (decodeFacts oldFactsBytes (segments !! 1))
-  facts <- either fail pure (parseModuleFacts value)
-  if oldFacts == facts then pure original else encoded $ \path -> do
-    -- ZIP records methods, not the original Deflate level. Preserve each method;
-    -- recompression uses the standard level rather than silently storing it.
-    policy <- either fail pure (foldM (\current (name,method) ->
-      setCompression (name ++ if method == 0 then "=0" else "=6") current) defaultCompression methods)
-    let prepare streams = do
-          void (appendBytes streams CommonStrings (segments !! 1))
-          encoder <- newEncoder streams
-          encodeFacts encoder facts
-        produce streams = do
-          forM_ (zip [minBound..maxBound] segments) $ \(segment,bytes) ->
-            unless (segment == CommonStrings) (void (appendBytes streams segment bytes))
-          pure (headerBindingCount header,
-            (headerSummaries header .&. complement 10) .|. factSummaries facts)
-    writeContainerStreamedWith policy path prepare produce
+readFacts :: BS.ByteString -> Either String (Header,Facts)
+readFacts bytes = do
+  (headerBytes,lengths) <- readZipHeader bytes
+  parseFacts headerBytes lengths
+
+-- | File-backed metadata observation reads no executable/debug payload bytes.
+readModuleMetadataFile :: FilePath -> IO (Header,Value)
+readModuleMetadataFile path = do
+  (headerBytes,lengths) <- readZipHeaderFile path
+  (header,facts) <- either fail pure (parseFacts headerBytes lengths)
+  pure (header,moduleJSON facts [])
+
+parseFacts :: BS.ByteString -> [Word64] -> Either String (Header,Facts)
+parseFacts headerBytes lengths = do
+  header <- decodeExact getHeader (BS.take 32 headerBytes)
+  validateContainer header lengths
+  facts <- decodeMetadata (BS.drop 32 headerBytes)
+  pure (header,facts)
+
+-- | Read exact persisted source observations without decoding executable
+-- bindings, display names, or line/column records. An absent table yields no
+-- observations, not invented files with unknown contents.
+readModuleSources :: BS.ByteString -> Either String [SourceFile]
+readModuleSources bytes = do
+  (_,_,segments) <- unpackContainer bytes
+  case segments of
+    [payload,strings,_,filenames,_,_] -> sourceFiles filenames strings (fromIntegral (BS.length payload))
+    _ -> Left "Compact container requires six segments"
+
+-- | Finalize the native-link metadata after all obligations are known. Only
+-- the final header and its private strings are encoded. The six preceding ZIP
+-- entries retain exact local headers, compressed bytes, directories and offsets.
+-- The path MUST name a private staging file, never a published cache artifact.
+finalizeModuleMetadata :: FilePath -> Value -> IO ()
+finalizeModuleMetadata path value = do
+  updated <- either fail pure (parseModuleFacts value)
+  finalizeHeaderFile path $ \original lengths -> do
+    header <- either fail pure (decodeExact getHeader (BS.take 32 original))
+    either fail pure (validateContainer header lengths)
+    oldFacts <- either fail pure (decodeMetadata (BS.drop 32 original))
+    -- Native linkage does not alter the original interface frontier or binder
+    -- origins. Header-only callers never need synthetic executable bindings
+    -- merely to carry that immutable provenance ledger through finalization.
+    let facts = updated {factsClosureProvenance = factsClosureProvenance oldFacts}
+    if oldFacts == facts then pure Nothing else do
+      metadata <- encodeMetadata (\streams -> newEncoder streams >>= \encoder -> encodeFacts encoder facts)
+      let finalHeader = header {headerSummaries =
+            (headerSummaries header .&. complement 10) .|. factSummaries facts}
+      pure (Just (BL.toStrict (runPut (putHeader finalHeader)) <> metadata))
 
 encoded :: (FilePath -> IO Container) -> IO BS.ByteString
 encoded action = do
@@ -131,13 +158,11 @@ writeModuleWithDebugCompressed policy destination facts bindings catalog = write
 
 writeModuleRecords :: Compression -> FilePath -> Facts -> [(Binding,[Annotation])] -> Maybe ModuleAnnotations -> IO Container
 writeModuleRecords policy destination facts bindings catalog = do
-  encoderSlot <- newIORef Nothing
   let prepare streams = do
         encoder <- newEncoder streams
-        writeIORef encoderSlot (Just encoder)
         encodeFacts encoder facts
       produce streams = do
-        encoder <- readIORef encoderSlot >>= maybe (fail "Missing prepared compact encoder") pure
+        encoder <- newEncoder streams
         debug <- traverse (const (newDebugEncoder streams (internString encoder))) catalog
         forM_ debug $ \tables -> forM_ catalog $ \annotations ->
           forM_ (constructorNames annotations) $ \(index,name) -> do

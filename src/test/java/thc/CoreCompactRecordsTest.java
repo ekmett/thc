@@ -35,7 +35,7 @@ class CoreCompactRecordsTest {
     private void module(byte[] data, byte[] strings, byte[] facts, int flags, Action action) throws Exception {
         var symbols = ByteBuffer.allocate(24).order(ByteOrder.LITTLE_ENDIAN)
             .put(MessageDigest.getInstance("MD5").digest(id)).putLong(0).array();
-        var encoded = CoreCbdTestSupport.archive(CoreCbdTestSupport.header(facts, 1, flags, 0),
+        var encoded = CoreCbdTestSupport.archive(CoreCbdTestSupport.header(facts, strings, 1, flags, 0),
             List.of(data, strings, new byte[0], new byte[0], new byte[0], symbols), Set.of(), false);
         var path = directory.resolve("module.cbd");
         Files.write(path, encoded);
@@ -52,6 +52,46 @@ class CoreCompactRecordsTest {
     private byte[] literal(int kind, byte[] payload) { return concat(bytes(2), new byte[10], bytes(kind), payload); }
     private byte[] binding(byte[] expression) { return concat(bytes(0, 0, id.length, 0, 2, 1, 0, 0, 0, 0, 0, 0, 0), expression); }
     private record LiteralCase(int kind, byte[] payload, String tag, Object expected) {}
+    @Test void finalizedHeaderStringsAreIndependentAndDoNotInflateExecutableMembers() throws Exception {
+        byte[] metadata = "metadata".getBytes(StandardCharsets.UTF_8);
+        byte[] span = bytes(0, metadata.length);
+        byte[] facts = concat(bytes(1), span, span, span, span, new byte[14]);
+        byte[] header = ByteBuffer.allocate(40 + metadata.length + facts.length).order(ByteOrder.LITTLE_ENDIAN)
+            .put("THCCBD1\0".getBytes(StandardCharsets.UTF_8)).putShort((short) 1).putShort((short) 1)
+            .putInt(0).putLong(1).putInt(0).putInt(0).putLong(metadata.length).put(metadata).put(facts).array();
+        byte[] symbols = ByteBuffer.allocate(24).order(ByteOrder.LITTLE_ENDIAN)
+            .put(MessageDigest.getInstance("MD5").digest(id)).putLong(0).array();
+        // Payload order is independent of the final header's placement.
+        byte[] encoded = CoreCbdTestSupport.archive(header,
+            List.of(binding(literal(0, bytes(84))), id, new byte[0], new byte[0], new byte[0], symbols),
+            Set.of("header", "data", "strings"), true);
+        var path = Files.write(directory.resolve("private-header-strings.cbd"), encoded);
+        var hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(encoded));
+        try (var maps = new CoreFileMappings(0, 0); var slabs = new CoreCbdSlabs(0, 0);
+                var file = new CoreCompactFile(path, hash, false, maps, slabs)) {
+            var records = new CoreCompactRecords(file, hash);
+            assertEquals("metadata", records.header().get("module"));
+            var counts = file.getCounters().statistics();
+            assertEquals(1L, counts.memberInflations());
+            assertEquals(0L, counts.dataBytesRead()); assertEquals(0L, counts.stringBytesRead());
+            assertEquals(0L, counts.debugBytesRead());
+            assertEquals("unit:M.f", records.binding(0).get("id"));
+            assertEquals("metadata", records.header().get("module"));
+            assertEquals(3L, file.getCounters().statistics().memberInflations());
+        }
+    }
+    @Test void malformedPrivateMetadataTextRejectsWithoutReadingExecutableMembers() throws Exception {
+        for (byte[] span : List.of(bytes(0, 1), bytes(0, 2))) {
+            byte[] facts = concat(bytes(1), span, span, span, span, new byte[14]);
+            module(new byte[0], bytes(255), facts, (records, file) -> {
+                if (span[1] == 1) assertThrows(java.nio.charset.CharacterCodingException.class, records::header);
+                else assertThrows(IllegalArgumentException.class, records::header);
+                var counts = file.getCounters().statistics();
+                assertEquals(0L, counts.dataBytesRead()); assertEquals(0L, counts.stringBytesRead());
+                assertEquals(0L, counts.debugBytesRead());
+            });
+        }
+    }
     @Test void unsupportedDiagnosticsKeepTheirExactPayloadAndRepresentation() throws Exception {
         var diagnostic = "RUBBISH(LiftedRep)".getBytes(StandardCharsets.UTF_8);
         byte[] metadata = concat(bytes(2, 0, 7, 2, 1, 14, 0, 0, 0, 0, 0, 0, 2, 0), new byte[9]);
@@ -165,6 +205,48 @@ class CoreCompactRecordsTest {
             assertEquals("unit:M.f", origin.get("origin")); assertTrue(origin.containsKey("originModule"));
             assertNull(origin.get("originModule")); assertEquals(0L, file.getCounters().statistics().dataBytesRead());
         });
+    }
+    @Test void nativeBuildInputsKeepProductProofSeparateFromDependencyReferences() throws Exception {
+        byte[] pool = concat(id, "localrepo-tarpathremoteuri".getBytes(StandardCharsets.UTF_8));
+        byte[] text = bytes(0, 8), local = bytes(8, 5), repo = bytes(13, 8), path = bytes(21, 4);
+        byte[] remote = bytes(25, 6), uri = bytes(31, 3);
+        byte[] payload = concat(bytes(1), text, text, text, text, text, text, bytes(0));
+        byte[] prefix = concat(bytes(1), text, text, text, text, new byte[12], bytes(2), payload, bytes(0, 4));
+        // New tag4 dependencies are linkage receipts, NOT full native product proofs.
+        byte[] inputs = concat(bytes(0, 0, 2, 1, 2), path, text, text, local, uri, bytes(0, 0, 0));
+        for (int presence : List.of(0, 1, 2)) {
+            var locations = presence == 2 ? List.of(bytes(0), bytes(1),
+                concat(bytes(2), local, bytes(2), path, bytes(0)),
+                concat(bytes(2), repo, bytes(0, 2), remote, uri)) : List.of(bytes(0));
+            for (byte[] location : locations) {
+                byte[] product = presence != 2 ? bytes(presence) : concat(bytes(2), text, text,
+                    new byte[10], location, text, uri, bytes(1), path, local, bytes(1), text, uri, bytes(0));
+                byte[] facts = concat(prefix, inputs, product, bytes(0, 0));
+                module(new byte[0], pool, facts, (records, file) -> {
+                    var link = (Map<?,?>) records.header().get("packageNativeLink");
+                    var build = (Map<?,?>) link.get("buildInputs");
+                    assertEquals(List.of(map("declaredPath", List.of("path", "unit:M.f"), "unit", "unit:M.f",
+                        "componentSha256", "local", "bitcodeSha256", "uri")), build.get("dependencies"));
+                    assertEquals(presence != 0, build.containsKey("nativeProduct"));
+                    if (presence != 2) assertNull(build.get("nativeProduct"));
+                    else {
+                        var proof = (Map<?,?>) build.get("nativeProduct");
+                        assertEquals("unit:M.f", proof.get("profile")); assertEquals("uri", proof.get("registrationSha256"));
+                        assertEquals(List.of(map("path", "path", "sha256", "local", "members",
+                            List.of(map("name", "unit:M.f", "sha256", "uri")))), proof.get("archives"));
+                        var source = (Map<?,?>) proof.get("sourceIdentity");
+                        assertEquals(location[0] != 0, source.containsKey("pkg-src"));
+                        if (location[0] == 2) assertEquals(location[2] == 5 ?
+                            map("type", "local", "path", "path") : map("type", "repo-tar", "repo", map("type", "remote", "uri", "uri")),
+                            source.get("pkg-src"));
+                        else assertNull(source.get("pkg-src"));
+                    }
+                    var counts = file.getCounters().statistics();
+                    assertEquals(0L, counts.dataBytesRead()); assertEquals(0L, counts.stringBytesRead());
+                    assertEquals(0L, counts.debugBytesRead());
+                });
+            }
+        }
     }
     @Test void explicitLiteralRecordsPreserveRawBytesIntegersAndIeeeBits() throws Exception {
         var cases = List.of(

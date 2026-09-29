@@ -15,16 +15,17 @@
 module THC.Compact.Debug
   ( SourceFile(..), SourcePosition(..), SourceLocation(..)
   , DebugEncoder, newDebugEncoder, recordName, recordLocation, finishDebug
-  , nameAt, locationAt
+  , nameAt, locationAt, sourceFiles
   ) where
 
-import Control.Monad (forM_, replicateM, unless, void, when)
+import Control.Monad (foldM, forM_, replicateM, unless, void, when)
 import Data.Binary.Get hiding (label)
 import Data.Binary.Put
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import Data.IORef
 import qualified Data.Map.Strict as Map
+import qualified Data.Set as Set
 import qualified Data.Text.Encoding as Text
 import Data.Word (Word64)
 import THC.Compact.Core (Presence(..))
@@ -205,6 +206,24 @@ locationAt filenames positions strings dataSize offset = do
       pure (Just (SourceLocation primary (zip fs ps)))
     _ -> Left "Mismatched compact source presence"
 
+-- | Enumerate the persisted file records, not executable records or source
+-- positions. Repeated/restored intervals share payloads; decode each once and
+-- retain distinct records, including distinct content-presence observations.
+sourceFiles :: BS.ByteString -> BS.ByteString -> Word64 -> Either String [SourceFile]
+sourceFiles filenames strings dataSize
+  | BS.null filenames = Right []
+  | otherwise = do
+      (index,count) <- table filenames 24
+      rows <- at filenames index (24*count) $ replicateM (fromIntegral count)
+        ((,,) <$> getWord64le <*> getWord64le <*> getWord64le)
+      (_,payloads) <- foldM (\(previous,seen) (start,end,payload) -> do
+        unless (previous <= start && start < end && end <= dataSize)
+          (Left "Invalid compact source interval")
+        pure (end,Set.insert payload seen)) (0,Set.empty) rows
+      files <- mapM (\payload -> intervalPayload filenames index payload
+        (\limit -> getList limit (getFile strings))) (Set.toAscList payloads)
+      pure (Set.toAscList (Set.fromList (concat [values | Just values <- files])))
+
 intervalAt :: BS.ByteString -> Word64 -> Word64 -> (Word64 -> Get a) -> Either String (Maybe a)
 intervalAt bytes dataSize position decode
   | BS.null bytes || position >= dataSize = Right Nothing
@@ -221,11 +240,14 @@ intervalAt bytes dataSize position decode
       if candidate == 0 then pure Nothing else do
         (start,end,payload) <- row (candidate-1)
         unless (start < end && end <= dataSize) (Left "Invalid compact source interval")
-        if position >= end then pure Nothing else do
-          unless (payload < index) (Left "Compact source payload exceeds its region")
-          prefixGet (BS.take (fromIntegral (index-payload)) (BS.drop (fromIntegral payload) bytes)) $ do
-            tag <- getWord8
-            case tag of 0 -> pure Nothing; 1 -> Just <$> decode (index-payload); _ -> fail "Invalid compact source payload tag"
+        if position >= end then pure Nothing else intervalPayload bytes index payload decode
+
+intervalPayload :: BS.ByteString -> Word64 -> Word64 -> (Word64 -> Get a) -> Either String (Maybe a)
+intervalPayload bytes index payload decode = do
+  unless (payload < index) (Left "Compact source payload exceeds its region")
+  prefixGet (BS.take (fromIntegral (index-payload)) (BS.drop (fromIntegral payload) bytes)) $ do
+    tag <- getWord8
+    case tag of 0 -> pure Nothing; 1 -> Just <$> decode (index-payload); _ -> fail "Invalid compact source payload tag"
 
 table :: BS.ByteString -> Word64 -> Either String (Word64,Word64)
 table bytes width = do

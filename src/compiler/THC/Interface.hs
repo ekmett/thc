@@ -19,7 +19,7 @@
 -- serialization do not link native foreign products or authorize execution.
 module THC.Interface
   ( InterfaceCore, interfaceModule, interfaceDetails, interfaceBindings, interfaceForeign
-  , InterfaceError(..), loadInterfaceCore, interfaceCoreJSON, interfaceCoreJSONBytes, probeInterface, checkInterfaceIdentity
+  , InterfaceError(..), loadInterfaceCore, interfaceCoreCBD, interfaceCoreJSON, interfaceCoreJSONBytes, probeInterface, checkInterfaceIdentity
   ) where
 
 import Control.Exception (Exception, throwIO)
@@ -47,7 +47,8 @@ import GHC.Utils.Binary (openBinMem, putFullBinData, put_, putFS, setWriterUserD
                         mkWriterUserData, mkSomeBinaryWriter, mkWriter, simpleBindingNameWriter)
 import GHC.Utils.Fingerprint (Fingerprint)
 import System.FilePath (replaceExtension)
-import THC.Plugin (serializePostTidyCoreWithAnnotations, serializePostTidyCoreWithAnnotationsBytes)
+import THC.Plugin (serializePostTidyCoreWithAnnotations, serializePostTidyCoreWithAnnotationsBytes,
+  serializePostTidyCoreWithAnnotationsCBD)
 
 -- | Original GHC identities, declarations, recursive groups and foreign
 -- metadata. Loading is archival: accompanying foreign build products are
@@ -210,6 +211,13 @@ loadInterfaceCore environment expected path = do
 -- | Use the same serializer as the post-Tidy plugin, without another compile
 -- or a source target. Source-note paths survive even if source text is absent.
 -- This does not link dependencies or certify runtime support for the module.
+interfaceCoreCBD :: [CommandLineOption] -> InterfaceCore -> IO BS.ByteString
+interfaceCoreCBD options core = serializePostTidyCoreWithAnnotationsCBD (interfaceFlags core) options
+  (interfaceModule core) (typeEnvTyCons (md_types (interfaceDetails core))) (interfaceBindings core)
+  (interfaceForeign core) (md_anns (interfaceDetails core))
+
+-- | Explicit JSON inspection output, derived from CBD rather than a second
+-- executable writer. Never used for normal acquisition or execution.
 interfaceCoreJSON :: [CommandLineOption] -> InterfaceCore -> IO String
 interfaceCoreJSON options core = serializePostTidyCoreWithAnnotations (interfaceFlags core) options
   (interfaceModule core) (typeEnvTyCons (md_types (interfaceDetails core))) (interfaceBindings core)

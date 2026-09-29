@@ -17,17 +17,19 @@ import Control.Concurrent (forkFinally, killThread, threadDelay)
 import Control.Concurrent.MVar (newEmptyMVar, putMVar, readMVar)
 import Control.Exception (IOException, bracket, finally, try)
 import Control.Monad (forM_, unless)
-import Data.Aeson (Value(Null), encode, object, (.=))
+import Data.Aeson (Value(Null), eitherDecodeStrict', encode, object, (.=))
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy.Char8 as BL
 import Data.List (isInfixOf)
-import System.Directory (createDirectory, doesFileExist, getTemporaryDirectory, removeFile, removePathForcibly)
+import System.Directory (canonicalizePath, createDirectory, doesFileExist, getCurrentDirectory,
+  getTemporaryDirectory, removeFile, removePathForcibly)
 import System.Environment (getExecutablePath)
 import System.Exit (ExitCode(..), exitWith)
 import System.FilePath ((</>))
 import System.IO (hClose, hSetBinaryMode, openTempFile, stdin, stderr, stdout)
 import System.Timeout (timeout)
 import Test.HUnit (Test(..), assertBool, assertEqual, assertFailure)
+import THC.Compact.Module (encodeModuleValue)
 import THC.Driver.Installed
 
 -- Subprocess orchestration controls, not executable Core evidence. The real
@@ -35,15 +37,19 @@ import THC.Driver.Installed
 -- exercise the unchanged package-cache and strict-audit contracts.
 helperMode :: [String] -> Maybe (IO ())
 helperMode arguments = case arguments of
+  ["--child-directory-fixture"] -> Just $ do
+    hSetBinaryMode stdout True
+    getCurrentDirectory >>= BL.putStr . encode
   ["--binary-input-fixture"] -> Just $ do
     mapM_ (`hSetBinaryMode` True) [stdin, stdout, stderr]
     -- Fill both output pipes before consuming a request larger than stdin's
     -- pipe buffer. The parent must drain them while it writes the request.
-    BS.hPut stdout pipePayload
+    BS.hPut stdout binaryPipePayload
     BS.hPut stderr pipePayload
     BS.hGetContents stdin >>= BS.hPut stdout
   "--global" : _ -> Just $ readFile (option "--package-db" </> "registration") >>= putStr
   "--libdir" : _ -> Just $ do
+    hSetBinaryMode stdout True
     let directory = option "--libdir"
         name = option "--module"
         mark suffix = directory </> name ++ suffix
@@ -67,13 +73,13 @@ helperMode arguments = case arguments of
           "module" .= name, "interface" .= option "--interface", "way" .= ("dynamic" :: String)]
         core = object ["schema" .= (1 :: Int), "unit" .= identifier, "module" .= name,
           "ghc" .= ("9.14.1" :: String), "boundary" .= ("optimized-Core-after-Tidy-before-CorePrep" :: String),
-          "payload" .= replicate 200 (name ++ "\x03bb\x1f642")]
+          "constructors" .= ([] :: [String]), "bindings" .= ([] :: [String])]
     if mode == "invalid-stdout" then BS.hPut stdout (BS.singleton 255)
     else if mode == "missing-after-B" then BL.putStrLn (encode missing) >> exitWith (ExitFailure 3)
     else if mode `elem` ["error", "error-after-B"] then do
       BL.putStrLn (encode (object ["schema" .= (1 :: Int), "status" .= ("error" :: String)]))
       exitWith (ExitFailure 1)
-    else BL.putStrLn (encode (object ["schema" .= (1 :: Int), "status" .= ("loaded" :: String), "core" .= core]))
+    else encodeModuleValue core >>= BS.hPut stdout
   _ -> Nothing
   where
     option name = case dropWhile (/= name) arguments of
@@ -85,6 +91,9 @@ identifier = "thc-hydration-fixture-0.1"
 
 pipePayload :: BS.ByteString
 pipePayload = BS.replicate (1024 * 1024) 120
+
+binaryPipePayload :: BS.ByteString
+binaryPipePayload = BS.pack [0, 255, 254] <> pipePayload
 
 awaitFile :: FilePath -> IO ()
 awaitFile path = do
@@ -119,12 +128,19 @@ fixture names action = do
 
 tests :: Test
 tests = TestLabel "bounded installed-interface hydration" $ TestList
-  [ TestCase $ do
+  [ TestCase $ fixture [] $ \directory context _ -> do
+      before <- getCurrentDirectory
+      (status, output, _) <- boundedInterfaceProcessIn directory (installedHelper context) ["--child-directory-fixture"]
+      expected <- canonicalizePath directory
+      assertEqual "only the child changes its working directory" ExitSuccess status
+      assertEqual "the child receives the selected directory" (Right expected) (eitherDecodeStrict' output)
+      assertEqual "the parent directory is unchanged" before =<< getCurrentDirectory
+  , TestCase $ do
       executable <- getExecutablePath
       let request = BL.toStrict (encode (replicate (256 * 1024) '\x03bb'))
       response <- timeout 5000000 (boundedInterfaceProcessInput executable ["--binary-input-fixture"] request)
       assertEqual "binary Unicode input and both large outputs make progress without locale conversion"
-        (Just (ExitSuccess, pipePayload <> request, pipePayload)) response
+        (Just (ExitSuccess, binaryPipePayload <> request, pipePayload)) response
   , TestCase $ fixture ["A"] $ \directory context unit -> do
       writeFile (directory </> "A.mode") "slow"
       result <- newEmptyMVar
@@ -216,12 +232,12 @@ tests = TestLabel "bounded installed-interface hydration" $ TestList
       serial <- acquireInstalledWithJobs 1 context unit
       forM_ ["A", "B"] $ \name -> writeFile (directory </> name ++ ".mode") "noisy"
       parallel <- timeout 5000000 (acquireInstalledWithJobs 2 context unit)
-      assertEqual "Concurrent large stderr drains preserve UTF-8 Core and EOF stdin" (Just serial) parallel
+      assertEqual "Concurrent large stderr drains preserve CBD bytes and EOF stdin" (Just serial) parallel
   , TestCase $ fixture ["A"] $ \directory context unit ->
       forM_ ["invalid-stdout", "invalid-stderr"] $ \mode -> do
         writeFile (directory </> "A.mode") mode
         result <- try (acquireInstalledWithJobs 2 context unit)
           :: IO (Either IOException (Either MissingCore InstalledCore))
-        assertBool "Invalid UTF-8 must remain a protocol failure, never missing Core"
+        assertBool "Malformed CBD or invalid UTF-8 diagnostics remain protocol failures, never missing Core"
           (case result of Left _ -> True; _ -> False)
   ]

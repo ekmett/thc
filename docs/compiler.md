@@ -1,17 +1,18 @@
 # GHC Core exporter
 
-The root `thc.cabal` builds `THC.Plugin` as the `thc` library against **GHC 9.14.1**, using only packages shipped with GHC. `cabal build` builds it alongside the driver; `bin/build-compiler.sh` remains a convenience wrapper for fixture scripts. `./bin/export-core.sh t/fixtures/core/Fixtures.hs` compiles the Haskell modules with `-O2 -g -dcore-lint` and exports `build/core/THC.Prim.Test.json` and `build/core/Fixtures.json`. GHC still produces native object/interface files in `build/ghc`; this is useful for checking that the same source is valid GHC Haskell. The THC runtime evaluates the exported expression trees.
+The root `thc.cabal` builds `THC.Plugin` as the `thc` library against **GHC 9.14.1**. `cabal build` builds it alongside the driver; `bin/build-compiler.sh` remains a convenience wrapper for fixture scripts. `./bin/export-core.sh t/fixtures/core/Fixtures.hs` compiles the Haskell modules with `-O2 -g -dcore-lint` and exports `build/core/THC.Prim.Test.cbd` and `build/core/Fixtures.cbd`. GHC still produces native object/interface files in `build/ghc`; this is useful for checking that the same source is valid GHC Haskell. The compiler writes the existing typed CBD format directly from its module value, with no intermediate Core JSON file. CBD is the runtime's sole executable Core input.
 
 The default source-fixture export appends `CoreDoPluginPass` to `installCoreToDos`, observing the **optimized Core pipeline's final `ModGuts`, before Tidy/CorePrep/STG**. With `post-tidy`, the plugin instead uses `latePlugin` to export **after Tidy and before CorePrep**; package manifests require that boundary. The ordinary GHC Core optimization passes run first in both paths. This is executable tree export directly from the GHC API; the runtime never parses a Core pretty dump.
 
 This is a deliberately version-pinned experiment, **not** a lossless, stable, general-purpose Core interchange format. It implements a checked executable subset. Default exports retain executable trees, binder types and arity, representation and calling-contract facts, join arity, and typed foreign metadata. Source locations and contents remain controlled independently by `source-notes`.
 
-For inspection, add `-fplugin-opt=THC.Plugin:pretty-diagnostics`. This includes
-`sourceCore` (the readable pre-erasure Core), readable module rewrite rules when
-available, and printed Id demand, strictness, CPR, occurrence/one-shot and inline
-information plus call arity. These diagnostics are absent by default and never
-used to reconstruct executable Core. `bin/export-boot.py` and `thc-interface`
-expose the same choice as `--pretty-diagnostics`. Full structured coercions, rules and unfoldings,
+For explicit inspection, add `-fplugin-opt=THC.Plugin:pretty-diagnostics`. This
+writes an additional JSON inspection of the emitted CBD; it is absent by default
+and cannot be used as executable input. `thc-compact decode Module.cbd Module.json`
+provides the same semantic inspection offline. Original display names/source
+positions are available through its `name` and `source` commands. Successful
+`thc-interface` exports return raw CBD; inventory/error replies remain JSON control
+messages. Full structured coercions, rules and unfoldings,
 and general representation-polymorphic lowering remain outside the contract.
 Dependency acquisition and linking have their own implemented
 [package-manifest contract](core-package-manifest.md).
@@ -27,7 +28,7 @@ exactly saturated primitive call; a type-instantiated bare mask gets both
 parameters. Its supplied action remains lazy until the state token arrives.
 The lambda, binder and result proofs come from the resulting Core types, using
 the existing schema. Saturated primitive calls and their runtime contract are
-unchanged. With `pretty-diagnostics`, `sourceCore` retains the original unexpanded GHC definitions, and
+unchanged. Original GHC definitions remain untouched, and
 native GHC compilation is unchanged. This bounded lowering does not implement
 general primop partial applications or establish support for full `bracket`.
 `cabal run exe:thc-fixtures --offline -- mask-functions` prepares the native and
@@ -87,7 +88,7 @@ Caller-demand lowering is **opt-in** with `-Dthc.callDemands=true`; the default 
 After building the distribution and exported fixtures, opt in for a run with:
 
 ```sh
-JAVA_OPTS='-Dthc.callDemands=true -Dpolyglot.compiler.InliningPolicy=Default' ./bin/run.sh build/core/THC.Prim.Test.json,build/core/Fixtures.json sumLoop 10000 --compile
+JAVA_OPTS='-Dthc.callDemands=true -Dpolyglot.compiler.InliningPolicy=Default' ./bin/run.sh build/core/THC.Prim.Test.cbd,build/core/Fixtures.cbd sumLoop 10000 --compile
 ```
 
 `JAVA_OPTS` is read by the installed application launcher. Passing `-Dthc.callDemands=true` only to Gradle does not forward it to the test or application JVM. For benchmark comparisons, hold the inlining policy fixed explicitly on both sides and vary only `thc.callDemands`; retain the same Core and runtime. The policy selection in the example is a comparison control, not a requirement for caller-demand semantics. See [the current demand contract](demand-probe.md).
