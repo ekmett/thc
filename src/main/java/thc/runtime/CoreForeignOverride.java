@@ -7,7 +7,7 @@ import java.util.List;
 
 /** Identities whose native implementation cannot operate on THC-owned state.
  * Identity selection is nonthrowing; the selected existing validator checks the ABI. */
-enum CoreForeignOverride {
+public enum CoreForeignOverride {
     STACK, STACK_INFO, STDIO, PROCESS, STABLE_FREE, SHARED_CAF, SHUTDOWN, MAIN_THREAD,
     BOUND_THREAD, GC, RTS_EVENT, ALLOCATION_COUNTER, STRING_RTS, ENVIRONMENT,
     RTS_DIAGNOSTIC, RTS_ARGUMENTS, MANAGED_FILE, SIGNAL, ALLOCATION, MEMMOVE, MEMCPY;
@@ -49,7 +49,7 @@ enum CoreForeignOverride {
         }
     }
 
-    static CoreForeignOverride select(Object metadata) {
+    public static CoreForeignOverride select(Object metadata) {
         if (!(metadata instanceof Map<?, ?> meta) || !(meta.get("foreignCall") instanceof Map<?, ?> call) ||
                 !(call.get("target") instanceof Map<?, ?> target) || !(target.get("symbol") instanceof String symbol)) return null;
         Object unit = target.get("unit");
