@@ -22,12 +22,12 @@ The array result uses GHC's unlifted `ThreadId#` elements. `indexArray#` and
 boxing them. Array allocation and writes also admit either known boxed levity;
 unlifted thread identities do not require a lifted wrapper.
 
-Forks inherit their program's `asyncExceptions` mode. With it enabled, both
-backends capture external `killThread#` delivery, including lazy action-head
-evaluation and shared thunk resumption. With it disabled, the registry rejects
-external delivery before enqueueing or waking the child, including across nested
-guest entries. Both backends permit self-delivery to the original handler or child
-termination as `DIED`.
+Fork admission invalidates speculative single-origin execution before child
+publication. Ordinary programs on both backends capture external `killThread#`
+delivery, including lazy action-head evaluation and shared thunk resumption,
+even with the default `asyncExceptions=false`. Prepared synchronous code rejects
+concurrency admission. Both backends permit self-delivery to the original handler
+or child termination as `DIED`.
 Both kinds are real Truffle-managed threads cancelled by `Context.close(true)`;
 context-wide cancellation is distinct from resumable guest async delivery.
 

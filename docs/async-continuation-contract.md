@@ -8,10 +8,12 @@ that a child evaluation will return normally: that child can unmask, wait
 interruptibly, or throw to itself. A masked caller still owes its unfinished
 work to a suspended callee.
 
-This contract separates those obligations. Both backends check ownership, masks
-and saved call boundaries when `asyncExceptions` is enabled. The public Boolean
-option defaults to off for AST and on for bytecode. Foreign execution and nested
-public guest entries have a separate delivery-permission gate.
+This contract separates those obligations. Ordinary programs on both backends
+always retain saved call boundaries and check ownership and masks for delivery.
+The public Boolean `asyncExceptions` option defaults to off on both backends,
+speculating only on ordinary polling until concurrency is admitted; explicit
+`true` enables polling eagerly. Foreign execution and nested public guest entries
+have a separate delivery-permission gate.
 The existence of a resumable root alone does not establish either property.
 
 ## Delivery

@@ -26,9 +26,9 @@ Delivery requires continuation-capable code, which ordinary AST and bytecode
 programs retain even with `asyncExceptions=false`. Binding alone preserves the
 single-origin assumption; installing the first handler invalidates it before
 native transport acquisition or signal-worker publication. `asyncExceptions=true`
-enables ordinary polling eagerly. The standalone executable launcher chooses it
-for both backends; raw AST defaults to speculative polling and bytecode defaults
-to eager polling. A malformed launcher property fails explicitly. Prepared
+enables ordinary polling eagerly. Ordinary executable launches and raw loads
+default to speculative polling on both backends; signal installation does not
+require explicit opt-in. A malformed launcher property fails explicitly. Prepared
 synchronous code rejects concurrency admission before acquiring the transport.
 
 ## JVM and embedding ownership

@@ -419,7 +419,7 @@ public final class Language extends TruffleLanguage<Language.State> {
         require("ast".equals(backendValue) || "bytecode".equals(backendValue), "Unknown THC backend: " + backendValue);
         String backend = (String) backendValue;
         require(!input.containsKey("asyncExceptions") || input.get("asyncExceptions") instanceof Boolean, "asyncExceptions must be a Boolean");
-        boolean async = input.get("asyncExceptions") instanceof Boolean value ? value : backend.equals("bytecode");
+        boolean async = Boolean.TRUE.equals(input.get("asyncExceptions"));
         boolean processSignals = bindings.stream().anyMatch(binding -> CoreSignalForeign.dispatcher.equals(binding.get("id")));
         require(backend.equals("ast") && !async && !Boolean.TRUE.equals(input.get("diagnosticUnsupported")),
             "Reusable code currently requires synchronous, strict AST preparation");
@@ -486,7 +486,7 @@ public final class Language extends TruffleLanguage<Language.State> {
         require("ast".equals(backendValue) || "bytecode".equals(backendValue), "Unknown THC backend: " + backendValue);
         String backend = (String) backendValue;
         require(input.get("asyncExceptions") == null || input.get("asyncExceptions") instanceof Boolean, "asyncExceptions must be a Boolean");
-        boolean async = input.get("asyncExceptions") instanceof Boolean value ? value : backend.equals("bytecode");
+        boolean async = Boolean.TRUE.equals(input.get("asyncExceptions"));
         require(!Boolean.TRUE.equals(input.get("ioMain")) || !Boolean.TRUE.equals(input.get("diagnosticUnsupported")), "IO main requires strict unsupported-Core rejection");
         return new RootNode(this) {
             @Override public Object execute(VirtualFrame frame) {

@@ -80,11 +80,12 @@ selects a bound from 1 to 64; higher values need more CPU and memory.
 
 ## Runtime selection and host resources
 
-Bytecode is the default backend; `THC_BACKEND=ast` selects AST. Full executable
-launches enable asynchronous exceptions on both backends. Set
-`JAVA_OPTS="${JAVA_OPTS:-} -Dthc.asyncExceptions=false"` only when synchronous
-execution is intended; programs installing process signal handlers require
-async mode. Raw IO and embedding defaults are described in
+Bytecode is the default backend; `THC_BACKEND=ast` selects AST. Ordinary executable
+launches, raw IO and embedding requests default to speculative single-origin
+execution on both backends. Set
+`JAVA_OPTS="${JAVA_OPTS:-} -Dthc.asyncExceptions=true"` to enable ordinary polling
+eagerly. Guest forks, signal-handler installation and different-origin public
+entries enable it automatically. The admission contract is described in
 [asynchronous exceptions](async-exceptions.md).
 
 The complete installed-Core provider runs GHC's generated `main::Main.main`
