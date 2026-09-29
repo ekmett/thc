@@ -15,7 +15,7 @@ public final class AstCapture extends ControlFlowException {
     private final MaskingState logicalMask;
     private final StackAnnotationState annotations = StackAnnotations.current(null);
     private final ArrayList<AstResumeStep> steps = new ArrayList<>();
-    public AstCapture(Object yielded, MaskingState logicalMask) { this.yielded = yielded; this.logicalMask = logicalMask; }
+    @TruffleBoundary public AstCapture(Object yielded, MaskingState logicalMask) { this.yielded = yielded; this.logicalMask = logicalMask; }
     public Object getYielded() { return yielded; }
     public MaskingState getLogicalMask() { return logicalMask; }
     @TruffleBoundary public AstCapture append(AstResumeStep step) { steps.add(step); return this; }
