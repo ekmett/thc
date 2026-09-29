@@ -125,7 +125,7 @@ data Expr = Var !Meta !Identity | Prim !Meta !BS.ByteString | Lit !Meta !Literal
   | App !Meta !Expr ![Expr] ![Presence Bool] !Bool !Bool
   | Let !Meta !Bool ![Binding] !Expr
   | Case !Meta !Expr !Word64 !(Presence Binder) ![Alternative]
-  | Void !Meta deriving (Eq, Show)
+  | Void !Meta | Unsupported !Meta !BS.ByteString deriving (Eq, Show)
 
 data Alternative = DefaultAlt ![Binder] !Expr | DataAlt !BS.ByteString ![Binder] !Expr
   | LiteralAlt !Literal ![Binder] !Expr deriving (Eq, Show)
@@ -138,6 +138,7 @@ data Literal = LitInt !Int64 | LitWord !Word64
   | LitBigNat !Integer | LitChar !Word32 | LitBytes !BS.ByteString
   | LitFloatBits !Word32 | LitDoubleBits !Word64 | LitNullAddr | LitRubbish !PrimRep
   | LitFunctionAddr !BS.ByteString | LitDataAddr !BS.ByteString
+  | LitUnsupported !BS.ByteString
   deriving (Eq, Show)
 
 data ConstructorKind = BoxedConstructor | TupleConstructor | SumConstructor | NewtypeConstructor

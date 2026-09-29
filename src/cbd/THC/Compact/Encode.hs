@@ -519,6 +519,7 @@ encodeExpr encoder@(Encoder _ _ _ _ found _) expression = observe encoder Expres
     present encoder (binder encoder) information
     list encoder (alternative encoder) alternatives
   Void metadata -> prefix 8 metadata
+  Unsupported metadata diagnostic -> prefix 9 metadata >> string encoder diagnostic
   where
     prefix kind metadata = tag encoder kind >> meta encoder metadata
     child = encodeExpr encoder
@@ -649,6 +650,7 @@ literal encoder value = case value of
   LitRubbish rep -> tag encoder 16 >> primRep encoder rep
   LitFunctionAddr symbol -> tag encoder 17 >> string encoder symbol
   LitDataAddr symbol -> tag encoder 18 >> string encoder symbol
+  LitUnsupported diagnostic -> tag encoder 19 >> string encoder diagnostic
   where
     signed kind lo hi n = do
       unless (lo <= n && n <= hi) (fail "Signed literal exceeds its declared width")

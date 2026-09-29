@@ -329,7 +329,7 @@ idInfo decoder = IdInfo <$> present getUVar <*> present boolean <*> present (lis
 expression :: Decoder -> Get Expr
 expression decoder = do
   kind <- getWord8
-  unless (kind <= 8) (fail "Unknown compact expression tag")
+  unless (kind <= 9) (fail "Unknown compact expression tag")
   metadata <- meta decoder
   case kind of
     0 -> Var metadata <$> identity decoder
@@ -340,7 +340,8 @@ expression decoder = do
     5 -> App metadata <$> child <*> list decoder child <*> list decoder (arrayElement boolean) <*> boolean <*> boolean
     6 -> Let metadata <$> boolean <*> list decoder (binding decoder) <*> child
     7 -> Case metadata <$> child <*> getUVar <*> present (binder decoder) <*> list decoder (alternative decoder)
-    _ -> pure (Void metadata)
+    8 -> pure (Void metadata)
+    _ -> Unsupported metadata <$> string decoder
   where
     child = expression decoder
 
@@ -465,6 +466,7 @@ literal decoder = do
     16 -> LitRubbish <$> primRep
     17 -> LitFunctionAddr <$> string decoder
     18 -> LitDataAddr <$> string decoder
+    19 -> LitUnsupported <$> string decoder
     _ -> fail "Unknown compact literal tag"
   where
     raw = count decoder >>= getByteString

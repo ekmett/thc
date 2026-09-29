@@ -17,6 +17,7 @@ module DebugTests (debugTests) where
 import Control.Exception (IOException, try)
 import Control.Monad (forM, forM_, void)
 import Data.Aeson (Value(..), object, toJSON, (.=))
+import qualified Data.Aeson.KeyMap as KM
 import Data.Binary.Get (getWord64le)
 import qualified Data.ByteString as BS
 import Data.Either (isLeft)
@@ -29,14 +30,30 @@ import THC.Compact.Core (Presence(..))
 import THC.Compact.Debug
 import THC.Compact.Encode (newEncoder, internString)
 import THC.Compact.JSON (parseModuleWithDebug, parseModuleWithoutDebug)
-import THC.Compact.Module (writeModuleWithDebug)
+import THC.Compact.Module (writeModuleWithDebug, encodeModuleValue, readModuleValue, rewriteModuleFacts)
 import THC.Compact.Inspect (inspectContainer, unpackContainer)
 import THC.Compact.Wire
 import THC.Compact.Writer
 
 debugTests :: Test
 debugTests = TestList
-  [ TestLabel "exact scoped debug names never use predecessor or common strings" $ TestCase $
+  [ TestLabel "direct CBD publication and metadata amendment preserve executable/debug bytes" $ TestCase $ do
+      original <- encodeModuleValue originalModule
+      value <- either fail pure (readModuleValue original)
+      let amended = case value of
+            Object fields -> Object (KM.insert "foreignExceptionBridgeUnit" (String "runtime-unit") fields)
+            _ -> error "Expected module"
+      changed <- rewriteModuleFacts original amended
+      (_,_,before) <- either fail pure (unpackContainer original)
+      (_,_,after) <- either fail pure (unpackContainer changed)
+      assertEqual "DATA, debug maps and fingerprint positions survive metadata linking"
+        (take 1 before ++ drop 2 before) (take 1 after ++ drop 2 after)
+      assertBool "original string offsets survive appended header strings" (before !! 1 `BS.isPrefixOf` (after !! 1))
+      assertEqual "new header fact" (Just (String "runtime-unit"))
+        (case readModuleValue changed of Right (Object fields) -> KM.lookup "foreignExceptionBridgeUnit" fields; _ -> Nothing)
+      assertEqual "unchanged amendment retains exact container" original =<< rewriteModuleFacts original value
+      assertBool "JSON is not an accepted module payload" (isLeft (readModuleValue "{\"bindings\":[]}"))
+  , TestLabel "exact scoped debug names never use predecessor or common strings" $ TestCase $
       withTables $ \_ names _ _ -> do
         assertEqual "UTF8 original name" (Right (Just unicodeName)) (nameAt names 0 0)
         assertEqual "local ordinal slot" (Right (Just "local")) (nameAt names 0 1)

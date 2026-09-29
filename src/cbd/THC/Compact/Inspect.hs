@@ -156,6 +156,7 @@ expr value = case value of
     ([String "case",expr scrutinee,identity (Local ordinal),arr alternative alternatives,
       object (meta m ++ p "binder" binder information)])
   Void m -> node "void" m []
+  Unsupported m diagnostic -> node "unsupported" m [str diagnostic]
   where node kind m payload = toJSON (String kind : payload ++ [object (meta m)])
 
 alternative :: Alternative -> Value
@@ -245,6 +246,7 @@ literal value = case value of
   LitRubbish proof -> (String "rubbish",primRep proof)
   LitFunctionAddr symbol -> (String "function-addr",str symbol)
   LitDataAddr symbol -> (String "data-addr",str symbol)
+  LitUnsupported diagnostic -> (String "unsupported",str diagnostic)
   where
     numeric kind number = (String kind,toJSON (show number))
     hex byte = let value' = showHex byte "" in replicate (2-length value') '0' ++ value'
