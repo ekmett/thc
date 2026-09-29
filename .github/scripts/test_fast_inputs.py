@@ -477,7 +477,7 @@ class FastInputTests(unittest.TestCase):
             self.assertEqual(original, (self.root / name).read_text())
             self.assertEqual(0o755, (self.root / binary).stat().st_mode & 0o7777)
             self.remove_payload(packed)
-            for absent in (binary, 'build/floating-remainder/pre-core/FloatingRemainderAudit.json'):
+            for absent in (binary, 'build/floating-remainder/pre-core/FloatingRemainderAudit.cbd'):
                 changed = self.rewrite(lambda entries: [(member, data) for member, data in entries
                     if member.name != 'files/' + absent])
                 self.rejected_without_writes(changed)
@@ -787,7 +787,7 @@ class FastInputTests(unittest.TestCase):
             self.assertEqual(original, (self.root / name).read_text())
             self.assertEqual(0o755, (self.root / binary).stat().st_mode & 0o7777)
             self.remove_payload(packed)
-            for absent in (binary, 'build/float-decode/original/GHC.Internal.Bignum.Integer.json'):
+            for absent in (binary, 'build/float-decode/original/GHC.Internal.Bignum.Integer.cbd'):
                 changed = self.rewrite(lambda entries: [(member, data) for member, data in entries
                     if member.name != 'files/' + absent])
                 self.rejected_without_writes(changed)
@@ -1813,10 +1813,18 @@ class FastInputTests(unittest.TestCase):
     def test_word_floating_manifest_and_semantic_payload_are_cache_inputs(self):
         self.assertIn("build/word-floating/manifest.json", DECLARED_REQUIRED)
         for name in ("oracle.tsv", "pre-audit.json", "post-audit.json",
-                     "pre-core/WordFloatingAudit.json", "post-core/WordFloatingAudit.json"):
+                     "pre-core/WordFloatingAudit.cbd", "post-core/WordFloatingAudit.cbd"):
             self.assertTrue(cache.allowed_payload("build/word-floating/" + name), name)
         for name in ("test-results/results.json", "classes/Main.class", "unreviewed.sh"):
             self.assertFalse(cache.allowed_payload("build/word-floating/" + name), name)
+
+    def test_scalar_cbd_payloads_admit_only_the_exported_modules_and_stages(self):
+        for family, module in (("word-floating", "WordFloatingAudit"), ("scalar-bitcasts", "ScalarBitCastAudit"),
+                               ("fused-floating", "FloatingAudit"), ("sqrt", "SqrtAudit")):
+            for stage in ("pre", "post"):
+                self.assertTrue(cache.allowed_payload(f"build/{family}/{stage}-core/{module}.cbd"))
+                self.assertFalse(cache.allowed_payload(f"build/{family}/{stage}-core/Other.cbd"))
+            self.assertFalse(cache.allowed_payload(f"build/{family}/unreviewed-core/{module}.cbd"))
 
     def test_original_stdio_inventory_is_exact_and_manifest_is_required(self):
         # setUp replaces REQUIRED for the small archive tests.
