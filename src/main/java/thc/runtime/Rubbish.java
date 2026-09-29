@@ -10,12 +10,14 @@ import com.oracle.truffle.api.nodes.UnexpectedResultException;
 /** A typed don't-care, materialized only when its consumer requires a carrier. */
 final class Rubbish extends Expr {
     private final RubbishLiterals literals;
+    private final int programSlot;
     @Child private Expr aggregate;
     @CompilationFinal private volatile Object reference;
 
-    Rubbish(CoreRepresentation proof, RubbishLiterals literals, Expr aggregate) {
+    Rubbish(CoreRepresentation proof, RubbishLiterals literals, Expr aggregate, int programSlot) {
         setRepresentation(proof.withEvaluated(true));
         this.literals = literals;
+        this.programSlot = programSlot;
         this.aggregate = aggregate;
     }
     @Override public void prepareTuple(int[] slots, int offset) {
@@ -35,6 +37,7 @@ final class Rubbish extends Expr {
             case ADDRESS -> ManagedAddress.nullAddress();
             case VECTOR -> getTypedVectorLayout().getSpecies().zero();
             case OBJECT, DATA, CLOSURE -> {
+                if (programSlot >= 0) yield Program.instance(frame, programSlot).rubbishValue(proof);
                 if (reference == null) {
                     CompilerDirectives.transferToInterpreterAndInvalidate();
                     atomic(() -> { if (reference == null) reference = literals.decode(proof); });

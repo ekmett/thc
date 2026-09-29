@@ -3,6 +3,7 @@
 package thc.runtime;
 
 import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.nodes.RootNode;
 import java.util.List;
 
@@ -12,14 +13,14 @@ public final class RubbishLiterals {
     private DataValue boxed;
     private Closure closure;
     public RubbishLiterals(TruffleLanguage<?> language) { this.language = language; }
-    private synchronized DataValue boxed() {
+    @TruffleBoundary private synchronized DataValue boxed() {
         if (boxed == null) {
             if (language == null) throw new RuntimeFault("Boxed rubbish requires a guest language");
             boxed = new DataLayout(language, "THC.Rubbish", "<absent>", new String[0], new Class<?>[0]).create(new Object[0]);
         }
         return boxed;
     }
-    private synchronized Closure closure() {
+    @TruffleBoundary private synchronized Closure closure() {
         if (closure == null) closure = new Closure(null, 1, RootNode.createConstantNode(boxed()).getCallTarget());
         return closure;
     }
