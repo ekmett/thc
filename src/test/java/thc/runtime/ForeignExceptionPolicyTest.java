@@ -47,6 +47,28 @@ class ForeignExceptionPolicyTest {
     private static final class PrivateTransfer extends AbstractTruffleException implements InternalGuestControl {
         PrivateTransfer() { super("private transfer"); }
     }
+    @Test void checkedHostConversionRetainsIdentityAndNeverTranslatesPrivateFailures() {
+        try (var context = Main.executionContext(false)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var target = new RootNode(language) {
+                    @Child private ForeignExceptionAccess access = new ForeignExceptionAccess();
+                    @Override public Object execute(VirtualFrame frame) {
+                        Exception error = (Exception) frame.getArguments()[0];
+                        throw error instanceof RuntimeException runtime ? access.raiseHost(runtime) : access.raiseHost(error, null);
+                    }
+                }.getCallTarget();
+                for (Exception original : List.of(new Exception("checked application"), new IllegalArgumentException("ordinary application"))) {
+                    var foreign = assertThrows(AbstractTruffleException.class, () -> target.call(original));
+                    var env = Language.currentState().getEnv();
+                    assertTrue(env.isHostException(foreign)); assertSame(original, env.asHostException(foreign));
+                }
+                for (Exception control : List.of(new InterruptedException(), new CancellationException(), new RuntimeFault("private invariant")))
+                    assertSame(control, assertThrows(Throwable.class, () -> target.call(control)));
+            } finally { context.leave(); }
+        }
+    }
     @Test void classificationNeverCallsForeignMessageAndPreservesControlKinds() {
         try (var context = Main.executionContext(false)) {
             context.initialize("thc"); context.enter();
