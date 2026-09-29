@@ -44,8 +44,9 @@ lowering after the automatic-vectorization policy and installs the
 [hash-pinned shared-arena provider](../nih/native-image/shared-arena-vector/README.md).
 The stock pinned toolchain rejects deterministic shared arenas with Vector API
 support. The paired provider preserves session pins, original scalar scope
-optimization and deterministic close; its small native/IR gate is distinct from
-full application and persisted cache qualification, which remain pending.
+optimization and deterministic close. The `run` wrapper reserves auxiliary-image
+address space before `Engine.CacheLoad`. Embedding launchers must also set
+`-XX:AuxiliaryImageBytes` at startup; the wrapper reserves the cache size plus 1 MiB.
 `THC_NATIVE_IMAGE_VECTOR_PROFILE=resource-copy` selects an experimental
 separate `thc-native-cache-resource-copy` image: shared arenas remain enabled,
 vector memory and bit reinterpretation use typed primitive-array bulk copies,

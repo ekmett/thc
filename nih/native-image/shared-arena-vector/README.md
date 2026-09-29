@@ -34,7 +34,6 @@ fixed SIMD memory operations and retained volatile session-count pins before and
 after the scalar optimizer, through late lowering and final scheduling. On the
 pinned x86-64-v3 target, masked operations can still use the JDK's supported
 fallback; the wrappers preserve both intrinsic and fallback lifetime boundaries.
-Full application-image and persisted guest AOT qualification remain pending.
 
 The pinned compiler's global `Vectorization=false` option also clears
 `OptimizeVectorAPI` and `TargetVectorLowering`. The `intrinsics` recipe therefore
