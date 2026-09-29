@@ -19,7 +19,7 @@ module THC.Driver.Project
   , publishCapturedStoreUnit, readCapturedStoreBundles, readCapturedInstalledBundles
   ) where
 
-import Control.Exception (evaluate, finally, onException)
+import Control.Exception (bracket, evaluate, finally, onException)
 import Control.Monad (filterM, forM, forM_, unless, when)
 import Data.Char (isAlphaNum, isHexDigit, isSpace)
 import GHC.ResponseFile (expandResponse)
@@ -76,7 +76,7 @@ import THC.Driver.Run (RunOptions(..), runtimeLaunchArguments, runResolvedPackag
 import THC.Driver.Zip (decodeZip, encodeZip)
 import THC.Compact.Core (Presence(..))
 import THC.Compact.Debug (SourceFile(..))
-import THC.Compact.Module (readModuleMetadata, readModuleSources)
+import THC.Compact.Module (readModuleMetadata, readModuleMetadataFile, readModuleSources)
 import THC.Driver.Wired (WiredArtifacts(..), moduleSources, sourceHashes, pinnedSourcePath,
                          exportPinnedCore, exportPinnedWindowsCore, probeTargetLayout)
 
@@ -934,8 +934,13 @@ acquireInstalledBundle verify cache staging recipe driverHash context registrati
             (installedCompiler context) (registration registrationUnit)
         let nativeArguments = maybe [] (\(archive,_) -> ["-optl" ++ archive]) configured ++ arguments
             configuredInputs = maybe [] snd configured
+        createDirectory (temporary </> "core")
+        staged <- forM (zip [0 :: Int ..] modules) $ \(index, (name, bytes)) -> do
+          let path = temporary </> "core" </> show index <.> "cbd"
+          BS.writeFile path bytes
+          pure (name, path)
         linked <- linkInstalledNative (installedGhc context) (installedLibdir context)
-          nativeArguments nativeDirectory unit modules
+          nativeArguments nativeDirectory unit staged
         forM_ configuredInputs $ \input -> do
           path <- field input "path"
           expected <- field input "sha256"
@@ -974,9 +979,7 @@ acquireInstalledBundle verify cache staging recipe driverHash context registrati
               require (validTargetLayout layout &&
                        jsonField layout "targetPlatform" == Just compilerPlatform)
                 "installed GHC target layout differs from selected compiler"
-              (refs, members) <- packageModules
-                [(name, "core/" ++ show index ++ ".cbd", bytes)
-                | (index, (name, bytes)) <- zip [0 :: Int ..] linked]
+              (refs, members) <- packageCoreFiles linked
               let receiptBytes = BL.toStrict (encode (object (inputFields ++
                     ["buildKey" .= buildKey, "exportKey" .= exportKey,
                      "exporter" .= exporter, "targetLayout" .= layout])))
@@ -1690,7 +1693,21 @@ publishCapturedStoreUnit planPath store dist capture identifier destination = do
   maybe (fail "new captured unit failed its ordinary bundle validation") pure result
 
 packGlobalBundle :: FilePath -> FilePath -> FilePath -> Map.Map String Unit -> Unit -> String -> String -> FilePath -> IO ()
-packGlobalBundle store dist capture planned unit buildKey exportKey destination = do
+packGlobalBundle store dist capture planned unit buildKey exportKey destination =
+  bracket temporary removePathForcibly $ \staging ->
+    packGlobalBundleStaged staging store dist capture planned unit buildKey exportKey destination
+  where
+    temporary = do
+      (path, handle) <- openTempFile (takeDirectory destination) "core-link-"
+      hClose handle
+      removeFile path
+      createDirectory path
+      pure path
+
+-- Retained captures are immutable inputs. Native linkage may amend only the
+-- private copies made here, including copied dependency modules.
+packGlobalBundleStaged :: FilePath -> FilePath -> FilePath -> FilePath -> Map.Map String Unit -> Unit -> String -> String -> FilePath -> IO ()
+packGlobalBundleStaged staging store dist capture planned unit buildKey exportKey destination = do
   let core = capture </> unitId unit </> "core"
   exported <- filter ((== ".cbd") . takeExtension) <$> recursiveFiles core
   empty <- if not (null exported) then pure [] else do
@@ -1709,15 +1726,17 @@ packGlobalBundle store dist capture planned unit buildKey exportKey destination 
     reexports <- maybe (fail ("Cabal store build did not export Core for nonempty unit " ++ unitId unit)) pure
       (modulelessRegistration (unitId unit) (unitDepends unit) bytes)
     pure [(if null reexports then "emptyRegistration" else "reexportRegistration") .= Text.decodeUtf8 bytes]
-  checked <- forM exported $ \path -> do
-    value <- readCoreMetadata path
-    foundUnit <- field value "unit"
-    foundBoundary <- field value "boundary" :: IO String
-    name <- field value "module" :: IO String
-    require (foundUnit == unitId unit && foundBoundary == boundary)
-      ("store Core artifact has wrong owner or boundary: " ++ path)
-    bytes <- BS.readFile path
-    pure (name, bytes)
+  let stageModules owner paths = do
+        createDirectoryIfMissing True (staging </> owner)
+        forM (zip [0 :: Int ..] paths) $ \(index, path) -> do
+          value <- readCoreMetadata path
+          require (jsonField value "unit" == Just owner && jsonField value "boundary" == Just boundary)
+            ("store Core artifact has wrong owner or boundary: " ++ path)
+          name <- field value "module"
+          let staged = staging </> owner </> show index <.> "cbd"
+          Directory.copyFile path staged
+          pure (name, staged)
+  checked <- stageModules (unitId unit) exported
   let pieces = takeDirectory capture </> "native-pieces"
   -- Cabal has installed these units and may have deleted their temporary
   -- intra-package DBs. Keep the recorded compiler recipe unchanged, but resolve
@@ -1749,13 +1768,7 @@ packGlobalBundle store dist capture planned unit buildKey exportKey destination 
       nativeReceipt <- doesFileExist (sourceDirectory </> "native.json")
       bodies <- if owner == unitId unit then pure checked else if not nativeReceipt then pure [] else do
         paths <- filter ((== ".cbd") . takeExtension) <$> recursiveFiles (sourceDirectory </> "core")
-        forM paths $ \path -> do
-          bytes <- BS.readFile path
-          value <- either fail pure (snd <$> readModuleMetadata bytes)
-          require (jsonField value "unit" == Just owner && jsonField value "boundary" == Just boundary)
-            "native dependency Core owner/boundary differs"
-          name <- field value "module"
-          pure (name,bytes)
+        stageModules owner paths
       (prepared,component) <- finishPackageNativeWithDependencies capturedNative direct (storeDatabases ++ inplaceDatabases)
         pieces sourceDirectory (takeDirectory destination </> "native-components" </> owner) owner Nothing bodies
       let available = maybe forwarded (\value -> [([],value)]) component
@@ -1765,9 +1778,7 @@ packGlobalBundle store dist capture planned unit buildKey exportKey destination 
       names = map fst sorted
   require (length names == length (nub names))
     ("duplicate exported store modules for " ++ unitId unit)
-  (modules, members) <- packageModules
-    [(name, "core/" ++ show index ++ ".cbd", bytes)
-    | (index, (name, bytes)) <- zip [0 :: Int ..] sorted]
+  (modules, members) <- packageCoreFiles sorted
   let inner = object (["format" .= ("thc-core-bundle" :: String), "schema" .= (1 :: Int),
                       "unit" .= unitId unit, "buildKey" .= buildKey,
                       "exportKey" .= exportKey, "modules" .= modules] ++ empty)
@@ -1974,8 +1985,7 @@ freshExport context component unit scalar runtimeShim helper nativeObjects build
       name <- field value "module"
       require (foundUnit == unitId unit && foundBoundary == boundary)
         ("Core artifact has wrong unit or boundary: " ++ path)
-      bytes <- BS.readFile path
-      pure (name, bytes)
+      pure (name, path)
     let actual = sort (map fst checked)
     require (length actual == length (nub actual) && actual == expected)
       ("Core module inventory differs from Cabal build-info for " ++ unitId unit ++ ": " ++ show actual)
@@ -1988,8 +1998,7 @@ freshExport context component unit scalar runtimeShim helper nativeObjects build
         updated <- forM exported $ \path -> do
           value <- readCoreMetadata path
           name <- field value "module"
-          bytes <- BS.readFile path
-          pure (name,bytes)
+          pure (name,path)
         sortOn fst <$> finishPackageNative (contextNative context </> "cache/thc/native-pieces-v1") staging (unitId unit) nativeObjects updated
       (Just recipe,Nothing,Just selectedHelper) -> do
         retained <- scalarInterfaceModules selectedHelper component unit objects expected
@@ -1998,9 +2007,7 @@ freshExport context component unit scalar runtimeShim helper nativeObjects build
         retained <- scalarInterfaceModules selectedHelper component unit objects expected
         validateRuntimeShimModules shim retained
       _ -> fail "scalar cbits interface helper missing"
-    (modules, members) <- packageModules
-      [(name, "core/" ++ show index ++ ".cbd", bytes)
-      | (index, (name, bytes)) <- zip [0 :: Int ..] sorted]
+    (modules, members) <- packageCoreFiles sorted
     let inputsBytes = BL.toStrict (encode buildInputs)
         inner = object ["format" .= ("thc-core-bundle" :: String), "schema" .= (1 :: Int),
                         "unit" .= unitId unit, "buildKey" .= buildKey,
@@ -2015,9 +2022,11 @@ freshExport context component unit scalar runtimeShim helper nativeObjects build
 
 -- Recover exact typed annotations from the emitted full-Core interfaces through
 -- the selected GHC helper and Cabal's actual library registration.
-scalarInterfaceModules :: InstalledContext -> Component -> Unit -> FilePath -> [String] -> IO [(String,BS.ByteString)]
+scalarInterfaceModules :: InstalledContext -> Component -> Unit -> FilePath -> [String] -> IO [(String,FilePath)]
 scalarInterfaceModules helper component unit objects names = do
   sourceDir <- field (componentValue component) "src-dir"
+  let core = objects </> "interface-core"
+  createDirectoryIfMissing True core
   databases <- mapM (canonicalizePath . (sourceDir </>))
     [path | (flag,path) <- zip (componentArguments component) (drop 1 (componentArguments component)),
       flag == "-package-db"]
@@ -2034,7 +2043,9 @@ scalarInterfaceModules helper component unit objects names = do
     require (jsonField value "unit" == Just (unitId unit) && jsonField value "module" == Just name &&
       jsonField value "boundary" == Just boundary && jsonField value "ghc" == Just ("9.14.1"::String))
       "scalar cbits interface identity or boundary mismatch"
-    pure (name,output)
+    let path = core </> name <.> "cbd"
+    BS.writeFile path output
+    pure (name,path)
 
 -- | Read a configured bundle under its complete expected inputs and inventory.
 -- True retains exhaustive archive, layout, provenance and module validation.
@@ -2351,7 +2362,16 @@ optionalField value name fallback = case value of
   _ -> fail ("JSON object expected for field " ++ name)
 
 readCoreMetadata :: FilePath -> IO Value
-readCoreMetadata path = BS.readFile path >>= either (fail . (("invalid CBD " ++ path ++ ": ") ++)) pure . fmap snd . readModuleMetadata
+readCoreMetadata path = snd <$> readModuleMetadataFile path
+
+-- Linking owns staged files. Read their final bytes only when publishing the
+-- bundle that records their hashes and stores those exact bytes.
+packageCoreFiles :: [(String, FilePath)] -> IO ([Value], [(FilePath, BS.ByteString)])
+packageCoreFiles files = do
+  modules <- forM (zip [0 :: Int ..] files) $ \(index, (name, path)) -> do
+    bytes <- BS.readFile path
+    pure (name, "core/" ++ show index ++ ".cbd", bytes)
+  packageModules modules
 
 readJson :: FilePath -> IO Value
 readJson path = do

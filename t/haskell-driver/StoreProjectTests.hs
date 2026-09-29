@@ -17,8 +17,6 @@ import Control.Exception (bracket, finally, throwIO)
 import Control.Monad (forM_, unless)
 import Data.Char (isHexDigit)
 import qualified Data.ByteString as BS
-import qualified Data.ByteString.Lazy as BL
-import Data.Aeson (encode, eitherDecodeStrict')
 import Data.List (isPrefixOf, sort, stripPrefix)
 import System.Directory (getModificationTime, getPermissions, removeFile,
                          removePathForcibly, setPermissions)
@@ -33,6 +31,8 @@ import TestSupport
 import THC.Driver.GhcProxy (ghcProxyCommand, directPlugin)
 import THC.Driver.Lock (withLock)
 import THC.Driver.PackageNative (nativeSignatures, finishPackageNative)
+import THC.Driver.Installed (boundedInterfaceProcessIn)
+import THC.Compact.Module (readModuleValue)
 
 tests :: Env -> Test
 tests env = TestList [proxyOptionsTest env, staticExportsTest env, captureLifetimeTests env, storeProjectTest env, customStoreProjectTest env,
@@ -360,14 +360,15 @@ staticExportsTest env = TestLabel "ordinary replay retains mixed static callback
     oracle <- runExe env project Nothing 30 native []
     assertSuccess oracle
     assertEqual "native address-taken callback and StablePtr release" "43\n" (out oracle)
-    hydrated <- runExe env project Nothing 60 "thc-interface"
+    (status, hydrated, diagnostic) <- boundedInterfaceProcessIn project helper
       ["--libdir", libdir, "--unit", unit, "--module", "NativeExport", "--interface", objectDirectory </> "NativeExport.hi",
        "--home-interfaces", objectDirectory, "--way", "dynamic"]
-    assertSuccess hydrated
-    writeText (scratch env </> "static-exports-hydrated.json") (out hydrated)
-    response <- json (out hydrated)
-    let core = field response "core"
-        imports = field core "staticForeignImports"
+    assertEqual (show diagnostic) ExitSuccess status
+    let staged = capture </> unit </> "NativeExport.cbd"
+    BS.writeFile staged hydrated
+    Directory.copyFile staged (scratch env </> "static-exports-hydrated.cbd")
+    core <- either fail pure (readModuleValue hydrated)
+    let imports = field core "staticForeignImports"
         exports = field core "staticForeignExports"
         registration = field core "staticForeignExportRegistration"
         callbacks = objects exports "exports"
@@ -386,12 +387,12 @@ staticExportsTest env = TestLabel "ordinary replay retains mixed static callback
       Left failure -> assertBool failure False
       Right signatures -> assertEqual "both actual C import declarations remain callable" 2 (length signatures)
     published <- finishPackageNative pieces (capture </> unit) unit (Just [project </> "callbacks.o"])
-      [("NativeExport.json", BL.toStrict (encode core))]
+      [("NativeExport", staged)]
       `finally` copyTree capture (scratch env </> "static-exports-capture")
     case published of
-      [("NativeExport.json", bytes)] -> do
-        BS.writeFile (scratch env </> "static-exports-linked.json") bytes
-        linked <- either fail pure (eitherDecodeStrict' bytes)
+      [("NativeExport", path)] -> do
+        Directory.copyFile path (scratch env </> "static-exports-linked.cbd")
+        linked <- BS.readFile path >>= either fail pure . readModuleValue
         let nativeLink = field linked "packageNativeLink"
         assertEqual "managed externals remain in verified LLVM" "llvm-bitcode" (string $ field nativeLink "format")
         assertEqual "managed symbols remain unresolved beside the genuine native dependency"
