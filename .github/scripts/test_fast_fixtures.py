@@ -19,6 +19,43 @@ import fast_fixtures
 
 
 class FixturePreparationTest(unittest.TestCase):
+    def test_selector_proof_is_required_for_full_preparation_reuse(self):
+        project = Path(__file__).resolve().parents[2]
+        source = (project / "bin/prepare-tests.sh").read_text()
+        command = '"$fixture_bin" selector-proof'
+        self.assertIn(command, source)
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+        self.assertIn("build/selector-proof", fast_fixtures.FULL_OUTPUT_ROOTS)
+        expected = {"build/selector-proof/" + name for name in (
+            "manifest.json", "pre/core/SelectorProofAudit.json", "post/core/SelectorProofAudit.json",
+            "api/predicate",
+            *[f"commands/{command}.{suffix}"
+              for command in ("pre-export", "post-export", "predicate-build", "libdir", "predicate-run")
+              for suffix in ("stdout", "stderr", "command.json")])}
+        required = {name for name in fast_fixtures.FULL_REQUIRED if name.startswith("build/selector-proof/")}
+        self.assertEqual(expected, required)
+        for name in expected:
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("fixture\n")
+        with mock.patch.object(fast_fixtures, "FULL_REQUIRED", required):
+            outputs = fast_fixtures._full_output_hashes(self.root)
+            self.assertEqual(expected, set(outputs))
+            for name in sorted(expected):
+                with self.subTest(missing=name):
+                    path = self.root / name
+                    path.unlink()
+                    with self.assertRaises(FileNotFoundError):
+                        fast_fixtures._full_output_hashes(self.root)
+                    path.write_text("fixture\n")
+            (self.root / "build/selector-proof/post/core/SelectorProofAudit.json").write_text("changed\n")
+            self.assertNotEqual(outputs, fast_fixtures._full_output_hashes(self.root))
+        script = self.root / "bin/prepare-tests.sh"
+        script.parent.mkdir(parents=True, exist_ok=True)
+        script.write_text(source.replace(command, "", 1))
+        with self.assertRaisesRegex(RuntimeError, "not been reviewed"):
+            fast_fixtures._full_key(self.root)
+
     def test_delimited_self_delivery_retains_thread_fixture_audits(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
