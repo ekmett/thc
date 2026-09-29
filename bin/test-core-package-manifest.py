@@ -8,6 +8,7 @@ import hashlib
 import gc
 import json
 from contextlib import closing
+from functools import lru_cache
 import os
 from pathlib import Path
 import platform
@@ -20,6 +21,51 @@ import weakref
 from zipfile import ZipFile
 
 import core_package_manifest
+
+
+@lru_cache(maxsize=1)
+def fixture_executable():
+    configured = os.environ.get('THC_FIXTURES')
+    if configured:
+        return configured
+    root = Path(__file__).resolve().parent.parent
+    prepared = root / 'build/thc-fixtures.path'
+    if prepared.is_file():
+        return prepared.read_text(encoding='utf-8').strip()
+    return subprocess.check_output([os.environ.get('CABAL', 'cabal'), 'list-bin',
+        'exe:thc-fixtures', '--offline'], cwd=root, text=True).strip()
+
+
+def write_core(path, module):
+    """Test notation enters the existing test-only encoder, never the audit loader."""
+    model = dict(schema=1, ghc='9.14.1', unit='fixture', module='Model',
+                 boundary='optimized-Core-before-Tidy', constructors=[])
+    model.update(module)
+    def complete(value, expression=False):
+        if isinstance(value, dict):
+            return {**({'arity': 0} if 'id' in value and 'expr' in value else {}),
+                    **{key: complete(item, key == 'expr') for key, item in value.items()}}
+        if isinstance(value, list):
+            result = [complete(item, expression) for item in value]
+            if (expression and result and isinstance(result[0], str) and result[0] in
+                    ('var', 'lit', 'lam', 'app', 'let', 'case', 'cast', 'tick', 'type', 'coercion', 'prim', 'con', 'void')
+                    and not isinstance(result[-1], dict)):
+                result.append({})
+            return result
+        return value
+    model = complete(model)
+    with TemporaryDirectory(prefix='audit-model-') as temporary:
+        source = Path(temporary) / 'model.json'
+        source.write_text(core_package_manifest.json_dumps(model), encoding='utf-8')
+        result = subprocess.run([fixture_executable(), 'compact-model', str(source), str(path.resolve())],
+                                capture_output=True, text=True, timeout=60)
+        if result.returncode:
+            raise ValueError(result.stderr)
+    return path.read_bytes()
+
+
+def read_core(path):
+    return core_package_manifest.inspect_cbd(path.read_bytes())
 
 
 class DeepJsonTest(unittest.TestCase):
@@ -49,9 +95,6 @@ class DeepJsonTest(unittest.TestCase):
         value = core_package_manifest.strict_json(text)
         self.assertEqual(text, core_package_manifest.json_dumps(value))
         self.assertTrue(core_package_manifest._same_json_value(value, core_package_manifest.strict_json(text)))
-        wrapped = '{"label":"€","bindings":' + text + ',"tail":false}'
-        start, end = core_package_manifest._bindings_span(wrapped)
-        self.assertEqual(text.encode(), wrapped.encode()[start:end])
         for leaf in ('{"x":1,"x":2}', 'NaN', 'Infinity', '{"x":}', '[0,]', '{"x":0,}'):
             with self.subTest(leaf=leaf), self.assertRaises(ValueError):
                 core_package_manifest.strict_json('[' * 1200 + leaf + ']' * 1200)
@@ -628,6 +671,9 @@ class PackageNativeVariantsTest(unittest.TestCase):
                 core_package_manifest.package_scalar_link(module)
 
 
+INTEGER = dict(kind='long', primReps=['IntRep'], evaluated=True)
+
+
 class PackageManifestTest(unittest.TestCase):
     def setUp(self):
         self.scratch = TemporaryDirectory()
@@ -638,8 +684,8 @@ class PackageManifestTest(unittest.TestCase):
     def unit(self, unit_id, name='Shared'):
         source = dict(schema=1, ghc='9.14.1', unit=unit_id, module=name,
                       boundary=self.boundary, bindings=[], constructors=[])
-        path = self.root / f'{unit_id}.json'
-        path.write_text(json.dumps(source) + '\n')
+        path = self.root / f'{unit_id}.cbd'
+        write_core(path, source)
         return dict(id=unit_id, depends=[], modules=[dict(name=name, boundary=self.boundary,
                     path=path.name, sha256=hashlib.sha256(path.read_bytes()).hexdigest())])
 
@@ -650,9 +696,9 @@ class PackageManifestTest(unittest.TestCase):
                     unit = self.unit('entry-unit', name)
                     item = unit['modules'][0]
                     path = self.root / item['path']
-                    module = json.loads(path.read_text())
-                    module['bindings'] = [dict(id=alias, expr=['lit', 'int', '0'])]
-                    path.write_text(json.dumps(module))
+                    module = read_core(path)
+                    module['bindings'] = [dict(id=alias, expr=['lit', 'int', '0', dict(rep=INTEGER)])]
+                    write_core(path, module)
                     item['sha256'] = hashlib.sha256(path.read_bytes()).hexdigest()
                     if alias == 'main::Main.main':
                         self.assertEqual(alias, core_package_manifest.load(self.manifest([unit]))[0][1]['bindings'][0]['id'])
@@ -669,10 +715,68 @@ class PackageManifestTest(unittest.TestCase):
                                         ghc='9.14.1', units=units)) + '\n')
         return path
 
+    def published(self, unit):
+        for item in unit['modules']:
+            item.update(compact=dict(format='thc-cbd-v1', path=str(self.root / item['path']), sha256=item['sha256']),
+                        containsDelimitedControl=False, registrationObligations=False,
+                        mainAlias=False, packageScalarDeclarations=False)
+        return unit
+
+    def test_published_cbd_is_inspected_once_with_original_identity(self):
+        unit = self.published(self.unit('first'))
+        source = self.root / unit['modules'][0]['path']
+        original = source.read_bytes()
+        inspected = []
+        decode = core_package_manifest.inspect_cbd
+        def tracked(data):
+            value = decode(data)
+            inspected.append(value)
+            return value
+        with patch.object(core_package_manifest, 'inspect_cbd', side_effect=tracked):
+            modules = core_package_manifest.load(self.manifest([unit]))
+        self.assertEqual(1, len(inspected))
+        self.assertIs(inspected[0], modules[0][1])
+        self.assertEqual(str(source), modules[0][0])
+        self.assertEqual(original, source.read_bytes())
+
+    def test_published_cbd_hash_summary_reference_and_corruption_fail_closed(self):
+        import copy
+        original = self.published(self.unit('first'))
+        for change in ('hash', 'format', 'relative', 'summary', 'summary-type', 'extra'):
+            unit = copy.deepcopy(original)
+            item = unit['modules'][0]
+            if change == 'hash': item['sha256'] = item['compact']['sha256'] = '0' * 64
+            elif change == 'format': item['compact']['format'] = 'json'
+            elif change == 'relative': item['compact']['path'] = 'first.cbd'
+            elif change == 'summary': item['mainAlias'] = True
+            elif change == 'summary-type': item['mainAlias'] = 0
+            else: item['compact']['future'] = True
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                core_package_manifest.load(self.manifest([unit]))
+        item = original['modules'][0]
+        source = Path(item['compact']['path'])
+        source.write_bytes(source.read_bytes()[:-1])
+        item['sha256'] = item['compact']['sha256'] = hashlib.sha256(source.read_bytes()).hexdigest()
+        with self.assertRaisesRegex(ValueError, 'CBD inspection failed'):
+            core_package_manifest.load(self.manifest([original]))
+
+    def test_retired_json_unit_transport_rejects_before_artifact_access(self):
+        for field in ('json', 'symbols'):
+            unit = self.unit('first')
+            unit[field] = dict(path='/not-read', sha256='0' * 64)
+            with self.subTest(field=field), self.assertRaisesRegex(ValueError, 'JSON Core unit artifacts'):
+                core_package_manifest.load(self.manifest([unit]))
+        unit = self.unit('first')
+        source = self.root / unit['modules'][0]['path']
+        source.write_text('{"schema":1,"bindings":[]}', encoding='utf-8')
+        unit['modules'][0]['sha256'] = hashlib.sha256(source.read_bytes()).hexdigest()
+        with self.assertRaisesRegex(ValueError, 'Core input must be CBD'):
+            core_package_manifest.load(self.manifest([unit]))
+
     def bundled(self, unit, members=None, inner=None, build_inputs=None, input_hash=None):
         module = unit['modules'][0]
         data = (self.root / module['path']).read_bytes()
-        module['path'] = 'core/' + module['name'] + '.json'
+        module['path'] = 'core/' + module['name'] + '.cbd'
         contents = {module['path']: data} if members is None else members
         inner = inner or dict(format='thc-core-bundle', schema=1, unit=unit['id'],
                               buildKey='a' * 64, exportKey='b' * 64, modules=unit['modules'])
@@ -693,58 +797,14 @@ class PackageManifestTest(unittest.TestCase):
     def two_module_bundle(self, second=None):
         unit = self.unit('first')
         if second is None:
-            second = json.dumps(dict(schema=1, ghc='9.14.1', unit='first', module='Other',
-                boundary=self.boundary, bindings=[dict(id='first:Other.value', expr=['lit', 'int', '7'])],
-                constructors=[])).encode()
-        unit['modules'].append(dict(name='Other', boundary=self.boundary, path='core/Other.json',
+            second = write_core(self.root / 'Other.cbd', dict(schema=1, ghc='9.14.1', unit='first', module='Other',
+                boundary=self.boundary, bindings=[dict(id='first:Other.value', expr=['lit', 'int', '7', dict(rep=INTEGER)])],
+                constructors=[]))
+        unit['modules'].append(dict(name='Other', boundary=self.boundary, path='core/Other.cbd',
                                     sha256=hashlib.sha256(second).hexdigest()))
-        return self.bundled(unit, members={'core/Shared.json': (self.root / 'first.json').read_bytes(),
-                                          'core/Other.json': second})
+        return self.bundled(unit, members={'core/Shared.cbd': (self.root / 'first.cbd').read_bytes(),
+                                          'core/Other.cbd': second})
 
-    def direct_unit(self, binding_count=1, fixed=False):
-        unit = dict(id='first', depends=[], modules=[])
-        payload, rows = bytearray(), []
-        # Reverse bytewise ID/module order, raw spaces and non-ASCII text.
-        for name in ('Zulu', 'Alpha'):
-            binding = dict(id=f'first:{name}.雪 space', name='value', arity=0, lifted=True,
-                           expr=['lit', 'int', '7'] if name == 'Zulu' else ['lit', 'string', 'prompt#'])
-            prefix = json.dumps(dict(schema=1, ghc='9.14.1', unit='first', module=name,
-                                    boundary=self.boundary, note='雪'), ensure_ascii=False).encode()[:-1]
-            prefix += b', "bindings": ['
-            chunks = [json.dumps(binding | dict(id=binding['id'] + (f' {index:05}' if binding_count > 1 else '')),
-                                 ensure_ascii=False).encode() for index in range(binding_count)]
-            body = b', \t\r\n'.join(chunks)
-            source = prefix + body + b'], "constructors": []}\r\n'
-            start = len(payload)
-            payload.extend(source + b'\n')
-            offset = start + len(prefix)
-            for chunk in chunks:
-                rows.append((json.loads(chunk)['id'].encode(), offset))
-                offset += len(chunk) + len(b', \t\r\n')
-            metadata_start = len(payload)
-            original = json.loads(source)
-            payload.extend(json.dumps({key: value for key, value in original.items()
-                if key in core_package_manifest.UNIT_METADATA_KEYS}).encode())
-            metadata_end = len(payload)
-            payload.extend(b'\n')
-            unit['modules'].append(dict(name=name, boundary=self.boundary, path=f'core/{name}.json',
-                sha256=hashlib.sha256(source).hexdigest(), start=start, end=start + len(source),
-                bindingsStart=start + len(prefix) - 1, bindingsEnd=start + len(prefix) + len(body) + 1,
-                metadataStart=metadata_start, metadataEnd=metadata_end,
-                containsDelimitedControl=False, registrationObligations=False, mainAlias=False,
-                packageScalarDeclarations=False))
-        if fixed:
-            records = sorted((hashlib.md5(key).digest(), offset) for key, offset in rows)
-            symbols = b''.join(key + offset.to_bytes(8, 'little') for key, offset in records)
-        else:
-            symbols = b''.join(key + b' ' + str(offset).encode() + b'\n' for key, offset in sorted(rows))
-        for key, filename, data in [('json', 'core.jsons', payload), ('symbols', 'core.symbols', symbols)]:
-            target = self.root / filename
-            target.write_bytes(data)
-            unit[key] = dict(path=str(target), sha256=hashlib.sha256(data).hexdigest())
-        if fixed:
-            unit['symbols']['format'] = 'md5-utf8-u64le-v1'
-        return unit
 
     def test_deep_core_control_summary_preserves_exact_primitive_detection(self):
         for leaf, expected in ((['prim', 'prompt#'], True), (['prim', 'control0#'], True),
@@ -761,127 +821,6 @@ class PackageManifestTest(unittest.TestCase):
                     core_package_manifest._check_unit_summaries('deep-core',
                         summary | dict(containsDelimitedControl=not expected), module)
 
-    def test_direct_unit_delivers_the_same_once_decoded_original_module(self):
-        unit = self.direct_unit()
-        original_bytes = Path(unit['json']['path']).read_bytes()
-        originals = {original_bytes[item['start']:item['end']].decode('utf-8'): item['name']
-                     for item in unit['modules']}
-        parse, decoded = core_package_manifest.strict_json, {}
-        def tracked(data):
-            value = parse(data)
-            if data in originals:
-                name = originals[data]
-                self.assertNotIn(name, decoded, 'original module decoded more than once')
-                decoded[name] = value
-            return value
-        with patch.object(core_package_manifest, 'strict_json', side_effect=tracked):
-            modules = core_package_manifest.load_for_audit(self.manifest([unit]))
-        self.assertEqual({'Zulu', 'Alpha'}, decoded.keys())
-        for _, module in modules:
-            self.assertIs(decoded[module['module']], module)
-        self.assertEqual(original_bytes, Path(unit['json']['path']).read_bytes())
-
-    def test_direct_unit_fixed_md5_records(self):
-        self.assertEqual('201ac5924113112a846d82b090d8458a', hashlib.md5(b'main:Main.main').hexdigest())
-        self.assertEqual('23415231b60de428eeaf32979e1cb8ce', hashlib.md5('main:M.é😀'.encode()).hexdigest())
-        unit = self.direct_unit(binding_count=2048, fixed=True)
-        directory = Path(unit['symbols']['path']).read_bytes()
-        self.assertEqual(4096 * 24, len(directory))
-        modules = core_package_manifest.load(self.manifest([unit]))
-        self.assertEqual(4096, sum(len(module['bindings']) for _, module in modules))
-        empty = self.direct_unit(binding_count=0, fixed=True)
-        self.assertEqual(b'', Path(empty['symbols']['path']).read_bytes())
-        self.assertEqual(2, len(core_package_manifest.load(self.manifest([empty]))))
-
-    def test_direct_unit_fixed_records_require_exact_explicit_format_and_offsets(self):
-        import copy
-        original = self.direct_unit(fixed=True)
-        directory = Path(original['symbols']['path'])
-        data = directory.read_bytes()
-        for replacement in (data[:-1], data + b'\0', data[24:] + data[:24], data[:24],
-                            data + data[:24], data[:16] + bytes(8) + data[24:]):
-            unit = copy.deepcopy(original)
-            directory.write_bytes(replacement)
-            unit['symbols']['sha256'] = hashlib.sha256(replacement).hexdigest()
-            with self.subTest(size=len(replacement)), self.assertRaisesRegex(ValueError, 'symbol directory'):
-                core_package_manifest.load(self.manifest([unit]))
-        directory.write_bytes(data)
-        for marker in (None, 'md5', 'md5-utf8-u64be-v1'):
-            unit = copy.deepcopy(original); unit['symbols']['format'] = marker
-            with self.subTest(format=marker), self.assertRaisesRegex(ValueError, 'symbols format'):
-                core_package_manifest.load(self.manifest([unit]))
-        legacy = copy.deepcopy(original); del legacy['symbols']['format']
-        with self.assertRaisesRegex(ValueError, 'symbol directory'):
-            core_package_manifest.load(self.manifest([legacy]))
-
-    def test_direct_unit_preserves_bytes_identity_and_explicit_audit(self):
-        unit = self.direct_unit()
-        path = self.manifest([unit])
-        modules = core_package_manifest.load(path)
-        self.assertEqual(['Zulu', 'Alpha'], [module['module'] for _, module in modules])
-        self.assertTrue(all('core.jsons@' in source for source, _ in modules))
-        result = subprocess.run(['python3', '-B', str(Path(__file__).with_name('audit-core.py')),
-            '--package-manifest', str(path), '--entry', 'first:Zulu.雪 space'], text=True, capture_output=True)
-        self.assertEqual(0, result.returncode, result.stderr)
-        self.assertTrue(json.loads(result.stdout)['accepted'])
-
-    def test_direct_unit_many_bindings_and_bounded_whitespace_cursor(self):
-        unit = self.direct_unit(binding_count=2048)
-        loaded = core_package_manifest.load(self.manifest([unit]))
-        self.assertEqual(4096, sum(len(module['bindings']) for _, module in loaded))
-        class NoSuffix(str):
-            def __getitem__(self, key):
-                if isinstance(key, slice) and key.start is not None and key.stop is None:
-                    raise AssertionError('scanner copied an unvisited suffix')
-                return super().__getitem__(key)
-        text = NoSuffix(' \r\n\t { "雪" : 7, \n "bindings" : [ {"id":"x y"} ] } \n')
-        self.assertEqual(5, core_package_manifest._skip_json_space(text, 0))
-        begin, end = core_package_manifest._bindings_span(text)
-        self.assertEqual(b'[ {"id":"x y"} ]', text.encode()[begin:end])
-        self.assertEqual(len(text), core_package_manifest._skip_json_space(text, len(text)))
-
-    def test_direct_unit_rejects_bad_pair_spans_summaries_and_symbols(self):
-        import copy
-        original = self.direct_unit()
-        malformed = []
-        for missing in ('json', 'symbols'):
-            value = copy.deepcopy(original); del value[missing]; malformed.append(value)
-        malformed.append(original | dict(bundle=dict(path='/unused', sha256='a' * 64)))
-        for key, value in [('start', -1), ('end', 999999), ('bindingsStart', True),
-                           ('bindingsEnd', 1), ('containsDelimitedControl', True),
-                           ('registrationObligations', True), ('mainAlias', True), ('mainAlias', None),
-                           ('metadataStart', -1), ('metadataEnd', 999999), ('sourceMetadataStart', 0),
-                           ('packageScalarDeclarations', True)]:
-            unit = copy.deepcopy(original); unit['modules'][0][key] = value; malformed.append(unit)
-        for unit in malformed:
-            with self.subTest(unit=unit), self.assertRaises(ValueError):
-                core_package_manifest.load(self.manifest([unit]))
-        for key in ('json', 'symbols'):
-            unit = copy.deepcopy(original); unit[key]['sha256'] = '0' * 64
-            with self.subTest(key=key), self.assertRaisesRegex(ValueError, 'artifact hash'):
-                core_package_manifest.load(self.manifest([unit]))
-        directory = self.root / 'core.symbols'
-        rows = directory.read_bytes().splitlines(keepends=True)
-        for data in (b''.join(reversed(rows)), rows[0], b''.join(rows) + rows[0],
-                     rows[0].rsplit(b' ', 1)[0] + b' 0\n' + rows[1]):
-            unit = copy.deepcopy(original)
-            directory.write_bytes(data); unit['symbols']['sha256'] = hashlib.sha256(data).hexdigest()
-            with self.assertRaisesRegex(ValueError, 'symbol directory'):
-                core_package_manifest.load(self.manifest([unit]))
-
-    def test_direct_unit_rejects_hash_consistent_metadata_substitution(self):
-        unit = self.direct_unit()
-        source = Path(unit['json']['path'])
-        data = source.read_bytes()
-        item = unit['modules'][0]
-        start, end = item['metadataStart'], item['metadataEnd']
-        metadata = data[start:end].replace(b'"schema": 1', b'"schema": 2')
-        changed = data[:start] + metadata + data[end:]
-        source.write_bytes(changed)
-        unit['json']['sha256'] = hashlib.sha256(changed).hexdigest()
-        with self.assertRaisesRegex(ValueError, 'metadata projection'):
-            core_package_manifest.load(self.manifest([unit]))
-        self.assertFalse(core_package_manifest._same_json_value({'schema': True}, {'schema': 1}))
 
     def test_retired_indexes_are_rejected_before_artifact_access(self):
         for bundled in (False, True):
@@ -890,7 +829,7 @@ class PackageManifestTest(unittest.TestCase):
                     unit = self.unit('first')
                     unit['modules'][0]['index'] = reference
                     path = self.bundled(unit) if bundled else self.manifest([unit])
-                    with self.assertRaisesRegex(ValueError, 'sidecars are no longer supported'):
+                    with self.assertRaisesRegex(ValueError, 'JSON Core indexes/extents'):
                         core_package_manifest.load(path)
 
     def test_transport_buffers_are_released_before_module_delivery(self):
@@ -912,7 +851,7 @@ class PackageManifestTest(unittest.TestCase):
         with patch.object(ZipFile, 'read', tracked_read):
             with core_package_manifest.open_modules(path) as modules:
                 next(modules)
-                self.assertEqual(['core/Shared.json'], reads)
+                self.assertEqual(['core/Shared.cbd'], reads)
                 self.assertTrue(all(reference() is None for reference in references))
                 self.assertEqual([], list(modules))
                 self.assertTrue(modules.complete)
@@ -960,7 +899,7 @@ class PackageManifestTest(unittest.TestCase):
             return value
 
         def tracked_read(archive, name, *args, **kwargs):
-            if name == 'core/Other.json':
+            if name == 'core/Other.cbd':
                 gc.collect()
                 self.assertIsNone(references[0](), 'previous parsed module survived the next member read')
             reads.append(name)
@@ -974,11 +913,11 @@ class PackageManifestTest(unittest.TestCase):
                 patch.object(ZipFile, 'read', tracked_read):
             with core_package_manifest.open_modules(path) as modules:
                 first = next(modules)
-                self.assertEqual(['manifest.json', 'core/Shared.json'], reads)
+                self.assertEqual(['manifest.json', 'core/Shared.cbd'], reads)
                 self.assertIsNone(buffers[0](), 'raw JSON survived delivery of its parsed module')
                 del first
                 second = next(modules)
-                self.assertEqual(['manifest.json', 'core/Shared.json', 'core/Other.json'], reads)
+                self.assertEqual(['manifest.json', 'core/Shared.cbd', 'core/Other.cbd'], reads)
                 del second
                 self.assertEqual([], list(modules))
             gc.collect()
@@ -997,9 +936,9 @@ class PackageManifestTest(unittest.TestCase):
         with patch.object(Path, 'read_bytes', tracked_read):
             with core_package_manifest.open_modules(path) as modules:
                 next(modules)
-                self.assertEqual(['packages.json', 'first.json'], reads)
+                self.assertEqual(['packages.json', 'first.cbd'], reads)
                 next(modules)
-                self.assertEqual(['packages.json', 'first.json', 'second.json'], reads)
+                self.assertEqual(['packages.json', 'first.cbd', 'second.cbd'], reads)
                 self.assertEqual([], list(modules))
 
     def test_stream_identity_hashes_exact_manifest_bytes_and_does_not_claim_completion(self):
@@ -1052,12 +991,10 @@ class PackageManifestTest(unittest.TestCase):
                     self.assertTrue(opened[0][1].closed)
 
     def test_late_invalid_module_closes_stream_and_never_completes(self):
-        for bad, message in ((b'{"schema":1,"schema":1}', 'Duplicate JSON key'),
-                             (b'{"value":NaN}', 'Invalid JSON constant'),
-                             (b'{"value":Infinity}', 'Invalid JSON constant'),
-                             (b'{"value":-Infinity}', 'Invalid JSON constant'),
-                             (b'{}', 'unit/module/boundary mismatch'),
-                             (b'{"value":', 'Expecting value')):
+        for bad, message in ((b'{"schema":1,"schema":1}', 'Core input must be CBD'),
+                             (b'{"value":NaN}', 'Core input must be CBD'),
+                             (b'PK\x03\x04broken', 'CBD inspection failed'),
+                             (b'{}', 'Core input must be CBD')):
             with self.subTest(bad=bad):
                 path = self.two_module_bundle(bad)
                 opened = []
@@ -1122,11 +1059,11 @@ class PackageManifestTest(unittest.TestCase):
 
     def test_stream_archive_diagnostic_mode_keeps_execution_and_proof_boundaries(self):
         unit = self.unit('first')
-        source = self.root / 'first.json'
-        module = json.loads(source.read_text())
+        source = self.root / 'first.cbd'
+        module = read_core(source)
         module.update(schema=2, foreign=dict(schema=1, execution='not-linked', files=[],
             stubs=dict(header='', source='original CAPI stub', initializers=[], finalizers=[])))
-        source.write_text(json.dumps(module))
+        write_core(source, module)
         unit['modules'][0]['sha256'] = hashlib.sha256(source.read_bytes()).hexdigest()
         path = self.bundled(unit)
         with self.assertRaisesRegex(ValueError, 'Unsupported foreign execution'):
@@ -1139,12 +1076,12 @@ class PackageManifestTest(unittest.TestCase):
 
         module = PackageNativeVariantsTest().module(['WordRep'])
         module['boundary'] = self.boundary
-        source = self.root / 'variants.json'
+        source = self.root / 'variants.cbd'
         for corrupt in (False, True):
             if corrupt:
                 module['packageNativeLink']['bitcodeHex'] = '4342'
             unit = self.unit('variants', 'Variants')
-            source.write_text(json.dumps(module))
+            write_core(source, module)
             unit['modules'][0]['sha256'] = hashlib.sha256(source.read_bytes()).hexdigest()
             path = self.bundled(unit)
             for diagnostic in (False, True):
@@ -1164,27 +1101,27 @@ class PackageManifestTest(unittest.TestCase):
 
     def test_auditor_combines_verified_package_with_pre_tidy_consumer_without_overlay(self):
         unit = self.unit('first')
-        original = self.root / 'first.json'
-        source = json.loads(original.read_text())
+        original = self.root / 'first.cbd'
+        source = read_core(original)
         source['bindings'] = [dict(id='first:Shared.value', name='value', lifted=True,
-                                   arity=0, expr=['lit', 'int', '7'])]
-        original.write_text(json.dumps(source))
+                                   arity=0, expr=['lit', 'int', '7', dict(rep=INTEGER)])]
+        write_core(original, source)
         unit['modules'][0]['sha256'] = hashlib.sha256(original.read_bytes()).hexdigest()
         package = self.bundled(unit)
-        consumer = self.root / 'consumer.json'
-        consumer.write_text(json.dumps(dict(schema=1, ghc='9.14.1', module='Consumer',
+        consumer = self.root / 'consumer.cbd'
+        write_core(consumer, dict(schema=1, ghc='9.14.1', module='Consumer',
             bindings=[dict(id='root', name='root', arity=0, lifted=True,
-                           expr=['var', 'first:Shared.value'])], constructors=[])))
+                           expr=['var', 'first:Shared.value', dict(rep=INTEGER)])], constructors=[]))
         command = ['python3', '-B', str(Path(__file__).with_name('audit-core.py')),
                    '--package-manifest', str(package), '--entry', 'root', str(consumer)]
         result = subprocess.run(command, capture_output=True, text=True)
         self.assertEqual(0, result.returncode, result.stderr)
         report = json.loads(result.stdout)
         self.assertEqual({'root', 'first:Shared.value'}, {b['id'] for b in report['reachableBindings']})
-        source['bindings'][0]['expr'] = ['lit', 'int', '8']
-        conflict = json.loads(consumer.read_text())
+        source['bindings'][0]['expr'] = ['lit', 'int', '8', dict(rep=INTEGER)]
+        conflict = read_core(consumer)
         conflict['bindings'].append(source['bindings'][0])
-        consumer.write_text(json.dumps(conflict))
+        write_core(consumer, conflict)
         duplicate = subprocess.run(command, capture_output=True, text=True)
         self.assertNotEqual(0, duplicate.returncode, 'A loose consumer must not replace package originals')
         self.assertIn('duplicate-binding', {issue['code'] for issue in json.loads(duplicate.stdout)['issues']})
@@ -1247,15 +1184,15 @@ class PackageManifestTest(unittest.TestCase):
         path = self.manifest([unit])
         self.assertEqual(1, len(core_package_manifest.load(path)))
         with self.subTest('hash'):
-            (self.root / 'first.json').write_text('{}')
+            (self.root / 'first.cbd').write_text('{}')
             with self.assertRaisesRegex(ValueError, 'hash mismatch'):
                 core_package_manifest.load(path)
         unit = self.unit('first')
         with self.subTest('unit'):
-            source_path = self.root / 'first.json'
-            source = json.loads(source_path.read_text())
+            source_path = self.root / 'first.cbd'
+            source = read_core(source_path)
             source['unit'] = 'spoofed'
-            source_path.write_text(json.dumps(source))
+            write_core(source_path, source)
             unit['modules'][0]['sha256'] = hashlib.sha256(source_path.read_bytes()).hexdigest()
             path = self.manifest([unit])
             with self.assertRaisesRegex(ValueError, 'unit/module/boundary mismatch'):
@@ -1268,10 +1205,11 @@ class PackageManifestTest(unittest.TestCase):
                 core_package_manifest.load(path)
         unit = self.unit('first')
         with self.subTest('foreign binding'):
-            source_path = self.root / 'first.json'
-            source = json.loads(source_path.read_text())
-            source['bindings'] = [dict(id='second:Shared.spoofed')]
-            source_path.write_text(json.dumps(source))
+            source_path = self.root / 'first.cbd'
+            source = read_core(source_path)
+            source['bindings'] = [dict(id='second:Shared.spoofed', arity=0,
+                                       expr=['lit', 'int', '0', dict(rep=INTEGER)])]
+            write_core(source_path, source)
             unit['modules'][0]['sha256'] = hashlib.sha256(source_path.read_bytes()).hexdigest()
             with self.assertRaisesRegex(ValueError, 'foreign binding owner'):
                 core_package_manifest.load(self.manifest([unit]))
@@ -1283,24 +1221,24 @@ class PackageManifestTest(unittest.TestCase):
 
     def test_module_path_cannot_escape_manifest_directory(self):
         unit = self.unit('first')
-        unit['modules'][0]['path'] = '../first.json'
+        unit['modules'][0]['path'] = '../first.cbd'
         with self.assertRaisesRegex(ValueError, 'stay inside'):
             core_package_manifest.load(self.manifest([unit]))
 
     def test_bundle_modules_are_read_directly_and_audited_by_exact_unit(self):
         unit = self.unit('first')
-        source = self.root / 'first.json'
-        document = json.loads(source.read_text())
+        source = self.root / 'first.cbd'
+        document = read_core(source)
         document['bindings'] = [dict(id='first:Shared.entry', name='entry', lifted=True,
-                                     arity=0, expr=['lit', 'int', '42'])]
-        source.write_text(json.dumps(document))
+                                     arity=0, expr=['lit', 'int', '42', dict(rep=INTEGER)])]
+        write_core(source, document)
         unit['modules'][0]['sha256'] = hashlib.sha256(source.read_bytes()).hexdigest()
         path = self.bundled(unit)
         source.unlink()  # A loose-file fallback would fail here.
         loaded = core_package_manifest.load(path)
         self.assertEqual(['first:Shared.entry'], [binding['id'] for _, module in loaded
                           for binding in module['bindings']])
-        self.assertIn('bundle.zip!/core/Shared.json', loaded[0][0])
+        self.assertIn('bundle.zip!/core/Shared.cbd', loaded[0][0])
         command = ['python3', str(Path(__file__).with_name('audit-core.py')),
                    '--package-manifest', str(path), '--entry', 'first:Shared.entry']
         result = subprocess.run(command, text=True, capture_output=True, check=True)
@@ -1331,13 +1269,13 @@ class PackageManifestTest(unittest.TestCase):
         unit = self.unit('first')
         with self.assertRaisesRegex(ValueError, 'missing, or extra ZIP entry'):
             core_package_manifest.load(self.bundled(unit, members={
-                'core/Shared.json': (self.root / 'first.json').read_bytes(),
+                'core/Shared.cbd': (self.root / 'first.cbd').read_bytes(),
                 '../escape': b'no extraction'}))
 
         unit = self.unit('first')
         inner = dict(format='thc-core-bundle', schema=1, unit='wrong',
                      buildKey='a' * 64, exportKey='b' * 64, modules=[dict(unit['modules'][0])])
-        inner['modules'][0]['path'] = 'core/Shared.json'
+        inner['modules'][0]['path'] = 'core/Shared.cbd'
         with self.assertRaisesRegex(ValueError, 'bundle manifest disagrees'):
             core_package_manifest.load(self.bundled(unit, inner=inner))
 
@@ -1359,11 +1297,11 @@ class PackageManifestTest(unittest.TestCase):
         with warnings.catch_warnings():
             warnings.simplefilter('ignore', UserWarning)
             with ZipFile(bundle, 'a') as archive:
-                archive.writestr('core/Shared.json', b'duplicate')
+                archive.writestr('core/Shared.cbd', b'duplicate')
         unit['bundle']['sha256'] = hashlib.sha256(bundle.read_bytes()).hexdigest()
         with self.assertRaisesRegex(ValueError, 'duplicate, unsafe'):
             core_package_manifest.load(self.manifest([unit]))
-        for unsafe in ('../Shared.json', '/absolute.json', 'core/../Shared.json', 'core\\Shared.json'):
+        for unsafe in ('../Shared.cbd', '/absolute.cbd', 'core/../Shared.cbd', 'core\\Shared.cbd'):
             with self.subTest(unsafe=unsafe):
                 unit = self.unit('first')
                 path = self.bundled(unit)
@@ -1381,25 +1319,25 @@ class PackageManifestTest(unittest.TestCase):
             core_package_manifest.load(self.manifest([unit]))
 
         unit = self.unit('first')
-        source = self.root / 'first.json'
-        document = json.loads(source.read_text())
+        source = self.root / 'first.cbd'
+        document = read_core(source)
         document['unit'] = 'another-unit'
-        source.write_text(json.dumps(document))
+        write_core(source, document)
         unit['modules'][0]['sha256'] = hashlib.sha256(source.read_bytes()).hexdigest()
         with self.assertRaisesRegex(ValueError, 'unit/module/boundary mismatch'):
             core_package_manifest.load(self.bundled(unit))
 
     def test_archive_only_foreign_core_reports_execution_gap_not_identity_mismatch(self):
         unit = self.unit('first')
-        source = self.root / 'first.json'
-        module = json.loads(source.read_text())
+        source = self.root / 'first.cbd'
+        module = read_core(source)
         module['schema'] = 2
         module['foreign'] = dict(schema=1, execution='not-linked',
                                  stubs=dict(header='', source='foreign stub', initializers=[], finalizers=[]),
                                  files=[])
         module['bindings'] = [dict(id='first:Shared.entry', name='entry', lifted=True,
-                                   arity=0, expr=['lit', 'int', '7'])]
-        source.write_text(json.dumps(module))
+                                   arity=0, expr=['lit', 'int', '7', dict(rep=INTEGER)])]
+        write_core(source, module)
         unit['modules'][0]['sha256'] = hashlib.sha256(source.read_bytes()).hexdigest()
         with self.assertRaisesRegex(ValueError, 'Unsupported foreign execution for first:Shared.*typed foreign registration.*callback'):
             core_package_manifest.load(self.bundled(unit))
@@ -1414,7 +1352,7 @@ class PackageManifestTest(unittest.TestCase):
 
         module['unit'] = 'wrong'
         unit = self.unit('first')
-        source.write_text(json.dumps(module))
+        write_core(source, module)
         unit['modules'][0]['sha256'] = hashlib.sha256(source.read_bytes()).hexdigest()
         with self.assertRaisesRegex(ValueError, 'unit/module/boundary mismatch'):
             core_package_manifest.load(self.bundled(unit))
@@ -1422,7 +1360,7 @@ class PackageManifestTest(unittest.TestCase):
         module['unit'] = 'first'
         module['schema'] = 1  # Renumbering must not silently discard registration obligations.
         unit = self.unit('first')
-        source.write_text(json.dumps(module))
+        write_core(source, module)
         unit['modules'][0]['sha256'] = hashlib.sha256(source.read_bytes()).hexdigest()
         with self.assertRaisesRegex(ValueError, 'unsupported Core module schema/foreign metadata'):
             core_package_manifest.load(self.bundled(unit))
@@ -1430,15 +1368,15 @@ class PackageManifestTest(unittest.TestCase):
     def test_audit_only_foreign_bundle_never_accepts_and_still_checks_reachable_core(self):
         def archive(expression, foreign=None):
             unit = self.unit('first')
-            source = self.root / 'first.json'
-            module = json.loads(source.read_text())
+            source = self.root / 'first.cbd'
+            module = read_core(source)
             module['schema'] = 2
             module['foreign'] = foreign if foreign is not None else dict(
                 schema=1, execution='not-linked',
                 stubs=dict(header='', source='foreign stub', initializers=[], finalizers=[]), files=[])
             module['bindings'] = [dict(id='first:Shared.entry', name='entry', lifted=True,
                                        arity=0, expr=expression)]
-            source.write_text(json.dumps(module))
+            write_core(source, module)
             unit['modules'][0]['sha256'] = hashlib.sha256(source.read_bytes()).hexdigest()
             return self.bundled(unit)
 
@@ -1450,7 +1388,7 @@ class PackageManifestTest(unittest.TestCase):
             self.assertEqual(status, result.returncode, result.stderr)
             return json.loads(output.read_text())
 
-        safe = archive(['lit', 'int', '42'])
+        safe = archive(['lit', 'int', '42', dict(rep=INTEGER)])
         with self.assertRaisesRegex(ValueError, 'Unsupported foreign execution'):
             core_package_manifest.load(safe)  # The normal loader remains strict.
         report = audit(safe)
@@ -1461,17 +1399,18 @@ class PackageManifestTest(unittest.TestCase):
 
         archived_unit = json.loads(safe.read_text())['units'][0]
         other = self.unit('second')
-        other_source = self.root / 'second.json'
-        document = json.loads(other_source.read_text())
+        other_source = self.root / 'second.cbd'
+        document = read_core(other_source)
         document['bindings'] = [dict(id='second:Shared.main', name='main', lifted=True,
-                                     arity=0, expr=['lit', 'int', '7'])]
-        other_source.write_text(json.dumps(document))
+                                     arity=0, expr=['lit', 'int', '7', dict(rep=INTEGER)])]
+        write_core(other_source, document)
         other['modules'][0]['sha256'] = hashlib.sha256(other_source.read_bytes()).hexdigest()
         unused = audit(self.manifest([archived_unit, other]), 'second:Shared.main', status=0)
         self.assertTrue(unused['accepted'], unused['issues'])
         self.assertEqual(['second:Shared.main'], [item['id'] for item in unused['reachableBindings']])
 
-        unsupported = archive(['app', ['prim', 'unsupported#'], [['lit', 'int', '1']], [False]])
+        unsupported = archive(['app', ['prim', 'unsupported#'],
+            [['lit', 'int', '1', dict(rep=INTEGER)]], [False], False, False, dict(rep=INTEGER)])
         report = audit(unsupported)
         self.assertFalse(report['accepted'])
         self.assertLessEqual({'module-format', 'unsupported-primitive'},
@@ -1481,7 +1420,7 @@ class PackageManifestTest(unittest.TestCase):
         malformed = dict(schema=1, execution='not-linked',
                          stubs=dict(header='', source='', initializers=[], finalizers=[]), files=[])
         with self.assertRaisesRegex(ValueError, 'malformed foreign archive'):
-            core_package_manifest.load_for_audit(archive(['lit', 'int', '42'], malformed))
+            core_package_manifest.load_for_audit(archive(['lit', 'int', '42', dict(rep=INTEGER)], malformed))
 
         for bad in (
                 dict(schema=1, execution='not-linked',
@@ -1496,9 +1435,9 @@ class PackageManifestTest(unittest.TestCase):
                          isInitializer=False, unit='first', module='Shared', name='init')],
                          finalizers=[]), files=[])):
             with self.subTest(foreign=bad), self.assertRaises(ValueError):
-                core_package_manifest.load_for_audit(archive(['lit', 'int', '42'], bad))
+                core_package_manifest.load_for_audit(archive(['lit', 'int', '42', dict(rep=INTEGER)], bad))
 
-        valid = archive(['lit', 'int', '42'])
+        valid = archive(['lit', 'int', '42', dict(rep=INTEGER)])
         unit = json.loads(valid.read_text())['units'][0]
         unit['bundle']['sha256'] = '0' * 64
         with self.assertRaisesRegex(ValueError, 'bundle hash mismatch'):
@@ -1506,11 +1445,11 @@ class PackageManifestTest(unittest.TestCase):
 
     def test_audit_keeps_strict_missing_global_closure_for_bundle(self):
         unit = self.unit('first')
-        source = self.root / 'first.json'
-        document = json.loads(source.read_text())
+        source = self.root / 'first.cbd'
+        document = read_core(source)
         document['bindings'] = [dict(id='first:Shared.entry', name='entry', lifted=True,
                                      arity=0, expr=['var', 'second:Other.absent'])]
-        source.write_text(json.dumps(document))
+        write_core(source, document)
         unit['modules'][0]['sha256'] = hashlib.sha256(source.read_bytes()).hexdigest()
         path = self.bundled(unit)
         command = ['python3', str(Path(__file__).with_name('audit-core.py')),

@@ -7,10 +7,14 @@
 import hashlib
 import json
 from contextlib import closing
+from functools import lru_cache
+import os
 from pathlib import Path
 import platform
 import re
 import stat
+import subprocess
+from tempfile import TemporaryDirectory
 import zlib
 from zipfile import BadZipFile, ZipFile
 
@@ -18,11 +22,43 @@ from zipfile import BadZipFile, ZipFile
 FORMAT = 'thc-core-packages'
 BOUNDARY = 'optimized-Core-after-Tidy-before-CorePrep'
 SHA256 = re.compile(r'[0-9a-f]{64}\Z')
-UNIT_METADATA_KEYS = frozenset(('schema', 'ghc', 'unit', 'module', 'boundary', 'providedModules',
-    'constructors', 'foreign', 'foreignLink', 'staticForeignImportStubs', 'staticForeignImports',
-    'staticForeignExports', 'staticForeignExportRegistration', 'packageScalarLink', 'packageNativeLink',
-    'packageNativeArchive', 'foreignExceptionBridge', 'foreignExceptionBridgeUnit'))
-SOURCE_METADATA_KEYS = frozenset(('sourceFiles', 'sourceSpans'))
+
+
+@lru_cache(maxsize=1)
+def _compact_executable():
+    root = Path(__file__).resolve().parent.parent
+    prepared = root / 'build/thc-compact.path'
+    executable = os.environ.get('THC_COMPACT')
+    if not executable:
+        if prepared.is_file():
+            executable = prepared.read_text(encoding='utf-8').strip()
+        else:
+            result = subprocess.run([os.environ.get('CABAL', 'cabal'), 'list-bin', 'exe:thc-compact', '--offline'],
+                                    cwd=root, capture_output=True, text=True, encoding='utf-8', timeout=60)
+            if result.returncode:
+                raise ValueError('Cannot locate CBD inspector: ' + result.stderr.strip())
+            executable = result.stdout.strip()
+    executable = Path(executable).resolve()
+    if not executable.is_file():
+        raise ValueError('Build exe:thc-compact first or set THC_COMPACT to its executable: ' + str(executable))
+    return str(executable)
+
+
+def inspect_cbd(data):
+    """Explicit offline inspection via the sole CBD decoder; JSON is output only."""
+    if not data.startswith(b'PK\x03\x04'):
+        raise ValueError('Core input must be CBD; JSON Core input is not supported')
+    with TemporaryDirectory(prefix='thc-cbd-audit-') as temporary:
+        source, output = Path(temporary) / 'module.cbd', Path(temporary) / 'inspection.json'
+        source.write_bytes(data)
+        try:
+            result = subprocess.run([_compact_executable(), 'decode', str(source), str(output)],
+                                    capture_output=True, text=True, encoding='utf-8', timeout=60)
+        except subprocess.TimeoutExpired as error:
+            raise ValueError('CBD inspection timed out') from error
+        if result.returncode:
+            raise ValueError('CBD inspection failed: ' + result.stderr.strip())
+        return strict_json(output.read_text(encoding='utf-8'))
 
 
 def time_clock_symbols(unit):
@@ -1319,129 +1355,12 @@ def _iter_loose_modules(path, root, records):
             raise ValueError(f'{path}: module path escapes manifest root: {relative!r}')
         return artifact.read_bytes()
     for item in records:
-        artifact = (root / item['path']).resolve()
-        yield item, str(artifact), _module_bytes(path, item, read)
-
-
-def _unit_reference(path, unit, key):
-    ref = unit.get(key)
-    fields = {'path', 'sha256'}
-    if isinstance(ref, dict) and key == 'symbols' and 'format' in ref:
-        if ref['format'] != 'md5-utf8-u64le-v1':
-            raise ValueError(f'{path}: invalid unit symbols format')
-        fields.add('format')
-    if (not isinstance(ref, dict) or set(ref) != fields or
-            not isinstance(ref['path'], str) or not Path(ref['path']).is_absolute() or
-            not isinstance(ref['sha256'], str) or not SHA256.fullmatch(ref['sha256'])):
-        raise ValueError(f'{path}: invalid unit {key} reference')
-    return ref
-
-
-def _verified_stream(path, stream, ref):
-    digest = hashlib.sha256()
-    for block in iter(lambda: stream.read(1024 * 1024), b''):
-        digest.update(block)
-    if digest.hexdigest() != ref['sha256']:
-        raise ValueError(f'{path}: unit artifact hash mismatch: {ref["path"]}')
-    stream.seek(0)
-
-
-def _iter_unit_modules(path, unit, records, audit_archives):
-    """Explicit audit only: verify the pair and all selected original modules.
-
-    Unlike runtime demand loading, this reader exhaustively checks the symbol
-    inventory. It never uses the optional structural index or rewrites Core.
-    """
-    source, symbols = (_unit_reference(path, unit, key) for key in ('json', 'symbols'))
-    fixed = symbols.get('format') == 'md5-utf8-u64le-v1'
-    expected_rows = {}
-    with open(source['path'], 'rb') as stream, open(symbols['path'], 'rb') as directory:
-        _verified_stream(path, stream, source)
-        _verified_stream(path, directory, symbols)
-        size = stream.seek(0, 2)
-        previous_end = 0
-        for item in records:
-            start, end, first, last = (item.get(key) for key in
-                                     ('start', 'end', 'bindingsStart', 'bindingsEnd'))
-            if (any(type(value) is not int for value in (start, end, first, last)) or
-                    not previous_end <= start <= first < last <= end <= size):
-                raise ValueError(f'{path}: invalid unit module byte spans')
-            previous_end = end
-            stream.seek(start)
-            data = stream.read(end - start)
-            a, b = first - start, last - start
-            if data[a:a+1] != b'[' or data[b-1:b] != b']':
-                raise ValueError(f'{path}: unit bindings span does not delimit an array')
-            metadata = strict_json((data[:a] + b'[]' + data[b:]).decode('utf-8'))
-            if not isinstance(metadata, dict) or metadata.get('bindings') != []:
-                raise ValueError(f'{path}: unit bindings span is not the module bindings')
-            original = strict_json(data.decode('utf-8'))
-            if _bindings_span(data.decode('utf-8')) != (a, b):
-                raise ValueError(f'{path}: unit bindings span selects a different field')
-            for begin_key, end_key, keys, required in (
-                    ('metadataStart', 'metadataEnd', UNIT_METADATA_KEYS, True),
-                    ('sourceMetadataStart', 'sourceMetadataEnd', SOURCE_METADATA_KEYS,
-                     bool(SOURCE_METADATA_KEYS.intersection(original)))):
-                begin, finish = item.get(begin_key), item.get(end_key)
-                if not required and begin is None and finish is None:
-                    continue
-                if (type(begin) is not int or type(finish) is not int or
-                        not previous_end < begin < finish <= size):
-                    raise ValueError(f'{path}: invalid unit metadata span')
-                stream.seek(begin)
-                selected = strict_json(stream.read(finish - begin).decode('utf-8'))
-                if not _same_json_value(selected, {key: value for key, value in original.items() if key in keys}):
-                    raise ValueError(f'{path}: unit metadata projection differs from original Core')
-                previous_end = finish
-            del selected
-            text = data[a:b].decode('utf-8')
-            at, offset = 1, first + 1
-            while True:
-                after_space = _skip_json_space(text, at)
-                offset += after_space - at  # JSON whitespace is one-byte ASCII.
-                at = after_space
-                if text[at] == ']':
-                    break
-                binding, end_at = json_raw_decode(text, at)
-                key = binding.get('id') if isinstance(binding, dict) else None
-                if not isinstance(key, str) or not key or not fixed and ('\n' in key or '\r' in key):
-                    raise ValueError(f'{path}: invalid unit symbol ID')
-                encoded_key = key.encode('utf-8')
-                if fixed:
-                    encoded_key = hashlib.md5(encoded_key).digest()
-                if encoded_key in expected_rows:
-                    raise ValueError(f'{path}: duplicate unit symbol ID')
-                expected_rows[encoded_key] = offset
-                offset += len(text[at:end_at].encode('utf-8'))
-                at = end_at
-                after_space = _skip_json_space(text, at)
-                offset += after_space - at
-                at = after_space
-                if text[at] == ',':
-                    offset += 1; at += 1
-                elif text[at] != ']':
-                    raise ValueError(f'{path}: invalid unit binding separator')
-            module = _validated_module(path, unit['id'], item, data, audit_archives, module=original)
-            del original, data, text
-            yield item, source['path'] + '@' + str(start), module
-            del module
-        previous_key = None
-        rows = iter(lambda: directory.read(24), b'') if fixed else directory
-        for row in rows:
-            if fixed:
-                if len(row) != 24:
-                    raise ValueError(f'{path}: truncated unit symbol directory record')
-                key, actual_offset = row[:16], int.from_bytes(row[16:], 'little')
-            else:
-                key, delimiter, _ = row.rpartition(b' ')
-            offset = expected_rows.pop(key, None)
-            valid_row = (actual_offset == offset if fixed else
-                         delimiter and row == key + b' ' + str(offset).encode('ascii') + b'\n')
-            if (offset is None or previous_key is not None and key <= previous_key or not valid_row):
-                raise ValueError(f'{path}: unit symbol directory differs from original bindings')
-            previous_key = key
-        if expected_rows:
-            raise ValueError(f'{path}: unit symbol directory is missing original bindings')
+        if 'compact' in item:
+            artifact = Path(item['compact']['path']).resolve()
+            yield item, str(artifact), artifact.read_bytes()
+        else:
+            artifact = (root / item['path']).resolve()
+            yield item, str(artifact), _module_bytes(path, item, read)
 
 
 def _skip_json_space(text, at):
@@ -1469,30 +1388,6 @@ def _same_json_value(left, right):
         elif left != right:
             return False
     return True
-
-
-def _bindings_span(text):
-    """Locate the actual top-level field for an explicitly verified module."""
-    at = _skip_json_space(text, 0)
-    if text[at] != '{':
-        raise ValueError('Core module must be an object')
-    at += 1
-    while True:
-        at = _skip_json_space(text, at)
-        if text[at] == '}':
-            raise ValueError('Core module has no bindings')
-        key, at = json_raw_decode(text, at)
-        at = _skip_json_space(text, at)
-        if text[at] != ':':
-            raise ValueError('Invalid Core object delimiter')
-        at += 1
-        at = _skip_json_space(text, at)
-        _, end = json_raw_decode(text, at)
-        if key == 'bindings':
-            return len(text[:at].encode('utf-8')), len(text[:end].encode('utf-8'))
-        at = _skip_json_space(text, end)
-        if text[at] == ',':
-            at += 1
 
 
 def _contains_delimited_control(value):
@@ -1553,9 +1448,8 @@ def _iter_load(path, audit_archives, manifest_read=None):
                 not isinstance(modules, list)):
             raise ValueError(f'{path}: invalid/duplicate unit or dependencies: {unit_id!r}')
         units.add(unit_id)
-        direct = 'json' in unit or 'symbols' in unit
-        if direct and ('json' not in unit or 'symbols' not in unit or 'bundle' in unit):
-            raise ValueError(f'{path}: unit requires both JSON/symbols and no bundle')
+        if 'json' in unit or 'symbols' in unit:
+            raise ValueError(f'{path}: JSON Core unit artifacts are not supported; publish CBD modules')
         records = []
         for item in modules:
             if not isinstance(item, dict):
@@ -1568,9 +1462,21 @@ def _iter_load(path, audit_archives, manifest_read=None):
                     not isinstance(expected, str) or not SHA256.fullmatch(expected)):
                 raise ValueError(f'{path}: invalid/duplicate post-Tidy module: {key!r}')
             module_keys.add(key)
-            if 'index' in item:
-                raise ValueError(f'{path}: JSON .idx sidecars are no longer supported; regenerate package artifacts')
-            if 'bundle' in unit or direct:
+            if set(item).intersection(('index', 'start', 'end', 'bindingsStart', 'bindingsEnd',
+                                      'metadataStart', 'metadataEnd', 'sourceMetadataStart', 'sourceMetadataEnd')):
+                raise ValueError(f'{path}: JSON Core indexes/extents are not supported; publish CBD modules')
+            if 'compact' in item:
+                compact = item['compact']
+                if ('bundle' in unit or not isinstance(compact, dict) or
+                        set(compact) != {'path', 'sha256', 'format'} or compact['format'] != 'thc-cbd-v1' or
+                        not isinstance(compact['path'], str) or not Path(compact['path']).is_absolute() or
+                        compact['sha256'] != expected):
+                    raise ValueError(f'{path}: invalid CBD artifact reference: {key!r}')
+                artifact = Path(compact['path']).resolve()
+                if artifact in loose_paths:
+                    raise ValueError(f'{path}: duplicate CBD path: {artifact}')
+                loose_paths.add(artifact)
+            elif 'bundle' in unit:
                 if not zip_member(relative) or relative == 'manifest.json':
                     raise ValueError(f'{path}: unsafe ZIP member path: {relative!r}')
             else:
@@ -1582,16 +1488,15 @@ def _iter_load(path, audit_archives, manifest_read=None):
                     if not artifact.is_relative_to(root):
                         raise ValueError(f'{path}: module path escapes manifest root: {member!r}')
                     if artifact in loose_paths:
-                        raise ValueError(f'{path}: duplicate JSON path: {member!r}')
+                        raise ValueError(f'{path}: duplicate CBD path: {member!r}')
                     loose_paths.add(artifact)
             records.append(item)
-        artifacts = (_iter_unit_modules(path, unit, records, audit_archives) if direct else
-                     _iter_bundle_modules(path, unit, records) if 'bundle' in unit else
+        artifacts = (_iter_bundle_modules(path, unit, records) if 'bundle' in unit else
                      _iter_loose_modules(path, root, records))
         with closing(artifacts):
             for item, artifact, data in artifacts:
-                module = data if direct else _validated_module(path, unit_id, item, data, audit_archives)
-                if direct:
+                module = _validated_module(path, unit_id, item, data, audit_archives)
+                if 'compact' in item:
                     _check_unit_summaries(path, item, module)
                 del data
                 found = True
@@ -1602,13 +1507,12 @@ def _iter_load(path, audit_archives, manifest_read=None):
         raise ValueError(f'{path}: no Core modules')
 
 
-def _validated_module(path, unit_id, item, data, audit_archives, *, module=None):
+def _validated_module(path, unit_id, item, data, audit_archives):
     name, boundary = item['name'], item['boundary']
     relative, expected = item['path'], item['sha256']
     if hashlib.sha256(data).hexdigest() != expected:
         raise ValueError(f'{path}: content hash mismatch: {relative!r}')
-    if module is None:
-        module = strict_json(data.decode('utf-8'))
+    module = inspect_cbd(data)
     if (not isinstance(module, dict) or module.get('unit') != unit_id or
             module.get('module') != name or module.get('boundary') != boundary):
         raise ValueError(f'{path}: unit/module/boundary mismatch: {relative!r}')

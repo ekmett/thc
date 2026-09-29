@@ -183,12 +183,13 @@ class RubbishLiteralTest {
         return value;
     }
     private void auditRejected(Map<String, Object> module, Path directory, String label) throws Exception {
+        var input = CoreCbdTestSupport.writeModel(directory.resolve(label + ".cbd"), module);
         var output = directory.resolve(label + ".audit.json");
-        var process = new ProcessBuilder("python3", root.resolve("bin/audit-core.py").toString(), "--entry", entry(module, "scalarIntRep"), "--output", output.toString(), "-")
+        var process = new ProcessBuilder("python3", root.resolve("bin/audit-core.py").toString(), "--entry", entry(module, "scalarIntRep"), "--output", output.toString(), input.toString())
             .directory(root.toFile()).redirectErrorStream(true).start();
-        try (var input = process.getOutputStream()) { input.write(Json.stringify(module).getBytes(java.nio.charset.StandardCharsets.UTF_8)); }
+        process.getOutputStream().close();
         var text = new String(process.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
-        assertTrue(process.waitFor(30, TimeUnit.SECONDS), text); assertNotEquals(0, process.exitValue(), text);
+        assertTrue(process.waitFor(30, TimeUnit.SECONDS), text); assertEquals(1, process.exitValue(), text);
         var result = object(Json.parse(Files.readString(output))); assertEquals(false, result.get("accepted"));
         assertFalse(expression(result.get("issues")).isEmpty());
         assertFalse(objects(result.get("issues")).stream().anyMatch(issue -> "entry-resolution".equals(issue.get("code"))));
@@ -212,7 +213,19 @@ changes.put("legacy-payload", value -> { var result = new ArrayList<>(value); re
             result.set(3, with(metadata, "rep", with(object(metadata.get("rep")), "evaluated", false))); return result;
         });
         for (var change : changes.entrySet()) {
-            var bad = object(changeLiterals(original, change.getValue())); auditRejected(bad, directory, change.getKey());
+            var bad = object(changeLiterals(original, change.getValue()));
+            var encodingError = switch (change.getKey()) {
+                case "missing" -> "Core expression lacks metadata";
+                case "legacy-payload" -> "Unsupported Core literal: \"rubbish\"";
+                default -> null;
+            };
+            if (encodingError == null) auditRejected(bad, directory, change.getKey());
+            else {
+                // These malformed models have no CBD 1.2 encoding to submit to the auditor.
+                var failure = assertThrows(java.io.IOException.class, () ->
+                    CoreCbdTestSupport.writeModel(directory.resolve(change.getKey() + ".cbd"), bad));
+                assertTrue(failure.getMessage().contains(encodingError), failure.getMessage());
+            }
             for (var backend : list("ast", "bytecode")) try (var context = context()) { entered(context, language ->
                 assertThrows(RuntimeFault.class, () -> load(language, backend, bad).entryTarget(entry(bad, "scalarIntRep")), backend + "/" + change.getKey())); }
         }
