@@ -1296,6 +1296,7 @@
         "t/fixtures/compiler/THC/Prim/Test.hs",
         "t/fixtures/core/Fixtures.hs",
         "t/fixtures/core/NativeOracle.hs",
+        "t/fixtures/core/NativeTiming.hs",
         "t/fixtures/core/MapWorkload.hs",
         "bin/native-oracle.sh"
       ]
