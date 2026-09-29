@@ -12,7 +12,7 @@ import static thc.CoreBackendTestSupport.*;
 /** Semantic parity at the public backend boundary, including cold compiled paths. */
 class BytecodeBackendTest {
     private final Path project = Path.of(System.getProperty("thc.projectRoot"));
-    private final List<String> modules = list(project.resolve("build/core/THC.Prim.Test.json").toString(), project.resolve("build/core/Fixtures.json").toString());
+    private final List<String> modules = list(project.resolve("build/core/THC.Prim.Test.cbd").toString(), project.resolve("build/core/Fixtures.cbd").toString());
     private record Example(String entry, long input, long expected) {}
     private List<Example> oracle() throws Exception {
         var rows = new ArrayList<Example>(); for (var line : Files.readAllLines(project.resolve("build/native/oracle.tsv"))) if (!line.isBlank()) {
@@ -23,7 +23,7 @@ class BytecodeBackendTest {
     private Map<String, Object> diagnostics(Value fn) { return object(Json.parse(fn.getMember("diagnostics").asString())); }
     private long count(Value fn, String key) { return ((Number) diagnostics(fn).get(key)).longValue(); }
     private Value load(Context context, String entry) {
-        var fn = Main.loadEntry(context, modules, entry, true, "bytecode"); assertEquals("bytecode", diagnostics(fn).get("backend"), "Must execute the requested backend"); return fn;
+        var fn = Main.loadEntry(context, modules, "main:Fixtures." + entry, true, "bytecode"); assertEquals("bytecode", diagnostics(fn).get("backend"), "Must execute the requested backend"); return fn;
     }
     private void compileAndCheck(Value fn, long input, long expected) {
         for (int i = 0; i < 40; i++) assertEquals(expected, fn.execute(input).asLong()); assertTrue(fn.invokeMember("compile").asBoolean());
@@ -175,7 +175,7 @@ class BytecodeBackendTest {
     @Test void backendSelectionAndMutableProgramStateAreIsolatedWithinASharedEngine() {
         try (var engine = Engine.newBuilder().allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false").build();
                 var first = Context.newBuilder("thc").engine(engine).build(); var second = Context.newBuilder("thc").engine(engine).build()) {
-            var ast = Main.loadEntry(first, modules, "shared", true, "ast"); var bytecode = load(first, "shared"); var otherContext = load(second, "shared");
+            var ast = Main.loadEntry(first, modules, "main:Fixtures.shared", true, "ast"); var bytecode = load(first, "shared"); var otherContext = load(second, "shared");
             assertEquals("ast", diagnostics(ast).get("backend")); assertFalse(ast.hasMember("bytecode")); assertTrue(bytecode.hasMember("bytecode")); var instructions = bytecode.getMember("bytecode").asString();
             assertFalse(instructions.isBlank()); assertTrue(instructions.contains("c.EnterRoot"), "Dump must contain generated Core instructions"); assertTrue(instructions.contains("load.argument"), "Dump must include the bytecode argument loads");
             assertEquals(120L, ast.execute(7L).asLong()); assertTrue(count(ast, "thunkEvaluations") > 0); assertEquals(0L, count(bytecode, "thunkEvaluations")); assertEquals(0L, count(otherContext, "thunkEvaluations"));

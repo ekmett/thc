@@ -252,14 +252,14 @@ class WindowsDistributionTest {
         var core = Files.createDirectories(temporary.resolve("Core inputs with spaces"));
         var modules = new ArrayList<String>();
         for (var module : List.of("THC.Prim.Test", "Fixtures"))
-            modules.add(Files.copy(root.resolve("build/core/" + module + ".json"), core.resolve(module + ".json")).toAbsolutePath().toString());
+            modules.add(Files.copy(root.resolve("build/core/" + module + ".cbd"), core.resolve(module + ".cbd")).toAbsolutePath().toString());
         var evidence = Files.createDirectories(root.resolve("build/windows-launcher/" + UUID.randomUUID()));
         var oracle = Files.readAllLines(root.resolve("build/native/oracle.tsv")).stream().map(line -> line.split("\t", -1)).toList();
         for (var backend : List.of("ast", "bytecode")) {
             var output = evidence.resolve(backend + ".stdout");
             var errors = evidence.resolve(backend + ".stderr");
             var command = List.of("cmd.exe", "/d", "/c", "call", destination.resolve("bin/thc.bat").toAbsolutePath().toString(),
-                String.join(",", modules), "sumLoop", "10");
+                String.join(",", modules), "main:Fixtures.sumLoop", "10");
             var builder = new ProcessBuilder(command).directory(temporary.toFile()).redirectOutput(output.toFile()).redirectError(errors.toFile());
             builder.environment().put("THC_BACKEND", backend);
             builder.environment().put("JAVA_OPTS", "-Dthc.handoffSlabs=" + System.getProperty("thc.handoffSlabs", "false"));

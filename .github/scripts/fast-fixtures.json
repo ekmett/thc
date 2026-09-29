@@ -1288,8 +1288,8 @@
         {"argv": ["bin/native-oracle.sh"], "stdout": "build/native/oracle.tsv"}
       ],
       "outputs": [
-        "build/core/THC.Prim.Test.json",
-        "build/core/Fixtures.json",
+        "build/core/THC.Prim.Test.cbd",
+        "build/core/Fixtures.cbd",
         "build/native/oracle.tsv"
       ],
       "sources": [
