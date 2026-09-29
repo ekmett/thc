@@ -156,6 +156,7 @@ expr value = case value of
     ([String "case",expr scrutinee,identity (Local ordinal),arr alternative alternatives,
       object (meta m ++ p "binder" binder information)])
   Void m -> node "void" m []
+  Unsupported m diagnostic -> node "unsupported" m [str diagnostic]
   where node kind m payload = toJSON (String kind : payload ++ [object (meta m)])
 
 alternative :: Alternative -> Value

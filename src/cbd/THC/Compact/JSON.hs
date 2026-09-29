@@ -286,6 +286,7 @@ expr scope value = do
     [String "lit",kind,payload,m] -> Lit <$> lift (meta m) <*> lift (literal kind payload)
     [String "con",name,arity,m] -> Con <$> lift (meta m) <*> lift (bytes name) <*> lift (parseJSON arity)
     [String "void",m] -> Void <$> lift (meta m)
+    [String "unsupported",diagnostic,m] -> Unsupported <$> lift (meta m) <*> lift (bytes diagnostic)
     [String "lam",parameters,body,m] -> do
       values <- lift (array pure parameters)
       names <- lift (mapM (\v -> object v >>= (.: "id")) values)
