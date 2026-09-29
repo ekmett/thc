@@ -15,36 +15,19 @@ public final class CoreUnitDirectory {
     public record Artifact(Path path, String sha256) {
         public Path getPath() { return path; } public String getSha256() { return sha256; }
     }
-    public record UnitRecord(String id, List<String> depends, Artifact json, Artifact symbols,
-            List<ModuleRecord> modules, Artifact legacyBundle, CoreJsonSymbols.Format symbolsFormat) {
-        public UnitRecord(String id, List<String> depends, Artifact json, Artifact symbols, List<ModuleRecord> modules) {
-            this(id, depends, json, symbols, modules, null, CoreJsonSymbols.Format.TEXT);
-        }
+    public record UnitRecord(String id, List<String> depends, List<ModuleRecord> modules) {
         public String getId() { return id; } public List<String> getDepends() { return depends; }
-        public Artifact getJson() { return json; } public Artifact getSymbols() { return symbols; }
-        public List<ModuleRecord> getModules() { return modules; } public Artifact getLegacyBundle() { return legacyBundle; }
-        public CoreJsonSymbols.Format getSymbolsFormat() { return symbolsFormat; }
+        public List<ModuleRecord> getModules() { return modules; }
     }
-    public sealed interface Storage permits JsonStorage, CompactStorage {}
-    public record JsonStorage(CoreJsonSymbols.ModuleSpan span, CoreJsonSymbols.ValueSpan metadata,
-            CoreJsonSymbols.ValueSpan sourceMetadata) implements Storage {
-        public CoreJsonSymbols.ModuleSpan getSpan() { return span; }
-        public CoreJsonSymbols.ValueSpan getMetadata() { return metadata; }
-        public CoreJsonSymbols.ValueSpan getSourceMetadata() { return sourceMetadata; }
-    }
-    public record CompactStorage(Artifact artifact) implements Storage { public Artifact getArtifact() { return artifact; } }
-    public record ModuleRecord(String unit, String name, String sha256, Storage storage,
+    public record ModuleRecord(String unit, String name, String sha256, Artifact artifact,
             boolean containsDelimitedControl, boolean registrationObligations, boolean mainAlias, boolean packageScalarDeclarations) {
         public String getUnit() { return unit; } public String getName() { return name; } public String getSha256() { return sha256; }
-        public Storage getStorage() { return storage; }
+        public Artifact getArtifact() { return artifact; }
         public boolean getContainsDelimitedControl() { return containsDelimitedControl; }
         public boolean getRegistrationObligations() { return registrationObligations; }
         public boolean getMainAlias() { return mainAlias; }
         public boolean getPackageScalarDeclarations() { return packageScalarDeclarations; }
         public String getPrefix() { return unit + ":" + name + "."; }
-        public CoreJsonSymbols.ModuleSpan getSpan() { return ((JsonStorage) storage).span; }
-        public CoreJsonSymbols.ValueSpan getMetadata() { return ((JsonStorage) storage).metadata; }
-        public CoreJsonSymbols.ValueSpan getSourceMetadata() { return ((JsonStorage) storage).sourceMetadata; }
     }
     private final List<UnitRecord> units;
     private final String foreignExceptionBridgeUnit;
@@ -76,23 +59,22 @@ public final class CoreUnitDirectory {
         return null;
     }
     public Sources open(boolean verifyArtifacts) { return open(verifyArtifacts, true); }
-    public Sources open(boolean verifyArtifacts, boolean sourceNotes) { return open(verifyArtifacts, sourceNotes, ignored -> {}, ignored -> {}); }
-    public Sources open(boolean verifyArtifacts, boolean sourceNotes, Consumer<CoreJsonSymbols.Counters> admitted,
-            Consumer<CoreCompactFile.Counters> compactAdmitted) { return new Sources(this, verifyArtifacts, sourceNotes, admitted, compactAdmitted); }
+    public Sources open(boolean verifyArtifacts, boolean sourceNotes) { return open(verifyArtifacts, sourceNotes, ignored -> {}); }
+    public Sources open(boolean verifyArtifacts, boolean sourceNotes,
+            Consumer<CoreCompactFile.Counters> compactAdmitted) { return new Sources(this, verifyArtifacts, compactAdmitted); }
     public static final class Sources implements AutoCloseable {
         private final CoreUnitDirectory directory;
-        private final boolean verifyArtifacts, sourceNotes;
-        private final Consumer<CoreJsonSymbols.Counters> admitted;
+        private TargetLayout targetLayout;
+        private final boolean verifyArtifacts;
         private final Consumer<CoreCompactFile.Counters> compactAdmitted;
         private boolean closed;
-        private final Map<String,CoreJsonSymbols> readers = new HashMap<>();
         private final Map<ModuleRecord,CoreCompactModule> compactReaders = new HashMap<>();
-        private final Map<ModuleRecord,Map<String,Object>> metadata = new HashMap<>();
+        private final List<CoreCompactFile> consumerReaders = new ArrayList<>();
         private final Set<ModuleRecord> verified = new HashSet<>();
-        public Sources(CoreUnitDirectory directory, boolean verifyArtifacts, boolean sourceNotes,
-                Consumer<CoreJsonSymbols.Counters> admitted, Consumer<CoreCompactFile.Counters> compactAdmitted) {
-            this.directory = directory; this.verifyArtifacts = verifyArtifacts; this.sourceNotes = sourceNotes;
-            this.admitted = admitted; this.compactAdmitted = compactAdmitted;
+        public Sources(CoreUnitDirectory directory, boolean verifyArtifacts, Consumer<CoreCompactFile.Counters> compactAdmitted) {
+            this.directory = directory; this.verifyArtifacts = verifyArtifacts;
+            targetLayout = directory.targetLayout;
+            this.compactAdmitted = compactAdmitted;
         }
         private CoreCompactModule compact(ModuleRecord module) {
             return compactReaders.computeIfAbsent(module, ignored -> {
@@ -101,108 +83,71 @@ public final class CoreUnitDirectory {
                 return reader;
             });
         }
-        private CoreJsonSymbols reader(String unit) {
+        /** Explicit loose inputs retain their readers in this context, just like package modules. */
+        public synchronized Map<String,Object> consumer(Path path, String sha256) {
             check(!closed, "Core unit sources are closed");
-            return readers.computeIfAbsent(unit, ignored -> {
-                var matches = new ArrayList<UnitRecord>();
-                for (var record : directory.units) if (record.id.equals(unit)) matches.add(record);
-                if (matches.size() != 1) throw error("Expected one unit: " + unit);
-                var record = matches.getFirst();
-                if (record.json == null) throw error("Moduleless unit has no JSON bindings");
-                if (record.symbols == null) throw error("Moduleless unit has no symbol directory");
-                var reader = new CoreJsonSymbols(record.json.path, record.symbols.path, verifyArtifacts,
-                        record.json.sha256, record.symbols.sha256, CoreFileMappings.shared, record.symbolsFormat);
-                admitted.accept(reader.getCounters());
-                return reader;
-            });
+            var file = new CoreCompactFile(path, sha256, verifyArtifacts);
+            consumerReaders.add(file);
+            compactAdmitted.accept(file.getCounters());
+            try {
+                var records = new CoreCompactRecords(file, sha256);
+                var result = new LinkedHashMap<>(records.header());
+                if (result.get("targetLayout") != null) {
+                    var candidate = TargetLayout.fromDocument(result.get("targetLayout"));
+                    require(targetLayout == null || targetLayout.equals(candidate), "Conflicting GHC target layouts");
+                    targetLayout = candidate;
+                }
+                var bindings = new ArrayList<Map<String,Object>>();
+                file.visitBindingOffsets(offset -> bindings.add(records.binding(offset)));
+                result.put("bindings", bindings);
+                return result;
+            } catch (Throwable failure) { return rethrow(failure); }
         }
+        public TargetLayout getTargetLayout() { return targetLayout; }
         public synchronized Map<String,Object> metadata(ModuleRecord module) {
             check(!closed, "Core unit sources are closed");
             verifyModule(module);
-            if (module.storage instanceof CompactStorage) return compact(module).metadata();
-            return metadata.computeIfAbsent(module, ignored -> {
-                var reader = reader(module.unit);
-                var required = reader.metadata(module.getMetadata(), true);
-                require(METADATA_FIELDS.containsAll(required.keySet()), "Unexpected Core admission metadata field");
-                Map<String,Object> notes = Map.of();
-                if (sourceNotes && module.getSourceMetadata() != null) {
-                    notes = reader.metadata(module.getSourceMetadata(), false);
-                    require(Set.of("sourceFiles", "sourceSpans").containsAll(notes.keySet()), "Unexpected Core source metadata field");
-                }
-                var result = new LinkedHashMap<>(required);
-                result.putAll(notes); result.put("bindings", List.of());
-                require(Objects.equals(result.get("unit"), module.unit) && Objects.equals(result.get("module"), module.name) &&
-                        Objects.equals(result.get("ghc"), "9.14.1") && Objects.equals(result.get("boundary"), BOUNDARY),
-                        "Core module identity differs from package directory: " + module.getPrefix());
-                return result;
-            });
+            return compact(module).metadata();
         }
         public synchronized Map<String,Object> binding(String id) {
             check(!closed, "Core unit sources are closed");
             var module = directory.owner(id);
             if (module == null) return null;
-            return module.storage instanceof CompactStorage ? compact(module).binding(id) : reader(module.unit).binding(id, module.getSpan());
+            return compact(module).binding(id);
         }
         public synchronized boolean containsSymbol(String id) {
             check(!closed, "Core unit sources are closed");
             var module = directory.owner(id);
             if (module == null) return false;
-            return module.storage instanceof CompactStorage ? compact(module).containsSymbol(id) : reader(module.unit).containsSymbol(id);
+            return compact(module).containsSymbol(id);
         }
         public synchronized void verifyModule(ModuleRecord module) {
             check(!closed, "Core unit sources are closed");
             if (!verifyArtifacts || verified.contains(module)) return;
-            if (module.storage instanceof CompactStorage) { compact(module).verify(); verified.add(module); return; }
-            var reader = reader(module.unit);
-            reader.verifyModule(module.getSpan(), module.sha256, original -> {
-                var selected = new LinkedHashMap<>(original);
-                selected.keySet().retainAll(METADATA_FIELDS);
-                require(selected.equals(reader.metadata(module.getMetadata(), true)), "Core admission metadata differs from original module");
-                var notes = new LinkedHashMap<>(original);
-                notes.keySet().retainAll(Set.of("sourceFiles", "sourceSpans"));
-                require(notes.equals(module.getSourceMetadata() == null ? Map.of() : reader.metadata(module.getSourceMetadata(), false)),
-                        "Core source metadata differs from original module");
-                CoreForeignArtifacts.INSTANCE.validateArchive(original, true);
-                CoreModules.admission(original, null);
-                thc.runtime.CoreForeignExceptionBridge.read(original);
-            });
+            compact(module).verify();
             verified.add(module);
-        }
-        public synchronized List<CoreJsonSymbols.Counters> counters() {
-            var counters = new ArrayList<CoreJsonSymbols.Counters>();
-            for (var reader : readers.values()) counters.add(reader.getCounters());
-            return Collections.unmodifiableList(counters);
         }
         public synchronized List<CoreCompactFile.Counters> compactCounters() {
             var counters = new ArrayList<CoreCompactFile.Counters>();
             for (var reader : compactReaders.values()) counters.add(reader.getCounters());
+            for (var reader : consumerReaders) counters.add(reader.getCounters());
             return Collections.unmodifiableList(counters);
         }
         public synchronized void close() {
             if (closed) return;
-            closed = true; metadata.clear(); verified.clear();
-            try { readers.values().forEach(CoreJsonSymbols::close); }
+            closed = true; verified.clear();
+            try { compactReaders.values().forEach(CoreCompactModule::close); }
             finally {
-                readers.clear();
-                try { compactReaders.values().forEach(CoreCompactModule::close); } finally { compactReaders.clear(); }
+                compactReaders.clear();
+                try { for (var reader : consumerReaders) reader.close(); }
+                catch (Exception failure) { rethrow(failure); }
+                finally { consumerReaders.clear(); }
             }
         }
     }
     private static final String BOUNDARY = "optimized-Core-after-Tidy-before-CorePrep";
-    private static final Set<String> METADATA_FIELDS = Set.of("schema", "ghc", "unit", "module", "boundary", "providedModules", "constructors",
-            "foreign", "foreignLink", "staticForeignImportStubs", "staticForeignImports", "staticForeignExports",
-            "staticForeignExportRegistration", "packageScalarLink", "packageNativeLink", "packageNativeArchive",
-            "foreignExceptionBridge", "foreignExceptionBridgeUnit");
-    /** Null retains legacy package loading; never discovers or converts sidecars. */
     public static CoreUnitDirectory read(Map<?,?> document) {
         var rawUnits = list(document.get("units"), "Missing package units");
-        boolean direct = false;
-        unitScan: for (Object raw : rawUnits) if (raw instanceof Map<?,?> unit) {
-            if (unit.containsKey("json") || unit.containsKey("symbols")) { direct = true; break; }
-            if (unit.get("modules") instanceof List<?> modules) for (Object value : modules)
-                if (value instanceof Map<?,?> module && module.containsKey("compact")) { direct = true; break unitScan; }
-        }
-        if (!direct) return null;
         require(Objects.equals(document.get("format"), "thc-core-packages") && Objects.equals(document.get("schema"), 1L) &&
                 Objects.equals(document.get("ghc"), "9.14.1"), "Core package manifest requires schema 1 / GHC 9.14.1");
         var unitIds = new HashSet<String>();
@@ -222,50 +167,19 @@ public final class CoreUnitDirectory {
             for (Object value : depends) dependencyNames.add((String) value);
             List<String> dependencies = Collections.unmodifiableList(dependencyNames);
             var rawModules = list(unit.get("modules"), "Missing unit modules");
-            if (rawModules.isEmpty() && !unit.containsKey("json") && !unit.containsKey("symbols")) {
-                units.add(new UnitRecord(id, dependencies, null, null, List.of(),
-                        unit.containsKey("bundle") ? artifact(unit.get("bundle"), false, false, artifactPaths) : null, CoreJsonSymbols.Format.TEXT));
-                continue;
-            }
-            require(!unit.containsKey("bundle"), "Only moduleless legacy units may accompany direct unit pairs: " + id);
-            boolean compact = false;
-            for (Object value : rawModules) if (value instanceof Map<?,?> module && module.containsKey("compact")) { compact = true; break; }
-            boolean consistent = !compact || !unit.containsKey("json") && !unit.containsKey("symbols");
-            if (compact && consistent) for (Object value : rawModules)
-                if (!(value instanceof Map<?,?> module) || !module.containsKey("compact")) { consistent = false; break; }
-            require(consistent, "Mixed compact and JSON storage within GHC unit: " + id);
+            require(!unit.containsKey("bundle") && !unit.containsKey("json") && !unit.containsKey("symbols"),
+                    "Core runtime inputs must be CBD modules: " + id);
             var names = new HashSet<String>();
-            long previousEnd = 0;
             var modules = new ArrayList<ModuleRecord>();
             for (Object item : rawModules) {
                 var module = record(item, "Invalid module record");
                 String name = text(module.get("name"), "Missing module name");
                 require(!name.isEmpty() && names.add(name) && Objects.equals(module.get("boundary"), BOUNDARY) &&
                         module.get("sha256") instanceof String hash && hash.matches("[0-9a-f]{64}"), "Invalid module directory record: " + id + ":" + name);
-                Storage storage;
-                if (compact) {
-                    var jsonFields = Set.of("start", "end", "bindingsStart", "bindingsEnd", "metadataStart", "metadataEnd", "sourceMetadataStart", "sourceMetadataEnd", "index");
-                    boolean jsonExtent = false;
-                    for (Object key : module.keySet()) if (jsonFields.contains(key)) { jsonExtent = true; break; }
-                    require(!jsonExtent, "Compact module contains JSON storage extents");
-                    storage = new CompactStorage(artifact(module.get("compact"), false, true, artifactPaths));
-                } else {
-                    require(!module.containsKey("index"), "JSON .idx sidecars are no longer supported; regenerate unit " + id);
-                    var span = new CoreJsonSymbols.ModuleSpan(offset(module, "start"), offset(module, "end"), offset(module, "bindingsStart"), offset(module, "bindingsEnd"));
-                    require(span.start() >= previousEnd && span.start() < span.bindingsStart() && span.bindingsStart() < span.bindingsEnd() && span.bindingsEnd() < span.end(),
-                            "Invalid module extents");
-                    var metadata = new CoreJsonSymbols.ValueSpan(offset(module, "metadataStart"), offset(module, "metadataEnd"));
-                    require(metadata.start() >= span.end() && metadata.end() > metadata.start(), "Invalid Core admission metadata extent");
-                    require(module.containsKey("sourceMetadataStart") == module.containsKey("sourceMetadataEnd"), "Incomplete Core source metadata extent");
-                    CoreJsonSymbols.ValueSpan notes = null;
-                    if (module.containsKey("sourceMetadataStart")) {
-                        notes = new CoreJsonSymbols.ValueSpan(offset(module, "sourceMetadataStart"), offset(module, "sourceMetadataEnd"));
-                        require(notes.start() >= metadata.end() && notes.end() > notes.start(), "Invalid Core source metadata extent");
-                    }
-                    previousEnd = notes == null ? metadata.end() : notes.end();
-                    storage = new JsonStorage(span, metadata, notes);
-                }
-                modules.add(new ModuleRecord(id, name, (String) module.get("sha256"), storage,
+                require(Collections.disjoint(module.keySet(), Set.of("start", "end", "bindingsStart", "bindingsEnd",
+                        "metadataStart", "metadataEnd", "sourceMetadataStart", "sourceMetadataEnd", "index")),
+                        "CBD module contains JSON storage extents");
+                modules.add(new ModuleRecord(id, name, (String) module.get("sha256"), artifact(module.get("compact"), artifactPaths),
                         flag(module, "containsDelimitedControl", "Missing delimited-control summary"),
                         flag(module, "registrationObligations", "Missing registration summary"),
                         flag(module, "mainAlias", "Missing main-alias summary"),
@@ -276,9 +190,7 @@ public final class CoreUnitDirectory {
                 require(layout == null || layout.equals(candidate), "Conflicting GHC target layouts");
                 layout = candidate;
             }
-            units.add(new UnitRecord(id, dependencies, compact ? null : artifact(unit.get("json"), false, false, artifactPaths),
-                    compact ? null : artifact(unit.get("symbols"), true, false, artifactPaths), modules, null,
-                    !compact && ((Map<?,?>) unit.get("symbols")).containsKey("format") ? CoreJsonSymbols.Format.MD5_UTF8_U64LE : CoreJsonSymbols.Format.TEXT));
+            units.add(new UnitRecord(id, dependencies, modules));
         }
         Object bridge = document.get("foreignExceptionBridgeUnit");
         require(bridge == null || bridge instanceof String name && !blank(name), "Invalid foreign exception bridge unit");
@@ -291,20 +203,14 @@ public final class CoreUnitDirectory {
         }
         return true;
     }
-    private static Artifact artifact(Object raw, boolean symbols, boolean compact, Set<Path> paths) {
-        var record = record(raw, "Missing unit artifact");
+    private static Artifact artifact(Object raw, Set<Path> paths) {
+        require(raw instanceof Map<?,?>, "Missing CBD artifact");
+        var record = (Map<?,?>) raw;
         var path = Path.of(text(record.get("path"), "Missing unit artifact path"));
         String hash = text(record.get("sha256"), "Missing unit artifact identity");
-        require((!compact && record.keySet().equals(Set.of("path", "sha256")) ||
-                record.keySet().equals(Set.of("path", "sha256", "format")) &&
-                        (symbols && Objects.equals(record.get("format"), CoreJsonSymbols.MD5_FORMAT) || compact && Objects.equals(record.get("format"), CoreCompactFormat.NAME))) &&
+        require(record.keySet().equals(Set.of("path", "sha256", "format")) && Objects.equals(record.get("format"), CoreCompactFormat.NAME) &&
                 path.isAbsolute() && hash.matches("[0-9a-f]{64}") && paths.add(path.normalize()), "Invalid or duplicate unit artifact reference");
         return new Artifact(path.normalize(), hash);
-    }
-    private static long offset(Map<?,?> module, String field) {
-        if (!(module.get(field) instanceof Long value)) throw error("Missing exact module byte offset: " + field);
-        require(value >= 0, "Negative module byte offset: " + field);
-        return value;
     }
     private static boolean flag(Map<?,?> module, String field, String message) { if (!(module.get(field) instanceof Boolean value)) throw error(message); return value; }
     private static Map<?,?> record(Object value, String message) { if (!(value instanceof Map<?,?> result)) throw error(message); return result; }
@@ -313,4 +219,5 @@ public final class CoreUnitDirectory {
     private static void require(boolean condition, String message) { if (!condition) throw new IllegalArgumentException(message); }
     private static void check(boolean condition, String message) { if (!condition) throw error(message); }
     private static IllegalStateException error(String message) { return new IllegalStateException(message); }
+    @SuppressWarnings("unchecked") private static <T,E extends Throwable> T rethrow(Throwable failure) throws E { throw (E) failure; }
 }

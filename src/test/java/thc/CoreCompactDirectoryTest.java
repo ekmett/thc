@@ -30,13 +30,11 @@ class CoreCompactDirectoryTest {
         assertEquals("A", Objects.requireNonNull(parsed.owner("unit:A.entry")).getName());
         assertEquals("B", Objects.requireNonNull(parsed.owner("unit:B.cold")).getName());
         assertNull(parsed.owner("absent:D.f"));
-        assertTrue(parsed.getModules().stream().allMatch(it -> it.getStorage() instanceof CoreUnitDirectory.CompactStorage));
-        assertTrue(parsed.getUnits().stream().allMatch(it -> it.getJson() == null && it.getSymbols() == null));
+        assertTrue(parsed.getModules().stream().allMatch(it -> it.getArtifact().path().toString().endsWith(".cbd")));
         try (var files = Files.list(directory)) { assertEquals(0L, files.count()); }
     }
-    @Test void modulelessCompatibilityIdentitySurvivesAlongsideCompactModules() throws Exception {
-        var empty = map("id", "rts", "depends", List.of(), "modules", List.of(),
-            "bundle", map("path", directory.resolve("unopened.zip").toString(), "sha256", hash));
+    @Test void modulelessDependencyIdentitySurvivesAlongsideCompactModules() throws Exception {
+        var empty = map("id", "rts", "depends", List.of(), "modules", List.of());
         var parsed = Objects.requireNonNull(CoreUnitDirectory.read(manifest(List.of(empty,
             with(unit(List.of(module("A"))), "depends", List.of("rts"))))));
         assertEquals(List.of("rts", "unit"), parsed.getUnits().stream().map(it -> it.getId()).toList());
@@ -54,6 +52,16 @@ class CoreCompactDirectoryTest {
         assertThrows(IllegalArgumentException.class, () -> ambiguous.owner("main::Main.main"));
         assertNull(CoreUnitDirectory.read(manifest(List.of(unit(List.of(module("NamedMain"))))))
             .owner("main::Main.main"));
+    }
+    @Test void jsonAndBundleStorageAreNotRuntimeInputs() {
+        var artifact = map("path", directory.resolve("old.jsons").toString(), "sha256", hash);
+        var empty = unit(List.of());
+        for (var old : List.of(with(empty, "json", artifact, "symbols", artifact),
+                with(empty, "bundle", artifact),
+                unit(List.of(without(module("A"), "compact"))))) {
+            assertThrows(IllegalArgumentException.class, () -> CoreUnitDirectory.read(manifest(List.of(old))));
+        }
+        assertNotNull(CoreUnitDirectory.read(manifest(List.of(empty))));
     }
     @Test void ambiguousProtocolsBadFormatsAndDuplicateArtifactPathsRejectWithoutOpening() throws Exception {
         var original = module("A");

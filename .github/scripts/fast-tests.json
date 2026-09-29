@@ -2264,18 +2264,14 @@
       "junit": ["thc.runtime.AddressIdentityNativeTest"],
       "python": []
     },
-    "src/main/java/thc/CorePackageManifest.java": {
-      "junit": ["thc.CoreZipBundleTest", "thc.CoreLinkerTest", "thc.runtime.InterfaceCoreNativeTest"],
-      "python": []
-    },
     "src/main/java/thc/CoreForeignArtifacts.java": {
       "junit": ["thc.CoreForeignArtifactsTest", "thc.runtime.InterfaceCoreNativeTest", "thc.ManagedImportStubsNativeTest"], "python": []
     },
     "src/test/java/thc/CoreForeignArtifactsTest.java": {
       "junit": ["thc.CoreForeignArtifactsTest"], "python": []
     },
-    "src/test/java/thc/CoreZipBundleTest.java": {
-      "junit": ["thc.CoreZipBundleTest"],
+    "src/test/java/thc/CoreCbdFixtures.java": {
+      "junit": ["thc.CoreCbdConsumersTest", "thc.CoreUnitLoadTest", "thc.CoreCompactLoadTest", "thc.ReusableLoaderTest", "thc.NativeCacheTest", "thc.NarrowPublicEntryTest"],
       "python": []
     },
     "src/test/java/thc/runtime/Int16ArrayNativeTest.java": {
@@ -2735,10 +2731,7 @@
         "thc.CoreCompactGoldenTest",
         "thc.CoreCompactLoadTest",
         "thc.CoreCompactRecordsTest",
-        "thc.CoreJsonConsumersTest",
-        "thc.CoreJsonMd5SymbolsTest",
-        "thc.CoreJsonPackageTest",
-        "thc.CoreJsonSymbolsTest",
+        "thc.CoreCbdConsumersTest",
         "thc.CoreRequestTest",
         "thc.JsonWriterTest",
         "thc.CoreCbdArchiveTest",
@@ -2752,7 +2745,6 @@
         "thc.CoreUnitLoadTest",
         "thc.ReusableLoaderTest",
         "thc.CoreUnitManagedExportTest",
-        "thc.CoreZipBundleTest",
         "thc.ManagedImportTypeTest",
         "thc.PackageScalarLinksTest",
         "thc.NarrowPublicEntryTest",
@@ -3278,7 +3270,7 @@
       "haskell": ["driver-tests"]
     },
     "src/main/java/thc/runtime/TargetLayout.java": {
-      "junit": ["thc.CoreZipBundleTest", "thc.runtime.InterfaceCoreNativeTest", "thc.runtime.OriginalStackFormatterTest"],
+      "junit": ["thc.CoreCompactDirectoryTest", "thc.runtime.InterfaceCoreNativeTest", "thc.runtime.OriginalStackFormatterTest"],
       "python": []
     },
     "src/driver/THC/Driver/Wired.hs": {

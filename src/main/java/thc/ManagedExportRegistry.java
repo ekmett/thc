@@ -39,9 +39,9 @@ public final class ManagedExportRegistry {
     @TruffleBoundary
     public ManagedExportNamespace load(Map<String,Object> input, CoreUnitDirectory directory, String backend) {
         return load(() -> {
-            if (directory.getTargetLayout() != null && directory.getTargetLayout().getWordBytes() * 8 != 64) throw new IllegalArgumentException("Managed export target word width differs");
             var program = new CoreUnitProgram(language, directory, input, null, backend, backend.equals("bytecode"), owner);
             try {
+                if (program.getTargetLayout() != null && program.getTargetLayout().getWordBytes() * 8 != 64) throw new IllegalArgumentException("Managed export target word width differs");
                 var registrations = program.registerStartup();
                 var exports = new ArrayList<ManagedExportSignature>();
                 for (var admission : registrations) exports.addAll(admission.getExports());

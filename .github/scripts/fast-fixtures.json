@@ -16,7 +16,6 @@
     "thc.ReusableHigherOrderTest",
     "thc.ReusableHeapTest",
     "thc.ReusableBytesTest",
-    "thc.ReusableLoaderTest",
     "thc.runtime.CapturedProgramInstanceTest",
     "thc.PackageFinalizersTest",
     "thc.runtime.PackageFinalizerTest",
@@ -70,7 +69,6 @@
     "thc.runtime.CoreTouchTest",
     "thc.runtime.MutableByteArrayContentsTest",
     "thc.runtime.CallMaskSegmentsTest",
-    "thc.CoreZipBundleTest",
     "thc.CoreLinkerTest",
     "thc.CoreForeignArtifactsTest",
     "thc.CoreLoweringRootsTest",
@@ -79,7 +77,6 @@
     "thc.runtime.CompilerHeapHintTest",
     "thc.runtime.NarrowIntegerCarrierTest",
     "thc.runtime.NarrowIntegerContinuationTest",
-    "thc.NarrowPublicEntryTest",
     "thc.runtime.NarrowReturnedPointerTest",
     "thc.runtime.HandoffTest",
     "thc.runtime.HostEntryCompilationTest",
@@ -90,6 +87,12 @@
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "compact-model": {
+      "junit": ["thc.CoreCbdModelTest", "thc.CoreCbdConsumersTest", "thc.CoreCompactLoadTest", "thc.CoreUnitLoadTest", "thc.ReusableLoaderTest", "thc.NativeCacheTest", "thc.NarrowPublicEntryTest"],
+      "commands": [{"argv": ["sh", "-c", "set -e; cabal build exe:thc-fixtures --offline; mkdir -p build; cabal list-bin exe:thc-fixtures --offline > build/thc-fixtures.path"]}],
+      "outputs": ["build/thc-fixtures.path"],
+      "sources": ["t/haskell-fixtures/CompactModelFixtures.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "src/cbd/THC/Compact/Module.hs", "src/cbd/THC/Compact/JSON.hs", "src/cbd/THC/Compact/Encode.hs", "src/test/java/thc/CoreCbdFixtures.java", "src/test/java/thc/CoreCbdTestSupport.java"]
+    },
     "process-lifecycle": {
       "junit": ["thc.runtime.ManagedProcessesTest", "thc.runtime.ManagedProcessForeignTest", "thc.runtime.CoreProcessForeignTest", "thc.runtime.ProcessLifecycleCoreTest"],
       "commands": [{"argv": ["sh", "-c", "case \"$(uname -s)-$(uname -m)\" in Linux-x86_64) cabal run exe:thc-fixtures --offline -- process-lifecycle ;; esac"]}],

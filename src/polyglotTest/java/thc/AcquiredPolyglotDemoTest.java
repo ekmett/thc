@@ -42,7 +42,7 @@ class AcquiredPolyglotDemoTest {
         assertEquals(module, original.name());
         String digest = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(compact)));
         var converted = new CoreUnitDirectory.ModuleRecord(original.unit(), original.name(), original.sha256(),
-            new CoreUnitDirectory.CompactStorage(new CoreUnitDirectory.Artifact(compact, digest)),
+            new CoreUnitDirectory.Artifact(compact, digest),
             original.containsDelimitedControl(), original.registrationObligations(), original.mainAlias(),
             original.packageScalarDeclarations());
         try (var source = directory.open(true);
