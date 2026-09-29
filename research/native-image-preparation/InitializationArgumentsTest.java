@@ -83,13 +83,18 @@ public final class InitializationArgumentsTest {
         return prepare(root, processIdentity, mode, null);
     }
     private static int prepare(Path root, String processIdentity, String mode, String vectorProfile) throws Exception {
+        return prepare(root, processIdentity, mode, vectorProfile, null);
+    }
+    private static int prepare(Path root, String processIdentity, String mode, String vectorProfile, String builderHeap) throws Exception {
         var command = new ProcessBuilder("bash", root.resolve("recipe/prepared-image.sh").toString(),
             root.toString(), mode);
         command.environment().put("JAVA_HOME", javaHome.toString());
         command.environment().remove("THC_NATIVE_IMAGE_PROCESS_IDENTITY");
         command.environment().remove("THC_NATIVE_IMAGE_VECTOR_PROFILE");
+        command.environment().remove("THC_NATIVE_IMAGE_BUILDER_HEAP");
         if (processIdentity != null) command.environment().put("THC_NATIVE_IMAGE_PROCESS_IDENTITY", processIdentity);
         if (vectorProfile != null) command.environment().put("THC_NATIVE_IMAGE_VECTOR_PROFILE", vectorProfile);
+        if (builderHeap != null) command.environment().put("THC_NATIVE_IMAGE_BUILDER_HEAP", builderHeap);
         command.redirectErrorStream(true).redirectOutput(root.resolve("prepare.log").toFile());
         return command.start().waitFor();
     }
@@ -239,6 +244,13 @@ public final class InitializationArgumentsTest {
         check(prepare(manual) == 0 && inventory(manual, "vector-profile.args").isEmpty(),
             "default image must not inherit resource-copy flags from a prior build");
         check(prepare(manual, null, "prepare-only", "typo") == 2, "unknown vector profile rejected");
+        check(inventory(manual, "builder-heap.args").equals("-J-Xmx8g\n"), "generic builder default remains 8 GiB");
+        check(prepare(manual, null, "prepare-only", null, "16g") == 0 &&
+            inventory(manual, "builder-heap.args").equals("-J-Xmx16g\n"), "explicit 16 GiB builder heap only");
+        check(prepare(manual, null, "prepare-only", null, "24g") == 2, "unqualified larger builder heap rejected");
+        check(prepare(manual, null, "prepare-only", null, "16g -Xmx32g") == 2, "builder option injection rejected");
+        check(prepare(manual) == 0 && inventory(manual, "builder-heap.args").equals("-J-Xmx8g\n"),
+            "default preparation clears a prior builder override");
         switchChecks();
         System.out.println("PASS " + checks + " initialization-argument checks; prepare-only, no image execution");
     }

@@ -69,6 +69,13 @@ On a shared host, wrap each command in its existing build-directory lease and
 check available host capacity. The script does not acquire a host-specific lock
 itself. Do not run duplicate image builders.
 
+`THC_NATIVE_IMAGE_BUILDER_HEAP=16g` selects the qualified larger builder budget
+when the default generic/cache 8 GiB is insufficient. Only `8g` and `16g` are
+accepted. Bound-executable mode defaults to 16 GiB. The choice is recorded in
+`reproduction-inventory/builder-heap.args` and changes only builder `-J-Xmx`,
+not the produced executable's runtime heap, compilation limits or two compiler
+threads. Check host headroom before selecting the larger budget.
+
 `prepare-only` compiles the included inventory tool and writes four sorted class
 lists plus `build/native-image/reproduction-inventory/prepared-initialization.args`.
 It does not build an image. `build` prepares the same inventory and invokes Native
