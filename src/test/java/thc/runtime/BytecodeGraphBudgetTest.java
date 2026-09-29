@@ -609,6 +609,179 @@ class BytecodeGraphBudgetTest {
                                 expression, Map.of("rep", CLOSURE, "resultRep", LONG, "entryStrict", List.of(false, false))))));
     }
 
+    private static List<Object> joinedCall(String name, List<List<Object>> arguments, Map<String, Object> result) {
+        return node("app", variable(name, CLOSURE), arguments,
+                java.util.Collections.nCopies(arguments.size(), false), false, false, Map.of("rep", result));
+    }
+
+    private static Map<String, Object> localJoin(String name, List<Map<String, Object>> parameters,
+            List<Object> body, Map<String, Object> result) {
+        var binding = new LinkedHashMap<>(binder(name, CLOSURE, true));
+        binding.put("joinValueArity", parameters.size()); binding.put("joinResultRep", result);
+        binding.put("expr", parameters.isEmpty() ? body : node("lam", parameters, body, Map.of("resultRep", result)));
+        return binding;
+    }
+
+    private static List<Object> regionChainSum(String prefix, int depth) {
+        List<Object> body = number(0);
+        for (int i = depth - 1; i >= 0; i--) {
+            String value = prefix + "Value" + i, next = prefix + "Next" + i;
+            body = node("app", node("prim", "+#"), List.of(variable(value, LONG), body),
+                    List.of(false, false), false, false, Map.of("rep", LONG));
+            body = node("case", variable(i == 0 ? "list" : prefix + "Next" + (i - 1), DATA), prefix + "Link" + i,
+                    List.of(node("data", "Link", List.of(value, next), body,
+                            Map.of("binders", List.of(binder(value, LONG, false), binder(next, DATA, true))))),
+                    Map.of("rep", LONG, "binder", binder(prefix + "Link" + i, DATA, true)));
+        }
+        return body;
+    }
+
+    private static List<Object> regionEffect(int stage, List<Object> body, Map<String, Object> result) {
+        return node("case", joinedCall("step", List.of(number(stage)), LONG), "effect" + stage,
+                List.of(node("default", null, List.of(), body)),
+                Map.of("rep", result, "binder", binder("effect" + stage, LONG, false)));
+    }
+
+    private static Map<String, Object> closedRecursiveRegion(int depth) {
+        return closedRecursiveRegion(depth, false, false);
+    }
+
+    private static Map<String, Object> closedRecursiveRegion(int depth, boolean nestedOwner, boolean shadowPayload) {
+        var result = tuple(STATE, REFERENCE, LONG);
+        var answer = node("app", node("con", "RegionResult", 3),
+                List.of(node("void", Map.of("rep", STATE)), variable("payload", REFERENCE), variable("answer", LONG)),
+                List.of(false, true, false), false, false, Map.of("rep", result));
+        var finish = localJoin("finish", List.of(binder("answer", LONG, false)), regionEffect(2, answer, result), result);
+        var next = node("app", node("prim", "-#"), List.of(variable("remaining", LONG), number(1)),
+                List.of(false, false), false, false, Map.of("rep", LONG));
+        var sum = node("app", node("prim", "+#"), List.of(variable("sum", LONG), regionChainSum("worker", depth)),
+                List.of(false, false), false, false, Map.of("rep", LONG));
+        var workerBody = node("case", variable("remaining", LONG), "remainingCase", List.of(
+                node("lit", List.of("int", "0"), List.of(), joinedCall("finish", List.of(variable("sum", LONG)), result)),
+                node("default", null, List.of(), regionEffect(1, joinedCall("worker", List.of(next, sum), result), result))),
+                Map.of("rep", result, "binder", binder("remainingCase", LONG, false)));
+        if (nestedOwner) {
+            var inner = localJoin("inner", List.of(),
+                    joinedCall("worker", List.of(number(0), sum), result), result);
+            workerBody = node("case", variable("remaining", LONG), "remainingCase", List.of(
+                    node("lit", List.of("int", "0"), List.of(), joinedCall("finish", List.of(variable("sum", LONG)), result)),
+                    node("default", null, List.of(), node("let", true, List.of(inner),
+                            joinedCall("inner", List.of(), result), Map.of("rep", result)))),
+                    Map.of("rep", result, "binder", binder("remainingCase", LONG, false)));
+        }
+        var worker = localJoin("worker", List.of(binder("remaining", LONG, false), binder("sum", LONG, false)), workerBody, result);
+        var region = node("let", true, List.of(worker),
+                joinedCall("worker", List.of(number(1), variable("prefixSum", LONG)), result), Map.of("rep", result));
+        if (shadowPayload) region = node("case", variable("payload", REFERENCE), "payload",
+                List.of(node("default", null, List.of(), region)),
+                Map.of("rep", result, "binder", binder("payload", REFERENCE, true)));
+        var prefix = node("case", regionChainSum("prefix", depth), "prefixSum", List.of(node("default", null, List.of(), region)),
+                Map.of("rep", result, "binder", binder("prefixSum", LONG, false)));
+        var body = node("let", false, List.of(finish), regionEffect(0, prefix, result), Map.of("rep", result));
+        var input = new LinkedHashMap<>(smallDecision(1));
+        input.put("bindings", List.of(Map.of("id", "entry", "name", "entry", "lifted", true, "rep", CLOSURE,
+                "expr", node("lam", List.of(binder("list", DATA, true), binder("step", CLOSURE, true),
+                        binder("payload", REFERENCE, true)), body,
+                        Map.of("rep", CLOSURE, "resultRep", result, "entryStrict", List.of(false, false, false))))));
+        constructors(input, tupleConstructor("RegionResult", 3));
+        return input;
+    }
+
+    @ParameterizedTest @ValueSource(booleans = {false, true})
+    void recursiveRegionRetainsInlineForReboundCapturesAndActiveOwners(boolean nestedOwner) throws Exception {
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new BytecodeProgram(language, closedRecursiveRegion(48, nestedOwner, true));
+                var root = (BytecodeRoot) program.entryTarget("entry").getRootNode();
+                // The exit owns the original payload local. In the nested variant,
+                // the inner candidate also transfers to the still-live Rec owner.
+                assertEquals(0, root.prepareGraphBudgetRetry(0));
+                var step = new Closure(null, 1, new RootNode(language) {
+                    @Override public Object execute(VirtualFrame frame) { return frame.getArguments()[1]; }
+                }.getCallTarget());
+                var payload = new Object();
+                var answer = TupleResults.ownedTupleResult(Calls.target(root.getCallTarget(),
+                        new Object[]{0L, chain(program, 48), step, payload}), root.getTupleResult());
+                assertSame(payload, root.getTupleResult().getLayout().getObject(answer, 0));
+                assertEquals(96L, root.getTupleResult().getLayout().getLong(answer, 1));
+            } finally { context.leave(); }
+        }
+    }
+
+    @Test void observedClosedRecursiveRegionInstallsBothParentAndSide() throws Exception {
+        checkClosedRecursiveRegion(false);
+    }
+    static void checkClosedRecursiveRegion(boolean stock) throws Exception {
+        try (var context = context(10000)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new BytecodeProgram(language, closedRecursiveRegion(24));
+                var target = program.entryTarget("entry"); var root = (BytecodeRoot) target.getRootNode();
+                var stages = new ArrayList<Long>();
+                var step = new Closure(null, 1, new GuestRoot(language, null) {
+                    @Override public long bloom(VirtualFrame frame) { return (Long) frame.getArguments()[0]; }
+                    @Override public Object execute(VirtualFrame frame) {
+                        long stage = (Long) frame.getArguments()[1]; stages.add(stage); return stage;
+                    }
+                }.getCallTarget());
+                var payload = new Thunk(new RootNode(language) {
+                    @Override public Object execute(VirtualFrame frame) { throw new AssertionError("Region capture forced"); }
+                }.getCallTarget(), null);
+                var list = chain(program, 24);
+                java.util.function.Consumer<Object> check = raw -> {
+                    var result = TupleResults.ownedTupleResult(raw, root.getTupleResult());
+                    assertSame(payload, root.getTupleResult().getLayout().getObject(result, 0));
+                    assertEquals(0, payload.getState());
+                    assertEquals(48L, root.getTupleResult().getLayout().getLong(result, 1));
+                };
+                check.accept(Calls.target(target, new Object[]{0L, list, step, payload}));
+                assertEquals(List.of(0L, 1L, 2L), stages);
+                var original = instructions(root);
+                assertEquals(0, root.getGraphBudgetGeneration()); assertEquals(0, entries(program));
+                RootCallTarget activeTarget = target;
+                BytecodeRoot activeRoot = root;
+                if (stock) {
+                    var failure = assertThrows(java.lang.reflect.InvocationTargetException.class, () -> compile(target));
+                    assertInstanceOf(com.oracle.truffle.api.OptimizationFailedException.class, failure.getCause());
+                    assertTrue(failure.getCause().toString().contains("GraphTooBigBailoutException"));
+                    assertEquals(0, root.getGraphBudgetGeneration());
+                    check.accept(Calls.target(target, new Object[]{0L, list, step, payload}));
+                    for (var child : root.getChildren()) {
+                        if (child instanceof com.oracle.truffle.api.nodes.DirectCallNode call
+                                && call.getCallTarget() instanceof RootCallTarget called && root.isSelf(called))
+                            activeTarget = called;
+                    }
+                    assertNotSame(target, activeTarget, "next real entry publishes the stock replacement");
+                    activeRoot = (BytecodeRoot) activeTarget.getRootNode();
+                } else {
+                    assertTrue(compile(target)); assertTrue(valid(target)); bypass(target);
+                    check.accept(Calls.target(target, new Object[]{0L, list, step, payload}));
+                }
+                assertEquals(1, activeRoot.getGraphBudgetGeneration(), "only the real graph limit selects the prepared region");
+                assertEquals(original, instructions(root), "old bytecode remains stable across recovery");
+                assertEquals(List.of(0L, 1L, 2L, 0L, 1L, 2L), stages);
+                var field = BytecodeRoot.class.getDeclaredField("caseRegions"); field.setAccessible(true);
+                var regions = (BytecodeCaseRegion[]) field.get(activeRoot); assertEquals(1, regions.length);
+                var sidesField = BytecodeCaseRegion.class.getDeclaredField("sides"); sidesField.setAccessible(true);
+                var sides = (Object[]) sidesField.get(regions[0]); assertEquals(1, sides.length);
+                var targetField = sides[0].getClass().getDeclaredField("target"); targetField.setAccessible(true);
+                var side = (RootCallTarget) targetField.get(sides[0]);
+                assertEquals(0, ((BytecodeRoot) side.getRootNode()).getGraphBudgetGeneration());
+                assertTrue(compile(side)); assertTrue(valid(side)); bypass(side);
+                assertTrue(compile(activeTarget)); assertTrue(valid(activeTarget)); bypass(activeTarget);
+                long before = entries(program);
+                check.accept(Calls.target(target, new Object[]{0L, list, step, payload}));
+                assertEquals(List.of(0L, 1L, 2L, 0L, 1L, 2L, 0L, 1L, 2L), stages);
+                assertEquals(before + 2, entries(program), "both installed bodies execute");
+                assertTrue(valid(activeTarget)); assertTrue(valid(side));
+                assertEquals(1, activeRoot.prepareGraphBudgetRetry(1), "no nested outlining or expanded budget");
+            } finally { context.leave(); }
+        }
+    }
+
     private static Object chain(BytecodeProgram program, int depth) {
         Object value = program.constructorLayout("End").allocate();
         var layout = program.constructorLayout("Link");
@@ -1230,7 +1403,13 @@ class BytecodeGraphBudgetTest {
     private void checkRegionCut(boolean parkBeforeRecovery) throws Exception {
         checkRegionCut(parkBeforeRecovery, false);
     }
+    @Test void closedRecursiveRegionResumesPendingJoinOperandsAcrossThreads() throws Exception {
+        checkRegionCut(false, false, true);
+    }
     private void checkRegionCut(boolean parkBeforeRecovery, boolean capacity) throws Exception {
+        checkRegionCut(parkBeforeRecovery, capacity, false);
+    }
+    private void checkRegionCut(boolean parkBeforeRecovery, boolean capacity, boolean recursiveRegion) throws Exception {
         var resultProof = tuple(REFERENCE, REFERENCE);
         var result = node("app", node("con", "Result", 2), List.of(variable("before", REFERENCE), variable("after", REFERENCE)),
                 List.of(true, true), false, false, Map.of("rep", resultProof));
@@ -1245,7 +1424,25 @@ class BytecodeGraphBudgetTest {
         // The selector is closed: this control isolates region suspension, not lazy-formal forcing.
         decision.set(1, node("con", "C63", 0, Map.of("rep", DATA)));
         var arguments = new ArrayList<>(List.of(binder("prefix", MUTABLE, false), binder("blocked", MUTABLE, false)));
-        if (capacity) arguments.add(binder("step", CLOSURE, true));
+        if (capacity || recursiveRegion) arguments.add(binder("step", CLOSURE, true));
+        if (recursiveRegion) {
+            var finishBody = node("app", node("con", "Result", 2),
+                    List.of(variable("first", REFERENCE), variable("second", REFERENCE)),
+                    List.of(true, true), false, false, Map.of("rep", resultProof));
+            var finish = localJoin("finish", List.of(binder("first", REFERENCE, true), binder("second", REFERENCE, true)),
+                    finishBody, resultProof);
+            var transfer = joinedCall("finish", List.of(variable("before", REFERENCE),
+                    afterTake("blocked", "after", variable("after", REFERENCE), REFERENCE)), resultProof);
+            var workerBody = node("case", variable("remaining", LONG), "seen", List.of(
+                    node("lit", List.of("int", "0"), List.of(), transfer),
+                    node("default", null, List.of(), capacityCalls(64, 0,
+                            joinedCall("worker", List.of(number(0)), resultProof), resultProof))),
+                    Map.of("rep", resultProof, "binder", binder("seen", LONG, false)));
+            var worker = localJoin("worker", List.of(binder("remaining", LONG, false)), workerBody, resultProof);
+            decision = new ArrayList<>(node("let", false, List.of(finish),
+                    node("let", true, List.of(worker), joinedCall("worker", List.of(number(1)), resultProof),
+                            Map.of("rep", resultProof)), Map.of("rep", resultProof)));
+        }
         lambda.set(1, arguments);
         lambda.set(2, afterTake("prefix", "before", decision, resultProof));
         lambda.set(3, Map.of("rep", CLOSURE, "resultRep", resultProof,
@@ -1285,7 +1482,7 @@ class BytecodeGraphBudgetTest {
                 context.enter(); owner.getThreads().enterCurrent(null, false, true, null);
                 try {
                     var saved = java.util.Objects.requireNonNull(SavedGuestContinuations.savedGuestContinuation(
-                            Calls.target(target, capacity ? new Object[]{0L, prefix, blocked, step} : new Object[]{0L, prefix, blocked})));
+                            Calls.target(target, capacity || recursiveRegion ? new Object[]{0L, prefix, blocked, step} : new Object[]{0L, prefix, blocked})));
                     java.util.Objects.requireNonNull(saved.asyncRequest()).acknowledge();
                     assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(root));
                     answer.complete(saved);
@@ -1298,7 +1495,7 @@ class BytecodeGraphBudgetTest {
                 while (blocked.pendingCounts().getTakers() != 1 && !answer.isDone() && System.nanoTime() < deadline) Thread.sleep(1);
                 if (answer.isCompletedExceptionally()) answer.get(1, TimeUnit.SECONDS);
                 assertEquals(1, blocked.pendingCounts().getTakers()); assertTrue(prefix.isEmpty());
-                assertEquals(capacity ? 64 : 0, calls.get());
+                assertEquals(capacity || recursiveRegion ? 64 : 0, calls.get());
                 owner.getThreads().send(java.util.Objects.requireNonNull(owner.getThreads().pollState(worker).getCurrent()).getIdentity(), "case region cut");
                 var saved = answer.get(10, TimeUnit.SECONDS); worker.join(5000); assertFalse(worker.isAlive());
                 assertEquals(compiled + (parkBeforeRecovery ? 0 : 1), entries(program));
@@ -1321,7 +1518,7 @@ class BytecodeGraphBudgetTest {
                         var layout = root.getTupleResult().getLayout();
                         assertSame(before, layout.getObject(value, 0)); assertSame(after, layout.getObject(value, 1));
                         assertTrue(prefix.isEmpty(), "Completed caller effect must not replay"); assertTrue(blocked.isEmpty());
-                        assertEquals(capacity ? 64 : 0, calls.get(), "completed side calls must not replay");
+                        assertEquals(capacity || recursiveRegion ? 64 : 0, calls.get(), "completed side calls must not replay");
                         assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(root));
                         var handoff = language.getHandoffState().get(); assertNull(handoff.getPending());
                         assertEquals(0, handoff.getArguments().getDepth()); assertEquals(0, handoff.getResults().getDepth());

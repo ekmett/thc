@@ -14,7 +14,7 @@ import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.runtime.OptimizedCallTarget;
 
-/** Prepublished, finite case partitions. No guest profile is seeded. */
+/** Prepublished, finite expression regions. No guest profile is seeded. */
 public final class BytecodeCaseRegion extends Node {
     static final int WIDTH = 32;
     static final int MAX_ALTERNATIVES = 1024;
@@ -38,6 +38,15 @@ public final class BytecodeCaseRegion extends Node {
     private final boolean tail;
 
     BytecodeCaseRegion(Object[] guards, int width, RootCallTarget[] targets, CaptureLayout[] captures, boolean tail) {
+        this(guards, width, targets, captures, tail, true);
+    }
+
+    BytecodeCaseRegion(RootCallTarget target, CaptureLayout captures, boolean tail) {
+        this(new Object[0], 1, new RootCallTarget[]{target}, new CaptureLayout[]{captures}, tail, false);
+    }
+
+    private BytecodeCaseRegion(Object[] guards, int width, RootCallTarget[] targets, CaptureLayout[] captures,
+            boolean tail, boolean valueArgument) {
         this.guards = guards;
         this.width = width;
         this.tail = tail;
@@ -46,7 +55,7 @@ public final class BytecodeCaseRegion extends Node {
             OptimizedCallTarget target = (OptimizedCallTarget) targets[i];
             target.ensureInitialized();
             target.prepareForAOT();
-            sides[i] = new Side(targets[i], captures[i]);
+            sides[i] = new Side(targets[i], captures[i], valueArgument);
         }
     }
 
@@ -126,14 +135,18 @@ public final class BytecodeCaseRegion extends Node {
     private static final class Side extends Node {
         private final RootCallTarget target;
         private final CaptureLayout captures;
+        private final boolean valueArgument;
         @Child private DirectCallNode call;
-        Side(RootCallTarget target, CaptureLayout captures) {
+        Side(RootCallTarget target, CaptureLayout captures, boolean valueArgument) {
             this.target = target;
             this.captures = captures;
+            this.valueArgument = valueArgument;
             this.call = DirectCallNode.create(target);
         }
         Object execute(VirtualFrame frame, BytecodeRoot owner, LocalAccessor[] sources, Object value) {
             long bloom = owner.bloom(frame);
+            if (!valueArgument) return Calls.direct(call, captures == null ? new Object[]{bloom}
+                    : new Object[]{bloom, captures.captureLocals(owner.getBytecodeNode(), frame, sources)});
             return Calls.direct(call, captures == null ? new Object[]{bloom, value}
                     : new Object[]{bloom, captures.captureLocals(owner.getBytecodeNode(), frame, sources), value});
         }
