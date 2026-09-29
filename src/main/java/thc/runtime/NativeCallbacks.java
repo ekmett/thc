@@ -89,7 +89,7 @@ public final class NativeCallbacks {
             result = ManagedExportScalar.nativeRepresentation(declaration.result(), ManagedExportScalar.Role.RESULT, declaration.wordBits());
         }
         void check() { registry.checkEntry(); if (!open.isValid()) throw fault("Native static export has been unregistered"); }
-        synchronized Object pointer() {
+        @TruffleBoundary synchronized Object pointer() {
             registry.checkOwner();
             if (!open.isValid()) throw fault("Native static export has been unregistered");
             if (closure == null) {

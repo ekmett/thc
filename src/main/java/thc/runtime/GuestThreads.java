@@ -306,7 +306,7 @@ public final class GuestThreads {
     }
     /** myThreadId# observes an existing guest entry; it never creates a new lifetime. */
     public long currentId() { return currentIdentity().logicalId; }
-    public GuestThreadId currentIdentity() {
+    @TruffleBoundary public GuestThreadId currentIdentity() {
         var slot = currentSlot.get();
         if (slot == null || slot.entries <= 0) throw fault("Current Java thread has not entered this guest context");
         return slot.identity;
