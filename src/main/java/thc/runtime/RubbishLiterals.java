@@ -24,6 +24,9 @@ public final class RubbishLiterals {
         if (closure == null) closure = new Closure(null, 1, RootNode.createConstantNode(boxed()).getCallTarget());
         return closure;
     }
+    @TruffleBoundary private static Object vector(CoreRepresentation proof) {
+        return new VectorLayout(proof).getSpecies().zero();
+    }
     public Object decode(CoreRepresentation proof) {
         return switch (proof.getKind()) {
             case LONG -> { if (proof.isInt()) yield Integer.valueOf(0); yield Long.valueOf(0L); }
@@ -31,7 +34,7 @@ public final class RubbishLiterals {
             case DOUBLE -> 0.0;
             case ADDRESS -> ManagedAddress.nullAddress();
             case VOID -> Unit.INSTANCE;
-            case VECTOR -> new VectorLayout(proof).getSpecies().zero();
+            case VECTOR -> vector(proof);
             case CLOSURE -> closure();
             case DATA, OBJECT -> boxed();
             default -> throw new UnsupportedCore("Unsupported rubbish representation");
