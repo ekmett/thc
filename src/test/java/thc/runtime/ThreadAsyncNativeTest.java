@@ -21,6 +21,7 @@ import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.PolyglotException;
 import org.junit.jupiter.api.Test;
 import thc.CoreModules;
+import thc.CoreCbdFixtures;
 import thc.EntryValue;
 import thc.Json;
 import thc.Language;
@@ -87,8 +88,8 @@ public class ThreadAsyncNativeTest {
             var context = Context.newBuilder("thc").allowExperimentalOptions(true).allowCreateThread(true).option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.Splitting", "false").option("engine.CompilationFailureAction", "Throw").build();
             var executor = Executors.newSingleThreadExecutor(task -> { var thread = new Thread(task, "thc-public-thread-test"); thread.setDaemon(true); return thread; });
             try {
-                var core = new File(root, "build/thread-async/" + stage + "/core/" + module + ".json");
-                var entry = context.eval("thc", CoreModules.request(List.of(core.getPath()), name, true, false, backend, true, false, null, asyncExceptions));
+                var core = new File(root, "build/thread-async/" + stage + "/core/" + module + ".cbd");
+                var entry = context.eval("thc", CoreModules.request(List.of(core.getPath()), "main:" + module + "." + name, true, false, backend, true, false, null, asyncExceptions));
                 var result = executor.submit(() -> {
                     if (cold) {
                         assertEquals(0L, ((Number) ((Map<?, ?>) Json.parse(entry.getMember("diagnostics").asString())).get("compiledEntries")).longValue());
@@ -151,10 +152,10 @@ public class ThreadAsyncNativeTest {
     @Test public void forkedChildOwnsAndResumesTheSharedLazyActionHead() throws Exception { exercise("lazyFork", List.of(52L, 53L), "LazyForkAudit", "bytecode", true); }
     @Test public void astForkedChildOwnsAndResumesTheSharedLazyActionHead() throws Exception { exercise("lazyFork", List.of(52L, 53L), "LazyForkAudit", "ast", true); }
     @Test public void publicRequestValidatesAndSelectsAdaptiveOrEagerPolling() throws Exception {
-        checkReceipt(); var core = new File(root, "build/thread-async/post/core/ThreadAsyncAudit.json");
+        checkReceipt(); var core = new File(root, "build/thread-async/post/core/ThreadAsyncAudit.cbd");
         for (var backend : List.of("ast", "bytecode")) for (var mode : Arrays.asList(null, false, true)) try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
                 .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build()) {
-            var request = CoreModules.request(List.of(core.getPath()), "yieldProbe", true, false, backend, true, false, null, mode); var entry = context.eval("thc", request);
+            var request = CoreModules.request(List.of(core.getPath()), "main:ThreadAsyncAudit.yieldProbe", true, false, backend, true, false, null, mode); var entry = context.eval("thc", request);
             assertTrue(entry.invokeMember("compile").asBoolean()); assertEquals(37L, entry.execute(0L).asLong(), backend + "/" + mode + " first installed entry");
             var diagnostics = (Map<?, ?>) Json.parse(entry.getMember("diagnostics").asString()); assertEquals(backend, diagnostics.get("backend")); assertEquals(Boolean.TRUE.equals(mode), diagnostics.get("asyncExceptions"));
             var document = (Map<String, Object>) Json.parse(request);
@@ -166,14 +167,14 @@ public class ThreadAsyncNativeTest {
     @Test public void yieldPreservesStateAndMaskInCompiledAstAndBytecode() throws Exception {
         checkReceipt();
         for (var stage : List.of("pre", "post")) for (var backend : List.of("ast", "bytecode")) {
-            var module = CoreModules.merge(List.of((Map<String, Object>) Json.parse(Files.readString(new File(root, "build/thread-async/" + stage + "/core/ThreadAsyncAudit.json").toPath()))));
+            var module = CoreModules.merge(List.of(CoreCbdFixtures.read(new File(root, "build/thread-async/" + stage + "/core/ThreadAsyncAudit.cbd").toPath())));
             for (var row : List.of(new YieldCase("yieldProbe", 37L), new YieldCase("yieldMasked", 39L))) try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
                     .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build()) {
                 context.initialize("thc"); context.enter();
                 try {
-                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var linked = new LinkedHashMap<>(CoreModules.reachable(module, row.name())); linked.put("instrument", true);
-                    ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked); var function = context.asValue(new EntryValue(program, row.name(), 1));
-                    assertEquals(row.base(), function.execute(0L).asLong(), stage + "/" + backend + "/" + row.name()); var target = program.entryTarget(row.name());
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var entry = "main:ThreadAsyncAudit." + row.name(); var linked = new LinkedHashMap<>(CoreModules.reachable(module, entry)); linked.put("instrument", true);
+                    ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked); var function = context.asValue(new EntryValue(program, entry, 1));
+                    assertEquals(row.base(), function.execute(0L).asLong(), stage + "/" + backend + "/" + row.name()); var target = program.entryTarget(entry);
                     target.getClass().getMethod("compile", boolean.class).invoke(target, true); assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target)); assertTrue(function.invokeMember("compile").asBoolean());
                     long before = ((Number) program.diagnostics().get("compiledEntries")).longValue(); assertEquals(row.base() + 1, function.execute(1L).asLong(), stage + "/" + backend + "/" + row.name() + " compiled");
                     assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > before); assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(target.getRootNode()));
