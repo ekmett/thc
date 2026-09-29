@@ -35,7 +35,7 @@ class CoreCompactRecordsTest {
     private void module(byte[] data, byte[] strings, byte[] facts, int flags, Action action) throws Exception {
         var symbols = ByteBuffer.allocate(24).order(ByteOrder.LITTLE_ENDIAN)
             .put(MessageDigest.getInstance("MD5").digest(id)).putLong(0).array();
-        var encoded = CoreCbdTestSupport.archive(CoreCbdTestSupport.header(facts, 1, flags, 0),
+        var encoded = CoreCbdTestSupport.archive(CoreCbdTestSupport.header(facts, strings, 1, flags, 0),
             List.of(data, strings, new byte[0], new byte[0], new byte[0], symbols), Set.of(), false);
         var path = directory.resolve("module.cbd");
         Files.write(path, encoded);
@@ -52,6 +52,64 @@ class CoreCompactRecordsTest {
     private byte[] literal(int kind, byte[] payload) { return concat(bytes(2), new byte[10], bytes(kind), payload); }
     private byte[] binding(byte[] expression) { return concat(bytes(0, 0, id.length, 0, 2, 1, 0, 0, 0, 0, 0, 0, 0), expression); }
     private record LiteralCase(int kind, byte[] payload, String tag, Object expected) {}
+    @Test void finalizedHeaderStringsAreIndependentAndDoNotInflateExecutableMembers() throws Exception {
+        byte[] metadata = "metadata".getBytes(StandardCharsets.UTF_8);
+        byte[] span = bytes(0, metadata.length);
+        byte[] facts = concat(bytes(1), span, span, span, span, new byte[14]);
+        byte[] header = ByteBuffer.allocate(40 + metadata.length + facts.length).order(ByteOrder.LITTLE_ENDIAN)
+            .put("THCCBD1\0".getBytes(StandardCharsets.UTF_8)).putShort((short) 1).putShort((short) 1)
+            .putInt(0).putLong(1).putInt(0).putInt(0).putLong(metadata.length).put(metadata).put(facts).array();
+        byte[] symbols = ByteBuffer.allocate(24).order(ByteOrder.LITTLE_ENDIAN)
+            .put(MessageDigest.getInstance("MD5").digest(id)).putLong(0).array();
+        // Payload order is independent of the final header's placement.
+        byte[] encoded = CoreCbdTestSupport.archive(header,
+            List.of(binding(literal(0, bytes(84))), id, new byte[0], new byte[0], new byte[0], symbols),
+            Set.of("header", "data", "strings"), true);
+        var path = Files.write(directory.resolve("private-header-strings.cbd"), encoded);
+        var hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(encoded));
+        try (var maps = new CoreFileMappings(0, 0); var slabs = new CoreCbdSlabs(0, 0);
+                var file = new CoreCompactFile(path, hash, false, maps, slabs)) {
+            var records = new CoreCompactRecords(file, hash);
+            assertEquals("metadata", records.header().get("module"));
+            var counts = file.getCounters().statistics();
+            assertEquals(1L, counts.memberInflations());
+            assertEquals(0L, counts.dataBytesRead()); assertEquals(0L, counts.stringBytesRead());
+            assertEquals(0L, counts.debugBytesRead());
+            assertEquals("unit:M.f", records.binding(0).get("id"));
+            assertEquals("metadata", records.header().get("module"));
+            assertEquals(3L, file.getCounters().statistics().memberInflations());
+        }
+    }
+    @Test void malformedPrivateMetadataTextRejectsWithoutReadingExecutableMembers() throws Exception {
+        for (byte[] span : List.of(bytes(0, 1), bytes(0, 2))) {
+            byte[] facts = concat(bytes(1), span, span, span, span, new byte[14]);
+            module(new byte[0], bytes(255), facts, (records, file) -> {
+                if (span[1] == 1) assertThrows(java.nio.charset.CharacterCodingException.class, records::header);
+                else assertThrows(IllegalArgumentException.class, records::header);
+                var counts = file.getCounters().statistics();
+                assertEquals(0L, counts.dataBytesRead()); assertEquals(0L, counts.stringBytesRead());
+                assertEquals(0L, counts.debugBytesRead());
+            });
+        }
+    }
+    @Test void unsupportedDiagnosticsKeepTheirExactPayloadAndRepresentation() throws Exception {
+        var diagnostic = "RUBBISH(LiftedRep)".getBytes(StandardCharsets.UTF_8);
+        byte[] metadata = concat(bytes(2, 0, 7, 2, 1, 14, 0, 0, 0, 0, 0, 0, 2, 0), new byte[9]);
+        byte[] text = bytes(id.length, diagnostic.length);
+        for (boolean literal : List.of(false, true)) {
+            byte[] expression = concat(bytes(literal ? 2 : 9), metadata, literal ? bytes(19) : new byte[0], text);
+            module(binding(expression), concat(id, diagnostic), new byte[0], (records, file) -> {
+                var expr = (List<?>) records.binding(0).get("expr");
+                assertEquals(literal ? "lit" : "unsupported", expr.getFirst());
+                assertEquals("RUBBISH(LiftedRep)", expr.get(literal ? 2 : 1));
+                if (literal) assertEquals("unsupported", expr.get(1));
+                var proof = thc.runtime.CoreRepresentations.parse(((Map<?,?>) expr.getLast()).get("rep"));
+                assertEquals(thc.runtime.CoreKind.OBJECT, proof.getKind());
+                assertEquals(List.of("BoxedRep (Just Lifted)"), proof.getPrimReps());
+                assertFalse(proof.getEvaluated());
+            });
+        }
+    }
     @Test void nominalHostSignatureExtensionNeedsItsFeatureBitAndKeepsOldRecords() throws Exception {
         // Independent shape encoding: object, exact unlifted boxed reference, evaluated.
         byte[] rep = bytes(0, 7, 2, 1, 15, 0, 0, 0, 0, 0, 0, 2, 1);

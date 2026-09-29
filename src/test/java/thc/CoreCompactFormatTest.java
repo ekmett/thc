@@ -21,7 +21,8 @@ class CoreCompactFormatTest {
     }
     @Test void headerUsesUncompressedMemberLengthsWithoutReadingTheirContents() {
         var value = read(header());
-        assertEquals(new CoreCompactFormat.Span(32, 5), value.facts());
+        assertEquals(new CoreCompactFormat.Span(40, 5), value.facts());
+        assertEquals(new CoreCompactFormat.Span(40, 0), value.metadataStrings());
         assertEquals(new CoreCompactFormat.Span(0, 3), value.get(CoreCompactFormat.Segment.DATA));
         assertEquals(new CoreCompactFormat.Span(0, 6), value.get(CoreCompactFormat.Segment.STRINGS));
         assertEquals(new CoreCompactFormat.Span(0, 24), value.get(CoreCompactFormat.Segment.SYMBOLS));
@@ -40,10 +41,18 @@ class CoreCompactFormatTest {
             byte[] bytes = header(); bytes[position] = -1;
             assertThrows(IllegalArgumentException.class, () -> read(bytes));
         }
-        for (int size = 0; size < 32; size++) {
+        for (int size = 0; size < 40; size++) {
             byte[] bytes = new byte[size];
             assertThrows(IllegalArgumentException.class, () -> read(bytes));
         }
+    }
+    @Test void privateStringExtentAndOldMinorVersionRejectBeforeRecordDecoding() {
+        for (long length : new long[]{-1, Long.MAX_VALUE, 6}) {
+            byte[] bytes = header(); ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).putLong(32, length);
+            assertThrows(IllegalArgumentException.class, () -> read(bytes));
+        }
+        byte[] previous = header(); ByteBuffer.wrap(previous).order(ByteOrder.LITTLE_ENDIAN).putShort(10, (short) 0);
+        assertThrows(IllegalArgumentException.class, () -> read(previous));
     }
     @Test void countOverflowUnknownLengthsAndSymbolWidthMismatchReject() {
         for (long count : new long[]{-1, Long.MAX_VALUE, 2}) {

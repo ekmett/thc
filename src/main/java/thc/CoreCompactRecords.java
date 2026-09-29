@@ -18,6 +18,7 @@ public final class CoreCompactRecords {
     private final CoreCompactFile file;
     private final String identity;
     private final CoreCompactDebug debug;
+    private final boolean metadata;
     private long bindingOffset;
     private static final Object MISSING = new Object();
     private record Shape(Map<String,Object> fields) {}
@@ -25,13 +26,16 @@ public final class CoreCompactRecords {
     private final Map<Long,Shape> shapes = new HashMap<>();
     private final Set<Long> readingShapes = new HashSet<>();
     private final Map<StringSpan,String> strings = new HashMap<>();
-    public CoreCompactRecords(CoreCompactFile file, String identity) { this.file = file; this.identity = identity; debug = new CoreCompactDebug(file); }
+    public CoreCompactRecords(CoreCompactFile file, String identity) { this(file, identity, false); }
+    private CoreCompactRecords(CoreCompactFile file, String identity, boolean metadata) {
+        this.file = file; this.identity = identity; this.metadata = metadata; debug = new CoreCompactDebug(file);
+    }
     private Origin origin(long offset) { return new Origin(identity, offset, bindingOffset, debug); }
     private String text(CoreCompactCursor cursor) throws Throwable {
         var span = new StringSpan(cursor.unsigned(), cursor.unsigned());
         String existing = strings.get(span);
         if (existing != null) return existing;
-        String value = file.string(span.offset, span.length);
+        String value = metadata ? file.metadataString(span.offset, span.length) : file.string(span.offset, span.length);
         strings.put(span, value);
         return value;
     }
@@ -343,6 +347,9 @@ public final class CoreCompactRecords {
     }
     /** Header shapes are inline: metadata admission never reads an executable body. */
     public Map<String,Object> header() {
+        return new CoreCompactRecords(file, identity, true).readHeader();
+    }
+    private Map<String,Object> readHeader() {
         try {
             return file.facts(cursor -> {
                 var result = map("schema", cursor.unsigned(), "ghc", text(cursor), "unit", text(cursor), "module", text(cursor), "boundary", text(cursor));

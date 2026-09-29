@@ -52,7 +52,7 @@ class CoreCompactFileTest {
             assertEquals(250L, file.lookup("unit:M.f250"));
             var counts = file.getCounters().statistics();
             assertEquals(1L, counts.acquisitions());
-            assertEquals(32L, counts.headerBytesRead());
+            assertEquals(40L, counts.headerBytesRead());
             assertTrue(counts.lookupComparisons() <= 11);
             assertTrue(counts.lookupBytesRead() <= 16 * 11 + 8);
             assertEquals(0L, counts.hashBytesRead()); assertEquals(0L, counts.dataBytesRead());
@@ -118,6 +118,7 @@ class CoreCompactFileTest {
         try (var cache = new CoreFileMappings(1024 * 1024, 4); var file = new CoreCompactFile(path(), sha(bytes), false, cache)) {
             assertThrows(IllegalArgumentException.class, () -> file.lookup("unit:M.f"));
             assertThrows(IllegalArgumentException.class, () -> file.string(5, 2));
+            assertThrows(IllegalArgumentException.class, () -> file.metadataString(0, 1));
             assertThrows(IllegalArgumentException.class, () -> file.data(1, CoreCompactCursor::readByte));
             assertThrows(IllegalArgumentException.class, () -> file.debug(CoreCompactFormat.Segment.DATA, CoreCompactCursor::readByte));
         }
@@ -131,7 +132,7 @@ class CoreCompactFileTest {
                 assertSame(failure, assertThrows(IOException.class, () -> file.facts(it -> { it.readByte(); throw failure; })));
                 assertSame(failure, assertThrows(IOException.class, () -> file.debug(CoreCompactFormat.Segment.NAMES, it -> { it.readByte(); throw failure; })));
                 var counts = file.getCounters().statistics();
-                assertEquals(1L, counts.dataBytesRead()); assertEquals(33L, counts.headerBytesRead()); assertEquals(1L, counts.debugBytesRead());
+                assertEquals(1L, counts.dataBytesRead()); assertEquals(41L, counts.headerBytesRead()); assertEquals(1L, counts.debugBytesRead());
                 assertEquals(0L, file.data(0, CoreCompactCursor::unsigned).longValue());
             }
             try (var file = new CoreCompactFile(path(), sha(bytes), true, cache)) {

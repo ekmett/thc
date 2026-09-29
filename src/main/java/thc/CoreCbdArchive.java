@@ -25,7 +25,7 @@ import java.util.zip.Inflater;
  * handles expose member-relative bounds and pin their exact mapping or slab. */
 public final class CoreCbdArchive implements AutoCloseable {
     public static final Set<String> NAMES = Collections.unmodifiableSet(new LinkedHashSet<>(
-            List.of("header", "data", "strings", "names", "filenames", "line-columns", "symbols")));
+            List.of("data", "strings", "names", "filenames", "line-columns", "symbols", "header")));
     private CoreFileMappings.Lease mapping;
     private final CoreCbdSlabs slabs;
     private final Directory directory;
@@ -264,7 +264,7 @@ public final class CoreCbdArchive implements AutoCloseable {
                     "Invalid CBD ZIP directory count or extent");
             var result = new LinkedHashMap<String, Member>();
             var occupied = new ArrayList<Extent>();
-            long cursor = directoryAt;
+            long cursor = directoryAt, headerStart = -1;
             for (int index = 0; index < NAMES.size(); index++) {
                 extent(cursor, 46, directoryEnd);
                 require(u32(cursor) == 0x02014b50L, "Invalid CBD ZIP central entry");
@@ -279,6 +279,9 @@ public final class CoreCbdArchive implements AutoCloseable {
                 long next = extent(commentAt, commentLength, directoryEnd);
                 String name = name(cursor + 46, nameLength);
                 require(!result.containsKey(name), "Duplicate CBD ZIP member: " + name);
+                if (name.equals("header")) {
+                    require(index == NAMES.size() - 1, "CBD header must be the final directory member");
+                }
                 Extra extra = new Extra(zip64(extraAt, extraLength));
                 boolean central64 = length == 0xffffffffL || compressed == 0xffffffffL || local == 0xffffffffL || disk == 65535;
                 require(!central64 || version == 45, "Invalid CBD ZIP64 central version");
@@ -286,6 +289,7 @@ public final class CoreCbdArchive implements AutoCloseable {
                 if (compressed == 0xffffffffL) compressed = extra.longValue();
                 if (local == 0xffffffffL) local = extra.longValue();
                 if (disk == 65535) disk = extra.disk();
+                if (name.equals("header")) headerStart = local;
                 require(disk == 0 && (method != 0 || compressed == length), "Invalid CBD ZIP member sizes or disk");
                 extent(local, 30, directoryAt);
                 int localVersion = u16(local + 4);
@@ -331,6 +335,7 @@ public final class CoreCbdArchive implements AutoCloseable {
             require(cursor == directoryEnd, "Trailing CBD ZIP directory bytes");
             long end = 0;
             occupied.sort(Comparator.comparingLong(Extent::start));
+            require(occupied.getLast().start == headerStart, "CBD header must be the final physical member");
             for (Extent span : occupied) {
                 require(span.start >= end, "Overlapping CBD ZIP members");
                 end = span.end;

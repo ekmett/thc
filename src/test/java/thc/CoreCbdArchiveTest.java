@@ -27,10 +27,10 @@ class CoreCbdArchiveTest {
         var bytes = CoreCbdTestSupport.zip64(false);
         try (var maps = new CoreFileMappings(0, 0); var archive = CoreCbdArchive.open(maps.acquire(write(bytes), sha(bytes)))) {
             try (var it = archive.read("data")) { assertEquals(42, it.getBytes().get(ValueLayout.JAVA_BYTE, 0)); }
-            assertEquals(32L, archive.member("header").length());
+            assertEquals(40L, archive.member("header").length());
         }
         // Reject unsigned sizes outside positive Long before allocation or narrowing.
-        for (int at : new int[]{40, bytes.length - 98 + 40, bytes.length - 98 + 48}) {
+        for (int at : new int[]{38, bytes.length - 98 + 40, bytes.length - 98 + 48}) {
             var invalid = bytes.clone(); ByteBuffer.wrap(invalid).order(ByteOrder.LITTLE_ENDIAN).putLong(at, Long.MIN_VALUE);
             try (var maps = new CoreFileMappings(0, 0)) {
                 assertThrows(IllegalArgumentException.class, () -> CoreCbdArchive.open(maps.acquire(write(invalid), sha(invalid))).close());
@@ -121,9 +121,30 @@ class CoreCbdArchiveTest {
         }
         return offsets;
     }
+    @Test void finalHeaderMustBeLastInBothPhysicalAndCentralOrder() throws Exception {
+        var original = source();
+        var offsets = central(original);
+        var view = ByteBuffer.wrap(original).order(ByteOrder.LITTLE_ENDIAN);
+        int directoryAt = offsets.getFirst(), headerEntry = offsets.getLast();
+        int directoryEnd = original.length - 22, headerLocal = view.getInt(headerEntry + 42);
+        var wrongCentral = original.clone();
+        int headerEntrySize = directoryEnd - headerEntry;
+        System.arraycopy(original, headerEntry, wrongCentral, directoryAt, headerEntrySize);
+        System.arraycopy(original, directoryAt, wrongCentral, directoryAt + headerEntrySize, headerEntry - directoryAt);
+        var wrongPhysical = original.clone();
+        int headerLocalSize = directoryAt - headerLocal;
+        System.arraycopy(original, headerLocal, wrongPhysical, 0, headerLocalSize);
+        System.arraycopy(original, 0, wrongPhysical, headerLocalSize, headerLocal);
+        var shifted = ByteBuffer.wrap(wrongPhysical).order(ByteOrder.LITTLE_ENDIAN);
+        for (int entry : offsets) shifted.putInt(entry + 42, entry == headerEntry ? 0 : view.getInt(entry + 42) + headerLocalSize);
+        for (byte[] invalid : List.of(wrongCentral, wrongPhysical)) try (var maps = new CoreFileMappings(0, 0)) {
+            assertThrows(IllegalArgumentException.class, () -> CoreCbdArchive.open(maps.acquire(write(invalid), sha(invalid))).close());
+            assertEquals(0L, maps.statistics().activeLeases());
+        }
+    }
     @Test void crcFailureIsUnpublishedAndRetryDoesNotReusePoisonedSlab() throws Exception {
         var bytes = source(Set.of("data")); var view = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN);
-        int data = central(bytes).get(1), local = view.getInt(data + 42);
+        int data = central(bytes).get(0), local = view.getInt(data + 42);
         int payload = local + 30 + (view.getShort(local + 26) & 65535) + (view.getShort(local + 28) & 65535);
         int descriptor = payload + view.getInt(data + 20), badCrc = view.getInt(data + 16) ^ 1;
         view.putInt(data + 16, badCrc); view.putInt(descriptor + 4, badCrc);
@@ -156,7 +177,7 @@ class CoreCbdArchiveTest {
     }
     @Test void storedCrcIsCheckedOnlyByExplicitFreshVerification() throws Throwable {
         var bytes = source(); var view = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN);
-        int data = central(bytes).get(1), local = view.getInt(data + 42);
+        int data = central(bytes).get(0), local = view.getInt(data + 42);
         view.putInt(data + 16, 0); view.putInt(local + 14, 0); var path = write(bytes);
         try (var maps = new CoreFileMappings(10000, 2)) {
             try (var file = new CoreCompactFile(path, sha(bytes), false, maps)) {
@@ -183,7 +204,7 @@ class CoreCbdArchiveTest {
     }
     @Test void duplicateRequiredNamesAndWrongInflatedLengthsReject() throws Exception {
         var duplicate = source(); var view = ByteBuffer.wrap(duplicate).order(ByteOrder.LITTLE_ENDIAN);
-        int entry = central(duplicate).get(2), local = view.getInt(entry + 42); // strings and symbols have equal widths.
+        int entry = central(duplicate).get(1), local = view.getInt(entry + 42); // strings and symbols have equal widths.
         var name = "symbols".getBytes(StandardCharsets.UTF_8);
         System.arraycopy(name, 0, duplicate, entry + 46, name.length); System.arraycopy(name, 0, duplicate, local + 30, name.length);
         try (var maps = new CoreFileMappings(0, 0)) {
@@ -191,7 +212,7 @@ class CoreCbdArchiveTest {
         }
         for (int length : new int[]{0, 2}) {
             var bytes = source(Set.of("data")); var fields = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN);
-            int data = central(bytes).get(1), at = fields.getInt(data + 42);
+            int data = central(bytes).get(0), at = fields.getInt(data + 42);
             int payload = at + 30 + (fields.getShort(at + 26) & 65535) + (fields.getShort(at + 28) & 65535);
             int descriptor = payload + fields.getInt(data + 20);
             fields.putInt(data + 24, length); fields.putInt(descriptor + 12, length);

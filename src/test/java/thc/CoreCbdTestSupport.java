@@ -75,18 +75,21 @@ public final class CoreCbdTestSupport {
     }
 
     static byte[] header(byte[] facts, long count, int summaries, int debug) {
-        return ByteBuffer.allocate(32 + facts.length).order(ByteOrder.LITTLE_ENDIAN)
-            .put("THCCBD1\0".getBytes(StandardCharsets.UTF_8)).putShort((short) 1).putShort((short) 0)
-            .putInt(summaries).putLong(count).putInt(debug).putInt(0).put(facts).array();
+        return header(facts, new byte[0], count, summaries, debug);
+    }
+    static byte[] header(byte[] facts, byte[] strings, long count, int summaries, int debug) {
+        return ByteBuffer.allocate(40 + strings.length + facts.length).order(ByteOrder.LITTLE_ENDIAN)
+            .put("THCCBD1\0".getBytes(StandardCharsets.UTF_8)).putShort((short) 1).putShort((short) 1)
+            .putInt(summaries).putLong(count).putInt(debug).putInt(0).putLong(strings.length).put(strings).put(facts).array();
     }
     static byte[] header() { return header(new byte[0], 0, 0, 0); }
     static byte[] archive(byte[] header, List<byte[]> segments, Set<String> deflated, boolean reverse) throws IOException {
-        var names = List.of("header", "data", "strings", "names", "filenames", "line-columns", "symbols");
-        var contents = new ArrayList<byte[]>(); contents.add(header); contents.addAll(segments);
+        var names = List.of("data", "strings", "names", "filenames", "line-columns", "symbols", "header");
+        var contents = new ArrayList<>(segments); contents.add(header);
         var output = new ByteArrayOutputStream();
         try (var zip = new ZipOutputStream(output)) {
             for (int index = 0; index < Math.min(names.size(), contents.size()); index++) {
-                int i = reverse ? Math.min(names.size(), contents.size()) - index - 1 : index;
+                int i = reverse && index < 6 ? 5 - index : index;
                 var name = names.get(i); var bytes = contents.get(i);
                 var entry = new ZipEntry(name); entry.setTime(315532800000L);
                 if (!deflated.contains(name)) {
@@ -101,8 +104,8 @@ public final class CoreCbdTestSupport {
     private static ByteBuffer fields(int size) { return ByteBuffer.allocate(size).order(ByteOrder.LITTLE_ENDIAN); }
     /** Small ZIP64 model uses sentinel fields despite small actual members. */
     static byte[] zip64(boolean offsetsOnly) {
-        var names = List.of("header", "data", "strings", "names", "filenames", "line-columns", "symbols");
-        var contents = List.of(header(), new byte[]{42}, new byte[0], new byte[0], new byte[0], new byte[0], new byte[0]);
+        var names = List.of("data", "strings", "names", "filenames", "line-columns", "symbols", "header");
+        var contents = List.of(new byte[]{42}, new byte[0], new byte[0], new byte[0], new byte[0], new byte[0], header());
         var out = new ByteArrayOutputStream(); var offsets = new ArrayList<Long>();
         for (int i = 0; i < names.size(); i++) {
             var name = names.get(i); var bytes = contents.get(i); offsets.add((long) out.size());
