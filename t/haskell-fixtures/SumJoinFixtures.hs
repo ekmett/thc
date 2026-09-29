@@ -95,7 +95,7 @@ prepareSumJoins root = do
       (["bin/audit-core.py", "--output", report] ++ concatMap (\entry -> ["--entry", "main:SumJoinAudit." ++ entry]) entries ++ [modulePath])
     auditBytes <- BS.readFile (root </> report)
     case decodeStrict' auditBytes of
-      Just (Object value) | KeyMap.lookup "accepted" value == Just (Bool True) -> pure ()
+      Just (Object audit) | KeyMap.lookup "accepted" audit == Just (Bool True) -> pure ()
       _ -> die ("Strict sum-join audit rejected " ++ stage)
     pure (modulePath : report : commandArtifacts exported ++ commandArtifacts audited)
   sourceHashes <- hashes root [source, driver, "t/haskell-fixtures/SumJoinFixtures.hs",
