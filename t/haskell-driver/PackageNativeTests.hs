@@ -20,6 +20,7 @@ import qualified Data.Aeson.KeyMap as KM
 import Data.Either (isLeft)
 import Data.List (isInfixOf, isPrefixOf)
 import System.Directory (findExecutable, getCurrentDirectory)
+import System.FilePath ((</>), takeDirectory)
 import System.Process (readProcess)
 import Test.HUnit
 import THC.Driver.PackageNative
@@ -35,13 +36,23 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
       libdir <- readProcess compiler ["--print-libdir"] "" >>= \output -> case lines output of
         [directory] -> pure directory
         _ -> fail "GHC did not report one libdir"
+      let ghcPkg = takeDirectory compiler </> "ghc-pkg"
+          unitId package = readProcess ghcPkg ["field",package,"id","--simple-output"] "" >>= \output ->
+            case words output of
+              [identifier] -> pure identifier
+              _ -> fail ("GHC did not report one installed unit for " ++ package)
       root <- getCurrentDirectory
-      compilerArchives <- nativeSymbolArchives compiler libdir root "ghc-9.14.1-inplace" []
-        [("keepCAFsForGHCi",True),("setHeapSize",True),("enableTimingStats",True),
-         ("ghc_unique_counter64",False),("ghc_unique_inc",False)]
-      assertEqual "compiler process-state objects must not load beside context-owned RTS services"
-        [] compilerArchives
-      ordinaryArchives <- nativeSymbolArchives compiler libdir root "ghc-internal-9.1401.0-inplace" [] [("__hscore_bufsiz",True)]
+      compilerUnit <- unitId "ghc"
+      if compilerUnit /= "ghc-9.14.1-inplace"
+        then putStrLn ("SKIP compiler native-state archive regression: requires ghc-9.14.1-inplace; selected " ++ compilerUnit)
+        else do
+          compilerArchives <- nativeSymbolArchives compiler libdir root compilerUnit []
+            [("keepCAFsForGHCi",True),("setHeapSize",True),("enableTimingStats",True),
+             ("ghc_unique_counter64",False),("ghc_unique_inc",False)]
+          assertEqual "compiler process-state objects must not load beside context-owned RTS services"
+            [] compilerArchives
+      internalUnit <- unitId "ghc-internal"
+      ordinaryArchives <- nativeSymbolArchives compiler libdir root internalUnit [] [("__hscore_bufsiz",True)]
       assertBool "ordinary registered C objects remain native providers" (not (null ordinaryArchives))
   , TestCase $ do
       let rep kind prim = object ["kind" .= (kind::String), "primReps" .= (prim::[String]), "evaluated" .= False]
