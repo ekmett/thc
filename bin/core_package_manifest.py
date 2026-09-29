@@ -925,17 +925,139 @@ def validate_archive_only_foreign(module):
         raise ValueError('Core schema 2 requires foreign artifacts')
 
 
-def strict_json(data):
-    def object_pairs(pairs):
-        result = {}
-        for key, value in pairs:
-            if key in result:
+def _object_pairs(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f'Duplicate JSON key: {key}')
+        result[key] = value
+    return result
+
+
+def _invalid_constant(value):
+    raise ValueError(f'Invalid JSON constant: {value}')
+
+
+def _json_decoder(strict):
+    return json.JSONDecoder(object_pairs_hook=_object_pairs, parse_constant=_invalid_constant) if strict else json.JSONDecoder()
+
+
+def json_raw_decode(text, at=0, *, strict=False):
+    """Keep the stdlib fast path; deep containers use the same scalar decoder."""
+    decoder = _json_decoder(strict)
+    try:
+        return decoder.raw_decode(text, at)
+    except RecursionError:
+        pass
+
+    def value(at):
+        if at < len(text) and text[at] in '[{':
+            return ([] if text[at] == '[' else {}), at + 1, True
+        result, end = decoder.raw_decode(text, at)
+        return result, end, False
+
+    root, at, opened = value(at)
+    if not opened:
+        return root, at
+    # State 0 permits an empty container, 1 requires an item, 2 a separator.
+    stack = [[root, 0]]
+    while stack:
+        container, state = stack[-1]
+        at = _skip_json_space(text, at)
+        char = text[at:at + 1]
+        close = ']' if isinstance(container, list) else '}'
+        if char == close and state != 1:
+            stack.pop()
+            at += 1
+            continue
+        if state == 2:
+            if char != ',':
+                raise json.JSONDecodeError("Expecting ',' delimiter", text, at)
+            stack[-1][1] = 1
+            at = _skip_json_space(text, at + 1)
+        key = None
+        if isinstance(container, dict):
+            if text[at:at + 1] != '"':
+                raise json.JSONDecodeError('Expecting property name enclosed in double quotes', text, at)
+            key, at = decoder.raw_decode(text, at)
+            if strict and key in container:
                 raise ValueError(f'Duplicate JSON key: {key}')
-            result[key] = value
-        return result
-    def invalid_constant(value):
-        raise ValueError(f'Invalid JSON constant: {value}')
-    return json.loads(data, object_pairs_hook=object_pairs, parse_constant=invalid_constant)
+            at = _skip_json_space(text, at)
+            if text[at:at + 1] != ':':
+                raise json.JSONDecodeError("Expecting ':' delimiter", text, at)
+            at = _skip_json_space(text, at + 1)
+        child, at, opened = value(at)
+        if isinstance(container, list):
+            container.append(child)
+        else:
+            container[key] = child
+        stack[-1][1] = 2
+        if opened:
+            stack.append([child, 0])
+    return root, at
+
+
+def json_loads(data, *, strict=False):
+    try:
+        return json.loads(data, **(dict(object_pairs_hook=_object_pairs, parse_constant=_invalid_constant) if strict else {}))
+    except RecursionError:
+        pass
+    if not isinstance(data, str):
+        data = data.decode(json.detect_encoding(data), 'surrogatepass')
+    result, end = json_raw_decode(data, _skip_json_space(data, 0), strict=strict)
+    end = _skip_json_space(data, end)
+    if end != len(data):
+        raise json.JSONDecodeError('Extra data', data, end)
+    return result
+
+
+def strict_json(data):
+    return json_loads(data, strict=True)
+
+
+def json_dumps(value):
+    """Exact compact ensure_ascii storage bytes, without a nesting limit."""
+    try:
+        return json.dumps(value, ensure_ascii=True, separators=(',', ':'))
+    except RecursionError:
+        pass
+    parts, active = [], set()
+    stack = [('value', value)]
+    while stack:
+        kind, item = stack.pop()
+        if kind == 'close':
+            active.remove(id(item))
+            parts.append('}' if isinstance(item, dict) else ']')
+        elif kind in ('array', 'object'):
+            iterator, first = item
+            try:
+                child = next(iterator)
+            except StopIteration:
+                continue
+            if not first:
+                parts.append(',')
+            stack.append((kind, (iterator, False)))
+            if kind == 'object':
+                key, child = child
+                if not isinstance(key, str):
+                    if key is True: key = 'true'
+                    elif key is False: key = 'false'
+                    elif key is None: key = 'null'
+                    elif isinstance(key, (int, float)): key = json.dumps(key)
+                    else: raise TypeError('keys must be str, int, float, bool or None')
+                parts.append(json.dumps(key, ensure_ascii=True) + ':')
+            stack.append(('value', child))
+        elif isinstance(item, (dict, list, tuple)):
+            if id(item) in active:
+                raise ValueError('Circular reference detected')
+            active.add(id(item))
+            object_ = isinstance(item, dict)
+            parts.append('{' if object_ else '[')
+            stack.append(('close', item))
+            stack.append(('object' if object_ else 'array', (iter(item.items() if object_ else item), True)))
+        else:
+            parts.append(json.dumps(item, ensure_ascii=True, separators=(',', ':')))
+    return ''.join(parts)
 
 
 def zip_member(name):
@@ -1186,14 +1308,13 @@ def _iter_unit_modules(path, unit, records):
             del original, selected
             text = data[a:b].decode('utf-8')
             at, offset = 1, first + 1
-            decoder = json.JSONDecoder()
             while True:
                 after_space = _skip_json_space(text, at)
                 offset += after_space - at  # JSON whitespace is one-byte ASCII.
                 at = after_space
                 if text[at] == ']':
                     break
-                binding, end_at = decoder.raw_decode(text, at)
+                binding, end_at = json_raw_decode(text, at)
                 key = binding.get('id') if isinstance(binding, dict) else None
                 if not isinstance(key, str) or not key or not fixed and ('\n' in key or '\r' in key):
                     raise ValueError(f'{path}: invalid unit symbol ID')
@@ -1241,18 +1362,26 @@ def _skip_json_space(text, at):
 
 
 def _same_json_value(left, right):
-    if type(left) is not type(right):
-        return False
-    if isinstance(left, dict):
-        return left.keys() == right.keys() and all(_same_json_value(left[key], value) for key, value in right.items())
-    if isinstance(left, list):
-        return len(left) == len(right) and all(_same_json_value(a, b) for a, b in zip(left, right))
-    return left == right
+    pending = [(left, right)]
+    while pending:
+        left, right = pending.pop()
+        if type(left) is not type(right):
+            return False
+        if isinstance(left, dict):
+            if left.keys() != right.keys():
+                return False
+            pending.extend((left[key], value) for key, value in right.items())
+        elif isinstance(left, list):
+            if len(left) != len(right):
+                return False
+            pending.extend(zip(left, right))
+        elif left != right:
+            return False
+    return True
 
 
 def _bindings_span(text):
     """Locate the actual top-level field for an explicitly verified module."""
-    decoder = json.JSONDecoder()
     at = _skip_json_space(text, 0)
     if text[at] != '{':
         raise ValueError('Core module must be an object')
@@ -1261,13 +1390,13 @@ def _bindings_span(text):
         at = _skip_json_space(text, at)
         if text[at] == '}':
             raise ValueError('Core module has no bindings')
-        key, at = decoder.raw_decode(text, at)
+        key, at = json_raw_decode(text, at)
         at = _skip_json_space(text, at)
         if text[at] != ':':
             raise ValueError('Invalid Core object delimiter')
         at += 1
         at = _skip_json_space(text, at)
-        _, end = decoder.raw_decode(text, at)
+        _, end = json_raw_decode(text, at)
         if key == 'bindings':
             return len(text[:at].encode('utf-8')), len(text[:end].encode('utf-8'))
         at = _skip_json_space(text, end)

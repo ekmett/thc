@@ -56,6 +56,36 @@ CLOSURE = dict(REFERENCE, kind='closure', evaluated=True)
 TUPLE_CAP = dict(CAP, aggregateResults=['unboxed-tuple'])
 
 
+class DeepCoreTest(unittest.TestCase):
+    def test_deep_storage_round_trip_keeps_checksum(self):
+        value = var('leaf')
+        for _ in range(1400):
+            value = ['lam', [], value]
+        data, digest = audit_core._pack(value)
+        restored = audit_core._unpack(data, digest)
+        self.assertTrue(core_package_manifest._same_json_value(value, restored))
+        with self.assertRaises(audit_core.AuditStoreError):
+            audit_core._unpack(data + b' ', digest)
+
+    def test_deep_walk_keeps_scope_and_dependency_order(self):
+        expression = var('leaf')
+        for index in range(1200):
+            expression = ['case', var('scrutinee' + str(index)), 'bound' + str(index),
+                          [['default', None, [], expression]]]
+        auditor = audit_core.Audit([], CAP)
+        auditor.walk(expression, {}, 'root', '/expr')
+        self.assertEqual(['scrutinee' + str(index) for index in reversed(range(1200))] + ['leaf'],
+                         [edge['dependency'] for edge in auditor.edges])
+        self.assertEqual(set(edge['dependency'] for edge in auditor.edges), auditor.free_variables(expression))
+        scoped = ['let', False, [bind('local', var('local'))],
+                  ['lam', [dict(id='argument')], ['case', var('argument'), 'case',
+                    [['default', None, ['pattern'], ['app', var('local'),
+                      [var('case'), var('pattern'), var('outside')]]]]]]]
+        self.assertEqual({'local', 'outside'}, auditor.free_variables(scoped))
+        scoped[1] = True
+        self.assertEqual({'outside'}, auditor.free_variables(scoped))
+
+
 class CommandLineEncodingTest(unittest.TestCase):
     def test_utf8_core_and_module_paths_do_not_use_windows_ansi_encoding(self):
         # U+201D contains a UTF-8 byte undefined in cp1252. This is the real
