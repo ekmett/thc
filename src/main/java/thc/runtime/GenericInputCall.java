@@ -49,6 +49,16 @@ public final class GenericInputCall extends Node {
                 return input != null ? genericTypedPap(function, input, source, frame, this, values, count + start, offset, remaining) :
                     legacyGenericPap(frame, this, function, source, values, count + start, offset, remaining);
             }
+            int[] strict = input != null && capturesInput(this) ? strictInputPositions(root, input) : null;
+            boolean prepared = strict != null && strict.length != 0;
+            Object[] overrides = null;
+            if (prepared) {
+                Closure current = function; int currentOffset = offset;
+                try { overrides = forceGenericInputCaptured(frame, this, current, input, source, values, count + start, currentOffset, strict, force); }
+                catch (AstCapture cut) {
+                    throw cut.append((saved, value) -> callPrepared(saved, current, values, currentOffset, input, strict, (Object[]) value, metrics));
+                }
+            }
             boolean exact = function.arity == remaining, isTail = tail && exact;
             TupleShape resultShape = exact && destination != null ? root.getTupleResult() : null;
             int next = offset + function.arity;
@@ -58,18 +68,7 @@ public final class GenericInputCall extends Node {
                 try {
                     if (input == null) answer = legacy.call(frame, target, scalarPacket(frame, this, function, source, values, offset, function.arity, count + start), isTail, resultShape);
                     else {
-                        if (metrics.getEnabled()) metrics.incrementIndirectCalls();
-                        HandoffStorage storage = prepareGenericInput(frame, this, function, input, source, values, count + start, offset, function.arity, force);
-                        long generation = storage.getGeneration();
-                        boolean transferred = false;
-                        try {
-                            if (isTail) {
-                                try { checkTypedTail(frame, this, target, storage, input.getPacket(), metrics); }
-                                catch (TailCall transfer) { transferred = transfer.getInput() == storage; throw transfer; }
-                            }
-                            if (metrics.getEnabled()) { var state = input.state(); state.setCalls(state.getCalls() + 1); }
-                            answer = coldGeneric ? target.call(this, new Object[] {storage}) : Calls.indirect(indirect, target, new Object[] {storage});
-                        } finally { if (!transferred) releaseGenericInput(input, storage, generation); }
+                        answer = invokeTyped(frame, function, values, offset, input, strict, overrides, prepared, isTail, metrics);
                     }
                 } catch (TailCall transfer) {
                     if (isTail || exact && tupleBounce != null) throw transfer;
@@ -100,6 +99,46 @@ public final class GenericInputCall extends Node {
                 throw cut.append((saved, value) -> execute(saved, requireClosure(value), savedValues, next));
             }
         }
+    }
+    private Object invokeTyped(VirtualFrame frame, Closure function, Object[] values, int offset,
+            TypedInputLayout input, int[] strict, Object[] overrides, boolean prepared, boolean isTail, Metrics metrics) {
+        if (metrics.getEnabled()) metrics.incrementIndirectCalls();
+        HandoffStorage storage = prepared
+            ? packGenericInput(frame, this, function, input, source, values, count + start, offset, function.arity, strict, overrides)
+            : prepareGenericInput(frame, this, function, input, source, values, count + start, offset, function.arity, force);
+        long generation = storage.getGeneration();
+        boolean transferred = false;
+        try {
+            if (isTail) {
+                try { checkTypedTail(frame, this, function.target, storage, input.getPacket(), metrics); }
+                catch (TailCall transfer) { transferred = transfer.getInput() == storage; throw transfer; }
+            }
+            if (metrics.getEnabled()) { var state = input.state(); state.setCalls(state.getCalls() + 1); }
+            return coldGeneric ? function.target.call(this, new Object[] {storage}) : Calls.indirect(indirect, function.target, new Object[] {storage});
+        } finally { if (!transferred) releaseGenericInput(input, storage, generation); }
+    }
+    private Object callPrepared(VirtualFrame frame, Closure function, Object[] values, int offset,
+            TypedInputLayout input, int[] strict, Object[] overrides, Metrics metrics) {
+        boolean exact = function.arity == count + start - offset, isTail = tail && exact;
+        TupleShape resultShape = exact && destination != null ? ((GuestRoot) function.target.getRootNode()).getTupleResult() : null;
+        int next = offset + function.arity;
+        Object result;
+        try {
+            try {
+                result = invokeTyped(frame, function, values, offset, input, strict, overrides, true, isTail, metrics);
+            } catch (TailCall transfer) {
+                if (isTail || exact && tupleBounce != null) throw transfer;
+                result = loop.execute(transfer, metrics);
+            }
+            result = AstControl.complete(this, result, function.target, resultShape);
+        } catch (TailCall transfer) {
+            if (isTail) throw transfer;
+            if (exact && tupleBounce != null) { tupleBounce.execute(frame, transfer); return null; }
+            throw transfer;
+        } catch (AstCapture cut) {
+            throw cut.append((saved, value) -> finish(saved, value, values, exact, next, resultShape));
+        }
+        return finish(frame, result, values, exact, next, resultShape);
     }
     private Object finish(VirtualFrame frame, Object result, Object[] values, boolean exact, int next, TupleShape resultShape) {
         if (exact) {

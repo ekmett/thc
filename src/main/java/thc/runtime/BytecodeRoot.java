@@ -2471,6 +2471,9 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             try {
                 return tailResult(dispatch.execute(frame, function, null), function,
                         source.getLayout().getLogicalArity(), tail);
+            } catch (AstCapture cut) {
+                CompilerDirectives.transferToInterpreter();
+                return captureTypedInput(frame.materialize(), function, source, null, cut, node, tail);
             } catch (TailCall transfer) {
                 if (!tail || !((GuestRoot) node.getRootNode()).isSelf(transfer.getTarget())) throw transfer;
                 if (metrics.getEnabled()) metrics.incrementSelfTailReentries();
@@ -2503,6 +2506,9 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                     throw new IllegalStateException("Completed typed tuple application did not restore its caller mask");
                 }
                 return result;
+            } catch (AstCapture cut) {
+                CompilerDirectives.transferToInterpreter();
+                return captureTypedInput(frame.materialize(), function, source, destination, cut, node, tail);
             } catch (TailCall transfer) {
                 if (!tail || !((GuestRoot) node.getRootNode()).isSelf(transfer.getTarget())) throw transfer;
                 if (metrics.getEnabled()) metrics.incrementSelfTailReentries();
@@ -2521,6 +2527,53 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 boolean tail, Metrics metrics) {
             return new InputDispatch(source, source.getLayout().getLogicalArity(), tail, metrics,
                     destination.getCapturesYield() ? new ContinuationTupleDestination(destination) : destination, 0);
+        }
+    }
+
+    @TruffleBoundary(transferToInterpreterOnException = false)
+    private static Object captureTypedInput(com.oracle.truffle.api.frame.MaterializedFrame frame, Closure function,
+            BytecodeInputSource source, BytecodeTupleSlots destination, AstCapture cut, Node node, boolean tail) {
+        BytecodeRoot root = (BytecodeRoot) node.getRootNode();
+        // The operation's finally clears its scratch; the callback owns this cold copy.
+        var savedFrame = DelimitedContinuations.copyContinuationFrame(frame);
+        cut.enclose(steps -> new TypedInputResume(function, source, destination, root, steps));
+        AstContinuation saved = cut.freeze(root, savedFrame);
+        if (tail) return new AstTailYield(saved, root.getCallTarget());
+        MaskingState mask = SynchronousMasking.current(node);
+        throw new CapturedCallSuspension(new CallSegment(saved, mask, mask, destination == null ? null : destination.getShape()));
+    }
+    private static final class TypedInputResume implements AstResumeStep {
+        private final Closure function;
+        private final BytecodeInputSource source;
+        private final BytecodeTupleSlots destination;
+        private final BytecodeRoot root;
+        private final java.util.List<AstResumeStep> steps;
+        TypedInputResume(Closure function, BytecodeInputSource source, BytecodeTupleSlots destination, BytecodeRoot root, java.util.List<AstResumeStep> steps) {
+            this.function = function; this.source = source; this.destination = destination; this.root = root; this.steps = steps;
+        }
+        @Override public Object resume(VirtualFrame frame, Object input) {
+            boolean suspended = false;
+            try {
+                Object result;
+                try { result = AstContinuations.resumeAstSteps(frame, steps, input); }
+                catch (TupleCallYield yielded) {
+                    // The operation's original catch scope unwound with strict preparation.
+                    MaskingState mask = SynchronousMasking.current(root);
+                    var captured = (CapturedCallSuspension) captureTupleCall(function, source.getLayout().getLogicalArity(),
+                        destination, yielded, root, mask);
+                    CallSegment segment = captured.getSegment();
+                    throw new AstCapture(new CallSegmentSuspended(segment), mask).append(new AstResumeStep() {
+                        @Override public Object resume(VirtualFrame saved, Object value) {
+                            destination.consume(saved, root, AstControl.resumeChild(segment, root, value, this));
+                            return null;
+                        }
+                    });
+                }
+                return destination == null ? result : TupleResults.ownedTupleResult(destination.finish(frame, root.getBytecodeNode()), destination.getShape());
+            } catch (AstCapture cut) {
+                suspended = true;
+                throw cut.enclose(remaining -> new TypedInputResume(function, source, destination, root, remaining));
+            } finally { if (!suspended) BytecodeTypedInputSlots.clearSource(source, frame, root); }
         }
     }
 
