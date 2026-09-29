@@ -112,6 +112,30 @@ class PackageScalarLinksTest {
         assertThrows(IllegalArgumentException.class, () -> PackageScalarLinks.read(with(nativeModule, "packageNativeLink",
             with(link, "nativeLibrary", with(dependency, "hex", "0103")))));
     }
+    @Test void nativeProvidersDoNotInventHaskellAbisAndKeepTheirExactClosure() throws Exception {
+        var base = module(); var scalar = object(base, "packageScalarLink"); var entry = single(scalar, "abi");
+        var provider = map("schema", 1L, "profile", "thc-package-native-component-v1", "unit", "native-provider",
+            "target", scalar.get("target"), "componentSha256", "b".repeat(64), "bitcodeSha256", hash(new byte[]{1, 2}),
+            "bitcodeHex", "0102", "format", "llvm-bitcode", "exports", list("provider_next"), "dependencies", List.of());
+        var link = with(scalar, "profile", "thc-package-c-ffi-v1", "exports", list("scalar_value"), "dependencies", list(provider),
+            "abi", list(with(entry, "entry", nativeEntry, "convention", "ccall", "safety", "unsafe")));
+        var nativeModule = with(without(base, "packageScalarLink"), "packageNativeLink", link);
+        var admitted = Objects.requireNonNull(PackageScalarLinks.read(nativeModule));
+        assertEquals(Set.of(nativeEntry), admitted.getProved());
+        assertEquals(1, admitted.getLink().getAbi().size(), "native exports are not Haskell callable signatures");
+        var component = admitted.getLink().getComponent().dependencies().getFirst();
+        assertEquals("native-provider", component.unit());
+        assertEquals(Set.of("provider_next"), component.exports());
+        for (var bad : list(with(provider, "bitcodeHex", "0103"), with(provider, "target", "other-target"),
+                with(provider, "exports", list("provider_next", "provider_next")), with(provider, "abi", List.of()),
+                with(provider, "unit", base.get("unit")), with(provider, "dependencies", list(provider))))
+            assertThrows(IllegalArgumentException.class, () -> PackageScalarLinks.read(with(nativeModule,
+                "packageNativeLink", with(link, "dependencies", list(bad)))));
+        assertThrows(IllegalArgumentException.class, () -> PackageScalarLinks.read(with(nativeModule,
+            "packageNativeLink", with(link, "dependencies", list(provider, provider)))));
+        assertThrows(IllegalArgumentException.class, () -> PackageScalarLinks.read(with(nativeModule,
+            "packageNativeLink", with(link, "abi", List.of()))), "ordinary typed ABI proof is still required");
+    }
     @Test void demandedBindingsUseOriginalInventoriesWithoutClaimingCompleteness() throws Exception {
         var base = module(); var proof = object(base, "staticForeignImports"); var call = map("target", map("unit", base.get("unit"), "symbol", "scalar_value"));
         var first = binding("first", list(call)); var second = binding("second", list(call));

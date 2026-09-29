@@ -24,6 +24,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import thc.Language;
 import thc.PackageScalarLink;
 import thc.PackageScalarSignature;
+import thc.PackageNativeComponent;
 import thc.ManagedExportSignature;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -95,8 +96,16 @@ public class PackageNativeLifecycleTest {
         }
     }
     @Timeout(15)
-    @ParameterizedTest @CsvSource({"ast,false", "bytecode,false", "ast,true", "bytecode,true"})
-    public void declaredStaticExportIsCallableFromOriginalCConstructorAndRetainedPointer(String backend, boolean reentrant) throws Exception {
+    @ParameterizedTest @CsvSource({"ast,false,false", "bytecode,false,false", "ast,true,false", "bytecode,true,false",
+        "ast,false,true", "bytecode,false,true", "ast,true,true", "bytecode,true,true"})
+    public void declaredStaticExportIsCallableFromOriginalCConstructorAndRetainedPointer(String backend, boolean reentrant, boolean dependency) throws Exception {
+        staticExport(backend, reentrant, dependency, false);
+    }
+    @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"}) @Timeout(5)
+    public void ancestorConstructorReentryNeverWaitsForItsOwnPendingComponent(String backend) throws Exception {
+        staticExport(backend, true, true, true);
+    }
+    private void staticExport(String backend, boolean reentrant, boolean dependency, boolean ancestor) throws Exception {
         assumeTrue(System.getProperty("os.name").equals("Linux") && System.getProperty("os.arch").equals("amd64"));
         var original = companion(new byte[0], """
             extern int declared_identity(int);
@@ -110,7 +119,17 @@ public class PackageNativeLifecycleTest {
             """, new PackageScalarSignature("entry", "entry", List.of(), "IntRep", "ccall", "safe"));
         var during = new PackageScalarSignature("during", "during", List.of(), "IntRep", "ccall", "safe");
         var link = new PackageScalarLink(original.getUnit(), original.getTarget(), original.getComponentSha256(), original.getBitcodeSha256(),
-            original.getBytes(), List.of(original.getAbi().getFirst(), during), original.getFormat());
+            original.getBytes(), List.of(original.getAbi().getFirst(), during), original.getFormat(), Set.of(), new byte[0], Set.of(),
+            Set.of("entry", "during"), List.of());
+        var consumerBase = !dependency ? link : component("consumer", "extern long entry(void); long consumer_entry(void) { return entry(); } long consumer_during(void) { return 5; }",
+            "consumer_entry", Set.of("consumer_entry"), List.of(link.getComponent()));
+        var consumerDuring = new PackageScalarSignature("consumer_during", "consumer_during", List.of(), "IntRep", "ccall", "safe");
+        var consumer = !ancestor ? consumerBase : new PackageScalarLink(consumerBase.getUnit(), consumerBase.getTarget(),
+            consumerBase.getComponentSha256(), consumerBase.getBitcodeSha256(), consumerBase.getBytes(),
+            List.of(consumerBase.getAbi().getFirst(), consumerDuring), consumerBase.getFormat(), Set.of(), new byte[0], Set.of(),
+            Set.of("consumer_entry", "consumer_during"), List.of(link.getComponent()));
+        var callbackLink = ancestor ? consumer : link;
+        var callbackSignature = ancestor ? consumerDuring : during;
         for (String hosting : List.of("platform", "loom")) try (var context = Context.newBuilder("thc")
                 .allowNativeAccess(true).allowCreateThread(true).allowExperimentalOptions(true)
                 .option("thc.ThreadHosting", hosting).build()) {
@@ -133,7 +152,7 @@ public class PackageNativeLifecycleTest {
                         var target = delegate.hostEntryTarget(arity);
                         return new RootNode(language) {
                             @Override public Object execute(VirtualFrame frame) {
-                                var function = owner.getPackageCbits().resolve(link, during).getReceiver();
+                                var function = owner.getPackageCbits().resolve(callbackLink, callbackSignature).getReceiver();
                                 try { assertEquals(5L, com.oracle.truffle.api.interop.InteropLibrary.getUncached().asLong(
                                     com.oracle.truffle.api.interop.InteropLibrary.getUncached().execute(function))); }
                                 catch (com.oracle.truffle.api.interop.InteropException failure) { throw new AssertionError(failure); }
@@ -150,8 +169,18 @@ public class PackageNativeLifecycleTest {
                     "occurrence", "Int32", "namespace", "type"), "arguments", List.of());
                 var declaration = new ManagedExportSignature("model", "Static", "declared_identity", "model:Static.identity", List.of(type), type, false, 64);
                 owner.getNativeCallbacks().registerStaticExports(program, language, List.of(declaration));
-                assertEquals(49, invoke(link), hosting);
-                assertEquals(49, invoke(link), "constructor runs only once");
+                owner.getPackageCbits().declare(link);
+                if (ancestor) {
+                    var failure = assertThrows(RuntimeFault.class, () -> invoke(consumer));
+                    assertTrue(failure.getMessage().contains("consumer") && failure.getMessage().contains("awaiting native dependencies"), failure.toString());
+                    assertSame(failure, assertThrows(RuntimeFault.class, () -> invoke(consumer)), "failure is retained, not retried");
+                    owner.getNativeCallbacks().unregisterStaticExports(program);
+                    assertEquals(0, language.getHandoffState().get().getArguments().getDepth());
+                    assertEquals(0, language.getHandoffState().get().getResults().getDepth());
+                    continue;
+                }
+                assertEquals(49, invoke(consumer), hosting);
+                assertEquals(49, invoke(consumer), "constructor runs only once");
                 owner.getNativeCallbacks().unregisterStaticExports(program);
                 var target = owner.getPackageCbits().resolve(link, link.getAbi().getFirst()).getReceiver();
                 assertThrows(Exception.class, () -> com.oracle.truffle.api.interop.InteropLibrary.getUncached().execute(target),
@@ -165,6 +194,63 @@ public class PackageNativeLifecycleTest {
         var registry = Language.currentState().getPackageCbits(); registry.link(link); registry.link(link);
         var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
         return (long) new Entry(language, new PackageScalarCall(link, link.getAbi().getFirst())).getCallTarget().call();
+    }
+    private PackageScalarLink component(String unit, String body, String entry, Set<String> exports,
+            List<PackageNativeComponent> dependencies) throws Exception {
+        var compiled = companion(new byte[0], body, new PackageScalarSignature(entry, entry, List.of(), "IntRep", "ccall", "safe"));
+        return new PackageScalarLink(unit, compiled.getTarget(), compiled.getComponentSha256(), compiled.getBitcodeSha256(),
+            compiled.getBytes(), compiled.getAbi(), compiled.getFormat(), Set.of(), new byte[0], Set.of(), exports, dependencies);
+    }
+    @Test public void declaredMixedProvidersShareOneInitializedNativeStateAcrossConsumers() throws Exception {
+        assumeTrue(System.getProperty("os.name").equals("Linux") && System.getProperty("os.arch").equals("amd64"));
+        var provider = component("provider", """
+            static long state;
+            __attribute__((constructor)) static void initialize(void) { state = 40; }
+            long provider_next(void) { return ++state; }
+            """, "provider_next", Set.of("provider_next"), List.of());
+        var first = component("first", """
+            extern long provider_next(void);
+            static long initial;
+            __attribute__((constructor)) static void initialize(void) { initial = provider_next(); }
+            long first_entry(void) { return 100 * initial + provider_next(); }
+            """, "first_entry", Set.of("first_entry"), List.of(provider.getComponent()));
+        var second = component("second", """
+            extern long provider_next(void);
+            static long initial;
+            __attribute__((constructor)) static void initialize(void) { initial = provider_next(); }
+            long second_entry(void) { return 100 * initial + provider_next(); }
+            """, "second_entry", Set.of("second_entry"), List.of(provider.getComponent()));
+        for (int i = 0; i < 2; i++) try (var context = Context.newBuilder("thc").allowNativeAccess(true).build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                assertEquals(4142L, invoke(first), "provider constructor precedes the first consumer");
+                assertEquals(4344L, invoke(second), "second consumer sees the same provider state");
+                assertEquals(4145L, invoke(first), "neither constructor repeats");
+                assertEquals(46L, invoke(provider), "later typed admission uses the already loaded provider");
+            } finally { context.leave(); }
+        }
+    }
+    @Test public void failedProviderInitializationIsNotRetriedByAnotherConsumer() throws Exception {
+        assumeTrue(System.getProperty("os.name").equals("Linux") && System.getProperty("os.arch").equals("amd64"));
+        var provider = component("provider", """
+            extern long missing_service(void);
+            __attribute__((constructor)) static void initialize(void) { missing_service(); }
+            long provider_next(void) { return 1; }
+            """, "provider_next", Set.of("provider_next"), List.of());
+        var first = component("first", "extern long provider_next(void); long first_entry(void) { return provider_next(); }",
+            "first_entry", Set.of("first_entry"), List.of(provider.getComponent()));
+        var second = component("second", "extern long provider_next(void); long second_entry(void) { return provider_next(); }",
+            "second_entry", Set.of("second_entry"), List.of(provider.getComponent()));
+        try (var context = Context.newBuilder("thc").allowNativeAccess(true).build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var failure = assertThrows(Exception.class, () -> invoke(first));
+                assertTrue(failure.getMessage().contains("missing_service"), failure.toString());
+                assertSame(failure, assertThrows(Exception.class, () -> invoke(first)));
+                assertSame(failure, assertThrows(Exception.class, () -> invoke(second)));
+                assertSame(failure, assertThrows(Exception.class, () -> invoke(provider)));
+            } finally { context.leave(); }
+        }
     }
     @Test public void nativeCompanionsDeferUnusedReferencesWithoutSharingProvidersBetweenContexts() throws Exception {
         assumeTrue(System.getProperty("os.name").equals("Linux") && System.getProperty("os.arch").equals("amd64"));
