@@ -819,7 +819,8 @@ library
     THC.Sources
     THC.Wired
   build-depends:
-    thc:core-symbols,
+    thc:compact-core,
+    aeson >= 2.3 && < 2.4,
     base >= 4.22 && < 4.23,
     bytestring >= 0.12.2 && < 0.13,
     containers >= 0.8 && < 0.9,
@@ -919,7 +920,7 @@ test-suite interface-json
   hs-source-dirs: t/interface-json, src/compiler
   other-modules: THC.JSON
   build-depends:
-    thc:core-symbols,
+    aeson >= 2.3 && < 2.4,
     base >= 4.22 && < 4.23,
     bytestring >= 0.12.2 && < 0.13,
     HUnit >= 1.6 && < 1.7,
@@ -974,7 +975,7 @@ executable thc
     THC.Driver.Zip
     THC.Driver.Wired
   build-depends:
-    thc:core-symbols,
+    thc:compact-core,
     base >= 4.22 && < 4.23,
     Cabal == 3.16.*, Cabal-syntax == 3.16.*,
     aeson >= 2.3 && < 2.4,
@@ -1045,6 +1046,7 @@ test-suite driver-tests
   build-tool-depends: thc:thc, thc:thc-interface
   build-depends:
     thc:core-symbols,
+    thc:compact-core,
     base >= 4.22 && < 4.23,
     Cabal == 3.16.*, Cabal-syntax == 3.16.*,
     aeson >= 2.3 && < 2.4,

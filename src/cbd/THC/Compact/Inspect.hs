@@ -14,24 +14,25 @@
 -- are original source spelling. IEEE bit literals retain every payload bit.
 -- Reading a complete module here is an explicit inspection operation, never a
 -- runtime startup or linking prerequisite.
-module THC.Compact.Inspect (inspectContainer, inspectName, inspectSource, unpackContainer, moduleJSON) where
+module THC.Compact.Inspect (inspectContainer, inspectName, inspectSource, unpackContainer, unpackContainerWithMethods, moduleJSON) where
 
 import Data.Aeson
 import qualified Data.Aeson.Key as Key
+import qualified Data.Aeson.KeyMap as KM
 import Data.Binary.Get (getByteString, getWord64le)
 import Data.Bits ((.&.))
 import qualified Data.ByteString as BS
 import Data.List (sortOn)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
-import Data.Word (Word64)
+import Data.Word (Word16, Word64)
 import Numeric (showHex)
 import THC.Compact.Core
 import THC.Compact.Decode
 import THC.Compact.Debug
 import THC.Compact.Facts
 import THC.Compact.Wire
-import THC.Compact.Zip (readZip)
+import THC.Compact.Zip (readZipWithMethods)
 
 -- | Decode original data order, not digest order. The caller explicitly reads
 -- the one container to inspect; normal runtime demand loading is independent.
@@ -81,13 +82,19 @@ inspectSource bytes position = do
 -- returned payloads retain their original member-relative coordinate systems.
 unpackContainer :: BS.ByteString -> Either String (Header,BS.ByteString,[BS.ByteString])
 unpackContainer bytes = do
-  members <- readZip bytes
+  (header,facts,segments,_) <- unpackContainerWithMethods bytes
+  pure (header,facts,segments)
+
+unpackContainerWithMethods :: BS.ByteString -> Either String (Header,BS.ByteString,[BS.ByteString],[(String,Word16)])
+unpackContainerWithMethods bytes = do
+  entries <- readZipWithMethods bytes
+  let members = [(name,payload) | (name,_,payload) <- entries]
   let member key = maybe (Left ("Missing CBD member: " ++ key)) Right (lookup key members)
   headerBytes <- member "header"
   header <- decodeExact getHeader (BS.take 32 headerBytes)
   segments <- mapM member ["data","strings","names","filenames","line-columns","symbols"]
   validateContainer header (map (fromIntegral . BS.length) segments)
-  pure (header,BS.drop 32 headerBytes,segments)
+  pure (header,BS.drop 32 headerBytes,segments,[(name,method) | (name,method,_) <- entries])
 
 str :: BS.ByteString -> Value
 str = String . Text.decodeUtf8
@@ -263,12 +270,23 @@ constructor value = object $ ["id" .= str (constructorId value),"name" .= str (c
 moduleJSON :: Facts -> [Binding] -> Value
 moduleJSON facts bindings = object $ ["schema" .= factsSchema facts,"ghc" .= str (factsGhc facts),
   "unit" .= str (factsUnit facts),"module" .= str (factsModule facts),"boundary" .= str (factsBoundary facts),
-  "constructors" .= arr constructor (factsConstructors facts),"bindings" .= arr binding bindings]
+  "constructors" .= arr constructor (factsConstructors facts),"bindings" .= arr originalBinding bindings]
   ++ p "providedModules" (arr str) (factsProvidedModules facts) ++ p "targetLayout" targetLayout (factsTargetLayout facts)
   ++ p "foreign" foreignArtifacts (factsForeign facts) ++ p "foreignExceptionBridge" exceptionBridge (factsExceptionBridge facts)
   ++ p "foreignExceptionBridgeUnit" str (factsExceptionBridgeUnit facts)
   ++ concat (zipWith (\key -> p (Key.fromText (Text.decodeUtf8 key)) provenance)
        pendingProvenanceNames (factsPendingProvenance facts))
+  ++ maybe [] closureFields (factsClosureProvenance facts)
+  where
+    closureFields (ClosureProvenance roots modules missing _) =
+      p "roots" (arr str) roots ++ p "sourceModules" (arr str) modules ++
+      p "missingDefinitions" (arr (\(MissingDefinition key ty reason) -> object
+        ["id" .= str key,"type" .= str ty,"reason" .= str reason])) missing
+    originalBinding value = case (bindingIdentity value,binding value,factsClosureProvenance facts) of
+      (Global key,Object fields,Just (ClosureProvenance _ _ _ origins)) -> Object $
+        foldr (\(BindingOrigin owner origin ownerModule) result -> if key /= owner then result else
+          foldr (uncurry KM.insert) result (p "origin" str origin ++ p "originModule" str ownerModule)) fields origins
+      (_,result,_) -> result
 
 provenance :: ModuleProvenance -> Value
 provenance (ImportsRecord proof) = importProof proof

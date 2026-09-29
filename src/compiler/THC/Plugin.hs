@@ -19,7 +19,8 @@
 -- consume genuine GHC Core and do not establish runtime support or link native
 -- foreign products. This library is tied to the selected GHC API version.
 module THC.Plugin (plugin, serializeOptimizedCore, serializePostTidyCore, serializePostTidyCoreWithAnnotations,
-                   serializePostTidyCoreWithAnnotationsBytes) where
+                   serializePostTidyCoreWithAnnotationsBytes, serializeOptimizedCoreCBD,
+                   serializePostTidyCoreCBD, serializePostTidyCoreWithAnnotationsCBD) where
 
 import GHC.Plugins
 import Control.Monad (when)
@@ -50,8 +51,10 @@ import qualified THC.ForeignExports as Exports
 import qualified THC.ForeignExportProvenance as ExportProvenance
 import qualified THC.ForeignImportProvenance as ImportProvenance
 import THC.Wired (wiredApplication, wiredCase, wiredRhs, preservesWiredTypes, isWiredVoid)
-import THC.JSON (J(..), json, jsonBytesWithBindings)
-import THC.CoreSymbols (encodeSymbols)
+import THC.JSON (J(..), moduleValue)
+import qualified Data.Aeson as Aeson
+import qualified Data.ByteString.Lazy as BL
+import THC.Compact.Module (writeModuleValue, encodeModuleValue, readModuleValue)
 import GHC.Types.Tickish (CoreTickish, tickishFloatable)
 import GHC.Types.Literal
 import qualified GHC.Types.ForeignCall as Foreign
@@ -75,7 +78,7 @@ import Data.Maybe (mapMaybe)
 import System.IO.Unsafe (unsafePerformIO)
 import Numeric (showHex)
 import System.Directory (createDirectoryIfMissing)
-import System.FilePath ((</>), takeDirectory)
+import System.FilePath ((</>), takeDirectory, replaceExtension)
 
 -- | Export executable trees from GHC's Core pipeline. Without @post-tidy@ the
 -- pass runs last before Tidy; that option selects the late plugin boundary
@@ -294,17 +297,13 @@ nameKey n = case nameModule_maybe n of
     -- Use GHC's own symbol spelling, also shared by cross-module references.
     occurrence = unpackFS (occNameMangledFS (nameOccName n))
 
--- Count positions in the emitted UTF-8 bytes, never in a pretty-printed String
--- or locale/newline-translated text handle. The small symbol directory permits
--- demand loading without decoding the whole JSON document.
-writeCoreOutput :: FilePath -> J -> IO ()
-writeCoreOutput path result = do
-  let (body, offsets, _) = jsonBytesWithBindings result
-      bytes = BS.snoc body 10
-  symbols <- either fail pure $ encodeSymbols
-    [(bytesFS (mkFastString key), fromIntegral offset) | (key, offset) <- offsets]
-  BS.writeFile path bytes
-  BS.writeFile (path ++ ".symbols") symbols
+-- Direct binary publication through the shared typed encoder. CBD owns its
+-- fingerprints and source maps; no JSON payload or side index is produced.
+writeCoreOutput :: [CommandLineOption] -> FilePath -> J -> IO ()
+writeCoreOutput options path result = do
+  _ <- writeModuleValue path (moduleValue result)
+  when ("pretty-diagnostics" `elem` options) $
+    BS.readFile path >>= inspectCore >>= BS.writeFile (replaceExtension path "json")
 
 -- Cabal can compile the same module name in several distinct units. Keep the
 -- historical flat layout for fixtures, but let package exports preserve the
@@ -312,8 +311,8 @@ writeCoreOutput path result = do
 -- out of the export root, even for an unusual unit ID.
 coreOutputPath :: [CommandLineOption] -> FilePath -> String -> String -> FilePath
 coreOutputPath opts dir unit modName
-  | "unit-qualified" `elem` opts = dir </> "units" </> ("u-" ++ concatMap escapeUnit unit) </> modName ++ ".json"
-  | otherwise = dir </> modName ++ ".json"
+  | "unit-qualified" `elem` opts = dir </> "units" </> ("u-" ++ concatMap escapeUnit unit) </> modName ++ ".cbd"
+  | otherwise = dir </> modName ++ ".cbd"
   where
     escapeUnit c
       | asciiAlphaNum c || c `elem` ("-._" :: String) = [c]
@@ -952,7 +951,7 @@ exportModule opts guts = do
   liftIO $ do
     let path = coreOutputPath opts dir (unitString (moduleUnit (mg_module guts))) modName
     createDirectoryIfMissing True (takeDirectory path)
-    writeCoreOutput path result
+    writeCoreOutput opts path result
     modifyIORef' sourceDefinitions ((d,binds):)
     let roots = [v | (v,_) <- binds, occNameString (nameOccName (varName v)) `elem` closureRoots]
     if null roots then pure () else exportInterfaceClosure hsc opts dir d roots
@@ -962,8 +961,13 @@ exportModule opts guts = do
 -- or closure registration. Callers must supply genuine optimized ModGuts.
 serializeOptimizedCore :: DynFlags -> [CommandLineOption] -> ModGuts -> IO String
 serializeOptimizedCore flags opts guts = do
+  bytes <- serializeOptimizedCoreCBD flags opts guts
+  utf8DecodeByteString <$> inspectCore bytes
+
+serializeOptimizedCoreCBD :: DynFlags -> [CommandLineOption] -> ModGuts -> IO BS.ByteString
+serializeOptimizedCoreCBD flags opts guts = do
   (_,result) <- optimizedModule flags opts guts
-  pure (json result ++ "\n")
+  encodeModuleValue (moduleValue result)
 
 
 -- A runtime bridge is exported only from the defining module, with the genuine
@@ -1027,7 +1031,7 @@ exportLate hsc opts pair@(guts,_)
           binds = concatMap flattenBind (cg_binds guts)
       let path = coreOutputPath opts dir (unitString (moduleUnit m)) modName
       createDirectoryIfMissing True (takeDirectory path)
-      writeCoreOutput path result
+      writeCoreOutput opts path result
       modifyIORef' sourceDefinitions ((d,binds):)
       let roots = [v | (v,_) <- binds, occNameString (nameOccName (varName v)) `elem` mapMaybe (stripPrefix "closure=") opts]
       if null roots then pure () else exportInterfaceClosure hsc opts dir d roots
@@ -1047,14 +1051,26 @@ serializePostTidyCore flags opts m tycons program foreignArtifacts =
 -- optional inventory, never a process-local table or a previous export file.
 serializePostTidyCoreWithAnnotations :: DynFlags -> [CommandLineOption] -> Module -> [TyCon] -> CoreProgram -> ForeignCore.IfaceForeign -> [Annotation] -> IO String
 serializePostTidyCoreWithAnnotations flags opts m tycons program foreignArtifacts annotations =
-  (\value -> json value ++ "\n") <$> postTidyCoreWithAnnotations flags opts m tycons program foreignArtifacts annotations
+  utf8DecodeByteString <$> serializePostTidyCoreWithAnnotationsBytes flags opts m tycons program foreignArtifacts annotations
 
 -- | The same ordered document in UTF-8 bytes, without a full output String.
 -- Callers must force the strict ByteString before emitting a success response.
 serializePostTidyCoreWithAnnotationsBytes :: DynFlags -> [CommandLineOption] -> Module -> [TyCon] -> CoreProgram -> ForeignCore.IfaceForeign -> [Annotation] -> IO BS.ByteString
 serializePostTidyCoreWithAnnotationsBytes flags opts m tycons program foreignArtifacts annotations =
-  (\value -> let (bytes, _, _) = jsonBytesWithBindings value in BS.snoc bytes 10) <$>
-    postTidyCoreWithAnnotations flags opts m tycons program foreignArtifacts annotations
+  serializePostTidyCoreWithAnnotationsCBD flags opts m tycons program foreignArtifacts annotations >>= inspectCore
+
+-- Explicit inspection helpers above derive their output from the same CBD
+-- payload; normal compiler and interface publication use these binary APIs.
+serializePostTidyCoreCBD :: DynFlags -> [CommandLineOption] -> Module -> [TyCon] -> CoreProgram -> ForeignCore.IfaceForeign -> IO BS.ByteString
+serializePostTidyCoreCBD flags opts m tycons program foreignArtifacts =
+  serializePostTidyCoreWithAnnotationsCBD flags opts m tycons program foreignArtifacts []
+
+serializePostTidyCoreWithAnnotationsCBD :: DynFlags -> [CommandLineOption] -> Module -> [TyCon] -> CoreProgram -> ForeignCore.IfaceForeign -> [Annotation] -> IO BS.ByteString
+serializePostTidyCoreWithAnnotationsCBD flags opts m tycons program foreignArtifacts annotations =
+  postTidyCoreWithAnnotations flags opts m tycons program foreignArtifacts annotations >>= encodeModuleValue . moduleValue
+
+inspectCore :: BS.ByteString -> IO BS.ByteString
+inspectCore bytes = (\value -> BS.snoc (BL.toStrict (Aeson.encode value)) 10) <$> either fail pure (readModuleValue bytes)
 
 postTidyCoreWithAnnotations :: DynFlags -> [CommandLineOption] -> Module -> [TyCon] -> CoreProgram -> ForeignCore.IfaceForeign -> [Annotation] -> IO J
 postTidyCoreWithAnnotations flags opts m tycons program foreignArtifacts annotations = do
@@ -1403,5 +1419,5 @@ exportInterfaceClosure hsc opts dir rootCtx roots = do
         [("providedModules", A (map S provided)) | not (null provided)] ++ sourceTableFields closureCtx
   let path = coreOutputPath opts dir "dependency-closure" "THC.InterfaceClosure"
   createDirectoryIfMissing True (takeDirectory path)
-  writeCoreOutput path result
+  writeCoreOutput opts path result
   putStrLn ("THC interface closure: " ++ show (length imports) ++ " actual unfoldings, " ++ show (length missing) ++ " missing source definitions")

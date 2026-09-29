@@ -1,12 +1,13 @@
 # Core Binary Distribution
 
-Version 1 containers support opt-in loading through both runtime backends.
-The native converter writes typed executable and header records, shared strings,
+Version 1 containers are the executable format for both runtime backends.
+The compiler writes typed executable and header records directly, shared strings,
 and optional name/source maps. The runtime decodes selected bindings on demand,
 including all eight module-level foreign provenance families. Source locations
 resolve when requested; original display names are available through explicit
 lookup APIs. General runtime labels do not yet use the name map.
-The project driver still publishes JSON unit artifacts by default.
+The project driver publishes these exact containers without an intermediate
+Core JSON file. JSON manifests remain control metadata, never executable Core.
 
 ## Assembly and addressing
 
@@ -85,10 +86,11 @@ the actual UTF-8 bytes (`fingerprintData`, not `fingerprintString`, in GHC).
 
 The record-level byte grammar uses explicit Core tags and typed fields,
 not JSON-token serialization or an opaque JSON fallback. The expression families
-are `var`, `prim`, `lit`, `lam`, `con`, `app`, `let`, `case`, and `void`.
+are `var`, `prim`, `lit`, `lam`, `con`, `app`, `let`, `case`, `void`, and explicit `unsupported`.
 Literal, alternative, binder, layout, constructor and foreign records have
-distinct typed encodings. Unsupported variants must fail conversion rather than
-silently discard operative fields.
+distinct typed encodings. Explicit unsupported diagnostic nodes retain their
+metadata and text, so a dormant binding stays dormant and fails if requested.
+Unknown variants or fields fail encoding rather than silently disappearing.
 
 The records preserve missing/unknown/empty representation distinctions; ordered
 nested tuple and sum layouts; vector species; coercion and void slots; declared
@@ -163,6 +165,7 @@ references; unannotated unlifted guest arrays retain their existing boundary.
 | 6 | let | `b recursive, list(Binding), Expr body` |
 | 7 | case | `Expr scrutinee, u binderOrdinal, p(Binder), list(Alternative)` |
 | 8 | void | empty |
+| 9 | unsupported | `str diagnostic` |
 
 `Meta` is `p(Rep), p(Rep resultRep), p(list(b) entryStrict),
 p(str entryStrictSource), p(CallDemand), p(ForeignCall), p(ExceptionPayload),
@@ -240,6 +243,7 @@ Literal tags and payloads are:
 | 16 | rubbish | `PrimRep` |
 | 17 | function-addr | `str exactSymbol` |
 | 18 | data-addr | `str exactSymbol` |
+| 19 | unsupported | `str diagnostic` |
 
 BigNat zero uses zero magnitude bytes; a nonempty magnitude has a nonzero final
 byte. Narrow literal payloads must fit their declared kind. Literal string bytes
@@ -269,6 +273,14 @@ schemas are specified below; missing/null remain distinct in every slot. The
 converter rejects unknown fields instead of omitting, guessing or hiding them
 in JSON text. These records preserve original admission facts; their presence
 does not replace existing ABI, ownership or native-access checks.
+
+An optional trailing header extension starts with tag 1, followed by
+`p(list(str)) roots, p(list(str)) sourceModules,
+p(list(MissingDefinition)) missingDefinitions, list(BindingOrigin)`.
+`MissingDefinition` is `str id, str type, str reason`; `BindingOrigin` is
+`str id, p(str) origin, p(str) originModule`. This retains original interface
+frontier and source-owner evidence without executable JSON. No extension bytes
+are emitted when absent, preserving existing headers. Unknown tags reject.
 
 `TargetLayout` carries `u documentSchema`, then four compiler strings (`id`,
 `abi`, `platform`, `way`), then `u layoutSchema, b profiled, u wordBytes,
@@ -407,6 +419,12 @@ carries `p(NativeCompanion), p(list(str)) dataSymbols`; `NativeCompanion` is
 on the wire. Data symbols name address-returning ABI entries, not executable
 function-call entries. Tags 1 and 2 belonged to the retired partial-entry
 protocol and are rejected, never reinterpreted as native libraries.
+Tag 4 has the tag-3 fields, then `list(str) exports, list(NativeComponent)
+dependencies`. Both lists must be present together in inspection output.
+`NativeComponent` is `LinkPayload, list(str) exports,
+list(NativeComponent) dependencies, p(NativeCompanion)`. Its profile is
+`thc-package-native-component-v1`, schema 1; it carries the actual complete
+component bytes and dependency graph, not a fabricated Haskell ABI.
 Native link schema 2 appends `list(str) finalizers` after `NativeExtras`;
 these are existing namespaced ABI entry names, not original symbols or an
 invented foreign-call inventory. Every entry must be a proved `ccall unsafe`
@@ -504,35 +522,30 @@ not have matching range boundaries. Readers check selected rows/payloads and
 matching lists locally, without a debug-table prescan. Binder/expression origins
 retain immutable container identity and DATA position through cloning/inlining.
 
-## Explicit conversion and inspection
+## Direct production and explicit inspection
 
 Build the native tool with `cabal build exe:thc-compact --offline -fdevelopment`.
-It currently accepts one flat Core JSON module at a time:
+Its input is CBD; JSON is inspection output only:
 
 ```sh
-cabal run exe:thc-compact -- encode Module.json Module.cbd
-cabal run exe:thc-compact -- encode --cbd-compression 9 --cbd-compression data=0 Module.json Module.cbd
 cabal run exe:thc-compact -- decode Module.cbd inspected.json
 cabal run exe:thc-compact -- source Module.cbd 0
 cabal run exe:thc-compact -- name Module.cbd 0 0
 ```
 
+The compiler calls the existing typed encoder on its in-memory module value.
 Normal encoding preserves supplied original names and source notes, recording
-origins while semantic records are emitted. The explicit `--without-debug` option
-omits those maps. Unknown semantic fields and malformed provenance fail conversion.
+origins while semantic records are emitted. Source-note selection remains a
+compiler option. Unknown semantic fields and malformed provenance fail encoding.
 Header constructors, target-layout facts, foreign artifacts, native-link recipes
 and exception-bridge facts are typed. Linked bitcode is stored as raw bytes and
 reconstructed as canonical hexadecimal by the JSON inspector.
-The converter is not yet a default project-publication path.
+The test fixture executable has a separate modeled-input command; it is not a
+runtime loader or a production JSON compatibility route.
 
-Compression defaults to ZIP STORED for every member. Repeat
-`--cbd-compression LEVEL` or `--cbd-compression TYPE=LEVEL` to select levels
-0 through 9; `--cbd-compression=VALUE` also works. Level 0 means STORED, not
-level-zero Deflate; levels 1 through 9 use Deflate. Types are the seven exact
-member names above. A per-type override wins regardless of the global setting's
-position; the last assignment within the same scope wins. Invalid syntax,
-unknown types and out-of-range levels fail before output creation. The archive
-records the methods, so readers need no matching compression option.
+Compression defaults to ZIP STORED for every member. The encoder library also
+supports per-member Deflate levels 1 through 9. The archive records the methods,
+so readers need no matching compression setting.
 
 `decode` is an explicit full-module semantic inspection, separate from runtime
 demand loading. It emits flat records with deterministic `@local/N` identities
@@ -543,18 +556,16 @@ validates/inflates the archive explicitly; it is separate from runtime member
 laziness. The semantic dump preserves only the
 two operative entry-type facts, not arbitrary pretty types or printed IdInfo.
 For lossless IEEE inspection it emits `float-bits` and `double-bits` literals with
-unsigned decimal bit payloads; this converter accepts those tags in addition to
-the reference exporter's decimal `float` and `double` values. The inspection-only
-bit tags do not extend the legacy JVM JSON reader. Encoding the inspected form
-preserves signed zero and NaN payload bits.
+unsigned decimal bit payloads. The typed encoder preserves signed zero and NaN
+payload bits. There is no JVM JSON Core reader.
 
-The opt-in manifest representation retains the original module `sha256`, name,
+The manifest representation retains the original module `sha256`, name,
 boundary and four actual summary booleans. Its `compact` field contains `path`,
 the container `sha256`, and `format: "thc-cbd-v1"`. Original unit identity,
 dependencies and any real canonical `targetLayout` remain in the unit descriptor.
-Compact paths are absolute. Each nonempty unit selects either compact containers
-for all its modules or the JSON/symbol pair; units with different storage formats
-may share one manifest. Compact module records contain no JSON extents or index.
+Compact paths are absolute. Each nonempty unit selects compact containers for
+all its modules. JSON/symbol pairs, legacy ZIP execution and JSON extents or
+indexes are not runtime inputs.
 
 The runtime shares immutable mappings while each Context owns its decoded
 bindings and CAF state. Ordinary cold references do not open their modules;

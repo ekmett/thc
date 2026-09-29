@@ -13,7 +13,7 @@
 -- Conversion of reference JSON into independent semantic and display records.
 -- Unknown semantic fields fail conversion; pretty diagnostics are not executable
 -- data. Omitting original display annotations requires an explicit entry point.
-module THC.Compact.JSON (parseModuleWithoutDebug, parseModuleWithDebug) where
+module THC.Compact.JSON (parseModuleWithoutDebug, parseModuleWithDebug, parseModuleFacts) where
 
 import Control.Monad (unless, forM, when)
 import Control.Monad.Trans.Class (lift)
@@ -64,20 +64,45 @@ parseModuleWithDebug value = parseEither (\input -> do
 
 moduleRecords :: Bool -> Value -> Parser (Facts,[(Binding,[Annotation])])
 moduleRecords debug = withObject "Core module" $ \fields -> do
-  checked fields (["schema","ghc","unit","module","boundary","providedModules","targetLayout",
-    "constructors","bindings","foreign","foreignExceptionBridge","foreignExceptionBridgeUnit",
-    "sourceCore","rules","groups","lowering","sourceFiles","sourceSpans"] ++ map bytesKey pendingProvenanceNames)
-  facts <- Facts <$> fields .: "schema" <*> bytesAt fields "ghc" <*> bytesAt fields "unit"
-    <*> bytesAt fields "module" <*> bytesAt fields "boundary" <*> optional fields "providedModules" (array bytes)
-    <*> optional fields "targetLayout" targetLayout <*> (fields .: "constructors" >>= array constructor)
-    <*> optional fields "foreign" foreignArtifacts <*> optional fields "foreignExceptionBridge" exceptionBridge
-    <*> optional fields "foreignExceptionBridgeUnit" bytes
-    <*> mapM (\(slot,key) -> optional fields (bytesKey key) (provenance slot)) (zip [0..] pendingProvenanceNames)
+  facts <- moduleFacts fields
   values <- fields .: "bindings" >>= array pure
   bindings <- forM values $ \value -> do
     (record,ConvertState _ _ annotations) <- runStateT (binding Map.empty Nothing value) (ConvertState 0 debug [])
     pure (record,reverse annotations)
   pure (facts,bindings)
+
+-- | Header amendments do not need to traverse executable expressions.
+parseModuleFacts :: Value -> Either String Facts
+parseModuleFacts = parseEither (withObject "Core module" moduleFacts)
+
+moduleFacts :: Object -> Parser Facts
+moduleFacts fields = do
+  checked fields (["schema","ghc","unit","module","boundary","providedModules","targetLayout",
+    "constructors","bindings","foreign","foreignExceptionBridge","foreignExceptionBridgeUnit",
+    "sourceCore","rules","groups","lowering","sourceFiles","sourceSpans",
+    "roots","sourceModules","missingDefinitions"] ++ map bytesKey pendingProvenanceNames)
+  Facts <$> fields .: "schema" <*> bytesAt fields "ghc" <*> bytesAt fields "unit"
+    <*> bytesAt fields "module" <*> bytesAt fields "boundary" <*> optional fields "providedModules" (array bytes)
+    <*> optional fields "targetLayout" targetLayout <*> (fields .: "constructors" >>= array constructor)
+    <*> optional fields "foreign" foreignArtifacts <*> optional fields "foreignExceptionBridge" exceptionBridge
+    <*> optional fields "foreignExceptionBridgeUnit" bytes
+    <*> mapM (\(slot,key) -> optional fields (bytesKey key) (provenance slot)) (zip [0..] pendingProvenanceNames)
+    <*> closureProvenance fields
+
+closureProvenance :: Object -> Parser (Maybe ClosureProvenance)
+closureProvenance fields = do
+  roots <- optional fields "roots" (array bytes)
+  modules <- optional fields "sourceModules" (array bytes)
+  missing <- optional fields "missingDefinitions" (array missingDefinition)
+  records <- fields .: "bindings" >>= array object
+  origins <- forM [record | record <- records, any (`KM.member` record) ["origin","originModule"]] $ \record ->
+    BindingOrigin <$> bytesAt record "id" <*> optional record "origin" bytes <*> optional record "originModule" bytes
+  pure $ if roots == Missing && modules == Missing && missing == Missing && null origins then Nothing
+    else Just (ClosureProvenance roots modules missing origins)
+  where
+    missingDefinition = withObject "missing interface definition" $ \record -> do
+      checked record ["id","type","reason"]
+      MissingDefinition <$> bytesAt record "id" <*> bytesAt record "type" <*> bytesAt record "reason"
 
 checked :: Object -> [Key.Key] -> Parser ()
 checked fields allowed = unless (all (`elem` allowed) (KM.keys fields)) $
@@ -249,7 +274,7 @@ binding :: Locals -> Maybe Locals -> Value -> Convert Binding
 binding rhsScope declared value = do
   fields <- lift (object value)
   lift (checked fields ["id","name","type","lifted","arity","expr","rep","info","entryStrict",
-    "entryStrictSource","joinValueArity","joinResultRep","hostSignature","source"])
+    "entryStrictSource","joinValueArity","joinResultRep","hostSignature","source","origin","originModule"])
   key <- lift (fields .: "id")
   identity <- case declared of
     Nothing -> pure (Global (Text.encodeUtf8 key))

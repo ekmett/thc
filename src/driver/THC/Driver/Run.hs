@@ -15,7 +15,7 @@ module THC.Driver.Run
   ) where
 
 import Control.Monad (unless, when)
-import Data.List (isSuffixOf, intercalate, sort)
+import Data.List (intercalate, sort)
 import Distribution.Compiler (CompilerFlavor(GHC))
 import Distribution.PackageDescription
 import Distribution.Pretty (prettyShow)
@@ -128,7 +128,7 @@ runResolvedPackage opts working target prepareRuntime = do
   ensureFile runtime
   createDirectoryIfMissing True core
   createDirectoryIfMissing True objects
-  oldCore <- filter (\path -> takeExtension path == ".json" || ".json.idx" `isSuffixOf` path) <$> listDirectory core
+  oldCore <- filter ((== ".cbd") . takeExtension) <$> listDirectory core
   mapM_ (removeFile . (core </>)) oldCore
   (supportOptions, supportManifest) <- prepareRuntime output
   inherited <- getEnvironment
@@ -165,8 +165,8 @@ runResolvedPackage opts working target prepareRuntime = do
       powershell <- maybe "powershell.exe" id <$> findExecutable "pwsh"
       checked True powershell ["-NoProfile", "-File", exporter, "@" ++ response] thcRoot environment
     else checked True exporter exportArgs thcRoot environment
-  files <- sort . filter ((== ".json") . takeExtension) <$> listDirectory core
-  let modules = [core </> file | file <- files, file /= "audit.json"]
+  files <- sort . filter ((== ".cbd") . takeExtension) <$> listDirectory core
+  let modules = [core </> file | file <- files]
   unless (not (null modules)) $ fail "GHC plugin exported no Core modules"
   when (runVerifyArtifacts opts) $
     checked True python ([thcRoot </> "bin/audit-core.py", "--entry", entry, "--io-main",
