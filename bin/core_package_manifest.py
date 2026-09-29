@@ -569,13 +569,14 @@ def package_native_archive(module):
     require(unknown in (None, 'non-static-c-import-declaration'), 'unclassified reason')
     scalar = ('IntRep', 'WordRep', 'Int8Rep', 'Word8Rep', 'Int16Rep', 'Word16Rep', 'Int32Rep', 'Word32Rep',
               'Int64Rep', 'Word64Rep', 'FloatRep', 'DoubleRep', 'AddrRep')
+    gc_boxed = ('BoxedRep (Just Lifted)', 'BoxedRep (Just Unlifted)')
     def emitted_signature(value):
         emitted = record(value, 'symbol unit convention safety arguments result')
         require(re.fullmatch('[A-Za-z_][A-Za-z0-9_]*', text(emitted['symbol'])) and emitted['unit'] == unit and
             emitted['convention'] in ('ccall', 'capi') and emitted['safety'] in ('unsafe', 'safe', 'interruptible'), 'emitted identity')
         args, result = sequence(emitted['arguments']), sequence(emitted['result'])
-        require(args and args[-1] == 'void' and all(rep in scalar + ('ByteArray#', 'MutableByteArray#') for rep in args[:-1]) and
-            (result == ['void'] or len(result) == 2 and result[0] == 'void' and result[1] in scalar), 'emitted carriers')
+        require(args and args[-1] == 'void' and all(rep in scalar + ('ByteArray#', 'MutableByteArray#') + gc_boxed for rep in args[:-1]) and
+            (result == ['void'] or len(result) == 2 and result[0] == 'void' and result[1] in scalar + gc_boxed), 'emitted carriers')
         return emitted
     def c_abi(emitted):
         def argument(rep):
@@ -631,11 +632,15 @@ def package_native_archive(module):
     conflict_symbols = {value['symbol'] for value in conflicts}
     for symbol in conflict_symbols:
         variants = [value for value in conflicts if value['symbol'] == symbol]
-        require(all(value['safety'] in ('unsafe', 'safe') for value in variants) and len({c_abi(value) for value in variants}) > 1,
+        require(all(value['safety'] in ('unsafe', 'safe') and
+            not any(rep in gc_boxed for rep in value['arguments'] + value['result']) for value in variants) and
+            len({c_abi(value) for value in variants}) > 1,
                 'imports do not have conflicting C ABIs')
-        local = [value for value in emitted_imports if value['symbol'] == symbol and value['safety'] != 'interruptible']
+        local = [value for value in emitted_imports if value['symbol'] == symbol and value['safety'] != 'interruptible' and
+                 not any(rep in gc_boxed for rep in value['arguments'] + value['result'])]
         require(local and all(value in variants for value in local), 'conflict witnesses differ from local imports')
-    expected = [entry for entry in emitted_imports if entry['safety'] == 'interruptible' or entry['symbol'] in conflict_symbols]
+    expected = [entry for entry in emitted_imports if entry['safety'] == 'interruptible' or entry['symbol'] in conflict_symbols or
+                any(rep in gc_boxed for rep in entry['arguments'] + entry['result'])]
     require(sequence(archive['unsupportedImports']) == expected, 'unsupported import inventory differs')
     unresolved = [text(value) for value in sequence(archive['unresolvedSymbols'])]
     require(len(set(unresolved)) == len(unresolved), 'duplicate unresolved symbols')

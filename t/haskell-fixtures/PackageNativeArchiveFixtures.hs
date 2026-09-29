@@ -11,11 +11,12 @@
 -- Portability : Native GHC; host filesystem/process services
 --
 -- Fixture acquisition support for package native archive.
-module PackageNativeArchiveFixtures (preparePackageNativeArchives) where
+module PackageNativeArchiveFixtures (preparePackageNativeArchives, preparePackageNativeGcCarriers) where
 
 import Control.Monad (forM, unless)
 import Data.Aeson (eitherDecodeStrict', Value(..), object, toJSON, (.=))
 import qualified Data.Aeson.KeyMap as KM
+import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC
 import Data.List (sort)
 import FixtureSupport
@@ -25,7 +26,64 @@ import System.Environment (lookupEnv, unsetEnv)
 import System.FilePath
 import Text.Read (readMaybe)
 import THC.Driver.GhcProxy (ghcProxyCommand)
-import THC.Driver.PackageNative (finishPackageNative)
+import THC.Driver.PackageNative (finishPackageNative, archiveNativeModule, nativeSignatures)
+import THC.Compact.Module (readModuleValue, finalizeModuleMetadata)
+
+-- A focused genuine compiler/RTS control, independent of the broad Cabal
+-- archive acquisition. Native GHC owns every closure used by the oracle.
+preparePackageNativeGcCarriers :: FilePath -> IO ()
+preparePackageNativeGcCarriers root = do
+  let relative = "build/package-native-gc-carriers"
+      output = root </> relative
+      source = "t/fixtures/compiler/PackageNativeGcCarriers.hs"
+      objects = output </> "ghc"
+      core = output </> "PackageNativeGcCarriers.cbd"
+      execute = runLogged 600 root (relative </> "logs")
+      line bytes = case BSC.lines bytes of [value] -> pure (BSC.unpack value); _ -> fail "expected one tool result"
+  createDirectoryIfMissing True output
+  ghc <- maybe "ghc" id <$> lookupEnv "GHC"
+  cabal <- maybe "cabal" id <$> lookupEnv "CABAL"
+  exported <- execute "export" [("THC_CORE_OUT",output </> "source-core"),("THC_GHC_OUT",objects)]
+    "bin/export-core.sh" ["-package","ghc-internal","-fwrite-if-simplified-core",
+      "-fplugin-opt=THC.Plugin:foreign-import-provenance",source]
+  _ <- execute "interface-build" [] cabal ["build","exe:thc-interface","--offline"]
+  helper <- execute "interface-path" [] cabal ["list-bin","exe:thc-interface","--offline"] >>= line . commandStdout
+  libdir <- execute "libdir" [] ghc ["--print-libdir"] >>= line . commandStdout
+  hydrated <- execute "hydrate" [] helper ["--libdir",libdir,"--unit","main",
+    "--module","PackageNativeGcCarriers","--way","dynamic","--home-interfaces",objects,
+    "--interface",objects </> "PackageNativeGcCarriers.hi"]
+  BS.writeFile core (commandStdout hydrated)
+  original <- either fail pure (readModuleValue (commandStdout hydrated))
+  proof <- field original "staticForeignImports" :: IO Value
+  status <- field proof "status" :: IO String
+  unless (status == "verified") (fail "genuine GC-carrier producer did not verify its stock import products")
+  archived <- either fail pure (archiveNativeModule "main" original)
+  signatures <- either fail pure (nativeSignatures "main" [archived])
+  unless (signatures == [("getpid","ccall","unsafe",[],"Int32Rep")])
+    (fail "GC carriers leaked into native adapters or ordinary scalar import was lost")
+  marker <- field archived "packageNativeArchive" :: IO Value
+  excluded <- field marker "unsupportedImports" :: IO [Value]
+  symbols <- sort <$> mapM (\entry -> field entry "symbol" :: IO String) excluded
+  unless (symbols == sort ["rts_getThreadId","eq_thread","cmp_thread","rts_enableThreadAllocationLimit",
+    "rts_disableThreadAllocationLimit","rts_setMainThread","reportStackOverflow"])
+    (fail "genuine GC-carrier archive inventory differs")
+  finalizeModuleMetadata core archived
+  validated <- execute "archive-validate" [("PYTHONPATH",root </> "bin")] "python3"
+    ["-c","import pathlib,sys,core_package_manifest as c; c.package_native_archive(c.inspect_cbd(pathlib.Path(sys.argv[1]).read_bytes()))",core]
+  createDirectoryIfMissing True (output </> "native")
+  compiled <- execute "native-build" [] ghc ["--make","-O2","-fforce-recomp","-package","ghc-internal",
+    "-odir",output </> "native","-hidir",output </> "native","-main-is","PackageNativeGcCarriers.main",
+    source,"-o",output </> "oracle"]
+  oracle <- execute "native-oracle" [] (output </> "oracle") []
+  unless (BSC.lines (commandStdout oracle) == replicate 6 "True") (fail "native GC-carrier relational oracle differs")
+  BS.writeFile (output </> "oracle.txt") (commandStdout oracle)
+  inputs <- hashes root [source,"t/haskell-fixtures/PackageNativeArchiveFixtures.hs",
+    "src/compiler/THC/ForeignImportProvenance.hs","src/driver/THC/Driver/PackageNative.hs"]
+  artifacts <- hashes root [relative </> "PackageNativeGcCarriers.cbd",relative </> "oracle.txt"]
+  writeJson (output </> "manifest.json") (object ["schema" .= (1::Int),"inputHashes" .= inputs,
+    "artifactHashes" .= artifacts,"nativeRows" .= (6::Int),"gcImports" .= (7::Int),
+    "commands" .= map commandRecord [exported,hydrated,validated,compiled,oracle]])
+  putStrLn "package-native-gc-carriers: exact GC imports archived; scalar adapter retained; six native relational observations"
 
 -- Real Cabal/GHC acquisition: ordinary native dependencies link by default,
 -- while unsupported calling conventions retain their declaration obligations.

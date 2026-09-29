@@ -323,6 +323,29 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
   , TestCase $ assertBool "conflicting emitted ABIs rejected" $ isLeft $ nativeSignatures "fixture-unit"
       [moduleWith [ordinary,entry "identity" "ccall" ["IntRep","void"] ["void","IntRep"]]]
   , TestCase $ do
+      forM_ [(["BoxedRep (Just Unlifted)","void"],["void","Word64Rep"]),
+             (["BoxedRep (Just Lifted)","void"],["void"]),
+             (["void"],["void","BoxedRep (Just Unlifted)"]),
+             (["void"],["void","BoxedRep (Just Lifted)"])] $ \(arguments,result) -> do
+        let boxed = entry "gc_object" "ccall" arguments result
+            original = moduleWith [ordinary,boxed]
+        case archiveNativeModule "fixture-unit" original of
+          Left message -> assertFailure message
+          Right archived -> do
+            assertEqual "GC import proof survives archival unchanged"
+              (lookupField "staticForeignImports" original) (lookupField "staticForeignImports" archived)
+            assertEqual "GC carrier is explicitly excluded from native adapters"
+              (Just (toJSON [maybe Null id (lookupField "emitted" boxed)]))
+              (lookupField "packageNativeArchive" archived >>= lookupField "unsupportedImports")
+            assertEqual "ordinary scalar adapter remains available beside GC imports"
+              (Right [("identity","ccall","unsafe",["WordRep"],"WordRep")])
+              (nativeSignatures "fixture-unit" [archived])
+        assertBool "unarchived GC calls cannot generate native adapters"
+          (isLeft (nativeSignatures "fixture-unit" [original]))
+      assertBool "unknown levity is not concrete archival provenance"
+        (isLeft (archiveNativeModule "fixture-unit" (moduleWith
+          [entry "gc_object" "ccall" ["BoxedRep Nothing","void"] ["void"]])))
+  , TestCase $ do
       let narrow = entry "width" "ccall" ["IntRep","void"] ["void","Int32Rep"]
           wide = entry "width" "ccall" ["IntRep","void"] ["void","Int64Rep"]
           named name entries = set "module" (toJSON (name::String)) $

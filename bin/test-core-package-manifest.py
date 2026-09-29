@@ -561,6 +561,41 @@ class PackageNativeVariantsTest(unittest.TestCase):
         archived['packageNativeArchive']['artifact']['bitcodeHex'] = '4342'
         with self.assertRaisesRegex(ValueError, 'bitcode digest'): core_package_manifest.package_native_archive(archived)
 
+    def test_gc_boxed_imports_are_archived_without_poisoning_scalar_adapters(self):
+        import copy
+        for arguments, result in [(['BoxedRep (Just Unlifted)', 'void'], ['void', 'Word64Rep']),
+                                  (['BoxedRep (Just Lifted)', 'void'], ['void']),
+                                  (['void'], ['void', 'BoxedRep (Just Unlifted)']),
+                                  (['void'], ['void', 'BoxedRep (Just Lifted)'])]:
+            with self.subTest(arguments=arguments, result=result):
+                module = self.module(['WordRep'])
+                blocked = copy.deepcopy(module['staticForeignImports']['imports'][0])
+                blocked['binder']['occurrence'] = 'gc_object'
+                blocked['symbol'] = blocked['emitted']['symbol'] = 'gc_object'
+                blocked['emitted'].update(arguments=arguments, result=result)
+                nominal = dict(kind='tycon', name=dict(unit='ghc-prim', module='GHC.Prim',
+                    occurrence='ThreadId#', namespace='type'), arguments=[])
+                blocked['declaredType'] = blocked['normalizedType'] = nominal
+                module['staticForeignImports']['imports'].append(blocked)
+                module['packageNativeArchive'] = dict(schema=1, profile='thc-package-native-archive-v1',
+                    execution='not-linked', unit=module['unit'], module=module['module'],
+                    unsupportedImports=[blocked['emitted']], unclassifiedReason=None,
+                    unresolvedSymbols=[], artifact=None)
+                link, proved = core_package_manifest.package_scalar_link(module)
+                self.assertEqual({link['abi'][0]['entry']}, proved)
+                self.assertEqual(nominal, module['staticForeignImports']['imports'][-1]['normalizedType'])
+                bad = copy.deepcopy(module)
+                bad['packageNativeArchive']['unsupportedImports'] = []
+                with self.assertRaises(ValueError): core_package_manifest.package_native_archive(bad)
+                bad = copy.deepcopy(module)
+                bad['packageNativeArchive']['conflictingImports'] = [blocked['emitted'],
+                    dict(blocked['emitted'], arguments=['WordRep', 'void'], result=['void', 'WordRep'])]
+                with self.assertRaises(ValueError): core_package_manifest.package_native_archive(bad)
+                bad = copy.deepcopy(module)
+                bad['staticForeignImports']['imports'][-1]['emitted']['arguments'] = ['BoxedRep Nothing', 'void']
+                bad['packageNativeArchive']['unsupportedImports'] = [bad['staticForeignImports']['imports'][-1]['emitted']]
+                with self.assertRaises(ValueError): core_package_manifest.package_native_archive(bad)
+
     def test_conflicts_order_and_duplicates_still_reject(self):
         for reps in (['AddrRep', 'WordRep'],
                      ['ByteArray#', 'AddrRep'], ['AddrRep', 'AddrRep']):
