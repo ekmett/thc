@@ -84,7 +84,7 @@ class ScalarBitCastTest {
     }
     private record RetainedCalls(List<String> globals, int callbacks) { long count() { return (long) globals.size() + callbacks; } }
     private static RetainedCalls retainedCalls(Map<String, Object> module, String name, Map<String, Object> shape) {
-        var evidence = new ArrayCoreEvidence(module, name);
+        var evidence = new ArrayCoreEvidence(module, "main:ScalarBitCastAudit." + name);
         var functions = evidence.getBindings().stream().filter(binding -> "lam".equals(expression(binding.get("expr")).getFirst())).toList();
         var globals = functions.stream().map(binding -> (String) binding.get("id")).toList();
         assertEquals(new HashSet<>(expression(shape.get("globalFunctions"))), new HashSet<>(globals), name + " original global identities");
@@ -106,12 +106,14 @@ class ScalarBitCastTest {
         assertEquals(shape.get("nestedCallbacks"), (long) callbacks.size()); return new RetainedCalls(globals, callbacks.size());
     }
     private Map<String, Object> json(String path) throws Exception { return object(Json.parse(Files.readString(new File(root, path).toPath()))); }
+    private Map<String, Object> cbd(String path) throws Exception { return thc.CoreCbdFixtures.read(new File(root, path).toPath()); }
+    private String entryId(String name) { return "main:ScalarBitCastAudit." + name; }
     private Map<String, Object> evidence() throws Exception { return json("build/scalar-bitcasts/manifest.json"); }
     private void verifyEvidence(Map<String, Object> manifest) throws Exception {
         String prefix = "build/scalar-bitcasts";
         assertEquals(1L, manifest.get("schema")); assertEquals("9.14.1", manifest.get("ghc"));
         assertEquals(NAMES, manifest.get("entries")); assertEquals(13555L, manifest.get("nativeRows"));
-        assertEquals(map("pre", prefix + "/pre-core/ScalarBitCastAudit.json", "post", prefix + "/post-core/ScalarBitCastAudit.json"), manifest.get("stages"));
+        assertEquals(map("pre", prefix + "/pre-core/ScalarBitCastAudit.cbd", "post", prefix + "/post-core/ScalarBitCastAudit.cbd"), manifest.get("stages"));
         assertEquals(map("32", inputs(32), "64", inputs(64)), manifest.get("inputsByWidth"));
         assertEquals(EXPECTED_CALLS, manifest.get("expectedGuestCalls"));
         var arities = new LinkedHashMap<String, Long>(); for (var name : SIGNATURES.keySet()) arities.put(name, 1L);
@@ -128,7 +130,7 @@ class ScalarBitCastTest {
         var commands = new ArrayList<>(list("native-build", "native-oracle"));
         var artifacts = new HashSet<>(list(prefix + "/inputs.tsv", prefix + "/oracle.tsv", prefix + "/native/scalar-bitcast-oracle"));
         for (var stage : list("pre", "post")) {
-            commands.add(stage + "-export"); artifacts.add(prefix + "/" + stage + "-core/ScalarBitCastAudit.json"); artifacts.add(prefix + "/" + stage + "-audit.json");
+            commands.add(stage + "-export"); artifacts.add(prefix + "/" + stage + "-core/ScalarBitCastAudit.cbd"); artifacts.add(prefix + "/" + stage + "-core/ScalarBitCastAudit.json"); artifacts.add(prefix + "/" + stage + "-audit.json");
             for (var name : NAMES) { commands.add(stage + "-" + name + "-audit"); artifacts.add(prefix + "/" + stage + "-" + name + "-audit.json"); }
         }
         for (var command : commands) for (var suffix : list("stdout", "stderr", "command.json")) artifacts.add(prefix + "/commands/" + command + "." + suffix);
@@ -176,14 +178,14 @@ class ScalarBitCastTest {
     @Test void loweredPathsKeepGlobalIdentitiesAndCallbacksAndRejectNonStateRedexes() throws Exception {
         var manifest = evidence(); verifyEvidence(manifest);
         for (var stage : object(manifest.get("stages")).entrySet()) {
-            var module = json((String) stage.getValue()); var shapes = object(manifest.get("structure"));
+            var module = cbd((String) stage.getValue()); var shapes = object(manifest.get("structure"));
             for (var name : NAMES) {
                 var retained = retainedCalls(module, name, object(shapes.get(stage.getKey() + "/" + name)));
                 assertEquals(name.endsWith("Roundtrip") ? 5L : name.endsWith("Field") ? 6L : name.endsWith("Captured") ? 7L : 3L,
                     retained.count(), stage.getKey() + "/" + name + " independently retained roots");
             }
             for (var mutation : list("type", "lifted", "coercion", "formal", "argument", "flags")) {
-                var bad = object(Json.parse(Json.stringify(module))); var core = new ArrayCoreEvidence(bad, "floatDecode");
+                var bad = object(Json.parse(Json.stringify(module))); var core = new ArrayCoreEvidence(bad, entryId("floatDecode"));
                 var calls = core.nodes(core.getRoot().get("expr")).stream().filter(node -> !node.isEmpty() && node.getFirst().equals("app") &&
                     node.size() > 1 && node.get(1) instanceof List<?> function && !function.isEmpty() && function.getFirst().equals("lam")).toList();
                 assertEquals(1, calls.size()); var call = calls.getFirst(); var formals = objects(expression(call.get(1)).get(1)); assertEquals(1, formals.size()); var formal = formals.getFirst();
@@ -203,13 +205,13 @@ class ScalarBitCastTest {
         }
         assertEquals(new HashSet<>(NAMES), rows.keySet()); assertEquals(((Number) manifest.get("nativeRows")).intValue(), rows.values().stream().mapToInt(List::size).sum());
         for (var stage : object(manifest.get("stages")).entrySet()) {
-            var module = json((String) stage.getValue());
+            var module = cbd((String) stage.getValue());
             for (var name : NAMES) for (var backend : list("ast", "bytecode")) try (var context = context(inlining)) {
                 context.initialize("thc"); context.enter();
                 try {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                    var p = program(language, with(CoreModules.reachable(module, name), "instrument", true), backend);
-                    var entry = p.entryTarget(name); var host = p.hostEntryTarget(1); var function = context.asValue(new EntryValue(p, name, 1));
+                    var p = program(language, with(CoreModules.reachable(module, entryId(name)), "instrument", true), backend);
+                    var entry = p.entryTarget(entryId(name)); var host = p.hostEntryTarget(1); var function = context.asValue(new EntryValue(p, entryId(name), 1));
                     var label = stage.getKey() + "/" + backend + "/" + name + "/inline=" + inlining;
                     var retained = retainedCalls(module, name, object(object(manifest.get("structure")).get(stage.getKey() + "/" + name))); var cases = rows.get(name);
                     assertEquals(expression(object(manifest.get("inputsByWidth")).get(name.startsWith("float") ? "32" : "64")).stream().map(value -> ((Number) value).longValue()).toList(), cases.stream().map(row -> Long.parseLong(row.get(1))).toList());
@@ -240,10 +242,11 @@ class ScalarBitCastTest {
     }
     private static Map<String, Object> synthetic(String name) {
         var signature = SIGNATURES.get(name); var closure = map("kind", "closure", "primReps", list("BoxedRep (Just Lifted)"), "evaluated", true);
-        var app = list("app", list("prim", name), list(list("var", "x", map("rep", proof(signature.input())))), list(false), false, false, map("rep", proof(signature.output())));
+        var app = list("app", list("prim", name, map("rep", closure)), list(list("var", "x", map("rep", proof(signature.input())))), list(false), false, false, map("rep", proof(signature.output())));
         var body = list("lam", list(map("id", "x", "lifted", false, "rep", proof(signature.input()))), app, map("rep", closure, "resultRep", proof(signature.output())));
-        var binding = map("id", "entry", "name", "entry", "lifted", true, "rep", closure, "expr", body);
-        return object(Json.parse(Json.stringify(map("schema", 1, "ghc", "9.14.1", "instrument", true, "constructors", list(), "bindings", list(binding)))));
+        var binding = map("id", "entry", "name", "entry", "arity", 1, "lifted", true, "rep", closure, "expr", body);
+        return object(Json.parse(Json.stringify(map("schema", 1, "ghc", "9.14.1", "unit", "main", "module", "ScalarBitCastModel",
+            "boundary", "optimized-Core-before-Tidy", "instrument", true, "constructors", list(), "bindings", list(binding)))));
     }
     private static List<Object> lambda(Map<String, Object> module) { var bindings = objects(module.get("bindings")); assertEquals(1, bindings.size()); return expression(bindings.getFirst().get("expr")); }
     private static void mutate(List<Object> lam, String mutation) {
@@ -255,7 +258,7 @@ class ScalarBitCastTest {
             case "lexical" -> objects(lam.get(1)).getFirst().put("rep", proof("WordRep"));
             case "partial" -> { arguments.clear(); expression(app.get(3)).clear(); }
             case "over" -> { assertEquals(1, arguments.size()); arguments.add(arguments.getFirst()); expression(app.get(3)).add(false); }
-            case "bare" -> lam.set(2, list("prim", expression(app.get(1)).get(1)));
+            case "bare" -> lam.set(2, list("prim", expression(app.get(1)).get(1), map("rep", object(lam.get(3)).get("rep"))));
             case "tuple" -> object(expression(arguments.getFirst()).get(2)).put("rep", map("kind", "unknown", "aggregate", "unboxed-tuple", "primReps", list(), "components", list(), "evaluated", true));
             case "sum" -> object(expression(arguments.getFirst()).get(2)).put("rep", map("kind", "unknown", "aggregate", "unboxed-sum", "primReps", list("WordRep", "WordRep"), "alternatives", list(proof("IntRep"), proof("IntRep")), "tagSlot", 0, "alternativeSlots", list(list(1), list(1)), "evaluated", true));
             default -> throw new AssertionError(mutation);
@@ -270,7 +273,7 @@ class ScalarBitCastTest {
             var name = entry.getKey(); var signature = entry.getValue(); assertEquals(map("arguments", list(signature.input()), "result", signature.output()), table.get(name)); assertEquals(1L, capabilities.get(name));
             for (var mutation : list("valid", "argument", "result", "lexical", "partial", "over", "bare")) {
                 var module = synthetic(name); mutate(lambda(module), mutation); var label = name.substring(0, name.length() - 1) + "-" + mutation;
-                var source = directory.resolve(label + ".json"); Files.writeString(source, Json.stringify(module)); var report = directory.resolve(label + "-report.json");
+                var source = thc.CoreCbdFixtures.write(directory.resolve(label + ".cbd"), without(module, "instrument")); var report = directory.resolve(label + "-report.json");
                 var process = new ProcessBuilder("python3", "bin/audit-core.py", source.toString(), "--entry", "entry", "--output", report.toString()).directory(root)
                     .redirectOutput(directory.resolve(label + ".stdout").toFile()).redirectError(directory.resolve(label + ".stderr").toFile()).start();
                 if (!process.waitFor(60, TimeUnit.SECONDS)) { process.destroyForcibly().waitFor(); fail("Shared bitcast auditor timed out: " + label); }

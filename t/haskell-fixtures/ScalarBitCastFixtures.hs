@@ -177,14 +177,16 @@ prepareScalarBitCasts root = do
   stages <- forM ["pre","post"] $ \stage -> do
     exported <- runLogged 300 root logs (stage ++ "-export")
       [("THC_CORE_OUT",output </> stage ++ "-core"),("THC_GHC_OUT",output </> stage ++ "-ghc")]
-      "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source])
-    let corePath = directory </> stage ++ "-core/ScalarBitCastAudit.json"
-    core <- readJson (root </> corePath)
+      "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
+        ["-fplugin-opt=THC.Plugin:pretty-diagnostics",source])
+    let corePath = directory </> stage ++ "-core/ScalarBitCastAudit.cbd"
+        diagnosticPath = directory </> stage ++ "-core/ScalarBitCastAudit.json"
+    core <- readJson (root </> diagnosticPath)
     reports <- forM entries $ \name -> do
       let reportPath = directory </> stage ++ "-" ++ name ++ "-audit.json"
       -- The existing shared Python auditor remains the capability proof.
       command <- runLogged 120 root logs (stage ++ "-" ++ name ++ "-audit") [] "python3"
-        ["bin/audit-core.py",corePath,"--entry",name,"--output",reportPath]
+        ["bin/audit-core.py",corePath,"--entry","main:ScalarBitCastAudit." ++ name,"--output",reportPath]
       report <- readJson (root </> reportPath)
       accepted <- field "accepted" report
       issues <- field "issues" report :: IO [Value]
@@ -195,7 +197,7 @@ prepareScalarBitCasts root = do
       pure (name,report,shape,summary,reportPath:commandArtifacts command)
     let reportPath = directory </> stage ++ "-audit.json"
     writeJson (root </> reportPath) (object [fromString name .= report | (name,report,_,_,_) <- reports])
-    pure (stage,corePath,reports,corePath:reportPath:commandArtifacts exported)
+    pure (stage,corePath,reports,corePath:diagnosticPath:reportPath:commandArtifacts exported)
   let requests = [(name,x) | name <- entries, x <- inputs (if "float" `isPrefixOf` name then 32 else 64)]
       requestPath = directory </> "inputs.tsv"
   unless (length (inputs 32) == 1211 && length (inputs 64) == 1500 && length requests == 13555)
