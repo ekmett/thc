@@ -75,8 +75,8 @@ class Case extends Expr {
             throw cut.append(frame, new DelimitedStep() {
                 @Override public Object resume(MaterializedFrame frame, DelimitedResume input,
                                                MaskingState ambient, DelimitedStep outerMask) {
-                    // Bind the completed scrutinee without evaluating it again.
-                    FrameAccess.INSTANCE.write(frame, binderSlot, input.get());
+                    // LocalBinding's saved write already installed the scrutinee.
+                    input.get();
                     Expr branch = select(frame).getBody();
                     return destination == null ? branch.execute(frame) : branch.executeTuple(frame, destination, offset);
                 }

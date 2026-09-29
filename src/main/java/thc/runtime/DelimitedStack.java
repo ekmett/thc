@@ -25,8 +25,11 @@ public final class DelimitedStack {
         initialMask = cut.getCapturedMask(); initialAnnotations = cut.getCapturedAnnotations();
         IdentityHashMap<MaterializedFrame, MaterializedFrame> copies = new IdentityHashMap<>();
         ArrayList<DelimitedFrame> image = new ArrayList<>();
-        for (DelimitedFrame entry : cut.getFrames())
-            image.add(new DelimitedFrame(copies.computeIfAbsent(entry.getFrame(), DelimitedContinuations::copyContinuationFrame), entry.getStep()));
+        for (DelimitedFrame entry : cut.getFrames()) {
+            MaterializedFrame copied = copies.computeIfAbsent(entry.getFrame(), DelimitedContinuations::copyContinuationFrame);
+            if (entry.getStep() instanceof DelimitedRootStep root) root.prepareImage(copied);
+            image.add(new DelimitedFrame(copied, entry.getStep()));
+        }
         frames = List.copyOf(image);
     }
     @TruffleBoundary(transferToInterpreterOnException = false)

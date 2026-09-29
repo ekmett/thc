@@ -272,8 +272,12 @@ public final class Force extends Node {
                         throw suspension;
                     }
                 } catch (DelimitedCut cut) {
-                    if (delimitedInvocation) throw new UnsupportedCore("control0# cannot recapture a parked one-shot invocation chain");
-                    throw cut;
+                    if (!delimitedInvocation) throw cut;
+                    if (!(current instanceof CallSegment) || !(expected instanceof AstContinuation || expected instanceof AstStackContinuation))
+                        throw new UnsupportedCore("control0# cannot recapture this parked invocation");
+                    // Abort through each exact private caller, leaf first. Its
+                    // consumed child edge throws before running the saved suffix.
+                    outcome = new ChildResume(null, cut);
                 } catch (GuestException | STMRetry | STMConflict | STMRestart failure) {
                     outcome = new ChildResume(null, failure);
                 } catch (AsyncDelivery failure) {
@@ -368,8 +372,9 @@ public final class Force extends Node {
     }
 
     private Object executeCallSegment(CallSegment segment, SavedGuestContinuation observed, Object resumeValue) {
+        boolean capturing = resumeValue instanceof ChildResume input && input.getFailure() instanceof DelimitedCut;
         while (true) {
-            switch (segment.getState()) {
+            if (!capturing) switch (segment.getState()) {
                 case 2 -> { return segment.getValue(); }
                 case 3 -> throw rethrowCallFailure(segment);
                 case 4 -> throw fault("Interrupted call segment has no resumable continuation");
@@ -380,6 +385,8 @@ public final class Force extends Node {
             try {
                 int claim;
                 synchronized (segment.getMonitor()) {
+                    if (capturing && (observed == null || segment.getState() != 5 || segment.getValue() != observed.getIdentity()))
+                        throw fault("Delimited capture lost its exact parked caller");
                     switch (segment.getState()) {
                         case 5 -> {
                             if (observed != null && segment.getValue() != observed.getIdentity() ||

@@ -36,6 +36,9 @@ final class Application extends Expr {
                         new Object[ArgumentLayout.width(inputLayout, arguments.length)], 0);
                 }
             });
+        } catch (DelimitedCut cut) {
+            throw cut.append(frame, (saved, input, ambient, outer) -> applyArguments(saved, Applications.requireClosure(input.get()),
+                new Object[ArgumentLayout.width(inputLayout, arguments.length)], 0));
         }
         Object[] values = new Object[ArgumentLayout.width(inputLayout, arguments.length)];
         return applyArguments(frame, fn, values, 0);
@@ -47,14 +50,19 @@ final class Application extends Expr {
                 else values[ArgumentLayout.offset(inputLayout, i)] = arguments[i].execute(frame);
             } catch (AstCapture cut) {
                 int index = i;
-                throw cut.append(new AstResumeStep() {
-                    @Override public Object resume(VirtualFrame frame, Object input) {
-                        if (inputLayout == null || !inputLayout.isEmpty(index)) values[ArgumentLayout.offset(inputLayout, index)] = input;
-                        return applyArguments(frame, fn, values, index + 1);
-                    }
-                });
+                throw cut.append((saved, input) -> resumeArgument(saved, fn, values, index, input));
+            } catch (DelimitedCut cut) {
+                int index = i;
+                throw cut.append(frame, (saved, input, ambient, outer) -> resumeArgument(saved, fn, values, index, input.get()));
             }
         }
         return dispatch.execute(frame, fn, values);
+    }
+    private Object resumeArgument(VirtualFrame frame, Closure fn, Object[] prefix, int index, Object input) {
+        // This prefix can belong to a reusable image; clone transport scratch,
+        // never the guest values, before running potentially reentrant operands.
+        Object[] values = prefix.clone();
+        if (inputLayout == null || !inputLayout.isEmpty(index)) values[ArgumentLayout.offset(inputLayout, index)] = input;
+        return applyArguments(frame, fn, values, index + 1);
     }
 }

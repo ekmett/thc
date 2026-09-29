@@ -62,6 +62,8 @@ public final class TupleApplication extends Expr {
             throw cut.append(new AstResumeStep() {
                 @Override public Object resume(VirtualFrame resumed, Object input) { return layout.read(resumed, vectorSlots, 0); }
             });
+        } catch (DelimitedCut cut) {
+            throw cut.append(frame, (saved, input, ambient, outer) -> { input.get(); return layout.read(saved, vectorSlots, 0); });
         }
         return layout.read(frame, vectorSlots, 0);
     }
@@ -75,6 +77,8 @@ public final class TupleApplication extends Expr {
                     return null;
                 }
             });
+        } catch (DelimitedCut cut) {
+            throw cut.append(frame, (saved, input, ambient, outer) -> { input.get(); vector.copy(saved, vectorSlots, 0, slots, offset); return null; });
         }
         vector.copy(frame, vectorSlots, 0, slots, offset);
         return null;
@@ -88,6 +92,9 @@ public final class TupleApplication extends Expr {
                     return executeArguments(resumed, slots, offset, Applications.requireClosure(input), new Object[ArgumentLayout.width(inputLayout, arguments.length)], 0);
                 }
             });
+        } catch (DelimitedCut cut) {
+            throw cut.append(frame, (saved, input, ambient, outer) -> executeArguments(saved, slots, offset,
+                Applications.requireClosure(input.get()), new Object[ArgumentLayout.width(inputLayout, arguments.length)], 0));
         }
         return executeArguments(frame, slots, offset, closure, new Object[ArgumentLayout.width(inputLayout, arguments.length)], 0);
     }
@@ -98,12 +105,10 @@ public final class TupleApplication extends Expr {
                 else values[ArgumentLayout.offset(inputLayout, index)] = arguments[index].execute(frame);
             } catch (AstCapture cut) {
                 int savedIndex = index;
-                throw cut.append(new AstResumeStep() {
-                    @Override public Object resume(VirtualFrame resumed, Object input) {
-                        if (inputLayout == null || !inputLayout.isEmpty(savedIndex)) values[ArgumentLayout.offset(inputLayout, savedIndex)] = input;
-                        return executeArguments(resumed, slots, offset, closure, values, savedIndex + 1);
-                    }
-                });
+                throw cut.append((saved, input) -> resumeArgument(saved, slots, offset, closure, values, savedIndex, input));
+            } catch (DelimitedCut cut) {
+                int savedIndex = index;
+                throw cut.append(frame, (saved, input, ambient, outer) -> resumeArgument(saved, slots, offset, closure, values, savedIndex, input.get()));
             }
         }
         if (prepared != null) {
@@ -124,5 +129,10 @@ public final class TupleApplication extends Expr {
         if (destinationSlots != slots || destinationOffset != offset) throw new IllegalStateException("Check failed.");
         child.execute(frame, closure, values);
         return null;
+    }
+    private Object resumeArgument(VirtualFrame frame, int[] slots, int offset, Closure closure, Object[] prefix, int index, Object input) {
+        Object[] values = prefix.clone(); // Per-invocation transport scratch; guest references remain shared.
+        if (inputLayout == null || !inputLayout.isEmpty(index)) values[ArgumentLayout.offset(inputLayout, index)] = input;
+        return executeArguments(frame, slots, offset, closure, values, index + 1);
     }
 }

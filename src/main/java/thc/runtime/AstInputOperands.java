@@ -38,19 +38,25 @@ public final class AstInputOperands extends Node {
                 else if (proof.isDouble()) FrameAccess.writeDouble(frame, source.getSlots()[offset], arguments[i].executeRequiredDouble(frame));
                 else FrameAccess.write(frame, source.getSlots()[offset], arguments[i].execute(frame));
             } catch (AstCapture cut) {
-                int next = i + 1;
-                throw cut.append((saved, input) -> {
-                    if (!proof.isTypedTransport()) {
-                        if (proof.isInt()) FrameAccess.writeInt(saved, source.getSlots()[offset], (Integer) input);
-                        else if (proof.isLong()) FrameAccess.writeLong(saved, source.getSlots()[offset], (Long) input);
-                        else if (proof.isFloat()) FrameAccess.writeFloat(saved, source.getSlots()[offset], (Float) input);
-                        else if (proof.isDouble()) FrameAccess.writeDouble(saved, source.getSlots()[offset], (Double) input);
-                        else FrameAccess.write(saved, source.getSlots()[offset], input);
-                    } else if (input != null) throw fault("Invalid typed operand continuation");
-                    evaluate(saved, next);
-                    return thc.runtime.Unit.INSTANCE; // Shared legacy guest token; replaced only by the coordinated runtime cutover.
-                });
+                int index = i;
+                throw cut.append((saved, input) -> resumeOperand(saved, index, input));
+            } catch (DelimitedCut cut) {
+                int index = i;
+                throw cut.append(frame, (saved, input, ambient, outer) -> resumeOperand(saved, index, input.get()));
             }
         }
+    }
+    private Object resumeOperand(VirtualFrame frame, int index, Object input) {
+        CoreRepresentation proof = layout.proof(index);
+        int offset = layout.offset(index);
+        if (!proof.isTypedTransport()) {
+            if (proof.isInt()) FrameAccess.writeInt(frame, source.getSlots()[offset], (Integer) input);
+            else if (proof.isLong()) FrameAccess.writeLong(frame, source.getSlots()[offset], (Long) input);
+            else if (proof.isFloat()) FrameAccess.writeFloat(frame, source.getSlots()[offset], (Float) input);
+            else if (proof.isDouble()) FrameAccess.writeDouble(frame, source.getSlots()[offset], (Double) input);
+            else FrameAccess.write(frame, source.getSlots()[offset], input);
+        } else if (input != null) throw fault("Invalid typed operand continuation");
+        evaluate(frame, index + 1);
+        return thc.runtime.Unit.INSTANCE;
     }
 }

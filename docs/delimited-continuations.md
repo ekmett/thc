@@ -59,10 +59,17 @@ returned its function. Both scalar and tuple results work through direct and
 megamorphic calls. The captured tuple consumer runs once; bytecode receives an
 owned result at its saved call site. Neither path reruns the callee prefix.
 
-Applications with unboxed tuple/vector inputs remain unestablished. A new
-`control0#` reached while draining a parked one-shot invocation chain rejects:
-its pending callers are not yet translated to a reusable frame graph. This is
-distinct from recapturing an ordinary saved suffix, which remains supported.
+Fresh `control0#` inside an internally parked AST invocation translates its
+remaining AST callers into reusable frame steps, innermost first. The consumed
+child edges and their one-shot owners are not captured. Mask, annotation and
+cleanup scopes remain part of the suffix; a matching prompt inside an existing
+image still separates the captured suffix from its once-only outer continuation.
+An interrupted operand records its pending write and remaining preparation;
+saved scalar/tuple application prefixes copy their private argument arrays on
+resume, while the referenced guest values remain shared across invocations.
+Applications with unboxed tuple/vector inputs remain unestablished. Bytecode
+parked caller conversion and arbitrary hand-built yielded capture markers remain
+unsupported; ordinary bytecode saved delimited suffixes are separate and supported.
 Caught delivery abandons its interrupted child, rather than resuming it.
 This is not complete delimited-continuation support. Capturing through a thunk
 update rejects explicitly; GHC also excludes update/STM/foreign stack barriers

@@ -3,6 +3,7 @@
 package thc.runtime;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.nodes.Node;
 import static thc.runtime.RuntimeServiceStatus.fault;
 import static thc.runtime.TupleResults.requireVoidCarrier;
@@ -82,7 +83,7 @@ public final class CatchException extends Expr {
         request.acknowledge();
         return runHandler(frame, handlerValue, request.getPayload());
     }
-    private static final class CatchScope implements AstResumeStep {
+    private static final class CatchScope implements AstResumeStep, DelimitedStep {
         private final CatchException node;
         private final Object handler;
         private final List<AstResumeStep> steps;
@@ -94,6 +95,19 @@ public final class CatchException extends Expr {
                 delivered.getRequest().acknowledge();
                 return node.runHandler(frame, handler, delivered.getRequest().getPayload());
             } catch (AstCapture cut) { return node.capture(frame, handler, cut); }
+            catch (DelimitedCut cut) { throw cut.append(frame, new CatchScope(node, handler, List.of())); }
+        }
+        @Override public Object resume(MaterializedFrame frame, DelimitedResume input, MaskingState ambient, DelimitedStep outerMask) {
+            try { return input.get(); }
+            catch (GuestException guest) { return node.runHandler(frame, handler, guest.getPayload()); }
+            catch (AsyncDelivery delivered) {
+                AsyncRequest request = delivered.getRequest();
+                if (request.getTarget() != Thread.currentThread() || request.getTargetId() != GuestThreads.current(node).currentId() ||
+                    request.getState() != AsyncRequestState.CLAIMED)
+                    throw new IllegalStateException("Delimited catch delivery left its target or was already consumed");
+                request.acknowledge();
+                return node.runHandler(frame, handler, request.getPayload());
+            }
         }
     }
     private Object runHandler(VirtualFrame frame, Object handlerValue, Object payload) {
@@ -108,6 +122,7 @@ public final class CatchException extends Expr {
             handlerCall.execute(frame, requireClosure(closure), new Object[] {payload, thc.runtime.Unit.INSTANCE});
             return null;
         } catch (AstCapture cut) { throw cut.enclose(steps -> new AstMaskScope(this, prior, steps)); }
+        catch (DelimitedCut cut) { throw cut.append(frame, new DelimitedMaskStep(this, prior)); }
         finally { SynchronousMasking.set(this, prior); }
     }
 }

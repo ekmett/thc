@@ -50,6 +50,11 @@ public final class LocalJoinCall extends Expr {
             } catch (AstCapture cut) {
                 int index = i;
                 throw cut.append((saved, input) -> { saveArgument(saved, index, input); prepare(saved, index + 1); throw transfer(saved); });
+            } catch (DelimitedCut cut) {
+                int index = i;
+                throw cut.append(frame, (saved, input, ambient, outer) -> {
+                    saveArgument(saved, index, input.get()); prepare(saved, index + 1); throw transfer(saved);
+                });
             }
         }
     }

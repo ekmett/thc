@@ -36,14 +36,14 @@ public final class LocalBinding extends Node {
     public void write(VirtualFrame frame) {
         try { writeValue(frame); }
         catch (AstCapture cut) { throw appendWrite(cut); }
+        catch (DelimitedCut cut) { throw cut.append(frame, (saved, input, ambient, outer) -> resumeWrite(saved, input.get())); }
     }
     @TruffleBoundary private AstCapture appendWrite(AstCapture cut) {
-        return cut.append(new AstResumeStep() {
-                @Override public Object resume(VirtualFrame frame, Object input) {
-                    if (typedSlots == null) FrameAccess.INSTANCE.write(frame, slot, input);
-                    return thc.runtime.Unit.INSTANCE;
-                }
-        });
+        return cut.append(this::resumeWrite);
+    }
+    private Object resumeWrite(VirtualFrame frame, Object input) {
+        if (typedSlots == null) FrameAccess.write(frame, slot, input);
+        return thc.runtime.Unit.INSTANCE;
     }
     private void writeValue(VirtualFrame frame) {
         if (typedSlots != null) { value.executeTuple(frame, typedSlots, 0); return; }

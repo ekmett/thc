@@ -3,6 +3,7 @@
 package thc.runtime;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.frame.MaterializedFrame;
 import java.util.List;
 import static thc.runtime.RuntimeServiceStatus.fault;
 import static thc.runtime.Applications.requireClosure;
@@ -59,6 +60,11 @@ public final class AstTypedApplication extends Expr {
                     if (input != null) throw fault("Invalid vector application continuation");
                     return vector.read(saved, vectorSlots, 0);
                 });
+            } catch (DelimitedCut cut) {
+                throw cut.append(frame, (saved, input, ambient, outer) -> {
+                    if (input.get() != null) throw fault("Invalid vector application continuation");
+                    return vector.read(saved, vectorSlots, 0);
+                });
             }
             return vector.read(frame, vectorSlots, 0);
         }
@@ -76,6 +82,11 @@ public final class AstTypedApplication extends Expr {
         catch (AstCapture cut) {
             throw cut.append((saved, input) -> {
                 if (input != null) throw fault("Invalid vector application continuation");
+                vector.copy(saved, vectorSlots, 0, slots, offset); return null;
+            });
+        } catch (DelimitedCut cut) {
+            throw cut.append(frame, (saved, input, ambient, outer) -> {
+                if (input.get() != null) throw fault("Invalid vector application continuation");
                 vector.copy(saved, vectorSlots, 0, slots, offset); return null;
             });
         }
@@ -112,6 +123,7 @@ public final class AstTypedApplication extends Expr {
         Closure closure;
         try { closure = function.executeRequiredClosure(frame); }
         catch (AstCapture cut) { throw cut.append((saved, input) -> invokeAsync(saved, requireClosure(input), slots, offset)); }
+        catch (DelimitedCut cut) { throw cut.append(frame, (saved, input, ambient, outer) -> invokeAsync(saved, requireClosure(input.get()), slots, offset)); }
         return invokeAsync(frame, closure, slots, offset);
     }
     private Object invokeAsync(VirtualFrame frame, Closure closure, int[] slots, int offset) {
@@ -123,11 +135,19 @@ public final class AstTypedApplication extends Expr {
                     if (input != thc.runtime.Unit.INSTANCE) throw fault("Invalid typed operands continuation");
                     return dispatchAsync(saved, closure, slots, offset);
                 });
+            } catch (DelimitedCut cut) {
+                throw cut.append(frame, (saved, input, ambient, outer) -> {
+                    if (input.get() != thc.runtime.Unit.INSTANCE) throw fault("Invalid typed operands continuation");
+                    return dispatchAsync(saved, closure, slots, offset);
+                });
             }
             return dispatchAsync(frame, closure, slots, offset);
         } catch (AstCapture cut) {
             suspended = true;
             throw cut.enclose(steps -> new Cleanup(this, steps));
+        } catch (DelimitedCut cut) {
+            suspended = true;
+            throw cut.append(frame, new Cleanup(this, List.of()));
         } finally { if (!suspended) operands.getSource().clear(frame); }
     }
     private Object dispatchAsync(VirtualFrame frame, Closure closure, int[] slots, int offset) {
@@ -135,7 +155,7 @@ public final class AstTypedApplication extends Expr {
         if (shape == null) throw fault("Scalar application has no aggregate destination");
         destination(shape, slots, offset).execute(frame, closure); return null;
     }
-    private static final class Cleanup implements AstResumeStep {
+    private static final class Cleanup implements AstResumeStep, DelimitedStep {
         private final AstTypedApplication owner;
         private final List<AstResumeStep> steps;
         Cleanup(AstTypedApplication owner, List<AstResumeStep> steps) { this.owner = owner; this.steps = steps; }
@@ -144,7 +164,13 @@ public final class AstTypedApplication extends Expr {
             try { return AstContinuations.resumeAstSteps(frame, steps, input); }
             catch (AstCapture cut) {
                 suspended = true; throw cut.enclose(remaining -> new Cleanup(owner, remaining));
+            } catch (DelimitedCut cut) {
+                suspended = true; throw cut.append(frame, new Cleanup(owner, List.of()));
             } finally { if (!suspended) owner.operands.getSource().clear(frame); }
+        }
+        @Override public Object resume(MaterializedFrame frame, DelimitedResume input, MaskingState ambient, DelimitedStep outerMask) {
+            try { return input.get(); }
+            finally { owner.operands.getSource().clear(frame); }
         }
     }
     private void transferSelf(VirtualFrame frame, Closure function) {

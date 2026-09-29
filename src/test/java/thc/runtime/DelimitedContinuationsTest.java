@@ -16,6 +16,10 @@ import com.oracle.truffle.api.nodes.NodeUtil;
 import org.graalvm.polyglot.Context;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
+import java.nio.file.Path;
 import thc.CoreModules;
 import thc.EntryValue;
 import thc.Json;
@@ -42,6 +46,319 @@ class DelimitedContinuationsTest {
     private long expected(String entry, long n) { return switch (entry) {
         case "promptPure" -> n + 7; case "abortSuffix" -> n; case "resumeTwice" -> ((n + 1) * 100 + (n + 4)) * 10 + 3; case "nestedPrompts" -> n + 111; case "sameTagNearest" -> n + 100; case "capturedCatch" -> n + 17; case "capturedMask" -> n + 21; case "escapedResume" -> 2 * n + 14; case "ambientMask" -> n; case "resumedTail", "resumedJoin", "resumedScalar", "resumedApplication", "resumedScalarApplication" -> n + 117; case "polymorphicApplications", "polymorphicScalarApplications" -> 4 * n + 174; case "recapturedMask" -> n + 1; default -> throw new IllegalStateException(entry);
     }; }
+    @ParameterizedTest @ValueSource(booleans = {false, true})
+    void reentrantImageInvocationsOwnTheirPendingApplicationArguments(boolean tupleResult) {
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.Compilation", "false").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var number = new CoreRepresentation(CoreKind.LONG, true, true, List.of("IntRep"), null, null, null, null, null);
+                var shape = new TupleShape(tuple(number), language);
+                var layout = new FrameLayout(); int[] destination = {layout.bind("result", FrameSlotKind.Long)};
+                int[] effects = new int[3]; boolean[] nested = {false}; long[] nestedResult = {0};
+                class Root extends GuestRoot {
+                    @Child private Expr application;
+                    @Child private DelimitedActionSite site = new DelimitedActionSite(language, new Metrics(false));
+                    DelimitedStack image;
+                    Root() {
+                        super(language, layout.build());
+                        var target = new GuestRoot(language, new FrameLayout().build()) {
+                            { configureEntry(new boolean[]{false, false}, false); if (tupleResult) configureTupleResult(shape); }
+                            @Override public long bloom(VirtualFrame frame) { return 0; }
+                            @Override public Object execute(VirtualFrame frame) {
+                                effects[2]++;
+                                long result = (Long) frame.getArguments()[1] * 100 + (Long) frame.getArguments()[2];
+                                if (!tupleResult) return result;
+                                var carrier = shape.getLayout().create(); shape.getLayout().setLong(carrier, 0, result); return carrier;
+                            }
+                        };
+                        var fn = new Expr() { @Override public Object execute(VirtualFrame frame) { return new Closure(null, 2, target.getCallTarget()); } };
+                        var first = new Expr() {
+                            { setRepresentation(number); }
+                            @Override public Object execute(VirtualFrame frame) {
+                                effects[0]++;
+                                throw new AstCapture(AstStackSpill.INSTANCE, SynchronousMasking.current(this)).append((saved, input) -> {
+                                    throw new DelimitedCut(new PromptTag(Language.currentState()), null, null, SynchronousMasking.current(this), this);
+                                });
+                            }
+                        };
+                        var second = new Expr() {
+                            { setRepresentation(number); }
+                            @Override public Object execute(VirtualFrame frame) {
+                                effects[1]++;
+                                if (nested[0]) return 2L;
+                                nested[0] = true;
+                                try { nestedResult[0] = (Long) resume(20L); }
+                                finally { nested[0] = false; }
+                                return 1L;
+                            }
+                        };
+                        application = tupleResult ? new TupleApplication(language, shape, fn, new Expr[]{first, second}, false, new Metrics(false)) :
+                            new Application(fn, new Expr[]{first, second}, false, new Metrics(false));
+                    }
+                    @Override public long bloom(VirtualFrame frame) { return 0; }
+                    @Override public Object execute(VirtualFrame frame) {
+                        try {
+                            if (!tupleResult) return application.execute(frame);
+                            try { application.executeTuple(frame, destination, 0); }
+                            catch (AstCapture cut) { throw cut.append((saved, input) -> saved.getLong(destination[0])); }
+                            return frame.getLong(destination[0]);
+                        } catch (AstCapture cut) { return cut.freeze(this, frame.materialize()); }
+                    }
+                    Object resume(long value) {
+                        var action = new Closure(null, 1, new GuestRoot(language, new FrameLayout().build()) {
+                            @Override public long bloom(VirtualFrame frame) { return 0; }
+                            @Override public Object execute(VirtualFrame frame) { return value; }
+                        }.getCallTarget());
+                        return image.resume(site, Truffle.getRuntime().createMaterializedFrame(new Object[]{0L}, getFrameDescriptor()), action);
+                    }
+                }
+                var root = new Root(); var saved = (AstContinuation) root.getCallTarget().call(0L);
+                root.image = new DelimitedStack(assertThrows(DelimitedCut.class, () -> saved.continueWith(Unit.INSTANCE)), null);
+                assertEquals(1001L, root.resume(10L)); assertEquals(2002L, nestedResult[0]);
+                assertEquals(3001L, root.resume(30L)); assertEquals(2002L, nestedResult[0]);
+                assertArrayEquals(new int[]{1, 4, 4}, effects);
+                assertEquals(0, language.getHandoffState().get().getResults().getDepth());
+            } finally { context.leave(); }
+        }
+    }
+    @ParameterizedTest @ValueSource(strings = {"operands", "typed", "let", "join"})
+    void freshCaptureDuringResumedOperandPreparationKeepsTheInterruptedWrite(String route) {
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.Compilation", "false").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var number = new CoreRepresentation(CoreKind.DOUBLE, true, true, List.of("DoubleRep"), null, null, null, null, null);
+                var layout = new FrameLayout();
+                int[] effects = new int[4];
+                Expr[] arguments = new Expr[3];
+                for (int i = 0; i < arguments.length; i++) {
+                    final int index = i;
+                    arguments[i] = new Expr() {
+                        { setRepresentation(number); }
+                        @Override public Object execute(VirtualFrame frame) {
+                            effects[index]++;
+                            if (index == 0) throw new AstCapture(AstStackSpill.INSTANCE, SynchronousMasking.current(this))
+                                .append((saved, input) -> 10.0);
+                            if (index == 1) throw new DelimitedCut(new PromptTag(Language.currentState()), null, null,
+                                SynchronousMasking.current(this), this);
+                            return 30.0;
+                        }
+                    };
+                }
+                boolean typed = route.equals("typed");
+                AstInputOperands inputs = typed ? new AstInputOperands(arguments, layout) : null;
+                int[] slots = typed ? inputs.getSource().getSlots() : new int[]{layout.bind("first", FrameSlotKind.Double),
+                    layout.bind("second", FrameSlotKind.Double), layout.bind("third", FrameSlotKind.Double)};
+                Expr body = new Expr() {
+                    @Override public Object execute(VirtualFrame frame) {
+                        effects[3]++;
+                        return frame.getDouble(slots[0]) + frame.getDouble(slots[1]) + frame.getDouble(slots[2]);
+                    }
+                };
+                Expr selected;
+                if (typed) selected = body;
+                else if (route.equals("let")) selected = new Let(slots, arguments, new boolean[3], body, false);
+                else if (route.equals("join")) {
+                    Object group = new Object();
+                    int[] temporaries = {layout.bind("pending first", FrameSlotKind.Double), layout.bind("pending second", FrameSlotKind.Double),
+                        layout.bind("pending third", FrameSlotKind.Double)};
+                    var target = new LocalJoinTarget(group, 1, slots, new CoreRepresentation[]{number, number, number});
+                    var call = new LocalJoinCall(language, target, arguments, temporaries, new Metrics(false));
+                    selected = new LocalJoinRegion(group, layout.bind("selector"), layout.bind("join result"),
+                        new Expr[]{call, body}, number, false, null, new int[0], true);
+                } else selected = new AstOperands(new LocalBinding[]{new LocalBinding(slots[0], arguments[0], false),
+                    new LocalBinding(slots[1], arguments[1], false), new LocalBinding(slots[2], arguments[2], false)}, slots, body);
+                class Root extends GuestRoot {
+                    @Child private AstInputOperands operands = inputs;
+                    @Child private Expr expression = selected;
+                    @Child private DelimitedActionSite site = new DelimitedActionSite(language, new Metrics(false));
+                    Root() { super(language, layout.build()); }
+                    @Override public long bloom(VirtualFrame frame) { return 0; }
+                    @Override public Object execute(VirtualFrame frame) {
+                        try {
+                            if (typed) try { operands.evaluate(frame); }
+                            catch (AstCapture cut) { throw cut.append((saved, input) -> expression.execute(saved)); }
+                            return expression.execute(frame);
+                        } catch (AstCapture cut) { return cut.freeze(this, frame.materialize()); }
+                    }
+                    Object resume(DelimitedStack image, double replacement) {
+                        var action = new Closure(null, 1, new GuestRoot(language, new FrameLayout().build()) {
+                            @Override public long bloom(VirtualFrame frame) { return 0; }
+                            @Override public Object execute(VirtualFrame frame) { return replacement; }
+                        }.getCallTarget());
+                        return image.resume(site, Truffle.getRuntime().createMaterializedFrame(new Object[]{0L}, getFrameDescriptor()), action);
+                    }
+                }
+                var root = new Root();
+                var saved = (AstContinuation) root.getCallTarget().call(0L);
+                var cut = assertThrows(DelimitedCut.class, () -> saved.continueWith(Unit.INSTANCE));
+                var image = new DelimitedStack(cut, null);
+                assertEquals(60.0, root.resume(image, 20.0));
+                assertEquals(70.0, root.resume(image, 30.0));
+                assertArrayEquals(new int[]{1, 1, 2, 2}, effects);
+                assertThrows(RuntimeFault.class, () -> saved.continueWith(Unit.INSTANCE));
+                assertEquals(0, language.getHandoffState().get().getResults().getDepth());
+            } finally { context.leave(); }
+        }
+    }
+    @Test void freshCaptureDuringResumedKeepAliveStateRetainsItsAction() {
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.Compilation", "false").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                Object kept = new Object(); int[] effects = new int[3];
+                class Root extends GuestRoot {
+                    @Child private DelimitedActionSite site = new DelimitedActionSite(language, new Metrics(false));
+                    @Child private Expr expression = new KeepAliveExpression(
+                        new Expr() { @Override public Object execute(VirtualFrame frame) {
+                            effects[0]++; throw new AstCapture(AstStackSpill.INSTANCE, SynchronousMasking.current(this)).append((saved, input) -> kept);
+                        } },
+                        new Expr() { @Override public Object execute(VirtualFrame frame) {
+                            effects[1]++; throw new DelimitedCut(new PromptTag(Language.currentState()), null, null, SynchronousMasking.current(this), this);
+                        } },
+                        new Expr() { @Override public Object execute(VirtualFrame frame) { effects[2]++; return 42L; } }, CoreRepresentation.UNKNOWN);
+                    Root() { super(language, new FrameLayout().build()); }
+                    @Override public long bloom(VirtualFrame frame) { return 0; }
+                    @Override public Object execute(VirtualFrame frame) {
+                        try { return expression.execute(frame); }
+                        catch (AstCapture cut) { return cut.freeze(this, frame.materialize()); }
+                    }
+                    Object resume(DelimitedStack image) {
+                        var action = new Closure(null, 1, new GuestRoot(language, new FrameLayout().build()) {
+                            @Override public long bloom(VirtualFrame frame) { return 0; }
+                            @Override public Object execute(VirtualFrame frame) { return Unit.INSTANCE; }
+                        }.getCallTarget());
+                        return image.resume(site, Truffle.getRuntime().createMaterializedFrame(new Object[]{0L}, getFrameDescriptor()), action);
+                    }
+                }
+                var root = new Root(); var saved = (AstContinuation) root.getCallTarget().call(0L);
+                var image = new DelimitedStack(assertThrows(DelimitedCut.class, () -> saved.continueWith(Unit.INSTANCE)), null);
+                assertEquals(42L, root.resume(image)); assertEquals(42L, root.resume(image));
+                assertArrayEquals(new int[]{1, 1, 2}, effects);
+                assertThrows(RuntimeFault.class, () -> saved.continueWith(Unit.INSTANCE));
+            } finally { context.leave(); }
+        }
+    }
+    @Test void freshCaptureFindsPromptInsideSavedSuffixAndRebasesItsScopes() {
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.Compilation", "false").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var state = new CoreRepresentation(CoreKind.VOID, false, false, List.of(), null, null, null, null, null);
+                var number = new CoreRepresentation(CoreKind.LONG, true, false, List.of("IntRep"), null, null, null, null, null);
+                var shape = new TupleShape(new CoreRepresentation(CoreKind.UNKNOWN, false, false, List.of("IntRep"), List.of(state, number), null, null, null, null), language);
+                var owners = new ArrayList<AstContinuation>();
+                int[] effects = new int[4];
+                Object inner = new Object(), ambient = new Object();
+                class Root extends GuestRoot {
+                    @Child private DelimitedActionSite site = new DelimitedActionSite(language, new Metrics(false));
+                    final PromptTag tag = new PromptTag(Language.currentState());
+                    final Closure handler;
+                    Root() {
+                        super(language, FrameDescriptor.newBuilder().build());
+                        configureEntry(new boolean[]{false}, false); configureTupleResult(shape);
+                        handler = new Closure(null, 2, new GuestRoot(language, FrameDescriptor.newBuilder().build()) {
+                            @Override public long bloom(VirtualFrame frame) { return 0; }
+                            @Override public Object execute(VirtualFrame frame) {
+                                assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(this));
+                                assertEquals(List.of(ambient), StackAnnotations.current(this).values());
+                                Object k = frame.getArguments()[1];
+                                long first = unpack(site.invoke(frame, k, new Object[]{action(11), Unit.INSTANCE}, shape));
+                                long second = unpack(site.invoke(frame, k, new Object[]{action(23), Unit.INSTANCE}, shape));
+                                return pack(first + second);
+                            }
+                        }.getCallTarget());
+                    }
+                    Object pack(long value) { var result = shape.getLayout().create(); shape.getLayout().setLong(result, 0, value); return result; }
+                    long unpack(Object value) { return shape.getLayout().getLong((HandoffStorage) value, 0); }
+                    Closure action(long value) {
+                        return new Closure(null, 1, new GuestRoot(language, FrameDescriptor.newBuilder().build()) {
+                            @Override public long bloom(VirtualFrame frame) { return 0; }
+                            @Override public Object execute(VirtualFrame frame) { return pack(value); }
+                        }.getCallTarget());
+                    }
+                    @Override public long bloom(VirtualFrame frame) { return 0; }
+                    @Override public Object execute(VirtualFrame ignored) {
+                        var builder = FrameDescriptor.newBuilder(); builder.addSlot(FrameSlotKind.Long, "local", null);
+                        var frame = Truffle.getRuntime().createMaterializedFrame(new Object[]{0L}, builder.build());
+                        frame.setLong(0, 7);
+                        MaskingState prior = SynchronousMasking.current(this);
+                        StackAnnotationState annotations = StackAnnotations.enter(this, inner);
+                        SynchronousMasking.set(this, MaskingState.MASKED_INTERRUPTIBLE);
+                        try {
+                            AstContinuation leaf = new AstCapture(AstStackSpill.INSTANCE, SynchronousMasking.current(this))
+                                .append((saved, input) -> { effects[0]++; throw new DelimitedCut(tag, handler, shape, SynchronousMasking.current(this), this); })
+                                .freeze(this, frame);
+                            owners.add(leaf);
+                            try { return AstControl.completeCallback(this, leaf, null, shape, false); }
+                            catch (AstCapture cut) {
+                                cut.append((saved, input) -> {
+                                    effects[1]++;
+                                    assertEquals(7, saved.getLong(0), "Each invocation owns a fresh control slot");
+                                    saved.setLong(0, 99);
+                                    assertEquals(MaskingState.MASKED_INTERRUPTIBLE, SynchronousMasking.current(this));
+                                    assertEquals(List.of(inner, ambient), StackAnnotations.current(this).values());
+                                    return pack(unpack(input) + 7);
+                                });
+                                cut.enclose(steps -> new AstAnnotationScope(this, annotations, steps));
+                                cut.enclose(steps -> new AstMaskScope(this, prior, steps));
+                                AstContinuation parent = cut.freeze(this, frame); owners.add(parent); return parent;
+                            }
+                        } finally { SynchronousMasking.set(this, prior); StackAnnotations.set(this, annotations); }
+                    }
+                    DelimitedStack image() {
+                        var frame = Truffle.getRuntime().createMaterializedFrame(new Object[]{0L}, getFrameDescriptor());
+                        var cut = new DelimitedCut(new PromptTag(Language.currentState()), null, shape, MaskingState.UNMASKED, this);
+                        cut.append(frame, (saved, input, mask, outer) -> { effects[2]++; return pack(unpack(input.get()) + 10); });
+                        cut.append(frame, new DelimitedPromptStep(tag, site, shape));
+                        cut.append(frame, (saved, input, mask, outer) -> { effects[3]++; return pack(unpack(input.get()) + 100); });
+                        return new DelimitedStack(cut, shape);
+                    }
+                    long run(DelimitedStack image) {
+                        var frame = Truffle.getRuntime().createMaterializedFrame(new Object[]{0L}, getFrameDescriptor());
+                        return unpack(image.resume(site, frame, new Closure(null, 1, getCallTarget())));
+                    }
+                }
+                var root = new Root(); var image = root.image();
+                var priorAnnotations = StackAnnotations.enter(root, ambient);
+                try {
+                    assertEquals(168, root.run(image)); assertEquals(168, root.run(image));
+                    assertArrayEquals(new int[]{2,4,4,2}, effects, "Capture prefix once; each inner suffix twice; outer prompt suffix once");
+                    for (var owner : owners) assertThrows(RuntimeFault.class, () -> owner.continueWith(Unit.INSTANCE));
+                    assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(root));
+                    assertEquals(List.of(ambient), StackAnnotations.current(root).values());
+                    assertEquals(0, AstStacks.astStackScope(root).getDepth());
+                } finally { StackAnnotations.set(root, priorAnnotations); }
+            } finally { context.leave(); }
+        }
+    }
+    @SuppressWarnings("unchecked")
+    @ParameterizedTest
+    @CsvSource({"0,11023000000,0", "96,107119096192,1"})
+    void freshCaptureCopiesEveryRecursiveSuffix(long depth, long expected, int nativeRow) throws Exception {
+        Path evidence = Path.of(System.getProperty("thc.projectRoot"), "build/delimited-continuations/parked");
+        provenance();
+        var manifest = (Map<?, ?>) Json.parse(Files.readString(new File(root, "build/delimited-continuations/manifest.json").toPath()));
+        assertEquals(expected, ((Number) ((List<?>) manifest.get("parkedNative")).get(nativeRow)).longValue());
+        var module = (Map<String,Object>) Json.parse(Files.readString(evidence.resolve("core/ParkedControl.json")));
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.Compilation", "false").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new Program(language, CoreModules.reachable(module, "observe"), true);
+                var function = context.asValue(new EntryValue(program, "observe", 1));
+                assertEquals(expected, function.execute(depth).asLong());
+                assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(null));
+                var handoff = language.getHandoffState().get();
+                assertEquals(0, handoff.getArguments().getDepth());
+                assertEquals(0, handoff.getResults().getDepth());
+                assertNull(handoff.getPending());
+            } finally { context.leave(); }
+        }
+    }
     @Test void originalCoreRunsSavedSuffixesOnBothBackends() throws Exception { runEntries(entries, true); }
     @Test void unsplitFourTargetApplicationsExerciseBothGenericResultPaths() throws Exception { runEntries(List.of("polymorphicApplications", "polymorphicScalarApplications"), false); }
     private void runEntries(List<String> selected, boolean splitting) throws Exception {
@@ -186,7 +503,13 @@ class DelimitedContinuationsTest {
             var root = new ImageRoot(); threads.enterCurrent(null, false, true, null);
             try {
                 var image = root.image(); for (int i = 0; i < 2; i++) { var answer = (HandoffStorage) root.resume(image); assertSame(payload, shape.getLayout().getObject(answer, 0)); } assertEquals(6, effects[0], "Two action cuts and the saved suffix run once per invocation"); assertEquals(4, children.size()); for (var child : children) assertThrows(RuntimeFault.class, () -> child.continueWith(thc.runtime.Unit.INSTANCE)); mode[0] = 1; for (int i = 0; i < 2; i++) assertSame(payload, shape.getLayout().getObject((HandoffStorage) root.resume(image), 0)); assertEquals(8, effects[0], "Delivery must not replay or resume the interrupted action"); assertEquals(2, handled[0]); assertNotSame(requests.get(0), requests.get(1)); boolean allAcknowledged = true; for (var request : requests) if (request.getState() != AsyncRequestState.ACKNOWLEDGED) { allAcknowledged = false; break; } assertTrue(allAcknowledged);
-                for (int recapture = 2; recapture <= 3; recapture++) { mode[0] = recapture; assertEquals("control0# cannot recapture a parked one-shot invocation chain", assertThrows(UnsupportedCore.class, () -> root.resume(image)).getMessage()); } mode[0] = 0; assertSame(payload, shape.getLayout().getObject((HandoffStorage) root.resume(image), 0)); assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(root)); assertEquals(0, AstStacks.astStackScope(root).getDepth()); assertNull(threads.poll(root, false));
+                // A fresh cut propagates to the matching prompt (this deliberately
+                // unmatched tag escapes). The already-consumed owner cannot replay.
+                mode[0] = 2; assertThrows(DelimitedCut.class, () -> root.resume(image));
+                assertThrows(RuntimeFault.class, () -> children.getLast().continueWith(thc.runtime.Unit.INSTANCE));
+                // A hand-built yielded cut is not an AST resume point and remains rejected.
+                mode[0] = 3; assertEquals("control0# cannot recapture a parked one-shot invocation chain", assertThrows(UnsupportedCore.class, () -> root.resume(image)).getMessage());
+                mode[0] = 0; assertSame(payload, shape.getLayout().getObject((HandoffStorage) root.resume(image), 0)); assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(root)); assertEquals(0, AstStacks.astStackScope(root).getDepth()); assertNull(threads.poll(root, false));
             } finally { threads.leaveCurrent(GuestThreadStatus.FINISHED); }
         } finally { context.leave(); } }
     }
