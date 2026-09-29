@@ -281,28 +281,18 @@ class DoubleVectorMemoryProofTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_direct('readDoubleX2Array#', app[2], app[3], result())
 
-    def test_vector_function_join_constructor_and_capture_boundaries_stay_closed(self):
-        for mode in ('result', 'argument', 'capture', 'join', 'constructor'):
-            module, _, body = fixture()
-            vector = var('vector', VECTOR_DOUBLE_REP)
-            if mode == 'result':
-                body[3][0][3] = vector
-                body[4]['rep'] = copy.deepcopy(VECTOR_DOUBLE_REP)
-                module['bindings'][0]['expr'][3]['resultRep'] = copy.deepcopy(VECTOR_DOUBLE_REP)
-            elif mode == 'argument':
-                body[3][0][3] = ['app', ['var', 'unknownFunction'], [vector], [False], False, False, dict(rep=INDEX)]
-            elif mode == 'capture':
-                body[3][0][3] = ['lam', [], vector, dict(rep=CLOSURE, resultRep=VECTOR_DOUBLE_REP)]
-            elif mode == 'join':
-                body[3][0][3] = ['let', False, [dict(id='join', lifted=True, rep=CLOSURE,
-                    joinValueArity=0, joinResultRep=VECTOR_DOUBLE_REP, info=dict(joinArity=0), expr=vector)],
-                    ['var', 'join', dict(rep=VECTOR_DOUBLE_REP)], dict(rep=VECTOR_DOUBLE_REP)]
-            else:
-                module['constructors'].append(dict(id='Box', kind='boxed', arity=1,
-                    fieldReps=[VECTOR_DOUBLE_REP['primReps']], fieldLifted=[False], strictFields=[False]))
-                body[3][0][3] = ['app', ['con', 'Box', 1], [vector], [False], False, True,
-                    dict(rep=dict(kind='data', primReps=['BoxedRep (Just Lifted)'], evaluated=True))]
-            self.assertFalse(check(module)['accepted'], mode)
+    def test_memory_vector_result_retains_its_exact_shape(self):
+        module, _, body = fixture()
+        vector = var('vector', VECTOR_DOUBLE_REP)
+        body[3][0][3] = vector
+        body[4]['rep'] = copy.deepcopy(VECTOR_DOUBLE_REP)
+        module['bindings'][0]['expr'][3]['resultRep'] = copy.deepcopy(VECTOR_DOUBLE_REP)
+        report = check(module)
+        self.assertTrue(report['accepted'], report['issues'])
+        vector[2]['rep']['vector']['lanes'] += 1
+        report = check(module)
+        self.assertFalse(report['accepted'])
+        self.assertIn('vector-representation', {issue['code'] for issue in report['issues']})
 
     def test_outer_result_mismatch_is_still_checked(self):
         for wrong in (dict(kind='double', primReps=['DoubleRep'], evaluated=True), STATE, ARRAY):

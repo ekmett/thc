@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
-"""Heap AddrRep support must not broaden aggregate result capabilities."""
+"""Exact AddrRep proofs for heap fields and aggregate payloads."""
 import copy
 import importlib.util
 import json
@@ -57,10 +57,14 @@ class AddressFields(unittest.TestCase):
             instance=audit.Audit([],CAP);instance.representation(rep,None,'/rep')
             self.assertTrue(instance.issues)
 
-    def test_address_sum_is_still_rejected(self):
+    def test_address_sum_requires_an_evaluated_address_payload(self):
         instance=audit.Audit([],CAP)
-        instance.representation(dict(kind='unknown',aggregate='unboxed-sum',alternatives=[ADDRESS,LONG],
-            primReps=['WordRep','WordRep'],tagSlot=0,alternativeSlots=[[1],[1]],evaluated=True),None,'/rep')
+        proof=dict(kind='unknown',aggregate='unboxed-sum',alternatives=[ADDRESS,LONG],
+            primReps=['WordRep','WordRep'],tagSlot=0,alternativeSlots=[[1],[1]],evaluated=True)
+        instance.representation(proof,None,'/rep')
+        self.assertEqual([],instance.issues)
+        proof['alternatives']=[dict(ADDRESS,evaluated=False),LONG]
+        instance.representation(proof,None,'/rep')
         self.assertIn('aggregate-representation',{i['code'] for i in instance.issues})
 
     def test_genuine_pre_and_post_inputs(self):
