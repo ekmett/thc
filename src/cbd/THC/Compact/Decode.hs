@@ -128,15 +128,21 @@ nativeLink decoder = do
     2 -> Known <$> nativeBuildInputs decoder False
     3 -> Known <$> nativeBuildInputs decoder True
     _ -> fail "Invalid compact native build-input tag"
-  (companion,dataSymbols) <- getWord8 >>= \kind -> case kind of
-    0 -> pure (Missing,Missing)
-    3 -> (,) <$> present ((,) <$> string decoder <*> blob decoder)
+  (companion,dataSymbols,components) <- getWord8 >>= \kind -> case kind of
+    0 -> pure (Missing,Missing,Nothing)
+    _ | kind == 3 || kind == 4 -> (,,) <$> present ((,) <$> string decoder <*> blob decoder)
              <*> present (list decoder (string decoder))
+             <*> (if kind == 3 then pure Nothing else
+               Just <$> ((,) <$> list decoder (string decoder) <*> list decoder (nativeComponent decoder)))
     _ -> fail "Retired or invalid compact native entry metadata"
   NativeLink payload abi inputs companion dataSymbols <$>
-    (if schema == 2 then list decoder (string decoder) else pure [])
+    (if schema == 2 then list decoder (string decoder) else pure []) <*> pure components
   where entry = NativeABI <$> string decoder <*> string decoder <*> enumeration <*> enumeration
           <*> list decoder (string decoder) <*> string decoder
+
+nativeComponent :: Decoder -> Get NativeComponent
+nativeComponent decoder = NativeComponent <$> linkPayload decoder <*> list decoder (string decoder)
+  <*> list decoder (nativeComponent decoder) <*> present ((,) <$> string decoder <*> blob decoder)
 
 nativeBuildInputs :: Decoder -> Bool -> Get NativeBuildInputs
 nativeBuildInputs decoder extended = NativeBuildInputs <$> list decoder group <*> list decoder provider

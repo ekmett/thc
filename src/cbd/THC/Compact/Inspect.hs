@@ -304,16 +304,22 @@ hexBytes :: BS.ByteString -> Value
 hexBytes = toJSON . concatMap (\byte -> let digits = showHex byte "" in replicate (2-length digits) '0' ++ digits) . BS.unpack
 
 nativeLink :: NativeLink -> Value
-nativeLink (NativeLink payload@(LinkPayload schema _ _ _ _ _ _ _) abi inputs companion dataSymbols finalizers) = object $ linkPayload payload ++ ["abi" .= arr entry abi]
+nativeLink (NativeLink payload@(LinkPayload schema _ _ _ _ _ _ _) abi inputs companion dataSymbols finalizers components) = object $ linkPayload payload ++ ["abi" .= arr entry abi]
   ++ ["finalizers" .= arr str finalizers | schema == 2]
   ++ p "buildInputs" nativeBuildInputs inputs
   ++ p "nativeLibrary" (\(digest,bytes) -> object ["sha256" .= str digest,"hex" .= hexBytes bytes]) companion
   ++ p "dataSymbols" (arr str) dataSymbols
+  ++ maybe [] (\(publicSymbols,dependencies) -> ["exports" .= arr str publicSymbols,"dependencies" .= arr nativeComponent dependencies]) components
   where entry (NativeABI symbol name convention safety arguments result) = object
           ["symbol" .= str symbol,"entry" .= str name,
            "convention" .= tagName ["ccall","capi","stdcall","prim","javascript"] convention,
            "safety" .= tagName ["unsafe","safe","interruptible"] safety,
            "arguments" .= arr str arguments,"result" .= str result]
+
+nativeComponent :: NativeComponent -> Value
+nativeComponent (NativeComponent payload publicSymbols dependencies companion) = object $ linkPayload payload ++
+  ["exports" .= arr str publicSymbols,"dependencies" .= arr nativeComponent dependencies] ++
+  p "nativeLibrary" (\(digest,bytes) -> object ["sha256" .= str digest,"hex" .= hexBytes bytes]) companion
 
 nativeBuildInputs :: NativeBuildInputs -> Value
 nativeBuildInputs (NativeBuildInputs units providers dependencies libraries unresolved bridges) = object $
