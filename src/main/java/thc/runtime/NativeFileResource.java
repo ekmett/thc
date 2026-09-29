@@ -12,8 +12,9 @@ public interface NativeFileResource extends SeekableByteChannel {
     long terminalStatus();
     void writeTermios(int action, byte[] image);
     long statusFlags();
-    long setStatusFlags(long flags);
-    long setDescriptorFlags(long flags);
+    long fcntl(int command, long argument, boolean hasArgument);
+    boolean fcntlCreatesDescriptor(int command);
+    NativeFileResource fcntlDuplicate(int command, long minimum);
     long writeEvent(long value);
     /** Private owned duplicate; never a guest descriptor number. */
     int duplicateDescriptor();

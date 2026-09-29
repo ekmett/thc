@@ -65,6 +65,36 @@ class NativeEpollTest {
             assertEquals(4L, integer(output, 4, 8)); assertEquals(0L, io.close(reused)); assertEquals(0L, io.close(setAlias));
         }); }
     }
+    @Test void fcntlEpollAliasSharesRegistrationsUntilItsLastClose() {
+        try (var context = NativeIO.createContext(Set.of())) { entered(context, () -> {
+            var io = Language.currentState(null).getStdio();
+            long epoll = io.epollCreate(1), fd = io.eventfd(1, 0);
+            assertEquals(0L, io.epollControl(epoll, 1, fd, event(7)));
+            assertEquals(70L, io.fcntl(epoll, 0, 70, true));
+            assertEquals(0L, io.close(epoll));
+            assertEquals(0L, io.epollControl(70, 3, fd, event(42)));
+            var output = event(0);
+            assertEquals(1L, io.epollWait(70, output, 1, 0, null));
+            assertEquals(42L, integer(output, 4, 8));
+            assertEquals(0L, io.epollControl(70, 2, fd, ManagedAddress.nullAddress()));
+            assertEquals(0L, io.close(70)); assertEquals(0L, io.close(fd));
+        }); }
+    }
+    @Test void fcntlTargetAliasKeepsOriginalEpollRegistrationUntilLastClose() {
+        try (var context = NativeIO.createContext(Set.of())) { entered(context, () -> {
+            var io = Language.currentState(null).getStdio();
+            long epoll = io.epollCreate(1), fd = io.eventfd(1, 0);
+            assertEquals(0L, io.epollControl(epoll, 1, fd, event(42)));
+            assertEquals(70L, io.fcntl(fd, 0, 70, true));
+            assertEquals(0L, io.close(fd));
+            var output = event(0);
+            assertEquals(1L, io.epollWait(epoll, output, 1, 0, null));
+            assertEquals(42L, integer(output, 4, 8));
+            assertEquals(0L, io.close(70));
+            assertEquals(0L, io.epollWait(epoll, output, 1, 0, null));
+            assertEquals(0L, io.close(epoll));
+        }); }
+    }
     @Test void epollTimeoutErrorsAndOneShotRearmUseRealKernelState() {
         try (var context = NativeIO.createContext(Set.of())) { entered(context, () -> {
             var io = Language.currentState(null).getStdio(); assertEquals(-1L, io.epollCreate(0)); assertEquals(22L, io.errno());

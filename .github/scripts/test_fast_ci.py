@@ -455,6 +455,7 @@ class FastRunnerTest(unittest.TestCase):
         makefile = (root / "Makefile").read_text()
         self.assertIn('foreign-exception-test-modes: foreign-exception-fixtures', makefile)
         self.assertIn('-- foreign-exceptions', makefile)
+        self.assertRegex(makefile, r'for family in [^;]*\boriginal-fcntl\b[^;]*; do')
         self.assertIn('--continue foreignExceptionTest foreignExceptionDenseTest', makefile)
         workflow = (root / ".github/workflows/build.yml").read_text()
         lane = workflow.split('  foreign-exceptions:\n', 1)[1].split('  library:\n', 1)[0]
@@ -469,6 +470,20 @@ class FastRunnerTest(unittest.TestCase):
         self.assertIn('THC_CACHE_HOME="$RUNNER_TEMP/thc-foreign-exceptions/core"', lane)
         self.assertIn('build/test-results/foreignExceptionTest/*.xml', lane)
         self.assertIn('build/test-results/foreignExceptionDenseTest/*.xml', lane)
+
+    def test_original_fcntl_keeps_native_regressions_in_affected_fast_tests(self):
+        root = Path(__file__).parents[2]
+        policy = json.loads((root / ".github/scripts/fast-tests.json").read_text())
+        groups = policy["leafSources"] | policy["owners"]
+        for source in ("src/main/c/native-file-api.c",
+                       "src/main/java/thc/runtime/ManagedFiles.java",
+                       "src/main/java/thc/runtime/ManagedStdio.java",
+                       "src/main/java/thc/runtime/NativeFileProvider.java",
+                       "src/main/java/thc/runtime/NativeFileResource.java",
+                       "src/main/java/thc/runtime/OpenedNativeFile.java"):
+            with self.subTest(source=source):
+                self.assertTrue({"thc.runtime.OriginalFcntlTest", "thc.runtime.NativeEventDescriptorsTest",
+                                 "thc.runtime.NativeEpollTest"}.issubset(groups[source]["junit"]))
 
     def test_previous_revision_or_driver_error_cannot_publish(self):
         with patch.object(ci, "git", return_value="a" * 40):

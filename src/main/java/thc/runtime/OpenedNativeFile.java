@@ -30,8 +30,9 @@ public final class OpenedNativeFile implements NativeFileResource {
     @Override public long terminalStatus() { return metadata.terminalStatus(); }
     @Override public void writeTermios(int action, byte[] image) { metadata.writeTermios(action, image); }
     @Override public long statusFlags() { return metadata.statusFlags(); }
-    @Override public long setStatusFlags(long flags) { return metadata.setStatusFlags(flags); }
-    @Override public long setDescriptorFlags(long flags) { return metadata.setDescriptorFlags(flags); }
+    @Override public long fcntl(int command, long argument, boolean hasArgument) { return metadata.fcntl(command, argument, hasArgument); }
+    @Override public boolean fcntlCreatesDescriptor(int command) { return metadata.fcntlCreatesDescriptor(command); }
+    @Override public NativeFileResource fcntlDuplicate(int command, long minimum) { return metadata.fcntlDuplicate(command, minimum); }
     @Override public long writeEvent(long value) { return metadata.writeEvent(value); }
     @Override public int duplicateDescriptor() { return metadata.duplicateDescriptor(); }
     @Override public void requireLive() { metadata.requireLive(); }
