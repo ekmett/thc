@@ -119,6 +119,9 @@ thc.runtime.ConstructorClassIdentity$1
 # values array are initialized. AstResumeStep has no fields or default methods.
 thc.runtime.GcForeignExpression$ResumeCompleted
 thc.runtime.RtsEventForeignExpression$ResumeCompleted
+# A capture-free AstResumeStep lambda only; no node, frame, guest context or
+# thread is captured. The state operand and async policy stay per instance.
+thc.runtime.YieldThread
 # Private identity marker and empty argument array only; no node, profile,
 # guest context, frame or handoff state is constructed by these initializers.
 thc.runtime.Force
