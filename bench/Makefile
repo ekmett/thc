@@ -23,6 +23,7 @@ kernels: prepare-kernels
 	cd "$(ROOT)"; \
 	OUT="$(OUT)"; \
 	THC_JAVA="$$JAVA_HOME/bin/java"; \
+	. bin/benchmark-jvm-options.sh; \
 	WARM_SECONDS="$${THC_BENCH_WARM_SECONDS:-10}"; \
 	SAMPLE_SECONDS="$${THC_BENCH_SAMPLE_SECONDS:-2}"; \
 	SAMPLES="$${THC_BENCH_SAMPLES:-5}"; \
@@ -33,12 +34,12 @@ kernels: prepare-kernels
 	    read -r entry inputBase <<< "$$spec"; \
 	    for ((fork=1; fork<=FORKS; fork++)); do \
 	        printf 'Running %s fork %s: JVM warmup %ss, %s windows of %ss per engine\n' "$$entry" "$$fork" "$$WARM_SECONDS" "$$SAMPLES" "$$SAMPLE_SECONDS"; \
-	        "$$THC_JAVA" --add-modules=jdk.incubator.vector --enable-native-access=ALL-UNNAMED -Xss2m -XX:+UseCompactObjectHeaders -Dthc.traceCompilation=true \
+	        "$$THC_JAVA" --add-modules=jdk.incubator.vector --enable-native-access=ALL-UNNAMED -Xss2m "$${THC_BENCH_JVM_OPTIONS[@]}" -Dthc.traceCompilation=true \
 	            -cp 'build/install/thc/lib/*:build/diagnostics/thc-tools.jar' thc.Probe \
-	            build/core/THC.Prim.Test.json,build/core/Fixtures.json \
-	            "$$entry" --steady "$$WARM_SECONDS" "$$SAMPLE_SECONDS" "$$SAMPLES" "$$inputBase" \
+	            build/core/THC.Prim.Test.cbd,build/core/Fixtures.cbd \
+	            "main:Fixtures.$$entry" --steady "$$WARM_SECONDS" "$$SAMPLE_SECONDS" "$$SAMPLES" "$$inputBase" \
 	            > "$$OUT/$$entry-$$fork-jvm.tsv" 2> "$$OUT/$$entry-$$fork.log"; \
-	        while IFS= read -r result; do printf 'thc-graal\t%s\t%s\n' "$$fork" "$$result" >> "$$OUT/timings.tsv"; done < "$$OUT/$$entry-$$fork-jvm.tsv"; \
+	        while IFS= read -r result; do printf 'thc-graal\t%s\t%s\n' "$$fork" "$${result/main:Fixtures./}" >> "$$OUT/timings.tsv"; done < "$$OUT/$$entry-$$fork-jvm.tsv"; \
 	        build/native/native-oracle --bench-steady "$$entry" 1 "$$SAMPLE_SECONDS" "$$SAMPLES" "$$inputBase" \
 	            > "$$OUT/$$entry-$$fork-native.tsv"; \
 	        while IFS= read -r result; do printf 'native-ghc\t%s\t%s\n' "$$fork" "$$result" >> "$$OUT/timings.tsv"; done < "$$OUT/$$entry-$$fork-native.tsv"; \
@@ -51,6 +52,7 @@ map: prepare-map
 	cd "$(ROOT)"; \
 	OUT="$(OUT)"; \
 	THC_JAVA="$$JAVA_HOME/bin/java"; \
+	. bin/benchmark-jvm-options.sh; \
 	BASE="$${THC_MAP_INPUT:-10000}"; \
 	WARM_SECONDS="$${THC_BENCH_WARM_SECONDS:-15}"; \
 	SAMPLE_SECONDS="$${THC_BENCH_SAMPLE_SECONDS:-2}"; \
@@ -67,11 +69,11 @@ map: prepare-map
 	cp build/map/audit.json "$$OUT/capability-audit.json"; \
 	printf 'engine\tfork\tentry\tsample\trepetitions\tinputBase\tchecksum\telapsedNs\n' > "$$OUT/timings.tsv"; \
 	run_jvm() { \
-	  "$$THC_JAVA" --add-modules=jdk.incubator.vector --enable-native-access=ALL-UNNAMED -Xss2m -XX:+UseCompactObjectHeaders -Dthc.traceCompilation=true \
+	  "$$THC_JAVA" --add-modules=jdk.incubator.vector --enable-native-access=ALL-UNNAMED -Xss2m "$${THC_BENCH_JVM_OPTIONS[@]}" -Dthc.traceCompilation=true \
 	    "-Dthc.backend=$$BACKEND" "-Dthc.diagnosticUnsupported=$$DIAGNOSTIC" -Dthc.minimumWarmCalls=12000 -cp 'build/install/thc/lib/*:build/diagnostics/thc-tools.jar' thc.Probe \
-	    "$$MODULES" mapAggregate --steady "$$WARM_SECONDS" "$$SAMPLE_SECONDS" "$$SAMPLES" "$$BASE" \
+	    "$$MODULES" main:MapWorkload.mapAggregate --steady "$$WARM_SECONDS" "$$SAMPLE_SECONDS" "$$SAMPLES" "$$BASE" \
 	    > "$$OUT/mapAggregate-$$fork-jvm.tsv" 2> "$$OUT/mapAggregate-$$fork.log"; \
-	  while IFS= read -r row; do printf 'thc-graal\t%s\t%s\n' "$$fork" "$$row" >> "$$OUT/timings.tsv"; done < "$$OUT/mapAggregate-$$fork-jvm.tsv"; \
+	  while IFS= read -r row; do printf 'thc-graal\t%s\t%s\n' "$$fork" "$${row/main:MapWorkload./}" >> "$$OUT/timings.tsv"; done < "$$OUT/mapAggregate-$$fork-jvm.tsv"; \
 	}; \
 	run_native() { \
 	  build/map/native/native-oracle --bench-steady mapAggregate 1 "$$SAMPLE_SECONDS" "$$SAMPLES" "$$BASE" \

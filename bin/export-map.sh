@@ -32,15 +32,17 @@ bin/build-compiler.sh
 THC_CORE_OUT="$root/build/map/core" THC_GHC_OUT="$root/build/map/ghc" \
   bin/export-core.sh -i"$root/vendor/containers-0.8/src" -I"$root/vendor/containers-0.8/include" \
   -fplugin-opt=THC.Plugin:closure=mapAggregate t/fixtures/core/MapWorkload.hs
-python3 bin/export-boot.py
+python3 bin/export-boot.py --build-dir "$root/build/map"
 python3 - <<'MANIFEST'
-import hashlib, json, os, pathlib, subprocess
+import hashlib, json, os, pathlib, subprocess, sys
+sys.path.insert(0, "bin")
+from core_package_manifest import inspect_cbd
 root = pathlib.Path.cwd()
 core = root / "build/map/core"
-closure = json.loads((core / "THC.InterfaceClosure.json").read_text())
-modules = [core / (name.split(":", 1)[1] + ".json") for name in closure["sourceModules"]]
-modules.append(core / "THC.InterfaceClosure.json")
-modules.extend(core / (name + ".json") for name in ["GHC.Internal.CString", "GHC.Internal.Err", "GHC.InterfaceClosure"])
+closure = inspect_cbd((core / "THC.InterfaceClosure.cbd").read_bytes())
+modules = [core / (name.split(":", 1)[1] + ".cbd") for name in closure["sourceModules"]]
+modules.append(core / "THC.InterfaceClosure.cbd")
+modules.extend(core / (name + ".cbd") for name in ["GHC.Internal.CString", "GHC.Internal.Err", "GHC.InterfaceClosure"])
 (root / "build/map/modules.txt").write_text("".join(str(path) + "\n" for path in modules))
 packages = {name: subprocess.check_output([os.environ["GHC_PKG"], "describe", name], text=True)
             for name in ["containers", "base", "ghc-internal", "ghc-prim"]}

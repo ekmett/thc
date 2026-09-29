@@ -42,7 +42,7 @@ public final class MapCheck {
         }
         if (rows.isEmpty()) throw new IllegalArgumentException("Failed requirement.");
         try (Context context = Main.executionContext(false)) {
-            var function = Main.loadEntry(context, modules, "mapAggregate");
+            var function = Main.loadEntry(context, modules, "main:MapWorkload.mapAggregate");
             checkRows(function, rows, "before-requested-compilation");
             for (int i = 0; i < 40; i++) function.execute(256L + (i & 15)).asLong();
             if (!function.invokeMember("compile").asBoolean()) throw new IllegalStateException("Check failed.");
