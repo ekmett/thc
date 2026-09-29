@@ -137,7 +137,16 @@ nativeSymbolArchives compiler libdir root owner arguments symbols
         if status /= ExitSuccess then pure [] else do
           (_,info) <- either (fail . show) pure (parseInstalledPackageInfo (T.encodeUtf8 (Data.Text.pack registration)))
           let package = prettyShow (pkgName (Package.sourcePackageId info))
-          pure [info | package /= "rts", prettyShow (Package.installedUnitId info) == owner || package == owner]
+          -- This compiler's three C products (cutils, genSym and
+          -- keepCAFsForGHCi) operate exclusively on native RTS/process state.
+          -- In particular keepCAFsForGHCi has a native constructor: extracting
+          -- its member would mutate a foreign RTS before any managed override
+          -- could run. Preserve the original calls/ABI, like other RTS calls;
+          -- context-owned services dispatch in the runtime, while unsupported
+          -- services remain unresolved rather than acquiring native state.
+          pure [info | package /= "rts",
+            prettyShow (Package.installedUnitId info) /= "ghc-9.14.1-inplace",
+            prettyShow (Package.installedUnitId info) == owner || package == owner]
       nm <- maybe "llvm-nm" id <$> lookupEnv "THC_LLVM_NM"
       registered <- fmap concat $ forM registrations $ \info -> do
         let packagePath path

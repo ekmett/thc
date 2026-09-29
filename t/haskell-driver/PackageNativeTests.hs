@@ -19,16 +19,31 @@ import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KM
 import Data.Either (isLeft)
 import Data.List (isInfixOf, isPrefixOf)
+import System.Directory (findExecutable, getCurrentDirectory)
+import System.Process (readProcess)
 import Test.HUnit
 import THC.Driver.PackageNative
 import THC.Driver.NativeLibrarySources (nativeLinkOptions, nativePackageOptions,
   nativePackageSelectors, packageNativeLibraries)
 import THC.Driver.NativeArgumentBridge (nativeArgumentBridge)
-import THC.Driver.NativeDependencies (selectNativePieces)
+import THC.Driver.NativeDependencies (selectNativePieces, nativeSymbolArchives)
 
 tests :: Test
 tests = TestLabel "package-owned native C acquisition" $ TestList
   [ TestCase $ do
+      compiler <- findExecutable "ghc" >>= maybe (fail "GHC missing") pure
+      libdir <- readProcess compiler ["--print-libdir"] "" >>= \output -> case lines output of
+        [directory] -> pure directory
+        _ -> fail "GHC did not report one libdir"
+      root <- getCurrentDirectory
+      compilerArchives <- nativeSymbolArchives compiler libdir root "ghc-9.14.1-inplace" []
+        [("keepCAFsForGHCi",True),("setHeapSize",True),("enableTimingStats",True),
+         ("ghc_unique_counter64",False),("ghc_unique_inc",False)]
+      assertEqual "compiler process-state objects must not load beside context-owned RTS services"
+        [] compilerArchives
+      ordinaryArchives <- nativeSymbolArchives compiler libdir root "ghc-internal-9.1401.0-inplace" [] [("__hscore_bufsiz",True)]
+      assertBool "ordinary registered C objects remain native providers" (not (null ordinaryArchives))
+  , TestCase $ do
       let rep kind prim = object ["kind" .= (kind::String), "primReps" .= (prim::[String]), "evaluated" .= False]
           state = rep "void" []
           result = object ["kind" .= ("unknown"::String), "primReps" .= (["IntRep"]::[String]),
