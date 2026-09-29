@@ -7,10 +7,12 @@ import static thc.runtime.RuntimeServiceStatus.fault;
 
 final class StringRtsExpression extends Expr {
     private final StringRtsOp operation;
+    private final long constantValue;
     @Children private Expr[] operands;
 
-    StringRtsExpression(StringRtsOp operation, Expr[] operands, CoreRepresentation proof) {
+    StringRtsExpression(StringRtsOp operation, Expr[] operands, CoreRepresentation proof, long constantValue) {
         this.operation = operation;
+        this.constantValue = constantValue;
         this.operands = operands;
         setRepresentation(new CoreRepresentation(proof.getKind(), true, proof.getPresent(),
             proof.getPrimReps(), proof.getComponents(), proof.getVector(), proof.getAlternatives(),
@@ -26,9 +28,8 @@ final class StringRtsExpression extends Expr {
         var address = operation.equals(StringRtsOp.STRLEN) || operation == StringRtsOp.STRLEN_CSIZE
             ? operands[0].executeRequiredAddress(frame) : null;
         TupleResults.requireVoidCarrier(operands[operands.length - 1].execute(frame));
-        // Live THC programs retain their global CAF cells; there is no native RTS CAF reversion.
         FrameAccess.INSTANCE.writeLong(frame, slots[offset], address != null ? address.cStringLength()
-            : operation == StringRtsOp.KEEP_CAFS ? 1L : 0L);
+            : constantValue);
         return null;
     }
 }

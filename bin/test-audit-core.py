@@ -2722,6 +2722,24 @@ class OriginalMemcpyDeclarationTest(unittest.TestCase):
 
 
 class OriginalStringRtsDeclarationTest(unittest.TestCase):
+    def test_original_compiler_host_way_family_has_exact_ownership_and_abi(self):
+        declarations = json.loads((ROOT.parent / 'src/test/resources/core/original-ghc-host-ways-descriptors.json').read_text())
+        self.assertEqual({'rts_isDynamic', 'rts_isProfiled', 'rts_isThreaded', 'rts_isDebugged', 'rts_isTracing'}, set(declarations))
+        fixture = LibdwUnavailableAuditTest()
+        for symbol, declaration in declarations.items():
+            with self.subTest(symbol=symbol):
+                self.assertEqual('ghc-9.14.1-inplace', declaration['target']['unit'])
+                result = fixture.audit(fixture.fixture(declaration))
+                self.assertTrue(result['accepted'], result)
+                self.assertEqual([symbol], [call['symbol'] for call in result['foreignCalls']])
+                disabled = dict(CAP, managedForeignCalls=[s for s in CAP['managedForeignCalls'] if s != symbol])
+                self.assertFalse(fixture.audit(fixture.fixture(declaration), disabled)['accepted'])
+                for key, value in [('safety', 'safe'), ('arity', 2), ('argumentReps', []), ('resultRep', LONG),
+                                   ('target', dict(declaration['target'], unit='other-compiler')),
+                                   ('target', dict(declaration['target'], isFunction=False))]:
+                    wrong = copy.deepcopy(declaration); wrong[key] = value
+                    self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
+
     def test_retained_posix_descriptors_and_capability(self):
         resource = ROOT.parent / 'src/test/resources/core/original-string-rts-descriptors.json'
         declarations = json.loads(resource.read_text())

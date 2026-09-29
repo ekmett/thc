@@ -75,8 +75,9 @@ enum CoreForeignOverride {
         if (store != null && store.getUnit().equals(unit)) return SHARED_CAF;
         for (var operation : GcForeignOp.values())
             if (operation != GcForeignOp.MONOTONIC && operation.getUnit().equals(unit) && operation.getSymbol().equals(symbol)) return GC;
+        // A native GHC RTS cannot report THC's compiler compatibility and RTS modes.
         for (var operation : StringRtsOp.values())
-            if ((operation == StringRtsOp.THREADED || operation == StringRtsOp.KEEP_CAFS) &&
+            if ((operation == StringRtsOp.THREADED || operation == StringRtsOp.KEEP_CAFS || operation.isHostWay()) &&
                     operation.acceptsUnit(unit) && operation.getSymbol().equals(symbol)) return STRING_RTS;
         for (var operation : RtsArgumentsOp.values())
             if ((internal || unix && operation == RtsArgumentsOp.GET) && operation.getSymbol().equals(symbol)) return RTS_ARGUMENTS;

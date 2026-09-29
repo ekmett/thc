@@ -182,6 +182,8 @@ UNIX_ENVIRONMENT_OPERATIONS = {
            for module in ('Env', 'EnvziByteString', 'EnvziPosixString')),
 }
 
+COMPILER_HOST_WAYS = ('rts_isDynamic', 'rts_isProfiled', 'rts_isThreaded', 'rts_isDebugged', 'rts_isTracing')
+
 OPERATIONS = {
     **UNIX_NATIVE_OPERATIONS,
     **UNIX_ENVIRONMENT_OPERATIONS,
@@ -240,7 +242,7 @@ OPERATIONS = {
     '__hscore_f_setfd': ('ccall', 'unsafe', (None,), (None, 'Int32Rep')),
     '__hscore_fd_cloexec': ('ccall', 'unsafe', (None,), (None, 'Int64Rep')),
     'stg_getThreadAllocationCounterzh': ('prim', 'safe', (None,), (None, 'Int64Rep')),
-    'rts_isThreaded': ('ccall', 'unsafe', (None,), (None, 'IntRep')),
+    **{symbol: ('ccall', 'unsafe', (None,), (None, 'IntRep')) for symbol in COMPILER_HOST_WAYS},
     'reportStackOverflow': ('ccall', 'unsafe', ('BoxedRep (Just Unlifted)', None), (None,)),
     'reportHeapOverflow': ('ccall', 'unsafe', (None,), (None,)),
     'errorBelch2': ('ccall', 'unsafe', ('AddrRep', 'AddrRep', None), (None,)),
@@ -372,6 +374,7 @@ DESCRIPTOR_KEYS = {'schema', 'target', 'convention', 'safety', 'arity', 'supplie
 # Same libc symbols, but different physical operands or result ABI from the
 # ghc-internal declarations above. Do not infer these from caller binding names.
 LIBRARY_OPERATIONS = {
+    **{('ghc-9.14.1-inplace', symbol): OPERATIONS[symbol] for symbol in COMPILER_HOST_WAYS},
     **{('unix-2.8.8.0-inplace', symbol): signature for symbol, signature in UNIX_NATIVE_OPERATIONS.items()},
     **{('unix-2.8.8.0-inplace', symbol): signature for symbol, signature in UNIX_ENVIRONMENT_OPERATIONS.items()},
     **{('unix-2.8.8.0-inplace', symbol): OPERATIONS[symbol] for symbol in ('read', 'write', 'getpid', 'putenv', 'getProgArgv')},
@@ -592,6 +595,8 @@ def validate(metadata, argument_reps, flags, result_rep):
                 'pinned original Win32 or ghc-internal GetLastError unit')
     if symbol in WINDOWS_ENCODING_OPERATIONS:
         require(target.get('unit') == 'ghc-internal', 'original ghc-internal Windows encoding unit')
+    if symbol in COMPILER_HOST_WAYS and symbol != 'rts_isThreaded':
+        require(target.get('unit') == 'ghc-9.14.1-inplace', 'exact compiler unit')
     if symbol in ('getOrSetLibHSghcFastStringTable', 'getOrSetLibHSghcGlobalHasPprDebug',
                   'getOrSetLibHSghcGlobalHasNoDebugOutput', 'getOrSetLibHSghcGlobalHasNoStateHack', 'keepCAFsForGHCi', 'setHeapSize'):
         require(target.get('unit') == 'ghc-9.14.1-inplace', 'exact compiler unit')
