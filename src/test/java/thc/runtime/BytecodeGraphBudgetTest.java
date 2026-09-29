@@ -169,11 +169,27 @@ class BytecodeGraphBudgetTest {
                             b.beginReturn(); b.emitLoadConstant(Unit.INSTANCE); b.endReturn(); b.endRoot();
                         }));
                 assertEquals(true, check.invoke(null, local));
+                var trace = local.getStackTrace();
+                assertEquals("create", trace[0].getMethodName());
+                // Native Image omits the exception factory, retaining the exact
+                // allocator path observed in a genuine GHC local-ID overflow.
+                local.setStackTrace(java.util.Arrays.copyOfRange(trace, 1, trace.length));
+                assertEquals(true, check.invoke(null, local));
+                local.setStackTrace(java.util.Arrays.copyOfRange(trace, 1, 3));
+                assertEquals(false, check.invoke(null, local), "incomplete allocation path");
+                local.setStackTrace(new StackTraceElement[0]);
+                assertEquals(false, check.invoke(null, local), "missing allocation path");
+                var unknownPrefix = trace.clone();
+                unknownPrefix[0] = new StackTraceElement("unknown.Factory", "create", null, -1);
+                local.setStackTrace(unknownPrefix);
+                assertEquals(false, check.invoke(null, local), "unknown prefix before allocator");
                 var argument = assertThrows(com.oracle.truffle.api.bytecode.BytecodeEncodingException.class,
                         () -> BytecodeRootGen.create(language, com.oracle.truffle.api.bytecode.BytecodeConfig.DEFAULT, b -> {
                             b.beginRoot(); b.beginReturn(); b.emitLoadArgument(65536); b.endReturn(); b.endRoot();
                         }));
                 assertEquals(false, check.invoke(null, argument));
+                argument.setStackTrace(java.util.Arrays.copyOfRange(argument.getStackTrace(), 1, argument.getStackTrace().length));
+                assertEquals(false, check.invoke(null, argument), "argument overflow without factory frame");
                 assertEquals(false, check.invoke(null,
                         com.oracle.truffle.api.bytecode.BytecodeEncodingException.create(local.getMessage())));
             } finally { context.leave(); }

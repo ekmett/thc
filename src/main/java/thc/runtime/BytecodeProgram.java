@@ -961,15 +961,18 @@ public final class BytecodeProgram implements ExecutableProgram {
         // The pinned API has no structured encoding reason. Match its exact
         // allocation path, not a message shared by argument/constant encodings.
         var trace = failure.getStackTrace();
-        return trace.length >= 4
+        // Native Image can omit the exception factory, but not the identifying
+        // allocator sequence. Do not search past an unrecognized leading frame.
+        int first = trace.length > 0
                 && trace[0].getClassName().equals(BytecodeEncodingException.class.getName())
-                && trace[0].getMethodName().equals("create")
-                && trace[1].getClassName().equals("thc.runtime.BytecodeRootGen$Builder")
-                && trace[1].getMethodName().equals("safeCastUnsignedShort")
-                && trace[2].getClassName().equals("thc.runtime.BytecodeRootGen$Builder$RootStackElement")
-                && trace[2].getMethodName().equals("allocateBytecodeLocal")
-                && trace[3].getClassName().equals("thc.runtime.BytecodeRootGen$Builder")
-                && trace[3].getMethodName().equals("createLocal");
+                && trace[0].getMethodName().equals("create") ? 1 : 0;
+        return trace.length >= first + 3
+                && trace[first].getClassName().equals("thc.runtime.BytecodeRootGen$Builder")
+                && trace[first].getMethodName().equals("safeCastUnsignedShort")
+                && trace[first + 1].getClassName().equals("thc.runtime.BytecodeRootGen$Builder$RootStackElement")
+                && trace[first + 1].getMethodName().equals("allocateBytecodeLocal")
+                && trace[first + 2].getClassName().equals("thc.runtime.BytecodeRootGen$Builder")
+                && trace[first + 2].getMethodName().equals("createLocal");
     }
 
     private RootCallTarget buildEncoded(String label, FunctionContext context, Expression body, boolean forceResult) {
