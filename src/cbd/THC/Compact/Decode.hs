@@ -61,6 +61,18 @@ facts decoder = Facts <$> getUVar <*> string decoder <*> string decoder <*> stri
   <*> list decoder (constructor decoder) <*> present (foreignArtifacts decoder)
   <*> present (exceptionBridge decoder) <*> present (string decoder)
   <*> mapM (present . provenance decoder) [0..length pendingProvenanceNames-1]
+  <*> closureProvenance decoder
+
+closureProvenance :: Decoder -> Get (Maybe ClosureProvenance)
+closureProvenance decoder = do
+  empty <- isEmpty
+  if empty then pure Nothing else do
+    kind <- getWord8
+    unless (kind == 1) (fail "Unknown compact header provenance extension")
+    Just <$> (ClosureProvenance <$> present (list decoder (string decoder))
+      <*> present (list decoder (string decoder))
+      <*> present (list decoder (MissingDefinition <$> string decoder <*> string decoder <*> string decoder))
+      <*> list decoder (BindingOrigin <$> string decoder <*> present (string decoder) <*> present (string decoder)))
 
 targetLayout :: Decoder -> Get TargetLayout
 targetLayout decoder = TargetLayout <$> getUVar <*> string decoder <*> string decoder <*> string decoder <*> string decoder
@@ -128,15 +140,21 @@ nativeLink decoder = do
     2 -> Known <$> nativeBuildInputs decoder False
     3 -> Known <$> nativeBuildInputs decoder True
     _ -> fail "Invalid compact native build-input tag"
-  (companion,dataSymbols) <- getWord8 >>= \kind -> case kind of
-    0 -> pure (Missing,Missing)
-    3 -> (,) <$> present ((,) <$> string decoder <*> blob decoder)
+  (companion,dataSymbols,components) <- getWord8 >>= \kind -> case kind of
+    0 -> pure (Missing,Missing,Nothing)
+    _ | kind == 3 || kind == 4 -> (,,) <$> present ((,) <$> string decoder <*> blob decoder)
              <*> present (list decoder (string decoder))
+             <*> (if kind == 3 then pure Nothing else
+               Just <$> ((,) <$> list decoder (string decoder) <*> list decoder (nativeComponent decoder)))
     _ -> fail "Retired or invalid compact native entry metadata"
   NativeLink payload abi inputs companion dataSymbols <$>
-    (if schema == 2 then list decoder (string decoder) else pure [])
+    (if schema == 2 then list decoder (string decoder) else pure []) <*> pure components
   where entry = NativeABI <$> string decoder <*> string decoder <*> enumeration <*> enumeration
           <*> list decoder (string decoder) <*> string decoder
+
+nativeComponent :: Decoder -> Get NativeComponent
+nativeComponent decoder = NativeComponent <$> linkPayload decoder <*> list decoder (string decoder)
+  <*> list decoder (nativeComponent decoder) <*> present ((,) <$> string decoder <*> blob decoder)
 
 nativeBuildInputs :: Decoder -> Bool -> Get NativeBuildInputs
 nativeBuildInputs decoder extended = NativeBuildInputs <$> list decoder group <*> list decoder provider
@@ -329,7 +347,7 @@ idInfo decoder = IdInfo <$> present getUVar <*> present boolean <*> present (lis
 expression :: Decoder -> Get Expr
 expression decoder = do
   kind <- getWord8
-  unless (kind <= 8) (fail "Unknown compact expression tag")
+  unless (kind <= 9) (fail "Unknown compact expression tag")
   metadata <- meta decoder
   case kind of
     0 -> Var metadata <$> identity decoder
@@ -340,7 +358,8 @@ expression decoder = do
     5 -> App metadata <$> child <*> list decoder child <*> list decoder (arrayElement boolean) <*> boolean <*> boolean
     6 -> Let metadata <$> boolean <*> list decoder (binding decoder) <*> child
     7 -> Case metadata <$> child <*> getUVar <*> present (binder decoder) <*> list decoder (alternative decoder)
-    _ -> pure (Void metadata)
+    8 -> pure (Void metadata)
+    _ -> Unsupported metadata <$> string decoder
   where
     child = expression decoder
 
@@ -465,6 +484,7 @@ literal decoder = do
     16 -> LitRubbish <$> primRep
     17 -> LitFunctionAddr <$> string decoder
     18 -> LitDataAddr <$> string decoder
+    19 -> LitUnsupported <$> string decoder
     _ -> fail "Unknown compact literal tag"
   where
     raw = count decoder >>= getByteString

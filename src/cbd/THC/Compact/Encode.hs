@@ -15,7 +15,7 @@
 module THC.Compact.Encode
   ( Encoder, newEncoder, setRecordObserver, encodeBinding, encodeExpr, encodeRep, encodeFacts, internString, containsDelimitedControl, containsHostSignatures ) where
 
-import Control.Monad (unless, void, when)
+import Control.Monad (forM_, unless, void, when)
 import Data.Binary.Put
 import Data.Bits ((.&.), (.|.), shiftR)
 import qualified Data.ByteString as BS
@@ -78,6 +78,15 @@ encodeFacts (Encoder streams strings shapes _ found observer) facts = do
     (fail "Compact header requires eight provenance-presence slots")
   mapM_ (\(slot,value) -> present encoder (provenance encoder slot) value)
     (zip [0..] (factsPendingProvenance facts))
+  forM_ (factsClosureProvenance facts) $ \(ClosureProvenance roots modules missing origins) -> do
+    tag encoder 1
+    present encoder (list encoder (string encoder)) roots
+    present encoder (list encoder (string encoder)) modules
+    present encoder (list encoder (\(MissingDefinition key ty reason) -> mapM_ (string encoder) [key,ty,reason])) missing
+    list encoder (\(BindingOrigin key origin owner) -> do
+      string encoder key
+      present encoder (string encoder) origin
+      present encoder (string encoder) owner) origins
   BL.toStrict . Builder.toLazyByteString <$> readIORef output
 
 targetLayout :: Encoder -> TargetLayout -> IO ()
@@ -181,7 +190,7 @@ blob :: Encoder -> BS.ByteString -> IO ()
 blob encoder bytes = number encoder (fromIntegral (BS.length bytes)) >> emit encoder (putByteString bytes)
 
 nativeLink :: Encoder -> NativeLink -> IO ()
-nativeLink encoder (NativeLink payload@(LinkPayload schema _ _ _ _ _ _ _) abi inputs companion dataSymbols finalizers) = do
+nativeLink encoder (NativeLink payload@(LinkPayload schema _ _ _ _ _ _ _) abi inputs companion dataSymbols finalizers components) = do
   linkPayload encoder payload
   list encoder entry abi
   case inputs of
@@ -193,12 +202,15 @@ nativeLink encoder (NativeLink payload@(LinkPayload schema _ _ _ _ _ _ _) abi in
           extra = any extended libraries
       tag encoder (if extra then 3 else 2)
       nativeBuildInputs encoder extra value
-  case (companion,dataSymbols) of
-    (Missing,Missing) -> tag encoder 0
+  case (companion,dataSymbols,components) of
+    (Missing,Missing,Nothing) -> tag encoder 0
     _ -> do
-      tag encoder 3
+      tag encoder (case components of Nothing -> 3; Just _ -> 4)
       present encoder (\(digest,bytes) -> string encoder digest >> blob encoder bytes) companion
       present encoder (list encoder (string encoder)) dataSymbols
+      forM_ components $ \(publicSymbols,dependencies) -> do
+        list encoder (string encoder) publicSymbols
+        list encoder (nativeComponent encoder) dependencies
   when (schema == 2) (list encoder (string encoder) finalizers)
   where entry (NativeABI symbol name convention safety arguments result) = do
           string encoder symbol
@@ -207,6 +219,13 @@ nativeLink encoder (NativeLink payload@(LinkPayload schema _ _ _ _ _ _ _) abi in
           enumeration encoder safety
           list encoder (string encoder) arguments
           string encoder result
+
+nativeComponent :: Encoder -> NativeComponent -> IO ()
+nativeComponent encoder (NativeComponent payload publicSymbols dependencies companion) = do
+  linkPayload encoder payload
+  list encoder (string encoder) publicSymbols
+  list encoder (nativeComponent encoder) dependencies
+  present encoder (\(digest,bytes) -> string encoder digest >> blob encoder bytes) companion
 
 nativeBuildInputs :: Encoder -> Bool -> NativeBuildInputs -> IO ()
 nativeBuildInputs encoder extended (NativeBuildInputs units providers dependencies libraries unresolved bridges) = do
@@ -519,6 +538,7 @@ encodeExpr encoder@(Encoder _ _ _ _ found _) expression = observe encoder Expres
     present encoder (binder encoder) information
     list encoder (alternative encoder) alternatives
   Void metadata -> prefix 8 metadata
+  Unsupported metadata diagnostic -> prefix 9 metadata >> string encoder diagnostic
   where
     prefix kind metadata = tag encoder kind >> meta encoder metadata
     child = encodeExpr encoder
@@ -649,6 +669,7 @@ literal encoder value = case value of
   LitRubbish rep -> tag encoder 16 >> primRep encoder rep
   LitFunctionAddr symbol -> tag encoder 17 >> string encoder symbol
   LitDataAddr symbol -> tag encoder 18 >> string encoder symbol
+  LitUnsupported diagnostic -> tag encoder 19 >> string encoder diagnostic
   where
     signed kind lo hi n = do
       unless (lo <= n && n <= hi) (fail "Signed literal exceeds its declared width")

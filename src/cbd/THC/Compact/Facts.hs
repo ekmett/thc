@@ -31,7 +31,18 @@ data Facts = Facts
   , factsExceptionBridge :: !(Presence ExceptionBridge)
   , factsExceptionBridgeUnit :: !(Presence BS.ByteString)
   , factsPendingProvenance :: ![Presence ModuleProvenance]
+  , factsClosureProvenance :: !(Maybe ClosureProvenance)
   } deriving (Eq, Show)
+
+-- | Actual interface frontier and binding origins used by source acquisition
+-- and provenance audits. These are facts, not executable bodies or display maps.
+data ClosureProvenance = ClosureProvenance !(Presence [BS.ByteString])
+  !(Presence [BS.ByteString]) !(Presence [MissingDefinition]) ![BindingOrigin]
+  deriving (Eq, Show)
+data MissingDefinition = MissingDefinition !BS.ByteString !BS.ByteString !BS.ByteString
+  deriving (Eq, Show)
+data BindingOrigin = BindingOrigin !BS.ByteString !(Presence BS.ByteString) !(Presence BS.ByteString)
+  deriving (Eq, Show)
 
 data Endianness = LittleEndian | BigEndian deriving (Eq, Ord, Enum, Bounded, Show)
 data TargetLayout = TargetLayout
@@ -73,7 +84,10 @@ data ScalarLink = ScalarLink !LinkPayload ![ScalarABI] deriving (Eq, Show)
 data NativeABI = NativeABI !BS.ByteString !BS.ByteString !Convention !Safety
   ![BS.ByteString] !BS.ByteString deriving (Eq, Show)
 data NativeLink = NativeLink !LinkPayload ![NativeABI] !(Presence NativeBuildInputs)
-  !(Presence (BS.ByteString,BS.ByteString)) !(Presence [BS.ByteString]) ![BS.ByteString] deriving (Eq, Show)
+  !(Presence (BS.ByteString,BS.ByteString)) !(Presence [BS.ByteString]) ![BS.ByteString]
+  !(Maybe ([BS.ByteString],[NativeComponent])) deriving (Eq, Show)
+data NativeComponent = NativeComponent !LinkPayload ![BS.ByteString] ![NativeComponent]
+  !(Presence (BS.ByteString,BS.ByteString)) deriving (Eq, Show)
 data NativeBuildInputs = NativeBuildInputs ![CompileGroup] ![NativeProvider]
   !(Presence [NativeDependency]) ![NativeLibrary] ![BS.ByteString] ![ArgumentBridge]
   deriving (Eq, Show)

@@ -77,6 +77,15 @@ semanticTests = TestList
       withEncoded (\_ encoder -> encodeBinding encoder completeBinding) $ \bytes strings offset ->
         assertEqual "all fields" (Right (completeBinding,fromIntegral (BS.length bytes)))
           (decodeBindingAt bytes strings offset)
+  , TestLabel "explicit unsupported nodes preserve their diagnostic and representation" $ TestCase $ do
+      let metadata = emptyMeta {metaRep=Known (Rep (scalar ObjectKind [BoxedLifted]) (Evaluation (Known False) []))}
+      forM_ [Lit metadata (LitUnsupported "RUBBISH(LiftedRep)"),Unsupported metadata "type-as-value"] $ \expression -> do
+        let value = completeBinding {bindingExpr=expression}
+        assertEqual "inspection preserves unsupported identity, not supported rubbish"
+          (Right (completeFacts,[value])) (parseModuleWithoutDebug (moduleJSON completeFacts [value]))
+        withEncoded (\_ encoder -> encodeBinding encoder value) $ \bytes strings offset ->
+          assertEqual "selected binary record retains exact original metadata"
+            (Right value) (fst <$> decodeBindingAt bytes strings offset)
   , TestLabel "optional declared host signature preserves old binding records" $ TestCase $ do
       let raw = HostType (Rep (scalar ObjectKind [BoxedUnlifted]) (Evaluation (Known True) [])) [HostObject]
           library = case raw of HostType proof _ -> HostType proof [HostInteropLibrary]
@@ -281,8 +290,8 @@ semanticTests = TestList
             nominal nominal "representational" (Just (["AddrRep"],"void"))
           imports2 = ImportProof 2 scope execution profile owner name
             (ImportsVerified wordBits productRecord imports calls [address] [] Nothing)
-          NativeLink (LinkPayload _ format linkProfile unit target component digest artifact) abi inputs companion dataSymbols _ = completeNativeLink
-          linked2 = NativeLink (LinkPayload 2 format linkProfile unit target component digest artifact) abi inputs companion dataSymbols ["adapter"]
+          NativeLink (LinkPayload _ format linkProfile unit target component digest artifact) abi inputs companion dataSymbols _ components = completeNativeLink
+          linked2 = NativeLink (LinkPayload 2 format linkProfile unit target component digest artifact) abi inputs companion dataSymbols ["adapter"] components
           facts = completeFacts {factsPendingProvenance =
             [Missing,Known (ImportsRecord imports2),Known (ImportsRecord imports2),Missing,Missing,Missing,
              Known (NativeLinkRecord linked2),Missing]}
@@ -318,6 +327,28 @@ semanticTests = TestList
             Object (KM.insert "packageNativeLink" (Object $ KM.insert "availableEntries" (toJSON (["adapter"] :: [String])) link) fields)
           amend value = value
       assertBool "retired selected-entry proof rejected" (isLeft (parseModuleWithoutDebug (amend original)))
+  , TestLabel "mixed native dependency components retain exact independent payloads" $ TestCase $ do
+      let component owner dependencies = NativeComponent
+            (LinkPayload 1 "llvm-bitcode" "thc-package-native-component-v1" owner "actual-target"
+              "component-sha" "bitcode-sha" (BS.pack [66,67,192,222,0,255]))
+            ["public_function","public_data"] dependencies (Known ("native-sha",BS.pack [127,69,76,70]))
+          leaf = component "native-provider" []
+          middle = component "mixed-provider" [leaf]
+          NativeLink payload abi inputs companion symbols finalizers _ = completeNativeLink
+          link = NativeLink payload abi inputs companion symbols finalizers (Just (["own_export"],[middle,leaf]))
+          facts = completeFacts {factsPendingProvenance =
+            [Missing,Missing,Missing,Missing,Missing,Missing,Known (NativeLinkRecord link),Missing]}
+          original = moduleJSON facts []
+      assertEqual "public exports and recursive provider identity survive inspection" (Right (facts,[]))
+        (parseModuleWithoutDebug original)
+      withEncoded (\_ encoder -> encodeFacts encoder facts) $ \_ strings bytes ->
+        assertEqual "dependency payload and companion are unchanged, without fabricated ABI"
+          (Right facts) (decodeFacts bytes strings)
+      let unpaired (Object fields) = Object (fmap (\value -> case value of
+            Object linkFields | KM.member "abi" linkFields -> Object (KM.delete "dependencies" linkFields)
+            other -> other) fields)
+          unpaired value = value
+      assertBool "paired metadata cannot be silently dropped" (isLeft (parseModuleWithoutDebug (unpaired original)))
   , TestLabel "callback wrapper association survives compact metadata transport" $ TestCase $ do
       ImportProof _ scope execution profile owner name (ImportsVerified wordBits productRecord imports calls addresses _ _) <- pure completeImports
       let wrapper = WrapperAssociation (ExportAssociation qualified "actual_helper" CCall nominal nominal
@@ -399,6 +430,7 @@ literals =
   , LitFloatBits 0x80000000, LitFloatBits 0x7fc00017
   , LitDoubleBits 0x8000000000000000, LitDoubleBits 0x7ff8000000000017
   , LitNullAddr, LitRubbish BoxedUnlifted, LitFunctionAddr "foreign_fn", LitDataAddr "foreign_data"
+  , LitUnsupported "RUBBISH(LiftedRep)"
   ]
 
 scalar :: Kind -> [PrimRep] -> Shape
@@ -481,7 +513,7 @@ completeFacts = Facts 2 "9.14.1" "main" "Typed" "optimized-Core-before-Tidy" (Kn
     [ForeignFile "C" "foreign source" ".c"]))
   (Known (ExceptionBridge 1 "main" "Typed" "main:Typed.box" "main:Typed.project"
     "main:Typed.Payload" "ghc-internal:GHC.Internal.Exception.Type.SomeException"))
-  (Known "main") [Missing,Unknown,Missing,Unknown,Missing,Missing,Missing,Missing]
+  (Known "main") [Missing,Unknown,Missing,Unknown,Missing,Missing,Missing,Missing] Nothing
 
 completeImports :: ImportProof
 completeImports = ImportProof 1 "retained-static-import-products" "not-linked"
@@ -531,8 +563,8 @@ nativeFactsWithFlags :: [(BS.ByteString,Bool)] -> Facts
 nativeFactsWithFlags flags = nativeProvenanceFacts
   {factsPendingProvenance=map replace (factsPendingProvenance nativeProvenanceFacts)}
   where
-    replace (Known (NativeLinkRecord (NativeLink payload abi (Known (NativeBuildInputs units providers (Known dependencies) libraries unresolved bridges)) companion dataSymbols finalizers))) =
-      Known (NativeLinkRecord (NativeLink payload abi (Known (NativeBuildInputs units providers (Known (map dependency dependencies)) libraries unresolved bridges)) companion dataSymbols finalizers))
+    replace (Known (NativeLinkRecord (NativeLink payload abi (Known (NativeBuildInputs units providers (Known dependencies) libraries unresolved bridges)) companion dataSymbols finalizers components))) =
+      Known (NativeLinkRecord (NativeLink payload abi (Known (NativeBuildInputs units providers (Known (map dependency dependencies)) libraries unresolved bridges)) companion dataSymbols finalizers components))
     replace value = value
     dependency (NativeDependency profile unit (SourceIdentity identifier depends kind style name version _ component sourceSha cabalSha)
         registrationText digest archives products) = NativeDependency profile unit
@@ -558,7 +590,7 @@ completeNativeLink = NativeLink completeLinkPayload [NativeABI "original" "adapt
       [NativeProduct (NativePiece "/source" "api.o" "object-sha" "api.bc" "actual-target" input) "bitcode-sha"]])
     [NativeLibrary "native-libc" ["free"] "clang" "compiler-sha" ["-lc"] Missing Missing Missing Missing] ["unknown"]
     [ArgumentBridge "actual-integer-width-bridge" "actual LLVM\n" "source-sha" "input-sha" [["define caller","define callee"]]]))
-  Missing Missing []
+  Missing Missing [] Nothing
   where input = CompileInput "ghc" "clang" ["-c","api.c"] (Known "c") "native-target" "actual-target"
           [("api.c","actual-source-sha"),("yaml.h","actual-header-sha")]
 

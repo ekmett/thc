@@ -13,7 +13,7 @@
 --
 -- Bounded deterministic ZIP assembly from already counted/CRC'd fragments.
 -- ZIP64 fields are emitted only where the ordinary field cannot hold a value.
-module THC.Compact.Zip (ZipSource(..), writeZip, readZip, zipLocalHeader, zipCentralHeader, zipEnd) where
+module THC.Compact.Zip (ZipSource(..), writeZip, readZip, readZipWithMethods, zipLocalHeader, zipCentralHeader, zipEnd) where
 
 import qualified Codec.Compression.Zlib.Internal as Z
 import Control.Exception (IOException, bracket, catch)
@@ -186,7 +186,11 @@ cleanup (path,handle) = do
 -- every member; it is not the runtime's demand-loading implementation. Directory
 -- and ZIP64 bounds are checked before slicing, and inflation obeys declared size.
 readZip :: BS.ByteString -> Either String [(String,BS.ByteString)]
-readZip bytes = do
+readZip bytes = map (\(name,_,payload) -> (name,payload)) <$> readZipWithMethods bytes
+
+-- | Retain the actual ZIP method when an existing container is amended.
+readZipWithMethods :: BS.ByteString -> Either String [(String,Word16,BS.ByteString)]
+readZipWithMethods bytes = do
   end <- case [i | i <- reverse [max 0 (BS.length bytes-65557)..BS.length bytes-22],
     BS.take 4 (BS.drop i bytes) == "PK\5\6"] of
       [] -> Left "Missing ZIP end record"
@@ -270,7 +274,7 @@ readZip bytes = do
         8 -> inflate size payload
         _ -> Left "Unsupported ZIP compression method"
       unless (actualCrc == checksum) (Left "ZIP member CRC mismatch")
-      pure (name,result)
+      pure (name,method,result)
 
 data Entry = Entry !String !Word16 !Word16 !Word32 !Word64 !Word64 !Word64
 

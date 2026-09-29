@@ -15,10 +15,13 @@
 module DebugTests (debugTests) where
 
 import Control.Exception (IOException, try)
-import Control.Monad (forM, forM_, void)
+import Control.Monad (foldM, forM, forM_, void)
+import qualified Codec.Archive.Zip as Zip
 import Data.Aeson (Value(..), object, toJSON, (.=))
+import qualified Data.Aeson.KeyMap as KM
 import Data.Binary.Get (getWord64le)
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as BL
 import Data.Either (isLeft)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
@@ -26,17 +29,73 @@ import System.FilePath ((</>))
 import System.IO.Temp (withSystemTempDirectory)
 import Test.HUnit
 import THC.Compact.Core (Presence(..))
+import THC.Compact.Compression
 import THC.Compact.Debug
 import THC.Compact.Encode (newEncoder, internString)
 import THC.Compact.JSON (parseModuleWithDebug, parseModuleWithoutDebug)
-import THC.Compact.Module (writeModuleWithDebug)
+import THC.Compact.Module (writeModuleWithDebug, writeModuleWithDebugCompressed, encodeModuleValue, readModuleValue, rewriteModuleFacts)
 import THC.Compact.Inspect (inspectContainer, unpackContainer)
 import THC.Compact.Wire
 import THC.Compact.Writer
 
 debugTests :: Test
 debugTests = TestList
-  [ TestLabel "exact scoped debug names never use predecessor or common strings" $ TestCase $
+  [ TestLabel "direct CBD publication and metadata amendment preserve executable/debug bytes" $ TestCase $ do
+      original <- encodeModuleValue originalModule
+      value <- either fail pure (readModuleValue original)
+      let amended = case value of
+            Object fields -> Object (KM.insert "foreignExceptionBridgeUnit" (String "runtime-unit") fields)
+            _ -> error "Expected module"
+      changed <- rewriteModuleFacts original amended
+      (_,_,before) <- either fail pure (unpackContainer original)
+      (_,_,after) <- either fail pure (unpackContainer changed)
+      assertEqual "DATA, debug maps and fingerprint positions survive metadata linking"
+        (take 1 before ++ drop 2 before) (take 1 after ++ drop 2 after)
+      assertBool "original string offsets survive appended header strings" (before !! 1 `BS.isPrefixOf` (after !! 1))
+      assertEqual "new header fact" (Just (String "runtime-unit"))
+        (case readModuleValue changed of Right (Object fields) -> KM.lookup "foreignExceptionBridgeUnit" fields; _ -> Nothing)
+      assertEqual "unchanged amendment retains exact container" original =<< rewriteModuleFacts original value
+      assertBool "JSON is not an accepted module payload" (isLeft (readModuleValue "{\"bindings\":[]}"))
+  , TestLabel "metadata amendment preserves mixed ZIP member methods" $ TestCase $
+      withSystemTempDirectory "compact-amend-methods" $ \directory -> do
+        policy <- either fail pure (foldM (flip setCompression) defaultCompression ["header=9","data=1","strings=9","names=6"])
+        (facts,bindings,annotations) <- either fail pure (parseModuleWithDebug originalModule)
+        let destination = directory </> "mixed.cbd"
+        _ <- writeModuleWithDebugCompressed policy destination facts bindings annotations
+        original <- BS.readFile destination
+        value <- either fail pure (readModuleValue original)
+        let amended = case value of Object fields -> Object (KM.insert "foreignExceptionBridgeUnit" (String "runtime") fields); _ -> value
+            methods bytes = map (\entry -> (Zip.eRelativePath entry,Zip.eCompressionMethod entry)) . Zip.zEntries
+              <$> Zip.toArchiveOrFail (BL.fromStrict bytes)
+        changed <- rewriteModuleFacts original amended
+        assertEqual "metadata linking retains every actual ZIP method" (methods original) (methods changed)
+        assertEqual "unchanged metadata keeps compressed archive byte-for-byte" original =<< rewriteModuleFacts original value
+  , TestLabel "interface closure provenance survives direct publication and native header amendment" $ TestCase $ do
+      let provenance = KM.fromList [("roots",toJSON ["main:Original.root" :: String]),
+            ("sourceModules",toJSON ["main:Original" :: String]),
+            ("missingDefinitions",toJSON [object ["id" .= ("base:Missing.body" :: String),
+              "type" .= ("Int" :: String),"reason" .= ("source export required" :: String)]])]
+          origin = KM.fromList [("origin",String "interface-core-unfolding"),("originModule",String "base:Original")]
+          addOrigin (Object fields) = Object (KM.union origin fields)
+          addOrigin value = value
+          input = case originalModule of
+            Object fields -> Object (KM.union provenance (KM.mapWithKey (\key value -> case value of
+              Array values | key == "bindings" -> Array (fmap addOrigin values); _ -> value) fields))
+            _ -> error "Expected module"
+      bytes <- encodeModuleValue input
+      value <- either fail pure (readModuleValue bytes)
+      let selected (Object fields) = (map (`KM.lookup` fields) (KM.keys provenance),
+            case KM.lookup "bindings" fields of
+              Just (Array values) -> fmap (\entry -> case entry of
+                Object record -> map (`KM.lookup` record) (KM.keys origin); _ -> []) values
+              _ -> mempty)
+          selected _ = error "Expected module"
+      assertEqual "required frontier and original binding owners are retained" (selected input) (selected value)
+      let amended = case value of Object fields -> Object (KM.insert "foreignExceptionBridgeUnit" (String "runtime") fields); _ -> value
+      changed <- rewriteModuleFacts bytes amended
+      after <- either fail pure (readModuleValue changed)
+      assertEqual "header amendment does not discard origin ledger" (selected value) (selected after)
+  , TestLabel "exact scoped debug names never use predecessor or common strings" $ TestCase $
       withTables $ \_ names _ _ -> do
         assertEqual "UTF8 original name" (Right (Just unicodeName)) (nameAt names 0 0)
         assertEqual "local ordinal slot" (Right (Just "local")) (nameAt names 0 1)

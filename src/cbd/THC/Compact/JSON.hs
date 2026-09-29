@@ -13,7 +13,7 @@
 -- Conversion of reference JSON into independent semantic and display records.
 -- Unknown semantic fields fail conversion; pretty diagnostics are not executable
 -- data. Omitting original display annotations requires an explicit entry point.
-module THC.Compact.JSON (parseModuleWithoutDebug, parseModuleWithDebug) where
+module THC.Compact.JSON (parseModuleWithoutDebug, parseModuleWithDebug, parseModuleFacts) where
 
 import Control.Monad (unless, forM, when)
 import Control.Monad.Trans.Class (lift)
@@ -64,20 +64,45 @@ parseModuleWithDebug value = parseEither (\input -> do
 
 moduleRecords :: Bool -> Value -> Parser (Facts,[(Binding,[Annotation])])
 moduleRecords debug = withObject "Core module" $ \fields -> do
-  checked fields (["schema","ghc","unit","module","boundary","providedModules","targetLayout",
-    "constructors","bindings","foreign","foreignExceptionBridge","foreignExceptionBridgeUnit",
-    "sourceCore","rules","groups","lowering","sourceFiles","sourceSpans"] ++ map bytesKey pendingProvenanceNames)
-  facts <- Facts <$> fields .: "schema" <*> bytesAt fields "ghc" <*> bytesAt fields "unit"
-    <*> bytesAt fields "module" <*> bytesAt fields "boundary" <*> optional fields "providedModules" (array bytes)
-    <*> optional fields "targetLayout" targetLayout <*> (fields .: "constructors" >>= array constructor)
-    <*> optional fields "foreign" foreignArtifacts <*> optional fields "foreignExceptionBridge" exceptionBridge
-    <*> optional fields "foreignExceptionBridgeUnit" bytes
-    <*> mapM (\(slot,key) -> optional fields (bytesKey key) (provenance slot)) (zip [0..] pendingProvenanceNames)
+  facts <- moduleFacts fields
   values <- fields .: "bindings" >>= array pure
   bindings <- forM values $ \value -> do
     (record,ConvertState _ _ annotations) <- runStateT (binding Map.empty Nothing value) (ConvertState 0 debug [])
     pure (record,reverse annotations)
   pure (facts,bindings)
+
+-- | Header amendments do not need to traverse executable expressions.
+parseModuleFacts :: Value -> Either String Facts
+parseModuleFacts = parseEither (withObject "Core module" moduleFacts)
+
+moduleFacts :: Object -> Parser Facts
+moduleFacts fields = do
+  checked fields (["schema","ghc","unit","module","boundary","providedModules","targetLayout",
+    "constructors","bindings","foreign","foreignExceptionBridge","foreignExceptionBridgeUnit",
+    "sourceCore","rules","groups","lowering","sourceFiles","sourceSpans",
+    "roots","sourceModules","missingDefinitions"] ++ map bytesKey pendingProvenanceNames)
+  Facts <$> fields .: "schema" <*> bytesAt fields "ghc" <*> bytesAt fields "unit"
+    <*> bytesAt fields "module" <*> bytesAt fields "boundary" <*> optional fields "providedModules" (array bytes)
+    <*> optional fields "targetLayout" targetLayout <*> (fields .: "constructors" >>= array constructor)
+    <*> optional fields "foreign" foreignArtifacts <*> optional fields "foreignExceptionBridge" exceptionBridge
+    <*> optional fields "foreignExceptionBridgeUnit" bytes
+    <*> mapM (\(slot,key) -> optional fields (bytesKey key) (provenance slot)) (zip [0..] pendingProvenanceNames)
+    <*> closureProvenance fields
+
+closureProvenance :: Object -> Parser (Maybe ClosureProvenance)
+closureProvenance fields = do
+  roots <- optional fields "roots" (array bytes)
+  modules <- optional fields "sourceModules" (array bytes)
+  missing <- optional fields "missingDefinitions" (array missingDefinition)
+  records <- fields .: "bindings" >>= array object
+  origins <- forM [record | record <- records, any (`KM.member` record) ["origin","originModule"]] $ \record ->
+    BindingOrigin <$> bytesAt record "id" <*> optional record "origin" bytes <*> optional record "originModule" bytes
+  pure $ if roots == Missing && modules == Missing && missing == Missing && null origins then Nothing
+    else Just (ClosureProvenance roots modules missing origins)
+  where
+    missingDefinition = withObject "missing interface definition" $ \record -> do
+      checked record ["id","type","reason"]
+      MissingDefinition <$> bytesAt record "id" <*> bytesAt record "type" <*> bytesAt record "reason"
 
 checked :: Object -> [Key.Key] -> Parser ()
 checked fields allowed = unless (all (`elem` allowed) (KM.keys fields)) $
@@ -249,7 +274,7 @@ binding :: Locals -> Maybe Locals -> Value -> Convert Binding
 binding rhsScope declared value = do
   fields <- lift (object value)
   lift (checked fields ["id","name","type","lifted","arity","expr","rep","info","entryStrict",
-    "entryStrictSource","joinValueArity","joinResultRep","hostSignature","source"])
+    "entryStrictSource","joinValueArity","joinResultRep","hostSignature","source","origin","originModule"])
   key <- lift (fields .: "id")
   identity <- case declared of
     Nothing -> pure (Global (Text.encodeUtf8 key))
@@ -286,6 +311,7 @@ expr scope value = do
     [String "lit",kind,payload,m] -> Lit <$> lift (meta m) <*> lift (literal kind payload)
     [String "con",name,arity,m] -> Con <$> lift (meta m) <*> lift (bytes name) <*> lift (parseJSON arity)
     [String "void",m] -> Void <$> lift (meta m)
+    [String "unsupported",diagnostic,m] -> Unsupported <$> lift (meta m) <*> lift (bytes diagnostic)
     [String "lam",parameters,body,m] -> do
       values <- lift (array pure parameters)
       names <- lift (mapM (\v -> object v >>= (.: "id")) values)
@@ -464,19 +490,34 @@ hexBytes = withText "original artifact hex" $ \value -> do
 nativeLink :: Value -> Parser NativeLink
 nativeLink = withObject "native linked artifact" $ \fields -> do
   schema <- fields .: "schema" :: Parser Word64
-  checked fields (linkPayloadKeys ++ ["abi","buildInputs","nativeLibrary","dataSymbols"] ++ ["finalizers" | schema == 2])
+  checked fields (linkPayloadKeys ++ ["abi","buildInputs","nativeLibrary","dataSymbols","exports","dependencies"] ++ ["finalizers" | schema == 2])
   NativeLink <$> linkPayload fields <*> (fields .: "abi" >>= array entry)
-    <*> optional fields "buildInputs" nativeBuildInputs <*> optional fields "nativeLibrary" companion
+    <*> optional fields "buildInputs" nativeBuildInputs <*> optional fields "nativeLibrary" nativeCompanion
     <*> optional fields "dataSymbols" (array bytes)
     <*> (if schema == 2 then fields .: "finalizers" >>= array bytes else pure [])
+    <*> (case (KM.lookup "exports" fields,KM.lookup "dependencies" fields) of
+      (Nothing,Nothing) -> pure Nothing
+      (Just publicSymbols,Just dependencies) -> Just <$> ((,) <$> array bytes publicSymbols <*> array nativeComponent dependencies)
+      _ -> fail "Native exports and dependencies must be present together")
   where entry = withObject "native linked ABI" $ \fields -> do
           checked fields ["symbol","entry","convention","safety","arguments","result"]
           NativeABI <$> bytesAt fields "symbol" <*> bytesAt fields "entry"
             <*> (fields .: "convention" >>= parseConvention) <*> (fields .: "safety" >>= parseSafety)
             <*> (fields .: "arguments" >>= array bytes) <*> bytesAt fields "result"
-        companion = withObject "native library companion" $ \fields -> do
-          checked fields ["sha256","hex"]
-          (,) <$> bytesAt fields "sha256" <*> (fields .: "hex" >>= hexBytes)
+
+nativeCompanion :: Value -> Parser (BS.ByteString,BS.ByteString)
+nativeCompanion = withObject "native library companion" $ \fields -> do
+  checked fields ["sha256","hex"]
+  (,) <$> bytesAt fields "sha256" <*> (fields .: "hex" >>= hexBytes)
+
+nativeComponent :: Value -> Parser NativeComponent
+nativeComponent = withObject "declared native component" $ \fields -> do
+  checked fields (linkPayloadKeys ++ ["exports","dependencies","nativeLibrary"])
+  unless (KM.lookup "schema" fields == Just (Number 1) &&
+          KM.lookup "profile" fields == Just (String "thc-package-native-component-v1"))
+    (fail "Unsupported native component descriptor")
+  NativeComponent <$> linkPayload fields <*> (fields .: "exports" >>= array bytes)
+    <*> (fields .: "dependencies" >>= array nativeComponent) <*> optional fields "nativeLibrary" nativeCompanion
 
 nativeBuildInputs :: Value -> Parser NativeBuildInputs
 nativeBuildInputs = withObject "native build inputs" $ \fields -> do
@@ -667,6 +708,7 @@ literal (String kind) (String payload) = case kind of
   "double-bits" -> LitDoubleBits <$> boundedNumber
   "null-addr" | payload == "0" -> pure LitNullAddr
   "rubbish" -> LitRubbish <$> primRep (String payload)
+  "unsupported" -> pure (LitUnsupported (Text.encodeUtf8 payload))
   "function-addr" -> pure (LitFunctionAddr (Text.encodeUtf8 payload))
   "data-addr" -> pure (LitDataAddr (Text.encodeUtf8 payload))
   _ -> fail ("Unsupported Core literal: " ++ show kind)
