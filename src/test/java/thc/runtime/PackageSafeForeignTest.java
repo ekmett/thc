@@ -146,13 +146,19 @@ public class PackageSafeForeignTest {
                         assertFalse(threads.needsHosting());
                         // Preserve the original three setup calls on the same TSO
                         // that executes the first installed foreign call.
-                        for (int i = 0; i < 3; i++) { entries.get("reset").call(); var result = Calls.target(target, new Object[]{0L, argument, thc.runtime.Unit.INSTANCE}); results.check(result); }
+                        for (int i = 0; i < 3; i++) { entries.get("reset").call(); var result = ScalarTestCalls.callScalarTestTarget(target, new Object[]{0L, argument, thc.runtime.Unit.INSTANCE}); results.check(result); }
                         entries.get("reset").call(); ready.countDown(); if (!begin.await(30, TimeUnit.SECONDS)) throw new IllegalStateException("Check failed.");
                         assertEquals(identity.get(), threads.currentId(), "setup and installed call keep one TSO");
-                        var result = Calls.target(target, new Object[]{0L, argument, thc.runtime.Unit.INSTANCE}); var continuation = Objects.requireNonNull(SavedGuestContinuations.savedGuestContinuation(result)); var request = continuation.asyncRequest();
+                        var result = ScalarTestCalls.callScalarTestTarget(target, new Object[]{0L, argument, thc.runtime.Unit.INSTANCE}); var continuation = Objects.requireNonNull(SavedGuestContinuations.savedGuestContinuation(result)); var request = continuation.asyncRequest();
                         assertSame(pending.get(), request, "delivery occurs at the completed foreign-call cut");
                         assertEquals(identity.get(), threads.currentId(), "foreign return preserves the TSO");
-                        if (mode.endsWith("compiled")) { assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > compiledBefore.get()); assertTrue(request.compiledCapture, "first installed call reaches the return cut in compiled code"); assertSame(target, program.entryTarget("wait")); assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target)); }
+                        if (mode.endsWith("compiled")) {
+                            assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > compiledBefore.get());
+                            assertTrue(request.compiledCapture, "first installed call reaches the return cut in compiled code");
+                            assertSame(target, program.entryTarget("wait"));
+                            // The first pending bytecode poll profiles its cold arm and may invalidate the target.
+                            if (mode.startsWith("ast")) assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
+                        }
                         request.acknowledge(); completed.set(continuation);
                     } catch (Throwable problem) { failure.set(problem); } finally { ready.countDown(); threads.leaveCurrent(); }
                 }, 0L, null);
