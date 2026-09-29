@@ -109,11 +109,12 @@ prepareFloatingRemainder root = do
     exported <- runLogged 300 root logs (stage ++ "-export")
       [("THC_CORE_OUT",root </> dir </> stage ++ "-core"),("THC_GHC_OUT",root </> dir </> stage ++ "-ghc")]
       "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source,example])
-    let cores = [dir </> stage ++ "-core" </> name ++ ".json" | name <- ["FloatingRemainderAudit","InverseHyperbolic"]]
+    let cores = [dir </> stage ++ "-core" </> name ++ ".cbd" | name <- ["FloatingRemainderAudit","InverseHyperbolic"]]
     audits <- forM entries $ \name -> do
       let path = dir </> stage ++ "-" ++ name ++ "-audit.json"
       audited <- runLogged 120 root logs (stage ++ "-" ++ name ++ "-audit") [] "python3"
-        (["bin/audit-core.py"] ++ cores ++ ["--entry",name,"--output",path])
+        (["bin/audit-core.py"] ++ cores ++ ["--entry",
+          "main:" ++ (if name == "asinhExample" then "InverseHyperbolic" else "FloatingRemainderAudit") ++ "." ++ name,"--output",path])
       report <- BS.readFile (root </> path) >>= either die pure . eitherDecodeStrict'
       case report of
         Object fields | KeyMap.lookup "accepted" fields == Just (Bool True),
