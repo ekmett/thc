@@ -21,6 +21,17 @@ import static thc.Main.launcherArtifactVerification;
 @ResourceLock(Resources.SYSTEM_PROPERTIES)
 public class LauncherDiagnosticsTest {
     @TempDir public Path directory;
+    @Test public void nativeExecutableProfileIsSeparateFromGuestCppOptions() {
+        var configuration = Json.stringify(Map.of("arguments", List.of("--run-executable", "main.cbd",
+            "u:Main.main", "base:Top.flush", "--", "ghc"), "properties", Map.of("thc.byteArrayStorage", "native")));
+        var old = System.getProperty("thc.byteArrayStorage");
+        try {
+            NativeExecutable.initializeProperties(configuration);
+            assertEquals("native", System.getProperty("thc.byteArrayStorage"));
+            assertArrayEquals(new String[]{"--run-executable", "main.cbd", "u:Main.main", "base:Top.flush", "--", "ghc",
+                "-DDEBUG", "-DVALUE=42"}, NativeExecutable.launcherArguments(configuration, new String[]{"-DDEBUG", "-DVALUE=42"}));
+        } finally { property("thc.byteArrayStorage", old); }
+    }
     @Test public void nativeExecutableBindsMainAndShutdownWithoutParsingGuestOptions() {
         var binding = List.of("--run-executable", "@packages.json,main.cbd", "u:Main.main",
             "base:Top.flush", "--", "ghc", "-B/lib with spaces");

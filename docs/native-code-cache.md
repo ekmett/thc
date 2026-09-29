@@ -100,6 +100,11 @@ The same experimental image recipe also accepts `executable`. Set
 `THC_NATIVE_IMAGE_EXECUTABLE_NAME` to the desired ELF basename. The binding is
 embedded in the image; incoming arguments are appended as opaque guest argv.
 The original loader owns argument initialization, IO, shutdown and exit status.
+An object with `arguments` containing that array and `properties` containing
+string-valued JVM system properties can also bind the THC execution profile.
+Native Image runtime-option parsing is disabled in this mode: guest `-D` and
+`-X` options are not VM arguments. This experimental recipe fixes a 16 GiB
+runtime heap ceiling and two available processors at image build time.
 
 This produces an application-bound JVM-free runtime, but **lowers guest Core at
 runtime**. It does not imply that the guest was AOT-compiled or persisted in a

@@ -94,7 +94,10 @@ if [[ "$mode" == executable* ]]; then
     cp -- "$THC_NATIVE_IMAGE_EXECUTABLE_CONFIG" "$binding_dir/thc-native-executable.json"
     "$JAVA_HOME/bin/jar" --create --file "$binding_dir/binding.jar" -C "$binding_dir" thc-native-executable.json
     classpath="$classpath:$binding_dir/binding.jar"
-    executable_options=(-H:IncludeResources=thc-native-executable.json)
+    # Dedicated guest executables must not consume GHC's -D/-X options as VM
+    # arguments. Keep VM bounds in the image, separate from opaque guest argv.
+    executable_options=(-H:IncludeResources=thc-native-executable.json -H:-ParseRuntimeOptions
+        -H:MaxHeapSize=17179869184 -H:ActiveProcessorCount=2)
     cache_options=(-march=x86-64-v3 -H:CPUFeatures=HT)
     main_class=thc.NativeExecutable
     image_path="$repo_dir/build/native-image/$THC_NATIVE_IMAGE_EXECUTABLE_NAME"
