@@ -16,6 +16,88 @@ import static thc.CoreExecutionTestSupport.*;
 /** Real lowerer ownership checks; auxiliary-cache persistence remains a separate acceptance. */
 class ReusableProgramTest {
     @Test @SuppressWarnings("unchecked")
+    void preparedNativeLabelsAndBigNatLiteralsBelongToTheInvokingLoad() throws Exception {
+        var address = map("kind", "address", "evaluated", true, "primReps", list("AddrRep"));
+        var bytes = map("kind", "object", "evaluated", true, "primReps", list("BoxedRep (Just Unlifted)"));
+        var closure = map("kind", "closure", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)"));
+        var label = list("lit", "function-addr", "free", map("rep", address));
+        var big = list("lit", "bignat", "18446744073709551617", map("rep", bytes));
+        var bindings = new ArrayList<Map<String,Object>>();
+        var labelBinding = binding("label", label, false); labelBinding.put("rep", address); bindings.add(labelBinding);
+        var bigBinding = binding("big", big, false); bigBinding.put("rep", bytes); bindings.add(bigBinding);
+        for (String name : List.of("globalLabel", "inlineLabel", "globalBig", "inlineBig", "nullAddress")) {
+            boolean byteResult = name.endsWith("Big");
+            Object body = switch (name) {
+                case "globalLabel" -> list("var", "label", map("rep", address));
+                case "inlineLabel" -> label;
+                case "globalBig" -> list("var", "big", map("rep", bytes));
+                case "inlineBig" -> big;
+                default -> list("lit", "null-addr", "0", map("rep", address));
+            };
+            var binding = binding(name, list("lam", list(wordParameter("unused")), body,
+                map("rep", closure, "resultRep", byteResult ? bytes : address)), true);
+            binding.put("rep", closure); binding.put("arity", 1); bindings.add(binding);
+        }
+        try (var engine = Engine.newBuilder().allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false")
+                .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build()) {
+            Program.PreparedCode code;
+            try (var preparation = Context.newBuilder("thc").engine(engine).build()) {
+                preparation.initialize("thc"); preparation.enter();
+                try { code = Program.prepareCode(TruffleLanguage.LanguageReference.create(Language.class).get(null), module(bindings),
+                    List.of("globalLabel", "inlineLabel", "globalBig", "inlineBig", "nullAddress")); }
+                finally { preparation.leave(); }
+            }
+            var field = Program.PreparedCode.class.getDeclaredField("targets"); field.setAccessible(true);
+            for (var target : (List<com.oracle.truffle.runtime.OptimizedCallTarget>)field.get(code)) {
+                assertFalse(target.wasExecuted()); assertTrue(target.prepareForAOT()); target.compile(true); assertFalse(target.wasExecuted());
+            }
+            code.requireInstalledCode();
+            String previous = System.getProperty("thc.requireCompiledCode"); System.setProperty("thc.requireCompiledCode", "true");
+            ManagedAddress previousLabel = null;
+            byte[] previousBytes = null;
+            try {
+                for (int load = 0; load < 2; load++) try (var context = Context.newBuilder("thc").engine(engine).allowNativeAccess(true).build()) {
+                    context.initialize("thc"); context.enter();
+                    try {
+                        var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                        for (int instance = 0; instance < 2; instance++) {
+                            var program = code.newInstance(language);
+                            var results = new LinkedHashMap<String,Object>();
+                            for (String name : List.of("globalLabel", "inlineLabel", "globalBig", "inlineBig", "nullAddress")) {
+                                var function = (Closure)program.entryValue(name);
+                                results.put(name, Calls.target(function.target, new Object[]{0L, function.environment, 0L}));
+                            }
+                            var currentLabel = (ManagedAddress)results.get("globalLabel");
+                            currentLabel.finalizerFunction().requireOwner(Language.currentState().cbits());
+                            assertTrue(currentLabel.sameLocation((ManagedAddress)results.get("inlineLabel")));
+                            assertSame(ManagedAddress.nullAddress(), results.get("nullAddress"));
+                            if (load != 0 && instance == 0) {
+                                var oldLabel = previousLabel;
+                                assertThrows(RuntimeFault.class, () -> oldLabel.finalizerFunction().requireOwner(Language.currentState().cbits()));
+                            }
+                            previousLabel = currentLabel;
+                            var currentBytes = (byte[])results.get("globalBig");
+                            assertNotSame(previousBytes, currentBytes); assertNotSame(currentBytes, results.get("inlineBig"));
+                            for (String name : List.of("globalBig", "inlineBig")) {
+                                byte[] value = (byte[])results.get(name);
+                                assertEquals(16, value.length); assertEquals(1L, ManagedByteArray.readInt(value, 0));
+                                assertEquals(1L, ManagedByteArray.readInt(value, 1));
+                            }
+                            ManagedByteArray.writeInt(currentBytes, 0, 7L);
+                            assertEquals(1L, ManagedByteArray.readInt((byte[])results.get("inlineBig"), 0));
+                            previousBytes = currentBytes;
+                            assertEquals(0, count(program, "loweredRootCount")); assertTrue(count(program, "compiledEntries") >= 5);
+                            code.requireInstalledCode();
+                        }
+                    } finally { context.leave(); }
+                }
+            } finally {
+                if (previous == null) System.clearProperty("thc.requireCompiledCode"); else System.setProperty("thc.requireCompiledCode", previous);
+            }
+        }
+    }
+
+    @Test @SuppressWarnings("unchecked")
     void preparedEnumsAndArithmeticPayloadsUseTheInvokingInstance() throws Exception {
         var data = map("kind", "data", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)"));
         var closure = map("kind", "closure", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)"));

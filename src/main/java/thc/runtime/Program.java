@@ -259,6 +259,14 @@ public final class Program implements ExecutableProgram {
             Map<String,Object> binding = builder.bindings.get(builder.bindingIndex(pending.removeFirst()));
             String id = (String) binding.get("id");
             if (values.containsKey(id)) continue;
+            List<Object> expression = (List<Object>) binding.get("expr");
+            if (expression.size() >= 3 && expression.getFirst().equals("lit") && expression.get(1).equals("function-addr")) {
+                // Never resolve a native label while preparing the source. The
+                // descriptor has no provider or context; each load resolves its own.
+                values.put(id, new CodeValue(null, null, 0, new CFinalizerLabels((String) expression.get(2),
+                    CoreRepresentations.expression(expression)), -1));
+                continue;
+            }
             Object value = builder.entryValue(id);
             values.put(id, CodeValue.from(value, builder, (List<?>) binding.get("expr")));
             pending.addAll(builder.codeDependencies);
@@ -323,10 +331,13 @@ public final class Program implements ExecutableProgram {
                 return new CodeValue(thunk.getTarget(), thunk.getEnvironment().getLayout(), -1, null, -1);
             if (value instanceof Integer || value instanceof Long || value instanceof Float || value instanceof Double || value == Unit.INSTANCE)
                 return new CodeValue(null, null, 0, value, -1);
-            // Only the actual static-byte literal owns context-free immutable
+            // Only static bytes and canonical null own context-free address
             // storage. Other Addr# values may carry native or context authority.
             if (value instanceof ManagedAddress && expression.size() >= 3 &&
-                    expression.getFirst().equals("lit") && expression.get(1).equals("string-bytes"))
+                    expression.getFirst().equals("lit") && (expression.get(1).equals("string-bytes") ||
+                    expression.get(1).equals("null-addr") && value == ManagedAddress.nullAddress()))
+                return new CodeValue(null, null, 0, value, -1);
+            if (value instanceof byte[] && expression.size() >= 3 && expression.getFirst().equals("lit") && expression.get(1).equals("bignat"))
                 return new CodeValue(null, null, 0, value, -1);
             // Store an immutable constructor index, never the preparation load's
             // nullary value or its allocation key/cache.
@@ -335,7 +346,11 @@ public final class Program implements ExecutableProgram {
             throw new UnsupportedCore("Reusable AST binding requires closed code, nullary data or an admitted literal");
         }
         Object instantiate(Program instance) {
-            if (target == null) return constructorIndex >= 0 ? instance.constructorLayout(constructorIndex).allocate() : literal;
+            if (target == null) {
+                if (literal instanceof CFinalizerLabels label) return label.resolve();
+                if (literal instanceof byte[] bytes) return bytes.clone();
+                return constructorIndex >= 0 ? instance.constructorLayout(constructorIndex).allocate() : literal;
+            }
             CapturedFrame environment = captures.captureValues(new Object[0], instance);
             return arity < 0 ? new Thunk(target, environment) : new Closure(environment, arity, target);
         }
@@ -418,7 +433,7 @@ public final class Program implements ExecutableProgram {
     private static boolean reusableLiteral(String kind) {
         return switch (kind) {
             case "int", "word", "char", "int8", "word8", "int16", "word16", "int32", "word32",
-                 "int64", "word64", "float", "double", "string-bytes" -> true;
+                 "int64", "word64", "float", "double", "string-bytes", "null-addr", "function-addr", "bignat" -> true;
             default -> false;
         };
     }
@@ -1428,7 +1443,9 @@ public final class Program implements ExecutableProgram {
             }
             case "lit" -> {
                 String tag = (String) expr.get(1);
-                Literal value = new Literal(literal(tag, expr.get(2), CoreRepresentations.expression(expr)));
+                if (reusableCode && tag.equals("function-addr"))
+                    yield new CFinalizerLabels((String) expr.get(2), CoreRepresentations.expression(expr));
+                Literal value = new Literal(literal(tag, expr.get(2), CoreRepresentations.expression(expr)), reusableCode && tag.equals("bignat"));
                 if (Arrays.asList("int8", "word8", "int16", "word16", "int32", "word32").contains(tag))
                     yield value.proven(CoreRepresentations.narrowLiteralProof(expr));
                 if (tag.equals("bignat")) yield value.proven(BigNatLiterals.proof(expr));
