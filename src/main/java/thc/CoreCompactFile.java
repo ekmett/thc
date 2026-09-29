@@ -73,7 +73,8 @@ public final class CoreCompactFile implements AutoCloseable {
         this.mappings = mappings;
         this.slabs = slabs;
         counters = new Counters();
-        if (!identity.matches("[0-9a-f]{64}")) throw new IllegalArgumentException("Missing compact Core producer identity");
+        if (!(identity.isEmpty() && !verifyArtifacts) && !identity.matches("[0-9a-f]{64}"))
+            throw new IllegalArgumentException("Missing compact Core producer identity");
     }
     public Counters getCounters() { return counters; }
 
@@ -115,8 +116,9 @@ public final class CoreCompactFile implements AutoCloseable {
         if (mapped != null) return mapped;
         counters.acquisitions++;
         // Verification observes the currently named file and retains that SAME
-        // fresh lease. Normal loads trust producer identity and share mappings.
-        CoreFileMappings.Lease lease = verifyArtifacts ? mappings.acquireUncached(path) : mappings.acquire(path, identity);
+        // fresh lease. Only producer-identified loads may share mappings; loose
+        // unverified inputs use a fresh snapshot without inventing or hashing an identity.
+        CoreFileMappings.Lease lease = verifyArtifacts || identity.isEmpty() ? mappings.acquireUncached(path) : mappings.acquire(path, identity);
         if (lease.getOpened()) counters.physicalOpens++; else counters.cacheHits++;
         CoreCbdArchive archive = null;
         var handles = new LinkedHashMap<String, CoreCbdArchive.Handle>();

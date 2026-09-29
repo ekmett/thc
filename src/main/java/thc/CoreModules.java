@@ -490,11 +490,12 @@ public final class CoreModules {
         for (Object raw : (List<?>) files) {
             require(raw instanceof Map<?,?>, "Invalid CBD artifact reference");
             var artifact = (Map<?,?>) raw;
-            require(artifact.keySet().equals(Set.of("path", "sha256", "capability")), "Invalid CBD artifact fields");
+            require(artifact.keySet().equals(Set.of("path", "sha256", "request", "capability")), "Invalid CBD artifact fields");
             String path = text(artifact.get("path"), "Missing CBD path");
             String hash = text(artifact.get("sha256"), "Missing CBD identity");
+            String request = text(artifact.get("request"), "Missing CBD request identity");
             String capability = text(artifact.get("capability"), "Missing CBD capability");
-            require(sameCapability(capability, packageCapability("CBD:" + path, hash, verify)), "Invalid CBD request capability");
+            require(sameCapability(capability, packageCapability("CBD:" + path, hash + ":" + request, verify)), "Invalid CBD request capability");
             accept.accept(with(sources.consumer(Path.of(path), hash), "foreignExceptionBridgeUnit", input.get("foreignExceptionBridgeUnit")));
         }
     }
@@ -508,9 +509,13 @@ public final class CoreModules {
                 require(manifest == null, "A Core request accepts at most one package manifest");
                 manifest = Path.of(requested.substring(1)).toRealPath().toString();
             } else {
-                String path = Path.of(requested).toRealPath().toString();
-                String hash = sha256(Files.readAllBytes(Path.of(path)));
-                files.add(Map.of("path", path, "sha256", hash, "capability", packageCapability("CBD:" + path, hash, verify)));
+                String path = (verify ? Path.of(requested).toRealPath() : Path.of(requested).toAbsolutePath().normalize()).toString();
+                String hash = verify ? sha256(Files.readAllBytes(Path.of(path))) : "";
+                // Without a producer identity, neither mappings nor cached source
+                // preparation may alias an earlier request at the same pathname.
+                String request = verify ? "" : UUID.randomUUID().toString();
+                files.add(Map.of("path", path, "sha256", hash, "request", request,
+                        "capability", packageCapability("CBD:" + path, hash + ":" + request, verify)));
             }
         }
         if (!files.isEmpty() || manifest == null) document.put("moduleFiles", files);

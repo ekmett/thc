@@ -100,6 +100,23 @@ class CoreCompactFileTest {
             assertEquals(0L, cache.statistics().activeLeases());
         }
     }
+    @Test void unidentifiedLooseArtifactsUseFreshMappingsWithoutHashingOrIdleRetention() throws Exception {
+        try (var cache = new CoreFileMappings(1024 * 1024, 4)) {
+            assertThrows(IllegalArgumentException.class, () -> new CoreCompactFile(path(), "", true, cache));
+            for (int count = 1; count <= 2; count++) {
+                Files.write(path(), fixture(Collections.nCopies(count, "unit:M.f"), false));
+                try (var file = new CoreCompactFile(path(), "", false, cache)) {
+                    assertEquals(count, file.header().bindingCount());
+                    assertEquals(0L, file.getCounters().statistics().hashBytesRead());
+                    assertEquals(0L, file.getCounters().statistics().cacheHits());
+                    assertEquals(1L, file.getCounters().statistics().physicalOpens());
+                }
+                assertEquals(0L, cache.statistics().activeLeases());
+                assertEquals(count, cache.statistics().mappingCloses());
+            }
+            assertEquals(2L, cache.statistics().mappingOpens());
+        }
+    }
     @Test void failedOpenCanBeRetriedAndClosedOwnerCannotDecodeCachedBytes() throws Exception {
         var bytes = fixture();
         try (var cache = new CoreFileMappings(1024 * 1024, 4)) {

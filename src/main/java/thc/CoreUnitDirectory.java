@@ -90,7 +90,7 @@ public final class CoreUnitDirectory {
             consumerReaders.add(file);
             compactAdmitted.accept(file.getCounters());
             try {
-                var records = new CoreCompactRecords(file, sha256);
+                var records = new CoreCompactRecords(file, sha256.isEmpty() ? path.toString() : sha256);
                 var result = new LinkedHashMap<>(records.header());
                 if (result.get("targetLayout") != null) {
                     var candidate = TargetLayout.fromDocument(result.get("targetLayout"));

@@ -11,31 +11,34 @@ import static thc.CoreFormatTestSupport.*;
 
 class CoreRequestTest {
     @TempDir Path directory;
-    @Test void embedsCompleteValidatedModulesWithoutChangingTheirMeaning() throws Exception {
-        var documents = List.of(
-            " {\"schema\":1,\"bindings\":[{\"id\":\"cold\",\"expr\":[\"unsupported\",\"kept\"]}],\"sourceCore\":\"λ\\n\\uD83D\\uDE00\",\"extra\":null} ",
-            "{\"nested\":{\"escaped\":\"\\u0078\",\"values\":[true,false,null,-9223372036854775808,9223372036854775807,1.25,1e100]},\"constructors\":[]}");
-        var paths = new ArrayList<String>();
-        for (int i = 0; i < documents.size(); i++) {
-            var path = directory.resolve("module" + i + ".json");
-            Files.writeString(path, documents.get(i)); paths.add(path.toString());
-        }
+    @Test void unverifiedLooseRequestsDoNotOpenOrHashTheirArtifacts() throws Exception {
+        var paths = List.of(directory.resolve("not-opened λ.cbd").toString());
         var request = CoreModules.request(paths, "entry\"\\\nλ", false, true, "bytecode", false, false, null, null, false);
-        assertEquals(map("modules", documents.stream().map(Json::parse).toList(), "entry", "entry\"\\\nλ",
-            "instrument", false, "diagnosticUnsupported", true, "backend", "bytecode", "sourceNotesEnabled", false, "verifyArtifacts", false), Json.parse(request));
-        // Every field survives, including unreachable definitions and decoded text.
-        assertTrue(request.chars().allMatch(it -> it < 128));
+        var document = (Map<?,?>) Json.parse(request);
+        assertEquals(map("entry", "entry\"\\\nλ", "instrument", false, "diagnosticUnsupported", true,
+            "backend", "bytecode", "sourceNotesEnabled", false, "verifyArtifacts", false), without(document, "moduleFiles"));
+        var artifacts = (List<?>) document.get("moduleFiles"); assertEquals(1, artifacts.size());
+        var artifact = (Map<?,?>) artifacts.getFirst();
+        assertEquals(paths.getFirst(), artifact.get("path")); assertEquals("", artifact.get("sha256"));
+        assertFalse(((String) artifact.get("request")).isEmpty());
+        assertFalse(((String) artifact.get("capability")).isEmpty());
+        assertFalse(Files.exists(Path.of(paths.getFirst())));
+        assertFalse(request.contains("\n"), "Control characters must be JSON-escaped");
+        assertNotEquals(request, CoreModules.request(paths, "entry\"\\\nλ", false, true, "bytecode", false, false, null, null, false),
+            "New unverified requests must not alias cached preparation of an earlier pathname snapshot");
+        assertThrows(NoSuchFileException.class, () -> CoreModules.request(paths, "entry", false, false, "ast", false, false, null, false, true));
     }
-    @Test void rejectsMalformedDocumentsBeforeEmbeddingAndCannotInjectAnotherModule() throws Exception {
-        var malformed = List.of("", "[]", "null", "1", "true", "\"object\"", "{} {}", "{},{}",
-            "{}],\"entry\":\"injected\",\"modules\":[{}", "{\"nested\":{\"x\":1,\"\\u0078\":2}}", "{\"x\":null,\"x\":1}",
-            "{\"x\":\"\\uQQQQ\"}", "{\"x\":\"\\u12\"}", "{\"x\":\"\\q\"}", "{\"x\":\"raw\nline\"}",
-            "{\"x\":9223372036854775808}", "{\"x\":1e999}", "{\"x\":01}", "{\"x\":1.}", "{\"x\":1e+}", "{\"x\":[1,]}", "{\"x\":1,}");
-        var path = directory.resolve("invalid.json");
-        for (String document : malformed) {
-            Files.writeString(path, document);
-            assertThrows(RuntimeException.class, () -> request(List.of(path.toString()), "entry",
-                Main.defaultBackend(), true, null, false), document);
+    @Test void inlineCoreAndForgedArtifactCapabilitiesRejectBeforeOpening() {
+        assertThrows(IllegalArgumentException.class, () -> CoreModules.unitDirectory(map("modules", List.of())));
+        var input = document(CoreModules.request(List.of(directory.resolve("not-opened.cbd").toString()), "entry", false));
+        var artifact = (Map<?,?>) ((List<?>) input.get("moduleFiles")).getFirst();
+        for (var forged : List.of(with(artifact, "path", directory.resolve("other.cbd").toString()),
+                with(artifact, "sha256", "a".repeat(64)), with(artifact, "request", "another"), with(artifact, "capability", "forged"))) {
+            var invalid = with(input, "moduleFiles", List.of(forged));
+            try (var sources = CoreModules.unitDirectory(invalid).open(false)) {
+                assertThrows(IllegalArgumentException.class, () -> CoreModules.visitUnitConsumers(invalid, sources, ignored -> fail("Untrusted module admitted")));
+                assertTrue(sources.compactCounters().isEmpty());
+            }
         }
     }
     @Test void validationMatchesTheMaterializingReaderForNestedDocuments() {
