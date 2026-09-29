@@ -1028,7 +1028,10 @@ public final class Program implements ExecutableProgram {
         if (inline != null) return compile(inline, scope, tail);
         OperandBuilder outer = operandBuilder;
         Object head = at(expr, 1) instanceof List<?> value ? at(value, 0) : null;
-        OperandBuilder operands = capturesContinuations && "app".equals(at(expr, 0)) && Arrays.asList("prim", "con").contains(head) ?
+        var metadata = CoreRepresentations.metadata(expr);
+        boolean foreign = "var".equals(head) && metadata != null && metadata.containsKey("foreignCall");
+        // A foreign operand can suspend before the call, just like a primop operand.
+        OperandBuilder operands = capturesContinuations && "app".equals(at(expr, 0)) && (Arrays.asList("prim", "con").contains(head) || foreign) ?
             new OperandBuilder(scope.layout) : null;
         operandBuilder = operands;
         Expr result;
@@ -1759,18 +1762,9 @@ public final class Program implements ExecutableProgram {
         if (stringOp != null || vectorApi != null) {
             if (vectorApi != null && vectorApi.javaArray() && foreignExceptionBridge == null)
                 throw fault("Java vector array access requires a linked genuine THC.Exception runtime bundle");
-            // Unlifted is a carrier proof, not a guarantee that evaluating the
-            // operand cannot suspend. Foreign heads bypass compile's prim/con
-            // wrapper, so retain their completed operands in the same frame.
-            OperandBuilder outer = operandBuilder;
-            OperandBuilder operands = capturesContinuations ? new OperandBuilder(scope.layout) : null;
-            operandBuilder = operands;
-            try {
-                Expr[] lowered = compileOperands(args, scope);
-                Expr body = (stringOp != null ? new TruffleStringExpression(stringOp, lowered, reusableCode ? scope.programSlot : -1) :
-                    new VectorApiExpression(vectorApi, lowered)).proven(evaluated(tupleProof, true));
-                return operands == null ? body : operands.finish(body);
-            } finally { operandBuilder = outer; }
+            Expr[] lowered = compileOperands(args, scope);
+            return (stringOp != null ? new TruffleStringExpression(stringOp, lowered, reusableCode ? scope.programSlot : -1) :
+                new VectorApiExpression(vectorApi, lowered)).proven(evaluated(tupleProof, true));
         }
         PolyglotOp polyglot;
         try {
@@ -1995,15 +1989,9 @@ public final class Program implements ExecutableProgram {
             // Every lifted operand in this ABI is an opaque Value consumed by the
             // foreign operation. Demand it at an ordinary resumable guest cut,
             // retaining earlier operands and the not-yet-executed foreign suffix.
-            OperandBuilder outer = operandBuilder;
-            OperandBuilder operands = capturesContinuations ? new OperandBuilder(scope.layout) : null;
-            operandBuilder = operands;
-            try {
-                var lowered = argumentOperands(args, scope, false);
-                Expr body = (polyglot.explicitLibrary() ? new InteropExpression(polyglot, lowered) :
-                    new PolyglotExpression(polyglot, lowered)).proven(evaluated(tupleProof, true));
-                return operands == null ? body : operands.finish(body);
-            } finally { operandBuilder = outer; }
+            var lowered = argumentOperands(args, scope, false);
+            return (polyglot.explicitLibrary() ? new InteropExpression(polyglot, lowered) :
+                new PolyglotExpression(polyglot, lowered)).proven(evaluated(tupleProof, true));
         }
 
         if (primitive && Set.of("newBCO#", "mkApUpd0#").contains(fn.get(1))) {
