@@ -197,7 +197,6 @@ publishCoreUnit cache verify unit = case (member unit "bundle", member unit "mod
               member value "boundary" == member ref "boundary") $ fail "Core module identity changed during publication"
       (offsets, (arrayStart, arrayEnd)) <- either fail pure (bindingPositionsValidated bytes)
       bindings <- field value "bindings" :: IO [Value]
-      name <- field value "module" :: IO String
       needsRegistration <- either fail pure (registration value)
       start <- hTell output
       BS.hPut output bytes
@@ -224,7 +223,7 @@ publishCoreUnit cache verify unit = case (member unit "bundle", member unit "mod
             set "containsDelimitedControl" (Bool (any (containsControl . fromMaybe Null . (`member` "expr")) bindings)) $
             set "packageScalarDeclarations" (Bool (hasDeclarations value)) $
             set "registrationObligations" (Bool needsRegistration) $ delete "index" ref
-          aliased = set "mainAlias" (Bool (any ((== Text.encodeUtf8 (Text.pack ("main::" ++ name ++ ".main"))) . fst) offsets)) record
+          aliased = set "mainAlias" (Bool (any ((== "main::Main.main") . fst) offsets)) record
           sourced = maybe aliased (\(a,b) -> set "sourceMetadataStart" (integer a) $
             set "sourceMetadataEnd" (integer b) aliased) sourceSpan
       -- Only compact records/keys and the updated digest survive this module.

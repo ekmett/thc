@@ -14,6 +14,7 @@
 module THC.Driver.NativeRecipe
   ( NativeRecipe(..), captureNativeRecipe, readNativeRecipe, recipePath
   , componentRoots, componentNativeObjects, componentHomeInterfaces, componentNativeDeclarations, componentRuntimeShim, componentDeclaredModules
+  , componentMainModule
   , ensureNativeRecipes, cRecipeOptions ) where
 
 import Control.Monad (filterM, forM, unless, when)
@@ -23,7 +24,8 @@ import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KM
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
-import Data.List (isPrefixOf, nub, sort)
+import Data.Char (isSpace, isUpper)
+import Data.List (dropWhileEnd, intercalate, isPrefixOf, nub, sort)
 import Data.Maybe (mapMaybe)
 import qualified Data.Map.Strict as Map
 import qualified Data.Text.Encoding as Text
@@ -217,14 +219,43 @@ configuredBuildInfo component = do
   configured <- maybe (fail "Cabal component absent from public package declaration") pure (lookupComponent package selected)
   pure (package, componentBuildInfo configured)
 
+-- | The entry module selected by GHC's already-accepted Cabal arguments.
+-- GHC 9.14.1's setMainIs retains the module for an unqualified function;
+-- qualified functions and module names replace it. Only separate -main-is
+-- arguments are accepted (SepArg), and repeated flags are applied in order.
+componentMainModule :: Value -> IO (Maybe String)
+componentMainModule component = do
+  kind <- field component "type" :: IO String
+  if kind `elem` ["exe", "bench", "test"] then do
+    arguments <- field component "compiler-args"
+    pure (Just (entry "Main" arguments))
+  else pure Nothing
+  where
+    entry current ("-main-is":value:rest) =
+      -- GHC has parsed the identifier already. Its capitalized prefix is the
+      -- module; a variable (including an operator) starts the function suffix.
+      let prefix = intercalate "." (takeWhile capitalized (splitModule (identifier value)))
+      in entry (if null prefix then current else prefix) rest
+    entry current (_:rest) = entry current rest
+    entry current [] = current
+    capitalized (first:_) = isUpper first
+    capitalized [] = False
+    -- parseIdentifier also accepts parenthesized operators and backticked
+    -- identifiers. The successful compiler invocation has checked the syntax.
+    identifier value = case trim value of
+      '(' : rest -> trim (init rest)
+      '`' : rest -> trim (init rest)
+      text -> text
+    trim = dropWhileEnd isSpace . dropWhile isSpace
+
 -- Assign nested build roots to their most-specific component. A library's
 -- output directory can otherwise accidentally include a sibling executable.
 componentNativeObjects :: FilePath -> FilePath -> [FilePath] -> Value -> IO [FilePath]
 componentNativeObjects native dist allRoots component = do
   (haskellRoots, paths) <- componentArtifacts dist allRoots component
   modules <- field component "modules"
-  kind <- field component "type" :: IO String
-  let names = nub (modules ++ ["Main" | kind `elem` ["exe", "bench", "test"]])
+  mainModule <- componentMainModule component
+  let names = nub (modules ++ maybe [] pure mainModule)
       expected = [joinPath (splitModule name) | name <- names]
   filterM (\path -> do
     let extension = takeExtension path
@@ -246,8 +277,8 @@ componentHomeInterfaces :: FilePath -> [FilePath] -> Value -> IO [(String, Strin
 componentHomeInterfaces dist allRoots component = do
   (roots, paths) <- componentArtifacts dist allRoots component
   modules <- field component "modules"
-  kind <- field component "type" :: IO String
-  let declared = modules ++ ["Main" | kind `elem` ["exe", "bench", "test"]]
+  mainModule <- componentMainModule component
+  let declared = modules ++ maybe [] pure mainModule
       candidate root path = do
         way <- case takeExtension path of
           ".hi" -> Just "vanilla"

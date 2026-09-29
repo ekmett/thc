@@ -10,6 +10,8 @@ import thc.runtime.TargetLayout;
 /** Small package directory owns module names, never binding names. Unit files
  * remain unopened until a binding or the module's metadata is requested. */
 public final class CoreUnitDirectory {
+    // GHC keeps this CLI wrapper identity even with a non-Main -main-is module.
+    static final String MAIN_ALIAS = "main::Main.main";
     public record Artifact(Path path, String sha256) {
         public Path getPath() { return path; } public String getSha256() { return sha256; }
     }
@@ -55,7 +57,7 @@ public final class CoreUnitDirectory {
         modules = new ArrayList<>();
         for (var unit : units) for (var module : unit.modules) {
             modules.add(module); owners.put(module.getPrefix(), module);
-            if (module.mainAlias) aliases.computeIfAbsent("main::" + module.name + ".main", ignored -> new ArrayList<>()).add(module);
+            if (module.mainAlias) aliases.computeIfAbsent(MAIN_ALIAS, ignored -> new ArrayList<>()).add(module);
         }
     }
     public List<UnitRecord> getUnits() { return units; }

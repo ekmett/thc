@@ -345,8 +345,7 @@ class FastSelectionTest(unittest.TestCase):
     def test_acquired_demo_inputs_and_js_admission_select_polyglot(self):
         for path in ("bin/acquire-polyglot-demo.sh", "bin/core_package_manifest.py",
                      "src/main/java/thc/PackageScalarLinks.java",
-                     "src/examples/cabal.project", "src/examples/thc-examples.cabal",
-                     "src/examples/javascript/Main.hs", "src/examples/polyglot/Main.hs"):
+                     "src/examples/cabal.project", "src/examples/thc-examples.cabal"):
             with self.subTest(path=path):
                 self.write(path, "changed\n")
                 self.commit()

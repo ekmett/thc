@@ -55,7 +55,7 @@ public final class CoreCompactModule implements AutoCloseable {
         return selected.computeIfAbsent(offset, ignored -> {
             var binding = records.binding(offset);
             String id = (String) binding.get("id");
-            require(id.startsWith(module.getPrefix()) || module.mainAlias() && id.equals("main::" + module.name() + ".main"),
+            require(id.startsWith(module.getPrefix()) || module.mainAlias() && id.equals(CoreUnitDirectory.MAIN_ALIAS),
                     "Compact Core binding has a different module owner: " + id);
             synchronized (getCounters()) { getCounters().decodedBindings++; }
             return binding;

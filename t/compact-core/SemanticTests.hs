@@ -22,6 +22,7 @@ import Data.Foldable (toList)
 import Data.Aeson (Value(..), toJSON, object, (.=))
 import qualified Data.Aeson.KeyMap as KM
 import Data.Binary.Get (getByteString, getWord64le)
+import Data.Bits (testBit)
 import Data.IORef
 import Data.List (sort)
 import qualified Data.Text.Encoding as Text
@@ -181,7 +182,7 @@ semanticTests = TestList
         assertBool "unmapped known record rejected" (isLeft failure)
   , TestLabel "module directory captures actual data-relative binding positions" $ TestCase $
       withSystemTempDirectory "compact-module" $ \directory -> do
-        let values = [completeBinding, completeBinding {bindingIdentity=Global "main::Typed.main"},
+        let values = [completeBinding, completeBinding {bindingIdentity=Global "main::Main.main"},
               completeBinding {bindingIdentity=Global "main:Typed.control", bindingExpr=Prim emptyMeta "prompt#"}]
             destination = directory </> "module.cbd"
         footer <- writeModule destination completeFacts values
@@ -266,6 +267,14 @@ semanticTests = TestList
         footer <- writeModule (directory </> "module.cbd") facts []
         assertEqual "foreign-owner lookup sees the compiled component in the cold directory"
           8 (headerSummaries (containerHeader footer))
+  , TestLabel "GHC main wrapper summary is independent of source module" $ TestCase $
+      withSystemTempDirectory "compact-named-main" $ \directory ->
+        forM_ ["Main", "NamedMain"] $ \name ->
+          forM_ ["main::Main.main", "main::NamedMain.main"] $ \key -> do
+            footer <- writeModule (directory </> "module.cbd") completeFacts {factsModule = name}
+              [completeBinding {bindingIdentity = Global key}]
+            assertEqual "only the real GHC CLI wrapper sets the alias bit"
+              (key == "main::Main.main") (testBit (headerSummaries (containerHeader footer)) 2)
   , TestLabel "typed package address and finalizer facts preserve schema-one prefixes" $ TestCase $ do
       ImportProof _ scope execution profile owner name (ImportsVerified wordBits productRecord imports calls _ _ _) <- pure completeImports
       let address = AddressAssociation qualified (Known "original.h") "original_finalizer" True CApi

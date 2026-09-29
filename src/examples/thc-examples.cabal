@@ -12,10 +12,10 @@ common guest
 
 executable javascript
   import: guest
-  main-is: javascript/Main.hs
-  other-modules: JavaScriptDemo
+  main-is: JavaScriptDemo.hs
+  ghc-options: -main-is JavaScriptDemo
 
 executable polyglot
   import: guest
-  main-is: polyglot/Main.hs
-  other-modules: PolyglotDemo
+  main-is: PolyglotDemo.hs
+  ghc-options: -main-is PolyglotDemo

@@ -42,7 +42,6 @@ POLYGLOT_EXACT_INPUTS = {
     "src/main/java/thc/PackageScalarLinks.java",
     "src/examples/java/thc/PolyglotDemo.java",
     "src/examples/cabal.project", "src/examples/thc-examples.cabal",
-    "src/examples/javascript/Main.hs", "src/examples/polyglot/Main.hs",
     "src/main/java/thc/runtime/Calls.java", "src/main/java/thc/runtime/BytecodeRoot.java",
     "src/main/java/thc/runtime/RuntimeTypes.java",
     "src/test/resources/thc/polyglot-abi.json",

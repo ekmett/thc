@@ -43,6 +43,18 @@ class CoreCompactDirectoryTest {
         assertEquals(List.of("rts"), parsed.getUnits().getLast().getDepends());
         try (var files = Files.list(directory)) { assertEquals(0L, files.count()); }
     }
+    @Test void fixedMainAliasResolvesNamedOwnersAndRejectsAmbiguity() {
+        for (String name : List.of("Main", "NamedMain")) {
+            var parsed = CoreUnitDirectory.read(manifest(List.of(unit(List.of(with(module(name), "mainAlias", true))))));
+            assertEquals(name, parsed.owner("main::Main.main").name());
+            assertNull(parsed.owner("main::NamedMain.main"));
+        }
+        var ambiguous = CoreUnitDirectory.read(manifest(List.of(unit(List.of(
+            with(module("Main"), "mainAlias", true), with(module("NamedMain"), "mainAlias", true))))));
+        assertThrows(IllegalArgumentException.class, () -> ambiguous.owner("main::Main.main"));
+        assertNull(CoreUnitDirectory.read(manifest(List.of(unit(List.of(module("NamedMain"))))))
+            .owner("main::Main.main"));
+    }
     @Test void ambiguousProtocolsBadFormatsAndDuplicateArtifactPathsRejectWithoutOpening() throws Exception {
         var original = module("A");
         var artifact = (Map<?, ?>) original.get("compact");

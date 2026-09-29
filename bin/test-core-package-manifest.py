@@ -624,6 +624,26 @@ class PackageManifestTest(unittest.TestCase):
         return dict(id=unit_id, depends=[], modules=[dict(name=name, boundary=self.boundary,
                     path=path.name, sha256=hashlib.sha256(path.read_bytes()).hexdigest())])
 
+    def test_main_wrapper_keeps_its_ghc_identity_in_a_named_entry_module(self):
+        for name in ('Main', 'NamedMain'):
+            for alias in ('main::Main.main', 'main::NamedMain.main', 'other:NamedMain.main'):
+                with self.subTest(module=name, alias=alias):
+                    unit = self.unit('entry-unit', name)
+                    item = unit['modules'][0]
+                    path = self.root / item['path']
+                    module = json.loads(path.read_text())
+                    module['bindings'] = [dict(id=alias, expr=['lit', 'int', '0'])]
+                    path.write_text(json.dumps(module))
+                    item['sha256'] = hashlib.sha256(path.read_bytes()).hexdigest()
+                    if alias == 'main::Main.main':
+                        self.assertEqual(alias, core_package_manifest.load(self.manifest([unit]))[0][1]['bindings'][0]['id'])
+                        core_package_manifest._check_unit_summaries(path, dict(
+                            containsDelimitedControl=False, registrationObligations=False,
+                            mainAlias=True, packageScalarDeclarations=False), module)
+                    else:
+                        with self.assertRaisesRegex(ValueError, 'foreign binding owner'):
+                            core_package_manifest.load(self.manifest([unit]))
+
     def manifest(self, units):
         path = self.root / 'packages.json'
         path.write_text(json.dumps(dict(format='thc-core-packages', schema=1,

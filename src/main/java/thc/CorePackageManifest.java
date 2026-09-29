@@ -240,7 +240,7 @@ public final class CorePackageManifest {
                             require(Objects.equals(source.get("ghc"), "9.14.1") && Objects.equals(source.get("unit"), id) &&
                                     Objects.equals(source.get("module"), name) && Objects.equals(source.get("boundary"), BOUNDARY),
                                     "Core package unit/module/boundary mismatch: " + id + ":" + name + " at " + relative);
-                            String prefix = id + ":" + name + ".", alias = "main::" + name + ".main";
+                            String prefix = id + ":" + name + ".", alias = CoreUnitDirectory.MAIN_ALIAS;
                             var bindings = list(source.get("bindings"), "Missing bindings in " + id + ":" + name);
                             for (Object binding : bindings) {
                                 Object key = binding instanceof Map<?,?> fields ? fields.get("id") : null;
