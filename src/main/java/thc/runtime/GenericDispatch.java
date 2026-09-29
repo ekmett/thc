@@ -56,6 +56,9 @@ public abstract class GenericDispatch extends Node {
                     Object[] savedArguments = arguments.clone();
                     throw cut.append((saved, input) -> resumeOverapplication(saved, node, input, savedArguments,
                         logicalCount, layout, tailCall, metrics, next, caller, force, typed, underapplied, exact));
+                } catch (DelimitedCut cut) {
+                    throw captureOverapplication(frame, node, cut, arguments, logicalCount, layout, tailCall, metrics,
+                        next, caller, force, typed, underapplied, exact);
                 }
                 Object forced;
                 try { forced = AstControl.force(frame, node, force, result); }
@@ -75,23 +78,27 @@ public abstract class GenericDispatch extends Node {
                     result = caller.call(frame, function.target, packet, false);
                     DelimitedControl.captureBytecode(result, null);
                 } catch (DelimitedCut cut) {
-                    CompilerDirectives.transferToInterpreter();
-                    Object[] remainingArguments = arguments.clone();
-                    int next = offset + count;
-                    throw cut.append(frame, new DelimitedStep() {
-                        @Override public Object resume(MaterializedFrame saved, DelimitedResume input, MaskingState ambient, DelimitedStep outerMask) {
-                            Object answer = apply(saved, node, requireClosure(force.execute(saved, input.get())), remainingArguments.clone(),
-                                logicalCount, layout, tailCall, metrics, next, caller, force, typed, underapplied, exact);
-                            DelimitedControl.captureBytecode(answer, null);
-                            return answer;
-                        }
-                        @Override public Object finish(Object result, DelimitedActionSite site) { return result; }
-                    });
+                    throw captureOverapplication(frame, node, cut, arguments, logicalCount, layout, tailCall, metrics,
+                        offset + count, caller, force, typed, underapplied, exact);
                 }
             }
             offset += count;
             function = requireClosure(force.execute(frame, result));
         }
+    }
+    private static DelimitedCut captureOverapplication(VirtualFrame frame, Node node, DelimitedCut cut, Object[] arguments,
+            int logicalCount, ArgumentLayout layout, boolean tailCall, Metrics metrics, int next,
+            IndirectCallerNode caller, Force force, GenericInputCall typed, InlinedConditionProfile underapplied, InlinedConditionProfile exact) {
+        CompilerDirectives.transferToInterpreter();
+        Object[] remainingArguments = arguments.clone();
+        return cut.append(frame, new DelimitedStep() {
+            @Override public Object resume(MaterializedFrame saved, DelimitedResume input, MaskingState ambient, DelimitedStep outerMask) {
+                Object answer = resumeOverapplication(saved, node, input.get(), remainingArguments.clone(),
+                    logicalCount, layout, tailCall, metrics, next, caller, force, typed, underapplied, exact);
+                DelimitedControl.captureBytecode(answer, null);
+                return answer;
+            }
+        });
     }
     private static Object resumeOverapplication(VirtualFrame frame, Node node, Object value, Object[] arguments,
             int logicalCount, ArgumentLayout layout, boolean tailCall, Metrics metrics, int next,

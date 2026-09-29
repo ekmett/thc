@@ -46,6 +46,98 @@ class DelimitedContinuationsTest {
     private long expected(String entry, long n) { return switch (entry) {
         case "promptPure" -> n + 7; case "abortSuffix" -> n; case "resumeTwice" -> ((n + 1) * 100 + (n + 4)) * 10 + 3; case "nestedPrompts" -> n + 111; case "sameTagNearest" -> n + 100; case "capturedCatch" -> n + 17; case "capturedMask" -> n + 21; case "escapedResume" -> 2 * n + 14; case "ambientMask" -> n; case "resumedTail", "resumedJoin", "resumedScalar", "resumedApplication", "resumedScalarApplication" -> n + 117; case "polymorphicApplications", "polymorphicScalarApplications" -> 4 * n + 174; case "recapturedMask" -> n + 1; default -> throw new IllegalStateException(entry);
     }; }
+    @ParameterizedTest @ValueSource(strings = {"direct", "generic", "tuple", "direct-tuple"})
+    void freshCaptureInLaterOverapplicationKeepsRemainingArguments(String route) {
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.Compilation", "false").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var metrics = new Metrics(false);
+                var number = new CoreRepresentation(CoreKind.LONG, true, true, List.of("IntRep"), null, null, null, null, null);
+                var shape = new TupleShape(tuple(number), language);
+                var layout = new FrameLayout(); int[] slots = {layout.bind("result", FrameSlotKind.Long)};
+                boolean tupleResult = route.contains("tuple");
+                int[] effects = new int[4];
+                var middle = new GuestRoot(language, new FrameLayout().build()) {
+                    { configureEntry(new boolean[]{false}, false); }
+                    @Override public long bloom(VirtualFrame frame) { return 0; }
+                    @Override public Object execute(VirtualFrame frame) {
+                        assertEquals(2L, frame.getArguments()[1]); effects[2]++;
+                        throw new DelimitedCut(new PromptTag(Language.currentState()), null, null,
+                            SynchronousMasking.current(this), this);
+                    }
+                };
+                var first = new GuestRoot(language, new FrameLayout().build()) {
+                    { configureEntry(new boolean[]{false}, false); }
+                    @Override public long bloom(VirtualFrame frame) { return 0; }
+                    @Override public Object execute(VirtualFrame frame) {
+                        assertEquals(1L, frame.getArguments()[1]); effects[1]++;
+                        return new Closure(null, 1, middle.getCallTarget());
+                    }
+                };
+                var closure = new Closure(null, 1, first.getCallTarget());
+                var body = new Expr() {
+                    @Child private Dispatch direct = Dispatch.create(3, false, metrics);
+                    @Child private GenericDispatch generic = GenericDispatchNodeGen.create();
+                    @Child private GenericTupleCaller tuples = new GenericTupleCaller(new AstTupleDestination(shape, slots, 0), metrics, false, 3, null);
+                    @Child private TupleDispatch directTuples = new TupleDispatch(new AstTupleDestination(shape, slots, 0), metrics, 3, false);
+                    { setRepresentation(tupleResult ? shape.getProof() : CoreRepresentation.UNKNOWN); }
+                    private Object apply(VirtualFrame frame) {
+                        assertTrue(AstControl.captures(this));
+                        Object[] arguments = {1L, 2L, 37L};
+                        if (tupleResult) {
+                            if (route.equals("direct-tuple")) directTuples.execute(frame, closure, arguments);
+                            else tuples.execute(frame, closure, arguments);
+                            return null;
+                        }
+                        return route.equals("direct") ? direct.execute(frame, closure, arguments) :
+                            generic.execute(frame, this, closure, arguments, 3, null, false, metrics, 0);
+                    }
+                    @Override public Object execute(VirtualFrame frame) {
+                        effects[0]++;
+                        throw new AstCapture(AstStackSpill.INSTANCE, SynchronousMasking.current(this)).append((saved, input) -> {
+                            assertSame(Unit.INSTANCE, input); return apply(saved);
+                        });
+                    }
+                    @Override public Object executeTuple(VirtualFrame frame, int[] destination, int offset) { return execute(frame); }
+                };
+                var function = new FunctionRoot(language, layout.build(), "parked overapplication", null, new int[0], new int[0], new int[0],
+                    body, metrics, new CoreRepresentation[0], body.getRepresentation(), null, new boolean[0], null,
+                    tupleResult ? shape : null, tupleResult ? slots : new int[0], null, true, new int[0][], true, FunctionRootRole.FUNCTION, false);
+                var cut = assertThrows(DelimitedCut.class, () -> function.getCallTarget().call(0L));
+                var image = new DelimitedStack(cut, tupleResult ? shape : null);
+                class Owner extends GuestRoot {
+                    @Child private DelimitedActionSite site = new DelimitedActionSite(language, metrics);
+                    Owner() { super(language, new FrameLayout().build()); }
+                    @Override public long bloom(VirtualFrame frame) { return 0; }
+                    @Override public Object execute(VirtualFrame frame) { return Unit.INSTANCE; }
+                    Object resume(long add) {
+                        var finalCallee = new GuestRoot(language, new FrameLayout().build()) {
+                            { configureEntry(new boolean[]{false}, false); if (tupleResult) configureTupleResult(shape); }
+                            @Override public long bloom(VirtualFrame frame) { return 0; }
+                            @Override public Object execute(VirtualFrame frame) {
+                                effects[3]++; assertEquals(37L, frame.getArguments()[1]);
+                                long result = (Long) frame.getArguments()[1] + add;
+                                if (!tupleResult) return result;
+                                var value = shape.getLayout().create(); shape.getLayout().setLong(value, 0, result); return value;
+                            }
+                        };
+                        var action = new GuestRoot(language, new FrameLayout().build()) {
+                            @Override public long bloom(VirtualFrame frame) { return 0; }
+                            @Override public Object execute(VirtualFrame frame) { return new Closure(null, 1, finalCallee.getCallTarget()); }
+                        };
+                        Object answer = image.resume(site, Truffle.getRuntime().createMaterializedFrame(new Object[]{0L}, getFrameDescriptor()),
+                            new Closure(null, 1, action.getCallTarget()));
+                        return tupleResult ? shape.getLayout().getLong((HandoffStorage) answer, 0) : answer;
+                    }
+                }
+                var owner = new Owner(); owner.getCallTarget();
+                assertEquals(42L, owner.resume(5L)); assertEquals(50L, owner.resume(13L));
+                assertArrayEquals(new int[]{1, 1, 1, 2}, effects);
+                assertEquals(0, language.getHandoffState().get().getResults().getDepth());
+            } finally { context.leave(); }
+        }
+    }
     @ParameterizedTest @ValueSource(booleans = {false, true})
     void reentrantImageInvocationsOwnTheirPendingApplicationArguments(boolean tupleResult) {
         try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.Compilation", "false").build()) {
