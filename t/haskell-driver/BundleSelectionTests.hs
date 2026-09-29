@@ -32,6 +32,7 @@ import THC.Driver.CoreSymbols (publishCoreUnit)
 import THC.Driver.Project (Bundle(..), BundleReceipt(..), readGlobalBundle, readBundle,
   exceptionBridgeModules, projectWindowsWiredBundle, readCapturedStoreBundles)
 import THC.Driver.Zip (encodeZip)
+import THC.Driver.NativeDependencies (readCOnlyProduct)
 import TestSupport (Env, withFixtureNamed)
 
 tests :: Env -> Test
@@ -82,6 +83,14 @@ tests env = TestLabel "upstream successful Core selections" $ TestList
       BS.writeFile manifest (encoded (supplied [row]))
       BS.appendFile path "changed"
       assertBool "supplied digest is checked against the validated archive" . isLeft =<< tryIOError (load request)
+  , TestCase $ scratch "setup library dependencies" $ \directory -> do
+      let path = directory </> "registered.conf"
+          unit = object ["id" .= ("empty-1-inplace" :: String),
+            "components" .= object ["lib" .= object ["depends" .= (["base-4-inplace"] :: [String])]]]
+      writeFile path (unlines ["name: empty", "version: 1", "id: empty-1-inplace",
+        "key: empty-1-inplace", "depends: base-4-inplace", "exposed: True"])
+      assertBool "resolved library dependencies do not require a flat Cabal plan row" . isNothing
+        =<< readCOnlyProduct unit ["base-4-inplace"] path directory
   , TestCase $ scratch "configured" $ \directory -> do
       let path = directory </> "configured.zip"
           inputs = object ["unit" .= ("test-unit" :: String), "component" .= ("original" :: String)]

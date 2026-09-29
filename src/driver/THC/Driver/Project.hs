@@ -1586,7 +1586,7 @@ packGlobalBundle store dist capture planned unit buildKey exportKey destination 
       [store </> partition </> "package.db" </> identifier <.> "conf" | partition <- partitions]
     case registrations of
       [] -> pure []
-      [path] -> maybe [] (:[]) <$> readCOnlyProduct (unitValue dependency) path pieces
+      [path] -> maybe [] (:[]) <$> readCOnlyProduct (unitValue dependency) (unitDepends dependency) path pieces
       _ -> fail "C-only dependency has ambiguous private-store registration"
   -- Cabal has installed these units and may have deleted their temporary
   -- intra-package DBs. Keep the recorded compiler recipe unchanged, but resolve
