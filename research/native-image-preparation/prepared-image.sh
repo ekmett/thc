@@ -21,7 +21,11 @@ case "${THC_NATIVE_IMAGE_AUTOVECTORIZE:-false}" in
 esac
 vector_profile=${THC_NATIVE_IMAGE_VECTOR_PROFILE:-intrinsics}
 case "$vector_profile" in
-    intrinsics) ;;
+    intrinsics)
+        # Vectorization=false also clears these two keys in the pinned compiler.
+        # Restore direct Vector API lowering without enabling automatic loops.
+        vector_options+=(-H:+OptimizeVectorAPI -H:+TargetVectorLowering
+            -R:+OptimizeVectorAPI -R:+TargetVectorLowering -H:+SharedArenaSupport) ;;
     resource-copy)
         # This pinned JDK cannot combine Vector API intrinsics with shared
         # arenas. Keep Vector API semantics using its array fallback and THC's
@@ -165,12 +169,24 @@ fi
 "$JAVA_HOME/bin/javac" -cp "$classpath" -d "$probe_dir" "$recipe_dir/PreparedInitializationFeature.java"
 classpath="$probe_dir:$classpath"
 builder_overlays=
+foreign_patch=()
+if [[ "$vector_profile" == intrinsics ]]; then
+    overlay_dir="$repo_dir/build/native-image/shared-arena-vector"
+    bash "$repo_dir/nih/native-image/shared-arena-vector/prepare.sh" "$overlay_dir"
+    bash "$recipe_dir/shared-arena-vector/check.sh" "$overlay_dir/checks" "$overlay_dir/thc-svm-shared-arena-vector-foreign.jar"
+    bash "$recipe_dir/shared-arena-vector/check-provider.sh" "$overlay_dir/provider-checks" "$overlay_dir"
+    builder_overlays="$overlay_dir/thc-svm-shared-arena-vector-builder.jar"
+    foreign_patch=("-J--patch-module=org.graalvm.nativeimage.foreign=$overlay_dir/thc-svm-shared-arena-vector-foreign.jar"
+        -J--add-exports=java.base/jdk.internal.foreign=org.graalvm.nativeimage.foreign
+        -J--add-exports=java.base/jdk.internal.misc=org.graalvm.nativeimage.foreign
+        -J--add-exports=java.base/jdk.internal.vm.vector=org.graalvm.nativeimage.foreign)
+fi
 if [[ -n "${THC_NATIVE_IMAGE_DEOPT_LOOP_STAMPS:-}" ]]; then
     [[ "$THC_NATIVE_IMAGE_DEOPT_LOOP_STAMPS" == 1 ]] || exit 2
     overlay_dir="$repo_dir/build/native-image/deopt-loop-stamps"
     bash "$recipe_dir/deopt-loop-stamps/prepare.sh" "$overlay_dir"
     bash "$recipe_dir/deopt-loop-stamps/check.sh" "$overlay_dir/checks" "$overlay_dir/thc-svm-deopt-loop-stamps.jar"
-    builder_overlays="$overlay_dir/thc-svm-deopt-loop-stamps.jar"
+    builder_overlays="${builder_overlays:+$builder_overlays:}$overlay_dir/thc-svm-deopt-loop-stamps.jar"
 fi
 if [[ -n "${THC_NATIVE_IMAGE_RUNTIME_SNIPPETS:-}" ]]; then
     [[ "$THC_NATIVE_IMAGE_RUNTIME_SNIPPETS" == 1 ]] || exit 2
@@ -195,7 +211,7 @@ if [[ -n "${THC_NATIVE_IMAGE_METHOD_FILTER:-}" ]]; then
     diagnostics=(-H:Dump=:2 -H:MethodFilter="$THC_NATIVE_IMAGE_METHOD_FILTER")
 fi
 exec "$JAVA_HOME/bin/native-image" -Ob "-J-Xmx$builder_heap" -J-XX:ActiveProcessorCount=2 --parallelism=2 \
-    "${builder_patch[@]}" \
+    "${builder_patch[@]}" "${foreign_patch[@]}" \
     --add-modules=jdk.incubator.vector \
     --enable-native-access=ALL-UNNAMED,org.graalvm.truffle \
     --add-exports=org.graalvm.truffle.runtime/com.oracle.truffle.runtime=ALL-UNNAMED \

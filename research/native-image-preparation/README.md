@@ -37,8 +37,12 @@ compiled code with the same valid targets; there is no post-install retry.
 the other backend in the same image. This small image excludes LLVM/NFI package
 FFI. The default profile preserves shared arenas and full vector semantics using
 the documented copying vector-memory fallback, not generic FFI copying. Explicit
-`THC_NATIVE_IMAGE_VECTOR_PROFILE=intrinsics` selects a separate image profile;
-it does not establish shared-arena compatibility on this pinned toolchain.
+`THC_NATIVE_IMAGE_VECTOR_PROFILE=intrinsics` selects a separate image profile
+with the [paired shared-arena/vector provider](../../nih/native-image/shared-arena-vector/README.md).
+It restores direct API lowering after the global automatic-vectorization policy
+and retains the original scalar optimizer and close machinery. The small native
+lifetime/IR gate is qualified separately; full application/cache qualification
+remains pending. The runtime wrapper's existing resource-copy default is unchanged.
 
 The wrapper's argument/result/status plumbing has a builder-free regression:
 

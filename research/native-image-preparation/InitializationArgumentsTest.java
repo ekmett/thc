@@ -92,6 +92,7 @@ public final class InitializationArgumentsTest {
         command.environment().remove("THC_NATIVE_IMAGE_PROCESS_IDENTITY");
         command.environment().remove("THC_NATIVE_IMAGE_VECTOR_PROFILE");
         command.environment().remove("THC_NATIVE_IMAGE_BUILDER_HEAP");
+        command.environment().remove("THC_NATIVE_IMAGE_AUTOVECTORIZE");
         if (processIdentity != null) command.environment().put("THC_NATIVE_IMAGE_PROCESS_IDENTITY", processIdentity);
         if (vectorProfile != null) command.environment().put("THC_NATIVE_IMAGE_VECTOR_PROFILE", vectorProfile);
         if (builderHeap != null) command.environment().put("THC_NATIVE_IMAGE_BUILDER_HEAP", builderHeap);
@@ -239,10 +240,12 @@ public final class InitializationArgumentsTest {
             "--initialize-at-build-time=thc.fixture.Tag\n"), "ordinary image must not inherit cached-mode holders");
         check(prepare(manual, null, "prepare-only", "resource-copy") == 0, "resource-copy profile preparation");
         check(inventory(manual, "vector-profile.args").equals(
-            "-H:-VectorAPISupport\n-H:+SharedArenaSupport\n-Dthc.nativeImage.resourceCopies=true\n"),
+            "-H:-Vectorization\n-R:-Vectorization\n-H:-VectorAPISupport\n-H:+SharedArenaSupport\n-Dthc.nativeImage.resourceCopies=true\n"),
             "shared arenas and the image-only memory fallback must be selected together");
-        check(prepare(manual) == 0 && inventory(manual, "vector-profile.args").isEmpty(),
-            "default image must not inherit resource-copy flags from a prior build");
+        check(prepare(manual) == 0 && inventory(manual, "vector-profile.args").equals(
+            "-H:-Vectorization\n-R:-Vectorization\n-H:+OptimizeVectorAPI\n-H:+TargetVectorLowering\n" +
+            "-R:+OptimizeVectorAPI\n-R:+TargetVectorLowering\n-H:+SharedArenaSupport\n"),
+            "default image restores direct API lowering after global disable and must not inherit copying flags");
         check(prepare(manual, null, "prepare-only", "typo") == 2, "unknown vector profile rejected");
         check(inventory(manual, "builder-heap.args").equals("-J-Xmx8g\n"), "generic builder default remains 8 GiB");
         check(prepare(manual, null, "prepare-only", null, "16g") == 0 &&
