@@ -14,7 +14,7 @@
 -- are original source spelling. IEEE bit literals retain every payload bit.
 -- Reading a complete module here is an explicit inspection operation, never a
 -- runtime startup or linking prerequisite.
-module THC.Compact.Inspect (inspectContainer, inspectName, inspectSource, unpackContainer, moduleJSON) where
+module THC.Compact.Inspect (inspectContainer, inspectName, inspectSource, unpackContainer, unpackContainerWithMethods, moduleJSON) where
 
 import Data.Aeson
 import qualified Data.Aeson.Key as Key
@@ -25,14 +25,14 @@ import qualified Data.ByteString as BS
 import Data.List (sortOn)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
-import Data.Word (Word64)
+import Data.Word (Word16, Word64)
 import Numeric (showHex)
 import THC.Compact.Core
 import THC.Compact.Decode
 import THC.Compact.Debug
 import THC.Compact.Facts
 import THC.Compact.Wire
-import THC.Compact.Zip (readZip)
+import THC.Compact.Zip (readZipWithMethods)
 
 -- | Decode original data order, not digest order. The caller explicitly reads
 -- the one container to inspect; normal runtime demand loading is independent.
@@ -82,13 +82,19 @@ inspectSource bytes position = do
 -- returned payloads retain their original member-relative coordinate systems.
 unpackContainer :: BS.ByteString -> Either String (Header,BS.ByteString,[BS.ByteString])
 unpackContainer bytes = do
-  members <- readZip bytes
+  (header,facts,segments,_) <- unpackContainerWithMethods bytes
+  pure (header,facts,segments)
+
+unpackContainerWithMethods :: BS.ByteString -> Either String (Header,BS.ByteString,[BS.ByteString],[(String,Word16)])
+unpackContainerWithMethods bytes = do
+  entries <- readZipWithMethods bytes
+  let members = [(name,payload) | (name,_,payload) <- entries]
   let member key = maybe (Left ("Missing CBD member: " ++ key)) Right (lookup key members)
   headerBytes <- member "header"
   header <- decodeExact getHeader (BS.take 32 headerBytes)
   segments <- mapM member ["data","strings","names","filenames","line-columns","symbols"]
   validateContainer header (map (fromIntegral . BS.length) segments)
-  pure (header,BS.drop 32 headerBytes,segments)
+  pure (header,BS.drop 32 headerBytes,segments,[(name,method) | (name,method,_) <- entries])
 
 str :: BS.ByteString -> Value
 str = String . Text.decodeUtf8
