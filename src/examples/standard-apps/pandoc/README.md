@@ -1,54 +1,60 @@
 # Pandoc 3.11 application workload
 
 This workload uses the unmodified `pandoc-3.11` and `pandoc-cli-3.11` Hackage
-sources. The project explicitly disables Lua, server and REPL support; it is
-not evidence for those optional features. The resolved Pandoc library flags are
-also `-http -embed_data_files`. Native execution is a baseline, not THC guest
-execution.
+sources with HTTP, Lua, server and REPL support explicitly enabled. The
+project keeps Pandoc's default `embed_data_files: False`; its data files are
+read from the source package. Cabal must retain the enabled feature flags in
+its resolved plan.
+
+The pinned `serialise` and `cborg` releases have upper bounds that exclude
+GHC 9.14's boot libraries. The project relaxes only their bounds on `base`,
+`containers`, and (for `serialise`) `time`, leaving package sources unchanged.
+
+## Prepare and run natively
 
 Copy this directory into a scratch directory outside the THC source project,
-then acquire both packages there with the selected Cabal 3.16 installation:
+then acquire both packages there with GHC 9.14.1 and Cabal 3.16:
 
 ```sh
 cabal get pandoc-3.11 pandoc-cli-3.11
-cabal build -j4 --enable-build-info pandoc-cli:exe:pandoc
+cabal build -j2 --enable-build-info pandoc-cli:exe:pandoc
+export pandoc_datadir="$PWD/pandoc-3.11"
 cabal run pandoc-cli:exe:pandoc -- --version
 cabal run pandoc-cli:exe:pandoc -- --help
 cabal run pandoc-cli:exe:pandoc -- --from markdown --to html smoke.md
 ```
 
-The HTML payload must match `expected.html`; Cabal's own status messages are
-not part of that payload. When invoking the built executable directly rather
-than using `cabal run`, set `pandoc_datadir` to the absolute unpacked
-`pandoc-3.11` directory. It contains the original `data/` files. Without the
-override an uninstalled binary looks in its configured installation prefix
-and conversion exits 97 on the missing `data/abbreviations` file.
+The HTML payload must match `expected.html`; Cabal's status messages are not
+part of that payload. The data-directory override also applies when invoking
+the built executable directly. It points to the package containing `data/`;
+an uninstalled executable otherwise searches its configured installation prefix.
 
-With the pinned full-Core GHC 9.14.1 installation, an installed THC launcher,
-and the corresponding configured GHC source tree, the guest attempt is:
+## Acquire and run with THC
+
+Use a full-Core GHC 9.14.1 installation and its matching configured GHC source
+tree. Acquisition builds the native component and exports its dependency
+closure without running Pandoc:
 
 ```sh
-export pandoc_datadir="$PWD/pandoc-3.11"
-thc run pandoc-cli:exe:pandoc --installed-core required \
+thc acquire pandoc-cli:exe:pandoc --installed-core required \
   --ghc-source /path/to/ghc-9.14.1 --thc-root /path/to/thc \
-  --dist-dir "$PWD/dist-thc" -- --version
+  --dist-dir "$PWD/dist-thc"
 ```
 
-Replace the suffix after `--` with `--help` or
-`--from markdown --to html smoke.md`. The driver uses the original complete
-Core and strict dependency audit. Do not replace the guest invocation with
-the native binary, remove unsupported branches from the application, or label
-successful preparation as guest success. Use bytecode for original executable
-startup; the AST backend still has a separate signal-startup limitation.
+With an installed THC launcher, run the original executable through the same
+project and output directory:
 
-Native Linux x86_64 GHC 9.14.1 baseline: version and help succeed; the tiny
-conversion matches the expected HTML with the data-directory override. The
-first runtime-enablement slice is the original POSIX environment family used
-by Pandoc's user-data-directory lookup, including the string encoder's
-`realloc`. Its genuine original `System.Environment` fixture passes native
-comparison, strict full-Core audit and both backend/handoff-mode checks.
-Full Pandoc guest execution remains under investigation; this directory does
-not claim a passing THC application.
+```sh
+thc run pandoc-cli:exe:pandoc --installed-core required \
+  --ghc-source /path/to/ghc-9.14.1 --thc-root /path/to/thc \
+  --dist-dir "$PWD/dist-thc" -- --from markdown --to html smoke.md
+```
+
+Compare guest output and exit status with the native executable. Check HTTP
+resource loading, Lua filters, `pandoc lua` and `pandoc server` through their
+actual operations; native compilation, acquisition and `--version` alone do
+not establish those guest capabilities. Use `--verify-artifacts` on `thc run`
+when an explicit pre-launch Core audit and artifact verification are wanted.
 
 Source archive SHA-256:
 

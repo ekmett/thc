@@ -1,8 +1,15 @@
 packages: pandoc-3.11 pandoc-cli-3.11
-jobs: 4
+jobs: 2
 tests: False
 benchmarks: False
 index-state: 2026-09-24T12:38:18Z
 
+package pandoc
+  flags: +http
+
 package pandoc-cli
-  flags: -lua -server -repl
+  flags: +lua +server +repl
+
+-- These releases exclude GHC 9.14 boot libraries in their upper bounds.
+-- Keep the original sources and relax only those dependency bounds.
+allow-newer: serialise:base, serialise:containers, serialise:time, cborg:base, cborg:containers
