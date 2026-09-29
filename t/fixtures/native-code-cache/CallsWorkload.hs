@@ -2,8 +2,8 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE MagicHash #-}
 
--- | Ordinary out-of-line Core calls for the experimental selected code cache.
-module THC.CachedCalls (affine) where
+-- | Ordinary out-of-line Core calls for code-cache tests.
+module CallsWorkload (affine) where
 
 import GHC.Exts (Int#, (+#), (*#))
 

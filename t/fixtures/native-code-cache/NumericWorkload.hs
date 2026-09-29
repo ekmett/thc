@@ -3,7 +3,7 @@
 {-# LANGUAGE MagicHash #-}
 
 -- |
--- Module      : THC.CachedNumeric
+-- Module      : NumericWorkload
 -- Copyright   : (C) 2026 Edward Kmett
 -- License     : UPL-1.0 AND BSD-3-Clause
 -- Maintainer  : Edward Kmett <ekmett@gmail.com>
@@ -11,7 +11,7 @@
 -- Portability : GHC primitive numeric types
 --
 -- Mixed primitive carriers for the experimental selected native code cache.
-module THC.CachedNumeric (calculate) where
+module NumericWorkload (calculate) where
 
 import GHC.Exts
   ( Int16#, Float(F#), Float#, Double#, intToInt16#, int16ToInt#

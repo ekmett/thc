@@ -4,15 +4,15 @@
 {-# OPTIONS_GHC -fno-full-laziness -fno-worker-wrapper -fno-specialise -fno-spec-constr #-}
 
 -- |
--- Module      : THC.CachedTyped
+-- Module      : TypedWorkload
 -- Copyright   : (C) 2026 Edward Kmett
 -- License     : UPL-1.0 AND BSD-3-Clause
 -- Maintainer  : Edward Kmett <ekmett@gmail.com>
 -- Stability   : experimental
 -- Portability : GHC primitive tuples, sums and 128-bit vectors
 --
--- Ordinary typed calls and captures for the selected native code cache.
-module THC.CachedTyped (calculate) where
+-- Ordinary typed calls and captures for code-cache tests.
+module TypedWorkload (calculate) where
 
 import GHC.Exts
 

@@ -2,8 +2,8 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE MagicHash #-}
 
--- | A lazy recursive data structure for the selected native code cache.
-module THC.CachedList (sumFrom) where
+-- | A lazy recursive data structure for code-cache tests.
+module ListWorkload (sumFrom) where
 
 import GHC.Exts (Int#, (+#), (-#))
 

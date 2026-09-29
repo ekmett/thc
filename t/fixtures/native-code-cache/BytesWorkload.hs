@@ -3,16 +3,16 @@
 {-# LANGUAGE MagicHash #-}
 
 -- |
--- Module      : THC.CachedBytes
+-- Module      : BytesWorkload
 -- Copyright   : (C) 2026 Edward Kmett
 -- License     : UPL-1.0 AND BSD-3-Clause
 -- Maintainer  : Edward Kmett <ekmett@gmail.com>
 -- Stability   : experimental
 -- Portability : GHC primitive types and operations
 --
--- Pure literal decoding and byte-buffer construction for the selected cache.
+-- Pure literal decoding and byte-buffer construction for code-cache tests.
 -- The installed ShortByteString implementation owns packing and slicing.
-module THC.CachedBytes (calculate) where
+module BytesWorkload (calculate) where
 
 import GHC.Exts
 import GHC.Word (Word8(W8#))

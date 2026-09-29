@@ -3,21 +3,23 @@
 {-# LANGUAGE MagicHash #-}
 
 -- |
--- Module      : THC.CachedText
+-- Module      : TextWorkload
 -- Copyright   : (C) 2026 Edward Kmett
 -- License     : UPL-1.0 AND BSD-3-Clause
 -- Maintainer  : Edward Kmett <ekmett@gmail.com>
 -- Stability   : experimental
 -- Portability : GHC primitive types and operations
 --
--- Genuine Text construction and transformation through the selected cache.
-module THC.CachedText (calculate) where
+-- Text construction and transformation for code-cache tests.
+module TextWorkload (calculate) where
 
 import Data.Bits ((.&.))
 import Data.Char (ord)
 import qualified Data.Text as T
 import GHC.Exts
 
+-- Keep pack/map/filter/fold as separate guest call roots and shared as a CAF.
+-- The test must cross those boundaries instead of receiving one fused function.
 {-# OPAQUE packed #-}
 packed :: Int# -> T.Text
 packed count = T.pack (go (max 0 (min 192 (I# count))))

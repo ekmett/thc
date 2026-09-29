@@ -2,8 +2,8 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE MagicHash #-}
 
--- | Word cases, a local recursive join and global self recursion for the code cache.
-module THC.CachedWordLoop (sumFrom, countDown) where
+-- | Word cases, a local recursive join and global self recursion for code-cache tests.
+module WordLoopWorkload (sumFrom, countDown) where
 
 import GHC.Exts (Int#, (+#), (-#))
 
