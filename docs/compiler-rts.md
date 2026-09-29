@@ -39,6 +39,10 @@ support for the native GHC object loader or a claim that every GHC API works.
 The function declarations require the exact original compiler unit
 `ghc-9.14.1-inplace`, unsafe `ccall`, and the original saturated primitive ABI.
 Data labels require an evaluated scalar `AddrRep` proof. Unknown labels reject.
+Installed native companion acquisition excludes this compiler unit's registered
+archive: its three C products implement native RTS/process state, including the
+`keepCAFsForGHCi` constructor. Original foreign calls and their ABI remain intact;
+this does not provide implementations for unsupported compiler RTS services.
 
 `runGhc` installs handlers for SIGQUIT, SIGINT, SIGHUP and SIGTERM. The
 [standalone process signal bridge](process-signals.md) admits these on Linux
