@@ -112,6 +112,64 @@ public class CaseArmOutliningTest {
     }
 
     @Test @SuppressWarnings("unchecked")
+    public void reusableSubstantialSiblingArmsKeepInternalAndOuterJoinsDistinct() throws Exception {
+        var internal = new ArrayList<List<?>>();
+        var external = new ArrayList<List<?>>();
+        var finish = new LinkedHashMap<>(binding("finish", lambda(List.of(parameter("n")), prim("+#", variable("n"), integer(9)))));
+        finish.put("joinValueArity", 1); finish.put("joinResultRep", wide);
+        for (int i = 0; i < 7; i++) {
+            List<Object> value = variable("seen");
+            for (int j = 0; j < 18; j++) value = prim("+#", value, variable("offset"));
+            var jump = app(variable("finish", closure), value);
+            var ownJoin = List.of("let", false, List.of(finish), jump, Map.of("rep", wide));
+            internal.add(i == 6 ? fallback(ownJoin) : List.of("lit", List.of("int", Integer.toString(i)), List.of(), ownJoin));
+            external.add(i == 6 ? fallback(jump) : List.of("lit", List.of("int", Integer.toString(i)), List.of(), jump));
+        }
+        var parameters = List.of(parameter("x"), parameter("offset"));
+        var ownBody = choice(variable("x"), "seen", internal.toArray(List<?>[]::new));
+        var outerBody = List.of("let", false, List.of(finish),
+            choice(variable("x"), "seen", external.toArray(List<?>[]::new)), Map.of("rep", wide));
+        var module = Map.<String,Object>of("instrument", true, "bindings", List.of(
+            binding("internal", lambda(parameters, ownBody)), binding("external", lambda(parameters, outerBody))));
+        try (var engine = org.graalvm.polyglot.Engine.newBuilder().allowExperimentalOptions(true)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("engine.CompilationFailureAction", "Throw").build()) {
+            Program.PreparedCode code;
+            try (var context = org.graalvm.polyglot.Context.newBuilder("thc").engine(engine).build()) {
+                context.initialize("thc"); context.enter();
+                try { code = Program.prepareCode(TruffleLanguage.LanguageReference.create(Language.class).get(null), module, List.of("internal", "external")); }
+                finally { context.leave(); }
+            }
+            var field = Program.PreparedCode.class.getDeclaredField("targets"); field.setAccessible(true);
+            var targets = (List<RootCallTarget>) field.get(code);
+            assertEquals(7, targets.stream().filter(t -> ((FunctionRoot)t.getRootNode()).getRole$org_intelligence_thc() == FunctionRootRole.PASS_THROUGH).count(),
+                "Substantial siblings may carry their internal joins, never an outer join");
+            for (var target : targets) {
+                assertFalse(((FunctionRoot)target.getRootNode()).getStackCapture());
+                assertEquals(false, target.getClass().getMethod("wasExecuted").invoke(target));
+                assertEquals(true, target.getClass().getMethod("prepareForAOT").invoke(target)); compile(target);
+                assertEquals(false, target.getClass().getMethod("wasExecuted").invoke(target));
+            }
+            for (int load = 0; load < 2; load++) try (var context = org.graalvm.polyglot.Context.newBuilder("thc").engine(engine).build()) {
+                context.initialize("thc"); context.enter();
+                try {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    for (var program : List.of(code.newInstance(language), code.newInstance(language))) {
+                        long offset = load + 2L;
+                        var own = (Closure)program.entryValue("internal"); var outer = (Closure)program.entryValue("external");
+                        assertEquals(7, NodeUtil.findAllNodeInstances(own.target.getRootNode(), AstCaseArm.class).size());
+                        assertTrue(NodeUtil.findAllNodeInstances(outer.target.getRootNode(), AstCaseArm.class).isEmpty());
+                        assertEquals(3L + 18L * offset + 9L, Calls.target(own.target, new Object[]{0L, own.environment, 3L, offset}));
+                        assertEquals(9L + 18L * offset + 9L, Calls.target(outer.target, new Object[]{0L, outer.environment, 9L, offset}));
+                        assertEquals(2L, count(program, "localJoinTransfers")); assertEquals(3L, count(program, "compiledEntries"));
+                        assertEquals(0, count(program, "loweredRootCount")); code.requireInstalledCode(); released(language);
+                    }
+                } finally { context.leave(); }
+            }
+        }
+    }
+
+    @Test @SuppressWarnings("unchecked")
     public void reusableWideCaseKeepsOuterJoinInItsOwningFrame() throws Exception {
         withLanguage(language -> {
             var join = new LinkedHashMap<>(binding("finish", lambda(List.of(parameter("n")), prim("+#", variable("n"), integer(9)))));
