@@ -74,7 +74,7 @@ jobs:
         with:
           version: '25.3.4.1'
           java-version: '25'
-          distribution: 'graalvm'
+          distribution: 'graalvm-community'
           github-token: ${{ secrets.GITHUB_TOKEN }}
           check-for-updates: false
       - name: Verify pinned toolchain
@@ -648,7 +648,7 @@ jobs:
         with:
           version: '25.3.4.1'
           java-version: '25'
-          distribution: 'graalvm'
+          distribution: 'graalvm-community'
           github-token: ${{ secrets.GITHUB_TOKEN }}
           check-for-updates: false
       - name: Download only this platform and Build attempt
