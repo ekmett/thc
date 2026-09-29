@@ -223,7 +223,6 @@ prepareTypedForeignAssociation root directory ghc ghcPkg libdir unitName baseUni
         "Typed association changed original foreign archive admission"
       let provenance = field "staticForeignExportRegistration" value
           (status, reason) = case variant of
-            "signatures" -> ("unclassified", "foreign-import-wrapper-or-non-ccall-declaration")
             "foreign-file" -> ("rejected", "additional-foreign-files")
             "instrumented" -> ("unclassified", "unclassified-target-or-instrumentation")
             _ -> ("verified", "")
@@ -236,6 +235,9 @@ prepareTypedForeignAssociation root directory ghc ghcPkg libdir unitName baseUni
         (field "expectedForeign" provenance == field "foreign" value && field "expectedExports" provenance == metadata &&
          field "wordBits" provenance == Number 64)
         "Verified registration lost its exact retained product or native word width"
+      if variant /= "signatures" then pure () else check
+        (field "profile" provenance == String "ghc-9.14.1-thc-only-native-static-c-products-v3")
+        "Wrapper-bearing exports lost their exact verified C-product profile"
       if variant /= "registration" then pure () else check
         (field "profile" provenance == String "ghc-9.14.1-thc-only-native-static-ccall-imports-v2" &&
          length (entries metadata) == 2)
