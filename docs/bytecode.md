@@ -50,6 +50,12 @@ a first suspension may deoptimize before resuming correctly. Continuation-local
 storage restores the saved frame's actual tags, including frames retained before
 a local widened. Preparation does not run guest code or seed exception profiles.
 
+An unobserved compiled conditional consumes its actual Boolean without quickening
+or inventing branch observations. Both real arms remain available while its two
+counters are zero, including stack guards and retry loops. Real interpreter
+execution still quickens and updates the ordinary branch profile; compilation
+with learned history retains its probabilities and unseen-arm deoptimization.
+
 The Bytecode DSL is pinned to Truffle 25.3.4.1. See the
 [continuation contract](async-continuation-contract.md) when changing lowering or
 adding a suspending operation.
@@ -88,7 +94,7 @@ does not make unsupported Core, foreign products or package closures executable.
 The Map inspection commands above use diagnostic mode deliberately; executing
 one path without a trap does not establish strict support for the full closure.
 
-Async exceptions default to enabled for bytecode and disabled for AST. See the
+Async exceptions default to disabled for both bytecode and AST. See the
 [asynchronous-exception contract](async-exceptions.md) for explicit selection
 and continuation limits. Guest compilation on the optimizing JVM is also
 separate from the [Native Image](native-image-feasibility.md) execution model.
