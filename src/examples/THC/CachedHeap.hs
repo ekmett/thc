@@ -3,7 +3,15 @@
 {-# LANGUAGE MagicHash, UnboxedTuples, UnboxedSums, NoImplicitPrelude #-}
 {-# OPTIONS_GHC -fno-do-lambda-eta-expansion #-}
 
--- | A lazy chunk stream with typed heap fields for the selected native cache.
+-- |
+-- Module      : THC.CachedHeap
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC primitive tuples, sums and 128-bit vectors
+--
+-- A lazy chunk stream with typed heap fields for the selected native cache.
 -- The count is nonnegative. Each load owns its cells, shared cycle and thunks.
 module THC.CachedHeap (calculate, partial) where
 

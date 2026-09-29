@@ -77,10 +77,10 @@ and retain first-installed-call checks rather than warming away a failure.
 
 The [selected-Core cache](../docs/native-code-cache.md) compiles synchronous AST
 code ahead of execution and loads it in fresh native processes with guest
-compilation disabled, including typed tuple, sum and vector calls. How should
-reusable heap construction, async continuations and the full executable lifecycle
-extend this support while keeping contexts, CAFs and resource owners local to
-each load?
+compilation disabled, including typed tuple, sum and vector calls, typed boxed
+fields and constructor partial applications. How should async continuations,
+foreign execution and the full executable lifecycle extend this support while
+keeping contexts, CAFs and resource owners local to each load?
 
 Foreign execution needs image-side support for callbacks and resource cleanup;
 JVM coverage alone does not establish it. The separate

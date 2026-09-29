@@ -67,11 +67,10 @@ facilities do not substitute for native-image execution checks.
 
 ## Planned work
 
-Extend reusable boxed construction to typed fields and constructor partial
-applications while preserving per-load ownership and CAF state. Qualify direct
-typed public-host persistence through the existing host ABI. Async execution,
-foreign calls and the full executable lifecycle need
-image-side support for suspension, callbacks and native-resource cleanup.
+Qualify direct typed public-host persistence through the existing host ABI.
+The selected-Core cache already supports typed boxed fields and constructor
+partial applications, with each load owning its heap values and CAF state.
+Async execution, foreign calls and the full executable lifecycle need image-side support for suspension, callbacks and native-resource cleanup.
 The pure recipe separately needs successful first installed guest calls before
 it can support runtime compilation.
 
