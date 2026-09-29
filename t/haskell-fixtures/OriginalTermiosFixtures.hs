@@ -99,7 +99,8 @@ prepareLinux root = do
   (savedCommands, savedArtifacts) <- prepareSavedTermios root ghc
   let commands = [version,info,compiled,observed] ++ concat [exported : map snd audits | (_,exported,audits) <- exports] ++ savedCommands
       artifacts = [binary,oracle] ++ concat [modules ++ map fst audits | (modules,_,audits) <- exports] ++
-        [directory </> stage </> "core/OriginalTermiosAudit.json" | stage <- ["pre", "post"]] ++
+        [directory </> stage </> "core" </> diagnostic | stage <- ["pre", "post"],
+          diagnostic <- ["OriginalTermiosAudit.json", "THC.InterfaceClosure.json"]] ++
         savedArtifacts ++ concatMap commandArtifacts commands
   inputHashes <- fixtureSources root >>= hashes root
   artifactHashes <- hashes root artifacts

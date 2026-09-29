@@ -1061,7 +1061,7 @@ class FastInputTests(unittest.TestCase):
         with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, path)
 
     def test_termios_exact_image_and_saved_pointer_fixture_inventory(self):
-        self.assertEqual(165, len(cache.ORIGINAL_TERMIOS_OUTPUTS))
+        self.assertEqual(167, len(cache.ORIGINAL_TERMIOS_OUTPUTS))
         self.assertIn('build/original-termios/manifest.json', DECLARED_REQUIRED)
         for name in cache.ORIGINAL_TERMIOS_OUTPUTS:
             self.assertTrue(cache.allowed_payload(name), name)

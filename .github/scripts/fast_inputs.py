@@ -767,7 +767,7 @@ ORIGINAL_TERMIOS_OUTPUTS = frozenset("build/original-termios/" + name for name i
         *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_TERMIOS_ENTRIES))
       for suffix in ("stdout", "stderr", "command.json")),
     *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
-        "core/OriginalTermiosAudit.cbd", "core/OriginalTermiosAudit.json", "core/THC.InterfaceClosure.cbd",
+        "core/OriginalTermiosAudit.cbd", "core/OriginalTermiosAudit.json", "core/THC.InterfaceClosure.cbd", "core/THC.InterfaceClosure.json",
         *(f"{entry}.audit.json" for entry in ORIGINAL_TERMIOS_ENTRIES))),
     "saved/oracle.json", "saved/native/oracle",
     *(f"logs/{label}.{suffix}" for label in (
