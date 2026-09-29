@@ -682,7 +682,7 @@ literal encoder value = case value of
   LitFloatBits bits -> tag encoder 13 >> emit encoder (putWord32le bits)
   LitDoubleBits bits -> tag encoder 14 >> emit encoder (putWord64le bits)
   LitNullAddr -> tag encoder 15
-  LitRubbish rep -> tag encoder 16 >> primRep encoder rep
+  LitRubbish -> tag encoder 16
   LitFunctionAddr symbol -> tag encoder 17 >> string encoder symbol
   LitDataAddr symbol -> tag encoder 18 >> string encoder symbol
   LitUnsupported diagnostic -> tag encoder 19 >> string encoder diagnostic

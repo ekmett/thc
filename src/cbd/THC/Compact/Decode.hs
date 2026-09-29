@@ -506,7 +506,7 @@ literal decoder = do
     13 -> LitFloatBits <$> getWord32le
     14 -> LitDoubleBits <$> getWord64le
     15 -> pure LitNullAddr
-    16 -> LitRubbish <$> primRep
+    16 -> pure LitRubbish
     17 -> LitFunctionAddr <$> string decoder
     18 -> LitDataAddr <$> string decoder
     19 -> LitUnsupported <$> string decoder

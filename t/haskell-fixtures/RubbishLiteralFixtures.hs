@@ -30,10 +30,13 @@ import GHC.Core.Lint (lintExpr)
 import GHC.Data.Bag (bagToList)
 import GHC.Driver.Config.Core.Lint (initLintConfig)
 import GHC.Driver.Env.KnotVars (KnotVars(..), lookupKnotVars)
-import GHC.Driver.Main (hscSimplify, hscTidy, hscCompileCoreExpr)
+import GHC.Driver.Main (hscSimplify, hscTidy, hscGenHardCode)
 import GHC.Iface.Binary
 import GHC.IfaceToCore (typecheckIface)
-import GHC.Runtime.Interpreter (wormhole)
+import GHC.Linker.Loader (initLoaderState)
+import GHC.Platform.Ways (hostFullWays, hostIsDynamic, hostIsProfiled)
+import GHC.Runtime.Interpreter (loadObj, lookupClosure, mkFinalizedHValue, resolveObjs, wormhole)
+import GHC.Runtime.Interpreter.Types.SymbolCache (InterpSymbol(..))
 import GHC.Tc.Utils.Monad (initIfaceCheck)
 import GHC.Types.RepType (primRepToType, runtimeRepPrimRep_maybe)
 import GHC.Types.TypeEnv (emptyTypeEnv, typeEnvIds)
@@ -72,7 +75,7 @@ representation _ = error "Expected one original scalar rubbish representation"
 
 -- Original literals are extracted unchanged from installed GHC interfaces.
 -- The wider matrix uses GHC's own
--- mkLitRubbish at closed scalar types. Native GHC compiles every case; its
+-- mkLitRubbish at closed scalar, aggregate and vector types. Native GHC compiles every case; its
 -- observable oracle is the continuation, never an unspecified filler payload.
 prepareRubbishLiterals :: FilePath -> IO ()
 prepareRubbishLiterals root = do
@@ -95,7 +98,7 @@ prepareRubbishLiterals root = do
     result <- execute ("imports-" ++ package) [] pkg ["field",package,"import-dirs","--simple-output"]
     pure (oneLine result </> path, result)
   sequenceUnit <- execute "containers-unit" [] pkg ["field","containers","id","--simple-output"]
-  (entries, originals, sequenceOriginals, rows) <- runGhc (Just (oneLine libdir)) $ do
+  (entries, producers, returns, originals, sequenceOriginals, rows, nativeCommand) <- runGhc (Just (oneLine libdir)) $ do
     initial <- getSessionDynFlags
     env0 <- getSession
     (configured, _, _) <- parseDynamicFlags (hsc_logger env0) initial (map noLoc
@@ -150,57 +153,132 @@ prepareRubbishLiterals root = do
           [] -> error "Missing already-checked original representation"
         selected = [firstOriginal rep |
           rep <- [BoxedRep (Just Lifted),BoxedRep (Just Unlifted),IntRep,Int32Rep]]
+        scalar ty = primRepToType ty
+        nestedTuple = mkTupleTy Unboxed [intPrimTy, mkTupleTy Unboxed [scalar WordRep,scalar DoubleRep],
+          mkSumTy [intPrimTy,scalar FloatRep]]
+        nestedSum = mkSumTy [mkTupleTy Unboxed [scalar Int8Rep,scalar DoubleRep],
+          mkSumTy [scalar WordRep,mkTupleTy Unboxed [scalar FloatRep,scalar AddrRep]]]
+        shapes = [fromGhc "shapeEmptyTuple" (mkTupleTy Unboxed []),
+          fromGhc "shapeSingletonTuple" (mkTupleTy Unboxed [intPrimTy]),
+          fromGhc "shapeSum" (mkSumTy [intPrimTy,intPrimTy]),
+          fromGhc "shapeVector" (scalar (VecRep 4 Int32ElemRep)),
+          fromGhc "shapeNestedTuple" nestedTuple, fromGhc "shapeNestedSum" nestedSum]
         samples = [("original" ++ label (representation l), App (Lit l) (Type (primRepToType (representation l)))) | (_,l) <- selected] ++
           [fromGhc ("scalar" ++ label r) (primRepToType r) | r <- scalars] ++
           [fromGhc "boxedData" intTy, fromGhc "boxedClosure" (mkVisFunTyMany intTy intTy)] ++
-          [("sequenceLifted",App (Lit l) (Type intTy)) | (_,l) <- sequenceRubbish]
+          [("sequenceLifted",App (Lit l) (Type intTy)) | (_,l) <- sequenceRubbish] ++ shapes
         wrap value expression = let (args,body) = collectBinders expression in
           mkLams args (Case value (mkWildValBinder ManyTy (exprType value)) (exprType body) [Alt DEFAULT [] body])
         seeds = [-1000,-17,-1,0,1,42,1000] :: [Int]
-        makeBinding (name,value) = do
+        check body = case lintExpr (initLintConfig flags []) body of
+          Nothing -> pure ()
+          Just errors -> die (showSDoc flags (vcat (bagToList errors)))
+        local name ty = do
           unique <- uniqFromSupply <$> mkSplitUniqSupply 'r'
-          let body = wrap value (template "template")
-              binder = setIdArity (mkVanillaGlobal (mkExternalName unique (mg_module optimized) (mkVarOcc name) noSrcSpan) (exprType body)) 1
-          case lintExpr (initLintConfig flags []) body of
-            Nothing -> pure ()
-            Just errors -> die (showSDoc flags (vcat (bagToList errors)))
+          pure (mkLocalId (mkInternalName unique (mkVarOcc name) noSrcSpan) ManyTy ty)
+        namedBinding name body = do
+          unique <- uniqFromSupply <$> mkSplitUniqSupply 'r'
+          let binder = setIdArity (mkVanillaGlobal (mkExternalName unique (mg_module optimized) (mkVarOcc name) noSrcSpan) (exprType body)) 1
+          check body
           pure (binder,body)
+        makeBinding (name,value) = namedBinding name (wrap value (template "template"))
+        makeProducer (name,value) = do
+          argument <- local "rubbishInput" intPrimTy
+          (binder,body) <- namedBinding (name ++ "Producer") (Lam argument value)
+          pure (setInlinePragma binder neverInlinePragma,body)
+        -- Reuse the whole result binder in a second DEFAULT case. In particular,
+        -- neither aggregate is flattened into an ad-hoc scalar continuation.
+        returnBody producer value = case collectBinders (template "template") of
+          ([argument],body) -> do
+            result <- local "rubbishResult" (exprType value)
+            reused <- local "rubbishReused" (exprType value)
+            pure (Lam argument (Case (App (Var producer) (Var argument)) result (exprType body)
+              [Alt DEFAULT [] (Case (Var result) reused (exprType body) [Alt DEFAULT [] body])]))
+          _ -> die "Unexpected unboxed rubbish continuation template"
     guests <- liftIO $ mapM makeBinding samples
-    frontiers <- liftIO $ mapM makeBinding
-      [fromGhc "emptyTuple" (mkTupleTy Unboxed []), fromGhc "singletonTuple" (mkTupleTy Unboxed [intPrimTy]),
-       fromGhc "sum" (mkSumTy [intPrimTy,intPrimTy]), fromGhc "vector" (primRepToType (VecRep 4 Int32ElemRep))]
-    liftIO $ serializeOptimizedCoreCBD flags ["unit-qualified"]
-      (optimized { mg_binds = [NonRec v body | (v,body) <- frontiers], mg_exports = [] }) >>=
-      BS.writeFile (root </> directory </> "frontiers.cbd")
-    let adapted = optimized { mg_binds = [NonRec v body | (v,body) <- guests], mg_exports = [] }
+    shapeProducers <- liftIO $ mapM makeProducer shapes
+    shapeReturns <- liftIO $ forM (zip shapes shapeProducers) $ \((name,value),(producer,_)) ->
+      returnBody producer value >>= namedBinding (name ++ "Return")
+    let adapted = optimized { mg_binds = [NonRec v body | (v,body) <- guests ++ shapeProducers ++ shapeReturns], mg_exports = [] }
     liftIO $ serializeOptimizedCoreCBD flags ["unit-qualified"] adapted >>= BS.writeFile (root </> directory </> "pre.cbd")
     (tidied, _) <- liftIO $ hscTidy current adapted
     liftIO $ serializePostTidyCoreCBD flags ["unit-qualified"] (cg_module tidied) (cg_tycons tidied)
       (cg_binds tidied) emptyIfaceForeign >>= BS.writeFile (root </> directory </> "post.cbd")
-    observations <- liftIO $ fmap concat $ forM samples $ \(name,value) -> do
-      let body = wrap value (template "nativeTemplate")
-      case lintExpr (initLintConfig flags []) body of
-        Nothing -> pure ()
-        Just errors -> die (showSDoc flags (vcat (bagToList errors)))
-      (compiled,_,_) <- hscCompileCoreExpr current noSrcSpan body
-      native <- wormhole (hscInterp current) compiled
+    nativeReturns <- liftIO $ forM (zip shapes shapeProducers) $ \((name,value),(producer,producerBody)) -> do
+      binder <- local (name ++ "NativeProducer") (varType producer)
+      let nativeProducer = setInlinePragma (setIdArity binder 1) neverInlinePragma
+      body <- returnBody nativeProducer value
+      -- GHC's unariser splits aggregate rubbish only in argument and case
+      -- positions, not a bare function return. Keep the exact literal behind
+      -- an identity DEFAULT case for this native oracle; the JVM fixture above
+      -- deliberately retains its bare aggregate producer return.
+      nativeProducerBody <- case producerBody of
+        Lam argument originalValue -> do
+          whole <- local "nativeRubbishWhole" (exprType originalValue)
+          pure (Lam argument (Case originalValue whole (exprType originalValue) [Alt DEFAULT [] (Var whole)]))
+        _ -> die "Unexpected native rubbish producer body"
+      pure (name ++ "Return", Let (NonRec nativeProducer nativeProducerBody) (App (template "nativeReturnTemplate") body))
+    let nativeEntries = [(name,wrap value (template "nativeTemplate")) | (name,value) <- samples] ++ nativeReturns
+    -- The interactive expression compiler always generates bytecode, which
+    -- cannot carry zero-register or vector rubbish. Compile the genuine typed
+    -- literals together through the native backend and its ordinary unarisation.
+    nativeBindings <- liftIO $ forM nativeEntries $ \(name,body) -> namedBinding (name ++ "Native") body
+    let wayFlags = [if hostIsDynamic then "-dynamic" else "-static"] ++ ["-prof" | hostIsProfiled]
+    (nativeFlags,_,_) <- parseDynamicFlags (hsc_logger current) (flags {targetWays_ = hostFullWays})
+      (map noLoc (["-fasm", "-fno-info-table-map"] ++ wayFlags))
+    let nativeEnv = hscSetFlags nativeFlags current
+        -- Retain only source workers actually referenced by the copied native
+        -- templates. exprFreeIds excludes globals, so include all free Ids here.
+        helpers needed =
+          let required = [bind | bind <- mg_binds optimized, any (`elemVarSet` needed) (bindersOf bind)]
+              closed = needed `unionVarSet` exprsSomeFreeVars isId (map snd (flattenBinds required))
+          in if sizeVarSet closed == sizeVarSet needed then required else helpers closed
+        nativeModule = optimized { mg_binds = helpers (exprsSomeFreeVars isId (map snd nativeBindings)) ++
+          [NonRec v body | (v,body) <- nativeBindings], mg_exports = [] }
+        assembly = directory </> "native.s"
+        objectFile = directory </> "native.o"
+    (nativeGuts,_) <- liftIO $ hscTidy nativeEnv nativeModule
+    let nativeBinder name = case [v | (v,_) <- flattenBinds (cg_binds nativeGuts), getOccString v == name ++ "Native", isExportedId v, isExternalName (varName v)] of
+          [v] -> v
+          _ -> error ("Missing exported native rubbish entry: " ++ name)
+    (emitted,stub,foreignFiles,_,_) <- liftIO $ hscGenHardCode nativeEnv nativeGuts (ms_location summary) (root </> assembly)
+    liftIO $ unless (emitted == root </> assembly && stub == Nothing && null foreignFiles)
+      (die "Unexpected native rubbish code-generation outputs")
+    assemblyHash <- liftIO $ hashFile (root </> assembly)
+    liftIO $ writeJson (root </> directory </> "native-codegen.json") $ object
+      ["backend" .= ("native" :: String), "assembly" .= assembly, "sha256" .= assemblyHash,
+       "unit" .= unitString (moduleUnit (cg_module nativeGuts)), "module" .= moduleNameString (moduleName (cg_module nativeGuts)),
+       "wayFlags" .= wayFlags, "entries" .= [(name,getOccString (nativeBinder name)) | (name,_) <- nativeEntries]]
+    assembled <- liftIO $ execute "native-assemble" [] ghc (wayFlags ++ ["-c",assembly,"-o",objectFile])
+    let interpreter = hscInterp nativeEnv
+    liftIO $ do
+      initLoaderState interpreter nativeEnv
+      loadObj interpreter (root </> objectFile)
+      linked <- resolveObjs interpreter
+      case linked of Succeeded -> pure (); Failed -> die "Native rubbish object failed to resolve"
+    -- Keep the native object loaded for the producer process lifetime. Releasing
+    -- each HValue reference must not unload code still referenced by closures.
+    observations <- liftIO $ fmap concat $ forM nativeEntries $ \(name,_) -> do
+      reference <- lookupClosure interpreter (IClosureSymbol (varName (nativeBinder name))) >>=
+        maybe (die ("Native rubbish closure not found: " ++ name)) pure
+      compiled <- mkFinalizedHValue interpreter reference
+      native <- wormhole interpreter compiled
       let function = unsafeCoerce native :: Int -> Int
       forM seeds $ \seed -> do
         let result = function seed
         unless (result == seed + 17) (die "GHC rubbish unexpectedly changed the continuation")
         pure (name,seed,result)
-    pure (map fst samples,[(owner,show (representation l)) | (owner,l) <- original],
-      [(owner,show (representation l)) | (owner,l) <- sequenceRubbish],observations)
+    pure (map fst samples,map (getOccString . fst) shapeProducers,map (getOccString . fst) shapeReturns,
+      [(owner,show (representation l)) | (owner,l) <- original],
+      [(owner,show (representation l)) | (owner,l) <- sequenceRubbish],observations,assembled)
   writeJson (root </> directory </> "oracle.json") $ object ["rows" .= rows]
   writeJson (root </> directory </> "originals.json") $ object ["occurrences" .= originals,
     "sequenceOccurrences" .= sequenceOriginals,
     "scope" .= ("Original installed rubbish literals; native observations execute their unchanged fillers in closed continuations" :: String)]
   audits <- forM ["pre","post"] $ \stage -> do
     let output = directory </> stage ++ ".audit.json"
-    result <- auditCBD root 0 (stage ++ "-audit") (directory </> stage ++ ".cbd") output entries
+    result <- auditCBD root 0 (stage ++ "-audit") (directory </> stage ++ ".cbd") output (entries ++ returns)
     pure (output,result)
-  frontierAudit <- auditCBD root 1 "frontiers-audit" (directory </> "frontiers.cbd")
-    (directory </> "frontiers.audit.json") ["emptyTuple","singletonTuple","sum","vector"]
   compilerFiles <- listDirectory (root </> "src/compiler/THC")
   scriptFiles <- listDirectory (root </> "bin")
   inputHashes <- hashes root $ sort $ [source,"t/haskell-fixtures/RubbishLiteralFixtures.hs",
@@ -211,16 +289,17 @@ prepareRubbishLiterals root = do
   installedInterfaces <- forM (map fst locations) $ \path -> do
     digest <- hashFile path
     pure (object ["path" .= path, "sha256" .= digest])
-  let commands = [version,info,libdir,sequenceUnit] ++ map snd locations ++ map snd audits ++ [frontierAudit]
-  artifactHashes <- hashes root $ map (directory </>) ["pre.cbd","post.cbd","Data.Sequence.Internal.cbd","oracle.json","originals.json","frontiers.cbd","frontiers.audit.json"] ++
+  let commands = [version,info,libdir,sequenceUnit] ++ map snd locations ++ [nativeCommand] ++ map snd audits
+  artifactHashes <- hashes root $ map (directory </>) ["pre.cbd","post.cbd","Data.Sequence.Internal.cbd","oracle.json","originals.json","native.s","native.o","native-codegen.json"] ++
     map fst audits ++ concatMap commandArtifacts commands
   writeJson (root </> directory </> "manifest.json") $ object ["schema" .= (1::Int), "entries" .= entries,
+    "producers" .= producers, "returns" .= returns, "literalOccurrences" .= (length entries + length producers),
     "nativeRows" .= length rows, "originalOccurrences" .= length originals, "inputHashes" .= inputHashes,
     "installedInterfaces" .= installedInterfaces, "artifactHashes" .= artifactHashes, "commands" .= map commandRecord commands]
-  putStrLn "rubbish-literals: original installed literals and closed scalar GHC-native continuation matrix prepared"
+  putStrLn "rubbish-literals: original installed literals and closed typed GHC-native continuation and return matrix prepared"
 
 -- The auditor consumes explicit inspection through stdin. Executable fixtures
--- remain CBD files, including deliberately unsupported representation controls.
+-- remain CBD files; malformed representation controls belong to the reader tests.
 auditCBD :: FilePath -> Int -> String -> FilePath -> FilePath -> [String] -> IO CommandResult
 auditCBD root expected label input output entries = do
   value <- BS.readFile (root </> input) >>= either fail pure . readModuleValue

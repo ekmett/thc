@@ -55,7 +55,7 @@ Fixed-width integers are little-endian. The `header` member starts with 32 bytes
 | ---: | ---: | --- |
 | 0 | 8 | ASCII `THCCBD1` followed by one zero byte |
 | 8 | 2 | major version, `1` |
-| 10 | 2 | minor version, `1` |
+| 10 | 2 | minor version, `2` |
 | 12 | 4 | actual module-summary flags |
 | 16 | 8 | top-level binding count |
 | 24 | 4 | debug-presence flags |
@@ -257,7 +257,7 @@ Literal tags and payloads are:
 | 13 | float | four IEEE-754 bits-as-bytes, little-endian |
 | 14 | double | eight IEEE-754 bits-as-bytes, little-endian |
 | 15 | null-addr | empty |
-| 16 | rubbish | `PrimRep` |
+| 16 | rubbish | none; shape comes from the enclosing expression metadata |
 | 17 | function-addr | `str exactSymbol` |
 | 18 | data-addr | `str exactSymbol` |
 | 19 | unsupported | `str diagnostic` |

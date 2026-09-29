@@ -21,3 +21,9 @@ template :: Int# -> Int#
 template n = n +# 17#
 nativeTemplate :: Int -> Int
 nativeTemplate (I# n) = I# (n +# 17#)
+
+-- Box the result of the exact unboxed return wrapper used by the JVM fixture.
+-- The preparer closes that wrapper over a local NOINLINE typed producer before
+-- native compilation, so the seed still crosses the same continuation.
+nativeReturnTemplate :: (Int# -> Int#) -> Int -> Int
+nativeReturnTemplate f (I# n) = I# (f n)

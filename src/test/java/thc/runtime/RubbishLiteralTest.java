@@ -20,12 +20,13 @@ class RubbishLiteralTest {
     private final String prefix = "build/rubbish-literals";
     private final List<String> scalarNames = list("IntRep", "Int8Rep", "Int16Rep", "Int32Rep", "Int64Rep",
         "WordRep", "Word8Rep", "Word16Rep", "Word32Rep", "Word64Rep", "FloatRep", "DoubleRep", "AddrRep", "Lifted", "Unlifted");
+    private final List<String> shapes = list("shapeEmptyTuple", "shapeSingletonTuple", "shapeSum", "shapeVector", "shapeNestedTuple", "shapeNestedSum");
     private final List<String> names = names();
     private List<String> names() {
         var result = new ArrayList<String>();
         for (var name : list("Lifted", "Unlifted", "IntRep", "Int32Rep")) result.add("original" + name);
         for (var name : scalarNames) result.add("scalar" + name);
-        result.addAll(list("boxedData", "boxedClosure", "sequenceLifted")); return result;
+        result.addAll(list("boxedData", "boxedClosure", "sequenceLifted")); result.addAll(shapes); return result;
     }
     private Map<String, Object> json(String file) throws Exception { return object(Json.parse(Files.readString(root.resolve(prefix + "/" + file)))); }
     private Map<String, Object> cbd(String file) throws Exception { return CoreCbdFixtures.read(root.resolve(prefix + "/" + file)); }
@@ -33,7 +34,9 @@ class RubbishLiteralTest {
     private String hash(Path file) throws Exception { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(file))); }
     private void verifyEvidence() throws Exception {
         var manifest = json("manifest.json");
-        assertEquals(1L, manifest.get("schema")); assertEquals(names, manifest.get("entries")); assertEquals(154L, manifest.get("nativeRows"));
+        assertEquals(1L, manifest.get("schema")); assertEquals(names, manifest.get("entries")); assertEquals(238L, manifest.get("nativeRows"));
+        assertEquals(shapes.stream().map(name -> name + "Return").toList(), manifest.get("returns"));
+        assertEquals(shapes.stream().map(name -> name + "Producer").toList(), manifest.get("producers"));
         var inputs = object(manifest.get("inputHashes"));
         var expectedInputs = new HashSet<>(list("t/fixtures/compiler/RubbishLiteralAudit.hs", "t/haskell-fixtures/RubbishLiteralFixtures.hs",
             "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "bin/audit-core.py", "bin/core-capabilities.json"));
@@ -47,11 +50,19 @@ class RubbishLiteralTest {
         assertEquals(expectedInputs, inputs.keySet());
         var artifacts = object(manifest.get("artifactHashes"));
         var expectedArtifacts = new HashSet<String>();
-        for (var file : list("pre.cbd", "post.cbd", "Data.Sequence.Internal.cbd", "oracle.json", "originals.json", "pre.audit.json", "post.audit.json", "frontiers.cbd", "frontiers.audit.json"))
+        for (var file : list("pre.cbd", "post.cbd", "Data.Sequence.Internal.cbd", "oracle.json", "originals.json", "native.s", "native.o", "native-codegen.json", "pre.audit.json", "post.audit.json"))
             expectedArtifacts.add(prefix + "/" + file);
-        for (var command : list("version", "info", "libdir", "imports-ghc-internal", "imports-containers", "containers-unit", "pre-audit", "post-audit", "frontiers-audit"))
+        for (var command : list("version", "info", "libdir", "imports-ghc-internal", "imports-containers", "containers-unit", "native-assemble", "pre-audit", "post-audit"))
             for (var suffix : list("stdout", "stderr", "command.json")) expectedArtifacts.add(prefix + "/logs/" + command + "." + suffix);
         assertEquals(expectedArtifacts, artifacts.keySet());
+        var nativeCode = json("native-codegen.json");
+        assertEquals("native", nativeCode.get("backend"));
+        assertEquals(prefix + "/native.s", nativeCode.get("assembly"));
+        assertEquals(artifacts.get(prefix + "/native.s"), nativeCode.get("sha256"));
+        var nativeNames = new ArrayList<>(names);
+        nativeNames.addAll(shapes.stream().map(name -> name + "Return").toList());
+        assertEquals(nativeNames.stream().map(name -> list(name, name + "Native")).toList(), nativeCode.get("entries"));
+
         var hashes = new LinkedHashMap<>(inputs); hashes.putAll(artifacts);
         for (var entry : hashes.entrySet()) assertEquals(entry.getValue(), hash(root.resolve(entry.getKey())), "Stale rubbish fixture: " + entry.getKey());
         var installed = new LinkedHashMap<String, Object>();
@@ -70,7 +81,7 @@ class RubbishLiteralTest {
         for (var stage : list("pre", "post")) {
             var audit = json(stage + ".audit.json"); assertEquals(true, audit.get("accepted"));
             assertEquals(list(), audit.get("issues")); assertEquals(list(), audit.get("missingGlobals"));
-            assertEquals(names.size(), literals(cbd(stage + ".cbd")).size());
+            assertEquals(names.size() + shapes.size(), literals(cbd(stage + ".cbd")).size());
         }
     }
     @Test void freshSequenceCaptureHasSupportedEvaluatedLiftedRubbish() throws Exception {
@@ -110,7 +121,7 @@ class RubbishLiteralTest {
     @Test void originalAndScalarNativeContinuationsMatchInterpreted() throws Exception { nativeValues(false); }
     @Test void originalAndScalarNativeContinuationsMatchFirstInstalledEntry() throws Exception { nativeValues(true); }
     private void nativeValues(boolean compiled) throws Exception {
-        verifyEvidence(); var rows = expression(json("oracle.json").get("rows")); assertEquals(154, rows.size());
+        verifyEvidence(); var rows = expression(json("oracle.json").get("rows")); assertEquals(238, rows.size());
         for (var stage : list("pre", "post")) for (var backend : list("ast", "bytecode")) try (var context = context()) {
             entered(context, language -> {
                 var module = with(cbd(stage + ".cbd"), "instrument", true);
@@ -145,7 +156,9 @@ class RubbishLiteralTest {
         try (var context = context()) { entered(context, language -> {
             verifyEvidence(); var decoder = new RubbishLiterals(language);
             for (var literal : literals(cbd("pre.cbd"))) {
-                var proof = RubbishLiterals.proof(literal); var value = decoder.decode(proof); assertFalse(value instanceof Thunk);
+                var proof = RubbishLiterals.proof(literal);
+                if (proof.isTypedTransport()) continue;
+                var value = decoder.decode(proof); assertFalse(value instanceof Thunk);
                 switch (proof.getKind()) {
                     case LONG -> { if (proof.isInt()) assertEquals(0, value); else assertEquals(0L, value); }
                     case FLOAT -> assertEquals(0, Float.floatToRawIntBits((Float) value));
@@ -180,17 +193,20 @@ class RubbishLiteralTest {
         assertFalse(expression(result.get("issues")).isEmpty());
         assertFalse(objects(result.get("issues")).stream().anyMatch(issue -> "entry-resolution".equals(issue.get("code"))));
     }
-    private List<Object> replaceRep(List<Object> value, String rep) { var result = new ArrayList<>(value); result.set(2, rep); return result; }
+private List<Object> replaceProof(List<Object> literal, Map<String,Object> proof) {
+        var result = new ArrayList<>(literal);
+        result.set(3, with(object(literal.get(3)), "rep", proof)); return result;
+    }
     @Test void malformedRubbishProofsAndUnsupportedRepresentationsFailClosed(@TempDir Path directory) throws Exception {
         var decoded = cbd("pre.cbd");
         var original = CoreModules.reachable(decoded, entry(decoded, "scalarIntRep"));
         var changes = new LinkedHashMap<String, UnaryOperator<List<Object>>>();
         changes.put("missing", value -> new ArrayList<>(value.subList(0, 3)));
-        changes.put("wrong-rep", value -> replaceRep(value, "FloatRep"));
-        changes.put("unknown-levity", value -> replaceRep(value, "BoxedRep Nothing"));
-        changes.put("tuple", value -> replaceRep(value, "TupleRep '[IntRep]"));
-        changes.put("sum", value -> replaceRep(value, "SumRep '[IntRep, WordRep]"));
-        changes.put("vector", value -> replaceRep(value, "VecRep 4 Int32ElemRep"));
+changes.put("legacy-payload", value -> { var result = new ArrayList<>(value); result.set(2, "IntRep"); return result; });
+        changes.put("wrong-register", value -> replaceProof(value, map("kind", "long", "primReps", list("FloatRep"), "evaluated", true)));
+        changes.put("opaque-tuple", value -> replaceProof(value, map("kind", "unknown", "aggregate", "unboxed-tuple", "primReps", list("IntRep"), "evaluated", true)));
+        changes.put("opaque-sum", value -> replaceProof(value, map("kind", "unknown", "aggregate", "unboxed-sum", "primReps", list("WordRep", "IntRep"), "evaluated", true)));
+        changes.put("unknown", value -> replaceProof(value, map("kind", "unknown", "evaluated", true)));
         changes.put("unevaluated", literal -> {
             var result = new ArrayList<>(literal); var metadata = object(literal.get(3));
             result.set(3, with(metadata, "rep", with(object(metadata.get("rep")), "evaluated", false))); return result;
@@ -201,15 +217,76 @@ class RubbishLiteralTest {
                 assertThrows(RuntimeFault.class, () -> load(language, backend, bad).entryTarget(entry(bad, "scalarIntRep")), backend + "/" + change.getKey())); }
         }
     }
-    @Test void genuineAggregateAndVectorRubbishRemainExplicitFrontiers() throws Exception {
-        verifyEvidence(); var audit = json("frontiers.audit.json"); assertEquals(false, audit.get("accepted"));
-        assertEquals(4L, objects(audit.get("issues")).stream().filter(issue -> "unsupported-literal".equals(issue.get("code"))).count());
-        for (var name : list("emptyTuple", "singletonTuple", "sum", "vector")) {
-            var decoded = cbd("frontiers.cbd");
-            var module = CoreModules.reachable(decoded, entry(decoded, name));
-            for (var backend : list("ast", "bytecode")) try (var context = context()) { entered(context, language ->
-                assertThrows(RuntimeFault.class, () -> load(language, backend, module).entryTarget(entry(module, name)), backend + "/" + name)); }
+    @Test void typedReturnsPreserveShapesAndFirstInstalledExecution() throws Exception {
+        verifyEvidence();
+        var rows = expression(json("oracle.json").get("rows"));
+        for (var stage : list("pre", "post")) for (var backend : list("ast", "bytecode")) try (var context = context()) {
+            entered(context, language -> {
+                var module = with(cbd(stage + ".cbd"), "instrument", true);
+                var program = load(language, backend, module);
+                for (var name : shapes) {
+                    var producer = program.entryTarget(entry(module, name + "Producer"));
+                    var continuation = program.entryTarget(entry(module, name + "Return"));
+                    var shape = ((GuestRoot) producer.getRootNode()).getTupleResult();
+                    assertNotNull(shape, name);
+                    var selected = rows.stream().map(ScalarValueTestSupport::expression)
+                        .filter(row -> (name + "Return").equals(row.get(0))).toList();
+                    assertEquals(7, selected.size());
+                    for (var row : selected) {
+                        checkCarrier(TupleResults.ownedTupleResult(Calls.target(producer, new Object[]{0L, row.get(1)}), shape), shape);
+                        assertEquals(row.get(2), Calls.target(continuation, new Object[]{0L, row.get(1)}));
+                    }
+                    if (backend.equals("ast")) assertFalse(com.oracle.truffle.api.nodes.NodeUtil
+                        .findAllNodeInstances(producer.getRootNode(), Rubbish.class).isEmpty(), "Keep the explicit don't-care node");
+                    for (var target : list(producer, continuation)) {
+                        target.getClass().getMethod("compile", boolean.class).invoke(target, true);
+                        assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
+                    }
+                    for (var row : selected) {
+                        long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
+                        assertEquals(row.get(2), Calls.target(continuation, new Object[]{0L, row.get(1)}), stage + "/" + backend + "/" + name);
+                        assertEquals(2L, ((Number) program.diagnostics().get("compiledEntries")).longValue() - before);
+                        for (var target : list(producer, continuation)) assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
+                        checkCarrier(TupleResults.ownedTupleResult(Calls.target(producer, new Object[]{0L, row.get(1)}), shape), shape);
+                        assertEquals(0, language.getHandoffState().get().getArguments().getDepth());
+                        assertEquals(0, language.getHandoffState().get().getResults().getDepth());
+                    }
+                }
+            });
         }
+    }
+    private void checkCarrier(HandoffStorage value, TupleShape shape) {
+        var slots = new ArrayList<Integer>();
+        for (int i = 0; i < shape.getWidth(); i++) {
+            slots.add(i);
+            if (!shape.getLayout().isInt(i) && !shape.getLayout().isLong(i) && !shape.getLayout().isFloat(i) && !shape.getLayout().isDouble(i))
+                shape.checkedReference(i, shape.getLayout().getObject(value, i));
+        }
+        checkLogicalCarrier(shape.getProof(), value, shape, slots);
+    }
+    private void checkLogicalCarrier(CoreRepresentation proof, HandoffStorage value, TupleShape shape, List<Integer> slots) {
+        if (proof.isTuple()) {
+            int offset = 0;
+            for (var field : proof.getComponents()) {
+                int width = TupleShape.flatten(field).size();
+                checkLogicalCarrier(field, value, shape, slots.subList(offset, offset + width)); offset += width;
+            }
+        } else if (proof.isSum()) {
+            int tag = SumShape.checkedTag(shape.getLayout().getLong(value, slots.getFirst()), proof.getAlternatives().size());
+            var selected = SumShape.projection(proof, tag - 1).stream().map(slots::get).toList();
+            checkLogicalCarrier(proof.getAlternatives().get(tag - 1), value, shape, selected);
+        } else if (proof.isVector()) new VectorLayout(proof).require(shape.getLayout().getObject(value, slots.getFirst()));
+        else if (proof.hasBoxedPointer()) assertFalse(shape.getLayout().getObject(value, slots.getFirst()) instanceof Thunk);
+        else if (proof.getKind() == CoreKind.ADDRESS) assertInstanceOf(ManagedAddress.class, shape.getLayout().getObject(value, slots.getFirst()));
+    }
+    @Test void unknownBoxedLevityUsesTheExistingReferenceCarrier() throws Exception {
+        var literal = list("lit", "rubbish", null, map("rep", map("kind", "object", "primReps", list("BoxedRep Nothing"), "evaluated", true)));
+        var proof = RubbishLiterals.proof(literal);
+        assertTrue(proof.hasUnknownBoxedLevity());
+        try (var context = context()) { entered(context, language -> {
+            var value = new Rubbish(proof, new RubbishLiterals(language), null).execute(null);
+            assertInstanceOf(DataValue.class, value); assertFalse(value instanceof Thunk);
+        }); }
     }
     private Object changeAlternative(Object value) {
         if (value instanceof Map<?, ?> map) {
@@ -217,7 +294,7 @@ class RubbishLiteralTest {
         }
         if (value instanceof List<?> values) {
             var result = new ArrayList<Object>(values);
-            if (!values.isEmpty() && "default".equals(values.getFirst())) { result.set(0, "lit"); result.set(1, list("rubbish", "IntRep")); }
+            if (!values.isEmpty() && "default".equals(values.getFirst())) { result.set(0, "lit"); result.set(1, list("rubbish", null)); }
             else result.replaceAll(this::changeAlternative);
             return result;
         }

@@ -57,7 +57,7 @@ class CoreCompactRecordsTest {
         byte[] span = bytes(0, metadata.length);
         byte[] facts = concat(bytes(1), span, span, span, span, new byte[14]);
         byte[] header = ByteBuffer.allocate(40 + metadata.length + facts.length).order(ByteOrder.LITTLE_ENDIAN)
-            .put("THCCBD1\0".getBytes(StandardCharsets.UTF_8)).putShort((short) 1).putShort((short) 1)
+            .put("THCCBD1\0".getBytes(StandardCharsets.UTF_8)).putShort((short) 1).putShort((short) 2)
             .putInt(0).putLong(1).putInt(0).putInt(0).putLong(metadata.length).put(metadata).put(facts).array();
         byte[] symbols = ByteBuffer.allocate(24).order(ByteOrder.LITTLE_ENDIAN)
             .put(MessageDigest.getInstance("MD5").digest(id)).putLong(0).array();
@@ -91,6 +91,19 @@ class CoreCompactRecordsTest {
                 assertEquals(0L, counts.debugBytesRead());
             });
         }
+    }
+    @Test void rubbishHasNoPayloadAndPreservesUnknownBoxedLevityInItsMetadata() throws Exception {
+        // The same independent shape grammar as other scalar metadata: the
+        // literal adds only tag16 and must not read another primitive tag.
+        byte[] metadata = concat(bytes(2, 0, 7, 2, 1, 13, 0, 0, 0, 0, 0, 0, 2, 1), new byte[9]);
+        module(binding(concat(bytes(2), metadata, bytes(16))), (records, file) -> {
+            var expression = (List<?>) records.binding(0).get("expr");
+            assertEquals(Arrays.asList("lit", "rubbish", null), expression.subList(0, 3));
+            var proof = (Map<?,?>) ((Map<?,?>) expression.getLast()).get("rep");
+            assertEquals("object", proof.get("kind"));
+            assertEquals(List.of("BoxedRep Nothing"), proof.get("primReps"));
+            assertEquals(true, proof.get("evaluated"));
+        });
     }
     @Test void unsupportedDiagnosticsKeepTheirExactPayloadAndRepresentation() throws Exception {
         var diagnostic = "RUBBISH(LiftedRep)".getBytes(StandardCharsets.UTF_8);
@@ -255,11 +268,12 @@ class CoreCompactRecordsTest {
             new LiteralCase(10, bytes(3, 0, 0, 1), "bignat", "65536"),
             new LiteralCase(12, bytes(4, 0, 255, 192, 128), "string-bytes", "00ffc080"),
             new LiteralCase(13, bytes(0x34, 0x12, 0xc0, 0x7f), "float", new CoreFloatingLiteral.Single(0x7fc01234)),
-            new LiteralCase(14, bytes(0, 0, 0, 0, 0, 0, 0, 128), "double", new CoreFloatingLiteral.Double(Long.MIN_VALUE)));
+            new LiteralCase(14, bytes(0, 0, 0, 0, 0, 0, 0, 128), "double", new CoreFloatingLiteral.Double(Long.MIN_VALUE)),
+            new LiteralCase(16, new byte[0], "rubbish", null));
         for (var c : cases) module(binding(literal(c.kind(), c.payload())), (records, file) -> {
             var selected = records.binding(0);
             assertEquals("unit:M.f", selected.get("id"));
-            assertEquals(List.of("lit", c.tag(), c.expected()), ((List<?>) selected.get("expr")).subList(0, 3));
+            assertEquals(Arrays.asList("lit", c.tag(), c.expected()), ((List<?>) selected.get("expr")).subList(0, 3));
             assertEquals(0L, file.getCounters().statistics().debugBytesRead());
             assertInstanceOf(CoreCompactRecords.Origin.class, selected.get("compactOrigin"));
         });

@@ -588,7 +588,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         var expr = (List<Object>) binding.get("expr");
         CoreRepresentations.requireNoSum(CoreRepresentations.expression(expr), "global binding");
         if (demand != null && !representation(binding)) return switch ((String) expr.getFirst()) {
-            case "lit" -> literal((String) expr.get(1), expr.get(2), CoreRepresentations.expression(expr));
+            case "lit" -> "rubbish".equals(expr.get(1)) ? rubbishLiterals.decode(RubbishLiterals.proof(expr)) : literal((String) expr.get(1), expr.get(2), CoreRepresentations.expression(expr));
             case "void" -> thc.runtime.Unit.INSTANCE;
             default -> throw new UnsupportedCore("Demand loading does not yet support effectful strict global initialization");
         };
@@ -1514,13 +1514,11 @@ public final class BytecodeProgram implements ExecutableProgram {
             throw new RuntimeFault(proof.isVector() ? "Vector argument cannot be lifted" : "Tuple argument cannot be lifted");
     }
 
-    private Object literal(String kind, Object encoded) { return literal(kind, encoded, null); }
     private Object literal(String kind, Object encoded, CoreRepresentation proof) {
         if (encoded instanceof Map<?,?> document) encoded = CoreFloatingLiteral.fromDocument(document);
         if (encoded instanceof CoreFloatingLiteral floating) return floating.decode(kind);
         if (!(encoded instanceof String value)) throw new UnsupportedCore("Malformed Core literal payload");
         return switch (kind) {
-            case "rubbish" -> rubbishLiterals.decode(Objects.requireNonNull(proof));
             case "int8" -> ScalarLiterals.int8Literal(value);
             case "int16" -> ScalarLiterals.int16Literal(value);
             case "int32" -> ScalarLiterals.int32Literal(value);
@@ -5311,12 +5309,12 @@ public final class BytecodeProgram implements ExecutableProgram {
             }
             case "lit" -> {
                 var kind = (String) expr.get(1);
+                if (kind.equals("rubbish")) yield new RubbishExpression(RubbishLiterals.proof(expr));
                 var value = constant(literal(kind, expr.get(2), CoreRepresentations.expression(expr)));
                 yield switch (kind) {
                     case "int8", "word8", "int16", "word16", "int32", "word32" ->
                         new ProvenExpression(value, CoreRepresentations.narrowLiteralProof(expr));
                     case "bignat" -> new ProvenExpression(value, BigNatLiterals.proof(expr));
-                    case "rubbish" -> new ProvenExpression(value, RubbishLiterals.proof(expr));
                     default -> value;
                 };
             }
@@ -6022,6 +6020,97 @@ public final class BytecodeProgram implements ExecutableProgram {
         }), mergedProof));
     }
 
+    /** Retains the don't-care until bytecode emission supplies its consumer's destination. */
+    private final class RubbishExpression implements Expression {
+        private final CoreRepresentation proof;
+        RubbishExpression(CoreRepresentation proof) { this.proof = proof.withEvaluated(true); }
+        @Override public CoreRepresentation proof() { return proof; }
+        @Override public boolean writesDestination() { return proof.isTypedTransport(); }
+        @Override public void emit(Emission emission) {
+            if (proof.isAggregate()) throw new RuntimeFault("Rubbish aggregate requires a typed destination");
+            constant(rubbishLiterals.decode(proof)).emit(emission);
+        }
+        @Override public void emitTuple(Emission emission, List<BytecodeLocal> destination) {
+            if (proof.isTuple()) {
+                var fields = new ArrayList<Expression>();
+                for (var field : proof.getComponents()) fields.add(new RubbishExpression(field));
+                tupleConstruct(new TupleShape(proof, language), fields).emitTuple(emission, destination);
+            } else if (proof.isSum()) {
+                sumConstruct(proof, 1, new RubbishExpression(proof.getAlternatives().getFirst())).emitTuple(emission, destination);
+            } else if (proof.isVector()) {
+                storeTupleResult(emission, destination.getFirst(), () -> emit(emission));
+            } else throw new RuntimeFault("Scalar rubbish does not have a typed destination");
+        }
+    }
+
+    private Expression sumConstruct(CoreRepresentation tupleProof, int tag, Expression payload) {
+        var selected = tupleProof.getAlternatives().get(tag - 1);
+        var shape = new TupleShape(tupleProof, language);
+        var leaves = TupleShape.flatten(selected);
+        return tupleExpression(tupleProof, (e, destination) -> {
+            var b = e.builder;
+            b.beginBlock();
+            for (int index = 0; index < shape.getLeaves().length; ++index) {
+                var field = shape.getLeaves()[index];
+                b.beginStoreLocal(destination.get(index));
+                if (field.isLong()) b.emitLoadConstant(0L);
+                else if (field.isFloat()) b.emitLoadConstant(0.0f);
+                else if (field.isDouble()) b.emitLoadConstant(0.0);
+                else if (field.getKind() == CoreKind.ADDRESS) b.emitLoadConstant(ManagedAddress.nullAddress());
+                else if (field.isVector()) b.emitLoadConstant(new VectorLayout(field).getSpecies().zero());
+                else b.emitLoadNull();
+                b.endStoreLocal();
+            }
+            var mapped = new ArrayList<BytecodeLocal>();
+            for (int index : SumShape.projection(tupleProof, tag - 1)) mapped.add(destination.get(index));
+            if (selected.isTypedTransport()) {
+                var logical = new ArrayList<BytecodeLocal>();
+                for (int index = 0; index < mapped.size(); ++index)
+                    logical.add(leaves.get(index).isInt() ? b.createLocal("narrow sum payload " + index, null) : mapped.get(index));
+                payload.emitTuple(e, logical);
+                for (int index = 0; index < leaves.size(); ++index) {
+                    var leaf = leaves.get(index);
+                    if (leaf.isInt()) {
+                        b.beginStoreLocal(mapped.get(index)); b.beginSumNarrowToWord(leaf.getNarrowInteger());
+                        b.beginToInt(); b.emitLoadLocal(logical.get(index)); b.endToInt();
+                        b.endSumNarrowToWord(); b.endStoreLocal();
+                    }
+                }
+            } else if (selected.getKind() == CoreKind.VOID) {
+                b.beginDiscardVoid(); payload.emit(e); b.endDiscardVoid();
+            } else {
+                b.beginStoreLocal(mapped.getFirst());
+                if (selected.isInt()) b.beginSumNarrowToWord(selected.getNarrowInteger());
+                payload.emit(e);
+                if (selected.isInt()) b.endSumNarrowToWord();
+                b.endStoreLocal();
+            }
+            b.beginStoreLocal(destination.getFirst()); b.emitLoadConstant((long) tag); b.endStoreLocal(); b.endBlock();
+        });
+    }
+
+    private Expression tupleConstruct(TupleShape shape, List<Expression> operands) {
+        return tupleExpression(shape.getProof(), (e, destination) -> {
+            var b = e.builder;
+            b.beginBlock();
+            for (int index = 0; index < operands.size(); ++index) {
+                var component = shape.getComponents()[index];
+                int offset = shape.getOffsets()[index];
+                var operand = operands.get(index);
+                if (component.isTypedTransport()) operand.emitTuple(e, destination.subList(offset, offset + TupleShape.flatten(component).size()));
+                else if (component.getKind() == CoreKind.VOID) { b.beginDiscardVoid(); operand.emit(e); b.endDiscardVoid(); }
+                else {
+                    storeTupleResult(e, destination.get(offset), () -> {
+                        if (component.getKind() == CoreKind.ADDRESS) b.beginRequireAddress();
+                        operand.emit(e);
+                        if (component.getKind() == CoreKind.ADDRESS) b.endRequireAddress();
+                    });
+                }
+            }
+            b.endBlock();
+        });
+    }
+
     private Expression compileOrdinaryApplication(List<Object> expr, Scope scope, boolean tail,
             List<Object> fn, List<List<Object>> args, List<?> flags, boolean[] callStrict, CoreRepresentation tupleProof) {
         var metadata = (tupleProof.isSum() || tupleProof.isTuple()) && "con".equals(fn.getFirst())
@@ -6033,48 +6122,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             boolean lifted = CoreRepresentations.argumentMayBeLazy(flags.getFirst(), args.getFirst());
             var payload = selected.isTypedTransport() ? compile(args.getFirst(), scope, false) : argument(args.getFirst(), scope, lifted);
             SumShape.payload(selected, payload.proof(), (Boolean) flags.getFirst());
-            var shape = new TupleShape(tupleProof, language);
-            var leaves = TupleShape.flatten(selected);
-            return tupleExpression(tupleProof, (e, destination) -> {
-                var b = e.builder;
-                b.beginBlock();
-                for (int index = 0; index < shape.getLeaves().length; ++index) {
-                    var field = shape.getLeaves()[index];
-                    b.beginStoreLocal(destination.get(index));
-                    if (field.isLong()) b.emitLoadConstant(0L);
-                    else if (field.isFloat()) b.emitLoadConstant(0.0f);
-                    else if (field.isDouble()) b.emitLoadConstant(0.0);
-                    else if (field.getKind() == CoreKind.ADDRESS) b.emitLoadConstant(ManagedAddress.nullAddress());
-                    else if (field.isVector()) b.emitLoadConstant(new VectorLayout(field).getSpecies().zero());
-                    else b.emitLoadNull();
-                    b.endStoreLocal();
-                }
-                var mapped = new ArrayList<BytecodeLocal>();
-                for (int index : SumShape.projection(tupleProof, tag - 1)) mapped.add(destination.get(index));
-                if (selected.isTypedTransport()) {
-                    var logical = new ArrayList<BytecodeLocal>();
-                    for (int index = 0; index < mapped.size(); ++index)
-                        logical.add(leaves.get(index).isInt() ? b.createLocal("narrow sum payload " + index, null) : mapped.get(index));
-                    payload.emitTuple(e, logical);
-                    for (int index = 0; index < leaves.size(); ++index) {
-                        var leaf = leaves.get(index);
-                        if (leaf.isInt()) {
-                            b.beginStoreLocal(mapped.get(index)); b.beginSumNarrowToWord(leaf.getNarrowInteger());
-                            b.beginToInt(); b.emitLoadLocal(logical.get(index)); b.endToInt();
-                            b.endSumNarrowToWord(); b.endStoreLocal();
-                        }
-                    }
-                } else if (selected.getKind() == CoreKind.VOID) {
-                    b.beginDiscardVoid(); payload.emit(e); b.endDiscardVoid();
-                } else {
-                    b.beginStoreLocal(mapped.getFirst());
-                    if (selected.isInt()) b.beginSumNarrowToWord(selected.getNarrowInteger());
-                    payload.emit(e);
-                    if (selected.isInt()) b.endSumNarrowToWord();
-                    b.endStoreLocal();
-                }
-                b.beginStoreLocal(destination.getFirst()); b.emitLoadConstant((long) tag); b.endStoreLocal(); b.endBlock();
-            });
+            return sumConstruct(tupleProof, tag, payload);
         }
         if (tupleProof.isTuple() && "con".equals(fn.getFirst()) && metadata != null && "unboxed-tuple".equals(metadata.get("kind"))) {
             var shape = new TupleShape(tupleProof, language);
@@ -6094,25 +6142,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                     operands.add(argument(arg, scope, lifted));
                 }
             }
-            return tupleExpression(tupleProof, (e, destination) -> {
-                var b = e.builder;
-                b.beginBlock();
-                for (int index = 0; index < operands.size(); ++index) {
-                    var component = shape.getComponents()[index];
-                    int offset = shape.getOffsets()[index];
-                    var operand = operands.get(index);
-                    if (component.isTypedTransport()) operand.emitTuple(e, destination.subList(offset, offset + TupleShape.flatten(component).size()));
-                    else if (component.getKind() == CoreKind.VOID) { b.beginDiscardVoid(); operand.emit(e); b.endDiscardVoid(); }
-                    else {
-                        storeTupleResult(e, destination.get(offset), () -> {
-                            if (component.getKind() == CoreKind.ADDRESS) b.beginRequireAddress();
-                            operand.emit(e);
-                            if (component.getKind() == CoreKind.ADDRESS) b.endRequireAddress();
-                        });
-                    }
-                }
-                b.endBlock();
-            });
+            return tupleConstruct(shape, operands);
         }
         var constructor = "con".equals(fn.getFirst()) ? dataLayout((String) fn.get(1)) : null;
         if (constructor != null && args.size() > constructor.getLogicalArity())

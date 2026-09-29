@@ -42,7 +42,7 @@ public final class CoreCompactFormat {
         }
         CoreCompactCursor cursor = new CoreCompactCursor(bytes, 0, HEADER_BYTES + Long.BYTES);
         if (!Arrays.equals(cursor.bytes(8), MAGIC)) throw new IllegalArgumentException("Invalid CBD header magic");
-        if (cursor.u16() != 1 || cursor.u16() != 1) throw new IllegalArgumentException("Unsupported CBD version");
+        if (cursor.u16() != 1 || cursor.u16() != 2) throw new IllegalArgumentException("Unsupported CBD version");
         long summaries = cursor.u32(), count = cursor.offset(), debug = cursor.u32();
         if ((summaries & ~31L) != 0 || (debug & ~7L) != 0 || cursor.u32() != 0) {
             throw new IllegalArgumentException("Reserved CBD header flags");

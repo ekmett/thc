@@ -79,7 +79,7 @@ public final class CoreCbdTestSupport {
     }
     static byte[] header(byte[] facts, byte[] strings, long count, int summaries, int debug) {
         return ByteBuffer.allocate(40 + strings.length + facts.length).order(ByteOrder.LITTLE_ENDIAN)
-            .put("THCCBD1\0".getBytes(StandardCharsets.UTF_8)).putShort((short) 1).putShort((short) 1)
+            .put("THCCBD1\0".getBytes(StandardCharsets.UTF_8)).putShort((short) 1).putShort((short) 2)
             .putInt(summaries).putLong(count).putInt(debug).putInt(0).putLong(strings.length).put(strings).put(facts).array();
     }
     static byte[] header() { return header(new byte[0], 0, 0, 0); }

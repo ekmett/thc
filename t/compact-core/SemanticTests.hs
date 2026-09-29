@@ -73,6 +73,31 @@ semanticTests = TestList
         pure (offset,value)) $ \bytes strings records ->
           forM_ records $ \(offset,value) -> assertEqual (show value)
             (Right (Lit emptyMeta value)) (fst <$> decodeExprAt bytes strings offset)
+  , TestLabel "rubbish has no payload and retains each occurrence representation" $ TestCase $ do
+      let unknownBoxed = Rep (scalar ObjectKind [BoxedUnknown]) (Evaluation (Known True) [])
+          shapes = [Missing,Unknown] ++ map Known (longRep : unknownBoxed : tupleCold : tupleHot : representations)
+      forM_ shapes $ \proof -> do
+        let expression = Lit (emptyMeta {metaRep=proof}) LitRubbish
+            binding = completeBinding {bindingExpr=expression}
+            inspected = moduleJSON completeFacts [binding]
+            legacy (Array values) = case toList values of
+              String "lit" : String "rubbish" : _ : rest -> toJSON ([String "lit",String "rubbish",String "IntRep"] ++ rest)
+              _ -> Array (fmap legacy values)
+            legacy (Object fields) = Object (fmap legacy fields)
+            legacy value = value
+        assertEqual "inspection uses null and preserves full metadata" (Right (completeFacts,[binding]))
+          (parseModuleWithoutDebug inspected)
+        assertBool "legacy scalar payload is not silently coerced" (isLeft (parseModuleWithoutDebug (legacy inspected)))
+        withEncoded (\streams encoder -> do
+          encodeExpr encoder expression
+          next <- streamOffset streams ExecutableData
+          encodeExpr encoder (Lit emptyMeta (LitInt 41))
+          pure next) $ \bytes strings next -> do
+            assertEqual "rubbish ends at its tag, without another representation" 16 (BS.index bytes (fromIntegral next - 1))
+            assertEqual "representation belongs to this exact occurrence" (Right (expression,next))
+              (decodeExprAt bytes strings 0)
+            assertEqual "next expression is not consumed as a literal payload" (Right (Lit emptyMeta (LitInt 41)))
+              (fst <$> decodeExprAt bytes strings next)
   , TestLabel "nine expression tags and calling facts roundtrip" $ TestCase $
       withEncoded (\_ encoder -> encodeBinding encoder completeBinding) $ \bytes strings offset ->
         assertEqual "all fields" (Right (completeBinding,fromIntegral (BS.length bytes)))
@@ -473,7 +498,7 @@ literals =
   , LitBytes (BS.pack [0,255,128,13,10]), LitBytes BS.empty
   , LitFloatBits 0x80000000, LitFloatBits 0x7fc00017
   , LitDoubleBits 0x8000000000000000, LitDoubleBits 0x7ff8000000000017
-  , LitNullAddr, LitRubbish BoxedUnlifted, LitFunctionAddr "foreign_fn", LitDataAddr "foreign_data"
+  , LitNullAddr, LitRubbish, LitFunctionAddr "foreign_fn", LitDataAddr "foreign_data"
   , LitUnsupported "RUBBISH(LiftedRep)"
   ]
 
