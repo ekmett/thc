@@ -18,6 +18,37 @@ a failed build must remain a failure.
 
 ## Reproduction
 
+The supported experimental entry point is `bin/native-runtime`. After building
+`installDist` with the pinned toolchain, it selects the checked compiler overlays
+and the `resource-copy` vector profile, then invokes the recipe below:
+
+```sh
+bin/native-runtime build
+THC_BACKEND=ast bin/native-runtime check build/native-image/check-ast \
+  "$CBD_MODULES" "$ENTRY" "$INPUT" "$EXPECTED"
+```
+
+Use an existing fixture's CBD modules or compact package manifest and independent
+expected integer result. `check` requires a fresh output directory and retains
+the executable hash, command, status, stdout and stderr. It runs `Main --compile`,
+whose setup precedes installation and whose first installed call must enter
+compiled code with the same valid targets; there is no post-install retry.
+`run` forwards ordinary Main arguments unchanged. `THC_BACKEND=bytecode` selects
+the other backend in the same image. This small image excludes LLVM/NFI package
+FFI. The default profile preserves shared arenas and full vector semantics using
+the documented copying vector-memory fallback, not generic FFI copying. Explicit
+`THC_NATIVE_IMAGE_VECTOR_PROFILE=intrinsics` selects a separate image profile;
+it does not establish shared-arena compatibility on this pinned toolchain.
+
+The wrapper's argument/result/status plumbing has a builder-free regression:
+
+```sh
+java research/native-image-preparation/NativeRuntimeTest.java "$PWD" "$(mktemp -d)"
+```
+
+That regression uses a stub process and is not native execution evidence. The
+`check` command must also be run against the actual built native executable.
+
 Select GraalVM 25.3.4.1 / JDK 25 with `JAVA_HOME`, build `installDist` from the
 source revision being investigated, and use that checkout's installed JARs:
 
