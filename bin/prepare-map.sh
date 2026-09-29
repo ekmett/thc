@@ -11,7 +11,7 @@ DIAGNOSTIC="${THC_DIAGNOSTIC_UNSUPPORTED:-false}"
 case "$DIAGNOSTIC" in true|false) ;; *) echo 'THC_DIAGNOSTIC_UNSUPPORTED must be true or false' >&2; exit 2;; esac
 bin/export-map.sh
 AUDIT_STATUS=0
-python3 bin/audit-core.py --entry mapAggregate --module-list build/map/modules.txt --output build/map/audit.json || AUDIT_STATUS=$?
+python3 bin/audit-core.py --entry main:MapWorkload.mapAggregate --module-list build/map/modules.txt --output build/map/audit.json || AUDIT_STATUS=$?
 if [ "$AUDIT_STATUS" != 0 ]; then
   if [ "$DIAGNOSTIC" != true ] || [ "$AUDIT_STATUS" != 1 ]; then exit "$AUDIT_STATUS"; fi
   echo 'DIAGNOSTIC RUN: capability audit is incomplete; unsupported paths will trap if reached.' >&2

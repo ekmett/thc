@@ -196,6 +196,12 @@ THC_DIAGNOSTIC_UNSUPPORTED=true make -C bench map OUT="$PWD/work/bench-map"
 THC_BACKEND=ast THC_DIAGNOSTIC_UNSUPPORTED=true make -C bench map OUT="$PWD/work/bench-ast"
 ```
 
+Direct benchmark JVMs also disable automatic vectorization by default. Set
+`JDK_JAVA_OPTIONS=-Djdk.graal.Vectorization=true` for an explicit comparison
+with it enabled; inherited JVM options preserve caller choices.
+`bash bin/test-benchmark-entrypoints.sh` checks paths and launch defaults without
+preparing fixtures or measuring.
+
 Choose an unused output directory; the targets prepare and check their inputs
 before measuring, then overwrite files in the supplied directory. Benchmarks vary their
 inputs, consume the results, warm the JVM and compare against native GHC. Graph capture is a
