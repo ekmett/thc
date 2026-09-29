@@ -130,8 +130,8 @@ prepareSqrt root = do
     _ <- run root [("THC_CORE_OUT",output </> stage ++ "-core"),
                    ("THC_GHC_OUT",output </> stage ++ "-ghc"),("THC_SOURCE_NOTES","true")]
       "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source]) ""
-    _ <- run root [] "python3" (["bin/audit-core.py",directory </> stage ++ "-core/SqrtAudit.json"] ++
-      concatMap (\name -> ["--entry",name]) entries ++
+    _ <- run root [] "python3" (["bin/audit-core.py",directory </> stage ++ "-core/SqrtAudit.cbd"] ++
+      concatMap (\name -> ["--entry","main:SqrtAudit." ++ name]) entries ++
       ["--output",directory </> stage ++ "-audit.json"]) ""
     evidence <- BS.readFile (output </> stage ++ "-audit.json")
     case decodeStrict' evidence of
@@ -149,7 +149,7 @@ prepareSqrt root = do
       artifacts = [directory </> name | name <- ["inputs.tsv","oracle.tsv","integer-oracle.tsv",
         "native/oracle"]] ++
         [directory </> stage ++ suffix | stage <- ["pre","post"],
-          suffix <- ["-core/SqrtAudit.json","-audit.json"]]
+          suffix <- ["-core/SqrtAudit.cbd","-audit.json"]]
   inputHashes <- hashes root sources
   artifactHashes <- hashes root artifacts
   writeJson manifest $ object ["schema" .= (1 :: Int),"ghc" .= ("9.14.1" :: String),

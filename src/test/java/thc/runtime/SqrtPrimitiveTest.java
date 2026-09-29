@@ -43,7 +43,8 @@ class SqrtPrimitiveTest {
         assertEquals(entries, evidence.get("entries")); assertEquals(rows().values().stream().mapToLong(List::size).sum(), evidence.get("nativeRows"));
         for (var stage : list("pre", "post")) assertEquals(true, json("build/sqrt/" + stage + "-audit.json").get("accepted"));
     }
-    private Map<String, Object> module(String stage) throws Exception { return json("build/sqrt/" + stage + "-core/SqrtAudit.json"); }
+    private Map<String, Object> module(String stage) throws Exception { return thc.CoreCbdFixtures.read(new File(root, "build/sqrt/" + stage + "-core/SqrtAudit.cbd").toPath()); }
+    private static String entryId(String name) { return "main:SqrtAudit." + name; }
     private static Context context(boolean inlining) {
         return Context.newBuilder("thc").allowExperimentalOptions(true).option("compiler.Inlining", Boolean.toString(inlining))
             .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build();
@@ -65,7 +66,7 @@ class SqrtPrimitiveTest {
             case "sqrtDouble" -> Double.longBitsToDouble(Long.parseUnsignedLong(row[1]));
             default -> Long.parseLong(row[1]);
         };
-        var result = Calls.target(p.hostEntryTarget(1), new Object[]{p.entryValue(entry), new Object[]{input}});
+        var result = Calls.target(p.hostEntryTarget(1), new Object[]{p.entryValue(entryId(entry)), new Object[]{input}});
         switch (entry) {
             case "sqrtFloat" -> {
                 assertTrue(result instanceof Float, label); float expected = Float.intBitsToFloat((int) Long.parseLong(row[2]));
@@ -90,8 +91,8 @@ class SqrtPrimitiveTest {
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 for (var entryRows : rows.entrySet()) {
-                    var entry = entryRows.getKey(); var selected = entryRows.getValue(); var linked = CoreModules.reachable(module(stage), entry);
-                    var p = program(language, linked, backend); var target = p.entryTarget(entry);
+                    var entry = entryRows.getKey(); var selected = entryRows.getValue(); var linked = CoreModules.reachable(module(stage), entryId(entry));
+                    var p = program(language, linked, backend); var target = p.entryTarget(entryId(entry));
                     for (var row : selected) call(p, entry, row, backend + "/" + entry + "/interpreter/" + row[1]);
                     for (var binding : objects(linked.get("bindings"))) if (expression(binding.get("expr")).getFirst().equals("lam")) compile(p.entryTarget((String) binding.get("id")));
                     for (var row : selected) {
@@ -171,10 +172,10 @@ class SqrtPrimitiveTest {
         for (var stage : list("pre", "post")) {
             var exported = module(stage);
             assertEquals(stage.equals("pre") ? "optimized-Core-before-Tidy" : "optimized-Core-after-Tidy-before-CorePrep", exported.get("boundary"));
-            var bindings = new LinkedHashMap<String, Map<String, Object>>(); for (var binding : objects(exported.get("bindings"))) bindings.put((String) binding.get("name"), binding);
+            var bindings = new LinkedHashMap<String, Map<String, Object>>(); for (var binding : objects(exported.get("bindings"))) bindings.put((String) binding.get("id"), binding);
             var entries = new ArrayList<>(list("sqrtFloat", "sqrtDouble")); entries.addAll(MATH_ENTRIES);
             for (var entry : entries) {
-                var lambda = expression(bindings.get(entry).get("expr")); var rep = entry.endsWith("Float") ? "FloatRep" : "DoubleRep"; var kind = entry.endsWith("Float") ? "float" : "double";
+                var lambda = expression(bindings.get(entryId(entry)).get("expr")); var rep = entry.endsWith("Float") ? "FloatRep" : "DoubleRep"; var kind = entry.endsWith("Float") ? "float" : "double";
                 assertEquals("lam", lambda.get(0), stage + "/" + entry);
                 var inputs = objects(lambda.get(1)); assertEquals(1, inputs.size()); var inputRep = object(inputs.getFirst().get("rep")); var resultRep = object(object(lambda.get(3)).get("resultRep"));
                 assertEquals(list(rep), inputRep.get("primReps")); assertEquals(kind, inputRep.get("kind")); assertEquals(true, inputRep.get("evaluated"));
@@ -188,7 +189,7 @@ class SqrtPrimitiveTest {
     private static void mathCall(ExecutableProgram p, String entry, String[] row, String label) {
         boolean floating = entry.endsWith("Float"); Object input;
         if (floating) input = Float.intBitsToFloat((int) Long.parseLong(row[1])); else input = Double.longBitsToDouble(Long.parseUnsignedLong(row[1]));
-        var result = Calls.target(p.hostEntryTarget(1), new Object[]{p.entryValue(entry), new Object[]{input}});
+        var result = Calls.target(p.hostEntryTarget(1), new Object[]{p.entryValue(entryId(entry)), new Object[]{input}});
         if (floating) {
             assertTrue(result instanceof Float, label); float actual = (Float) result, expected = Float.intBitsToFloat((int) Long.parseLong(row[2]));
             if (Float.isNaN(expected)) assertTrue(Float.isNaN(actual), label);
@@ -208,7 +209,7 @@ class SqrtPrimitiveTest {
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 for (var entry : MATH_ENTRIES) {
-                    var p = program(language, CoreModules.reachable(module(stage), entry), backend); var target = p.entryTarget(entry); var selected = rows.get(entry);
+                    var p = program(language, CoreModules.reachable(module(stage), entryId(entry)), backend); var target = p.entryTarget(entryId(entry)); var selected = rows.get(entry);
                     for (var row : selected) mathCall(p, entry, row, stage + "/" + backend + "/" + entry + "/interpreter/" + row[1]);
                     compile(target); long before = count(p);
                     for (var row : selected) { mathCall(p, entry, row, stage + "/" + backend + "/" + entry + "/compiled/" + row[1]); valid(target, stage + "/" + backend + "/" + entry); }
@@ -225,10 +226,10 @@ class SqrtPrimitiveTest {
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 for (var entry : list("sqrtFloat", "sqrtDouble")) {
-                    var selected = rows().get(entry); var p = program(language, CoreModules.reachable(module("pre"), entry), backend);
+                    var selected = rows().get(entry); var p = program(language, CoreModules.reachable(module("pre"), entryId(entry)), backend);
                     long one = entry.equals("sqrtFloat") ? 0x3f800000L : 0x3ff0000000000000L;
                     var warmRows = selected.stream().filter(row -> row[1].equals(Long.toString(one))).toList(); assertEquals(1, warmRows.size()); var warm = warmRows.getFirst();
-                    for (int i = 0; i < 20; i++) call(p, entry, warm, "warm"); var target = p.entryTarget(entry); compile(target);
+                    for (int i = 0; i < 20; i++) call(p, entry, warm, "warm"); var target = p.entryTarget(entryId(entry)); compile(target);
                     for (var row : selected) {
                         long before = count(p); call(p, entry, row, backend + "/" + entry + "/cold/" + row[1]);
                         assertEquals(before + 1, count(p), backend + "/" + entry + "/" + row[1]); valid(target, backend + "/" + entry + "/" + row[1]);
@@ -243,7 +244,7 @@ class SqrtPrimitiveTest {
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 for (var entry : list("sqrtFloat", "sqrtDouble")) for (var variant : list("result", "arity")) {
-                    var linked = CoreModules.reachable(module(stage), entry); var bindings = objects(linked.get("bindings")); assertEquals(1, bindings.size());
+                    var linked = CoreModules.reachable(module(stage), entryId(entry)); var bindings = objects(linked.get("bindings")); assertEquals(1, bindings.size());
                     var lambda = expression(bindings.getFirst().get("expr")); var body = expression(lambda.get(2)); var other = entry.equals("sqrtFloat") ? "double" : "float";
                     var proof = map("kind", other, "primReps", list(other.equals("float") ? "FloatRep" : "DoubleRep"), "evaluated", true);
                     if (variant.equals("arity")) {
