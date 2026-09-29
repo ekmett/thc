@@ -217,7 +217,7 @@ class Case extends Expr {
             for (int i = 0; i < alt.getFields().length; i++) {
                 int[] lanes = i < alt.getVectorFields().length ? alt.getVectorFields()[i] : null;
                 if (lanes == null) alt.restore(data, i, frame, alt.getFields()[i]);
-                else alt.layout(frame).restoreVector(data, i, frame, lanes, 0);
+                else alt.restoreVector(data, i, frame, lanes);
             }
         }
     }
