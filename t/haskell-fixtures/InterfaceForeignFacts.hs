@@ -436,6 +436,9 @@ prepareImportStubs root directory ghc ghcPkg libdir unitName baseUnit pluginDb p
         case interfaceForeign core of
           ForeignCore.IfaceForeign (Just (ForeignCore.IfaceCStubs header body initializers finalizers)) [] -> do
             let wrappers = case field "wrappers" proof of Just (Array values) -> toList values; _ -> []
+                -- GHC includes the result descriptor for libffi adjustors,
+                -- while native adjustors describe only the callback arguments.
+                encoding = if platformMisc_libFFI (platformMisc flags) then "WW" else "W"
                 int32 = object ["kind" .= ("tycon" :: String), "arguments" .= ([] :: [Value]),
                   "name" .= object ["unit" .= ("ghc-internal" :: String),
                     "module" .= ("GHC.Internal.Int" :: String), "occurrence" .= ("Int32" :: String),
@@ -448,7 +451,7 @@ prepareImportStubs root directory ghc ghcPkg libdir unitName baseUnit pluginDb p
                 field "normalizationRole" record == Just (String "representational") &&
                 field "declaredType" record /= Nothing && field "normalizedType" record /= Nothing &&
                 field "arguments" record == Just (toJSON [int32]) && field "result" record == Just int32 &&
-                field "effect" record == Just (String "io") && field "typeString" record == Just (String "W") &&
+                field "effect" record == Just (String "io") && field "typeString" record == Just (String encoding) &&
                 case field "helper" record of
                   Just (String helper) -> not (Text.null helper) &&
                     Text.unpack helper `isInfixOf` header && Text.unpack helper `isInfixOf` body
