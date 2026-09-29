@@ -202,7 +202,7 @@ private List<Object> replaceProof(List<Object> literal, Map<String,Object> proof
     }
     @Test void malformedRubbishProofsAndUnsupportedRepresentationsFailClosed(@TempDir Path directory) throws Exception {
         var decoded = cbd("pre.cbd");
-        var original = CoreModules.reachable(decoded, entry(decoded, "scalarIntRep"));
+        var original = with(decoded, "bindings", CoreModules.reachable(decoded, entry(decoded, "scalarIntRep")).get("bindings"));
         var changes = new LinkedHashMap<String, UnaryOperator<List<Object>>>();
         changes.put("missing", value -> new ArrayList<>(value.subList(0, 3)));
 changes.put("legacy-payload", value -> { var result = new ArrayList<>(value); result.set(2, "IntRep"); return result; });
@@ -486,7 +486,7 @@ changes.put("legacy-payload", value -> { var result = new ArrayList<>(value); re
     }
     @Test void rubbishCannotBecomeALiteralAlternative(@TempDir Path directory) throws Exception {
         var decoded = cbd("pre.cbd");
-        var original = CoreModules.reachable(decoded, entry(decoded, "scalarIntRep")); var bad = object(changeAlternative(original));
+        var original = with(decoded, "bindings", CoreModules.reachable(decoded, entry(decoded, "scalarIntRep")).get("bindings")); var bad = object(changeAlternative(original));
         auditRejected(bad, directory, "pattern");
         for (var backend : list("ast", "bytecode")) try (var context = context()) { entered(context, language ->
             assertThrows(RuntimeFault.class, () -> load(language, backend, bad).entryTarget(entry(bad, "scalarIntRep")))); }
