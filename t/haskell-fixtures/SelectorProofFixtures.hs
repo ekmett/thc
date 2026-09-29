@@ -18,6 +18,9 @@ import System.Directory (createDirectoryIfMissing, listDirectory)
 import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>), takeExtension)
+import THC.Compact.JSON (parseModuleWithoutDebug)
+import THC.Compact.Module (writeModule)
+import THC.Compact.Inspect (inspectContainer)
 
 prepareSelectorProof :: FilePath -> IO ()
 prepareSelectorProof root = do
@@ -39,6 +42,7 @@ prepareSelectorProof root = do
     method <- entry "method"
     superclass <- entry "superclass"
     unary <- entry "unary"
+    implicitSupply <- entry "implicitSupply"
     -- In a non-unary template the dictionary is DATA, each method is a lazy
     -- closure, and the case forces only its dictionary, not the selected field.
     checkTemplate "method" "closure" ["data", "closure"] method
@@ -48,8 +52,21 @@ prepareSelectorProof root = do
                              parameter <- array (at 1 node)]
     check (any (unknown . field "rep") erased)
       "Unary selector erasure unexpectedly gained a binder certificate"
-    putStrLn ("PASS " ++ stage ++ " selector method/superclass proofs and unary exclusion")
-    pure (path : commandArtifacts exported)
+    checkImplicitCase implicitSupply
+    -- The same distinction must survive the existing compact metadata codec.
+    (facts, records) <- either die pure (parseModuleWithoutDebug value)
+    let compact = core </> "SelectorProofAudit.cbd"
+    _ <- writeModule (root </> compact) facts records
+    decoded <- BSC.readFile (root </> compact) >>= either die pure . inspectContainer
+    let decodedBindings = array (field "bindings" decoded)
+        originals = map (field "expr") bindings
+        restored = map (field "expr") decodedBindings
+        caseProofs expressions = [(field "rep" (at 4 node), field "resultRep" (at 4 node)) |
+          expression <- expressions, node <- descendants expression, tagged "case" node]
+    check (caseProofs originals == caseProofs restored)
+      "Compact roundtrip changed intrinsic or enclosing case certificates"
+    putStrLn ("PASS " ++ stage ++ " selector and implicit-parameter case proofs, unary exclusion, compact roundtrip")
+    pure (path : compact : commandArtifacts exported)
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
   let api = directory </> "api"
   createDirectoryIfMissing True (root </> api)
@@ -64,10 +81,12 @@ prepareSelectorProof root = do
     [path, source]
   BSC.putStr (commandStdout checked)
   compiler <- listDirectory (root </> "src/compiler/THC")
+  codec <- listDirectory (root </> "src/cbd/THC/Compact")
   inputHashes <- hashes root $ sort $ [source, predicate, "t/haskell-fixtures/SelectorProofFixtures.hs",
     "t/haskell-fixtures/Main.hs", "t/haskell-fixtures/FixtureSupport.hs",
     "bin/export-core.sh", "bin/build-compiler.sh", "bin/toolchain.sh", "bin/plugin.py", "thc.cabal"] ++
-    ["src/compiler/THC" </> name | name <- compiler, takeExtension name == ".hs"]
+    ["src/compiler/THC" </> name | name <- compiler, takeExtension name == ".hs"] ++
+    ["src/cbd/THC/Compact" </> name | name <- codec, takeExtension name == ".hs"]
   artifactHashes <- hashes root (concat artifacts ++ concatMap commandArtifacts [built, libdir, checked])
   writeJson (root </> directory </> "manifest.json") $ object
     ["schema" .= (1 :: Int), "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes]
@@ -97,6 +116,19 @@ prepareSelectorProof root = do
           check (boxed resultKind False (field "rep" (lastValue (at 3 alternative))))
             (label ++ ": selected result lost its exact lazy carrier")
         _ -> die (label ++ ": selector is not one constructor alternative")
+
+    checkImplicitCase expression = do
+      let cases = [node | node <- descendants expression, tagged "case" node,
+                         unknown (field "rep" (at 4 node))]
+      node <- case cases of
+        [one] -> pure one
+        _ -> die "Expected one genuinely erased C:IP case result"
+      let result = field "resultRep" (at 4 node)
+      check (boxed "data" False result)
+        "Implicit-parameter erasure lost the intrinsic case result certificate"
+      check (length (array (at 3 node)) == 2 && all
+        (boxed "data" True . field "rep" . lastValue . at 3) (array (at 3 node)))
+        "Implicit-parameter case alternatives lost their independent payload proofs"
 
 check :: Bool -> String -> IO ()
 check condition message = unless condition (die message)

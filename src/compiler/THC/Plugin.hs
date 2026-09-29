@@ -804,7 +804,9 @@ exprRaw d original = case original of
   Case scrut b _ alts ->
     let branchCtx = d { evaluatedIds = extendVarSetList (evaluatedIds d) (b : scrutineeVars scrut) }
     in node [S "case",expr d scrut,S (varKey d b),A (map (alt branchCtx) alts)]
-      [("binder",binderWithState d True b)]
+      -- Keep the typed case's own result when an enclosing erased unary
+      -- constructor or cast replaces only the expression's public rep.
+      [("binder",binderWithState d True b),("resultRep",exprRep d original)]
   Cast e _ -> withRep (exprRep d original) (expr d e)
   Tick tick e -> expr (underTick d tick) e
   Type _ -> A [S "unsupported",S "type-as-value"]
