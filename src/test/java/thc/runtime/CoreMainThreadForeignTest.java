@@ -42,11 +42,34 @@ class CoreMainThreadForeignTest {
         var body = List.of("lam", List.of(Map.of("id", "w", "name", "w", "lifted", false, "rep", weak),
             Map.of("id", "s", "name", "s", "lifted", false, "rep", state)), application(), Map.of("rep", closure, "resultRep", tuple(false)));
         var binding = Map.of("id", "register", "name", "register", "arity", 2, "lifted", true, "rep", closure, "expr", body);
-        return Map.of("bindings", List.of(binding), "constructors", List.of(), "instrument", true);
+        return BoxedForeignProofFixtures.withProof(Map.of("bindings", List.of(binding), "constructors", List.of(), "instrument", true));
     }
     private Map<String, Object> changed(Map<?, ?> original, String key, Object value) {
         var changed = new LinkedHashMap<String, Object>(); original.forEach((k, v) -> changed.put((String) k, v));
         changed.put(key, value); return changed;
+    }
+    @Test void missingOrWrongNominalProofRejectsBeforeMainThreadRegistration() {
+        for (var backend : List.of("ast", "bytecode")) try (var context = Main.executionContext(false)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var threads = Language.currentState().getThreads(); var before = threads.mainThreadRegistration();
+                var missing = new LinkedHashMap<>(module()); missing.remove("staticForeignImports");
+                java.util.function.Consumer<Map<String,Object>> lower = source -> {
+                    var program = backend.equals("ast") ? new Program(language, source) : new BytecodeProgram(language, source);
+                    program.entryTarget("register");
+                };
+                assertThrows(RuntimeFault.class, () -> lower.accept(missing)); assertSame(before, threads.mainThreadRegistration());
+                for (var nominal : List.of("declaredType", "normalizedType")) {
+                    var wrong = module(); var proof = (Map<?,?>) wrong.get("staticForeignImports");
+                    var declaration = (Map<String,Object>) ((List<?>) proof.get("imports")).getFirst();
+                    var type = changed((Map<?,?>) declaration.get(nominal), "argument", Map.of("kind", "tycon", "name",
+                        Map.of("unit", "ghc-internal", "module", "GHC.Internal.Prim", "occurrence", "ThreadId#", "namespace", "type"), "arguments", List.of()));
+                    declaration.put(nominal, type);
+                    assertThrows(IllegalArgumentException.class, () -> lower.accept(wrong)); assertSame(before, threads.mainThreadRegistration());
+                }
+            } finally { context.leave(); }
+        }
     }
     @Test void exactOriginalWeakAndStateAbiRejectsNearMisses() {
         var good = proof();
@@ -121,6 +144,23 @@ class CoreMainThreadForeignTest {
                     assertEquals(0, handoff.getResults().getDepth()); assertEquals(0, handoff.getResults().retainedReferences());
                     assertNull(handoff.getPending());
                 } finally { threads.leaveCurrent(GuestThreadStatus.FINISHED); }
+            } finally { context.leave(); }
+        }
+    }
+    @Test void fabricatedThreadKeysRejectBeforeReplacingTheMainRegistration() {
+        try (var context = Main.executionContext(false)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var runtime = Language.currentState(); var threads = runtime.getThreads(); threads.enterCurrent();
+                try {
+                    var self = threads.currentIdentity();
+                    CoreMainThreadForeign.register(null, runtime.getWeaks().make(self, new Object(), null));
+                    var original = threads.mainThreadRegistration();
+                    var impostor = new GuestThreadId(self.getLogicalId(), threads, 0, Thread.currentThread(), false);
+                    var weak = runtime.getWeaks().make(impostor, new Object(), null);
+                    assertThrows(RuntimeFault.class, () -> CoreMainThreadForeign.register(null, weak));
+                    assertSame(original, threads.mainThreadRegistration());
+                } finally { threads.leaveCurrent(); }
             } finally { context.leave(); }
         }
     }

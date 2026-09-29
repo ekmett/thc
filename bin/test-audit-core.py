@@ -2914,6 +2914,54 @@ class OriginalUnixLibcDeclarationTest(unittest.TestCase):
         self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
 
 
+class OriginalThreadIdentityDeclarationTest(unittest.TestCase):
+    symbols = ('rts_getThreadId', 'eq_thread', 'cmp_thread')
+
+    def test_context_owned_identity_abi_and_capability_controls(self):
+        fixture = LibdwUnavailableAuditTest()
+        enabled = CAP
+        for symbol in self.symbols:
+            self.assertEqual(1, CAP['managedForeignCalls'].count(symbol))
+        scalar = lambda rep, evaluated=True: dict(kind=core_original_foreign.scalar_kind(rep),
+            primReps=[] if rep is None else [rep], evaluated=evaluated)
+        for symbol, count, output in (('rts_getThreadId', 1, 'Word64Rep'), ('eq_thread', 2, 'Word8Rep'), ('cmp_thread', 2, 'Int32Rep')):
+            arguments = ['BoxedRep (Just Unlifted)'] * count + [None]
+            declaration = dict(schema=1, target=dict(kind='static', symbol=symbol, unit='ghc-internal', isFunction=True),
+                convention='ccall', safety='unsafe', arity=len(arguments), suppliedArity=len(arguments),
+                argumentReps=[scalar(rep, False) for rep in arguments], resultRep=dict(kind='unknown', primReps=[output],
+                    evaluated=False, aggregate='unboxed-tuple', components=[scalar(None), scalar(output)]))
+            self.assertTrue(fixture.audit(fixture.fixture(declaration), enabled)['accepted'])
+            disabled = dict(enabled, managedForeignCalls=[name for name in enabled['managedForeignCalls'] if name != symbol])
+            self.assertFalse(fixture.audit(fixture.fixture(declaration), disabled)['accepted'])
+            for key, value in (('safety', 'safe'), ('convention', 'capi'), ('arity', 0), ('suppliedArity', 1), ('schema', 1.0)):
+                wrong = copy.deepcopy(declaration); wrong[key] = value
+                self.assertFalse(fixture.audit(fixture.fixture(wrong), enabled)['accepted'])
+            for unit in ('main', 'ghc-prim', 'ghc-internal-9.1401.0-inplace'):
+                wrong = copy.deepcopy(declaration); wrong['target']['unit'] = unit
+                self.assertFalse(fixture.audit(fixture.fixture(wrong), enabled)['accepted'])
+            for carrier in ('AddrRep', 'BoxedRep (Just Lifted)', 'BoxedRep Nothing'):
+                wrong = copy.deepcopy(declaration); wrong['argumentReps'][0] = scalar(carrier, False)
+                self.assertFalse(fixture.audit(fixture.fixture(wrong), enabled)['accepted'])
+        for symbol in ('enableAllocationLimit', 'disableAllocationLimit', 'prefixeq_thread', 'cmp_thread2'):
+            self.assertNotIn(symbol, core_original_foreign.OPERATIONS)
+
+    def test_genuine_original_call_inventory(self):
+        source = os.environ.get('THC_TEST_THREAD_ID_CBD')
+        if not source:
+            self.skipTest('requires genuine original-unit stock import proof')
+        data = Path(source).read_bytes()
+        self.assertEqual(os.environ.get('THC_TEST_THREAD_ID_CBD_SHA256'), hashlib.sha256(data).hexdigest())
+        module = core_package_manifest.inspect_cbd(data)
+        self.assertEqual('ghc-internal', module['unit'])
+        self.assertEqual('GHC.Internal.Conc.Sync', module['module'])
+        proof = module['staticForeignImports']
+        self.assertEqual('verified', proof['status'])
+        fixture = LibdwUnavailableAuditTest()
+        for symbol in self.symbols:
+            declaration = next(call for call in proof['expectedCalls'] if call['target'].get('symbol') == symbol)
+            self.assertTrue(fixture.audit(fixture.fixture(declaration))['accepted'])
+
+
 class OriginalEnvironmentDeclarationTest(unittest.TestCase):
     def test_environment_abi_and_capability_controls(self):
         fixture = LibdwUnavailableAuditTest()

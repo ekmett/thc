@@ -3,6 +3,7 @@
 package thc.runtime;
 
 import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.RootCallTarget;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
@@ -56,9 +57,17 @@ public class RtsDiagnosticsTest {
         return List.of("app", List.of("var", "foreign", Map.of("rep", scalar("BoxedRep (Just Lifted)"))), arguments, flags, false, false, Map.of("rep", tuple(true), "foreignCall", descriptor));
     }
     private ExecutableProgram program(Language language, String backend, List<Object> call) {
-        return program(language, backend, OriginalStdioChecks.rawModule(call, Map.of("sourceFiles", List.of(), "sourceSpans", List.of()), null));
+        return program(language, backend, BoxedForeignProofFixtures.withProof(OriginalStdioChecks.rawModule(call, Map.of("sourceFiles", List.of(), "sourceSpans", List.of()), null)));
     }
     private ExecutableProgram program(Language language, String backend, Map<String, Object> module) { return backend.equals("ast") ? new Program(language, module) : new BytecodeProgram(language, module); }
+    private Object invoke(RootCallTarget target, Object[] arguments) {
+        var typed = ((GuestRoot) target.getRootNode()).getTypedInput();
+        if (typed == null) return Calls.target(target, arguments);
+        var input = typed.state().getArguments().acquire(typed.getPacket()); input.setInputMode(1);
+        typed.getPacket().setLong(input, 0, (Long) arguments[0]);
+        for (int i = 1; i < arguments.length; i++) typed.getPacket().setObject(input, typed.getHeader() + i - 1, arguments[i]);
+        return TypedInputs.invokeTypedInput(target, input, packet -> Calls.target(target, packet));
+    }
     private ManagedAddress format(String operation) { return cstring((operation.equals("debugBelch2") ? "%s\n" : "%s").getBytes(StandardCharsets.UTF_8)); }
     private byte[] bytes(List<Long> values) { var result = new byte[values.size()]; for (int i = 0; i < result.length; i++) result[i] = values.get(i).byteValue(); return result; }
     private ManagedAddress cstring(byte[] bytes) { return ManagedAddress.fromByteArray(Arrays.copyOf(bytes, bytes.length + 1)); }
@@ -95,7 +104,8 @@ public class RtsDiagnosticsTest {
                                     case "reportStackOverflow" -> new Object[]{0L, threads.currentIdentity(), thc.runtime.Unit.INSTANCE};
                                     default -> new Object[]{0L, thc.runtime.Unit.INSTANCE};
                                 };
-                                long before = ((Number) program.diagnostics().get("compiledEntries")).longValue(); assertEquals(0L, Calls.target(target, arguments));
+                                long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
+                                assertEquals(0L, invoke(target, arguments));
                                 byte[] expected;
                                 switch (operation) {
                                     case "errorBelch2" -> { var message = bytes((List<Long>) row.get("message")); expected = Arrays.copyOf(message, message.length + 1); expected[message.length] = 10; }
@@ -115,7 +125,7 @@ public class RtsDiagnosticsTest {
                             // Native traceIO filters NULs in Haskell, then makes
                             // these two leaf calls. The leaf itself only truncates.
                             output.reset(); long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
-                            for (var message : List.of("leftright", "WARNING: previous trace message had null bytes")) assertEquals(0L, Calls.target(target, new Object[]{0L, format(operation), cstring(message.getBytes(StandardCharsets.UTF_8)), thc.runtime.Unit.INSTANCE}));
+                            for (var message : List.of("leftright", "WARNING: previous trace message had null bytes")) assertEquals(0L, invoke(target, new Object[]{0L, format(operation), cstring(message.getBytes(StandardCharsets.UTF_8)), thc.runtime.Unit.INSTANCE}));
                             assertArrayEquals(bytes((List<Long>) nativeOutput.get("trace-nul").get("stderr")), output.toByteArray());
                             assertEquals(before + 2, ((Number) program.diagnostics().get("compiledEntries")).longValue());
                             assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target)); assertEquals(0, stdout.size());
@@ -139,7 +149,7 @@ public class RtsDiagnosticsTest {
                             new Object[]{0L, ManagedAddress.fromByteArray(new byte[]{37, 115}), text, thc.runtime.Unit.INSTANCE},
                             new Object[]{0L, validFormat, ManagedAddress.fromByteArray(new byte[]{1, 2}), thc.runtime.Unit.INSTANCE},
                             new Object[]{0L, ManagedAddress.nullAddress(), text, thc.runtime.Unit.INSTANCE}, new Object[]{0L, validFormat, ManagedAddress.nullAddress(), thc.runtime.Unit.INSTANCE})) {
-                        assertThrows(RuntimeFault.class, () -> Calls.target(target, args)); assertEquals(0, output.size()); assertEquals(0, stdout.size());
+                        assertThrows(RuntimeFault.class, () -> invoke(target, args)); assertEquals(0, output.size()); assertEquals(0, stdout.size());
                     }
                     for (var mutation : List.of(new Mutation("safety", "safe"), new Mutation("arity", 4L), new Mutation("suppliedArity", 2L), new Mutation("convention", "capi"), new Mutation("schema", 2L))) {
                         var broken = (List<Object>) Json.parse(Json.stringify(call(operation)));
@@ -148,7 +158,12 @@ public class RtsDiagnosticsTest {
                     }
                     for (var unit : List.of("main", "ghc-internal-9.1401.0-inplace")) {
                         var broken = (List<Object>) Json.parse(Json.stringify(call(operation))); var descriptor = (Map<?, ?>) ((Map<?, ?>) broken.get(6)).get("foreignCall");
-                        ((Map<String, Object>) descriptor.get("target")).put("unit", unit); assertThrows(RuntimeFault.class, () -> program(language, backend, broken));
+                        ((Map<String, Object>) descriptor.get("target")).put("unit", unit);
+                        // An ordinary library spelling is not an RTS capability. Unknown linkage
+                        // is deferred, but must fail at its first entry without diagnostic output.
+                        var ordinary = program(language, backend, broken).entryTarget("entry");
+                        assertThrows(UnsupportedCore.class, () -> invoke(ordinary, new Object[]{0L, validFormat, text, Unit.INSTANCE}));
+                        assertEquals(0, output.size()); assertEquals(0, stdout.size());
                     }
                     var source = Map.<String, Object>of("sourceFiles", List.of(), "sourceSpans", List.of());
                     assertThrows(RuntimeFault.class, () -> program(language, backend, OriginalStdioChecks.rawModule(call(operation), source, 2)));
@@ -183,6 +198,29 @@ public class RtsDiagnosticsTest {
             assertDoesNotThrow(() -> RtsDiagnostics.report(null, RtsDiagnosticOp.HEAP, null, null));
             assertDoesNotThrow(() -> RtsDiagnostics.report(null, RtsDiagnosticOp.DEBUG, format("debugBelch2"), cstring("message".getBytes(StandardCharsets.UTF_8))));
         }); }
+    }
+    @Test public void boxedNominalProofAndCanonicalIdentityRejectBeforeOverflowOutput() throws Exception {
+        for (var backend : List.of("ast", "bytecode")) {
+            var output = new ByteArrayOutputStream();
+            try (var context = context(output)) { entered(context, language -> {
+                var raw = OriginalStdioChecks.rawModule(call("reportStackOverflow"), Map.of("sourceFiles", List.of(), "sourceSpans", List.of()), null);
+                assertThrows(RuntimeFault.class, () -> program(language, backend, raw).entryTarget("entry")); assertEquals(0, output.size());
+                for (var nominal : List.of("declaredType", "normalizedType")) {
+                    var source = BoxedForeignProofFixtures.withProof(raw); var proof = (Map<?,?>) source.get("staticForeignImports");
+                    var declaration = (Map<String,Object>) ((List<?>) proof.get("imports")).getFirst();
+                    var type = new LinkedHashMap<>((Map<String,Object>) declaration.get(nominal));
+                    type.put("argument", Map.of("kind", "tycon", "name", Map.of("unit", "ghc-internal", "module", "GHC.Internal.Prim",
+                        "occurrence", "ByteArray#", "namespace", "type"), "arguments", List.of())); declaration.put(nominal, type);
+                    assertThrows(IllegalArgumentException.class, () -> program(language, backend, source).entryTarget("entry")); assertEquals(0, output.size());
+                }
+                var threads = Language.currentState().getThreads(); threads.enterCurrent();
+                try {
+                    var self = threads.currentIdentity(); var impostor = new GuestThreadId(self.getLogicalId(), threads, 0, Thread.currentThread(), false);
+                    var target = program(language, backend, call("reportStackOverflow")).entryTarget("entry");
+                    assertThrows(RuntimeFault.class, () -> Calls.target(target, new Object[]{0L, impostor, Unit.INSTANCE})); assertEquals(0, output.size());
+                } finally { threads.leaveCurrent(); }
+            }); }
+        }
     }
     @Test public void ownedNativeCStringAliasesRejectCrossContextAndExpiredStorage() throws Exception {
         assumeTrue(System.getProperty("os.name").equals("Linux") && Set.of("amd64", "x86_64").contains(System.getProperty("os.arch")), "Owned native malloc currently has the verified Linux x86_64 ABI");

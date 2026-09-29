@@ -82,15 +82,16 @@ public final class ManagedWeaks {
     }
     private GuestThreadId threadKey(Payload payload, GuestThreads threads) {
         if (!(payload.key instanceof GuestThreadId key)) throw fault("Main thread Weak# key is not a ThreadId#");
-        if (key.getOwner() != threads) throw fault("Main thread Weak# key belongs to another context");
-        return key;
+        return threads.requireIdentity(key);
     }
     // No key or callback escapes. The thread service checks the original canonical
     // carrier; the returned number is still only a snapshot.
     @TruffleBoundary synchronized Long mainThreadJavaId(Object value, GuestThreads threads) {
         if (closed) return null;
         var payload = live.get(handle(value));
-        return payload == null ? null : threads.liveJavaId(threadKey(payload, threads));
+        // mainThreadKey admitted this immutable key before publishing the capability.
+        // A later context close expires liveness; it does not invalidate the query itself.
+        return payload == null ? null : threads.liveJavaId((GuestThreadId) payload.key);
     }
     public synchronized int retainedCount() { return live.size(); }
     public synchronized void close() { closed = true; live.clear(); }

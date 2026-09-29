@@ -50,6 +50,7 @@ public final class BytecodeProgram implements ExecutableProgram {
     private final RubbishLiterals rubbishLiterals;
     private final List<thc.ForeignBitcode> foreignLinks;
     private final List<thc.PackageScalarLink> packageScalarLinks;
+    private final List<CoreBoxedForeignDeclarations> boxedForeignDeclarations;
     private final Map<String,thc.ManagedCallbackSignature> nativeCallbacks;
     private final boolean delimited;
     private final boolean containsDelimited;
@@ -107,6 +108,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         this.checkpoint = checkpoint;
         this.enableAsync = enableAsync;
         thc.CoreForeignArtifacts.INSTANCE.requireExecutableInput(moduleData);
+        boxedForeignDeclarations = CoreBoxedForeignDeclarations.admissions(moduleData);
         demand = moduleData.get("demandBindings") instanceof CoreDemandBindings value ? value : null;
         foreignExceptionBridge = ForeignExceptionBridge.bind(moduleData, this::entryValue, this::dataLayout);
         rubbishLiterals = new RubbishLiterals(language);
@@ -6232,7 +6234,10 @@ public final class BytecodeProgram implements ExecutableProgram {
         boolean allocationCounterForeign = override == CoreForeignOverride.ALLOCATION_COUNTER && CoreBoundThreadForeign.validate(metadata, representations, flags, resultRepresentation, true);
         var stringRts = override == CoreForeignOverride.STRING_RTS ? CoreStringRtsForeign.validate(metadata, representations, flags, resultRepresentation) : null;
         var environment = override == CoreForeignOverride.ENVIRONMENT ? CoreEnvironmentForeign.validate(metadata, representations, flags, resultRepresentation) : null;
+        var threadIdForeign = override == CoreForeignOverride.THREAD_ID ? CoreThreadIdForeign.validate(metadata, representations, flags, resultRepresentation) : null;
         var rtsDiagnostic = override == CoreForeignOverride.RTS_DIAGNOSTIC ? CoreRtsDiagnosticForeign.validate(metadata, representations, flags, resultRepresentation) : null;
+        if (threadIdForeign != null || mainThreadForeign || rtsDiagnostic == RtsDiagnosticOp.STACK)
+            CoreBoxedForeignDeclarations.requireCall(boxedForeignDeclarations, metadata);
         var rtsArguments = override == CoreForeignOverride.RTS_ARGUMENTS ? CoreRtsArgumentsForeign.validate(metadata, representations, flags, resultRepresentation) : null;
         var managedFile = override == CoreForeignOverride.MANAGED_FILE ? CoreManagedFiles.validate(metadata, representations, flags, resultRepresentation) : null;
         var javascript = packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && managedFile == null
@@ -6500,6 +6505,21 @@ public final class BytecodeProgram implements ExecutableProgram {
                 if (rtsArguments == RtsArgumentsOp.GET) b.beginGetProgramArguments(); else b.beginSetProgramArguments();
                 for (var operand : operands) operand.emit(e);
                 if (rtsArguments == RtsArgumentsOp.GET) b.endGetProgramArguments(); else b.endSetProgramArguments();
+            });
+        }
+        if (threadIdForeign != null) {
+            CoreThreadIdForeign.validateHead(fn, defined);
+            var operands = new ArrayList<Expression>();
+            for (int index = 0; index < args.size(); ++index) {
+                var argument = args.get(index); var operand = compile(argument, scope, false);
+                CoreThreadIdForeign.validateOperand(threadIdForeign, index, operand.proof(), lexicalProof(argument, scope));
+                operands.add(operand);
+            }
+            return tupleExpression(tupleProof, (e, destination) -> {
+                var b = e.builder; b.beginThreadIdForeign(destination.getFirst(), threadIdForeign);
+                operands.getFirst().emit(e);
+                if (threadIdForeign.getArguments() == 2) operands.get(1).emit(e); else b.emitLoadConstant(Unit.INSTANCE);
+                operands.getLast().emit(e); b.endThreadIdForeign();
             });
         }
         if (rtsDiagnostic != null) {

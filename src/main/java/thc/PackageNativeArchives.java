@@ -3,6 +3,7 @@
 package thc;
 
 import java.util.*;
+import thc.runtime.CoreBoxedForeignDeclarations;
 
 public final class PackageNativeArchives {
     public static final PackageNativeArchives INSTANCE = new PackageNativeArchives();
@@ -17,13 +18,18 @@ public final class PackageNativeArchives {
     private static String text(Object value) { check(value instanceof String s && !s.isEmpty() && s.indexOf(0) < 0, "text"); return (String) value; }
     private static List<?> list(Object value) { check(value instanceof List<?>, "list"); return (List<?>) value; }
     private static boolean scalar(Object value) { return value instanceof String s && SCALAR.contains(s); }
+    private static boolean boxed(Object value) { return in(value, "BoxedRep (Just Unlifted)", "BoxedRep (Just Lifted)"); }
+    private static boolean gcBoxed(Map<?,?> emitted) {
+        return list(emitted.get("arguments")).stream().anyMatch(PackageNativeArchives::boxed) ||
+            list(emitted.get("result")).stream().anyMatch(PackageNativeArchives::boxed);
+    }
     private static Map<?,?> emitted(Object value, String unit) {
         var emitted = record(value, "symbol unit convention safety arguments result");
         check(text(emitted.get("symbol")).matches("[A-Za-z_][A-Za-z0-9_]*") && Objects.equals(emitted.get("unit"), unit) && in(emitted.get("convention"), "ccall", "capi") && in(emitted.get("safety"), "unsafe", "safe", "interruptible"), "emitted identity");
         var args = list(emitted.get("arguments")); var result = list(emitted.get("result"));
         boolean valid = !args.isEmpty() && Objects.equals(args.getLast(), "void");
-        if (valid) for (Object arg : args.subList(0, args.size() - 1)) if (!scalar(arg) && !in(arg, "ByteArray#", "MutableByteArray#")) { valid = false; break; }
-        check(valid && (result.equals(List.of("void")) || result.size() == 2 && Objects.equals(result.getFirst(), "void") && scalar(result.get(1))), "emitted carriers");
+        if (valid) for (Object arg : args.subList(0, args.size() - 1)) if (!scalar(arg) && !boxed(arg) && !in(arg, "ByteArray#", "MutableByteArray#")) { valid = false; break; }
+        check(valid && (result.equals(List.of("void")) || result.size() == 2 && Objects.equals(result.getFirst(), "void") && (scalar(result.get(1)) || boxed(result.get(1)))), "emitted carriers");
         return emitted;
     }
     private static List<?> cAbi(Map<?,?> emitted) {
@@ -86,11 +92,14 @@ public final class PackageNativeArchives {
                 check((entry.get("unit") == null || Objects.equals(entry.get("unit"), unit)) && in(entry.get("convention"), "ccall", "capi") && (Objects.equals(entry.get("isFunction"), true) || Objects.equals(entry.get("convention"), "capi") && Objects.equals(entry.get("isFunction"), false)) && in(entry.get("safety"), "unsafe", "safe", "interruptible") && Objects.equals(entry.get("normalizationRole"), "representational"), "import metadata");
                 PackageScalarLinks.archiveType(entry.get("declaredType")); PackageScalarLinks.archiveType(entry.get("normalizedType"));
                 var emitted = emitted(entry.get("emitted"), unit);
+                CoreBoxedForeignDeclarations.validate(entry);
                 check(Objects.equals(emitted.get("convention"), entry.get("convention")) && Objects.equals(emitted.get("safety"), entry.get("safety")), "emitted declaration"); imports.add(emitted);
             }
         }
         if (module.containsKey("staticForeignImportStubs")) check(Objects.equals(module.get("staticForeignImportStubs"), proof), "retained stub provenance differs");
-        var conflicts = new ArrayList<Map<?,?>>(); if (conflictField) for (Object value : list(archive.get("conflictingImports"))) conflicts.add(emitted(value, unit));
+        var conflicts = new ArrayList<Map<?,?>>(); if (conflictField) for (Object value : list(archive.get("conflictingImports"))) {
+            var witness = emitted(value, unit); check(!gcBoxed(witness), "GC-boxed conflict is not a native ABI"); conflicts.add(witness);
+        }
         if (conflictField) check(!conflicts.isEmpty() && new ArrayList<>(new LinkedHashSet<>(conflicts)).equals(conflicts) && unknown == null, "conflicting import inventory");
         var conflictGroups = new LinkedHashMap<Object,List<Map<?,?>>>(); for (var entry : conflicts) conflictGroups.computeIfAbsent(entry.get("symbol"), ignored -> new ArrayList<>()).add(entry);
         for (var group : conflictGroups.entrySet()) {
@@ -104,12 +113,12 @@ public final class PackageNativeArchives {
             }
             check(validVariants, "imports do not have conflicting C ABIs");
             var local = new ArrayList<Map<?,?>>();
-            for (var entry : imports) if (Objects.equals(entry.get("symbol"), group.getKey()) && !Objects.equals(entry.get("safety"), "interruptible")) local.add(entry);
+            for (var entry : imports) if (Objects.equals(entry.get("symbol"), group.getKey()) && !Objects.equals(entry.get("safety"), "interruptible") && !gcBoxed(entry)) local.add(entry);
             check(!local.isEmpty() && variants.containsAll(local), "conflict witnesses differ from local imports");
         }
         var conflictSymbols = conflictGroups.keySet();
         var selectedImports = new ArrayList<Map<?,?>>();
-        for (var entry : imports) if (Objects.equals(entry.get("safety"), "interruptible") || conflictSymbols.contains(entry.get("symbol"))) selectedImports.add(entry);
+        for (var entry : imports) if (Objects.equals(entry.get("safety"), "interruptible") || gcBoxed(entry) || conflictSymbols.contains(entry.get("symbol"))) selectedImports.add(entry);
         List<Map<?,?>> expected = Collections.unmodifiableList(selectedImports);
         check(list(archive.get("unsupportedImports")).equals(expected), "unsupported import inventory differs");
         var unresolved = new ArrayList<String>();

@@ -129,7 +129,7 @@ public final class GuestThreads {
     // Weak keys release dead Java carriers; retained IDs keep their assigned capability.
     private final WeakHashMap<Thread, GuestThreadId> identities = new WeakHashMap<>();
     // This registry retains neither the completed ThreadId# nor its Java carrier.
-    private final WeakHashMap<GuestThreadId, Boolean> knownThreads = new WeakHashMap<>();
+    private final WeakHashMap<GuestThreadId, java.lang.ref.WeakReference<GuestThreadId>> knownThreads = new WeakHashMap<>();
     // Like TSO.label, the exact ByteArray# stays live while its ThreadId# does.
     private final WeakHashMap<GuestThreadId, Object> labels = new WeakHashMap<>();
     private MainThreadWeakKey mainThreadWeak;
@@ -265,7 +265,7 @@ public final class GuestThreads {
         if (nextIdentity <= 0) throw new IllegalStateException("Guest thread identity space exhausted");
         var identity = new GuestThreadId(nextIdentity++, this, selected, current, forked, capability != null, callback);
         if (loom != null) loom.attach(identity);
-        knownThreads.put(identity, Boolean.TRUE); return identity;
+        knownThreads.put(identity, new java.lang.ref.WeakReference<>(identity)); return identity;
     }
     private synchronized long enterCurrentImpl(MaskingState inheritedMask, boolean forked, boolean externalAsync, Long capability, boolean callback, LoomScheduler.Admission admission) {
         if (closed) throw new IllegalStateException("Guest context has closed");
@@ -337,9 +337,18 @@ public final class GuestThreads {
         return identity.allocationRemaining - (allocated - identity.allocationBaseline);
     }
     public void setAllocationCounter(long value) { setAllocationCounter(value, currentIdentity()); }
+    /** A retained completed identity remains valid; a same-number fabricated object does not. */
+    @TruffleBoundary public synchronized GuestThreadId requireIdentity(Object value) {
+        if (closed) throw fault("Guest context has closed");
+        if (!(value instanceof GuestThreadId identity) || identity.owner != this)
+            throw fault("Expected a ThreadId# from this guest context");
+        var canonical = knownThreads.get(identity);
+        if (canonical == null || canonical.get() != identity) throw fault("ThreadId# is not a registered guest lifetime");
+        return identity;
+    }
     @TruffleBoundary public synchronized void setAllocationCounter(long value, GuestThreadId identity) {
         if (closed) throw fault("Guest context has closed");
-        if (identity.owner != this || !knownThreads.containsKey(identity)) throw fault("ThreadId# belongs to another guest context");
+        requireIdentity(identity);
         var slot = threads.get(identity.logicalId);
         if (!identity.allocationSuspended && slot != null && slot.identity == identity)
             identity.allocationBaseline = GuestAllocationAccounting.bytes(identity.javaId);

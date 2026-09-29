@@ -204,7 +204,7 @@ class ManagedWeakTest {
                     key.getLogicalId(), threads, key.getCapability(), Thread.currentThread(), false, false, false);
                 assertEquals(key, impostor, "Numeric equality alone must not establish canonical identity");
                 assertNull(threads.liveJavaId(impostor));
-                assertNull(owner.mainThreadKey(owner.make(impostor, new Object(), null), threads).liveJavaId());
+                assertThrows(RuntimeFault.class, () -> owner.mainThreadKey(owner.make(impostor, new Object(), null), threads));
                 closing = owner.mainThreadKey(owner.make(key, new Object(), null), threads);
                 var wrongKey = owner.make(new Object(), key, null);
                 assertThrows(RuntimeFault.class, () -> owner.mainThreadKey(wrongKey, threads));
