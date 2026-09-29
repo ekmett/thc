@@ -495,11 +495,6 @@
       "bytes": 9066
     },
     {
-      "path": "capture-source.sh",
-      "sha256": "d23f757d3b0459fc637723e1ff2b3e0db2ffc9e6e6e702db22f5503829bc9116",
-      "bytes": 2434
-    },
-    {
       "path": "captures/ast-off/command.sh",
       "sha256": "9768aeaff94e2bbf7d2c6b880322f50a8fdf1a63583d9bcb73e659b7ef79a023",
       "bytes": 637
@@ -698,11 +693,6 @@
       "path": "render-cfg.py",
       "sha256": "b055204f5996f2f615fd717948f8381acfac3d2d53e21cfd330f6ddddd61e861",
       "bytes": 2484
-    },
-    {
-      "path": "reparse.sh",
-      "sha256": "a1bb6a9fac8e7c1a447fe151b7fd0b7ccd750726d51e94a57c201db9adf262f7",
-      "bytes": 1263
     },
     {
       "path": "runtime-manifest.json",

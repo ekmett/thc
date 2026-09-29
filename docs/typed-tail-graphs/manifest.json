@@ -357,19 +357,9 @@
       "sha256": "50012c9621dbc513a7522899a918e3046dd259342d90dd351e6cd7b3d9568365"
     },
     {
-      "path": "compare-map-source.py",
-      "bytes": 8681,
-      "sha256": "b68047d01f49271210f01bea61d47665751a1363a4b83b8865ccad4c8b95ee5b"
-    },
-    {
       "path": "cycle-audit-loops.py",
       "bytes": 2707,
       "sha256": "d47c873235126e89e75c098f661c4921d5e944eb825c9403a4cefd61225bf742"
-    },
-    {
-      "path": "cycle-capture.sh",
-      "bytes": 3306,
-      "sha256": "3e7263e1eb08e021afb3787bed398aa4dacecc0e5361d4f69fc5a719593af739"
     },
     {
       "path": "cycle-fixture.json",
@@ -595,11 +585,6 @@
       "path": "selected-bgv.tar.xz",
       "bytes": 7016548,
       "sha256": "05455d3a4a377f39168d67407f24565bf5220b1df2e008c6efbef81eaa73c723"
-    },
-    {
-      "path": "typed-application-capture-source.sh",
-      "bytes": 2266,
-      "sha256": "1824b4d89cb96f3b9a9ff8ae63ff5668b13e8b399cb6baac50b84ad36a1a4b67"
     },
     {
       "path": "typed-application-fixture.json",
