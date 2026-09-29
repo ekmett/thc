@@ -24,6 +24,8 @@ class LazyBindingTest {
             if (CompilerDirectives.inCompiledCode()) compiled[0]++;
             Object result = binding.read();
             if (CompilerDirectives.inCompiledCode()) compiled[1]++;
+            if (compiled.length > 2 && CompilerDirectives.inCompiledCode() &&
+                    CompilerDirectives.isPartialEvaluationConstant(result)) compiled[2]++;
             return result;
         }
     }
@@ -73,6 +75,26 @@ class LazyBindingTest {
                 assertEquals(true, type.getMethod("isValidLastTier").invoke(target));
                 for (int i = 0; i < 32; i++) assertEquals(17L, Calls.target(target, new Object[0]));
                 assertEquals(1, preparations[0]); assertEquals(33L, compiled[0]); assertEquals(33L, compiled[1]);
+                assertEquals(true, type.getMethod("isValidLastTier").invoke(target));
+            } finally { context.leave(); }
+        }
+    }
+    @Test void alreadyPreparedCellIsConstantAtFirstCompiledEntry() throws Exception {
+        try (var context = Main.executionContext(false)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var cell = new GlobalBinding("prepared scalar"); int[] preparations = {0};
+                cell.defer(new Object(), () -> { preparations[0]++; return 17L; });
+                assertEquals(17L, cell.read()); // Inert preparation, not guest execution.
+                long[] compiled = new long[3]; var target = new ColdCellRoot(cell, compiled).getCallTarget();
+                var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget");
+                assertEquals(true, type.getMethod("prepareForAOT").invoke(target));
+                type.getMethod("compile", boolean.class).invoke(target, true);
+                assertEquals(true, type.getMethod("isValidLastTier").invoke(target));
+                assertEquals(17L, Calls.target(target, new Object[0]));
+                assertArrayEquals(new long[]{1, 1, 1}, compiled,
+                    "published linkage must fold without executing or retraining the guest root");
+                assertEquals(1, preparations[0]);
                 assertEquals(true, type.getMethod("isValidLastTier").invoke(target));
             } finally { context.leave(); }
         }
