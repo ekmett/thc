@@ -9,6 +9,7 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.profiles.ValueProfile;
+import com.oracle.truffle.api.profiles.ConditionProfile;
 import jdk.incubator.vector.*;
 
 /** JDK Vector API operations. Values are the JDK carriers themselves. */
@@ -135,6 +136,8 @@ public enum VectorApiOp {
         @CompilationFinal(dimensions = 1) private final ValueProfile[] identities;
         @CompilationFinal(dimensions = 1) private final ValueProfile[] classes;
         private final ValueProfile resultSpecies = ValueProfile.createIdentityProfile();
+        // Keep unobserved masked fallbacks out of full-block vector graphs.
+        private final ConditionProfile fullMask = ConditionProfile.create();
 
         Site(VectorApiOp operation) {
             this.operation = operation;
@@ -151,7 +154,7 @@ public enum VectorApiOp {
             return value instanceof VectorSpecies<?> ? identities[index].profile(value) : classes[index].profile(value);
         }
         Object execute(Object[] values) {
-            Object result = operation.execute(profile(0, values), profile(1, values), profile(2, values), profile(3, values), profile(4, values));
+            Object result = operation.execute(profile(0, values), profile(1, values), profile(2, values), profile(3, values), profile(4, values), fullMask);
             return result instanceof VectorSpecies<?> ? resultSpecies.profile(result) : result;
         }
     }
@@ -199,10 +202,10 @@ public enum VectorApiOp {
     /** The operation is constant at a lowered call site. */
     public Object execute(Object[] a) {
         return execute(a.length > 0 ? a[0] : null, a.length > 1 ? a[1] : null,
-            a.length > 2 ? a[2] : null, a.length > 3 ? a[3] : null, a.length > 4 ? a[4] : null);
+            a.length > 2 ? a[2] : null, a.length > 3 ? a[3] : null, a.length > 4 ? a[4] : null, null);
     }
 
-    private Object execute(Object a0, Object a1, Object a2, Object a3, Object a4) {
+    private Object execute(Object a0, Object a1, Object a2, Object a3, Object a4, ConditionProfile maskProfile) {
         return switch (this) {
             case INT8_SPECIES -> species(ByteVector.SPECIES_PREFERRED, ByteVector.SPECIES_MAX, ((Long) a0));
             case BROADCAST_INT8 -> ByteVector.broadcast(((VectorSpecies) a0), (byte) (int) (Integer) a1);
@@ -293,28 +296,17 @@ public enum VectorApiOp {
             case VEC_EXPAND -> ((Vector) a0).expand(((VectorMask) a1));
             case VEC_CONVERT -> ((Vector) a0).convertShape(VectorOperators.Conversion.ofCast(((Vector) a0).elementType(), ((VectorSpecies) a1).elementType()), ((VectorSpecies) a1), Math.toIntExact(((Long) a2)));
             case VEC_REINTERPRET -> ((Vector) a0).reinterpretShape(((VectorSpecies) a1), Math.toIntExact(((Long) a2)));
-            case INDEX_INT8_VECTOR -> memory(a0, a1, a2, a3, a4);
-            case READ_INT8_VECTOR -> memory(a0, a1, a2, a3, a4);
-            case WRITE_INT8_VECTOR -> memory(a0, a1, a2, a3, a4);
-            case INDEX_INT16_VECTOR -> memory(a0, a1, a2, a3, a4);
-            case READ_INT16_VECTOR -> memory(a0, a1, a2, a3, a4);
-            case WRITE_INT16_VECTOR -> memory(a0, a1, a2, a3, a4);
-            case INDEX_INT32_VECTOR -> memory(a0, a1, a2, a3, a4);
-            case READ_INT32_VECTOR -> memory(a0, a1, a2, a3, a4);
-            case WRITE_INT32_VECTOR -> memory(a0, a1, a2, a3, a4);
-            case INDEX_INT64_VECTOR -> memory(a0, a1, a2, a3, a4);
-            case READ_INT64_VECTOR -> memory(a0, a1, a2, a3, a4);
-            case WRITE_INT64_VECTOR -> memory(a0, a1, a2, a3, a4);
-            case INDEX_FLOAT_VECTOR -> memory(a0, a1, a2, a3, a4);
-            case READ_FLOAT_VECTOR -> memory(a0, a1, a2, a3, a4);
-            case WRITE_FLOAT_VECTOR -> memory(a0, a1, a2, a3, a4);
-            case INDEX_DOUBLE_VECTOR -> memory(a0, a1, a2, a3, a4);
-            case READ_DOUBLE_VECTOR -> memory(a0, a1, a2, a3, a4);
-            case WRITE_DOUBLE_VECTOR -> memory(a0, a1, a2, a3, a4);
+            case INDEX_INT8_VECTOR, READ_INT8_VECTOR, WRITE_INT8_VECTOR,
+                 INDEX_INT16_VECTOR, READ_INT16_VECTOR, WRITE_INT16_VECTOR,
+                 INDEX_INT32_VECTOR, READ_INT32_VECTOR, WRITE_INT32_VECTOR,
+                 INDEX_INT64_VECTOR, READ_INT64_VECTOR, WRITE_INT64_VECTOR,
+                 INDEX_FLOAT_VECTOR, READ_FLOAT_VECTOR, WRITE_FLOAT_VECTOR,
+                 INDEX_DOUBLE_VECTOR, READ_DOUBLE_VECTOR, WRITE_DOUBLE_VECTOR ->
+                memory(a0, a1, a2, a3, a4, maskProfile);
         };
     }
 
-    private Object memory(Object a0, Object a1, Object a2, Object a3, Object a4) {
+    private Object memory(Object a0, Object a1, Object a2, Object a3, Object a4, ConditionProfile maskProfile) {
         boolean write = result.equals("State# RealWorld");
         Object storage = write ? a0 : a1;
         VectorSpecies species = write ? ((Vector) a2).species() : (VectorSpecies) a0;
@@ -325,14 +317,16 @@ public enum VectorApiOp {
         if (tuple || write) TupleResults.requireVoidCarrier(a4);
         if (storage instanceof ManagedAllocation owner) {
             synchronized (owner) {
-                return accessMemory(a0, a2, a3, owner.maskedVectorSegment(offset, species.elementSize() / 8, mask, write), offset);
+                return accessMemory(a0, a2, a3, owner.maskedVectorSegment(offset, species.elementSize() / 8, mask, write), offset, maskProfile);
             }
         }
-        return accessMemory(a0, a2, a3, MemorySegment.ofArray(ManagedByteArray.require(storage)), offset);
+        return accessMemory(a0, a2, a3, MemorySegment.ofArray(ManagedByteArray.require(storage)), offset, maskProfile);
     }
 
-    private Object accessMemory(Object a0, Object a2, Object a3, MemorySegment bytes, long offset) {
-        if (((VectorMask) a3).allTrue()) return unmaskedMemory(a0, a2, bytes, offset);
+    private Object accessMemory(Object a0, Object a2, Object a3, MemorySegment bytes, long offset, ConditionProfile maskProfile) {
+        boolean allTrue = ((VectorMask) a3).allTrue();
+        if (maskProfile != null) allTrue = maskProfile.profile(allTrue);
+        if (allTrue) return unmaskedMemory(a0, a2, bytes, offset);
         return maskedMemory(a0, a2, a3, bytes, offset);
     }
 
