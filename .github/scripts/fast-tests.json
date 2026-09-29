@@ -2753,6 +2753,7 @@
         "thc.CoreUnitCafLifetimeTest",
         "thc.CoreUnitColdControlTest",
         "thc.CoreUnitLoadTest",
+        "thc.ReusableLoaderTest",
         "thc.CoreUnitManagedExportTest",
         "thc.CoreZipBundleTest",
         "thc.ManagedImportTypeTest",

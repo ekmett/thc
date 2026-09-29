@@ -157,26 +157,65 @@ public final class CoreModules {
         var reachable = new LinkedHashSet<String>(); var pending = new ArrayDeque<String>();
         var missing = new LinkedHashMap<String,Set<String>>(); var missingConstructors = new LinkedHashMap<String,Set<String>>();
         class Linker {
-            String owner = ""; Map<String,Object> exceptionBridge;
-            void constructor(String id) {
-                if (strictLink && !constructorIds.contains(id) && (demand == null || !demand.constructors(Map.of()).containsKey(id))) missingConstructors.computeIfAbsent(id, ignored -> new LinkedHashSet<>()).add(owner);
-            }
-            void reference(String id, Set<String> bound) {
-                if (bound.contains(id)) return;
+            String owner = "";
+            void reference(String id) {
                 if (byId.containsKey(id)) { if (reachable.add(id)) pending.addLast(id); }
                 else if (demand != null && demand.contains(id)) demand.cell(id);
                 else if (strictLink) missing.computeIfAbsent(id, ignored -> new LinkedHashSet<>()).add(owner);
             }
-            Set<String> boundWith(Set<String> bound, Collection<String> extra) { var result = new LinkedHashSet<>(bound); result.addAll(extra); return result; }
-            void visit(List<Object> expression, Set<String> bound) {
+        }
+        var linker = new Linker();
+        var dependencies = new Dependencies(linker::reference,
+            id -> { if (strictLink && !constructorIds.contains(id) && (demand == null || !demand.constructors(Map.of()).containsKey(id))) missingConstructors.computeIfAbsent(id, ignored -> new LinkedHashSet<>()).add(linker.owner); },
+            (id, foreign) -> byId.containsKey(id) || demand != null && (foreign ? demand.isDefined(id) : demand.contains(id)),
+            () -> bridge != null ? bridge.get() : CoreForeignExceptionBridge.select(module),
+            () -> module.get("packageScalarLinks") instanceof List<?> links ? (List<PackageScalarLink>) links : List.of());
+        var roots = new LinkedHashSet<>(entries);
+        if (module.get("managedRegistrations") instanceof List<?> registrations) for (Object raw : registrations) for (var export : ((ManagedExportAdmission) raw).getExports()) roots.add(export.binder());
+        for (String entry : roots) {
+            var exact = byId.get(entry); var matches = new ArrayList<Map<String,Object>>();
+            if (exact != null) matches.add(exact);
+            else for (var binding : bindings) if (Objects.equals(binding.get("name"), entry)) matches.add(binding);
+            require(matches.size() == 1, "Missing or ambiguous entry: " + entry); String root = (String) matches.getFirst().get("id"); if (reachable.add(root)) pending.addLast(root);
+        }
+        while (!pending.isEmpty()) {
+            linker.owner = pending.removeFirst(); dependencies.binding(byId.get(linker.owner));
+        }
+        require(missing.isEmpty(), "Unlinked Core globals: " + missingDescription(missing));
+        require(missingConstructors.isEmpty(), "Unlinked Core constructors: " + missingDescription(missingConstructors));
+        var archived = module.get("archiveBindings") instanceof Map<?,?> map ? (Map<String,String>) map : Map.<String,String>of();
+        for (String id : reachable) { String owner = archived.get(id); if (owner != null) throw new IllegalArgumentException("Unsupported foreign code/registration for " + owner + ": Core schema 2 is archive-only; native stubs, initializers, finalizers and callbacks are not linked"); }
+        var result = without(module, "archiveBindings");
+        var selected = new ArrayList<Map<String,Object>>();
+        for (var binding : bindings) if (reachable.contains(binding.get("id"))) selected.add(binding);
+        result.put("bindings", Collections.unmodifiableList(selected)); result.put("selectedForeignExceptionBridge", dependencies.exceptionBridge); return result;
+    }
+    /** The same semantic edges govern ordinary linking and detached cache input. */
+    private static final class Dependencies {
+        private final Consumer<String> reference, constructor;
+        private final BiPredicate<String,Boolean> defined;
+        private final Supplier<Map<String,Object>> bridge;
+        private final Supplier<List<PackageScalarLink>> packageLinks;
+        private Map<String,Object> exceptionBridge;
+        Dependencies(Consumer<String> reference, Consumer<String> constructor, BiPredicate<String,Boolean> defined,
+                Supplier<Map<String,Object>> bridge, Supplier<List<PackageScalarLink>> packageLinks) {
+            this.reference = reference; this.constructor = constructor; this.defined = defined;
+            this.bridge = bridge; this.packageLinks = packageLinks;
+        }
+        void binding(Map<String,Object> binding) {
+            var body = (List<Object>) binding.get("expr");
+            if (body instanceof CoreBindingBody lazy) lazy.visitForLinking(value -> visit(value, Set.of())); else visit(body, Set.of());
+        }
+        private static Set<String> boundWith(Set<String> bound, Collection<String> extra) { var result = new LinkedHashSet<>(bound); result.addAll(extra); return result; }
+        private void visit(List<Object> expression, Set<String> bound) {
                 switch (Objects.toString(expression.getFirst(), "")) {
-                    case "var" -> reference((String) expression.get(1), bound);
+                    case "var" -> { String id = (String) expression.get(1); if (!bound.contains(id)) reference.accept(id); }
                     case "prim" -> {
                         String name = (String) expression.get(1);
-                        if (CoreFileWait.named(name)) reference(CoreFileWait.badFd, Set.of());
-                        String payload = CoreArithmeticExceptions.INSTANCE.payload(name); if (payload != null) reference(payload, Set.of());
-                        var compact = CompactOp.named(name); if (compact != null && compact.getAdds()) for (String failure : CompactOp.getFailures()) reference(failure, Set.of());
-                        if (name.equals("atomically#")) reference(STMOp.NESTED, Set.of());
+                        if (CoreFileWait.named(name)) reference.accept(CoreFileWait.badFd);
+                        String payload = CoreArithmeticExceptions.payload(name); if (payload != null) reference.accept(payload);
+                        var compact = CompactOp.named(name); if (compact != null && compact.getAdds()) for (String failure : CompactOp.getFailures()) reference.accept(failure);
+                        if (name.equals("atomically#")) reference.accept(STMOp.NESTED);
                     }
                     case "lam" -> {
                         var body = (List<Object>) expression.get(2);
@@ -188,14 +227,13 @@ public final class CoreModules {
                         var function = (List<Object>) expression.get(1); CoreExceptionPayload.validate(expression);
                         var metadata = CoreRepresentations.metadata(expression); boolean foreignDescriptor = metadata != null && metadata.get("foreignCall") instanceof Map<?,?>;
                         Object head = function.size() > 1 ? function.get(1) : null;
-                        boolean defined = !function.isEmpty() && Objects.equals(function.getFirst(), "var") && (head != null && bound.contains(head) || byId.containsKey(head) || head instanceof String id && demand != null && (foreignDescriptor ? demand.isDefined(id) : demand.contains(id)));
-                        var packageLinks = module.get("packageScalarLinks") instanceof List<?> links ? (List<PackageScalarLink>) links : List.<PackageScalarLink>of();
-                        if (CoreForeignExceptionBridge.executes(expression, defined, packageLinks)) {
-                            if (exceptionBridge == null) exceptionBridge = bridge != null ? bridge.get() : CoreForeignExceptionBridge.select(module);
-                            reference((String) exceptionBridge.get("box"), Set.of()); reference((String) exceptionBridge.get("project"), Set.of());
+                        boolean isDefined = !function.isEmpty() && Objects.equals(function.getFirst(), "var") && head instanceof String id && (bound.contains(id) || defined.test(id, foreignDescriptor));
+                        if (foreignDescriptor && CoreForeignExceptionBridge.executes(expression, isDefined, packageLinks.get())) {
+                            if (exceptionBridge == null) exceptionBridge = bridge.get();
+                            reference.accept((String) exceptionBridge.get("box")); reference.accept((String) exceptionBridge.get("project"));
                         }
-                        if (CoreSignalForeign.named(metadata)) reference(CoreSignalForeign.dispatcher, Set.of());
-                        boolean foreignHead = foreignDescriptor && !function.isEmpty() && Objects.equals(function.getFirst(), "var") && head instanceof String && !defined;
+                        if (CoreSignalForeign.named(metadata)) reference.accept(CoreSignalForeign.dispatcher);
+                        boolean foreignHead = foreignDescriptor && !function.isEmpty() && Objects.equals(function.getFirst(), "var") && head instanceof String && !isDefined;
                         if (!foreignHead) visit(function, bound);
                         for (var argument : (List<List<Object>>) expression.get(2)) visit(argument, bound);
                     }
@@ -209,35 +247,14 @@ public final class CoreModules {
                     case "case" -> {
                         visit((List<Object>) expression.get(1), bound);
                         for (var alternative : (List<List<Object>>) expression.get(3)) {
-                            if (Objects.equals(alternative.getFirst(), "data")) constructor((String) alternative.get(1));
+                            if (Objects.equals(alternative.getFirst(), "data")) constructor.accept((String) alternative.get(1));
                             visit((List<Object>) alternative.get(3), boundWith(boundWith(bound, List.of((String) expression.get(2))), (List<String>) alternative.get(2)));
                         }
                     }
-                    case "con" -> constructor((String) expression.get(1));
+                    case "con" -> constructor.accept((String) expression.get(1));
                     default -> { }
                 }
-            }
         }
-        var linker = new Linker(); var roots = new LinkedHashSet<>(entries);
-        if (module.get("managedRegistrations") instanceof List<?> registrations) for (Object raw : registrations) for (var export : ((ManagedExportAdmission) raw).getExports()) roots.add(export.binder());
-        for (String entry : roots) {
-            var exact = byId.get(entry); var matches = new ArrayList<Map<String,Object>>();
-            if (exact != null) matches.add(exact);
-            else for (var binding : bindings) if (Objects.equals(binding.get("name"), entry)) matches.add(binding);
-            require(matches.size() == 1, "Missing or ambiguous entry: " + entry); String root = (String) matches.getFirst().get("id"); if (reachable.add(root)) pending.addLast(root);
-        }
-        while (!pending.isEmpty()) {
-            linker.owner = pending.removeFirst(); var body = (List<Object>) byId.get(linker.owner).get("expr");
-            if (body instanceof CoreBindingBody lazy) lazy.visitForLinking(value -> linker.visit(value, Set.of())); else linker.visit(body, Set.of());
-        }
-        require(missing.isEmpty(), "Unlinked Core globals: " + missingDescription(missing));
-        require(missingConstructors.isEmpty(), "Unlinked Core constructors: " + missingDescription(missingConstructors));
-        var archived = module.get("archiveBindings") instanceof Map<?,?> map ? (Map<String,String>) map : Map.<String,String>of();
-        for (String id : reachable) { String owner = archived.get(id); if (owner != null) throw new IllegalArgumentException("Unsupported foreign code/registration for " + owner + ": Core schema 2 is archive-only; native stubs, initializers, finalizers and callbacks are not linked"); }
-        var result = without(module, "archiveBindings");
-        var selected = new ArrayList<Map<String,Object>>();
-        for (var binding : bindings) if (reachable.contains(binding.get("id"))) selected.add(binding);
-        result.put("bindings", Collections.unmodifiableList(selected)); result.put("selectedForeignExceptionBridge", linker.exceptionBridge); return result;
     }
     private static String missingDescription(Map<String,Set<String>> missing) {
         var descriptions = new ArrayList<String>();
@@ -361,39 +378,129 @@ public final class CoreModules {
             require(input.containsKey("modules"), "Cached preparation requires inline modules or a package directory");
             return Json.stringify(detachedValue(input));
         }
-        require(input.get("consumerModules") == null && input.get("indexedModuleFiles") == null,
-            "Cached package selection requires a qualified entry in its package directory");
+        var consumerSources = new ArrayList<CoreJsonIndex>();
         try (var sources = directory.open(Boolean.TRUE.equals(input.get("verifyArtifacts")), false)) {
-            var selected = new LinkedHashMap<CoreUnitDirectory.ModuleRecord,List<Map<String,Object>>>();
+            var selected = new LinkedHashMap<CoreModuleAdmission,List<Map<String,Object>>>();
             var admissions = new LinkedHashMap<CoreUnitDirectory.ModuleRecord,CoreModuleAdmission>();
+            var consumerAdmissions = new IdentityHashMap<Map<String,Object>,CoreModuleAdmission>();
+            var consumers = new ArrayList<Map<String,Object>>();
+            var consumerBindings = new LinkedHashMap<String,Map<String,Object>>();
+            var consumerOwners = new LinkedHashMap<String,Map<String,Object>>();
+            var moduleNames = new HashSet<String>();
+            for (var module : directory.getModules()) moduleNames.add(module.unit() + ":" + module.name());
+            visitUnitConsumers(with(input, "sourceNotesEnabled", false), (source, adapter) -> consumerSources.add(source), module -> {
+                String unit = text(module.get("unit"), "Missing loose consumer unit"), name = text(module.get("module"), "Missing loose consumer module");
+                boolean fragment = unit.equals("dependency-closure") && name.equals("THC.InterfaceClosure") && Objects.equals(module.get("boundary"), "actual-interface-unfoldings");
+                require(fragment || moduleNames.add(unit + ":" + name), "Duplicate GHC module: " + unit + ":" + name);
+                for (var binding : (List<Map<String,Object>>) module.get("bindings")) {
+                    String id = (String) binding.get("id"); require(consumerBindings.putIfAbsent(id, binding) == null, "Duplicate binding: " + id);
+                    consumerOwners.put(id, module);
+                }
+                consumers.add(module);
+            });
             var visited = new LinkedHashSet<String>();
-            var pending = new ArrayDeque<String>(); pending.add(entry);
+            var entries = new ArrayList<String>(); entries.add(entry);
+            if (input.get("shutdownEntry") instanceof String shutdown) entries.add(shutdown);
+            var pending = new ArrayDeque<String>(entries);
+            class Selection {
+                final Set<String> foreignUnits = new HashSet<>();
+                Map<String,Object> binding(String id) {
+                    var consumer = consumerBindings.get(id);
+                    if (consumer != null) {
+                        require(!sources.containsSymbol(id), "Duplicate binding: " + id); return consumer;
+                    }
+                    return sources.binding(id);
+                }
+                CoreModuleAdmission admit(Map<String,Object> module) {
+                    var existing = consumerAdmissions.get(module); if (existing != null) return existing;
+                    var admitted = new CoreModuleAdmission(with(module, "bindings", List.of()), this::binding);
+                    consumerAdmissions.put(module, admitted); selected.put(admitted, new ArrayList<>());
+                    if (admitted.getExports() != null) for (var exported : admitted.getExports().getExports()) pending.add(exported.binder());
+                    return admitted;
+                }
+                CoreModuleAdmission admit(CoreUnitDirectory.ModuleRecord module) {
+                    var existing = admissions.get(module); if (existing != null) return existing;
+                    sources.verifyModule(module);
+                    var admitted = admit(sources.metadata(module)); admissions.put(module, admitted); return admitted;
+                }
+                void constructor(String id) {
+                    for (var admission : selected.keySet()) for (var constructor : (List<Map<String,Object>>) admission.getModule().get("constructors"))
+                        if (id.equals(constructor.get("id"))) return;
+                    var owner = directory.owner(id); if (owner != null) admit(owner);
+                    // The ordinary strict linker below reports a missing constructor.
+                }
+                Map<String,Object> bridge() {
+                    var candidates = directory.getModules().stream().filter(module -> module.name().equals("THC.Internal.Exception") &&
+                        (directory.getForeignExceptionBridgeUnit() == null || module.unit().equals(directory.getForeignExceptionBridgeUnit()))).toList();
+                    var loose = consumers.stream().filter(module -> Objects.equals(module.get("module"), "THC.Internal.Exception") &&
+                        (directory.getForeignExceptionBridgeUnit() == null || Objects.equals(module.get("unit"), directory.getForeignExceptionBridgeUnit()))).toList();
+                    require(candidates.size() + loose.size() == 1, "Missing or ambiguous foreign exception bridge unit");
+                    var proof = (loose.isEmpty() ? admit(candidates.getFirst()) : admit(loose.getFirst())).getBridge();
+                    require(proof != null, "Foreign execution requires a genuine THC.Exception runtime bundle"); return proof;
+                }
+                List<PackageScalarLink> packageLinks() {
+                    var links = new LinkedHashMap<String,PackageScalarLink>();
+                    for (var admission : selected.keySet()) if (admission.getPackageLink() != null) {
+                        var link = admission.getPackageLink().link(); var old = links.putIfAbsent(link.getUnit(), link);
+                        require(old == null || old.same(link), "Conflicting package C component: " + link.getUnit());
+                    }
+                    return List.copyOf(links.values());
+                }
+                void provenance(CoreModuleAdmission admitted, Map<String,Object> binding) {
+                    var units = new LinkedHashSet<String>();
+                    if (admitted.getPackageLink() != null) units.add((String) admitted.getModule().get("unit"));
+                    for (var call : PackageNativeArchive.calls(binding)) if (call.get("target") instanceof Map<?,?> target &&
+                            "static".equals(target.get("kind")) && target.get("unit") instanceof String unit) units.add(unit);
+                    for (String unit : units) if (foreignUnits.add(unit)) for (var module : directory.getModules())
+                        if (module.unit().equals(unit) && module.packageScalarDeclarations()) admit(module);
+                    var links = selected.keySet().stream().map(CoreModuleAdmission::getForeignLink).filter(Objects::nonNull).toList();
+                    CoreCapiProvenance.supplement(Map.of("foreignLinks", links, "packageScalarLinks", packageLinks()), binding, (unit, name) -> {
+                        var candidates = directory.getModules().stream().filter(module -> module.unit().equals(unit) && module.name().equals(name)).toList();
+                        var loose = consumers.stream().filter(module -> Objects.equals(module.get("unit"), unit) && Objects.equals(module.get("module"), name)).toList();
+                        require(candidates.size() + loose.size() == 1, "Missing or ambiguous CAPI declaration: " + unit + ":" + name);
+                        return (loose.isEmpty() ? admit(candidates.getFirst()) : admit(loose.getFirst())).getForeignLink();
+                    });
+                }
+            }
+            var selection = new Selection();
+            for (var module : consumers) {
+                selection.admit(module);
+                // Retain original complete-module provenance of interface fragments,
+                // without selecting any unrelated binding body.
+                if (module.get("providedModules") instanceof List<?> provided) for (var original : directory.getModules())
+                    if (provided.contains(original.unit() + ":" + original.name())) selection.admit(original);
+            }
+            for (var module : directory.getModules()) if (module.registrationObligations()) selection.admit(module);
+            var dependencies = new Dependencies(pending::add, selection::constructor,
+                (id, foreign) -> consumerBindings.containsKey(id) || (foreign ? sources.containsSymbol(id) : directory.owner(id) != null),
+                selection::bridge, selection::packageLinks);
             while (!pending.isEmpty()) {
                 String id = pending.removeFirst();
                 if (!visited.add(id)) continue;
                 var owner = directory.owner(id);
-                require(owner != null, "Unlinked cached Core global: " + id);
-                admissions.computeIfAbsent(owner, module -> new CoreModuleAdmission(sources.metadata(module), sources::binding));
-                var binding = sources.binding(id);
+                var consumer = consumerOwners.get(id);
+                require(consumer != null || owner != null, "Unlinked cached Core global: " + id);
+                var admitted = consumer == null ? selection.admit(owner) : selection.admit(consumer);
+                var binding = selection.binding(id);
                 require(binding != null, "Missing cached Core binding: " + id);
-                selected.computeIfAbsent(owner, ignored -> new ArrayList<>()).add(binding);
-                pending.addAll(CoreFreeVariables.coreFreeVariables((List<Object>) binding.get("expr")));
+                selected.get(admitted).add(binding);
+                selection.provenance(admitted, binding);
+                dependencies.binding(binding);
             }
             var modules = new ArrayList<Map<String,Object>>();
             var merger = new Merger();
-            selected.forEach((owner, bindings) -> {
-                var admission = admissions.get(owner);
+            selected.forEach((admission, bindings) -> {
                 merger.addSelected(admission, bindings);
                 modules.add(admission.selected(bindings));
             });
-            // The ordinary linker still checks implicit dependencies and metadata;
-            // unsupported/foreign code is not made admissible by detachment.
-            reachable(merger.finish(), entry, true);
-            var result = without(input, "packageManifest", "packageManifestSha256", "packageCapability");
+            // Selection collects dependencies, not permission to execute them.
+            // The ordinary linker still validates every selected original body.
+            reachable(merger.finish(), entries, true);
+            var result = without(input, "packageManifest", "packageManifestSha256", "packageCapability", "consumerModules", "indexedModuleFiles");
             result.put("modules", modules);
             if (directory.getTargetLayout() != null) result.put("targetLayout", directory.getTargetLayout().document());
             return Json.stringify(detachedValue(result));
-        }
+        } finally { consumerSources.forEach(CoreJsonIndex::close); }
     }
     private static Object detachedValue(Object value) {
         if (value instanceof thc.runtime.CoreFloatingLiteral floating) return floating.document();

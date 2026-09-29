@@ -211,6 +211,7 @@ public final class EntryValue implements TruffleObject {
                     // Run the original Handle action over this program's CAFs.
                     // TopHandler itself flushes on its exceptional path.
                     if (shutdownTarget != null) dispatch.execute(shutdownTarget, new Object[]{shutdownValue});
+                    if (requiredCode != null) requireCachedReturn();
                 } catch (ThunkSuspended suspended) { throw AsyncContinuations.publicSuspension(suspended, dispatch); }
                 catch (CallSegmentSuspended suspended) { throw AsyncContinuations.publicSuspension(suspended, dispatch); }
                 catch (AsyncDelivery delivered) { throw AsyncContinuations.uncaught(delivered.getRequest(), dispatch); }
