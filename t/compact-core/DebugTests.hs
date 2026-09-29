@@ -15,11 +15,13 @@
 module DebugTests (debugTests) where
 
 import Control.Exception (IOException, try)
-import Control.Monad (forM, forM_, void)
+import Control.Monad (foldM, forM, forM_, void)
+import qualified Codec.Archive.Zip as Zip
 import Data.Aeson (Value(..), object, toJSON, (.=))
 import qualified Data.Aeson.KeyMap as KM
 import Data.Binary.Get (getWord64le)
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as BL
 import Data.Either (isLeft)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
@@ -27,10 +29,11 @@ import System.FilePath ((</>))
 import System.IO.Temp (withSystemTempDirectory)
 import Test.HUnit
 import THC.Compact.Core (Presence(..))
+import THC.Compact.Compression
 import THC.Compact.Debug
 import THC.Compact.Encode (newEncoder, internString)
 import THC.Compact.JSON (parseModuleWithDebug, parseModuleWithoutDebug)
-import THC.Compact.Module (writeModuleWithDebug, encodeModuleValue, readModuleValue, rewriteModuleFacts)
+import THC.Compact.Module (writeModuleWithDebug, writeModuleWithDebugCompressed, encodeModuleValue, readModuleValue, rewriteModuleFacts)
 import THC.Compact.Inspect (inspectContainer, unpackContainer)
 import THC.Compact.Wire
 import THC.Compact.Writer
@@ -53,6 +56,20 @@ debugTests = TestList
         (case readModuleValue changed of Right (Object fields) -> KM.lookup "foreignExceptionBridgeUnit" fields; _ -> Nothing)
       assertEqual "unchanged amendment retains exact container" original =<< rewriteModuleFacts original value
       assertBool "JSON is not an accepted module payload" (isLeft (readModuleValue "{\"bindings\":[]}"))
+  , TestLabel "metadata amendment preserves mixed ZIP member methods" $ TestCase $
+      withSystemTempDirectory "compact-amend-methods" $ \directory -> do
+        policy <- either fail pure (foldM (flip setCompression) defaultCompression ["header=9","data=1","strings=9","names=6"])
+        (facts,bindings,annotations) <- either fail pure (parseModuleWithDebug originalModule)
+        let destination = directory </> "mixed.cbd"
+        _ <- writeModuleWithDebugCompressed policy destination facts bindings annotations
+        original <- BS.readFile destination
+        value <- either fail pure (readModuleValue original)
+        let amended = case value of Object fields -> Object (KM.insert "foreignExceptionBridgeUnit" (String "runtime") fields); _ -> value
+            methods bytes = map (\entry -> (Zip.eRelativePath entry,Zip.eCompressionMethod entry)) . Zip.zEntries
+              <$> Zip.toArchiveOrFail (BL.fromStrict bytes)
+        changed <- rewriteModuleFacts original amended
+        assertEqual "metadata linking retains every actual ZIP method" (methods original) (methods changed)
+        assertEqual "unchanged metadata keeps compressed archive byte-for-byte" original =<< rewriteModuleFacts original value
   , TestLabel "interface closure provenance survives direct publication and native header amendment" $ TestCase $ do
       let provenance = KM.fromList [("roots",toJSON ["main:Original.root" :: String]),
             ("sourceModules",toJSON ["main:Original" :: String]),

@@ -35,7 +35,7 @@ import THC.Compact.Debug
 import THC.Compact.Encode
 import THC.Compact.Facts
 import THC.Compact.Decode (decodeFacts)
-import THC.Compact.Inspect (inspectContainer, moduleJSON, unpackContainer)
+import THC.Compact.Inspect (inspectContainer, moduleJSON, unpackContainer, unpackContainerWithMethods)
 import THC.Compact.JSON (parseModuleWithDebug, parseModuleFacts)
 import THC.Compact.Wire
 import THC.Compact.Writer
@@ -66,10 +66,14 @@ readModuleMetadata bytes = do
 -- strings needed by the new header. Unchanged facts retain the exact archive.
 rewriteModuleFacts :: BS.ByteString -> Value -> IO BS.ByteString
 rewriteModuleFacts original value = do
-  (header,oldFactsBytes,segments) <- either fail pure (unpackContainer original)
+  (header,oldFactsBytes,segments,methods) <- either fail pure (unpackContainerWithMethods original)
   oldFacts <- either fail pure (decodeFacts oldFactsBytes (segments !! 1))
   facts <- either fail pure (parseModuleFacts value)
   if oldFacts == facts then pure original else encoded $ \path -> do
+    -- ZIP records methods, not the original Deflate level. Preserve each method;
+    -- recompression uses the standard level rather than silently storing it.
+    policy <- either fail pure (foldM (\current (name,method) ->
+      setCompression (name ++ if method == 0 then "=0" else "=6") current) defaultCompression methods)
     let prepare streams = do
           void (appendBytes streams CommonStrings (segments !! 1))
           encoder <- newEncoder streams
@@ -79,7 +83,7 @@ rewriteModuleFacts original value = do
             unless (segment == CommonStrings) (void (appendBytes streams segment bytes))
           pure (headerBindingCount header,
             (headerSummaries header .&. complement 10) .|. factSummaries facts)
-    writeContainerStreamed path prepare produce
+    writeContainerStreamedWith policy path prepare produce
 
 encoded :: (FilePath -> IO Container) -> IO BS.ByteString
 encoded action = do
