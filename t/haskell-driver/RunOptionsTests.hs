@@ -18,38 +18,29 @@ import System.FilePath ((</>))
 import System.Info (os)
 import Test.HUnit (Test(..), assertBool, assertEqual)
 import TestSupport
-import THC.Driver.Run (FfiMode(..), parseFfiMode, runtimeLaunchArguments, runtimeEntryArguments)
+import THC.Driver.Run (runtimeLaunchArguments, runtimeEntryArguments)
 
 tests :: Env -> Test
 tests env = TestLabel "run options and target selection" $ TestList
-  [ TestLabel "typed mode choices" $ TestCase $ do
-      assertEqual "native" (Right NativeFfi) (parseFfiMode "native")
-      assertEqual "managed" (Right ManagedFfi) (parseFfiMode "managed")
-      forM_ ["", "MANAGED", "automatic", "native,managed"] $ \invalid ->
-        case parseFfiMode invalid of
-          Left problem -> assertContains "--ffi must be native or managed" problem
-          Right mode -> assertBool ("unexpected accepted mode " ++ show mode) False
-  , TestLabel "launcher prefix and guest suffix" $ TestList
-      [ TestLabel (show verify ++ " " ++ show mode ++ " " ++ show entry ++ " " ++ show guest) $ TestCase $
+  [ TestLabel "launcher prefix and guest suffix" $ TestList
+      [ TestLabel (show verify ++ " " ++ show entry ++ " " ++ show guest) $ TestCase $
           assertEqual "exact separate arguments"
-            (["--verify-artifacts" | verify] ++ prefix ++ entry ++ ["--", "program"] ++ guest)
-            (runtimeLaunchArguments verify mode entry "program" guest)
-      | (mode, prefix) <- [(Nothing, []), (Just NativeFfi, ["--ffi", "native"]),
-                          (Just ManagedFfi, ["--ffi", "managed"])]
-      , verify <- [False, True]
+            (["--verify-artifacts" | verify] ++ entry ++ ["--", "program"] ++ guest)
+            (runtimeLaunchArguments verify entry "program" guest)
+      | verify <- [False, True]
       , entry <- [["--run-io", "core one.json,core-two.json", "main:Main.main"],
                   ["--run-io", "@packages.json", "selected:Main.main"],
                   ["--run-executable", "@packages.json", "main::Main.main", "flushStdHandles"]]
-      , guest <- [[], ["--ffi", "not-a-runtime-mode", "--verify-artifacts", "--", "", "two words", "lambda-λ"]]
+      , guest <- [[], ["--guest-option", "value", "--verify-artifacts", "--", "", "two words", "lambda-λ"]]
       ]
   , TestLabel "loose consumers keep paths before the guest boundary" $ TestCase $ do
       let modules = ["C:/core café/Main.json", "C:/core café/THC.InterfaceClosure.json"]
           entry = runtimeEntryArguments modules "C:/support/packages.json" "main:Main.main"
       assertEqual "exact module association, manifest and guest operands"
-        ["--verify-artifacts", "--ffi", "native",
+        ["--verify-artifacts",
          "--run-io", "C:/core café/Main.json,C:/core café/THC.InterfaceClosure.json,@C:/support/packages.json", "main:Main.main",
          "--", "program", "--json-sidecar", "guest", "", "--"]
-        (runtimeLaunchArguments True (Just NativeFfi) entry "program" ["--json-sidecar", "guest", "", "--"])
+        (runtimeLaunchArguments True entry "program" ["--json-sidecar", "guest", "", "--"])
   , TestLabel "verification is an explicit run-only switch" $ TestCase $ do
       accepted <- run env (root env) Nothing 30 ["run", "--verify-artifacts"]
       assertFailure accepted
@@ -77,49 +68,22 @@ tests env = TestLabel "run options and target selection" $ TestList
         verified <- run env package Nothing 30 (arguments ++ ["--verify-artifacts"])
         assertFailure verified
         assertContains "bin/audit-core.py" (err verified)
-  , TestLabel "CLI rejects invalid selection before building" $ TestCase $
-      forM_ ["", "MANAGED", "automatic", "native,managed"] $ \invalid -> do
-        result <- run env (root env) Nothing 30 ["run", "--ffi", invalid]
-        assertFailure result
-        assertNoStdout result
-        assertContains "--ffi must be native or managed" (err result)
-  , TestLabel "CLI accepts both choices and equals syntax" $ TestCase $
-      forM_ [["--ffi", "native"], ["--ffi", "managed"],
-             ["--ffi=native"], ["--ffi=managed"]] $ \arguments -> do
-        -- Missing --thc-root is intentionally checked before any build or runtime
-        -- probe; reaching it verifies that the option was accepted by the CLI.
-        result <- run env (root env) Nothing 30 ("run" : arguments)
-        assertFailure result
-        assertContains "run requires --thc-root DIR" (err result)
-        assertBool "not an option-parser rejection" (not ("unrecognized option" `isInfixOf` err result))
-  , TestLabel "CLI does not interpret a guest same-spelled option" $ TestCase $
-      forM_ [[], ["--ffi", "managed"]] $ \arguments -> do
-        result <- run env (root env) Nothing 30
-          ("run" : arguments ++ ["--", "--ffi", "not-a-runtime-mode", "", "--"])
-        assertFailure result
-        assertContains "run requires --thc-root DIR" (err result)
-        assertBool "guest mode value was not validated"
-          (not ("--ffi must be native or managed" `isInfixOf` err result))
-  , TestLabel "unreleased old spelling is not an alias" $ TestCase $
-      forM_ [["--sulong-mode", "native"], ["--sulong-mode=managed"]] $ \arguments -> do
+  , TestLabel "CLI rejects unknown options before building" $ TestCase $
+      forM_ [["--unknown-option", "value"], ["--unknown-option=value"]] $ \arguments -> do
         result <- run env (root env) Nothing 30 ("run" : arguments)
         assertFailure result
         assertNoStdout result
         assertContains "unrecognized option" (err result)
-  , TestLabel "mode requires a value" $ TestCase $ do
-      result <- run env (root env) Nothing 30 ["run", "--ffi"]
+  , TestLabel "runtime requires a value" $ TestCase $ do
+      result <- run env (root env) Nothing 30 ["run", "--runtime"]
       assertFailure result
       assertNoStdout result
       assertContains "requires an argument" (err result)
-  , TestLabel "help names the modes" $ TestCase $ do
+  , TestLabel "help names artifact verification" $ TestCase $ do
       result <- run env (root env) Nothing 30 ["run", "--help"]
       assertSuccess result
-      assertContains "--ffi" (out result)
-      assertContains "native|managed" (out result)
-      assertContains "unavailable managed execution fails explicitly" (out result)
       assertContains "--verify-artifacts" (out result)
       assertContains "verify runtime artifacts (default: off)" (out result)
-      assertBool "old spelling is absent from help" (not ("--sulong-mode" `isInfixOf` out result))
   , TestLabel "positional Cabal targets and omitted default" $ TestCase $
       forM_ ["run", "acquire"] $ \command ->
       forM_ [[], ["ordinary"], ["exe:ordinary"], ["example:exe:ordinary"],

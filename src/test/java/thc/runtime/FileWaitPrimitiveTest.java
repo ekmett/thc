@@ -11,7 +11,6 @@ import org.junit.jupiter.api.condition.*;
 import org.junit.jupiter.api.io.TempDir;
 import thc.CoreModules;
 import thc.ContextProfile;
-import thc.FfiMode;
 import thc.Language;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
@@ -59,7 +58,7 @@ class FileWaitPrimitiveTest {
         }
     }
     @Test void firstInstalledWaitsKeepExactDescriptorAndLazyBadFdPayload() throws Exception {
-        try (var context = NativeFileProvider.createContext(Set.of(), ContextProfile.SYNCHRONOUS_TEST, FfiMode.NATIVE, false)) {
+        try (var context = NativeFileProvider.createContext(Set.of(), ContextProfile.SYNCHRONOUS_TEST, false)) {
             context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var files = Language.currentState(null).getFiles();
@@ -120,7 +119,7 @@ class FileWaitPrimitiveTest {
     @Test void compiledReadWaitResumesItsOriginalTokenAfterInterruptionAndRejectsDescriptorReuse() throws Exception {
         var pipe = directory.resolve("readiness"); var created = new ProcessBuilder("mkfifo", pipe.toString()).start();
         assertTrue(created.waitFor(5, TimeUnit.SECONDS)); assertEquals(0, created.exitValue());
-        var context = NativeFileProvider.createContext(Set.of(), ContextProfile.SYNCHRONOUS_TEST, FfiMode.NATIVE, false);
+        var context = NativeFileProvider.createContext(Set.of(), ContextProfile.SYNCHRONOUS_TEST, false);
         var worker = Executors.newSingleThreadExecutor();
         try {
             context.initialize("thc"); context.enter();

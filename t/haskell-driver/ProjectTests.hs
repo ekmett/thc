@@ -198,7 +198,7 @@ acquisitionTests env = TestLabel "project acquisition stops before audit and exe
         output = base </> "acquired"
         arguments = ["acquire", "--project-dir", project, "fail-frontier", "--thc-root", thcRoot env,
                      "--dist-dir", output]
-    forM_ [["--", "guest"], ["--"], ["--runtime", "/missing/thc"], ["--ffi", "native"], ["--verify-artifacts"]] $ \extra -> do
+    forM_ [["--", "guest"], ["--"], ["--runtime", "/missing/thc"], ["--verify-artifacts"]] $ \extra -> do
       rejected <- run env base Nothing 30 (arguments ++ extra)
       assertFailure rejected
       assertNoStdout rejected

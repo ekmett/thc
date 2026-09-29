@@ -30,10 +30,10 @@ tests env = TestLabel "implicit Cabal project native versus THC run" $ TestCase 
         -- still exports Core and audited controls explicitly request verification.
         -- Later edits use this same directory, exercising actual invalidation.
         output = base </> "output"
-        invokeFfi backend ffi = run env base backend 180
+        invokeWith backend options = run env base backend 180
           (["run", "--project-dir", package, "completed", "--dist-dir", output,
-            "--thc-root", thcRoot env, "--runtime", runtime env] ++ ffi)
-        invoke backend = invokeFfi backend ["--verify-artifacts", "--ffi", "native"]
+            "--thc-root", thcRoot env, "--runtime", runtime env] ++ options)
+        invoke backend = invokeWith backend ["--verify-artifacts"]
         exported = output
         executable = do
           plan <- readJson (output </> "native/cache/plan.json")
@@ -41,7 +41,7 @@ tests env = TestLabel "implicit Cabal project native versus THC run" $ TestCase 
             (objects plan "install-plan")) "bin-file"
     cold <- doesDirectoryExist output
     assertBool "fixture starts with a cold native dist directory" (not cold)
-    ordinary <- invokeFfi Nothing []
+    ordinary <- invokeWith Nothing []
     assertSuccess ordinary
     assertNoStdout ordinary
     audited <- doesFileExist (exported </> "audit.json")
@@ -90,10 +90,9 @@ tests env = TestLabel "implicit Cabal project native versus THC run" $ TestCase 
 
     previousAudit <- readText (exported </> "audit.json")
     previousAuditTime <- getModificationTime (exported </> "audit.json")
-    managed <- invokeFfi Nothing ["--ffi", "managed"]
-    assertFailure managed
-    assertNoStdout managed
-    assertContains "--ffi managed is unavailable" (err managed)
+    unverified <- invokeWith Nothing []
+    assertSuccess unverified
+    assertEqual "unverified run preserves the guest result" (out ordinary) (out unverified)
     assertEqual "unverified run leaves previous audit bytes untouched" previousAudit
       =<< readText (exported </> "audit.json")
     assertEqual "unverified run does not refresh an old audit" previousAuditTime

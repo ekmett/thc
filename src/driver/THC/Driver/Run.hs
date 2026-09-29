@@ -11,7 +11,7 @@
 --
 -- Build a selected Cabal component and launch it with explicit guest runtime arguments.
 module THC.Driver.Run
-  ( RunOptions(..), FfiMode(..), parseFfiMode, runtimeLaunchArguments, runtimeEntryArguments, runResolvedPackage
+  ( RunOptions(..), runtimeLaunchArguments, runtimeEntryArguments, runResolvedPackage
   ) where
 
 import Control.Monad (unless, when)
@@ -48,42 +48,20 @@ data RunOptions = RunOptions
   , runRuntime :: Maybe FilePath
   , runInstalledCore :: String
   , runGhcSource :: Maybe FilePath
-  , runFfiMode :: Maybe FfiMode
   , runVerifyArtifacts :: Bool
   , runArguments :: [String]
   }
 
--- | Explicit runtime FFI selection. Omitting it preserves launcher defaults.
-data FfiMode = NativeFfi | ManagedFfi deriving (Eq, Show)
-
--- | Parse the two accepted, case-sensitive @--ffi@ values.
+-- | Artifact verification belongs before the entry command, never in GHC flags
+-- or after the guest delimiter, and is disabled unless explicitly requested.
 --
--- >>> parseFfiMode "native"
--- Right NativeFfi
--- >>> parseFfiMode "managed"
--- Right ManagedFfi
--- >>> parseFfiMode "auto"
--- Left "--ffi must be native or managed; got \"auto\""
-parseFfiMode :: String -> Either String FfiMode
-parseFfiMode "native" = Right NativeFfi
-parseFfiMode "managed" = Right ManagedFfi
-parseFfiMode value = Left ("--ffi must be native or managed; got " ++ show value)
-
--- | Runtime selection belongs before the entry command, never in GHC flags or
--- after the guest delimiter. No explicit choice leaves launcher defaults and
--- its environment/property configuration intact. Artifact verification is
--- independent of FFI selection and disabled unless explicitly requested.
---
--- >>> runtimeLaunchArguments True (Just ManagedFfi) ["--run-io", "bundle.json", "main:Main.main"] "demo" ["hello"]
--- ["--verify-artifacts","--ffi","managed","--run-io","bundle.json","main:Main.main","--","demo","hello"]
--- >>> runtimeLaunchArguments False Nothing ["--run-io", "bundle.json", "main:Main.main"] "demo" []
+-- >>> runtimeLaunchArguments True ["--run-io", "bundle.json", "main:Main.main"] "demo" ["hello"]
+-- ["--verify-artifacts","--run-io","bundle.json","main:Main.main","--","demo","hello"]
+-- >>> runtimeLaunchArguments False ["--run-io", "bundle.json", "main:Main.main"] "demo" []
 -- ["--run-io","bundle.json","main:Main.main","--","demo"]
-runtimeLaunchArguments :: Bool -> Maybe FfiMode -> [String] -> String -> [String] -> [String]
-runtimeLaunchArguments verify mode entry program arguments =
-  ["--verify-artifacts" | verify] ++
-  maybe [] (\selected -> ["--ffi", case selected of
-    NativeFfi -> "native"
-    ManagedFfi -> "managed"]) mode ++ entry ++ ["--", program] ++ arguments
+runtimeLaunchArguments :: Bool -> [String] -> String -> [String] -> [String]
+runtimeLaunchArguments verify entry program arguments =
+  ["--verify-artifacts" | verify] ++ entry ++ ["--", program] ++ arguments
 
 -- | Loose Core modules accompany the authenticated package manifest.
 runtimeEntryArguments :: [FilePath] -> FilePath -> String -> [String]
@@ -192,7 +170,7 @@ runResolvedPackage opts working target prepareRuntime = do
     checked True python ([thcRoot </> "bin/audit-core.py", "--entry", entry, "--io-main",
                       "--package-manifest", supportManifest,
                       "--output", output </> "audit.json"] ++ modules) thcRoot inherited
-  checked False runtime (runtimeLaunchArguments (runVerifyArtifacts opts) (runFfiMode opts)
+  checked False runtime (runtimeLaunchArguments (runVerifyArtifacts opts)
     (runtimeEntryArguments modules supportManifest entry) selectedName (runArguments opts)) working inherited
 
 filterMFile :: (a -> IO Bool) -> [a] -> IO [a]

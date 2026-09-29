@@ -70,7 +70,7 @@ import THC.Driver.NativeDependencies (readCOnlyProduct, configuredNativeArchive)
 import THC.Driver.NativeCache (nativeToolIdentity, nativePieceIdentity)
 import THC.Driver.Installed
 import THC.Driver.InstalledForeign
-import THC.Driver.Run (RunOptions(..), FfiMode, runtimeLaunchArguments, runResolvedPackage)
+import THC.Driver.Run (RunOptions(..), runtimeLaunchArguments, runResolvedPackage)
 import THC.Driver.Zip (decodeZip, encodeZip)
 import THC.Driver.Wired (WiredArtifacts(..), moduleSources, sourceHashes, pinnedSourcePath,
                          exportPinnedCore, exportPinnedWindowsCore, probeTargetLayout)
@@ -322,7 +322,7 @@ buildProject action opts target = do
   withProjectLock output $
     runBuiltProject action project working thcRoot runtime output native (runTarget opts) projectOptions
                     pluginDb pluginUnit pluginLibrary compiler packageTool (runInstalledCore opts)
-                    source registeredLibrary (runVerifyArtifacts opts) (runFfiMode opts) (runArguments opts)
+                    source registeredLibrary (runVerifyArtifacts opts) (runArguments opts)
 
 resolveRunnable :: FilePath -> String -> [String] -> [(String, String)] -> FilePath -> IO Unit
 resolveRunnable working target configuration environment native = do
@@ -378,9 +378,9 @@ selectedPackageTool ghc requested = do
 
 runBuiltProject :: ProjectAction -> FilePath -> FilePath -> FilePath -> FilePath -> FilePath -> FilePath ->
                    String -> [String] -> FilePath -> String -> FilePath -> FilePath ->
-                   Maybe FilePath -> String -> Maybe FilePath -> FilePath -> Bool -> Maybe FfiMode -> [String] -> IO ()
+                   Maybe FilePath -> String -> Maybe FilePath -> FilePath -> Bool -> [String] -> IO ()
 runBuiltProject action project working thcRoot runtime output native target projectOptions
-                pluginDb pluginUnit pluginLibrary ghc ghcPkg installedPolicy ghcSource registeredLibrary verifyArtifacts ffiMode guestArguments = do
+                pluginDb pluginUnit pluginLibrary ghc ghcPkg installedPolicy ghcSource registeredLibrary verifyArtifacts guestArguments = do
   driver <- getExecutablePath
   let proxy = native </> "cache/thc/native-ghc"
       receipts = native </> "cache/thc/native-recipes-v1"
@@ -559,7 +559,7 @@ runBuiltProject action project working thcRoot runtime output native target proj
     -- Full-Core main and shutdown share one program and its Handle CAFs.
     -- Like cabal run, preserve the caller's cwd even with --project-dir.
     let programName = reverse (takeWhile (/= ':') (reverse (snd selection)))
-    runCommand False runtime (runtimeLaunchArguments verifyArtifacts ffiMode (if lifecycle
+    runCommand False runtime (runtimeLaunchArguments verifyArtifacts (if lifecycle
         then ["--run-executable", '@' : manifest, entry, shutdown]
         else ["--run-io", '@' : manifest, entry]) programName guestArguments) working
 
