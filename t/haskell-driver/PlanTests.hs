@@ -194,11 +194,11 @@ tests env = TestList
       exists <- doesFileExist (base </> "out/setup-config")
       assertBool "no cwd dist" (not exists)
 
-    cli _ _ _ _ invoke _ reject = do
+    cli _ base _ _ invoke _ reject = do
       help <- invoke True ["--help"]
       assertContains "plan-package" (out help)
       assertContains "run" (out help)
-      _ <- reject ["run"] "run requires --thc-root DIR"
+      _ <- reject ["run", "--thc-root", base </> "missing-thc-root"] "THC root directory does not exist"
       forM_ [["build", "--dry-run"], ["repl"], ["plan-package", "--unknown"], ["plan-package", "a", "b"]] $ \arguments ->
         reject arguments "Usage:"
 
