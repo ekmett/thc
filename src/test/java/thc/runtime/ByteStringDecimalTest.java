@@ -26,7 +26,8 @@ class ByteStringDecimalTest {
     private final boolean nativeAvailable = "Linux".equals(System.getProperty("os.name")) && Set.of("amd64", "x86_64").contains(System.getProperty("os.arch"));
     private Object json(String name) throws Exception { return Json.parse(Files.readString(root.resolve(prefix + "/" + name))); }
     private Map<String, Object> source(String stage) throws Exception { return object(cbd(stage + ".cbd")); }
-    private ExecutableProgram program(Language language, String backend, Map<String, Object> module) {
+    private ExecutableProgram program(Language language, String backend, Map<String, Object> module) throws Exception {
+        module = ForeignExceptionFixtureSupport.nativeModules(List.of(module));
         return backend.equals("ast") ? new Program(language, module) : new BytecodeProgram(language, module);
     }
     private void inside(CheckedConsumer<Language> action) throws Exception {
@@ -178,21 +179,26 @@ class ByteStringDecimalTest {
             }
         });
     }
-    @Test void domainBoundsAndOwnershipFailBeforeWrites() throws Exception {
+    private void managedWrite(String entry, long value, ManagedAddress destination) {
+        if (entry.equals("decimal")) ByteStringDecimal.signed(value, destination);
+        else { assertEquals("padded18", entry); ByteStringDecimal.padded18(value, destination); }
+    }
+    @Test void managedWritersRejectDomainBoundsAndOwnershipBeforeWrites() throws Exception {
         fixture();
-        for (var backend : list("ast", "bytecode")) inside(language -> {
+        // Native C declarations do not encode these helper-specific domain
+        // and destination-capacity guarantees. Check the managed operations.
+        inside(language -> {
             for (var entry : entries) {
-                var p = program(language, backend, CoreModules.reachable(source("pre"),entryId(entry), true)); var target = p.entryTarget(entryId(entry));
                 var writable = ManagedAddress.fromByteArray(sentinel(48));
                 for (var address : list(writable.plus(48), writable.plus(-1), ManagedAddress.nullAddress(),
                     ManagedAddress.fromHex("a5".repeat(48)), ManagedAddress.unownedNumeric(1))) {
-                    assertThrows(RuntimeFault.class, () -> callScalarTestTarget(target, new Object[]{0L, 10L, address})); assertArrayEquals(sentinel(48), bytes(writable));
+                    assertThrows(RuntimeFault.class, () -> managedWrite(entry, 10L, address)); assertArrayEquals(sentinel(48), bytes(writable));
                 }
                 int length = entry.equals("decimal") ? 19 : 17; var shortBuffer = ManagedAddress.fromByteArray(sentinel(length));
-                assertThrows(RuntimeFault.class, () -> callScalarTestTarget(target, new Object[]{0L, entry.equals("decimal") ? Long.MIN_VALUE : 0L, shortBuffer}));
+                assertThrows(RuntimeFault.class, () -> managedWrite(entry, entry.equals("decimal") ? Long.MIN_VALUE : 0L, shortBuffer));
                 for (byte value : bytes(shortBuffer, length)) assertEquals((byte) 0xa5, value);
                 if (entry.equals("padded18")) for (long invalid : list(Long.MIN_VALUE, -1L, 1_000_000_000_000_000_000L, Long.MAX_VALUE)) {
-                    var error = assertThrows(RuntimeFault.class, () -> callScalarTestTarget(target, new Object[]{0L, invalid, writable.plus(7)}));
+                    var error = assertThrows(RuntimeFault.class, () -> managedWrite(entry, invalid, writable.plus(7)));
                     assertTrue(Objects.requireNonNull(error.getMessage()).contains("0 <= value < 10^18")); assertArrayEquals(sentinel(48), bytes(writable));
                 }
                 released(language);
@@ -222,7 +228,7 @@ class ByteStringDecimalTest {
                         case 6 -> expression(call.get(3)).set(0, true); case 7 -> expression(call.get(1)).set(1, "entry");
                         case 8 -> expression(object(descriptor.get("resultRep")).get("components")).remove(0);
                     }
-                    assertThrows(RuntimeFault.class, () -> program(language, backend, candidate), backend + "/variant=" + variant);
+                    assertThrows(RuntimeFault.class, () -> program(language, backend, candidate).entryTarget("entry"), backend + "/variant=" + variant);
                 }
                 var raw = program(language, backend, OriginalStdioChecks.rawModule(original, source("pre"), null));
                 var address = ManagedAddress.fromByteArray(sentinel(48));

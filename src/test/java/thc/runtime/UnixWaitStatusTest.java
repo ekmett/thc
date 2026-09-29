@@ -39,7 +39,7 @@ class UnixWaitStatusTest {
     private Map<String,List<Row>> grouped(List<Row> rows) { var groups = new LinkedHashMap<String,List<Row>>(); for (var row : rows) groups.computeIfAbsent(row.name(), ignored -> new ArrayList<>()).add(row); return groups; }
     private Context context() { return context(true,true); }
     private Context context(boolean inlining, boolean nativeAccess) { return withContextProfile(Context.newBuilder("thc").allowNativeAccess(nativeAccess), ContextProfile.SYNCHRONOUS_TEST).option("compiler.Inlining",Boolean.toString(inlining)).build(); }
-    private ExecutableProgram program(Language language,Map<String,Object> source,String backend) { return backend.equals("ast") ? new Program(language,source) : new BytecodeProgram(language,source); }
+    private ExecutableProgram program(Language language,Map<String,Object> source,String backend) throws Exception { source = ForeignExceptionFixtureSupport.nativeModules(List.of(source), Language.currentState().getEnv().isNativeAccessAllowed()); return backend.equals("ast") ? new Program(language,source) : new BytecodeProgram(language,source); }
     private void compiled(RootCallTarget target) throws Exception { assertEquals(true,target.getClass().getMethod("isValidLastTier").invoke(target)); }
     @Test void originalCallsMatchNativeWithInlining() throws Exception { nativeChecks(true); }
     @Test void originalCallsMatchNativeAcrossResidualCalls() throws Exception { nativeChecks(false); }
@@ -107,7 +107,7 @@ class UnixWaitStatusTest {
         for (var backend : List.of("ast","bytecode")) for (var variant : List.of("unit","safety","convention","arity","width","result","head","flags")) try (var context = context()) {
             context.initialize("thc"); context.enter();
             try {
-                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var source = CoreModules.reachable(cbd("post.cbd"),entryId("waitWCOREDUMP"));
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var source = (Map<String,Object>) Json.parse(Json.stringify(CoreModules.reachable(cbd("post.cbd"),entryId("waitWCOREDUMP"))));
                 var app = single(foreignApps(source),ignored -> true); var call = (Map<String,Object>) ((Map<?,?>) app.get(6)).get("foreignCall");
                 switch (variant) {
                     case "unit" -> ((Map<String,Object>) call.get("target")).put("unit","ghc-internal"); case "safety" -> call.put("safety","safe");
@@ -117,7 +117,7 @@ class UnixWaitStatusTest {
                     case "head" -> ((Map<String,Object>) ((List<?>) app.get(1)).get(2)).put("rep",map("kind","long","primReps",list("IntRep"),"evaluated",true));
                     case "flags" -> ((List<Object>) app.get(3)).set(0,true);
                 }
-                assertThrows(RuntimeFault.class,() -> program(language,source,backend),backend + "/" + variant);
+                assertThrows(RuntimeFault.class,() -> program(language,source,backend).entryTarget(entryId("waitWCOREDUMP")),backend + "/" + variant);
             } finally { context.leave(); }
         }
     }
@@ -134,7 +134,7 @@ class UnixWaitStatusTest {
                 for (var bad : List.of(List.of("unix-2.8.8.0-inplace",symbol(operation,owner)),List.of(owner,operation.getSymbol()),
                     List.of("unix-2.8.8.0-ABCD",symbol(operation,"unix-2.8.8.0-ABCD")),List.of("unix-2.8.8.0-nothex",symbol(operation,"unix-2.8.8.0-nothex")),List.of("unix-2.8.7.0-460b",symbol(operation,"unix-2.8.7.0-460b")),
                     List.of(owner,symbol(operation,owner).replace("ghczuwrapperZC" + operations.indexOf(operation) + "ZC","ghczuwrapperZC7ZC")),List.of(owner,symbol(operation,owner).replace("ProcessziInternals","ProcessziByteString")),List.of(owner,symbol(operation,owner) + "Extra")))
-                    assertThrows(RuntimeFault.class,() -> program(language,control.module(bad.get(0),bad.get(1)),backend));
+                    assertThrows(RuntimeFault.class,() -> program(language,control.module(bad.get(0),bad.get(1)),backend).entryTarget(entryId("wait" + operation.name())));
             } finally { context.leave(); }
         }
     }
@@ -145,13 +145,13 @@ class UnixWaitStatusTest {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 for (var operation : operations) {
                     var source = CoreModules.reachable(cbd("post.cbd"),entryId("wait" + operation.name())); var call = single(foreignApps(source),ignored -> true);
-                    for (int i = 0; i <= 1; i++) { int index = i; assertThrows(RuntimeFault.class,() -> program(language,rawModule(call,source,index),backend)); }
+                    for (int i = 0; i <= 1; i++) { int index = i; assertThrows(RuntimeFault.class,() -> program(language,rawModule(call,source,index),backend).entryTarget("entry")); }
                     var target = program(language,rawModule(call,source),backend).entryTarget("entry");
                     assertThrows(RuntimeFault.class,() -> Calls.target(target,new Object[]{0L,137L,9L}));
                     var failure = assertThrows(RuntimeFault.class,() -> callScalarTestTarget(target,new Object[]{0L,137,9L}));
                     assertTrue(Objects.toString(failure.getMessage(),"").contains("zero-width scalar carrier"),failure.getMessage());
                     var shadowed = rawModule(call,source); var app = single(foreignApps(shadowed),ignored -> true); app.set(1,list("var","p0",((List<?>) app.get(1)).get(2)));
-                    assertThrows(RuntimeFault.class,() -> program(language,shadowed,backend));
+                    assertThrows(RuntimeFault.class,() -> program(language,shadowed,backend).entryTarget("entry"));
                 }
                 assertEquals(0,language.getHandoffState().get().getArguments().getDepth()); assertEquals(0,language.getHandoffState().get().getResults().getDepth());
             } finally { context.leave(); }

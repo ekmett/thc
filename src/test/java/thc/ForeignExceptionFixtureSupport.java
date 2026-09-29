@@ -68,6 +68,11 @@ public final class ForeignExceptionFixtureSupport {
      * declarations, and only the reachable genuine exception helpers are added.
      * Link the native owners in the entered context, as Language.instantiate does. */
     public static Map<String, Object> nativeModules(List<Map<String, Object>> modules) throws Exception {
+        return nativeModules(modules, true);
+    }
+    /** Declaration-only admission lets malformed-carrier controls prove that
+     * rejection precedes native loading, including in native-denied contexts. */
+    public static Map<String, Object> nativeModules(List<Map<String, Object>> modules, boolean loadNative) throws Exception {
         var available = new HashSet<String>();
         for (var original : originals()) available.add(original.get("unit") + ":" + original.get("module"));
         var merger = new CoreModules.Merger(available);
@@ -92,8 +97,10 @@ public final class ForeignExceptionFixtureSupport {
         merged.put("selectedForeignExceptionBridge", proof);
         merged.put("targetLayout", target);
         for (var module : modules) if (module.containsKey("instrument")) merged.put("instrument", module.get("instrument"));
-        for (var link : (List<PackageScalarLink>) merged.get("packageScalarLinks"))
-            Language.currentState().getPackageCbits().link(link);
+        for (var link : (List<PackageScalarLink>) merged.get("packageScalarLinks")) {
+            if (loadNative) Language.currentState().getPackageCbits().link(link);
+            else Language.currentState().getPackageCbits().declare(link);
+        }
         return merged;
     }
     /** Supplied protocol remains synthetic; exception support is genuine validated GHC output. */

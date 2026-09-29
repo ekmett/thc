@@ -122,7 +122,7 @@ class UnixLibcTest {
                 var changed = (List<Object>) copy(call); var descriptor = (Map<String,Object>) ((Map<?,?>) changed.get(6)).get("foreignCall"); action.accept(changed,descriptor);
                 assertThrows(RuntimeFault.class,() -> validate(changed));
                 for (var backend : List.of("ast","bytecode")) try (var context = Context.newBuilder("thc").build()) { inside(context,() -> {
-                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); assertThrows(RuntimeFault.class,() -> program(language,rawModule(changed,source),backend)); return null;
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); assertThrows(RuntimeFault.class,() -> program(language,CoreModules.reachable(rawModule(changed,source),"entry",true),backend).entryTarget("entry")); return null;
                 }); }
             }}
             var control = new Control();

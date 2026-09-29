@@ -96,9 +96,9 @@ class OriginalPathModeTest {
             for (var backend : List.of("ast","bytecode")) try (var context = context()) { entered(context,() -> {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 for (var unit : List.of("unix-2.8.8.0-inplace","unix-2.8.8.0-460b")) { var installed = (List<Object>) copy(call); ((Map<String,Object>) ((Map<?,?>) ((Map<?,?>) installed.get(6)).get("foreignCall")).get("target")).put("unit",unit);
-                    if (operation == OriginalStdioOp.MKDIR) { assertEquals(operation,validate(installed)); program(language,backend,raw(installed)); } else assertThrows(RuntimeFault.class,() -> program(language,backend,raw(installed))); }
-                for (int i = 0; i <= 2; i++) { int index = i; assertThrows(RuntimeFault.class,() -> program(language,backend,rawModule(call,source("post"),index))); }
-                var shadowed = raw(call); var body = single((List<Map<String,Object>>) shadowed.get("bindings"),ignored -> true).get("expr"); var copied = single(foreignCalls(body),ignored -> true); copied.set(1,list("var","p0",((List<?>) copied.get(1)).get(2))); assertThrows(RuntimeFault.class,() -> program(language,backend,shadowed)); return null;
+                    if (operation == OriginalStdioOp.MKDIR) { assertEquals(operation,validate(installed)); program(language,backend,raw(installed)).entryTarget("entry"); } else assertThrows(RuntimeFault.class,() -> program(language,backend,CoreModules.reachable(raw(installed),"entry",true)).entryTarget("entry")); }
+                for (int i = 0; i <= 2; i++) { int index = i; assertThrows(RuntimeFault.class,() -> program(language,backend,rawModule(call,source("post"),index)).entryTarget("entry")); }
+                var shadowed = raw(call); var body = single((List<Map<String,Object>>) shadowed.get("bindings"),ignored -> true).get("expr"); var copied = single(foreignCalls(body),ignored -> true); copied.set(1,list("var","p0",((List<?>) copied.get(1)).get(2))); assertThrows(RuntimeFault.class,() -> program(language,backend,shadowed).entryTarget("entry")); return null;
             }); }
         }
     }

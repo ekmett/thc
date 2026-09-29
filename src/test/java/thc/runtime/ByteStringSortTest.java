@@ -22,7 +22,8 @@ class ByteStringSortTest {
     private final boolean nativeAvailable = "Linux".equals(System.getProperty("os.name")) && Set.of("amd64", "x86_64").contains(System.getProperty("os.arch"));
     private Object json(String name) throws Exception { return Json.parse(Files.readString(root.resolve(prefix + "/" + name))); }
     private Map<String, Object> source(String stage) throws Exception { return object(cbd(stage + ".cbd")); }
-    private ExecutableProgram program(Language language, String backend, Map<String, Object> module) {
+    private ExecutableProgram program(Language language, String backend, Map<String, Object> module) throws Exception {
+        module = ForeignExceptionFixtureSupport.nativeModules(List.of(module));
         return backend.equals("ast") ? new Program(language, module) : new BytecodeProgram(language, module);
     }
     private void inside(CheckedConsumer<Language> action) throws Exception {
@@ -98,21 +99,27 @@ class ByteStringSortTest {
                 }
             };
             exercise.accept(false); install(target); exercise.accept(true);
+            assertEquals(0L, callScalarTestTarget(target, new Object[]{0L, ManagedAddress.nullAddress(), 0L}));
+            byte[] unchanged = {9, 8, 7, 6}; var end = ManagedAddress.fromByteArray(unchanged).plus(4);
+            assertEquals(0L, callScalarTestTarget(target, new Object[]{0L, end, 0L}));
+            assertArrayEquals(new byte[]{9, 8, 7, 6}, unchanged); released(language);
         });
     }
-    @Test void boundsStorageAndLifetimesRejectBeforeMutation() throws Exception {
+    @Test void managedSortRejectsBoundsStorageAndLifetimesBeforeMutation() throws Exception {
         fixture();
-        for (var backend : list("ast", "bytecode")) inside(language -> {
-            var target = program(language, backend, CoreModules.reachable(source("pre"),entryId("sortBytes"), true)).entryTarget(entryId("sortBytes"));
+        // These are the managed operation's range guarantees, not properties
+        // of an ordinary C pointer/size_t ABI. Never feed invalid counts to C.
+        inside(language -> {
             byte[] original = {9, 8, 7, 6}; var storage = ManagedAddress.fromByteArray(original.clone());
             record Range(ManagedAddress address, long count) {}
             for (var range : list(new Range(storage, -1L), new Range(storage, Long.MIN_VALUE), new Range(storage, Long.MAX_VALUE),
                 new Range(storage.plus(-1), 1), new Range(storage.plus(4), 1), new Range(storage.plus(2), 3), new Range(ManagedAddress.nullAddress(), 1),
                 new Range(ManagedAddress.unownedNumeric(1), 0), new Range(ManagedAddress.fromHex("09080706"), 4))) {
-                assertThrows(RuntimeFault.class, () -> callScalarTestTarget(target, new Object[]{0L, range.address(), range.count()})); assertArrayEquals(original, bytes(storage, 4));
+                assertThrows(RuntimeFault.class, () -> ByteStringSort.sort(range.address(), range.count())); assertArrayEquals(original, bytes(storage, 4));
             }
-            assertEquals(0L, callScalarTestTarget(target, new Object[]{0L, ManagedAddress.nullAddress(), 0L}));
-            assertEquals(0L, callScalarTestTarget(target, new Object[]{0L, storage.plus(4), 0L}));
+            ByteStringSort.sort(ManagedAddress.nullAddress(), 0L);
+            ByteStringSort.sort(storage.plus(4), 0L);
+            assertArrayEquals(original, bytes(storage, 4));
             var cells = ManagedAddress.fromAllocation(ManagedAllocation.mutable(16, 8)); cells.writeAddressElementIndex(0, storage);
             assertThrows(RuntimeFault.class, () -> ByteStringSort.sort(cells, 8)); assertTrue(cells.readAddressElementIndex(0).sameLocation(storage));
             if (nativeAvailable) {
@@ -140,7 +147,7 @@ class ByteStringSortTest {
                     case 9 -> object(descriptor.get("target")).put("unit", "bytestring-0.12.2.0-inplace:forged");
                     case 10 -> object(descriptor.get("target")).put("isFunction", false);
                 }
-                assertThrows(RuntimeFault.class, () -> program(language, backend, candidate), backend + "/variant=" + variant);
+                assertThrows(RuntimeFault.class, () -> program(language, backend, candidate).entryTarget("entry"), backend + "/variant=" + variant);
             }
             var raw = program(language, backend, OriginalStdioChecks.rawModule(original, source("pre"), null));
             var storage = ManagedAddress.fromByteArray(new byte[]{3, 2, 1});

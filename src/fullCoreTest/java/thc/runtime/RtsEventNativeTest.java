@@ -29,10 +29,10 @@ public class RtsEventNativeTest {
     private final File root = new File(System.getProperty("thc.projectRoot"));
     private final File directory = new File(root, "build/rts-event");
     private Map<String, Object> json(File file) throws Exception { return (Map<String, Object>) Json.parse(Files.readString(file.toPath(), StandardCharsets.UTF_8)); }
-    private Context context() { return Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false")
+    private Context context() { return Context.newBuilder("thc").allowNativeAccess(true).allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false")
         .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build(); }
     private ExecutableProgram program(Language language, String backend, String entry, String stage) throws Exception {
-        var module = CoreModules.merge(List.of(cbd(new File(directory, entry + "-" + stage + ".cbd")))); return backend.equals("ast") ? new Program(language, module, true) : new BytecodeProgram(language, module);
+        var module = ForeignExceptionFixtureSupport.nativeModules(List.of(cbd(new File(directory, entry + "-" + stage + ".cbd")))); return backend.equals("ast") ? new Program(language, module, true) : new BytecodeProgram(language, module);
     }
     private List<List<?>> calls(Object value) {
         var result = new ArrayList<List<?>>();

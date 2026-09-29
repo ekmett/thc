@@ -20,7 +20,7 @@ public class FloatForeignNativeTest {
     private final File root = new File(System.getProperty("thc.projectRoot"));
     private final File directory = new File(root, "build/float-foreign");
     private Map<String, Object> json(File file) throws Exception { return (Map<String, Object>) Json.parse(Files.readString(file.toPath(), StandardCharsets.UTF_8)); }
-    private Context context() { return Context.newBuilder("thc").allowExperimentalOptions(true)
+    private Context context() { return Context.newBuilder("thc").allowNativeAccess(true).allowExperimentalOptions(true)
         .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build(); }
     private List<List<?>> calls(Object value) {
         var result = new ArrayList<List<?>>();
@@ -74,7 +74,7 @@ public class FloatForeignNativeTest {
                     context.initialize("thc"); context.enter();
                     try {
                         var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                        var linked = CoreModules.reachable(CoreModules.merge(List.of(module)),entryId(entry), true);
+                        var linked = CoreModules.reachable(ForeignExceptionFixtureSupport.nativeModules(List.of(module)),entryId(entry), true);
                         ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
                         var callable = context.asValue(new EntryValue(program,entryId(entry), 1));
                         for (var row : cases) assertEquals(Long.parseLong(row.get(2)), callable.execute(Long.parseLong(row.get(1))).asLong(), stage + "/" + backend + "/" + entry + "/" + row.get(1));
