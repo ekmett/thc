@@ -14,6 +14,17 @@ class CoreCbdModelTest {
     @TempDir Path directory;
 
     @SuppressWarnings("unchecked")
+    @Test void snapshotsPermitNegativeControlsWithoutChangingTheSource() {
+        var source = Map.of("expr", List.of("app", List.of("prim", "word2Float#"), List.of("operand")));
+        var copy = (Map<String, Object>) CoreCbdFixtures.snapshot(source);
+        var expression = (List<Object>) copy.get("expr");
+        ((List<Object>) expression.get(2)).clear();
+        expression.set(1, List.of("prim", "word2Double#"));
+        assertEquals(List.of("app", List.of("prim", "word2Float#"), List.of("operand")), source.get("expr"));
+        assertEquals(List.of(), expression.get(2));
+    }
+
+    @SuppressWarnings("unchecked")
     @Test void modelRoundTripPreservesBindingsAndLazyDebug() throws Exception {
         var model = (Map<String, Object>) Json.parse(Files.readString(
             Path.of("t/compact-core/golden/cbd-module-v1.json")));
