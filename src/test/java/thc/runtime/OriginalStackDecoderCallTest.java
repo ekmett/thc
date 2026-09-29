@@ -171,7 +171,7 @@ public class OriginalStackDecoderCallTest {
                     }
                     void exercise() throws Exception {
                         for (var snapshot : List.of(single, multiple)) {
-                            assertEquals((long) snapshot.getFrames().size(), call("getStackFieldszh", 0, snapshot));
+                            assertEquals(Integer.valueOf(snapshot.getFrames().size()), call("getStackFieldszh", 0, snapshot));
                             for (int offset = 0; offset < snapshot.getFrames().size(); offset++) {
                                 var key = ManagedStackRuntime.frameInfo(snapshot, offset, StackInfoTestLayout.layout()).getKey();
                                 long bits = (Long) call("getWordzh", 0, snapshot, (long) offset); assertEquals(key.toNativeBits(), bits);

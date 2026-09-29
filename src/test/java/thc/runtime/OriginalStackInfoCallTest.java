@@ -96,7 +96,19 @@ public class OriginalStackInfoCallTest {
                     Object call(String name, Object... arguments) throws Exception {
                         var before = ((Number) program.diagnostics().get("compiledEntries")).longValue(); var target = targets.get(name);
                         var packet = new Object[arguments.length + 1]; packet[0] = 0L; System.arraycopy(arguments, 0, packet, 1, arguments.length);
-                        var result = Calls.target(target, packet);
+                        Object result;
+                        var typed = ((GuestRoot) target.getRootNode()).getTypedInput();
+                        if (typed == null) result = Calls.target(target, packet);
+                        else {
+                            // Address formals use the callee's real typed entry,
+                            // including the scalar State token, not a raw array.
+                            var input = typed.state().getArguments().acquire(typed.getPacket());
+                            input.setInputMode(1);
+                            try {
+                                typed.getPacket().copyIn(input, packet);
+                                result = Calls.target(target, new Object[]{input});
+                            } finally { typed.releaseChecked(input); }
+                        }
                         if (compiled) {
                             assertEquals(before + 1, ((Number) program.diagnostics().get("compiledEntries")).longValue(), name);
                             valid(target, backend + "/inlining=" + inlining + "/" + name);
