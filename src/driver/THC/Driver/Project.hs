@@ -61,7 +61,8 @@ import THC.Driver.CoreIndex (packageModules, modulePaths, moduleEntries)
 import THC.Driver.CoreSymbols (publishCoreUnit)
 import THC.Driver.GhcProxy (ghcProxyCommand, ghcProxyWindowsCommand, directPlugin)
 import THC.Driver.NativeRecipe (NativeRecipe(..), componentRoots, componentNativeObjects,
-  readNativeRecipe, ensureNativeRecipes, componentRuntimeShim, componentDeclaredModules, componentHomeInterfaces)
+  readNativeRecipe, ensureNativeRecipes, componentRuntimeShim, componentDeclaredModules, componentHomeInterfaces,
+  componentMainModule)
 import THC.Driver.ScalarBitcode (ScalarBitcode, scalarBuildInputs, linkScalarBitcode)
 import THC.Driver.RuntimeShim (RuntimeShim, withRuntimeShim, runtimeShimInputs, validateRuntimeShimModules, foreignExceptionBridgeUnit)
 import THC.Driver.PackageNative (captureNativeObject, capturePackageNative, finishPackageNative,
@@ -1976,11 +1977,10 @@ expectedModuleNames :: Value -> IO [String]
 expectedModuleNames component = do
   modules <- optionalField component "modules" ([] :: [String])
   files <- optionalField component "src-files" ([] :: [String])
-  componentType <- field component "type"
-  let runnable = componentType `elem` ["exe", "bench", "test" :: String]
-  when runnable $
+  mainModule <- componentMainModule component
+  when (mainModule /= Nothing) $
     require (length files == 1) "project runnable component must have one Haskell main source"
-  pure (sort (modules ++ if runnable then ["Main"] else []))
+  pure (sort (modules ++ maybe [] pure mainModule))
 
 readComponent :: Unit -> ExportContext -> IO Component
 readComponent = readComponentMetadata True

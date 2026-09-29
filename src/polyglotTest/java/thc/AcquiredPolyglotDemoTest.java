@@ -10,6 +10,8 @@ import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import org.graalvm.polyglot.Context;
@@ -25,6 +27,39 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 /** Compiled-entry control kept separate from the public embedding example. */
 @SuppressWarnings("unchecked")
 class AcquiredPolyglotDemoTest {
+    @ParameterizedTest
+    @CsvSource({"javascript,JavaScriptDemo", "polyglot,PolyglotDemo"})
+    void genuineNamedMainWrapperSurvivesCompactConversion(String demo, String module) throws Exception {
+        Path manifest = Path.of("build", demo, "packages.json").toAbsolutePath();
+        Path compact = Path.of("build", "demo-direct-main-validation", demo, module + ".cbd").toAbsolutePath();
+        assumeTrue(Files.isRegularFile(manifest) && Files.isRegularFile(compact),
+            "Acquire the demo and encode its genuine module with thc-compact first");
+        var input = (Map<String,Object>) Json.INSTANCE.parse(CoreModules.request(
+            List.of("@" + manifest), "main::Main.main", true, false, "ast", true, true));
+        var directory = CoreModules.unitDirectory(input);
+        var original = directory.owner("main::Main.main");
+        assertNotNull(original);
+        assertEquals(module, original.name());
+        String digest = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(compact)));
+        var converted = new CoreUnitDirectory.ModuleRecord(original.unit(), original.name(), original.sha256(),
+            new CoreUnitDirectory.CompactStorage(new CoreUnitDirectory.Artifact(compact, digest)),
+            original.containsDelimitedControl(), original.registrationObligations(), original.mainAlias(),
+            original.packageScalarDeclarations());
+        try (var source = directory.open(true);
+             var reader = new CoreCompactModule(converted, directory.getTargetLayout(), true)) {
+            assertEquals(module, reader.metadata().get("module"));
+            var expected = source.binding("main::Main.main");
+            var actual = reader.binding("main::Main.main");
+            // CBD keeps display names/source locations in lazy debug tables.
+            for (String field : List.of("id", "type", "rep", "arity", "lifted", "info", "entryStrict", "entryStrictSource"))
+                assertEquals(expected.get(field), actual.get(field), field);
+            assertEquals(((List<?>) expected.get("expr")).subList(0, 2),
+                ((List<?>) actual.get("expr")).subList(0, 2), "The wrapper retains its actual Core reference");
+            assertNull(reader.binding("main::" + module + ".main"));
+            reader.verify();
+        }
+    }
+
     @ParameterizedTest
     @CsvSource({"javascript,JavaScriptDemo,ast", "javascript,JavaScriptDemo,bytecode",
                 "polyglot,PolyglotDemo,ast", "polyglot,PolyglotDemo,bytecode"})
@@ -46,6 +81,12 @@ class AcquiredPolyglotDemoTest {
                 var directory = CoreModules.unitDirectory(input);
                 var candidates = directory.getModules().stream().filter(item -> item.name().equals(module)).toList();
                 assertEquals(1, candidates.size());
+                assertTrue(candidates.getFirst().mainAlias(), "The genuine named-module CLI wrapper needs an alias summary");
+                assertSame(candidates.getFirst(), directory.owner("main::Main.main"));
+                assertNull(directory.owner("main::" + module + ".main"), "Do not invent a module-relative CLI wrapper");
+                try (var sources = directory.open(true)) {
+                    assertEquals("main::Main.main", sources.binding("main::Main.main").get("id"));
+                }
                 String entry = candidates.getFirst().unit() + ":" + module + ".main";
                 Main.loadEntry(context, List.of("@" + manifest), entry, true, backend, true);
                 assertEquals(1, owner.getCoreUnitPrograms().size());

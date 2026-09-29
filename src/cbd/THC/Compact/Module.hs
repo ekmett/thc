@@ -88,7 +88,7 @@ writeModuleRecords policy destination facts bindings catalog = do
         completed
         setRecordObserver encoder Nothing
         digest <- symbolDigest key
-        let !isAlias = alias || key == "main::" <> factsModule facts <> ".main"
+        let !isAlias = alias || key == "main::Main.main"
         pure (count+1,isAlias,(digest,offset):rows)
       registration = case factsForeign facts of
         Known (ForeignArtifacts _ _ stubs files) -> not (null files) || case stubs of

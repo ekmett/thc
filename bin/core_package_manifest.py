@@ -1448,7 +1448,7 @@ def _check_unit_summaries(path, item, module):
     foreign = module.get('foreign', {})
     stubs = foreign.get('stubs') or {}
     registration = bool(foreign.get('files') or stubs.get('initializers') or stubs.get('finalizers'))
-    alias = any(binding['id'] == 'main::' + module['module'] + '.main' for binding in module['bindings'])
+    alias = any(binding['id'] == 'main::Main.main' for binding in module['bindings'])
     inventory = module.get('staticForeignImports')
     imports = inventory.get('imports') if isinstance(inventory, dict) else None
     declarations = 'packageNativeLink' in module or isinstance(imports, list) and bool(imports)
@@ -1575,7 +1575,7 @@ def _validated_module(path, unit_id, item, data, audit_archives, *, module=None)
     if not isinstance(bindings, list):
         raise ValueError(f'{path}: missing bindings: {relative!r}')
     prefix = unit_id + ':' + name + '.'
-    alias = 'main::' + name + '.main'
+    alias = 'main::Main.main'
     for binding in bindings:
         key = binding.get('id') if isinstance(binding, dict) else None
         if not isinstance(key, str) or not (key.startswith(prefix) or key == alias):

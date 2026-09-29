@@ -69,7 +69,7 @@ tests env = TestLabel "direct unit Core publication" $ TestList
             Right value@(Object fields) -> encoded (Object $ KM.insert
               (if providerField == "packageNativeLink" then "packageNativeLink" else "staticForeignImports")
               (object [providerField .= [object ["synthetic" .= True]]]) $ KM.insert "bindings"
-              (toJSON (objects value "bindings" ++ [object ["id" .= ("main::B.main" :: String),
+              (toJSON (objects value "bindings" ++ [object ["id" .= ("main::Main.main" :: String),
                 "expr" .= (["lit", "int", "0"] :: [String])]])) fields)
             _ -> error "invalid test module"
           bodies = [first, second]
@@ -109,7 +109,8 @@ tests env = TestLabel "direct unit Core publication" $ TestList
         (map (bool . (`field` "containsDelimitedControl")) records)
       assertEqual "actual startup metadata" [False, True]
         (map (bool . (`field` "registrationObligations")) records)
-      assertEqual "actual alias presence" [False, True] (map (bool . (`field` "mainAlias")) records)
+      assertEqual "GHC's fixed main alias belongs to its non-Main source module" [False, True]
+        (map (bool . (`field` "mainAlias")) records)
       assertEqual "actual declaration provider" [False, True]
         (map (bool . (`field` "packageScalarDeclarations")) records)
       assertEqual "canonical original layout" layout (field (field published "targetLayout") "layout")
@@ -119,7 +120,7 @@ tests env = TestLabel "direct unit Core publication" $ TestList
       assertEqual "three fixed-width bindings" 3 (length rows)
       assertBool "no variable-length names in directory" (all ((== 24) . BS.length) rows)
       assertEqual "unsigned digest order" (sort (map (BS.take 16) rows)) (map (BS.take 16) rows)
-      expectedKeys <- mapM symbolDigest [utf8 "test-unit:A.雪", "test-unit:B.a space", "main::B.main"]
+      expectedKeys <- mapM symbolDigest [utf8 "test-unit:A.雪", "test-unit:B.a space", "main::Main.main"]
       assertEqual "exact logical UTF-8 IDs hashed, including spaces" (sort expectedKeys) (map (BS.take 16) rows)
       forM_ rows $ \row -> do
         let offset = fromIntegral (littleEndian (BS.drop 16 row))

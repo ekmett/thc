@@ -47,7 +47,7 @@ class CoreUnitManagedExportTest {
             rows.sort((a, b) -> Arrays.compareUnsigned(bytes(a.id()), bytes(b.id()))); var text = new StringBuilder();
             for (var row : rows) text.append(row.id()).append(' ').append(row.offset()).append('\n'); Files.writeString(symbols, text);
             boolean mainAlias = false;
-            for (var binding : (List<?>) source.get("bindings")) if (Objects.equals(((Map<?, ?>) binding).get("id"), "main::" + module + ".main")) mainAlias = true;
+            for (var binding : (List<?>) source.get("bindings")) if (Objects.equals(((Map<?, ?>) binding).get("id"), CoreUnitDirectory.MAIN_ALIAS)) mainAlias = true;
             var imports = source.get("staticForeignImports") instanceof Map<?, ?> proof ? proof.get("imports") : null;
             record = map("name", module, "path", "core/" + module + ".json", "sha256", hash(original), "boundary", source.get("boundary"),
                 "start", 0, "end", original.length, "bindingsStart", bindings.getStart(), "bindingsEnd", bindings.getEndExclusive(),

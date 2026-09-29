@@ -242,6 +242,32 @@ tests = TestLabel "actual native compiler receipts" $ TestList
       hidden <- tryIOError $ withScalarBitcode native dist [dist,child] compiler "/unused" "proof-0.1-inplace" component
         (const (pure ()))
       assertBool "public declaration guard rejects hidden C after receipt loss" (isLeft hidden)
+  , TestLabel "GHC main-is selects the executable Haskell artifact" $ TestCase $
+      forM_ [ ([], "Main")
+            , (["-main-is", "run"], "Main")
+            , (["-main-is", "JavaScriptDemo"], "JavaScriptDemo")
+            , (["-main-is", "Nested.Demo"], "Nested.Demo")
+            , (["-main-is", "Nested.Demo.start"], "Nested.Demo")
+            , (["-main-is", " ( Nested.Demo.++ ) "], "Nested.Demo")
+            , (["-main-is", "`Nested.Demo.start`"], "Nested.Demo")
+            , (["-main-is", "Nested.Demo", "-main-is", "(++)"], "Nested.Demo")
+            , (["-main-is", "First.start", "-main-is", "Nested.Demo"], "Nested.Demo")
+            , (["-main-is", "Nested.Demo.start", "-main-is", "run"], "Nested.Demo")
+            ] $ \(options, entryModule) -> withScratch $ \root -> do
+        let native = root </> "native"
+            dist = native </> "build"
+            artifacts = dist </> "demo" </> "demo-tmp"
+            basename = artifacts </> map (\c -> if c == '.' then pathSeparator else c) entryModule
+            component = object
+              ["type" .= ("exe" :: String), "name" .= ("exe:demo" :: String),
+               "modules" .= ([] :: [String]), "src-files" .= (["Entry.hs"] :: [String]),
+               "src-dir" .= root, "compiler-args" .= (["-odir",dist,"-hidir",dist] ++ options)]
+        createDirectoryIfMissing True (takeDirectory basename)
+        forM_ ["o", "hi", "dyn_o", "dyn_hi"] $ \suffix -> writeFile (basename <.> suffix) suffix
+        assertEqual ("entry objects are Haskell: " ++ show options) [] =<<
+          componentNativeObjects native dist [dist] component
+        assertEqual ("entry interfaces are declared: " ++ show options) [] =<<
+          componentHomeInterfaces dist [dist] component
   , TestCase $ withScratch $ \root -> withCurrentDirectory root $ do
       let native = root </> "native"
           dist = native </> "build" </> "scalar-first-0.1.0.0" </> "x" </> "oracle"
