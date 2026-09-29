@@ -16,6 +16,7 @@ import java.nio.file.Files;
 import java.util.*;
 import java.util.function.Consumer;
 import static org.junit.jupiter.api.Assertions.*;
+import static thc.runtime.ScalarTestCalls.callScalarTestTarget;
 import static thc.runtime.OriginalStdioChecks.*;
 
 @EnabledOnOs(OS.LINUX)
@@ -77,7 +78,7 @@ class OriginalSavedTermiosTest {
                         Object call(RootCallTarget target, Object... values) {
                             long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
                             Object[] args = new Object[values.length + 1]; args[0] = 0L; System.arraycopy(values, 0, args, 1, values.length);
-                            var value = Calls.target(target, args);
+                            var value = callScalarTestTarget(target, args);
                             if (compiled) assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > before);
                             assertEquals(0, language.getHandoffState().get().getArguments().getDepth());
                             assertEquals(0, language.getHandoffState().get().getResults().getDepth()); return value;

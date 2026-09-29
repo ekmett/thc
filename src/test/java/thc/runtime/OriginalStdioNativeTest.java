@@ -17,6 +17,7 @@ import java.nio.file.StandardOpenOption;
 import java.util.*;
 import java.util.function.Consumer;
 import static org.junit.jupiter.api.Assertions.*;
+import static thc.runtime.ScalarTestCalls.callScalarTestTarget;
 import static thc.runtime.OriginalStdioChecks.*;
 
 /** Executes unchanged installed GHC wrappers copied into real consumer Core. */
@@ -121,7 +122,7 @@ class OriginalStdioNativeTest {
                         class Check { void row(Map<String,Object> row) {
                             output.reset(); errors.reset(); var args = new ArrayList<Long>(); for (var value : (List<Number>) row.get("arguments")) args.add(value.longValue()); assertEquals(3,args.size());
                             long fd = args.get(0), offset = args.get(1), count = args.get(2);
-                            assertEquals(row.get("result"),Calls.target(entry,new Object[]{0L,fd,address,offset,count}),label + "/" + args);
+                            assertEquals(row.get("result"),callScalarTestTarget(entry,new Object[]{0L,fd,address,offset,count}),label + "/" + args);
                             assertArrayEquals(bytes((String) row.get("stdoutHex")),output.toByteArray(),label + " stdout/" + args); assertArrayEquals(bytes((String) row.get("stderrHex")),errors.toByteArray(),label + " stderr/" + args);
                             assertArrayEquals(payload,address.cbitsBacking(),label + " immutable input/" + args); released(language);
                         }}

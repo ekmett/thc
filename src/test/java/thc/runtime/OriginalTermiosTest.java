@@ -21,6 +21,7 @@ import static thc.runtime.OriginalStdioChecks.*;
 @EnabledOnOs(OS.LINUX)
 @EnabledIfSystemProperty(named = "os.arch",matches = "amd64|x86_64")
 @SuppressWarnings("unchecked")
+@org.junit.jupiter.api.Tag("foreign-exceptions-full-core")
 class OriginalTermiosTest {
     private final File root = new File(System.getProperty("thc.projectRoot"));
     private final String prefix = "build/original-termios";
@@ -32,7 +33,7 @@ class OriginalTermiosTest {
     private Map<String,Object> json(String path) throws Exception { return (Map<String,Object>) Json.parse(Files.readString(new File(root,path).toPath())); }
     private Map<String,Object> module(String stage) throws Exception { var modules = new ArrayList<Map<String,Object>>(); for (var part : List.of("OriginalTermiosAudit","THC.InterfaceClosure")) modules.add(cbd(prefix + "/" + stage + "/core/" + part + ".cbd")); return CoreModules.merge(modules); }
     private Object copy(Object value) { return Json.parse(Json.stringify(value)); }
-    private Context context() { return Context.newBuilder("thc").allowIO(IOAccess.NONE).allowExperimentalOptions(true).option("engine.BackgroundCompilation","false").option("engine.MultiTier","false").option("engine.CompilationFailureAction","Throw").build(); }
+    private Context context() { return Context.newBuilder("thc").allowIO(IOAccess.NONE).allowNativeAccess(true).allowExperimentalOptions(true).option("engine.BackgroundCompilation","false").option("engine.MultiTier","false").option("engine.CompilationFailureAction","Throw").build(); }
     private void valid(RootCallTarget target) throws Exception { assertEquals(true,target.getClass().getMethod("isValidLastTier").invoke(target)); }
     private OriginalStdioOp validate(List<Object> call) { var reps = new ArrayList<Object>(); for (var arg : (List<List<Object>>) call.get(2)) { var metadata = CoreRepresentations.metadata(arg); reps.add(metadata == null ? null : metadata.get("rep")); } return CoreOriginalStdio.validate(call.get(6),reps,(List<?>) call.get(3),((Map<?,?>) call.get(6)).get("rep")); }
     private List<List<Object>> calls() throws Exception { var calls = new ArrayList<List<Object>>(); var seen = new HashSet<Object>(); for (var call : foreignCalls(module("pre"))) if (seen.add(((Map<?,?>) ((Map<?,?>) call.get(6)).get("foreignCall")).get("target"))) calls.add(call); return calls; }
@@ -57,7 +58,7 @@ class OriginalTermiosTest {
                 try {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                     for (int at = 0; at < names.size(); at++) {
-                        int index = at; var name = names.get(index); var linked = with(CoreModules.reachable(source, entryId(name)),"instrument",true); ExecutableProgram program = backend.equals("ast") ? new Program(language,linked) : new BytecodeProgram(language,linked); var entry = program.entryTarget(entryId(name));
+                        int index = at; var name = names.get(index); var linked = with(CoreModules.reachable(source, entryId(name)),"instrument",true); var programSource = thc.ForeignExceptionFixtureSupport.nativeModules(List.of(linked)); ExecutableProgram program = backend.equals("ast") ? new Program(language,programSource) : new BytecodeProgram(language,programSource); var entry = program.entryTarget(entryId(name));
                         int executedRoots;
                         if (index < constantCount) executedRoots = 1;
                         else {
@@ -71,7 +72,7 @@ class OriginalTermiosTest {
                             void install(RootCallTarget target) throws Exception { assertTrue(installed.add(target),"compile each target only once"); target.getClass().getMethod("compile",boolean.class).invoke(target,true); valid(target); }
                             void released() { var handoff = language.getHandoffState().get(); assertEquals(0,handoff.getArguments().getDepth()); assertEquals(0,handoff.getResults().getDepth()); assertEquals(0,handoff.getArguments().retainedReferences()); assertEquals(0,handoff.getResults().retainedReferences()); }
                             Object invoke(Object[] arguments,boolean compiled) throws Exception {
-                                long before = ((Number) program.diagnostics().get("compiledEntries")).longValue(); var result = Calls.target(entry,packet(arguments,0L));
+                                long before = ((Number) program.diagnostics().get("compiledEntries")).longValue(); var result = callScalarTestTarget(entry,packet(arguments,0L));
                                 if (compiled) { assertEquals(before + executedRoots,((Number) program.diagnostics().get("compiledEntries")).longValue(),stage + "/" + backend + "/" + name); assertEquals(active,targets(entry)); for (var target : active) valid(target); } released(); return result;
                             }
                             void run(boolean compiled) throws Exception {
@@ -99,7 +100,7 @@ class OriginalTermiosTest {
                             var cafId = (String) caf.get("id"); var thunk = (Thunk) program.entryValue(cafId); var target = program.entryTarget(cafId); assertSame(target,thunk.getTarget()); assertEquals(CoreFunctionIdentity.from(linked,caf),((GuestRoot) target.getRootNode()).getCoreIdentity()); assertNull(thunk.getEnvironment());
                             class Caf { void invoke(boolean compiled) throws Exception {
                                 assertEquals(0,thunk.getState()); assertSame(target,thunk.getTarget()); assertSame(thunk,program.entryValue(cafId)); assertSame(target,program.entryTarget(cafId)); long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
-                                var value = (DataValue) Calls.target(target,new Object[]{0L}); assertEquals(DataValues.BOXED_INT_CONSTRUCTOR_ID,value.getLayout().getId()); assertEquals(1,value.getLayout().getArity()); assertEquals(constants.get(index),value.getLayout().readLong(value,0));
+                                var value = (DataValue) callScalarTestTarget(target,new Object[]{0L}); assertEquals(DataValues.BOXED_INT_CONSTRUCTOR_ID,value.getLayout().getId()); assertEquals(1,value.getLayout().getArity()); assertEquals(constants.get(index),value.getLayout().readLong(value,0));
                                 assertEquals(0,thunk.getState()); assertSame(target,thunk.getTarget()); assertEquals(List.of(target),targets(target)); if (compiled) { assertEquals(before + 1,((Number) program.diagnostics().get("compiledEntries")).longValue()); valid(target); } exercise.released();
                             }}
                             var cafCall = new Caf(); for (int i = 0; i < 3; i++) cafCall.invoke(false); exercise.install(target); for (int i = 0; i < 3; i++) cafCall.invoke(true);
@@ -117,7 +118,7 @@ class OriginalTermiosTest {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                class Load { ExecutableProgram call(Map<String,Object> raw) { return backend.equals("ast") ? new Program(language,raw) : new BytecodeProgram(language,raw); }}
+                class Load { ExecutableProgram call(Map<String,Object> raw) throws Exception { raw = thc.ForeignExceptionFixtureSupport.nativeModules(List.of(raw)); return backend.equals("ast") ? new Program(language,raw) : new BytecodeProgram(language,raw); }}
                 var load = new Load();
                 for (var call : calls()) {
                     var operation = Objects.requireNonNull(validate(call)); var raw = rawModule(call,source); var target = load.call(raw).entryTarget("entry"); byte[] bytes = new byte[4096]; Arrays.fill(bytes,(byte) 90); var address = ManagedAddress.fromByteArray(bytes); var args = new ArrayList<Object>();

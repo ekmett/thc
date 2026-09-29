@@ -22,6 +22,7 @@ import static thc.runtime.ScalarTestCalls.callScalarTestTarget;
 /** Original imported declarations and native observations, not replacement FFIs. */
 @EnabledOnOs(value = OS.LINUX,disabledReason = "Only original Linux stat scalar declarations have native/Core proof")
 @SuppressWarnings("unchecked")
+@org.junit.jupiter.api.Tag("foreign-exceptions-full-core")
 class OriginalPosixStatTest {
     private final File root = new File(System.getProperty("thc.projectRoot"));
     private final String prefix = "build/original-posix-stat";
@@ -32,7 +33,7 @@ class OriginalPosixStatTest {
     private Map<String,Object> module(String stage) throws Exception { var modules = new ArrayList<Map<String,Object>>(); for (var part : List.of("OriginalPosixStatAudit","THC.InterfaceClosure")) modules.add(cbd(prefix + "/" + stage + "/core/" + part + ".cbd")); return CoreModules.merge(modules); }
     private Object copy(Object value) { return Json.parse(Json.stringify(value)); }
     private void valid(RootCallTarget target) throws Exception { assertEquals(true,target.getClass().getMethod("isValidLastTier").invoke(target)); }
-    private Context context() { return Context.newBuilder("thc").allowIO(IOAccess.NONE).allowExperimentalOptions(true).option("engine.BackgroundCompilation","false").option("engine.MultiTier","false").option("engine.CompilationFailureAction","Throw").build(); }
+    private Context context() { return Context.newBuilder("thc").allowIO(IOAccess.NONE).allowNativeAccess(true).allowExperimentalOptions(true).option("engine.BackgroundCompilation","false").option("engine.MultiTier","false").option("engine.CompilationFailureAction","Throw").build(); }
     private Expr operand(List<String> events,String name,Object value) { return new Expr() { @Override public Object execute(VirtualFrame frame) { events.add(name); return value; } }; }
     @Test void statOperandsAndStateKeepTheirOrderBeforeNativeAccess() throws Exception {
         var events = new ArrayList<String>(); var layout = new FrameLayout(); int slot = layout.bind("result"); var frame = Truffle.getRuntime().createVirtualFrame(new Object[0],layout.build());
@@ -63,7 +64,7 @@ class OriginalPosixStatTest {
                     for (var name : names) {
                         var linked = with(CoreModules.reachable(module, entryId(name)),"instrument",true); var evidence = new ArrayCoreEvidence(linked, entryId(name)); assertEquals(1,evidence.getBindings().size()); int originalLambdas = List.of("originalStatSize","originalStatTypes").contains(name) ? 1 : 2;
                         assertEquals(originalLambdas,evidence.guestLambdas(evidence.getRoot().get("expr")).size()); assertEquals(1,evidence.loweredGuestLambdas(evidence.getRoot().get("expr")).size(),"Only exact State# redexes lower in-frame");
-                        ExecutableProgram program = backend.equals("ast") ? new Program(language,linked) : new BytecodeProgram(language,linked); var entry = program.entryTarget(entryId(name));
+                        var programSource = thc.ForeignExceptionFixtureSupport.nativeModules(List.of(linked)); ExecutableProgram program = backend.equals("ast") ? new Program(language,programSource) : new BytecodeProgram(language,programSource); var entry = program.entryTarget(entryId(name));
                         class Exercise {
                             List<RootCallTarget> active = List.of();
                             void invoke(Object argument,long expected,boolean compiled) throws Exception {
@@ -100,7 +101,7 @@ class OriginalPosixStatTest {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                class Load { ExecutableProgram call(Map<String,Object> module) { return backend.equals("ast") ? new Program(language,module) : new BytecodeProgram(language,module); }}
+                class Load { ExecutableProgram call(Map<String,Object> module) throws Exception { module = thc.ForeignExceptionFixtureSupport.nativeModules(List.of(module)); return backend.equals("ast") ? new Program(language,module) : new BytecodeProgram(language,module); }}
                 var load = new Load();
                 for (var call : calls()) {
                     var operation = Objects.requireNonNull(validate(call)); var program = load.call(rawModule(call)); var target = program.entryTarget("entry"); var args = new ArrayList<Object>();

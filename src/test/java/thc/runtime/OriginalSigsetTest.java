@@ -32,10 +32,12 @@ import thc.CoreModules;
 import thc.Json;
 import thc.Language;
 import static org.junit.jupiter.api.Assertions.*;
+import static thc.runtime.ScalarTestCalls.callScalarTestTarget;
 
 @EnabledOnOs(OS.LINUX)
 @EnabledIfSystemProperty(named = "os.arch", matches = "amd64|x86_64")
 @SuppressWarnings("unchecked")
+@org.junit.jupiter.api.Tag("foreign-exceptions-full-core")
 public class OriginalSigsetTest {
     private final File root = new File(System.getProperty("thc.projectRoot")); private final String prefix = "build/original-sigset";
     private final List<String> names = List.of("originalSigEmpty", "originalSigAdd"); private final List<OriginalStdioOp> operations = List.of(OriginalStdioOp.SIGEMPTYSET, OriginalStdioOp.SIGADDSET);
@@ -46,7 +48,7 @@ public class OriginalSigsetTest {
     private Object copy(Object value) { return Json.parse(Json.stringify(value)); }
     private Map<String, Object> document() throws Exception { try (var stream = Objects.requireNonNull(SigsetImage.class.getResourceAsStream("/thc/native/sigset-abi.json"))) { return (Map<String, Object>) Json.parse(new String(stream.readAllBytes(), StandardCharsets.UTF_8)); } }
     private SigsetImage parse(Object value) { return SigsetImage.parse(value, System.getProperty("os.name"), System.getProperty("os.arch")); }
-    private Context context() { return Context.newBuilder("thc").allowIO(IOAccess.NONE).allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build(); }
+    private Context context() { return Context.newBuilder("thc").allowIO(IOAccess.NONE).allowNativeAccess(true).allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build(); }
     private void valid(RootCallTarget target) throws Exception { assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target)); }
     private List<RootCallTarget> targets(RootCallTarget entry) { Set<RootCallTarget> seen = Collections.newSetFromMap(new IdentityHashMap<>()); var result = new ArrayList<RootCallTarget>(); visit(entry, seen, result); return result; }
     private void visit(RootCallTarget target, Set<RootCallTarget> seen, List<RootCallTarget> result) {
@@ -57,7 +59,7 @@ public class OriginalSigsetTest {
     }
     private OriginalStdioOp validate(List<Object> call) { var arguments = new ArrayList<Object>(); for (var argument : (List<List<Object>>) call.get(2)) { var metadata = CoreRepresentations.metadata(argument); arguments.add(metadata == null ? null : metadata.get("rep")); } return CoreOriginalStdio.validate(call.get(6), arguments, (List<?>) call.get(3), ((Map<?, ?>) call.get(6)).get("rep")); }
     private byte[] filled(int count, int value) { var bytes = new byte[count]; Arrays.fill(bytes, (byte) value); return bytes; }
-    private ExecutableProgram load(Language language, String backend, Map<String, Object> module) { return backend.equals("ast") ? new Program(language, module) : new BytecodeProgram(language, module); }
+    private ExecutableProgram load(Language language, String backend, Map<String, Object> module) throws Exception { module = thc.ForeignExceptionFixtureSupport.nativeModules(List.of(module)); return backend.equals("ast") ? new Program(language, module) : new BytecodeProgram(language, module); }
     @Test public void nativeImagesErrnoAndExactFirstInstalledTargetsMatchBothBackends() throws Exception {
         var manifest = json(prefix + "/manifest.json"); assertEquals(1L, manifest.get("schema")); assertEquals("linux", manifest.get("platform")); assertEquals(true, manifest.get("supported")); assertEquals(names, manifest.get("entries"));
         assertEquals(true, manifest.get("strictAccepted")); assertEquals(false, manifest.get("runtimeVerified")); assertEquals(false, manifest.get("installedArtifactsHashed")); assertEquals(532L, manifest.get("nativeRows"));
@@ -94,7 +96,7 @@ public class OriginalSigsetTest {
                                 var bytes = filled(size + 16, 77); Arrays.fill(bytes, 8, 8 + size, ((Long) row.get(1)).byteValue()); var address = ManagedAddress.fromByteArray(bytes).plus(8);
                                 var args = selectedIndex == 0 ? new Object[]{0L, address} : new Object[]{0L, address, row.get(2)}; stdio.captureForeignErrno(0);
                                 for (int repeat = 0; repeat < 2; repeat++) {
-                                    long before = ((Number) program.diagnostics().get("compiledEntries")).longValue(); assertEquals(row.get(3), Calls.target(entry, args), stage + "/" + backend + "/" + name + "/" + row.subList(0, Math.min(5, row.size()))); assertEquals(row.get(4), stdio.errno());
+                                    long before = ((Number) program.diagnostics().get("compiledEntries")).longValue(); assertEquals(row.get(3), callScalarTestTarget(entry, args), stage + "/" + backend + "/" + name + "/" + row.subList(0, Math.min(5, row.size()))); assertEquals(row.get(4), stdio.errno());
                                     var expected = (List<Long>) row.get(5); var expectedBytes = new byte[expected.size()]; for (int i = 0; i < expectedBytes.length; i++) expectedBytes[i] = expected.get(i).byteValue(); assertArrayEquals(expectedBytes, bytes);
                                     if (compiled) { assertEquals(before + 2, ((Number) program.diagnostics().get("compiledEntries")).longValue()); assertEquals(retained, targets(entry)); for (var target : retained) valid(target); }
                                     var handoff = language.getHandoffState().get(); assertEquals(0, handoff.getArguments().getDepth()); assertEquals(0, handoff.getResults().getDepth()); assertEquals(0, handoff.getArguments().retainedReferences()); assertEquals(0, handoff.getResults().retainedReferences());
@@ -119,7 +121,7 @@ public class OriginalSigsetTest {
                     class Runner {
                         Object invoke(ManagedAddress pointer) { return invoke(pointer, 1L, thc.runtime.Unit.INSTANCE); }
                         Object invoke(ManagedAddress pointer, long signal) { return invoke(pointer, signal, thc.runtime.Unit.INSTANCE); }
-                        Object invoke(ManagedAddress pointer, long signal, Object state) { return Calls.target(target, operation == OriginalStdioOp.SIGADDSET ? new Object[]{0L, pointer, signal, state} : new Object[]{0L, pointer, state}); }
+                        Object invoke(ManagedAddress pointer, long signal, Object state) { return callScalarTestTarget(target, operation == OriginalStdioOp.SIGADDSET ? new Object[]{0L, pointer, signal, state} : new Object[]{0L, pointer, state}); }
                     }
                     var runner = new Runner(); stdio.captureForeignErrno(123); assertThrows(RuntimeFault.class, () -> runner.invoke(address, 1L, 9L));
                     for (int index = 0; index < operation.getArguments().size(); index++) { final int selected = index; assertThrows(RuntimeFault.class, () -> load(language, backend, OriginalStdioChecks.rawModule(call, source, selected))); }

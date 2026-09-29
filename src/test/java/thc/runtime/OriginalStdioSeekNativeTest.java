@@ -20,6 +20,7 @@ import static thc.runtime.OriginalStdioChecks.*;
 
 /** Installed GHC c_lseek metadata and private-file positions, including ESPIPE. */
 @SuppressWarnings("unchecked")
+@org.junit.jupiter.api.Tag("foreign-exceptions-full-core")
 class OriginalStdioSeekNativeTest {
     @TempDir Path directory;
     private final File root = new File(System.getProperty("thc.projectRoot"));
@@ -93,7 +94,7 @@ class OriginalStdioSeekNativeTest {
             }
             for (var backend : List.of("ast", "bytecode")) for (boolean inlining : new boolean[] {false, true}) {
                 var output = new ByteArrayOutputStream(); var errors = new ByteArrayOutputStream();
-                try (var context = Context.newBuilder("thc").allowIO(IOAccess.ALL).in(new ByteArrayInputStream(new byte[0])).out(output).err(errors)
+                try (var context = Context.newBuilder("thc").allowIO(IOAccess.ALL).allowNativeAccess(true).in(new ByteArrayInputStream(new byte[0])).out(output).err(errors)
                     .allowExperimentalOptions(true).option("compiler.Inlining", Boolean.toString(inlining)).option("engine.BackgroundCompilation", "false")
                     .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build()) {
                     context.initialize("thc"); context.enter();
@@ -101,7 +102,7 @@ class OriginalStdioSeekNativeTest {
                         var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                         for (var name : names) {
                             var linked = with(CoreModules.reachable(module, entryId(name)), "instrument", true);
-                            ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked); var entry = program.entryTarget(entryId(name));
+                            var programSource = thc.ForeignExceptionFixtureSupport.nativeModules(List.of(linked)); ExecutableProgram program = backend.equals("ast") ? new Program(language, programSource) : new BytecodeProgram(language, programSource); var entry = program.entryTarget(entryId(name));
                             exercise(false, stage, backend, inlining, name, program, entry, oracle, abi, expectedPosition); var active = targets(entry);
                             assertEquals(1, active.size(), "entry contains the inlined runRW State body");
                             for (var target : active) { target.getClass().getMethod("compile", boolean.class).invoke(target, true); valid(target); }

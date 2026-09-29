@@ -35,6 +35,7 @@ import thc.Json;
 import thc.Language;
 import thc.Main;
 import static org.junit.jupiter.api.Assertions.*;
+import static thc.runtime.ScalarTestCalls.callScalarTestTarget;
 
 @EnabledOnOs(OS.LINUX)
 @EnabledIfSystemProperty(named = "os.arch", matches = "amd64|x86_64")
@@ -112,7 +113,7 @@ public class OriginalSigprocmaskTest {
                         for (int index = 0; index < calls.size(); index++) {
                             var call = calls.get(index); var current = snapshot(service); var bytes = canaries(); var old = call.output() ? address(bytes).plus(8) : nil();
                             var io = Language.currentState().getStdio(); assertEquals(-1L, io.close(-1)); long sticky = io.errno(); long count = ((Number) program.diagnostics().get("compiledEntries")).longValue();
-                            assertEquals(rows.get(index).get(1), Calls.target(entry, new Object[]{0L, call.how(), call.set(), old}));
+                            assertEquals(rows.get(index).get(1), callScalarTestTarget(entry, new Object[]{0L, call.how(), call.set(), old}));
                             if (compiled) assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > count);
                             assertEquals(index == 6 ? rows.get(index).get(2) : sticky, io.errno()); var expected = canaries();
                             if (index != 6 && call.output()) System.arraycopy(current, 0, expected, 8, 8);
@@ -137,7 +138,7 @@ public class OriginalSigprocmaskTest {
                     var target = load(language, backend, OriginalStdioChecks.rawModule(original, source, null)).entryTarget("entry");
                     class Runner {
                         Object invoke(long how, ManagedAddress set, ManagedAddress old) { return invoke(how, set, old, thc.runtime.Unit.INSTANCE); }
-                        Object invoke(long how, ManagedAddress set, ManagedAddress old, Object state) { return Calls.target(target, new Object[]{0L, how, set, old, state}); }
+                        Object invoke(long how, ManagedAddress set, ManagedAddress old, Object state) { return callScalarTestTarget(target, new Object[]{0L, how, set, old, state}); }
                     }
                     var runner = new Runner();
                     // Existing non-SIGTTOU bits and unmaskable signals are

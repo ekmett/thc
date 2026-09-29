@@ -59,8 +59,20 @@ public final class ForeignExceptionFixtureSupport {
     }
     public static Map<String, Object> source(String stage) throws Exception {
         var modules = new ArrayList<>(originals());
-        modules.addAll(stageModules(stage));
+        var exported = stageModules(stage);
+        modules.addAll(exported);
         var merged = new LinkedHashMap<>(CoreModules.merge(modules));
+        // This fixture compiled its own runtime; installed support may also
+        // contain another genuine bridge. Select the exact exported proof.
+        String bridgeUnit = null;
+        for (var module : exported) {
+            var proof = CoreForeignExceptionBridge.read(module);
+            if (proof == null) continue;
+            if (bridgeUnit != null) throw new IllegalStateException("Ambiguous exported fixture runtime");
+            bridgeUnit = (String) proof.get("unit");
+        }
+        if (bridgeUnit == null) throw new IllegalStateException("Missing exported fixture runtime");
+        merged.put("foreignExceptionBridgeUnit", bridgeUnit);
         merged.put("targetLayout", target);
         return merged;
     }

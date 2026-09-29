@@ -16,6 +16,7 @@ import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.*;
 import static org.junit.jupiter.api.Assertions.*;
+import static thc.runtime.ScalarTestCalls.callScalarTestTarget;
 import static thc.runtime.OriginalStdioChecks.*;
 
 @EnabledOnOs(OS.LINUX)
@@ -83,7 +84,7 @@ class OriginalTcsetattrTest {
                             for (var row : rows) {
                                 long kind = (Long) row.get(0), action = (Long) row.get(1), echo = (Long) row.get(2); var expected = oracle.observe(kind == 0 ? action : -1L,echo); var supplied = bytes(expected.subList(2,2 + size() + 16)); var original = supplied.clone(); long descriptor = kind == 0 ? terminal : kind == 1 ? regular : -1L;
                                 try {
-                                    assertEquals(-1L,io.close(-1)); long sticky = io.errno(); long before = ((Number) program.diagnostics().get("compiledEntries")).longValue(); var result = Calls.target(entry,new Object[]{0L,descriptor,action,ManagedAddress.fromByteArray(supplied).plus(8)});
+                                    assertEquals(-1L,io.close(-1)); long sticky = io.errno(); long before = ((Number) program.diagnostics().get("compiledEntries")).longValue(); var result = callScalarTestTarget(entry,new Object[]{0L,descriptor,action,ManagedAddress.fromByteArray(supplied).plus(8)});
                                     var recordedStatus = (List<Long>) row.get(3); assertEquals(recordedStatus.get(0),result); assertEquals(Objects.equals(result,0L) ? sticky : recordedStatus.get(1),io.errno());
                                     if (compiled) assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > before); assertArrayEquals(original,supplied,"Const input and canaries must remain unchanged");
                                     var observed = image(90); assertEquals(0L,io.tcgetattr(terminal,ManagedAddress.fromByteArray(observed).plus(8))); assertArrayEquals(bytes(expected.subList(expected.size() - size() - 16,expected.size())),observed);
@@ -92,7 +93,7 @@ class OriginalTcsetattrTest {
                             }
                             // Const struct termios also accepts immutable byte storage.
                             var expected = oracle.observe(0,0); var input = expected.subList(2,2 + size() + 16); var text = new StringBuilder(); for (long value : input) { var hex = Long.toString(value,16); if (hex.length() < 2) text.append('0'); text.append(hex); }
-                            var immutable = ManagedAddress.fromHex(text.toString()).plus(8); try { assertEquals(0L,Calls.target(entry,new Object[]{0L,terminal,0L,immutable})); } finally { oracle.reset(); }
+                            var immutable = ManagedAddress.fromHex(text.toString()).plus(8); try { assertEquals(0L,callScalarTestTarget(entry,new Object[]{0L,terminal,0L,immutable})); } finally { oracle.reset(); }
                         }}
                         var exercise = new Exercise(); exercise.run(false); var cls = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"); for (var target : targets(entry)) { cls.getMethod("compile",boolean.class).invoke(target,true); assertEquals(true,cls.getMethod("isValidLastTier").invoke(target)); }
                         var runtime = Truffle.getRuntime(); runtime.getClass().getMethod("bypassedInstalledCode",cls).invoke(runtime,entry); exercise.run(true); assertEquals(0L,program.diagnostics().get("unsupportedTraps"));
@@ -107,7 +108,7 @@ class OriginalTcsetattrTest {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var target = load(language,backend,rawModule(original,source)).entryTarget("entry"); var io = Language.currentState().getStdio(); var bytes = image(90); var valid = ManagedAddress.fromByteArray(bytes).plus(8);
-                class Call { Object invoke(long fd,long action,ManagedAddress address,Object state) { return Calls.target(target,new Object[]{0L,fd,action,address,state}); }}
+                class Call { Object invoke(long fd,long action,ManagedAddress address,Object state) { return callScalarTestTarget(target,new Object[]{0L,fd,action,address,state}); }}
                 var call = new Call(); assertEquals(-1L,io.close(-1)); long sticky = io.errno(); assertThrows(RuntimeFault.class,() -> call.invoke(-1,0,valid,9L));
                 for (long bad : new long[]{Long.MIN_VALUE,2147483648L}) { assertThrows(RuntimeFault.class,() -> call.invoke(bad,0,valid,thc.runtime.Unit.INSTANCE)); assertThrows(RuntimeFault.class,() -> call.invoke(-1,bad,valid,thc.runtime.Unit.INSTANCE)); }
                 var pointerCell = ManagedAddress.fromAllocation(PinnedMemory.allocate(size(),8)); pointerCell.writeAddressElementIndex(0,valid);

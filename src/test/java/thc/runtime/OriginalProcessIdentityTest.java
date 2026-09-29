@@ -17,10 +17,12 @@ import java.nio.file.Files;
 import java.util.*;
 import java.util.function.BiConsumer;
 import static org.junit.jupiter.api.Assertions.*;
+import static thc.runtime.ScalarTestCalls.callScalarTestTarget;
 import static thc.runtime.OriginalStdioChecks.*;
 
 @EnabledOnOs({OS.LINUX,OS.MAC})
 @SuppressWarnings("unchecked")
+@org.junit.jupiter.api.Tag("foreign-exceptions-full-core")
 class OriginalProcessIdentityTest {
     private final File root = new File(System.getProperty("thc.projectRoot"));
     private final String prefix = "build/original-process-identity";
@@ -34,7 +36,7 @@ class OriginalProcessIdentityTest {
     private Map<String,Object> source(String stage) throws Exception {
         var modules = new ArrayList<Map<String,Object>>(); for (var part : List.of("OriginalProcessIdentityAudit","THC.InterfaceClosure")) modules.add((Map<String,Object>) cbd(prefix + "/" + stage + "/core/" + part + ".cbd")); return CoreModules.merge(modules);
     }
-    private ExecutableProgram program(Language language,String backend,Map<String,Object> module) { return backend.equals("ast") ? new Program(language,module) : new BytecodeProgram(language,module); }
+    private ExecutableProgram program(Language language,String backend,Map<String,Object> module) throws Exception { module = thc.ForeignExceptionFixtureSupport.nativeModules(List.of(module), Language.currentState().getEnv().isNativeAccessAllowed()); return backend.equals("ast") ? new Program(language,module) : new BytecodeProgram(language,module); }
     private List<Object> original(Map<String,Object> module,String symbol) { return single(foreignCalls(module),call -> Objects.equals(((Map<?,?>) ((Map<?,?>) ((Map<?,?>) call.get(6)).get("foreignCall")).get("target")).get("symbol"),symbol)); }
     private void released(Language language) { var state = language.getHandoffState().get(); assertEquals(0,state.getArguments().getDepth()); assertEquals(0,state.getArguments().retainedReferences()); assertEquals(0,state.getResults().getDepth()); assertEquals(0,state.getResults().retainedReferences()); assertNull(state.getPending()); }
     private void valid(RootCallTarget target) throws Exception { assertEquals(true,target.getClass().getMethod("isValidLastTier").invoke(target)); }
@@ -73,7 +75,7 @@ class OriginalProcessIdentityTest {
                                 stdio.setErrno(sentinel);
                                 for (var invocation : List.of(new Invocation(raw,rawTarget,new Object[]{0L,thc.runtime.Unit.INSTANCE}),new Invocation(consumer,consumerTarget,new Object[]{0L,0L}))) {
                                     long identity = symbol.equals("getpid") ? ProcessHandle.current().pid() : Integer.toUnsignedLong((int) effectiveUid.invokeExact());
-                                    long before = ((Number) invocation.program().diagnostics().get("compiledEntries")).longValue(); Object expected = invocation.target() == rawTarget ? (Object) (int) identity : identity; assertEquals(expected,Calls.target(invocation.target(),invocation.arguments()),stage + "/" + backend + "/" + name); assertEquals(sentinel,stdio.errno()); released(language);
+                                    long before = ((Number) invocation.program().diagnostics().get("compiledEntries")).longValue(); Object expected = invocation.target() == rawTarget ? (Object) (int) identity : identity; assertEquals(expected,callScalarTestTarget(invocation.target(),invocation.arguments()),stage + "/" + backend + "/" + name); assertEquals(sentinel,stdio.errno()); released(language);
                                     if (compiled) { assertEquals(before + 1,((Number) invocation.program().diagnostics().get("compiledEntries")).longValue()); valid(invocation.target()); }
                                 }
                             }
