@@ -75,6 +75,22 @@ public final class ManagedImportAdmission {
                         "aggregate", "unboxed-tuple", "components", Collections.unmodifiableList(components), "evaluated", false));
     }
     private static boolean version(Object value, int expected) { return Objects.equals(value, expected) || Objects.equals(value, (long) expected); }
+    /** Schema 4 retains both the complete stock product and its import-only partition. */
+    static Map<?,?> importProduct(Map<?,?> module, Map<?,?> proof, boolean completeBindings) {
+        if (!version(proof.get("schema"), 4)) return record(proof.get("expectedForeign"), "schema execution stubs files");
+        ManagedExportAdmission.declarations(module, completeBindings);
+        requireProof(Objects.equals(proof.get("expectedForeign"), module.get("foreign")), "mixed retained product differs");
+        var product = record(proof.get("importForeign"), "schema execution stubs files");
+        requireProof(version(product.get("schema"), 1) && Objects.equals(product.get("execution"), "not-linked") &&
+            Objects.equals(product.get("files"), List.of()), "mixed import product");
+        if (product.get("stubs") != null) {
+            var stubs = record(product.get("stubs"), "header source initializers finalizers");
+            requireProof(stubs.get("header") instanceof String && stubs.get("source") instanceof String &&
+                Objects.equals(stubs.get("initializers"), List.of()) && Objects.equals(stubs.get("finalizers"), List.of()),
+                "mixed import lifecycle obligations");
+        }
+        return product;
+    }
     public static ManagedImportAdmission read(Map<?,?> module) { return read(module, true); }
     public static ManagedImportAdmission read(Map<?,?> module, boolean completeBindings) {
         if (!module.containsKey("staticForeignImportStubs")) return null;
@@ -83,10 +99,11 @@ public final class ManagedImportAdmission {
         requireProof(!module.containsKey("foreignLink"), "ambiguous native/managed link");
         requireProof(raw instanceof Map<?,?>, "proof record");
         Object status = ((Map<?,?>) raw).get("status");
-        boolean wrappers = PackageFinalizers.version(((Map<?,?>) raw).get("schema"), 3);
+        boolean mixed = version(((Map<?,?>) raw).get("schema"), 4);
+        boolean wrappers = mixed || PackageFinalizers.version(((Map<?,?>) raw).get("schema"), 3);
         boolean addresses = wrappers || PackageFinalizers.version(((Map<?,?>) raw).get("schema"), 2);
         var proof = record(raw, "schema scope execution profile unit module status" +
-                (Objects.equals(status, "verified") ? " wordBits expectedForeign imports expectedCalls" + (addresses ? " addresses" : "") + (wrappers ? " wrappers" : "") : " reason"));
+                (Objects.equals(status, "verified") ? " wordBits expectedForeign imports expectedCalls" + (addresses ? " addresses" : "") + (wrappers ? " wrappers" : "") + (mixed ? " importForeign" : "") : " reason"));
         requireProof((version(proof.get("schema"), 1) || addresses) && Objects.equals(proof.get("scope"), "retained-static-import-products") &&
                 Objects.equals(proof.get("execution"), "not-linked") && Objects.equals(proof.get("profile"), "ghc-9.14.1-thc-only-static-c-imports-v1") &&
                 Objects.equals(proof.get("unit"), module.get("unit")) && Objects.equals(proof.get("module"), module.get("module")) && Objects.equals(module.get("ghc"), "9.14.1"),
@@ -99,7 +116,7 @@ public final class ManagedImportAdmission {
         PackageFinalizers.declarations(module, proof); // Validate the selected inventory; this grants no callback execution.
         var callbacks = ManagedCallbackMetadata.read(module, proof);
         requireProof(Objects.equals(proof.get("expectedForeign"), module.get("foreign")), "retained foreign product differs");
-        var foreign = record(module.get("foreign"), "schema execution stubs files");
+        var foreign = importProduct(module, proof, completeBindings);
         requireProof(version(foreign.get("schema"), 1) && Objects.equals(foreign.get("execution"), "not-linked"), "foreign schema/execution");
         var stubs = record(foreign.get("stubs"), "header source initializers finalizers");
         requireProof((Objects.equals(stubs.get("header"), "") || !callbacks.isEmpty() && stubs.get("header") instanceof String) && Objects.equals(stubs.get("initializers"), List.of()) &&

@@ -114,7 +114,7 @@ data ImportAssociation = ImportAssociation !QualifiedName !(Presence BS.ByteStri
   !BS.ByteString !(Presence BS.ByteString) !Bool !Convention !Safety !ForeignType !ForeignType
   !BS.ByteString !EmittedCall deriving (Eq, Show)
 data ImportStatus = ImportsUnclassified !BS.ByteString | ImportsRejected !BS.ByteString
-  | ImportsVerified !Word64 !ForeignArtifacts ![ImportAssociation] ![ForeignCall] ![AddressAssociation] ![WrapperAssociation]
+  | ImportsVerified !Word64 !ForeignArtifacts ![ImportAssociation] ![ForeignCall] ![AddressAssociation] ![WrapperAssociation] !(Maybe ForeignArtifacts)
   deriving (Eq, Show)
 data AddressAssociation = AddressAssociation !QualifiedName !(Presence BS.ByteString)
   !BS.ByteString !Bool !Convention !ForeignType !ForeignType !BS.ByteString

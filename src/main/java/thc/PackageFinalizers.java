@@ -64,7 +64,7 @@ public final class PackageFinalizers {
     }
 
     static Set<String> declarations(Map<?, ?> module, Map<?, ?> proof) {
-        boolean wrappers = version(proof.get("schema"), 3);
+        boolean wrappers = version(proof.get("schema"), 3) || version(proof.get("schema"), 4);
         if (!version(proof.get("schema"), 2) && !wrappers) return Set.of();
         require("verified".equals(proof.get("status")), "verified address inventory");
         require(proof.get("addresses") instanceof List<?>, "address inventory");

@@ -54,18 +54,21 @@ public final class PackageNativeArchives {
             check(Objects.equals(p.get("status"), "unclassified") && Objects.equals(p.get("reason"), unknown), "unclassified provenance");
         } else if (proof == null) check(!module.containsKey("foreign") && !module.containsKey("staticForeignImportStubs"), "missing import provenance");
         else {
-            boolean addressProof = proof instanceof Map<?,?> m && version(m.get("schema"), 2);
-            var p = record(proof, "schema scope execution profile unit module status wordBits expectedForeign imports expectedCalls" + (addressProof ? " addresses" : "")); proofIdentity(p, module);
+            boolean mixed = proof instanceof Map<?,?> m && version(m.get("schema"), 4);
+            boolean wrappers = mixed || proof instanceof Map<?,?> m && version(m.get("schema"), 3);
+            boolean addressProof = wrappers || proof instanceof Map<?,?> m && version(m.get("schema"), 2);
+            var p = record(proof, "schema scope execution profile unit module status wordBits expectedForeign imports expectedCalls" + (addressProof ? " addresses" : "") + (wrappers ? " wrappers" : "") + (mixed ? " importForeign" : "")); proofIdentity(p, module);
             PackageFinalizers.declarations(module);
             check(Objects.equals(p.get("status"), "verified") && version(p.get("wordBits"), 64), "verified import profile");
-            var product = record(p.get("expectedForeign"), "schema execution stubs files");
+            var callbacks = ManagedCallbackMetadata.read(module, p);
+            var product = ManagedImportAdmission.importProduct(module, p, completeBindings);
             check(version(product.get("schema"), 1) && Objects.equals(product.get("execution"), "not-linked") && Objects.equals(product.get("files"), List.of()), "foreign product");
             if (product.get("stubs") != null) {
                 var stubs = record(product.get("stubs"), "header source initializers finalizers");
-                check(Objects.equals(stubs.get("header"), "") && stubs.get("source") instanceof String && Objects.equals(stubs.get("initializers"), List.of()) && Objects.equals(stubs.get("finalizers"), List.of()), "foreign stub obligations");
+                check((Objects.equals(stubs.get("header"), "") || !callbacks.isEmpty() && stubs.get("header") instanceof String) && stubs.get("source") instanceof String && Objects.equals(stubs.get("initializers"), List.of()) && Objects.equals(stubs.get("finalizers"), List.of()), "foreign stub obligations");
                 check(module.containsKey("foreign") || Objects.equals(stubs.get("source"), ""), "missing retained stubs");
             }
-            if (module.containsKey("foreign")) check(Objects.equals(module.get("foreign"), product), "retained product differs");
+            if (module.containsKey("foreign")) check(Objects.equals(module.get("foreign"), p.get("expectedForeign")), "retained product differs");
             CoreCallInventory.check(p.get("expectedCalls"), PackageNativeArchive.calls(module.get("bindings")), completeBindings);
             var binders = new HashSet<Object>();
             for (Object item : list(p.get("imports"))) {
@@ -122,6 +125,6 @@ public final class PackageNativeArchives {
         return new PackageNativeArchive(unit + ":" + module.get("module") + " has archive-only native obligations" + " (unsupported=" + expected.size() + ", conflicting=" + conflictSymbols + ", unclassified=" + unknown + ", unresolved=" + unresolved + ")", unknown != null || !unresolved.isEmpty(), unit, expected);
     }
     private static void proofIdentity(Map<?,?> proof, Map<?,?> module) {
-        check((version(proof.get("schema"), 1) || version(proof.get("schema"), 2)) && Objects.equals(proof.get("scope"), "retained-static-import-products") && Objects.equals(proof.get("execution"), "not-linked") && Objects.equals(proof.get("profile"), "ghc-9.14.1-thc-only-static-c-imports-v1") && Objects.equals(proof.get("unit"), module.get("unit")) && Objects.equals(proof.get("module"), module.get("module")), "typed provenance identity");
+        check((version(proof.get("schema"), 1) || version(proof.get("schema"), 2) || version(proof.get("schema"), 3) || version(proof.get("schema"), 4)) && Objects.equals(proof.get("scope"), "retained-static-import-products") && Objects.equals(proof.get("execution"), "not-linked") && Objects.equals(proof.get("profile"), "ghc-9.14.1-thc-only-static-c-imports-v1") && Objects.equals(proof.get("unit"), module.get("unit")) && Objects.equals(proof.get("module"), module.get("module")), "typed provenance identity");
     }
 }

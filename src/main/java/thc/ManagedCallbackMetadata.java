@@ -18,10 +18,11 @@ public final class ManagedCallbackMetadata {
     }
     @SuppressWarnings("unchecked")
     public static List<ManagedCallbackSignature> read(Map<?, ?> module, Map<?, ?> proof) {
-        if (!PackageFinalizers.version(proof.get("schema"), 3)) return List.of();
+        boolean mixed = PackageFinalizers.version(proof.get("schema"), 4);
+        if (!mixed && !PackageFinalizers.version(proof.get("schema"), 3)) return List.of();
         require("verified".equals(proof.get("status")) && Objects.equals(module.get("unit"), proof.get("unit")) &&
             Objects.equals(module.get("module"), proof.get("module")) && PackageFinalizers.version(proof.get("wordBits"), 64), "owner/status/word width");
-        require(proof.get("wrappers") instanceof List<?> items && !items.isEmpty(), "missing wrappers");
+        require(proof.get("wrappers") instanceof List<?> items && (mixed || !items.isEmpty()), "missing wrappers");
         var result = new ArrayList<ManagedCallbackSignature>();
         var names = new HashSet<Object>();
         var binders = new HashSet<Object>();

@@ -362,6 +362,13 @@ below, with its symbol field naming the emitted helper, followed by
 `str typeString`. It preserves the declared callback ABI and the actual
 `createAdjustor` helper/encoding association; it does not link GHC's RTS stub.
 
+Import proof schema 4 retains both lists (either may be empty), then appends
+`ForeignArtifacts importForeign`. This is the stock import-only product of a
+module also declaring static exports; `expectedForeign` still records the whole
+original product. Admission requires the matching verified export registration,
+and the import partition cannot contain initialization/finalization obligations.
+Schemas 1–3 retain their original encoding.
+
 `Exports` is `u schema, str producer, str scope, str execution, str unit,
 str module, list(ExportAssociation)`. `ExportAssociation` is `QualifiedName
 binder, str symbol, Convention, ForeignType declaredType, ForeignType

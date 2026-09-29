@@ -57,6 +57,7 @@ runTests arguments = do
       [ProjectTests.interopTests env, StoreProjectTests.proxyOptionsTest env,
        StoreProjectTests.exportSafetyTests env, PackageNativeTests.tests]
     ["--ghc-proxy-only"] -> pure [StoreProjectTests.proxyOptionsTest env]
+    ["--static-exports-only"] -> pure [StoreProjectTests.proxyOptionsTest env, StoreProjectTests.staticExportsTest env, PackageNativeTests.tests]
     ["--exception-bridge-only"] -> pure [RuntimeShimTests.tests, ProjectTests.exceptionBridgeTests env]
     ["--runtime-shim-only"] -> pure [RuntimeShimTests.tests]
     ["--run-options-only"] -> pure [RunOptionsTests.tests env]
@@ -91,6 +92,6 @@ runTests arguments = do
       , StoreProjectTests.tests env
       , EmptyStoreProjectTests.tests env
       ]
-    _ -> die "Usage: driver-tests [--core-index-only|--bundle-selection-only|--runnable-targets-only|--acquire-project-only|--interop-project-only|--ghc-proxy-only|--run-options-only|--run-ffi-only|--store-inventory-only|--store-projects-only|--store-capture-lifetime-only|--export-safety-only|--inplace-store-only|--concurrent-store-only|--installed-hydration-only|--installed-foreign-source-only|--package-native-only|--native-recipe-only]"
+    _ -> die "Usage: driver-tests [--core-index-only|--bundle-selection-only|--runnable-targets-only|--acquire-project-only|--interop-project-only|--ghc-proxy-only|--static-exports-only|--run-options-only|--run-ffi-only|--store-inventory-only|--store-projects-only|--store-capture-lifetime-only|--export-safety-only|--inplace-store-only|--concurrent-store-only|--installed-hydration-only|--installed-foreign-source-only|--package-native-only|--native-recipe-only]"
   counts <- runTestTT $ TestList selected
   if errors counts + failures counts == 0 then pure () else exitFailure

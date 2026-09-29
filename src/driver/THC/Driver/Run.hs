@@ -169,7 +169,9 @@ runResolvedPackage opts working target prepareRuntime = do
       -- notes, without sending source filenames through its assembler.
       exportArgs = ["-hide-all-packages", "-no-user-package-db", "-package-env", "-",
                     "-fplugin-opt=THC.Plugin:closure=" ++ (if windows then "thcRunMain" else "main"),
-                    "-fplugin-opt=THC.Plugin:foreign-import-provenance"] ++
+                    "-fplugin-opt=THC.Plugin:foreign-import-provenance",
+                    "-fplugin-opt=THC.Plugin:foreign-export-associations",
+                    "-fplugin-opt=THC.Plugin:foreign-export-registration"] ++
                    packages ++ concatMap (\directory -> ["-i" ++ directory]) dirs ++
                    extensions ++ cpp ++ hcOptions GHC info ++ supportOptions ++
                    ["-fno-code", "-fwrite-interface", "-fwrite-if-simplified-core", source] ++

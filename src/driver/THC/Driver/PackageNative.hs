@@ -233,7 +233,7 @@ nativeImports unit value = do
   case member value "staticForeignImports" of
     Nothing -> Right []
     Just proof -> do
-      require (member proof "schema" `elem` map (Just . toJSON) ([1,2,3]::[Int]) && member proof "unit" == Just (toJSON unit) &&
+      require (member proof "schema" `elem` map (Just . toJSON) ([1,2,3,4]::[Int]) && member proof "unit" == Just (toJSON unit) &&
         member proof "module" == member value "module" && member proof "scope" == Just "retained-static-import-products" &&
         member proof "execution" == Just "not-linked" && member proof "profile" == Just "ghc-9.14.1-thc-only-static-c-imports-v1")
         "package native imports lack typed provenance identity"
@@ -246,8 +246,9 @@ nativeImports unit value = do
         pure []
       else do
         requireKeys proof (["schema","scope","execution","profile","unit","module","status","wordBits","expectedForeign","expectedCalls","imports"] ++
-          ["addresses" | member proof "schema" `elem` map (Just . toJSON) ([2,3]::[Int])] ++
-          ["wrappers" | member proof "schema" == Just (toJSON (3::Int))])
+          ["addresses" | member proof "schema" `elem` map (Just . toJSON) ([2,3,4]::[Int])] ++
+          ["wrappers" | member proof "schema" `elem` map (Just . toJSON) ([3,4]::[Int])] ++
+          ["importForeign" | member proof "schema" == Just (toJSON (4::Int))])
         require (member proof "status" == Just "verified" && member proof "wordBits" == Just (toJSON (64::Int)))
           "package native imports lack verified typed provenance"
         expected <- field proof "expectedForeign"
@@ -255,6 +256,7 @@ nativeImports unit value = do
           "package native retained foreign product differs from typed import provenance"
         require (member proof "expectedCalls" == Just (toJSON (calls value)))
           "package native Core calls differ from typed import provenance"
+        _ <- nativeImportForeign value
         imports <- field proof "imports"
         forM_ imports $ \entry -> do
           binder <- field entry "binder"
@@ -268,9 +270,9 @@ nativeImports unit value = do
 -- IO-unit profile is eligible for a C finalizer adapter.
 nativeAddresses :: String -> Value -> Either String [Value]
 nativeAddresses unit value = case member value "staticForeignImports" of
-  Just proof | member proof "schema" `elem` map (Just . toJSON) ([2,3]::[Int]), member proof "status" == Just "verified" -> do
+  Just proof | member proof "schema" `elem` map (Just . toJSON) ([2,3,4]::[Int]), member proof "status" == Just "verified" -> do
     addresses <- field proof "addresses"
-    require ((not (null addresses) || member proof "schema" == Just (toJSON (3::Int))) &&
+    require ((not (null addresses) || member proof "schema" `elem` map (Just . toJSON) ([3,4]::[Int])) &&
       length addresses == length (nub addresses)) "empty or duplicate native address inventory"
     require (length addresses == length (nub (map (`member` "binder") addresses))) "duplicate native address binder"
     forM_ addresses $ \entry -> do
@@ -518,7 +520,9 @@ capturePackageNative repository helper libdir compiler arguments unit directory 
   paths <- sort . filter ((== ".json") . takeExtension) <$> files core
   sourceValues <- mapM readJson paths
   let needed = [(path,value) | (path,value) <- zip paths sourceValues,
-        any (owned unit) (calls value) || hasFunctionAddress value || not (null (addressLabels value))]
+        any (owned unit) (calls value) || hasFunctionAddress value || not (null (addressLabels value)) ||
+        maybe False (\stubs -> stubs /= Null && member stubs "initializers" /= Just (toJSON ([]::[Value])))
+          (member value "foreign" >>= (`member` "stubs"))]
   unless (null needed) $ do
     root <- getCurrentDirectory >>= canonicalizePath
     configured <- either fail pure (nativeCompilerArguments arguments)
@@ -728,7 +732,7 @@ headerInputs generated value = do
   pure [entry | entry <- dependencies, member entry "path" /= Just (toJSON source)]
 
 stubSource :: Value -> IO String
-stubSource value = case member value "foreign" of
+stubSource value = either fail pure (nativeImportForeign value) >>= \product' -> case product' of
   Nothing -> pure ""
   Just archive -> do
     check (member archive "execution" == Just "not-linked" && member archive "files" == Just (toJSON ([]::[Value])))
@@ -741,6 +745,62 @@ stubSource value = case member value "foreign" of
           member stubs "finalizers" == Just (toJSON ([]::[Value])))
           "package native callbacks, headers or initialization are unsupported"
         get stubs "source"
+
+-- Only a stock producer partition can remove export/RTS products from the C
+-- adapter translation unit. The complete original archive remains unchanged.
+nativeImportForeign :: Value -> Either String (Maybe Value)
+nativeImportForeign value = case member value "staticForeignImports" of
+  Just proof | member proof "schema" == Just (toJSON (4::Int)) -> do
+    exports <- nativeStaticExports value
+    require (not (null exports)) "mixed import partition lacks static export declarations"
+    require (member proof "status" == Just "verified" && member proof "expectedForeign" == member value "foreign")
+      "mixed native import product differs from its original archive"
+    product' <- field proof "importForeign"
+    require (member product' "schema" == Just (toJSON (1::Int)) &&
+      member product' "execution" == Just "not-linked" && member product' "files" == Just (toJSON ([]::[Value])))
+      "mixed import partition has additional foreign obligations"
+    case member product' "stubs" of
+      Just stubs | stubs /= Null -> require
+        (member stubs "initializers" == Just (toJSON ([]::[Value])) && member stubs "finalizers" == Just (toJSON ([]::[Value])))
+        "mixed import partition has lifecycle obligations"
+      _ -> pure ()
+    pure (Just product')
+  _ -> pure (member value "foreign")
+
+nativeStaticExports :: Value -> Either String [Value]
+nativeStaticExports value = case member value "staticForeignExports" of
+  Nothing -> pure []
+  Just inventory -> do
+    registration <- field value "staticForeignExportRegistration"
+    require (member inventory "schema" == Just (toJSON (1::Int)) &&
+      member inventory "producer" == Just "THC.Plugin/typeCheckResultAction" &&
+      member inventory "scope" == Just "static-export-associations" && member inventory "execution" == Just "not-linked" &&
+      member inventory "unit" == member value "unit" && member inventory "module" == member value "module")
+      "static export inventory owner/profile differs"
+    require (member registration "schema" == Just (toJSON (2::Int)) && member registration "status" == Just "verified" &&
+      member registration "wordBits" == Just (toJSON (64::Int)) &&
+      member registration "scope" == Just "retained-foreign-products" && member registration "execution" == Just "not-linked" &&
+      member registration "profile" `elem` map Just ["ghc-9.14.1-thc-only-native-static-ccall-v1",
+        "ghc-9.14.1-thc-only-native-static-ccall-imports-v2","ghc-9.14.1-thc-only-native-static-c-products-v3"] &&
+      member registration "expectedForeign" == member value "foreign" && member registration "expectedExports" == Just inventory)
+      "static exports lack exact stock registration provenance"
+    exports <- field inventory "exports"
+    require (not (null exports) && member registration "roots" == Just (toJSON [binder | entry <- exports, Just binder <- [member entry "binder"]]))
+      "static export registration roots differ"
+    forM_ exports $ \entry -> do
+      binder <- field entry "binder"
+      symbol <- field entry "symbol"
+      require (identifier symbol && member binder "unit" == member value "unit" && member binder "module" == member value "module" &&
+        member binder "namespace" == Just "value" && member entry "convention" == Just "ccall" &&
+        member entry "normalizationRole" == Just "representational") "static export declaration identity differs"
+      owner <- field binder "unit"
+      name <- field binder "module"
+      occurrence <- field binder "occurrence"
+      bindings <- field value "bindings"
+      require (length [binding | binding <- bindings,
+        member binding "id" == Just (toJSON (owner ++ ":" ++ name ++ "." ++ occurrence :: String))] == 1)
+        "static export declaration has no exact retained Core binder"
+    pure exports
 
 finishPackageNative :: FilePath -> FilePath -> String -> Maybe [FilePath] -> [(String,BS.ByteString)] -> IO [(String,BS.ByteString)]
 finishPackageNative = finishPackageNativeWithDependencies [] []
@@ -876,6 +936,14 @@ finishPackageNativeWithDependencies cOnlyProducts publishedDatabases pieces dire
       _ <- trim resolved
       pure ()
     externals <- unresolved
+    declarations <- fmap concat $ forM modules $ \(_,bytes') -> do
+      value <- either fail pure (eitherDecodeStrict' bytes')
+      either fail pure (nativeStaticExports value)
+    exportNames <- mapM (`get` "symbol") declarations :: IO [String]
+    -- These references belong to this context's managed callback namespace,
+    -- not to an ELF/RTS implementation. Keep them in verified LLVM unchanged.
+    let managedExternals = filter (`elem` ("hs_free_stable_ptr" : exportNames)) externals
+        nativeExternals = filter (\name -> name `notElem` managedExternals && not ("llvm." `isPrefixOf` name)) externals
     -- The configured C compiler and linker own native symbol resolution.
     -- Sulong consumes the embedded LLVM and native dependency list; there is
     -- no tested-symbol inventory or inferred library/ABI here.
@@ -889,7 +957,7 @@ finishPackageNativeWithDependencies cOnlyProducts publishedDatabases pieces dire
     dataLibraries <- maybe (pure []) (either fail pure . parseValue) (member record "dataLibraries") :: IO [FilePath]
     let linkArguments = dataLibraries ++ externalArguments
     clang <- tool "THC_CLANG" "clang"
-    (artifact,format,libraries,nativeLibrary) <- if all ("llvm." `isPrefixOf`) externals
+    (artifact,format,libraries,nativeLibrary) <- if null nativeExternals
       then pure (final,"llvm-bitcode",[],Nothing) else do
         let darwin = "-darwin" `isInfixOf` target || "-apple-macosx" `isInfixOf` target
             -- Installed Core can retain unused RTS calls. Do not pull native
@@ -898,23 +966,27 @@ finishPackageNativeWithDependencies cOnlyProducts publishedDatabases pieces dire
             resolution = if member record "installed" == Just (Bool True)
               then ["-Wl,-undefined,dynamic_lookup" | darwin]
               else [if darwin then "-Wl,-undefined,error" else "-Wl,--no-undefined"]
-            artifact = directory </> if darwin then "native/final.dylib" else "native/final.so"
-            format = if darwin then "llvm-embedded-mach-o" else "llvm-embedded-elf"
+            container = directory </> if darwin then "native/final.dylib" else "native/final.so"
+            artifact = if null managedExternals then container else final
+            format = if not (null managedExternals) then "llvm-bitcode"
+              else if darwin then "llvm-embedded-mach-o" else "llvm-embedded-elf"
             -- Current Apple ld ignores -fembed-bitcode's legacy bundle flag.
             -- Sulong accepts raw bitcode in the Mach-O __LLVM,__bundle section.
             embedding = if darwin
               then concatMap (\argument -> ["-Xlinker",argument]) ["-sectcreate","__LLVM","__bundle",final]
               else ["-fembed-bitcode"]
             arguments = ["--target=" ++ target,"-shared","-fPIC",final] ++ embedding ++
-              linkArguments ++ resolution ++ ["-o",artifact]
-        _ <- command directory clang arguments
+              linkArguments ++ resolution ++ ["-o",container]
+        when (null managedExternals) $ do
+          _ <- command directory clang arguments
+          pure ()
         -- A container's machine code is not executed by Sulong. Materialize
         -- native dependencies separately, rooting archive extraction with the
         -- actual unresolved symbols. Never include the component here: its
         -- globals and constructors must exist only in the LLVM instance.
         let dependency = directory </> if darwin then "native/dependencies.dylib" else "native/dependencies.so"
             nativeRoots = concatMap (\symbol -> ["-Xlinker","-u","-Xlinker",if darwin then '_' : symbol else symbol])
-              (filter (not . ("llvm." `isPrefixOf`)) externals)
+              nativeExternals
             dependencyArguments = ["--target=" ++ target,"-shared","-fPIC"] ++ nativeRoots ++ linkArguments ++
               resolution ++ ["-o",dependency]
         _ <- command directory clang dependencyArguments
@@ -926,16 +998,17 @@ finishPackageNativeWithDependencies cOnlyProducts publishedDatabases pieces dire
               (if darwin then ["__LLVM,__bundle","__LLVM,__bitcode","__LLVM,__cmdline"] else [".llvmbc",".llvmcmd"]) ++ [dependency]
             componentArguments = ["--update-section=.llvmbc=" ++ final,artifact]
         _ <- command directory objcopy stripArguments
-        unless darwin $ do
+        unless (darwin || not (null managedExternals)) $ do
           _ <- command directory objcopy componentArguments
           pure ()
         dependencyBytes <- BS.readFile dependency
         objcopyHash <- sha <$> BS.readFile objcopy
         compilerHash <- sha <$> BS.readFile clang
         pure (artifact,format,[object ["provider" .= ("package-declared-native-libraries-v1"::String),
-          "symbols" .= externals,"compiler" .= clang,"compilerSha256" .= compilerHash,"arguments" .= arguments,
+          "symbols" .= nativeExternals,"compiler" .= clang,"compilerSha256" .= compilerHash,
+          "arguments" .= [argument | null managedExternals, argument <- arguments],
           "dependencyArguments" .= dependencyArguments,"objcopy" .= objcopy,"objcopySha256" .= objcopyHash,
-          "objcopyArguments" .= (stripArguments : [componentArguments | not darwin])]],
+          "objcopyArguments" .= (stripArguments : [componentArguments | not darwin && null managedExternals])]],
           Just (object ["sha256" .= sha dependencyBytes,"hex" .= hex dependencyBytes]))
     bytes <- BS.readFile artifact
     component <- get record "componentSha256" :: IO String

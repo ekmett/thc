@@ -740,7 +740,7 @@ class Audit:
                   'foreignLink' in module and core_package_manifest.linked_foreign(module))
         if scalar_link or managed_imports:
             callback_proof = module.get('staticForeignImportStubs', module.get('staticForeignImports', {}))
-            if callback_proof.get('schema') == 3:
+            if callback_proof.get('schema') in (3, 4):
                 for wrapper in callback_proof['wrappers']:
                     helper = wrapper['helper']
                     if helper in self.native_callback_helpers:

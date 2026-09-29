@@ -309,14 +309,19 @@ importProof encoder (ImportProof schema scope execution profile unit moduleName 
   case status of
     ImportsUnclassified reason -> tag encoder 0 >> string encoder reason
     ImportsRejected reason -> tag encoder 1 >> string encoder reason
-    ImportsVerified wordBits original associations calls addresses wrappers -> do
+    ImportsVerified wordBits original associations calls addresses wrappers partition -> do
       tag encoder 2
       number encoder wordBits
       foreignArtifacts encoder original
       list encoder association associations
       list encoder (foreignCallWith encoder (inlineRep encoder)) calls
       when (schema >= 2) (list encoder address addresses)
-      when (schema == 3) (list encoder wrapper wrappers)
+      when (schema >= 3) (list encoder wrapper wrappers)
+      case (schema,partition) of
+        (4,Just product') -> foreignArtifacts encoder product'
+        (4,Nothing) -> fail "Mixed import proof lacks its stock import partition"
+        (_,Nothing) -> pure ()
+        _ -> fail "Import partition requires schema 4"
   where
     wrapper (WrapperAssociation (ExportAssociation binderName helper convention declared normalized role arguments result effect) encoding) = do
       qualifiedName encoder binderName

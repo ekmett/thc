@@ -208,7 +208,8 @@ importProof decoder = do
       2 -> ImportsVerified <$> getUVar <*> foreignArtifacts decoder <*> list decoder association
         <*> list decoder (foreignCallWith decoder (inlineRepresentation decoder))
         <*> (if schema >= 2 then list decoder address else pure [])
-        <*> (if schema == 3 then list decoder wrapper else pure [])
+        <*> (if schema >= 3 then list decoder wrapper else pure [])
+        <*> (if schema == 4 then Just <$> foreignArtifacts decoder else pure Nothing)
       _ -> fail "Unknown compact import provenance status"
     wrapper = WrapperAssociation <$> (ExportAssociation <$> qualifiedName decoder <*> string decoder <*> enumeration
       <*> foreignType decoder <*> foreignType decoder <*> string decoder <*> list decoder (foreignType decoder)

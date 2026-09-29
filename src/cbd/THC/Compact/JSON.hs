@@ -578,11 +578,12 @@ importProof = withObject "original import proof" $ \fields -> do
   details <- case status of
     "unclassified" -> checked fields (common ++ ["reason"]) >> (ImportsUnclassified <$> bytesAt fields "reason")
     "rejected" -> checked fields (common ++ ["reason"]) >> (ImportsRejected <$> bytesAt fields "reason")
-    "verified" -> checked fields (common ++ ["wordBits","expectedForeign","imports","expectedCalls"] ++ ["addresses" | schema >= 2] ++ ["wrappers" | schema == 3]) >>
+    "verified" -> checked fields (common ++ ["wordBits","expectedForeign","imports","expectedCalls"] ++ ["addresses" | schema >= 2] ++ ["wrappers" | schema >= 3] ++ ["importForeign" | schema == 4]) >>
       (ImportsVerified <$> fields .: "wordBits" <*> (fields .: "expectedForeign" >>= foreignArtifacts)
         <*> (fields .: "imports" >>= array association) <*> (fields .: "expectedCalls" >>= array foreignCall)
         <*> (if schema >= 2 then fields .: "addresses" >>= array address else pure [])
-        <*> (if schema == 3 then fields .: "wrappers" >>= array wrapper else pure []))
+        <*> (if schema >= 3 then fields .: "wrappers" >>= array wrapper else pure [])
+        <*> (if schema == 4 then Just <$> (fields .: "importForeign" >>= foreignArtifacts) else pure Nothing))
     _ -> fail "Unknown original import proof status"
   ImportProof <$> fields .: "schema" <*> bytesAt fields "scope" <*> bytesAt fields "execution"
     <*> bytesAt fields "profile" <*> bytesAt fields "unit" <*> bytesAt fields "module" <*> pure details

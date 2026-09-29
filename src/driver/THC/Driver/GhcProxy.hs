@@ -69,7 +69,8 @@ runGhcProxy arguments = do
          "-hidir", objects, "-hiedir", objects </> "hie", "-stubdir", objects,
          "-package-db", pluginDb, "-fplugin-trustworthy",
          directPlugin pluginLibrary pluginUnit
-           [core, "post-tidy", "unit-qualified", "source-notes", "foreign-import-provenance"] options,
+           [core, "post-tidy", "unit-qualified", "source-notes", "foreign-import-provenance",
+            "foreign-export-associations", "foreign-export-registration"] options,
          -- Adding -g only to the replay can change CSE/tidied helper names.
          -- Consumers use the native interfaces, so preserve their debug flags.
          "-fwrite-if-simplified-core",

@@ -17,13 +17,12 @@ module THC.ForeignExportProvenance
 
 import Control.Monad (unless)
 import Data.Data (Data)
-import Data.IORef (readIORef)
+import Data.IORef (newIORef, readIORef)
 import Data.Maybe (isNothing)
 import Data.Proxy (Proxy(..))
 import qualified Data.Typeable as Typeable
 import GHC.Plugins
 import GHC.Cmm.CLabel (CStubLabel(..))
-import GHC.Data.OrdList (fromOL)
 import GHC.Driver.Hooks
 import GHC.Hs (ForeignDecl(..), ForeignExport(..), ForeignImport(..), CImportSpec(..))
 import GHC.HsToCore.Foreign.Decl (dsForeigns)
@@ -95,7 +94,8 @@ recordProvenance options environment
           declarations = tcg_fords environment
           exports = [declaration | declaration@(L _ ForeignExport {}) <- declarations]
           roots = if all classified declarations then traverse staticRoot exports else Nothing
-          version = if length exports == length declarations then 1 else 2
+          version = if length exports == length declarations then 1
+            else if all directImport declarations then 2 else 3
           allowed = native && not (profileIsProfiling (targetProfile flags)) &&
             not (gopt Opt_Hpc flags) && not (gopt Opt_InfoTableMap flags)
       evidence <- if "foreign-export-associations" `notElem` options
@@ -105,20 +105,25 @@ recordProvenance options environment
           else if not allowed then pure (Unclassified "unclassified-target-or-instrumentation")
           else case roots of
             Nothing -> pure (Unclassified "foreign-import-wrapper-or-non-ccall-declaration")
-            Just orderedRoots -> setGblEnv environment $ do
+            Just orderedRoots -> do
               before <- liftIO (readIORef (tcg_th_foreign_files environment))
-              -- The exported entry delegates to GHC's private stock emitter
-              -- when this one hook is locally absent. Probe only exports:
-              -- direct ccall imports have no C products but allocate Core
-              -- worker uniques. The entire real product must still equal this
-              -- export-only product when the interface is recovered.
-              (messages, result) <- initDsTc $ updTopEnv
+              counter <- liftIO (readIORef (tcg_next_wrapper_num environment))
+              filesCopy <- liftIO (newIORef before)
+              counterCopy <- liftIO (newIORef counter)
+              let private = environment { tcg_th_foreign_files = filesCopy, tcg_next_wrapper_num = counterCopy }
+              -- Probe the complete declaration group: dsForeigns emits one
+              -- registration initializer for all static exports. CAPI/wrapper
+              -- counters are private, just as in the import provenance probe.
+              (messages, result) <- setGblEnv private $ initDsTc $ updTopEnv
                 (\hsc -> hsc { hsc_hooks = (hsc_hooks hsc) { dsForeignsHook = Nothing } })
-                (dsForeigns exports)
+                (dsForeigns declarations)
               after <- liftIO (readIORef (tcg_th_foreign_files environment))
-              unless (before == after) (liftIO (ioError (userError "THC stock foreign-export probe changed foreign files")))
+              probeFiles <- liftIO (readIORef filesCopy)
+              afterCounter <- liftIO (readIORef (tcg_next_wrapper_num environment))
+              unless (before == after && before == probeFiles && moduleEnvToList counter == moduleEnvToList afterCounter)
+                (liftIO (ioError (userError "THC stock foreign-export probe changed compilation state")))
               case result of
-                Just (stubs, bindings) | isEmptyMessages messages && null (fromOL bindings) -> do
+                Just (stubs, _) | isEmptyMessages messages -> do
                   original <- liftIO (Foreign.encodeIfaceForeign (hsc_logger top) flags stubs [])
                   pure (StockProduct orderedRoots (productOf original))
                 _ -> pure (Unclassified "stock-export-emitter-did-not-complete-cleanly")
@@ -134,9 +139,17 @@ recordProvenance options environment
         (occNameString (nameOccName (varName binder))) "value")
     staticRoot _ = Nothing
     classified (L _ ForeignExport {}) = True
-    classified (L _ ForeignImport { fd_fi = CImport _ (L _ CCallConv) _ Nothing
-        (CFunction (StaticTarget _ _ _ True)) }) = True
+    classified (L _ ForeignImport { fd_fi = CImport _ (L _ conv) _ _ spec })
+      | conv `elem` [CCallConv, CApiConv] = case spec of
+          CFunction (StaticTarget _ _ _ _) -> True
+          CFunction DynamicTarget -> conv == CCallConv
+          CLabel _ -> True
+          CWrapper -> conv == CCallConv
     classified _ = False
+    directImport (L _ ForeignExport {}) = True
+    directImport (L _ ForeignImport { fd_fi = CImport _ (L _ CCallConv) _ _
+        (CFunction (StaticTarget _ _ _ True)) }) = True
+    directImport _ = False
 
 -- Compare the entire archived product, including the exact ordered lifecycle
 -- labels and all foreign files. A prefix, matching symbol or matching label is
@@ -146,7 +159,7 @@ inspectProvenance :: Module -> [Annotation] -> Maybe [ExportName] -> Foreign.Ifa
 inspectProvenance owner annotations roots original = case proofs of
   [] -> Right (UnknownProvenance "missing-registration-provenance")
   [RegistrationProof version unit modName evidence]
-    | version `notElem` [1,2] || unit /= unitString (moduleUnit owner) || modName /= moduleNameString (moduleName owner) ->
+    | version `notElem` [1,2,3] || unit /= unitString (moduleUnit owner) || modName /= moduleNameString (moduleName owner) ->
         Left "foreign-export registration proof version/owner mismatch"
     | otherwise -> Right $ case evidence of
         Unclassified reason -> UnknownProvenance reason

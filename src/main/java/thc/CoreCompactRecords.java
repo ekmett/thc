@@ -431,7 +431,7 @@ public final class CoreCompactRecords {
                 return entry;
             }));
             result.put("expectedCalls", list(cursor, () -> foreign(cursor, true)));
-            if (Objects.equals(result.get("schema"), 2L) || Objects.equals(result.get("schema"), 3L)) result.put("addresses", list(cursor, () -> {
+            if (Objects.equals(result.get("schema"), 2L) || Objects.equals(result.get("schema"), 3L) || Objects.equals(result.get("schema"), 4L)) result.put("addresses", list(cursor, () -> {
                 var entry = map("binder", qualifiedName(cursor));
                 field(cursor, entry, "header", () -> text(cursor)); entry.put("symbol", text(cursor));
                 entry.put("isFunction", cursor.readBoolean()); entry.put("convention", convention(cursor));
@@ -440,11 +440,12 @@ public final class CoreCompactRecords {
                 entry.put("callback", cursor.readBoolean() ? map("arguments", texts(cursor), "result", text(cursor)) : null);
                 return entry;
             }));
-            if (Objects.equals(result.get("schema"), 3L)) result.put("wrappers", list(cursor, () -> map(
+            if (Objects.equals(result.get("schema"), 3L) || Objects.equals(result.get("schema"), 4L)) result.put("wrappers", list(cursor, () -> map(
                 "binder", qualifiedName(cursor), "helper", text(cursor), "convention", convention(cursor),
                 "declaredType", foreignType(cursor), "normalizedType", foreignType(cursor), "normalizationRole", text(cursor),
                 "arguments", list(cursor, () -> foreignType(cursor)), "result", foreignType(cursor),
                 "effect", enumeration(cursor, List.of("pure", "io")), "typeString", text(cursor))));
+            if (Objects.equals(result.get("schema"), 4L)) result.put("importForeign", artifacts(cursor));
         }
         return result;
     }

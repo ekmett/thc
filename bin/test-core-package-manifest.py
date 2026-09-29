@@ -300,6 +300,41 @@ class PackageNativeVariantsTest(unittest.TestCase):
         return dict(schema=1, ghc='9.14.1', unit=unit, module=name, bindings=[], constructors=[],
                     packageNativeLink=link, staticForeignImports=proof)
 
+    def test_mixed_export_products_need_the_whole_stock_registration(self):
+        module = self.module(['AddrRep'])
+        typ = ManagedImportTypeTest.tycon('Int')
+        binder = dict(unit=module['unit'], module=module['module'], occurrence='callback', namespace='value')
+        declaration = dict(binder=binder, symbol='package_callback', convention='ccall', declaredType=typ,
+            normalizedType=typ, normalizationRole='representational', arguments=[], result=typ, effect='pure')
+        inventory = dict(schema=1, producer='THC.Plugin/typeCheckResultAction', scope='static-export-associations',
+            execution='not-linked', unit=module['unit'], module=module['module'], exports=[declaration])
+        foreign = dict(schema=1, execution='not-linked', files=[], stubs=dict(header='HsInt package_callback(void);',
+            source='original GHC registration product', initializers=[dict(isInitializer=True, unit=module['unit'],
+                module=module['module'], name='register_callback')], finalizers=[]))
+        registration = dict(schema=2, scope='retained-foreign-products', execution='not-linked',
+            profile='ghc-9.14.1-thc-only-native-static-c-products-v3', status='verified', roots=[binder], wordBits=64,
+            expectedForeign=foreign, expectedExports=inventory)
+        proof = module['staticForeignImports']
+        proof.update(schema=4, importForeign=proof['expectedForeign'], expectedForeign=foreign, addresses=[], wrappers=[])
+        module.update(schema=2, foreign=foreign, staticForeignExports=inventory, staticForeignExportRegistration=registration,
+            bindings=[dict(id=module['unit'] + ':' + module['module'] + '.callback', expr=['lit', 'int', '7'])])
+        self.assertEqual({module['packageNativeLink']['abi'][0]['entry']}, core_package_manifest.package_scalar_link(module)[1])
+        companion = dict(sha256=hashlib.sha256(b'native').hexdigest(), hex=b'native'.hex())
+        module['packageNativeLink']['nativeLibrary'] = companion
+        self.assertEqual({module['packageNativeLink']['abi'][0]['entry']}, core_package_manifest.package_scalar_link(module)[1])
+        companion['hex'] = b'changed'.hex()
+        with self.assertRaises(ValueError): core_package_manifest.package_scalar_link(module)
+        del module['packageNativeLink']['nativeLibrary']
+        for change in ('missing', 'roots', 'product', 'partition', 'export'):
+            with self.subTest(change=change):
+                changed = json.loads(json.dumps(module))
+                if change == 'missing': del changed['staticForeignExportRegistration']
+                elif change == 'roots': changed['staticForeignExportRegistration']['roots'] = []
+                elif change == 'product': changed['foreign']['stubs']['source'] = 'changed'
+                elif change == 'partition': changed['staticForeignImports']['importForeign'] = changed['foreign']
+                else: changed['staticForeignExports']['exports'][0]['symbol'] = 'changed'
+                with self.assertRaises(ValueError): core_package_manifest.package_scalar_link(changed)
+
     def test_pointer_variants_keep_distinct_provenance_entries(self):
         module = self.module(['AddrRep', 'ByteArray#'])
         link, proved = core_package_manifest.package_scalar_link(module)

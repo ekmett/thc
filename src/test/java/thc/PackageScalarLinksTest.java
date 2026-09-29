@@ -34,6 +34,37 @@ class PackageScalarLinksTest {
     private Map<String, Object> binding(String id, List<?> calls) {
         return map("id", "scalar-fixture:Scalar." + id, "expr", list("lit", "int", "7", calls.stream().map(it -> map("foreignCall", it)).toList()));
     }
+    @Test void mixedStaticExportRegistrationKeepsItsOriginalProductsSeparateFromNativeAdapters() throws Exception {
+        var base = module(); var scalar = object(base, "packageScalarLink"); var abi = single(scalar, "abi");
+        var link = with(scalar, "profile", "thc-package-c-ffi-v1",
+            "abi", list(with(abi, "entry", nativeEntry, "convention", "ccall", "safety", "unsafe")));
+        var proof = object(base, "staticForeignImports");
+        var type = object(single(proof, "imports"), "normalizedType");
+        var binder = map("unit", base.get("unit"), "module", base.get("module"), "occurrence", "exported", "namespace", "value");
+        var declaration = map("binder", binder, "symbol", "managed_value", "convention", "ccall", "declaredType", type,
+            "normalizedType", type, "normalizationRole", "representational", "arguments", List.of(), "result", type, "effect", "pure");
+        var inventory = map("schema", 1L, "producer", "THC.Plugin/typeCheckResultAction", "scope", "static-export-associations",
+            "execution", "not-linked", "unit", base.get("unit"), "module", base.get("module"), "exports", list(declaration));
+        var product = map("schema", 1L, "execution", "not-linked", "files", List.of(), "stubs", map("header", "HsInt32 managed_value(void);",
+            "source", "original GHC export products", "initializers", list(map("unit", base.get("unit"), "module", base.get("module"),
+                "isInitializer", true, "name", "register_export")), "finalizers", List.of()));
+        var registration = map("schema", 2L, "scope", "retained-foreign-products", "execution", "not-linked",
+            "profile", "ghc-9.14.1-thc-only-native-static-c-products-v3", "status", "verified", "roots", list(binder),
+            "wordBits", 64L, "expectedForeign", product, "expectedExports", inventory);
+        var mixedProof = with(proof, "schema", 4L, "expectedForeign", product, "importForeign", proof.get("expectedForeign"),
+            "addresses", List.of(), "wrappers", List.of());
+        var mixed = with(without(base, "packageScalarLink"), "schema", 2L, "foreign", product, "staticForeignImports", mixedProof,
+            "staticForeignExports", inventory, "staticForeignExportRegistration", registration, "packageNativeLink", link,
+            "bindings", list(binding("exported", List.of())));
+        assertEquals(Set.of(nativeEntry), Objects.requireNonNull(PackageScalarLinks.read(mixed)).getProved());
+        assertEquals("managed_value", ManagedExportAdmission.read(mixed).getExports().getFirst().symbol());
+        for (var changed : List.of(without(mixed, "staticForeignExportRegistration"),
+            with(mixed, "staticForeignExports", with(inventory, "exports", List.of())),
+            with(mixed, "staticForeignImports", with(mixedProof, "importForeign", product)),
+            with(mixed, "foreign", with(product, "files", list("unexpected"))),
+            with(mixed, "staticForeignExportRegistration", with(registration, "roots", List.of()))))
+            assertThrows(RuntimeException.class, () -> PackageScalarLinks.read(changed));
+    }
     @Test void nativeDependencyBytesAreVerifiedAndPartOfLoadedIdentity() throws Exception {
         var base = module(); var scalar = object(base, "packageScalarLink"); var entry = single(scalar, "abi");
         var dependency = map("sha256", hash(new byte[]{1, 2}), "hex", "0102");
@@ -46,6 +77,8 @@ class PackageScalarLinksTest {
             return;
         }
         var first = Objects.requireNonNull(PackageScalarLinks.read(nativeModule)).getLink();
+        assertArrayEquals(new byte[]{1, 2}, Objects.requireNonNull(PackageScalarLinks.read(with(nativeModule,
+            "packageNativeLink", with(link, "format", "llvm-bitcode")))).getLink().getNativeLibrary());
         var changed = with(link, "nativeLibrary", map("sha256", hash(new byte[]{1, 3}), "hex", "0103"));
         assertFalse(first.same(Objects.requireNonNull(PackageScalarLinks.read(with(nativeModule, "packageNativeLink", changed))).getLink()));
         assertThrows(IllegalArgumentException.class, () -> PackageScalarLinks.read(with(nativeModule, "packageNativeLink",

@@ -651,6 +651,16 @@ An absent annotation is unknown, never a known-empty inventory. Existing
 unclassified or rejected annotations do not become valid through regeneration.
 See the [managed export contract](site/embedding.md).
 
+Ordinary source replay enables both static-export annotation options. Mixed
+C imports and exports retain a whole-group stock-emitter proof plus its separate
+import-only product (import schema 4, registration profile v3). Native adapters
+use only that verified import partition; GHC's export/RTS stubs are never removed
+by matching generated text. Package LLVM referencing declared managed exports
+or `hs_free_stable_ptr` remains raw verified bitcode, with any native dependencies
+in the separately linked companion. Those managed references remain unresolved
+until context linkage; producing this artifact alone does not establish callback
+execution or supply a native GHC RTS ABI.
+
 For an ordinary full-Core installation lacking these annotations, project runs
 can explicitly supply `--installed-core required --ghc-source DIR`. This bounded
 producer accepts a matching configured GHC 9.14.1 native Linux stage1 tree with

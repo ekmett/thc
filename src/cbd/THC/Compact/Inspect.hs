@@ -384,9 +384,10 @@ importProof (ImportProof schema scope execution profile unit moduleName status) 
    "unit" .= str unit,"module" .= str moduleName] ++ case status of
     ImportsUnclassified reason -> ["status" .= String "unclassified","reason" .= str reason]
     ImportsRejected reason -> ["status" .= String "rejected","reason" .= str reason]
-    ImportsVerified wordBits original associations calls addresses wrappers -> ["status" .= String "verified","wordBits" .= wordBits,
+    ImportsVerified wordBits original associations calls addresses wrappers partition -> ["status" .= String "verified","wordBits" .= wordBits,
       "expectedForeign" .= foreignArtifacts original,"imports" .= arr association associations,"expectedCalls" .= arr foreignCall calls] ++
-      ["addresses" .= arr address addresses | schema >= 2] ++ ["wrappers" .= arr wrapper wrappers | schema == 3]
+      ["addresses" .= arr address addresses | schema >= 2] ++ ["wrappers" .= arr wrapper wrappers | schema >= 3] ++
+      ["importForeign" .= foreignArtifacts product' | Just product' <- [partition]]
   where
     wrapper (WrapperAssociation (ExportAssociation binderName helper convention declared normalized role arguments result effect) encoding) = object
       ["binder" .= qualifiedName binderName,"helper" .= str helper,
