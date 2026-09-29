@@ -74,38 +74,3 @@ locale. The supported target uses glibc iconv and `HAVE_LANGINFO_H`, not an
 alternate libcharset/libiconv configuration. Darwin and other libc/platform
 variants are not claimed; the lazy iconv loader rejects them without changing
 the existing MD5 path.
-
-## Explicit full-Core proof group
-
-Select a native Linux GHC9.14.1 installation carrying full library Core. Stock
-thin Iconv interfaces lack two required original bodies. The fixture loader
-fails if full Core is absent; it never substitutes aliases, copied inventories,
-or reconstructed source. This group is separate from ordinary stock-toolchain
-tests and is not silently skipped:
-
-```sh
-cabal run --offline exe:thc-fixtures -- original-iconv
-./gradlew --offline --no-daemon --max-workers=2 originalIconvFullCoreTest
-JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew --offline --no-daemon --max-workers=2 originalIconvFullCoreTest
-```
-
-Use the host's resource gate around each command (and its JVM resource for
-Gradle). Native ABI probing remains enabled. The Java source is in
-`src/fullCoreTest`; ordinary `test` groups do not require this full-Core fixture.
-Selecting `originalIconvFullCoreTest` without its fixture is an explicit failure.
-
-The Haskell preparer compiles genuine pre-Tidy and post-Tidy scalar consumers, checks GHC type equality,
-and replaces only their FCallIds with the actual private Ids extracted from the
-selected installed Iconv Core. Serialization scopes private names to the
-consumer module while retaining the exact Unique/type and original C target
-owner. This is **not** a claim that unchanged whole Handle/IO or hello works.
-
-Both stages pass strict audits. The native oracle covers UTF-8/UTF-16, Latin-1, locale-default conversion,
-transliteration's nonzero success count, empty input, output exhaustion,
-incomplete/invalid input, continued conversion, ISO-2022-JP state, short reset
-output, reset and close. Tests compare both interpreters and actual compiled
-AST/BC with inlining on/off; assertions begin on the first compiled call, with
-no settling executions. They also check canaries, sticky errno, ownership,
-disposal, denied native access, bounds/alignment and 44 rejected ABI/CBV audit
-controls. Provenance hashes cover source/generated fixtures, never installed
-GHC binaries, interfaces or shared libraries.

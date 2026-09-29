@@ -20,10 +20,3 @@ out-of-bounds lengths, opaque pointer cells and unowned addresses reject.
 Safe calls poll for guest async delivery after C completes and its result is
 saved. Resumption consumes that saved result without replaying C. Unsafe calls
 do not add a return poll. Neither declaration interrupts host/native execution.
-
-`cabal run exe:thc-fixtures -- bytestring-utf8` exposes the installed hidden
-`Data.ByteString.Internal.Type` module in a private copied registration, keeping
-its unit and code unchanged. It produces 800 native observations and original
-pre/post Core with four strict audits. `ByteStringUtf8Test` compares both
-backends against those observations and an independent JVM decoder, including
-first compiled calls, invalid inputs, bounds, ownership and safe completion.

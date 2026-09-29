@@ -50,7 +50,11 @@ public final class Main {
             .allowIO(fileIO ? IOAccess.ALL : IOAccess.NONE), ContextProfile.LAUNCHER)).build();
     }
 
-    /** Load an accepted scalar or IO entry owned by the supplied context. */
+    /**
+     * Load a Core entry owned by the supplied context. Supported signatures carry
+     * numeric values, logical tuple/sum arrays, exact vector species and
+     * context-owned references/functions. IO entries expose {@code runIO}.
+     */
     public static Value loadEntry(Context context, List<String> modules, String entry) { return loadEntry(context, modules, entry, true); }
     public static Value loadEntry(Context context, List<String> modules, String entry, boolean instrument) { return loadEntry(context, modules, entry, instrument, defaultBackend()); }
     public static Value loadEntry(Context context, List<String> modules, String entry, boolean instrument, String backend) { return loadEntry(context, modules, entry, instrument, backend, false); }

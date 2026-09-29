@@ -7,8 +7,10 @@ remains a scalar void value with its existing convention and primitive contracts
 The [typed tuple input contract](tuple-inputs.md) also covers nested and nonempty
 tuples, including singleton State components. [Owned tuple captures](tuple-captures.md),
 [tuple join arguments](tuple-joins.md) and [binary sum inputs/captures](sum-inputs.md)
-have their own typed paths. Ordinary aggregate let/global storage, public host
-aggregate parameters/results and unresolved shapes remain unsupported.
+have their own typed paths. Nonrecursive unlifted aggregate lets use typed
+locals. Recursive/lifted aggregate lets, global aggregate storage and unresolved
+shapes remain unsupported. The [host ABI](site/embedding.md#load-a-core-entry)
+transports logical empty and nested tuples.
 
 An immutable argument layout separates logical arity from scalar payload offsets.
 An empty argument consumes one logical parameter but contributes no array element,
@@ -36,10 +38,3 @@ separate ownership; callee entry releases its input after copying durable locals
 before executing guest code. Calls with empty inputs use the existing tail
 trampoline and mapped frame restoration; scalar direct-self paths are unchanged.
 Residual calls retain the Truffle object boundary, not a hardware tuple register ABI.
-
-`EmptyTupleInputAudit.hs` and `prepare-empty-tuple-input-audit.py` supply genuine
-pre/post-Tidy exports and a native oracle. Runtime controls cover logical PAPs,
-overapplication, effect/throw ordering, zero-storage proofs, mixed targets,
-tail recursion and primitive contract rejection on both backends. Sequence's
-actual fold specializations use empty first parameters; other Sequence gaps must
-remain separately reported rather than counted as supported by this feature.

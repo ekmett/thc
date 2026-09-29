@@ -11,7 +11,7 @@ otherwise, a row applies to both the AST and bytecode backends, interpreted and
 compiled. Exact primop spellings are searchable below; names sharing a row have
 the same stated restriction.
 
-This is a current behavioral reference, not a historical test report. The
+The
 [generated checklist](primops.md) is the complete inventory; an operation absent
 here has no specific infelicity recorded here, not a proof of equivalence on
 every input. JVM/Sulong pointers, managed storage, typed vector representations,
@@ -24,12 +24,12 @@ test commands.
 
 | Original declaration | Current behavior and consequence |
 | --- | --- |
-| Unix 2.8.8.0 `chdir` / `getcwd` | Both backends use the explicit Linux x86_64 NativeIO context's directory descriptor; process CWD stays unchanged. `getcwd` supports non-null caller-owned buffers and rejects GNU NULL allocation. Verified physical naming can return EACCES for inaccessible ancestors where native process `getcwd` succeeds; relative IO remains descriptor-based. See [native files](native-file-provider.md#context-working-directory) for lifetime and platform requirements. |
+| Unix 2.8.8.0 `chdir` / `getcwd` | Both backends use the explicit Linux x86_64 NativeIO context's directory descriptor; process CWD stays unchanged. `getcwd` supports non-null caller-owned buffers and rejects GNU NULL allocation. Verified physical naming can return EACCES for inaccessible ancestors where native process `getcwd` succeeds; relative IO remains descriptor-based. See [native files](native-file-provider.md#working-directory-and-path-operations) for lifetime and platform requirements. |
 | Process 1.6.26.1 `runInteractiveProcess`, `getProcessExitCode`, `waitForProcess`, `terminateProcess` | Both backends preserve the original unsafe/interruptible declarations on Linux x86_64 with an explicit process grant. Only launched context-owned children are valid; real PIDs remain observable and retained IDs cannot be rebound after reuse. Interruptible wait saves result and errno before delivery and never replays a reap. Credential changes, unsupported flags, auto-reaping SIGCHLD policies and arbitrary host PIDs reject; stable host signal/reaping policy is required. See [owned process transport](process-lifecycle.md). |
-| Unix 2.8.8.0 directory streams | Exact unsafe opendir/fdopendir/closedir/readdir/d_name/free_dirent calls use context-owned handles on Linux x86_64 glibc 2.23+. Readdir preserves raw names and EOF errno; views expire at the next read or close. Successful fdopendir consumes only its input guest descriptor. See [native files](native-file-provider.md#original-directory-streams) for ownership and validation. |
+| Unix 2.8.8.0 directory streams | Exact unsafe opendir/fdopendir/closedir/readdir/d_name/free_dirent calls use context-owned handles on Linux x86_64 glibc 2.23+. Readdir preserves raw names and EOF errno; views expire at the next read or close. Successful fdopendir consumes only its input guest descriptor. See [native files](native-file-provider.md#directory-streams) for ownership and validation. |
 | Win32 2.14.2.1 directory scans | Exact unsafe FindFirstFileW/FindNextFileW/FindClose calls use context-owned search handles on Windows x86_64. Caller-owned UTF-16 find-data survives close, errors are captured at the native call and observed by original GetLastError, and context disposal closes remaining searches. Both backends require the fixed NativeIO factory for scans; full installed-library closure export and other Windows file APIs remain separate. See [Windows scans](windows.md#original-win32-directory-scans). |
 | ghc-internal Windows encoding/errors | Exact unsafe GetACP/GetConsoleCP/GetCPInfo/IsDBCSLeadByteEx/MultiByteToWideChar/WideCharToMultiByte use actual Windows code pages and flags on both backends. GetLastError shares captured errors with directory calls; maperrno/maperrno_func preserve the original C mapping and separate errno slot. base_getErrorMessage/LocalFree use context-owned native message allocations with allocator and lifetime checks. Native access is required, without filesystem authority. Other Windows IO and automatic exception conversion remain separately validated scopes. See [Windows encoding](windows.md#original-windows-code-pages-and-errors). |
-| Unix 2.8.8.0 `rmdir`; Unix and `ghc-internal` `readlink` | Both backends retain native context-relative pathname behavior and exact unsafe CInt results. Rmdir uses authenticated AT_REMOVEDIR removal; readlink stages only the returned bytes, adds no NUL, and preserves the output on failure. See [native files](native-file-provider.md#original-directory-pathname-calls). |
+| Unix 2.8.8.0 `rmdir`; Unix and `ghc-internal` `readlink` | Both backends retain native context-relative pathname behavior and exact unsafe CInt results. Rmdir uses authenticated AT_REMOVEDIR removal; readlink stages only the returned bytes, adds no NUL, and preserves the output on failure. See [native files](native-file-provider.md#working-directory-and-path-operations). |
 
 ## Sparks and thread scheduling
 
@@ -43,7 +43,7 @@ test commands.
 | `forkOn#` | Same thread and delivery requirements as `fork#`. Chooses a dense logical capability modulo the context's current logical capability count, then maps modulo its immutable eligible CPU capacity. Native affinity is **best effort**: Linux requests a per-thread pin; Windows requests advisory CPU Sets and declines unresolved multi-group topology; macOS, unavailable native access, or a rejected request run unpinned without failing the fork. |
 | `threadStatus#` | Capability is a context-local assignment, not a measurement of the currently executing physical CPU. The lock flag records a `forkOn#` request, **not successful OS affinity**. Ordinary threads share logical capabilities. |
 | `listThreads#` | Lists context-owned guest identities, not every JVM thread. Retained completed identities and, in platform mode, host carriers between guest invocations can appear; ordering is unspecified. |
-| `isCurrentThreadBound#` | In either hosting mode, returns `1` inside an admitted safe managed foreign reverse entry and `0` for ordinary guest entries and forks. Unsafe activations reject reverse entry before changing thread state. Callback identities stay on their native origin thread; raw C callback transport and `forkOS` remain unsupported. |
+| `isCurrentThreadBound#` | In either hosting mode, returns `1` inside an admitted safe managed foreign reverse entry and `0` for ordinary guest entries and forks. Unsafe activations reject reverse entry before changing thread state. Callback identities stay on their native origin thread; supported native callbacks retain their checked scalar/address ABI; `forkOS` remains unsupported. |
 | `setThreadAllocationCounter#` | Accounts JVM heap bytes during outer guest-entry extents, including runtime bookkeeping and excluding native/Sulong allocations and host work between entries. Requires JVM thread-allocation accounting support; Loom reads/resets reject. Does **not** enforce allocation limits. |
 | `setOtherThreadAllocationCounter#` | Same accounting and missing allocation-limit enforcement, for the selected context-owned thread. |
 
@@ -284,10 +284,8 @@ Details: [floating scalar contracts and tests](floating-primitives.md).
 | `minFloatX4#`, `minFloatX8#`, `minFloatX16#`, `minDoubleX2#`, `minDoubleX4#`, `minDoubleX8#` | Java vector minimum: either NaN operand produces NaN (payload/sign unspecified); mixed signed zeros produce negative zero irrespective of operand order. Native GHC vector lowering can choose different NaN/zero-tie behavior. |
 | `maxFloatX4#`, `maxFloatX8#`, `maxFloatX16#`, `maxDoubleX2#`, `maxDoubleX4#`, `maxDoubleX8#` | Java vector maximum: either NaN operand produces NaN (payload/sign unspecified); mixed signed zeros produce positive zero irrespective of operand order. Same native portability caveat. |
 
-Finite-input native comparisons and Java edge-case checks are separate evidence;
-the tests do not assert universal native instruction bit parity. No additional
-“partial” score is assigned for using correctly typed JDK vectors or for lacking
-a formal equivalence proof. Details: [floating vector min/max](floating-vector-minmax.md).
+See [floating vector min/max](floating-vector-minmax.md) for the exact target
+semantics. Native instruction bit parity is not guaranteed for NaNs or signed zero.
 
 ## Performance hints and tracing
 
@@ -332,7 +330,7 @@ collection without GHC generation or completion guarantees. `getRTSStatsEnabled`
 is false, and direct `getRTSStats` rejects without modifying its buffer; original
 Haskell retains its disabled-statistics exception. `getMonotonicNSec` uses the
 JVM monotonic clock with an arbitrary process-local origin. See
-[GC/statistics/clock behavior and tests](gc-stats-clock.md).
+[GC/statistics/clock behavior](gc-stats-clock.md).
 Original `stg_sig_install` supports GHC's INT/QUIT/HUP/TERM handlers in the
 Linux x86_64 launcher with `-Xrs` and `asyncExceptions=true` on either backend
 (AST opt-in, bytecode default). Other signals, non-null masks and ordinary
@@ -340,11 +338,9 @@ embedding contexts remain outside that service. See
 [process signal ownership and JVM consequences](process-signals.md).
 
 Core transport also has restrictions independent of any one primop: see the
-[coverage guide](README.md#tuples-and-sums) for aggregate inputs/captures and the
+[coverage guide](aggregate-layout.md) for aggregate inputs/captures and the
 [SIMD guest transport contract](simd-families.md) for vector boundaries. A
 registered primop cannot make an otherwise unsupported whole program runnable.
 
 When changing a behavior above, update this page, its detailed guide and the
 machine-readable [capability notes](../bin/core-capabilities.json) together.
-Keep concrete countersrc/examples/rejections separate from coverage percentages and
-from historical validation reports.

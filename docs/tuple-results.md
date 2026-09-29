@@ -5,8 +5,7 @@ scalar/reference inputs or [typed tuple inputs](tuple-inputs.md). This includes 
 tuples, nested tuples, concrete Long/Float/Double fields, lazy lifted references, boxed unlifted reference fields,
 non-tail calls, tail forwarding, scalar PAP prefixes and overapplication.
 An exact evaluated `AddrRep` leaf uses a checked `ManagedAddress` reference
-field, with carrier checks on construction, copy and consumption. This does
-not admit native pointers or address-bearing unboxed sums.
+field, with carrier checks on construction, copy and consumption. Native pointer projection requires a separate checked foreign boundary.
 Saturated [tuple arithmetic primitives](tuple-arithmetic.md) write directly to
 typed local destinations without using the function-return carrier.
 
@@ -76,40 +75,3 @@ components, and concrete sums may themselves contain tuples or sums. Unknown/nul
 unsupported physical leaves remain rejected. The
 [Core host ABI](site/embedding.md#load-a-core-entry) returns supported tuples as
 read-only logical arrays, copied before temporary result storage is released.
-
-`bin/prepare-floating-tuples.py` checks genuine `Data.Complex` multiplication
-and `conjugate`: ordinary NOINLINE boxed producers become GHC CPR workers returning
-`(# Float#, Float# #)` and `(# Double#, Double# #)`. The public `Complex` datatype
-itself remains boxed. Both export stages are strict-audited, and 44 native results
-match independent formulas. Eight additional native bit rows cover opposite zero
-signs, subnormals, infinities, NaNs and finite values; arithmetic NaN payload/sign
-is not specified, so that row checks NaN classification. JVM protocol tests also
-preserve deliberately chosen NaN payload bits without performing arithmetic.
-The suite covers a genuine tuple-result join, nested empty and State# fields,
-two outstanding mixed results, and an ignored lifted leaf that is itself bottom.
-Every measured row checks its exact compiled-entry increment and installed target
-validity on AST and BytecodeDSL, with guest inlining enabled and disabled. The CI
-handoff run repeats these checks with the optional scalar handoff enabled. Source,
-auditor, native executable, oracle and export hashes are checked before execution.
-
-The exporter preserves native proofs through `runRW# f` to `f realWorld#` only
-when GHC's exact type equality confirms the rewrite. Representation-changing
-wired rewrites remain uncertified. `bin/prepare-state-tuple-audit.py` checks
-the genuine pre/post-Tidy metadata and 21 native rows against independent
-wraparound formulas. `StateTupleTest` runs these rows with and without guest
-inlining on both backends, checks installed entry validity after every compiled
-call, and covers lazy payloads, nested empty fields, zero-storage captures and
-an ignored State# field whose evaluation throws before tuple completion. Preparation
-strict-audits all positive roots and the exception control; tests verify source,
-auditor and artifact hashes before execution. Erasing a field also verifies its
-canonical Unit carrier, so missing legacy metadata cannot hide an invalid value.
-
-`TupleResultTest` executes the genuine pre/post-Tidy `AggregateFrontier` tuple
-entries and all 94 `TupleReturnAudit` native oracle rows on AST and BytecodeDSL,
-with inlining enabled and disabled. It explicitly compiles guest roots, executes
-them, checks that entry code remains installed, and checks pool release and
-allocation reuse. Cases include two differently weighted outstanding pairs,
-lazy bottom fields, empty/singleton/nested results, 20,000 self-tail and 20,001
-mutual-tail iterations, PAPs and overapplication. `TupleRepresentationTest` covers
-logical-shape forgeries, mismatched-layout cleanup, fresh-carrier ownership and
-independence from scalar handoff.

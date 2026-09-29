@@ -22,12 +22,3 @@ canonical but unsupported signal numbers return -1, leave the image unchanged,
 and update the context's existing guest-thread errno slot. Success preserves
 that slot. No host process/thread signal mask is read or changed, and no native
 pointer, allocation ownership or terminal descriptor is manufactured.
-
-`thc-fixtures original-sigset` imports unchanged installed declarations, produces
-genuine optimized pre/post Core and four strict accepted audits, and runs native
-GHC IO observations. The 532 rows cover four fill patterns, both operations,
-signals 0..128 and signed-CInt extremes, preserving full images and canaries.
-The runtime checks both AST and bytecode before and at the first installed
-compiled entry, exact two-target/two-entry execution, idempotence, padding,
-status/errno parity, malformed stored proofs and handoff release. No source
-rewriting, settling, recompilation, mask mutation or whole-IO success is implied.

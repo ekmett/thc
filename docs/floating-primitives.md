@@ -28,299 +28,60 @@ There is no implicit widening between the two types. Every floating operation
 rounds to its declared precision; comparisons use IEEE arithmetic equality and
 ordering, including unordered NaNs and equal positive/negative zeros.
 
-## Original floating C imports
+## Numeric behavior
 
-Both backends translate the twelve original `ghc-internal` declarations from
-GHC 9.14.1's `primFloat.c`: `isFloatNaN`, `isFloatInfinite`, `isFloatFinite`,
-`isFloatDenormalized`, `isFloatNegativeZero`, their five `Double` counterparts,
-and `rintFloat`/`rintDouble`. These are foreign library calls, not additional
-primops or a general-purpose libm symbol dispatcher. Admission checks the exact
-installed owner, unsafe `ccall`, and saturated Float/Double/State/result ABI.
+Arithmetic rounds to the declared precision. Comparisons use IEEE equality and
+ordering, including unordered NaNs and equal positive/negative zeros. Scalar math
+uses JVM `Math`; results need not be bit-identical to a platform's native `libm`.
+Float results round to binary32. Arithmetic does not promise NaN payload or sign
+preservation. Floating-to-integer conversion has no portable result for non-finite
+or out-of-range inputs.
 
-Predicates return Haskell `Int#` zero or one. Denormal tests exclude both zeros;
-negative-zero tests inspect the sign and all remaining bits. Rounding uses
-nearest, ties to even, and follows GHC's explicit positive-zero result for
-inputs in `[-0.5, 0.5]`. Already-integral large values, infinities and NaNs are
-returned unchanged. No host floating-environment rounding-mode control is
-introduced. The raw NaN-payload comparisons are a pinned platform/JDK test,
-not a portable Java guarantee about signalling NaNs on every architecture.
+The fused variants compute `x*y+z`, `x*y-z`, `-x*y+z` and `-x*y-z` with one
+nearest-even rounding through `Math.fma`. Float never uses a Double intermediate
+for these operations. Square root uses `Math.sqrt`, preserving signed zero;
+Float operands widen exactly before narrowing the root.
 
-With complete installed Core for `ghc-internal`:
+Unsigned `word2Float#` and `word2Double#` accept all 64 Word bits and round to
+nearest, ties to even. The Float conversion avoids a Double intermediate that
+could double-round integer inputs. `maxBound :: Word` rounds to 2^64.
 
-```sh
-cabal run exe:thc-fixtures --offline -- float-foreign
-./gradlew --continue floatForeignFullCoreTest floatForeignFullCoreDenseTest
-```
+GHC leaves scalar min/max operand choice unspecified for equal values and NaNs.
+THC selects the second operand when its strict comparison is false. This differs
+from the separate [vector extrema contract](floating-vector-minmax.md).
 
-The Haskell producer recovers the actual FCallIds from installed `GHC.Internal.Float`
-and `GHC.Internal.Float.RealFracMethods` interfaces. It specializes GHC-typechecked
-raw-bit consumers, executes the same consumers natively, and retains 384 native
-rows plus 24 strict pre/post-Tidy audits. Both backends and handoff modes compare
-all rows before and immediately after compilation, including signed quiet and
-signalling NaNs, subnormal/normal boundaries, infinities, half ties and adjacent
-encodings. The compiler/plugin and original library bodies are not replaced.
+Inverse hyperbolic functions use cancellation-resistant formulas, returning NaN
+for domain errors, signed infinity at `atanh(±1)`, and preserving signed zero for
+`asinh`/`atanh`. They do not promise correctly rounded results for every input.
 
-## Integer decomposition and public exponent
+The raw bit casts preserve encodings rather than convert numeric values. Their
+integer sides are `Word32#` and `Word64#`. Quiet-NaN payload and signed-zero bits
+are retained during supported movement; signaling-NaN identity is not portable
+across all JVM platforms. Floating literal case alternatives are invalid GHC Core
+and rejected.
 
-`decodeFloat_Int#` returns `(# Int#, Int# #)` and `decodeDouble_Int64#`
-returns `(# Int64#, Int# #)`: a signed integer significand and a binary
-exponent. Both backends use raw IEEE bits and write the two primitive Long
-results directly into tuple destination slots. Shared Java decomposition
-handles subnormal normalization, with no intermediate floating calculation or
-temporary pair. This is not a claim about the generic floating call ABI.
+## Integer decomposition
 
-Both signed zeros return `(0, 0)`. The smallest positive subnormals return
-`(2^23, -172)` and `(2^52, -1126)` respectively. Infinities and signed NaN
-payloads follow the bit decomposition in pinned GHC 9.14.1's `StgPrimFloat.c`;
-these are not finite mathematical values.
+`decodeFloat_Int#` and `decodeDouble_Int64#` return a signed integer significand
+and binary exponent in an unboxed tuple. Both signed zeros return `(0,0)`.
+The smallest positive subnormals return `(2^23,-172)` and `(2^52,-1126)`.
+Non-finite encodings follow the pinned GHC bit decomposition, not finite
+mathematical values.
 
-`decodeDouble_2Int#` instead returns `(# Int#, Word#, Word#, Int# #)`:
-sign, high 32 significand bits, low 32 significand bits, and exponent. The
-two word fields are nonnegative Long carriers, not signed Int32 values.
-The pinned RTS's zero branch in `rts/StgPrimFloat.c::__decodeDouble_2Int`
-does not initialize the sign output. THC deterministically returns
-`(+1, 0, 0, 0)` for either zero. Tests preserve the native uninitialized
-observation but compare only the three defined zero fields; all four fields
-are exact for nonzero encodings, including subnormals and non-finite values.
+`decodeDouble_2Int#` returns sign, high 32 significand bits, low 32 bits and
+exponent. Its two Word fields are unsigned. The native RTS leaves the sign output
+uninitialized for zero; THC deterministically returns `(+1,0,0,0)` for either
+zero. See [FloatDecode.hs](../src/examples/THC/FloatDecode.hs) for an example.
 
-```sh
-cabal run exe:thc-fixtures --offline -- float-decode
-./gradlew --no-daemon test --tests thc.runtime.FloatDecodeTest
-JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew --no-daemon test --rerun --tests thc.runtime.FloatDecodeTest
-```
+## Storage and calls
 
-The Haskell producer records 22,520 ordered native rows: 936 binary32 and 4,694
-binary64 encodings across direct, opaque-worker, genuine public `exponent`
-and [command-line example](../src/examples/THC/FloatDecode.hs) entries.
-Inputs cover both signs, every exponent code, every leading subnormal
-bit and neighbors, boundary fractions and deterministic integer-generated cases.
-Java independently derives fields with unbounded integer arithmetic and checks
-both Core stages/backends, with guest inlining enabled and disabled. Every
-measured call checks the exact compiled-entry count, target identities/validity
-and released handoff storage; setup does not execute a settling guest call.
+Float and Double remain distinct in typed locals, fields, captures and
+[tuple results](tuple-results.md). Generic residual scalar calls still use
+Truffle's Object call boundary and may box. The
+[Core host ABI](site/embedding.md#load-a-core-entry) accepts their exact scalar
+values; declared managed exports have their separate signature checks.
 
-Public `Double.exponent` retains GHC's opaque `$wintegerFromInt64#` worker.
-Preparation exports and retains the complete unchanged original Integer module,
-alongside its pinned sources, license and provenance; the reachable worker is
-not fabricated. Missing that module fails the strict closure audit. The existing
-shared original-library exporter and Core auditor remain explicit Python
-dependencies; the new producer and independent models are Haskell and Java.
-Malformed scalar carriers, tuple shape, arity and levity fail closed. Bare
-primops are rejected by strict loading and trap when demanded in diagnostic mode.
-Missing/corrupt native rows or source/artifact provenance are rejected as well.
-
-## Scalar arithmetic and conversions
-
-The inverse-hyperbolic operations share a Java implementation between
-backends. Cancellation-resistant `log1p` formulas handle finite middle ranges;
-small `asinh`/`atanh` inputs retain their signed input, and large
-`asinh`/`acosh` inputs use `log(abs(x)) + log(2)` to avoid overflow.
-Float inputs are widened exactly, then rounded once to Float. Domain errors
-produce NaN; `atanh(±1)` produces signed infinity, and `asinh`/`atanh`
-preserve signed zero and subnormals. NaN payload/sign preservation is not promised.
-The native corpus and an independent 90-digit decimal model check a two-ULP
-bound over the tested inputs, not correctly-rounded or bit-identical libm
-behavior for every possible input.
-
-GHC explicitly leaves `minFloat#`/`maxFloat#` and their Double equivalents'
-operand choice unspecified for equal values (including opposite signed zeros)
-or NaNs. THC selects the second operand when its strict comparison is false.
-Tests require exact ordered unequal results, and a permitted operand otherwise;
-they do not mistake one native platform's NaN/zero choice for a portable rule.
-The genuine Haskell fixture imports these experimental operations explicitly
-from `GHC.Prim`, since GHC 9.14.1's `GHC.Exts` does not export them.
-
-`cabal run exe:thc-fixtures --offline -- floating-remainder` records 8,876
-argument-fed native rows and 26 strict pre/post Core audits, including the
-[runnable inverse-hyperbolic example](../src/examples/THC/InverseHyperbolic.hs).
-`FloatingRemainderTest` covers every leading subnormal bit, formula-switch
-neighbors, domain endpoints, finite extremes and deterministic bit patterns.
-Both backends and inlining modes check every interpreted/compiled row, exact
-first-installed entry counts, unchanged valid targets and empty handoff storage.
-The four-field decode also crosses an opaque worker boundary.
-
-`word2Float#` and `word2Double#` accept the full unsigned 64-bit `Word#`
-range, represented by raw Long bits. Top-bit-set values are shifted right with
-a sticky low bit before a direct conversion at the destination precision, then
-scaled exactly by two. The Float path never goes through Double: that would
-double-round inputs one integer away from a binary32 midpoint. Both operations
-round to nearest, ties to even, including rounding `maxBound :: Word` to 2^64.
-`cabal run exe:thc-fixtures -- word-floating` produces argument-fed native raw-bit
-observations and strict pre/post Core audits using the existing Haskell fixture
-runner. `WordFloatingTest` independently derives integer rounding and checks
-both backends before and on the first/subsequent installed compiled calls, with
-inlining enabled/disabled. Its input domain includes 2^24/2^53, both sides of
-2^63, max Word, and even/odd midpoint neighbors; exact Word/Float/Double proofs
-and unary arities have negative controls. Preparation is wired into full and
-focused CI; no installed GHC artifacts are hashed.
-
-The fused variants implement `x*y+z`, `x*y-z`, `-x*y+z`, and `-x*y-z`,
-respectively, with one nearest/even rounding using the corresponding Java
-`Math.fma` overload. Negations apply to operands, not the rounded result;
-binary32 never goes through a binary64 intermediate. These signs match pinned
-GHC `902339d332fb4ce2b3c87dcac1ee6495d41ad886`, `primops.txt.pp:1465–1532`.
-`cabal run exe:thc-fixtures -- fused-floating` reuses `FloatingAudit` and its
-native driver (`--fused`), with no additional ISA flags. The 12,304 native rows
-cover signed zeros, subnormals, overflow rescue, cancellation, halfway rounding,
-infinities and NaNs. `FusedFloatingTest` independently rounds exact integer
-products/sums; NaN results are compared by classification, not payload or sign.
-Both Core stages/backends and inlining modes check the first installed call,
-exactly two compiled guest entries per scalar observer call, target validity
-and empty handoff loans. Separate mutation controls reject non-fused arithmetic,
-Double-mediated Float rounding, malformed ternary proofs and incomplete receipts.
-
-Generic function call packets and root returns still use the existing Object
-ABI. Non-inlined floating calls can therefore allocate wrapper objects. The
-optional integer/reference handoff ABI does not cover floating values. The
-`loadEntry` integer-kernel interface used by these fixtures accepts integer
-inputs through `Int# -> Int#` wrappers. The separate
-[managed-export interface](site/embedding.md) accepts its declared scalar
-signatures, including Float and Double. These measurements do not establish an
-unboxed scalar floating calling convention across residual calls.
-
-Exact floating [unboxed tuple results](tuple-results.md) use primitive float/double
-fields and typed destination slots on both backends. Ordinary GHC CPR can turn a
-boxed producer into such a worker; the original `floatingTupleFrontier` now runs
-as a positive native control. A separate suite executes public `Data.Complex`
-multiplication and `conjugate` through real floating CPR workers. The boxed-field
-control keeps its `OPAQUE` producer to preserve the boxed boundary under test.
-Current tuple, vector and bounded sum transport is specified by the
-[capability contract and limits](primops.md#current-aggregate-and-address-limits);
-the measurements here establish only the stated floating slice. Floating literal
-case alternatives are invalid GHC Core and fail closed.
-
-`bin/prepare-floating-audit.py` builds the native oracle, exports current
-GHC 9.14.1 Core, checks all 28 primops, verifies concrete worker results/arguments,
-boxed field representations and retained floating captures, and audits all 15
-positive roots strictly. It independently checks 441 native rows, including
-binary32's 2^24 boundary, binary64's 2^53 boundary, negative values, signed zero,
-infinities, NaNs and the smallest subnormals. Floating-to-Int conversion tests
-exclude non-finite and out-of-range operands, whose GHC behavior is undefined.
-The ordinary `floatingJoinSwap` retains a real recursive join with two Float and
-two Double formals, testing parallel argument permutations independently of the
-self-tail accumulator loop. Native executable, oracle, source, auditor,
-capabilities and exported Core hashes are retained under
-`build/floating/checks.json`; JVM tests reject stale evidence.
-
-Preparation runs automatically in `bin/prepare-tests.sh`; Gradle tracks the
-generated inputs and CI retains their evidence. The focused checks are:
-
-```sh
-bin/build-compiler.sh
-python3 bin/prepare-floating-audit.py
-./gradlew --no-daemon test --tests thc.runtime.FloatingPrimitiveTest
-python3 bin/test-audit-core.py
-```
-
-The JVM tests replay every native row before and after requested compilation,
-requiring each final row to execute installed guest code with the default
-splitting policy. Additional checks cover previously cold non-finite paths,
-direct primitive storage and exact signed-zero/NaN-payload preservation across
-fields and captures, shared frame-descriptor widening, and unsupported boundaries.
-Exact captures also accept the same boxed scalar carrier after shared descriptor
-widening, without numeric coercion. This is API/legacy robustness: no ordinary
-valid GHC lowering path that widens an exact scalar binder is currently known.
-Malformed case results are checked against every known alternative independent
-of ordering; an unknown alternative does not inherit a floating proof from its
-peers.
-
-`cabal run exe:thc-fixtures --offline -- sqrt` exports public `Prelude.sqrt` and
-the scalar math wrappers for both precisions before and after Tidy. Its 418
-sqrt/control native rows include signed zeros, subnormals, infinities,
-negative values, signaling/quiet NaNs, boundaries around
-perfect squares, and deterministic random finite inputs. An independent exact
-rational model in `SqrtPrimitiveTest` finds adjacent output values and compares
-their squared midpoint, checking nearest-even rounding without a floating
-square-root function.
-The suite checks 288 exact bit results, 104 NaN classifications and 26 scalar
-consumer results. Another 402 native rows exercise the 30 scalar math primops
-through typed `Float#`/`Double#` wrappers. Arithmetic NaN payloads and signs
-are not specified. Inverse trigonometric rows include inputs outside [-1, 1]
-for NaN classification; hyperbolic rows include infinities and values near
-Float and Double overflow.
-
-Scalar math uses JVM `Math` operations and rounds each Float result to
-binary32. Native GHC is the differential oracle, not a claim of bit-exact
-transcendentals across `libm` and the JVM. Both backends execute every math
-row before and after explicit compilation. The comparison checks NaN by class,
-infinities and signed zero by exact bits, and finite results within the larger
-of 8 ulps or 2e-6 relative for Float, and 16 ulps or 2e-14 relative for Double.
-These bounds apply to the tested finite domain; they do not promise
-cross-platform bit identity or a universal `Math.pow` accuracy contract.
-
-The AST uses separate typed unary nodes; BytecodeDSL uses typed unary operations.
-Both call JVM `Math.sqrt`, whose [specified behavior](https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Math.html#sqrt(double))
-preserves signed zero and returns the correctly rounded binary64 root. Float
-operands are widened exactly, then the result is narrowed to binary32. The native
-and independent bit checks cover this path at both precision boundaries. This
-widening does not introduce double rounding: every positive finite binary32 root
-is normal. In a result binade `[2^e, 2^(e+1))`, a binary32 midpoint has a 25-bit
-significand, so its square is an odd integer times `2^(2e-48)`. A binary32 input
-cannot equal that midpoint square and differs by at least `2^(2e-48)`. Dividing
-by the sum of the root and midpoint puts their distance above `2^(e-50)`, while
-binary64 rounding changes the root by at most `2^(e-53)`. It therefore cannot
-cross a binary32 rounding midpoint. Zeros, infinities and NaNs follow their
-separate IEEE rules. Generic
-Object call/return boxing and optional scalar handoff eligibility remain unchanged.
-`SqrtPrimitiveTest` runs both exports and backends with guest inlining enabled and
-disabled. Every measured row requires the exact guest-entry count (one primitive
-producer or two roots for a scalar consumer) and the selected target still
-installed. Cold special values are checked without a compilation retry. The CI
-handoff run repeats the same tests; source, auditor, native and export hashes are
-validated before execution.
-
-For actual compiler evidence, `floatingLoop` has both f32 and f64 accumulators.
-Capture its graph with `bin/dump-graph.sh`, selecting
-`build/floating/core/FloatingAudit.json` through `THC_GRAPH_MODULES` and each
-backend through `THC_BACKEND`. Run `tools/check-floating-loop-graph.py` on the
-parsed `Before phase HighTierLowering` snapshot. The checker follows actual CFG
-backedges and dominators, requires f32/f64 addition recurrences, and rejects
-boxing, allocation, heap loads and calls throughout the continuing loop blocks.
-Entry/exit ABI costs are outside that narrowly stated check.
-
-AST primop names resolve to numeric opcodes during lowering. String comparison
-can simplify too late for Graal's speculative frame virtualization, exposing
-unreachable reads of one slot as incompatible primitive kinds. Numeric dispatch
-removes those paths during partial evaluation. Frame initialization, scratch
-clearing, and the normal splitting policy remain unchanged.
-
-During development the string-dispatched AST loop installed a five-node graph
-ending in an unconditional `RuntimeConstraint` deoptimization under the
-`IntrinsifyFrameAccessor` speculation. A detailed pre-escape-analysis graph
-showed Float formal slot 5 read as Long through the unreachable `int2Float#`
-branch of `executeFloat` (node 2446), and as Double through the unreachable
-comparison branch of `float2Int#` (node 1373). Numeric dispatch removed the
-cross-kind paths; the unchanged first compilation then passed every native row.
-Initializing floating slots or changing scratch clearing did not solve the
-problem and neither experiment is retained.
-
-`tools/record-floating-graphs.py --ast AST_DUMP_DIR --bytecode BYTECODE_DUMP_DIR
---output docs/floating-graphs` retains each checked entry snapshot, its original
-BGV, hashes, installed runtime identity, and loop evidence. This record is
-about the compiler snapshot, not final machine-code instruction selection.
-
-The four raw bit casts preserve IEEE encodings instead of performing numeric
-conversions. Their integer sides are exactly `Word32#` and `Word64#`; binary32
-bits use a zero-extended Long, while binary64 uses all 64 Long bits. Separate
-typed AST nodes and BytecodeDSL operations call the raw-bit JVM APIs. Saturation
-and the pinned scalar signature table reject contradictory exact argument or
-result proofs, including machine-Word substitutions. No vector or call ABI is
-added.
-
-`cabal run exe:thc-fixtures --offline -- scalar-bitcasts` retains 13,555 native/model
-rows across ten pre/post-Tidy roots. The Haskell producer retains the existing
-shared Core auditor dependency; bitcast-specific Python producers and models are
-removed. Integer-only Java models cover signed zeros, infinities,
-subnormals and signed quiet/signalling NaNs. The fixtures retain opaque calls,
-floating constructor fields with an unused recursive bottom, and primitive
-closure captures. Separate encode and decode roots compare through native-order
-array storage, so a pair of compensating bit-cast errors cannot satisfy only a
-round-trip test. Export checks derive fixed guest-entry counts from the retained
-call structure; every measured row requires that exact count and unchanged,
-installed active targets, with inlining both enabled and disabled. The normal
-handoff matrix repeats these gates. A separate helper test enumerates every
-binary32 NaN encoding and 262,140 selected binary64 NaN encodings. Raw-bit
-preservation, including signalling NaNs, is an explicit platform/JDK test gate;
-this does not rely on floating equality or claim that Java specifies universal
-signalling-NaN preservation on other architectures. Generic residual floating
-calls can still box, as described above.
+Original Haskell floating predicates and rounding imports require their
+[ordinary native linkage](interface-foreign.md). Primitive support does not
+replace a missing foreign library or supply the complete Integer/formatting
+library closure.

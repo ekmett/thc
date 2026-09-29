@@ -20,7 +20,7 @@ DSL and SIMD sources and test fixtures are intentionally excluded.
 
 This namespace is the boundary between an exported program, its host, and the
 runtime. Start with `executionContext` and `loadManagedExports` when embedding THC;
-`loadEntry` supplies the separate integer-kernel and executable contracts.
+`loadEntry` supplies the separate typed Core and executable contracts.
 
 - **Loading and admission.** `CoreModules`, package manifests and foreign-artifact
   validation assemble exported Core and check the reachable program. Reading a
@@ -30,7 +30,7 @@ runtime. Start with `executionContext` and `loadManagedExports` when embedding T
   interning and other mutable services. These are context state, not executable
   nodes or Haskell data constructors.
 - **Host entrypoints and diagnostics.** Managed foreign exports expose checked
-  scalar signatures through polyglot members. Kernel calls and executable `IO ()` have distinct contracts;
+  scalar signatures through polyglot members. Typed Core calls and executable `IO ()` have distinct contracts;
   public runtime classes are not a substitute for the checked host boundary.
 
 ## Package thc.runtime
@@ -80,9 +80,9 @@ graph before producing machine code. The Truffle nodes documented here are
 source may disappear after partial evaluation, inlining and escape analysis;
 that is an optimization outcome, not a different source-level value contract.
 
-This describes the optimizing JVM configuration. The separate Native Image
-probe packages a native executable that interprets accepted pure Core; it does
-not establish guest JIT or guest AOT compilation, or the full native FFI lifecycle.
+The [Native Image workflows](../native-image-feasibility.md) separately provide
+a pure interpreter and an experimental selected-Core compiled cache. They have
+narrower admission and resource-lifecycle contracts than the JVM runtime.
 
 ## Values and representation
 

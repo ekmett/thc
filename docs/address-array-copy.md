@@ -29,33 +29,3 @@ literals, or live context-owned malloc storage on the existing native-enabled
 Linux x86_64 backend. Unowned numeric pointers, freed or foreign-context native
 owners and immutable destinations are rejected. This does not introduce an
 arbitrary-pointer FFI, `copyAddrToAddr#`, or additional native platforms.
-
-`AddressArrayCopyFixtures` builds the genuine Haskell consumers with pinned GHC
-9.14.1 and records 1,323 native rows, each observing all eight source and eight
-destination bytes. The rows cover seven seeds, all contained ranges in a small
-window, whole-array and interior copies, and empty end positions. Pre/post Core
-exports retain one saturated copy primop per consumer and strict audits check
-their original GHC signatures. The Java tests compare every byte with an
-independent snapshot model on AST and bytecode, with and without inlining.
-They require unchanged target identities and last-tier validity, and exactly
-two compiled guest entries per installed observation: the public entry and its
-genuine `runRW#` state lambda. Result pools remain empty and reference-clean.
-
-Additional tests exhaust contained managed ranges and reject full-width bounds,
-backing aliases, pointer-bit exposure, wrong carriers/arity/aggregate results,
-and invalid State values without changing storage. Explicitly synthetic primop
-consumers exercise owned native transport with exactly one compiled guest entry
-per installed call; they are not counted as native GHC corpus evidence. Opposing
-managed copies and a copy blocked on an owner monitor test lock ordering and
-the native lifetime held against concurrent `free`.
-
-```sh
-cabal run exe:thc-fixtures --offline -- address-array-copy
-cabal run exe:thc-fixtures --offline -- native-addresses
-./gradlew test --tests thc.runtime.AddressArrayCopyTest --tests thc.runtime.NativeMallocTest
-JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew test --rerun --tests thc.runtime.AddressArrayCopyTest --tests thc.runtime.NativeMallocTest
-```
-
-Fixture manifests retain exact source and artifact inventories, including native
-binary/input/output, both Core exports, strict audit reports and command logs.
-Fast and full CI register the Haskell producer and retain its evidence directory.

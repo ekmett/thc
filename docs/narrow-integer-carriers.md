@@ -22,18 +22,3 @@ are range checked. There is no global implicit Int-to-Long conversion.
 Comparison results and shift counts remain machine Int#. The analogous Word
 operations preserve this distinction. GHC's original sum slot proofs and
 projections remain unchanged; see [sum results](sum-results.md).
-
-The native fixture includes all six widths, boundary bits, typed fields,
-captures/PAPs, tuples, nested empty tuples, sums, masks, loops, raw float bits,
-byte arrays, pinned memory, CAS and vector lanes. Its producer retains independent
-GHC observations and strict original pre-/post-tidy Core evidence:
-
-```sh
-cabal run exe:thc-fixtures --offline -- narrow-integer-transport
-./gradlew narrowIntegerTransportFullCoreTest narrowIntegerTransportFullCoreDenseTest
-```
-
-The existing scalar, literal and SIMD fixtures remain independent regression
-controls. Installation checks retain original targets, first compiled entry and
-handoff cleanup. A successful carrier test is not an allocation or speedup claim;
-use actual [compiler graphs](graph-inspection.md) for those investigations.

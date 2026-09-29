@@ -42,48 +42,17 @@ Truffle iterator exposes, not a historical call log or a one-to-one GHC stack.
 These records are diagnostic only: they contain no resumable `AP_STACK`,
 continuation, or `throwTo` unwinding/resumption state.
 
-The exact original `stg_cloneMyStackzh` foreign declaration now reaches this
+The exact original `stg_cloneMyStackzh` foreign declaration reaches this
 capture path in both lowerings. It returns the detached snapshot through the
 original State/snapshot tuple and unchanged Haskell constructor. Recognition
 validates the static `ghc-internal` target, `prim`/`safe` convention, raw argument
 and result representations, saturation, and unresolved foreign head; it does
 not depend on the consuming binding's name.
 
-The strict Core auditor admits that same exact symbol through its shared original
-foreign-call validator. It checks the raw State/snapshot tuple and rejects a
-State occurrence that relabels a stored scalar or boxed binding. The existing
-auditor tests use the unchanged exported worker with an explicitly synthetic
-scalar-result consumer. No stack getter, IPE, decoder, or remote-capture symbol
-is admitted by this capability.
-
-This does not attach snapshots to exceptions, emulate native `StgStack` memory,
-capture remote threads, or freeze backtrace configuration. The remaining
-GHC compatibility layer must preserve original primitive and foreign protocols:
-GHC may have already inlined its decoder or formatter into a dependency. A managed
-stack image must expose captured provenance to that unchanged Haskell code.
-Stack annotations are separate work; this snapshot deliberately retains no guest
-payloads. Context-owned captures carry an empty identity token, not a reference
-to the language state or registry. Standalone diagnostic captures have no token.
-
-`ManagedStackSnapshotTest` exercises synthetic Core through real AST and bytecode
-loaders, with a test capture callback as the newest guest frame. It checks frame
-order and caller source locations before and after explicit compilation with
-inlining enabled/disabled, missing source metadata, root-fallback provenance,
-original AST note coordinates, immutability after return and synchronous unwind
-through both backends (including context close), and fail-closed invalid capture
-sites. Explicit cross-unit binding identities are checked before and after
-compilation/inlining and context close, independently of the debug names and
-source paths.
-
-`OriginalStackCloneTest` additionally executes a provenance-recorded projection
-of the unchanged exported `cloneMyStack1` worker. This reaches the actual newest
-bytecode operation frame, checks its original source coordinates and binding
-identity, and verifies first post-installation compiled calls with inlining
-enabled/disabled. Its wrapper and moved-body consumer control are explicitly
-synthetic, not fresh GHC inline exports. Raw contract and state-relabel controls
-fail closed. These are JVM protocol tests, not native GHC snapshot comparisons
-or a complete library bridge. Strict package linking preserves the original
-foreign head for its exact protocol validation at lowering.
+Snapshots are diagnostic data: they do not attach automatically to exceptions,
+capture remote threads or emulate native `StgStack` memory. They retain no guest
+payloads. Context-owned captures carry an identity token rather than a reference
+to the language state; standalone captures have no context token.
 
 ## Original stack-info and IPE boundary
 
@@ -122,25 +91,11 @@ during a long-lived context. Any surviving address alias or copied output pointe
 keeps its registration usable. Cached provenance excludes the info-table key to
 avoid a weak-key/value retention cycle. Disposal clears all registrations.
 
-`CoreStackInfoForeignTest`, `ManagedStackInfoImageTest`, and
-`ManagedStackRuntimeTest` cover the raw contracts, target bytes and ownership/
-transactional-copy rules. `OriginalStackInfoCallTest` places unchanged original
-call excerpts in explicitly synthetic scalar-result consumers, exercising AST
-and bytecode entries before and immediately after compilation, with inlining
-enabled and disabled. This is protocol execution, not execution of the complete
-original decoder or formatter. Remote capture is still unsupported.
-
 ## Diagnostic frame traversal
 
-The remaining original getter declarations are checked with the same exact raw
-contracts, including the lifted `Any` result of `getStackClosurezh`, the Word32
-result of `getStackFieldszh`, and all three ordered components of
-`advanceStackFrameLocationzh`. Recognition and lowering do not by themselves
-admit these calls through the capability auditor or prove complete Decode.
-Only `getSmallBitmapzh`, `advanceStackFrameLocationzh` and `getStackFieldszh`
-are newly admitted after unchanged original-call proofs pass in both backends,
-both handoff modes and immediately after explicit compilation. The eight cold
-getter capabilities remain disabled.
+The admitted traversal operations are `getSmallBitmapzh`,
+`advanceStackFrameLocationzh` and `getStackFieldszh`, with the exact original
+foreign signatures and checked target layout.
 
 The managed image has no unused stack capacity: it is a zero-slack sequence of
 one-word, zero-payload `RET_SMALL` records. `getStackFieldszh` reports that virtual
@@ -159,94 +114,8 @@ These restrictions are a diagnostic representation boundary, not native stack
 introspection or resumable `AP_STACK` support. Complete unchanged decoder
 execution remains a separate proof requirement.
 
-`OriginalStackDecoderCallTest` retains all eleven remaining original getter
-applications with exact original source tables. Its explicitly synthetic scalar
-consumers inspect every hot result component (including the terminal null),
-exercise one- and two-frame snapshots, and check cold failures and invalid
-offsets without replacing the original GHC applications. It is a protocol proof,
-not complete decoder execution.
-
-## Original formatter execution
-
-The shared Haskell fixture command `original-stack-formatter` exports the pinned
-original source closure and calls unchanged `prettyStackEntry` with six explicit
-`StackEntry` inputs. Native GHC supplies 606 code-point observations, including
-empty fields, Unicode, punctuation and embedded NUL characters. Both pre- and
-post-Tidy consumers pass strict audits. `OriginalStackFormatterTest` checks those
-observations through both backends, before and immediately after explicit
-compilation, with inlining enabled and disabled.
-
-The fixture records exactly 95 source inputs and 91 artifacts from one export
-attempt. Provenance tests independently pin the upstream source catalog and
-reject omissions, changed pins and escaped paths. Focused preparation and cache
-receipts reuse this exact inventory; installed-interface symlink overlays are
-neither hashed nor cached. This executes the original formatter on constructed
-entries, not the full original decoder on captured snapshots.
-
-The source overlay also includes unchanged `GHC.Internal.IO.Unsafe` from GHC
-commit `902339d332fb4ce2b3c87dcac1ee6495d41ad886`, covered by the pinned source
-license and hash catalog. Fresh export supplies the exact
-`ghc-internal:GHC.Internal.IO.Unsafe.unsafeDupableInterleaveIO1` binding needed
-by original callers, without a worker-name alias. A separate test uses explicitly
-synthetic scalar consumers and confirms both original `ExecutionStack.Internal.stackFrames`
-references name that exact worker. The scalar consumers wrap the unchanged
-binding: strict linking rejects its removal, discarding its delayed result does
-not run the action, and demanding
-the result runs it, through both backends and explicit compilation. This is not
-a native oracle for those synthetic consumers, nor full decoder support. The
-worker itself still has an unboxed-tuple result and is not a scalar host entry;
-the libdw-based `stackFrames` closure remains unsupported.
-
-The same overlay includes unchanged `GHC.Internal.Heap.InfoTable.Types.hsc`
-from that pinned revision, compiled before `Heap.InfoTable` using the target's
-real `hsc2hs`. Fresh export supplies the exact
-`ghc-internal:GHC.Internal.Heap.InfoTable.Types.$w$cshowsPrec` body, referenced
-36 times by three original `Heap.Closures` workers. The proof checks its formal
-representations and the generated `HalfWord` width against the target layout;
-it does not replace or alias the worker. The unchanged original `Ptr`,
-`Data.Either`, and `Word` sources now supply `Ptr.$fShowFunPtr`,
-`Data.Either.$fShowEither`, `Word.$fShowWord32`, and `Word.$fShowWord8`
-under the `ghc-internal:GHC.Internal` prefix. Availability of those exact
-bindings does not establish full `Show StgInfoTable`, ErrorCall, or decoder
-support.
-
-Original `Bignum.Integer`, `Real`, and `Numeric` sources supply the next four
-identities: `integerFromWord#`, `$fIntegralInteger`, `showHex1`, and
-`showIntAtBase` in those respective modules. The proof checks each unchanged
-pointer-formatter reference, the exact unlifted Word# input, the original
-Integer constant 16 and the Integral dictionary constructor. Compiling Integer
-requires the unchanged small boot interfaces in BigNat, Natural, Integer order;
-the BigNat/WordArray/backend implementations are not added. Strict traversal
-still exposes those implementations and further numeric/encoding/error
-dependencies, installed GMP foreign calls, tuple captures, `timesInt2#`,
-`addr2Int#`, libdw and cold decoder branches. This source addition does not
-admit those paths or select a bignum backend.
-
-The unchanged `IO.Encoding.Types` and `IO.Encoding.Failure` sources from the
-same pinned revision supply `Types.close#` and eight original Failure workers:
-`recoverDecode2`, `recoverDecode3`, `recoverDecode5`, `recoverDecode#`,
-`recoverEncode#`, and `codingFailureModeSuffix1`, `codingFailureModeSuffix3`,
-`codingFailureModeSuffix5`. The source proof checks their exact original
-CString/UTF8/encoding caller references and preserves each exported binding
-through module merging. These modules use the existing private installed-interface
-overlay for `IO.Buffer`, `Char`, and `Num`; their implementations are not added.
-No new boot interface or target-layout receipt is needed. This is source
-availability, not execution or admission of the buffer-recovery/error closure.
-At that encoding-source checkpoint, the original error probe still stopped at
-unsaturated masks in `IO.bracket1`. The separate mask-function exporter fix in
-PR #206 now saturates those calls; it resolves that export-shape problem, not
-full bracket or error-path execution. The encoding source addition itself did
-not change the backtrace, libdw, masking, or exception policies.
-
-The overlay also restores unchanged `GHC.Internal.Classes` and `GHC.Internal.Num`
-from the same pinned revision. Classes is compiled after Types and before
-Bignum.Integer; Num follows Base using the existing Num boot interface. No
-additional boot or source dependency is added. Fresh export retains exactly one
-`Classes.compareInt#` reference in original `Bignum.Integer.integerCompare` and
-one `Num.$fNumInteger` reference in original `Real.$fRealInteger`. The proof
-checks the comparison's two unlifted Int# parameters, the original seven-field
-Num dictionary constructor, and preservation of both exact exported bodies
-through module merging. Installed Magic/Tuple and compatibility Integer/Natural
-interfaces still supply omitted modules. This proves source availability, not
-general Integer, BigNat/backend, error, or library execution; no runtime,
-primitive, masking, libdw, or admission policy is changed by this source slice.
+The complete original decoder and libdw execution-stack path remain outside this
+managed diagnostic contract. The original Haskell formatter can render constructed
+stack entries; that does not turn these images into native frames or executable
+continuations. To prepare the original consumer and formatter fixtures, use
+`cabal run exe:thc-fixtures -- original-stack` and `original-stack-formatter`.

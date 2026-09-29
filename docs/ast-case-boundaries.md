@@ -130,23 +130,3 @@ across legitimate loop iterations without a generic trampoline on each lap.
 Async-enabled, delimited, aggregate/vector, unknown/lazy-result and result-loan paths
 continue using their existing capture/completion protocols; they are not compacted
 by this tranche. Public loading still does not enable outlining by default.
-
-`PassThroughRootTest` covers root roles, explicit packet ownership, Bloom
-backedges, typed/scalar self-shortcut suppression and cold compiled clones.
-`CaseArmOutliningTest` covers actual Core lowering, cold compiled caller/callee
-entry, selection effects, returning continuations, local joins, mixed typed
-tuples, a real blocking async cut and original native-backed delimited resumes.
-Prepare its existing fixture with:
-
-```sh
-cabal run exe:thc-fixtures -fdevelopment -- delimited-continuations
-```
-
-`AstTailSpillTest` checks long identity side chains, exact prefix counts, retained
-non-tail suffixes, masks live before and after the first spill, and nested anchors
-whose tail transfers must not cross a non-tail return boundary. `AstStackTest`
-continues to cover shared updates, failures, async delivery and driver isolation.
-The exact-reference controls also exercise real outlined-arm calls, first-installed
-spills without settling calls, unforced constructor/exception payloads, unentered
-closure bodies, address backing identity, shared updates and ordinary fallback
-completion for lazy or unknown results.

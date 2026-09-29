@@ -23,22 +23,6 @@ retaining the same allocation, not a host pointer. Original zero-width State
 operands are checked before access; the setter preserves the exact singleton
 `(# State# #)` result, without inventing a returned scalar.
 
-`thc-fixtures original-termios` prepares genuine public installed-import
-pre/post Core and native observations using the existing Haskell framework.
-The native oracle touches allocated images only: six full-width patterns,
-offset canaries, member reads/writes, and two writes through the returned
-`c_cc` pointer. Java checks the raw descriptors, strict closures, observed
-images and constants, both runtime backends, and first installed compiled
-entries. CAF constants separately exercise each unchanged original-call body before
-its shared thunk is forced: one compiled entry per call, followed by the warmed
-consumer's one entry with both retained targets still valid. The signal-size
-consumer instead requires exactly one original-call binding and one retained,
-first-installed compiled target, executing exactly one compiled entry per call.
-Memory consumers
-execute two compiled entries (the consumer and its immediate State lambda).
-Other hosts are explicitly excluded, not assigned guessed layouts.
-
-This does not admit `tcgetattr`, `tcsetattr`, signal masks, saved terminal state,
-event-manager stores or bound-thread support. It does not mutate a host terminal
-or establish full original Handle/`putStrLn` execution. Those reachable calls
-remain separate strict-audit obligations.
+Image access alone does not grant terminal or signal-mask authority. Those
+operations require their separately admitted native/runtime boundaries. Layouts
+from another platform are not interchangeable.

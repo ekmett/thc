@@ -34,25 +34,3 @@ in GHC.Internal.Int/Word and double-word division in GHC's native bignum backend
 For example, `quotRem (minBound + 1 :: Int16) 7` retains the correct signed
 remainder; `shiftR (-1 :: Int8) 3` remains arithmetic at the public Bits layer,
 whereas the new low-level logical primitive returns 31.
-
-## Verification
-
-`cabal run exe:thc-fixtures --offline -- integer-completion` uses pinned GHC
-9.14.1 to export genuine pre-/post-Tidy Core, strictly audits all eleven roots,
-and generates 3,373 native rows. The manifest closes source, generated Core,
-native binary, requests, output and command/stdout/stderr inventories.
-`IntegerCompletionTest` independently checks native results with BigInteger,
-all defined 8-bit division inputs, 20,000 additional unsigned double-word
-divisions, malformed physical carriers/tuples/arity, first-class rejection and
-invalid-domain recovery.
-
-Every native row is exercised on AST and bytecode, with inlining enabled and
-disabled. Compilation must leave guest call counters unchanged. Each first and
-subsequent checked call must enter exactly one source-proven installed root,
-without interpreter fallback or additional handoff allocations; argument and
-result pools must be empty afterward. Run both default and dense handoff modes:
-
-```sh
-./gradlew test --tests thc.runtime.IntegerCompletionTest
-JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew test --tests thc.runtime.IntegerCompletionTest --rerun
-```

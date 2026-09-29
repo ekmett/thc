@@ -21,18 +21,3 @@ allocations retain a context-owned borrow throughout each checked access;
 foreign-context and freed owners reject. Null, opaque and unowned numeric
 addresses are not byte-addressable. These are ordinary vector memory operations,
 not an atomic-memory API or a claim of hardware SIMD acceleration.
-
-`Simd128AddressAudit.hs` uses all 36 operations over initialized pinned storage,
-kept alive with `keepAlive#`. Its interior pointer deliberately exercises valid
-negative offsets. The Haskell fixture command retains native LLVM output,
-original pre/post-Tidy Core, strict entry audits and source/artifact hashes.
-Java checks the 2,304 native rows with an independent scalar-byte model and
-tests both lowerings, installed-code execution and memory boundaries.
-
-Run `cabal run exe:thc-fixtures --offline -- simd128-addresses`, then
-`./gradlew test --tests 'thc.runtime.Simd128Address*'`; repeat the test task with
-`JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true`. Fixture selection uses the same
-producer. As with the sibling fixture, native/post-Tidy evidence is retained on
-little-endian x86-64; ARM64 preparation currently emits pre-Tidy Core and records
-no native rows. Native allocation tests retain that subsystem's Linux/LP64 host
-gate. None of these host-test limits implies a different vector representation.

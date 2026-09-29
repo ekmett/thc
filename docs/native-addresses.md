@@ -58,18 +58,10 @@ its numeric bits nor a C copy extends the lifetime after explicit free. An
 unrecognized pointer result remains opaque and unowned. This is not a native
 GHC closure address or callback/re-entry implementation.
 
-Moving-heap arrays still reject numeric projection. Pointer-bearing owned arrays
-retain their managed cell protections and cannot be exported as raw C buffers;
-this does not yet provide general native pointer cell encoding for pinned byte
-arrays. A temporary native copy or native identity token would not satisfy that
-contract. This increment does not
-add generic foreign-pointer ownership, arbitrary-pointer memory access, or
-native function pointers.
-
-The native Haskell oracle covers null, all-bit integer roundtrips, pointer offsets,
-one-past pointers, and alias writes across GC. Java tests exercise actual native
-bytes, old and new Sulong transports, original MD5 input, owner closure, denied
-memory access, and the first installed compiled AST/bytecode entries.
+Moving-heap arrays reject numeric projection. Raw byte views cannot expose
+managed pointer cells. The [typed package-call boundary](c-finalizers.md) can
+encode and reconcile supported pointer-bearing pinned allocations while retaining
+the complete ownership graph; this is not arbitrary-pointer memory access.
 
 Primary contracts:
 

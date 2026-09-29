@@ -50,7 +50,3 @@ state/result shape. They are runtime queries rather than CPP switches or an
 environment-variable test, so native and THC execution use identical Haskell
 source. These names take precedence over the native compatibility shim, whose
 zero results are intentionally not the THC implementation.
-
-Run the native compatibility check with `cabal test cpu-affinity-api
--fdevelopment`. JVM controls cover both backends, exact declaration negatives,
-current-context state and actual forked-child observations.

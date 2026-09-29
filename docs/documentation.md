@@ -1,112 +1,59 @@
-# Build the documentation
+# Build and publish the documentation
 
-From the repository root, using the [supported toolchain](../README.md):
+Use the [supported GHC and GraalVM toolchain](../README.md) and install
+**Pandoc 3.x**. From the repository root:
 
 ```sh
 make docs
 make docs-check
 ```
 
-Install **Pandoc 3.x** for the Markdown guides (or set `PANDOC=/path/to/pandoc`).
-The root targets are independent of runtime tests and native/Core fixture
-generation:
+The site is written to `build/site/`. Serve that directory with a static HTTP
+server to preview the guides and API references together. The same output works
+at a server root or under the project's `/thc/` GitHub Pages path.
 
 | Command | Output |
 | --- | --- |
-| `make docs-haskell` | Compiler `lib:thc` Haddock under `build/docs/haskell/`, public `lib:runtime` Haddock under `build/docs/runtime/` |
-| `make docs-jvm` | JDK 25 Javadoc under `build/docs/jvm/` |
-| `make docs` | Three references, thirteen curated guides and one navigable site in `build/site/` |
-| `make docs-check` | Recheck the assembled site's links, fragments, assets and revision |
+| `make docs-haskell` | Compiler and public runtime Haddock in `build/docs/haskell/` and `build/docs/runtime/` |
+| `make docs-jvm` | Java implementation reference in `build/docs/jvm/` |
+| `make docs` | API references and selected Markdown guides assembled into `build/site/` |
+| `make docs-check` | Check the assembled site's links, anchors, assets and source revision |
 
-`docs` runs Haddock for the two libraries and Javadoc sequentially, with at most two compiler workers.
-Use the normal `GHC`, `CABAL`, `CABAL_FLAGS`, `GRADLE_FLAGS`, `JAVA_HOME`, and
-`GRADLE_USER_HOME` overrides. Cabal documentation and the small Haskell site tool
-use a separate `build/docs/cabal` build tree. A full-Core GHC installation is not
-needed to document the exporter library. No installed compiler artifacts are
-rebuilt or hashed by this workflow.
+Set `PANDOC=/path/to/pandoc` if needed. The build also accepts the normal
+`GHC`, `CABAL`, `CABAL_FLAGS`, `GRADLE_FLAGS`, `JAVA_HOME` and `GRADLE_USER_HOME`
+overrides. Documentation uses a separate Cabal build tree under
+`build/docs/cabal/` and does not require runtime tests or Core fixtures.
+A complete-Core GHC installation is not needed. Install GHC's dependency
+Haddock interfaces if you want cross-package API links; without them, Haddock
+reports unresolved external links.
 
-Serve `build/site/` with any static HTTP server. `index.html` keeps a persistent left rail;
-the selected guide, Haskell API page, or JVM-internals page appears in a titled,
-same-origin frame. The shell accepts only HTML paths in the generated page
-inventory, including generator search queries and symbol fragments on those
-pages. Navigation updates the URL and browser history, so a copied
-`?page=api/runtime/THC-Memory.html` link opens the same view. Existing
-`api/haskell/` compiler-reference URLs are preserved. The rail's
-System/Light/Dark control follows the comonad.com palette in the shell and
-content; a direct API URL follows the saved choice or system preference. Direct guide and
-API URLs remain usable outside the shell with their native anchors, search,
-index, and source links. External source and dependency links open outside the
-frame. All site links and assets are relative, so the same output works at the
-server root or at the project's `/thc/` Pages path.
+## Edit and add documentation
 
-## Generators and source identity
+Edit the Markdown in `docs/`; the front page and shared appearance live in
+`docs/site/`. Document public Haskell APIs with Haddock and Java declarations
+with Javadoc. Keep examples and limitations consistent with current code.
+See [contributing](contributing.md) for the development workflow.
 
-The JVM reference uses **JDK 25 Javadoc** through the pinned Gradle 9.7.1 build.
-It documents authored Java declarations, including `thc.Main.executionContext`
-and `thc.runtime.Calls`. The pinned Truffle processor and all five normalizers
-prepare generated declarations needed for type resolution; generated DSL/SIMD
-sources themselves are not API inputs. This path does not compile native
-libraries or prepare Core fixtures. Doclint stays enabled, and the assembled-site
-checker requires the actual Java pages and the `executionContext()` anchor.
+To publish a new guide, add it to the `guides` list in
+[`src/tools/docs/Main.hs`](../src/tools/docs/Main.hs). Pages includes only those
+guides and the generated references. Links to other tracked repository files
+point to GitHub at the site's source revision; graph archives and logs are not
+copied into the site. Use relative links and run `make docs-check` after changes.
 
-Haddock comes from GHC 9.14.1. Use a compiler installation with its dependency
-Haddock interfaces for cross-package API links; a custom `--docs=none` GHC can
-still generate THC's reference but reports unresolved external type links.
-`lib:thc` exposes `THC.Plugin` and `THC.Interface`; its reference is published at
-`api/haskell/`. The public `thc:runtime` library is documented separately at
-`api/runtime/`: `THC`, `THC.Runtime`, `THC.Thread`, `THC.Memory`, `THC.GC`,
-`THC.Trace`, and `THC.Internal.JIT`. The [runtime services guide](runtime-services.md)
-explains scope, availability and native-GHC fallbacks. `.Internal` marks an
-intentionally unstable interface: `THC.Internal.JIT` exposes version-sensitive
-Graal diagnostics and is explicitly `Unsafe` for Safe Haskell.
-Driver executables and fixtures are not published as library API.
-Missing documentation warnings remain visible; there is no blanket
-warnings-as-errors policy for the JVM implementation's public declarations.
+The shared navigation provides appearance controls and links to the guides,
+Haskell libraries and Java reference. API search, symbol anchors and source
+links remain available. Copy the browser URL to link directly to a selected
+page or symbol.
 
-The persistent rail shows the source revision and toolchain. Every generated
-HTML document retains revision metadata. Javadoc declaration links are mapped
-from its generated source locations to the actual tracked Java files and line
-numbers at the full Git revision. Duplicate `src-html` copies are not published;
-unknown source-link shapes or untracked source targets fail assembly.
-Haddock declaration source links use that same full commit ID. The two Haddock
-invocations use their actual `src/compiler/` and `src/runtime/` source roots; neither
-library's links are redirected into the other. Each of the three partial builds
-records that ID, and assembly refuses references from a different revision.
-Commit edits before producing a publishable site: a local dirty build is useful
-for preview but its GitHub links necessarily describe the committed source.
+## Publish from main
 
-## What gets published
+Commit changes before building a publishable site. All references must be built
+from the same Git revision, and their source links identify that revision. If
+assembly reports mismatched revisions, rebuild with `make docs`. A dirty local
+preview is useful for editing, but its GitHub source links still describe the
+committed source.
 
-`src/tools/docs/Main.hs` contains the guide allowlist and assembles the site using
-Pandoc and TagSoup. The Markdown files remain their single editable source.
-Links to omitted guides, code, benchmark reports and evidence point to that
-exact revision in the public repository. There is no recursive `docs/` copy;
-large graphs, logs, fixture data and generated DSL dumps stay out of Pages.
-
-The same tool checks every HTML `href` and `src`, local target existence and
-fragment IDs, required API/guide pages (including every public runtime module), Java declaration presence, shared
-navigation and revision. Root-relative and local filesystem URLs fail validation.
-It does not make live HTTP requests to external sites or prove JavaScript
-behavior in every browser.
-
-The rail owns global navigation. Generator-local search, symbol lists and
-indices remain in the content frame. Haddock uses its supported `--theme` CSS
-option for typography and color alongside its built-in structural stylesheet,
-including quickjump and collapse controls; it does not offer a full HTML shell template.
-The assembler adds the shared stylesheet to standalone pages without replacing
-generator markup. Every Javadoc page receives the same revision and theme checks. For Haddock
-2.33 it adds the
-missing local anchors to rendered instance-method declarations and removes an
-empty source-line suffix from record-selector file links. All resulting links
-still pass the same checker; missing targets are not exempted. Haddock 2.33 also
-links derived-instance origins to the hidden `THC.Runtime.Types` module even
-though `Available` is documented through its public reexports. Those exact
-module-origin links point to the defining module's tracked source at the same
-revision. Public symbol links remain unchanged, and the private module and raw
-FFI boundary are not added to the published API.
-
-`.github/workflows/docs.yml` builds a cached, docs-only Pages artifact from
-`main`. An active publication finishes while a newer run may replace pending
-work; frequent main pushes do not continually cancel the active site build. Deployment uses the
-GitHub Pages artifact/environment mechanism; no `gh-pages` source branch is
-created. Repository Pages settings must use **GitHub Actions** as the source.
+The documentation workflow publishes `main` through GitHub Actions. In the
+repository's Pages settings, select **GitHub Actions** as the source. A passing
+`make docs-check` verifies local links and assets; it does not test external
+websites or every browser's JavaScript behavior.

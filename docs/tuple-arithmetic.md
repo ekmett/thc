@@ -41,41 +41,5 @@ The [scalar integer completion](integer-completion.md) extends this protocol to
 all six narrow quotient/remainder operations and the three-input double-word
 unsigned division operation.
 
-`TupleArithmeticAudit.hs` retains each genuine primitive in both pre- and
-post-Tidy Core. A dynamic selector observes each result field separately without
-turning the tuple into a boxed product. `thc-fixtures tuple-arithmetic` exports
-both boundaries, audits ten entry roots at each boundary, and produces native two-field rows.
-Inputs include signed endpoints, word sign/carry transitions, neighbors of
-powers of two through bit 63 (every bit for WordC), equal operands, negative divisors and reproducible
-bit patterns. Division by zero and signed minimum divided by minus one
-are excluded from the native oracle; the runtime reports an undefined-input
-fault for those cases and assigns no numeric result.
-
-`TupleArithmeticTest` checks native fields against an independent `BigInteger`
-model and executes every field in both backends before and after compilation,
-for both export boundaries. Every checked compiled call must enter installed
-guest code, each exact entry must remain valid, and tuple result pool allocations
-must stay zero. Other tests reject forged layouts, wrong arities and first-class
-primops, and verify recovery after invalid division inputs. Python auditor
-tests include matching shape and saturation negatives.
-
-`WordCarryTest` additionally checks direct and opaque mixed `WordRep`/`IntRep`
-results with normal and disabled inlining, pre/post Tidy and both backends. The
-opaque producer adjusts the low word by one and its caller subtracts one to retain
-an actual return boundary instead of an eta-reduced first-class primop. The flag
-stays unchanged. Each measured invocation must enter exactly one direct or two
-caller/producer guest roots, retain installed original and active target identities,
-and leave argument/result pools empty. Malformed field order and signedness are
-rejected. Operand-failure controls require both destinations to remain unchanged.
-
-This adds only the two missing WordC operations. Original Integer/Natural arithmetic
-still has exact mutable-size/shrink and GMP/exception frontiers; removing the one
-reachable WordC issue from each addition root does not make either closure supported.
-The existing enum dispatch is unchanged; no new graph or throughput claim is made.
-
-Normal clean-checkout preparation runs this fixture. Its manifest fingerprints
-the source, exporter, preparation script, capability audit, exported Core and
-native oracle, and records full `ghc --info` provenance. Gradle tracks these test
-inputs and CI retains the generated artifacts. These eight operations use the same two-Long destination protocol;
-the separate [typed tuple input protocol](tuple-inputs.md), aggregate capture
-restrictions, and other arithmetic families retain their own coverage boundaries.
+Division by zero and signed minimum divided by minus one report an
+undefined-input fault; no numeric tuple result is published.

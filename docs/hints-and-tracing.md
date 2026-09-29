@@ -42,16 +42,3 @@ This is a useful JVM diagnostic translation, **not** GHC's `.eventlog` format,
 RTS event-selection flags, timestamps, or eventlog tooling integration. All 19
 operations count as implemented for this target; hardware prefetch and GHC
 eventlog serialization are not claimed.
-
-`t/fixtures/compiler/HintTraceAudit.hs` is a runnable example. Its Haskell
-producer checks native return values and actual native user-event payloads;
-Java checks the JVM record format, lazy bottom hints, unchanged memory, byte
-bounds, native lifetime/context checks, concurrent records, and first compiled
-calls on both backends.
-
-```sh
-cabal run exe:thc-fixtures --offline -- hint-trace
-./gradlew --no-daemon test --tests thc.runtime.HintTraceTest
-JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew --no-daemon test \
-  --tests thc.runtime.HintTraceTest --rerun
-```

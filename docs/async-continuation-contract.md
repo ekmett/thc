@@ -17,7 +17,7 @@ The existence of a resumable root alone does not establish either property.
 ## Delivery
 
 Only a THC continuation point may claim a request. The claim belongs to the
-current Java thread in the request's owning context. A Truffle wakeup may make
+current logical guest thread in the request's owning context. A Truffle wakeup may make
 that thread runnable, but must not throw a guest exception from arbitrary Java
 frames. A thread has at most one claimed request at a time.
 
@@ -45,20 +45,10 @@ Lowering must distinguish two facts:
 * Whether a point may accept delivery under its current mask.
 * Whether evaluating a child may suspend before returning its result.
 
-For future mask analysis, the abstract domain is inherited/unknown, unmasked,
-masked-interruptible, or masked-uninterruptible. A known lexical scope can
-simplify state changes and delivery checks. Independently compiled roots start with inherited masking
-unless their entry convention explicitly establishes another state.
-Eliminating a delivery check also requires ruling out a self-directed request;
-the Haskell mask alone cannot establish that delivery is impossible.
-The actual mask belongs to the executing thread. Observing one mask while
-compiling does not make it a constant for other invocations or resuming threads.
-
-Both backends currently use conservative continuation cuts and dynamic mask
-checks, not this abstract interpretation. AST lowering covers ordinary Core
-calls, cases, lets and local joins, with separate capture for typed results and
-arguments. Unknown forms and subsystems with unsupported continuation state
-remain rejected during construction.
+Both backends use conservative continuation cuts and dynamic mask checks.
+The mask belongs to the executing guest thread; a mask observed during
+compilation is not a constant for another invocation or resumption. Unknown
+forms with unsupported continuation state reject during construction.
 
 The conservative suspension effect is independent of that mask. Unknown calls,
 forcing a lazy value, and callbacks that may change masking can suspend.
@@ -78,8 +68,9 @@ of the tree. A caller's known mask cannot satisfy the check on its own.
 The obligation includes argument evaluation, strict entry forcing, result
 conversion and cleanup introduced by lowering. Forcing a strict argument in
 host code before entering the root's capture handler is not covered by that
-handler. Both backends place this forcing in the callee's resumable prologue,
-including strict arguments supplied by partial application.
+handler. A saved preparation must retain the argument packet, current force and pending
+invocation, including strict arguments supplied by partial application. Typed
+preparation acquires transport loans only after forcing completes.
 Admission must also match the execution route chosen by the parent. A saved
 `executeLong` suffix does not cover a generic or tuple-returning entry; the
 declared result convention must select the covered route before execution.
@@ -123,8 +114,8 @@ synchronous exceptions retain the normal thunk-update behavior.
 
 Foreign execution permission is separate from the observable Haskell mask.
 `GuestThreads` keeps a context-owned permission stack per Java thread. Public
-guest entry pushes guest permission; outgoing JavaScript, Polyglot, managed
-MD5/Sulong and managed-file operations, including teardown flushes, push foreign permission and restore
+guest entry pushes guest permission; outgoing JavaScript, Polyglot, linked
+native and managed-file operations, including teardown flushes, push foreign permission and restore
 their previous permission in `finally`. A reentrant public guest entry pushes
 guest permission above that foreign scope on the same Java thread. It may claim
 at its own THC cut, subject to its unchanged Haskell mask. A self-directed
@@ -154,58 +145,17 @@ The permission gate never polls on foreign return. Capture after a foreign
 return still depends on the enclosing guest node's own resume proof; the gate
 does not make an arbitrary AST caller or opaque Java frame resumable.
 
-## Evidence and remaining checks
+## Boundaries
 
-`GuestThreadsTest` checks Java identity, masking eligibility, nested entry
-lifetime, request acknowledgement, foreign/guest/foreign nesting, cross-context
-callback origin and wake/claim races. `ManagedFilesTest` checks embedding-stream
-calls and teardown flushes. The optional `PolyglotFFITest` invokes an actual
-public `EntryValue` from a JavaScript callback: an acknowledged request lets
-JavaScript continue, while an uncaught request passes through
-`EntryValue.publicSuspension` and leaves an outer thunk parked with one foreign
-effect. The unit test checks the exact payload and cause; Polyglot wraps the
-escaping failure before the outer caller sees it. These focused classes pass
-in ordinary and dense handoff modes. The callback target is synthetic; native GHC callback Core
-and general safe-FFI resumption are not established. `CallMaskSegmentsTest`
-checks logical mask restoration across Java threads and rejects malformed
-mask restoration. `ResumableThunkProofTest` rejects uncaptured caller updates
-and unrelated continuation roots. `ThreadAsyncNativeTest` covers public
-fork/throw/catch and lazy action heads with async explicitly enabled on both
-backends. It and `AsyncStrictEntryNativeTest` pass in ordinary and dense handoff
-modes; strict-entry checks preserve demanded PAP arguments and the caller.
-Typed calls into synchronous strict targets also retain pending boxed demands,
-including typed PAP prefixes, before acquiring their input loan or entering the
-callee. `MixedBackendContinuationTest` interrupts direct and generic preparation
-repeatedly on both backends and checks scalar, tuple and tail completion, including
-a later tail transfer to an asynchronous tuple callee. Saved preparation owns
-its input scratch and resumes the remaining invocation once.
-The thread suite's nested uninterruptible-mask/unmask/self-throw case verifies that the original
-handler receives the exception and that the outer mask is restored, interpreted
-and compiled, before and after Tidy.
+BCO instruction positions, operand stacks and pending applications survive
+one-shot asynchronous and stack cuts; see [GHC bytecode objects](ghc-bco.md).
+Explicit delimited capture through BCO frames and opaque foreign execution
+remain barriers. A new delimited capture across a parked one-shot caller chain
+also rejects; ordinary saved-suffix recapture has a different contract.
 
-`AstContinuationTest` exercises a direct-MVar root after
-explicit compilation, checks that the blocked entry ran compiled, and resumes
-it on another Java thread. Its tuple is copied out of the producer's handoff
-pool. Separate owned-thunk tests interrupt twice without replaying the prefix,
-and keep an uninterruptibly masked caller's unfinished work when its child
-unmasks. Construction admits the ordinary caller and strict-entry routes while
-still rejecting conflicting representation proofs and unknown Core forms.
-`LiveAsyncNativeTest` extends coverage to running loops, blocking waits,
-blackhole ownership and repeated interruption using a native GHC result oracle.
-The AST loop retains its installed code before delivery and records whether
-the request was claimed there. Disabled delimited-capture paths must be guarded
-before materializing frames: otherwise an impossible exception edge can escape
-the loop frame and invalidate its first installed invocation.
+Internal stack cuts preserve the active [STM](stm.md) attempt. External
+interruption retires its old transaction log before propagating the original
+request. Explicit checkpoint/delimited capture across transactions is unsupported.
 
-STM aborts its carrier-local attempt before emitting a fresh restart capture;
-the old transactional child chain and log never enter the enclosing thunk's
-saved suffix. See [STM](stm.md). BCO instruction positions, operand stacks and
-pending applications survive one-shot
-asynchronous and stack cuts. Explicit delimited capture through BCO frames,
-opaque foreign execution and mixed asynchronous/delimited capture retain
-separate barriers. Ordinary Core capture does not remove those requirements.
-
-The callback permission gate is admitted only at a public guest entry whose
-guest body already satisfies its backend's capture obligations. It does not
-admit suspension across Java or callbacks from an arbitrary unclassified AST
-node.
+A callback permission gate is valid only at a public entry whose guest body
+meets these capture obligations. It cannot make an opaque Java caller resumable.

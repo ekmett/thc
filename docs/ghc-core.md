@@ -76,7 +76,7 @@ Resolve the expected `Module` (including its exact package unit) and interface
 path using the selected compiler session and package databases. `Nothing`
 means a valid interface lacks complete Core; wrong module/unit identities,
 way/version mismatches and malformed interfaces are errors. Nonempty foreign
-stubs and foreign files are retained in [Core schema 2](interface-foreign.md),
+stubs and foreign files are retained in [foreign metadata](interface-foreign.md#artifact-contract-for-tool-authors),
 including exact source and initializer/finalizer identities. Hydration does not
 link native products or register foreign exports. The checked loader rejects
 unlinked global lifecycle obligations even outside the entry's reachable
@@ -86,19 +86,13 @@ bindings do not grant executable status. Ordinary foreign calls still require
 the runtime's normal support audit.
 
 The result exposes the original module, `ModDetails`, `CoreProgram` and foreign
-metadata. Installed acquisition serializes and forces each module's strict JSON
-payload before loading the next interface. This releases its decoded Core tree
-instead of retaining all such trees until the entire package is archived; the
-GHC library alone contains over 800 interfaces. This does not change archive
-bytes, cache identities, or interface validation.
+metadata. Acquisition serializes each module before loading the next, allowing
+its decoded tree to be released.
 
 Executable IDs use GHC's mangled occurrence spelling. In GHC 9.14, a record
 selector such as `field` has a constructor-qualified namespace represented by
 `$fld:Constructor:field`; it is distinct from another constructor's selector or
-an ordinary exported alias named `field`. Display names remain unchanged. The
-`thc-fixtures record-fields` controls cover two separately compiled modules at
-both plugin boundaries and after interface hydration, with native comparisons
-on both runtimes. Exporter identity changes invalidate older cached payloads.
+an ordinary exported alias named `field`. Display names remain unchanged.
 
 Hydration reads the raw interface before GHC's package cache strips
 complete Core. It privately retains interface pragmas/source ticks and keeps
@@ -113,21 +107,12 @@ with their original names, types and coercions. Existing binding groups remain
 unchanged; wrappers are separate nonrecursive groups. This is not a fallback to
 ordinary function unfoldings when complete Core is absent. Constructor workers
 remain represented by constructor metadata, and newtypes are not injected.
-An unpacked GADT wrapper is native-checked through both execution backends;
-complete boot interfaces additionally check the original `$WTrType` and
-`$WUnsafeRefl` bodies and strict audits.
-
 Serialization shares `THC.Plugin.serializePostTidyCore` with the late plugin,
 including exact recursive groups, representations, existing CBV proofs and
 optional `source-notes`/`unit-qualified` metadata. No source target is required;
 missing source text stays absent. The driver owns acquisition and cache
 integration separately; this API does not link dependencies or establish runtime
 support for an entire package.
-
-The `thc-fixtures interface-core` control separately registers full and thin
-synthetic packages, recovers an `OPAQUE` entry/private worker, checks identity,
-way and lossless foreign archival, then supplies the recovered JSON and native results
-to `InterfaceCoreNativeTest` for strict AST/bytecode execution.
 
 ## Selected-compiler helper
 
@@ -173,19 +158,6 @@ Cancellation is not converted to a missing-capability result. An unavailable
 result never substitutes inline unfoldings. In the driver's installed-Core
 required mode it is a capability failure; choosing the pinned source provider
 is an explicit option, not a retry policy.
-
-The fixture feeds helper JSON through AST/bytecode execution and checks the
-installed `CBVCoercionAudit` worker's real `idCbvMarks_maybe`/`entryStrict` against
-the direct late-plugin export from its native compilation. No inferred marks
-are allowed in this comparison.
-It also probes the selected installation's actual `GHC.Internal.Char` interface:
-stock thin interfaces must report missing capability, not wrong-unit failure.
-If that installation carries full Core, the control requires successful loading
-with the original wired owner. This control reads the installed interface in
-place. The [driver's installed-Core cache](driver.md) separately fingerprints
-GHC's full retained interface bytes and checks dependency providers and source
-observations before avoiding hydration. GHC remains version-gated; compiler
-executables are not hashed.
 
 ## Build a compiler with complete Core
 

@@ -1,12 +1,12 @@
-# Native pinned memory and bounded MD5 calls
+# Pinned memory and address lifetimes
 
 The [aligned scalar extension](aligned-scalar-memory.md) also supports opaque
 StablePtr array/address cells and four-byte WideChar array elements.
 
-This slice supports `newPinnedByteArray#`, `newAlignedPinnedByteArray#`,
+Both backends support `newPinnedByteArray#`, `newAlignedPinnedByteArray#`,
 `byteArrayContents#`, `mutableByteArrayContents#`, `readWord8OffAddr#`, `writeWord8OffAddr#`,
 `readAddrOffAddr#`, `writeAddrOffAddr#`, `keepAlive#` and `touch#`
-in both backends. Byte loads/stores retain GHC 9.14.1's exact `Word8Rep`, not
+Byte loads/stores retain GHC 9.14.1's exact `Word8Rep`, not
 `WordRep`. Existing address arithmetic and character loads work on either
 immutable literal bytes or mutable byte-array backing.
 
@@ -22,7 +22,7 @@ operand and an `AddrRep` result, with no State argument or tuple result. Both
 contents operations preserve the same backing allocation and offset identity;
 addresses keep that storage alive and retain pointer-cell protections. This is
 stable address access. Explicitly pinned arrays have real native storage from
-allocation; ordinary arrays remain on the moving JVM heap. Neither contents
+allocation; ordinary arrays follow the context's heap/native storage policy. Neither contents
 operation copies, promotes, or temporarily pins an array.
 
 Pinned `ByteArray#` values have one allocation owner shared by frozen values
@@ -31,8 +31,9 @@ pointer cells; OffAddr pointer offsets count pointer-sized elements, while the
 owner's lookup/write API uses byte offsets. A pointer cell's bytes are not a
 fabricated host address: raw reads and partial overwrites reject before any
 change. Complete byte copies between pinned owners preserve references, and
-complete fills invalidate them. A Sulong buffer view and managed pointer cells
-cannot coexist in one allocation because raw C writes cannot track references.
+complete fills invalidate them. An unrestricted raw Sulong buffer view cannot expose managed pointer cells.
+Typed package calls use a separate checked pointer-graph projection and
+reconciliation protocol; see [C finalizers](c-finalizers.md).
 Handing out a raw byte-array alias likewise prevents later pointer-cell writes.
 Ordinary guest byte arrays also have allocation owners; pointer-cell maps are
 created only when needed. Owner accesses synchronize to order pointer-cell
@@ -55,23 +56,17 @@ Repeated native address acquisition and foreign calls never copy or repin it.
 The automatic arena is reclaimed only after all segment/buffer/address owners
 become unreachable; `keepAlive#` and `touch#` retain their existing fences.
 Numeric pointers alone do not keep the allocation alive. Resize down changes
-the logical size in place without copying; growth allocates an ordinary unpinned
-heap array and copies the prefix, as GHC's replacement-allocation contract requires.
+the logical size in place without copying; growth allocates an ordinary
+array under the context's storage policy and copies the prefix, as GHC's replacement-allocation contract requires.
 
-Ordinary arrays use heap segments over their original JVM `byte[]`, retaining
-moving-GC freedom. Managed Sulong accesses them by object plus offset, without
+Ordinary arrays use heap segments by default; the optional
+[native storage policy](bytearrays.md) chooses stable native backing at allocation.
+Heap segments retain moving-GC freedom. Managed Sulong accesses them by object plus offset, without
 physical pinning; raw native projection rejects them even after unsafe freeze.
 Buffer-only and native-pointer-capable views of pinned storage are both
-available without copying. The installed community Sulong has not exercised
-true `llvm.managed`; a buffer-only view test is not a managed-engine test.
-Pre-existing native GMP and Windows MD5 staging for **unpinned** heap data is a
-separate remaining boundary; their pinned paths now borrow the original segment.
-The native allocator/automatic-arena lifetime boundary is kept out of guest
-partial evaluation. Scalar and vector operations use direct segment accesses;
-heap-backed segments still refer to the original moving array. Existing direct
-host `ByteArray` helpers are unchanged. This is a storage/coherence guarantee,
-not a claim that native allocation is as cheap as JVM allocation or a measured
-throughput improvement.
+available without copying. Native GMP and Windows MD5 may stage unpinned heap data; pinned paths borrow
+the original segment. Native storage ownership does not imply that allocation
+is as cheap as JVM heap allocation.
 The separate [native address projection](native-addresses.md) and explicit
 malloc/free ownership paths do not grant access to arbitrary process memory. See the
 [primop behavior reference](primop-behavior.md#addresses-pinning-and-pointer-containing-storage)
@@ -87,156 +82,20 @@ widenings respectively zero-extend and sign-extend into machine `Long`. Reads us
 writes through aliases, including after unsafe freeze. The exact State/payload
 tuple keeps Word32, Word, Int32 and Int representation proofs distinct.
 
-`cabal run exe:thc-fixtures --offline -- managed-address-reads` prepares
-1,800 native observations, eight strict pre/post-Tidy closure audits, and source
-and artifact hashes. `ManagedAddressReadTest` verifies those manifests and the
-ordered input corpus against an independent Java byte-buffer model, then
-checks the exports on AST and bytecode. Its runtime controls cover compiled
-mutable reads, bounds/overflow, State-before-read order and failure-before-publication.
-Malformed loader-proof controls use explicitly synthetic modules; they are
-separate from the genuine-Core acceptance audits. Native inputs are
-aligned live allocations; adversarial out-of-bounds inputs are managed-only
-tests. These reads do not enable arbitrary native pointer dereferences.
-
-After preparation, run both handoff modes with:
-
-```sh
-./gradlew --max-workers=2 --continue \
-  testDefault --tests thc.runtime.ManagedAddressReadTest \
-  testDense --tests thc.runtime.ManagedAddressReadTest
-```
-
-`cabal run exe:thc-fixtures -- pinned-pointer-cells` exports the genuine
-`newPinnedByteArray#`/freeze/contents/`keepAlive#` sequence at both Core stages,
-with strict representation audits and seven native oracle inputs.
-`PinnedPointerCellsTest` checks the same rows interpreted and explicitly
-compiled on AST and bytecode. It also checks an interior pointer cell and a
-separate numeric field; this does not turn arbitrary C pointer memory into
-managed addresses.
-
 `keepAlive#` preserves a lifted kept reference without forcing it, validates
 State before the action, and invokes the continuation non-tail with exactly
 one logical State argument. A Java reachability fence follows actual return or
 throw. Scalar results follow the existing call-root WHNF convention; tuple
-components retain their own evaluatedness. Existing tuple and binary-sum result
-ABIs are reused, without extending aggregate inputs, captures or vector ABIs.
+components retain their own evaluatedness. Its result follows the existing typed calling convention.
 
 `touch#` preserves an exact lifted or unlifted reference until its State-thread
 position, without entering a lifted thunk. It validates the State carrier before
 issuing a Java reachability fence and returns bare State, not a singleton tuple.
 Raw operand/result proofs and levity flags are checked before lowering; known
 stored or intrinsic representations cannot be disguised by occurrence metadata.
-This does not add weak pointers, finalizers or asynchronous exception semantics.
+For weak pointers and cleanup, see [weak finalization](weak-explicit.md).
 
-The existing `pinned-pointer-cells` native fixture exercises mutable contents
-without a freeze, bidirectional array/address writes and an unlifted touch. A
-separate root touches a lifted bottom without entering it. The combined fixture
-keeps the pointer, byte and halfword observations: eleven inputs, nine roots and
-ten TSV columns including the input. Genuine pre/post Core applications retain
-their exact levity, operand and bare-State result proofs; malformed mutations
-are rejected by both loaders. New compiled checks cover both backends with
-inlining enabled and disabled, including active `runRW#` lambdas and split
-callees. They require valid targets on the first and every installed invocation,
-without post-installation settling or recompilation. Managed-only checks cover
-escaped-address lifetime, pointer-cell protection and invalid offsets; native
-tests never execute invalid pointer operations.
 
-## Three closed foreign contracts
-
-The existing compiler exporter supplies structured `app[6].foreignCall` metadata
-from GHC's `FCallId`, retaining the original variable ID. The MD5 adapter accepts only static
-function targets in unit `ghc-internal`, convention `ccall`, safety `unsafe`:
-
-| Symbol | Logical arguments | Logical result |
-| --- | --- | --- |
-| `__hsbase_MD5Init` | Addr, State | singleton State tuple |
-| `__hsbase_MD5Update` | Addr, Addr, Int32, State | singleton State tuple |
-| `__hsbase_MD5Final` | Addr, Addr, State | singleton State tuple |
-
-Descriptors, actual operands, saturation, flags and result layout must agree.
-There is no name-parsing fallback or ordinary Haskell-name interception. Other
-foreign calls retain their existing gates. Wrong contracts for
-these known symbols fail explicitly, including main-unit declarations, safe or
-interruptible calls, CApi, dynamic targets and wrong CInt width.
-
-The implementation executes the pinned GHC 9.14.1 public-domain `md5.c`/`md5.h`
-through Sulong 25.3.4.1. The original files and notice remain unchanged under
-`nih/pinned/ghc-9.14.1/libraries/ghc-internal`. `bin/build-cbits.py` checks
-their pinned Git blob hashes and compiles them with a small byte-buffer ABI
-adapter during the Gradle resource build. Clang and the installed GHC 9.14.1
-headers are required. The compiler target must match the current Linux/macOS
-64-bit host; a packaged runtime also rejects bitcode for a different platform.
-`THC_CLANG` can select the compiler; no local bitcode is committed for other hosts.
-The entire 88-byte context is guest-visible: four hash words, two counter words
-and 64 scratch bytes. Init leaves scratch untouched; Final emits 16 bytes then
-clears the context. Native-endian context words, little-endian MD5 input and the
-original Haskell Fingerprint's separate big-endian Storable layout are distinct.
-No Java digest object or hidden context-identity table substitutes for this ABI.
-All range, four-byte MD5Context alignment and memcpy-overlap checks precede effects; negative/out-of-range CInt
-lengths reject. The THC call is an explicit Truffle boundary; Sulong executes
-the C body. This establishes no cross-language inlining or hashing-throughput
-claim.
-
-Each THC context initializes and caches its C executable values once. The
-initial C load executes outside cache locks; concurrent callers wait for its
-result. A byte-buffer interop view
-shares the existing allocation and exposes typed, byte-addressed accesses;
-array-element interop would give incorrect C word reinterpretation. C adapters
-receive a canonical base and explicit byte offset, preserving zero-offset and
-alias behavior without treating a buffer as named C struct members. Both keys
-and values in the context's view cache are weak, so the cache cannot keep dead
-allocations alive. View creation is synchronized, while C calls execute outside
-that lock. Live calls strongly retain their views. Literals remain
-read-only; no process pointer is invented and no payload is copied.
-
-Embedding contexts that execute cbits must explicitly enable native access for
-Sulong's runtime libraries (`allowNativeAccess(true)`); the command-line context
-does so. The buffer protocol requires no host-object/member access. Other RTS,
-libc and foreign entry points remain outside the exact descriptor gate. Full
-public Fingerprint execution still depends on composing its original source
-closure.
-
-## Verification and remaining source frontier
-
-`cabal run exe:thc-fixtures --offline -- pinned-addresses` creates genuine pre/post-Tidy Core and
-7,269 native/model rows. Of these, 6,387 exercise the primitive slice and are
-checked on AST/bytecode with inlining enabled/disabled. Tests compile active
-guest targets plus the host boundary, then check reversed native inputs with
-exact guest-entry counts, target identity/validity and released handoff pools.
-Twelve malformed-proof controls per stage start from accepted genuine Core.
-The producer also exercises its actual structural checker with seven malformed
-call shapes and a rejected-baseline guard. Java independently models the
-ordered corpus, checks all required source/artifact hashes and rejects missing,
-duplicate, reordered and altered rows. The existing shared `audit-core.py`
-proof checker remains an explicit Python dependency; the pinned-address
-producer and model no longer use Python or dynamic auditor imports.
-
-The Haskell command retains `--native-only`, `--export-only` and
-`--allow-unsupported` diagnostic modes. Only full, strictly accepted receipts
-are reusable fixture-cache inputs; these caches do not store JVM test outcomes.
-
-The remaining 882 rows exercise native public Storable functions only. Their
-original specialized peek/poke workers currently lack exported bodies in this
-fixture. `fingerprintByte` is explicitly a byte-layout control, not a replacement
-Haskell implementation. Full public Fingerprint/error execution must compose the
-genuine source exports separately; this checkpoint does not claim that result.
-
-`bin/prepare-managed-md5.py` compiles the pinned original C with an ABI/layout
-driver. It archives prior owned attempts intact in unique sibling directories;
-ambiguous contents and symlinked output paths are rejected. It checks 558 cases,
-2,247 full memory snapshots, seeded counter carries,
-padding boundaries, defined aliases and 540 independently checked digests. JVM
-tests consume those snapshots, copy/resume visible contexts, exercise both
-compiled adapters and check malformed State/ranges/alignment/metadata. The real
-GHC `fingerprintData` source proof exports all three original `ghc-internal`
-FCallIds at pre- and post-Tidy stages, with no foreign-call audit issues. Its
-full entry remains rejected for the IO host boundary and a missing specialized
-Storable worker. Synthetic adapter
-tests remain labeled synthetic rather than relabeled main-unit exports.
-
-First failures and reviewed corrections are retained in the checkpoint evidence;
-no settling retries, compiler-policy changes or reduced compiled-entry checks
-are part of these gates.
-
-The [scalar unaligned memory families](unaligned-scalar-memory.md) use byte offsets
-for all scalar widths and preserve these allocation and pointer-cell contracts.
+See [foreign imports](interface-foreign.md#pass-buffers-and-pointers) for C
+buffer transport and [unaligned memory](unaligned-scalar-memory.md) for byte-offset
+scalar accesses.

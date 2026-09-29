@@ -21,10 +21,10 @@ two or more alternatives can occur inside recursive tuples and supported sum
 payloads. Complete logical shapes containing known boxed pointers remain
 transportable when unknown levity prevents a native sum layout. Genuinely unknown
 RuntimeRep payloads, missing logical components and unsupported leaves reject.
-Aggregate-field constructor workers require direct saturated applications.
+AST aggregate-field constructor workers support partial application; bytecode
+lowering requires direct saturation.
 [Owned exact aggregate fields](aggregate-heap-fields.md) include the original
-compiler's unpacked `BoxedRep` payload. The metadata fixtures below test shape
-evidence independently of these execution contracts.
+compiler's unpacked `BoxedRep` payload.
 
 Boxed tuples such as `(Int, Int)`, boxed unit `()`, and `Solo Box` retain one
 `BoxedRep (Just Lifted)` carrier with ordinary `data` evidence. They have no
@@ -102,31 +102,6 @@ evaluatedness rules still determine the outer record. Generic constructor
 application results, case binders, and lambda boundaries carry the actual
 logical layout. Ordinary scalar records keep the existing schema.
 
-Run `python3 bin/check-aggregate-layout.py --prepare` with the pinned GHC and
-ghc-pkg to rebuild the plugin, compile the fixture natively without the plugin,
-and check genuine optimized exports before and after Tidy. It checks eleven exact
-recursive layouts, including mixed physical reps, lifted payloads, nested
-polymorphism, and constructor-free newtype aliases, plus seven partial or unknown
-layouts for abstract/family types. Controls cover a recursive scalar newtype,
-a newtype over the zero-width state primitive, and the zero-width `Proxy#` primitive.
-The existing aggregate frontier driver
-runs this check during normal test preparation. `AggregateLayoutTest` checks
-strict loading on both backends at both stages before invoking any guest input.
-Additional controls load boxed tuple/unit/Solo and unlifted boxed product identities
-on both backends. Boxed and unlifted boxed producers each store a lazy bottom in
-their unused second field; observers return the first field at five integer
-inputs on both backends and both export stages. These controls establish that
-outer evaluatedness does not force the lifted payload. They add no unboxed
-aggregate execution support.
-
-`build/aggregate-layout/provenance.json` records full GHC `--info`, package
-descriptions, compiler executable hashes, commands and environment overrides,
-fixture/exporter/checker hashes, the built plugin, native objects/interfaces,
-and both exported bundles. `checks.json` references that manifest's hash. Running
-the checker again without `--prepare` verifies the recorded inputs and outputs
-before checking metadata, so a stale bundle cannot certify an edited exporter.
-These generated records are included in CI artifacts.
-
 ## Sum storage projections
 
 A sum with known native layout records `tagSlot: 0` and `alternativeSlots` alongside
@@ -162,28 +137,13 @@ Missing native layout is accepted only for known-pointer unknown levity with a
 complete logical shape, including nested sums. Abstract alternatives and tuple
 `components: null` still reject, even when their native vector is known.
 
-[SumLayoutAudit.hs](../t/fixtures/compiler/SumLayoutAudit.hs) and its native
-driver check 169 values against an independent arithmetic model. Genuine exports
-before and after Tidy retain 19 result shapes, including nested sums/tuples,
-newtype aliases, runtime/levity polymorphism, three-way sums, lazy boxed payloads,
-and the zero-width distinctions above. Address/vector raising producers are
-native compilation and metadata controls, never native execution claims.
-An independent projection checker tests source field order, duplicate-slot
-rejection, tag indexing, pointer levity, floating width, and null layouts.
-`python3 bin/check-sum-layout.py --prepare` freezes source, compiler, toolchain,
-package, command and artifact hashes in `build/sum-layout/provenance.json`;
-running it without `--prepare` verifies those hashes before checking the exports.
-Normal test preparation and CI include these checks.
-
 [Sum lowering](sum-results.md) validates complete logical alternatives, family
 arity, native evidence and JVM projections before using typed destinations.
-The metadata suite audits 32 roots at each export stage: 27 supported sum entries
-and the scalar `directCase` control are accepted; four unresolved shapes reject
-on both backends. This metadata does not define a hardware call-register ABI.
+This metadata does not define a hardware call-register ABI.
 
 JVM tuple flattening recursively expands a supported sum's storage slots,
 while the logical tree still distinguishes sums, tuples, erased State tokens and
 empty tuples, including sums nested inside sum payloads. The genuine
 `VirtualRegWithFormat` worker has two logical fields but three JVM fields:
 Long tag, shared Long payload, then the Format reference at offset 2. See the
-[native four-way fixture](aggregate-heap-fields.md#four-way-and-nested-aggregate-fixture).
+[aggregate constructor contract](aggregate-heap-fields.md).

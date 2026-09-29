@@ -37,23 +37,3 @@ The [compiler metadata reference](../docs/compiler.md) gives the exact schema
 and launcher options. Pass JVM properties to the application JVM, not only to
 Gradle. The option is independent of constructor strictness, safe-speculation
 certificates and entry obligations.
-
-## Validation and experiments
-
-`bin/prepare-tests.sh` exports the genuine demand fixtures and runs
-`python3 bin/check-demand-metadata.py --ghc-api`. The audit covers signature
-versus Id arity, type/coercion slots, absent and bottom demands, lazy wrappers,
-head casts/ticks and metadata-only IO cases.
-
-[`RealCoreCallDemandTest`](../src/test/java/thc/RealCoreCallDemandTest.java)
-checks genuine ordinary, polymorphic, lazy and partial applications before and
-after requested guest compilation on both backends.
-[`CallDemandTest`](../src/test/java/thc/runtime/CallDemandTest.java) separately
-checks opt-in behavior, strict failures, PAP sharing, unknown calls and unchanged
-formal contracts.
-
-Fewer argument thunks do not establish a throughput improvement: changing an
-operand's execution path can also change inlining and compiled graph shape.
-Measure those outcomes independently. Typed transport across residual calls
-has its own [ownership and ABI contract](handoff-slabs.md), independent of
-caller-demand lowering.

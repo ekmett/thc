@@ -1,73 +1,37 @@
-# Fast checks
+# Continuous integration checks
 
-Pull requests run `automation` and `fast-check`. The automation job tests the CI
-scripts with normal Python and `-O`, then lints the workflows. A PR from this
-repository runs `fast-check` on the persistent Linux runner, reusing its toolchain,
-Gradle dependencies, build outputs and daemon. Fork PRs use a GitHub-hosted runner.
-Closing or merging a PR cancels its pending or running Fast check through that
-PR's concurrency group; the closed event runs no test jobs. Checks queued before
-this group change retain their old group and may need one-time manual cancellation.
-The event is checked before selecting the persistent runner and checked again on
-that runner before checkout. The pinned Graal/JDK and GHC versions are verified;
-the input identity does not hash the installed GHC library tree.
+Pull requests run `automation` for CI scripts/workflows and `fast-check` for the
+changed components. `fast-check` runs compiled smoke tests plus changed tests
+and their mapped consumers, in both default and dense handoff modes. Shared
+compiler/runtime changes or unmapped dependencies select the full inventory.
 
-`fast-check` compiles the project and runs a fixed smoke suite plus changed tests
-and explicitly mapped consumers of changed code, fixtures or preparers. The smoke
-suite covers AST and bytecode execution, host compilation, handoff, typed inputs,
-tuple inputs and native explicit-64 primops. The selector maps the bit, integer,
-signed-narrow and other reviewed families to their own tests. Known additive
-primitive entries and whole new dispatch arms select the native family that
-exercises them. Edits to existing shared dispatch, compiler code, unknown fixtures
-or unmapped dependencies run the full test inventory. A changed test is never
-dropped to meet a time budget. The ownership rules are in
-`.github/scripts/fast-tests.json`.
+The selection is recorded under `build/fast/results/`, together with commands,
+timings and fresh results. JVM XML and HTML reports use separate directories for
+each handoff mode. Cached compilation and verified fixture inputs avoid repeated
+setup; selected tests still execute on every run. The generated primop checklist
+is checked against the pinned GHC API.
 
-Adding a full-Core regression can stay narrow when its Cabal stanza matches the
-closed `full-core-tests` template, the existing flag remains manual and disabled
-by default, and every existing Cabal block is unchanged. The new harness and
-listed fixture files must be additions in a new directory owned by that test.
-Fast compiles the exact test target with `-fdevelopment -ffull-core-tests` and
-keeps the compiled JVM smoke suite. It does not execute the full-Core regression
-or widen into JavaScript tests solely for that verified addition. Changed existing
-stanzas, shared helpers, production dependencies, unknown conditions, or unowned
-files retain their ordinary wider selection. The separate full-Core gate still
-supplies execution evidence.
+## Maintain test selection
 
-Generated SIMD min/max additions use the shared SIMD smoke and family checks
-when layouts and the generator are unchanged and the capability entries and
-generated Java blocks match exactly. Changes to existing operations,
-other registry entries, or the generator still select the full suite. This
-bounded rule avoids unrelated native fixtures and driver tests for those additions.
+[fast-tests.json](../.github/scripts/fast-tests.json) maps source changes to
+consumer tests. [fast-fixtures.json](../.github/scripts/fast-fixtures.json) names
+the native/Core preparation groups those tests require. Update the relevant
+mapping when adding a test or changing its fixture dependencies; unknown cases
+fall back to broader preparation and testing.
 
-For a narrow selection, `.github/scripts/fast-fixtures.json` names each required
-native/Core preparation group. Local stamps include the declared source bytes,
-toolchain identity and every output byte. Missing, changed or linked inputs or
-outputs cause preparation again. Unknown selected classes and full selections
-use `bin/prepare-tests.sh` on a local receipt miss. A hit verifies the pinned
-source/toolchain identity, vendored source pins, and the exact paths, bytes and
-modes of the reviewed Core/native fixture outputs before reusing them. GHC
-objects/interfaces, JVM-generated sources and classes, and task state are outside this
-receipt. A changed preparation plan or new output root declines reuse until its
-scope is reviewed. The groups retain independent native oracles and pre/post
-Core audits. These are local accelerators, not cached test results or a transfer
-archive.
+Test the CI scripts with:
 
-The selected Python tests run with normal Python and `-O`. One Gradle invocation
-runs the selected JUnit classes in separate `testDefault` and `testDense` forks,
-with explicit false/true handoff properties and independent XML/report directories.
-Both tasks share compilation and the always-fresh native/ABI probes; `installDist`
-joins the same invocation when driver tests require it. `--continue` runs the
-second mode even when the first fails. Existing test reports are moved aside;
-the runner requires fresh, nonempty, successful XML for every selected class,
-the same testcase set in both modes, and a `HandoffTest` marker emitted after
-checking the actual test-process property and runtime context. The primop checklist is checked
-against the installed GHC API on every run. Selection, commands, timings, native
-input decisions and fresh results are retained in `build/fast/results/`.
+```sh
+python3 -m unittest discover -s .github/scripts -p 'test_*.py'
+python3 -O -m unittest discover -s .github/scripts -p 'test_*.py'
+```
 
-The full cross-platform `Build` runs after merge on main. The nightly JIT
-stability workflow is advisory and separately records compiled-code behavior.
-Neither the smoke selection nor a warm local run is a claim about hosted PR
-latency; use the workflow's phase timings and elapsed time to assess that.
+Full-Core tests need their own configured compiler and installed Core. A narrowly
+selected PR check may compile a new full-Core test without executing it; use the
+separate full-Core workflow or local fixture setup for its runtime checks.
 
-The merge workflow is disabled. Reviewed PRs are integrated into main manually,
-one at a time.
+The main `Build` workflow runs the complete cross-platform suite after merge.
+The separate JIT stability workflow reports compiled-code retention. A smoke
+selection does not establish whole-program compatibility; see
+[contributing](contributing.md) for local commands and
+[Core compatibility checks](coverage.md) for native comparisons.

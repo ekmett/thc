@@ -39,32 +39,3 @@ sum lets and global aggregate storage remain excluded. The
 [Core host ABI](site/embedding.md#load-a-core-entry) transports supported sums
 as `[tag, payload]` arrays with a 1-based tag. Unsaturated sum constructors
 remain excluded.
-
-## Reproduce
-
-With the pinned GHC 9.14.1 and Graal/JDK 25 toolchain:
-
-```sh
-cabal run exe:thc-fixtures --offline -fdevelopment -- sum-input
-./gradlew sumInputFullCoreTest sumInputFullCoreDenseTest
-cabal run exe:thc-fixtures --offline -fdevelopment -- sum-join-input
-./gradlew sumJoinInputFullCoreTest sumJoinInputFullCoreDenseTest
-./gradlew testDefault --tests thc.runtime.SumInputLayoutTest \
-  testDense --tests thc.runtime.SumInputLayoutTest
-```
-
-The unchanged Haskell fixture yields 333 native observations across nine roots.
-Genuine pre/post-Tidy exports retain ordinary sum formals, partial applications,
-whole-sum captures and a two-argument function that is really overapplied.
-Both backends compare every row before and immediately after compilation in
-both handoff modes with inlining enabled and disabled, checking compiled target validity and released input/result
-references. Reused escaped closures and PAPs outlive their creator frames;
-separate controls check logical-layout mismatches, ownership and null padding.
-Source, exporter, auditor, native and artifact hashes reject stale evidence.
-
-The sum-join fixture adds 259 native observations across seven roots in both
-export stages. It covers forwarding, recursive swaps, mutual recursion, lexical
-and escaped captures, empty payloads, lazy bottom fields and changing tags.
-Exact transfer counts include the nonrecursive wrappers retained by GHC around
-the two recursive loops; structural checks confirm those wrappers in each export.
-The same interpreted and first-compiled-call checks run with and without inlining.

@@ -1,7 +1,7 @@
 # Scalar bit primitives
 
 THC implements these 24 unary GHC 9.14.1 primitives in both the AST and bytecode
-backends. Machine `popCnt#`, `clz#`, and `ctz#` were already supported.
+backends, alongside machine `popCnt#`, `clz#`, and `ctz#`.
 
 | Operations | Input | Result |
 | --- | --- | --- |
@@ -31,34 +31,3 @@ Widths become immutable AST fields or bytecode constant operands during
 lowering. Guest execution uses primitive `long` operands and results, with
 fixed masks/shifts and Java's population-count, zero-count, byte-reversal, and
 bit-reversal operations. No generic boxed arithmetic is added.
-
-`t/fixtures/compiler/BitPrimopsAudit.hs` uses opaque wrappers with dynamic
-inputs. The Haskell fixture producer exports both pre-Tidy and post-Tidy Core.
-JVM tests load both exports and check retained
-primitive names and the pinned input/result representations. The manifest hashes source inputs,
-exported Core, the native driver, and its 14,326 result rows.
-Samples include every bit position and transition, zero, all ones, alternating
-bits, signed-carrier extremes, and exhaustive byte inputs with several upper
-bit patterns. Native GHC results are independently checked with an unbounded
-integer bit-position model.
-
-The JVM test runs every row before and after explicit compilation on both
-backends and both export stages. Each post-compilation row must increment the
-compiled guest-entry counter exactly once; the active guest targets and host
-root must remain installed. Unsupported traps, blackholes, thunk evaluation,
-and partial-application allocation remain zero. Separate controls reject zero
-and two arguments at load time for every new unary primitive, including in
-diagnostic mode.
-
-From a clean checkout with the pinned GHC and Graal toolchains:
-
-```sh
-bin/build-compiler.sh
-cabal run exe:thc-fixtures --offline -- bit
-./gradlew test --tests thc.runtime.BitPrimopsTest
-JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew test --tests thc.runtime.BitPrimopsTest --rerun
-```
-
-`bin/prepare-tests.sh` includes preparation, so the ordinary clean-build CI
-and opt-in handoff test runs exercise this suite. This slice does not add
-deposit/extract operations, arithmetic, shifts, or SIMD.

@@ -21,14 +21,3 @@ tuple. Lane bits are preserved, including floating signed zero and NaN payloads.
 
 For example, `shuffleInt32X4# left right (# 3#, 4#, 1#, 6# #)` selects
 `left[3], right[0], left[1], right[2]`.
-
-`cabal run exe:thc-fixtures -- simd-arithmetic` generates real vector Haskell Core,
-an independent scalar-lane native GHC oracle, and strict provenance/audits.
-`SimdArithmeticTest` checks its results against a Java BigInteger/bit-lane model,
-then executes the unchanged Core on both backends, including each first installed
-call and target validity. Three shuffle patterns cover both inputs, reversal,
-rotation, and repeated first-left/last-right lanes, including the highest valid
-concatenated index. Literal rejection covers 16-, 32-, and 64-lane tuples.
-The corpus has 138 entries for 78 operations. The existing generated SIMD smoke corpus also
-includes the new operations. Native scalar evidence does not require wide host
-vector hardware and does not claim native wide-vector code execution.

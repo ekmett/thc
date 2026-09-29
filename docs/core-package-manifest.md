@@ -5,8 +5,8 @@
 
 When separate GHC units are linked into one THC program, each source component
 must be compiled with its actual GHC unit ID. The THC plugin's `unit-qualified`
-option writes each module below `units/u-<escaped-unit>/Module.json`; the legacy
-flat output layout remains the default for existing single-unit fixtures.
+option writes each module below `units/u-<escaped-unit>/Module.json`; the flat
+output layout is the default for single-unit exports.
 Package modules must use `post-tidy` with GHC code generation. This is the
 boundary that matches names in installed `.hi` files: a separately compiled
 importer can refer to generated workers absent from the dependency's pre-Tidy
@@ -47,12 +47,6 @@ globals. File-hash verification is opt-in. The separate auditor accepts
 `@packages.json`, including with `--run-io`. Add `--verify-artifacts` before the
 guest `--` separator to check artifact hashes and original source identity.
 The JVM `loadEntry` and `loadManagedExports` APIs expose `verifyArtifacts = false`.
-
-`bin/test-core-package-link.py` builds an independently registered library
-and importer with GHC 9.14.1, compares native output with compiled AST and
-bytecode execution, and checks that removing the library fails before execution.
-This focused proof uses binder/file provenance from `-g0`; it does not claim
-preservation of nested expression SourceNote ticks.
 
 ## Direct unit artifacts
 
@@ -119,10 +113,8 @@ loose-module manifests remain valid.
 
 ## JSON navigation and lazy loading
 
-Serialized `.idx` sidecars and module `index` references are no longer supported.
-Regenerate old package artifacts with the current exporter. JSON and `.symbols`
-directories remain supported; the latter provide direct binding lookup without
-building navigation over a whole unit.
+JSON and `.symbols` directories provide direct binding lookup. Serialized `.idx`
+sidecars and module `index` references are not accepted.
 
 Loose module paths stay inside the manifest directory. ZIP bundles contain the
 exact declared JSON modules plus their required manifests; missing, duplicate
@@ -144,15 +136,10 @@ with each Context. Runtime admission and lowering still reject unsupported code
 when preparing a binding (`reject-at-binding-admission`); the separate
 whole-program audit is unchanged.
 
-Sidecars add storage alongside the unchanged JSON. Cache accounting must include
-both artifacts and the ZIP's framing and compression. Index array byte counts
-are not JVM heap measurements, and lazy preparation alone establishes no heap
-or startup performance result.
-
 ## Partially resolved package-native components
 
 An unresolved package-native artifact remains in `packageNativeArchive`, with
-its complete original bytes, ABI and unresolved-symbol inventory. Older archives
+its complete original bytes, ABI and unresolved-symbol inventory. Artifacts
 without a dependency proof block the entire module. Recognizing a managed symbol
 such as `memcpy` does not waive this obligation.
 
@@ -171,7 +158,7 @@ keeps the original component identity, full ABI, entry indices and source recipe
 with an explicit `availableEntries` selection and the union's bytes/hash. This
 single loaded component preserves shared mutable globals and one-time native
 initializers; individual closures are evidence, not separately loaded libraries.
-This first profile admits raw-bitcode dependencies only. A selected union that
+This profile admits raw-bitcode dependencies only. A selected union that
 needs an embedded native provider container (libm, entropy, width or C++ library)
 remains archive-only until its container recipe can also be preserved.
 
@@ -180,11 +167,3 @@ the exact available subset, and the final union's dependency inventory. Only the
 selected ABI entries become callable. Selecting an unavailable original call
 still fails before native execution. The retained original archive is never
 rewritten into an assertion that its unresolved dependencies were satisfied.
-
-The `package-native-archives` Haskell producer and
-`packageNativeArchivesDefault`/`packageNativeArchivesDense` tests cover a genuine
-mixed package, shared initialized C state across selected adapters, rejected
-direct/global-function-pointer calls, and an unresolved constructor that prevents
-admission of otherwise ordinary entries, plus a libm adapter that still needs its
-native provider container. The first compiled shared-state call is
-checked once after a fixed interpreted native-oracle corpus, with no retries.

@@ -29,28 +29,6 @@ accepts and returns exact raw JDK vector values through polyglot interop;
 host-object access is required for vector inputs. This transport does not
 provide a native hardware vector calling convention.
 
-## Correctness checks
-
-The Int64X2 and Int32X4 foundations retain separate original-Core producers:
-
-```sh
-python3 bin/prepare-simd-audit.py
-python3 bin/prepare-simd-audit.py --vector int32x4
-```
-
-Full preparation requires a working native GHC SIMD toolchain and records both
-pre/post-Tidy exports and fresh native rows. `--export-only` instead produces
-real pre-Tidy Core with explicitly model-only expectations and null
-`nativeRows`; it does not establish native or post-Tidy coverage. Tests use the
-stages and artifact hashes in provenance, not leftover files from another run.
-The [floating](floatx4.md), [binary64](doublex2.md) and
-[integer fixture](integer-simd-fixtures.md) guides describe their own models.
-
-`CoreVectorCarrierTest`, `VectorLayoutTest`, `SimdAstTransportTest`,
-`BytecodeVectorTransportTest` and `VectorHeapStorageTest` cover raw carriers,
-exact layouts and owned transport. The genuine `SimdCallNativeTest` corpus
-checks guest calling paths separately from local arithmetic fixtures.
-
 ## Code-generation evidence
 
 Type acceptance and native-result agreement do not prove uninterrupted vector

@@ -1,60 +1,22 @@
 # Unsigned scalar primops
 
-The scalar audit used GHC's pinned
-[`ghc-9.14.1-release` primop definitions](https://github.com/ghc/ghc/blob/ghc-9.14.1-release/compiler/GHC/Builtin/primops.txt.pp)
-against `bin/core-capabilities.json`. The existing machine Int operations
-already covered ordinary scalar arithmetic, comparisons and bitwise operations.
-The first missing unsigned families now execute in both AST and bytecode:
+Both backends implement these unsigned scalar families:
 
-| Carrier | Added primitives |
+| Carrier | Primitives |
 | --- | --- |
 | Word# | `quotWord#`, `remWord#`, `gtWord#`, `geWord#` |
 | Word8#/Word16#/Word32# | `quotWordN#`, `remWordN#`, `eqWordN#`, `neWordN#`, `gtWordN#`, `geWordN#` |
 | Word8#/Word16#/Word32# | `andWordN#`, `orWordN#`, `xorWordN#`, `notWordN#`, `uncheckedShiftLWordN#`, `uncheckedShiftRLWordN#` |
 | Word# / Word64# | `pdep#`, `pext#`, and their 8/16/32/64-bit variants |
 
-There are 50 additions. Machine words retain all 64 bits in a Long, using Java's
-unsigned division/remainder and comparison facilities. Narrow unsigned words
-remain zero-extended Longs; masks truncate left shifts and complements and bound
-division and comparison operands. Bit deposit/extract use `Long.expand` and
+Machine words retain all 64 bits in a Long, using Java's
+unsigned division/remainder and comparison facilities. Narrow unsigned values use the [narrow integer carriers](narrow-integer-carriers.md);
+masks truncate shifts and complements and bound division and comparison operands. Bit deposit/extract use `Long.expand` and
 `Long.compress` with exact-width masks; the 8/16/32 variants consume and return
 `Word#`, while the 64-bit variant uses `Word64#`. Each bytecode operation has a constant width
 mask and primitive operands/results. No aggregate transport changed.
 
-`IntegerPrimopsAudit.hs` wraps every primitive with dynamic operands and the
-existing Int# host boundary. The Cabal `thc-fixtures` executable exports the
-Core and generates 58,559 native oracle rows. The JVM
-test checks that every intended primop survives GHC optimization. Inputs include every bit
-position and its neighbors, zero, alternating patterns, the sign bit, all-ones
-and equal/neighbor operands. Every byte is checked for complement and every
-valid byte shift count; wider shifts cover every count and bit transition.
-Deposit/extract rows additionally cover empty, full, alternating, sparse and
-high-bit masks, including inputs outside narrow widths.
-
-`IntegerPrimopsTest` independently checks those native results with BigInteger
-and a per-bit deposit/extract model,
-then executes every row on both runtimes before and after compilation. It
-requires exactly one installed guest entry for every oracle row and checks wrong
-arities in strict and diagnostic modes. Preparation is part of the normal
-`bin/prepare-tests.sh` flow; Gradle tracks the generated inputs and CI retains
-the Core export and oracle. SHA-256 manifests reject stale source or artifacts.
-
-Division by zero and unchecked shifts outside `[0, width)` are outside the
-numeric oracle. No semantics for those inputs are promised. This slice leaves
-existing signed division and overflow behavior unchanged.
-
-The separate [signed narrow slice](signed-narrow-primops.md) adds 36 arithmetic,
-division and comparison operations with native/model checks. Remaining scalar
-candidates include signed narrow shifts, cross-signedness narrow conversions,
-width-specific counts, byte swaps and bit reversal. The [explicit64 slice](explicit64-primops.md) adds 36 Int64/Word64 scalar
-operations and canonical Word64 literals, extending the
-[Int64 conversion/literal foundation](int64-conversions.md). The separate
-[tuple arithmetic slice](tuple-arithmetic.md) now lowers quotient/remainder,
-carry, overflow and full-width multiplication directly into exact result slots.
-Aggregate arguments, PAPs, captures and sums remain
-outside this slice; these additions do not establish complete GHC.Prim coverage.
-
-Validation on Linux x86-64 with the pinned GHC/GraalVM toolchain: a fresh
-`bin/try.sh --offline --max-workers=4` passed all 288 JVM tests and built the
-distribution. The exact dependency auditor passed 24 tests. A subsequent focused
-run passed the stronger per-row compiled-entry assertion on both backends.
+Division by zero and unchecked shifts outside `[0,width)` have no portable
+numeric result. See [signed narrow operations](signed-narrow-primops.md),
+[64-bit operations](explicit64-primops.md), [bit operations](bit-primops.md),
+and [tuple arithmetic](tuple-arithmetic.md) for the other scalar families.

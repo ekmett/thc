@@ -30,7 +30,8 @@ and destination-context admission. Native TLS and the foreign activation stack
 are not moved to an offload thread. Process-signal readers use the same managed
 hosting and release their HEC during native waits. Unsafe foreign calls retain
 the HEC and can block its progress. This does not make arbitrary native calls
-cancellable or add raw C callback transport. Per-virtual-thread
+cancellable. Supported native callback signatures and safety rules are described
+in [Foreign code](interface-foreign.md). Per-virtual-thread
 allocation counters are unavailable and explicit reads/resets fail, not return
 zero. Platform hosting retains the existing foreign and allocation facilities.
 Existing async delivery, masking and saved-continuation rules apply in both modes.
@@ -112,12 +113,3 @@ for an explicit counter operation; loss of accounting never interrupts thread
 cleanup and requires a successful reset before another read. Native/Sulong bytes
 are not charged. These are target-relative measurements, not GHC heap-layout byte
 equivalence, and they do not implement allocation-limit enforcement.
-
-`cabal run exe:thc-fixtures -- thread-scheduling` exports nine genuine pre/post
-Core entries and compares native hint, fork, counter and timed-delay observations.
-The native oracle uses GHC's non-threaded RTS because the pinned threaded POSIX
-I/O manager rejects direct `delay#`; the guest checks still exercise real managed
-threads. Counter expectations use allocation bounds, including GHC's documented
-approximately 4 KiB other-thread accounting granularity. Java checks add first
-installed straight-line calls, actual JVM byte accounting, context ownership,
-cleanup with accounting disabled, delay capture/deadline retention and masking.

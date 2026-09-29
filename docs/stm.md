@@ -77,57 +77,7 @@ unreachable empty-read-set retry waits until embedding cancellation/disposal;
 it cannot return success. Unsafe effects inside STM are not rolled back, just
 as in GHC; callers must not rely on how many times an invalid action reruns.
 
-## Verification and example
-
-```sh
-cabal run exe:thc-fixtures --offline -- stm
-./gradlew --no-daemon testDefault --tests thc.runtime.ManagedSTMTest \
-  testDense --tests thc.runtime.ManagedSTMTest stmFullCoreTest stmDenseFullCoreTest
-```
-
-The Haskell producer exports pre/post-Tidy original Core, closes the implicit
-exception using complete installed GHC Core, performs strict audits and runs a
-78-row native oracle. Java checks an independent arithmetic model, deterministic
-conflicts and stale exceptions, real retry registration/wakeup, nested rollback,
-lazy and unlifted payloads, context boundaries and cleanup. Installed guest-entry
-checks inspect the first compiled call without settling or retries, with and
-without inlining and under both handoff modes.
-The public parser tests additionally interrupt retry and an inner transaction
-thunk through original `killThread#` and `catch#`, check sender acknowledgement,
-observe rollback before resumption, and force the abandoned enclosing thunk from
-another carrier. Repeated interruption must not replay the enclosing prefix or
-retain retry registrations. All native helpers execute afresh inside an opaque
-IO wrapper so the oracle does not accidentally memoize its own observations.
-The 504 compiled rows per handoff require exactly two guest roots for basic,
-lazy and unlifted payloads, or four for exception/alternative/nested-atomic rows:
-the public entry, atomic action, and (where present) protected action plus
-handler/right branch. The immediate `runRW#` State# lambda is beta-reduced.
-The three newtype-field cases also retain an opaque consumer, giving three roots
-for a simple action or five for an alternative/catch. The rejected nested atomic
-action never runs.
-All active targets must remain installed after each row. Callback orchestration
-uses direct Java control flow; expected retry and conflict signals do not trigger
-an interpreter transfer at storage boundaries.
-
-The twelve transaction-protocol tests and strict audit mutation controls run in
-ordinary CI. The original-Core/native tests have a required explicit
-`stmFullCoreTest` gate, using the existing full-Core source set, a hashed native
-receipt and no cached test success. Missing fixtures fail, never skip. Even a
-non-nested `atomically#` frame must retain the original nested-transaction exception:
-an action can invoke another transaction dynamically. Stock thin interfaces omit
-that exception dictionary's private `$ctoException` body, so all faithful atomic
-closures share this complete-installed-Core requirement. This is a fixture/linker
-prerequisite, not an excuse to replace the original exception or weaken STM.
-
-The installed bundle also contains an unrelated `GHC.Internal.Conc.Bound`
-foreign-export registration that the current linker cannot admit. The producer
-retains the complete-bundle discovery failure, requires that exact module to be
-unreachable, then selects whole original modules named by the reachable closure.
-Fresh strict audits run against that selection; tests compare every selected
-module byte-for-byte with its hashed installed archive member. No definitions or
-module metadata are rewritten, and a reachable unsupported module still fails.
-
-`t/fixtures/compiler/STMAudit.hs` is a runnable raw-primop example: `basic`
-distinguishes committed reads from private writes; `alternative` demonstrates
-rollback; `awaitEither` waits on either TVar. `STMNative.hs` runs those examples
-and the state-threaded concurrent increment action with the pinned native GHC.
+Linking `atomically#` requires complete installed GHC Core for the original
+nested-transaction exception and its dictionaries, even if the intended action
+never nests. Use the [installed-library setup](driver.md#installed-library-core)
+rather than replacing a missing exception definition.

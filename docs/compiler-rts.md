@@ -40,31 +40,10 @@ The function declarations require the exact original compiler unit
 `ghc-9.14.1-inplace`, unsafe `ccall`, and the original saturated primitive ABI.
 Data labels require an evaluated scalar `AddrRep` proof. Unknown labels reject.
 
-The fixture generator recovers actual FCallIds from complete installed `GHC`,
-`GHC.Data.FastString` and `GHC.Utils.GlobalVars` interfaces, applies them to GHC-typechecked test consumers,
-and serializes the resulting pre/post-Tidy Core. These small consumers are not
-substitute compiler bodies. Native GHC executes the same specialized consumers;
-the address-cell oracle separately links the original RTS symbols and advances
-the real unique counter without resetting a live compiler's supply. Native
-compiler flag CAFs are initialized normally before observations, so the oracle
-never installs a test value into a native compiler-owned flag slot.
-
-```sh
-cabal run exe:thc-fixtures -- compiler-rts
-./gradlew --continue testDefault --tests thc.runtime.CompilerRtsTest \
-  testDense --tests thc.runtime.CompilerRtsTest \
-  compilerRtsFullCoreTest compilerRtsFullCoreDenseTest
-```
-
-The JVM tests cover both backends, both handoff modes, native comparisons and
-first compiled calls, plus concurrent increments, wrapping, aliasing, independent
-contexts, closed contexts and shared-CAF lifetime. The native fixtures require
-the complete-Core GHC installation; ordinary runtime unit tests do not.
-
 `runGhc` installs handlers for SIGQUIT, SIGINT, SIGHUP and SIGTERM. The
 [standalone process signal bridge](process-signals.md) admits these on Linux
-x86_64 launches with `-Xrs` and asynchronous continuations enabled. AST needs
-explicit `-Dthc.asyncExceptions=true`; ordinary embeddings remain unauthorized.
+x86_64 launches with `-Xrs` and asynchronous continuations enabled. The executable launcher enables this on both backends; ordinary embeddings
+remain unauthorized.
 Native object loading/GHCi, compiler RTS flags and other reachable foreign calls
 must be tested and implemented as they are encountered. These translations do
 not bypass strict Core admission.

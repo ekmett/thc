@@ -1,104 +1,49 @@
 # Cabal integration
 
-The implemented interface is `thc acquire` and `thc run` inside an ordinary
-Cabal project. `thc run [TARGET] [FLAGS] [-- ARG...]` asks Cabal to select an
-executable, exitcode test suite or benchmark, then builds and executes its
-`Main.main :: IO ()` only after the strict Core audit. Omitting TARGET uses
-Cabal's current-package selection: prefer its sole buildable executable,
-otherwise require a sole runnable component. Qualified targets such as
-`containers-tests:bench:intmap-benchmarks` use Cabal's normal component syntax.
-See the [driver instructions](driver.md) for tested scope. Build the driver
-with `cabal build exe:thc` at the repository root and invoke it with
-`cabal run thc -- ...`. General `thc build` and `thc repl` remain planned.
+Use `thc run [TARGET] [FLAGS] [-- ARG...]` inside an ordinary Cabal project to
+build and execute a Haskell component on THC. Use `thc acquire` to produce its
+Core package manifest without running it. Build the driver with
+`cabal build exe:thc`; from the THC checkout, invoke it with `cabal run thc -- ...`.
+See the [driver guide](driver.md) for commands, toolchain setup and examples.
 
-The goal is to run those projects with no unimplemented paths in their complete
-dependency closure, including cold exceptions and library internals. A successful
-build or a benchmark that avoids unsupported code is not completion. Diagnostic
-traps are useful during development, but do not belong in the finished interface.
+## Select a component
 
-Cabal solves dependencies and builds components. GHC parses, typechecks and
-optimizes Haskell. THC collects the resulting Core, links it, and runs accepted
-components on Graal. The [architecture guide](architecture.md) describes these
-boundaries and the runtime behind them.
+Targets follow Cabal syntax: `PACKAGE:exe:NAME`, `PACKAGE:test:NAME`, or
+`PACKAGE:bench:NAME`, with short forms where unambiguous. Tests must use
+`exitcode-stdio-1.0`. With no target, select the current package's sole buildable
+executable, otherwise its sole runnable component. Ambiguity is an error.
+Use `--project-dir` or `--project-file` to select another project, and
+`--thc-root` to identify the built THC checkout.
 
-## Build and run
+Cabal handles package flags, CPP, generated modules and dependencies. Setup
+programs, preprocessors and Template Haskell run under native GHC. THC exports
+the selected component and dependency Core using Cabal's actual unit IDs and
+compiler configuration, then runs the accepted `Main.main :: IO ()` on Graal.
+Two instances of one package remain distinct when Cabal assigns different units.
 
-`THC.Plugin` is an ordinary Cabal library tied to GHC 9.14.1. For a project
-directory, the Haskell driver asks cabal-install to resolve the target and build
-the selected native component with machine-readable build information. It does
-not execute that native program. Cabal handles package flags,
-CPP, generated modules, compile-time Haskell and component dependencies. The
-driver uses the resolved unit IDs and exact per-component GHC arguments for a
-separate post-Tidy Core export, without passing the plugin into host tools.
+Ordinary runs validate code as it is loaded. Add `--verify-artifacts` to request
+a strict pre-launch reachable-Core audit and artifact-hash verification.
+A successful acquisition or native build does not establish THC support for
+every reachable operation.
 
-Each export writes a Core artifact identified by its GHC unit ID and module
-name. A package manifest records the Cabal dependency graph, strict post-Tidy
-boundary, artifact paths and SHA-256 hashes. Two instances of the same package
-remain distinct when Cabal gives them different unit IDs.
+## Supply dependencies
 
-Dependencies need matching complete Core artifacts too. Ordinary installed
-interfaces do not necessarily contain every executable body. The default
-`--installed-core pinned` mode supplies a limited set of exact GHC library
-sources. Project runs may instead select `--installed-core required`
-to hydrate complete installed interfaces through the selected GHC 9.14.1 helper,
-including hidden owned modules. Thin interfaces are explicit capability failures;
-there is no silent switch to the pinned provider. See [GHC library Core](ghc-core.md)
-and the [driver's acquisition/cache contract](driver.md).
+Every reachable Haskell definition needs executable Core. The default
+`--installed-core pinned` provider supplies a limited set of exact GHC library
+sources. For ordinary applications, use `--installed-core required` with a
+complete-Core GHC 9.14.1 installation and, where required, its matching configured
+source tree. Thin interfaces fail explicitly; the driver does not silently
+switch providers. Follow [GHC library Core](ghc-core.md) to prepare them.
 
-Acquiring a module is distinct from admitting its foreign products for execution.
-The [foreign-artifact guide](interface-foreign.md) describes the schema-2 archive,
-verified native links, reachable binding checks and global lifecycle obligations.
+Package C/C++ and CAPI imports use the configured native sources and link
+settings. See [foreign imports and exports](interface-foreign.md) for LLVM setup,
+buffer and callback contracts, and unsupported forms. Native build products are
+still needed for compile-time Haskell even though the final guest runs on THC.
 
-The project driver caches exports by Cabal's resolved build information, source
-contents, native component products and the exporter library. It keeps THC Core
-separate from Cabal's native outputs. A native object or interface is not
-evidence that the corresponding Core export exists.
+Exports are cached by source, configuration, native products and exporter
+identity. Local Core stays under the selected build directory; dependency bundles
+use the THC cache. Reusing an unchanged package avoids another export. See
+[caching and failures](driver.md#caching-and-failures) for locations and cleanup.
 
-`thc acquire [TARGET] [FLAGS]` uses the same target resolution and builds the
-selected dependency closure, but stops before auditing or executing the guest.
-Acquisition is not a claim that the program is loadable or runnable.
-The planned `thc build [target]` command would also report unsupported
-requirements. `thc run` launches accepted `IO ()` Core on the JVM. Its
-project fixture covers three local packages, an internal library, CPP, an
-autogenerated Paths module and native Template Haskell; it is not a general
-Hackage acceptance claim. The [driver guide](driver.md) documents the bounded
-Linux console and file-IO paths; general library closures and FFI coverage still
-require runtime and exporter work.
-
-## Build-time Haskell
-
-Setup programs, preprocessors and Template Haskell run under native GHC.
-THC consumes the resulting program. This means retaining native
-build products where the build needs them, even when the final program runs on
-the JVM. Foreign calls remain an explicit runtime requirement.
-
-## Planned REPL
-
-REPL work follows broad file and Handle support: ordinary reads and writes,
-buffering, closing, and IO exceptions come first.
-
-`thc repl [target]` should use the same package environment and export cache as
-the other commands. GHC can maintain the interactive typechecking environment;
-THC can load and execute the resulting expressions and bindings. Reloading a
-module must replace its dependent code and values without retaining obsolete
-closures indefinitely.
-
-The frontend can also be exposed as `thci`. It should reuse the `ghc` library's
-parser, typechecker and interactive scope, with an adapter that exports Core
-before GHCi's execution path requires `ForeignHValue`. The installed `ghci`
-library does not expose the GHCi command loop as an independent UI library.
-Keeping values in THC therefore needs our own prompt and command dispatch, plus
-binding and result handling; it does not require a GHC bytecode interpreter in
-THC. Native GHC remains responsible for build-time Template Haskell. A splice
-that needs a value created only in the THC session needs an explicit bridge or
-native evaluation of that binding.
-
-The interactive UI should support live syntax highlighting, completion,
-multiline editing and inline diagnostics using GHC's syntax and type information.
-Debugging should use Truffle's instrumentation for source breakpoints, stepping
-and frame inspection. Lazy values must remain inspectable without forcing them;
-evaluation should be an explicit action. Existing source notes are a starting
-point, not a claim that debugger instrumentation is already implemented.
-
-The current driver wraps Cabal and GHC. A dedicated Cabal backend remains an
-option if it becomes useful; it is not required by the implemented commands.
+`thc build` and `thc repl` are not implemented. The native Windows simple-package
+backend has narrower dependency support; consult [Windows builds](windows.md).

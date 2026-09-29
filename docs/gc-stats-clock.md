@@ -27,10 +27,6 @@ The original `GHC.Internal.Stats.getRTSStats` first calls
 `getRTSStatsEnabled`. When false it raises its own `UnsupportedOperation`
 `IOError`, before allocating an `RTSStats` buffer. The direct foreign leaf is
 also explicitly unavailable, not a buffer full of plausible zero counters.
-In upstream tasty-bench 0.4.1, `hasGCStats` and `getAllocsAndCopied` already
-choose `(0,0,0)` themselves when statistics are disabled. That is the library's
-no-statistics behavior, not evidence of zero guest allocation.
-
 Monotonic time has an arbitrary JVM origin and nanosecond units, not guaranteed
 nanosecond resolution. Compare elapsed differences within a process; it is not
 wall-clock UTC and is not synchronized with another JVM or native GHC. The
@@ -62,59 +58,9 @@ explicitly unsupported until guest-owned descriptors and guest CPU identities
 can be translated; THC does not pass those encodings to unrelated host objects.
 This is not general POSIX clock or timer support.
 
-The full-Core fixture recovers the unchanged FCallIds from the installed time
-interface, typechecks native and guest consumers, and retains the original base
-clock module for a coexistence control. Native observations cover resolution,
-`getres(NULL)`, valid time and invalid IDs with errno and guard bytes. Runtime
-tests compare resolution exactly and bracket live realtime with wall-clock
-samples; a clock adjustment outside that enclosing interval is an environmental
-limit of the live comparison. Failure buffer nonpublication is a THC guarantee,
-independent of unspecified libc failure-buffer contents.
-
-```sh
-cabal run exe:thc-fixtures -- original-time-clock
-./gradlew --continue originalTimeClockDefault originalTimeClockDense
-```
-
-These named tests require the complete installed GHC 9.14.1 interfaces and fail
-when the native fixture is missing. They retain AST/bytecode pre/post-Tidy and
-first-installed-call checks in both handoff modes.
-The ignored-argument adapter also retains an ordinary `-O2` worker that receives
-a first-class FCallId. That shape remains an explicit negative regression: THC
-does not yet lower foreign import identifiers as callable values. The positive
-constant consumer uses the genuine installed `clock_REALTIME` binding and its
-unchanged saturated foreign call.
-
 Admission preserves the original `ccall`, `ghc-internal` unit, saturated arity,
 State/result tuple and primitive ABI. The statistics and GC calls are `safe`;
 the clock is `unsafe`. With asynchronous exceptions enabled, successful safe
 calls commit their result before polling. Saved continuation resumption does
 not replay the completed call. AST keeps its explicit opt-in policy; bytecode
 keeps its existing default.
-
-## Reproduction and evidence
-
-The Haskell producer recovers all six genuine FCallIds from the complete
-installed `Stats`, `System.Mem` and `Clock` interfaces, specializes independently
-typechecked consumers, and exports pre/post-Tidy Core. It does not redeclare the
-foreign imports. Native GHC executes 15 rows: disabled statistics, three GC
-requests, and ordered monotonic observations. No test assumes a measurable GC
-effect or equates absolute clock values between runtimes.
-
-```sh
-bin/build-compiler.sh
-cabal run exe:thc-primops -- scalars
-cabal run exe:thc-fixtures -- gc-stats
-./gradlew --continue gcStatsFullCoreTest gcStatsFullCoreDenseTest \
-  testDefault --tests thc.runtime.PackageSafeForeignTest \
-  testDense --tests thc.runtime.PackageSafeForeignTest
-```
-
-Use the pinned native 64-bit GHC 9.14.1 complete-Core environment. These explicitly
-selected full-Core tests fail if preparation is absent; they are not a hidden
-dependency of stock/thin-interface CI. The receipt hashes producer inputs,
-original interfaces, exported Core and native observations. Each handoff mode
-checks 60 interpreted and 60 first-compiled native-comparison rows across both
-backends (AST explicitly async-enabled) and both Core stages, plus ABI negatives and direct-statistics failure
-with an unchanged destination buffer. Existing safe-FFI tests separately cover
-asynchronous delivery and completed-result resumption without replay.

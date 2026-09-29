@@ -4,9 +4,7 @@ GHC 9.14.1 `LitLabel` contains an exact symbol and `FunctionOrData` tag.
 The exporter preserves these as `function-addr` and `data-addr` literals with
 `AddrRep`. A label carries no argument types, calling convention, or library
 ownership certificate. Runtime providers must establish those separately.
-The installed Hello World closure contains `libdwPoolRelease` twice and
-`backtraceFree` once as function labels; `enabled_capabilities` is a separate
-data symbol. The exporter does not parse GHC's printed `__label` syntax.
+The exporter does not parse GHC's printed `__label` syntax.
 
 The selected native RTS has `USE_LIBDW=0`. Its original `LibdwPool.c` and
 `Libdw.c` define `libdwPoolRelease` and `backtraceFree` as empty functions with
@@ -42,37 +40,13 @@ weak lock. Only after those effects does it return the original Haskell action
 and its validity flag. A weak with only C finalizers returns flag 0 after running
 them. The Haskell action is never executed by the primitive itself.
 
-The native Haskell fixture checks real non-null function addresses, registration,
-dead-registration failure, repeat finalization, and preservation of the separate
-Haskell finalizer action. The source fixture exports actual GHC Core and verifies
-the function/data distinction, `AddrRep` certificates, and the typed finalizer
-primop. THC resolves the two original one-argument libdw labels into
-context-owned, nonnumeric native callables, and `free` into the owned allocation
-registry. Explicit weak finalization invokes
-registered callbacks outside the registry lock. The two selected original
-callback bodies are empty: unchanged bytes in the native oracle cannot prove
-invocation or callback order. Separate registry instrumentation checks order and
-the fact that invocation is outside the lock; the JVM integration check executes
-the actual Sulong members or Windows DLL functions. The native fixture producer
-supports static Windows GHC and uses canonical paths in its checked manifest.
-On Windows, `bin/windows.ps1 -Action LibdwTest` runs the original eight-call
-oracle, eighteen C-finalizer checks, genuine function/data label export and both
-JVM handoff forks. Both backends retain first-compiled-call checks. Storage,
-context, native authority and expired-owner controls run with `IOAccess.NONE`.
-The Linux-only owned `free` test verifies release, expired aliases and dead
-registration on both compiled backends; it remains skipped on Windows.
-Automatic guest GC finalization
-and arbitrary C function labels remain unsupported. The separate
-`enabled_capabilities` data label exposes a read-only live Word32 cell.
-
 Package-owned one-address finalizers use a separate typed admission path. The
 exporter retains the actual stock `CLabel` declaration, its declared and
 normalized nominal types, and the unchanged foreign product. A normalized
 `FunPtr (Ptr a -> IO ())` proves a candidate ABI; it does not by itself make the
 label executable. Acquisition must retain the original C definition with an
 exact `void(pointer)` ABI and root its namespaced adapter in a completely linked
-component. These declarations and roots use schema-two inner provenance records;
-ordinary schema-one call records and the CBD container framing remain unchanged.
+component.
 
 Runtime labels retain that component and owning context. Cross-context, closed
 component, ambiguous-label, malformed signature and disposed-allocation uses

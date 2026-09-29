@@ -39,19 +39,13 @@ frozen guest program. The expected pure results are `5050` and `210`.
 The default backend is bytecode. Put `-Dthc.backend=ast` before the Core paths
 to select AST, and `-Dthc.handoffSlabs=true` to select dense handoff storage.
 
-The [probe script](../bin/native-image-pure.sh) reads the installed runtime
+The [build script](../bin/native-image-pure.sh) reads the installed runtime
 JARs, deliberately excludes LLVM/NFI dependencies, and uses the checked
 [initialization inventory](../bin/native-image/pure-initialization.txt).
 It limits the image builder to an 8 GiB heap and two compiler threads.
 An optional script argument selects the output executable path.
 On a shared development host, hold its existing build-directory resource lease
 around installation and image construction.
-
-Generated Truffle DSL field-access descriptors are prepared at image build
-time because the pinned image implementation replaces their reflective fields
-with native offsets. Guest contexts, native resource owners and the signing
-key are not initialized by this inventory. The pure recipe does not use the
-larger diagnostic graph-preparation lists from the investigation.
 
 ## Compilation and lifecycle limits
 
@@ -64,15 +58,3 @@ required before claiming native-image guest JIT support.
 The pure classpath cannot establish Sulong, foreign callbacks, native-resource
 cleanup or complete executable startup/shutdown support. JVM tests of those
 facilities do not substitute for native-image execution checks.
-
-## Planned work
-
-Qualify direct typed public-host persistence through the existing host ABI.
-The selected-Core cache already supports typed boxed fields and constructor
-partial applications, with each load owning its heap values and CAF state.
-Async execution, foreign calls and the full executable lifecycle need image-side support for suspension, callbacks and native-resource cleanup.
-The pure recipe separately needs successful first installed guest calls before
-it can support runtime compilation.
-
-The [open design questions](../research/open-questions.md#native-image-beyond-pure-interpretation)
-track wider cache admission, runtime compilation and executable lifecycle support.

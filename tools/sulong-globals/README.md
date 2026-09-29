@@ -32,17 +32,12 @@ Upstream `org.graalvm.llvm:llvm-language:25.3.4.1`:
 - Sources SHA256: `716562a9c6cbe9201f53bc972d9eafbb1a692a9d9aebb9f177a541c5e0913f66`
 - Binary SHA256: `c835fc80abdc818b7487c9e0b9ecd6c7cd59a7bbb7ac7041d6e2cda2be4b9335`
 
-`PackageNativeForeignTest` retains the original strict C `advance` first-installed
-control and adds mutable/readonly reader validity, managed global pointer
-identity, separate-context and TLS storage, and native-transition controls.
-On Linux the fixture also runs a separately compiled native C oracle; the Sulong
-controls run on all hosts without adding a native-linker/SDK requirement. Focused
-command:
+The focused runtime check is:
 
 ```sh
-./gradlew --offline --max-workers=2 testDefault --tests thc.runtime.PackageNativeForeignTest testDense --tests thc.runtime.PackageNativeForeignTest --continue
+./gradlew --max-workers=2 --continue \
+  testDefault --tests thc.runtime.PackageNativeForeignTest \
+  testDense --tests thc.runtime.PackageNativeForeignTest
 ```
 
-These are package-C/runtime controls, not whole-application or Native Image
-acceptance. The separate Windows lookup checks remain in
-[`sulong-windows`](../sulong-windows/README.md).
+Windows additionally uses the [optional-cwd lookup correction](../sulong-windows/README.md).

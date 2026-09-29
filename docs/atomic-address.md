@@ -38,19 +38,6 @@ remain non-dereferenceable. Managed mutable pointers cannot be stored in native
 cells because they have no real native address. Freed owners, foreign contexts,
 unowned numeric locations and opaque labels reject before memory access.
 
-The native oracle and independent Java byte-buffer model cover all operations,
-successful and failed CAS, narrowing, wraparound, aliasing, null pointers and
-neighboring sentinels. Pre/post-tidy Core is audited. Both backends exercise the
-first installed call with exact compiled-entry increments and no settling calls;
-storage checks cover raw/owned aliases, contention, publication and native
-lifetime/context failures. Run the focused group with the pinned toolchain:
-
-```sh
-cabal run exe:thc-fixtures --offline -- atomic-address
-./gradlew --continue testDefault --tests thc.runtime.AtomicAddressTest \
-  testDense --tests thc.runtime.AtomicAddressTest
-```
-
 [AtomicTickets.hs](../src/examples/AtomicTickets.hs) shows a ticket dispenser whose
 fetch-add returns the first reserved ticket. Export it from the repository root:
 
@@ -60,7 +47,7 @@ bin/export-core.sh src/examples/AtomicTickets.hs
 
 `reserveTickets :: Int# -> Int# -> Int#` needs two arguments. The low-level
 command-line kernel launcher accepts only one integer, so call this entry from
-the existing [JVM embedding API](site/embedding.md#load-an-integer-kernel):
+the existing [JVM embedding API](site/embedding.md#load-a-core-entry):
 
 ```java
 import java.util.List;
@@ -81,9 +68,3 @@ void main() {
 Use the pinned JVM dependencies and run with the repository root as the working
 directory. The arguments initialize the local counter to `40` and advance it to
 `43`; the returned ticket is `40`. This example does not request compilation.
-After preparing `atomic-address`, its native fixture driver can also be run
-directly:
-
-```sh
-printf 'numeric 8 40 3 0\n' | build/atomic-address/native/oracle
-```

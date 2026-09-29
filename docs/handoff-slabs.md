@@ -17,7 +17,7 @@ Async-enabled AST roots, bytecode roots, generic indirect scalar calls,
 unsupported signatures and tail chains without a handoff receiver retain their
 other dispatch paths. Sharing `HandoffStorage` or `HandoffLayout` does not make a
 path conditional on this flag: [typed tuple inputs](tuple-inputs.md),
-[binary sum transport](sum-inputs.md), [vector transport](simd-families.md) and
+[sum transport](sum-inputs.md), [vector transport](simd-families.md) and
 the [typed result protocol](tuple-results.md) have separate contracts on both
 backends. In particular, a singleton-reference tuple is not a scalar reference.
 
@@ -46,28 +46,3 @@ An ordinary boxed Long or reference never reads that register.
 The interpreter still stages an argument packet before copying it into the
 handoff fields. This protocol does not by itself prove allocation elimination
 or a performance gain when a call inlines.
-
-## Check the current implementation
-
-With the pinned toolchain, run the focused protocol checks in separate mode
-forks sharing one compilation:
-
-```sh
-./gradlew --max-workers=2 --continue \
-  testDefault --tests 'thc.runtime.HandoffTest' \
-  testDense --tests 'thc.runtime.HandoffTest'
-```
-
-These tests construct their Core inputs directly. They cover layout/pool
-ownership, nested calls, tail cycles, lazy prefixes, captures, retained frames
-and exceptional cleanup. The dedicated
-`requestedModeReachesTestProcessAndContext` test observes each fork's mode
-without changing it; other protocol tests deliberately enable handoff locally
-and restore the previous setting. Running those controls in a default fork is
-therefore not evidence that every test body leaves handoff disabled.
-
-`testDefault` and `testDense` always execute fresh tests and keep separate
-reports. Do not use `--rerun-tasks` to select the mode or force unrelated
-compilation. For the full suite with fresh native/Core fixtures, use the
-[development workflow](contributing.md#build-and-test); selected synthetic
-protocol checks are not a replacement for original-GHC coverage.

@@ -29,14 +29,7 @@ about undefined numeric inputs. Runtime tuple/vector transport, actual JVM
 carriers, bounds, ownership, lifetime and aliasing retain their own necessary
 checks; removing redundant scalar type validation does not remove those checks.
 
-The auditor checks both occurrence and stored binder proofs. Missing and
-explicitly unknown legacy metadata remain compatible with runtime lowering;
-intrinsic literal carriers do not invent an exact register proof. Evaluatedness
+The auditor checks both occurrence and stored binder proofs. Missing or explicitly unknown metadata remains conservative, while intrinsic
+literals retain their exact representation when its kind establishes one. Evaluatedness
 is not a type constraint, and legal scalar newtype casts preserve their primitive
 representation.
-
-Runtime tests retain legacy metadata compatibility and native pre/post-Tidy
-newtype arithmetic and conversion controls, including installed compiled-entry
-checks on both backends. They no longer require rejection of forged same-carrier
-scalar type annotations. Existing native scalar conformance fixtures continue to
-verify defined-input numeric semantics independently.
