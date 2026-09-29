@@ -900,7 +900,47 @@ public final class Program implements ExecutableProgram {
             if (scope.joins.containsKey(free)) return false;
         return true;
     }
-    private Expr caseArm(List<Object> expression, Scope scope, boolean tail) {
+    private boolean substantialSiblings(List<List<Object>> alternatives) {
+        if (!reusableCode || capturesContinuations || delimited || alternatives.size() < 2 || alternatives.size() > 32) return false;
+        int remaining = 128;
+        for (List<Object> alternative : alternatives) {
+            remaining -= boundedCoreSize((List<?>) alternative.get(3), remaining);
+            if (remaining == 0) return true;
+        }
+        return false;
+    }
+    /** A bounded syntax estimate, not a compiler graph budget. Metadata is not code. */
+    private static int boundedCoreSize(List<?> expression, int limit) {
+        if (limit <= 0) return 0;
+        int size = 1;
+        switch ((String) expression.getFirst()) {
+            case "lam" -> size += boundedCoreSize((List<?>) expression.get(2), limit - size);
+            case "app" -> {
+                size += boundedCoreSize((List<?>) expression.get(1), limit - size);
+                for (Object argument : (List<?>) expression.get(2)) {
+                    size += boundedCoreSize((List<?>) argument, limit - size);
+                    if (size == limit) break;
+                }
+            }
+            case "case" -> {
+                size += boundedCoreSize((List<?>) expression.get(1), limit - size);
+                for (Object alternative : (List<?>) expression.get(3)) {
+                    size += boundedCoreSize((List<?>) ((List<?>) alternative).get(3), limit - size);
+                    if (size == limit) break;
+                }
+            }
+            case "let" -> {
+                for (Object binding : (List<?>) expression.get(2)) {
+                    size += boundedCoreSize((List<?>) ((Map<?,?>) binding).get("expr"), limit - size);
+                    if (size == limit) break;
+                }
+                size += boundedCoreSize((List<?>) expression.get(3), limit - size);
+            }
+            default -> { }
+        }
+        return size;
+    }
+    private Expr caseArm(List<Object> expression, Scope scope, boolean tail, int alternativeCount, boolean substantialSiblings) {
         if (sameFrameCandidate(expression, scope)) {
             OperandBuilder operands = operandBuilder;
             operandBuilder = null;
@@ -947,10 +987,17 @@ public final class Program implements ExecutableProgram {
                 return node;
             }
         }
+        // Wide cold dispatches otherwise compile every nontrivial arm into one
+        // graph. Reuse side roots without enabling continuation frame capture.
+        // Split modest bodies of an expensive sibling dispatch, not giant
+        // singleton prefixes that would merely move the same large graph.
+        int size = substantialSiblings ? boundedCoreSize(expression, 129) : 0;
+        boolean outline = outlineCaseArms || reusableCode && !capturesContinuations && !delimited &&
+            (alternativeCount > 32 || substantialSiblings && size >= 12 && size <= 128);
         boolean hasLocalJoin = false;
-        if (outlineCaseArms && Arrays.asList("app", "case", "let").contains(expression.getFirst()))
+        if (outline && Arrays.asList("app", "case", "let").contains(expression.getFirst()))
             for (String free : coreFreeVariables(expression)) if (scope.joins.containsKey(free)) { hasLocalJoin = true; break; }
-        if (!outlineCaseArms || !Arrays.asList("app", "case", "let").contains(expression.getFirst()) || hasLocalJoin)
+        if (!outline || !Arrays.asList("app", "case", "let").contains(expression.getFirst()) || hasLocalJoin)
             return compile(expression, scope, tail);
         OperandBuilder operands = operandBuilder;
         operandBuilder = null;
@@ -958,7 +1005,7 @@ public final class Program implements ExecutableProgram {
         try { fn = function("case arm", List.of(), expression, scope, CoreRepresentations.expression(expression),
             new boolean[0], FunctionRootRole.PASS_THROUGH, tail); }
         finally { operandBuilder = operands; }
-        return new AstCaseArm(fn.target, fn.captureLayout, fn.captures, tail).located(currentSource);
+        return new AstCaseArm(fn.target, fn.captureLayout, fn.captures, tail, scope.programSlot).located(currentSource);
     }
     private FrameSlotKind outlinedSlotKind(CoreRepresentation proof, boolean cell) {
         if (reusableCode) return cell || !proof.getEvaluated() || proof.getKind() == CoreKind.UNKNOWN
@@ -1112,6 +1159,7 @@ public final class Program implements ExecutableProgram {
         Set<Integer> tags = new LinkedHashSet<>();
         int fallback = -1;
         List<List<Object>> alternatives = (List<List<Object>>) expr.get(3);
+        boolean substantialSiblings = substantialSiblings(alternatives);
         Expr[] arms = new Expr[alternatives.size()];
         for (int index = 0; index < alternatives.size(); index++) {
             List<Object> alt = alternatives.get(index);
@@ -1153,7 +1201,7 @@ public final class Program implements ExecutableProgram {
                 else if (component.getKind() == CoreKind.VOID) child.bindVoid(ids.getFirst(), field);
                 else child.bindSlot(ids.getFirst(), new Local(projection[0], component.isLong(), field, false, null, null, null));
             }
-            Expr body = caseArm((List<Object>) alt.get(3), child, tail);
+            Expr body = caseArm((List<Object>) alt.get(3), child, tail, alternatives.size(), substantialSiblings);
             arms[index] = conversionSlots.isEmpty() ? body : new Let(ints(conversionSlots), conversionValues.toArray(Expr[]::new),
                 new boolean[conversionSlots.size()], body, false);
         }
@@ -1234,7 +1282,7 @@ public final class Program implements ExecutableProgram {
                 else local.bindSlot(id, new Local(slots[offset], component.isLong(), evaluated(field, component.isLong() || component.getEvaluated()), false, null, null, null));
             }
         } else if (!"default".equals(alt.getFirst()) || !ids.isEmpty()) throw new RuntimeFault("Invalid tuple alternative");
-        return new TupleCase(scrutinee, slots, caseArm((List<Object>) alt.get(3), local, tail));
+        return new TupleCase(scrutinee, slots, caseArm((List<Object>) alt.get(3), local, tail, 1, false));
     }
     private Expr joinJump(LocalJoinTarget target, List<List<Object>> args, List<?> flags, Scope scope) {
         return joinJump(target, args, flags, scope, new boolean[args.size()]);
@@ -1588,6 +1636,7 @@ public final class Program implements ExecutableProgram {
         int binder = local.bind((String) expr.get(2), !binderProof.getPresent() || binderProof.isLong(), binderProof,
             false, null, null, FrameLayout.carrierKind(binderProof)).slot;
         List<List<Object>> rawAlternatives = (List<List<Object>>) expr.get(3);
+        boolean substantialSiblings = substantialSiblings(rawAlternatives);
         Alternative[] alternatives = new Alternative[rawAlternatives.size()];
         List<CoreRepresentation> results = new ArrayList<>();
         List<Integer> kinds = new ArrayList<>();
@@ -1656,7 +1705,7 @@ public final class Program implements ExecutableProgram {
                 case "lit" -> LITERAL_ALTERNATIVE;
                 default -> throw new RuntimeFault("Invalid Core alternative kind " + kind);
             };
-            Expr body = caseArm((List<Object>) alt.get(3), child, tail);
+            Expr body = caseArm((List<Object>) alt.get(3), child, tail, alternatives.length, substantialSiblings);
             alternatives[a] = reusableCode && layout != null ?
                 new Alternative(tag, layout.reusableStorage(), ints(slots), body, vectorFields, false,
                     scope.programSlot, required(constructorIndices, layout.getId())) :
