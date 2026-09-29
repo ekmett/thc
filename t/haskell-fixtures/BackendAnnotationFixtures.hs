@@ -11,7 +11,7 @@
 -- Portability : GHC 9.14.1; source and interface publication
 --
 -- Real ANN controls share one source across pre-Tidy, late and interface export.
-module BackendAnnotationFixtures (prepareBackendAnnotations) where
+module BackendAnnotationFixtures (prepareBackendAnnotations, checkBackendHookProvenance) where
 
 import Control.Monad (forM_, unless)
 import Data.Aeson (Value(..), object, (.=))
@@ -21,7 +21,12 @@ import Data.List (isInfixOf)
 import Data.Foldable (toList)
 import FixtureSupport
 import GHC
-import GHC.Plugins (liftIO, mainUnit, hsc_logger)
+import GHC.Plugins (liftIO, mainUnit, hsc_logger, hsc_hooks, hsc_plugins,
+  staticPlugins, StaticPlugin(..), PluginWithArgs(..), defaultPlugin)
+import GHC.Driver.Hooks (runPhaseHook)
+import GHC.Driver.Pipeline.Phases (PhaseHook(..))
+import GHC.Driver.Pipeline.Execute (runPhase)
+import GHC.Runtime.Loader (initializePlugins)
 import System.Directory (createDirectoryIfMissing)
 import System.Environment (lookupEnv, getEnvironment)
 import System.Exit (ExitCode(..), die)
@@ -111,4 +116,59 @@ prepareBackendAnnotations root = do
       writeFile (output </> label ++ ".log") (stdout ++ stderr)
       unless (code /= ExitSuccess && message `isInfixOf` (stdout ++ stderr))
         (die ("Expected backend ANN rejection: " ++ label))
-  putStrLn "Backend ANN: pre-Tidy, post-Tidy and installed-interface policies agree; imported closure policies retained; four invalid controls rejected"
+  checkBackendHookProvenance root (output </> "foreign-hooks") libdir packageDb
+  putStrLn "Backend ANN: source/interface policies and foreign provenance agree; invalid policies and unknown compiler hooks rejected"
+
+-- | Real mixed foreign declarations retain both proofs with THC's late hook.
+-- A prior hook, a replacement hook, or an additional plugin stays unclassified.
+checkBackendHookProvenance :: FilePath -> FilePath -> FilePath -> FilePath -> IO ()
+checkBackendHookProvenance root output libdir packageDb =
+  forM_ ["stock", "prior", "replacement", "extra-plugin"] $ \variant -> do
+    let directory = output </> variant
+        source = root </> "t/fixtures/compiler/ForeignExportRegistration.hs"
+        unknown environment = environment {hsc_hooks = (hsc_hooks environment)
+          {runPhaseHook = Just (PhaseHook runPhase)}}
+        field key (Object fields) = maybe Null id (KM.lookup key fields)
+        field _ _ = Null
+    createDirectoryIfMissing True directory
+    bytes <- runGhc (Just libdir) $ do
+      initial <- getSessionDynFlags
+      environment <- getSession
+      (flags,leftovers,_) <- parseDynamicFlags (hsc_logger environment) initial (map noLoc
+        ["-dynamic", "-O0", "-fforce-recomp", "-fwrite-if-simplified-core",
+         "-package-db", packageDb, "-fplugin=THC.Plugin",
+         "-fplugin-opt=THC.Plugin:" ++ (directory </> "core"),
+         "-fplugin-opt=THC.Plugin:post-tidy", "-fplugin-opt=THC.Plugin:unit-qualified",
+         "-fplugin-opt=THC.Plugin:foreign-import-provenance",
+         "-fplugin-opt=THC.Plugin:foreign-export-associations",
+         "-fplugin-opt=THC.Plugin:foreign-export-registration",
+         "-odir", directory, "-hidir", directory, "-stubdir", directory])
+      unless (null leftovers) (liftIO (die "Unexpected foreign hook fixture flags"))
+      _ <- setSessionDynFlags flags {ghcLink = NoLink}
+      configured <- getSession
+      initialized <- liftIO (initializePlugins (if variant == "prior" then unknown configured else configured))
+      setSession $ case variant of
+        "replacement" -> unknown initialized
+        "extra-plugin" -> initialized {hsc_plugins = (hsc_plugins initialized)
+          {staticPlugins = [StaticPlugin (PluginWithArgs defaultPlugin []) True]}}
+        _ -> initialized
+      target <- guessTarget source Nothing Nothing
+      setTargets [target]
+      succeeded <- load LoadAllTargets
+      case succeeded of
+        Succeeded -> pure ()
+        Failed -> liftIO (die "Foreign hook fixture did not compile")
+      final <- getSession
+      core <- liftIO (loadInterfaceCore final (mkModule mainUnit (mkModuleName "ForeignExportRegistration"))
+        (directory </> "ForeignExportRegistration.hi")) >>=
+          maybe (liftIO (die "Foreign hook fixture lost retained Core")) pure
+      liftIO (interfaceCoreCBD [] core)
+    BS.writeFile (directory </> "foreign.cbd") bytes
+    (_,metadata) <- either die pure (readModuleMetadata bytes)
+    forM_ ["staticForeignImports", "staticForeignExportRegistration"] $ \key -> do
+      let proof = field key metadata
+          expected = if variant == "stock" then "verified" else "unclassified"
+      unless (field "status" proof == String expected)
+        (die ("Foreign hook provenance differs: " ++ variant ++ "/" ++ show key ++ " " ++ show proof))
+      unless (variant == "stock" || field "reason" proof == String "unclassified-plugin-or-hook-pipeline")
+        (die "Unknown hook was rejected for an unrelated reason")

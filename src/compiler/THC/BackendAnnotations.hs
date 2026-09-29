@@ -13,12 +13,15 @@
 -- Portability : GHC 9.14.1 compiler API
 --
 -- Decode root-backend annotations and retain them at final source publication.
-module THC.BackendAnnotations (backendFields, closureFields, installBackendHook) where
+module THC.BackendAnnotations (backendFields, closureFields, installBackendHook, knownBackendHook) where
 
+import Control.Concurrent.MVar (MVar, newMVar, modifyMVar, modifyMVar_)
+import Control.Exception (evaluate)
 import Control.Monad (foldM, forM, unless)
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as KM
 import Data.List (stripPrefix)
+import Data.Maybe (catMaybes)
 import qualified Data.Map.Strict as Map
 import GHC.Plugins
 import GHC.Driver.Env (prepareAnnotations)
@@ -30,6 +33,27 @@ import GHC.Types.Name.Occurrence (occNameMangledFS)
 import GHC.Unit.Module.Status (HscBackendAction(..))
 import THC.Compact.Module (readModuleMetadataFile, finalizeModuleMetadata)
 import THC.JSON (J(..), moduleValue)
+import System.IO.Unsafe (unsafePerformIO)
+import System.Mem.StableName (makeStableName)
+import System.Mem.Weak (Weak, deRefWeak, mkWeakPtr)
+
+-- Only our exact wrappers over the stock pipeline are known. Weak keys avoid
+-- retaining compiler sessions, options or previous hooks after compilation.
+{-# NOINLINE backendHooks #-}
+backendHooks :: MVar [Weak (TPhase () -> IO ())]
+backendHooks = unsafePerformIO (newMVar [])
+
+-- | Recognize the installed THC hook without admitting an arbitrary hook
+-- merely because THC is also loaded. Unknown predecessors and replacements
+-- remain unknown; GHC may initialize this driver plugin more than once.
+knownBackendHook :: Maybe PhaseHook -> IO Bool
+knownBackendHook Nothing = pure True
+knownBackendHook (Just (PhaseHook hook)) = do
+  identity <- evaluate hook >>= makeStableName
+  modifyMVar backendHooks $ \hooks -> do
+    live <- catMaybes <$> mapM (\weak -> fmap ((,) weak) <$> deRefWeak weak) hooks
+    identities <- mapM (\(_,callback) -> evaluate callback >>= makeStableName) live
+    pure (map fst live, identity `elem` identities)
 
 -- | Unrelated payload types and strings are ignored. Backend overrides name
 -- original declarations; they do not propagate to GHC workers or inline copies.
@@ -93,7 +117,16 @@ closureFields environment roots = do
 installBackendHook :: ([CommandLineOption] -> Module -> FilePath) -> [CommandLineOption] -> HscEnv -> IO HscEnv
 installBackendHook path options environment
   | "post-tidy" `notElem` options = pure environment
-  | otherwise = pure environment {hsc_hooks = hooks {runPhaseHook = Just (PhaseHook run)}}
+  | otherwise = do
+      knownPrevious <- knownBackendHook (runPhaseHook hooks)
+      hook <- evaluate (PhaseHook run)
+      if knownPrevious then do
+        -- GHC can rebox PhaseHook, but retains its actual callback closure.
+        callback <- evaluate (run :: TPhase () -> IO ())
+        weak <- mkWeakPtr callback Nothing
+        modifyMVar_ backendHooks (pure . (weak :))
+      else pure ()
+      pure environment {hsc_hooks = hooks {runPhaseHook = Just hook}}
   where
     hooks = hsc_hooks environment
     previous :: TPhase a -> IO a

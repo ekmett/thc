@@ -162,6 +162,7 @@ recordImports options environment
   | "foreign-import-provenance" `notElem` options = pure environment
   | otherwise = do
       top <- getTopEnv
+      pipeline <- liftIO (knownPipeline top)
       pending <- liftIO (readIORef (tcg_th_coreplugins environment))
       let flags = hsc_dflags top
           allowed = platformArch (targetPlatform flags) `elem` [ArchX86_64,ArchAArch64] &&
@@ -169,7 +170,7 @@ recordImports options environment
           allDeclarations = tcg_fords environment
           declarations = [declaration | declaration@(L _ ForeignImport {}) <- allDeclarations]
           mixed = length declarations /= length allDeclarations
-      evidence <- if not (knownPipeline top) || not (null pending)
+      evidence <- if not pipeline || not (null pending)
         then pure (Unclassified "unclassified-plugin-or-hook-pipeline")
         else if not allowed then pure (Unclassified "unclassified-target-or-instrumentation")
         else case traverse classify declarations of
