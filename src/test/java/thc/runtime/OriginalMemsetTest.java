@@ -72,7 +72,7 @@ class OriginalMemsetTest {
                                 var destination = base.plus((Long) row.get("offset")); long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
                                 // Raw calls retain the genuine descriptor and cover the entire CInt corpus.
                                 Object fill = raw ? Integer.valueOf(((Long) row.get("value")).intValue()) : row.get("value"); Object[] args = {0L,destination,fill,row.get("count")}; Object result;
-                                if (raw) { var packet = Arrays.copyOf(args,args.length + 1); packet[args.length] = thc.runtime.Unit.INSTANCE; result = callScalarTestTarget(target,packet); } else result = Calls.target(target,args);
+                                if (raw) { var packet = Arrays.copyOf(args,args.length + 1); packet[args.length] = thc.runtime.Unit.INSTANCE; result = callScalarTestTarget(target,packet); } else result = callScalarTestTarget(target,args);
                                 var label = stage + "/" + backend + "/raw=" + raw + "/storage=" + kind + "/" + index + "/compiled=" + compiled; returnedAlias(destination,result); assertEquals(row.get("returned"),((ManagedAddress) result).difference(base),label); assertEquals(row.get("after"),bytes(base,values.size()),label);
                                 if (compiled) { assertEquals(before + executedRoots,((Number) program.diagnostics().get("compiledEntries")).longValue(),label); valid(target); }
                                 var state = language.getHandoffState().get(); assertEquals(0,state.getArguments().getDepth()); assertEquals(0,state.getResults().getDepth()); assertEquals(0,state.getResults().retainedReferences());

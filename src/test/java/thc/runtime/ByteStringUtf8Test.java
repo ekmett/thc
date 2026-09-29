@@ -18,6 +18,7 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static thc.runtime.ScalarValueTestSupport.*;
+import static thc.runtime.ScalarTestCalls.callScalarTestTarget;
 
 class ByteStringUtf8Test {
     @BeforeEach void supportedHost() { assumeTrue("Linux".equals(System.getProperty("os.name")) && Set.of("amd64", "x86_64").contains(System.getProperty("os.arch"))); }
@@ -72,7 +73,8 @@ class ByteStringUtf8Test {
             case 0 -> ManagedAddress.fromByteArray(bytes);
             case 3 -> ManagedAddress.fromHex(HexFormat.of().formatHex(bytes));
             default -> {
-                var result = ManagedAddress.fromAllocation(ManagedAllocation.mutable(bytes.length, 8, kind == 2));
+                var result = ManagedAddress.fromAllocation(kind == 4 ? ManagedAllocation.nativeMutable(bytes.length, 8)
+                    : ManagedAllocation.mutable(bytes.length, 8, kind == 2));
                 for (int i = 0; i < bytes.length; i++) result.writeWord8(i, bytes[i]); yield result;
             }
         };
@@ -98,9 +100,10 @@ class ByteStringUtf8Test {
                 for (var group : groups.entrySet()) {
                     var entry = group.getKey(); var examples = group.getValue(); var program = load(language, backend, with(CoreModules.reachable(source, entry), "instrument", true)); var target = program.entryTarget(entry);
                     CheckedConsumer<Boolean> exercise = compiled -> {
-                        for (int kind = 0; kind <= 3; kind++) for (int index = 0; index < examples.size(); index++) {
+                        // The original Ptr ABI and withArray oracle use native addresses.
+                        for (int kind : new int[]{2, 3, 4}) for (int index = 0; index < examples.size(); index++) {
                             var row = examples.get(index); var base = address(row.get("bytes"), kind); long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
-                            var result = Calls.target(target, new Object[]{0L, base.plus((Long) row.get("offset")), row.get("count")});
+                            var result = callScalarTestTarget(target, new Object[]{0L, base.plus((Long) row.get("offset")), row.get("count")});
                             var label = stage + "/" + backend + "/" + entry + "/storage=" + kind + "/" + index + "/compiled=" + compiled;
                             assertEquals(row.get("result"), result, label); var bytes = expression(row.get("bytes"));
                             for (int i = 0; i < bytes.size(); i++) assertEquals(bytes.get(i), base.readWord8(i), label + " input is unchanged");
@@ -145,9 +148,9 @@ class ByteStringUtf8Test {
                     }
                     assertThrows(RuntimeFault.class, () -> load(language, backend, bad), backend + "/" + variant);
                 }
-                var target = load(language, backend, raw).entryTarget("entry"); var bytes = ManagedAddress.fromByteArray(new byte[]{65});
-                assertThrows(RuntimeFault.class, () -> Calls.target(target, new Object[]{0L, bytes, 1L, 17L}));
-                assertEquals(1, Calls.target(target, new Object[]{0L, bytes, 1L, thc.runtime.Unit.INSTANCE}));
+                var target = load(language, backend, raw).entryTarget("entry"); var bytes = address(list(65L), 4);
+                assertThrows(RuntimeFault.class, () -> callScalarTestTarget(target, new Object[]{0L, bytes, 1L, 17L}));
+                assertEquals(1, callScalarTestTarget(target, new Object[]{0L, bytes, 1L, thc.runtime.Unit.INSTANCE}));
             }
         });
     }
@@ -172,7 +175,7 @@ class ByteStringUtf8Test {
             for (var backend : list("ast", "bytecode")) inside(language -> {
                 for (var original : OriginalStdioChecks.foreignCalls(source)) {
                     var ordinary = load(language, backend, shadowed(original, source, false)).entryTarget("entry");
-                    assertEquals(37, Calls.target(ordinary, new Object[]{0L, ManagedAddress.fromByteArray(new byte[]{-1}), 1L, thc.runtime.Unit.INSTANCE}), stage + "/" + backend + " ordinary lexical join keeps its result");
+                    assertEquals(37, callScalarTestTarget(ordinary, new Object[]{0L, ManagedAddress.fromByteArray(new byte[]{-1}), 1L, thc.runtime.Unit.INSTANCE}), stage + "/" + backend + " ordinary lexical join keeps its result");
                     var failure = assertThrows(RuntimeFault.class, () -> load(language, backend, shadowed(original, source, true)));
                     assertTrue(Objects.toString(failure.getMessage(), "").contains("unresolved declared foreign head"), stage + "/" + backend + " rejects the shadowed head specifically: " + failure.getMessage());
                 }

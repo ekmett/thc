@@ -34,6 +34,10 @@ LIBDW_SHA256 = {
     "LibdwPool.h": "db0ca71e54f18b15bd8afbb66ba69b13675ec10b974bfcb838ddb1234127612c",
     "RtsUtils.h": "6257c9fb28c80ad62c5084b771ce71fd2b2afceaf428633a10e37dc5eb309649",
 }
+RTS_FLOAT_SHA256 = {
+    "StgPrimFloat.c": "9cf152e52641b332634c9a9a0a24114f7d4640b08d17a35a020abb7bde4cf8c0",
+    "StgPrimFloat.h": "486279f796cfc733a7d371e2445201a21b66a82a08ed501fdb82491c473b8f13",
+}
 
 
 def compiler_target(clang, system, arch):
@@ -103,7 +107,7 @@ def main():
     if hashlib.sha256(strerror.read_bytes()).hexdigest() != STRERROR_SHA256:
         raise SystemExit("Original GHC 9.14.1 strerror.c changed")
     libdw = ROOT / "nih/pinned/ghc-9.14.1/rts"
-    for name, expected in LIBDW_SHA256.items():
+    for name, expected in (LIBDW_SHA256 | RTS_FLOAT_SHA256).items():
         if hashlib.sha256((libdw / name).read_bytes()).hexdigest() != expected:
             raise SystemExit(f"Original GHC 9.14.1 {name} changed")
     text_source = ROOT / "nih/pinned/text-2.1.3"
@@ -195,6 +199,19 @@ def main():
     source_files += list(text_sources.values()) + [bytestring_source]
     source_files += unix_headers + [p.parent / "HsUnixConfig.h" for p in unix_headers]
     artifacts = [output / (name + ".bc") for name in sources]
+    # The original RTS floating helpers contain no GHC heap state. Supply the
+    # whole translation unit to ordinary native imports, including its public
+    # signed/unsigned Float/Double encoders, without loading a second RTS.
+    artifact = output / ("rts-float" + {"Windows": ".dll", "Darwin": ".dylib", "Linux": ".so"}[system])
+    command = [*compiler, "-O1", "-g", "-fno-strict-aliasing", "-shared",
+               *([] if system == "Windows" else ["-fPIC"]),
+               f"-ffile-prefix-map={ROOT}=.", f"-fdebug-prefix-map={ROOT}=.",
+               "-I", str(headers[0].parent), str(libdw / "StgPrimFloat.c"),
+               "-lm", "-o", str(artifact)]
+    subprocess.run(command, cwd=ROOT, check=True)
+    commands.append(command)
+    source_files += [libdw / name for name in RTS_FLOAT_SHA256]
+    artifacts.append(artifact)
     if system == "Windows":
         source = ROOT / "src/main/c/windows-malloc.c"
         artifact = output / "windows-malloc.dll"

@@ -40,8 +40,27 @@ public final class PackageScalarLibraries {
     private final ThreadLocal<ArrayDeque<String>> awaitingDependencies = ThreadLocal.withInitial(ArrayDeque::new);
     private final InteropLibrary interop = InteropLibrary.getUncached();
     private final FutureTask<Map<String, Object>> pointerOperations;
+    private final FutureTask<Object> floatingRuntime;
     public PackageScalarLibraries(TruffleLanguage.Env env) {
         this.env = env;
+        floatingRuntime = new FutureTask<>(() -> {
+            String system = System.getProperty("os.name");
+            boolean windows = system.startsWith("Windows");
+            String suffix = windows ? ".dll" : system.startsWith("Mac") ? ".dylib" : ".so";
+            var file = Files.createTempFile("thc-rts-float-", suffix);
+            try {
+                try (var stream = PackageScalarLibraries.class.getResourceAsStream("/thc/cbits/rts-float" + suffix)) {
+                    if (stream == null) throw fault("Missing original RTS floating support");
+                    Files.copy(stream, file, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                }
+                String path = file.toString().replace("\\", "\\\\").replace("\"", "\\\"");
+                return env.parseInternal(Source.newBuilder("nfi",
+                    (windows ? "load " : "load(RTLD_LAZY|RTLD_LOCAL) ") + "\"" + path + "\"", "rts-float").build()).call();
+            } finally {
+                if (windows) file.toFile().deleteOnExit();
+                else Files.deleteIfExists(file);
+            }
+        });
         pointerOperations = new FutureTask<>(() -> {
             byte[] bytes;
             try (var stream = PackageScalarLibraries.class.getResourceAsStream("/thc/cbits/package-pointer.bc")) {
@@ -183,6 +202,8 @@ public final class PackageScalarLibraries {
         if (nativeContext == null) throw fault("Sulong native library loading is unavailable");
         synchronized (this) {
             if (!callbacksRegistered) {
+                floatingRuntime.run();
+                nativeContext.addLibraryHandles(await(floatingRuntime));
                 nativeContext.addLibraryHandles(owner.getNativeCallbacks().namespace());
                 callbacksRegistered = true;
             }

@@ -1248,6 +1248,7 @@ def compileCbits = tasks.register("compileCbits", Exec) {
         "nih/pinned/ghc-9.14.1/libraries/ghc-internal/cbits/md5.c",
         "nih/pinned/ghc-9.14.1/libraries/ghc-internal/include/md5.h")
     inputs.files("nih/pinned/ghc-9.14.1/rts/BeginPrivate.h", "nih/pinned/ghc-9.14.1/rts/EndPrivate.h", "nih/pinned/ghc-9.14.1/rts/Libdw.c", "nih/pinned/ghc-9.14.1/rts/Libdw.h", "nih/pinned/ghc-9.14.1/rts/LibdwPool.c", "nih/pinned/ghc-9.14.1/rts/LibdwPool.h", "nih/pinned/ghc-9.14.1/rts/RtsUtils.h")
+    inputs.files("nih/pinned/ghc-9.14.1/rts/StgPrimFloat.c", "nih/pinned/ghc-9.14.1/rts/StgPrimFloat.h")
     inputs.files("src/main/c/text-api.c", "src/main/c/wait-status-api.c")
     inputs.files("src/main/c/bytestring-utf8-api.c")
     inputs.file("nih/pinned/bytestring-0.12.2.0/cbits/is-valid-utf8.c")

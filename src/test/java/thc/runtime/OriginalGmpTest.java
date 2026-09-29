@@ -34,6 +34,7 @@ import thc.ForeignExceptionFixtureSupport;
 import thc.Json;
 import thc.Language;
 import static org.junit.jupiter.api.Assertions.*;
+import static thc.runtime.ScalarTestCalls.callScalarTestTarget;
 
 /** Genuine installed declarations and native observations; no replacement FFI. */
 @EnabledOnOs(OS.LINUX)
@@ -76,10 +77,17 @@ public class OriginalGmpTest {
         var words = (List<Long>) value; var buffer = ByteBuffer.allocate(words.size() * 8).order(ByteOrder.nativeOrder());
         for (long word : words) buffer.putLong(word); return buffer.array();
     }
+    private ManagedAllocation nativeBytes(Object value) {
+        var bytes = bytes(value);
+        var allocation = ManagedAllocation.nativeMutable(bytes.length, 8);
+        allocation.copyBytesIn(bytes, 0, 0, bytes.length);
+        return allocation;
+    }
+    private byte[] bytes(ManagedAllocation allocation) { return allocation.copyBytesOut(0, allocation.getSize()); }
     private static final class Observation {
-        final byte[] left, right, output, remainder;
+        final ManagedAllocation left, right, output, remainder;
         final Object[] arguments;
-        Observation(Map<String, Object> row, Function<Object, byte[]> convert) {
+        Observation(Map<String, Object> row, Function<Object, ManagedAllocation> convert) {
             left = convert.apply(row.get("leftBefore")); right = convert.apply(row.get("rightBefore"));
             output = switch ((String) row.get("alias")) {
                 case "output-left" -> left; case "output-right" -> right;
@@ -117,6 +125,7 @@ public class OriginalGmpTest {
     }
     private Context context() { return context(true, true); }
     private Context context(boolean nativeAccess, boolean inline) { return Context.newBuilder("thc").allowNativeAccess(nativeAccess).allowIO(IOAccess.ALL).allowExperimentalOptions(true)
+        .option("thc.ByteArrayStorage", nativeAccess ? "native" : "heap")
         .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("compiler.Inlining", Boolean.toString(inline)).option("engine.CompilationFailureAction", "Throw").build(); }
     private ExecutableProgram load(Language language, String backend, Map<String, Object> source) throws Exception { source = ForeignExceptionFixtureSupport.nativeModules(List.of(source)); return backend.equals("ast") ? new Program(language, source) : new BytecodeProgram(language, source); }
     @Test public void originalCorpusAndExportProvenanceRemainExact() throws Exception { rows(); }
@@ -139,22 +148,22 @@ public class OriginalGmpTest {
                     for (var group : grouped.entrySet()) {
                         var name = group.getKey(); var examples = group.getValue(); var linked = new LinkedHashMap<>(CoreModules.reachable(source, name)); linked.put("instrument", true);
                         var program = load(language, backend, linked); var value = program.entryValue(name);
-                        var host = program.hostEntryTarget(new Observation(examples.getFirst(), this::bytes).arguments.length);
+                        var host = program.hostEntryTarget(new Observation(examples.getFirst(), this::nativeBytes).arguments.length);
                         class Runner {
                             RootCallTarget entry = program.entryTarget(name); List<RootCallTarget> active = List.of();
                             void exercise(boolean compiled) throws Exception {
                                 for (int index = 0; index < examples.size(); index++) {
-                                    var row = examples.get(index); var observation = new Observation(row, OriginalGmpTest.this::bytes); var label = stage + "/" + backend + "/inline=" + inline + "/" + name + "/" + index;
-                                    assertArrayEquals(bytes(row.get("outputBefore")), observation.output, label + " output alias initialization");
-                                    assertArrayEquals(bytes(row.get("remainderBefore")), observation.remainder, label + " remainder alias initialization");
+                                    var row = examples.get(index); var observation = new Observation(row, OriginalGmpTest.this::nativeBytes); var label = stage + "/" + backend + "/inline=" + inline + "/" + name + "/" + index;
+                                    assertArrayEquals(bytes(row.get("outputBefore")), bytes(observation.output), label + " output alias initialization");
+                                    assertArrayEquals(bytes(row.get("remainderBefore")), bytes(observation.remainder), label + " remainder alias initialization");
                                     long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
                                     // The source-pure cmp/mod consumers are genuine global
                                     // aliases. The ordinary host dispatcher forces their CAF
                                     // and applies the resulting closure, retaining captures.
                                     var returned = Calls.target(host, new Object[]{value, observation.arguments});
                                     assertEquals(row.get("result"), returned instanceof Double number ? (Object) Double.doubleToRawLongBits(number) : returned, label);
-                                    assertArrayEquals(bytes(row.get("leftAfter")), observation.left, label + " left"); assertArrayEquals(bytes(row.get("rightAfter")), observation.right, label + " right");
-                                    assertArrayEquals(bytes(row.get("outputAfter")), observation.output, label + " output"); assertArrayEquals(bytes(row.get("remainderAfter")), observation.remainder, label + " remainder");
+                                    assertArrayEquals(bytes(row.get("leftAfter")), bytes(observation.left), label + " left"); assertArrayEquals(bytes(row.get("rightAfter")), bytes(observation.right), label + " right");
+                                    assertArrayEquals(bytes(row.get("outputAfter")), bytes(observation.output), label + " output"); assertArrayEquals(bytes(row.get("remainderAfter")), bytes(observation.remainder), label + " remainder");
                                     if (compiled) {
                                         assertEquals(before + active.size(), ((Number) program.diagnostics().get("compiledEntries")).longValue(), label + " compiled entries");
                                         assertEquals(active, targets(entry), label + " target retention"); for (var target : active) valid(target);
@@ -208,11 +217,11 @@ public class OriginalGmpTest {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 var output = new byte[24]; Arrays.fill(output, (byte) 0x5a); var before = output.clone(); var input = new byte[24]; Arrays.fill(input, (byte) 0x33);
                 if (!nativeAccess) {
-                    assertThrows(RuntimeFault.class, () -> Calls.target(load(language, backend, source).entryTarget("originalAddWord"),
+                    assertThrows(RuntimeFault.class, () -> callScalarTestTarget(load(language, backend, source).entryTarget("originalAddWord"),
                         new Object[]{0L, output, input, 1L, 1L}));
                 } else {
                     var entry = load(language, backend, source).entryTarget("originalAddWord");
-                    assertThrows(RuntimeFault.class, () -> Calls.target(entry, new Object[]{0L, output, ManagedAddress.fromByteArray(input), 1L, 1L}));
+                    assertThrows(RuntimeFault.class, () -> callScalarTestTarget(entry, new Object[]{0L, output, ManagedAddress.fromByteArray(input), 1L, 1L}));
                 }
                 assertArrayEquals(before, output);
             } finally { context.leave(); }
