@@ -13,12 +13,17 @@
 --
 -- Bounded deterministic ZIP assembly from already counted/CRC'd fragments.
 -- ZIP64 fields are emitted only where the ordinary field cannot hold a value.
-module THC.Compact.Zip (ZipSource(..), writeZip, readZip, readZipWithMethods, zipLocalHeader, zipCentralHeader, zipEnd) where
+module THC.Compact.Zip
+  ( ZipSource(..), writeZip, readZip, readZipWithMethods, readZipHeader, readZipHeaderFile, finalizeHeaderFile
+  , zipLocalHeader, zipCentralHeader, zipEnd ) where
 
 import qualified Codec.Compression.Zlib.Internal as Z
+import qualified Codec.Compression.Zlib.Raw as Raw
 import Control.Exception (IOException, bracket, catch)
 import Control.Monad (foldM, unless, replicateM)
 import Control.Monad.ST.Lazy (runST)
+import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.Except (ExceptT(..), except, runExceptT, throwE)
 import Data.Binary.Get hiding (remaining)
 import Data.Binary.Put
 import Data.Bits ((.&.))
@@ -26,7 +31,7 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as B8
 import qualified Data.ByteString.Lazy as BL
 import Data.Digest.CRC32 (crc32, crc32Update)
-import Data.List (nub)
+import Data.Functor.Identity (Identity(..))
 import Data.Word (Word16, Word32, Word64)
 import System.Directory (removeFile)
 import System.IO
@@ -191,45 +196,129 @@ readZip bytes = map (\(name,_,payload) -> (name,payload)) <$> readZipWithMethods
 -- | Retain the actual ZIP method when an existing container is amended.
 readZipWithMethods :: BS.ByteString -> Either String [(String,Word16,BS.ByteString)]
 readZipWithMethods bytes = do
-  end <- case [i | i <- reverse [max 0 (BS.length bytes-65557)..BS.length bytes-22],
-    BS.take 4 (BS.drop i bytes) == "PK\5\6"] of
-      [] -> Left "Missing ZIP end record"
-      positions -> case filter validEnd positions of
-        position:_ -> Right position
-        [] -> Left "Invalid ZIP end record"
-  (count,offset,size,boundary) <- decode (endRecord end) (BS.drop end bytes)
-  unless (count == 7) (Left "CBD ZIP requires seven members")
-  unless (offset <= boundary && size == boundary-offset) (Left "Invalid ZIP directory extent")
-  directory <- slice offset size
-  entries <- decode (replicateM 7 centralEntry) directory
-  let names = [name | Entry name _ _ _ _ _ _ <- entries]
-  unless (length (nub names) == 7 && all (`elem` ["header","data","strings","names","filenames","line-columns","symbols"]) names)
-    (Left "Invalid CBD ZIP member inventory")
-  mapM (contents offset) entries
+  (offset,entries) <- readZipDirectory bytes
+  mapM (contents bytes offset . fst) entries
+
+readZipHeader :: BS.ByteString -> Either String (BS.ByteString,[Word64])
+readZipHeader bytes = do
+  (offset,entries) <- readZipDirectory bytes
+  (_,_,payload) <- contents bytes offset (fst (last entries))
+  pure (payload,[size | (Entry _ _ _ _ size _ _,_) <- take 6 entries])
+
+-- | Finalize an OWNED STAGING file, never a published immutable cache entry.
+-- Seek to the last local record and replace only that tail. The six payload
+-- payload bytes are neither read nor written. Their raw central records retain
+-- their exact bytes and offsets. Prepare the complete new tail before writing.
+finalizeHeaderFile :: FilePath -> (BS.ByteString -> [Word64] -> IO (Maybe BS.ByteString)) -> IO ()
+finalizeHeaderFile path prepare = withBinaryFile path ReadWriteMode $ \handle -> do
+  (entries,oldHeader) <- fileHeader handle
+  let (Entry _ _ method _ _ _ offset,_) = last entries
+      lengths = [length' | (Entry _ _ _ _ length' _ _,_) <- take 6 entries]
+  changed <- prepare oldHeader lengths
+  case changed of
+    Nothing -> pure ()
+    Just header -> do
+      let compressed = if method == 0 then header else BL.toStrict (Raw.compress (BL.fromStrict header))
+          newSize = fromIntegral (BS.length header)
+          newCompressed = fromIntegral (BS.length compressed)
+          crc = crc32 header
+          local = BL.toStrict (runPut (zipLocalHeader "header" method crc newSize newCompressed)) <> compressed
+          central = BS.concat (map snd (take 6 entries)) <>
+            BL.toStrict (runPut (zipCentralHeader "header" method crc newSize newCompressed offset))
+      nextDirectory <- checkedAdd offset (fromIntegral (BS.length local))
+      let tailBytes = local <> central <>
+            BL.toStrict (runPut (zipEnd 7 nextDirectory (fromIntegral (BS.length central))))
+      end <- checkedAdd offset (fromIntegral (BS.length tailBytes))
+      hSeek handle AbsoluteSeek (fromIntegral offset)
+      BS.hPut handle tailBytes
+      hSetFileSize handle (fromIntegral end)
+
+readZipHeaderFile :: FilePath -> IO (BS.ByteString,[Word64])
+readZipHeaderFile path = withBinaryFile path ReadMode $ \handle -> do
+  (entries,header) <- fileHeader handle
+  pure (header,[size | (Entry _ _ _ _ size _ _,_) <- take 6 entries])
+
+fileHeader :: Handle -> IO ([(Entry,BS.ByteString)],BS.ByteString)
+fileHeader handle = do
+  -- Reading a small local header must not refill a buffered handle from DATA.
+  hSetBuffering handle NoBuffering
+  extent <- hFileSize handle
+  unless (extent <= fromIntegral (maxBound :: Word64)) (fail "CBD ZIP exceeds uint64")
+  let size = fromIntegral extent
+      fetch start count = do
+        unless (start <= size && count <= size-start && count <= fromIntegral (maxBound :: Int))
+          (throwE "ZIP extent exceeds archive")
+        lift (hSeek handle AbsoluteSeek (fromIntegral start))
+        bytes <- lift (BS.hGet handle (fromIntegral count))
+        unless (fromIntegral (BS.length bytes) == count) (throwE "Truncated CBD staging file")
+        pure bytes
+  (directoryOffset,entries) <- either fail pure =<< runExceptT (readDirectory size fetch)
+  let (headerEntry@(Entry _ flags method checksum headerSize compressedSize _),_) = last entries
+  unless (flags == 0) (fail "Final CBD header has unsupported ZIP flags")
+  oldHeader <- either fail pure =<< runExceptT (do
+    -- Validate local/directory framing without fetching any of the payloads.
+    finalOffset <- foldM (\expected (entry@(Entry _ entryFlags _ _ _ count offset),_) -> do
+      unless (entryFlags == 0 && offset == expected) (throwE "CBD staging records are not contiguous")
+      start <- entryStart fetch directoryOffset entry
+      pure (start+count)) 0 (take 6 entries)
+    let Entry _ _ _ _ _ _ headerOffset = headerEntry
+    unless (finalOffset == headerOffset) (throwE "CBD header does not follow payload records")
+    start <- entryStart fetch directoryOffset headerEntry
+    unless (compressedSize == directoryOffset-start) (throwE "CBD header is not the final local record")
+    compressed <- fetch start compressedSize
+    except (uncompress method checksum headerSize compressedSize compressed))
+  pure (entries,oldHeader)
+
+readZipDirectory :: BS.ByteString -> Either String (Word64,[(Entry,BS.ByteString)])
+readZipDirectory bytes = runIdentity (runExceptT
+  (readDirectory (fromIntegral (BS.length bytes)) (\start size -> except (sliceZip bytes start size))))
+
+readDirectory :: Monad m => Word64 -> (Word64 -> Word64 -> ExceptT String m BS.ByteString) ->
+  ExceptT String m (Word64,[(Entry,BS.ByteString)])
+readDirectory sizeOfFile fetch = do
+  unless (sizeOfFile >= 22) (throwE "Missing ZIP end record")
+  let end = sizeOfFile-22
+  tailBytes <- fetch end 22
+  (count,offset,size,boundary) <- endRecord end =<< except (decode endOnly tailBytes)
+  unless (count == 7) (throwE "CBD ZIP requires seven members")
+  unless (offset <= boundary && size == boundary-offset) (throwE "Invalid ZIP directory extent")
+  directory <- fetch offset size
+  rows <- except $ decode (replicateM 7 $ do
+    start <- bytesRead
+    entry <- centralEntry
+    finish <- bytesRead
+    pure (entry,start,finish)) directory
+  let entries = [(entry,BS.take (fromIntegral (finish-start)) (BS.drop (fromIntegral start) directory)) |
+        (entry,start,finish) <- rows]
+      names = [name | (Entry name _ _ _ _ _ _,_) <- entries]
+  unless (names == ["data","strings","names","filenames","line-columns","symbols","header"])
+    (throwE "Invalid CBD ZIP member order")
+  let offsets = [position | (Entry _ _ _ _ _ _ position,_) <- entries]
+  unless (and (zipWith (<) offsets (drop 1 offsets))) (throwE "Invalid CBD ZIP physical member order")
+  pure (offset,entries)
   where
-    validEnd position = case decode endOnly (BS.drop position bytes) of Right _ -> True; Left _ -> False
     endOnly = do
       signature 0x06054b50
       disk <- getWord16le; directoryDisk <- getWord16le
       diskCount <- getWord16le; count <- getWord16le
       size <- getWord32le; offset <- getWord32le
       commentSize <- getWord16le
-      skip (fromIntegral commentSize)
+      unless (commentSize == 0) (fail "CBD ZIP comments are unsupported")
       unless (disk == 0 && directoryDisk == 0 && diskCount == count) (fail "Multi-disk ZIP is unsupported")
       pure (count,offset,size)
-    endRecord end = do
-      (count,offset,size) <- endOnly
+    endRecord end (count,offset,size) = do
       if count /= maxBound && offset /= maxBound && size /= maxBound
         then pure (fromIntegral count,fromIntegral offset,fromIntegral size,fromIntegral end)
         else do
-          locator <- either fail pure (slice (fromIntegral end-20) 20)
-          zip64Offset <- either fail pure $ decode (do
+          unless (end >= 20) (throwE "Truncated ZIP64 locator")
+          locator <- fetch (end-20) 20
+          zip64Offset <- except $ decode (do
             signature 0x07064b50
             disk <- getWord32le; position <- getWord64le; disks <- getWord32le
             unless (disk == 0 && disks == 1) (fail "Invalid ZIP64 locator")
             pure position) locator
-          record <- either fail pure (slice zip64Offset 56)
-          (wideCount,wideOffset,wideSize) <- either fail pure $ decode (do
+          record <- fetch zip64Offset 56
+          (wideCount,wideOffset,wideSize) <- except $ decode (do
             signature 0x06064b50
             recordLength <- getWord64le
             unless (recordLength == 44) (fail "Unsupported ZIP64 end extension")
@@ -239,16 +328,27 @@ readZipWithMethods bytes = do
             wideSize <- getWord64le; wideOffset <- getWord64le
             unless (disk == 0 && directoryDisk == 0 && diskCount == total) (fail "Invalid ZIP64 end record")
             pure (total,wideOffset,wideSize)) record
-          unless (zip64Offset <= fromIntegral end && fromIntegral end-zip64Offset == 76) (fail "Invalid ZIP64 end bounds")
+          unless (zip64Offset <= end && end-zip64Offset == 76) (throwE "Invalid ZIP64 end bounds")
           pure (wideCount,wideOffset,wideSize,zip64Offset)
-    slice :: Word64 -> Word64 -> Either String BS.ByteString
-    slice start size
-      | start <= fromIntegral (BS.length bytes) && size <= fromIntegral (BS.length bytes)-start =
-          Right (BS.take (fromIntegral size) (BS.drop (fromIntegral start) bytes))
-      | otherwise = Left "ZIP extent exceeds archive"
-    contents directoryOffset (Entry name flags method checksum size compressed offset) = do
-      fixed <- slice offset 30
-      (localFlags,localMethod,localCrc,localCompressed,localSize,nameSize,extraSize) <- decode (do
+
+sliceZip :: BS.ByteString -> Word64 -> Word64 -> Either String BS.ByteString
+sliceZip bytes start size
+  | start <= fromIntegral (BS.length bytes) && size <= fromIntegral (BS.length bytes)-start =
+      Right (BS.take (fromIntegral size) (BS.drop (fromIntegral start) bytes))
+  | otherwise = Left "ZIP extent exceeds archive"
+
+compressedContents :: BS.ByteString -> Word64 -> Entry -> Either String (Word64,BS.ByteString)
+compressedContents bytes directoryOffset (Entry name flags method checksum size compressed offset) = do
+      let entry = Entry name flags method checksum size compressed offset
+      start <- runIdentity (runExceptT (entryStart (\at count -> except (sliceZip bytes at count)) directoryOffset entry))
+      payload <- sliceZip bytes start compressed
+      pure (start,payload)
+
+entryStart :: Monad m => (Word64 -> Word64 -> ExceptT String m BS.ByteString) -> Word64 -> Entry -> ExceptT String m Word64
+entryStart fetch directoryOffset (Entry name flags method checksum size compressed offset) = do
+      unless (offset <= directoryOffset && directoryOffset-offset >= 30) (throwE "ZIP local header overlaps directory")
+      fixed <- fetch offset 30
+      (localFlags,localMethod,localCrc,localCompressed,localSize,nameSize,extraSize) <- except $ decode (do
         signature 0x04034b50
         skip 2
         f <- getWord16le; m <- getWord16le
@@ -257,16 +357,25 @@ readZipWithMethods bytes = do
         n <- getWord16le; x <- getWord16le
         pure (f,m,c,z,s,n,x)) fixed
       let variableSize = fromIntegral nameSize+fromIntegral extraSize
-      variable <- slice (offset+30) variableSize
+      variable <- fetch (offset+30) variableSize
       unless (B8.unpack (BS.take (fromIntegral nameSize) variable) == name && flags == localFlags && method == localMethod)
-        (Left "ZIP local/directory identity mismatch")
-      localExtra <- decode extras (BS.drop (fromIntegral nameSize) variable)
-      actualSizes <- widen localExtra [localSize,localCompressed]
+        (throwE "ZIP local/directory identity mismatch")
+      localExtra <- except (decode extras (BS.drop (fromIntegral nameSize) variable))
+      actualSizes <- except (widen localExtra [localSize,localCompressed])
       unless (flags .&. 8 /= 0 || (checksum == localCrc && actualSizes == [size,compressed]))
-        (Left "ZIP local/directory size or CRC mismatch")
+        (throwE "ZIP local/directory size or CRC mismatch")
       let start = offset+30+variableSize
-      unless (start <= directoryOffset && compressed <= directoryOffset-start) (Left "ZIP member overlaps directory")
-      payload <- slice start compressed
+      unless (start <= directoryOffset && compressed <= directoryOffset-start) (throwE "ZIP member overlaps directory")
+      pure start
+
+contents :: BS.ByteString -> Word64 -> Entry -> Either String (String,Word16,BS.ByteString)
+contents bytes directoryOffset entry@(Entry name _ method checksum size compressed _) = do
+      (_,payload) <- compressedContents bytes directoryOffset entry
+      result <- uncompress method checksum size compressed payload
+      pure (name,method,result)
+
+uncompress :: Word16 -> Word32 -> Word64 -> Word64 -> BS.ByteString -> Either String BS.ByteString
+uncompress method checksum size compressed payload = do
       (result,actualCrc) <- case method of
         0 -> do
           unless (size == compressed) (Left "STORED ZIP sizes disagree")
@@ -274,7 +383,7 @@ readZipWithMethods bytes = do
         8 -> inflate size payload
         _ -> Left "Unsupported ZIP compression method"
       unless (actualCrc == checksum) (Left "ZIP member CRC mismatch")
-      pure (name,method,result)
+      pure result
 
 data Entry = Entry !String !Word16 !Word16 !Word32 !Word64 !Word64 !Word64
 

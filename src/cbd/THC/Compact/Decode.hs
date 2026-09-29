@@ -12,7 +12,7 @@
 -- Native selected-record decoder for round-trip controls and flat inspection.
 -- Earlier shape definitions are addressed directly; no preceding Core tree is
 -- decoded to find a selected binding. Runtime mmap ownership is independent.
-module THC.Compact.Decode (decodeBindingAt, decodeBindingAtWithHostSignatures, decodeExprAt, decodeRepAt, decodeFacts) where
+module THC.Compact.Decode (decodeBindingAt, decodeBindingAtWithHostSignatures, decodeExprAt, decodeRepAt, decodeFacts, decodeMetadata) where
 
 import Control.Monad (replicateM, unless)
 import Data.Binary.Get hiding (Decoder)
@@ -54,6 +54,15 @@ decodeRepAt bytes strings offset = runAt bytes offset (representation (Decoder b
 -- | Header facts decode independently of all executable and debug bytes.
 decodeFacts :: BS.ByteString -> BS.ByteString -> Either String Facts
 decodeFacts bytes strings = decodeExact (facts (Decoder bytes strings 0 Set.empty True)) bytes
+
+-- | The final header owns its string pool; no facts span refers to DATA's
+-- strings member. The fixed 32-byte container prefix is excluded here.
+decodeMetadata :: BS.ByteString -> Either String Facts
+decodeMetadata bytes = do
+  size <- decodeExact getWord64le (BS.take 8 bytes)
+  let rest = BS.drop 8 bytes
+  unless (size <= fromIntegral (BS.length rest)) (Left "Compact metadata strings exceed header")
+  decodeFacts (BS.drop (fromIntegral size) rest) (BS.take (fromIntegral size) rest)
 
 facts :: Decoder -> Get Facts
 facts decoder = Facts <$> getUVar <*> string decoder <*> string decoder <*> string decoder <*> string decoder
