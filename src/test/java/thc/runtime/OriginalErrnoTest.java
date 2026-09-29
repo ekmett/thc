@@ -25,6 +25,8 @@ class OriginalErrnoTest {
     private final File root = new File(System.getProperty("thc.projectRoot"));
     private final String prefix = "build/original-errno";
     private final List<Long> values = List.of((long) Integer.MIN_VALUE, -1L, 0L, 1L, (long) Integer.MAX_VALUE);
+    private Map<String, Object> cbd(String path) throws Exception { return thc.CoreCbdFixtures.read(new File(root, path).toPath()); }
+    private static String entryId(String name) { return "main:OriginalErrnoAudit." + name; }
     private Object json(String path) throws Exception { return Json.parse(Files.readString(new File(root, path).toPath())); }
     private Context context() { return Context.newBuilder("thc").allowIO(IOAccess.NONE).out(new ByteArrayOutputStream()).err(new ByteArrayOutputStream())
         .allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build(); }
@@ -33,7 +35,7 @@ class OriginalErrnoTest {
     }
     private ExecutableProgram program(Language language, String backend, Map<String,Object> module) { return backend.equals("ast") ? new Program(language, module) : new BytecodeProgram(language, module); }
     private Map<String,Object> source(String stage) throws Exception {
-        var modules = new ArrayList<Map<String,Object>>(); for (var name : List.of("OriginalErrnoAudit", "THC.InterfaceClosure")) modules.add((Map<String,Object>) json(prefix + "/" + stage + "/core/" + name + ".json"));
+        var modules = new ArrayList<Map<String,Object>>(); for (var name : List.of("OriginalErrnoAudit", "THC.InterfaceClosure")) modules.add((Map<String,Object>) cbd(prefix + "/" + stage + "/core/" + name + ".cbd"));
         return CoreModules.merge(modules);
     }
     private List<Object> original(Map<String,Object> module, String symbol) {
@@ -41,7 +43,7 @@ class OriginalErrnoTest {
     }
     /** The checked immediate State lambda lowers into the only consumer root. */
     private void checkConsumer(Map<String,Object> module) {
-        var binding = single((List<Map<String,Object>>) module.get("bindings"), item -> Objects.equals(item.get("name"), "originalResetErrno"));
+        var binding = single((List<Map<String,Object>>) module.get("bindings"), item -> Objects.equals(item.get("id"), entryId("originalResetErrno")));
         assertEquals(1L, binding.get("arity")); var body = (List<?>) binding.get("expr"); assertEquals("lam", body.get(0));
         int lambdas = 0; for (var node : nodes(body)) if (!node.isEmpty() && Objects.equals(node.get(0), "lam")) lambdas++; assertEquals(2, lambdas);
         var run = (List<?>) body.get(2); assertEquals("app", run.get(0)); assertEquals(list(false), run.get(3));
@@ -61,7 +63,7 @@ class OriginalErrnoTest {
         assertEquals(1L, manifest.get("schema")); assertEquals("9.14.1", manifest.get("ghc")); assertEquals(true, manifest.get("strictAccepted"));
         hashes(root, manifest.get("inputHashes"), Set.of("t/fixtures/compiler/OriginalErrnoAudit.hs", "t/fixtures/compiler/OriginalErrnoNative.hs", "t/haskell-fixtures/OriginalStdioFixtures.hs", "bin/core_original_foreign.py"));
         var artifacts = new HashSet<>(Set.of(prefix + "/oracle.json")); for (var stage : List.of("pre", "post")) {
-            artifacts.add(prefix + "/" + stage + "/core/OriginalErrnoAudit.json"); artifacts.add(prefix + "/" + stage + "/core/THC.InterfaceClosure.json"); artifacts.add(prefix + "/" + stage + "/originalResetErrno.audit.json");
+            artifacts.add(prefix + "/" + stage + "/core/OriginalErrnoAudit.cbd"); artifacts.add(prefix + "/" + stage + "/core/THC.InterfaceClosure.cbd"); artifacts.add(prefix + "/" + stage + "/originalResetErrno.audit.json");
         }
         hashes(root, manifest.get("artifactHashes"), artifacts, prefix + "/");
         var rows = (List<Map<String,Object>>) json(prefix + "/oracle.json"); var actualValues = new ArrayList<Object>(); for (var row : rows) actualValues.add(row.get("value")); assertEquals(values, actualValues);
@@ -79,8 +81,8 @@ class OriginalErrnoTest {
             for (var backend : List.of("ast", "bytecode")) try (var context = context()) { entered(context, () -> {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var stdio = Language.currentState().getStdio();
                 var set = program(language, backend, rawModule(setter, source)); var get = program(language, backend, rawModule(getter, source));
-                var reset = program(language, backend, with(CoreModules.reachable(source, "originalResetErrno"), "instrument", true));
-                var setTarget = set.entryTarget("entry"); var getTarget = get.entryTarget("entry"); var resetTarget = reset.entryTarget("originalResetErrno");
+                var reset = program(language, backend, with(CoreModules.reachable(source, entryId("originalResetErrno")), "instrument", true));
+                var setTarget = set.entryTarget("entry"); var getTarget = get.entryTarget("entry"); var resetTarget = reset.entryTarget(entryId("originalResetErrno"));
                 var targets = List.of(setTarget, getTarget, resetTarget);
                 class Exercise {
                     Object invoke(ExecutableProgram guest, RootCallTarget target, Object[] args, boolean compiled) throws Exception {

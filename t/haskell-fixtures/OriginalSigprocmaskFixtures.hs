@@ -77,7 +77,7 @@ prepareOriginalSigprocmask root = do
     writeJson (root </> oracle) $ object ["size" .= size, "rows" .= rows]
     exports <- forM ["pre","post"] $ \stage -> do
       let core = directory </> stage </> "core"
-          modules = [core </> "OriginalSigprocmaskAudit.json", core </> "THC.InterfaceClosure.json"]
+          modules = [core </> "OriginalSigprocmaskAudit.cbd", core </> "THC.InterfaceClosure.cbd"]
           options = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
             ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries]
       exported <- execute (stage ++ "-export")
@@ -86,7 +86,7 @@ prepareOriginalSigprocmask root = do
       audits <- forM entries $ \entry -> do
         let path = directory </> stage </> entry ++ ".audit.json"
         command <- execute (stage ++ "-audit-" ++ entry) [] "python3"
-          (["bin/audit-core.py", "--entry", entry, "--output", path] ++ modules)
+          (["bin/audit-core.py", "--entry", "main:OriginalSigprocmaskAudit." ++ entry, "--output", path] ++ modules)
         pure (path,command)
       pure (modules,exported,audits)
     let commands = [version,info,compiled,observed] ++ concat [exported : map snd audits | (_,exported,audits) <- exports]

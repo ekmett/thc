@@ -1061,7 +1061,7 @@ class FastInputTests(unittest.TestCase):
         with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, path)
 
     def test_termios_exact_image_and_saved_pointer_fixture_inventory(self):
-        self.assertEqual(163, len(cache.ORIGINAL_TERMIOS_OUTPUTS))
+        self.assertEqual(165, len(cache.ORIGINAL_TERMIOS_OUTPUTS))
         self.assertIn('build/original-termios/manifest.json', DECLARED_REQUIRED)
         for name in cache.ORIGINAL_TERMIOS_OUTPUTS:
             self.assertTrue(cache.allowed_payload(name), name)
@@ -1116,7 +1116,7 @@ class FastInputTests(unittest.TestCase):
             for binary in binaries:
                 self.assertEqual(0o755, (self.root / binary).stat().st_mode & 0o7777)
             self.remove_payload(packed)
-            for missing in ('saved/native/oracle', 'saved/pre/core/OriginalSavedTermiosAudit.json',
+            for missing in ('saved/native/oracle', 'saved/pre/core/OriginalSavedTermiosAudit.cbd',
                             'logs/saved-native-run.stdout'):
                 altered = self.rewrite(lambda entries: [(member, data) for member, data in entries
                     if member.name != 'files/build/original-termios/' + missing])
@@ -1233,7 +1233,7 @@ class FastInputTests(unittest.TestCase):
                 self.assertEqual(manifest['payload'][name], cache.digest(self.root / name))
             self.remove_payload(manifest)
             for missing in ('logs/package-register.command.json', 'exposed-ghc-internal.conf',
-                            'pre/originalCmp.audit.json', 'post/core/THC.InterfaceClosure.json'):
+                            'pre/originalCmp.audit.json', 'post/core/THC.InterfaceClosure.cbd'):
                 changed = self.rewrite(lambda entries: [(member, data) for member, data in entries
                     if member.name != 'files/build/original-gmp/' + missing])
                 self.rejected_without_writes(changed)

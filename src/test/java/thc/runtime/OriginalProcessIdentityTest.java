@@ -25,12 +25,14 @@ class OriginalProcessIdentityTest {
     private final File root = new File(System.getProperty("thc.projectRoot"));
     private final String prefix = "build/original-process-identity";
     private final Map<String,Object> entries = map("originalGetPid","getpid","originalGetEuid","geteuid");
+    private Map<String, Object> cbd(String path) throws Exception { return thc.CoreCbdFixtures.read(new File(root, path).toPath()); }
+    private static String entryId(String name) { return "main:OriginalProcessIdentityAudit." + name; }
     private Object json(String path) throws Exception { return Json.parse(Files.readString(new File(root,path).toPath())); }
     private Context context() { return context(true); }
     private Context context(boolean nativeAccess) { return Context.newBuilder("thc").allowIO(IOAccess.NONE).allowNativeAccess(nativeAccess).out(new ByteArrayOutputStream()).err(new ByteArrayOutputStream())
         .allowExperimentalOptions(true).option("engine.BackgroundCompilation","false").option("engine.MultiTier","false").option("engine.CompilationFailureAction","Throw").build(); }
     private Map<String,Object> source(String stage) throws Exception {
-        var modules = new ArrayList<Map<String,Object>>(); for (var part : List.of("OriginalProcessIdentityAudit","THC.InterfaceClosure")) modules.add((Map<String,Object>) json(prefix + "/" + stage + "/core/" + part + ".json")); return CoreModules.merge(modules);
+        var modules = new ArrayList<Map<String,Object>>(); for (var part : List.of("OriginalProcessIdentityAudit","THC.InterfaceClosure")) modules.add((Map<String,Object>) cbd(prefix + "/" + stage + "/core/" + part + ".cbd")); return CoreModules.merge(modules);
     }
     private ExecutableProgram program(Language language,String backend,Map<String,Object> module) { return backend.equals("ast") ? new Program(language,module) : new BytecodeProgram(language,module); }
     private List<Object> original(Map<String,Object> module,String symbol) { return single(foreignCalls(module),call -> Objects.equals(((Map<?,?>) ((Map<?,?>) ((Map<?,?>) call.get(6)).get("foreignCall")).get("target")).get("symbol"),symbol)); }
@@ -38,7 +40,7 @@ class OriginalProcessIdentityTest {
     private void valid(RootCallTarget target) throws Exception { assertEquals(true,target.getClass().getMethod("isValidLastTier").invoke(target)); }
     /** Each exported runRW State lambda is checked and immediately inlined. */
     private void checkConsumer(Map<String,Object> module,String name) {
-        var binding = single((List<Map<String,Object>>) module.get("bindings"),item -> Objects.equals(item.get("name"),name)); assertEquals(1L,binding.get("arity"));
+        var binding = single((List<Map<String,Object>>) module.get("bindings"),item -> Objects.equals(item.get("id"), entryId(name))); assertEquals(1L,binding.get("arity"));
         var body = (List<?>) binding.get("expr"); assertEquals("lam",body.get(0)); int count = 0; for (var node : nodes(body)) if (!node.isEmpty() && Objects.equals(node.getFirst(),"lam")) count++; assertEquals(2,count);
         var run = (List<?>) body.get(2); assertEquals("app",run.get(0)); assertEquals(list(false),run.get(3)); var lambda = (List<?>) run.get(1); assertEquals("lam",lambda.get(0));
         var state = single((List<Map<String,Object>>) lambda.get(1),ignored -> true); assertEquals("State# RealWorld",state.get("type")); assertEquals(OriginalStdioFixtures.scalar(null),state.get("rep")); assertEquals(false,state.get("lifted")); assertEquals(false,state.get("coercion"));
@@ -49,7 +51,7 @@ class OriginalProcessIdentityTest {
         assertTrue(CoreOriginalStdio.isOriginalUnixUnit(manifest.get("unixUnit")));
         for (var stage : List.of("pre","post")) assertEquals(manifest.get("unixUnit"),((Map<?,?>) ((Map<?,?>) ((Map<?,?>) original(source(stage),"geteuid").get(6)).get("foreignCall")).get("target")).get("unit"));
         hashes(root,manifest.get("inputHashes"),Set.of("t/fixtures/compiler/OriginalProcessIdentityAudit.hs","t/fixtures/compiler/OriginalProcessIdentityNative.hs","t/haskell-fixtures/OriginalStdioFixtures.hs","bin/core_original_foreign.py","src/main/java/thc/runtime/ProcessIdentity.java"));
-        var artifacts = new HashSet<>(Set.of(prefix + "/oracle.json")); for (var stage : List.of("pre","post")) { artifacts.add(prefix + "/" + stage + "/core/OriginalProcessIdentityAudit.json"); artifacts.add(prefix + "/" + stage + "/core/THC.InterfaceClosure.json"); for (var name : entries.keySet()) artifacts.add(prefix + "/" + stage + "/" + name + ".audit.json"); }
+        var artifacts = new HashSet<>(Set.of(prefix + "/oracle.json")); for (var stage : List.of("pre","post")) { artifacts.add(prefix + "/" + stage + "/core/OriginalProcessIdentityAudit.cbd"); artifacts.add(prefix + "/" + stage + "/core/THC.InterfaceClosure.cbd"); for (var name : entries.keySet()) artifacts.add(prefix + "/" + stage + "/" + name + ".audit.json"); }
         hashes(root,manifest.get("artifactHashes"),artifacts,prefix + "/"); var oracle = (Map<String,Long>) json(prefix + "/oracle.json"); assertEquals(Set.of("pid","parentPid","euid"),oracle.keySet());
         assertTrue(oracle.get("pid") >= 1 && oracle.get("pid") <= Integer.MAX_VALUE); assertTrue(oracle.get("parentPid") >= 0 && oracle.get("parentPid") <= Integer.MAX_VALUE); assertNotEquals(oracle.get("pid"),oracle.get("parentPid")); assertTrue(oracle.get("euid") >= 0 && oracle.get("euid") <= 0xffff_ffffL);
         // The native fixture's separate-process PID is not this JVM's expected identity.
@@ -63,8 +65,8 @@ class OriginalProcessIdentityTest {
                 for (var backend : List.of("ast","bytecode")) try (var context = context()) {
                     context.initialize("thc"); context.enter();
                     try {
-                        var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var raw = program(language,backend,rawModule(original(module,symbol),module)); var consumer = program(language,backend,with(CoreModules.reachable(module,name),"instrument",true));
-                        var rawTarget = raw.entryTarget("entry"); var consumerTarget = consumer.entryTarget(name); var stdio = Language.currentState().getStdio();
+                        var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var raw = program(language,backend,rawModule(original(module,symbol),module)); var consumer = program(language,backend,with(CoreModules.reachable(module, entryId(name)),"instrument",true));
+                        var rawTarget = raw.entryTarget("entry"); var consumerTarget = consumer.entryTarget(entryId(name)); var stdio = Language.currentState().getStdio();
                         record Invocation(ExecutableProgram program,RootCallTarget target,Object[] arguments) {}
                         class Exercise { void run(boolean compiled) throws Throwable {
                             for (long sentinel : new long[]{-1,0,17}) {

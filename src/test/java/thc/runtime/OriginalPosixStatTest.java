@@ -26,8 +26,10 @@ class OriginalPosixStatTest {
     private final File root = new File(System.getProperty("thc.projectRoot"));
     private final String prefix = "build/original-posix-stat";
     private final List<String> names = List.of("originalStatSize","originalStatDev","originalStatIno","originalStatMode","originalStatLength","originalStatTypes");
+    private Map<String, Object> cbd(String path) throws Exception { return thc.CoreCbdFixtures.read(new File(root, path).toPath()); }
+    private static String entryId(String name) { return "main:OriginalPosixStatAudit." + name; }
     private Map<String,Object> json(String path) throws Exception { return (Map<String,Object>) Json.parse(Files.readString(new File(root,path).toPath())); }
-    private Map<String,Object> module(String stage) throws Exception { var modules = new ArrayList<Map<String,Object>>(); for (var part : List.of("OriginalPosixStatAudit","THC.InterfaceClosure")) modules.add(json(prefix + "/" + stage + "/core/" + part + ".json")); return CoreModules.merge(modules); }
+    private Map<String,Object> module(String stage) throws Exception { var modules = new ArrayList<Map<String,Object>>(); for (var part : List.of("OriginalPosixStatAudit","THC.InterfaceClosure")) modules.add(cbd(prefix + "/" + stage + "/core/" + part + ".cbd")); return CoreModules.merge(modules); }
     private Object copy(Object value) { return Json.parse(Json.stringify(value)); }
     private void valid(RootCallTarget target) throws Exception { assertEquals(true,target.getClass().getMethod("isValidLastTier").invoke(target)); }
     private Context context() { return Context.newBuilder("thc").allowIO(IOAccess.NONE).allowExperimentalOptions(true).option("engine.BackgroundCompilation","false").option("engine.MultiTier","false").option("engine.CompilationFailureAction","Throw").build(); }
@@ -49,7 +51,7 @@ class OriginalPosixStatTest {
     @Test void realNativeImagesAndModePredicatesMatchBothBackendsOnFirstInstalledCalls() throws Exception {
         var manifest = json(prefix + "/manifest.json"); assertEquals(1L,manifest.get("schema")); assertEquals("linux",manifest.get("platform")); assertEquals(true,manifest.get("supported"));
         hashes(root,manifest.get("inputHashes"),Set.of("t/fixtures/compiler/OriginalPosixStatAudit.hs","t/fixtures/compiler/OriginalPosixStatNative.hs","t/haskell-fixtures/OriginalPosixStatFixtures.hs","bin/core_original_foreign.py"));
-        var artifacts = new HashSet<>(Set.of(prefix + "/oracle.json")); for (var stage : List.of("pre","post")) { for (var name : names) artifacts.add(prefix + "/" + stage + "/" + name + ".audit.json"); for (var part : List.of("OriginalPosixStatAudit","THC.InterfaceClosure")) artifacts.add(prefix + "/" + stage + "/core/" + part + ".json"); } hashes(root,manifest.get("artifactHashes"),artifacts,prefix + "/");
+        var artifacts = new HashSet<>(Set.of(prefix + "/oracle.json")); for (var stage : List.of("pre","post")) { for (var name : names) artifacts.add(prefix + "/" + stage + "/" + name + ".audit.json"); for (var part : List.of("OriginalPosixStatAudit","THC.InterfaceClosure")) artifacts.add(prefix + "/" + stage + "/core/" + part + ".cbd"); } hashes(root,manifest.get("artifactHashes"),artifacts,prefix + "/");
         var oracle = json(prefix + "/oracle.json"); var images = (List<List<List<Number>>>) oracle.get("images"); var modes = (List<List<Number>>) oracle.get("modes"); assertEquals(6,images.size());
         var expectedModes = new ArrayList<Long>(); for (long mode = 0; mode <= 65535; mode++) expectedModes.add(mode); expectedModes.addAll(List.of(-1L,2147483647L,2147483648L,4294967295L)); var actualModes = new ArrayList<Long>(); for (var row : modes) actualModes.add(row.get(0).longValue()); assertEquals(expectedModes,actualModes);
         for (var stage : List.of("pre","post")) {
@@ -59,9 +61,9 @@ class OriginalPosixStatTest {
                 try {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                     for (var name : names) {
-                        var linked = with(CoreModules.reachable(module,name),"instrument",true); var evidence = new ArrayCoreEvidence(linked,name); assertEquals(1,evidence.getBindings().size()); int originalLambdas = List.of("originalStatSize","originalStatTypes").contains(name) ? 1 : 2;
+                        var linked = with(CoreModules.reachable(module, entryId(name)),"instrument",true); var evidence = new ArrayCoreEvidence(linked, entryId(name)); assertEquals(1,evidence.getBindings().size()); int originalLambdas = List.of("originalStatSize","originalStatTypes").contains(name) ? 1 : 2;
                         assertEquals(originalLambdas,evidence.guestLambdas(evidence.getRoot().get("expr")).size()); assertEquals(1,evidence.loweredGuestLambdas(evidence.getRoot().get("expr")).size(),"Only exact State# redexes lower in-frame");
-                        ExecutableProgram program = backend.equals("ast") ? new Program(language,linked) : new BytecodeProgram(language,linked); var entry = program.entryTarget(name);
+                        ExecutableProgram program = backend.equals("ast") ? new Program(language,linked) : new BytecodeProgram(language,linked); var entry = program.entryTarget(entryId(name));
                         class Exercise {
                             List<RootCallTarget> active = List.of();
                             void invoke(Object argument,long expected,boolean compiled) throws Exception {

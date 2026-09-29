@@ -26,6 +26,8 @@ class OriginalStdioTruncateNativeTest {
     private final File fixture = new File(root, "build/original-stdio-truncate");
     private final List<String> names = List.of("originalTruncate", "originalTruncateErrno");
     private final List<String> scenarios = List.of("shrink", "same", "extend", "negative", "readonly", "invalid", "pipe");
+    private Map<String, Object> cbd(File path) throws Exception { return thc.CoreCbdFixtures.read(path.toPath()); }
+    private static String entryId(String name) { return "main:OriginalStdioTruncateAudit." + name; }
     private Map<String, Object> json(File path) throws IOException { return (Map<String, Object>) Json.parse(Files.readString(path.toPath())); }
     private void valid(RootCallTarget target) throws Exception { assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target)); }
     private void exercise(boolean compiled, String stage, String backend, String name, ExecutableProgram program,
@@ -59,8 +61,8 @@ class OriginalStdioTruncateNativeTest {
         assertEquals(names, manifest.get("entries")); assertEquals(14L, manifest.get("nativeRows"));
         hashes(root, manifest.get("inputHashes"), Set.of("t/fixtures/compiler/OriginalStdioTruncateAudit.hs", "t/fixtures/compiler/OriginalStdioTruncateAuditNative.hs",
             "t/haskell-fixtures/OriginalStdioTruncateFixtures.hs", "bin/core_original_foreign.py"));
-        hashes(root, manifest.get("artifactHashes"), Set.of("build/original-stdio-truncate/oracle.json", "build/original-stdio-truncate/pre/core/OriginalStdioTruncateAudit.json",
-            "build/original-stdio-truncate/post/core/OriginalStdioTruncateAudit.json"), "build/original-stdio-truncate/");
+        hashes(root, manifest.get("artifactHashes"), Set.of("build/original-stdio-truncate/oracle.json", "build/original-stdio-truncate/pre/core/OriginalStdioTruncateAudit.cbd",
+            "build/original-stdio-truncate/post/core/OriginalStdioTruncateAudit.cbd"), "build/original-stdio-truncate/");
         var oracle = (List<Map<String, Object>>) Json.parse(Files.readString(new File(fixture, "oracle.json").toPath()));
         var expectedOrder = new ArrayList<List<String>>(); for (var name : names) for (var scenario : scenarios) expectedOrder.add(List.of(name, scenario));
         var actualOrder = new ArrayList<List<Object>>(); for (var row : oracle) actualOrder.add(list(row.get("entry"), row.get("scenario"))); assertEquals(expectedOrder, actualOrder);
@@ -75,7 +77,7 @@ class OriginalStdioTruncateNativeTest {
             assertEquals("", row.get("stdoutHex")); assertEquals("", row.get("stderrHex"));
         }
         for (var stage : List.of("pre", "post")) {
-            var modules = new ArrayList<Map<String, Object>>(); for (var part : List.of("OriginalStdioTruncateAudit", "THC.InterfaceClosure")) modules.add(json(new File(fixture, stage + "/core/" + part + ".json")));
+            var modules = new ArrayList<Map<String, Object>>(); for (var part : List.of("OriginalStdioTruncateAudit", "THC.InterfaceClosure")) modules.add(cbd(new File(fixture, stage + "/core/" + part + ".cbd")));
             var module = CoreModules.merge(modules); var bindings = (List<Map<String, Object>>) module.get("bindings");
             for (var name : names) {
                 var owner = "main:OriginalStdioTruncateAudit." + name; var binding = single(bindings, item -> Objects.equals(item.get("id"), owner));
@@ -96,8 +98,8 @@ class OriginalStdioTruncateNativeTest {
                     try {
                         var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                         for (var name : names) {
-                            var linked = with(CoreModules.reachable(module, name), "instrument", true);
-                            ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked); var entry = program.entryTarget(name);
+                            var linked = with(CoreModules.reachable(module, entryId(name)), "instrument", true);
+                            ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked); var entry = program.entryTarget(entryId(name));
                             exercise(false, stage, backend, name, program, entry, oracle, expectedSize); var active = targets(entry);
                             assertEquals(1, active.size(), "entry contains the inlined runRW State body");
                             for (var target : active) { target.getClass().getMethod("compile", boolean.class).invoke(target, true); valid(target); }

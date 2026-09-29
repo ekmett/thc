@@ -27,8 +27,10 @@ class OriginalTermiosTest {
     private final List<String> names = List.of("originalTermiosSize","originalEcho","originalIcanon","originalVmin","originalVtime","originalTcsanow","originalSigsetSize","originalSigttou","originalSigBlock","originalSigSetmask","originalLflag","originalPokeLflag","originalCC");
     private final int constantCount = 10;
     private final List<String> symbols = List.of("__hscore_sizeof_termios","__hscore_echo","__hscore_icanon","__hscore_vmin","__hscore_vtime","__hscore_tcsanow","__hscore_sizeof_sigset_t","__hscore_sigttou","__hscore_sig_block","__hscore_sig_setmask","__hscore_lflag","__hscore_poke_lflag","__hscore_ptr_c_cc");
+    private Map<String, Object> cbd(String path) throws Exception { return thc.CoreCbdFixtures.read(new File(root, path).toPath()); }
+    private static String entryId(String name) { return "main:OriginalTermiosAudit." + name; }
     private Map<String,Object> json(String path) throws Exception { return (Map<String,Object>) Json.parse(Files.readString(new File(root,path).toPath())); }
-    private Map<String,Object> module(String stage) throws Exception { var modules = new ArrayList<Map<String,Object>>(); for (var part : List.of("OriginalTermiosAudit","THC.InterfaceClosure")) modules.add(json(prefix + "/" + stage + "/core/" + part + ".json")); return CoreModules.merge(modules); }
+    private Map<String,Object> module(String stage) throws Exception { var modules = new ArrayList<Map<String,Object>>(); for (var part : List.of("OriginalTermiosAudit","THC.InterfaceClosure")) modules.add(cbd(prefix + "/" + stage + "/core/" + part + ".cbd")); return CoreModules.merge(modules); }
     private Object copy(Object value) { return Json.parse(Json.stringify(value)); }
     private Context context() { return Context.newBuilder("thc").allowIO(IOAccess.NONE).allowExperimentalOptions(true).option("engine.BackgroundCompilation","false").option("engine.MultiTier","false").option("engine.CompilationFailureAction","Throw").build(); }
     private void valid(RootCallTarget target) throws Exception { assertEquals(true,target.getClass().getMethod("isValidLastTier").invoke(target)); }
@@ -38,7 +40,7 @@ class OriginalTermiosTest {
     @Test void genuineNativeImagesAndPointersMatchBothBackendsAtFirstInstalledEntry() throws Exception {
         var manifest = json(prefix + "/manifest.json"); assertEquals(1L,manifest.get("schema")); assertEquals("linux",manifest.get("platform")); assertEquals(true,manifest.get("supported")); assertEquals(names,manifest.get("entries")); assertEquals(true,manifest.get("strictAccepted")); assertEquals(false,manifest.get("runtimeVerified")); assertEquals(false,manifest.get("installedArtifactsHashed")); assertEquals(6L,manifest.get("nativeRows"));
         hashes(root,manifest.get("inputHashes"),Set.of("t/fixtures/compiler/OriginalTermiosAudit.hs","t/fixtures/compiler/OriginalTermiosNative.hs","t/haskell-fixtures/OriginalTermiosFixtures.hs","t/haskell-fixtures/FixtureSupport.hs","t/haskell-fixtures/Main.hs","thc.cabal","bin/audit-core.py","bin/core_original_foreign.py","bin/core-capabilities.json"));
-        var artifacts = new HashSet<>(Set.of(prefix + "/oracle.json",prefix + "/native/oracle")); for (var stage : List.of("pre","post")) { for (var name : names) artifacts.add(prefix + "/" + stage + "/" + name + ".audit.json"); for (var part : List.of("OriginalTermiosAudit","THC.InterfaceClosure")) artifacts.add(prefix + "/" + stage + "/core/" + part + ".json"); } hashes(root,manifest.get("artifactHashes"),artifacts,prefix + "/");
+        var artifacts = new HashSet<>(Set.of(prefix + "/oracle.json",prefix + "/native/oracle")); for (var stage : List.of("pre","post")) { for (var name : names) artifacts.add(prefix + "/" + stage + "/" + name + ".audit.json"); for (var part : List.of("OriginalTermiosAudit","THC.InterfaceClosure")) artifacts.add(prefix + "/" + stage + "/core/" + part + ".cbd"); } hashes(root,manifest.get("artifactHashes"),artifacts,prefix + "/");
         var oracle = json(prefix + "/oracle.json"); var constants = (List<Long>) oracle.get("constants"); var rows = (List<List<Object>>) oracle.get("rows"); Map<?,?> probe;
         try (var input = TermiosImage.class.getResourceAsStream("/thc/native/termios-abi.json")) { probe = (Map<?,?>) ((Map<?,?>) Json.parse(new String(Objects.requireNonNull(input).readAllBytes(),StandardCharsets.UTF_8))).get("termios"); }
         var expectedConstants = new ArrayList<Object>(); for (var key : List.of("size","echo","icanon","vmin","vtime","tcsanow","sigsetSize","sigttou","sigBlock","sigSetmask")) expectedConstants.add(probe.get(key)); assertEquals(expectedConstants,constants);
@@ -55,7 +57,7 @@ class OriginalTermiosTest {
                 try {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                     for (int at = 0; at < names.size(); at++) {
-                        int index = at; var name = names.get(index); var linked = with(CoreModules.reachable(source,name),"instrument",true); ExecutableProgram program = backend.equals("ast") ? new Program(language,linked) : new BytecodeProgram(language,linked); var entry = program.entryTarget(name);
+                        int index = at; var name = names.get(index); var linked = with(CoreModules.reachable(source, entryId(name)),"instrument",true); ExecutableProgram program = backend.equals("ast") ? new Program(language,linked) : new BytecodeProgram(language,linked); var entry = program.entryTarget(entryId(name));
                         int executedRoots;
                         if (index < constantCount) executedRoots = 1;
                         else {
@@ -82,14 +84,16 @@ class OriginalTermiosTest {
                                 }
                             }
                         }
-                        var exercise = new Exercise(); var bindings = (List<Map<String,Object>>) linked.get("bindings"); var binding = single(bindings,b -> Objects.equals(b.get("name"),name)); boolean directConstant = name.equals("originalSigsetSize");
+                        var exercise = new Exercise(); var bindings = (List<Map<String,Object>>) linked.get("bindings"); var binding = single(bindings,b -> Objects.equals(b.get("id"), entryId(name))); boolean directConstant = name.equals("originalSigsetSize");
                         if (directConstant) {
                             // Require the installed Int helper inlined directly into its consumer.
                             assertEquals(1,bindings.size()); assertEquals(1L,binding.get("arity")); assertSame(entry,program.entryTarget((String) binding.get("id"))); assertEquals(CoreFunctionIdentity.from(linked,binding),((GuestRoot) entry.getRootNode()).getCoreIdentity());
                             var call = single(foreignCalls(binding.get("expr")),ignored -> true); assertEquals(OriginalStdioOp.SIZEOF_SIGSET,validate(call)); assertEquals(List.of(entry),targets(entry));
                         } else if (index < constantCount) {
                             // Calling the original CAF target leaves its shared Thunk unforced.
-                            assertEquals(2,bindings.size()); var caf = single(bindings,b -> !Objects.equals(b.get("id"),binding.get("id"))); assertEquals(0L,caf.get("arity")); assertEquals(true,caf.get("lifted")); assertEquals("Int",caf.get("type"));
+                            assertEquals(2,bindings.size()); var caf = single(bindings,b -> !Objects.equals(b.get("id"),binding.get("id"))); assertEquals(0L,caf.get("arity")); assertEquals(true,caf.get("lifted"));
+                            var diagnostic = single((List<Map<String,Object>>) json(prefix + "/" + stage + "/core/OriginalTermiosAudit.json").get("bindings"), b -> Objects.equals(b.get("id"), caf.get("id")));
+                            assertEquals("Int",diagnostic.get("type"));
                             assertEquals(map("primReps",list("BoxedRep (Just Lifted)"),"kind","data","evaluated",false),caf.get("rep")); var cafSymbols = new ArrayList<String>(); for (var call : foreignCalls(caf.get("expr"))) cafSymbols.add(Objects.requireNonNull(validate(call)).getSymbol()); assertEquals(List.of(symbols.get(index)),cafSymbols);
                             var cafId = (String) caf.get("id"); var thunk = (Thunk) program.entryValue(cafId); var target = program.entryTarget(cafId); assertSame(target,thunk.getTarget()); assertEquals(CoreFunctionIdentity.from(linked,caf),((GuestRoot) target.getRootNode()).getCoreIdentity()); assertNull(thunk.getEnvironment());
                             class Caf { void invoke(boolean compiled) throws Exception {

@@ -39,8 +39,10 @@ import static org.junit.jupiter.api.Assertions.*;
 public class OriginalSigsetTest {
     private final File root = new File(System.getProperty("thc.projectRoot")); private final String prefix = "build/original-sigset";
     private final List<String> names = List.of("originalSigEmpty", "originalSigAdd"); private final List<OriginalStdioOp> operations = List.of(OriginalStdioOp.SIGEMPTYSET, OriginalStdioOp.SIGADDSET);
+    private Map<String, Object> cbd(String path) throws Exception { return thc.CoreCbdFixtures.read(new File(root, path).toPath()); }
+    private static String entryId(String name) { return "main:OriginalSigsetAudit." + name; }
     private Map<String, Object> json(String path) throws Exception { return (Map<String, Object>) Json.parse(Files.readString(new File(root, path).toPath())); }
-    private Map<String, Object> module(String stage) throws Exception { var modules = new ArrayList<Map<String, Object>>(); for (var name : List.of("OriginalSigsetAudit", "THC.InterfaceClosure")) modules.add(json(prefix + "/" + stage + "/core/" + name + ".json")); return CoreModules.merge(modules); }
+    private Map<String, Object> module(String stage) throws Exception { var modules = new ArrayList<Map<String, Object>>(); for (var name : List.of("OriginalSigsetAudit", "THC.InterfaceClosure")) modules.add(cbd(prefix + "/" + stage + "/core/" + name + ".cbd")); return CoreModules.merge(modules); }
     private Object copy(Object value) { return Json.parse(Json.stringify(value)); }
     private Map<String, Object> document() throws Exception { try (var stream = Objects.requireNonNull(SigsetImage.class.getResourceAsStream("/thc/native/sigset-abi.json"))) { return (Map<String, Object>) Json.parse(new String(stream.readAllBytes(), StandardCharsets.UTF_8)); } }
     private SigsetImage parse(Object value) { return SigsetImage.parse(value, System.getProperty("os.name"), System.getProperty("os.arch")); }
@@ -61,7 +63,7 @@ public class OriginalSigsetTest {
         assertEquals(true, manifest.get("strictAccepted")); assertEquals(false, manifest.get("runtimeVerified")); assertEquals(false, manifest.get("installedArtifactsHashed")); assertEquals(532L, manifest.get("nativeRows"));
         OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of("t/fixtures/compiler/OriginalSigsetAudit.hs", "t/fixtures/compiler/OriginalSigsetNative.hs", "t/haskell-fixtures/OriginalSigsetFixtures.hs", "bin/audit-core.py", "bin/core_original_foreign.py", "bin/core-capabilities.json"), null);
         var required = new LinkedHashSet<>(List.of(prefix + "/oracle.json", prefix + "/native/oracle"));
-        for (var stage : List.of("pre", "post")) { for (var name : names) required.add(prefix + "/" + stage + "/" + name + ".audit.json"); required.add(prefix + "/" + stage + "/core/OriginalSigsetAudit.json"); required.add(prefix + "/" + stage + "/core/THC.InterfaceClosure.json"); }
+        for (var stage : List.of("pre", "post")) { for (var name : names) required.add(prefix + "/" + stage + "/" + name + ".audit.json"); required.add(prefix + "/" + stage + "/core/OriginalSigsetAudit.cbd"); required.add(prefix + "/" + stage + "/core/THC.InterfaceClosure.cbd"); }
         OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"), required, prefix + "/");
         var oracle = json(prefix + "/oracle.json"); int size = ((Long) oracle.get("size")).intValue(); var rows = (List<List<Object>>) oracle.get("rows"); assertEquals(532, rows.size());
         var signals = new ArrayList<Long>(); signals.add((long) Integer.MIN_VALUE); signals.add(-1L); for (long signal = 0; signal <= 128; signal++) signals.add(signal); signals.add((long) Integer.MAX_VALUE);
@@ -81,10 +83,10 @@ public class OriginalSigsetTest {
                 for (int index = 0; index < names.size(); index++) {
                     final int selectedIndex = index; var name = names.get(index); var audit = json(prefix + "/" + stage + "/" + name + ".audit.json"); assertEquals(true, audit.get("accepted")); assertEquals(List.of(), audit.get("issues")); assertEquals(List.of(), audit.get("missingGlobals"));
                     var symbols = new ArrayList<>(); for (var call : (List<Map<?, ?>>) audit.get("foreignCalls")) symbols.add(call.get("symbol")); assertEquals(List.of(operations.get(index).getSymbol()), symbols);
-                    var linked = new LinkedHashMap<>(CoreModules.reachable(module(stage), name)); linked.put("instrument", true); var bindings = (List<Map<String, Object>>) linked.get("bindings"); if (bindings.size() != 1) throw new IllegalArgumentException("Expected one binding"); var binding = bindings.getFirst();
+                    var linked = new LinkedHashMap<>(CoreModules.reachable(module(stage), entryId(name))); linked.put("instrument", true); var bindings = (List<Map<String, Object>>) linked.get("bindings"); if (bindings.size() != 1) throw new IllegalArgumentException("Expected one binding"); var binding = bindings.getFirst();
                     var foreignCalls = OriginalStdioChecks.foreignCalls(binding.get("expr")); if (foreignCalls.size() != 1) throw new IllegalArgumentException("Expected one call"); assertEquals(operations.get(index), validate(foreignCalls.getFirst()));
                     int lambdas = 0; for (var node : OriginalStdioChecks.nodes(binding.get("expr"))) if (!node.isEmpty() && "lam".equals(node.getFirst())) lambdas++; assertEquals(2, lambdas);
-                    var program = load(language, backend, linked); var entry = program.entryTarget(name);
+                    var program = load(language, backend, linked); var entry = program.entryTarget(entryId(name));
                     class Runner {
                         List<RootCallTarget> retained = List.of();
                         void exercise(boolean compiled) throws Exception {

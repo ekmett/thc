@@ -138,12 +138,12 @@ public final class OriginalStdioChecks {
     public static Map<String, List<String>> module(Map<String, Object> module) {
         var bindings = (List<Map<String, Object>>) module.get("bindings");
         var roots = new ArrayList<Map<String, Object>>(); var rootNames = new LinkedHashSet<Object>();
-        for (var binding : bindings) if (names.contains(binding.get("name"))) { roots.add(binding); rootNames.add(binding.get("name")); }
+        for (var binding : bindings) for (var name : names) if (Objects.equals(binding.get("id"), "main:OriginalStdioAudit." + name)) { roots.add(binding); rootNames.add(name); }
         assertEquals(new HashSet<>(names), rootNames); assertEquals(4, roots.size());
         var bound = new HashSet<Object>(); binders(module, bound);
         var result = new LinkedHashMap<String, List<String>>();
         for (var binding : roots) {
-            var name = (String) binding.get("name"); var body = (List<?>) binding.get("expr");
+            var name = (String) binding.get("id"); var body = (List<?>) binding.get("expr");
             assertEquals(4L, binding.get("arity")); assertEquals(OriginalStdioFixtures.closure(), binding.get("rep"));
             assertEquals("lam", body.get(0), name);
             assertEquals(OriginalStdioFixtures.scalar("IntRep", false), ((Map<?, ?>) body.getLast()).get("resultRep"));

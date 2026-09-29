@@ -26,10 +26,11 @@ class OriginalSavedTermiosTest {
     private final String prefix = "build/original-termios";
     private final List<String> names = List.of("originalGetSavedTermios", "originalSetSavedTermios");
     private final List<String> symbols = List.of("__hscore_get_saved_termios", "__hscore_set_saved_termios");
+    private static String entryId(String name) { return "main:OriginalSavedTermiosAudit." + name; }
     private Map<String,Object> json(String path) throws Exception { return (Map<String,Object>) Json.parse(Files.readString(new File(root, path).toPath())); }
     private Map<String,Object> module(String stage) throws Exception {
         var modules = new ArrayList<Map<String,Object>>();
-        for (var part : List.of("OriginalSavedTermiosAudit", "THC.InterfaceClosure")) modules.add(json(prefix + "/saved/" + stage + "/core/" + part + ".json"));
+        for (var part : List.of("OriginalSavedTermiosAudit", "THC.InterfaceClosure")) modules.add(thc.CoreCbdFixtures.read(new File(root, prefix + "/saved/" + stage + "/core/" + part + ".cbd").toPath()));
         return CoreModules.merge(modules);
     }
     private Context context() { return Context.newBuilder("thc").allowExperimentalOptions(true)
@@ -68,9 +69,9 @@ class OriginalSavedTermiosTest {
                 context.initialize("thc"); context.enter();
                 try {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                    var linked = with(CoreModules.reachable(source, names, true), "instrument", true);
+                    var linked = with(CoreModules.reachable(source, names.stream().map(OriginalSavedTermiosTest::entryId).toList(), true), "instrument", true);
                     ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
-                    var get = program.entryTarget(names.get(0)); var set = program.entryTarget(names.get(1));
+                    var get = program.entryTarget(entryId(names.get(0))); var set = program.entryTarget(entryId(names.get(1)));
                     class Exercise {
                         boolean compiled;
                         Object call(RootCallTarget target, Object... values) {

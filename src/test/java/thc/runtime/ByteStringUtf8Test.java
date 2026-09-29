@@ -24,10 +24,12 @@ class ByteStringUtf8Test {
     @BeforeEach void supportedHost() { assumeTrue("Linux".equals(System.getProperty("os.name")) && Set.of("amd64", "x86_64").contains(System.getProperty("os.arch"))); }
     private final Path root = Path.of(System.getProperty("thc.projectRoot"));
     private final String prefix = "build/bytestring-utf8";
+    private Map<String, Object> cbd(String path) throws Exception { return thc.CoreCbdFixtures.read(root.resolve(path)); }
+    private static String entryId(String name) { return "main:ByteStringUtf8Audit." + name; }
     private Object json(String path) throws Exception { return Json.parse(Files.readString(root.resolve(path))); }
     private Map<String, Object> module(String stage) throws Exception {
         var modules = new ArrayList<Map<String, Object>>();
-        for (var name : list("ByteStringUtf8Audit", "THC.InterfaceClosure")) modules.add(object(json(prefix + "/" + stage + "/core/" + name + ".json")));
+        for (var name : list("ByteStringUtf8Audit", "THC.InterfaceClosure")) modules.add(object(cbd(prefix + "/" + stage + "/core/" + name + ".cbd")));
         return CoreModules.merge(modules);
     }
     private List<Map<String, Object>> rows() throws Exception {
@@ -35,7 +37,7 @@ class ByteStringUtf8Test {
         OriginalStdioChecks.hashes(root.toFile(), manifest.get("inputHashes"), Set.of("t/fixtures/compiler/ByteStringUtf8Audit.hs",
             "t/fixtures/compiler/ByteStringUtf8Native.hs", "t/haskell-fixtures/ByteStringUtf8Fixtures.hs", "bin/core_original_foreign.py"), null);
         var artifacts = new HashSet<>(list(prefix + "/oracle.json"));
-        for (var stage : list("pre", "post")) for (var name : list("ByteStringUtf8Audit", "THC.InterfaceClosure")) artifacts.add(prefix + "/" + stage + "/core/" + name + ".json");
+        for (var stage : list("pre", "post")) for (var name : list("ByteStringUtf8Audit", "THC.InterfaceClosure")) artifacts.add(prefix + "/" + stage + "/core/" + name + ".cbd");
         OriginalStdioChecks.hashes(root.toFile(), manifest.get("artifactHashes"), artifacts, prefix + "/");
         var rows = objects(json(prefix + "/oracle.json")); var counts = new HashMap<Object, Integer>(); for (var row : rows) counts.merge(row.get("entry"), 1, Integer::sum);
         assertEquals(map("validateUnsafe", 400, "validateSafe", 400), counts);
@@ -98,7 +100,7 @@ class ByteStringUtf8Test {
             for (var backend : list("ast", "bytecode")) inside(language -> {
                 var groups = new LinkedHashMap<String, List<Map<String, Object>>>(); for (var row : rows) groups.computeIfAbsent((String) row.get("entry"), ignored -> new ArrayList<>()).add(row);
                 for (var group : groups.entrySet()) {
-                    var entry = group.getKey(); var examples = group.getValue(); var program = load(language, backend, with(CoreModules.reachable(source, entry), "instrument", true)); var target = program.entryTarget(entry);
+                    var entry = group.getKey(); var examples = group.getValue(); var program = load(language, backend, with(CoreModules.reachable(source, entryId(entry)), "instrument", true)); var target = program.entryTarget(entryId(entry));
                     CheckedConsumer<Boolean> exercise = compiled -> {
                         // The original Ptr ABI and withArray oracle use native addresses.
                         for (int kind : new int[]{2, 3, 4}) for (int index = 0; index < examples.size(); index++) {

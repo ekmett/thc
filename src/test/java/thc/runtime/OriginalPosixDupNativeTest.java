@@ -30,6 +30,8 @@ class OriginalPosixDupNativeTest {
         requests.put("originalDup",List.of("shared","close-source","append","lowest0","lowest1","lowest2","invalid","closed"));
         requests.put("originalDupErrno",List.of("invalid","closed")); requests.put("originalDup2",List.of("replace","self","alias","invalid","closed","bad-target")); requests.put("originalDup2Errno",List.of("invalid","closed","bad-target"));
     }
+    private Map<String, Object> cbd(File file) throws Exception { return thc.CoreCbdFixtures.read(file.toPath()); }
+    private static String entryId(String name) { return "main:OriginalPosixDupAudit." + name; }
     private Map<String,Object> json(File file) throws Exception { return (Map<String,Object>) Json.parse(Files.readString(file.toPath())); }
     private void valid(RootCallTarget target) throws Exception { assertEquals(true,target.getClass().getMethod("isValidLastTier").invoke(target)); }
     private ManagedAddress address(byte[] bytes) { return ManagedAddress.fromByteArray(bytes); }
@@ -43,7 +45,7 @@ class OriginalPosixDupNativeTest {
         var artifacts = new HashSet<>(Set.of("oracle.json","native/oracle"));
         for (int i = 0; i <= 18; i++) for (var extension : List.of("txt","private","other")) artifacts.add("results/" + i + "." + extension);
         for (var label : labels) for (var extension : List.of("stdout","stderr","command.json")) artifacts.add("logs/" + label + "." + extension);
-        for (var stage : List.of("pre","post")) { artifacts.add(stage + "/core/OriginalPosixDupAudit.json"); artifacts.add(stage + "/core/THC.InterfaceClosure.json"); for (var name : requests.keySet()) artifacts.add(stage + "/" + name + ".audit.json"); }
+        for (var stage : List.of("pre","post")) { artifacts.add(stage + "/core/OriginalPosixDupAudit.cbd"); artifacts.add(stage + "/core/THC.InterfaceClosure.cbd"); for (var name : requests.keySet()) artifacts.add(stage + "/" + name + ".audit.json"); }
         assertEquals(167,artifacts.size()); var paths = new HashSet<String>(); for (var path : artifacts) paths.add("build/original-posix-dup/" + path);
         hashes(root,manifest.get("artifactHashes"),paths,"build/original-posix-dup/"); assertEquals(167,((Map<?,?>) manifest.get("artifactHashes")).size());
         var oracle = (List<Map<String,Object>>) Json.parse(Files.readString(new File(fixture,"oracle.json").toPath())); var expectedKeys = new ArrayList<List<String>>(); for (var entry : requests.entrySet()) for (var scenario : entry.getValue()) expectedKeys.add(List.of(entry.getKey(),scenario));
@@ -64,7 +66,7 @@ class OriginalPosixDupNativeTest {
             assertArrayEquals(bytes,Files.readAllBytes(new File(fixture,"results/" + index + ".private").toPath())); assertEquals("target",Files.readString(new File(fixture,"results/" + index + ".other").toPath()));
         }
         for (var stage : List.of("pre","post")) {
-            var modules = new ArrayList<Map<String,Object>>(); for (var part : List.of("OriginalPosixDupAudit","THC.InterfaceClosure")) modules.add(json(new File(fixture,stage + "/core/" + part + ".json"))); var module = CoreModules.merge(modules); var bindings = (List<Map<String,Object>>) module.get("bindings");
+            var modules = new ArrayList<Map<String,Object>>(); for (var part : List.of("OriginalPosixDupAudit","THC.InterfaceClosure")) modules.add(cbd(new File(fixture,stage + "/core/" + part + ".cbd"))); var module = CoreModules.merge(modules); var bindings = (List<Map<String,Object>>) module.get("bindings");
             for (var name : requests.keySet()) {
                 var owner = "main:OriginalPosixDupAudit." + name; var calls = foreignCalls(single(bindings,b -> Objects.equals(b.get("id"),owner)).get("expr")); var symbols = new ArrayList<String>();
                 for (var call : calls) { CoreOriginalStdio.validateHead((List<Object>) call.get(1),false); var reps = new ArrayList<Object>(); for (var arg : (List<List<?>>) call.get(2)) reps.add(((Map<?,?>) arg.getLast()).get("rep"));
@@ -80,8 +82,8 @@ class OriginalPosixDupNativeTest {
                     try {
                         var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var files = Language.currentState().getFiles(); var stdio = Language.currentState().getStdio();
                         for (var request : requests.entrySet()) {
-                            var name = request.getKey(); var scenarios = request.getValue(); var linked = with(CoreModules.reachable(module,name),"instrument",true);
-                            ExecutableProgram program = backend.equals("ast") ? new Program(language,linked) : new BytecodeProgram(language,linked); var entry = program.entryTarget(name);
+                            var name = request.getKey(); var scenarios = request.getValue(); var linked = with(CoreModules.reachable(module, entryId(name)),"instrument",true);
+                            ExecutableProgram program = backend.equals("ast") ? new Program(language,linked) : new BytecodeProgram(language,linked); var entry = program.entryTarget(entryId(name));
                             record Backup(long wanted,long saved) {}
                             class Exercise { void run(boolean compiled) throws Exception {
                                 for (var scenario : scenarios) {

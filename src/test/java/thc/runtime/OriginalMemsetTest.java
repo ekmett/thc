@@ -24,8 +24,10 @@ class OriginalMemsetTest {
     private final File root = new File(System.getProperty("thc.projectRoot"));
     private final String prefix = "build/original-memset";
     private final boolean nativeSupported = System.getProperty("os.name").equals("Linux") && Set.of("amd64","x86_64").contains(System.getProperty("os.arch"));
+    private Map<String, Object> cbd(String path) throws Exception { return thc.CoreCbdFixtures.read(new File(root, path).toPath()); }
+    private static String entryId(String name) { return "main:OriginalMemsetAudit." + name; }
     private Object json(String path) throws Exception { return Json.parse(Files.readString(new File(root,path).toPath())); }
-    private Map<String,Object> module(String stage) throws Exception { var modules = new ArrayList<Map<String,Object>>(); for (var part : List.of("OriginalMemsetAudit","THC.InterfaceClosure")) modules.add((Map<String,Object>) json(prefix + "/" + stage + "/core/" + part + ".json")); return CoreModules.merge(modules); }
+    private Map<String,Object> module(String stage) throws Exception { var modules = new ArrayList<Map<String,Object>>(); for (var part : List.of("OriginalMemsetAudit","THC.InterfaceClosure")) modules.add((Map<String,Object>) cbd(prefix + "/" + stage + "/core/" + part + ".cbd")); return CoreModules.merge(modules); }
     private Context context() { return Context.newBuilder("thc").allowNativeAccess(true).allowExperimentalOptions(true).option("engine.BackgroundCompilation","false").option("engine.MultiTier","false").option("engine.CompilationFailureAction","Throw").option("engine.SingleTierCompilationThreshold","10000000").build(); }
     private <T> T inside(Callable<T> body) throws Exception { try (var context = context()) { context.initialize("thc"); context.enter(); try { return body.call(); } finally { context.leave(); } } }
     private ExecutableProgram load(Language language,String backend,Map<String,Object> source) throws Exception { source = ForeignExceptionFixtureSupport.nativeModules(List.of(source)); return backend.equals("ast") ? new Program(language,source) : new BytecodeProgram(language,source); }
@@ -34,7 +36,7 @@ class OriginalMemsetTest {
     private List<Map<String,Object>> rows() throws Exception {
         var manifest = (Map<String,Object>) json(prefix + "/manifest.json"); assertEquals(true,manifest.get("strictAccepted")); assertEquals(198L,manifest.get("nativeRows"));
         hashes(root,manifest.get("inputHashes"),Set.of("t/fixtures/compiler/OriginalMemsetAudit.hs","t/fixtures/compiler/OriginalMemsetNative.hs","t/haskell-fixtures/MemsetFixtures.hs","bin/core_original_foreign.py"));
-        var artifacts = new HashSet<>(Set.of(prefix + "/oracle.json")); for (var stage : List.of("pre","post")) for (var part : List.of("OriginalMemsetAudit","THC.InterfaceClosure")) artifacts.add(prefix + "/" + stage + "/core/" + part + ".json"); hashes(root,manifest.get("artifactHashes"),artifacts,prefix + "/");
+        var artifacts = new HashSet<>(Set.of(prefix + "/oracle.json")); for (var stage : List.of("pre","post")) for (var part : List.of("OriginalMemsetAudit","THC.InterfaceClosure")) artifacts.add(prefix + "/" + stage + "/core/" + part + ".cbd"); hashes(root,manifest.get("artifactHashes"),artifacts,prefix + "/");
         for (var stage : List.of("pre","post")) { var audit = (Map<String,Object>) json(prefix + "/" + stage + "/originalFill.audit.json"); assertEquals(true,audit.get("accepted")); assertEquals(List.of(),audit.get("issues")); assertEquals(List.of(),audit.get("missingGlobals")); }
         var rows = (List<Map<String,Object>>) json(prefix + "/oracle.json"); assertEquals(198,rows.size()); return rows;
     }
@@ -60,11 +62,11 @@ class OriginalMemsetTest {
             var source = module(stage); var original = single(foreignCalls(source),ignored -> true);
             var descriptor = (Map<?, ?>) ((Map<?, ?>) original.get(6)).get("foreignCall");
             assertEquals("memset", ((Map<?, ?>) descriptor.get("target")).get("symbol"));
-            var evidence = new ArrayCoreEvidence(source,"originalFill"); var lambda = (List<Object>) evidence.getRoot().get("expr"); evidence.immediateStateLambda(lambda.get(2)); assertEquals(1,evidence.getBindings().size()); assertEquals(2,evidence.guestLambdas(lambda).size()); int executedRoots = evidence.loweredGuestLambdas(lambda).size(); assertEquals(1,executedRoots,"exact immediate State# application is in-frame");
+            var evidence = new ArrayCoreEvidence(source,entryId("originalFill")); var lambda = (List<Object>) evidence.getRoot().get("expr"); evidence.immediateStateLambda(lambda.get(2)); assertEquals(1,evidence.getBindings().size()); assertEquals(2,evidence.guestLambdas(lambda).size()); int executedRoots = evidence.loweredGuestLambdas(lambda).size(); assertEquals(1,executedRoots,"exact immediate State# application is in-frame");
             for (var backend : List.of("ast","bytecode")) inside(() -> {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 for (boolean raw : new boolean[]{false,true}) {
-                    var selected = raw ? rawModule(original,source) : CoreModules.reachable(source,"originalFill"); var program = load(language,backend,with(selected,"instrument",true)); var target = program.entryTarget(raw ? "entry" : "originalFill");
+                    var selected = raw ? rawModule(original,source) : CoreModules.reachable(source, entryId("originalFill")); var program = load(language,backend,with(selected,"instrument",true)); var target = program.entryTarget(raw ? "entry" : entryId("originalFill"));
                     class Exercise { void run(boolean compiled) throws Exception {
                         for (int kind = 0; kind <= (nativeSupported ? 3 : 2); kind++) for (int index = 0; index < rows.size(); index++) {
                             var row = rows.get(index); var values = (List<Long>) row.get("before"); var base = address(values,kind);

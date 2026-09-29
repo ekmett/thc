@@ -25,6 +25,8 @@ class OriginalStdioReadTest {
     private final byte[] payload = {0,1,127,-128,-1,65,-61,-87};
     private final List<List<Long>> cases = List.of(List.of(-1L,0L,0L,0L), List.of(-1L,3L,4L,0L), List.of(1L,3L,4L,0L), List.of(2L,3L,0L,0L),
         List.of(0L,16L,0L,0L), List.of(0L,2L,4L,0L), List.of(0L,1L,12L,0L), List.of(0L,0L,5L,4L), List.of(0L,5L,4L,8L), List.of(0L,3L,6L,7L));
+    private Map<String, Object> cbd(File path) throws Exception { return thc.CoreCbdFixtures.read(path.toPath()); }
+    private static String entryId(String name) { return "main:OriginalStdioReadAudit." + name; }
     private Object json(File path) throws Exception { return Json.parse(Files.readString(path.toPath())); }
     private record Expected(long result, byte[] buffer) {}
     private Expected expected(String name, List<Long> args) throws IOException {
@@ -61,10 +63,10 @@ class OriginalStdioReadTest {
         var stages = (Map<String,List<String>>) manifest.get("stages"); var audits = (Map<String,Map<String,String>>) manifest.get("audits"); assertEquals(Set.of("pre", "post"), stages.keySet());
         for (var stageEntry : stages.entrySet()) {
             var stage = stageEntry.getKey(); var paths = stageEntry.getValue(); var expectedPaths = new ArrayList<String>();
-            for (var part : List.of("OriginalStdioReadAudit", "THC.InterfaceClosure")) expectedPaths.add("build/original-stdio-read/" + stage + "/core/" + part + ".json"); assertEquals(expectedPaths, paths);
-            var modules = new ArrayList<Map<String,Object>>(); for (var path : paths) modules.add((Map<String,Object>) json(new File(root, path)));
+            for (var part : List.of("OriginalStdioReadAudit", "THC.InterfaceClosure")) expectedPaths.add("build/original-stdio-read/" + stage + "/core/" + part + ".cbd"); assertEquals(expectedPaths, paths);
+            var modules = new ArrayList<Map<String,Object>>(); for (var path : paths) modules.add((Map<String,Object>) cbd(new File(root, path)));
             var module = CoreModules.merge(modules); var bindings = (List<Map<String,Object>>) module.get("bindings"); var found = new HashSet<String>(); var known = new HashSet<Object>();
-            for (var binding : bindings) { if (binding.get("name") instanceof String name && names.contains(name)) found.add(name); known.add(binding.get("id")); }
+            for (var binding : bindings) { for (var name : names) if (Objects.equals(binding.get("id"), entryId(name))) found.add(name); known.add(binding.get("id")); }
             assertEquals(new HashSet<>(names), found); assertEquals(new HashSet<>(names), audits.get(stage).keySet());
             for (var name : names) {
                 var owner = "main:OriginalStdioReadAudit." + name; var body = single(bindings, b -> Objects.equals(b.get("id"), owner)).get("expr"); var symbols = new ArrayList<String>();
@@ -83,8 +85,8 @@ class OriginalStdioReadTest {
                     .option("compiler.Inlining", Boolean.toString(inlining)).option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build()) {
                     context.initialize("thc"); context.enter();
                     try {
-                        var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var linked = with(CoreModules.reachable(module, name), "instrument", true);
-                        ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked); var entry = program.entryTarget(name);
+                        var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var linked = with(CoreModules.reachable(module, entryId(name)), "instrument", true);
+                        ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked); var entry = program.entryTarget(entryId(name));
                         var label = stage + "/" + backend + "/" + name + "/inlining=" + inlining;
                         class Check { void row(Map<String,Object> row) {
                             var args = (List<Long>) row.get("arguments"); long fd = args.get(0), offset = args.get(1), count = args.get(2), start = args.get(3);

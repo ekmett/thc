@@ -26,6 +26,8 @@ class OriginalStdioSeekNativeTest {
     private final File fixture = new File(root, "build/original-stdio-seek");
     private final List<String> names = List.of("originalSeek", "originalSeekErrno");
     private final List<String> scenarios = List.of("set", "cur", "end", "beyond", "wide", "negative", "bad-whence", "invalid", "pipe", "eof", "tell", "closed");
+    private Map<String, Object> cbd(File path) throws Exception { return thc.CoreCbdFixtures.read(path.toPath()); }
+    private static String entryId(String name) { return "main:OriginalStdioSeekAudit." + name; }
     private Map<String, Object> json(File path) throws IOException { return (Map<String, Object>) Json.parse(Files.readString(path.toPath())); }
     private void valid(RootCallTarget target) throws Exception { assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target)); }
     private void exercise(boolean compiled, String stage, String backend, boolean inlining, String name, ExecutableProgram program,
@@ -58,8 +60,8 @@ class OriginalStdioSeekNativeTest {
         assertEquals(names, manifest.get("entries")); assertEquals(24L, manifest.get("nativeRows"));
         hashes(root, manifest.get("inputHashes"), Set.of("t/fixtures/compiler/OriginalStdioSeekAudit.hs", "t/fixtures/compiler/OriginalStdioSeekAuditNative.hs",
             "t/haskell-fixtures/OriginalStdioSeekFixtures.hs", "bin/core_original_foreign.py"));
-        hashes(root, manifest.get("artifactHashes"), Set.of("build/original-stdio-seek/oracle.json", "build/original-stdio-seek/pre/core/OriginalStdioSeekAudit.json",
-            "build/original-stdio-seek/post/core/OriginalStdioSeekAudit.json"), "build/original-stdio-seek/");
+        hashes(root, manifest.get("artifactHashes"), Set.of("build/original-stdio-seek/oracle.json", "build/original-stdio-seek/pre/core/OriginalStdioSeekAudit.cbd",
+            "build/original-stdio-seek/post/core/OriginalStdioSeekAudit.cbd"), "build/original-stdio-seek/");
         var oracle = (List<Map<String, Object>>) Json.parse(Files.readString(new File(fixture, "oracle.json").toPath()));
         var expectedOrder = new ArrayList<List<String>>(); for (var name : names) for (var scenario : scenarios) expectedOrder.add(List.of(name, scenario));
         var actualOrder = new ArrayList<List<Object>>(); for (var row : oracle) actualOrder.add(list(row.get("entry"), row.get("scenario"))); assertEquals(expectedOrder, actualOrder);
@@ -75,7 +77,7 @@ class OriginalStdioSeekNativeTest {
             assertEquals(expected, row.get("result"), row.toString()); assertEquals("", row.get("stdoutHex")); assertEquals("", row.get("stderrHex"));
         }
         for (var stage : List.of("pre", "post")) {
-            var modules = new ArrayList<Map<String, Object>>(); for (var part : List.of("OriginalStdioSeekAudit", "THC.InterfaceClosure")) modules.add(json(new File(fixture, stage + "/core/" + part + ".json")));
+            var modules = new ArrayList<Map<String, Object>>(); for (var part : List.of("OriginalStdioSeekAudit", "THC.InterfaceClosure")) modules.add(cbd(new File(fixture, stage + "/core/" + part + ".cbd")));
             var module = CoreModules.merge(modules); var bindings = (List<Map<String, Object>>) module.get("bindings");
             for (var name : names) {
                 var owner = "main:OriginalStdioSeekAudit." + name; var binding = single(bindings, item -> Objects.equals(item.get("id"), owner));
@@ -98,8 +100,8 @@ class OriginalStdioSeekNativeTest {
                     try {
                         var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                         for (var name : names) {
-                            var linked = with(CoreModules.reachable(module, name), "instrument", true);
-                            ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked); var entry = program.entryTarget(name);
+                            var linked = with(CoreModules.reachable(module, entryId(name)), "instrument", true);
+                            ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked); var entry = program.entryTarget(entryId(name));
                             exercise(false, stage, backend, inlining, name, program, entry, oracle, abi, expectedPosition); var active = targets(entry);
                             assertEquals(1, active.size(), "entry contains the inlined runRW State body");
                             for (var target : active) { target.getClass().getMethod("compile", boolean.class).invoke(target, true); valid(target); }

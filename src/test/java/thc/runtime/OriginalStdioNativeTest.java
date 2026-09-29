@@ -25,6 +25,8 @@ class OriginalStdioNativeTest {
     private final File root = new File(System.getProperty("thc.projectRoot"));
     private final File directory = new File(root,"build/original-stdio");
     private final List<String> names = OriginalStdioChecks.names;
+    private Map<String, Object> cbd(File file) throws Exception { return thc.CoreCbdFixtures.read(file.toPath()); }
+    private static String entryId(String name) { return "main:OriginalStdioAudit." + name; }
     private Object json(File file) throws Exception { return Json.parse(Files.readString(file.toPath())); }
     private byte[] bytes(String hex) { return HexFormat.of().parseHex(hex); }
     private Map<String,Object> manifest() throws Exception {
@@ -34,7 +36,7 @@ class OriginalStdioNativeTest {
         hashes(root,manifest.get("inputHashes"),Set.of("t/fixtures/compiler/OriginalStdioAudit.hs","t/fixtures/compiler/OriginalStdioAuditNative.hs","t/haskell-fixtures/Main.hs","t/haskell-fixtures/FixtureSupport.hs","t/haskell-fixtures/OriginalStdioFixtures.hs","bin/prepare-original-stdio.sh","thc.cabal","bin/audit-core.py","bin/core_original_foreign.py","bin/core-capabilities.json"));
         var required = new HashSet<>(Set.of("build/original-stdio/oracle.json"));
         for (var stage : List.of("pre","post")) {
-            for (var part : List.of("OriginalStdioAudit","THC.InterfaceClosure")) required.add("build/original-stdio/" + stage + "/core/" + part + ".json");
+            for (var part : List.of("OriginalStdioAudit","THC.InterfaceClosure")) required.add("build/original-stdio/" + stage + "/core/" + part + ".cbd");
             for (var name : names) required.add("build/original-stdio/" + stage + "/" + name + ".audit.json");
         }
         for (int i = 0; i < 144; i++) { required.add("build/original-stdio/results/" + i + ".txt");
@@ -70,9 +72,9 @@ class OriginalStdioNativeTest {
             var changed = new ArrayList<>(rows); changed.set(0,with(rows.getFirst(),edit.get(0),edit.get(1))); assertThrows(AssertionError.class,() -> OriginalStdioChecks.rows(changed));
         }
     }
-    private Map<String,Object> module() throws Exception { return (Map<String,Object>) json(new File(directory,"pre/core/OriginalStdioAudit.json")); }
+    private Map<String,Object> module() throws Exception { return (Map<String,Object>) cbd(new File(directory,"pre/core/OriginalStdioAudit.cbd")); }
     private List<Object> expression(Map<String,Object> module) {
-        for (var binding : (List<Map<String,Object>>) module.get("bindings")) if (Objects.equals(binding.get("name"),names.getFirst())) return (List<Object>) binding.get("expr");
+        for (var binding : (List<Map<String,Object>>) module.get("bindings")) if (Objects.equals(binding.get("id"), entryId(names.getFirst()))) return (List<Object>) binding.get("expr");
         throw new NoSuchElementException();
     }
     @Test void originalConsumerStructureAndAuditMutationsReject() throws Exception {
@@ -83,7 +85,7 @@ class OriginalStdioNativeTest {
             it -> foreignCalls(expression(it)).getFirst().set(1,list("var","unproved")),
             it -> ((Map<String,Object>) ((Map<?,?>) foreignCalls(expression(it)).getFirst().get(6)).get("foreignCall")).put("safety","safe"),
             it -> ((List<Object>) it.get("bindings")).add(((List<?>) it.get("bindings")).getFirst()));
-        for (var mutate : mutations) { var changed = module(); mutate.accept(changed); var failure = assertThrows(Throwable.class,() -> OriginalStdioChecks.module(changed)); assertTrue(failure instanceof AssertionError || failure instanceof RuntimeFault,failure.toString()); }
+        for (var mutate : mutations) { var changed = (Map<String,Object>) Json.parse(Json.stringify(module())); mutate.accept(changed); var failure = assertThrows(Throwable.class,() -> OriginalStdioChecks.module(changed)); assertTrue(failure instanceof AssertionError || failure instanceof RuntimeFault,failure.toString()); }
         var owner = "main:OriginalStdioAudit.originalWrite"; var symbols = OriginalStdioChecks.module(module()).get(owner); var audit = (Map<String,Object>) json(new File(directory,"pre/originalWrite.audit.json"));
         audit(audit,owner,symbols);
         for (var edit : List.of(list("accepted",false),list("roots",list("other")),list("issues",list(map("code","unsupported-primitive"))),list("missingGlobals",list(map("id","other"))),
@@ -103,8 +105,8 @@ class OriginalStdioNativeTest {
         var stages = (Map<String,Map<String,Object>>) manifest.get("stages"); var audits = (Map<String,Map<String,String>>) manifest.get("audits"); assertEquals(Set.of("pre","post"),stages.keySet()); assertEquals(stages.keySet(),audits.keySet());
         for (var stageEntry : stages.entrySet()) {
             var stage = stageEntry.getKey(); var settings = stageEntry.getValue(); var paths = (List<String>) settings.get("modules"); var expectedPaths = new ArrayList<String>();
-            for (var part : List.of("OriginalStdioAudit","THC.InterfaceClosure")) expectedPaths.add("build/original-stdio/" + stage + "/core/" + part + ".json"); assertEquals(expectedPaths,paths);
-            var modules = new ArrayList<Map<String,Object>>(); for (var path : paths) modules.add((Map<String,Object>) json(new File(root,path))); var module = CoreModules.merge(modules);
+            for (var part : List.of("OriginalStdioAudit","THC.InterfaceClosure")) expectedPaths.add("build/original-stdio/" + stage + "/core/" + part + ".cbd"); assertEquals(expectedPaths,paths);
+            var modules = new ArrayList<Map<String,Object>>(); for (var path : paths) modules.add((Map<String,Object>) cbd(new File(root,path))); var module = CoreModules.merge(modules);
             var calls = OriginalStdioChecks.module(module); assertEquals(new HashSet<>(names),audits.get(stage).keySet());
             for (var name : names) { var path = "build/original-stdio/" + stage + "/" + name + ".audit.json"; assertEquals(path,audits.get(stage).get(name)); var owner = "main:OriginalStdioAudit." + name; audit((Map<String,Object>) json(new File(root,path)),owner,calls.get(owner)); }
             for (var name : names) for (var backend : List.of("ast","bytecode")) {
@@ -113,8 +115,8 @@ class OriginalStdioNativeTest {
                     .option("compiler.Inlining",Boolean.toString(inlining)).option("engine.BackgroundCompilation","false").option("engine.MultiTier","false").option("engine.CompilationFailureAction","Throw").build()) {
                     context.initialize("thc"); context.enter();
                     try {
-                        var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var linked = with(CoreModules.reachable(module,name),"instrument",true);
-                        ExecutableProgram program = backend.equals("ast") ? new Program(language,linked) : new BytecodeProgram(language,linked); var entry = program.entryTarget(name); var address = ManagedAddress.fromByteArray(payload.clone());
+                        var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var linked = with(CoreModules.reachable(module, entryId(name)),"instrument",true);
+                        ExecutableProgram program = backend.equals("ast") ? new Program(language,linked) : new BytecodeProgram(language,linked); var entry = program.entryTarget(entryId(name)); var address = ManagedAddress.fromByteArray(payload.clone());
                         var label = stage + "/" + backend + "/" + name + "/inlining=" + inlining;
                         class Check { void row(Map<String,Object> row) {
                             output.reset(); errors.reset(); var args = new ArrayList<Long>(); for (var value : (List<Number>) row.get("arguments")) args.add(value.longValue()); assertEquals(3,args.size());

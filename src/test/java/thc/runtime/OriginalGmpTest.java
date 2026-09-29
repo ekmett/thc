@@ -43,17 +43,19 @@ import static thc.runtime.ScalarTestCalls.callScalarTestTarget;
 public class OriginalGmpTest {
     private final File root = new File(System.getProperty("thc.projectRoot"));
     private final String prefix = "build/original-gmp";
+    private Map<String, Object> cbd(String path) throws Exception { return thc.CoreCbdFixtures.read(new File(root, path).toPath()); }
+    private static String entryId(String name) { return "main:OriginalGmpAudit." + name; }
     private Object json(String path) throws Exception { return Json.parse(Files.readString(new File(root, path).toPath())); }
     private Map<String, Object> module(String stage) throws Exception {
         var modules = new ArrayList<Map<String, Object>>();
-        for (var name : List.of("OriginalGmpAudit", "THC.InterfaceClosure")) modules.add((Map<String, Object>) json(prefix + "/" + stage + "/core/" + name + ".json"));
+        for (var name : List.of("OriginalGmpAudit", "THC.InterfaceClosure")) modules.add((Map<String, Object>) cbd(prefix + "/" + stage + "/core/" + name + ".cbd"));
         return CoreModules.merge(modules);
     }
     private List<Map<String, Object>> rows() throws Exception {
         var manifest = (Map<String, Object>) json(prefix + "/manifest.json"); assertEquals(true, manifest.get("strictAccepted"));
         OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of("t/fixtures/compiler/OriginalGmpAudit.hs", "t/fixtures/compiler/OriginalGmpNative.hs", "t/haskell-fixtures/OriginalGmpFixtures.hs", "bin/core_original_foreign.py"), null);
         var required = new LinkedHashSet<String>(); required.add(prefix + "/oracle.json");
-        for (var stage : List.of("pre", "post")) { required.add(prefix + "/" + stage + "/core/OriginalGmpAudit.json"); required.add(prefix + "/" + stage + "/core/THC.InterfaceClosure.json"); }
+        for (var stage : List.of("pre", "post")) { required.add(prefix + "/" + stage + "/core/OriginalGmpAudit.cbd"); required.add(prefix + "/" + stage + "/core/THC.InterfaceClosure.cbd"); }
         OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"), required, prefix + "/");
         var rows = (List<Map<String, Object>>) json(prefix + "/oracle.json"); assertEquals(464, rows.size());
         var expectedSymbols = new LinkedHashSet<String>(); for (var op : GmpForeignOp.values()) expectedSymbols.add(op.getSymbol());
@@ -146,11 +148,11 @@ public class OriginalGmpTest {
                     var grouped = new LinkedHashMap<String, List<Map<String, Object>>>();
                     for (var row : rows) grouped.computeIfAbsent((String) row.get("entry"), _ -> new ArrayList<>()).add(row);
                     for (var group : grouped.entrySet()) {
-                        var name = group.getKey(); var examples = group.getValue(); var linked = new LinkedHashMap<>(CoreModules.reachable(source, name)); linked.put("instrument", true);
-                        var program = load(language, backend, linked); var value = program.entryValue(name);
+                        var name = group.getKey(); var examples = group.getValue(); var linked = new LinkedHashMap<>(CoreModules.reachable(source, entryId(name))); linked.put("instrument", true);
+                        var program = load(language, backend, linked); var value = program.entryValue(entryId(name));
                         var host = program.hostEntryTarget(new Observation(examples.getFirst(), this::nativeBytes).arguments.length);
                         class Runner {
-                            RootCallTarget entry = program.entryTarget(name); List<RootCallTarget> active = List.of();
+                            RootCallTarget entry = program.entryTarget(entryId(name)); List<RootCallTarget> active = List.of();
                             void exercise(boolean compiled) throws Exception {
                                 for (int index = 0; index < examples.size(); index++) {
                                     var row = examples.get(index); var observation = new Observation(row, OriginalGmpTest.this::nativeBytes); var label = stage + "/" + backend + "/inline=" + inline + "/" + name + "/" + index;
@@ -172,7 +174,7 @@ public class OriginalGmpTest {
                                 }
                             }
                         }
-                        var runner = new Runner(); runner.exercise(false); runner.entry = program.entryTarget(name); runner.active = targets(runner.entry); assertFalse(runner.active.isEmpty());
+                        var runner = new Runner(); runner.exercise(false); runner.entry = program.entryTarget(entryId(name)); runner.active = targets(runner.entry); assertFalse(runner.active.isEmpty());
                         for (var target : runner.active) {
                             try { target.getClass().getMethod("compile", boolean.class).invoke(target, true); }
                             catch (Exception failure) { throw new AssertionError(stage + "/" + backend + "/inline=" + inline + "/" + name + ": " + target.getRootNode().getName(), failure); }
@@ -192,7 +194,7 @@ public class OriginalGmpTest {
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 for (var entry : entries) {
-                    var linked = CoreModules.reachable(source, entry);
+                    var linked = CoreModules.reachable(source, entryId(entry));
                     for (int variant = 2; variant < 5; variant++) {
                         var bad = (Map<String, Object>) Json.parse(Json.stringify(linked)); var calls = OriginalStdioChecks.foreignCalls(bad);
                         if (calls.size() != 1) throw new IllegalArgumentException("Expected one call");
@@ -200,7 +202,7 @@ public class OriginalGmpTest {
                         switch (variant) {
                             case 2 -> ((List<Object>) call.get(3)).set(0, true);
                             case 3 -> ((List<Object>) call.get(1)).set(1, ((List<Map<String, Object>>) linked.get("bindings")).stream()
-                                .filter(binding -> entry.equals(binding.get("name"))).findFirst().orElseThrow().get("id"));
+                                .filter(binding -> entryId(entry).equals(binding.get("id"))).findFirst().orElseThrow().get("id"));
                             case 4 -> { var argument = ((List<List<Object>>) call.get(2)).get(0); ((Map<String, Object>) CoreRepresentations.metadata(argument)).put("rep", Map.of("kind", "address", "primReps", List.of("AddrRep"), "evaluated", true)); }
                         }
                         assertThrows(RuntimeFault.class, () -> load(language, backend, bad), backend + "/" + entry + "/" + variant);
@@ -210,17 +212,17 @@ public class OriginalGmpTest {
         }
     }
     @Test @Tag("foreign-exceptions-full-core") public void originalEntryPermissionAndArrayCarriersNeverStoreToGuestBuffersOnRejection() throws Exception {
-        rows(); var source = CoreModules.reachable(module("pre"), "originalAddWord");
+        rows(); var source = CoreModules.reachable(module("pre"), entryId("originalAddWord"));
         for (var backend : List.of("ast", "bytecode")) for (boolean nativeAccess : new boolean[]{false, true}) try (var context = context(nativeAccess, true)) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                 var output = new byte[24]; Arrays.fill(output, (byte) 0x5a); var before = output.clone(); var input = new byte[24]; Arrays.fill(input, (byte) 0x33);
                 if (!nativeAccess) {
-                    assertThrows(RuntimeFault.class, () -> callScalarTestTarget(load(language, backend, source).entryTarget("originalAddWord"),
+                    assertThrows(RuntimeFault.class, () -> callScalarTestTarget(load(language, backend, source).entryTarget(entryId("originalAddWord")),
                         new Object[]{0L, output, input, 1L, 1L}));
                 } else {
-                    var entry = load(language, backend, source).entryTarget("originalAddWord");
+                    var entry = load(language, backend, source).entryTarget(entryId("originalAddWord"));
                     assertThrows(RuntimeFault.class, () -> callScalarTestTarget(entry, new Object[]{0L, output, ManagedAddress.fromByteArray(input), 1L, 1L}));
                 }
                 assertArrayEquals(before, output);
