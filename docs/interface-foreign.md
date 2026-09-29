@@ -53,6 +53,7 @@ THC does not load native Haskell archives or a host GHC RTS to execute guest Cor
 | `safe` calls | Release guest scheduling admission during the call and permit supported callbacks. Pending asynchronous delivery occurs after return, without repeating the native effect. |
 | `interruptible` calls | General native interruption is unsupported. |
 | `dynamic` and `wrapper` imports | Scalar/address function signatures with the callback limits below. |
+| Static `foreign export ccall` | Package C can call declared scalar/address exports in the same THC context, including during native component initialization. |
 | C++ sources | Configured `.cc`, `.cpp` and `.cxx` sources, including their native dependencies. Constructors run when the context loads the component; normal context close runs registered destructors. Forced cancellation does not guarantee cleanup. |
 | Assembly sources | Unsupported. |
 
@@ -81,7 +82,7 @@ matches the library's needs:
   does not grant Haskell permission to read or write its target. The external
   library's ownership and release rules still apply.
 - `StablePtr` values are context-owned opaque identities. C may store and return
-  them while they remain live; `freeStablePtr` releases them. They are not GHC RTS
+  them while they remain live; Haskell `freeStablePtr` or C `hs_free_stable_ptr` releases them. They are not GHC RTS
   heap pointers, and do not support the C `hs_deref_stable_ptr` ABI.
 
 Known allocation aliases retain their owner and lifetime checks. Do not use a
@@ -105,19 +106,25 @@ its guest function until explicit release or context close. `dynamic` imports
 use the declared invocation signature; a function-address getter alone does not
 determine that signature.
 
-Callbacks must occur through a supported safe foreign call. They start unmasked;
+Callbacks from an active foreign call require a supported safe call. They start unmasked;
 unsafe reentry is rejected. Reentry is also rejected while managed pointer cells
 await native writeback. General cross-thread callbacks and aggregate callback
 ABIs are unsupported. Keeping raw pointer bits does not extend a callback's
 lifetime.
 
-For Java callers, `foreign export ccall` declarations can expose scalar and IO
-functions through `thc.Main.loadManagedExports`. Follow the
+Package C can also call declared `foreign export ccall` functions by their
+exported symbols. THC registers context-owned targets before running native
+constructors, so a constructor may call Haskell and obtain its component's
+native labels. If initialization fails, later lookup or invocation of its
+finalizers reports that failure; initialization is not retried. Arbitrary native
+side effects are not rolled back.
+
+For Java callers, the same declarations expose scalar and IO functions through
+`thc.Main.loadManagedExports`. Follow the
 [embedding example](site/embedding.md#call-a-declared-haskell-export) for supported
-types, namespace lookup and context lifetime. These members are polyglot
-functions, not native C export addresses. GHC-generated export stubs depend on
-GHC's RTS closure and registration ABI; compiling them as LLVM does not make
-them THC callbacks.
+types, namespace lookup and context lifetime. Java receives polyglot functions;
+package C uses the native callback binding. Both refer to the owning context's
+Haskell functions, without a separate host GHC RTS.
 
 Catchable foreign language failures use the
 [foreign-exception bridge](foreign-exceptions.md). This does not transport

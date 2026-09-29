@@ -15,6 +15,7 @@ import thc.PackageScalarLink;
 /** Canonical labels retain the loaded component, callable and context lifetime. */
 public final class PackageFinalizerRegistry {
     private final Map<String, CFinalizerFunction> labels = new HashMap<>();
+    private final Map<String, PackageScalarLink> components = new HashMap<>();
     private boolean closed;
 
     private static RuntimeFault fault(String message) {
@@ -26,6 +27,11 @@ public final class PackageFinalizerRegistry {
     public synchronized void register(PackageScalarLink link, Map<String, PackageScalarFunction> functions,
             SulongCbits owner) {
         if (closed) throw fault("Package finalizer registry is closed");
+        var previous = components.get(link.getUnit());
+        if (previous != null) {
+            if (!previous.same(link)) throw fault("Conflicting package finalizer component: " + link.getUnit());
+            return; // A synchronous constructor callback can publish these first.
+        }
         Map<String, CFinalizerFunction> additions = new HashMap<>();
         for (String entry : link.getFinalizers()) {
             PackageScalarFunction function = functions.get(entry);
@@ -37,6 +43,7 @@ public final class PackageFinalizerRegistry {
         }
         // Validate the whole registration before publishing any names.
         labels.putAll(additions);
+        components.put(link.getUnit(), link);
     }
 
     @TruffleBoundary
@@ -48,6 +55,7 @@ public final class PackageFinalizerRegistry {
     public synchronized void close() {
         closed = true;
         labels.clear();
+        components.clear();
     }
 
     @TruffleBoundary

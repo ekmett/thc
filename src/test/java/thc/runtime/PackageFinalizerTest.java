@@ -73,6 +73,20 @@ class PackageFinalizerTest {
             } finally { context.leave(); }
         }
     }
+    @Test void declaredFinalizerLoadsItsComponentOnFirstUse() throws Exception {
+        var link = library();
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var owner = Language.currentState(); owner.getPackageCbits().declare(link);
+                var label = owner.cbits().finalizerLabel("first");
+                byte[] bytes = {3}; label.finalizerFunction().invoke(ManagedAddress.fromByteArray(bytes));
+                assertArrayEquals(new byte[]{31}, bytes);
+                owner.getPackageCbits().link(link);
+                assertSame(label.finalizerFunction(), owner.getPackageCbits().finalizer("first"));
+            } finally { context.leave(); }
+        }
+    }
     @Test void foreignClosedAndAmbiguousOwnersNeverPublishOrInvokeCallbacks() throws Exception {
         var link = library(); var conflicting = library("conflicting-finalizer-test", "unpublished");
         try (var first = context()) {
@@ -81,8 +95,9 @@ class PackageFinalizerTest {
                 var state = Language.currentState(null); state.getPackageCbits().link(link);
                 var callback = state.cbits().finalizerLabel("first");
                 byte[] bytes = {0}; var pointer = ManagedAddress.fromByteArray(bytes);
-                assertThrows(RuntimeFault.class, () -> state.getPackageCbits().link(conflicting));
-                assertNull(state.getPackageCbits().finalizer("unpublished"), "failed registration is atomic");
+                var failed = assertThrows(RuntimeFault.class, () -> state.getPackageCbits().link(conflicting));
+                assertSame(failed, assertThrows(RuntimeFault.class, () -> state.getPackageCbits().finalizer("unpublished")),
+                    "failed registration cannot supply a callable label");
                 assertTrue(callback.sameLocation(state.cbits().finalizerLabel("first")));
                 try (var second = context()) {
                     second.initialize("thc"); second.enter();

@@ -19,7 +19,13 @@ public final class CFinalizerFunction {
     public Object getCallable() { return callable; }
     public void requireOwner(SulongCbits provider) {
         if (provider != owner) throw fault("C function label belongs to another THC context");
-        if (packageFunction != null) PackageFinalizerRegistry.requireCurrent(packageFunction);
+        if (packageFunction != null) {
+            PackageFinalizerRegistry.requireCurrent(packageFunction);
+            // A handle may have escaped through a constructor callback before
+            // its component finished loading. Reuse its canonical load result.
+            if (packageFunction.getOwner().getPackageCbits().finalizer(symbol) != this)
+                throw fault("C finalizer is not its component's canonical label");
+        }
     }
     public void invoke(ManagedAddress address) { owner.invokeFinalizer(this, address); }
 }

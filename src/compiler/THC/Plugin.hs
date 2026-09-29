@@ -1091,6 +1091,7 @@ exportProvenanceFields owner annotations program original = do
   associations <- checked (Exports.readStaticExports owner annotations program)
   case associations of
     Nothing -> pure []
+    Just (Exports.StaticExports _ _ _ []) -> pure []
     Just (Exports.StaticExports _ _ _ exports) -> do
       inventory <- staticExportFields owner annotations program
       verdict <- checked (ExportProvenance.inspectProvenance owner annotations
@@ -1105,6 +1106,7 @@ exportProvenanceFields owner annotations program original = do
                   Just value -> value
                   Nothing -> error "THC verified registration lost its export inventory")]
           profile = case verdict of
+            ExportProvenance.VerifiedRetainedRegistration 3 _ -> "ghc-9.14.1-thc-only-native-static-c-products-v3"
             ExportProvenance.VerifiedRetainedRegistration 2 _ -> "ghc-9.14.1-thc-only-native-static-ccall-imports-v2"
             _ -> "ghc-9.14.1-thc-only-native-static-ccall-v1"
       pure [("staticForeignExportRegistration",O
@@ -1123,13 +1125,19 @@ importProvenanceFields owner annotations original core = do
     (ImportProvenance.inspectImports owner annotations original)
   pure $ case verdict of
     Nothing -> []
+    Just (ImportProvenance.VerifiedMixed [] [] [] _) -> []
     Just value ->
-      let schema = case value of ImportProvenance.VerifiedWrappers {} -> 3; ImportProvenance.Verified _ (_:_) -> 2; _ -> 1
+      let schema = case value of ImportProvenance.VerifiedMixed {} -> 4; ImportProvenance.VerifiedWrappers {} -> 3; ImportProvenance.Verified _ (_:_) -> 2; _ -> 1
           record = O (("schema",num (schema::Int)) : common ++ details value)
           associations = case value of
             ImportProvenance.Verified [] [] -> []
             _ -> [("staticForeignImports", record)]
-      in associations ++ [("staticForeignImportStubs", record) | not emptyProduct]
+          emptyImports = case value of
+            ImportProvenance.VerifiedMixed _ _ _ (ImportProvenance.Product Nothing []) -> True
+            ImportProvenance.VerifiedMixed _ _ _ (ImportProvenance.Product (Just ("","",[],[])) []) -> True
+            ImportProvenance.VerifiedMixed {} -> False
+            _ -> emptyProduct
+      in associations ++ [("staticForeignImportStubs", record) | not emptyImports]
   where
     emptyProduct = case original of
       ForeignCore.IfaceForeign Nothing [] -> True
@@ -1146,6 +1154,18 @@ importProvenanceFields owner annotations original core = do
     details (ImportProvenance.VerifiedWrappers imports addresses wrappers) =
       details (ImportProvenance.Verified imports []) ++
       [("addresses",A (map address addresses)),("wrappers",A (map wrapper wrappers))]
+    details (ImportProvenance.VerifiedMixed imports addresses wrappers product') =
+      details (ImportProvenance.VerifiedWrappers imports addresses wrappers) ++
+      [("importForeign",importProduct product')]
+    importProduct (ImportProvenance.Product stubs files) = O
+      [("schema",num (1::Int)),("execution",S "not-linked"),
+       ("stubs",maybe Z (\(header,source,initializers,finalizers) -> O
+         [("header",S header),("source",S source),("initializers",A (map label initializers)),
+          ("finalizers",A (map label finalizers))]) stubs),
+       ("files",A [O [("language",S language),("source",S source),("extension",S extension)]
+         | (language,source,extension) <- files])]
+    label (initializer,unit,name,symbol) = O
+      [("isInitializer",B initializer),("unit",S unit),("module",S name),("name",S symbol)]
     calls (O fields) = [value | (key,value) <- fields, key == "foreignCall"] ++ concatMap (calls . snd) fields
     calls (A values) = concatMap calls values
     calls _ = []
@@ -1181,6 +1201,7 @@ staticExportFields owner annotations bindings = do
     (Exports.readStaticExports owner annotations bindings)
   pure $ case record of
     Nothing -> []
+    Just (Exports.StaticExports _ _ _ []) -> []
     Just (Exports.StaticExports version unit modName exports) -> [("staticForeignExports",O
       [("schema",num version),("producer",S "THC.Plugin/typeCheckResultAction"),
        ("scope",S "static-export-associations"),("execution",S "not-linked"),

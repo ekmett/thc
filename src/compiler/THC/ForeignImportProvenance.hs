@@ -13,7 +13,7 @@
 -- A closed producer profile for stock static-import C products. These are
 -- retained provenance records, not native links or execution capabilities.
 module THC.ForeignImportProvenance
-  ( Import(..), Address(..), Wrapper(..), ImportType(..), Call(..), Verdict(..), recordImports, inspectImports ) where
+  ( Import(..), Address(..), Wrapper(..), ImportType(..), Call(..), Product(..), Verdict(..), recordImports, inspectImports ) where
 
 import Control.Monad (unless)
 import Data.Data (Data)
@@ -72,10 +72,12 @@ data Product = Product (Maybe (String,String,[(Bool,String,String,String)],[(Boo
 -- stored in .hi files use that serialized representation.
 data Evidence = Unclassified String | StockImports [Import] Product
   | StockImportsWithAddresses [Import] [Address] Product
-  | StockImportsWithWrappers [Import] [Address] [Wrapper] Product deriving Data
+  | StockImportsWithWrappers [Import] [Address] [Wrapper] Product
+  | StockImportsWithExports [Import] [Address] [Wrapper] Product Product deriving Data
 data ImportProof = ImportProof Int String String Evidence deriving Data
 data Verdict = Unknown String | Rejected String | Verified [Import] [Address]
   | VerifiedWrappers [Import] [Address] [Wrapper]
+  | VerifiedMixed [Import] [Address] [Wrapper] Product
 
 productOf :: Foreign.IfaceForeign -> Product
 productOf (Foreign.IfaceForeign stubs files) = Product (fmap stub stubs) (map file files)
@@ -164,7 +166,9 @@ recordImports options environment
       let flags = hsc_dflags top
           allowed = platformArch (targetPlatform flags) `elem` [ArchX86_64,ArchAArch64] &&
             not (profileIsProfiling (targetProfile flags)) && not (gopt Opt_Hpc flags) && not (gopt Opt_InfoTableMap flags)
-          declarations = tcg_fords environment
+          allDeclarations = tcg_fords environment
+          declarations = [declaration | declaration@(L _ ForeignImport {}) <- allDeclarations]
+          mixed = length declarations /= length allDeclarations
       evidence <- if not (knownPipeline top) || not (null pending)
         then pure (Unclassified "unclassified-plugin-or-hook-pipeline")
         else if not allowed then pure (Unclassified "unclassified-target-or-instrumentation")
@@ -194,16 +198,36 @@ recordImports options environment
                       | (stubs,_) <- products]
                 original <- liftIO (Foreign.encodeIfaceForeign (hsc_logger top) flags
                   (ForeignStubs (mconcat headers) (mconcat sources)) [])
+                whole <- if not mixed then pure (Right original) else do
+                  -- A whole-group probe is essential: foreign exports share
+                  -- one initializer. Never concatenate per-export stubs or
+                  -- remove native RTS text by recognizing generated names.
+                  fullCounter <- liftIO (newIORef counter)
+                  fullFiles <- liftIO (newIORef files)
+                  let fullEnvironment = environment { tcg_next_wrapper_num = fullCounter,
+                        tcg_th_foreign_files = fullFiles }
+                  (fullMessages,fullResult) <- setGblEnv fullEnvironment $ initDsTc $ updTopEnv
+                    (\hsc -> hsc { hsc_hooks = (hsc_hooks hsc) { dsForeignsHook = Nothing } })
+                    (dsForeigns allDeclarations)
+                  resultingFiles <- liftIO (readIORef fullFiles)
+                  unless (files == resultingFiles)
+                    (liftIO (ioError (userError "THC mixed foreign probe changed foreign files")))
+                  case fullResult of
+                    Just (stubs,_) | isEmptyMessages fullMessages -> Right <$>
+                      liftIO (Foreign.encodeIfaceForeign (hsc_logger top) flags stubs [])
+                    _ -> pure (Left "stock-mixed-emitter-did-not-complete-cleanly")
                 pure $ either Unclassified (\emitted ->
                   let calls = [value | Imported value <- emitted]
                       addresses = [value | Addressed value <- emitted]
                       wrappers = [value | Wrapped value <- emitted]
-                  in if not (null wrappers) then StockImportsWithWrappers calls addresses wrappers (productOf original)
+                  in if mixed then either Unclassified
+                    (\full -> StockImportsWithExports calls addresses wrappers (productOf full) (productOf original)) whole
+                  else if not (null wrappers) then StockImportsWithWrappers calls addresses wrappers (productOf original)
                   else if null addresses then StockImports calls (productOf original)
                   else StockImportsWithAddresses calls addresses (productOf original)) imports
               _ -> pure (Unclassified "stock-import-emitter-did-not-complete-cleanly")
       let owner = tcg_mod environment
-          version = case evidence of StockImportsWithWrappers {} -> 3; StockImportsWithAddresses {} -> 2; _ -> 1
+          version = case evidence of StockImportsWithExports {} -> 4; StockImportsWithWrappers {} -> 3; StockImportsWithAddresses {} -> 2; _ -> 1
           proof = ImportProof version (unitString (moduleUnit owner)) (moduleNameString (moduleName owner)) evidence
       pure environment { tcg_anns = tcg_anns environment ++
         [Annotation (ModuleTarget owner) (toSerialized serializeWithData proof)] }
@@ -320,7 +344,7 @@ inspectImports :: Module -> [Annotation] -> Foreign.IfaceForeign -> Either Strin
 inspectImports owner annotations original = case proofs of
   [] -> Right Nothing
   [ImportProof version unit name evidence] -> do
-    let expectedVersion = case evidence of StockImportsWithWrappers {} -> 3; StockImportsWithAddresses {} -> 2; _ -> 1
+    let expectedVersion = case evidence of StockImportsWithExports {} -> 4; StockImportsWithWrappers {} -> 3; StockImportsWithAddresses {} -> 2; _ -> 1
     unless (version == expectedVersion && unit == unitString (moduleUnit owner) && name == moduleNameString (moduleName owner))
       (Left "static-import proof version/owner mismatch")
     pure $ Just $ case evidence of
@@ -328,11 +352,20 @@ inspectImports owner annotations original = case proofs of
       StockImports imports expected -> verify imports [] [] expected
       StockImportsWithAddresses imports addresses expected -> verify imports addresses [] expected
       StockImportsWithWrappers imports addresses wrappers expected -> verify imports addresses wrappers expected
+      StockImportsWithExports imports addresses wrappers expected imported
+        | productOf original /= expected -> Rejected "retained-foreign-product-differs"
+        | Product _ files <- expected, not (null files) -> Rejected "additional-foreign-files"
+        | otherwise -> case verifyProduct imports addresses wrappers imported of
+            Verified {} -> VerifiedMixed imports addresses wrappers imported
+            VerifiedWrappers {} -> VerifiedMixed imports addresses wrappers imported
+            failure -> failure
   _ -> Left "duplicate static-import proofs"
   where
     verify imports addresses wrappers expected
         | Product _ files <- productOf original, not (null files) = Rejected "additional-foreign-files"
         | productOf original /= expected = Rejected "retained-foreign-product-differs"
+        | otherwise = verifyProduct imports addresses wrappers expected
+    verifyProduct imports addresses wrappers expected
         | Product (Just (header,_,initializers,finalizers)) _ <- expected,
             not ((null header || not (null wrappers)) && null initializers && null finalizers) = Rejected "unexpected-stub-obligations"
         | length imports /= length (nub imports) = Rejected "duplicate-static-import-evidence"

@@ -16,12 +16,21 @@ public final class ManagedExportAdmission {
     @SuppressWarnings("unchecked")
     public static ManagedExportAdmission read(Map<String,Object> module, Function<String,Map<String,Object>> binding) {
         CoreForeignArtifacts.validateArchive(module, binding == null);
+        return declarations(module, binding, true);
+    }
+    /** Check the registration product without recursively checking native import admission. */
+    @SuppressWarnings("unchecked")
+    static ManagedExportAdmission declarations(Map<?,?> module, boolean completeBindings) {
+        return declarations((Map<String,Object>) module, null, completeBindings);
+    }
+    @SuppressWarnings("unchecked")
+    private static ManagedExportAdmission declarations(Map<String,Object> module, Function<String,Map<String,Object>> binding, boolean checkBindings) {
         require(Objects.equals(module.get("schema"), 2L) && !module.containsKey("foreignLink"), "Managed exports require original, unlinked static-export products");
         String unit = text(module.get("unit")), name = text(module.get("module"));
         var inventory = record(module.get("staticForeignExports"), "schema producer scope execution unit module exports");
         require(Objects.equals(inventory.get("schema"), 1L) && Objects.equals(inventory.get("producer"), "THC.Plugin/typeCheckResultAction") && Objects.equals(inventory.get("scope"), "static-export-associations") && Objects.equals(inventory.get("execution"), "not-linked") && Objects.equals(inventory.get("unit"), unit) && Objects.equals(inventory.get("module"), name), "Invalid managed export inventory owner/schema");
         var provenance = record(module.get("staticForeignExportRegistration"), "schema scope execution profile status roots wordBits expectedForeign expectedExports");
-        require(Objects.equals(provenance.get("schema"), 2L) && Objects.equals(provenance.get("scope"), "retained-foreign-products") && Objects.equals(provenance.get("execution"), "not-linked") && Objects.equals(provenance.get("status"), "verified") && Arrays.asList("ghc-9.14.1-thc-only-native-static-ccall-v1", "ghc-9.14.1-thc-only-native-static-ccall-imports-v2").contains(provenance.get("profile")) && Objects.equals(provenance.get("wordBits"), 64L), "Managed exports require verified retained static-export registration");
+        require(Objects.equals(provenance.get("schema"), 2L) && Objects.equals(provenance.get("scope"), "retained-foreign-products") && Objects.equals(provenance.get("execution"), "not-linked") && Objects.equals(provenance.get("status"), "verified") && Arrays.asList("ghc-9.14.1-thc-only-native-static-ccall-v1", "ghc-9.14.1-thc-only-native-static-ccall-imports-v2", "ghc-9.14.1-thc-only-native-static-c-products-v3").contains(provenance.get("profile")) && Objects.equals(provenance.get("wordBits"), 64L), "Managed exports require verified retained static-export registration");
         require(Objects.equals(provenance.get("expectedForeign"), module.get("foreign")), "Managed export foreign product changed after verification");
         require(Objects.equals(provenance.get("expectedExports"), inventory), "Managed export inventory changed after verification");
         var foreign = (Map<String,Object>) module.get("foreign");
@@ -46,7 +55,7 @@ public final class ManagedExportAdmission {
                 for (var value : bindings) if (Objects.equals(value.get("id"), id)) matches++;
                 exact = matches == 1;
             } else exact = Objects.equals(binding.apply(id).get("id"), id);
-            require(exact, "Static export does not resolve to one exact Core binder: " + id);
+            require(!checkBindings || exact, "Static export does not resolve to one exact Core binder: " + id);
             String symbol = text(export.get("symbol")); require(names.add(symbol), "Duplicate static export symbol: " + unit + ":" + name + "/" + symbol);
             require(Objects.equals(export.get("convention"), "ccall") && Objects.equals(export.get("normalizationRole"), "representational"), "Unsupported static export convention/normalization");
             type(export.get("declaredType")); var remaining = type(export.get("normalizedType"));

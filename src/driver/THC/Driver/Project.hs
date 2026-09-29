@@ -1058,6 +1058,7 @@ wiredGhcInternal context thcRoot = do
                          "driverHash" .= contextDriverHash context,
                          "options" .= (["ghc-internal-source-closure-v2", "post-tidy",
                                         "source-notes", "foreign-import-provenance",
+                                        "foreign-export-associations", "foreign-export-registration",
                                         "hsc2hs", "-g"] ++
                            (if Host.os == "mingw32" then ["compiler-source-graph", "-O2", "-fwrite-if-simplified-core"]
                             else exportWayOptions) ++ ["-dcore-lint", "-XNoPolyKinds"])] ++
@@ -1321,7 +1322,7 @@ exporterIdentity context = do
                  "pluginHash" .= pluginHash,
                  "driverHash" .= contextDriverHash context,
                  "options" .= (["post-tidy", "unit-qualified", "source-notes",
-                                "foreign-import-provenance",
+                                "foreign-import-provenance", "foreign-export-associations", "foreign-export-registration",
                                 "native-debug-info", "-dynamic", "-dcore-lint",
                                 "-fplugin-trustworthy"] :: [String])]
 
@@ -1678,7 +1679,7 @@ exportConfiguredUnit context keys unit component scalar runtimeShim nativeObject
                          "pluginHash" .= pluginHash,
                          "driverHash" .= contextDriverHash context,
                          "options" .= (["post-tidy", "unit-qualified", "source-notes",
-                                         "foreign-import-provenance",
+                                         "foreign-import-provenance", "foreign-export-associations", "foreign-export-registration",
                                          "native-debug-info"] ++ exportWayOptions ++
                                         ["-dcore-lint", "-fplugin-trustworthy"])] ++
                      maybe [] (\digest -> ["scalarInterfaceHelperSha256" .= digest,
@@ -1747,7 +1748,8 @@ freshExport context component unit scalar runtimeShim helper nativeObjects build
     -- The known THC exporter preserves GHC safety inference, as in GhcProxy.
     -- Without plugin trust, an inferred-safe home module becomes unsafe merely
     -- because it is exported, so a later Safe importer fails to compile.
-    let pluginOptions = [core, "post-tidy", "unit-qualified", "source-notes", "foreign-import-provenance"]
+    let pluginOptions = [core, "post-tidy", "unit-qualified", "source-notes", "foreign-import-provenance",
+                         "foreign-export-associations", "foreign-export-registration"]
         -- The pinned Windows compiler loads a vanilla archive, not a shared plugin.
         pluginFlags = if Host.os == "mingw32"
           then ["-plugin-package-id", contextPluginUnit context, "-fplugin=THC.Plugin"] ++

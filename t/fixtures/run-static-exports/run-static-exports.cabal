@@ -1,0 +1,15 @@
+cabal-version: 3.0
+name: static-export-package
+version: 0.1.0.0
+build-type: Simple
+
+executable static-export-package
+  main-is: Main.hs
+  other-modules: NativeExport
+  hs-source-dirs: .
+  c-sources: cbits/callbacks.c
+  include-dirs: cbits
+  install-includes: callbacks.h
+  build-depends: base
+  default-language: Haskell2010
+  ghc-options: -O2

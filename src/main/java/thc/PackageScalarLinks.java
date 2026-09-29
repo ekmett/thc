@@ -70,7 +70,10 @@ public final class PackageScalarLinks {
         Object raw = module.get(nativeLink ? "packageNativeLink" : "packageScalarLink"); if (raw == null) return null;
         check(!nativeLink || !module.containsKey("packageScalarLink"), "two package link profiles");
         check(Objects.equals(module.get("ghc"), "9.14.1") && (version(module.get("schema"), 1) || nativeLink && version(module.get("schema"), 2)), "GHC/schema");
-        check((nativeLink || !module.containsKey("foreign")) && !module.containsKey("foreignLink") && (nativeLink || !module.containsKey("staticForeignImportStubs")) && !module.containsKey("staticForeignExports") && !module.containsKey("staticForeignExportRegistration"), "mixed foreign obligations");
+        check((nativeLink || !module.containsKey("foreign")) && !module.containsKey("foreignLink") && (nativeLink || !module.containsKey("staticForeignImportStubs")) &&
+            (nativeLink || !module.containsKey("staticForeignExports") && !module.containsKey("staticForeignExportRegistration")), "mixed foreign obligations");
+        if (nativeLink && (module.containsKey("staticForeignExports") || module.containsKey("staticForeignExportRegistration")))
+            ManagedExportAdmission.declarations(module, completeBindings);
         boolean inputs = nativeLink && raw instanceof Map<?,?> m && m.containsKey("buildInputs");
         boolean callbacks = nativeLink && raw instanceof Map<?,?> m && version(m.get("schema"), 2);
         boolean companion = nativeLink && raw instanceof Map<?,?> m && m.containsKey("nativeLibrary");
@@ -96,7 +99,6 @@ public final class PackageScalarLinks {
         byte[] bytes = HexFormat.of().parseHex(encoded); check(bytes.length != 0 && digest(bytes).equals(bitcodeHash), "bitcode digest");
         byte[] nativeLibrary = new byte[0];
         if (companion) {
-            check(!format.equals("llvm-bitcode"), "native dependency container");
             var dependency = record(fields.get("nativeLibrary"), "sha256 hex");
             String hex = text(dependency.get("hex")); nativeLibrary = HexFormat.of().parseHex(hex);
             check(nativeLibrary.length != 0 && HexFormat.of().formatHex(nativeLibrary).equals(hex) &&
@@ -190,15 +192,16 @@ public final class PackageScalarLinks {
                 if (!finalizers.contains(signature.entry())) admitted.add(signature.entry());
             return new PackageScalarAdmission(link, admitted);
         }
-        boolean wrapperProof = module.get("staticForeignImports") instanceof Map<?,?> m && version(m.get("schema"), 3);
+        boolean mixedProof = module.get("staticForeignImports") instanceof Map<?,?> m && version(m.get("schema"), 4);
+        boolean wrapperProof = mixedProof || module.get("staticForeignImports") instanceof Map<?,?> m && version(m.get("schema"), 3);
         boolean addressProof = wrapperProof || module.get("staticForeignImports") instanceof Map<?,?> m && version(m.get("schema"), 2);
-        var proof = record(module.get("staticForeignImports"), "schema scope execution profile unit module status wordBits expectedForeign imports expectedCalls" + (addressProof ? " addresses" : "") + (wrapperProof ? " wrappers" : ""));
+        var proof = record(module.get("staticForeignImports"), "schema scope execution profile unit module status wordBits expectedForeign imports expectedCalls" + (addressProof ? " addresses" : "") + (wrapperProof ? " wrappers" : "") + (mixedProof ? " importForeign" : ""));
         if (nativeLink && module.containsKey("staticForeignImportStubs")) check(Objects.equals(module.get("staticForeignImportStubs"), proof), "retained CAPI import provenance differs");
         check((version(proof.get("schema"), 1) || addressProof) && Objects.equals(proof.get("scope"), "retained-static-import-products") && Objects.equals(proof.get("execution"), "not-linked") && Objects.equals(proof.get("profile"), "ghc-9.14.1-thc-only-static-c-imports-v1") && Objects.equals(proof.get("unit"), unit) && Objects.equals(proof.get("module"), module.get("module")) && Objects.equals(proof.get("status"), "verified") && version(proof.get("wordBits"), 64), "typed import profile/owner");
         var wrappers = ManagedCallbackMetadata.read(module, proof);
-        var product = record(proof.get("expectedForeign"), "schema execution stubs files");
+        var product = ManagedImportAdmission.importProduct(module, proof, completeBindings);
         check(version(product.get("schema"), 1) && Objects.equals(product.get("execution"), "not-linked") && Objects.equals(product.get("files"), List.of()), "foreign product");
-        if (nativeLink && module.containsKey("foreign")) check(product.equals(module.get("foreign")), "retained C stubs differ");
+        if (nativeLink && module.containsKey("foreign")) check(Objects.equals(proof.get("expectedForeign"), module.get("foreign")), "retained C stubs differ");
         if (product.get("stubs") != null) {
             var stubs = record(product.get("stubs"), "header source initializers finalizers");
             check((Objects.equals(stubs.get("header"), "") || nativeLink && !wrappers.isEmpty() && stubs.get("header") instanceof String) && (nativeLink ? stubs.get("source") instanceof String : Objects.equals(stubs.get("source"), "")) && Objects.equals(stubs.get("initializers"), List.of()) && Objects.equals(stubs.get("finalizers"), List.of()), "nonempty foreign products");

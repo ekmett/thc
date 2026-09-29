@@ -1,6 +1,7 @@
 {
   "schema": 1,
   "fixtureFreeJunit": [
+    "thc.StaticExportStartupTest",
     "thc.HostInteropAbiTest",
     "thc.runtime.ExplicitInteropLibraryTest",
     "thc.runtime.SemanticForeignOverrideTest",

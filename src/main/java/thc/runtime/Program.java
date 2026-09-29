@@ -71,6 +71,12 @@ public final class Program implements ExecutableProgram {
     private final Map<String, boolean[]> globalEntries = new LinkedHashMap<>();
     private final Map<String, CoreApplicationCertificates.Arity> globalArityCertificates = new LinkedHashMap<>();
     private final Consumer<List<Map<String, Object>>> validateInputs;
+    private List<String> pendingInitializers = List.of();
+
+    /** Publish all ordinary global cells before package constructors can call back. */
+    public static Program forNativeStartup(TruffleLanguage<?> language, Map<String,Object> module, boolean async) {
+        return new Program(language, module, async, false, false, false, null, !absentOrEmpty(module.get("packageScalarLinks")));
+    }
 
     public Program(TruffleLanguage<?> language, Map<String, Object> moduleData) { this(language, moduleData, false, false); }
     public Program(TruffleLanguage<?> language, Map<String, Object> moduleData, boolean enableAsync) { this(language, moduleData, enableAsync, false); }
@@ -83,6 +89,10 @@ public final class Program implements ExecutableProgram {
     }
     private Program(TruffleLanguage<?> language, Map<String, Object> moduleData, boolean enableAsync,
                     boolean outlineCaseArms, boolean deferDefaultArm, boolean reusableCode, PreparedCode prepared) {
+        this(language, moduleData, enableAsync, outlineCaseArms, deferDefaultArm, reusableCode, prepared, false);
+    }
+    private Program(TruffleLanguage<?> language, Map<String, Object> moduleData, boolean enableAsync,
+                    boolean outlineCaseArms, boolean deferDefaultArm, boolean reusableCode, PreparedCode prepared, boolean nativeStartup) {
         if (prepared == null && Boolean.getBoolean("thc.requireCachedCode"))
             throw new UnsupportedCore("Runtime THC lowering is disabled; prepared code is required");
         this.language = language; this.enableAsync = enableAsync; this.outlineCaseArms = outlineCaseArms;
@@ -169,7 +179,7 @@ public final class Program implements ExecutableProgram {
             if (!reusableCode && (source == null && demand == null || !representation(binding) || demand == null && source != null &&
                 Arrays.asList("lit", "con", "void").contains(source.getHeader().getTag()))) {
                 eager.add(binding);
-                continue;
+                if (!nativeStartup) continue;
             }
             required(globals, (String) binding.get("id")).defer(preparationLock, () -> {
                 if (reusableCode) {
@@ -190,6 +200,10 @@ public final class Program implements ExecutableProgram {
                 return value;
             });
         }
+        if (nativeStartup) {
+            pendingInitializers = eager.stream().map(binding -> (String) binding.get("id")).toList();
+            return;
+        }
         validateBindings(eager);
         Scope scope = new Scope(new FrameLayout());
         List<Expr> initializers = new ArrayList<>();
@@ -202,6 +216,11 @@ public final class Program implements ExecutableProgram {
             required(globals, (String) binding.get("id")).initialize(value);
             initializedBindingCount++;
         }
+    }
+
+    @Override public void initializeGlobals() {
+        for (String id : pendingInitializers) required(globals, id).read();
+        pendingInitializers = List.of();
     }
 
     /** Explicit experimental admission using the ordinary AST lowerer, without executing guest bodies.

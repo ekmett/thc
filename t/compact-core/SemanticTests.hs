@@ -267,11 +267,11 @@ semanticTests = TestList
         assertEqual "foreign-owner lookup sees the compiled component in the cold directory"
           8 (headerSummaries (containerHeader footer))
   , TestLabel "typed package address and finalizer facts preserve schema-one prefixes" $ TestCase $ do
-      ImportProof _ scope execution profile owner name (ImportsVerified wordBits productRecord imports calls _ _) <- pure completeImports
+      ImportProof _ scope execution profile owner name (ImportsVerified wordBits productRecord imports calls _ _ _) <- pure completeImports
       let address = AddressAssociation qualified (Known "original.h") "original_finalizer" True CApi
             nominal nominal "representational" (Just (["AddrRep"],"void"))
           imports2 = ImportProof 2 scope execution profile owner name
-            (ImportsVerified wordBits productRecord imports calls [address] [])
+            (ImportsVerified wordBits productRecord imports calls [address] [] Nothing)
           NativeLink (LinkPayload _ format linkProfile unit target component digest artifact) abi inputs companion dataSymbols _ = completeNativeLink
           linked2 = NativeLink (LinkPayload 2 format linkProfile unit target component digest artifact) abi inputs companion dataSymbols ["adapter"]
           facts = completeFacts {factsPendingProvenance =
@@ -310,16 +310,31 @@ semanticTests = TestList
           amend value = value
       assertBool "retired selected-entry proof rejected" (isLeft (parseModuleWithoutDebug (amend original)))
   , TestLabel "callback wrapper association survives compact metadata transport" $ TestCase $ do
-      ImportProof _ scope execution profile owner name (ImportsVerified wordBits productRecord imports calls addresses _) <- pure completeImports
+      ImportProof _ scope execution profile owner name (ImportsVerified wordBits productRecord imports calls addresses _ _) <- pure completeImports
       let wrapper = WrapperAssociation (ExportAssociation qualified "actual_helper" CCall nominal nominal
             "representational" [nominal] nominal IOExport) "W"
           proof = ImportProof 3 scope execution profile owner name
-            (ImportsVerified wordBits productRecord imports calls addresses [wrapper])
+            (ImportsVerified wordBits productRecord imports calls addresses [wrapper] Nothing)
           facts = completeFacts {factsPendingProvenance = [Missing,Known (ImportsRecord proof),Known (ImportsRecord proof),Missing,Missing,Missing,Missing,Missing]}
       assertEqual "callback ABI and emitted helper survive JSON" (Right (facts,[]))
         (parseModuleWithoutDebug (moduleJSON facts []))
       withEncoded (\_ encoder -> encodeFacts encoder facts) $ \_ strings bytes ->
         assertEqual "callback ABI and helper survive selected wire decoding" (Right facts) (decodeFacts bytes strings)
+  , TestLabel "mixed import and static export product partition survives compact metadata" $ TestCase $ do
+      let original = moduleJSON completeFacts {factsPendingProvenance =
+            [Missing,Known (ImportsRecord completeImports),Known (ImportsRecord completeImports),Missing,Missing,Missing,Missing,Missing]} []
+          partition = object ["schema" .= (1::Int),"execution" .= ("not-linked"::String),"stubs" .= Null,"files" .= ([]::[Value])]
+          amend (Object fields) = Object (fmap change fields)
+          amend value = value
+          change (Object proof) | KM.member "expectedForeign" proof = Object $
+            KM.insert "schema" (toJSON (4::Int)) $ KM.insert "addresses" (toJSON ([]::[Value])) $
+            KM.insert "wrappers" (toJSON ([]::[Value])) $ KM.insert "importForeign" partition proof
+          change value = value
+          expected = amend original
+      (facts,bindings) <- either fail pure (parseModuleWithoutDebug expected)
+      assertEqual "original product and import-only product are distinct" expected (moduleJSON facts bindings)
+      withEncoded (\_ encoder -> encodeFacts encoder facts) $ \_ strings bytes ->
+        assertEqual "schema 4 partition survives typed bytes" (Right facts) (decodeFacts bytes strings)
   , TestLabel "native artifact conversion rejects malformed hex and unknown nested facts" $ TestCase $ do
       let original = moduleJSON completeFacts {factsPendingProvenance =
             [Missing,Missing,Missing,Missing,Missing,Known (ScalarLinkRecord completeScalarLink),Missing,Missing]} []
@@ -465,7 +480,7 @@ completeImports = ImportProof 1 "retained-static-import-products" "not-linked"
     [ImportAssociation qualified Unknown "original_fn" (Known "main") True CApi InterruptibleCall
       nominal (ForeignApplication nominal (ForeignVariable 0)) "representational"
       (EmittedCall "original_fn" (Known "main") CApi InterruptibleCall ["IntRep","void"] ["void","IntRep"])]
-    [expected,expected] [] [])
+    [expected,expected] [] [] Nothing)
   where
     expected = ForeignCall 1 (StaticTarget "original_fn" (Known "main") True) CApi InterruptibleCall
       2 2 [longRep,tupleCold] tupleHot Unknown Missing Missing

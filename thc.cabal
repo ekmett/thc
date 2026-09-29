@@ -376,6 +376,10 @@ extra-source-files:
   t/fixtures/run-native-variants/native-variants.cabal
   t/fixtures/run-native-variants/Main.hs
   t/fixtures/run-native-variants/variants.c
+  t/fixtures/run-static-exports/run-static-exports.cabal
+  t/fixtures/run-static-exports/*.hs
+  t/fixtures/run-static-exports/cbits/*.c
+  t/fixtures/run-static-exports/cbits/*.h
   src/examples/standard-apps/README.md
   src/examples/standard-apps/TinyLexer.x
   src/examples/standard-apps/TinyParser.y

@@ -10,13 +10,15 @@
 -- Portability : Native GHC; host filesystem/process services
 --
 -- Tests for store project.
-module StoreProjectTests (tests, inplaceTests, concurrentTests, exportSafetyTests, proxyOptionsTest, captureLifetimeTests) where
+module StoreProjectTests (tests, inplaceTests, concurrentTests, exportSafetyTests, proxyOptionsTest, staticExportsTest, captureLifetimeTests) where
 
 import Control.Concurrent (forkFinally, killThread, newEmptyMVar, putMVar, readMVar)
-import Control.Exception (bracket, throwIO)
+import Control.Exception (bracket, finally, throwIO)
 import Control.Monad (forM_, unless)
 import Data.Char (isHexDigit)
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as BL
+import Data.Aeson (encode, eitherDecodeStrict')
 import Data.List (isPrefixOf, sort, stripPrefix)
 import System.Directory (getModificationTime, getPermissions, removeFile,
                          removePathForcibly, setPermissions)
@@ -25,13 +27,15 @@ import System.Environment (getEnvironment, lookupEnv, setEnv, unsetEnv)
 import System.Exit (ExitCode(..))
 import System.FilePath ((</>), takeDirectory, takeFileName)
 import qualified System.Process as Process
+import System.Timeout (timeout)
 import Test.HUnit (Test(..), assertBool, assertEqual)
 import TestSupport
 import THC.Driver.GhcProxy (ghcProxyCommand, directPlugin)
 import THC.Driver.Lock (withLock)
+import THC.Driver.PackageNative (nativeSignatures, finishPackageNative)
 
 tests :: Env -> Test
-tests env = TestList [proxyOptionsTest env, captureLifetimeTests env, storeProjectTest env, customStoreProjectTest env,
+tests env = TestList [proxyOptionsTest env, staticExportsTest env, captureLifetimeTests env, storeProjectTest env, customStoreProjectTest env,
   inplaceTests env, concurrentTests env, exportSafetyTests env, nativeVariantsTest env False, nativeVariantsTest env True]
 
 captureLifetimeTests :: Env -> Test
@@ -317,6 +321,88 @@ inplaceTests env = TestLabel "archive dependency retains its project-local depen
     changedNative <- runExe env project Nothing 60 executable []
     assertFailure changedNative
 
+staticExportsTest :: Env -> Test
+staticExportsTest env = TestLabel "ordinary replay retains mixed static callback provenance" $ TestCase $
+  withFixtureNamed env "t/fixtures/run-static-exports" "static callbacks" $ \project -> do
+    assertSuccess =<< runExe env (thcRoot env) Nothing 180 "bin/build-compiler.sh" []
+    plugin <- readJson (thcRoot env </> "build/compiler/plugin.json")
+    compiler <- maybe "ghc" id <$> lookupEnv "GHC"
+    libdirResult <- runExe env project Nothing 30 compiler ["--print-libdir"]
+    assertSuccess libdirResult
+    helper <- Directory.findExecutable "thc-interface" >>= maybe (fail "Missing genuine interface helper") pure
+    let unit = "static-export-fixture"
+        capture = project </> "capture"
+        pieces = project </> "pieces"
+        objectDirectory = capture </> unit </> "objects"
+        libdir = case lines (out libdirResult) of [value] -> value; _ -> error "Expected one GHC library directory"
+        settings = [("THC_PROXY_GHC", compiler), ("THC_PROXY_GLOBAL_UNITS", unit),
+          ("THC_PROXY_CAPTURE", capture), ("THC_PROXY_PLUGIN_DB", string $ field plugin "packageDb"),
+          ("THC_PROXY_PLUGIN_UNIT", string $ field plugin "unitId"),
+          ("THC_PROXY_PLUGIN_LIBRARY", string $ field plugin "sharedLibrary"),
+          ("THC_PROXY_NATIVE_PIECES", pieces), ("THC_PROXY_INTERFACE_HELPER", helper),
+          ("THC_PROXY_INTERFACE_LIBDIR", libdir), ("THC_PROXY_ROOT", thcRoot env)]
+    original <- getEnvironment
+    let runProxy arguments = do
+          let command = (Process.proc (driver env) ("ghc-proxy" : arguments))
+                { Process.cwd = Just project, Process.env = Just (settings ++ filter
+                    (\(key,_) -> key `notElem` ("THC_PROXY_NATIVE_RECIPES" : "THC_PROXY_NO_LINK_UNIT" : map fst settings)) original) }
+          completed <- timeout (120 * 1000000) (Process.readCreateProcessWithExitCode command "")
+          (status, stdout, stderr) <- maybe (fail "Static-export proxy timed out") pure completed
+          writeText (scratch env </> "static-exports-replay.log") (stdout ++ stderr)
+          assertEqual stderr ExitSuccess status
+    -- Cabal compiles C translation units separately. Passing C source through
+    -- --make's replay would let GHC's -no-link -o overwrite the native oracle.
+    runProxy
+      ["-c", "-dynamic", "-Icbits", "cbits/callbacks.c", "-o", "callbacks.o"]
+    let native = project </> "oracle"
+    runProxy ["--make", "-O2", "-dynamic", "-fforce-recomp", "-odir", "objects",
+      "-this-unit-id", unit, "-Icbits", "Main.hs", "callbacks.o", "-o", native]
+    oracle <- runExe env project Nothing 30 native []
+    assertSuccess oracle
+    assertEqual "native address-taken callback and StablePtr release" "43\n" (out oracle)
+    hydrated <- runExe env project Nothing 60 "thc-interface"
+      ["--libdir", libdir, "--unit", unit, "--module", "NativeExport", "--interface", objectDirectory </> "NativeExport.hi",
+       "--home-interfaces", objectDirectory, "--way", "dynamic"]
+    assertSuccess hydrated
+    writeText (scratch env </> "static-exports-hydrated.json") (out hydrated)
+    response <- json (out hydrated)
+    let core = field response "core"
+        imports = field core "staticForeignImports"
+        exports = field core "staticForeignExports"
+        registration = field core "staticForeignExportRegistration"
+        callbacks = objects exports "exports"
+    assertEqual "mixed declarations retain typed import proof" "verified" (string $ field imports "status")
+    assertEqual "mixed declarations retain explicit product partition" 4 (number $ field imports "schema")
+    assertEqual "registration proves the complete original product" (field core "foreign") (field registration "expectedForeign")
+    assertEqual "import proof proves the same complete original product" (field core "foreign") (field imports "expectedForeign")
+    assertEqual "typed registration is verified" "verified" (string $ field registration "status")
+    assertEqual "exactly the source-declared C symbol" ["thc_pkg_callback"] (map (string . (`field` "symbol")) callbacks)
+    assertEqual "typed callback roots agree with registration" (map (`field` "binder") callbacks) (array $ field registration "roots")
+    assertEqual "native adapter partition has no RTS registration initializer" []
+      (array $ field (field (field imports "importForeign") "stubs") "initializers")
+    assertBool "real CAPI adapter remains in the import partition"
+      (not (null (string $ field (field (field imports "importForeign") "stubs") "source")))
+    case nativeSignatures unit [core] of
+      Left failure -> assertBool failure False
+      Right signatures -> assertEqual "both actual C import declarations remain callable" 2 (length signatures)
+    published <- finishPackageNative pieces (capture </> unit) unit (Just [project </> "callbacks.o"])
+      [("NativeExport.json", BL.toStrict (encode core))]
+      `finally` copyTree capture (scratch env </> "static-exports-capture")
+    case published of
+      [("NativeExport.json", bytes)] -> do
+        BS.writeFile (scratch env </> "static-exports-linked.json") bytes
+        linked <- either fail pure (eitherDecodeStrict' bytes)
+        let nativeLink = field linked "packageNativeLink"
+        assertEqual "managed externals remain in verified LLVM" "llvm-bitcode" (string $ field nativeLink "format")
+        assertEqual "managed symbols remain unresolved beside the genuine native dependency"
+          ["hs_free_stable_ptr", "strtol", "thc_pkg_callback"]
+          (sort $ map string $ array $ field (field nativeLink "buildInputs") "unresolved")
+        assertEqual "only the actual native dependency roots the native companion" ["strtol"]
+          (strings $ field (one (const True) $ objects (field nativeLink "buildInputs") "nativeLibraries") "symbols")
+        assertEqual "native publication preserves authentic callback registration"
+          registration (field linked "staticForeignExportRegistration")
+      _ -> fail "Static-export publication changed module identity"
+
 proxyOptionsTest :: Env -> Test
 proxyOptionsTest env = TestLabel "compiler proxy preserves arguments and replay provenance" $ TestCase $
   withFixtureNamed env "t/fixtures/run-store-project" "proxy" $ \project -> do
@@ -394,12 +480,13 @@ proxyOptionsTest env = TestLabel "compiler proxy preserves arguments and replay 
           [value] -> pure (read value :: [String])
           _ -> fail "direct plugin specification missing"
         assertEqual "required output and provenance options precede caller additions"
-          [project </> "capture/sample/core", "post-tidy", "unit-qualified", "source-notes", "foreign-import-provenance"]
-          (take 5 pluginOptions)
+          [project </> "capture/sample/core", "post-tidy", "unit-qualified", "source-notes", "foreign-import-provenance",
+           "foreign-export-associations", "foreign-export-registration"]
+          (take 7 pluginOptions)
         assertEqual "exactly one provenance opt-in" 1 (length $ filter (== "foreign-import-provenance") pluginOptions)
         let wanted = if supplied == ["@" ++ response] then ["closure=response"]
               else if "-fplugin-opt" `elem` supplied then ["closure=first", "closure=second"] else []
-        assertEqual "caller plugin options and response-file options survive in order" wanted (drop 5 pluginOptions)
+        assertEqual "caller plugin options and response-file options survive in order" wanted (drop 7 pluginOptions)
         assertBool "ordinary plugin loading does not eagerly link guest dependencies" ("-fplugin=THC.Plugin" `notElem` replay)
       else pure ()
   where

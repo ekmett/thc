@@ -2752,7 +2752,8 @@
         "thc.CoreUnitManagedExportTest",
         "thc.CoreZipBundleTest",
         "thc.ManagedImportTypeTest",
-        "thc.PackageScalarLinksTest"
+        "thc.PackageScalarLinksTest",
+        "thc.StaticExportStartupTest"
       ],
       "python": []
     },
