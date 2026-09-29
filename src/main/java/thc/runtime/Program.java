@@ -363,12 +363,14 @@ public final class Program implements ExecutableProgram {
                     String name = (String) function.get(1);
                     if (Primitive.arity(name) < 0 && NarrowScalarOp.named(name) == null && ByteArrayOp.named(name) == null &&
                             !CoreVectors.operations.contains(name) && !Set.of("plusAddr#", "indexCharOffAddr#",
+                            "raise#", "raiseIO#", "catch#", "getMaskingState#", "unmaskAsyncExceptions#",
+                            "maskAsyncExceptions#", "maskUninterruptible#", "noDuplicate#", "touch#",
                             "plusFloat#", "minusFloat#", "timesFloat#", "divideFloat#", "negateFloat#",
                             "+##", "-##", "*##", "/##", "negateDouble#",
                             "eqFloat#", "neFloat#", "ltFloat#", "leFloat#", "gtFloat#", "geFloat#",
                             "==##", "/=##", "<##", "<=##", ">##", ">=##",
                             "int2Float#", "int2Double#", "float2Int#", "double2Int#", "float2Double#", "double2Float#").contains(name))
-                        throw new UnsupportedCore("Reusable AST primitive is outside the admitted pure families");
+                        throw new UnsupportedCore("Reusable AST primitive is outside the admitted families: " + name);
                 } else requireReusableBody(function);
                 for (List<Object> argument : (List<List<Object>>) expression.get(2)) requireReusableBody(argument);
             }
@@ -2066,14 +2068,14 @@ public final class Program implements ExecutableProgram {
             if (name.equals("raiseIO#")) return new RaiseIOException(operands[0], operands[1], tupleProof, CoreExceptionPayload.validate(expr));
             if (delimited && !name.equals("getMaskingState#")) return new DelimitedIOBoundary(name, new TupleShape(tupleProof, (thc.Language) language),
                 operands, (thc.Language) language, metrics);
-            if (name.equals("catch#")) return new CatchException(new TupleShape(tupleProof, (thc.Language) language), operands[0], operands[1], operands[2], metrics);
+            if (name.equals("catch#")) return new CatchException(new TupleShape(tupleProof, (thc.Language) language), operands[0], operands[1], operands[2], codeMetrics());
             if (name.equals("getMaskingState#")) return new GetMaskingState(operands[0], tupleProof);
             MaskingState state = switch (name) {
                 case "maskAsyncExceptions#" -> MaskingState.MASKED_INTERRUPTIBLE;
                 case "maskUninterruptible#" -> MaskingState.MASKED_UNINTERRUPTIBLE;
                 default -> MaskingState.UNMASKED;
             };
-            return new MaskAction(new TupleShape(tupleProof, (thc.Language) language), state, operands[0], operands[1], metrics);
+            return new MaskAction(new TupleShape(tupleProof, (thc.Language) language), state, operands[0], operands[1], codeMetrics());
         }
         if (primitive && "noDuplicate#".equals(fn.get(1))) {
             CoreNoDuplicate.validate(argumentProofs(args), flags, tupleProof);

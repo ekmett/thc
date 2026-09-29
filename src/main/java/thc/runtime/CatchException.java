@@ -25,6 +25,17 @@ public final class CatchException extends Expr {
         setRepresentation(proof.copy(proof.getKind(), true, proof.getPresent(), proof.getPrimReps(), proof.getComponents(), proof.getVector(),
             proof.getAlternatives(), proof.getTagSlot(), proof.getAlternativeSlots()));
     }
+    @Override public void prepareTuple(int[] slots, int offset) {
+        if (metrics != null) return;
+        if (actionCall != null) {
+            if (destinationSlots != slots || destinationOffset != offset) throw new IllegalStateException("Conflicting typed destination");
+            return;
+        }
+        var destination = new AstTupleDestination(shape, slots, offset);
+        actionCall = new TupleDispatch(destination, null, 1, false, null);
+        handlerCall = new TupleDispatch(destination, null, 2, false, null);
+        destinationSlots = slots; destinationOffset = offset;
+    }
     @Override public Object execute(VirtualFrame frame) { throw fault("catch# requires a tuple destination"); }
     @Override @ExplodeLoop public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
         if (actionCall == null) {

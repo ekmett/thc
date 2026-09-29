@@ -23,6 +23,15 @@ public final class MaskAction extends Expr {
         setRepresentation(proof.copy(proof.getKind(), true, proof.getPresent(), proof.getPrimReps(), proof.getComponents(), proof.getVector(),
             proof.getAlternatives(), proof.getTagSlot(), proof.getAlternativeSlots()));
     }
+    @Override public void prepareTuple(int[] slots, int offset) {
+        if (metrics != null) return;
+        if (actionCall != null) {
+            if (destinationSlots != slots || destinationOffset != offset) throw new IllegalStateException("Conflicting typed destination");
+            return;
+        }
+        actionCall = new TupleDispatch(new AstTupleDestination(shape, slots, offset), null, 1, false, null);
+        destinationSlots = slots; destinationOffset = offset;
+    }
     @Override public Object execute(VirtualFrame frame) { throw fault("mask action requires a tuple destination"); }
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
         if (actionCall == null) {

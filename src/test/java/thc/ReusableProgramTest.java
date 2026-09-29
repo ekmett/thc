@@ -15,6 +15,75 @@ import static thc.CoreExecutionTestSupport.*;
 
 /** Real lowerer ownership checks; auxiliary-cache persistence remains a separate acceptance. */
 class ReusableProgramTest {
+    @Test @SuppressWarnings("unchecked")
+    void preparedSynchronousHandlersAndMaskingNeedNoTraining() throws Exception {
+        var state = map("kind", "void", "evaluated", true, "primReps", list());
+        var word = map("kind", "long", "evaluated", true, "primReps", list("IntRep"));
+        var closure = map("kind", "closure", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)"));
+        var data = map("kind", "data", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)"));
+        var io = map("kind", "unknown", "evaluated", true, "primReps", list("IntRep"),
+            "aggregate", "unboxed-tuple", "components", list(state, word));
+        var token = list("void", map("rep", state));
+        var stateBinder = map("id", "s", "name", "s", "lifted", false, "rep", state);
+        var getMask = list("app", list("prim", "getMaskingState#"), list(token), list(false), false, false, map("rep", io));
+        var action = list("lam", list(stateBinder), getMask, map("rep", closure, "resultRep", io));
+        var payload = list("con", "Payload", 0, map("rep", data));
+        var raising = list("lam", list(stateBinder), list("app", list("prim", "raiseIO#"),
+            list(payload, token), list(true, false), false, false, map("rep", io)), map("rep", closure, "resultRep", io));
+        var handler = list("lam", list(map("id", "error", "name", "error", "lifted", true, "rep", data), stateBinder),
+            getMask, map("rep", closure, "resultRep", io));
+        var masked = list("app", list("prim", "maskAsyncExceptions#"), list(action, token), list(true, false), false, false, map("rep", io));
+        var caught = list("app", list("prim", "catch#"), list(raising, handler, token), list(true, true, false), false, false, map("rep", io));
+        var bindings = new ArrayList<Map<String,Object>>();
+        for (var name : List.of("mask", "catch")) {
+            var body = list("case", name.equals("mask") ? masked : caught, "pair", list(list("data", "Pair", list("s", "mask"),
+                list("var", "mask", map("rep", word)), map("binders", list(stateBinder, wordParameter("mask"))))),
+                map("binder", map("id", "pair", "name", "pair", "lifted", false, "rep", io), "rep", word));
+            var binding = binding(name, list("lam", list(wordParameter("unused")), body, map("rep", closure, "resultRep", word)), true);
+            binding.put("arity", 1); binding.put("rep", closure); bindings.add(binding);
+        }
+        var module = module(bindings);
+        module.put("constructors", list(map("id", "Pair", "name", "Pair", "arity", 2, "kind", "unboxed-tuple"),
+            map("id", "Payload", "name", "Payload", "arity", 0, "kind", "boxed", "tag", 1,
+                "strictFields", list(), "fieldLifted", list(), "fieldReps", list())));
+        try (var engine = Engine.newBuilder().allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false")
+                .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build()) {
+            Program.PreparedCode code;
+            try (var preparation = Context.newBuilder("thc").engine(engine).build()) {
+                preparation.initialize("thc"); preparation.enter();
+                try { code = Program.prepareCode(TruffleLanguage.LanguageReference.create(Language.class).get(null), module, List.of("mask", "catch")); }
+                finally { preparation.leave(); }
+            }
+            var field = Program.PreparedCode.class.getDeclaredField("targets"); field.setAccessible(true);
+            for (var target : (List<com.oracle.truffle.runtime.OptimizedCallTarget>)field.get(code)) {
+                assertFalse(target.wasExecuted()); assertTrue(target.prepareForAOT()); target.compile(true); assertFalse(target.wasExecuted());
+            }
+            code.requireInstalledCode();
+            String previous = System.getProperty("thc.requireCompiledCode"); System.setProperty("thc.requireCompiledCode", "true");
+            try {
+                for (int load = 0; load < 2; load++) try (var context = Context.newBuilder("thc").engine(engine).build()) {
+                    context.initialize("thc"); context.enter();
+                    try {
+                        var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                        var program = code.newInstance(language); var sibling = code.newInstance(language);
+                        for (var name : List.of("mask", "catch")) {
+                            var function = (Closure)program.entryValue(name);
+                            assertEquals(2L, Calls.target(function.target, new Object[]{0L, function.environment, 0L}), "GHC masked-interruptible tag");
+                            assertEquals(MaskingState.UNMASKED, Language.currentState().getMaskingState().get());
+                        }
+                        assertTrue(count(program, "compiledEntries") >= 5); assertEquals(0, count(sibling, "compiledEntries"));
+                        assertEquals(0, count(program, "loweredRootCount")); code.requireInstalledCode();
+                        var handoff = language.getHandoffState().get();
+                        assertNull(handoff.getPending()); assertEquals(0, handoff.getArguments().getDepth());
+                        assertEquals(0, handoff.getResults().getDepth());
+                    } finally { context.leave(); }
+                }
+            } finally {
+                if (previous == null) System.clearProperty("thc.requireCompiledCode"); else System.setProperty("thc.requireCompiledCode", previous);
+            }
+        }
+    }
+
     private Map<String,Object> ordinaryClosureModule() {
         var longRep = map("kind", "long", "evaluated", true, "primReps", list("IntRep"));
         var closureRep = map("kind", "closure", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)"));
