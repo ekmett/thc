@@ -311,6 +311,48 @@ public class PackageNativeLifecycleTest {
             } finally { context.leave(); }
         }
     }
+    @Test public void standardLoweringExecutesRealCRelativeStringTables() throws Exception {
+        assumeTrue(System.getProperty("os.name").equals("Linux") && System.getProperty("os.arch").equals("amd64"));
+        var original = companion(new byte[0], """
+            static const char *const names[] = {"zero", "one", "two", "three", "four", "five"};
+            static unsigned index;
+            long entry(void) { return names[index++ % 6][0]; }
+            #ifdef NATIVE_ORACLE
+            #include <stdio.h>
+            int main(void) { for (int i = 0; i < 7; ++i) printf("%ld\\n", entry()); }
+            #endif
+            """);
+        var compiler = System.getenv().getOrDefault("THC_CLANG", "clang");
+        var nativeProgram = directory.resolve("native-relative-table");
+        command(List.of(compiler, "-O1", "-DNATIVE_ORACLE", directory.resolve("companion.c").toString(), "-o", nativeProgram.toString()));
+        assertEquals("122\n111\n116\n116\n102\n102\n122\n", command(List.of(nativeProgram.toString())));
+        var opt = System.getenv().getOrDefault("THC_LLVM_OPT", "opt");
+        var input = directory.resolve("companion.bc");
+        assertTrue(command(List.of(opt, "-S", "-passes=verify", input.toString(), "-o", "-")).contains("call ptr @llvm.load.relative"),
+            "the genuine compiler input must exercise a relative table");
+        // Characterize the pinned Sulong gap independently of the standard LLVM
+        // expansion. The producer's native test checks that its final pipeline
+        // applies this pass; this control checks actual guest execution.
+        try (var context = Context.newBuilder("thc").allowNativeAccess(true).build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var failure = assertThrows(com.oracle.truffle.api.exception.AbstractTruffleException.class, () -> invoke(original));
+                assertTrue(failure.getMessage().contains("missing LLVM builtin: llvm.load.relative"), failure.toString());
+            } finally { context.leave(); }
+        }
+        var output = directory.resolve("relative-lowered.bc");
+        command(List.of(opt, "-passes=pre-isel-intrinsic-lowering,globaldce", input.toString(), "-o", output.toString()));
+        var bytes = Files.readAllBytes(output);
+        var hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
+        var lowered = new PackageScalarLink("relative-lowered", original.getTarget(), hash, hash, bytes,
+            original.getAbi(), "llvm-bitcode", Set.of(), new byte[0]);
+        for (int i = 0; i < 2; i++) try (var context = Context.newBuilder("thc").allowNativeAccess(true).build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                for (long expected : new long[]{122, 111, 116, 116, 102, 102, 122}) assertEquals(expected, invoke(lowered));
+            } finally { context.leave(); }
+        }
+    }
     @Test public void failedProviderInitializationIsNotRetriedByAnotherConsumer() throws Exception {
         assumeTrue(System.getProperty("os.name").equals("Linux") && System.getProperty("os.arch").equals("amd64"));
         var provider = component("provider", """
