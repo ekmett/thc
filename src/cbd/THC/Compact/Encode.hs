@@ -519,6 +519,7 @@ encodeExpr encoder@(Encoder _ _ _ _ found _) expression = observe encoder Expres
     present encoder (binder encoder) information
     list encoder (alternative encoder) alternatives
   Void metadata -> prefix 8 metadata
+  Unsupported metadata diagnostic -> prefix 9 metadata >> string encoder diagnostic
   where
     prefix kind metadata = tag encoder kind >> meta encoder metadata
     child = encodeExpr encoder
