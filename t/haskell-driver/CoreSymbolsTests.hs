@@ -18,6 +18,8 @@ import System.FilePath ((</>))
 import Test.HUnit (Test(..), assertBool, assertEqual)
 import THC.Compact.Module (encodeModuleValue, readModuleMetadata)
 import THC.Driver.CoreSymbols (publishCoreUnit)
+import qualified THC.Driver.Installed as Installed
+import qualified THC.Driver.Project as Project
 import THC.Driver.Zip (encodeZip)
 import TestSupport
 
@@ -51,12 +53,26 @@ tests env = TestLabel "CBD-only unit publication" $ TestList
       archive <- either fail pure (encodeZip (("manifest.json",encoded inner) :
         ("inplace-manifest.json",inputs) : zip ["core/a.cbd","core/b.cbd"] bodies))
       BL.writeFile source archive
-      let unit = object ["id" .= ("test-unit" :: String),"modules" .= refs,
-            "bundle" .= object ["path" .= source,"sha256" .= digest (BL.toStrict archive)]]
-      published <- publishCoreUnit cache False unit
+      let registration = Installed.InstalledUnit "registration-unit" "" ["dependency-unit"] [] []
+          bundle = Project.Bundle source (digest (BL.toStrict archive)) refs "test-build-key" []
+          units = Project.installedRecords registration (Project.InstalledBundle "test-unit" bundle)
+          unit = units !! 1
+      assertEqual "intermediate bundle remains available for foreign linking" (toJSON source)
+        (field (field unit "bundle") "path")
+      publishedUnits <- mapM (publishCoreUnit cache False) units
+      assertEqual "registration alias and original owner survive" ["registration-unit","test-unit"]
+        (map (string . (`field` "id")) publishedUnits)
+      assertEqual "dependency closure survives on alias and owner"
+        [toJSON (["dependency-unit"] :: [String]),toJSON (["dependency-unit"] :: [String])]
+        (map (`field` "depends") publishedUnits)
+      assertEqual "moduleless registration alias remains unchanged" (take 1 units) (take 1 publishedUnits)
+      let published = publishedUnits !! 1
       forM_ ["bundle","json","symbols"] $ \key ->
         assertEqual "no legacy executable payload" Null (field published key)
       let records = array (field published "modules")
+      forM_ (zip refs records) $ \(originalRef,record) ->
+        forM_ ["name","path","boundary","sha256"] $ \key ->
+          assertEqual "original module provenance survives publication" (field originalRef key) (field record key)
       forM_ (zip records bodies) $ \(record,body) -> do
         let compact = field record "compact"
         actual <- BS.readFile (string (field compact "path"))

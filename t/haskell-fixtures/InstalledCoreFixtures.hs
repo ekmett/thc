@@ -21,6 +21,7 @@ import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString.Char8 as BS
 import FixtureSupport (CommandResult(..), hashFile, runLogged, writeJson)
 import qualified THC.Driver.Cache as Cache
+import THC.Driver.CoreSymbols (publishCoreUnit)
 import qualified THC.Driver.Installed as Installed
 import qualified THC.Driver.InstalledForeign as Foreign
 import qualified THC.Driver.Project as Project
@@ -155,7 +156,8 @@ prepareInstalledCoreProfile foreignSource root directory libraries = do
     digest <- hashFile (root </> destination)
     unless (digest == Project.bundleHash bundle) (die "Installed fixture bundle changed while copying")
     let local = original {Project.installedBundle = bundle {Project.bundlePath = root </> destination}}
-    pure (Project.installedRecords unit local, destination)
+    records <- mapM (publishCoreUnit cache False) (Project.installedRecords unit local)
+    pure (records, destination)
   writeJson (root </> packagePath) $ object
     ["format" .= ("thc-core-packages" :: String), "schema" .= (1 :: Int),
      "ghc" .= ("9.14.1" :: String), "units" .= concatMap fst bundles]
