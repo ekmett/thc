@@ -11,7 +11,7 @@
 --
 -- Build a selected Cabal component and launch it with explicit guest runtime arguments.
 module THC.Driver.Run
-  ( RunOptions(..), runtimeLaunchArguments, runtimeEntryArguments, runResolvedPackage
+  ( RunOptions(..), resolveThcRoot, runtimeLaunchArguments, runtimeEntryArguments, runResolvedPackage
   ) where
 
 import Control.Monad (unless, when)
@@ -27,9 +27,9 @@ import Distribution.Simple.Setup
 import Distribution.Utils.Path (getSymbolicPath, makeSymbolicPath)
 import Distribution.Verbosity (silent)
 import GHC.ResponseFile (escapeArgs)
-import System.Directory (canonicalizePath, doesFileExist, findExecutable, listDirectory, makeAbsolute,
+import System.Directory (canonicalizePath, doesDirectoryExist, doesFileExist, findExecutable, listDirectory, makeAbsolute,
                          createDirectoryIfMissing, removeFile)
-import System.Environment (getEnvironment, lookupEnv)
+import System.Environment (getEnvironment, getExecutablePath, lookupEnv)
 import System.Info (os)
 import System.Exit (ExitCode(ExitSuccess))
 import System.FilePath
@@ -51,6 +51,28 @@ data RunOptions = RunOptions
   , runVerifyArtifacts :: Bool
   , runArguments :: [String]
   }
+
+-- | Locate the source/build tree containing this executable, including when
+-- launched through a symlink or from another Cabal project. An explicit root
+-- supports drivers copied outside their build tree.
+resolveThcRoot :: FilePath -> IO FilePath
+resolveThcRoot supplied
+  | not (null supplied) = do
+      exists <- doesDirectoryExist supplied
+      unless exists $ fail ("THC root directory does not exist: " ++ supplied)
+      canonicalizePath supplied
+  | otherwise = do
+      executable <- canonicalizePath =<< getExecutablePath
+      search executable (takeDirectory executable)
+  where
+    search executable directory = do
+      package <- doesFileExist (directory </> "thc.cabal")
+      compiler <- doesFileExist (directory </> "bin/build-compiler.sh")
+      if package && compiler then pure directory
+        else if takeDirectory directory == directory
+          then fail ("Cannot locate THC source/build root from " ++ executable ++
+                     "; use --thc-root DIR when the driver is installed separately")
+          else search executable (takeDirectory directory)
 
 -- | Artifact verification belongs before the entry command, never in GHC flags
 -- or after the guest delimiter, and is disabled unless explicitly requested.

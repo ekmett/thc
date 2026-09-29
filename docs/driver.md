@@ -13,7 +13,7 @@ pinned GraalVM from the [README](../README.md). From a configured THC checkout:
 make
 cabal run thc -- --help
 cabal run thc -- run completed --project-dir t/fixtures/run-pure \
-  --thc-root "$PWD" --dist-dir "$PWD/build/run-package"
+  --dist-dir "$PWD/build/run-package"
 ```
 
 The included example returns `()` without printing. It works with the limited
@@ -23,8 +23,8 @@ complete-Core setup below.
 ## Choose a target and pass arguments
 
 ```sh
-thc run my-package:exe:my-program --thc-root /absolute/path/to/thc -- --help
-thc acquire my-package:exe:my-program --thc-root /absolute/path/to/thc
+thc run my-package:exe:my-program -- --help
+thc acquire my-package:exe:my-program
 ```
 
 `run` accepts executables, `exitcode-stdio-1.0` test suites and benchmarks.
@@ -36,13 +36,17 @@ missing and ambiguous targets fail explicitly.
 | Option | Purpose |
 | --- | --- |
 | `--project-dir DIR`, `--project-file FILE` | Select the application's Cabal project. Otherwise use the current directory. |
-| `--thc-root DIR` | Required path to the built THC checkout. |
+| `--thc-root DIR` | Override the THC source/build root, normally located from the executable. |
 | `--dist-dir DIR` | Select the THC/Cabal build and publication directory. |
 | `--with-ghc PATH`, `--with-ghc-pkg PATH` | Select the matching compiler and package tool. |
 | `--installed-core required` | Acquire complete executable Core from the selected installation. |
 | `--ghc-source DIR` | Supply the matching configured GHC source tree for required foreign annotations. |
 | `--verify-artifacts` | On `run`, audit the reachable Core before launch and verify artifact hashes. |
 | `--runtime PATH` | Override `<thc-root>/build/install/thc/bin/thc`. |
+
+The driver finds its THC checkout from its executable location, following
+symlinks. This works from another application's directory. If you copy the
+driver outside that tree, supply `--thc-root` to locate its compiler and runtime.
 
 `thc run TARGET --help` shows driver help without building. Put guest arguments
 after the literal `--`; `thc run TARGET ... -- --help` asks the guest for help.
