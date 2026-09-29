@@ -71,6 +71,7 @@ class ReusableLoaderTest {
         assertEquals(Set.of("app:Main.entry", "exit:Shutdown.stop"), ids(result));
         assertEquals("exit:Shutdown.stop", result.get("shutdownEntry"));
         assertFalse(result.containsKey("packageManifest")); assertFalse(result.containsKey("packageCapability"));
+        assertEquals(Boolean.TRUE, result.get("detachedBindings"));
     }
     @Test void detachedPackageIncludesImplicitArithmeticPayload() throws Exception {
         String payload = thc.runtime.CoreArithmeticExceptions.payload("raiseDivZero#");

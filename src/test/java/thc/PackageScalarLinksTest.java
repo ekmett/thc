@@ -77,6 +77,27 @@ class PackageScalarLinksTest {
             with(product, "stubs", with(stubs, "initializers", list("register_callback"))))));
         var complete = new CoreModules.Merger(); complete.addSelected(inlineAdmission, List.of()); complete.addPackageProvenance(Objects.requireNonNull(declaration.getPackageLink())); complete.finish();
     }
+    @Test void detachedOriginalInventoryIsRecheckedAsACountedSubset() throws Exception {
+        var base = module(); var proof = object(base, "staticForeignImports");
+        var call = map("target", map("unit", base.get("unit"), "symbol", "scalar_value"));
+        var entry = map("id", "scalar-fixture:Scalar.entry", "name", "entry", "arity", 0, "lifted", false,
+            "rep", map("kind", "long", "primReps", list("IntRep"), "evaluated", true), "expr", list("lit", "int", "7"));
+        var selected = with(base, "bindings", list(entry), "staticForeignImports", with(proof, "expectedCalls", list(call, call)));
+        var request = map("modules", list(selected), "entry", entry.get("id"), "backend", "ast", "asyncExceptions", false, "detachedBindings", true);
+        try (var context = org.graalvm.polyglot.Context.newBuilder("thc").allowExperimentalOptions(true)
+                .option("engine.Compilation", "false").build()) {
+            // Parse only: the structural bitcode model must never be loaded or executed.
+            assertDoesNotThrow(() -> context.parse("thc", Json.stringify(request)));
+            for (var full : List.of(without(request, "detachedBindings"), with(request, "detachedBindings", false)))
+                assertThrows(org.graalvm.polyglot.PolyglotException.class, () -> context.parse("thc", Json.stringify(full)));
+            for (var bad : List.of(binding("altered", list(with(call, "safety", "safe"))), binding("duplicated", list(call, call, call)))) {
+                var invalid = with(request, "modules", list(with(selected, "bindings", list(entry, bad))));
+                assertThrows(org.graalvm.polyglot.PolyglotException.class, () -> context.parse("thc", Json.stringify(invalid)));
+            }
+            assertThrows(org.graalvm.polyglot.PolyglotException.class,
+                () -> context.parse("thc", Json.stringify(with(request, "detachedBindings", "true"))));
+        }
+    }
     private Map<String, Object> foreignCall(Map<?, ?> base, String symbol) {
         return map("foreignCall", map("target", map("unit", base.get("unit"), "symbol", symbol), "convention", "ccall", "safety", "unsafe",
             "argumentReps", list(map("primReps", list("Int32Rep")), map("primReps", List.of()))));

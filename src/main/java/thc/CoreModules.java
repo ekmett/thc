@@ -58,6 +58,17 @@ public final class CoreModules {
         public void add(Map<String,Object> module) { add(module, admission(module)); }
         public void add(Map<String,Object> module, ManagedExportAdmission admission) { append(module, admission, null); }
         public void addSelected(CoreModuleAdmission admission, List<Map<String,Object>> bindings) { append(admission.selected(bindings), admission.getExports(), admission); }
+        /** Detached bodies remain a counted subset of the unchanged original inventory. */
+        void addDetached(Map<String,Object> module) {
+            var selected = (List<Map<String,Object>>) module.get("bindings");
+            var definitions = new LinkedHashMap<String,Map<String,Object>>();
+            for (var binding : selected) require(definitions.putIfAbsent((String) binding.get("id"), binding) == null, "Duplicate detached binding");
+            var admission = new CoreModuleAdmission(module, id -> {
+                var binding = definitions.get(id); require(binding != null, "Missing detached registration or bridge helper: " + id); return binding;
+            });
+            addSelected(admission, selected);
+            if (admission.getExports() != null) admissions.add(admission.getExports());
+        }
         /** Declaration-only modules contribute typed ABI provenance, not roots. */
         public void addPackageProvenance(PackageScalarAdmission admission) { packageProvenance(admission); }
         private void packageProvenance(PackageScalarAdmission admission) {
@@ -302,6 +313,10 @@ public final class CoreModules {
     }
     private static TargetLayout visitRequestModulesChecked(Map<String,Object> input, BiConsumer<CoreJsonIndex,CoreJsonBindings> indexed, Consumer<Map<String,Object>> accept) throws java.io.IOException {
         require(input.get("verifyArtifacts") == null || input.get("verifyArtifacts") instanceof Boolean, "verifyArtifacts must be a Boolean");
+        require(input.get("detachedBindings") == null || input.get("detachedBindings") instanceof Boolean, "detachedBindings must be a Boolean");
+        require(!Boolean.TRUE.equals(input.get("detachedBindings")) || input.get("modules") instanceof List<?> &&
+            input.get("packageManifest") == null && input.get("indexedModuleFiles") == null && input.get("consumerModules") == null,
+            "Detached bindings require inline selected modules");
         boolean verify = Objects.equals(input.get("verifyArtifacts"), true); Object files = input.get("indexedModuleFiles");
         if (files != null) {
             require(files instanceof List<?> list && !list.isEmpty() && input.get("modules") == null && input.get("consumerModules") == null && input.get("targetLayout") == null, "Indexed module request must not mix input protocols");
@@ -498,6 +513,7 @@ public final class CoreModules {
             reachable(merger.finish(), entries, true);
             var result = without(input, "packageManifest", "packageManifestSha256", "packageCapability", "consumerModules", "indexedModuleFiles");
             result.put("modules", modules);
+            result.put("detachedBindings", true);
             if (directory.getTargetLayout() != null) result.put("targetLayout", directory.getTargetLayout().document());
             return Json.stringify(detachedValue(result));
         } finally { consumerSources.forEach(CoreJsonIndex::close); }
