@@ -263,21 +263,26 @@ public final class PackageScalarLibraries {
             if (closed) throw fault("Package C library registry is closed");
             declared = libraries.values().toArray(Loaded[]::new);
         }
+        var existing = finalizers.resolve(symbol);
         // Only the loader's synchronous callback may see a component before
         // INIT_MODULE returns. Its function symbols are already initialized.
         for (var selected : declared) {
             var link = selected.link();
-            boolean matches = link.getAbi().stream().anyMatch(signature ->
-                link.getFinalizers().contains(signature.getEntry()) && signature.getSymbol().equals(symbol));
+            // A canonical label retains its exact declaration, not a failed
+            // competing component that happened to declare the same symbol.
+            boolean matches = link.getAbi().stream().anyMatch(signature -> existing != null
+                ? signature == existing.getPackageFunction().getSignature()
+                : link.getFinalizers().contains(signature.getEntry()) && signature.getSymbol().equals(symbol));
             if (!matches) continue;
             if (initializing.get().contains(link)) {
                 var functions = new HashMap<String, PackageScalarFunction>();
                 for (var signature : link.getAbi()) if (link.getFinalizers().contains(signature.getEntry()))
                     functions.put(signature.getEntry(), resolve(link, signature));
                 finalizers.register(link, functions, owner.cbits());
-            } else if (!selected.task().isDone()) {
+            } else {
                 // A constructor may demand a different declared component.
-                // Use normal loading/awaiting; never retry a failed component.
+                // Always observe completion, including a stored failure. Running
+                // a completed FutureTask is a no-op, not an initialization retry.
                 link(link);
             }
         }

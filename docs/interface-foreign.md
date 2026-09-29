@@ -680,8 +680,9 @@ fabricated, foreign and previously freed tokens are rejected. It does not accept
 GHC RTS heap pointers. Failed initialization withdraws the new export names and
 roots; any callback pointers already handed to C remain allocated but invalid
 until context close. Failed native component initialization is not rolled back
-or retried in place. Reusable/native-image construction remains a separate
-preparation contract.
+or retried in place. Subsequent finalizer lookup or use of a retained finalizer
+observes that component's stored load failure. Reusable/native-image construction
+remains a separate preparation contract.
 
 For an ordinary full-Core installation lacking these annotations, project runs
 can explicitly supply `--installed-core required --ghc-source DIR`. This bounded

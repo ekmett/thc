@@ -176,6 +176,35 @@ class StaticExportStartupTest {
         }
     }
     @Timeout(20)
+    @ParameterizedTest @CsvSource({"ast,false", "bytecode,false", "ast,true", "bytecode,true"})
+    void failedConstructorCannotPublishItsEarlyFinalizer(String backend, boolean lazy) throws Exception {
+        var module = module(true, "function-addr"); var file = Files.writeString(directory.resolve("module.json"), Json.stringify(module));
+        var paths = List.of(lazy ? "@" + paired(module) : file.toString());
+        for (String hosting : List.of("platform", "loom")) try (var context = Context.newBuilder("thc").allowNativeAccess(true).allowCreateThread(true)
+                .allowExperimentalOptions(true).option("thc.ThreadHosting", hosting).build()) {
+            var failure = assertThrows(RuntimeException.class,
+                () -> context.eval("thc", CoreModules.managedExportRequest(paths, backend, true)));
+            assertTrue(failure.getMessage().contains("missing_initializer_dependency"), failure.toString());
+            context.enter();
+            try {
+                var owner = Language.currentState();
+                var lookup = assertThrows(RuntimeException.class, () -> owner.getPackageCbits().finalizer("startup_label"));
+                assertTrue(lookup.getMessage().contains("missing_initializer_dependency"), lookup.toString());
+                assertSame(lookup, assertThrows(RuntimeException.class, () -> owner.getPackageCbits().finalizer("startup_label")),
+                    "repeat lookup observes the same failed load, not a retry");
+                // Inspect the real object published during the callback, bypassing
+                // the now-rejecting lookup to model an already retained handle.
+                var field = thc.runtime.PackageScalarLibraries.class.getDeclaredField("finalizers"); field.setAccessible(true);
+                var retained = ((thc.runtime.PackageFinalizerRegistry) field.get(owner.getPackageCbits())).resolve("startup_label");
+                assertNotNull(retained);
+                byte[] bytes = {40};
+                assertSame(lookup, assertThrows(RuntimeException.class, () -> retained.invoke(thc.runtime.ManagedAddress.fromByteArray(bytes))));
+                assertArrayEquals(new byte[]{40}, bytes, "failed component cannot execute its retained finalizer");
+                assertEquals(0, owner.getForeignRoots().size());
+            } finally { context.leave(); }
+        }
+    }
+    @Timeout(20)
     @ParameterizedTest @CsvSource({"ast,false,false", "bytecode,false,false", "ast,true,false", "bytecode,true,false",
         "ast,false,true", "bytecode,false,true", "ast,true,true", "bytecode,true,true"})
     void publicLoadRegistersBeforeOriginalConstructorCallsBack(String backend, boolean lazy, boolean managed) throws Exception {

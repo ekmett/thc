@@ -95,8 +95,9 @@ class PackageFinalizerTest {
                 var state = Language.currentState(null); state.getPackageCbits().link(link);
                 var callback = state.cbits().finalizerLabel("first");
                 byte[] bytes = {0}; var pointer = ManagedAddress.fromByteArray(bytes);
-                assertThrows(RuntimeFault.class, () -> state.getPackageCbits().link(conflicting));
-                assertNull(state.getPackageCbits().finalizer("unpublished"), "failed registration is atomic");
+                var failed = assertThrows(RuntimeFault.class, () -> state.getPackageCbits().link(conflicting));
+                assertSame(failed, assertThrows(RuntimeFault.class, () -> state.getPackageCbits().finalizer("unpublished")),
+                    "failed registration cannot supply a callable label");
                 assertTrue(callback.sameLocation(state.cbits().finalizerLabel("first")));
                 try (var second = context()) {
                     second.initialize("thc"); second.enter();
