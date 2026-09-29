@@ -63,7 +63,7 @@ class ShowIntTest {
         }
         for (var stage : object(manifest.get("stages")).entrySet()) {
             var modules = new ArrayList<Map<String, Object>>();
-            for (var path : expression(stage.getValue())) modules.add(object(Json.parse(Files.readString(root.resolve((String) path)))));
+            for (var path : expression(stage.getValue())) modules.add(CoreCbdFixtures.read(root.resolve((String) path)));
             var module = CoreModules.merge(modules);
             for (var name : list("showChecksum", "showCharacter")) {
                 var audit = object(Json.parse(Files.readString(root.resolve("build/show-int/" + stage.getKey() + "-" + name + ".audit.json"))));

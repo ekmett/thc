@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import zipfile
 from show_int_model import ENTRIES, inputs, requests, verify
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -34,25 +35,32 @@ def auditor():
     spec = importlib.util.spec_from_file_location('audit_core', ROOT/'bin/audit-core.py')
     module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
     return module, json.loads((ROOT/'bin/core-capabilities.json').read_text())
+def inspection(path):
+    check(path.is_file(), 'Missing executable CBD: '+str(path))
+    return json.loads(path.with_suffix('.json').read_text())
+def source_debug(path):
+    with zipfile.ZipFile(path) as archive:
+        check(archive.read('filenames') and archive.read('line-columns'),
+              'Original source files and spans must be retained in CBD debug tables')
 def inventory():
     audit, caps = auditor()
-    source_path = OUT/'boot/core/GHC.Internal.Show.json'
-    source = json.loads(source_path.read_text())
+    source_path = OUT/'boot/core/GHC.Internal.Show.cbd'
+    source = inspection(source_path)
     check(source['ghc'] == '9.14.1' and source['boundary'] == STAGES['post'], 'Show must be genuine post-Tidy GHC9.14.1 source')
     source_ids = {b['id'] for b in source['bindings']}
     worker = [b for b in source['bindings'] if b['id'] == WORKER]
     check(len(worker) == 1 and worker[0]['arity'] == 2 and worker[0]['expr'][0] == 'lam', 'Missing exact installed Show digit worker')
-    check(source.get('sourceCore') and source.get('sourceSpans'), 'Complete original source evidence is required')
+    source_debug(source_path)
     stages = {}; coverage = {}
     for stage, boundary in STAGES.items():
-        public_path = OUT/f'{stage}-core/ShowIntAudit.json'
-        closure_path = OUT/f'{stage}-core/THC.InterfaceClosure.json'
-        public = json.loads(public_path.read_text()); closure = json.loads(closure_path.read_text())
+        public_path = OUT/f'{stage}-core/ShowIntAudit.cbd'
+        closure_path = OUT/f'{stage}-core/THC.InterfaceClosure.cbd'
+        public = inspection(public_path); closure = inspection(closure_path)
         check(public['ghc'] == '9.14.1' and public['boundary'] == boundary, f'{stage}: wrong public export boundary')
         interface_ids = {b['id'] for b in closure['bindings']}
         check(interface_ids and interface_ids <= source_ids, 'Whole interface closure must be supplied by the complete original Show module')
         check(all(b.get('origin') in ('interface-core-unfolding', 'interface-dfun-unfolding') for b in closure['bindings']), 'Expected genuine installed interface definitions')
-        original = audit.Audit([(str(public_path), public), (str(closure_path), closure)], caps).run(list(ENTRIES))
+        original = audit.Audit([(str(public_path), public), (str(closure_path), closure)], caps).run(['main:ShowIntAudit.'+entry for entry in ENTRIES])
         check(not original['accepted'] and not original['issues'] and [m['id'] for m in original['missingGlobals']] == [WORKER],
               f'{stage}: public-only frontier changed: {original["summary"]}')
         (OUT/f'{stage}-missing-worker.audit.json').write_text(json.dumps(original, indent=2)+'\n')
@@ -60,7 +68,7 @@ def inventory():
         stages[stage] = [str(p.relative_to(ROOT)) for p in paths]
         reports = {}
         for entry in ENTRIES:
-            report = audit.Audit([(str(public_path), public), (str(source_path), source)], caps).run([entry])
+            report = audit.Audit([(str(public_path), public), (str(source_path), source)], caps).run(['main:ShowIntAudit.'+entry])
             check(report['accepted'], f'{stage}/{entry}: strict Show source closure rejected: {report["summary"]}')
             check(WORKER in {b['id'] for b in report['reachableBindings']}, f'{entry}: actual digit worker disappeared')
             (OUT/f'{stage}-{entry}.audit.json').write_text(json.dumps(report, indent=2)+'\n')
@@ -84,7 +92,8 @@ def main():
         run(['bin/build-compiler.sh'])
         run([sys.executable, 'bin/export-boot.py', '--pretty-diagnostics', '--frontier', 'show', '--build-dir', str(OUT/'boot')])
         for stage in STAGES:
-            run(['bin/export-core.sh', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []),
+            run(['bin/export-core.sh', '-fplugin-opt=THC.Plugin:pretty-diagnostics',
+                 *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []),
                  *['-fplugin-opt=THC.Plugin:closure='+name for name in ENTRIES], str(FIXTURES[0])],
                 dict(THC_CORE_OUT=str(OUT/f'{stage}-core'), THC_GHC_OUT=str(OUT/f'{stage}-ghc'), THC_SOURCE_NOTES='true'))
         stages, coverage = inventory()
