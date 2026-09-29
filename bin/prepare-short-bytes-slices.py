@@ -26,6 +26,10 @@ FIXTURES = [ROOT/'t/fixtures/compiler'/name for name in ('ShortByteStringSliceAu
 def check(ok, message):
     if not ok: raise AssertionError(message)
 
+def inspection(path):
+    check(path.is_file(), 'Missing executable CBD: '+str(path))
+    return json.loads(path.with_suffix('.json').read_text())
+
 def digest(path): return hashlib.sha256(path.read_bytes()).hexdigest()
 def record(path): return dict(path=str(path.relative_to(ROOT)), sha256=digest(path))
 def audit_inputs():
@@ -50,15 +54,15 @@ def inventory(unit=None):
     spec = importlib.util.spec_from_file_location('slice_audit', ROOT/'bin/audit-core.py')
     audit = importlib.util.module_from_spec(spec); spec.loader.exec_module(audit)
     caps = json.loads((ROOT/'bin/core-capabilities.json').read_text())
-    originals = [OUT/'list/core/GHC.Internal.List.json', OUT/'cstring/core/GHC.Internal.CString.json']
-    original_modules = [(str(p), json.loads(p.read_text())) for p in originals]
+    originals = [OUT/'list/core/GHC.Internal.List.cbd', OUT/'cstring/core/GHC.Internal.CString.cbd']
+    original_modules = [(str(p), inspection(p)) for p in originals]
     for path, module in original_modules:
         check(module['ghc'] == '9.14.1' and module['boundary'] == STAGES['post'] and module.get('sourceCore') and module.get('sourceSpans'),
               'Complete original post-Tidy source evidence required: '+path)
     stages, coverage = {}, {}
     for stage, boundary in STAGES.items():
-        paths = sorted((OUT/f'{stage}-core').glob('*.json'))
-        modules = [(str(p), json.loads(p.read_text())) for p in paths]
+        paths = sorted((OUT/f'{stage}-core').glob('*.cbd'))
+        modules = [(str(p), inspection(p)) for p in paths]
         fixture = next(m for _,m in modules if m['module'] == 'ShortByteStringSliceAudit')
         check(fixture['boundary'] == boundary, 'Wrong public Core boundary')
         closure = next(m for _,m in modules if m['module'] == 'THC.InterfaceClosure')
@@ -107,7 +111,7 @@ def main():
         for frontier, directory in [('lists','list'),('exceptions','cstring')]:
             run([sys.executable,'bin/export-boot.py','--pretty-diagnostics','--frontier',frontier,'--build-dir',OUT/directory])
         for stage in STAGES:
-            run(['bin/export-core.sh',*(['-fplugin-opt=THC.Plugin:post-tidy'] if stage=='post' else []),
+            run(['bin/export-core.sh', '-fplugin-opt=THC.Plugin:pretty-diagnostics',*(['-fplugin-opt=THC.Plugin:post-tidy'] if stage=='post' else []),
                  *['-fplugin-opt=THC.Plugin:closure='+n for n in (*ENTRIES,*FRONTIERS)],FIXTURES[0]],
                 dict(THC_CORE_OUT=str(OUT/f'{stage}-core'),THC_GHC_OUT=str(OUT/f'{stage}-ghc'),THC_SOURCE_NOTES='true'))
         stages, coverage = inventory(unit)

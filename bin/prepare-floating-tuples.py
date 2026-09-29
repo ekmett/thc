@@ -120,10 +120,10 @@ def main():
             (OUT / filename).write_text(subprocess.check_output(argv, text=True))
         check_native()
         for stage in STAGES:
-            run(['bin/export-core.sh', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []), str(FIXTURE)],
+            run(['bin/export-core.sh', '-fplugin-opt=THC.Plugin:pretty-diagnostics', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []), str(FIXTURE)],
                 dict(THC_CORE_OUT=str(OUT / f'{stage}-core'), THC_GHC_OUT=str(OUT / f'{stage}-ghc'), THC_SOURCE_NOTES='true'))
-            run([sys.executable, 'bin/audit-core.py', str(OUT / f'{stage}-core/FloatingTupleAudit.json'),
-                 *[part for entry in ENTRIES for part in ('--entry', entry)], '--output', str(OUT / f'{stage}-audit.json')])
+            run([sys.executable, 'bin/audit-core.py', str(OUT / f'{stage}-core/FloatingTupleAudit.cbd'),
+                 *[part for entry in ENTRIES for part in ('--entry', f'main:FloatingTupleAudit.{entry}')], '--output', str(OUT / f'{stage}-audit.json')])
             inventory(stage)
         sources = [FIXTURE, NATIVE, Path(__file__).resolve(), ROOT / 'bin/build-compiler.sh', ROOT / 'bin/export-core.sh',
                    ROOT / 'bin/toolchain.sh', *sorted((ROOT / 'src/compiler/THC').glob('*.hs')), *audit_inputs(),

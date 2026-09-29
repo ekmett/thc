@@ -27,6 +27,9 @@ FIXTURES = [ROOT / 't/fixtures/compiler' / name for name in ('ShowWordListAudit.
 def check(condition, message):
     if not condition:
         raise AssertionError(message)
+def inspection(path):
+    check(path.is_file(), 'Missing executable CBD: '+str(path))
+    return json.loads(path.with_suffix('.json').read_text())
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 def record(path):
@@ -40,12 +43,12 @@ def auditor():
     return module, json.loads((ROOT/'bin/core-capabilities.json').read_text())
 def inventory():
     audit, caps = auditor()
-    source_path = OUT/'boot/core/GHC.Internal.Show.json'
-    source = json.loads(source_path.read_text())
+    source_path = OUT/'boot/core/GHC.Internal.Show.cbd'
+    source = inspection(source_path)
     check(source['ghc'] == '9.14.1' and source['boundary'] == STAGES['post'], 'Show must be genuine post-Tidy GHC9.14.1 source')
     source_ids = {b['id'] for b in source['bindings']}
-    cstring_path = OUT/'cstring/core/GHC.Internal.CString.json'
-    cstring = json.loads(cstring_path.read_text())
+    cstring_path = OUT/'cstring/core/GHC.Internal.CString.cbd'
+    cstring = inspection(cstring_path)
     check(cstring['ghc'] == '9.14.1' and cstring['boundary'] == STAGES['post'] and cstring.get('sourceCore'),
           'CString must be the complete original post-Tidy source module')
     for identity in WORKERS:
@@ -54,9 +57,9 @@ def inventory():
     check(source.get('sourceCore') and source.get('sourceSpans'), 'Complete original source evidence is required')
     stages = {}; coverage = {}
     for stage, boundary in STAGES.items():
-        public_path = OUT/f'{stage}-core/ShowWordListAudit.json'
-        closure_path = OUT/f'{stage}-core/THC.InterfaceClosure.json'
-        public = json.loads(public_path.read_text()); closure = json.loads(closure_path.read_text())
+        public_path = OUT/f'{stage}-core/ShowWordListAudit.cbd'
+        closure_path = OUT/f'{stage}-core/THC.InterfaceClosure.cbd'
+        public = inspection(public_path); closure = inspection(closure_path)
         check(public['ghc'] == '9.14.1' and public['boundary'] == boundary, f'{stage}: wrong public export boundary')
         interface_ids = {b['id'] for b in closure['bindings']}
         check(interface_ids and interface_ids <= source_ids, 'Whole interface closure must be supplied by the complete original Show module')
@@ -97,7 +100,7 @@ def main():
         run([sys.executable, 'bin/export-boot.py', '--pretty-diagnostics', '--frontier', 'show', '--build-dir', str(OUT/'boot')])
         run([sys.executable, 'bin/export-boot.py', '--pretty-diagnostics', '--frontier', 'exceptions', '--build-dir', str(OUT/'cstring')])
         for stage in STAGES:
-            run(['bin/export-core.sh', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []),
+            run(['bin/export-core.sh', '-fplugin-opt=THC.Plugin:pretty-diagnostics', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []),
                  *['-fplugin-opt=THC.Plugin:closure='+name for name in ENTRIES], str(FIXTURES[0])],
                 dict(THC_CORE_OUT=str(OUT/f'{stage}-core'), THC_GHC_OUT=str(OUT/f'{stage}-ghc'), THC_SOURCE_NOTES='true'))
         stages, coverage = inventory()

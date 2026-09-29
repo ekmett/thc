@@ -165,7 +165,7 @@ def prepare():
     run(['bin/build-compiler.sh'])
     for stage in STAGES:
         flags = ['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []
-        run(['bin/export-core.sh', *flags, str(FIXTURE)], dict(THC_CORE_OUT=str(OUT/f'{stage}-core'), THC_GHC_OUT=str(OUT/f'{stage}-ghc'), THC_SOURCE_NOTES='true'))
+        run(['bin/export-core.sh', '-fplugin-opt=THC.Plugin:pretty-diagnostics', *flags, str(FIXTURE)], dict(THC_CORE_OUT=str(OUT/f'{stage}-core'), THC_GHC_OUT=str(OUT/f'{stage}-ghc'), THC_SOURCE_NOTES='true'))
     native = OUT/'native'; native.mkdir(exist_ok=True)
     binary = native/'sum-layout-oracle'
     run([ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint', '-dstg-lint', '-it/fixtures/compiler',

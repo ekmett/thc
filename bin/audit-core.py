@@ -967,7 +967,8 @@ class Audit:
         if value not in item['examples'] and len(item['examples']) < 8:
             item['examples'].append(value)
         item['uses'].append(self.location(owner, path))
-        if kind not in self.cap['literalKinds']:
+        capability_kind = {'float-bits': 'float', 'double-bits': 'double'}.get(kind, kind)
+        if capability_kind not in self.cap['literalKinds']:
             self.issue('unsupported-literal', owner, path, kind)
             return
         if kind == 'rubbish' and value is not None:
@@ -992,8 +993,10 @@ class Audit:
                 self.issue('invalid-literal-value', owner, path, 'string-bytes must contain pairs of hexadecimal digits')
         if kind == 'null-addr' and value != '0':
             self.issue('invalid-literal-value', owner, path, 'null-addr must be exactly 0')
-        if kind in self.cap.get('integerLiteralRanges', {}):
-            lo, hi = self.cap['integerLiteralRanges'][kind]
+        limits = {'float-bits': (0, (1 << 32) - 1), 'double-bits': (0, (1 << 64) - 1)}.get(
+            kind, self.cap.get('integerLiteralRanges', {}).get(kind))
+        if limits is not None:
+            lo, hi = limits
             try:
                 number = int(value)
                 if str(number) != value or not lo <= number <= hi:
@@ -1221,7 +1224,7 @@ class Audit:
                 return dict(kind='long', primReps=[narrow[expr[1]]], evaluated=True)
             if expr[1] in ('null-addr', 'function-addr', 'data-addr'):
                 return dict(kind='address', primReps=['AddrRep'], evaluated=True)
-            kind = {'float': 'float', 'double': 'double', 'string-bytes': 'address',
+            kind = {'float': 'float', 'float-bits': 'float', 'double': 'double', 'double-bits': 'double', 'string-bytes': 'address',
                     **dict.fromkeys(('int', 'word', 'char', 'int8', 'int16', 'int32', 'int64',
                                      'word8', 'word16', 'word32', 'word64'), 'long')}.get(expr[1])
             return dict(kind=kind, evaluated=True) if kind else None
@@ -2867,7 +2870,7 @@ class Audit:
                         self.literal(value[0], value[1], owner, altpath + '/literal')
                         if value[0] in ('bignat', 'rubbish'):
                             self.issue('alternative-kind', owner, altpath, 'BigNat/rubbish literal alternatives are invalid GHC Core')
-                        if value[0] in ('float', 'double', 'function-addr', 'data-addr'):
+                        if value[0] in ('float', 'float-bits', 'double', 'double-bits', 'function-addr', 'data-addr'):
                             self.issue('alternative-kind', owner, altpath,
                                        'Floating and C label literal alternatives are invalid GHC Core')
                     elif kind != 'default':

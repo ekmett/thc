@@ -104,13 +104,13 @@ def main():
         for stage in STAGES:
             directory = OUT / stage
             options = ['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []
-            run([ROOT / 'bin/export-core.sh', *options,
+            run([ROOT / 'bin/export-core.sh', '-fplugin-opt=THC.Plugin:pretty-diagnostics', *options,
                  *['-fplugin-opt=THC.Plugin:closure=' + name for name in ENTRIES], FIXTURES[0]],
                 dict(THC_CORE_OUT=str(directory / 'core'), THC_GHC_OUT=str(directory / 'ghc'), THC_SOURCE_NOTES='true'))
-            paths = sorted((directory / 'core').glob('*.json'))
-            check({p.name for p in paths} == {'IoMainPapAudit.json', 'THC.InterfaceClosure.json'}, 'Unexpected Core module set')
-            modules = [(str(p.relative_to(ROOT)), json.loads(p.read_text())) for p in paths]
-            artifacts.extend(paths)
+            paths = sorted((directory / 'core').glob('*.cbd'))
+            check({p.name for p in paths} == {'IoMainPapAudit.cbd', 'THC.InterfaceClosure.cbd'}, 'Unexpected Core module set')
+            modules = [(str(p.relative_to(ROOT)), json.loads(p.with_suffix('.json').read_text())) for p in paths]
+            artifacts.extend(paths + [p.with_suffix('.json') for p in paths])
             coverage.append(inventory(stage, modules))
             for name in ENTRIES:
                 report = audit.Audit(modules, capabilities).run([PREFIX + name], io_main=True)

@@ -937,6 +937,20 @@ class AuditTest(unittest.TestCase):
         for value in ('-1', '18446744073709551616', '', '+1', '01', '-0', ' 1', '1.0'):
             self.assertIn('invalid-literal-value', {i['code'] for i in run(['lit', 'word64', value])['issues']}, value)
 
+    def test_floating_bits_literals_require_unsigned_width_and_floating_capability(self):
+        for kind, width, carrier in [('float-bits', 32, 'float'), ('double-bits', 64, 'double')]:
+            for value in ('0', '1', str(1 << (width - 1)), str((1 << width) - 1)):
+                report = run(['lit', kind, value])
+                self.assertTrue(report['accepted'], (kind, value))
+                self.assertEqual(kind, report['literals'][0]['kind'])
+                self.assertEqual([value], report['literals'][0]['examples'])
+            for value in ('-1', str(1 << width), '', '+1', '01', '-0', ' 1', '1.0', 1, None):
+                report = run(['lit', kind, value])
+                self.assertIn('invalid-literal-value', {i['code'] for i in report['issues']}, (kind, value))
+            cap = dict(CAP, literalKinds=[literal for literal in CAP['literalKinds'] if literal != carrier])
+            report = run(['lit', kind, '0'], cap=cap)
+            self.assertIn('unsupported-literal', {i['code'] for i in report['issues']}, kind)
+
     def test_int32_literals_and_alternatives_require_canonical_signed_range(self):
         for text in ('-2147483648', '-1', '0', '1', '2147483647', '-2147483649', '2147483648',
                      '', '+1', '01', '-0', ' 1', '1.0', '18446744073709551616'):
@@ -1086,6 +1100,8 @@ class AuditTest(unittest.TestCase):
     def test_floating_literal_carriers_cannot_be_overridden_by_metadata(self):
         carriers = [(['lit', 'float', '1.0'], dict(kind='float', primReps=['FloatRep'], evaluated=True)),
                     (['lit', 'double', '1.0'], dict(kind='double', primReps=['DoubleRep'], evaluated=True)),
+                    (['lit', 'float-bits', '2143289344'], dict(kind='float', primReps=['FloatRep'], evaluated=True)),
+                    (['lit', 'double-bits', '9221120237041090560'], dict(kind='double', primReps=['DoubleRep'], evaluated=True)),
                     (lit(1), LONG),
                     (['lit', 'string-bytes', '41'], dict(kind='address', primReps=['AddrRep'], evaluated=True)),
                     (['void'], dict(kind='void', primReps=[], evaluated=True))]
@@ -1700,15 +1716,19 @@ class AuditTest(unittest.TestCase):
                 self.assertIn('primitive-representation', {issue['code'] for issue in run(bad)['issues']})
 
     def test_floating_tuple_leaves_preserve_exact_proofs_and_reject_literal_alternatives(self):
-        for kind, register in [('float', 'FloatRep'), ('double', 'DoubleRep')]:
-            scalar = dict(kind=kind, primReps=[register], evaluated=True)
+        for kind, carrier, register, zero, negative_zero in [
+                ('float', 'float', 'FloatRep', '0.0', '-0.0'),
+                ('double', 'double', 'DoubleRep', '0.0', '-0.0'),
+                ('float-bits', 'float', 'FloatRep', '0', '2147483648'),
+                ('double-bits', 'double', 'DoubleRep', '0', '9223372036854775808')]:
+            scalar = dict(kind=carrier, primReps=[register], evaluated=True)
             audit = audit_core.Audit([], CAP)
             audit.representation(scalar, None, '/scalar')
             self.assertEqual([], audit.issues)
             audit.representation(tuple_rep(scalar), None, '/tuple')
             self.assertEqual([], audit.issues)
-            report = run(['case', ['lit', kind, '0.0'], 'x',
-                          [['lit', [kind, '-0.0'], [], lit(1)], ['default', None, [], lit(0)]]])
+            report = run(['case', ['lit', kind, zero], 'x',
+                          [['lit', [kind, negative_zero], [], lit(1)], ['default', None, [], lit(0)]]])
             self.assertIn('alternative-kind', [i['code'] for i in report['issues']])
 
     def test_strictness_checked_for_construction_not_pattern_match(self):

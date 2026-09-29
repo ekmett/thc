@@ -2,7 +2,14 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE OverloadedStrings #-}
 
--- | Focused producer regression. Export ProxyVoidAudit with source-notes and
+-- |
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC 9.14.1
+--
+-- Focused producer regression. Export ProxyVoidAudit with source-notes and
 -- pretty-diagnostics into ROOT/{pre,post}/core, retaining post/ghc interfaces
 -- with -fwrite-if-simplified-core. Run with the selected GHC libdir and ROOT.
 -- CBD decoding and rich diagnostic assertions deliberately inspect different

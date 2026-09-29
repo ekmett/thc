@@ -225,7 +225,7 @@ def prepare():
          '-odir', str(native), '-hidir', str(native), str(FIXTURE)])
     for stage in STAGES:
         flags = ['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []
-        run(['bin/export-core.sh', *flags, str(FIXTURE)], dict(
+        run(['bin/export-core.sh', '-fplugin-opt=THC.Plugin:pretty-diagnostics', *flags, str(FIXTURE)], dict(
             THC_CORE_OUT=str(OUT / f'{stage}-core'), THC_GHC_OUT=str(OUT / f'{stage}-ghc'),
             THC_SOURCE_NOTES='true'))
     sources = [FIXTURE, Path(__file__).resolve(), ROOT / 'bin/audit-core.py',

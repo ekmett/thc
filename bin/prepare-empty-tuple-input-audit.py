@@ -145,10 +145,10 @@ def prepare():
         (OUT / file).write_text(output(argv) + '\n')
     entries = list(dict.fromkeys(name for name, _ in expected_rows())) + ['betweenInputs']
     for stage in STAGES:
-        run(['bin/export-core.sh', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []), str(FIXTURE)],
+        run(['bin/export-core.sh', '-fplugin-opt=THC.Plugin:pretty-diagnostics', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []), str(FIXTURE)],
             dict(THC_CORE_OUT=str(OUT / f'{stage}-core'), THC_GHC_OUT=str(OUT / f'{stage}-ghc'), THC_SOURCE_NOTES='true'))
-        run(['python3', 'bin/audit-core.py', str(OUT / f'{stage}-core/EmptyTupleInputAudit.json'),
-             *[part for entry in entries for part in ['--entry', entry]], '--output', str(OUT / f'{stage}-audit.json')])
+        run(['python3', 'bin/audit-core.py', str(OUT / f'{stage}-core/EmptyTupleInputAudit.cbd'),
+             *[part for entry in entries for part in ['--entry', f'main:EmptyTupleInputAudit.{entry}']], '--output', str(OUT / f'{stage}-audit.json')])
         check(json.loads((OUT / f'{stage}-audit.json').read_text())['accepted'] is True, f'{stage}: strict audit rejected')
     sources = [FIXTURE, NATIVE, Path(__file__).resolve(), ROOT / 'bin/build-compiler.sh', ROOT / 'bin/export-core.sh',
                ROOT / 'bin/toolchain.sh', *sorted((ROOT / 'src/compiler/THC').glob('*.hs')),
