@@ -114,8 +114,7 @@ public final class BytecodeMetadataPreparation {
     """.indent(4);
     private static final String PROFILE = """
                 int handlerEntryIndex = Math.floorDiv(i, EXCEPTION_HANDLER_LENGTH);
-                // THC nonadaptive capture handlers v1
-                if (!getRoot().requiresUnprofiledExceptionHandlers() && !this.exceptionProfiles_[handlerEntryIndex]) {
+                if (!this.exceptionProfiles_[handlerEntryIndex]) {
                     CompilerDirectives.transferToInterpreterAndInvalidate();
                     this.exceptionProfiles_[handlerEntryIndex] = true;
                 }

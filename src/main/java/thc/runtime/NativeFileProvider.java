@@ -142,7 +142,8 @@ public final class NativeFileProvider implements Closeable {
         if (Language.currentState().getEnv() != env) throw fault("Native file resource belongs to another context");
     }
 
-    private long result(String name, Object... arguments) {
+    private long result(String name, Object... arguments) { return result(false, name, arguments); }
+    private long result(boolean signed, String name, Object... arguments) {
         requireCurrent();
         var previous = threads.enterForeign(ForeignSafety.UNSAFE);
         try (var scope = new NativeLimbScope()) {
@@ -157,7 +158,7 @@ public final class NativeFileProvider implements Closeable {
             }
             if (name.equals("open") && value == -2)
                 throw new UnsupportedOperationException("Native file acquisition currently supports regular files only");
-            if (value < 0) throw fault("Negative native file success");
+            if (value < 0 && !signed) throw fault("Negative native file success");
             return value;
         } catch (Throwable failure) { throw propagate(failure); }
         finally { threads.leaveForeign(previous); }
@@ -471,8 +472,24 @@ public final class NativeFileProvider implements Closeable {
             }
         }
         @Override public long statusFlags() { synchronized (lease) { requireCurrent(); lease.requireOpen(); return result("getfl", lease); } }
-        @Override public long setStatusFlags(long flags) { synchronized (lease) { requireCurrent(); lease.requireOpen(); return result("setfl", lease, flags); } }
-        @Override public long setDescriptorFlags(long flags) { synchronized (lease) { requireCurrent(); lease.requireOpen(); return result("setfd", lease, flags); } }
+        @Override public long fcntl(int command, long argument, boolean hasArgument) {
+            synchronized (lease) {
+                requireCurrent(); lease.requireOpen();
+                return result(true, "fcntl", lease, command, argument, hasArgument ? 1 : 0);
+            }
+        }
+        @Override public boolean fcntlCreatesDescriptor(int command) {
+            synchronized (lease) {
+                requireCurrent(); lease.requireOpen();
+                return result("fcntl_duplicate_command", command) != 0;
+            }
+        }
+        @Override public NativeFileResource fcntlDuplicate(int command, long minimum) {
+            synchronized (lease) {
+                requireCurrent(); lease.requireOpen();
+                return acquire(readable, writable, target -> result("fcntl_duplicate", target, lease, command, minimum));
+            }
+        }
         @Override public long writeEvent(long value) {
             synchronized (lease) {
                 requireCurrent(); lease.requireOpen();

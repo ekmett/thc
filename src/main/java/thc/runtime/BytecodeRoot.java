@@ -146,11 +146,6 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public final void configureDelimited(boolean enabled) { delimitedEnabled = enabled; }
     public final boolean isDelimitedEnabled() { return delimitedEnabled; }
 
-    /** A first suspension is an ordinary compiled path, not an observed-exception
-     * specialization. The generated handler resolver keeps its profile untouched. */
-    public final boolean requiresUnprofiledExceptionHandlers() {
-        return asyncEnabled || delimitedEnabled;
-    }
     @CompilerDirectives.CompilationFinal private LocalAccessor typedBloom;
     @CompilerDirectives.CompilationFinal private LocalAccessor stackTransaction;
     public final void configureTypedBloom(LocalAccessor bloom) { typedBloom = bloom; }

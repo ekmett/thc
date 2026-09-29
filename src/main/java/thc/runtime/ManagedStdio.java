@@ -166,14 +166,11 @@ public final class ManagedStdio {
         return result;
     }
     @TruffleBoundary public long fcntl(long fd, long command, long argument, boolean write) {
-        var abi = hostAbi();
+        hostAbi();
         if (fd != (long) (int) fd || command != (long) (int) command) throw fault("Original fcntl requires canonical signed CInt descriptor and command");
-        long expected = abi.flagConstant(write ? OriginalStdioOp.F_SETFL : OriginalStdioOp.F_GETFL);
-        boolean descriptorFlags = write && command == abi.flagConstant(OriginalStdioOp.F_SETFD);
-        if (command != expected && !descriptorFlags) throw fault("Original fcntl supports F_GETFL/F_SETFL/F_SETFD with the matching arity");
-        long result = files.fcntl(fd, argument, write, descriptorFlags);
-        if (result < 0) lastError.set(fileError(abi));
-        return result;
+        var result = files.fcntl(fd, (int) command, argument, write);
+        if (result.errno() != 0) lastError.set(result.errno());
+        return result.value();
     }
     @TruffleBoundary public long ready(long fd, long writing, long milliseconds, long socket) { return ready(fd, writing, milliseconds, socket, null); }
     @TruffleBoundary public long ready(long fd, long writing, long milliseconds, long socket, Node node) {

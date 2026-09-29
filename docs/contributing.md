@@ -175,6 +175,14 @@ and noncanonical helper inputs retain the original scans. Handler lookup can
 still visit multiple subtrees for overlapping interval envelopes; this is not a
 claim of logarithmic worst-case search or elimination of all graph-size failures.
 
+Both sparse and fallback handler lookup retain ordinary per-handler profiling,
+including async and delimited roots. A first exception or suspension may deoptimize
+and mark the selected handler observed; unobserved handlers need not be compiled.
+Checks distinguish an actual first compiled entry followed by a first cut from
+an already-observed handler's compiled hot path. Both preserve once-only effects,
+saved locations, frame cleanup, masks and exact typed results; first-cut code
+retention is not required.
+
 For an upstream-runtime build, use `./gradlew -Pthc.stockTruffle=true installDist`.
 This selects the published Truffle API, runtime and Sulong artifacts; the
 `verifyStockTruffle` task checks the runtime classpath. Generated-source
