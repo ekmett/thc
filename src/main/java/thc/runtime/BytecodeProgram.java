@@ -1500,6 +1500,19 @@ public final class BytecodeProgram implements ExecutableProgram {
             ? Objects.requireNonNull(scope.locals.get(headId)).arityCertificate : globalArityCertificates.get(headId);
         boolean unopenedHead = headId != null && !scope.locals.containsKey(headId)
             && !globalArityCertificates.containsKey(headId) && demand != null && demand.contains(headId);
+        if (unopenedHead && CoreApplicationCertificates.eagerApplication(expr, null)) {
+            var application = lowered.get();
+            var suspension = delay(expr, scope, label);
+            var head = Objects.requireNonNull(demand.cell(headId));
+            int arguments = ((List<?>) expr.get(2)).size();
+            return sourced(new ProvenExpression(e -> {
+                e.builder.beginConditional();
+                e.builder.emitCanConstructPap(head, arguments);
+                application.emit(e);
+                suspension.emit(e);
+                e.builder.endConditional();
+            }, suspension.proof()), suspension.source());
+        }
         if (!unopenedHead && CoreApplicationCertificates.eagerApplication(expr, arityCertificate)) return lowered.get();
         return switch ((String) expr.getFirst()) {
             case "var", "lit", "lam", "con", "prim", "void" -> lowered.get();

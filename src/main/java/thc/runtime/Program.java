@@ -1083,6 +1083,12 @@ public final class Program implements ExecutableProgram {
             scope.locals.containsKey(headId) ? required(scope.locals, headId).arityCertificate : globalArityCertificates.get(headId);
         boolean unopenedHead = headId != null && !scope.locals.containsKey(headId) && !globalArityCertificates.containsKey(headId) &&
             demand != null && demand.contains(headId);
+        if (unopenedHead && CoreApplicationCertificates.eagerApplication(expr, null)) {
+            Expr application = compile(expr, scope, false);
+            checkArgument(application.getRepresentation(), allowEmpty, declaredLifted);
+            return new DeferredPap(Objects.requireNonNull(demand.cell(headId)), ((List<?>) expr.get(2)).size(),
+                application, delay(expr, scope, label)).located(sources.expression(expr, currentSource));
+        }
         if (!unopenedHead && CoreApplicationCertificates.eagerApplication(expr, certificate)) {
             Expr result = compile(expr, scope, false);
             checkArgument(result.getRepresentation(), allowEmpty, declaredLifted);

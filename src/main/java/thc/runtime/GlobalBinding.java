@@ -45,6 +45,15 @@ public final class GlobalBinding {
         return value;
     }
 
+    /** Observe publication without looking up, preparing, or evaluating this binding. */
+    Object peek() {
+        if (preparationLock != null) return prepared ? preparedValue : peekUnprepared();
+        return initialized ? value : null;
+    }
+    // An already compiled cold caller must still observe later publication.
+    @CompilerDirectives.TruffleBoundary
+    private Object peekUnprepared() { return prepared ? preparedValue : null; }
+
     /** The shared program lock protects lowering builders, never guest evaluation. */
     @CompilerDirectives.TruffleBoundary
     private Object prepareValue() {

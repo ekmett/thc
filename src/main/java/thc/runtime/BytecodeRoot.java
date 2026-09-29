@@ -258,6 +258,15 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation
+    @ConstantOperand(type = GlobalBinding.class, name = "binding")
+    @ConstantOperand(type = int.class, name = "arguments")
+    public static final class CanConstructPap {
+        @Specialization public static boolean test(GlobalBinding binding, int arguments) {
+            return DeferredPap.canConstruct(binding, arguments);
+        }
+    }
+
+    @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class PolyglotEval {
         @Specialization
