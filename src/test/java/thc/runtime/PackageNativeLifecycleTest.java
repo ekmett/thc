@@ -272,6 +272,45 @@ public class PackageNativeLifecycleTest {
             } finally { context.leave(); }
         }
     }
+    @Test public void declaredDataExportsRetainTheirProvidersStorageAcrossConsumers() throws Exception {
+        assumeTrue(System.getProperty("os.name").equals("Linux") && System.getProperty("os.arch").equals("amd64"));
+        var provider = component("provider", """
+            long provider_value;
+            const char provider_ident[] = "real";
+            __attribute__((constructor)) static void initialize(void) { provider_value = 40; }
+            long provider_next(void) { return ++provider_value; }
+            """, "provider_next", Set.of("provider_value", "provider_ident", "provider_next"), List.of());
+        var consumer = component("consumer", """
+            extern long provider_value;
+            extern const char provider_ident[];
+            long consumer_entry(void) { return 100 * provider_value + provider_ident[0]; }
+            """, "consumer_entry", Set.of("consumer_entry"), List.of(provider.getComponent()));
+        for (int i = 0; i < 2; i++) try (var context = Context.newBuilder("thc").allowNativeAccess(true).build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                assertEquals(4114L, invoke(consumer));
+                assertEquals(41L, invoke(provider));
+                assertEquals(4214L, invoke(consumer), "consumer and typed provider share the same mutable global");
+            } finally { context.leave(); }
+        }
+    }
+    @Test public void declaredExportsCannotBeBorrowedFromAnotherLoadedProvider() throws Exception {
+        assumeTrue(System.getProperty("os.name").equals("Linux") && System.getProperty("os.arch").equals("amd64"));
+        var provider = component("provider", "long missing_export = 7; long provider_entry(void) { return missing_export; }",
+            "provider_entry", Set.of("provider_entry"), List.of());
+        var claimant = component("claimant", "extern long missing_export; long claimant_entry(void) { return missing_export; }",
+            "claimant_entry", Set.of("claimant_entry", "missing_export"), List.of(provider.getComponent()));
+        try (var context = Context.newBuilder("thc").allowNativeAccess(true).build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                assertEquals(7L, invoke(provider));
+                var failure = assertThrows(RuntimeFault.class, () -> invoke(claimant));
+                assertTrue(failure.getMessage().contains("Missing package C provider export: missing_export"), failure.toString());
+                assertSame(failure, assertThrows(RuntimeFault.class, () -> invoke(claimant)), "failed publication is not retried");
+                assertEquals(7L, invoke(provider));
+            } finally { context.leave(); }
+        }
+    }
     @Test public void failedProviderInitializationIsNotRetriedByAnotherConsumer() throws Exception {
         assumeTrue(System.getProperty("os.name").equals("Linux") && System.getProperty("os.arch").equals("amd64"));
         var provider = component("provider", """
