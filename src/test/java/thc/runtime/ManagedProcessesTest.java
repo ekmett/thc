@@ -132,7 +132,7 @@ public class ManagedProcessesTest {
         var firstPath = directory.resolve("first"); var secondPath = directory.resolve("second");
         Files.write(firstPath, new byte[]{42}); Files.write(secondPath, new byte[]{73});
         try (var owner = new NativeDirectoryOwner(directory);
-             var context = NativeFileProvider.createContext(Set.of(), thc.ContextProfile.NATIVE, thc.FfiMode.NATIVE, true)) {
+             var context = NativeFileProvider.createContext(Set.of(), thc.ContextProfile.NATIVE, true)) {
             entered(context, () -> {
                 var provider = NativeFileProvider.current();
                 try (var first = provider.open(firstPath.toString(), 0); var second = provider.open(secondPath.toString(), 0);

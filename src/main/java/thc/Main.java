@@ -22,6 +22,11 @@ public final class Main {
     }
 
     public static Context.Builder withContextProfile(Context.Builder builder, ContextProfile profile) {
+        // Native Haskell providers cannot run under an inherited managed LLVM engine.
+        // Do not set llvm.managed=false: Community LLVM does not expose that option.
+        var managed = System.getProperty("polyglot.llvm.managed");
+        if (managed != null && !managed.equals("false"))
+            throw new IllegalArgumentException("Native Haskell contexts require polyglot.llvm.managed to be absent or false");
         builder.allowCreateThread(true).useSystemExit(false);
         if (profile == ContextProfile.LAUNCHER)
             builder.option("thc.ByteArrayStorage", System.getProperty("thc.byteArrayStorage", "heap"));
@@ -42,12 +47,11 @@ public final class Main {
 
     /** Values and native resources must not outlive or cross this owning context. */
     public static Context executionContext() { return executionContext(false); }
-    public static Context executionContext(boolean fileIO) { return executionContext(fileIO, FfiMode.configured()); }
-    public static Context executionContext(boolean fileIO, FfiMode ffiMode) {
+    public static Context executionContext(boolean fileIO) {
         if (fileIO && NativeIO.supportedHost())
-            return NativeIO.commandLineContext(ffiMode);
-        return ffiMode.configure(withContextProfile(Context.newBuilder("thc").allowNativeAccess(true)
-            .allowIO(fileIO ? IOAccess.ALL : IOAccess.NONE), ContextProfile.LAUNCHER)).build();
+            return NativeIO.commandLineContext();
+        return withContextProfile(Context.newBuilder("thc").allowNativeAccess(true)
+            .allowIO(fileIO ? IOAccess.ALL : IOAccess.NONE), ContextProfile.LAUNCHER).build();
     }
 
     /**
@@ -89,7 +93,6 @@ public final class Main {
     /** Ordinary package users invoke the Haskell thc run driver. */
     public static void main(String[] args) {
         try { launch(args); }
-        catch (FfiConfigurationException failure) { System.err.println("thc: " + failure.getMessage()); System.exit(2); }
         catch (PolyglotException exit) {
             if (!exit.isExit()) throw exit;
             // All owning contexts have closed before process termination.
@@ -133,24 +136,12 @@ public final class Main {
 
     public static void launch(String[] arguments) {
         var withVerification = launcherArtifactVerification(arguments);
-        String[] rawArgs = withVerification.arguments();
+        String[] args = withVerification.arguments();
         boolean verifyArtifacts = withVerification.verifyArtifacts();
-        int prefix = 0;
-        FfiMode selected = null;
-        while (prefix < rawArgs.length) {
-            String option = rawArgs[prefix];
-            if (option.equals("--ffi")) {
-                if (++prefix == rawArgs.length) throw new FfiConfigurationException("--ffi requires native or managed");
-                selected = FfiMode.parse(rawArgs[prefix++], "--ffi");
-            } else if (option.startsWith("--ffi=")) { selected = FfiMode.parse(option.substring(option.indexOf('=') + 1), "--ffi"); prefix++; }
-            else break;
-        }
-        FfiMode ffiMode = selected == null ? FfiMode.configured() : selected;
-        String[] args = Arrays.copyOfRange(rawArgs, prefix, rawArgs.length);
         if (args.length > 0 && args[0].equals("--run-executable")) {
             require(args.length >= 4, "Usage: thc --run-executable MODULE.json[,MODULE.json...] ENTRY SHUTDOWN_ENTRY [-- PROGRAM_NAME ARG...]");
             var guest = launcherArguments(args, 4);
-            try (Context context = executionContext(true, ffiMode)) {
+            try (Context context = executionContext(true)) {
                 initializeArguments(context, guest);
                 Boolean async = configuredAsyncExceptions();
                 var action = loadEntry(context, modules(args[1]), args[2], true, defaultBackend(), true, args[3], async == null ? true : async, true, verifyArtifacts);
@@ -162,7 +153,7 @@ public final class Main {
         if (args.length > 0 && args[0].equals("--run-io")) {
             require(args.length >= 3, "Usage: thc --run-io MODULE.json[,MODULE.json...] ENTRY [-- PROGRAM_NAME ARG...]");
             var guest = launcherArguments(args, 3);
-            try (Context context = executionContext(true, ffiMode)) {
+            try (Context context = executionContext(true)) {
                 initializeArguments(context, guest);
                 var action = loadEntry(context, modules(args[1]), args[2], true, defaultBackend(), true, null, configuredAsyncExceptions(), true, verifyArtifacts);
                 check(action.invokeMember("runIO").asBoolean(), "IO main did not complete");
@@ -172,7 +163,7 @@ public final class Main {
         }
         require(args.length >= 3, "Usage: thc MODULE.json[,MODULE.json...] ENTRY INTEGER [--compile]");
         long input = Long.parseLong(args[2]);
-        try (Context context = executionContext(false, ffiMode)) {
+        try (Context context = executionContext(false)) {
             var function = loadEntry(context, modules(args[0]), args[1], true, defaultBackend(), false, null, configuredAsyncExceptions(), true, verifyArtifacts);
             Long before = null;
             if (Arrays.asList(args).subList(3, args.length).contains("--compile")) {

@@ -23,7 +23,7 @@ creation with `allowExperimentalOptions(true)`, `allowNativeAccess(true)` and
 `option("thc.ByteArrayStorage", "native")`; `heap` explicitly selects the default.
 Launcher contexts accept `-Dthc.byteArrayStorage=native` through JVM options.
 The option is context-local and requires native authority before the context
-initializes. It does not change `--ffi` selection or enable any additional C ABI.
+initializes. It does not enable any additional C ABI.
 
 Under this policy ordinary guest allocations and resize replacements use the
 existing automatic FFM arena ownership. Unsafe freeze/thaw keep the same owner;

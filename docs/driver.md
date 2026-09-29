@@ -43,7 +43,6 @@ missing and ambiguous targets fail explicitly.
 | `--ghc-source DIR` | Supply the matching configured GHC source tree for required foreign annotations. |
 | `--verify-artifacts` | On `run`, audit the reachable Core before launch and verify artifact hashes. |
 | `--runtime PATH` | Override `<thc-root>/build/install/thc/bin/thc`. |
-| `--ffi native` | Use native-enabled Sulong; this is the default. Managed FFI mode is unsupported. |
 
 `thc run TARGET --help` shows driver help without building. Put guest arguments
 after the literal `--`; `thc run TARGET ... -- --help` asks the guest for help.
@@ -52,7 +51,7 @@ Arguments retain their boundaries, empty strings and option-looking values.
 
 `acquire` uses the same target and build options, then atomically publishes
 `DIST/packages.json`. It does not audit or execute the guest. Runtime-only
-options (`--runtime`, `--ffi`) and guest arguments are rejected. An existing
+options (`--runtime`, `--verify-artifacts`) and guest arguments are rejected. An existing
 `audit.json` is not refreshed by acquisition or by a run without
 `--verify-artifacts`.
 
@@ -97,9 +96,10 @@ ordinary native access alone does not install the managed file provider.
 See [native files](native-file-provider.md) and [process signals](process-signals.md).
 
 Package C/C++ uses [declared native linkage](interface-foreign.md).
-`--ffi native` is the default. Mode selection uses the command-line option,
-then `-Dthc.ffiMode`, then `THC_FFI_MODE`. The bundled distribution rejects
-`managed` before initializing native providers; it does not silently fall back.
+Haskell foreign calls use native-enabled Sulong. Native Haskell context factories
+reject an inherited `polyglot.llvm.managed` setting other than absent or exact
+`false` before initializing native providers. Other LLVM options retain their
+ordinary engine validation.
 
 The driver also supplies the genuine [foreign-exception bridge](foreign-exceptions.md),
 reusing the application's runtime unit when present. Ordinary Haskell `catch`,

@@ -34,9 +34,8 @@ Use `thc acquire` with the same build options to prepare the package without
 executing it. Add `--verify-artifacts` to `thc run` for a strict pre-launch Core
 audit and artifact-hash verification.
 
-Native FFI is the default (`--ffi native`). The bundled Sulong distribution
-does not support `--ffi managed`; requesting it fails before execution.
-Embedding contexts must permit native access. These calls are not a sandbox for
+Haskell FFI uses native-enabled Sulong. Embedding contexts must permit native
+access. These calls are not a sandbox for
 untrusted C code.
 
 The package linker supports ELF on Linux and Mach-O on Darwin. Generic package

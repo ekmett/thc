@@ -30,7 +30,6 @@ import thc.NativeIO.StandardEndpoint;
 import thc.NativeFileSystem;
 import thc.NativeIO;
 import thc.ContextProfile;
-import thc.FfiMode;
 import static thc.Main.withContextProfile;
 import static thc.runtime.RuntimeFault.fault;
 
@@ -50,23 +49,20 @@ public final class NativeFileProvider implements Closeable {
     private final int termiosSize;
 
     public static Context createContext(Set<StandardEndpoint> endpoints) {
-        return createContext(endpoints, ContextProfile.NATIVE, FfiMode.NATIVE, false);
+        return createContext(endpoints, ContextProfile.NATIVE, false);
     }
     public static Context createContext(Set<StandardEndpoint> endpoints, ContextProfile profile) {
-        return createContext(endpoints, profile, FfiMode.NATIVE, false);
-    }
-    public static Context createContext(Set<StandardEndpoint> endpoints, ContextProfile profile, FfiMode ffiMode) {
-        return createContext(endpoints, profile, ffiMode, false);
+        return createContext(endpoints, profile, false);
     }
     /** No arbitrary Builder, FileSystem, provider attachment, or global map. */
-    public static Context createContext(Set<StandardEndpoint> endpoints, ContextProfile profile, FfiMode ffiMode, boolean allowProcesses) {
+    public static Context createContext(Set<StandardEndpoint> endpoints, ContextProfile profile, boolean allowProcesses) {
         if (!NativeIO.supportedPosixHost())
             throw new UnsupportedOperationException("Native files are currently verified only on Linux x86_64");
         var filesystem = new NativeFileSystem(endpoints);
         Context context;
         try {
-            context = ffiMode.configure(withContextProfile(Context.newBuilder("thc").allowNativeAccess(true)
-                .allowCreateProcess(allowProcesses).allowIO(IOAccess.newBuilder().fileSystem(filesystem).build()), profile)).build();
+            context = withContextProfile(Context.newBuilder("thc").allowNativeAccess(true)
+                .allowCreateProcess(allowProcesses).allowIO(IOAccess.newBuilder().fileSystem(filesystem).build()), profile).build();
         } catch (Throwable failure) {
             try { filesystem.getDirectoryOwner().close(); } catch (Throwable closing) { failure.addSuppressed(closing); }
             throw propagate(failure);

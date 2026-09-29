@@ -27,7 +27,7 @@ public class ManagedProcessForeignTest {
     @FunctionalInterface private interface Action { void run() throws Exception; }
     private void inside(Action body) throws Exception { inside(true, body); }
     private void inside(boolean allowed, Action body) throws Exception {
-        try (var context = NativeFileProvider.createContext(java.util.Set.of(), thc.ContextProfile.NATIVE, thc.FfiMode.NATIVE, allowed)) {
+        try (var context = NativeFileProvider.createContext(java.util.Set.of(), thc.ContextProfile.NATIVE, allowed)) {
             context.enter(); try { body.run(); } finally { context.leave(); }
         }
     }

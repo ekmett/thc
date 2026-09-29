@@ -21,7 +21,6 @@ import java.util.function.Supplier;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.io.IOAccess;
 import thc.ContextProfile;
-import thc.FfiMode;
 import thc.Json;
 import thc.Language;
 import thc.Main;
@@ -246,15 +245,14 @@ public final class WindowsDirectoryStreams implements Closeable {
         if (streams == null) throw new SecurityException("Windows directory scanning requires the fixed-filesystem NativeIO context");
         return streams;
     }
-    public static Context createContext() { return createContext(ContextProfile.NATIVE, FfiMode.NATIVE); }
-    public static Context createContext(ContextProfile profile) { return createContext(profile, FfiMode.NATIVE); }
-    public static Context createContext(ContextProfile profile, FfiMode ffiMode) {
+    public static Context createContext() { return createContext(ContextProfile.NATIVE); }
+    public static Context createContext(ContextProfile profile) {
         if (!supportedHost()) throw new IllegalStateException("Windows directory scanning requires native Windows x86_64");
         // A built Context cannot have its filesystem replaced after this
         // authority is installed. Never authenticate custom wrappers.
         var builder = Context.newBuilder("thc").allowNativeAccess(true)
             .allowIO(IOAccess.newBuilder().allowHostFileAccess(true).build());
-        var context = ffiMode.configure(Main.withContextProfile(builder, profile)).build();
+        var context = Main.withContextProfile(builder, profile).build();
         try {
             context.initialize("thc");
             context.enter();

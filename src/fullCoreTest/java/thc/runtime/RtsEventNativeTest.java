@@ -68,7 +68,7 @@ public class RtsEventNativeTest {
         var manifest = json(new File(directory, "manifest.json")); var entries = entries(manifest.get("descriptorEntries")); var rows = rows(json(new File(directory, "oracle.json")).get("descriptorRows"));
         assertEquals(Set.of("eventfdCycle", "pipeCycle", "epollCycle", "epollSafeCycle", "pollCycle", "pollSafeCycle", "controlCycle"), entries.keySet()); assertEquals(entries.keySet(), rows.keySet()); assertEquals(21, count(rows));
         for (String stage : List.of("pre", "post")) for (var group : rows.entrySet()) for (String backend : List.of("ast", "bytecode"))
-            try (var context = NativeFileProvider.createContext(Set.of(), ContextProfile.SYNCHRONOUS_TEST, FfiMode.NATIVE, false)) {
+            try (var context = NativeFileProvider.createContext(Set.of(), ContextProfile.SYNCHRONOUS_TEST, false)) {
                 String entry = group.getKey(), label = stage + "/" + backend + "/" + entry; var cases = group.getValue(); context.enter();
                 try {
                     assertEquals(true, json(new File(directory, entry + "-" + stage + ".audit.json")).get("accepted")); var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);

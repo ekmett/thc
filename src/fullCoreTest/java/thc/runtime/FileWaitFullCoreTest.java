@@ -49,7 +49,7 @@ public class FileWaitFullCoreTest {
                 boolean writing = entry.getValue(); var audit = document(stage.getKey() + "/" + entry.getKey() + "-audit.json");
                 assertEquals(true, audit.get("accepted")); assertEquals(List.of(), audit.get("missingGlobals")); boolean found = false;
                 for (var primitive : (List<Map<String, Object>>) audit.get("primitives")) if ((writing ? "waitWrite#" : "waitRead#").equals(primitive.get("name"))) found = true; assertTrue(found);
-                for (String backend : List.of("ast", "bytecode")) try (var context = NativeFileProvider.createContext(Set.of(), ContextProfile.SYNCHRONOUS_TEST, FfiMode.NATIVE, false)) {
+                for (String backend : List.of("ast", "bytecode")) try (var context = NativeFileProvider.createContext(Set.of(), ContextProfile.SYNCHRONOUS_TEST, false)) {
                     context.enter();
                     try {
                         var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var files = Language.currentState().getFiles();

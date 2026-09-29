@@ -33,7 +33,7 @@ public class LauncherDiagnosticsTest {
         Files.createDirectories(child.getParent());
         Files.writeString(child, "#!/bin/sh\nprintf '%s\\n' \"$@\"\n");
         assertTrue(child.toFile().setExecutable(true));
-        var arguments = List.of("--ffi=native", "path with spaces/core.json", "entry", "", "--", "guest", "--compile");
+        var arguments = List.of("path with spaces/core.json", "entry", "", "--", "guest", "--compile");
         var command = new ArrayList<>(List.of("sh", script.toString())); command.addAll(arguments);
         var process = new ProcessBuilder(command).redirectErrorStream(true).start();
         assertTrue(process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS));
@@ -66,7 +66,7 @@ public class LauncherDiagnosticsTest {
     }
     private String[] concat(String[]... parts) { var result = new ArrayList<String>(); for (var part : parts) Collections.addAll(result, part); return result.toArray(String[]::new); }
     @Test public void artifactVerificationIsExplicitAndNeverConsumesGuestArguments() {
-        var host = new String[] {"--ffi=native", "--run-io", "@packages.json", "main"};
+        var host = new String[] {"--run-io", "@packages.json", "main"};
         var normal = launcherArtifactVerification(host); assertFalse(normal.getVerifyArtifacts()); assertArrayEquals(host, normal.getArguments());
         var selected = launcherArtifactVerification(concat(new String[] {"--verify-artifacts"}, host, new String[] {"--", "program", "--verify-artifacts"}));
         assertTrue(selected.getVerifyArtifacts()); assertArrayEquals(concat(host, new String[] {"--", "program", "--verify-artifacts"}), selected.getArguments());
@@ -96,15 +96,15 @@ public class LauncherDiagnosticsTest {
         return Map.of("id", id, "name", id, "type", "IO ()", "arity", 0, "lifted", true, "rep", closure, "expr", expression);
     }
     private void property(String key, String value) { if (value == null) System.clearProperty(key); else System.setProperty(key, value); }
-    private String launch(String mode, String backend, String diagnostics) throws Throwable { return launch(mode, backend, diagnostics, List.of(), List.of(), null); }
-    private String launch(String mode, String backend, String diagnostics, List<String> ffi, List<String> guest, String async) throws Throwable {
+    private String launch(String mode, String backend, String diagnostics) throws Throwable { return launch(mode, backend, diagnostics, List.of(), null); }
+    private String launch(String mode, String backend, String diagnostics, List<String> guest, String async) throws Throwable {
         var source = directory.resolve("io.json"); Files.writeString(source, Json.stringify(module()));
         var old = new LinkedHashMap<String, String>(); for (var key : List.of("thc.backend", "thc.diagnostics", "thc.asyncExceptions")) old.put(key, System.getProperty(key));
         var stderr = System.err; var bytes = new ByteArrayOutputStream();
         try (var stream = new PrintStream(bytes, true, StandardCharsets.UTF_8)) {
             try {
                 System.setProperty("thc.backend", backend); property("thc.diagnostics", diagnostics); property("thc.asyncExceptions", async); System.setErr(stream);
-                var args = new ArrayList<>(ffi); args.addAll(List.of(mode, source.toString(), "main")); if (mode.equals("--run-executable")) args.add("shutdown"); args.addAll(List.of("--", "program")); args.addAll(guest);
+                var args = new ArrayList<>(List.of(mode, source.toString(), "main")); if (mode.equals("--run-executable")) args.add("shutdown"); args.addAll(List.of("--", "program")); args.addAll(guest);
                 // Invoke the installed launcher class explicitly, preserving the original launcher boundary.
                 try { Class.forName("thc.Main").getMethod("main", String[].class).invoke(null, (Object) args.toArray(String[]::new)); }
                 catch (InvocationTargetException failure) { throw failure.getTargetException(); }
@@ -127,24 +127,17 @@ public class LauncherDiagnosticsTest {
     @Test public void executableAsyncDefaultAndOverridesReachTheRunningProgram() throws Throwable {
         for (var backend : List.of("ast", "bytecode")) {
             for (var setting : Arrays.asList(null, "true", "false")) {
-                var metrics = (Map<?, ?>) Json.parse(launch("--run-executable", backend, "true", List.of(), List.of(), setting).trim());
+                var metrics = (Map<?, ?>) Json.parse(launch("--run-executable", backend, "true", List.of(), setting).trim());
                 assertEquals(!"false".equals(setting), metrics.get("asyncExceptions"), backend + "/" + setting);
             }
-            assertThrows(IllegalArgumentException.class, () -> launch("--run-executable", backend, "true", List.of(), List.of(), "enabled"));
+            assertThrows(IllegalArgumentException.class, () -> launch("--run-executable", backend, "true", List.of(), "enabled"));
         }
         for (var backend : List.of("ast", "bytecode")) {
             var metrics = (Map<?, ?>) Json.parse(launch("--run-io", backend, "true").trim()); assertEquals(backend.equals("bytecode"), metrics.get("asyncExceptions"), "raw IO/" + backend);
         }
     }
-    @Test public void nativeFfiOverridesAmbientModeAndPreservesGuestOptions() throws Throwable {
-        var old = System.getProperty("thc.ffiMode");
-        try {
-            System.setProperty("thc.ffiMode", "managed");
-            for (var mode : List.of("--run-io", "--run-executable")) for (var backend : List.of("ast", "bytecode")) {
-                assertEquals("", launch(mode, backend, null, List.of("--ffi", "native"), List.of("--ffi", "invalid-guest-value", "", "--"), null));
-                assertEquals("", launch(mode, backend, null, List.of("--ffi=managed", "--ffi=native"), List.of(), null));
-            }
-            assertEquals("managed", System.getProperty("thc.ffiMode"), "launch does not mutate defaults");
-        } finally { property("thc.ffiMode", old); }
+    @Test public void guestOptionsRemainOpaqueToTheLauncher() throws Throwable {
+        for (var mode : List.of("--run-io", "--run-executable")) for (var backend : List.of("ast", "bytecode"))
+            assertEquals("", launch(mode, backend, null, List.of("--guest-option", "value", "", "--"), null));
     }
 }

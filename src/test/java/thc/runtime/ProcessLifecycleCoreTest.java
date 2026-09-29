@@ -76,7 +76,7 @@ public class ProcessLifecycleCoreTest {
     }
     @ParameterizedTest @CsvSource({"pre, ast", "post, ast", "pre, bytecode", "post, bytecode"})
     void originalInterruptibleWaitSavesErrnoAndNeverReplays(String stage, String backend) throws Throwable {
-        try (var context = NativeFileProvider.createContext(Set.of(), ContextProfile.SYNCHRONOUS_TEST, FfiMode.NATIVE, true)) {
+        try (var context = NativeFileProvider.createContext(Set.of(), ContextProfile.SYNCHRONOUS_TEST, true)) {
             context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var state = Language.currentState();
@@ -164,7 +164,7 @@ public class ProcessLifecycleCoreTest {
         OriginalStdioChecks.hashes(root.toFile(), manifest.get("inputHashes"), Set.of("t/fixtures/compiler/ProcessLifecycleAudit.hs", "t/haskell-fixtures/ProcessLifecycleFixtures.hs"), null);
         OriginalStdioChecks.hashes(root.toFile(), manifest.get("artifactHashes"), Set.of(prefix + "/pre.json", prefix + "/post.json"), prefix + "/");
         var expected = nativeRows("oracle"); var creation = nativeRows("creation-oracle"); assertEquals(10, expected.size()); assertEquals(3, creation.size());
-        try (var context = NativeFileProvider.createContext(Set.of(), ContextProfile.SYNCHRONOUS_TEST, FfiMode.NATIVE, true)) {
+        try (var context = NativeFileProvider.createContext(Set.of(), ContextProfile.SYNCHRONOUS_TEST, true)) {
             context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var state = Language.currentState(); var module = new LinkedHashMap<>(json(stage)); module.put("instrument", true);
