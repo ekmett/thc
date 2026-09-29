@@ -130,10 +130,17 @@ vector_args="$inventory_dir/vector-profile.args"
 if (( ${#vector_options[@]} )); then printf '%s\n' "${vector_options[@]}" > "$vector_args"; fi
 foreign_args="$inventory_dir/foreign.args"
 : > "$foreign_args"
+foreign_configuration=
 if [[ -n "${THC_NATIVE_IMAGE_PROCESS_IDENTITY:-}" ]]; then
     [[ "$THC_NATIVE_IMAGE_PROCESS_IDENTITY" == 1 ]] || exit 2
     test -f "$recipe_dir/process-identity/reachability-metadata.json"
-    printf '"-H:ConfigurationFileDirectories=%s"\n' "$recipe_dir/process-identity" > "$foreign_args"
+    foreign_configuration="$recipe_dir/process-identity"
+fi
+if [[ "$mode" == executable* ]]; then
+    foreign_configuration="${foreign_configuration:+$foreign_configuration,}$recipe_dir/native-io"
+fi
+if [[ -n "$foreign_configuration" ]]; then
+    printf '"-H:ConfigurationFileDirectories=%s"\n' "$foreign_configuration" > "$foreign_args"
 fi
 [[ "$mode" == *prepare-only ]] && exit 0
 builder_overlays=

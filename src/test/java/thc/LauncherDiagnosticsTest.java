@@ -21,6 +21,43 @@ import static thc.Main.launcherArtifactVerification;
 @ResourceLock(Resources.SYSTEM_PROPERTIES)
 public class LauncherDiagnosticsTest {
     @TempDir public Path directory;
+    @Test public void nativeImageIoMetadataCoversDeclaredUnixAbisAndCaptureOptions() throws Exception {
+        var path = Path.of(System.getProperty("thc.projectRoot"),
+            "research/native-image-preparation/native-io/reachability-metadata.json");
+        var document = (Map<?, ?>) Json.parse(Files.readString(path));
+        var foreign = (Map<?, ?>) document.get("foreign");
+        assertEquals(Set.of("downcalls"), foreign.keySet());
+        var calls = (List<?>) foreign.get("downcalls");
+        assertEquals(calls.size(), new HashSet<>(calls).size());
+        for (var raw : calls) {
+            var call = (Map<?, ?>) raw;
+            assertTrue(Set.of("jint", "jlong", "void*", "void").contains(call.get("returnType")));
+            for (var parameter : (List<?>) call.get("parameterTypes"))
+                assertTrue(Set.of("jint", "jlong", "void*").contains(parameter));
+            var options = (Map<?, ?>) call.get("options");
+            if (options != null) {
+                assertEquals(true, options.get("captureCallState"));
+                assertTrue(Set.of("captureCallState", "firstVariadicArg").containsAll(options.keySet()));
+            }
+        }
+        assertTrue(calls.contains(Map.of("returnType", "jint", "parameterTypes", List.of("jint"),
+            "options", Map.of("captureCallState", true)))); // NativeFileLease.close, actual ELF startup failure.
+        assertTrue(calls.contains(Map.of("returnType", "jint", "parameterTypes", List.of("jint", "jint", "jint"),
+            "options", Map.of("captureCallState", true, "firstVariadicArg", 2L)))); // fcntl readiness duplicate.
+        for (var operation : thc.runtime.OriginalStdioOp.values()) if (operation.getUnixNative()) {
+            var parameters = operation.getArguments().stream().filter(Objects::nonNull).map(LauncherDiagnosticsTest::foreignType).toList();
+            assertTrue(calls.contains(Map.of("returnType", foreignType(operation.getResult()), "parameterTypes", parameters,
+                "options", Map.of("captureCallState", true))), operation.name());
+        }
+    }
+    private static String foreignType(String representation) {
+        return switch (representation) {
+            case "AddrRep" -> "void*";
+            case "Int32Rep", "Word32Rep" -> "jint";
+            case "Int64Rep", "Word64Rep", "IntRep", "WordRep" -> "jlong";
+            default -> throw new AssertionError(representation);
+        };
+    }
     @Test public void nativeExecutableProfileIsSeparateFromGuestCppOptions() {
         var configuration = Json.stringify(Map.of("arguments", List.of("--run-executable", "main.cbd",
             "u:Main.main", "base:Top.flush", "--", "ghc"), "properties", Map.of("thc.byteArrayStorage", "native")));
