@@ -480,11 +480,6 @@
       "bytes": 6073
     },
     {
-      "path": "README.md",
-      "sha256": "d919d5cca4aac2e519d21521e11b5fd2328c437a29c430ecdd21bf6b021ab95b",
-      "bytes": 6804
-    },
-    {
       "path": "RepresentationAudit.json",
       "sha256": "03bc878c1cb55c2a8bb7666e89b30d3e97362453b4555e8a068bb969a1cf9426",
       "bytes": 141252
