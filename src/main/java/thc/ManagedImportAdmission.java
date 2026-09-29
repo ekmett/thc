@@ -107,7 +107,7 @@ public final class ManagedImportAdmission {
         var proof = record(raw, "schema scope execution profile unit module status" +
                 (Objects.equals(status, "verified") ? " wordBits expectedForeign imports expectedCalls" + (addresses ? " addresses" : "") + (wrappers ? " wrappers" : "") + (mixed ? " importForeign" : "") : " reason"));
         requireProof((version(proof.get("schema"), 1) || addresses) && Objects.equals(proof.get("scope"), "retained-static-import-products") &&
-                Objects.equals(proof.get("execution"), "not-linked") && Objects.equals(proof.get("profile"), "ghc-9.14.1-thc-only-static-c-imports-v1") &&
+                Objects.equals(proof.get("execution"), "not-linked") && PackageNativeArchives.importProfile(proof.get("profile")) &&
                 Objects.equals(proof.get("unit"), module.get("unit")) && Objects.equals(proof.get("module"), module.get("module")) && Objects.equals(module.get("ghc"), "9.14.1"),
                 "schema/profile/owner");
         text(proof.get("unit")); text(proof.get("module"));
@@ -126,6 +126,8 @@ public final class ManagedImportAdmission {
         text(stubs.get("source"));
         if (!(proof.get("imports") instanceof List<?> imports)) throw new IllegalArgumentException("Missing typed static imports");
         requireProof(!imports.isEmpty() || !callbacks.isEmpty(), "empty import inventory");
+        boolean primProfile = Objects.equals(proof.get("profile"), "ghc-9.14.1-thc-stock-static-foreign-imports-v2");
+        if (primProfile) requireProof(PackageNativeArchives.read(module, completeBindings) != null, "prim archive obligation");
         var binders = new HashSet<Map<?,?>>();
         var generated = new LinkedHashMap<Target,Map<String,Object>>();
         boolean allExcluded = !imports.isEmpty();
@@ -135,6 +137,12 @@ public final class ManagedImportAdmission {
             requireProof(Objects.equals(binder.get("unit"), module.get("unit")) && Objects.equals(binder.get("module"), module.get("module")) &&
                     Objects.equals(binder.get("namespace"), "value") && binders.add(binder), "duplicate or foreign import binder");
             nullableText(item.get("header")); nullableText(item.get("unit")); text(item.get("symbol"));
+            if (Objects.equals(item.get("convention"), "prim")) {
+                // The archive reader validates the full stock products, nominal
+                // declaration and recursive call shape. A prim is never CAPI.
+                requireProof(primProfile && PackageNativeArchives.excluded(module).contains(item.get("emitted")), "prim archive obligation");
+                continue;
+            }
             requireProof(in(item.get("convention"), "ccall", "capi") && in(item.get("safety"), "safe", "unsafe", "interruptible") &&
                     item.get("isFunction") instanceof Boolean && (Objects.equals(item.get("isFunction"), true) || Objects.equals(item.get("convention"), "capi")) &&
                     Objects.equals(item.get("normalizationRole"), "representational"), "static import declaration");

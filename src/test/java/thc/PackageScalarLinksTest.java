@@ -180,20 +180,14 @@ class PackageScalarLinksTest {
         var entry = map("id", "scalar-fixture:Scalar.entry", "name", "entry", "arity", 0, "lifted", false,
             "rep", map("kind", "long", "primReps", list("IntRep"), "evaluated", true), "expr", list("lit", "int", "7"));
         var selected = with(base, "bindings", list(entry), "staticForeignImports", with(proof, "expectedCalls", list(call, call)));
-        var request = map("modules", list(selected), "entry", entry.get("id"), "backend", "ast", "asyncExceptions", false, "detachedBindings", true);
-        try (var context = org.graalvm.polyglot.Context.newBuilder("thc").allowExperimentalOptions(true)
-                .option("engine.Compilation", "false").build()) {
-            // Parse only: the structural bitcode model must never be loaded or executed.
-            assertDoesNotThrow(() -> context.parse("thc", Json.stringify(request)));
-            for (var full : List.of(without(request, "detachedBindings"), with(request, "detachedBindings", false)))
-                assertThrows(org.graalvm.polyglot.PolyglotException.class, () -> context.parse("thc", Json.stringify(full)));
-            for (var bad : List.of(binding("altered", list(with(call, "safety", "safe"))), binding("duplicated", list(call, call, call)))) {
-                var invalid = with(request, "modules", list(with(selected, "bindings", list(entry, bad))));
-                assertThrows(org.graalvm.polyglot.PolyglotException.class, () -> context.parse("thc", Json.stringify(invalid)));
-            }
-            assertThrows(org.graalvm.polyglot.PolyglotException.class,
-                () -> context.parse("thc", Json.stringify(with(request, "detachedBindings", "true"))));
-        }
+        // Inspect the decoded cold-admission boundary. These structural bitcode
+        // bytes must never become a public inline runtime input or be executed.
+        var admission = new CoreModuleAdmission(with(selected, "bindings", List.of()), _ -> entry);
+        assertEquals(list(entry), admission.selected(List.of(entry)).get("bindings"));
+        assertNotNull(PackageScalarLinks.read(selected, true, false));
+        assertThrows(IllegalArgumentException.class, () -> PackageScalarLinks.read(selected, true, true));
+        for (var bad : List.of(binding("altered", list(with(call, "safety", "safe"))), binding("duplicated", list(call, call, call))))
+            assertThrows(IllegalArgumentException.class, () -> admission.selected(List.of(entry, bad)));
     }
     private Map<String, Object> foreignCall(Map<?, ?> base, String symbol) {
         return map("foreignCall", map("target", map("unit", base.get("unit"), "symbol", symbol), "convention", "ccall", "safety", "unsafe",
@@ -259,6 +253,38 @@ class PackageScalarLinksTest {
         assertThrows(IllegalArgumentException.class, () -> CoreModules.reachable(CoreModules.merge(List.of(unresolved)), goodId, true));
         var invalid = with(unresolved, "packageNativeArchive", with(archive, "unresolvedSymbols", list("unknown_external"), "artifact", with(link, "bitcodeHex", "4342")));
         assertThrows(IllegalArgumentException.class, () -> CoreModules.merge(List.of(invalid)));
+    }
+    @Test void primProofKeepsTheMixedNativeCAdapterAndItsArchiveGuard() throws Exception {
+        var base = module(); var scalar = object(base, "packageScalarLink"); var abi = single(scalar, "abi");
+        var link = with(scalar, "profile", "thc-package-c-ffi-v1", "abi", list(with(abi, "entry", nativeEntry, "convention", "ccall", "safety", "unsafe")));
+        var proof = object(base, "staticForeignImports"); var original = single(proof, "imports");
+        var emitted = map("symbol", "ordinary_prim", "unit", base.get("unit"), "convention", "prim", "safety", "safe",
+            "arguments", list("WordRep"), "result", list("AddrRep", "WordRep"));
+        var primitive = with(original, "symbol", "ordinary_prim", "unit", base.get("unit"), "convention", "prim", "safety", "safe",
+            "binder", with(object(original, "binder"), "occurrence", "primitive"), "emitted", emitted);
+        var word = map("kind", "tycon", "name", map("unit", "ghc-internal", "module", "GHC.Internal.Prim", "occurrence", "Word#", "namespace", "type"), "arguments", List.of());
+        var address = with(word, "name", with(object(word, "name"), "occurrence", "Addr#"));
+        var many = with(word, "name", with(object(word, "name"), "module", "GHC.Internal.Types", "occurrence", "Many", "namespace", "data"));
+        var tuple = with(word, "name", with(object(word, "name"), "module", "GHC.Internal.Types", "occurrence", "Tuple2#"), "arguments", list(
+            with(many, "name", with(object(many, "name"), "occurrence", "AddrRep")), with(many, "name", with(object(many, "name"), "occurrence", "WordRep")), address, word));
+        var type = map("kind", "function", "multiplicity", many, "argument", word, "result", tuple);
+        primitive = with(primitive, "declaredType", type, "normalizedType", type);
+        var call = map("schema", 1L, "target", map("kind", "static", "unit", base.get("unit"), "symbol", "ordinary_prim", "isFunction", true),
+            "convention", "prim", "safety", "safe", "arity", 1L, "suppliedArity", 1L,
+            "argumentReps", list(map("kind", "long", "primReps", list("WordRep"), "evaluated", false)),
+            "resultRep", map("kind", "unknown", "primReps", list("AddrRep", "WordRep"), "evaluated", false, "aggregate", "unboxed-tuple", "components", list(
+                map("kind", "address", "primReps", list("AddrRep"), "evaluated", true), map("kind", "long", "primReps", list("WordRep"), "evaluated", true))));
+        var archive = map("schema", 1L, "profile", "thc-package-native-archive-v1", "execution", "not-linked", "unit", base.get("unit"), "module", base.get("module"),
+            "unsupportedImports", list(emitted), "unclassifiedReason", null, "unresolvedSymbols", List.of(), "artifact", null);
+        var mixed = with(without(base, "packageScalarLink"), "packageNativeLink", link, "packageNativeArchive", archive,
+            "staticForeignImports", with(proof, "profile", "ghc-9.14.1-thc-stock-static-foreign-imports-v2", "imports", list(original, primitive), "expectedCalls", list(call)),
+            "bindings", list(binding("primitive", list(call))));
+        assertEquals(Set.of(nativeEntry), Objects.requireNonNull(PackageScalarLinks.read(mixed)).getProved());
+        var retained = Objects.requireNonNull(PackageNativeArchives.read(mixed));
+        assertFalse(retained.getWholeModule()); assertTrue(retained.blocks(mixed.get("bindings")));
+        assertFalse(retained.blocks(Map.of()));
+        assertThrows(IllegalArgumentException.class, () -> PackageScalarLinks.read(with(mixed,
+            "packageNativeArchive", with(archive, "unsupportedImports", List.of()))));
     }
     private Map<String, Object> proofChange(Map<?, ?> original, Map<?, ?> proof, Map<?, ?> item) {
         return with(original, "staticForeignImports", with(proof, "imports", list(item)));
